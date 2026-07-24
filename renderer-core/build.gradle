@@ -1,0 +1,405 @@
+plugins {
+    id 'java-library'
+}
+
+group = rootProject.group
+version = rootProject.version
+
+dependencies {
+    api project(':renderer-api')
+    implementation 'it.unimi.dsi:fastutil:8.5.18'
+    api 'org.joml:joml:1.10.8'
+    api 'org.lwjgl:lwjgl:3.4.1'
+    api 'org.lwjgl:lwjgl-vulkan:3.4.1'
+    api 'org.lwjgl:lwjgl-vma:3.4.1'
+    implementation 'org.lwjgl:lwjgl-shaderc:3.4.1'
+
+    // renderer-core is published as a ready-to-run Windows backend. Keeping natives test-only
+    // makes the published provider discoverable but impossible to initialize in a clean host.
+    runtimeOnly 'org.lwjgl:lwjgl:3.4.1:natives-windows'
+    runtimeOnly 'org.lwjgl:lwjgl-vma:3.4.1:natives-windows'
+    runtimeOnly 'org.lwjgl:lwjgl-shaderc:3.4.1:natives-windows'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(rootProject.java_version as int)
+    }
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = rootProject.java_version as int
+    options.compilerArgs.addAll(['-Xlint:deprecation', '-Xlint:unchecked'])
+}
+
+tasks.withType(ProcessResources).configureEach {
+    filteringCharset = 'UTF-8'
+}
+
+/*
+ * Core contracts are deterministic JavaExec programs registered below, not JUnit tests. Gradle 9.5
+ * otherwise treats the intentionally empty JUnit discovery result as a configuration failure before
+ * those real gates can run.
+ */
+tasks.withType(Test).configureEach {
+    failOnNoDiscoveredTests = false
+}
+
+tasks.withType(JavaExec).configureEach {
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(rootProject.java_version as int)
+    }
+    jvmArgs '--enable-native-access=ALL-UNNAMED',
+            '--sun-misc-unsafe-memory-access=allow',
+            '-Dfile.encoding=UTF-8',
+            '-Dstdout.encoding=UTF-8',
+            '-Dstderr.encoding=UTF-8',
+            '-Duser.language=en',
+            '-Duser.country=US'
+    systemProperties(System.getProperties().findAll { key, ignored ->
+        key.toString().startsWith('mcvulkanrt.')
+    })
+}
+
+/*
+ * Match dependency namespaces instead of prose words such as "Minecraft".
+ * Renderer documentation must be able to explain the host boundary without
+ * turning a comment into a false-positive dependency violation.
+ */
+def forbiddenCoreReferences = [
+        'net.minecraft.',
+        'com.mojang.',
+        'net.fabricmc.',
+        'org.lwjgl.opengl.',
+        'top.ceroxe.mcvulkanrt.MCVulkanRT',
+        'top.ceroxe.mcvulkanrt.bridge.',
+        'top.ceroxe.mcvulkanrt.mixin.'
+].asImmutable()
+
+def coreProductionSources = fileTree('src/main') {
+    include '**/*.java'
+    include '**/*.rgen'
+    include '**/*.rmiss'
+    include '**/*.rchit'
+}
+
+tasks.register('verifyNoMinecraftDependencies') {
+    group = 'verification'
+    description = 'Rejects host-game, Mojang, Fabric, bridge, mixin, and OpenGL dependencies in renderer-core production code.'
+    inputs.files(coreProductionSources)
+
+    doLast {
+        def violations = []
+        coreProductionSources.files.sort().each { file ->
+            file.readLines('UTF-8').eachWithIndex { line, index ->
+                forbiddenCoreReferences.each { forbidden ->
+                    if (line.contains(forbidden)) {
+                        def relative = projectDir.toPath().relativize(file.toPath())
+                        violations << "${relative}:${index + 1}: ${forbidden}"
+                    }
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException(
+                    "renderer-core must remain Minecraft-independent:\n" + violations.join('\n')
+            )
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyNoMinecraftDependencies')
+}
+
+def registerCoreSelfTest = { String taskName, String mainClassName, String taskDescription ->
+    tasks.register(taskName, JavaExec) {
+        group = 'verification'
+        description = taskDescription
+        dependsOn tasks.named('testClasses')
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = mainClassName
+    }
+}
+
+def contractSelfTests = [
+        coreVulkanRendererRuntimeLifecycleSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanRendererRuntimeLifecycleSelfTest',
+        coreRtActiveSectionContentStateSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtActiveSectionContentStateSelfTest',
+        coreRtCommittedFrontPolicySelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.device.RtCommittedFrontPolicySelfTest',
+        coreRtDeferredEmptySectionStateSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtDeferredEmptySectionStateSelfTest',
+        coreRtDeviceFrameAdmissionSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.device.RtDeviceFrameAdmissionSelfTest',
+        coreRtDynamicInstanceFlightRecorderSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtDynamicInstanceFlightRecorderSelfTest',
+        coreRtFirstFrontBlasFlightRecorderSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtFirstFrontBlasFlightRecorderSelfTest',
+        coreRtFirstFrontBlasProgressTrackerSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtFirstFrontBlasProgressTrackerSelfTest',
+        coreRtFrameDispatchAdmissionSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.pipeline.RtFrameDispatchAdmissionSelfTest',
+        coreRtSharedFramePublicationLedgerSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.pipeline.RtSharedFramePublicationLedgerSelfTest',
+        coreRtDynamicSceneUploadPlannerSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.pipeline.RtDynamicSceneUploadPlannerSelfTest',
+        coreRtDynamicSceneShaderAbiSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.pipeline.RtDynamicSceneShaderAbiSelfTest',
+        coreRtPipelineFrameLifecycleSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.pipeline.RtPipelineFrameLifecycleSelfTest',
+        coreRtShaderBindingTableSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.pipeline.RtShaderBindingTableSelfTest',
+        coreRtFrameDispatchFlightRecorderSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.pipeline.RtFrameDispatchFlightRecorderSelfTest',
+        coreRtMaterialStateSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.material.RtMaterialStateSelfTest',
+        coreRtMaterialUploadStatisticsSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.material.RtMaterialUploadStatisticsSelfTest',
+        coreMaterialSlotAllocatorSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.material.MaterialSlotAllocatorSelfTest',
+        coreRtResourceScopeSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.device.RtResourceScopeSelfTest',
+        coreRtVulkanDeviceCapabilitiesSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.device.RtVulkanDeviceCapabilitiesSelfTest',
+        coreRtDeferredWorldSceneBindSchedulerSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.device.RtDeferredWorldSceneBindSchedulerSelfTest',
+        coreRtDynamicSceneDispatchPolicySelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.device.RtDynamicSceneDispatchPolicySelfTest',
+        coreRtWorldSceneMaterialUploadLaneSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.device.RtWorldSceneMaterialUploadLaneSelfTest',
+        coreRtWorldSceneConvergencePolicySelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.device.RtWorldSceneConvergencePolicySelfTest',
+        coreRtDynamicMeshContractsSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtDynamicMeshContractsSelfTest',
+        coreRtSectionSourceStoreSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionSourceStoreSelfTest',
+        coreRtSectionActiveViewCacheSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionActiveViewCacheSelfTest',
+        coreRtSectionActiveViewTelemetrySelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionActiveViewTelemetrySelfTest',
+        coreRtSectionBlasConfigurationSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionBlasConfigurationSelfTest',
+        coreRtSectionAsyncBuildInventorySelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionAsyncBuildInventorySelfTest',
+        coreRtSectionSceneRevisionStateSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionSceneRevisionStateSelfTest',
+        coreRtSectionBlasBuildBatchSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionBlasBuildBatchSelfTest',
+        coreRtSectionBlasLifecycleFlightRecorderSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionBlasLifecycleFlightRecorderSelfTest',
+        coreRtSectionBlasRetirementQueueSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionBlasRetirementQueueSelfTest',
+        coreRtSectionBlasStatisticsSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionBlasStatisticsSelfTest',
+        coreRtSectionBuildIntentStateSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionBuildIntentStateSelfTest',
+        coreRtSectionBuildPriorityStateSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionBuildPriorityStateSelfTest',
+        coreRtSectionForegroundBuildLedgerSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionForegroundBuildLedgerSelfTest',
+        coreRtSectionForegroundStateSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionForegroundStateSelfTest',
+        coreRtSectionLifecycleMembershipStateSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionLifecycleMembershipStateSelfTest',
+        coreRtSectionMaterialPublicationStateSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionMaterialPublicationStateSelfTest',
+        coreRtSectionTerrainOwnershipPublisherSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionTerrainOwnershipPublisherSelfTest',
+        coreRtSectionTlasBuildInputCacheSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.acceleration.RtSectionTlasBuildInputCacheSelfTest',
+        coreVulkanQueueHostSyncSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.device.VulkanQueueHostSyncSelfTest',
+        coreVulkanRtDeviceCapabilitySelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.device.VulkanRtDeviceCapabilitySelfTest',
+        corePersistentSceneRegistrySelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.PersistentSceneRegistrySelfTest',
+        coreVulkanSceneResidencySelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanSceneResidencySelfTest',
+        coreVulkanSceneResidencyFlightRecorderSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanSceneResidencyFlightRecorderSelfTest',
+        coreVulkanGpuSceneAbiSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanGpuSceneAbiSelfTest',
+        coreVulkanFrameUniformPackerSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanFrameUniformPackerSelfTest',
+        coreVulkanFrameFlightRecorderSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanFrameFlightRecorderSelfTest',
+        coreGpuSceneDescriptorResourcesSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.pipeline.GpuSceneDescriptorResourcesSelfTest',
+        coreVulkanGpuSceneShaderSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.pipeline.VulkanGpuSceneShaderSelfTest',
+        coreVulkanRangeArenaSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanRangeArenaSelfTest',
+        coreVulkanGpuSceneMemorySelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanGpuSceneMemorySelfTest',
+        coreVulkanGpuSceneIdentityIndexSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanGpuSceneIdentityIndexSelfTest',
+        coreVulkanGpuSceneUploadPlannerSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanGpuSceneUploadPlannerSelfTest',
+        coreVulkanGpuSceneTransferPlanSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanGpuSceneTransferPlanSelfTest',
+        coreVulkanGpuSceneSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanGpuSceneSelfTest',
+        coreVulkanRendererHostSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanRendererHostSelfTest',
+        coreVulkanRayTracingBackendProviderSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanRayTracingBackendProviderSelfTest'
+]
+
+contractSelfTests.each { taskName, mainClassName ->
+    registerCoreSelfTest(taskName, mainClassName, "Runs the independent renderer-core contract check ${mainClassName}.")
+}
+
+tasks.register('rendererCoreContractGate') {
+    group = 'verification'
+    description = 'Runs renderer-core ownership, lifecycle, material, pipeline, and acceleration contracts.'
+    dependsOn contractSelfTests.keySet()
+    dependsOn ':renderer-api:check'
+}
+
+/*
+ * A standalone API project must make `check` authoritative. Leaving the core
+ * contract gate opt-in would allow broken ownership or lifecycle contracts to
+ * publish successfully while Gradle still reports a green default build.
+ */
+tasks.named('check') {
+    dependsOn tasks.named('rendererCoreContractGate')
+}
+
+def nativeSelfTests = [
+        vulkanGpuSceneNativeSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanGpuSceneNativeSelfTest',
+        vulkanGenericAccelerationNativeSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanGenericBlasNativeSelfTest',
+        vulkanSceneAccelerationNativeSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanSceneAccelerationNativeSelfTest',
+        vulkanSceneRuntimeNativeSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanSceneRuntimeNativeSelfTest',
+        gpuSceneRayTracingPipelineNativeSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.pipeline.GpuSceneRayTracingPipelineNativeSelfTest',
+        vulkanGpuSceneRenderingSessionNativeSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanGpuSceneRenderingSessionNativeSelfTest',
+        vulkanGpuSceneThroughputNativeSelfTest: 'top.ceroxe.mcvulkanrt.renderer.backend.vulkan.VulkanGpuSceneThroughputNativeSelfTest',
+        rtNativeMicroSceneSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeMicroSceneSelfTest',
+        rtNativeStressSceneSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeStressSceneSelfTest',
+        rtNativeMaskedMaterialStressSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeMaskedMaterialStressSelfTest',
+        rtNativeFluidSceneSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeFluidSceneSelfTest',
+        rtNativeDynamicSkySceneSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeDynamicSkySceneSelfTest',
+        rtNativeDynamicObjectSceneSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeDynamicObjectSceneSelfTest',
+        rtNativeDynamicBlasTlasStressSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeDynamicBlasTlasStressSelfTest',
+        rtNativeDynamicMeshInstanceStressSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeDynamicMeshInstanceStressSelfTest',
+        rtNativeVanillaDynamicLightingSceneSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeVanillaDynamicLightingSceneSelfTest',
+        rtNativeGpuThroughputSelfTest: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeGpuThroughputSelfTest'
+]
+
+nativeSelfTests.each { taskName, mainClassName ->
+    registerCoreSelfTest(taskName, mainClassName, "Runs the independent hardware Vulkan RT check ${mainClassName}.")
+}
+
+abstract class RendererCoreHardwareGateLock implements org.gradle.api.services.BuildService<org.gradle.api.services.BuildServiceParameters.None> {
+}
+
+def rendererCoreHardwareGateLock = gradle.sharedServices.registerIfAbsent(
+        'rendererCoreHardwareGateLock',
+        RendererCoreHardwareGateLock
+) {
+    maxParallelUsages = 1
+}
+
+nativeSelfTests.keySet().each { taskName ->
+    tasks.named(taskName).configure {
+        usesService(rendererCoreHardwareGateLock)
+    }
+}
+
+def throughputTask = tasks.named('rtNativeGpuThroughputSelfTest')
+nativeSelfTests.keySet().findAll { it != 'rtNativeGpuThroughputSelfTest' }.each { taskName ->
+    tasks.named(taskName).configure {
+        mustRunAfter(throughputTask)
+    }
+}
+
+/*
+ * The largest 768-section convergence scene runs immediately after throughput.
+ * Smaller visual/dynamic scenes must not thermally precondition the GPU or leave
+ * driver retirement work ahead of the test with the largest initial BLAS front.
+ */
+def stressTask = tasks.named('rtNativeStressSceneSelfTest')
+nativeSelfTests.keySet().findAll {
+    it != 'rtNativeGpuThroughputSelfTest' && it != 'rtNativeStressSceneSelfTest'
+}.each { taskName ->
+    tasks.named(taskName).configure {
+        mustRunAfter(stressTask)
+    }
+}
+
+tasks.register('rendererCoreNativeGate') {
+    group = 'verification'
+    description = 'Runs the complete MC-independent hardware Vulkan RT correctness and throughput gate.'
+    dependsOn nativeSelfTests.keySet()
+}
+
+def gpuSceneNativeSelfTests = [
+        'vulkanGpuSceneNativeSelfTest',
+        'vulkanGenericAccelerationNativeSelfTest',
+        'vulkanSceneAccelerationNativeSelfTest',
+        'vulkanSceneRuntimeNativeSelfTest',
+        'gpuSceneRayTracingPipelineNativeSelfTest',
+        'vulkanGpuSceneRenderingSessionNativeSelfTest',
+        'vulkanGpuSceneThroughputNativeSelfTest'
+]
+
+tasks.register('rendererCoreGpuSceneNativeGate') {
+    group = 'verification'
+    description = 'Runs the standalone GPUScene Vulkan RT correctness, visual, provider, and throughput gates.'
+    dependsOn gpuSceneNativeSelfTests
+}
+
+tasks.register('rendererCoreGpuSceneGate') {
+    group = 'verification'
+    description = 'Runs all deterministic and native gates required before the standalone GPUScene checkpoint.'
+    dependsOn tasks.named('rendererCoreContractGate')
+    dependsOn tasks.named('rendererCoreGpuSceneNativeGate')
+    dependsOn tasks.named('verifyNoMinecraftDependencies')
+}
+
+/*
+ * Standalone renderer laboratories.  Each lane uses only renderer-core payloads
+ * and Vulkan hardware; no source-game runtime, bridge, or oracle participates.
+ * Keep them separate so a regression report names the resource lifetime under
+ * test instead of presenting one opaque native-gate failure.
+ */
+tasks.register('rendererCoreStaticDenseSceneLab') {
+    group = 'verification'
+    description = 'Runs the GPU-resident dense static scene laboratory.'
+    dependsOn tasks.named('rtNativeGpuThroughputSelfTest')
+}
+
+tasks.register('rendererCoreDynamicGeometrySceneLab') {
+    group = 'verification'
+    description = 'Runs dynamic BLAS/TLAS and persistent-instance scene laboratories.'
+    dependsOn tasks.named('rtNativeDynamicBlasTlasStressSelfTest')
+    dependsOn tasks.named('rtNativeDynamicMeshInstanceStressSelfTest')
+}
+
+tasks.register('rendererCoreDynamicMaterialMediumSceneLab') {
+    group = 'verification'
+    description = 'Runs incremental masked-material and dynamic-medium scene laboratories.'
+    dependsOn tasks.named('rtNativeMaskedMaterialStressSelfTest')
+    dependsOn tasks.named('rtNativeFluidSceneSelfTest')
+}
+
+tasks.register('rendererCoreSceneLabGate') {
+    group = 'verification'
+    description = 'Runs the standalone static, dynamic geometry, and dynamic material/medium renderer laboratories.'
+    dependsOn tasks.named('rendererCoreStaticDenseSceneLab')
+    dependsOn tasks.named('rendererCoreDynamicGeometrySceneLab')
+    dependsOn tasks.named('rendererCoreDynamicMaterialMediumSceneLab')
+}
+
+/*
+ * A fixed-resolution benchmark matrix reuses the native correctness scenes
+ * instead of forking their scene construction.  Dedicated JavaExec tasks keep
+ * the 1080p contract local to this matrix; ordinary native gates retain their
+ * faster default extents.  The shared hardware service and explicit ordering
+ * make runs reproducible even when Gradle parallel execution is enabled.
+ */
+def native1080pMatrixScenarios = [
+        rtNative1080pStaticDenseBenchmark: [
+                mainClass: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeGpuThroughputSelfTest',
+                widthProperty: 'mcvulkanrt.rt.gpuThroughput.width',
+                heightProperty: 'mcvulkanrt.rt.gpuThroughput.height'
+        ],
+        rtNative1080pMaskedMaterialBenchmark: [
+                mainClass: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeMaskedMaterialStressSelfTest',
+                widthProperty: 'mcvulkanrt.rt.maskedStress.width',
+                heightProperty: 'mcvulkanrt.rt.maskedStress.height'
+        ],
+        rtNative1080pFluidMediumBenchmark: [
+                mainClass: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeFluidSceneSelfTest',
+                widthProperty: 'mcvulkanrt.rt.fluidStress.width',
+                heightProperty: 'mcvulkanrt.rt.fluidStress.height'
+        ],
+        rtNative1080pDynamicSkyBenchmark: [
+                mainClass: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeDynamicSkySceneSelfTest',
+                widthProperty: 'mcvulkanrt.rt.dynamicSky.width',
+                heightProperty: 'mcvulkanrt.rt.dynamicSky.height'
+        ],
+        rtNative1080pDynamicLightingBenchmark: [
+                mainClass: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeVanillaDynamicLightingSceneSelfTest',
+                widthProperty: 'mcvulkanrt.rt.vanillaLighting.width',
+                heightProperty: 'mcvulkanrt.rt.vanillaLighting.height'
+        ],
+        rtNative1080pDynamicBlasTlasBenchmark: [
+                mainClass: 'top.ceroxe.mcvulkanrt.renderer.rt.RtNativeDynamicBlasTlasStressSelfTest',
+                widthProperty: 'mcvulkanrt.rt.dynamicBlasStress.width',
+                heightProperty: 'mcvulkanrt.rt.dynamicBlasStress.height'
+        ]
+]
+
+native1080pMatrixScenarios.each { taskName, scenario ->
+    registerCoreSelfTest(
+            taskName,
+            scenario.mainClass,
+            "Runs the fixed 1920x1080 Vulkan RT matrix lane ${scenario.mainClass}."
+    )
+    tasks.named(taskName).configure {
+        usesService(rendererCoreHardwareGateLock)
+        systemProperty scenario.widthProperty, '1920'
+        systemProperty scenario.heightProperty, '1080'
+    }
+}
+
+def previous1080pMatrixTask = null
+native1080pMatrixScenarios.keySet().each { taskName ->
+    def currentTask = tasks.named(taskName)
+    if (previous1080pMatrixTask != null) {
+        def predecessorTask = previous1080pMatrixTask
+        currentTask.configure {
+            mustRunAfter(predecessorTask)
+        }
+    }
+    previous1080pMatrixTask = currentTask
+}
+
+tasks.register('rendererCore1080pBenchmarkMatrix') {
+    group = 'verification'
+    description = 'Runs the ordered MC-independent 1080p Vulkan RT correctness and GPU-timing matrix.'
+    dependsOn native1080pMatrixScenarios.keySet()
+}

@@ -1,0 +1,270 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "gpuscene_common.glsl"
+
+layout(set = 0, binding = GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
+layout(set = 0, binding = GPU_SCENE_BINDING_OUTPUT_IMAGE, rgba8) uniform writeonly image2D outputImage;
+layout(location = 0) rayPayloadEXT GpuScenePayload payload;
+
+float gsDistributionGgx(float normalHalf, float roughness)
+{
+    float alpha = max(roughness * roughness, 0.0025);
+    float alpha2 = alpha * alpha;
+    float denominator = normalHalf * normalHalf * (alpha2 - 1.0) + 1.0;
+    return alpha2 / max(GS_PI * denominator * denominator, 1.0e-6);
+}
+
+float gsGeometrySmith(float normalView, float normalLight, float roughness)
+{
+    float r = roughness + 1.0;
+    float k = r * r * 0.125;
+    float view = normalView / max(normalView * (1.0 - k) + k, 1.0e-6);
+    float light = normalLight / max(normalLight * (1.0 - k) + k, 1.0e-6);
+    return view * light;
+}
+
+vec3 gsFresnelSchlick(float viewHalf, vec3 reflectance)
+{
+    return reflectance + (vec3(1.0) - reflectance) * pow(1.0 - viewHalf, 5.0);
+}
+
+vec3 gsEvaluateBrdf(vec3 normal, vec3 view, vec3 light, vec3 baseColor, float roughness, float metallic)
+{
+    vec3 halfVector = normalize(view + light);
+    float normalView = max(dot(normal, view), 0.0);
+    float normalLight = max(dot(normal, light), 0.0);
+    float normalHalf = max(dot(normal, halfVector), 0.0);
+    float viewHalf = max(dot(view, halfVector), 0.0);
+    vec3 f0 = mix(vec3(0.04), baseColor, metallic);
+    vec3 fresnel = gsFresnelSchlick(viewHalf, f0);
+    float distribution = gsDistributionGgx(normalHalf, roughness);
+    float geometry = gsGeometrySmith(normalView, normalLight, roughness);
+    vec3 specular = fresnel * distribution * geometry
+        / max(4.0 * normalView * normalLight, 1.0e-5);
+    vec3 diffuse = (vec3(1.0) - fresnel) * (1.0 - metallic) * baseColor * (1.0 / GS_PI);
+    return (diffuse + specular) * normalLight;
+}
+
+bool gsShadowVisible(vec3 origin, vec3 normal, vec3 direction, float maximumDistance)
+{
+    payload.state = uvec4(0u, 1u, 0u, 0u);
+    traceRayEXT(
+        sceneTlas,
+        gl_RayFlagsTerminateOnFirstHitEXT,
+        0xff,
+        0,
+        0,
+        0,
+        origin + normal * 1.0e-3,
+        1.0e-3,
+        direction,
+        maximumDistance,
+        0
+    );
+    return payload.state.x == 0u;
+}
+
+vec3 gsDirectContribution(
+    vec3 position,
+    vec3 normal,
+    vec3 view,
+    vec3 lightDirection,
+    vec3 radiance,
+    float maximumDistance,
+    bool castsShadow,
+    vec3 baseColor,
+    float roughness,
+    float metallic
+) {
+    if (dot(normal, lightDirection) <= 0.0 || max(max(radiance.r, radiance.g), radiance.b) <= 0.0) {
+        return vec3(0.0);
+    }
+    if (castsShadow && !gsShadowVisible(position, normal, lightDirection, maximumDistance)) {
+        return vec3(0.0);
+    }
+    return gsEvaluateBrdf(normal, view, lightDirection, baseColor, roughness, metallic) * radiance;
+}
+
+vec3 gsSceneLight(
+    uint slot,
+    vec3 position,
+    vec3 normal,
+    vec3 view,
+    vec3 baseColor,
+    float roughness,
+    float metallic
+) {
+    uint base = slot * GPU_SCENE_LIGHT_RECORD_WORDS;
+    uint flags = gsLights.words[base + GPU_SCENE_LIGHT_FLAGS_WORD];
+    if ((flags & GPU_SCENE_FLAG_ACTIVE) == 0u) return vec3(0.0);
+
+    uint type = (flags >> 1u) & 0x7u;
+    vec3 color = vec3(
+        uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_COLOR_WORD]),
+        uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_COLOR_WORD + 1u]),
+        uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_COLOR_WORD + 2u])
+    );
+    float intensity = uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_INTENSITY_WORD]);
+    vec3 direction;
+    float maximumDistance;
+    float attenuation = 1.0;
+    if (type == GPU_SCENE_LIGHT_DIRECTIONAL) {
+        direction = -normalize(vec3(
+            uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_DIRECTION_WORD]),
+            uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_DIRECTION_WORD + 1u]),
+            uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_DIRECTION_WORD + 2u])
+        ));
+        maximumDistance = 1.0e20;
+    } else {
+        vec3 lightPosition = vec3(
+            gsFiniteDoubleAsFloat(gsLights.words[base + GPU_SCENE_LIGHT_POSITION_X_WORD],
+                gsLights.words[base + GPU_SCENE_LIGHT_POSITION_X_WORD + 1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base + GPU_SCENE_LIGHT_POSITION_Y_WORD],
+                gsLights.words[base + GPU_SCENE_LIGHT_POSITION_Y_WORD + 1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base + GPU_SCENE_LIGHT_POSITION_Z_WORD],
+                gsLights.words[base + GPU_SCENE_LIGHT_POSITION_Z_WORD + 1u])
+        );
+        vec3 delta = lightPosition - position;
+        maximumDistance = length(delta);
+        if (maximumDistance <= 1.0e-4) return vec3(0.0);
+        direction = delta / maximumDistance;
+        float range = uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_RANGE_WORD]);
+        float rangeFade = clamp(1.0 - maximumDistance / max(range, 1.0e-4), 0.0, 1.0);
+        attenuation = rangeFade * rangeFade / max(maximumDistance * maximumDistance, 1.0);
+        if (type == GPU_SCENE_LIGHT_SPOT) {
+            vec3 spotDirection = normalize(vec3(
+                uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_DIRECTION_WORD]),
+                uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_DIRECTION_WORD + 1u]),
+                uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_DIRECTION_WORD + 2u])
+            ));
+            float cone = dot(spotDirection, -direction);
+            float inner = uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_INNER_CONE_WORD]);
+            float outer = uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_OUTER_CONE_WORD]);
+            attenuation *= smoothstep(outer, inner, cone);
+        }
+    }
+    bool castsShadow = (flags & GPU_SCENE_FLAG_CASTS_SHADOW) != 0u;
+    return gsDirectContribution(position, normal, view, direction, color * intensity * attenuation,
+        maximumDistance, castsShadow, baseColor, roughness, metallic);
+}
+
+vec3 gsToneMap(vec3 color)
+{
+    vec3 mapped = (color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14);
+    return pow(clamp(mapped, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));
+}
+
+vec3 gsLinearToSrgb(vec3 color)
+{
+    vec3 clamped = clamp(color, vec3(0.0), vec3(1.0));
+    bvec3 low = lessThanEqual(clamped, vec3(0.0031308));
+    vec3 linear = clamped * 12.92;
+    vec3 curved = 1.055 * pow(clamped, vec3(1.0 / 2.4)) - 0.055;
+    return mix(curved, linear, low);
+}
+
+float gsLinearFogValue(float distance, float start, float end)
+{
+    if (distance <= start) return 0.0;
+    if (distance >= end) return 1.0;
+    return (distance - start) / (end - start);
+}
+
+vec3 gsApplyDistanceFog(vec3 color, float sphericalDistance, float cylindricalDistance)
+{
+    float spherical = gsLinearFogValue(
+        sphericalDistance,
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOG_SPHERICAL_START_WORD]),
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOG_SPHERICAL_END_WORD])
+    );
+    float cylindrical = gsLinearFogValue(
+        cylindricalDistance,
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOG_CYLINDRICAL_START_WORD]),
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOG_CYLINDRICAL_END_WORD])
+    );
+    vec4 fog = vec4(
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOG_COLOR_WORD]),
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOG_COLOR_WORD + 1u]),
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOG_COLOR_WORD + 2u]),
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOG_COLOR_WORD + 3u])
+    );
+    return mix(color, fog.rgb, max(spherical, cylindrical) * fog.a);
+}
+
+void main()
+{
+    ivec2 extent = imageSize(outputImage);
+    ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    if (any(greaterThanEqual(pixel, extent))) return;
+
+    vec2 ndc = (vec2(pixel) + vec2(0.5)) / vec2(extent) * 2.0 - 1.0;
+    vec3 origin = gsFrameCameraPosition();
+    vec3 forward = normalize(gsFrameVec3(GPU_SCENE_FRAME_CAMERA_FORWARD_WORD));
+    vec3 right = normalize(gsFrameVec3(GPU_SCENE_FRAME_CAMERA_RIGHT_WORD));
+    vec3 up = normalize(gsFrameVec3(GPU_SCENE_FRAME_CAMERA_UP_WORD));
+    vec2 fov = vec2(
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOV_WORD]),
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOV_WORD + 1u])
+    );
+    vec3 rayDirection = normalize(forward + right * ndc.x * fov.x - up * ndc.y * fov.y);
+
+    payload.state = uvec4(0u, 0u, 0u, 0u);
+    payload.launchInfo = uvec4(uint(pixel.x), uint(pixel.y), uint(extent.x), uint(extent.y));
+    traceRayEXT(sceneTlas, gl_RayFlagsNoneEXT, 0xff, 0, 0, 0,
+        origin, 1.0e-3, rayDirection, 1.0e20, 0);
+
+    vec3 radiance;
+    bool lightmapModulated = payload.state.x != 0u
+        && ((payload.state.z >> GPU_SCENE_SHADING_MODEL_SHIFT) & GPU_SCENE_SHADING_MODEL_MASK)
+            == GPU_SCENE_SHADING_LIGHTMAP_MODULATED;
+    if (payload.state.x == 0u) {
+        radiance = payload.baseColorAndOpacity.rgb;
+    } else if (lightmapModulated) {
+        // Source-compatible materials already contain texture, vertex tint, AO and lightmap.
+        // Running them through the PBR light loop or ACES would light and curve them twice.
+        radiance = gsApplyDistanceFog(
+            payload.baseColorAndOpacity.rgb,
+            payload.transmissionIor.z,
+            payload.transmissionIor.w
+        );
+    } else {
+        vec3 position = payload.worldPositionAndDistance.xyz;
+        float distance = payload.worldPositionAndDistance.w;
+        vec3 normal = normalize(payload.worldNormalAndRoughness.xyz);
+        float roughness = clamp(payload.worldNormalAndRoughness.w, 0.025, 1.0);
+        vec3 baseColor = max(payload.baseColorAndOpacity.rgb, vec3(0.0));
+        float opacity = clamp(payload.baseColorAndOpacity.a, 0.0, 1.0);
+        vec3 emissive = max(payload.emissiveAndMetallic.rgb, vec3(0.0));
+        float metallic = clamp(payload.emissiveAndMetallic.a, 0.0, 1.0);
+        float transmission = clamp(payload.transmissionIor.x, 0.0, 1.0);
+        vec3 view = normalize(origin - position);
+        vec3 sky = gsFrameVec3(GPU_SCENE_FRAME_SKY_COLOR_WORD);
+        float ambient = uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_AMBIENT_INTENSITY_WORD]);
+        radiance = emissive + baseColor * sky * ambient * (1.0 - metallic);
+
+        vec3 sunDirection = -normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
+        vec3 sunRadiance = gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)
+            * uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
+        radiance += gsDirectContribution(position, normal, view, sunDirection, sunRadiance,
+            1.0e20, true, baseColor, roughness, metallic);
+
+        uint lightCount = gsFrame.words[GPU_SCENE_FRAME_LIGHT_SLOT_UPPER_BOUND_WORD];
+        for (uint slot = 0u; slot < lightCount; ++slot) {
+            radiance += gsSceneLight(slot, position, normal, view, baseColor, roughness, metallic);
+        }
+
+        vec3 background = gsSkyRadiance(rayDirection);
+        radiance = mix(background, radiance, opacity * (1.0 - transmission));
+        float mediumDensity = uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_DENSITY_WORD]);
+        vec3 extinction = gsFrameVec3(GPU_SCENE_FRAME_MEDIUM_EXTINCTION_WORD) * mediumDensity;
+        vec3 transmittance = exp(-extinction * max(distance, 0.0));
+        vec3 scattering = gsFrameVec3(GPU_SCENE_FRAME_MEDIUM_SCATTERING_WORD) * mediumDensity;
+        radiance = radiance * transmittance + scattering * (vec3(1.0) - transmittance);
+    }
+    imageStore(outputImage, pixel, vec4(
+        lightmapModulated ? gsLinearToSrgb(radiance) : gsToneMap(radiance),
+        1.0
+    ));
+}

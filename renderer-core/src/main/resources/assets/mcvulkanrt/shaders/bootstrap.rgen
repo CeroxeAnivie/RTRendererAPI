@@ -1,0 +1,920 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT sceneTlas;
+/* Static terrain and animated ModelPart instances update through separate TLAS lanes. */
+layout(set = 0, binding = 8) uniform accelerationStructureEXT dynamicTlas;
+layout(set = 0, binding = 1, rgba8) uniform writeonly image2D outputImage;
+
+layout(set = 0, binding = 5, std430) readonly buffer TextureRecords
+{
+    uvec4 textures[];
+} textureRecords;
+
+layout(set = 0, binding = 6, std430) readonly buffer TexturePixels
+{
+    uint pixels[];
+} texturePixels;
+
+struct RtPayload
+{
+    vec4 colorAlpha;
+    float hitT;
+    uint blendMode;
+    uint hit;
+    uint reserved;
+#ifdef MCVULKANRT_GBUFFER
+    uint materialId;
+    uint normalOct16;
+    uint albedoRgba8;
+    uint emissiveRgba8;
+#endif
+};
+
+layout(location = 0) rayPayloadEXT RtPayload payload;
+
+#ifdef MCVULKANRT_GBUFFER
+layout(set = 0, binding = 9, std430) buffer DiagnosticGBuffer
+{
+    uvec4 pixels[];
+} diagnosticGBuffer;
+#endif
+
+layout(set = 0, binding = 4, std430) readonly buffer FrameUniformBuffer
+{
+    vec4 cameraPosition;
+    vec4 cameraForward;
+    vec4 cameraRight;
+    vec4 cameraUp;
+    uvec4 frameInfo;
+    uvec2 frameSequence;
+    uvec2 reserved;
+    vec4 environmentTime;
+} frame;
+
+layout(set = 0, binding = 7, std430) readonly buffer DynamicSceneBuffer
+{
+    uvec4 info;
+    uvec4 counts;
+    vec4 skyZenith;
+    vec4 skyHorizon;
+    vec4 primaryLightDirectionIntensity;
+    vec4 primaryLightColorFlags;
+    uvec4 lightmapPayloadRgba[64];
+    vec4 celestialDirectionRadius[8];
+    uvec4 celestialColorKind[8];
+    vec4 primitivePositionRadius[64];
+    uvec4 primitiveColorKind[64];
+    vec4 particlePositionSize[256];
+    uvec4 particleColorKind[256];
+    vec4 particleRotation[256];
+    vec4 particleUv[256];
+    vec4 particleLifecycle[256];
+    vec4 beamStartRadius[32];
+    vec4 beamEndFlags[32];
+    uvec4 beamColorKind[32];
+    vec4 localLightPositionRadius[64];
+    uvec4 localLightColorKindIntensity[64];
+    vec4 fogColorFlags;
+    vec4 fogDistances0;
+    vec4 fogDistances1;
+    uvec4 environmentInfo;
+    vec4 environmentTime;
+    vec4 weatherColumnBounds[256];
+    vec4 weatherColumnData[256];
+    uvec4 weatherColumnMeta[256];
+    uvec4 blockDecalInfo;
+    ivec4 blockDecalBoundsMin;
+    ivec4 blockDecalBoundsMax;
+    ivec4 blockDecals[128];
+    vec4 blockDecalOffsets[128];
+    uvec4 particleTileInfo;
+    uvec4 particleTileRanges[576];
+    uvec4 particleTileIndices[4096];
+} dynamicScene;
+
+const uint WORLD_MODE = 0u;
+const uint BOOTSTRAP_MODE = 1u;
+const uint CAMERA_MEDIUM_NONE = 0u;
+const uint MAX_DYNAMIC_PRIMITIVES = 64u;
+const uint MAX_DYNAMIC_PARTICLES = 256u;
+const uint MAX_DYNAMIC_BEAMS = 32u;
+const uint MAX_DYNAMIC_LIGHTS = 64u;
+const uint MAX_WEATHER_COLUMNS = 256u;
+const uint ENVIRONMENT_FLAG_FOG_KNOWN = 1u;
+const uint DYNAMIC_SCENE_FLAG_ACTIVE = 1u;
+const uint DYNAMIC_SCENE_FLAG_TLAS_GEOMETRY = 2u;
+const float DYNAMIC_ALPHA_CUTOFF = 1.0 / 255.0;
+const uint BLEND_OPAQUE = 0u;
+const uint BLEND_TRANSLUCENT = 1u;
+const uint BLEND_PREMULTIPLIED_ALPHA = 2u;
+const uint BLEND_ADDITIVE = 3u;
+const uint BLEND_LIGHTNING = 4u;
+const uint BLEND_OVERLAY = 5u;
+const uint BLEND_OUTLINE_BLIT = 6u;
+const uint BLEND_INVERT = 7u;
+const uint BLEND_MULTIPLY = 8u;
+const uint MAX_TRANSPARENCY_LAYERS = 12u;
+const float NEXT_LAYER_EPSILON = 0.0005;
+const uint WORLD_VISIBILITY_MASK = 0x7fu;
+const uint OVERLAY_VISIBILITY_MASK = 0x80u;
+const uint RAY_QUERY_DIRECTIONAL_VISIBILITY = 1u;
+const float DIRECTIONAL_SHADOW_AMBIENT_FLOOR = 0.35;
+const float SHADOW_ORIGIN_EPSILON = 0.002;
+
+vec3 unpackRgba8(uint packedRgba)
+{
+    return vec3(
+        float(packedRgba & 0xffu) / 255.0,
+        float((packedRgba >> 8u) & 0xffu) / 255.0,
+        float((packedRgba >> 16u) & 0xffu) / 255.0
+    );
+}
+
+float unpackAlpha8(uint packedRgba)
+{
+    return float((packedRgba >> 24u) & 0xffu) / 255.0;
+}
+
+uint lightmapPayloadRgba(uint firstCoordinate, uint secondCoordinate)
+{
+    uint tableIndex = min(firstCoordinate, 15u) * 16u + min(secondCoordinate, 15u);
+    uvec4 packed = dynamicScene.lightmapPayloadRgba[tableIndex >> 2u];
+    uint lane = tableIndex & 3u;
+    return lane == 0u ? packed.x : lane == 1u ? packed.y : lane == 2u ? packed.z : packed.w;
+}
+
+vec3 lightmapPayloadForPackedCoordinates(uint packedCoordinates, bool forceMaximumSecondCoordinate)
+{
+    uint secondCoordinate = (packedCoordinates >> 4u) & 0x0fu;
+    uint firstCoordinate = (packedCoordinates >> 20u) & 0x0fu;
+    if (forceMaximumSecondCoordinate) {
+        secondCoordinate = 15u;
+    }
+    return unpackRgba8(lightmapPayloadRgba(firstCoordinate, secondCoordinate));
+}
+
+vec4 sampleTextureNearest(uint textureId, vec2 uv)
+{
+    uvec4 textureRecord = textureRecords.textures[textureId];
+    uint width = max(textureRecord.y, 1u);
+    uint height = max(textureRecord.z, 1u);
+    vec2 clampedUv = clamp(uv, vec2(0.0), vec2(0.99999994));
+    uvec2 pixel = min(uvec2(floor(clampedUv * vec2(width, height))), uvec2(width - 1u, height - 1u));
+    uint packed = texturePixels.pixels[textureRecord.x + pixel.y * width + pixel.x];
+    return vec4(unpackRgba8(packed), unpackAlpha8(packed));
+}
+
+float cameraMediumDensity()
+{
+    if (frame.frameInfo.w == CAMERA_MEDIUM_NONE) {
+        return 0.0;
+    }
+    return max(uintBitsToFloat(frame.reserved.y), 0.0);
+}
+
+vec3 cameraMediumColor()
+{
+    if (frame.frameInfo.w == CAMERA_MEDIUM_NONE) {
+        return vec3(0.0);
+    }
+    return unpackRgba8(frame.reserved.x);
+}
+
+vec3 applyCameraMediumFog(vec3 color, float travelDistance)
+{
+    float density = cameraMediumDensity();
+    if (density <= 0.0) {
+        return color;
+    }
+
+    /*
+     * MC camera fog is a full-frame medium effect, not a property of the first
+     * surface hit.  Apply it after terrain/dynamic composition so every visible
+     * object inside the fluid volume is absorbed consistently.  Lava-like media
+     * use high density and alpha, collapsing distant detail instead of letting
+     * enclosed rooms stay readable through the fluid.
+     */
+    vec3 mediumColor = cameraMediumColor();
+    float alpha = unpackAlpha8(frame.reserved.x);
+    float distance = clamp(travelDistance, 0.0, 1024.0);
+    float extinction = exp(-density * distance);
+    float scatter = 1.0 - extinction;
+    vec3 fogColor = mix(mediumColor * 0.55, mediumColor * 1.15, clamp(alpha, 0.0, 1.0));
+    vec3 absorbed = color * extinction + fogColor * scatter;
+    float opacity = clamp(alpha * scatter, 0.0, 1.0);
+    return mix(color, absorbed, opacity);
+}
+
+float linearFogFactor(float distance, float startDistance, float endDistance)
+{
+    if (endDistance <= startDistance + 0.001) {
+        return distance >= endDistance ? 1.0 : 0.0;
+    }
+    return clamp((distance - startDistance) / (endDistance - startDistance), 0.0, 1.0);
+}
+
+vec3 applyWorldFog(vec3 color, float travelDistance)
+{
+    if ((dynamicScene.environmentInfo.z & ENVIRONMENT_FLAG_FOG_KNOWN) == 0u) {
+        return color;
+    }
+    float terrainFog = linearFogFactor(
+        travelDistance,
+        dynamicScene.fogDistances0.x,
+        dynamicScene.fogDistances0.y
+    );
+    float renderFog = linearFogFactor(
+        travelDistance,
+        dynamicScene.fogDistances0.z,
+        dynamicScene.fogDistances0.w
+    );
+    float fog = max(terrainFog, renderFog);
+    float alpha = frame.environmentTime.z > 0.0 ? frame.environmentTime.z : 1.0;
+    return mix(color, dynamicScene.fogColorFlags.rgb, clamp(fog * alpha, 0.0, 1.0));
+}
+
+vec3 shadeDynamicColor(uint packedRgba, float shade)
+{
+    return clamp(unpackRgba8(packedRgba) * shade, vec3(0.0), vec3(1.0));
+}
+
+float localLightScalar(vec3 point)
+{
+    uint localLightCount = min(dynamicScene.counts.w, MAX_DYNAMIC_LIGHTS);
+    float light = 0.0;
+    for (uint index = 0u; index < localLightCount; index++) {
+        vec4 positionRadius = dynamicScene.localLightPositionRadius[index];
+        if (positionRadius.w <= 0.0) {
+            continue;
+        }
+        vec3 delta = positionRadius.xyz - point;
+        float distance2 = dot(delta, delta);
+        float radius2 = max(positionRadius.w * positionRadius.w, 0.0001);
+        float attenuation = clamp(1.0 - distance2 / radius2, 0.0, 1.0);
+        float intensity = max(uintBitsToFloat(dynamicScene.localLightColorKindIntensity[index].z), 0.0);
+        light += attenuation * attenuation * intensity;
+    }
+    return light;
+}
+
+bool intersectSphere(vec3 origin, vec3 direction, vec3 center, float radius, out float hitT)
+{
+    vec3 oc = origin - center;
+    float b = dot(oc, direction);
+    float c = dot(oc, oc) - radius * radius;
+    float discriminant = b * b - c;
+    if (discriminant < 0.0) {
+        return false;
+    }
+    float root = sqrt(discriminant);
+    float nearT = -b - root;
+    float farT = -b + root;
+    hitT = nearT > 0.001 ? nearT : farT;
+    return hitT > 0.001;
+}
+
+bool intersectEllipsoid(
+    vec3 origin,
+    vec3 direction,
+    vec3 center,
+    vec3 radii,
+    out float hitT,
+    out vec3 hitNormal)
+{
+    vec3 safeRadii = max(radii, vec3(0.001));
+    vec3 scaledOrigin = (origin - center) / safeRadii;
+    vec3 scaledDirection = direction / safeRadii;
+    float a = dot(scaledDirection, scaledDirection);
+    float b = dot(scaledOrigin, scaledDirection);
+    float c = dot(scaledOrigin, scaledOrigin) - 1.0;
+    float discriminant = b * b - a * c;
+    if (discriminant < 0.0 || a <= 1.0e-10) {
+        return false;
+    }
+    float root = sqrt(discriminant);
+    float nearT = (-b - root) / a;
+    float farT = (-b + root) / a;
+    hitT = nearT > 0.001 ? nearT : farT;
+    if (hitT <= 0.001) {
+        return false;
+    }
+    vec3 hitDelta = (origin + direction * hitT) - center;
+    hitNormal = normalize(hitDelta / (safeRadii * safeRadii));
+    return true;
+}
+
+vec3 rotateByQuaternion(vec3 vector, vec4 rotation)
+{
+    vec3 twiceCross = 2.0 * cross(rotation.xyz, vector);
+    return vector + rotation.w * twiceCross + cross(rotation.xyz, twiceCross);
+}
+
+bool intersectBillboard(
+    vec3 origin,
+    vec3 direction,
+    vec3 center,
+    float halfSize,
+    vec4 rotation,
+    out float hitT,
+    out vec2 localUv)
+{
+    vec3 normal = normalize(rotateByQuaternion(vec3(0.0, 0.0, 1.0), rotation));
+    float denominator = dot(direction, normal);
+    if (abs(denominator) <= 1.0e-5) {
+        return false;
+    }
+    hitT = dot(center - origin, normal) / denominator;
+    if (hitT <= 0.001) {
+        return false;
+    }
+    vec3 hitPoint = origin + direction * hitT;
+    vec3 delta = hitPoint - center;
+    vec3 right = normalize(rotateByQuaternion(vec3(1.0, 0.0, 0.0), rotation));
+    vec3 up = normalize(rotateByQuaternion(vec3(0.0, 1.0, 0.0), rotation));
+    float localX = dot(delta, right);
+    float localY = dot(delta, up);
+    if (abs(localX) > halfSize || abs(localY) > halfSize) {
+        return false;
+    }
+    localUv = vec2(localX / halfSize * 0.5 + 0.5, localY / halfSize * 0.5 + 0.5);
+    return true;
+}
+
+bool intersectBeam(vec3 origin, vec3 direction, vec3 startPoint, vec3 endPoint, float radius, out float hitT)
+{
+    vec3 segment = endPoint - startPoint;
+    float segmentLength2 = dot(segment, segment);
+    if (segmentLength2 <= 1.0e-8) {
+        return false;
+    }
+
+    vec3 w0 = origin - startPoint;
+    float a = dot(direction, direction);
+    float b = dot(direction, segment);
+    float c = segmentLength2;
+    float d = dot(direction, w0);
+    float e = dot(segment, w0);
+    float denominator = a * c - b * b;
+    float rayT = denominator > 1.0e-8 ? (b * e - c * d) / denominator : 0.0;
+    float segmentT = denominator > 1.0e-8 ? (a * e - b * d) / denominator : e / c;
+    rayT = max(rayT, 0.001);
+    segmentT = clamp(segmentT, 0.0, 1.0);
+
+    vec3 rayPoint = origin + direction * rayT;
+    vec3 segmentPoint = startPoint + segment * segmentT;
+    vec3 closestDelta = rayPoint - segmentPoint;
+    if (dot(closestDelta, closestDelta) > radius * radius) {
+        return false;
+    }
+    hitT = rayT;
+    return true;
+}
+
+bool intersectWeatherColumn(
+    vec3 origin,
+    vec3 direction,
+    vec4 bounds,
+    out float hitT,
+    out float verticalT
+) {
+    vec2 center = bounds.xy + vec2(0.5);
+    vec2 relativeCenter = center - origin.xz;
+    vec2 radial = relativeCenter;
+    float radialLength = length(radial);
+    if (radialLength <= 1.0e-4) {
+        radial = vec2(1.0, 0.0);
+        radialLength = 1.0;
+    }
+    vec2 normal = radial / radialLength;
+    vec2 side = vec2(-normal.y, normal.x);
+    float denominator = dot(direction.xz, normal);
+    if (abs(denominator) <= 1.0e-5) {
+        return false;
+    }
+    hitT = dot(relativeCenter, normal) / denominator;
+    if (hitT <= 0.001) {
+        return false;
+    }
+    vec3 point = origin + direction * hitT;
+    if (point.y < bounds.z || point.y > bounds.w) {
+        return false;
+    }
+    float along = dot(point.xz - center, side);
+    if (abs(along) > 0.5) {
+        return false;
+    }
+    verticalT = clamp((point.y - bounds.z) / max(bounds.w - bounds.z, 0.001), 0.0, 1.0);
+    return true;
+}
+
+vec4 shadeDynamicScene(
+    vec3 rayOrigin,
+    vec3 rayDirection,
+    float minHitT,
+    float maxHitT,
+    out float dynamicHitT,
+    out uint dynamicBlendMode
+)
+{
+    dynamicHitT = maxHitT;
+    dynamicBlendMode = BLEND_OPAQUE;
+    if ((dynamicScene.info.w & DYNAMIC_SCENE_FLAG_ACTIVE) == 0u) {
+        return vec4(0.0);
+    }
+
+    float bestT = maxHitT;
+    vec3 bestColor = vec3(0.0);
+    float bestAlpha = 0.0;
+
+    uint primitiveCount = min(dynamicScene.counts.x, MAX_DYNAMIC_PRIMITIVES);
+    for (uint index = 0u; index < primitiveCount; index++) {
+        vec4 positionRadius = dynamicScene.primitivePositionRadius[index];
+        uvec4 colorKind = dynamicScene.primitiveColorKind[index];
+        float alpha = unpackAlpha8(colorKind.x);
+        vec3 radii = vec3(positionRadius.w, uintBitsToFloat(colorKind.z), uintBitsToFloat(colorKind.w));
+        if (any(lessThanEqual(radii, vec3(0.0))) || alpha <= DYNAMIC_ALPHA_CUTOFF) {
+            continue;
+        }
+        float hitT;
+        vec3 normal;
+        if (intersectEllipsoid(rayOrigin, rayDirection, positionRadius.xyz, radii, hitT, normal)
+                && hitT >= minHitT && hitT < bestT) {
+            float shade = 0.45 + 0.55 * clamp(dot(normal, normalize(vec3(-0.35, 0.8, 0.45))), 0.0, 1.0);
+            shade += 0.18 * localLightScalar(rayOrigin + rayDirection * hitT);
+            bestT = hitT;
+            bestColor = shadeDynamicColor(colorKind.x, shade);
+            bestAlpha = alpha;
+            dynamicBlendMode = BLEND_OPAQUE;
+        }
+    }
+
+    uint particleCount = min(dynamicScene.counts.y, MAX_DYNAMIC_PARTICLES);
+    bool fullParticleScan = dynamicScene.particleTileInfo.w != 0u;
+    uvec4 particleTileRange = uvec4(0u);
+    if (!fullParticleScan) {
+        uint tileX = min(gl_LaunchIDEXT.x * dynamicScene.particleTileInfo.x / max(gl_LaunchSizeEXT.x, 1u), dynamicScene.particleTileInfo.x - 1u);
+        uint tileY = min(gl_LaunchIDEXT.y * dynamicScene.particleTileInfo.y / max(gl_LaunchSizeEXT.y, 1u), dynamicScene.particleTileInfo.y - 1u);
+        particleTileRange = dynamicScene.particleTileRanges[tileY * dynamicScene.particleTileInfo.x + tileX];
+    }
+    uint particleCandidateCount = fullParticleScan ? particleCount : particleTileRange.y;
+    for (uint candidate = 0u; candidate < particleCandidateCount; candidate++) {
+        uint index = candidate;
+        if (!fullParticleScan) {
+            uint packedReference = particleTileRange.x + candidate;
+            uvec4 packedIndices = dynamicScene.particleTileIndices[packedReference >> 2u];
+            uint lane = packedReference & 3u;
+            index = lane == 0u ? packedIndices.x : lane == 1u ? packedIndices.y : lane == 2u ? packedIndices.z : packedIndices.w;
+        }
+        if (index >= particleCount) {
+            continue;
+        }
+        vec4 positionSize = dynamicScene.particlePositionSize[index];
+        uvec4 colorKind = dynamicScene.particleColorKind[index];
+        vec4 particleRotation = dynamicScene.particleRotation[index];
+        vec4 particleUv = dynamicScene.particleUv[index];
+        vec4 particleLifecycle = dynamicScene.particleLifecycle[index];
+        if (positionSize.w <= 0.0 || particleLifecycle.y <= DYNAMIC_ALPHA_CUTOFF) {
+            continue;
+        }
+        float hitT;
+        vec2 localUv;
+        if (intersectBillboard(
+                rayOrigin,
+                rayDirection,
+                positionSize.xyz,
+                positionSize.w * 0.5,
+                particleRotation,
+                hitT,
+                localUv
+        ) && hitT >= minHitT && hitT < bestT) {
+            vec2 atlasUv = mix(particleUv.xz, particleUv.yw, localUv);
+            vec4 textureColor = sampleTextureNearest(colorKind.z, atlasUv);
+            float alpha = textureColor.a * particleLifecycle.y;
+            if (alpha <= DYNAMIC_ALPHA_CUTOFF) {
+                continue;
+            }
+            vec2 cutout = abs(localUv - vec2(0.5));
+            float crossMask = min(cutout.x, cutout.y);
+            if (crossMask <= 0.18 || length(localUv - vec2(0.5)) <= 0.38) {
+                bestT = hitT;
+                uint packedLight = uint(round(max(particleLifecycle.z, 0.0)));
+                bestColor = clamp(
+                    textureColor.rgb
+                        * unpackRgba8(colorKind.x)
+                        * lightmapPayloadForPackedCoordinates(packedLight, false),
+                    vec3(0.0),
+                    vec3(1.0)
+                );
+                bestAlpha = alpha;
+                uint particleKind = colorKind.y;
+                dynamicBlendMode = particleKind == 3u
+                    ? BLEND_ADDITIVE
+                    : particleKind == 2u
+                        ? BLEND_TRANSLUCENT
+                        : BLEND_OPAQUE;
+            }
+        }
+    }
+
+    uint beamCount = min(dynamicScene.counts.z, MAX_DYNAMIC_BEAMS);
+    for (uint index = 0u; index < beamCount; index++) {
+        vec4 startRadius = dynamicScene.beamStartRadius[index];
+        vec4 endFlags = dynamicScene.beamEndFlags[index];
+        uvec4 colorKind = dynamicScene.beamColorKind[index];
+        float alpha = unpackAlpha8(colorKind.x);
+        if (startRadius.w <= 0.0 || alpha <= DYNAMIC_ALPHA_CUTOFF) {
+            continue;
+        }
+        float hitT;
+        if (intersectBeam(rayOrigin, rayDirection, startRadius.xyz, endFlags.xyz, startRadius.w, hitT)
+                && hitT >= minHitT && hitT < bestT) {
+            bestT = hitT;
+            bestColor = clamp(
+                shadeDynamicColor(colorKind.x, endFlags.w > 0.5 ? 1.25 : 1.0)
+                    * lightmapPayloadForPackedCoordinates(colorKind.w, endFlags.w > 0.5),
+                vec3(0.0),
+                vec3(1.0)
+            );
+            bestAlpha = alpha;
+            dynamicBlendMode = endFlags.w > 0.5 ? BLEND_ADDITIVE : BLEND_TRANSLUCENT;
+        }
+    }
+
+    uint weatherCount = min(dynamicScene.environmentInfo.w, MAX_WEATHER_COLUMNS);
+    for (uint index = 0u; index < weatherCount; index++) {
+        vec4 bounds = dynamicScene.weatherColumnBounds[index];
+        vec4 columnData = dynamicScene.weatherColumnData[index];
+        float alpha = clamp(columnData.z, 0.0, 1.0);
+        if (alpha <= DYNAMIC_ALPHA_CUTOFF || bounds.w <= bounds.z) {
+            continue;
+        }
+        float hitT;
+        float verticalT;
+        if (intersectWeatherColumn(rayOrigin, rayDirection, bounds, hitT, verticalT)
+                && hitT >= minHitT && hitT < bestT) {
+            uint kind = dynamicScene.weatherColumnMeta[index].x;
+            float streak = kind == 0u
+                ? smoothstep(0.20, 0.0, abs(fract(verticalT * 14.0 + columnData.y) - 0.5))
+                : smoothstep(0.42, 0.0, abs(fract(verticalT * 4.0 + columnData.x) - 0.5));
+            bestT = hitT;
+            bestColor = kind == 0u ? vec3(0.62, 0.68, 0.78) : vec3(0.90, 0.94, 1.0);
+            bestAlpha = clamp(alpha * mix(0.35, 1.0, streak), 0.0, 1.0);
+            dynamicBlendMode = BLEND_TRANSLUCENT;
+        }
+    }
+
+    dynamicHitT = bestT;
+    return vec4(bestColor, bestAlpha);
+}
+
+void resetPayload()
+{
+    payload.colorAlpha = vec4(0.0);
+    payload.hitT = -1.0;
+    payload.blendMode = BLEND_OPAQUE;
+    payload.hit = 0u;
+    payload.reserved = 0u;
+#ifdef MCVULKANRT_GBUFFER
+    payload.materialId = 0u;
+    payload.normalOct16 = 0u;
+    payload.albedoRgba8 = 0u;
+    payload.emissiveRgba8 = 0u;
+#endif
+}
+
+void resetDirectionalVisibilityPayload()
+{
+    /*
+     * Visibility rays only need an occluded/not-occluded result. Seed the
+     * payload as occluded so an accepted any-hit can terminate traversal while
+     * SkipClosestHitShader avoids running the material shader. The miss shader
+     * clears this sentinel through its dedicated constant-time visibility path.
+     */
+    resetPayload();
+    payload.hit = 1u;
+    payload.reserved = RAY_QUERY_DIRECTIONAL_VISIBILITY;
+}
+
+float directionalLightVisibility(vec3 worldPosition)
+{
+    vec3 lightDirection = dynamicScene.primaryLightDirectionIntensity.xyz;
+    float lightIntensity = dynamicScene.primaryLightDirectionIntensity.w;
+    bool castsShadow = dynamicScene.primaryLightColorFlags.w > 0.5;
+    if (!castsShadow || lightIntensity <= 0.0 || dot(lightDirection, lightDirection) < 0.5) {
+        return 1.0;
+    }
+
+    lightDirection = normalize(lightDirection);
+    vec3 shadowOrigin = worldPosition + lightDirection * SHADOW_ORIGIN_EPSILON;
+    resetDirectionalVisibilityPayload();
+    traceRayEXT(
+        sceneTlas,
+        gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT,
+        WORLD_VISIBILITY_MASK,
+        0,
+        0,
+        0,
+        shadowOrigin,
+        SHADOW_ORIGIN_EPSILON,
+        lightDirection,
+        1024.0,
+        0
+    );
+    if (payload.hit != 0u) {
+        return DIRECTIONAL_SHADOW_AMBIENT_FLOOR;
+    }
+
+    if ((dynamicScene.info.w & DYNAMIC_SCENE_FLAG_TLAS_GEOMETRY) != 0u) {
+        resetDirectionalVisibilityPayload();
+        traceRayEXT(
+            dynamicTlas,
+            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT,
+            WORLD_VISIBILITY_MASK,
+            0,
+            0,
+            0,
+            shadowOrigin,
+            SHADOW_ORIGIN_EPSILON,
+            lightDirection,
+            1024.0,
+            0
+        );
+        if (payload.hit != 0u) {
+            return DIRECTIONAL_SHADOW_AMBIENT_FLOOR;
+        }
+    }
+    return 1.0;
+}
+
+#ifdef MCVULKANRT_GBUFFER
+void storeDiagnosticGBuffer(ivec2 pixel, bool hasSurface, RtPayload surface)
+{
+    uint pixelIndex = uint(pixel.y) * gl_LaunchSizeEXT.x + uint(pixel.x);
+    uint base = pixelIndex * 2u;
+    diagnosticGBuffer.pixels[base] = hasSurface
+        ? uvec4(floatBitsToUint(surface.hitT), surface.normalOct16, surface.albedoRgba8, surface.materialId)
+        : uvec4(0x7f800000u, 0u, 0u, 0xffffffffu);
+    diagnosticGBuffer.pixels[base + 1u] = hasSurface
+        ? uvec4(surface.emissiveRgba8, frame.frameInfo.w & 0xffu, 0u, 0u)
+        : uvec4(0u, frame.frameInfo.w & 0xffu, 0u, 0u);
+}
+#endif
+
+vec3 blendMaterialLayer(vec4 source, uint blendMode, vec3 destination)
+{
+    float alpha = clamp(source.a, 0.0, 1.0);
+    if (blendMode == BLEND_OPAQUE) {
+        return source.rgb;
+    }
+    if (blendMode == BLEND_TRANSLUCENT || blendMode == BLEND_OUTLINE_BLIT) {
+        return source.rgb * alpha + destination * (1.0 - alpha);
+    }
+    if (blendMode == BLEND_PREMULTIPLIED_ALPHA) {
+        return source.rgb + destination * (1.0 - alpha);
+    }
+    if (blendMode == BLEND_ADDITIVE) {
+        return source.rgb + destination;
+    }
+    if (blendMode == BLEND_LIGHTNING || blendMode == BLEND_OVERLAY) {
+        return source.rgb * alpha + destination;
+    }
+    if (blendMode == BLEND_INVERT) {
+        return source.rgb * (vec3(1.0) - destination)
+            + destination * (vec3(1.0) - source.rgb);
+    }
+    if (blendMode == BLEND_MULTIPLY) {
+        return 2.0 * source.rgb * destination;
+    }
+    return vec3(1.0, 0.0, 1.0);
+}
+
+void main()
+{
+    uint x = gl_LaunchIDEXT.x;
+    uint y = gl_LaunchIDEXT.y;
+    uint width = gl_LaunchSizeEXT.x;
+    uint height = gl_LaunchSizeEXT.y;
+
+    vec3 rayOrigin;
+    vec3 rayDirection;
+    if (frame.frameInfo.z == BOOTSTRAP_MODE) {
+        bool shouldHitBootstrapTriangle = x < (width / 2u);
+        /*
+         * The bootstrap mesh is a square made from two triangles. The center point
+         * is exactly on the shared diagonal, and edge ownership is not a good
+         * invariant for a hardware smoke test. Aim inside the first triangle so a
+         * miss means the AS/SBT path is broken, not that the driver chose the other
+         * side of an edge rule.
+         */
+        vec2 rayXY = shouldHitBootstrapTriangle ? vec2(-0.25, -0.25) : vec2(3.0, 3.0);
+        rayOrigin = vec3(rayXY, 1.0);
+        rayDirection = vec3(0.0, 0.0, -1.0);
+    } else {
+        vec2 uv = (vec2(gl_LaunchIDEXT.xy) + vec2(0.5)) / vec2(width, height);
+        vec2 ndc = vec2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+        rayOrigin = frame.cameraPosition.xyz;
+        rayDirection = normalize(
+            frame.cameraForward.xyz
+                + frame.cameraRight.xyz * ndc.x * frame.cameraForward.w
+                + frame.cameraUp.xyz * ndc.y * frame.cameraRight.w
+        );
+    }
+    float rayTMax = frame.frameInfo.z == BOOTSTRAP_MODE ? 10.0 : 1024.0;
+
+    resetPayload();
+    if (frame.frameInfo.z == BOOTSTRAP_MODE) {
+        traceRayEXT(
+            sceneTlas,
+            gl_RayFlagsNoneEXT,
+            0xff,
+            0,
+            0,
+            0,
+            rayOrigin,
+            0.001,
+            rayDirection,
+            rayTMax,
+            0
+        );
+        imageStore(outputImage, ivec2(x, y), vec4(payload.colorAlpha.rgb, 1.0));
+        return;
+    }
+
+    vec4 layerColorAlpha[MAX_TRANSPARENCY_LAYERS];
+    uint layerBlendMode[MAX_TRANSPARENCY_LAYERS];
+    uint layerCount = 0u;
+    float nextHitT = 0.001;
+    float firstHitT = rayTMax;
+    vec3 background = vec3(0.0);
+    bool hasDynamicTlasGeometry =
+        (dynamicScene.info.w & DYNAMIC_SCENE_FLAG_TLAS_GEOMETRY) != 0u;
+#ifdef MCVULKANRT_GBUFFER
+    RtPayload firstSurface;
+    bool firstSurfaceFound = false;
+#endif
+
+    for (uint layer = 0u; layer < MAX_TRANSPARENCY_LAYERS; layer++) {
+        resetPayload();
+        traceRayEXT(
+            sceneTlas,
+            gl_RayFlagsNoneEXT,
+            0xff,
+            0,
+            0,
+            0,
+            rayOrigin,
+            nextHitT,
+            rayDirection,
+            rayTMax,
+            0
+        );
+        RtPayload terrainSample = payload;
+
+        resetPayload();
+        if (hasDynamicTlasGeometry) {
+            traceRayEXT(
+                dynamicTlas,
+                gl_RayFlagsNoneEXT,
+                WORLD_VISIBILITY_MASK,
+                0,
+                0,
+                0,
+                rayOrigin,
+                nextHitT,
+                rayDirection,
+                rayTMax,
+                0
+            );
+        }
+        RtPayload dynamicSample = payload;
+
+        bool selected = false;
+        bool selectedRayPayload = false;
+        RtPayload selectedSample = terrainSample;
+        vec4 selectedColorAlpha = vec4(0.0);
+        float selectedHitT = rayTMax;
+        uint selectedBlendMode = BLEND_OPAQUE;
+        if (terrainSample.hit != 0u) {
+            selected = true;
+            selectedColorAlpha = terrainSample.colorAlpha;
+            selectedHitT = terrainSample.hitT;
+            selectedBlendMode = terrainSample.blendMode;
+            selectedRayPayload = true;
+        } else {
+            background = terrainSample.colorAlpha.rgb;
+        }
+        if (dynamicSample.hit != 0u && (!selected || dynamicSample.hitT < selectedHitT)) {
+            selected = true;
+            selectedColorAlpha = dynamicSample.colorAlpha;
+            selectedHitT = dynamicSample.hitT;
+            selectedBlendMode = dynamicSample.blendMode;
+            selectedRayPayload = true;
+            selectedSample = dynamicSample;
+        } else if (hasDynamicTlasGeometry && dynamicSample.hit == 0u && terrainSample.hit != 0u) {
+            background = dynamicSample.colorAlpha.rgb;
+        }
+
+#ifndef MCVULKANRT_DISABLE_DYNAMIC_ANALYTIC_LOOP
+        float analyticHitT;
+        uint analyticBlendMode;
+        vec4 analyticColorAlpha = shadeDynamicScene(
+            rayOrigin,
+            rayDirection,
+            nextHitT,
+            rayTMax,
+            analyticHitT,
+            analyticBlendMode
+        );
+        if (analyticColorAlpha.a > DYNAMIC_ALPHA_CUTOFF
+                && (!selected || analyticHitT < selectedHitT)) {
+            selected = true;
+            selectedColorAlpha = analyticColorAlpha;
+            selectedHitT = analyticHitT;
+            selectedBlendMode = analyticBlendMode;
+            selectedRayPayload = false;
+        }
+#endif
+
+        if (!selected) {
+            break;
+        }
+        firstHitT = min(firstHitT, selectedHitT);
+#ifdef MCVULKANRT_GBUFFER
+        if (!firstSurfaceFound && selectedRayPayload) {
+            firstSurface = selectedSample;
+            firstSurfaceFound = true;
+        }
+#endif
+        if (selectedRayPayload && selectedBlendMode == BLEND_OPAQUE) {
+            vec3 worldPosition = rayOrigin + rayDirection * selectedHitT;
+            selectedColorAlpha.rgb *= directionalLightVisibility(worldPosition);
+        }
+        layerColorAlpha[layerCount] = selectedColorAlpha;
+        layerBlendMode[layerCount] = selectedBlendMode;
+        layerCount++;
+        if (selectedBlendMode == BLEND_OPAQUE) {
+            break;
+        }
+        nextHitT = max(selectedHitT + NEXT_LAYER_EPSILON, nextHitT + NEXT_LAYER_EPSILON);
+        if (nextHitT >= rayTMax) {
+            break;
+        }
+    }
+
+    vec3 composedColor = background;
+    for (int layer = int(layerCount) - 1; layer >= 0; layer--) {
+        composedColor = blendMaterialLayer(
+            layerColorAlpha[layer],
+            layerBlendMode[layer],
+            composedColor
+        );
+    }
+    composedColor = applyWorldFog(composedColor, firstHitT);
+    composedColor = applyCameraMediumFog(composedColor, firstHitT);
+
+    uint overlayCount = 0u;
+    if (hasDynamicTlasGeometry) {
+        float nextOverlayHitT = 0.001;
+        for (uint layer = 0u; layer < MAX_TRANSPARENCY_LAYERS; layer++) {
+            resetPayload();
+            traceRayEXT(
+                dynamicTlas,
+                gl_RayFlagsNoneEXT,
+                OVERLAY_VISIBILITY_MASK,
+                0,
+                0,
+                0,
+                rayOrigin,
+                nextOverlayHitT,
+                rayDirection,
+                rayTMax,
+                0
+            );
+            if (payload.hit == 0u) {
+                break;
+            }
+            layerColorAlpha[overlayCount] = payload.colorAlpha;
+            layerBlendMode[overlayCount] = payload.blendMode;
+            overlayCount++;
+            nextOverlayHitT = max(
+                payload.hitT + NEXT_LAYER_EPSILON,
+                nextOverlayHitT + NEXT_LAYER_EPSILON
+            );
+            if (nextOverlayHitT >= rayTMax) {
+                break;
+            }
+        }
+    }
+    for (int layer = int(overlayCount) - 1; layer >= 0; layer--) {
+        composedColor = blendMaterialLayer(
+            layerColorAlpha[layer],
+            layerBlendMode[layer],
+            composedColor
+        );
+    }
+#ifdef MCVULKANRT_GBUFFER
+    storeDiagnosticGBuffer(ivec2(x, y), firstSurfaceFound, firstSurface);
+#endif
+    imageStore(outputImage, ivec2(x, y), vec4(clamp(composedColor, vec3(0.0), vec3(1.0)), 1.0));
+}
