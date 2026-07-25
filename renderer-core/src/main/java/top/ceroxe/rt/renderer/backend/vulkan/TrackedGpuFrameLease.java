@@ -1,0 +1,75 @@
+package top.ceroxe.rt.renderer.backend.vulkan;
+
+import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
+
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * Makes lease relinquishment observable without weakening the public ownership contract.
+ *
+ * <p>The host must keep the Vulkan session alive while a consumer can still submit work against
+ * an exported image. A lease leaves that set only after its backend lease reports a successful
+ * close. In particular, a failed close of an imported, unreleased lease does not notify the host:
+ * the consumer still owes an explicit completion signal.</p>
+ */
+final class TrackedGpuFrameLease implements GpuFrameLease {
+    private final GpuFrameLease delegate;
+    private final Runnable closeObserver;
+
+    private boolean closeObserved;
+
+    TrackedGpuFrameLease(GpuFrameLease delegate, Runnable closeObserver) {
+        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.closeObserver = Objects.requireNonNull(closeObserver, "closeObserver");
+    }
+
+    @Override
+    public synchronized FrameDescriptor descriptor() {
+        return delegate.descriptor();
+    }
+
+    @Override
+    public synchronized ExportedNativeHandle<VulkanMemoryHandleType> memoryHandle() {
+        return delegate.memoryHandle();
+    }
+
+    @Override
+    public synchronized Optional<AcquireSignal> acquireSignal() {
+        return delegate.acquireSignal();
+    }
+
+    @Override
+    public synchronized ConsumerCompletionCapabilities consumerCompletionCapabilities() {
+        return delegate.consumerCompletionCapabilities();
+    }
+
+    @Override
+    public synchronized void release(ConsumerCompletion completion) {
+        delegate.release(Objects.requireNonNull(completion, "completion"));
+        if (delegate.state() != LeaseState.RELEASED) {
+            throw new IllegalStateException("backend lease accepted release without publishing released state");
+        }
+    }
+
+    @Override
+    public synchronized LeaseState state() {
+        return delegate.state();
+    }
+
+    @Override
+    public synchronized void close() {
+        if (closeObserved) {
+            return;
+        }
+        delegate.close();
+        if (delegate.state() != LeaseState.CLOSED) {
+            throw new IllegalStateException("backend lease close returned without publishing closed state");
+        }
+        closeObserver.run();
+        // Publish the terminal wrapper state only after the host accepted the relinquishment.
+        // If the observer fails, the already-closed delegate remains safe and a subsequent close
+        // retries only the missing host notification instead of leaking an outstanding lease.
+        closeObserved = true;
+    }
+}
