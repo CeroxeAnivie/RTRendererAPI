@@ -2,6 +2,15 @@
 
 本文记录 RTRendererAPI 面向消费方可见的变化。版本遵循语义化版本；公共二进制兼容性由同版本 ABI baseline 与发布门禁共同验证。
 
+## 0.1.1
+
+### 变更
+
+- 升级 fastutil 至 8.5.19，并将全部 LWJGL 模块与 Windows natives 对齐至 3.4.2。
+- 升级并继续以完整 commit SHA 固定 GitHub Actions 供应链依赖。
+- 将宿主机墙钟性能数据与确定性正确性门禁解耦，避免共享 CI runner 抖动造成伪失败。
+- 补全 Maven Central 所需的 Javadoc、OpenPGP 签名和 Portal bundle 发布链路。
+
 ## 0.1.0
 
 ### 新增

@@ -133,7 +133,9 @@ tasks.register<JavaExec>("rendererApiContractSelfTest") {
     mainClass.set("top.ceroxe.rt.renderer.api.RendererApiContractSelfTest")
 }
 
-val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-${project.version}.abi")
+// A patch release must prove compatibility with the last published contract. Pointing this at a
+// snapshot named after the version under construction would let that release approve itself.
+val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-0.1.0.abi")
 val rendererApiAbiSnapshot = layout.buildDirectory.file("abi/renderer-api-${project.version}.abi")
 
 tasks.register("generateRendererApiAbi") {

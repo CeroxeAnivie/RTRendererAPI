@@ -58,12 +58,12 @@ tasks.register("verifyPublishedRuntimeClasspath") {
             .map { it.name }
             .toSet()
         val requiredNames = listOf(
-            "lwjgl-3.4.1.jar",
-            "lwjgl-3.4.1-natives-windows.jar",
-            "lwjgl-vma-3.4.1.jar",
-            "lwjgl-vma-3.4.1-natives-windows.jar",
-            "lwjgl-shaderc-3.4.1.jar",
-            "lwjgl-shaderc-3.4.1-natives-windows.jar"
+            "lwjgl-3.4.2.jar",
+            "lwjgl-3.4.2-natives-windows.jar",
+            "lwjgl-vma-3.4.2.jar",
+            "lwjgl-vma-3.4.2-natives-windows.jar",
+            "lwjgl-shaderc-3.4.2.jar",
+            "lwjgl-shaderc-3.4.2-natives-windows.jar"
         )
         val missing = requiredNames.filterNot(resolvedNames::contains)
         if (missing.isNotEmpty()) {

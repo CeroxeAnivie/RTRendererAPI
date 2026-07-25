@@ -2,7 +2,7 @@
 
 RTRendererAPI 适合嵌入 Java 25 桌面或引擎进程。普通调用方只需要理解场景 revision、帧 sequence 和资源生命周期；Vulkan external memory、semaphore、queue-family ownership 等细节被隔离在显式专家扩展中。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:0.1.0`。只声明这一个依赖即可，Windows Vulkan 后端与 natives 会传递解析。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:0.1.1`。只声明这一个依赖即可，Windows Vulkan 后端与 natives 会传递解析。
 
 ## 最小调用
 

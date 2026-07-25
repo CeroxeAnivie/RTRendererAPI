@@ -1,6 +1,6 @@
 # API 迁移指南
 
-本文记录 0.1.0 公共 API 中需要消费方修改源码或生命周期的迁移。机械边界以同版本 Javadoc、ABI baseline 和隔离 Maven 消费者为准。
+本文记录 0.1.1 公共 API 中需要消费方修改源码或生命周期的迁移。机械边界以同版本 Javadoc、ABI baseline 和隔离 Maven 消费者为准。
 
 ## 托管帧与显式 Vulkan 扩展
 
@@ -18,7 +18,7 @@ VulkanFrameInterop interop = renderer.extension(VulkanFrameInterop.class)
 VulkanFrameInterop.FramePollResult result = interop.pollLatestFrame();
 ```
 
-| 旧入口                                 | 0.1.0 入口                                              |
+| 旧入口                                 | 0.1.1 入口                                              |
 |-------------------------------------|-------------------------------------------------------|
 | `renderer.acquireLatestFrame()`     | 已删除；使用 `interop.pollLatestFrame()` 并穷尽处理 typed result |
 | `renderer.pollLatestFrame()`        | `interop.pollLatestFrame()`                           |

@@ -32,7 +32,7 @@ AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件后端不属
   lifetime。
 - [x] `MECHANICAL`：`RendererHealth` 发布稳定 failure kind、recovery action 和资源欠账；lease 使用互斥 `LeaseState`
   ，失败保持可重试阶段。
-- [x] `MECHANICAL`：README、Java 指南、API 参考、Vulkan 专家协议、支持矩阵和迁移指南覆盖当前 0.1.0 接入面。
+- [x] `MECHANICAL`：README、Java 指南、API 参考、Vulkan 专家协议、支持矩阵和迁移指南覆盖当前 0.1.1 接入面。
 - [ ] 隔离 Maven 消费者已编译 README quick start、设备选择、基础资源、事务、提交、托管帧，以及可执行的 interop
   ownership/release/recovery 控制流；仍需一个绑定真实 consumer Vulkan device/queue 的 LWJGL native import 样例与实机门禁。
 - [x] `MECHANICAL`：异步帧等待取消只终止 caller-executor 上的 managed polling；契约测试证明不关闭 renderer/executor、不产生 lease，并在最大 250 微秒 backoff 后停止。

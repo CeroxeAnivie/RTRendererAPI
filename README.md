@@ -34,7 +34,7 @@ AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件渲染器不
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
 </dependency>
 ```
 
@@ -42,7 +42,7 @@ AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件渲染器不
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:0.1.0")
+implementation("top.ceroxe.rt:renderer-api:0.1.1")
 }
 ```
 ### 示例代码
