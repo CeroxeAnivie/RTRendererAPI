@@ -366,7 +366,7 @@ public final class RtCommandContext implements AutoCloseable {
      * @return 用于轮询完成状态并回收提交资源的句柄
      */
     public AsyncSubmission submitOneTimeAsync(CommandRecorder recorder) {
-        return submitOneTimeAsync(recorder, null);
+        return submitOneTimeAsync(recorder, 0L, 0L, null);
     }
 
     /**
@@ -381,7 +381,79 @@ public final class RtCommandContext implements AutoCloseable {
             CommandRecorder recorder,
             VulkanWin32ExternalSemaphoreProbe.ExportedSemaphore signalSemaphore
     ) {
-        return submitOneTimeAsync(recorder, signalSemaphore, null);
+        return submitOneTimeAsync(
+                recorder,
+                0L,
+                signalSemaphore == null ? 0L : signalSemaphore.semaphore(),
+                null
+        );
+    }
+
+    /**
+     * Records and asynchronously submits work bracketed by ordinary same-device binary
+     * semaphores. This is the managed swapchain path: acquire is waited before transfer commands,
+     * render-done is signalled for presentation, and the command lane preserves its existing
+     * queue timeline and host-synchronization rules.
+     *
+     * @param waitSemaphore non-null binary semaphore that makes the command buffer executable
+     * @param signalSemaphore non-null binary semaphore signalled after command-buffer completion
+     * @param recorder callback that records commands into the temporary primary command buffer
+     * @return fence-backed asynchronous submission whose close waits and releases owned resources
+     */
+    public AsyncSubmission submitBinarySynchronizedOneTimeAsync(
+            long waitSemaphore,
+            long signalSemaphore,
+            CommandRecorder recorder
+    ) {
+        if (waitSemaphore == 0L || signalSemaphore == 0L) {
+            throw new IllegalArgumentException("binary wait and signal semaphores must not be null");
+        }
+        return submitOneTimeAsync(recorder, waitSemaphore, signalSemaphore, null);
+    }
+
+    /**
+     * Timed variant of {@link #submitBinarySynchronizedOneTimeAsync(long, long, CommandRecorder)}.
+     * Query exhaustion degrades to ordinary synchronized submission without delaying the frame.
+     *
+     * @param timingLabel non-blank GPU timestamp aggregation label
+     * @param waitSemaphore non-null binary semaphore that makes the command buffer executable
+     * @param signalSemaphore non-null binary semaphore signalled after command-buffer completion
+     * @param recorder callback that records the measured commands
+     * @return fence-backed asynchronous submission carrying timing when a query was available
+     */
+    public AsyncSubmission submitTimedBinarySynchronizedOneTimeAsync(
+            String timingLabel,
+            long waitSemaphore,
+            long signalSemaphore,
+            CommandRecorder recorder
+    ) {
+        Objects.requireNonNull(recorder, "recorder");
+        if (timingLabel == null || timingLabel.isBlank()) {
+            throw new IllegalArgumentException("GPU timing label must not be blank");
+        }
+        if (waitSemaphore == 0L || signalSemaphore == 0L) {
+            throw new IllegalArgumentException("binary wait and signal semaphores must not be null");
+        }
+        RtGpuTimestampPool.Capture capture = acquireGpuTimestampCapture(
+                timingLabel, GPU_WORK_CHECKPOINTS
+        );
+        boolean transferred = false;
+        try {
+            CommandRecorder timedRecorder = capture == null
+                    ? recorder
+                    : (commandBuffer, stack) -> {
+                capture.begin(commandBuffer, VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                recorder.record(commandBuffer, stack);
+                capture.write(commandBuffer, VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+            };
+            AsyncSubmission submission = submitOneTimeAsync(
+                    timedRecorder, waitSemaphore, signalSemaphore, capture
+            );
+            transferred = true;
+            return submission;
+        } finally {
+            if (!transferred && capture != null) capture.close();
+        }
     }
 
     /**
@@ -407,7 +479,7 @@ public final class RtCommandContext implements AutoCloseable {
                 recorder.record(commandBuffer, stack);
                 capture.write(commandBuffer, VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
             };
-            AsyncSubmission submission = submitOneTimeAsync(timedRecorder, null, capture);
+            AsyncSubmission submission = submitOneTimeAsync(timedRecorder, 0L, 0L, capture);
             transferred = true;
             return submission;
         } finally {
@@ -417,15 +489,86 @@ public final class RtCommandContext implements AutoCloseable {
         }
     }
 
+    /**
+     * Submits one timed workload and signals a caller-owned timeline semaphore on completion.
+     * The signal value must be reserved monotonically by the semaphore owner.
+     *
+     * @param timingLabel non-blank GPU timing label
+     * @param timelineSemaphore non-null same-device timeline semaphore
+     * @param timelineValue positive value signalled by this submission
+     * @param recorder command recorder invoked before submission
+     * @return asynchronous submission retaining command and timestamp resources
+     */
+    public AsyncSubmission submitTimedOneTimeAsync(
+            String timingLabel,
+            long timelineSemaphore,
+            long timelineValue,
+            CommandRecorder recorder
+    ) {
+        Objects.requireNonNull(recorder, "recorder");
+        if (timingLabel == null || timingLabel.isBlank()) {
+            throw new IllegalArgumentException("GPU timing label must not be blank");
+        }
+        if (timelineSemaphore == 0L || timelineValue <= 0L) {
+            throw new IllegalArgumentException("timeline signal handle and value must be positive");
+        }
+        RtGpuTimestampPool.Capture capture = acquireGpuTimestampCapture(
+                timingLabel, GPU_WORK_CHECKPOINTS
+        );
+        boolean transferred = false;
+        try {
+            CommandRecorder timedRecorder = capture == null
+                    ? recorder
+                    : (commandBuffer, stack) -> {
+                capture.begin(commandBuffer, VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                recorder.record(commandBuffer, stack);
+                capture.write(commandBuffer, VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+            };
+            AsyncSubmission submission = submitOneTimeAsync(
+                    timedRecorder,
+                    0L,
+                    0L,
+                    timelineSemaphore,
+                    timelineValue,
+                    capture
+            );
+            transferred = true;
+            return submission;
+        } finally {
+            if (!transferred && capture != null) capture.close();
+        }
+    }
+
     private AsyncSubmission submitOneTimeAsync(
             CommandRecorder recorder,
-            VulkanWin32ExternalSemaphoreProbe.ExportedSemaphore signalSemaphore,
+            long waitSemaphore,
+            long signalSemaphore,
+            RtGpuTimestampPool.Capture gpuTimestamps
+    ) {
+        return submitOneTimeAsync(
+                recorder, waitSemaphore, signalSemaphore, 0L, 0L, gpuTimestamps
+        );
+    }
+
+    private AsyncSubmission submitOneTimeAsync(
+            CommandRecorder recorder,
+            long waitSemaphore,
+            long signalSemaphore,
+            long timelineSignalSemaphore,
+            long requestedTimelineSignalValue,
             RtGpuTimestampPool.Capture gpuTimestamps
     ) {
         Objects.requireNonNull(recorder, "recorder");
         RecordedCommandBuffer recording = recordOneTime(recorder);
         try {
-            return submitRecordedAsync(List.of(recording), 0L, signalSemaphore, gpuTimestamps);
+            return submitRecordedAsync(
+                    List.of(recording),
+                    waitSemaphore,
+                    signalSemaphore,
+                    timelineSignalSemaphore,
+                    requestedTimelineSignalValue,
+                    gpuTimestamps
+            );
         } catch (RuntimeException | Error ex) {
             recording.close();
             throw ex;
@@ -551,7 +694,12 @@ public final class RtCommandContext implements AutoCloseable {
             List<RecordedCommandBuffer> recordings,
             VulkanWin32ExternalSemaphoreProbe.ExportedSemaphore signalSemaphore
     ) {
-        return submitRecordedAsync(recordings, 0L, signalSemaphore, null);
+        return submitRecordedAsync(
+                recordings,
+                0L,
+                signalSemaphore == null ? 0L : signalSemaphore.semaphore(),
+                null
+        );
     }
 
     /**
@@ -581,7 +729,7 @@ public final class RtCommandContext implements AutoCloseable {
             );
         });
         try {
-            return submitRecordedAsync(List.of(recording), waitSemaphore, null, null);
+            return submitRecordedAsync(List.of(recording), waitSemaphore, 0L, null);
         } catch (RuntimeException | Error failure) {
             recording.close();
             throw failure;
@@ -591,7 +739,20 @@ public final class RtCommandContext implements AutoCloseable {
     private AsyncSubmission submitRecordedAsync(
             List<RecordedCommandBuffer> recordings,
             long waitSemaphore,
-            VulkanWin32ExternalSemaphoreProbe.ExportedSemaphore signalSemaphore,
+            long signalSemaphore,
+            RtGpuTimestampPool.Capture gpuTimestamps
+    ) {
+        return submitRecordedAsync(
+                recordings, waitSemaphore, signalSemaphore, 0L, 0L, gpuTimestamps
+        );
+    }
+
+    private AsyncSubmission submitRecordedAsync(
+            List<RecordedCommandBuffer> recordings,
+            long waitSemaphore,
+            long signalSemaphore,
+            long timelineSignalSemaphore,
+            long requestedTimelineSignalValue,
             RtGpuTimestampPool.Capture gpuTimestamps
     ) {
         Objects.requireNonNull(recordings, "recordings");
@@ -649,7 +810,9 @@ public final class RtCommandContext implements AutoCloseable {
                             stack,
                             submitInfo,
                             waitSemaphore,
-                            signalSemaphore == null ? 0L : signalSemaphore.semaphore()
+                            signalSemaphore,
+                            timelineSignalSemaphore,
+                            requestedTimelineSignalValue
                     );
                     checkVk(VK10.vkQueueSubmit(queue, submitInfo, pooledFence.fence()), "vkQueueSubmit.recordedAsync");
                     markTimelineSubmitted(timelineSignalValue);
@@ -706,6 +869,23 @@ public final class RtCommandContext implements AutoCloseable {
             long binaryWaitSemaphore,
             long binarySignalSemaphore
     ) {
+        return configureSubmissionTimeline(
+                stack, submitInfo, binaryWaitSemaphore, binarySignalSemaphore, 0L, 0L
+        );
+    }
+
+    private long configureSubmissionTimeline(
+            MemoryStack stack,
+            VkSubmitInfo.Buffer submitInfo,
+            long binaryWaitSemaphore,
+            long binarySignalSemaphore,
+            long externalTimelineSignalSemaphore,
+            long externalTimelineSignalValue
+    ) {
+        if ((externalTimelineSignalSemaphore == 0L) != (externalTimelineSignalValue == 0L)
+                || externalTimelineSignalValue < 0L) {
+            throw new IllegalArgumentException("external timeline signal is inconsistent");
+        }
         long timelineWaitValue = timelineRole == TimelineRole.CONSUMER
                 ? queueTimeline.completedValue()
                 : 0L;
@@ -713,7 +893,9 @@ public final class RtCommandContext implements AutoCloseable {
                 ? queueTimeline.reserveSignalValue()
                 : 0L;
         int waitCount = (binaryWaitSemaphore == 0L ? 0 : 1) + (timelineWaitValue == 0L ? 0 : 1);
-        int signalCount = (binarySignalSemaphore == 0L ? 0 : 1) + (timelineSignalValue == 0L ? 0 : 1);
+        int signalCount = (binarySignalSemaphore == 0L ? 0 : 1)
+                + (externalTimelineSignalValue == 0L ? 0 : 1)
+                + (timelineSignalValue == 0L ? 0 : 1);
         if (waitCount > 0) {
             LongBuffer semaphores = stack.mallocLong(waitCount);
             java.nio.IntBuffer stages = stack.mallocInt(waitCount);
@@ -725,24 +907,52 @@ public final class RtCommandContext implements AutoCloseable {
                 semaphores.put(queueTimeline.semaphore());
                 stages.put(VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
             }
-            submitInfo.pWaitSemaphores(semaphores.flip()).pWaitDstStageMask(stages.flip());
+            submitInfo
+                    .waitSemaphoreCount(waitCount)
+                    .pWaitSemaphores(semaphores.flip())
+                    .pWaitDstStageMask(stages.flip());
         }
         if (signalCount > 0) {
             LongBuffer semaphores = stack.mallocLong(signalCount);
             if (binarySignalSemaphore != 0L) semaphores.put(binarySignalSemaphore);
+            if (externalTimelineSignalValue != 0L) {
+                semaphores.put(externalTimelineSignalSemaphore);
+            }
             if (timelineSignalValue != 0L) semaphores.put(queueTimeline.semaphore());
             submitInfo.pSignalSemaphores(semaphores.flip());
         }
-        if (timelineWaitValue != 0L || timelineSignalValue != 0L) {
+        if (timelineWaitValue != 0L
+                || externalTimelineSignalValue != 0L
+                || timelineSignalValue != 0L) {
             LongBuffer waitValues = stack.callocLong(waitCount);
             LongBuffer signalValues = stack.callocLong(signalCount);
             if (timelineWaitValue != 0L) waitValues.put(waitCount - 1, timelineWaitValue);
+            int signalValueIndex = binarySignalSemaphore == 0L ? 0 : 1;
+            if (externalTimelineSignalValue != 0L) {
+                signalValues.put(signalValueIndex++, externalTimelineSignalValue);
+            }
             if (timelineSignalValue != 0L) signalValues.put(signalCount - 1, timelineSignalValue);
             VkTimelineSemaphoreSubmitInfo timelineInfo = VkTimelineSemaphoreSubmitInfo.calloc(stack)
                     .sType$Default()
                     .pWaitSemaphoreValues(waitValues)
                     .pSignalSemaphoreValues(signalValues);
             submitInfo.pNext(timelineInfo.address());
+        }
+        if (submitInfo.waitSemaphoreCount() != waitCount
+                || submitInfo.signalSemaphoreCount() != signalCount) {
+            throw new IllegalStateException(
+                    "Vulkan submit semaphore counts diverged: expected wait=" + waitCount
+                            + ", actual wait=" + submitInfo.waitSemaphoreCount()
+                            + ", expected signal=" + signalCount
+                            + ", actual signal=" + submitInfo.signalSemaphoreCount()
+            );
+        }
+        if (binaryWaitSemaphore != 0L) {
+            LongBuffer configuredWaits = submitInfo.pWaitSemaphores();
+            if (configuredWaits == null || configuredWaits.remaining() != waitCount
+                    || configuredWaits.get(configuredWaits.position()) != binaryWaitSemaphore) {
+                throw new IllegalStateException("binary acquire semaphore was not retained by VkSubmitInfo");
+            }
         }
         return timelineSignalValue;
     }

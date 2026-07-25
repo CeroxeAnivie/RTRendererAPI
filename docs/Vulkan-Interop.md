@@ -16,12 +16,12 @@ semaphore、queue-family ownership transfer 和 Win32 handle 所有权的调用�
 
 | 路径 | 调用方负责 | API/provider 负责 |
 | --- | --- | --- |
-| `VulkanFramePresenter` | 创建配置、pump event、提交帧、调用 `presentAndRelease` | consumer Vulkan device、external import、swapchain copy/present、completion、lease close |
+| `VulkanFramePresenter` | 创建配置、pump event、提交帧、调用 `presentLatestFrame` | 同设备 managed timeline fast path、swapchain copy/present、HUD、completion、lease close；必要时 external fallback |
 | `VulkanFrameInterop` | 全部 consumer Vulkan import、queue ownership、同步、submission、completion 与 lease close | producer image/handle export 与契约验证 |
 
-官方 presenter 通过 `VulkanFramePresenter.open(renderer, config)` 打开。其全部方法绑定创建线程；同一 renderer 同时只允许一个官方 presenter。`maximumFramesQueuedAhead` 按实际 lease retirement 限制 producer lead，防止 uncapped trace 工作饿死 swapchain，但不按时间锁 FPS。关闭 presenter 会清空该流控状态。
+官方 presenter 通过 `VulkanFramePresenter.open(renderer, config)` 打开。其全部方法绑定创建线程；同一 renderer 同时只允许一个官方 presenter。简单模式调用 `presentLatestFrame()`，由 provider 获取可用 internal managed lease；该路径复用 renderer 的 `VkInstance`、`VkDevice` 与受控 queue，并用 GPU timeline 表达 producer-ready 依赖，不导出 Win32 memory handle。`VulkanFrameInterop.pollLatestFrame()` 是独立专家入口，继续只返回 CPU 已观察完成的 external lease。`maximumFramesQueuedAhead` 限制 producer lead，但不按时间锁 FPS。
 
-`PresentMode.UNCAPPED` 依次偏好 immediate、mailbox、FIFO；`LOW_LATENCY` 偏好 mailbox；`VSYNC` 使用 FIFO。平台可以 fallback，唯一权威结果是 `activePresentMode()`。`PresentationResult` 的 `PRESENTED` 才能计入实际 present FPS；minimized 和 swapchain recreate 结果会安全退休 lease，但不是可见帧。
+`PresentMode.UNCAPPED` 依次偏好 immediate、mailbox、FIFO；`LOW_LATENCY` 偏好 mailbox；`VSYNC` 使用 FIFO。平台可以 fallback，唯一权威结果是 `activePresentMode()`。`PresentationResult` 的 `PRESENTED` 才能计入实际 present FPS；minimized 和 swapchain recreate 结果会安全退休 lease，但不是可见帧。同一 `VkSwapchainKHR` 的 acquire/present host access 必须串行；不得用跨线程竞争伪造吞吐。`performanceSnapshot()` 用于区分 acquire、GPU copy、queue lock 与 native present；`setOverlayText(...)` 可把诊断值直接画入 swapchain。
 
 ## 获取扩展
 

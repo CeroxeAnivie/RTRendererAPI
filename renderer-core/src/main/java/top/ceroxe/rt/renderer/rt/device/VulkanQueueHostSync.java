@@ -64,6 +64,21 @@ public final class VulkanQueueHostSync {
     }
 
     /**
+     * Submits legacy {@link VkSubmitInfo} work while holding the queue's process-wide host lock.
+     * This is shared by the RT command lanes and the managed swapchain presenter.
+     *
+     * @param queue destination queue
+     * @param submits submit descriptors valid for the duration of the native call
+     * @param fence optional completion fence, or {@link VK10#VK_NULL_HANDLE}
+     * @return Vulkan result returned by {@link VK10#vkQueueSubmit}
+     */
+    public static int submit(VkQueue queue, VkSubmitInfo.Buffer submits, long fence) {
+        synchronized (monitor(queue)) {
+            return VK10.vkQueueSubmit(queue, submits, fence);
+        }
+    }
+
+    /**
      * Waits for a queue to become idle while excluding concurrent queue commands.
      *
      * @param queue queue to drain
@@ -85,6 +100,40 @@ public final class VulkanQueueHostSync {
     public static int present(VkQueue queue, VkPresentInfoKHR presentInfo) {
         synchronized (monitor(queue)) {
             return KHRSwapchain.vkQueuePresentKHR(queue, presentInfo);
+        }
+    }
+
+    /**
+     * Presents while separately measuring monitor contention and the native WSI call.
+     *
+     * @param queue presentation queue
+     * @param presentInfo presentation descriptor valid for the duration of the native call
+     * @return immutable native result and host timing sample
+     */
+    public static TimedPresent presentTimed(VkQueue queue, VkPresentInfoKHR presentInfo) {
+        Object queueMonitor = monitor(queue);
+        long waitStart = System.nanoTime();
+        synchronized (queueMonitor) {
+            long acquired = System.nanoTime();
+            int result = KHRSwapchain.vkQueuePresentKHR(queue, presentInfo);
+            long completed = System.nanoTime();
+            return new TimedPresent(result, acquired - waitStart, completed - acquired);
+        }
+    }
+
+    /**
+     * Immutable timing for one host-synchronized present call.
+     *
+     * @param result Vulkan result returned by {@code vkQueuePresentKHR}
+     * @param queueLockWaitNanos non-negative time spent waiting for the queue host monitor
+     * @param nativeCallNanos non-negative time spent inside {@code vkQueuePresentKHR}
+     */
+    public record TimedPresent(int result, long queueLockWaitNanos, long nativeCallNanos) {
+        /** Validates that both monotonic timing components are non-negative. */
+        public TimedPresent {
+            if (queueLockWaitNanos < 0L || nativeCallNanos < 0L) {
+                throw new IllegalArgumentException("present timings must not be negative");
+            }
         }
     }
 }

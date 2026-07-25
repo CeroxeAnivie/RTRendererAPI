@@ -181,7 +181,7 @@ RendererException
 VulkanFramePresenter presenter = VulkanFramePresenter.open(renderer, configuration);
 ```
 
-renderer-bound 官方窗口/swapchain consumer。`pollEvents()`、`windowState()`、`setTitle(...)`、`presentAndRelease(...)` 和 `close()` 都绑定创建线程。`presentAndRelease(...)` 穷尽返回 `PRESENTED`、`SKIPPED_MINIMIZED` 或 `RETIRED_FOR_RECREATE`，并在全部路径消费/关闭 lease。
+renderer-bound 官方窗口/swapchain consumer。`presentLatestFrame()` 是主推简单入口，返回 empty 表示尚无已提交帧；provider-owned 实现可用内部 GPU timeline 提前排入同 logical-device fast path。`presentAndRelease(...)` 保留给显式 lease 调用方。两种路径都以 `PRESENTED`、`SKIPPED_MINIMIZED` 或 `RETIRED_FOR_RECREATE` 表示穷尽结果并关闭被消费 lease。全部 presenter 方法绑定创建线程；`setOverlayText("")` 关闭 transfer-only HUD，`performanceSnapshot()` 对未知 timing 返回零样本而非估算值。
 
 ### VulkanFramePresenterConfig
 
@@ -190,6 +190,7 @@ renderer-bound 官方窗口/swapchain consumer。`pollEvents()`、`windowState()
 | `title(String)` | 非空原生窗口标题 |
 | `initialExtent(int, int)` | 正初始 framebuffer extent |
 | `resizable(boolean)` | 窗口 resize 策略 |
+| `windowMode(WindowMode)` | 普通窗口或主显示器全屏；可选 full-screen-exclusive hint 失败时安全回退 |
 | `presentMode(PresentMode)` | VSYNC、LOW_LATENCY 或 UNCAPPED 偏好 |
 | `maximumFramesQueuedAhead(int)` | 1–16 的 producer lead 上限；默认 2，不是 FPS 锁 |
 

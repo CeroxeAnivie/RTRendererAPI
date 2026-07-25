@@ -285,9 +285,15 @@ public final class VulkanValidationFileLogger implements AutoCloseable {
         PointerBuffer layerNames = stack.mallocPointer(1)
                 .put(stack.UTF8(VALIDATION_LAYER))
                 .flip();
-        PointerBuffer extensionNames = stack.mallocPointer(1)
-                .put(stack.UTF8(EXTDebugUtils.VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
-                .flip();
+        PointerBuffer existingExtensions = createInfo.ppEnabledExtensionNames();
+        int existingCount = existingExtensions == null ? 0 : existingExtensions.remaining();
+        PointerBuffer extensionNames = stack.mallocPointer(existingCount + 1);
+        if (existingExtensions != null) {
+            for (int index = existingExtensions.position(); index < existingExtensions.limit(); index++) {
+                extensionNames.put(existingExtensions.get(index));
+            }
+        }
+        extensionNames.put(stack.UTF8(EXTDebugUtils.VK_EXT_DEBUG_UTILS_EXTENSION_NAME)).flip();
         VkDebugUtilsMessengerCreateInfoEXT callbackInfo = callbackCreateInfo(stack);
         callbackInfo.pNext(createInfo.pNext());
         createInfo

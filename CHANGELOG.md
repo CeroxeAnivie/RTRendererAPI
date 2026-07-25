@@ -10,18 +10,23 @@
 - 增加 `RayTracingRenderer.trySubmit(...)` 及穷尽的 `FrameSubmitted`/`FrameSubmissionDeferred` 结果，正常容量背压不再依赖异常控制流。
 - external image descriptor 增加稳定 `resourceId` 与显式 `memoryTypeIndex`，允许 presenter 安全复用 import，同时拒绝 identity/metadata 冲突。
 - presenter 公开平台实际选中的 `IMMEDIATE`、`MAILBOX` 或 `FIFO` present mode，并提供可配置的 producer lead 上限。
+- 简单模式增加 `VulkanFramePresenter.presentLatestFrame()`：官方 presenter 可在同一 logical device 上以 GPU timeline 同步直接消费最新 managed frame，无需应用手写 external-memory/semaphore 生命周期。
+- 官方 GLFW presenter 增加 dedicated presentation queue、GPU managed-copy 快速路径、窗口内性能 HUD 与可查询的分阶段 present timing；专家模式 `VulkanFrameInterop.pollLatestFrame()` 继续保留 completed external lease 语义。
 
 ### 修复
 
 - 修复 GPU scene session 丢弃已完成但尚未显示帧的问题。官方 presenter 现在以实际 lease 消费回调退休提交占位，阻止生产端计算数千个永远不可见的帧并饿死 swapchain。
 - 修复 presenter 关闭和 Vulkan device recovery 后残留生产者占位的问题；两条路径都确定性清空不可再消费的队列状态。
+- 修复 host wait/CPU completed-frame 语义把可见呈现串行化在 producer fence 之后的问题；普通调用改为同 logical-device timeline 依赖，presentation queue 可与下一帧 ray dispatch 并行推进。
+- 修复 consumer completion 发布顺序：外部完成信号提交先进入 Vulkan queue，lease 才允许释放，避免在 NVIDIA 驱动上提前复用 frame slot 导致 device lost。
 - 动态场景 TLAS 首次以 `ALLOW_UPDATE` 构建，变换更新使用持久化 instance/scratch 资源与 `MODE_UPDATE`，并通过 descriptor-safe 目标轮换复用避免逐代初始构建。
 - 本地 `check`/staging 不再错误触发 GPG；签名任务只在显式 `-PcentralRelease=true` 的远程发布图中接线。
 
 ### 性能证据
 
-- Windows 11、RTX 5080 Laptop GPU、2560×1600、三球场景、`IMMEDIATE`、每档 121 次实际 present：1/2/4/8 spp 分别为 166.5/117.4/56.6/24.7 FPS。
-- 2 spp 回归场景由 6–9 visible FPS 恢复到约 117–120 present FPS；提交数与显示数保持同量级，不再用 trace capacity 冒充可见 FPS。
+- Windows 11、RTX 5080 Laptop GPU、2560×1600、三球场景、2 spp、`IMMEDIATE`、独显显示路径：rolling Present 189.1 FPS、全程 Present 176.1 FPS、trace 4.20 ms / 238.3 FPS。
+- 同一验收运行中 acquire 为 0.632 ms、native present 为 0.400 ms；dedicated copy 的 GPU timing 没有取得有效样本，因此不以 `NaN` 推导或宣称 copy 成本。
+- 2 spp 回归场景由 6–9 visible FPS 恢复到约 176–189 actual present FPS；统计同时公开 Present 与 Trace capacity，不再用 producer throughput 冒充肉眼可见帧率。
 
 ## 0.1.2
 

@@ -35,7 +35,6 @@ import top.ceroxe.rt.renderer.api.TextureAsset.ColorSpace;
 import top.ceroxe.rt.renderer.api.TextureAsset.Filter;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop;
-import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.HandleState;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.ImportDisposition;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.LeaseState;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.SemaphoreKind;
@@ -73,12 +72,10 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
          cpuFrame.pixelsRgba8().get(cpuPixels);
          require(statistics(cpuPixels).equals(statistics), "managed CPU frame pixels diverged from the trusted readback path");
          require(renderer.pollLatestCpuFrame().isEmpty(), "managed CPU frame path returned the same completed sequence twice");
+         require(renderer.pollLatestFrame() instanceof VulkanFrameInterop.FrameNotReady,
+                 "CPU snapshot retained an already-consumed expert GPU lease");
          Path png = Path.of("build", "reports", "gpuscene-complex-scene.png").toAbsolutePath().normalize();
          writePng(diagnostic, png);
-         try (GpuFrameLease lease = awaitLease(renderer)) {
-            require(lease.descriptor().frameSequence() == 0L && lease.descriptor().renderedSceneRevision() == 0L && lease.memoryHandle().state() == HandleState.EXPORTED, "public frame lease does not describe the rendered generation");
-            System.out.println("VulkanGpuSceneRenderingSessionNativeSelfTest frame0Handle=0x" + Long.toHexString(lease.memoryHandle().value()));
-         }
 
          renderer.apply(refractiveIndexSceneUpdate());
          RenderFrameRequest refractiveIndexFrame = frameRequest(1L, 1L, AntiAliasingState.disabled());
@@ -133,6 +130,7 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
          require(statistics(diagnostic.rgba8()).nonBlackPixels() > 86400L, "HDR managed readback lost visible scene coverage");
          CpuFrame cpuFrame = awaitCpuFrame(renderer);
          require(cpuFrame.byteCount() == Math.multiplyExact(Math.multiplyExact(960, 540), 4), "HDR renderer did not preserve the managed RGBA8 CpuFrame contract");
+         awaitFrameAdmission(renderer, frameRequest(1L, 0L, AntiAliasingState.multisampled(4)));
          GpuFrameLease lease = awaitLease(renderer);
 
          try {

@@ -3,6 +3,7 @@ package top.ceroxe.rt.renderer.api.interop.vulkan;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Official Windows Vulkan swapchain consumer for {@link VulkanFrameInterop} leases.
@@ -54,11 +55,47 @@ public interface VulkanFramePresenter extends AutoCloseable {
     SwapchainPresentMode activePresentMode();
 
     /**
+     * Returns accumulated native presentation timings without resetting them.
+     *
+     * @return immutable point-in-time timing counters
+     */
+    default PerformanceSnapshot performanceSnapshot() {
+        return new PerformanceSnapshot(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
+    }
+
+    /**
      * Replaces the native window title on the presenter thread.
      *
      * @param title non-blank native window title
      */
     void setTitle(String title);
+
+    /**
+     * Replaces the optional text drawn over the top-left of subsequently presented frames.
+     *
+     * <p>The managed presenter implements this as a tiny transfer-only overlay, so enabling a
+     * diagnostic HUD does not enable CPU frame readback or add a graphics-pipeline dependency.
+     * An empty string disables the overlay. Providers that do not support an overlay may retain
+     * this binary-compatible default implementation.</p>
+     *
+     * @param text non-null text; line feeds request additional rows
+     */
+    default void setOverlayText(String text) {
+        Objects.requireNonNull(text, "text");
+    }
+
+    /**
+     * Presents the next renderer-owned frame using the provider's GPU-timeline fast path.
+     *
+     * <p>This is the recommended simple mode: it can enqueue presentation before the producer
+     * fence is observed by the CPU, while {@link VulkanFrameInterop#pollLatestFrame()} retains its
+     * completed-frame contract for expert external-memory consumers.</p>
+     *
+     * @return presentation evidence, or empty when no submitted frame is available
+     */
+    default Optional<PresentationResult> presentLatestFrame() {
+        throw new UnsupportedOperationException("presenter does not own a managed frame source");
+    }
 
     /**
      * Imports, copies, presents, GPU-signals producer completion, and closes one active lease.
@@ -141,5 +178,90 @@ public interface VulkanFramePresenter extends AutoCloseable {
         MAILBOX,
         /** Unsynchronized immediate presentation. */
         IMMEDIATE
+    }
+
+    /**
+     * Point-in-time evidence separating platform waits from managed GPU copy execution.
+     * Unknown GPU copy timing is represented by zero samples, never by a fabricated duration.
+     *
+     * @param acquireSamples number of measured swapchain acquire calls
+     * @param acquireNanos accumulated host duration of measured acquire calls
+     * @param presentSamples number of measured swapchain present calls
+     * @param presentNanos accumulated queue-lock and native present duration
+     * @param presentQueueLockNanos accumulated host wait for exclusive queue access
+     * @param presentNativeCallNanos accumulated duration inside the native present call
+     * @param managedCopyGpuSamples number of completed managed-copy GPU timing samples
+     * @param managedCopyGpuNanos accumulated managed-copy GPU execution duration
+     */
+    record PerformanceSnapshot(
+            long acquireSamples,
+            long acquireNanos,
+            long presentSamples,
+            long presentNanos,
+            long presentQueueLockNanos,
+            long presentNativeCallNanos,
+            long managedCopyGpuSamples,
+            long managedCopyGpuNanos
+    ) {
+        /** Validates that all monotonic timing counters are non-negative. */
+        public PerformanceSnapshot {
+            if (acquireSamples < 0L || acquireNanos < 0L
+                    || presentSamples < 0L || presentNanos < 0L
+                    || presentQueueLockNanos < 0L || presentNativeCallNanos < 0L
+                    || managedCopyGpuSamples < 0L || managedCopyGpuNanos < 0L) {
+                throw new IllegalArgumentException("presentation timing counters must not be negative");
+            }
+        }
+
+        /**
+         * Computes the mean host-side swapchain acquire duration.
+         *
+         * @return average duration in milliseconds, or NaN without samples
+         */
+        public double averageAcquireMillis() {
+            return acquireSamples == 0L ? Double.NaN : acquireNanos / 1_000_000.0 / acquireSamples;
+        }
+
+        /**
+         * Computes the mean complete host-side present duration.
+         *
+         * @return average queue-lock plus native duration in milliseconds, or NaN without samples
+         */
+        public double averagePresentMillis() {
+            return presentSamples == 0L ? Double.NaN : presentNanos / 1_000_000.0 / presentSamples;
+        }
+
+        /**
+         * Computes the mean wait for exclusive host access to the presentation queue.
+         *
+         * @return average queue-lock wait in milliseconds, or NaN without present samples
+         */
+        public double averagePresentQueueLockMillis() {
+            return presentSamples == 0L
+                    ? Double.NaN
+                    : presentQueueLockNanos / 1_000_000.0 / presentSamples;
+        }
+
+        /**
+         * Computes the mean duration spent inside the native present call.
+         *
+         * @return average native duration in milliseconds, or NaN without samples
+         */
+        public double averagePresentNativeCallMillis() {
+            return presentSamples == 0L
+                    ? Double.NaN
+                    : presentNativeCallNanos / 1_000_000.0 / presentSamples;
+        }
+
+        /**
+         * Computes the mean GPU execution duration of the managed presentation copy.
+         *
+         * @return average GPU duration in milliseconds, or NaN without samples
+         */
+        public double averageManagedCopyGpuMillis() {
+            return managedCopyGpuSamples == 0L
+                    ? Double.NaN
+                    : managedCopyGpuNanos / 1_000_000.0 / managedCopyGpuSamples;
+        }
     }
 }

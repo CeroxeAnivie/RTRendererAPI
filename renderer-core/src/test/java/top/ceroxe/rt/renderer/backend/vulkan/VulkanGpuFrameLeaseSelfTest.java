@@ -22,6 +22,7 @@ public final class VulkanGpuFrameLeaseSelfTest {
       assertAdvertisedBinaryCompletionIsForwardedExactlyOnce();
       assertLifecycleStateIsMutuallyExclusive();
       assertTrackingObserverFailureIsRetryable();
+      assertUnusedLazyMemoryHandleDoesNotExport();
       System.out.println("VulkanGpuFrameLeaseSelfTest passed");
    }
 
@@ -110,6 +111,17 @@ public final class VulkanGpuFrameLeaseSelfTest {
       require(delegate.state() == LeaseState.CLOSED, "tracking failure lost the successful backend close");
       lease.close();
       require(observations.get() == 2 && lease.state() == LeaseState.CLOSED, "tracking notification was not retried exactly once");
+   }
+
+   private static void assertUnusedLazyMemoryHandleDoesNotExport() {
+      AtomicInteger exports = new AtomicInteger();
+      VulkanExportedMemoryHandle handle = new VulkanExportedMemoryHandle(() -> {
+         exports.incrementAndGet();
+         return 1L;
+      });
+      handle.close();
+      require(exports.get() == 0, "closing an unused managed handle performed a Win32 export");
+      require(handle.state() == HandleState.CLOSED, "unused lazy handle did not close cleanly");
    }
 
    private static GpuFrameLease.FrameDescriptor descriptor() {

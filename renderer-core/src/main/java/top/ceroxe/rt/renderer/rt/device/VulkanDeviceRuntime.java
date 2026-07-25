@@ -2,7 +2,14 @@ package top.ceroxe.rt.renderer.rt.device;
 
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkDevice;
+import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkPhysicalDevice;
+import org.lwjgl.vulkan.VkQueue;
+import org.lwjgl.vulkan.KHRSurface;
+import org.lwjgl.vulkan.KHRSwapchain;
+import org.lwjgl.vulkan.KHRWin32Surface;
+import org.lwjgl.vulkan.KHRGetSurfaceCapabilities2;
+import org.lwjgl.vulkan.EXTFullScreenExclusive;
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.rt.pipeline.RtRayTracingPipeline;
@@ -23,6 +30,7 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
     private final RtResourceScope resources;
     private final RtVulkanDeviceBootstrap bootstrap;
     private final RtDeviceQueueContexts queues;
+    private boolean managedPresentationActive;
     private boolean closed;
 
     private VulkanDeviceRuntime(
@@ -139,6 +147,17 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
     }
 
     /**
+     * Returns the runtime-owned instance for tightly integrated platform presentation.
+     * The caller must not destroy it and must not retain it beyond this runtime.
+     *
+     * @return runtime-owned Vulkan instance while this runtime is open
+     */
+    public synchronized VkInstance instance() {
+        requireOpen();
+        return bootstrap.instance();
+    }
+
+    /**
      * Returns the logical device without transferring ownership.
      *
      * @return runtime-owned logical device while this runtime is open
@@ -186,6 +205,157 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
     public synchronized int queueFamilyIndex() {
         requireOpen();
         return bootstrap.queueFamilyIndex();
+    }
+
+    /**
+     * Returns the ordered frame queue used by ray dispatch and managed presentation.
+     * Queue commands must use {@link VulkanQueueHostSync} for Vulkan host synchronization.
+     *
+     * @return borrowed frame queue valid until {@link #close()}
+     */
+    public synchronized VkQueue frameQueue() {
+        requireOpen();
+        return queues.frameQueue();
+    }
+
+    /**
+     * Returns the queue reserved for potentially blocking platform presentation calls.
+     * It is distinct from frame/build queues when the selected family exposes at least three
+     * queues; otherwise it safely aliases the ordered frame queue.
+     *
+     * @return borrowed presentation queue valid until {@link #close()}
+     */
+    public synchronized VkQueue presentationQueue() {
+        requireOpen();
+        return queues.presentationQueue();
+    }
+
+    /**
+     * Reports whether platform presentation can avoid blocking frame/build host submission.
+     *
+     * @return {@code true} when presentation owns a distinct native queue
+     */
+    public synchronized boolean dedicatedPresentationQueueEnabled() {
+        requireOpen();
+        return queues.presentationQueueDedicated();
+    }
+
+    /**
+     * Reserves a monotonic GPU signal consumed by the dedicated managed-presentation queue.
+     *
+     * @return non-null signal, or a disabled signal when presentation aliases the frame queue
+     */
+    public synchronized ManagedPresentationSignal reserveManagedPresentationSignal() {
+        requireOpen();
+        if (!queues.presentationQueueDedicated()) return ManagedPresentationSignal.disabled();
+        return new ManagedPresentationSignal(
+                queues.presentationTimelineSemaphore(),
+                queues.reservePresentationTimelineValue()
+        );
+    }
+
+    /**
+     * Reports whether this runtime was created with the instance and device extensions required
+     * for a same-logical-device Win32 swapchain. Surface support for the selected queue family is
+     * still checked against the actual GLFW window before the fast path is committed.
+     *
+     * @return {@code true} when the required managed Win32 presentation extensions are enabled
+     */
+    public synchronized boolean managedWin32PresentationEnabled() {
+        requireOpen();
+        List<String> instanceExtensions = bootstrap.enabledInstanceExtensions();
+        return instanceExtensions.contains(KHRSurface.VK_KHR_SURFACE_EXTENSION_NAME)
+                && instanceExtensions.contains(KHRWin32Surface.VK_KHR_WIN32_SURFACE_EXTENSION_NAME)
+                && bootstrap.enabledExtensions().contains(KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    }
+
+    /**
+     * Reports whether the optional Windows full-screen swapchain hint is enabled.
+     *
+     * @return {@code true} when instance and device full-screen-exclusive extensions are enabled
+     */
+    public synchronized boolean fullScreenExclusivePresentationEnabled() {
+        requireOpen();
+        return bootstrap.enabledInstanceExtensions().contains(
+                KHRGetSurfaceCapabilities2.VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME
+        ) && bootstrap.enabledExtensions().contains(
+                EXTFullScreenExclusive.VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME
+        );
+    }
+
+    /**
+     * Activates the same-device presentation ownership contract.
+     *
+     * <p>While active, frame producers keep output images owned by the renderer queue instead of
+     * releasing every frame to {@code VK_QUEUE_FAMILY_EXTERNAL}. The official presenter is the
+     * sole owner of this scope; expert consumers that request an external memory handle still
+     * trigger a lazy, explicit ownership release in the frame slot.</p>
+     */
+    public synchronized void beginManagedPresentation() {
+        requireOpen();
+        if (!managedWin32PresentationEnabled()) {
+            throw new UnsupportedOperationException(
+                    "runtime does not expose the extensions required for managed presentation"
+            );
+        }
+        if (managedPresentationActive) {
+            throw new IllegalStateException("managed presentation is already active");
+        }
+        managedPresentationActive = true;
+    }
+
+    /**
+     * Returns whether newly submitted frames should retain renderer-queue ownership.
+     *
+     * @return {@code true} while the official managed presenter owns the presentation scope
+     */
+    public synchronized boolean managedPresentationActive() {
+        requireOpen();
+        return managedPresentationActive;
+    }
+
+    /** Ends the ownership contract established by {@link #beginManagedPresentation()}. */
+    public synchronized void endManagedPresentation() {
+        requireOpen();
+        if (!managedPresentationActive) {
+            throw new IllegalStateException("managed presentation is not active");
+        }
+        managedPresentationActive = false;
+    }
+
+    /**
+     * Same-device timeline identity connecting a completed producer frame to presentation.
+     *
+     * @param semaphore borrowed timeline semaphore, or zero when the fast path is disabled
+     * @param value positive signal value, or zero when the fast path is disabled
+     */
+    public record ManagedPresentationSignal(long semaphore, long value) {
+        /**
+         * Validates that handle and value are either both zero or both positive.
+         */
+        public ManagedPresentationSignal {
+            if ((semaphore == 0L) != (value == 0L) || value < 0L) {
+                throw new IllegalArgumentException("managed presentation signal is inconsistent");
+            }
+        }
+
+        /**
+         * Creates the sentinel used when presentation aliases the frame queue.
+         *
+         * @return disabled zero-handle signal
+         */
+        public static ManagedPresentationSignal disabled() {
+            return new ManagedPresentationSignal(0L, 0L);
+        }
+
+        /**
+         * Reports whether a dedicated presentation queue must wait this signal.
+         *
+         * @return {@code true} when this signal carries a native timeline semaphore
+         */
+        public boolean enabled() {
+            return semaphore != 0L;
+        }
     }
 
     /**

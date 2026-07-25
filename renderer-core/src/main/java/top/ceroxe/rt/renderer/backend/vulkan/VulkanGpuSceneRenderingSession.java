@@ -259,11 +259,14 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
             long descriptorEpoch = Math.incrementExact(lastSubmittedDescriptorEpoch);
             int previousLayout = slot.imageLayout();
             boolean acquireExternalOwnership = slot.externallyOwned();
+            boolean releaseExternalOwnership = !scene.device().managedPresentationActive();
             int producerQueueFamilyIndex = scene.device().queueFamilyIndex();
-            RtCommandContext.AsyncSubmission nativeSubmission = scene.device().frameCommands()
-                    .submitTimedOneTimeAsync(
-                            FRAME_TIMING_LABEL,
-                            (commandBuffer, stack) -> pipeline.recordFrame(
+            VulkanDeviceRuntime.ManagedPresentationSignal readySignal =
+                    releaseExternalOwnership
+                            ? VulkanDeviceRuntime.ManagedPresentationSignal.disabled()
+                            : scene.device().reserveManagedPresentationSignal();
+            RtCommandContext.CommandRecorder frameRecorder =
+                    (commandBuffer, stack) -> pipeline.recordFrame(
                                     commandBuffer,
                                     stack,
                                     slot.index(),
@@ -272,10 +275,20 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
                                     temporalResources,
                                     previousLayout,
                                     acquireExternalOwnership,
+                                    releaseExternalOwnership,
                                     producerQueueFamilyIndex,
                                     width,
                                     height
-                            )
+                            );
+            RtCommandContext.AsyncSubmission nativeSubmission = readySignal.enabled()
+                    ? scene.device().frameCommands().submitTimedOneTimeAsync(
+                            FRAME_TIMING_LABEL,
+                            readySignal.semaphore(),
+                            readySignal.value(),
+                            frameRecorder
+                    )
+                    : scene.device().frameCommands().submitTimedOneTimeAsync(
+                            FRAME_TIMING_LABEL, frameRecorder
                     );
             boolean published = false;
             try {
@@ -283,7 +296,9 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
                         nativeSubmission,
                         checked.request().sequence(),
                         acceptedSceneRevision,
-                        descriptorEpoch
+                        descriptorEpoch,
+                        releaseExternalOwnership,
+                        readySignal
                 );
                 published = true;
             } finally {
@@ -324,6 +339,22 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
             return lease;
         } catch (RuntimeException failure) {
             throw fail("export completed GPUScene frame", failure);
+        }
+    }
+
+    @Override
+    public synchronized GpuFrameLease acquireLatestManagedFrame() {
+        requireReady("acquire managed frame");
+        try {
+            pump();
+            VulkanFrameSlot earliest = earliestManagedPresentableSlot();
+            if (earliest == null || earliest.frameSequence() <= latestAcquiredFrameSequence) return null;
+            discardCompletedExcept(earliest);
+            GpuFrameLease lease = earliest.acquireManaged();
+            latestAcquiredFrameSequence = lease.descriptor().frameSequence();
+            return lease;
+        } catch (RuntimeException failure) {
+            throw fail("export managed GPUScene frame", failure);
         }
     }
 
@@ -454,10 +485,9 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
         long completedEpoch = latestCompletedDescriptorEpoch;
         long completedSequence = latestCompletedFrameSequence;
         for (VulkanFrameSlot slot : frameSlots) {
-            if (slot.pollProducer()) {
-                completedEpoch = Math.max(completedEpoch, slot.descriptorEpoch());
-                completedSequence = Math.max(completedSequence, slot.frameSequence());
-            }
+            slot.pollProducer();
+            completedEpoch = Math.max(completedEpoch, slot.observedProducerDescriptorEpoch());
+            completedSequence = Math.max(completedSequence, slot.observedProducerFrameSequence());
         }
         latestCompletedDescriptorEpoch = completedEpoch;
         latestCompletedFrameSequence = completedSequence;
@@ -492,6 +522,18 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
             }
         }
         return latest;
+    }
+
+    private VulkanFrameSlot earliestManagedPresentableSlot() {
+        VulkanFrameSlot earliest = null;
+        for (VulkanFrameSlot slot : frameSlots) {
+            if (slot.managedPresentable()
+                    && slot.frameSequence() > latestAcquiredFrameSequence
+                    && (earliest == null || slot.frameSequence() < earliest.frameSequence())) {
+                earliest = slot;
+            }
+        }
+        return earliest;
     }
 
     private RendererDiagnostics.FrameGpuTiming frameTiming() {

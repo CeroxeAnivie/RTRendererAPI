@@ -218,6 +218,7 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanGpuSceneSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneSelfTest",
     "coreVulkanRendererHostSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererHostSelfTest",
     "coreVulkanGpuFrameLeaseSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuFrameLeaseSelfTest",
+    "coreVulkanTextOverlayRasterizerSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanTextOverlayRasterizerSelfTest",
     "coreVulkanRayTracingBackendProviderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRayTracingBackendProviderSelfTest"
 )
 

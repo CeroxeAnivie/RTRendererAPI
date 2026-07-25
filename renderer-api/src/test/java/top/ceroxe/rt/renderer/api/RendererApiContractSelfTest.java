@@ -428,6 +428,8 @@ public final class RendererApiContractSelfTest {
               "managed presenter default extent changed");
       require(defaults.presentMode() == VulkanFramePresenterConfig.PresentMode.VSYNC,
               "managed presenter safe default is no longer FIFO-oriented");
+      require(defaults.windowMode() == VulkanFramePresenterConfig.WindowMode.WINDOWED,
+              "presenter default window mode changed");
       require(defaults.maximumFramesQueuedAhead() == 2,
               "managed presenter default producer lead changed");
       VulkanFramePresenterConfig uncapped = VulkanFramePresenterConfig.builder()

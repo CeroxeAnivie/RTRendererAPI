@@ -4,6 +4,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.LongConsumer;
+import java.util.function.Supplier;
 import top.ceroxe.rt.renderer.api.CameraState;
 import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
@@ -39,6 +40,7 @@ import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.LeaseState;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop.FrameNotReady;
 import top.ceroxe.rt.renderer.backend.vulkan.VulkanRenderingSession.State;
 import top.ceroxe.rt.renderer.backend.vulkan.VulkanRenderingSession.Telemetry;
+import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
 public final class VulkanRendererHostSelfTest {
    private VulkanRendererHostSelfTest() {
@@ -604,8 +606,10 @@ public final class VulkanRendererHostSelfTest {
 
       @Override
       public VulkanFramePresenter open(
+              VulkanDeviceRuntime runtime,
               String gpuStableId,
               VulkanFramePresenterConfig configuration,
+              Supplier<GpuFrameLease> managedFrameSupplier,
               LongConsumer frameRetiredCallback,
               Runnable closeCallback
       ) {

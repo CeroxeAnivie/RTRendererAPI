@@ -39,13 +39,13 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
       try {
          VulkanFrameInterop interop = (VulkanFrameInterop)renderer.extension(VulkanFrameInterop.class).orElseThrow(() -> new AssertionError("Vulkan backend omitted its interop extension"));
          renderer.apply(VulkanGpuSceneRenderingSessionNativeSelfTest.complexScene());
-         runRange(renderer, 0L, 32, false);
+         runRange(renderer, interop, 0L, 32, false);
          double coldStartMillis = (double)(System.nanoTime() - coldStartNanos) / 1000000.0;
          ArrayList<Measurement> measurements = new ArrayList<>(3);
 
          for(int run = 0; run < 3; ++run) {
             long firstSequence = 32L + (long)run * 256L;
-            Measurement measurement = runRange(renderer, firstSequence, 256, true);
+            Measurement measurement = runRange(renderer, interop, firstSequence, 256, true);
             measurements.add(measurement);
             require(measurement.averageFps() >= 100.0, "GPUScene average throughput is below target in run " + run + ": " + String.valueOf(measurement));
             require(measurement.lowWindowFps() >= 50.0, "GPUScene low-window throughput is below target in run " + run + ": " + String.valueOf(measurement));
@@ -54,28 +54,6 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
          }
 
          RendererDiagnostics diagnostics = renderer.diagnostics();
-         VulkanFrameInterop.FramePollResult frameResult = interop.pollLatestFrame();
-         require(frameResult instanceof VulkanFrameInterop.FrameAvailable, "throughput gate produced no public GPU frame lease");
-         GpuFrameLease lease = ((VulkanFrameInterop.FrameAvailable)frameResult).lease();
-
-         try {
-            require(lease.state() == LeaseState.ACTIVE, "throughput gate returned an inactive public GPU frame lease");
-         } catch (Throwable value17) {
-            if (lease != null) {
-               try {
-                  lease.close();
-               } catch (Throwable value16) {
-                  value17.addSuppressed(value16);
-               }
-            }
-
-            throw value17;
-         }
-
-         if (lease != null) {
-            lease.close();
-         }
-
          require(diagnostics.frameGpuTiming().enabled() && diagnostics.frameGpuTiming().completedSamples() > 0L, "GPUScene throughput gate has no hardware timestamp evidence: " + String.valueOf(diagnostics.frameGpuTiming()));
          PrintStream output10000 = System.out;
          String details10001 = capability.preferredDevice().name();
@@ -98,7 +76,7 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
 
    }
 
-   private static Measurement runRange(RayTracingRenderer renderer, long firstSequence, int frameCount, boolean measure) throws InterruptedException {
+   private static Measurement runRange(RayTracingRenderer renderer, VulkanFrameInterop interop, long firstSequence, int frameCount, boolean measure) throws InterruptedException {
       long finalSequence = firstSequence + (long)frameCount - 1L;
       long nextSequence = firstSequence;
       long latestCompleted = firstSequence - 1L;
@@ -109,9 +87,20 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
       long windowSequence = latestCompleted;
       double lowWindowFps = 1.0 / 0.0;
       long maxGapNanos = 0L;
+      long consumedLeases = 0L;
       ArrayList<Long> progressGaps = new ArrayList<>();
 
       while(latestCompleted < finalSequence) {
+         if (latestCompleted < finalSequence - 1L) {
+            VulkanFrameInterop.FramePollResult available = interop.pollLatestFrame();
+            if (available instanceof VulkanFrameInterop.FrameAvailable frame) {
+               GpuFrameLease lease = frame.lease();
+               require(lease.state() == LeaseState.ACTIVE,
+                       "throughput gate returned an inactive public GPU frame lease");
+               lease.close();
+               ++consumedLeases;
+            }
+         }
          boolean admitted;
          for(admitted = false; nextSequence <= finalSequence; admitted = true) {
             RenderFrameRequest frame = RenderFrameRequest.builder(nextSequence, 1920, 1080, VulkanGpuSceneRenderingSessionNativeSelfTest.camera()).environment(VulkanGpuSceneRenderingSessionNativeSelfTest.environment()).build();
@@ -152,6 +141,7 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
       }
 
       long elapsed = Math.max(1L, System.nanoTime() - start);
+      require(consumedLeases > 0L, "throughput gate consumed no completed GPU frame leases");
       double averageFps = (double)frameCount * 1.0E9 / (double)elapsed;
       if (!Double.isFinite(lowWindowFps)) {
          lowWindowFps = averageFps;

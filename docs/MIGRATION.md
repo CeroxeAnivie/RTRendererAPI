@@ -19,12 +19,15 @@ if (attempt instanceof RayTracingRenderer.FrameSubmitted) {
 
 ## 0.2.0 官方 Vulkan presenter
 
-只需要 GPU 窗口显示的应用不再需要自行编写 native import/present 代码。使用 `VulkanFramePresenter.open(renderer, config)`；它拥有窗口、Vulkan consumer device、swapchain、external import、completion 和 lease close。
+只需要 GPU 窗口显示的应用不再需要自行编写 native import/present 代码。使用 `VulkanFramePresenter.open(renderer, config)`；内置 backend 会复用 renderer 的 logical device 并拥有窗口、swapchain、managed copy、completion 和 lease close，只有专家/兼容路径才使用 external import。
 
 - `PresentMode` 是偏好；用 `activePresentMode()` 读取平台实际的 `IMMEDIATE`、`MAILBOX` 或 `FIFO`。
 - `maximumFramesQueuedAhead` 是 producer lead 上限，不是 FPS 限制。
 - 只在 `PresentationResult.outcome() == PRESENTED` 时统计实际 present FPS。
 - `SKIPPED_MINIMIZED` 与 `RETIRED_FOR_RECREATE` 已消费 lease，但不代表可见帧。
+- `performanceSnapshot()` 分离 acquire、managed GPU copy、queue lock 与 native present。
+- `setOverlayText(...)` 提供无需 CPU readback 的 transfer-only 画面内诊断 HUD。
+- `windowMode(...)` 可选择普通窗口或主显示器全屏；可选 full-screen-exclusive hint 不可用时自动回退。
 
 已有自定义 Vulkan consumer 继续使用 `VulkanFrameInterop`。`FrameDescriptor` 新增：
 

@@ -18,6 +18,7 @@ import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterFactory;
+import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -68,6 +69,7 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     private int failedDeviceRecoveries;
     private boolean recoveryPending;
     private boolean managedPresenterOpen;
+    private boolean managedPresenterRetainsSession;
     private int managedPresenterBacklogLimit;
     private FrameSubmissionDeferred managedPresenterBackpressure;
     private final ArrayDeque<Long> managedPresenterOutstandingFrames = new ArrayDeque<>();
@@ -264,10 +266,13 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         VulkanFramePresenterConfig checked = Objects.requireNonNull(
                 presenterConfiguration, "presenterConfiguration"
         );
+        VulkanDeviceRuntime presentationRuntime = managedPresentationRuntime();
         VulkanFramePresenter presenter = Objects.requireNonNull(
                 managedPresenterOpener.open(
+                        presentationRuntime,
                         session.gpuStableId(),
                         checked,
+                        this::acquireLatestManagedFrame,
                         this::onManagedFrameRetired,
                         this::onManagedPresenterClosed
                 ),
@@ -282,11 +287,18 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             );
             managedPresenterOutstandingFrames.clear();
             managedPresenterOpen = true;
+            managedPresenterRetainsSession = presentationRuntime != null;
             published = true;
             return presenter;
         } finally {
             if (!published) presenter.close();
         }
+    }
+
+    private VulkanDeviceRuntime managedPresentationRuntime() {
+        return session instanceof VulkanGpuSceneRenderingSession gpuSession
+                ? gpuSession.deviceForAcceptance()
+                : null;
     }
 
     private void onManagedFrameRetired(long frameSequence) {
@@ -302,9 +314,21 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         withLifecycleLock(() -> {
             if (!managedPresenterOpen) return;
             managedPresenterOpen = false;
+            managedPresenterRetainsSession = false;
             managedPresenterBacklogLimit = 0;
             managedPresenterBackpressure = null;
             managedPresenterOutstandingFrames.clear();
+            if (lifecycle != Lifecycle.READY) {
+                RuntimeException closeFailure = closeSessionIfUnleased();
+                if (closeFailure != null) {
+                    recoveryPending = false;
+                    if (terminalFailure == null) terminalFailure = closeFailure;
+                    else terminalFailure.addSuppressed(closeFailure);
+                    throw closeFailure;
+                }
+                clearResolvedCleanupFailure();
+                recoverIfPossible();
+            }
         });
     }
 
@@ -458,6 +482,26 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             return VulkanFrameInterop.FrameNotReady.INSTANCE;
         }
 
+        return new VulkanFrameInterop.FrameAvailable(trackAcquiredFrame(lease, true));
+    }
+
+    private GpuFrameLease acquireLatestManagedFrame() {
+        return withLifecycleLock(() -> {
+            requireReady("acquire latest managed GPU frame");
+            if (!managedPresenterOpen) {
+                throw new IllegalStateException("managed frame source requires an open presenter");
+            }
+            GpuFrameLease lease;
+            try {
+                lease = session.acquireLatestManagedFrame();
+            } catch (RuntimeException failure) {
+                throw fail("acquire latest managed GPU frame", failure);
+            }
+            return lease == null ? null : trackAcquiredFrame(lease, false);
+        });
+    }
+
+    private GpuFrameLease trackAcquiredFrame(GpuFrameLease lease, boolean producerCompletedOnCpu) {
         try {
             GpuFrameLease.FrameDescriptor descriptor = Objects.requireNonNull(
                     lease.descriptor(), "lease descriptor"
@@ -492,11 +536,13 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
                 );
             }
             latestAcquiredFrameSequence = descriptor.frameSequence();
-            latestCompletedFrameSequence = Math.max(latestCompletedFrameSequence, descriptor.frameSequence());
+            if (producerCompletedOnCpu) {
+                latestCompletedFrameSequence = Math.max(
+                        latestCompletedFrameSequence, descriptor.frameSequence()
+                );
+            }
             openFrameLeases++;
-            return new VulkanFrameInterop.FrameAvailable(
-                    new TrackedGpuFrameLease(lease, new FrameLeaseRetirement())
-            );
+            return new TrackedGpuFrameLease(lease, new FrameLeaseRetirement());
         } catch (RuntimeException contractFailure) {
             try {
                 lease.close();
@@ -756,7 +802,7 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     }
 
     private RuntimeException closeSessionIfUnleased() {
-        if (sessionClosed || openFrameLeases != 0) {
+        if (sessionClosed || openFrameLeases != 0 || managedPresenterRetainsSession) {
             return null;
         }
         try {
@@ -895,8 +941,10 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     @FunctionalInterface
     interface ManagedPresenterOpener {
         VulkanFramePresenter open(
+                VulkanDeviceRuntime runtime,
                 String gpuStableId,
                 VulkanFramePresenterConfig configuration,
+                Supplier<GpuFrameLease> managedFrameSupplier,
                 LongConsumer frameRetiredCallback,
                 Runnable closeCallback
         );

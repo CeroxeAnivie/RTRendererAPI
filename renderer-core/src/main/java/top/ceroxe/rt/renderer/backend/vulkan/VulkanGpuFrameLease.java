@@ -9,11 +9,12 @@ import java.util.function.Consumer;
 /**
  * One exclusive consumer claim on a producer-complete Vulkan frame slot.
  */
-final class VulkanGpuFrameLease implements GpuFrameLease {
+final class VulkanGpuFrameLease implements GpuFrameLease, VulkanManagedFrameLease {
     private final FrameDescriptor descriptor;
     private final ExportedNativeHandle<VulkanMemoryHandleType> memoryHandle;
     private final ConsumerCompletionCapabilities completionCapabilities;
     private final Consumer<ConsumerCompletion> completionObserver;
+    private final NativeFrame managedNativeFrame;
 
     private LeaseState state = LeaseState.ACTIVE;
 
@@ -31,10 +32,21 @@ final class VulkanGpuFrameLease implements GpuFrameLease {
             ConsumerCompletionCapabilities completionCapabilities,
             Consumer<ConsumerCompletion> completionObserver
     ) {
+        this(descriptor, memoryHandle, completionCapabilities, completionObserver, null);
+    }
+
+    VulkanGpuFrameLease(
+            FrameDescriptor descriptor,
+            ExportedNativeHandle<VulkanMemoryHandleType> memoryHandle,
+            ConsumerCompletionCapabilities completionCapabilities,
+            Consumer<ConsumerCompletion> completionObserver,
+            NativeFrame managedNativeFrame
+    ) {
         this.descriptor = Objects.requireNonNull(descriptor, "descriptor");
         this.memoryHandle = Objects.requireNonNull(memoryHandle, "memoryHandle");
         this.completionCapabilities = Objects.requireNonNull(completionCapabilities, "completionCapabilities");
         this.completionObserver = Objects.requireNonNull(completionObserver, "completionObserver");
+        this.managedNativeFrame = managedNativeFrame;
     }
 
     private static Consumer<ConsumerCompletion> adapt(Runnable observer) {
@@ -86,6 +98,37 @@ final class VulkanGpuFrameLease implements GpuFrameLease {
     @Override
     public synchronized LeaseState state() {
         return state;
+    }
+
+    @Override
+    public synchronized NativeFrame managedNativeFrame() {
+        if (state != LeaseState.ACTIVE) {
+            throw new IllegalStateException("managed native frame requires an active lease");
+        }
+        if (managedNativeFrame == null) {
+            throw new UnsupportedOperationException("lease has no managed native frame capability");
+        }
+        boolean externallyOwned = managedNativeFrame.externallyOwned()
+                || memoryHandle instanceof VulkanExportedMemoryHandle exported
+                && exported.materialized();
+        return externallyOwned == managedNativeFrame.externallyOwned()
+                ? managedNativeFrame
+                : new NativeFrame(
+                        managedNativeFrame.device(),
+                        managedNativeFrame.image(),
+                        managedNativeFrame.queueFamilyIndex(),
+                        true,
+                        managedNativeFrame.readyTimelineSemaphore(),
+                        managedNativeFrame.readyTimelineValue()
+                );
+    }
+
+    @Override
+    public synchronized void releaseAfterManagedQueueSubmission() {
+        if (managedNativeFrame == null) {
+            throw new UnsupportedOperationException("lease has no managed native frame capability");
+        }
+        release(new CpuCompleted());
     }
 
     @Override

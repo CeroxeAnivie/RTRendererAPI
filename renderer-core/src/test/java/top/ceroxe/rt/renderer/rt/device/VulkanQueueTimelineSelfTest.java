@@ -15,6 +15,8 @@ public final class VulkanQueueTimelineSelfTest {
       require(RtDeviceQueueContexts.requestedQueueCount(1, true) == 1, "one available queue must retain the ordered fallback");
       require(RtDeviceQueueContexts.requestedQueueCount(2, false) == 1, "queue separation without timeline synchronization must be rejected");
       require(RtDeviceQueueContexts.requestedQueueCount(2, true) == 2, "two queues plus timeline support must enable the asynchronous build lane");
+      require(RtDeviceQueueContexts.requestedQueueCount(3, true) == 3,
+              "three queues plus timeline support must isolate blocking presentation");
    }
 
    private static void publishesOnlyFenceObservedValues() {

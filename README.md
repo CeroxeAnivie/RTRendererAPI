@@ -86,7 +86,7 @@ public final class Main {
 
 ### 官方 GPU 显示路径
 
-普通桌面应用无需自己编写 Vulkan import/swapchain 代码。关闭 CPU readback 后，通过 renderer 绑定的官方 presenter 直接显示 external-memory 帧：
+普通桌面应用无需自己编写 Vulkan import/swapchain 代码。关闭 CPU readback 后，通过 renderer 绑定的官方 presenter 直接显示 GPU 帧。内置 renderer 的默认路径复用同一 `VkInstance`、`VkDevice` 与受控 queue；只有真正的外部 consumer 才走 Win32 external-memory 协议：
 
 ```java
 RayTracingRendererConfig config = RayTracingRendererConfig.builder()
@@ -100,25 +100,26 @@ try (RayTracingRenderer renderer = RendererBootstrap.open(config);
                      .presentMode(VulkanFramePresenterConfig.PresentMode.UNCAPPED)
                      .maximumFramesQueuedAhead(2)
                      .build())) {
-    VulkanFrameInterop interop = renderer.extension(VulkanFrameInterop.class).orElseThrow();
     // apply scene, then submit with trySubmit(...)
-    if (interop.pollLatestFrame() instanceof VulkanFrameInterop.FrameAvailable frame) {
-        VulkanFramePresenter.PresentationResult result =
-                presenter.presentAndRelease(frame.lease());
+    var presented = presenter.presentLatestFrame();
+    if (presented.isPresent()) {
+        VulkanFramePresenter.PresentationResult result = presented.orElseThrow();
         // Only Outcome.PRESENTED counts as an actually visible/present-queued frame.
     }
+    presenter.setOverlayText("PRESENT: 145.2 FPS\nTRACE CAPACITY: 266.3 FPS");
+    VulkanFramePresenter.PerformanceSnapshot timings = presenter.performanceSnapshot();
     System.out.println(presenter.activePresentMode());
 }
 ```
 
-`maximumFramesQueuedAhead` 限制的是尚未被 presenter 消费的生产者领先量，不是时间型 FPS 锁。`trySubmit(...)` 在队列满时返回 `FrameSubmissionDeferred`，不会为正常背压构造异常；同一 sequence 只有成功提交后才能递增。`activePresentMode()` 返回平台最终选择的 `IMMEDIATE`、`MAILBOX` 或 `FIFO`，不能用配置偏好冒充实际模式。
+`presentLatestFrame()` 是普通应用的主推入口：provider 可在 CPU 观察 producer fence 前用内部 GPU timeline 排入同设备 presentation fast path。专家 `VulkanFrameInterop.pollLatestFrame()` 仍只发布 CPU 已确认完成、可按 external-memory 契约消费的 lease。`maximumFramesQueuedAhead` 限制的是尚未被 presenter 消费的生产者领先量，不是时间型 FPS 锁。`trySubmit(...)` 在队列满时返回 `FrameSubmissionDeferred`；`activePresentMode()` 返回平台最终选择的 `IMMEDIATE`、`MAILBOX` 或 `FIFO`。`setOverlayText(...)` 使用 transfer-only GPU HUD，不开启 CPU readback；`performanceSnapshot()` 不会伪造缺失的 GPU copy 样本。
 
 ### FPS 口径与当前实机证据
 
-- **Present FPS**：仅在 `presentAndRelease(...)` 返回 `Outcome.PRESENTED` 后计数，表示进入平台 presentation queue 的实际帧。
-- **Trace capacity**：由 GPU ray-trace timing 的倒数估算，只描述光追阶段理论吞吐；它不包含 acquire、external-memory import/copy、queue ownership 和 present，不能当作肉眼看到的 FPS。
+- **Present FPS**：仅在 presenter 返回 `Outcome.PRESENTED` 后计数，表示进入平台 presentation queue 的实际帧。
+- **Trace capacity**：由 GPU ray-trace timing 的倒数估算，只描述光追阶段理论吞吐；它不包含 swapchain acquire、managed GPU copy 和 present，不能当作肉眼看到的 FPS。
 
-Windows 11、RTX 5080 Laptop GPU、2560×1600、三球动态场景、`IMMEDIATE`、每档 121 个实际 present 的本轮证据为：1 spp 166.5 FPS，2 spp 117.4 FPS，4 spp 56.6 FPS，8 spp 24.7 FPS。该数字是当前代码和机器的诊断证据，不是跨驱动/硬件性能承诺。当前 presenter 与 renderer 使用两个 Vulkan logical device，剩余成本包含 external-memory 同步与 swapchain copy；未来同 device surface-aware 路径仍有优化空间。
+Windows 11、RTX 5080 Laptop GPU、独显显示路径 active、2560×1600 全屏、2 spp、三球动态场景、平台实际 `IMMEDIATE`、1200 个 present 的当前证据为：滚动 Present 189.1 FPS、全程平均 176.1 FPS、trace 4.20 ms / 238.3 FPS、acquire 0.632 ms、native present 0.400 ms。独立 presentation queue 路径当前不发布 managed-copy GPU timestamp，`PerformanceSnapshot` 以零样本/`NaN` 如实表示未知。Khronos Validation 的 180 帧 smoke 无 ERROR/WARNING/VUID。该数字是本机证据，不是跨驱动或硬件的性能承诺。
 
 ## 构建与测试
 

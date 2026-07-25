@@ -33,6 +33,15 @@ interface VulkanRenderingSession extends AutoCloseable {
     GpuFrameLease acquireLatestFrame();
 
     /**
+     * Returns a managed-presenter lease as soon as GPU timeline synchronization can describe it.
+     * Expert consumers keep using {@link #acquireLatestFrame()} and therefore never observe a
+     * producer-pending image without an exported acquire semaphore.
+     */
+    default GpuFrameLease acquireLatestManagedFrame() {
+        return acquireLatestFrame();
+    }
+
+    /**
      * Returns an owned CPU snapshot newer than the supplied sequence, or {@code null}.
      */
     CpuFrame captureLatestCpuFrame(long afterFrameSequence);

@@ -13,7 +13,7 @@ import java.util.Optional;
  * close. In particular, a failed close of an imported, unreleased lease does not notify the host:
  * the consumer still owes an explicit completion signal.</p>
  */
-final class TrackedGpuFrameLease implements GpuFrameLease {
+final class TrackedGpuFrameLease implements GpuFrameLease, VulkanManagedFrameLease {
     private final GpuFrameLease delegate;
     private final Runnable closeObserver;
 
@@ -55,6 +55,24 @@ final class TrackedGpuFrameLease implements GpuFrameLease {
     @Override
     public synchronized LeaseState state() {
         return delegate.state();
+    }
+
+    @Override
+    public synchronized NativeFrame managedNativeFrame() {
+        return managedDelegate().managedNativeFrame();
+    }
+
+    @Override
+    public synchronized void releaseAfterManagedQueueSubmission() {
+        managedDelegate().releaseAfterManagedQueueSubmission();
+        if (delegate.state() != LeaseState.RELEASED) {
+            throw new IllegalStateException("managed lease release did not publish released state");
+        }
+    }
+
+    private VulkanManagedFrameLease managedDelegate() {
+        if (delegate instanceof VulkanManagedFrameLease managed) return managed;
+        throw new UnsupportedOperationException("lease has no managed native frame capability");
     }
 
     @Override

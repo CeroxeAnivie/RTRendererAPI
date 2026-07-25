@@ -13,6 +13,8 @@ import top.ceroxe.rt.renderer.rt.pipeline.RtRayTracingPipeline;
 
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -25,11 +27,13 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
     private static final String ENGINE_NAME = "RTRenderer-RTCore";
 
     private final RtResourceScope resources;
+    private final VkInstance instance;
     private final VkPhysicalDevice physicalDevice;
     private final VkDevice device;
     private final long allocator;
     private final RtVulkanDeviceCapabilities.StablePhysicalDeviceProperties properties;
     private final List<String> enabledExtensions;
+    private final List<String> enabledInstanceExtensions;
     private final int queueFamilyIndex;
     private final int requestedQueueCount;
     private final boolean timelineSemaphoreEnabled;
@@ -38,6 +42,7 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
 
     private RtVulkanDeviceBootstrap(
             RtResourceScope resources,
+            VulkanInstanceHandle instance,
             SelectedPhysicalDevice physicalDevice,
             VkDevice device,
             long allocator,
@@ -49,6 +54,7 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
             boolean memoryBudgetEnabled
     ) {
         this.resources = Objects.requireNonNull(resources, "resources");
+        this.instance = Objects.requireNonNull(instance, "instance").instance();
         this.physicalDevice = Objects.requireNonNull(physicalDevice, "physicalDevice").device();
         this.properties = physicalDevice.properties();
         this.device = Objects.requireNonNull(device, "device");
@@ -59,6 +65,7 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         }
         this.allocator = allocator;
         this.enabledExtensions = List.copyOf(enabledExtensions);
+        this.enabledInstanceExtensions = instance.enabledExtensions();
         this.queueFamilyIndex = queueFamilyIndex;
         this.requestedQueueCount = requestedQueueCount;
         this.timelineSemaphoreEnabled = timelineSemaphoreEnabled;
@@ -106,7 +113,7 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                     physicalDevice.properties().apiVersion(), memoryBudgetEnabled);
             resources.retain("vma allocator", () -> Vma.vmaDestroyAllocator(allocator));
             return new RtVulkanDeviceBootstrap(
-                    resources, physicalDevice, device, allocator, enabledExtensions, queueFamily.index(),
+                    resources, instanceHandle, physicalDevice, device, allocator, enabledExtensions, queueFamily.index(),
                     requestedQueueCount, timelineSemaphoreEnabled, scratchAlignment, memoryBudgetEnabled);
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
             try {
@@ -130,6 +137,12 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                     .pEngineName(stack.UTF8(ENGINE_NAME)).engineVersion(VK10.VK_MAKE_VERSION(0, 1, 0))
                     .apiVersion(selectInstanceApiVersion());
             VkInstanceCreateInfo createInfo = VkInstanceCreateInfo.calloc(stack).sType$Default().pApplicationInfo(applicationInfo);
+            List<String> enabledInstanceExtensions = presentationInstanceExtensions(stack);
+            if (!enabledInstanceExtensions.isEmpty()) {
+                PointerBuffer extensionNames = stack.mallocPointer(enabledInstanceExtensions.size());
+                for (String extension : enabledInstanceExtensions) extensionNames.put(stack.UTF8(extension));
+                createInfo.ppEnabledExtensionNames(extensionNames.flip());
+            }
             if (validationLogger != null) {
                 validationLogger.configureInstanceCreateInfo(stack, createInfo);
             }
@@ -139,12 +152,43 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
             if (validationLogger != null) {
                 validationLogger.createMessenger(stack, createdInstance);
             }
-            return new VulkanInstanceHandle(createdInstance, validationLogger);
+            return new VulkanInstanceHandle(createdInstance, validationLogger, enabledInstanceExtensions);
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
             if (createdInstance != null) VK10.vkDestroyInstance(createdInstance, null);
             if (validationLogger != null) validationLogger.close();
             throw failure;
         }
+    }
+
+    private static List<String> presentationInstanceExtensions(MemoryStack stack) {
+        IntBuffer count = stack.ints(0);
+        checkVk(
+                VK10.vkEnumerateInstanceExtensionProperties((String) null, count, null),
+                "vkEnumerateInstanceExtensionProperties.count"
+        );
+        VkExtensionProperties.Buffer properties = VkExtensionProperties.malloc(count.get(0), stack);
+        checkVk(
+                VK10.vkEnumerateInstanceExtensionProperties((String) null, count, properties),
+                "vkEnumerateInstanceExtensionProperties.values"
+        );
+        Set<String> available = new HashSet<>(properties.remaining());
+        for (int index = 0; index < properties.limit(); index++) {
+            available.add(properties.get(index).extensionNameString());
+        }
+        List<String> enabled = new ArrayList<>(3);
+        if (available.contains(KHRSurface.VK_KHR_SURFACE_EXTENSION_NAME)
+                && available.contains(KHRWin32Surface.VK_KHR_WIN32_SURFACE_EXTENSION_NAME)) {
+            enabled.add(KHRSurface.VK_KHR_SURFACE_EXTENSION_NAME);
+            enabled.add(KHRWin32Surface.VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+            if (available.contains(
+                    KHRGetSurfaceCapabilities2.VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME
+            )) {
+                enabled.add(
+                        KHRGetSurfaceCapabilities2.VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME
+                );
+            }
+        }
+        return List.copyOf(enabled);
     }
 
     private static int selectInstanceApiVersion() {
@@ -275,6 +319,10 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         return physicalDevice;
     }
 
+    VkInstance instance() {
+        return instance;
+    }
+
     VkDevice device() {
         return device;
     }
@@ -289,6 +337,10 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
 
     List<String> enabledExtensions() {
         return enabledExtensions;
+    }
+
+    List<String> enabledInstanceExtensions() {
+        return enabledInstanceExtensions;
     }
 
     int queueFamilyIndex() {
@@ -319,8 +371,15 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         resources.close();
     }
 
-    private record VulkanInstanceHandle(VkInstance instance,
-                                        VulkanValidationFileLogger logger) implements AutoCloseable {
+    private record VulkanInstanceHandle(
+            VkInstance instance,
+            VulkanValidationFileLogger logger,
+            List<String> enabledExtensions
+    ) implements AutoCloseable {
+        private VulkanInstanceHandle {
+            Objects.requireNonNull(instance, "instance");
+            enabledExtensions = List.copyOf(enabledExtensions);
+        }
         @Override
         public void close() {
             try {

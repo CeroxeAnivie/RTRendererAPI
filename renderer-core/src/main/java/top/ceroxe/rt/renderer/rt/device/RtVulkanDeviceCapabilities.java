@@ -41,6 +41,13 @@ final class RtVulkanDeviceCapabilities {
             addOptionalExtension(enabled, extensions, KHRTimelineSemaphore.VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
         }
         addOptionalExternalInteropExtensions(enabled, extensions, apiVersion);
+        // The managed presenter shares this logical device with the RT pipeline.  Enabling the
+        // swapchain extension here is what makes the zero-IPC viewport path possible; devices
+        // without it remain usable for headless/expert interop and simply take the fallback path.
+        addOptionalExtension(enabled, extensions, KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+        addOptionalExtension(
+                enabled, extensions, EXTFullScreenExclusive.VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME
+        );
         addOptionalExtension(enabled, extensions, EXTMemoryBudget.VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
         return enabled;
     }

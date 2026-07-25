@@ -39,7 +39,7 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
                require(stableResourceId > 0L, "frame slot published an invalid external resource identity");
 
                try {
-                  releaseAfterDelayedExternalSignal(slot, lease, consumerDevice);
+                  releaseAfterSubmittedExternalSignal(slot, lease, consumerDevice);
                } catch (Throwable value13) {
                   if (lease != null) {
                      try {
@@ -113,7 +113,7 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
    private static void publish(VulkanFrameSlot slot, VulkanDeviceRuntime producerDevice, long sequence, int width, int height) throws InterruptedException {
       slot.prepare(width, height, new byte[1392]);
       slot.submitted(producerDevice.frameCommands().submitOneTimeAsync((commandBuffer, stack) -> {
-      }), sequence, sequence, sequence);
+      }), sequence, sequence, sequence, true, VulkanDeviceRuntime.ManagedPresentationSignal.disabled());
       awaitProducer(slot);
    }
 
@@ -163,7 +163,7 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
       require(slot.writable(), "replacement resource verification stranded the frame slot");
    }
 
-   private static void releaseAfterDelayedExternalSignal(VulkanFrameSlot slot, GpuFrameLease lease, VulkanDeviceRuntime consumerDevice) throws InterruptedException {
+   private static void releaseAfterSubmittedExternalSignal(VulkanFrameSlot slot, GpuFrameLease lease, VulkanDeviceRuntime consumerDevice) throws InterruptedException {
       long consumerHandle = 0L;
 
       try {
@@ -171,14 +171,11 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
 
          try {
             consumerHandle = signal.detachWin32Handle();
-            lease.release(new GpuFrameLease.ExternalSemaphoreSignal(consumerHandle, new GpuFrameLease.VulkanSemaphoreHandleType(signal.handleType()), SemaphoreKind.BINARY, 0L, ImportDisposition.CALLER_RETAINS_HANDLE));
-            require(lease.state() == LeaseState.RELEASED, "lease did not accept external GPU completion");
-            require(!slot.writable(), "frame slot became writable before the consumer signalled");
-            require(!slot.pollProducer(), "unsignalled consumer semaphore was reported complete");
-            require(!slot.writable(), "polling reused a frame slot with pending consumer work");
-            RtCommandContext.AsyncSubmission signalSubmission = consumerDevice.frameCommands().submitOneTimeAsync((commandBuffer, stack) -> {
-            }, signal);
-            signalSubmission.close();
+            try (RtCommandContext.AsyncSubmission signalSubmission = consumerDevice.frameCommands().submitOneTimeAsync((commandBuffer, stack) -> {
+            }, signal)) {
+               lease.release(new GpuFrameLease.ExternalSemaphoreSignal(consumerHandle, new GpuFrameLease.VulkanSemaphoreHandleType(signal.handleType()), SemaphoreKind.BINARY, 0L, ImportDisposition.CALLER_RETAINS_HANDLE));
+               require(lease.state() == LeaseState.RELEASED, "lease did not accept external GPU completion");
+            }
             awaitConsumer(slot);
          } catch (Throwable value13) {
             if (signal != null) {

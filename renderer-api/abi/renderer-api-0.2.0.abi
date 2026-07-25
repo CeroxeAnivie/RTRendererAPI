@@ -2843,8 +2843,17 @@ public interface top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter 
   public abstract top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$SwapchainPresentMode activePresentMode();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenter$SwapchainPresentMode;
 
+  public default top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$PerformanceSnapshot performanceSnapshot();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenter$PerformanceSnapshot;
+
   public abstract void setTitle(java.lang.String);
     descriptor: (Ljava/lang/String;)V
+
+  public default void setOverlayText(java.lang.String);
+    descriptor: (Ljava/lang/String;)V
+
+  public default java.util.Optional<top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$PresentationResult> presentLatestFrame();
+    descriptor: ()Ljava/util/Optional;
 
   public abstract top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$PresentationResult presentAndRelease(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease);
     descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenter$PresentationResult;
@@ -2866,6 +2875,60 @@ public final class top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresente
 
   public static top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$Outcome valueOf(java.lang.String);
     descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenter$Outcome;
+}
+
+Compiled from "VulkanFramePresenter.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$PerformanceSnapshot extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$PerformanceSnapshot(long, long, long, long, long, long, long, long);
+    descriptor: (JJJJJJJJ)V
+
+  public double averageAcquireMillis();
+    descriptor: ()D
+
+  public double averagePresentMillis();
+    descriptor: ()D
+
+  public double averagePresentQueueLockMillis();
+    descriptor: ()D
+
+  public double averagePresentNativeCallMillis();
+    descriptor: ()D
+
+  public double averageManagedCopyGpuMillis();
+    descriptor: ()D
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public long acquireSamples();
+    descriptor: ()J
+
+  public long acquireNanos();
+    descriptor: ()J
+
+  public long presentSamples();
+    descriptor: ()J
+
+  public long presentNanos();
+    descriptor: ()J
+
+  public long presentQueueLockNanos();
+    descriptor: ()J
+
+  public long presentNativeCallNanos();
+    descriptor: ()J
+
+  public long managedCopyGpuSamples();
+    descriptor: ()J
+
+  public long managedCopyGpuNanos();
+    descriptor: ()J
 }
 
 Compiled from "VulkanFramePresenter.java"
@@ -2954,6 +3017,9 @@ public final class top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresente
   public boolean resizable();
     descriptor: ()Z
 
+  public top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$WindowMode windowMode();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$WindowMode;
+
   public top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$PresentMode presentMode();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$PresentMode;
 
@@ -2971,6 +3037,9 @@ public final class top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresente
 
   public top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$Builder resizable(boolean);
     descriptor: (Z)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$Builder windowMode(top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$WindowMode);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$WindowMode;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$Builder;
 
   public top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$Builder presentMode(top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$PresentMode);
     descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$PresentMode;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$Builder;
@@ -2995,6 +3064,19 @@ public final class top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresente
 
   public static top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$PresentMode valueOf(java.lang.String);
     descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$PresentMode;
+}
+
+Compiled from "VulkanFramePresenterConfig.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$WindowMode extends java.lang.Enum<top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$WindowMode> {
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$WindowMode WINDOWED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$WindowMode;
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$WindowMode PRIMARY_MONITOR_FULLSCREEN;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$WindowMode;
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$WindowMode[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$WindowMode;
+
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$WindowMode valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$WindowMode;
 }
 
 Compiled from "VulkanFramePresenterFactory.java"

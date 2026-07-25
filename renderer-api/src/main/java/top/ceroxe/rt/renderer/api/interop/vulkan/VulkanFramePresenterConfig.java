@@ -14,6 +14,7 @@ public final class VulkanFramePresenterConfig {
     private final int initialWidth;
     private final int initialHeight;
     private final boolean resizable;
+    private final WindowMode windowMode;
     private final PresentMode presentMode;
     private final int maximumFramesQueuedAhead;
 
@@ -22,6 +23,7 @@ public final class VulkanFramePresenterConfig {
         initialWidth = requireDimension(builder.initialWidth, "initialWidth");
         initialHeight = requireDimension(builder.initialHeight, "initialHeight");
         resizable = builder.resizable;
+        windowMode = Objects.requireNonNull(builder.windowMode, "windowMode");
         presentMode = Objects.requireNonNull(builder.presentMode, "presentMode");
         maximumFramesQueuedAhead = requireQueuedFrames(builder.maximumFramesQueuedAhead);
     }
@@ -72,6 +74,15 @@ public final class VulkanFramePresenterConfig {
     }
 
     /**
+     * Returns whether the presenter creates a normal window or a native monitor window.
+     *
+     * @return native window attachment policy
+     */
+    public WindowMode windowMode() {
+        return windowMode;
+    }
+
+    /**
      * Returns the requested swapchain pacing policy.
      *
      * @return presentation mode preference
@@ -102,12 +113,21 @@ public final class VulkanFramePresenterConfig {
         UNCAPPED
     }
 
+    /** Native window attachment policy. */
+    public enum WindowMode {
+        /** Ordinary composited desktop window. */
+        WINDOWED,
+        /** Native full-screen window on the primary monitor at its current video mode. */
+        PRIMARY_MONITOR_FULLSCREEN
+    }
+
     /** Single-thread-confined semantic builder. */
     public static final class Builder {
         private String title = "RTRendererAPI Vulkan Presenter";
         private int initialWidth = 1280;
         private int initialHeight = 720;
         private boolean resizable = true;
+        private WindowMode windowMode = WindowMode.WINDOWED;
         private PresentMode presentMode = PresentMode.VSYNC;
         private int maximumFramesQueuedAhead = 2;
 
@@ -146,6 +166,17 @@ public final class VulkanFramePresenterConfig {
          */
         public Builder resizable(boolean value) {
             resizable = value;
+            return this;
+        }
+
+        /**
+         * Selects the native window attachment policy.
+         *
+         * @param value non-null window attachment policy
+         * @return this builder
+         */
+        public Builder windowMode(WindowMode value) {
+            windowMode = Objects.requireNonNull(value, "windowMode");
             return this;
         }
 

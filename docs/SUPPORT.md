@@ -35,16 +35,13 @@
 
 ### 本轮 GPU presenter 证据
 
-测试条件：Windows 11、NVIDIA GeForce RTX 5080 Laptop GPU、2560×1600、动态三球/六边形场景、uncapped 请求、平台实际 `IMMEDIATE`、每档 121 个 `Outcome.PRESENTED`。
+测试条件：Windows 11、NVIDIA GeForce RTX 5080 Laptop GPU、独显显示路径 active、2560×1600 全屏、2 spp 动态三球/六边形场景、uncapped 请求、平台实际 `IMMEDIATE`、1200 个 `Outcome.PRESENTED`。
 
-| 空间采样 | Present FPS | 平均 trace | Trace capacity |
-| --- | ---: | ---: | ---: |
-| 1 spp | 166.5 | 1.69 ms | 592.4 FPS |
-| 2 spp | 117.4 | 4.58 ms | 218.3 FPS |
-| 4 spp | 56.6 | 9.48 ms | 105.5 FPS |
-| 8 spp | 24.7 | 21.38 ms | 46.8 FPS |
+| 空间采样 | 滚动 Present | 全程 Present | 平均 trace | Trace capacity | Acquire | Managed copy | Native present |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2 spp | 189.1 FPS | 176.1 FPS | 4.20 ms | 238.3 FPS | 0.632 ms | 未采样 | 0.400 ms |
 
-Present FPS 只统计成功进入平台 presentation queue 的帧；trace capacity 是 ray-trace timing 倒数，不包含 external-memory import/copy、queue ownership、swapchain acquire/present，不能解释为肉眼看到的 FPS。当前官方 presenter 与 renderer 使用两个 Vulkan logical device；同 device surface-aware 路径尚未实现，因此表中差值仍包含可优化的跨设备显示成本。
+Present FPS 只统计成功进入平台 presentation queue 的帧；trace capacity 是 ray-trace timing 倒数，不包含 swapchain acquire、managed copy 和 present，不能解释为肉眼看到的 FPS。官方 presenter 的简单模式使用同 logical-device managed timeline fast path；专家 external-memory 路径保持独立。独立 presentation queue 的 managed-copy timestamp 尚未接入，因此以“未采样”明确表示，不能以 host fence 时间冒充 GPU 时间。强制 Khronos Validation 的 180 帧 smoke 无 ERROR/WARNING/VUID。
 
 ## 能力探测
 

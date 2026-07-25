@@ -1,6 +1,11 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import org.lwjgl.vulkan.VK10;
+import org.lwjgl.vulkan.VK11;
+import org.lwjgl.vulkan.KHRRayTracingPipeline;
+import org.lwjgl.vulkan.VkCommandBuffer;
+import org.lwjgl.vulkan.VkImageMemoryBarrier;
+import org.lwjgl.system.MemoryStack;
 import top.ceroxe.rt.renderer.RtStallTelemetrySink;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 import top.ceroxe.rt.renderer.rt.device.RtCommandContext;
@@ -46,6 +51,10 @@ final class VulkanFrameSlot implements AutoCloseable {
     private long frameSequence = -1L;
     private long sceneRevision = -1L;
     private long descriptorEpoch = -1L;
+    private long readyTimelineSemaphore;
+    private long readyTimelineValue;
+    private long observedProducerFrameSequence = -1L;
+    private long observedProducerDescriptorEpoch = -1L;
     private boolean closed;
 
     VulkanFrameSlot(
@@ -304,7 +313,9 @@ final class VulkanFrameSlot implements AutoCloseable {
             RtCommandContext.AsyncSubmission submission,
             long frameSequence,
             long sceneRevision,
-            long descriptorEpoch
+            long descriptorEpoch,
+            boolean externallyOwnedAfterSubmission,
+            VulkanDeviceRuntime.ManagedPresentationSignal readySignal
     ) {
         requireState(State.FREE, "publish frame submission");
         if (frameSequence < 0L || sceneRevision < 0L || descriptorEpoch < 0L) {
@@ -314,9 +325,13 @@ final class VulkanFrameSlot implements AutoCloseable {
         this.frameSequence = frameSequence;
         this.sceneRevision = sceneRevision;
         this.descriptorEpoch = descriptorEpoch;
+        VulkanDeviceRuntime.ManagedPresentationSignal checkedSignal =
+                Objects.requireNonNull(readySignal, "readySignal");
+        readyTimelineSemaphore = checkedSignal.semaphore();
+        readyTimelineValue = checkedSignal.value();
         imageLayout = VK10.VK_IMAGE_LAYOUT_GENERAL;
         if (temporalEnabled) motionLayoutInitialized = true;
-        externallyOwned = true;
+        externallyOwned = externallyOwnedAfterSubmission;
         state = State.SUBMITTED;
         VulkanFrameFlightRecorder.record(
                 VulkanFrameFlightRecorder.PHASE_ADMITTED,
@@ -345,9 +360,21 @@ final class VulkanFrameSlot implements AutoCloseable {
         }
         if (state != State.SUBMITTED) return state == State.COMPLETED || state == State.LEASED;
         if (!producerSubmission.pollComplete()) return false;
+        RtCommandContext.Timing timing = finishProducerCompletion();
+        state = State.COMPLETED;
+        recordProducerCompleted(timing);
+        return true;
+    }
+
+    private RtCommandContext.Timing finishProducerCompletion() {
         RtCommandContext.Timing timing = producerSubmission.timing();
         producerSubmission = null;
-        state = State.COMPLETED;
+        observedProducerFrameSequence = Math.max(observedProducerFrameSequence, frameSequence);
+        observedProducerDescriptorEpoch = Math.max(observedProducerDescriptorEpoch, descriptorEpoch);
+        return timing;
+    }
+
+    private void recordProducerCompleted(RtCommandContext.Timing timing) {
         VulkanFrameFlightRecorder.record(
                 VulkanFrameFlightRecorder.PHASE_PRODUCER_COMPLETED,
                 index,
@@ -359,7 +386,6 @@ final class VulkanFrameSlot implements AutoCloseable {
                 timing.fenceResidencyUpperBoundNanos(),
                 timing.notReadyPolls()
         );
-        return true;
     }
 
     synchronized boolean completed() {
@@ -382,6 +408,20 @@ final class VulkanFrameSlot implements AutoCloseable {
         return descriptorEpoch;
     }
 
+    synchronized long observedProducerFrameSequence() {
+        return observedProducerFrameSequence;
+    }
+
+    synchronized long observedProducerDescriptorEpoch() {
+        return observedProducerDescriptorEpoch;
+    }
+
+    synchronized boolean managedPresentable() {
+        requireOpen();
+        return state == State.COMPLETED
+                || state == State.SUBMITTED && readyTimelineSemaphore != 0L;
+    }
+
     synchronized void discardCompleted() {
         requireState(State.COMPLETED, "discard completed frame");
         resetIdentity();
@@ -390,8 +430,21 @@ final class VulkanFrameSlot implements AutoCloseable {
 
     synchronized GpuFrameLease acquire() {
         requireState(State.COMPLETED, "acquire completed frame");
-        long handle = outputImage.exportSharedWin32MemoryHandle();
-        VulkanExportedMemoryHandle memoryHandle = new VulkanExportedMemoryHandle(handle);
+        return acquirePreparedFrame();
+    }
+
+    synchronized GpuFrameLease acquireManaged() {
+        requireOpen();
+        if (!managedPresentable()) {
+            throw new IllegalStateException("cannot acquire managed frame while frame slot is " + state);
+        }
+        return acquirePreparedFrame();
+    }
+
+    private GpuFrameLease acquirePreparedFrame() {
+        VulkanExportedMemoryHandle memoryHandle = new VulkanExportedMemoryHandle(
+                this::exportSharedMemoryHandle
+        );
         boolean transferred = false;
         try {
             GpuFrameLease.FrameDescriptor descriptor = GpuFrameLease.FrameDescriptor.builder()
@@ -422,7 +475,15 @@ final class VulkanFrameSlot implements AutoCloseable {
                     externalSemaphoreCompletionEnabled
                             ? GpuFrameLease.ConsumerCompletionCapabilities.cpuAndBinarySemaphore()
                             : GpuFrameLease.ConsumerCompletionCapabilities.cpuOnly(),
-                    completion -> consumerCompleted(leasedSequence, completion)
+                    completion -> consumerCompleted(leasedSequence, completion),
+                    new VulkanManagedFrameLease.NativeFrame(
+                            device.device(),
+                            outputImage.image(),
+                            device.queueFamilyIndex(),
+                            externallyOwned,
+                            readyTimelineSemaphore,
+                            readyTimelineValue
+                    )
             );
             state = State.LEASED;
             VulkanFrameFlightRecorder.record(
@@ -441,6 +502,53 @@ final class VulkanFrameSlot implements AutoCloseable {
         } finally {
             if (!transferred) memoryHandle.close();
         }
+    }
+
+    /**
+     * Converts a managed frame into the public expert ownership contract only when an expert
+     * consumer actually asks for a native handle. The normal presenter path never calls this
+     * method and therefore pays no external queue-family transition.
+     */
+    private synchronized long exportSharedMemoryHandle() {
+        requireState(State.LEASED, "export shared frame memory");
+        if (!externallyOwned) {
+            RtCommandContext.AsyncSubmission release = device.frameCommands().submitOneTimeAsync(
+                    this::recordExternalOwnershipRelease
+            );
+            release.close();
+            externallyOwned = true;
+        }
+        return outputImage.exportSharedWin32MemoryHandle();
+    }
+
+    private void recordExternalOwnershipRelease(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack
+    ) {
+        VkImageMemoryBarrier.Buffer barrier = VkImageMemoryBarrier.calloc(1, stack)
+                .sType$Default()
+                .srcAccessMask(VK10.VK_ACCESS_SHADER_WRITE_BIT)
+                .dstAccessMask(0)
+                .oldLayout(VK10.VK_IMAGE_LAYOUT_GENERAL)
+                .newLayout(VK10.VK_IMAGE_LAYOUT_GENERAL)
+                .srcQueueFamilyIndex(device.queueFamilyIndex())
+                .dstQueueFamilyIndex(VK11.VK_QUEUE_FAMILY_EXTERNAL)
+                .image(outputImage.image());
+        barrier.subresourceRange()
+                .aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
+                .baseMipLevel(0)
+                .levelCount(1)
+                .baseArrayLayer(0)
+                .layerCount(1);
+        VK10.vkCmdPipelineBarrier(
+                commandBuffer,
+                KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                0,
+                null,
+                null,
+                barrier
+        );
     }
 
     private synchronized void consumerCompleted(
@@ -469,6 +577,10 @@ final class VulkanFrameSlot implements AutoCloseable {
                 if (!transferred) imported.close();
             }
         }
+        if (producerSubmission != null) {
+            producerSubmission.close();
+            recordProducerCompleted(finishProducerCompletion());
+        }
         recordConsumerCompleted();
         resetIdentity();
         state = State.FREE;
@@ -492,6 +604,8 @@ final class VulkanFrameSlot implements AutoCloseable {
         frameSequence = -1L;
         sceneRevision = -1L;
         descriptorEpoch = -1L;
+        readyTimelineSemaphore = 0L;
+        readyTimelineValue = 0L;
     }
 
     private void requireState(State required, String operation) {

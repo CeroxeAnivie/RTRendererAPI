@@ -289,6 +289,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
      * @param temporalImages           complete temporal images and their committed layout state
      * @param previousImageLayout      layout before this frame
      * @param acquireExternalOwnership whether to acquire from the external queue family
+     * @param releaseExternalOwnership whether to release to the external queue family after trace
      * @param producerQueueFamilyIndex Vulkan producer queue family
      * @param width                    positive dispatch width
      * @param height                   positive dispatch height
@@ -302,6 +303,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             GpuSceneTemporalFrameResources temporalImages,
             int previousImageLayout,
             boolean acquireExternalOwnership,
+            boolean releaseExternalOwnership,
             int producerQueueFamilyIndex,
             int width,
             int height
@@ -382,31 +384,37 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         if (cpuReadback != null) {
             recordCpuReadback(commandBuffer, stack, image, cpuReadback, width, height);
         }
-        /*
-         * The exported image uses EXCLUSIVE sharing. A producer fence proves execution
-         * completion, but it does not transfer queue-family ownership to another device
-         * or graphics API. Release every published frame to the external family; the
-         * next reuse performs the matching acquire before the first shader write.
-         */
-        RtFrameDispatchCommands.recordImageLayoutTransition(
-                commandBuffer,
-                stack,
-                image.image(),
-                cpuReadback == null
-                        ? VK10.VK_IMAGE_LAYOUT_GENERAL
-                        : VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK10.VK_IMAGE_LAYOUT_GENERAL,
-                cpuReadback == null
-                        ? VK10.VK_ACCESS_SHADER_WRITE_BIT
-                        : VK10.VK_ACCESS_TRANSFER_READ_BIT,
-                0,
-                cpuReadback == null
-                        ? org.lwjgl.vulkan.KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
-                        : VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                producerQueueFamilyIndex,
-                VK11.VK_QUEUE_FAMILY_EXTERNAL
-        );
+        if (releaseExternalOwnership) {
+            /* Expert external interop requires a real ownership release, not fence-only ordering. */
+            RtFrameDispatchCommands.recordImageLayoutTransition(
+                    commandBuffer,
+                    stack,
+                    image.image(),
+                    cpuReadback == null
+                            ? VK10.VK_IMAGE_LAYOUT_GENERAL
+                            : VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    VK10.VK_IMAGE_LAYOUT_GENERAL,
+                    cpuReadback == null
+                            ? VK10.VK_ACCESS_SHADER_WRITE_BIT
+                            : VK10.VK_ACCESS_TRANSFER_READ_BIT,
+                    0,
+                    cpuReadback == null
+                            ? org.lwjgl.vulkan.KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
+                            : VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                    producerQueueFamilyIndex,
+                    VK11.VK_QUEUE_FAMILY_EXTERNAL
+            );
+        } else if (cpuReadback != null) {
+            /* Readback changes layout; managed presentation still consumes a GENERAL image. */
+            RtFrameDispatchCommands.recordImageLayoutTransition(
+                    commandBuffer, stack, image.image(),
+                    VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK10.VK_IMAGE_LAYOUT_GENERAL,
+                    VK10.VK_ACCESS_TRANSFER_READ_BIT, VK10.VK_ACCESS_TRANSFER_READ_BIT,
+                    VK10.VK_PIPELINE_STAGE_TRANSFER_BIT, VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK10.VK_QUEUE_FAMILY_IGNORED, VK10.VK_QUEUE_FAMILY_IGNORED
+            );
+        }
     }
 
     private static void recordCpuReadback(

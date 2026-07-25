@@ -20,29 +20,35 @@ import java.util.Objects;
 final class RtDeviceQueueContexts implements AutoCloseable {
     private final VkQueue frameQueue;
     private final VkQueue buildQueue;
+    private final VkQueue presentationQueue;
     private final RtCommandContext frameCommands;
     private final RtCommandContext buildCommands;
     private final RtCommandContext sectionBlasCommands;
     private final VulkanQueueTimeline buildTimeline;
+    private final VulkanQueueTimeline presentationTimeline;
     private final int queueFamilyIndex;
     private final int requestedQueueCount;
 
     private RtDeviceQueueContexts(
             VkQueue frameQueue,
             VkQueue buildQueue,
+            VkQueue presentationQueue,
             RtCommandContext frameCommands,
             RtCommandContext buildCommands,
             RtCommandContext sectionBlasCommands,
             VulkanQueueTimeline buildTimeline,
+            VulkanQueueTimeline presentationTimeline,
             int queueFamilyIndex,
             int requestedQueueCount
     ) {
         this.frameQueue = Objects.requireNonNull(frameQueue, "frameQueue");
         this.buildQueue = Objects.requireNonNull(buildQueue, "buildQueue");
+        this.presentationQueue = Objects.requireNonNull(presentationQueue, "presentationQueue");
         this.frameCommands = Objects.requireNonNull(frameCommands, "frameCommands");
         this.buildCommands = Objects.requireNonNull(buildCommands, "buildCommands");
         this.sectionBlasCommands = Objects.requireNonNull(sectionBlasCommands, "sectionBlasCommands");
         this.buildTimeline = buildTimeline;
+        this.presentationTimeline = presentationTimeline;
         if (queueFamilyIndex < 0 || requestedQueueCount <= 0) {
             throw new IllegalArgumentException("queue topology values are invalid");
         }
@@ -84,6 +90,9 @@ final class RtDeviceQueueContexts implements AutoCloseable {
         VkQueue buildQueue = requestedQueueCount > 1
                 ? getDeviceQueue(stack, device, queueFamilyIndex, 1)
                 : frameQueue;
+        VkQueue presentationQueue = requestedQueueCount > 2
+                ? getDeviceQueue(stack, device, queueFamilyIndex, 2)
+                : frameQueue;
         RtCommandContext.QueueSubmitLock frameLock = RtCommandContext.queueSubmitLock(frameQueue);
         RtCommandContext.QueueSubmitLock buildLock = buildQueue.address() == frameQueue.address()
                 ? frameLock
@@ -92,8 +101,12 @@ final class RtDeviceQueueContexts implements AutoCloseable {
         RtCommandContext buildCommands = null;
         RtCommandContext sectionBlasCommands = null;
         VulkanQueueTimeline buildTimeline = null;
+        VulkanQueueTimeline presentationTimeline = null;
         try {
             if (requestedQueueCount > 1) buildTimeline = VulkanQueueTimeline.create(stack, device);
+            if (requestedQueueCount > 2) {
+                presentationTimeline = VulkanQueueTimeline.create(stack, device);
+            }
             frameCommands = RtCommandContext.create(
                     physicalDevice, device, frameQueue, frameLock, queueFamilyIndex,
                     stallTelemetry, gpuTimingsEnabled, buildTimeline, RtCommandContext.TimelineRole.CONSUMER);
@@ -114,10 +127,12 @@ final class RtDeviceQueueContexts implements AutoCloseable {
             RtDeviceQueueContexts contexts = new RtDeviceQueueContexts(
                     frameQueue,
                     buildQueue,
+                    presentationQueue,
                     frameCommands,
                     buildCommands,
                     sectionBlasCommands,
                     buildTimeline,
+                    presentationTimeline,
                     queueFamilyIndex,
                     requestedQueueCount
             );
@@ -125,11 +140,13 @@ final class RtDeviceQueueContexts implements AutoCloseable {
             buildCommands = null;
             sectionBlasCommands = null;
             buildTimeline = null;
+            presentationTimeline = null;
             return contexts;
         } finally {
             closeSuppressing(sectionBlasCommands);
             closeSuppressing(buildCommands);
             closeSuppressing(frameCommands);
+            closeSuppressing(presentationTimeline);
             closeSuppressing(buildTimeline);
         }
     }
@@ -138,7 +155,7 @@ final class RtDeviceQueueContexts implements AutoCloseable {
         if (availableQueues <= 0) {
             throw new IllegalArgumentException("availableQueues must be positive");
         }
-        return timelineSemaphoreSupported && availableQueues >= 2 ? 2 : 1;
+        return timelineSemaphoreSupported ? Math.min(availableQueues, 3) : 1;
     }
 
     private static void closeSuppressing(AutoCloseable closeable) {
@@ -153,6 +170,7 @@ final class RtDeviceQueueContexts implements AutoCloseable {
     }
 
     private static RuntimeException closeCollecting(RuntimeException failure, AutoCloseable closeable) {
+        if (closeable == null) return failure;
         try {
             closeable.close();
         } catch (Exception closeFailure) {
@@ -190,6 +208,10 @@ final class RtDeviceQueueContexts implements AutoCloseable {
         return buildQueue;
     }
 
+    VkQueue presentationQueue() {
+        return presentationQueue;
+    }
+
     RtCommandContext frameCommands() {
         return frameCommands;
     }
@@ -214,6 +236,22 @@ final class RtDeviceQueueContexts implements AutoCloseable {
         return frameQueue.address() != buildQueue.address();
     }
 
+    boolean presentationQueueDedicated() {
+        return presentationQueue.address() != frameQueue.address()
+                && presentationQueue.address() != buildQueue.address();
+    }
+
+    long presentationTimelineSemaphore() {
+        return presentationTimeline == null ? 0L : presentationTimeline.semaphore();
+    }
+
+    long reservePresentationTimelineValue() {
+        if (presentationTimeline == null) {
+            throw new IllegalStateException("dedicated presentation timeline is unavailable");
+        }
+        return presentationTimeline.reserveSignalValue();
+    }
+
     boolean timelineEnabled() {
         return buildTimeline != null;
     }
@@ -226,6 +264,14 @@ final class RtDeviceQueueContexts implements AutoCloseable {
         frameCommands.waitQueueIdle("vkQueueWaitIdle.frameCloseBarrier");
         if (queuesSeparated()) {
             buildCommands.waitQueueIdle("vkQueueWaitIdle.buildCloseBarrier");
+        }
+        if (presentationQueueDedicated()) {
+            int result = VulkanQueueHostSync.waitIdle(presentationQueue);
+            if (result != VK10.VK_SUCCESS) {
+                throw new IllegalStateException(
+                        "vkQueueWaitIdle.presentationCloseBarrier failed with VkResult " + result
+                );
+            }
         }
     }
 
@@ -240,6 +286,7 @@ final class RtDeviceQueueContexts implements AutoCloseable {
         failure = closeCollecting(failure, sectionBlasCommands);
         failure = closeCollecting(failure, buildCommands);
         failure = closeCollecting(failure, frameCommands);
+        failure = closeCollecting(failure, presentationTimeline);
         failure = closeCollecting(failure, buildTimeline);
         if (failure != null) {
             throw failure;

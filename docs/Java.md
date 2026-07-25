@@ -197,16 +197,17 @@ try (RayTracingRenderer renderer = RendererBootstrap.open(config);
                      .presentMode(VulkanFramePresenterConfig.PresentMode.UNCAPPED)
                      .maximumFramesQueuedAhead(2)
                      .build())) {
-    VulkanFrameInterop interop = renderer.extension(VulkanFrameInterop.class).orElseThrow();
     presenter.pollEvents();
-    if (interop.pollLatestFrame() instanceof VulkanFrameInterop.FrameAvailable available) {
-        VulkanFramePresenter.PresentationResult result =
-                presenter.presentAndRelease(available.lease());
+    var presented = presenter.presentLatestFrame();
+    if (presented.isPresent()) {
+        VulkanFramePresenter.PresentationResult result = presented.orElseThrow();
     }
+    presenter.setOverlayText("PRESENT: 145.2 FPS\nTRACE CAPACITY: 266.3 FPS");
+    VulkanFramePresenter.PerformanceSnapshot timings = presenter.performanceSnapshot();
 }
 ```
 
-presenter 的 open、event pump、present、title 和 close 都绑定创建线程。`presentAndRelease(...)` 在成功、minimized skip、swapchain recreate 或失败时都负责消费并关闭传入 lease。`maximumFramesQueuedAhead(2)` 允许 trace 与 present 重叠，同时阻止生产队列饿死 swapchain；它不锁 FPS。显示统计只应在 `Outcome.PRESENTED` 时累计，`activePresentMode()` 才是平台实际模式。
+presenter 的 open、event pump、present、title、overlay 和 close 都绑定创建线程。主推的 `presentLatestFrame()` 直接从 renderer 取得 managed frame，可用内部 timeline 在 CPU fence 观察前建立 GPU 依赖；专家 `VulkanFrameInterop.pollLatestFrame()` 保持 completed external lease 语义。`presentAndRelease(...)` 仍供显式 lease consumer 使用，并在所有结果路径消费/关闭 lease。`maximumFramesQueuedAhead(2)` 允许 renderer 与显示消费重叠，同时阻止生产队列饿死 swapchain；它不锁 FPS。同一 swapchain 的 acquire/present 按 Vulkan 外部同步要求在 presenter 线程串行。显示统计只应在 `Outcome.PRESENTED` 时累计；缺失的 GPU timing 以零样本/`NaN` 表示，绝不估算。
 
 ## Vulkan 专家模式
 
