@@ -2,6 +2,38 @@
 
 本文记录 RTRendererAPI 面向消费方可见的变化。版本遵循语义化版本；公共二进制兼容性由同版本 ABI baseline 与发布门禁共同验证。
 
+## 0.2.0
+
+### 新增
+
+- 增加 renderer-bound `VulkanFramePresenter`、`VulkanFramePresenterConfig` 与 `VulkanFramePresenterFactory`，为普通桌面应用提供官方 GPU external-memory import、swapchain copy、present、consumer completion 和 lease 关闭路径。
+- 增加 `RayTracingRenderer.trySubmit(...)` 及穷尽的 `FrameSubmitted`/`FrameSubmissionDeferred` 结果，正常容量背压不再依赖异常控制流。
+- external image descriptor 增加稳定 `resourceId` 与显式 `memoryTypeIndex`，允许 presenter 安全复用 import，同时拒绝 identity/metadata 冲突。
+- presenter 公开平台实际选中的 `IMMEDIATE`、`MAILBOX` 或 `FIFO` present mode，并提供可配置的 producer lead 上限。
+
+### 修复
+
+- 修复 GPU scene session 丢弃已完成但尚未显示帧的问题。官方 presenter 现在以实际 lease 消费回调退休提交占位，阻止生产端计算数千个永远不可见的帧并饿死 swapchain。
+- 修复 presenter 关闭和 Vulkan device recovery 后残留生产者占位的问题；两条路径都确定性清空不可再消费的队列状态。
+- 动态场景 TLAS 首次以 `ALLOW_UPDATE` 构建，变换更新使用持久化 instance/scratch 资源与 `MODE_UPDATE`，并通过 descriptor-safe 目标轮换复用避免逐代初始构建。
+- 本地 `check`/staging 不再错误触发 GPG；签名任务只在显式 `-PcentralRelease=true` 的远程发布图中接线。
+
+### 性能证据
+
+- Windows 11、RTX 5080 Laptop GPU、2560×1600、三球场景、`IMMEDIATE`、每档 121 次实际 present：1/2/4/8 spp 分别为 166.5/117.4/56.6/24.7 FPS。
+- 2 spp 回归场景由 6–9 visible FPS 恢复到约 117–120 present FPS；提交数与显示数保持同量级，不再用 trace capacity 冒充可见 FPS。
+
+## 0.1.2
+
+### 修复
+
+- 将托管 `CpuFrame` 从逐帧 staging buffer、独立提交和 queue-idle 等待改为 frame-slot 常驻异步 readback ring；图像复制与 ray dispatch 位于同一 producer command buffer，CPU 只读取已完成 slot。
+- 为不透明 metallic PBR 材质增加一次有界、roughness-aware 的 GGX 场景反射；反射使用 Fresnel 与 Smith visibility 权重，二次命中不递归。
+
+### 新增
+
+- 增加 renderer-lifetime 配置 `cpuFrameReadbackEnabled(boolean)`；默认开启普通托管帧，纯 Vulkan interop 消费方可显式关闭 host readback 分配与复制。
+
 ## 0.1.1
 
 ### 变更

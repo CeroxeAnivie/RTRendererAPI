@@ -2,7 +2,7 @@
 
 RTRendererAPI 适合嵌入 Java 25 桌面或引擎进程。普通调用方只需要理解场景 revision、帧 sequence 和资源生命周期；Vulkan external memory、semaphore、queue-family ownership 等细节被隔离在显式专家扩展中。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:0.1.1`。只声明这一个依赖即可，Windows Vulkan 后端与 natives 会传递解析。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:0.2.0`。只声明这一个依赖即可，Windows Vulkan 后端与 natives 会传递解析。
 
 ## 最小调用
 
@@ -34,6 +34,7 @@ try (RayTracingRenderer renderer = RendererBootstrap.open()) {
 - 帧 sequence 必须严格递增，不可重用。
 - `pollLatestCpuFrame()` 非阻塞；`awaitLatestCpuFrame(Duration)` 是有界等待，超时返回 `Optional.empty()`。
 - API 不使用 `null` 表示“暂时无帧”，也不会无限等待。
+- 普通路径的 readback 使用 frame-slot 常驻异步 ring，不会逐帧创建 staging buffer 或执行 queue-idle；但把图像送到 CPU 本身仍有带宽成本。
 
 ## 发布一个最小场景
 
@@ -100,6 +101,7 @@ try (RayTracingRenderer renderer = RendererBootstrap.open(config)) {
 | `maxFramesInFlight(int)` | `3` | 调整 CPU/GPU 并行深度；合法范围由 API 常量约束 |
 | `validationEnabled(boolean)` | 生产默认值 | 调试 Vulkan validation 时开启 |
 | `gpuTimingsEnabled(boolean)` | 生产默认值 | 需要 GPU stage timing 时开启 |
+| `cpuFrameReadbackEnabled(boolean)` | `true` | 只走 GPU presenter/interop 时关闭 CPU buffer 与 image-to-buffer copy |
 | `frameOutputFormat(FrameOutputFormat)` | `SDR_RGBA8` | 专家链路需要 linear HDR RGBA16F 时修改 |
 | `temporalRendering(TemporalRenderingOptions)` | `balanced()` | 禁用或调整 temporal history 长度 |
 | `gpuDevice(RayTracingGpuDevice)` | 自动选择 | 必须绑定确定 GPU 时修改 |
@@ -136,6 +138,22 @@ RenderFrameRequest request = RenderFrameRequest.builder(sequence, width, height,
 | `AntiAliasingState` | 1/2/4/8 spp 的确定性空间采样 |
 | temporal reset | camera cut、teleport、projection change 等显式历史失效原因 |
 
+## 无异常背压提交
+
+交互式或 uncapped 循环使用 `trySubmit(...)`。队列满属于正常状态，只有成功后才推进 sequence 和相关模拟状态：
+
+```java
+RayTracingRenderer.FrameSubmissionAttempt attempt = renderer.trySubmit(request);
+if (attempt instanceof RayTracingRenderer.FrameSubmitted submitted) {
+    sequence = Math.addExact(sequence, 1L);
+} else if (attempt instanceof RayTracingRenderer.FrameSubmissionDeferred deferred) {
+    // 保留相同 request/sequence，稍后重试；不要 busy-spin。
+    LockSupport.parkNanos(25_000L);
+}
+```
+
+`FrameSubmissionDeferred` 只代表本次没有发布任何逻辑或 native submission 状态。顺序、revision、生命周期和 device failure 仍抛出对应 typed exception。`submit(...)` 保留给“拒绝即异常”的控制流。
+
 ## 结果与健康状态
 
 `submit(...)` 返回 typed result，不要通过日志文本判断是否被接收。运行期治理读取：
@@ -161,6 +179,34 @@ RendererDiagnostics diagnostics = renderer.diagnostics();
 | `SubmissionRejectedException` | 有界队列或运行期策略拒绝提交 |
 
 不要解析异常 message 做控制流；使用结构化字段、reason 和 recovery action。
+
+## 官方 GPU presenter
+
+需要窗口显示但不想自行实现 Vulkan interop 的应用，使用官方 renderer-bound presenter：
+
+```java
+RayTracingRendererConfig config = RayTracingRendererConfig.builder()
+        .cpuFrameReadbackEnabled(false)
+        .build();
+
+try (RayTracingRenderer renderer = RendererBootstrap.open(config);
+     VulkanFramePresenter presenter = VulkanFramePresenter.open(
+             renderer,
+             VulkanFramePresenterConfig.builder()
+                     .initialExtent(2560, 1600)
+                     .presentMode(VulkanFramePresenterConfig.PresentMode.UNCAPPED)
+                     .maximumFramesQueuedAhead(2)
+                     .build())) {
+    VulkanFrameInterop interop = renderer.extension(VulkanFrameInterop.class).orElseThrow();
+    presenter.pollEvents();
+    if (interop.pollLatestFrame() instanceof VulkanFrameInterop.FrameAvailable available) {
+        VulkanFramePresenter.PresentationResult result =
+                presenter.presentAndRelease(available.lease());
+    }
+}
+```
+
+presenter 的 open、event pump、present、title 和 close 都绑定创建线程。`presentAndRelease(...)` 在成功、minimized skip、swapchain recreate 或失败时都负责消费并关闭传入 lease。`maximumFramesQueuedAhead(2)` 允许 trace 与 present 重叠，同时阻止生产队列饿死 swapchain；它不锁 FPS。显示统计只应在 `Outcome.PRESENTED` 时累计，`activePresentMode()` 才是平台实际模式。
 
 ## Vulkan 专家模式
 

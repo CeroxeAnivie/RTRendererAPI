@@ -32,7 +32,9 @@ AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件后端不属
   lifetime。
 - [x] `MECHANICAL`：`RendererHealth` 发布稳定 failure kind、recovery action 和资源欠账；lease 使用互斥 `LeaseState`
   ，失败保持可重试阶段。
-- [x] `MECHANICAL`：README、Java 指南、API 参考、Vulkan 专家协议、支持矩阵和迁移指南覆盖当前 0.1.1 接入面。
+- [x] `MECHANICAL`：README、Java 指南、API 参考、Vulkan 专家协议、支持矩阵和迁移指南覆盖当前 0.2.0 接入面。
+- [x] `MECHANICAL`：官方 renderer-bound Vulkan presenter 覆盖 native window/swapchain、external image import 缓存、consumer completion、lease close、实际 present mode 与有界 producer lead；简单 GPU 显示无需调用方自行实现专家同步。
+- [x] `MECHANICAL`：`trySubmit(...)` 将正常容量背压建模为穷尽结果；10,000 次持续尝试不能越过 presenter lead，deferred 不推进 frame authority，lease retirement 恰好恢复一个 permit，presenter close/device recovery 清除失效占位。
 - [ ] 隔离 Maven 消费者已编译 README quick start、设备选择、基础资源、事务、提交、托管帧，以及可执行的 interop
   ownership/release/recovery 控制流；仍需一个绑定真实 consumer Vulkan device/queue 的 LWJGL native import 样例与实机门禁。
 - [x] `MECHANICAL`：异步帧等待取消只终止 caller-executor 上的 managed polling；契约测试证明不关闭 renderer/executor、不产生 lease，并在最大 250 微秒 backoff 后停止。
@@ -46,6 +48,7 @@ AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件后端不属
   RGBA16F；probe/open、shader、allocation、descriptor、显存估算和 managed tone-map/readback 同步。
 - [x] `MECHANICAL`：1/2/4/8 spp 固定 subpixel sequence 的确定性空间抗锯齿贯通 public request、frame ABI、SDR/HDR resolve 和
   pinned SPIR-V。
+- [x] `MECHANICAL`：opaque metallic PBR 具有有界 roughness-aware GGX 场景反射；直接光照不再是 metallic 的唯一能量来源。
 - [x] `MECHANICAL`：motion vector、RGBA16F color/geometry temporal history 和确定性 invalidation 贯通 camera cut、scene
   topology、resolution、format 与 device recovery；ABI、descriptor、shader 和 GPUScene native session 均有门禁。
 - [ ] 支持生产级 denoise，或提供完整、版本化、可插拔的 denoiser input/output contract。
@@ -59,6 +62,7 @@ AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件后端不属
 - [ ] 每个 native 资源具有单一 owner、幂等 close、异常路径释放和机械可验证的状态转换。
 - [ ] device lost、OOM、driver error、external handle import failure 和 process shutdown 具有故障注入测试。
 - [ ] 无界 queue、无界 cache、静默 fallback 和未声明的全局可变配置为零。
+- [x] `MECHANICAL`：GPUScene 动态 TLAS 首次 build 使用 `ALLOW_UPDATE`，变换代使用持久化 instance/scratch 与 `MODE_UPDATE`；appearance-only 更新保持 TLAS，descriptor-safe 目标池证明可复用。
 - [x] `MECHANICAL`：API/Core Java 使用 `-Xlint:all -Werror`；API/Core Javadoc 使用 `-Werror`；block-tag layout 和高 warning
   上限阻止截断伪通过。
 - [ ] 独立静态分析、覆盖率和依赖漏洞 warning 全部按错误处理。
@@ -72,6 +76,7 @@ AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件后端不属
 - [ ] 冷启动、稳态、scene streaming、resource churn、VRAM pressure 和 recovery 后性能具有独立预算。
 - [ ] 至少 8 小时 soak 无 native leak、handle growth、VRAM drift、deadlock 或未恢复停顿。
 - [ ] benchmark history 可比较，并以经过批准的阈值阻断回归。
+- [x] `MECHANICAL`：官方 presenter 将“已提交”和“已实际消费”闭环；回归诊断中 submitted≈presented，不再把数千个被丢弃帧或 trace capacity 计为可见 FPS。
 
 ## 5. 支持矩阵
 
@@ -102,6 +107,8 @@ AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件后端不属
 
 - API/Core Javadoc 强制重建为 0 warning。
 - ABI、published Maven consumer 和当前公开 API contract 已通过。
+- Windows 11 + RTX 5080 Laptop GPU、2560×1600、`IMMEDIATE`、每档 121 次实际 present：1/2/4/8 spp 分别为 166.5/117.4/56.6/24.7 FPS；2 spp 平均 trace 4.58 ms、trace capacity 218.3 FPS。Present 与 capacity 口径已分离。
+- JFR 定位并修复旧 GPU starvation：坏路径 submitted=5803、presented=242、presentFps=6.7；API flow-control 后有限运行 submitted=241、presented=241、presentFps=116.3。
 - 本轮 Windows 11 + NVIDIA GeForce RTX 5080 Laptop GPU 通过 `check + rendererCoreGpuSceneNativeGate`：覆盖 API/Core 合同、隔离
   Maven consumer、8 个 GPUScene Vulkan RT native 检查与 1920×1080 throughput；两份 Vulkan validation JSONL 共 267 条事件，
   `ERROR=0`、`WARNING=0`。

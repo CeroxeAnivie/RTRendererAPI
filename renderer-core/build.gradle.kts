@@ -31,6 +31,7 @@ dependencies {
     implementation("it.unimi.dsi:fastutil:8.5.19")
     api("org.joml:joml:1.10.8")
     api("org.lwjgl:lwjgl:3.4.2")
+    api("org.lwjgl:lwjgl-glfw:3.4.2")
     api("org.lwjgl:lwjgl-vulkan:3.4.2")
     api("org.lwjgl:lwjgl-vma:3.4.2")
     implementation("org.lwjgl:lwjgl-shaderc:3.4.2")
@@ -38,6 +39,7 @@ dependencies {
     // renderer-core is published as a ready-to-run Windows backend. Keeping natives test-only
     // makes the published provider discoverable but impossible to initialize in a clean host.
     runtimeOnly("org.lwjgl:lwjgl:3.4.2:natives-windows")
+    runtimeOnly("org.lwjgl:lwjgl-glfw:3.4.2:natives-windows")
     runtimeOnly("org.lwjgl:lwjgl-vma:3.4.2:natives-windows")
     runtimeOnly("org.lwjgl:lwjgl-shaderc:3.4.2:natives-windows")
 }
@@ -206,6 +208,8 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanFrameFlightRecorderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameFlightRecorderSelfTest",
     "coreGpuSceneDescriptorResourcesSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuSceneDescriptorResourcesSelfTest",
     "coreVulkanGpuSceneShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.VulkanGpuSceneShaderSelfTest",
+    "coreRtPrecompiledShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.RtPrecompiledShaderSelfTest",
+    "coreVulkanFramePixelCodecSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDiagnosticReadbackSelfTest",
     "coreVulkanRangeArenaSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRangeArenaSelfTest",
     "coreVulkanGpuSceneMemorySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneMemorySelfTest",
     "coreVulkanGpuSceneIdentityIndexSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneIdentityIndexSelfTest",
@@ -213,6 +217,7 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanGpuSceneTransferPlanSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneTransferPlanSelfTest",
     "coreVulkanGpuSceneSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneSelfTest",
     "coreVulkanRendererHostSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererHostSelfTest",
+    "coreVulkanGpuFrameLeaseSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuFrameLeaseSelfTest",
     "coreVulkanRayTracingBackendProviderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRayTracingBackendProviderSelfTest"
 )
 
@@ -247,6 +252,7 @@ val nativeSelfTests = linkedMapOf(
     "vulkanSceneRuntimeNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSceneRuntimeNativeSelfTest",
     "gpuSceneRayTracingPipelineNativeSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipelineNativeSelfTest",
     "vulkanGpuSceneRenderingSessionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneRenderingSessionNativeSelfTest",
+    "vulkanFrameSlotExternalCompletionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameSlotExternalCompletionNativeSelfTest",
     "vulkanGpuSceneThroughputNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneThroughputNativeSelfTest",
     "rtNativeMicroSceneSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeMicroSceneSelfTest",
     "rtNativeStressSceneSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeStressSceneSelfTest",
@@ -315,6 +321,7 @@ val gpuSceneNativeSelfTests = listOf(
     "vulkanSceneRuntimeNativeSelfTest",
     "gpuSceneRayTracingPipelineNativeSelfTest",
     "vulkanGpuSceneRenderingSessionNativeSelfTest",
+    "vulkanFrameSlotExternalCompletionNativeSelfTest",
     "vulkanGpuSceneThroughputNativeSelfTest"
 )
 

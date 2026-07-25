@@ -12,6 +12,7 @@
 - [场景与帧](#场景与帧)
 - [资产与实例](#资产与实例)
 - [设备、诊断与异常](#设备诊断与异常)
+- [官方 Vulkan presenter](#官方-vulkan-presenter)
 - [Vulkan 专家扩展](#vulkan-专家扩展)
 
 ## RendererBootstrap
@@ -42,6 +43,7 @@ public interface RayTracingRenderer extends AutoCloseable
 | `status()` | `Status` | 当前生命周期状态 |
 | `apply(SceneTransaction)` | `SceneUpdateResult` | 原子应用场景事务并返回 accepted revision |
 | `submit(RenderFrameRequest)` | `FrameSubmissionResult` | 提交一帧；sequence 必须严格递增 |
+| `trySubmit(RenderFrameRequest)` | `FrameSubmissionAttempt` | 容量拒绝返回 deferred，其他契约错误保持 typed exception |
 | `pollLatestCpuFrame()` | `Optional<CpuFrame>` | 非阻塞读取最新托管帧 |
 | `awaitLatestCpuFrame(Duration)` | `Optional<CpuFrame>` | 有界等待托管帧 |
 | `diagnostics()` | `RendererDiagnostics` | 当前诊断快照 |
@@ -67,6 +69,7 @@ public final class RayTracingRendererConfig
 | `maxFramesInFlight(int)` | 帧环深度 |
 | `validationEnabled(boolean)` | Vulkan validation 策略 |
 | `gpuTimingsEnabled(boolean)` | GPU timing 策略 |
+| `cpuFrameReadbackEnabled(boolean)` | 是否分配并复制异步托管 CPU 帧；默认开启 |
 | `frameOutputFormat(FrameOutputFormat)` | SDR RGBA8 或 linear HDR RGBA16F |
 | `temporalRendering(TemporalRenderingOptions)` | temporal reconstruction 策略 |
 | `gpuDevice(RayTracingGpuDevice)` | 绑定枚举所得稳定设备对象 |
@@ -106,6 +109,10 @@ RenderFrameRequest.builder(sequence, width, height, camera)
 ```
 
 `toBuilder()` 用于从已有请求安全派生下一帧。不要复用旧 sequence。
+
+### FrameSubmissionAttempt
+
+`trySubmit(...)` 返回穷尽的 `FrameSubmitted` 或 `FrameSubmissionDeferred`。deferred 不发布逻辑/native 状态，因此 sequence 只能在 submitted 后推进。它消除正常背压的异常构造与 stack capture；顺序、revision、生命周期和设备失败仍抛 typed exception。
 
 ### CameraState
 
@@ -166,6 +173,32 @@ RendererException
 └── SubmissionRejectedException
 ```
 
+## 官方 Vulkan presenter
+
+### VulkanFramePresenter
+
+```java
+VulkanFramePresenter presenter = VulkanFramePresenter.open(renderer, configuration);
+```
+
+renderer-bound 官方窗口/swapchain consumer。`pollEvents()`、`windowState()`、`setTitle(...)`、`presentAndRelease(...)` 和 `close()` 都绑定创建线程。`presentAndRelease(...)` 穷尽返回 `PRESENTED`、`SKIPPED_MINIMIZED` 或 `RETIRED_FOR_RECREATE`，并在全部路径消费/关闭 lease。
+
+### VulkanFramePresenterConfig
+
+| Builder 方法 | 说明 |
+| --- | --- |
+| `title(String)` | 非空原生窗口标题 |
+| `initialExtent(int, int)` | 正初始 framebuffer extent |
+| `resizable(boolean)` | 窗口 resize 策略 |
+| `presentMode(PresentMode)` | VSYNC、LOW_LATENCY 或 UNCAPPED 偏好 |
+| `maximumFramesQueuedAhead(int)` | 1–16 的 producer lead 上限；默认 2，不是 FPS 锁 |
+
+`activePresentMode()` 返回最终平台模式，而不是配置偏好。实际显示统计只累计 `Outcome.PRESENTED`。
+
+### VulkanFramePresenterFactory
+
+renderer 通过 `extension(VulkanFramePresenterFactory.class)` 发布 provider-bound 工厂；普通调用方优先使用 `VulkanFramePresenter.open(...)`，无需手动发现工厂。
+
 ## Vulkan 专家扩展
 
 包路径：`top.ceroxe.rt.renderer.api.interop.vulkan`
@@ -191,6 +224,6 @@ lease 的权威状态机是：
 ACTIVE -> RELEASED -> CLOSED
 ```
 
-`descriptor()` 描述共享 image；`memoryHandle()` 和可选 `acquireSignal()` 描述导入所有权；`consumerCompletionCapabilities()` 约束可提交 completion；`release(...)` 发布 consumer 完成；`close()` 关闭剩余所有权。
+`descriptor()` 描述共享 image；其中 `resourceId` 是可缓存 import 的稳定底层 image identity，`memoryTypeIndex` 是 producer allocation 的显式 memory type。`memoryHandle()` 和可选 `acquireSignal()` 描述导入所有权；`consumerCompletionCapabilities()` 约束可提交 completion；`release(...)` 发布 consumer 完成；`close()` 关闭剩余所有权。
 
 任何专家接入都必须阅读 [Vulkan 专家互操作](Vulkan-Interop.md)，不得只根据本页的方法列表实现 native 同步。

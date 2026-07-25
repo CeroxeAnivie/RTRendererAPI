@@ -31,6 +31,7 @@ public final class VulkanGpuSceneShaderSelfTest {
       verifyForwardParityContract();
       verifyTemporalReconstructionContract();
       verifyTransmissionOpticsContract();
+      verifyOpaqueMetallicReflectionContract();
       PrintStream output10000 = System.out;
       int size10001 = stages.size();
       output10000.println("VulkanGpuSceneShaderSelfTest passed: stages=" + size10001 + ", spirvBytes=" + totalBytes);
@@ -71,6 +72,14 @@ public final class VulkanGpuSceneShaderSelfTest {
       require(raygen.contains("refract(incidentDirection, normal, eta)") && raygen.contains("gsDielectricFresnel") && raygen.contains("return reflected;"), "transmission must implement Snell refraction, Fresnel, and total internal reflection");
       require(raygen.contains("GpuScenePayload reflectedSample = gsTraceRadiance") && raygen.contains("GpuScenePayload refractedSample = gsTraceRadiance"), "transmission must evaluate bounded reflected and refracted hardware rays");
       require(closestHit.contains("backFace ? GS_PAYLOAD_BACK_FACE") && raygen.contains("surfaceSample.state.y == GS_PAYLOAD_BACK_FACE"), "closest-hit orientation must reach the IOR transition calculation");
+   }
+
+   private static void verifyOpaqueMetallicReflectionContract() {
+      String raygen = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rgen");
+      require(raygen.contains("gsEvaluateOpaqueMetallicReflection") && raygen.contains("GpuScenePayload reflectedSample = gsTraceRadiance"), "opaque metallic shading must issue a bounded hardware reflection ray");
+      require(raygen.contains("gsSampleGgxHalfVector") && raygen.contains("roughness * roughness") && raygen.contains("gsReflectionSample(sampleIndex, sampleCount, launchInfo)"), "opaque reflection direction must use deterministic roughness-aware GGX sampling");
+      require(raygen.contains("f * N.L / pdf") && raygen.contains("gsFresnelSchlick(viewHalf") && raygen.contains("gsGeometrySmith(normalView, normalLight, roughness)"), "opaque reflection contribution must retain Fresnel and GGX visibility energy terms");
+      require(raygen.contains("transmission <= 1.0e-4 && opacity >= 0.999") && raygen.contains("surface + opaqueReflection"), "metallic reflection must be isolated to opaque non-transmissive material evaluation");
    }
 
    private static String read(String path) {

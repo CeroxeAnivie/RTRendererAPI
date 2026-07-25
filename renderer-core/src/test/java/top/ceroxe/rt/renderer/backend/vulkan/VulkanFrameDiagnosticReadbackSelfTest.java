@@ -15,7 +15,7 @@ public final class VulkanFrameDiagnosticReadbackSelfTest {
       putPixel(source, 0, 0, 15360, 17408, 15360);
       putPixel(source, 8, 31744, 64512, 32256, 0);
       putPixel(source, 16, 1, 32768, 15360, 14336);
-      byte[] converted = VulkanFrameDiagnosticReadback.convertLinearHdrRgba16fToSdrRgba8(source);
+      byte[] converted = VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8(source);
       require(converted.length == 12, "RGBA16F conversion changed pixel count");
       require(unsigned(converted[0]) == 0, "zero radiance must remain black");
       require(unsigned(converted[1]) == 231, "unit radiance ACES/gamma result changed");
@@ -26,9 +26,9 @@ public final class VulkanFrameDiagnosticReadbackSelfTest {
       require(unsigned(converted[7]) == 0, "zero alpha changed");
       require(unsigned(converted[8]) == 0 && unsigned(converted[9]) == 0, "positive subnormal and negative zero must remain bounded at black");
       require(unsigned(converted[10]) == 231 && unsigned(converted[11]) == 128, "finite color/alpha quantization changed");
-      require(VulkanFrameDiagnosticReadback.convertLinearHdrRgba16fToSdrRgba8(new byte[0]).length == 0, "empty payload must remain empty");
-      expect(IllegalArgumentException.class, () -> VulkanFrameDiagnosticReadback.convertLinearHdrRgba16fToSdrRgba8(new byte[7]));
-      expect(NullPointerException.class, () -> VulkanFrameDiagnosticReadback.convertLinearHdrRgba16fToSdrRgba8((byte[])null));
+      require(VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8(new byte[0]).length == 0, "empty payload must remain empty");
+      expect(IllegalArgumentException.class, () -> VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8(new byte[7]));
+      expect(NullPointerException.class, () -> VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8((byte[])null));
       verifiesExhaustiveHalfFloatGolden();
       System.out.println("VulkanFrameDiagnosticReadbackSelfTest passed");
    }
@@ -42,7 +42,7 @@ public final class VulkanFrameDiagnosticReadbackSelfTest {
          putPixel(source, offset, bits, bits, bits, 15360);
       }
 
-      byte[] converted = VulkanFrameDiagnosticReadback.convertLinearHdrRgba16fToSdrRgba8(source);
+      byte[] converted = VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8(source);
       require(converted.length == encodings * 4, "exhaustive half-float conversion changed pixel count");
       int previous = -1;
 

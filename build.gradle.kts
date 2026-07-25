@@ -105,14 +105,17 @@ subprojects {
 
         extensions.configure<SigningExtension> {
             // Local verification remains credential-free. A Central release opts in explicitly,
-            // at which point every publication artifact must receive an OpenPGP signature.
-            useGpgCmd()
-            setRequired(
-                providers.gradleProperty("centralRelease")
-                    .map(String::toBoolean)
-                    .getOrElse(false)
-            )
-            sign(project.extensions.getByType<PublishingExtension>().publications.named("mavenJava").get())
+            // at which point every publication artifact must receive an OpenPGP signature. Do
+            // not even wire Sign tasks for ordinary checks/local staging: Gradle may otherwise
+            // execute an optional sign task as a publication dependency and invoke GPG anyway.
+            val centralRelease = providers.gradleProperty("centralRelease")
+                .map(String::toBoolean)
+                .getOrElse(false)
+            setRequired(centralRelease)
+            if (centralRelease) {
+                useGpgCmd()
+                sign(project.extensions.getByType<PublishingExtension>().publications.named("mavenJava").get())
+            }
         }
     }
 }

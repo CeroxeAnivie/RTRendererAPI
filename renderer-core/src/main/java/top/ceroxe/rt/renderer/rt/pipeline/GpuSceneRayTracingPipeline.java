@@ -4,6 +4,7 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.shaderc.Shaderc;
 import org.lwjgl.vulkan.*;
 import top.ceroxe.rt.renderer.RtEdgeSink;
+import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
 import top.ceroxe.rt.renderer.rt.device.RtGpuImage;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
@@ -284,6 +285,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
      * @param stack                    caller-owned temporary stack
      * @param descriptorSetIndex       published descriptor slot index
      * @param outputImage              dispatch output image
+     * @param cpuReadback              optional slot-owned asynchronous readback destination
      * @param temporalImages           complete temporal images and their committed layout state
      * @param previousImageLayout      layout before this frame
      * @param acquireExternalOwnership whether to acquire from the external queue family
@@ -296,6 +298,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             MemoryStack stack,
             int descriptorSetIndex,
             RtGpuImage outputImage,
+            RtGpuBuffer cpuReadback,
             GpuSceneTemporalFrameResources temporalImages,
             int previousImageLayout,
             boolean acquireExternalOwnership,
@@ -376,6 +379,9 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 VK10.VK_ACCESS_SHADER_WRITE_BIT, VK10.VK_ACCESS_SHADER_WRITE_BIT
         );
         recordTrace(commandBuffer, stack, descriptorSetIndex, width, height);
+        if (cpuReadback != null) {
+            recordCpuReadback(commandBuffer, stack, image, cpuReadback, width, height);
+        }
         /*
          * The exported image uses EXCLUSIVE sharing. A producer fence proves execution
          * completion, but it does not transfer queue-family ownership to another device
@@ -386,14 +392,83 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 commandBuffer,
                 stack,
                 image.image(),
+                cpuReadback == null
+                        ? VK10.VK_IMAGE_LAYOUT_GENERAL
+                        : VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 VK10.VK_IMAGE_LAYOUT_GENERAL,
-                VK10.VK_IMAGE_LAYOUT_GENERAL,
-                VK10.VK_ACCESS_SHADER_WRITE_BIT,
+                cpuReadback == null
+                        ? VK10.VK_ACCESS_SHADER_WRITE_BIT
+                        : VK10.VK_ACCESS_TRANSFER_READ_BIT,
                 0,
-                org.lwjgl.vulkan.KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                cpuReadback == null
+                        ? org.lwjgl.vulkan.KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
+                        : VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                 producerQueueFamilyIndex,
                 VK11.VK_QUEUE_FAMILY_EXTERNAL
+        );
+    }
+
+    private static void recordCpuReadback(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            RtGpuImage outputImage,
+            RtGpuBuffer readback,
+            int width,
+            int height
+    ) {
+        RtFrameDispatchCommands.recordImageLayoutTransition(
+                commandBuffer,
+                stack,
+                outputImage.image(),
+                VK10.VK_IMAGE_LAYOUT_GENERAL,
+                VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT,
+                VK10.VK_ACCESS_TRANSFER_READ_BIT,
+                org.lwjgl.vulkan.KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK10.VK_QUEUE_FAMILY_IGNORED,
+                VK10.VK_QUEUE_FAMILY_IGNORED
+        );
+
+        VkBufferImageCopy.Buffer copy = VkBufferImageCopy.calloc(1, stack);
+        copy.get(0)
+                .bufferOffset(0L)
+                .bufferRowLength(0)
+                .bufferImageHeight(0);
+        copy.get(0).imageSubresource()
+                .aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
+                .mipLevel(0)
+                .baseArrayLayer(0)
+                .layerCount(1);
+        copy.get(0).imageOffset().set(0, 0, 0);
+        copy.get(0).imageExtent().set(width, height, 1);
+        VK10.vkCmdCopyImageToBuffer(
+                commandBuffer,
+                outputImage.image(),
+                VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                readback.buffer(),
+                copy
+        );
+
+        VkBufferMemoryBarrier.Buffer hostRead = VkBufferMemoryBarrier.calloc(1, stack);
+        hostRead.get(0)
+                .sType$Default()
+                .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                .dstAccessMask(VK10.VK_ACCESS_HOST_READ_BIT)
+                .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .buffer(readback.buffer())
+                .offset(0L)
+                .size(readback.sizeBytes());
+        VK10.vkCmdPipelineBarrier(
+                commandBuffer,
+                VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK10.VK_PIPELINE_STAGE_HOST_BIT,
+                0,
+                null,
+                hostRead,
+                null
         );
     }
 

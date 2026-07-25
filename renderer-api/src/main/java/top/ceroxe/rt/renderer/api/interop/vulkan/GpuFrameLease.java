@@ -224,6 +224,7 @@ public interface GpuFrameLease extends AutoCloseable {
      * values can no longer be exchanged positionally.</p>
      */
     final class FrameDescriptor {
+        private final long resourceId;
         private final long frameSequence;
         private final long renderedSceneRevision;
         private final int width;
@@ -239,11 +240,13 @@ public interface GpuFrameLease extends AutoCloseable {
         private final VulkanSampleCount sampleCount;
         private final VulkanSharingMode sharingMode;
         private final VulkanQueueFamily producerQueueFamily;
+        private final int memoryTypeIndex;
         private final long allocationSize;
         private final long allocationOffset;
         private final boolean dedicatedAllocation;
 
         private FrameDescriptor(Builder builder) {
+            resourceId = builder.resourceId;
             frameSequence = builder.frameSequence;
             renderedSceneRevision = builder.renderedSceneRevision;
             width = builder.width;
@@ -259,13 +262,16 @@ public interface GpuFrameLease extends AutoCloseable {
             sampleCount = requireSelected(builder.sampleCount, "sampleCount");
             sharingMode = requireSelected(builder.sharingMode, "sharingMode");
             producerQueueFamily = requireSelected(builder.producerQueueFamily, "producerQueueFamily");
+            memoryTypeIndex = builder.memoryTypeIndex;
             allocationSize = builder.allocationSize;
             allocationOffset = builder.allocationOffset;
             dedicatedAllocation = builder.dedicatedAllocation;
-            if (frameSequence < 0L || renderedSceneRevision < 0L) {
-                throw new IllegalArgumentException("frame descriptor revisions must not be negative");
+            if (resourceId <= 0L || frameSequence < 0L || renderedSceneRevision < 0L) {
+                throw new IllegalArgumentException(
+                        "frame resource identity must be positive and revisions must not be negative"
+                );
             }
-            if (width <= 0 || height <= 0 || mipLevels <= 0 || arrayLayers <= 0
+            if (width <= 0 || height <= 0 || mipLevels <= 0 || arrayLayers <= 0 || memoryTypeIndex < 0
                     || allocationSize <= 0L || allocationOffset < 0L) {
                 throw new IllegalArgumentException("external image descriptor contains invalid dimensions or allocation metadata");
             }
@@ -295,6 +301,20 @@ public interface GpuFrameLease extends AutoCloseable {
          */
         public Builder toBuilder() {
             return new Builder(this);
+        }
+
+        /**
+         * Returns the stable identity of the exported image allocation.
+         *
+         * <p>The value remains unchanged while the producer reuses the same underlying external
+         * image and changes whenever that image is replaced. Consumers may therefore cache one
+         * imported image/memory pair by this identity instead of importing a new Win32 memory
+         * handle every frame. The identity is scoped to the owning renderer lifetime.</p>
+         *
+         * @return positive renderer-lifetime resource identity
+         */
+        public long resourceId() {
+            return resourceId;
         }
 
         /**
@@ -433,6 +453,18 @@ public interface GpuFrameLease extends AutoCloseable {
         }
 
         /**
+         * Returns the producer allocation's exact physical-device memory-type index.
+         *
+         * <p>OPAQUE_WIN32 handles do not expose this value through the Win32 handle-properties
+         * query, so a same-GPU Vulkan consumer must reuse the producer-selected index.</p>
+         *
+         * @return non-negative Vulkan memory-type index
+         */
+        public int memoryTypeIndex() {
+            return memoryTypeIndex;
+        }
+
+        /**
          * Returns exported allocation size.
          *
          * @return positive byte count
@@ -463,12 +495,14 @@ public interface GpuFrameLease extends AutoCloseable {
         public boolean equals(Object other) {
             if (this == other) return true;
             if (!(other instanceof FrameDescriptor descriptor)) return false;
-            return frameSequence == descriptor.frameSequence
+            return resourceId == descriptor.resourceId
+                    && frameSequence == descriptor.frameSequence
                     && renderedSceneRevision == descriptor.renderedSceneRevision
                     && width == descriptor.width
                     && height == descriptor.height
                     && mipLevels == descriptor.mipLevels
                     && arrayLayers == descriptor.arrayLayers
+                    && memoryTypeIndex == descriptor.memoryTypeIndex
                     && allocationSize == descriptor.allocationSize
                     && allocationOffset == descriptor.allocationOffset
                     && dedicatedAllocation == descriptor.dedicatedAllocation
@@ -485,15 +519,16 @@ public interface GpuFrameLease extends AutoCloseable {
 
         @Override
         public int hashCode() {
-            return Objects.hash(frameSequence, renderedSceneRevision, width, height, format, imageType,
+            return Objects.hash(resourceId, frameSequence, renderedSceneRevision, width, height, format, imageType,
                     imageTiling, imageUsage, imageCreateFlags, imageLayout, mipLevels, arrayLayers,
-                    sampleCount, sharingMode, producerQueueFamily, allocationSize, allocationOffset,
+                    sampleCount, sharingMode, producerQueueFamily, memoryTypeIndex, allocationSize, allocationOffset,
                     dedicatedAllocation);
         }
 
         @Override
         public String toString() {
-            return "FrameDescriptor[frameSequence=" + frameSequence
+            return "FrameDescriptor[resourceId=" + resourceId
+                    + ", frameSequence=" + frameSequence
                     + ", renderedSceneRevision=" + renderedSceneRevision
                     + ", width=" + width + ", height=" + height
                     + ", format=" + format + ", imageType=" + imageType
@@ -502,6 +537,7 @@ public interface GpuFrameLease extends AutoCloseable {
                     + ", mipLevels=" + mipLevels + ", arrayLayers=" + arrayLayers
                     + ", sampleCount=" + sampleCount + ", sharingMode=" + sharingMode
                     + ", producerQueueFamily=" + producerQueueFamily
+                    + ", memoryTypeIndex=" + memoryTypeIndex
                     + ", allocationSize=" + allocationSize + ", allocationOffset=" + allocationOffset
                     + ", dedicatedAllocation=" + dedicatedAllocation + ']';
         }
@@ -510,6 +546,7 @@ public interface GpuFrameLease extends AutoCloseable {
          * Single-thread-confined semantic builder for one complete descriptor.
          */
         public static final class Builder {
+            private long resourceId = -1L;
             private long frameSequence = -1L;
             private long renderedSceneRevision = -1L;
             private int width;
@@ -525,6 +562,7 @@ public interface GpuFrameLease extends AutoCloseable {
             private VulkanSampleCount sampleCount;
             private VulkanSharingMode sharingMode;
             private VulkanQueueFamily producerQueueFamily;
+            private int memoryTypeIndex = -1;
             private long allocationSize;
             private long allocationOffset;
             private boolean dedicatedAllocation;
@@ -533,6 +571,7 @@ public interface GpuFrameLease extends AutoCloseable {
             }
 
             private Builder(FrameDescriptor source) {
+                resourceId = source.resourceId;
                 frameSequence = source.frameSequence;
                 renderedSceneRevision = source.renderedSceneRevision;
                 width = source.width;
@@ -548,9 +587,21 @@ public interface GpuFrameLease extends AutoCloseable {
                 sampleCount = source.sampleCount;
                 sharingMode = source.sharingMode;
                 producerQueueFamily = source.producerQueueFamily;
+                memoryTypeIndex = source.memoryTypeIndex;
                 allocationSize = source.allocationSize;
                 allocationOffset = source.allocationOffset;
                 dedicatedAllocation = source.dedicatedAllocation;
+            }
+
+            /**
+             * Selects the stable renderer-lifetime identity of the external image allocation.
+             *
+             * @param value positive identity that changes when the producer replaces the image
+             * @return this builder
+             */
+            public Builder resourceId(long value) {
+                resourceId = value;
+                return this;
             }
 
             /**
@@ -706,6 +757,17 @@ public interface GpuFrameLease extends AutoCloseable {
              */
             public Builder producerQueueFamily(VulkanQueueFamily value) {
                 producerQueueFamily = Objects.requireNonNull(value, "producerQueueFamily");
+                return this;
+            }
+
+            /**
+             * Selects the producer allocation's exact physical-device memory-type index.
+             *
+             * @param value non-negative Vulkan memory-type index
+             * @return this builder
+             */
+            public Builder memoryTypeIndex(int value) {
+                memoryTypeIndex = value;
                 return this;
             }
 

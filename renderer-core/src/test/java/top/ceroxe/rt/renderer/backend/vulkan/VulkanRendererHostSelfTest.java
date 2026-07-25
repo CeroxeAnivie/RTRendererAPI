@@ -3,6 +3,7 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.LongConsumer;
 import top.ceroxe.rt.renderer.api.CameraState;
 import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
@@ -29,6 +30,8 @@ import top.ceroxe.rt.renderer.api.RendererDiagnostics.FrameGpuTiming;
 import top.ceroxe.rt.renderer.api.RendererHealth.Kind;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop;
+import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter;
+import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.FrameDescriptor;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.HandleState;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.ImportDisposition;
@@ -45,6 +48,8 @@ public final class VulkanRendererHostSelfTest {
       rejectsAndClosesInvalidInitialSession();
       advancesOnlyAfterBackendAdmission();
       validatesFrameOrderBeforeDispatch();
+      boundsSustainedProducerLeadUntilPresentationRetiresFrames();
+      closingManagedPresenterClearsProducerFlowControl();
       publishesCpuFramesWithoutNativeInterop();
       publishesBoundedDiagnosticsAndClosesOnce();
       retriesFailedSessionClose();
@@ -53,6 +58,7 @@ public final class VulkanRendererHostSelfTest {
       backendContractViolationFailsPermanently();
       backendFailureClosesResourcesExactlyOnce();
       recreatesDeviceAndReplaysCommittedSceneOnce();
+      deviceRecoveryClearsDiscardedPresenterBacklog();
       doesNotRecoverBeforeLostSessionCloses();
       recoveryBeforeFirstScenePreservesRevisionZero();
       defersDeviceRecoveryUntilExternalLeaseCompletion();
@@ -94,8 +100,73 @@ public final class VulkanRendererHostSelfTest {
       require(renderer.diagnostics().latestSubmittedFrameSequence() == -1L, "rejected frame advanced submitted sequence");
       RayTracingRenderer.FrameSubmissionResult accepted = renderer.submit(frame(5L, 0L));
       require(accepted.frameSequence() == 5L && accepted.scheduledSceneRevision() == 0L, "accepted frame submission changed");
-      expect(SubmissionOrderException.class, () -> renderer.submit(frame(5L, 0L)));
-      require(session.frameSubmissions == 2, "duplicate frame sequence reached backend");
+      session.rejectNextFrame = true;
+      RayTracingRenderer.FrameSubmissionAttempt deferred = renderer.trySubmit(frame(6L, 0L));
+      require(deferred instanceof RayTracingRenderer.FrameSubmissionDeferred,
+              "capacity-aware submission converted recoverable backpressure into an exception");
+      RayTracingRenderer.FrameSubmissionAttempt submitted = renderer.trySubmit(frame(6L, 0L));
+      require(submitted instanceof RayTracingRenderer.FrameSubmitted success
+                      && success.submission().frameSequence() == 6L,
+              "capacity-aware retry did not preserve frame identity");
+      expect(SubmissionOrderException.class, () -> renderer.submit(frame(6L, 0L)));
+      require(session.frameSubmissions == 4, "duplicate frame sequence reached backend");
+      renderer.close();
+   }
+
+   private static void boundsSustainedProducerLeadUntilPresentationRetiresFrames() {
+      TrackingSession session = new TrackingSession();
+      TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
+      VulkanRendererHost renderer = new VulkanRendererHost(
+              RayTracingRendererConfig.defaults(), session, presenterOpener
+      );
+      renderer.apply(scene(0L));
+      TrackingPresenter presenter = presenterOpener.openedBy(renderer, 2);
+
+      require(renderer.trySubmit(frame(1L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+              "managed presenter rejected the first producer frame");
+      require(renderer.trySubmit(frame(2L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+              "managed presenter rejected the configured overlap frame");
+      for (int attempt = 0; attempt < 10_000; attempt++) {
+         RayTracingRenderer.FrameSubmissionAttempt deferred = renderer.trySubmit(frame(3L, 0L));
+         require(deferred instanceof RayTracingRenderer.FrameSubmissionDeferred,
+                 "sustained producer attempts bypassed the managed presentation bound");
+         if (attempt == 0) {
+            require(deferred == renderer.trySubmit(frame(3L, 0L)),
+                    "managed queue backpressure allocated a new result on every hot-loop attempt");
+         }
+      }
+      require(session.frameSubmissions == 2,
+              "deferred frames reached the backend and could starve presentation GPU work");
+      require(renderer.diagnostics().latestSubmittedFrameSequence() == 2L,
+              "deferred submission advanced public frame authority");
+
+      presenter.retire(1L);
+      require(renderer.trySubmit(frame(3L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+              "actual frame retirement did not restore exactly one producer permit");
+      require(session.frameSubmissions == 3,
+              "retirement did not admit exactly one replacement frame");
+      presenter.close();
+      renderer.close();
+   }
+
+   private static void closingManagedPresenterClearsProducerFlowControl() {
+      TrackingSession session = new TrackingSession();
+      TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
+      VulkanRendererHost renderer = new VulkanRendererHost(
+              RayTracingRendererConfig.defaults(), session, presenterOpener
+      );
+      renderer.apply(scene(0L));
+      TrackingPresenter presenter = presenterOpener.openedBy(renderer, 1);
+
+      require(renderer.trySubmit(frame(7L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+              "single-frame presenter bound rejected its first frame");
+      require(renderer.trySubmit(frame(8L, 0L)) instanceof RayTracingRenderer.FrameSubmissionDeferred,
+              "single-frame presenter bound did not defer producer lead");
+      presenter.close();
+      require(renderer.trySubmit(frame(8L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+              "closed presenter left stale producer flow-control state");
+      require(session.frameSubmissions == 2,
+              "presenter close admitted an unexpected number of backend frames");
       renderer.close();
    }
 
@@ -232,6 +303,38 @@ public final class VulkanRendererHostSelfTest {
       require(retry.acceptedSceneRevision() == 1L, "failed scene revision could not retry after recovery");
       renderer.close();
       require(recovered.closes == 1, "replacement session leaked during renderer close");
+   }
+
+   private static void deviceRecoveryClearsDiscardedPresenterBacklog() {
+      TrackingSession initial = new TrackingSession();
+      TrackingSession recovered = new TrackingSession();
+      TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
+      int[] opens = new int[]{0};
+      VulkanRendererHost renderer = new VulkanRendererHost(
+              RayTracingRendererConfig.defaults(),
+              () -> opens[0]++ == 0 ? initial : recovered,
+              presenterOpener
+      );
+      renderer.apply(scene(0L));
+      TrackingPresenter presenter = presenterOpener.openedBy(renderer, 1);
+      require(renderer.trySubmit(frame(1L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+              "pre-recovery presenter frame was not admitted");
+      require(renderer.trySubmit(frame(2L, 0L)) instanceof RayTracingRenderer.FrameSubmissionDeferred,
+              "pre-recovery presenter backlog did not reach its bound");
+
+      initial.failNextSceneWith = deviceLost("syntheticPresenterRecovery");
+      RendererDeviceException recovery = (RendererDeviceException) expect(
+              RendererDeviceException.class,
+              () -> renderer.apply(SceneTransaction.empty(1L))
+      );
+      require(recovery.recoveryAction() == RecoveryAction.RETRY_OPERATION,
+              "presenter recovery did not complete device recreation");
+      require(renderer.trySubmit(frame(2L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+              "discarded pre-recovery frames retained stale presenter permits");
+      require(recovered.frameSubmissions == 1,
+              "post-recovery frame was not submitted exactly once to the replacement session");
+      presenter.close();
+      renderer.close();
    }
 
    private static void doesNotRecoverBeforeLostSessionCloses() {
@@ -374,6 +477,10 @@ public final class VulkanRendererHostSelfTest {
          return this.state;
       }
 
+      public String gpuStableId() {
+         return "00000000000000000000000000000000";
+      }
+
       public VulkanRenderingSession.SceneAdmission apply(VulkanRenderingSession.SceneSubmission submission) throws VulkanRenderingSession.SubmissionRejectedException {
          ++this.sceneSubmissions;
          this.lastSceneChangeSet = submission.residentChanges();
@@ -448,7 +555,7 @@ public final class VulkanRendererHostSelfTest {
       private boolean closed;
 
       private TrackingFrameLease(long sequence, long sceneRevision) {
-         this.descriptor = FrameDescriptor.builder().frameSequence(sequence).renderedSceneRevision(sceneRevision).extent(640, 480).format(new GpuFrameLease.VulkanFormat(37)).imageType(new GpuFrameLease.VulkanImageType(1)).imageTiling(new GpuFrameLease.VulkanImageTiling(1)).imageUsage(new GpuFrameLease.VulkanImageUsage(16)).imageCreateFlags(new GpuFrameLease.VulkanImageCreateFlags(0)).imageLayout(new GpuFrameLease.VulkanImageLayout(1)).mipLevels(1).arrayLayers(1).sampleCount(new GpuFrameLease.VulkanSampleCount(1)).sharingMode(new GpuFrameLease.VulkanSharingMode(0)).producerQueueFamily(new GpuFrameLease.VulkanQueueFamily(0)).allocationSize(1228800L).allocationOffset(0L).dedicatedAllocation(true).build();
+         this.descriptor = FrameDescriptor.builder().resourceId(1L).frameSequence(sequence).renderedSceneRevision(sceneRevision).extent(640, 480).format(new GpuFrameLease.VulkanFormat(37)).imageType(new GpuFrameLease.VulkanImageType(1)).imageTiling(new GpuFrameLease.VulkanImageTiling(1)).imageUsage(new GpuFrameLease.VulkanImageUsage(16)).imageCreateFlags(new GpuFrameLease.VulkanImageCreateFlags(0)).imageLayout(new GpuFrameLease.VulkanImageLayout(1)).mipLevels(1).arrayLayers(1).sampleCount(new GpuFrameLease.VulkanSampleCount(1)).sharingMode(new GpuFrameLease.VulkanSharingMode(0)).producerQueueFamily(new GpuFrameLease.VulkanQueueFamily(0)).memoryTypeIndex(0).allocationSize(1228800L).allocationOffset(0L).dedicatedAllocation(true).build();
       }
 
       public GpuFrameLease.LeaseState state() {
@@ -489,6 +596,89 @@ public final class VulkanRendererHostSelfTest {
                this.closed = true;
             }
          }
+      }
+   }
+
+   private static final class TrackingPresenterOpener implements VulkanRendererHost.ManagedPresenterOpener {
+      private TrackingPresenter presenter;
+
+      @Override
+      public VulkanFramePresenter open(
+              String gpuStableId,
+              VulkanFramePresenterConfig configuration,
+              LongConsumer frameRetiredCallback,
+              Runnable closeCallback
+      ) {
+         require(!gpuStableId.isBlank(), "presenter opener received a blank GPU identity");
+         require(presenter == null, "test opener unexpectedly created multiple presenters");
+         presenter = new TrackingPresenter(configuration, frameRetiredCallback, closeCallback);
+         return presenter;
+      }
+
+      private TrackingPresenter openedBy(VulkanRendererHost renderer, int maximumFramesQueuedAhead) {
+         VulkanFramePresenter opened = renderer.openPresenter(
+                 VulkanFramePresenterConfig.builder()
+                         .maximumFramesQueuedAhead(maximumFramesQueuedAhead)
+                         .build()
+         );
+         require(opened == presenter && presenter != null,
+                 "renderer did not publish the presenter returned by its provider");
+         return presenter;
+      }
+   }
+
+   private static final class TrackingPresenter implements VulkanFramePresenter {
+      private final VulkanFramePresenterConfig configuration;
+      private final LongConsumer frameRetiredCallback;
+      private final Runnable closeCallback;
+      private boolean closed;
+
+      private TrackingPresenter(
+              VulkanFramePresenterConfig configuration,
+              LongConsumer frameRetiredCallback,
+              Runnable closeCallback
+      ) {
+         this.configuration = Objects.requireNonNull(configuration, "configuration");
+         this.frameRetiredCallback = Objects.requireNonNull(frameRetiredCallback, "frameRetiredCallback");
+         this.closeCallback = Objects.requireNonNull(closeCallback, "closeCallback");
+      }
+
+      private void retire(long frameSequence) {
+         require(!closed, "closed test presenter retired a frame");
+         frameRetiredCallback.accept(frameSequence);
+      }
+
+      @Override
+      public void pollEvents() {
+         require(!closed, "closed test presenter polled events");
+      }
+
+      @Override
+      public WindowState windowState() {
+         return new WindowState(closed, configuration.initialWidth(), configuration.initialHeight());
+      }
+
+      @Override
+      public SwapchainPresentMode activePresentMode() {
+         return SwapchainPresentMode.FIFO;
+      }
+
+      @Override
+      public void setTitle(String title) {
+         require(!closed && title != null && !title.isBlank(), "invalid test presenter title");
+      }
+
+      @Override
+      public PresentationResult presentAndRelease(GpuFrameLease lease) {
+         Objects.requireNonNull(lease, "lease");
+         throw new UnsupportedOperationException("flow-control test does not consume native frame leases");
+      }
+
+      @Override
+      public void close() {
+         if (closed) return;
+         closed = true;
+         closeCallback.run();
       }
    }
 

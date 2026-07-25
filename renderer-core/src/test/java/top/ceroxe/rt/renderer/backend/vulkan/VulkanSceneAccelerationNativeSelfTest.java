@@ -46,6 +46,8 @@ public final class VulkanSceneAccelerationNativeSelfTest {
                long secondTlas = acceleration.requireActiveTlas(1L).handle();
                require(movedAdmission.meshBuilds() == 0, "instance-only generation rebuilt an unchanged BLAS");
                require(second.activeMeshes() == 1 && second.activeInstances() == 1 && second.retiredGenerations() == 1 && secondTlas != firstTlas, "instance-only generation did not replace and retire its TLAS");
+               require(second.tlasBuilds() == 1L && second.tlasUpdates() == 1L,
+                       "transform-only generation did not use native TLAS update mode");
                VulkanSceneAcceleration.Snapshot released = acceleration.poll(1L);
                require(released.retiredGenerations() == 0, "completed descriptor epoch did not release the retired TLAS generation");
                VulkanSceneResidency.PreparedUpdate faded = residency.prepare(instanceFade(2L));
@@ -56,6 +58,14 @@ public final class VulkanSceneAccelerationNativeSelfTest {
                long thirdTlas = acceleration.requireActiveTlas(2L).handle();
                require(fadedAdmission.active() && fadedAdmission.meshBuilds() == 0, "appearance-only generation did not activate synchronously");
                require(thirdTlas == secondTlas && third.retiredGenerations() == 0, "appearance-only instance update rebuilt or retired an unchanged TLAS");
+               VulkanSceneResidency.PreparedUpdate movedAgain = residency.prepare(instanceMoveAgain(3L));
+               activateGpuScene(gpuScene, movedAgain.changeSet(), 3L);
+               acceleration.submit(movedAgain.changeSet(), 3L);
+               residency.commit(movedAgain);
+               VulkanSceneAcceleration.Snapshot fourth = awaitAcceleration(acceleration, 3L, 2L);
+               require(fourth.tlasBuilds() == 1L && fourth.tlasUpdates() == 2L
+                               && fourth.recycledTlasDestinations() == 1L,
+                       "second transform update did not recycle a descriptor-safe TLAS destination");
                PrintStream output10000 = System.out;
                String details10001 = capability.preferredDevice().name();
                output10000.println("VulkanSceneAccelerationNativeSelfTest passed: device=" + details10001 + ", activeRevision=" + third.activeRevision() + ", meshes=" + third.activeMeshes() + ", instances=" + third.activeInstances() + ", appearanceOnlyTlasReused=" + (thirdTlas == secondTlas));
@@ -139,6 +149,11 @@ public final class VulkanSceneAccelerationNativeSelfTest {
 
    private static SceneTransaction instanceFade(long revision) {
       return SceneTransaction.builder(revision).upsert(SceneInstance.builder(40L, 30L).transform(new AffineTransform(new float[]{1.0F, 0.0F, 0.0F, 4.0F, 0.0F, 1.0F, 0.0F, 2.0F, 0.0F, 0.0F, 1.0F, -3.0F})).mobility(Mobility.DYNAMIC).surfaceVisibility(0.5F).build()).build();
+   }
+
+   private static SceneTransaction instanceMoveAgain(long revision) {
+      AffineTransform moved = new AffineTransform(new float[]{1.0F, 0.0F, 0.0F, -2.0F, 0.0F, 1.0F, 0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 5.0F});
+      return SceneTransaction.builder(revision).upsert(instance(moved)).build();
    }
 
    private static MaterialAsset material() {

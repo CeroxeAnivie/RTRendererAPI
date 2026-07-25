@@ -26,6 +26,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
     private static final String FRAME_TIMING_LABEL = "gpuSceneFrame";
 
     private final RayTracingRendererConfig configuration;
+    private final String gpuStableId;
     private final VulkanSceneRuntime scene;
     private final GpuSceneRayTracingPipeline pipeline;
     private final VulkanFrameSlot[] frameSlots;
@@ -86,6 +87,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
                         frameOutput,
                         interop.dedicatedAllocationRequired(),
                         interop.semaphoreImportReady(),
+                        checkedConfiguration.cpuFrameReadbackEnabled(),
                         diagnostics.stalls(),
                         checkedConfiguration.temporalRendering().enabled()
                 );
@@ -95,7 +97,13 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
                     capability.preferredDevice().maxRayDispatchInvocationCount()
             );
             VulkanGpuSceneRenderingSession result = new VulkanGpuSceneRenderingSession(
-                    checkedConfiguration, scene, pipeline, temporalGpuHistory, slots, frameAdmissionLimits
+                    checkedConfiguration,
+                    capability.preferredDevice().stableId(),
+                    scene,
+                    pipeline,
+                    temporalGpuHistory,
+                    slots,
+                    frameAdmissionLimits
             );
             scene = null;
             pipeline = null;
@@ -113,6 +121,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
 
     private VulkanGpuSceneRenderingSession(
             RayTracingRendererConfig configuration,
+            String gpuStableId,
             VulkanSceneRuntime scene,
             GpuSceneRayTracingPipeline pipeline,
             VulkanTemporalHistory temporalGpuHistory,
@@ -120,6 +129,8 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
             VulkanFrameAdmissionLimits frameAdmissionLimits
     ) {
         this.configuration = Objects.requireNonNull(configuration, "configuration");
+        this.gpuStableId = Objects.requireNonNull(gpuStableId, "gpuStableId");
+        if (gpuStableId.isBlank()) throw new IllegalArgumentException("gpuStableId must not be blank");
         this.scene = Objects.requireNonNull(scene, "scene");
         this.pipeline = Objects.requireNonNull(pipeline, "pipeline");
         this.temporalGpuHistory = Objects.requireNonNull(temporalGpuHistory, "temporalGpuHistory");
@@ -135,6 +146,11 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
     @Override
     public synchronized State state() {
         return state;
+    }
+
+    @Override
+    public String gpuStableId() {
+        return gpuStableId;
     }
 
     @Override
@@ -252,6 +268,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
                                     stack,
                                     slot.index(),
                                     slot.outputImage(),
+                                    slot.cpuReadbackOrNull(),
                                     temporalResources,
                                     previousLayout,
                                     acquireExternalOwnership,
@@ -295,6 +312,13 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
             pump();
             VulkanFrameSlot latest = latestCompletedSlot();
             if (latest == null || latest.frameSequence() <= latestAcquiredFrameSequence) return null;
+            /*
+             * Completed images are retained until a consumer actually asks for one. Reclaiming
+             * them from pump() let an uncapped producer render and discard thousands of frames
+             * while starving a swapchain consumer on the same physical GPU. Once the caller asks
+             * for the latest image, older completions are genuinely superseded and may be freed.
+             */
+            discardCompletedExcept(latest);
             GpuFrameLease lease = latest.acquire();
             latestAcquiredFrameSequence = lease.descriptor().frameSequence();
             return lease;
@@ -309,17 +333,26 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
             throw new IllegalArgumentException("afterFrameSequence must be at least -1");
         }
         requireReady("capture latest CPU frame");
+        if (!configuration.cpuFrameReadbackEnabled()) {
+            throw new UnsupportedOperationException(
+                    "managed CPU frame readback is disabled by renderer configuration"
+            );
+        }
         try {
             pump();
             VulkanFrameSlot latest = latestCompletedSlot();
             if (latest == null || latest.frameSequence() <= afterFrameSequence) return null;
-            byte[] rgba8 = VulkanFrameDiagnosticReadback.capture(scene.device(), latest.outputImage());
-            return CpuFrame.builder()
+            byte[] rgba8 = latest.captureCpuRgba8();
+            CpuFrame frame = CpuFrame.builder()
                     .frameSequence(latest.frameSequence())
                     .renderedSceneRevision(latest.renderedSceneRevision())
                     .extent(latest.outputImage().width(), latest.outputImage().height())
                     .pixelsRgba8(rgba8)
                     .build();
+            // The immutable CPU copy owns its pixels, so no completed GPU output must remain
+            // retained merely to keep the returned frame alive.
+            discardAllCompleted();
+            return frame;
         } catch (RuntimeException failure) {
             throw fail("capture latest CPU frame", failure);
         }
@@ -429,19 +462,18 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
         latestCompletedDescriptorEpoch = completedEpoch;
         latestCompletedFrameSequence = completedSequence;
         scene.poll(latestCompletedDescriptorEpoch);
-        discardSupersededCompletions();
     }
 
-    private void discardSupersededCompletions() {
+    private void discardCompletedExcept(VulkanFrameSlot retained) {
+        Objects.requireNonNull(retained, "retained");
         for (VulkanFrameSlot slot : frameSlots) {
-            if (slot.completed() && slot.frameSequence() <= latestAcquiredFrameSequence) {
-                slot.discardCompleted();
-            }
+            if (slot != retained && slot.completed()) slot.discardCompleted();
         }
-        VulkanFrameSlot latest = latestCompletedSlot();
-        if (latest == null) return;
+    }
+
+    private void discardAllCompleted() {
         for (VulkanFrameSlot slot : frameSlots) {
-            if (slot != latest && slot.completed()) slot.discardCompleted();
+            if (slot.completed()) slot.discardCompleted();
         }
     }
 

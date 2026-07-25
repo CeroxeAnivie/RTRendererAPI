@@ -20,6 +20,9 @@ import java.util.Set;
 interface VulkanRenderingSession extends AutoCloseable {
     State state();
 
+    /** Stable UUID-derived identity of the physical GPU that owns exported frame memory. */
+    String gpuStableId();
+
     SceneAdmission apply(SceneSubmission submission) throws SubmissionRejectedException;
 
     FrameAdmission submit(FrameSubmission submission) throws SubmissionRejectedException;

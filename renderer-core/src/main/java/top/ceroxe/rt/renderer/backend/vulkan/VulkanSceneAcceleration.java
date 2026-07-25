@@ -19,10 +19,13 @@ import java.util.*;
  * still reference.</p>
  */
 final class VulkanSceneAcceleration implements AutoCloseable {
+    private static final int MAX_REUSABLE_TLAS_DESTINATIONS = 2;
     private final VulkanDeviceRuntime device;
     private final VulkanGpuScene gpuScene;
     private final RtAccelerationStructure bootstrapBlas;
+    private final RtDeviceTlasBuilder.PersistentBuildLane tlasBuildLane;
     private final ArrayList<RetiredGeneration> retired = new ArrayList<>();
+    private final ArrayDeque<RtAccelerationStructure> reusableTlasDestinations = new ArrayDeque<>();
 
     private Map<Integer, RtAccelerationStructure> activeMeshes = Map.of();
     private Map<Integer, VulkanGpuScene.InstanceGeometry> activeInstances = Map.of();
@@ -31,17 +34,36 @@ final class VulkanSceneAcceleration implements AutoCloseable {
     private Lifecycle lifecycle = Lifecycle.READY;
     private long activeRevision = -1L;
     private long completedDescriptorEpoch = -1L;
+    private long tlasBuilds;
+    private long tlasUpdates;
+    private long recycledTlasDestinations;
     private Throwable terminalFailure;
 
     VulkanSceneAcceleration(VulkanDeviceRuntime device, VulkanGpuScene gpuScene) {
         this.device = Objects.requireNonNull(device, "device");
         this.gpuScene = Objects.requireNonNull(gpuScene, "gpuScene");
-        this.bootstrapBlas = RtAccelerationStructure.buildBootstrapTriangleBlas(
-                device.device(),
-                device.allocator(),
-                device.buildCommands(),
-                device.accelerationStructureScratchAlignment()
-        );
+        RtAccelerationStructure createdBootstrap = null;
+        RtDeviceTlasBuilder.PersistentBuildLane createdLane = null;
+        try {
+            createdBootstrap = RtAccelerationStructure.buildBootstrapTriangleBlas(
+                    device.device(),
+                    device.allocator(),
+                    device.buildCommands(),
+                    device.accelerationStructureScratchAlignment()
+            );
+            createdLane = RtDeviceTlasBuilder.openPersistentLane(
+                    device.device(),
+                    device.allocator(),
+                    device.buildCommands(),
+                    device.accelerationStructureScratchAlignment()
+            );
+        } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
+            closeSuppressing(failure, createdLane);
+            closeSuppressing(failure, createdBootstrap);
+            throw failure;
+        }
+        bootstrapBlas = createdBootstrap;
+        tlasBuildLane = createdLane;
     }
 
     private static RuntimeException closeCollecting(RuntimeException failure, AutoCloseable resource) {
@@ -243,6 +265,9 @@ final class VulkanSceneAcceleration implements AutoCloseable {
                 activeInstances.size(),
                 activeTlas != null,
                 retired.size(),
+                tlasBuilds,
+                tlasUpdates,
+                recycledTlasDestinations,
                 terminalFailure
         );
     }
@@ -265,33 +290,52 @@ final class VulkanSceneAcceleration implements AutoCloseable {
         if (!allMeshesReady) return;
 
         if (generation.tlasSubmission == null) {
-            generation.tlasSubmission = RtDeviceTlasBuilder.submit(
-                    device.device(),
-                    device.allocator(),
-                    device.buildCommands(),
-                    device.accelerationStructureScratchAlignment(),
-                    tlasInstances(generation)
-            );
+            List<RtDeviceTlasBuilder.Instance> instances = tlasInstances(generation);
+            List<RtDeviceTlasBuilder.Instance> active = activeTlasInstances();
+            boolean update = activeTlas != null && active.size() == instances.size();
+            generation.tlasSubmission = update
+                    ? tlasBuildLane.submitUpdate(
+                    activeTlas,
+                    reusableTlasDestinations.pollFirst(),
+                    instances,
+                    dirtyInstanceSlots(active, instances)
+            )
+                    : tlasBuildLane.submitBuild(instances);
         }
         RtDeviceTlasBuilder.CompletedBuild completedTlas = generation.tlasSubmission.completeIfReady();
         if (completedTlas == null) return;
+        if (completedTlas.update()) tlasUpdates++;
+        else tlasBuilds++;
+        if (completedTlas.recycledDestination()) recycledTlasDestinations++;
         generation.completedTlas = completedTlas.accelerationStructure();
         activate(generation);
     }
 
     private List<RtDeviceTlasBuilder.Instance> tlasInstances(PendingGeneration generation) {
-        if (generation.candidateInstances.isEmpty()) {
+        return tlasInstances(generation.candidateMeshes, generation.candidateInstances);
+    }
+
+    private List<RtDeviceTlasBuilder.Instance> activeTlasInstances() {
+        if (activeTlas == null) return List.of();
+        return tlasInstances(activeMeshes, activeInstances);
+    }
+
+    private List<RtDeviceTlasBuilder.Instance> tlasInstances(
+            Map<Integer, RtAccelerationStructure> meshes,
+            Map<Integer, VulkanGpuScene.InstanceGeometry> instances
+    ) {
+        if (instances.isEmpty()) {
             return List.of(new RtDeviceTlasBuilder.Instance(
                     bootstrapBlas.deviceAddress(), AffineTransform.identity(), 0, 0
             ));
         }
         ArrayList<VulkanGpuScene.InstanceGeometry> ordered = new ArrayList<>(
-                generation.candidateInstances.values()
+                instances.values()
         );
         ordered.sort(Comparator.comparingInt(VulkanGpuScene.InstanceGeometry::instanceSlot));
         ArrayList<RtDeviceTlasBuilder.Instance> result = new ArrayList<>(ordered.size());
         for (VulkanGpuScene.InstanceGeometry instance : ordered) {
-            RtAccelerationStructure blas = generation.candidateMeshes.get(instance.meshSlot());
+            RtAccelerationStructure blas = meshes.get(instance.meshSlot());
             if (blas == null) {
                 throw new IllegalStateException(
                         "instance slot " + instance.instanceSlot()
@@ -306,6 +350,21 @@ final class VulkanSceneAcceleration implements AutoCloseable {
             ));
         }
         return List.copyOf(result);
+    }
+
+    private static int[] dirtyInstanceSlots(
+            List<RtDeviceTlasBuilder.Instance> previous,
+            List<RtDeviceTlasBuilder.Instance> next
+    ) {
+        if (previous.size() != next.size()) {
+            throw new IllegalArgumentException("TLAS update instance counts must match");
+        }
+        int[] dirty = new int[next.size()];
+        int count = 0;
+        for (int index = 0; index < next.size(); index++) {
+            if (!next.get(index).equals(previous.get(index))) dirty[count++] = index;
+        }
+        return Arrays.copyOf(dirty, count);
     }
 
     private void activate(PendingGeneration generation) {
@@ -338,10 +397,18 @@ final class VulkanSceneAcceleration implements AutoCloseable {
         for (int index = retired.size() - 1; index >= 0; index--) {
             RetiredGeneration generation = retired.get(index);
             if (generation.safeAfterEpoch <= completedEpoch) {
+                RtAccelerationStructure reusable = generation.detachTlas();
                 try {
                     generation.close();
                 } catch (RuntimeException closeFailure) {
                     failure = collect(failure, closeFailure);
+                }
+                if (reusable != null) {
+                    if (reusableTlasDestinations.size() < MAX_REUSABLE_TLAS_DESTINATIONS) {
+                        reusableTlasDestinations.addLast(reusable);
+                    } else {
+                        failure = closeCollecting(failure, reusable);
+                    }
                 }
                 retired.remove(index);
             }
@@ -387,6 +454,11 @@ final class VulkanSceneAcceleration implements AutoCloseable {
             failure = closeCollecting(failure, generation);
         }
         retired.clear();
+        for (RtAccelerationStructure reusable : reusableTlasDestinations) {
+            failure = closeCollecting(failure, reusable);
+        }
+        reusableTlasDestinations.clear();
+        failure = closeCollecting(failure, tlasBuildLane);
         failure = closeCollecting(failure, bootstrapBlas);
         if (failure != null) throw failure;
     }
@@ -413,12 +485,17 @@ final class VulkanSceneAcceleration implements AutoCloseable {
             int activeInstances,
             boolean tlasReady,
             int retiredGenerations,
+            long tlasBuilds,
+            long tlasUpdates,
+            long recycledTlasDestinations,
             Throwable terminalFailure
     ) {
         Snapshot {
             lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
             if (activeRevision < -1L || pendingRevision < -1L || activeMeshes < 0
-                    || activeInstances < 0 || retiredGenerations < 0) {
+                    || activeInstances < 0 || retiredGenerations < 0 || tlasBuilds < 0L
+                    || tlasUpdates < 0L || recycledTlasDestinations < 0L
+                    || recycledTlasDestinations > tlasUpdates) {
                 throw new IllegalArgumentException("acceleration snapshot contains invalid counters");
             }
         }
@@ -493,7 +570,7 @@ final class VulkanSceneAcceleration implements AutoCloseable {
 
     private static final class RetiredGeneration implements AutoCloseable {
         private final long safeAfterEpoch;
-        private final RtAccelerationStructure tlas;
+        private RtAccelerationStructure tlas;
         private final List<RtAccelerationStructure> blases;
 
         private RetiredGeneration(
@@ -505,6 +582,12 @@ final class VulkanSceneAcceleration implements AutoCloseable {
             this.safeAfterEpoch = safeAfterEpoch;
             this.tlas = tlas;
             this.blases = List.copyOf(Objects.requireNonNull(blases, "blases"));
+        }
+
+        private RtAccelerationStructure detachTlas() {
+            RtAccelerationStructure detached = tlas;
+            tlas = null;
+            return detached;
         }
 
         @Override

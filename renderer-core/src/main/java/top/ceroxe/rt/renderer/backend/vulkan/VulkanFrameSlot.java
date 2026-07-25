@@ -10,6 +10,7 @@ import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.interop.VulkanImportedSemaphore;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Bounded ownership unit for one output image, frame constants, descriptor set, and producer fence.
@@ -19,16 +20,21 @@ import java.util.Objects;
  * or descriptor still visible outside the renderer.</p>
  */
 final class VulkanFrameSlot implements AutoCloseable {
+    private static final AtomicLong EXTERNAL_RESOURCE_IDS = new AtomicLong(1L);
     private final int index;
     private final VulkanDeviceRuntime device;
     private final VulkanFrameOutput frameOutput;
     private final boolean dedicatedAllocationRequired;
     private final boolean externalSemaphoreCompletionEnabled;
+    private final boolean cpuFrameReadbackEnabled;
     private final boolean temporalEnabled;
+    private final RtStallTelemetrySink stalls;
     private final RtGpuBuffer frameUniforms;
 
     private RtGpuImage outputImage;
+    private long outputResourceId = -1L;
     private RtGpuImage motionImage;
+    private RtGpuBuffer cpuReadback;
     private RtCommandContext.AsyncSubmission producerSubmission;
     private RtCommandContext.AsyncSubmission consumerSubmission;
     private VulkanImportedSemaphore consumerSemaphore;
@@ -48,6 +54,7 @@ final class VulkanFrameSlot implements AutoCloseable {
             VulkanFrameOutput frameOutput,
             boolean dedicatedAllocationRequired,
             boolean externalSemaphoreCompletionEnabled,
+            boolean cpuFrameReadbackEnabled,
             RtStallTelemetrySink stalls,
             boolean temporalEnabled
     ) {
@@ -57,13 +64,15 @@ final class VulkanFrameSlot implements AutoCloseable {
         this.frameOutput = Objects.requireNonNull(frameOutput, "frameOutput");
         this.dedicatedAllocationRequired = dedicatedAllocationRequired;
         this.externalSemaphoreCompletionEnabled = externalSemaphoreCompletionEnabled;
+        this.cpuFrameReadbackEnabled = cpuFrameReadbackEnabled;
         this.temporalEnabled = temporalEnabled;
+        this.stalls = Objects.requireNonNull(stalls, "stalls");
         this.frameUniforms = RtGpuBuffer.createHostVisibleUploadBuffer(
                 device.device(),
                 device.allocator(),
                 VulkanFrameUniformPacker.BYTE_COUNT,
                 VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                Objects.requireNonNull(stalls, "stalls")
+                this.stalls
         );
     }
 
@@ -73,6 +82,14 @@ final class VulkanFrameSlot implements AutoCloseable {
         }
         failure.addSuppressed(next);
         return failure;
+    }
+
+    private static long nextExternalResourceId() {
+        long identity = EXTERNAL_RESOURCE_IDS.getAndIncrement();
+        if (identity <= 0L) {
+            throw new IllegalStateException("external frame resource identity space exhausted");
+        }
+        return identity;
     }
 
     int index() {
@@ -91,14 +108,28 @@ final class VulkanFrameSlot implements AutoCloseable {
 
     synchronized void prepare(int width, int height, byte[] uniformBytes) {
         requireState(State.FREE, "prepare frame slot");
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("frame extent must be positive");
+        }
         byte[] checkedUniforms = Objects.requireNonNull(uniformBytes, "uniformBytes");
         if (checkedUniforms.length != VulkanFrameUniformPacker.BYTE_COUNT) {
             throw new IllegalArgumentException("frame uniform payload has the wrong ABI size");
         }
-        if (outputImage == null || outputImage.width() != width || outputImage.height() != height) {
-            if (outputImage != null) outputImage.close();
-            if (motionImage != null) motionImage.close();
-            outputImage = RtGpuImage.createExportableStorageImage(
+        boolean resourcesMatch = outputImage != null
+                && outputImage.width() == width
+                && outputImage.height() == height
+                && (!temporalEnabled || motionImage != null)
+                && (!cpuFrameReadbackEnabled || cpuReadback != null);
+        if (resourcesMatch) {
+            frameUniforms.writeBytes(checkedUniforms);
+            return;
+        }
+
+        RtGpuImage replacementOutput = null;
+        RtGpuImage replacementMotion = null;
+        RtGpuBuffer replacementReadback = null;
+        try {
+            replacementOutput = RtGpuImage.createExportableStorageImage(
                     device.physicalDevice(),
                     device.device(),
                     width,
@@ -106,17 +137,66 @@ final class VulkanFrameSlot implements AutoCloseable {
                     frameOutput.vkFormat(),
                     dedicatedAllocationRequired
             );
-            imageLayout = VK10.VK_IMAGE_LAYOUT_UNDEFINED;
-            externallyOwned = false;
-            motionImage = temporalEnabled
+            replacementMotion = temporalEnabled
                     ? RtGpuImage.createStorageImage(
                     device.device(), device.allocator(), width, height,
                     VulkanTemporalImageSupport.MOTION_FORMAT
             )
                     : null;
-            motionLayoutInitialized = false;
+            replacementReadback = cpuFrameReadbackEnabled
+                    ? RtGpuBuffer.createHostVisibleBuffer(
+                    device.device(),
+                    device.allocator(),
+                    frameOutput.byteCount(width, height),
+                    VK10.VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                    stalls
+            )
+                    : null;
+            frameUniforms.writeBytes(checkedUniforms);
+        } catch (RuntimeException | Error failure) {
+            closeAfterFailedReplacement(replacementReadback, failure);
+            closeAfterFailedReplacement(replacementMotion, failure);
+            closeAfterFailedReplacement(replacementOutput, failure);
+            throw failure;
         }
-        frameUniforms.writeBytes(checkedUniforms);
+
+        RtGpuImage previousOutput = outputImage;
+        RtGpuImage previousMotion = motionImage;
+        RtGpuBuffer previousReadback = cpuReadback;
+        outputImage = replacementOutput;
+        outputResourceId = nextExternalResourceId();
+        motionImage = replacementMotion;
+        cpuReadback = replacementReadback;
+        imageLayout = VK10.VK_IMAGE_LAYOUT_UNDEFINED;
+        externallyOwned = false;
+        motionLayoutInitialized = false;
+
+        RuntimeException failure = null;
+        failure = closeReplaced(previousReadback, failure);
+        failure = closeReplaced(previousMotion, failure);
+        failure = closeReplaced(previousOutput, failure);
+        if (failure != null) throw failure;
+    }
+
+    private static void closeAfterFailedReplacement(AutoCloseable resource, Throwable failure) {
+        if (resource == null) return;
+        try {
+            resource.close();
+        } catch (Exception closeFailure) {
+            failure.addSuppressed(closeFailure);
+        }
+    }
+
+    private static RuntimeException closeReplaced(AutoCloseable resource, RuntimeException failure) {
+        if (resource == null) return failure;
+        try {
+            resource.close();
+            return failure;
+        } catch (RuntimeException closeFailure) {
+            return accumulate(failure, closeFailure);
+        } catch (Exception closeFailure) {
+            return accumulate(failure, new IllegalStateException("native frame resource close failed", closeFailure));
+        }
     }
 
     synchronized long requiredImageGrowthBytes(int width, int height) {
@@ -133,25 +213,33 @@ final class VulkanFrameSlot implements AutoCloseable {
 
     synchronized long trimIdleOutputImage() {
         requireState(State.FREE, "trim idle frame output");
-        RtGpuImage idle = outputImage;
-        if (idle == null) {
+        RtGpuImage idleOutput = outputImage;
+        RtGpuImage idleMotion = motionImage;
+        RtGpuBuffer idleReadback = cpuReadback;
+        if (idleOutput == null && idleMotion == null && idleReadback == null) {
             return 0L;
         }
-        long releasedBytes = idle.allocationSize();
+        long releasedBytes = idleOutput == null ? 0L : idleOutput.allocationSize();
+        if (idleMotion != null) {
+            releasedBytes = Math.addExact(releasedBytes, idleMotion.allocationSize());
+        }
         /*
-         * Detach first so even an exceptional native close cannot leave a closed image reachable
-         * by a later descriptor update. The owning session treats such a close failure as fatal.
+         * Detach the whole resource set before native teardown. This preserves the slot invariant
+         * even when one close fails and lets every independent allocation attempt cleanup.
          */
         outputImage = null;
+        outputResourceId = -1L;
+        motionImage = null;
+        cpuReadback = null;
         imageLayout = VK10.VK_IMAGE_LAYOUT_UNDEFINED;
         externallyOwned = false;
-        idle.close();
-        if (motionImage != null) {
-            releasedBytes = Math.addExact(releasedBytes, motionImage.allocationSize());
-            motionImage.close();
-            motionImage = null;
-            motionLayoutInitialized = false;
-        }
+        motionLayoutInitialized = false;
+
+        RuntimeException failure = null;
+        failure = closeReplaced(idleReadback, failure);
+        failure = closeReplaced(idleMotion, failure);
+        failure = closeReplaced(idleOutput, failure);
+        if (failure != null) throw failure;
         return releasedBytes;
     }
 
@@ -164,6 +252,29 @@ final class VulkanFrameSlot implements AutoCloseable {
     synchronized RtGpuBuffer frameUniforms() {
         requireOpen();
         return frameUniforms;
+    }
+
+    synchronized RtGpuBuffer cpuReadback() {
+        requireOpen();
+        if (!cpuFrameReadbackEnabled || cpuReadback == null) {
+            throw new IllegalStateException("frame slot has no managed CPU readback buffer");
+        }
+        return cpuReadback;
+    }
+
+    synchronized RtGpuBuffer cpuReadbackOrNull() {
+        requireOpen();
+        return cpuReadback;
+    }
+
+    synchronized byte[] captureCpuRgba8() {
+        requireState(State.COMPLETED, "capture managed CPU frame");
+        byte[] nativePixels = cpuReadback().readBytes(frameOutput.byteCount(
+                outputImage.width(), outputImage.height()
+        ));
+        return frameOutput.linearHdr()
+                ? VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8(nativePixels)
+                : nativePixels;
     }
 
     synchronized RtGpuImage motionImage() {
@@ -284,6 +395,7 @@ final class VulkanFrameSlot implements AutoCloseable {
         boolean transferred = false;
         try {
             GpuFrameLease.FrameDescriptor descriptor = GpuFrameLease.FrameDescriptor.builder()
+                    .resourceId(outputResourceId)
                     .frameSequence(frameSequence)
                     .renderedSceneRevision(sceneRevision)
                     .extent(outputImage.width(), outputImage.height())
@@ -298,6 +410,7 @@ final class VulkanFrameSlot implements AutoCloseable {
                     .sampleCount(new GpuFrameLease.VulkanSampleCount(VK10.VK_SAMPLE_COUNT_1_BIT))
                     .sharingMode(new GpuFrameLease.VulkanSharingMode(VK10.VK_SHARING_MODE_EXCLUSIVE))
                     .producerQueueFamily(new GpuFrameLease.VulkanQueueFamily(device.queueFamilyIndex()))
+                    .memoryTypeIndex(outputImage.memoryTypeIndex())
                     .allocationSize(outputImage.allocationSize())
                     .allocationOffset(0L)
                     .dedicatedAllocation(outputImage.dedicatedAllocation())
@@ -435,6 +548,7 @@ final class VulkanFrameSlot implements AutoCloseable {
                 try {
                     outputImage.close();
                     outputImage = null;
+                    outputResourceId = -1L;
                 } catch (RuntimeException ex) {
                     failure = accumulate(failure, ex);
                 }
@@ -443,6 +557,14 @@ final class VulkanFrameSlot implements AutoCloseable {
                 try {
                     motionImage.close();
                     motionImage = null;
+                } catch (RuntimeException ex) {
+                    failure = accumulate(failure, ex);
+                }
+            }
+            if (cpuReadback != null) {
+                try {
+                    cpuReadback.close();
+                    cpuReadback = null;
                 } catch (RuntimeException ex) {
                     failure = accumulate(failure, ex);
                 }
@@ -461,6 +583,7 @@ final class VulkanFrameSlot implements AutoCloseable {
                 && producerSubmission == null
                 && outputImage == null
                 && motionImage == null
+                && cpuReadback == null
                 && frameUniformsClosed;
         if (failure != null) throw failure;
     }

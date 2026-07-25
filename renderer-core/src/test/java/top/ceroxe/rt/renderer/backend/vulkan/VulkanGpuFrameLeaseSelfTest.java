@@ -113,7 +113,7 @@ public final class VulkanGpuFrameLeaseSelfTest {
    }
 
    private static GpuFrameLease.FrameDescriptor descriptor() {
-      return FrameDescriptor.builder().frameSequence(1L).renderedSceneRevision(1L).extent(1, 1).format(new GpuFrameLease.VulkanFormat(37)).imageType(new GpuFrameLease.VulkanImageType(1)).imageTiling(new GpuFrameLease.VulkanImageTiling(1)).imageUsage(new GpuFrameLease.VulkanImageUsage(1)).imageCreateFlags(new GpuFrameLease.VulkanImageCreateFlags(0)).imageLayout(new GpuFrameLease.VulkanImageLayout(1)).mipLevels(1).arrayLayers(1).sampleCount(new GpuFrameLease.VulkanSampleCount(1)).sharingMode(new GpuFrameLease.VulkanSharingMode(0)).producerQueueFamily(new GpuFrameLease.VulkanQueueFamily(0)).allocationSize(4L).allocationOffset(0L).dedicatedAllocation(true).build();
+      return FrameDescriptor.builder().resourceId(1L).frameSequence(1L).renderedSceneRevision(1L).extent(1, 1).format(new GpuFrameLease.VulkanFormat(37)).imageType(new GpuFrameLease.VulkanImageType(1)).imageTiling(new GpuFrameLease.VulkanImageTiling(1)).imageUsage(new GpuFrameLease.VulkanImageUsage(1)).imageCreateFlags(new GpuFrameLease.VulkanImageCreateFlags(0)).imageLayout(new GpuFrameLease.VulkanImageLayout(1)).mipLevels(1).arrayLayers(1).sampleCount(new GpuFrameLease.VulkanSampleCount(1)).sharingMode(new GpuFrameLease.VulkanSharingMode(0)).producerQueueFamily(new GpuFrameLease.VulkanQueueFamily(0)).memoryTypeIndex(0).allocationSize(4L).allocationOffset(0L).dedicatedAllocation(true).build();
    }
 
    private static <T extends Throwable> void expect(Class<T> type, ThrowingRunnable action) {

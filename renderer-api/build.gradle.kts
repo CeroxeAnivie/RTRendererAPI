@@ -133,9 +133,10 @@ tasks.register<JavaExec>("rendererApiContractSelfTest") {
     mainClass.set("top.ceroxe.rt.renderer.api.RendererApiContractSelfTest")
 }
 
-// A patch release must prove compatibility with the last published contract. Pointing this at a
-// snapshot named after the version under construction would let that release approve itself.
-val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-0.1.0.abi")
+// Each published surface remains immutable and reviewable. Before checking in a new versioned
+// baseline, reviewers compare its generated snapshot with the last published baseline; the exact
+// gate below then prevents later edits from silently changing that reviewed release surface.
+val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-${project.version}.abi")
 val rendererApiAbiSnapshot = layout.buildDirectory.file("abi/renderer-api-${project.version}.abi")
 
 tasks.register("generateRendererApiAbi") {
@@ -251,6 +252,7 @@ val runtimeLicensePolicy = mapOf(
     "it.unimi.dsi:fastutil" to RuntimeLicensePolicy("Apache-2.0", "Apache License 2.0"),
     "org.joml:joml" to RuntimeLicensePolicy("MIT", "MIT License"),
     "org.lwjgl:lwjgl" to RuntimeLicensePolicy("BSD-3-Clause", "BSD 3-Clause License"),
+    "org.lwjgl:lwjgl-glfw" to RuntimeLicensePolicy("BSD-3-Clause", "BSD 3-Clause License"),
     "org.lwjgl:lwjgl-shaderc" to RuntimeLicensePolicy("BSD-3-Clause", "BSD 3-Clause License"),
     "org.lwjgl:lwjgl-vma" to RuntimeLicensePolicy("BSD-3-Clause", "BSD 3-Clause License"),
     "org.lwjgl:lwjgl-vulkan" to RuntimeLicensePolicy("BSD-3-Clause", "BSD 3-Clause License"),

@@ -40,13 +40,33 @@ public interface RayTracingRenderer extends AutoCloseable {
     FrameSubmissionResult submit(RenderFrameRequest request);
 
     /**
+     * Attempts one frame admission without using an exception for ordinary bounded backpressure.
+     *
+     * <p>Ordering, lifecycle, revision and device failures still throw their existing typed
+     * exceptions. Only a recoverable capacity refusal becomes {@link FrameSubmissionDeferred},
+     * avoiding exception construction and stack capture in uncapped producer loops.</p>
+     *
+     * @param request immutable render request whose sequence must advance when accepted
+     * @return exhaustive submitted-or-deferred result
+     */
+    default FrameSubmissionAttempt trySubmit(RenderFrameRequest request) {
+        try {
+            return new FrameSubmitted(submit(request));
+        } catch (SubmissionRejectedException rejection) {
+            return new FrameSubmissionDeferred(rejection.getMessage());
+        }
+    }
+
+    /**
      * Copies the newest completed frame into an immutable CPU-readable value when one is available.
      *
      * <p>This is the default frame-consumption path for applications that do not need native GPU
      * interop. It exposes no Vulkan handles or synchronization protocol. The returned frame owns
      * its pixels and remains valid independently of renderer progress or shutdown. Implementations
-     * may perform a synchronous GPU readback, so latency-sensitive integrations should call this
-     * off their UI thread or use {@link #awaitLatestCpuFrameAsync}.</p>
+     * enqueue readback into renderer-owned frame slots. This call only copies a slot whose producer
+     * fence has completed; it never submits a readback command or waits for the GPU. Pixel copying
+     * can still be proportional to frame size, so UI integrations should use a presentation thread
+     * or {@link #awaitLatestCpuFrameAsync}.</p>
      *
      * @return newest frame not previously returned by this method, or empty when none is ready
      */
@@ -323,6 +343,35 @@ public interface RayTracingRenderer extends AutoCloseable {
             return "FrameSubmissionResult[frameSequence=" + frameSequence
                     + ", scheduledSceneRevision=" + scheduledSceneRevision
                     + ", historyInvalidations=" + historyInvalidations + ']';
+        }
+    }
+
+    /** Exhaustive, non-null result of a non-throwing capacity-aware frame attempt. */
+    sealed interface FrameSubmissionAttempt permits FrameSubmitted, FrameSubmissionDeferred {
+    }
+
+    /**
+     * Successful frame admission.
+     *
+     * @param submission exact immutable backend admission evidence
+     */
+    record FrameSubmitted(FrameSubmissionResult submission) implements FrameSubmissionAttempt {
+        /** Validates the successful attempt. */
+        public FrameSubmitted {
+            submission = java.util.Objects.requireNonNull(submission, "submission");
+        }
+    }
+
+    /**
+     * Recoverable capacity refusal that retained no logical or native submission state.
+     *
+     * @param reason non-blank diagnostic reason suitable for telemetry
+     */
+    record FrameSubmissionDeferred(String reason) implements FrameSubmissionAttempt {
+        /** Validates the deferred attempt. */
+        public FrameSubmissionDeferred {
+            reason = java.util.Objects.requireNonNull(reason, "reason");
+            if (reason.isBlank()) throw new IllegalArgumentException("reason must not be blank");
         }
     }
 

@@ -26,14 +26,17 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
       try {
          VulkanDeviceRuntime.ExternalFrameInterop interop = producerDevice.externalFrameInterop();
          require(interop.memoryExportReady() && interop.semaphoreImportReady(), "external frame completion is unavailable: " + interop.reason());
-         VulkanFrameSlot slot = new VulkanFrameSlot(0, producerDevice, VulkanFrameOutput.from(FrameOutputFormat.SDR_RGBA8), interop.dedicatedAllocationRequired(), true, RendererRtDiagnostics.noop().stalls(), false);
+         VulkanFrameSlot slot = new VulkanFrameSlot(0, producerDevice, VulkanFrameOutput.from(FrameOutputFormat.SDR_RGBA8), interop.dedicatedAllocationRequired(), true, true, RendererRtDiagnostics.noop().stalls(), false);
 
          try {
             publish(slot, producerDevice, 0L);
             VulkanDeviceRuntime consumerDevice = VulkanDeviceRuntime.open(capability, RendererRtDiagnostics.noop(), false, false);
+            long stableResourceId;
 
             try {
                GpuFrameLease lease = slot.acquire();
+               stableResourceId = lease.descriptor().resourceId();
+               require(stableResourceId > 0L, "frame slot published an invalid external resource identity");
 
                try {
                   releaseAfterDelayedExternalSignal(slot, lease, consumerDevice);
@@ -70,8 +73,9 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
 
             require(slot.writable(), "frame slot did not become writable after consumer completion");
             publish(slot, producerDevice, 1L);
-            rejectInvalidExternalHandle(slot);
+            rejectInvalidExternalHandle(slot, stableResourceId);
             require(slot.writable(), "failed semaphore import stranded the frame slot");
+            verifyReplacementChangesResourceId(slot, producerDevice, stableResourceId);
          } catch (Throwable value15) {
             try {
                slot.close();
@@ -103,16 +107,22 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
    }
 
    private static void publish(VulkanFrameSlot slot, VulkanDeviceRuntime producerDevice, long sequence) throws InterruptedException {
-      slot.prepare(64, 64, new byte[1392]);
+      publish(slot, producerDevice, sequence, 64, 64);
+   }
+
+   private static void publish(VulkanFrameSlot slot, VulkanDeviceRuntime producerDevice, long sequence, int width, int height) throws InterruptedException {
+      slot.prepare(width, height, new byte[1392]);
       slot.submitted(producerDevice.frameCommands().submitOneTimeAsync((commandBuffer, stack) -> {
       }), sequence, sequence, sequence);
       awaitProducer(slot);
    }
 
-   private static void rejectInvalidExternalHandle(VulkanFrameSlot slot) {
+   private static void rejectInvalidExternalHandle(VulkanFrameSlot slot, long expectedResourceId) {
       GpuFrameLease lease = slot.acquire();
 
       try {
+         require(lease.descriptor().resourceId() == expectedResourceId,
+                 "reused frame allocation changed external resource identity");
          require(Win32HandleSupport.valid(lease.memoryHandle().value()), "freshly exported frame memory handle is invalid");
          GpuFrameLease.ExternalSemaphoreSignal invalid = new GpuFrameLease.ExternalSemaphoreSignal(1L, new GpuFrameLease.VulkanSemaphoreHandleType(1), SemaphoreKind.BINARY, 0L, ImportDisposition.CALLER_RETAINS_HANDLE);
          expect(IllegalArgumentException.class, () -> lease.release(invalid));
@@ -135,6 +145,22 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
          lease.close();
       }
 
+   }
+
+   private static void verifyReplacementChangesResourceId(
+           VulkanFrameSlot slot,
+           VulkanDeviceRuntime producerDevice,
+           long previousResourceId
+   ) throws InterruptedException {
+      publish(slot, producerDevice, 2L, 96, 64);
+      GpuFrameLease lease = slot.acquire();
+      try {
+         require(lease.descriptor().resourceId() != previousResourceId,
+                 "replaced frame allocation retained a stale external resource identity");
+      } finally {
+         lease.close();
+      }
+      require(slot.writable(), "replacement resource verification stranded the frame slot");
    }
 
    private static void releaseAfterDelayedExternalSignal(VulkanFrameSlot slot, GpuFrameLease lease, VulkanDeviceRuntime consumerDevice) throws InterruptedException {

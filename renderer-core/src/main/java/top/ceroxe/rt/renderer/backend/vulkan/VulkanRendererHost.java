@@ -15,9 +15,16 @@ import top.ceroxe.rt.renderer.api.SceneTransaction;
 import top.ceroxe.rt.renderer.api.SubmissionOrderException;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop;
+import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter;
+import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
+import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterFactory;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.ArrayDeque;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.LongConsumer;
+import java.util.function.Supplier;
 
 /**
  * Provider-side lifecycle and ordering authority for one Vulkan renderer instance.
@@ -27,12 +34,20 @@ import java.util.Optional;
  * material adapter supplies a real {@link VulkanRenderingSession}, no service registration can
  * accidentally expose a renderer that acknowledges work without dispatching it.</p>
  */
-final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop {
+final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop, VulkanFramePresenterFactory {
     private static final int MAX_AUTOMATIC_DEVICE_RECOVERIES = 1;
 
     private final RayTracingRendererConfig configuration;
     private final VulkanRenderingSessionFactory sessionFactory;
+    private final ManagedPresenterOpener managedPresenterOpener;
     private final PersistentSceneRegistry scene = new PersistentSceneRegistry();
+    /*
+     * The lock protects lifecycle publication and the public single-writer contract. It is
+     * deliberately non-fair: fair hand-off turned the hot submit/poll pair into a context-switch
+     * pipeline and measurably reduced presentation throughput. GPU work is bounded by frame-slot
+     * ownership instead of scheduler fairness.
+     */
+    private final ReentrantLock lifecycleLock = new ReentrantLock();
     private VulkanSceneResidency residency = new VulkanSceneResidency();
     private VulkanRenderingSession session;
 
@@ -52,19 +67,68 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     private int successfulDeviceRecoveries;
     private int failedDeviceRecoveries;
     private boolean recoveryPending;
+    private boolean managedPresenterOpen;
+    private int managedPresenterBacklogLimit;
+    private FrameSubmissionDeferred managedPresenterBackpressure;
+    private final ArrayDeque<Long> managedPresenterOutstandingFrames = new ArrayDeque<>();
+
+    private <T> T withLifecycleLock(Supplier<T> action) {
+        lifecycleLock.lock();
+        try {
+            return action.get();
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    private void withLifecycleLock(Runnable action) {
+        lifecycleLock.lock();
+        try {
+            action.run();
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
 
     VulkanRendererHost(RayTracingRendererConfig configuration, VulkanRenderingSession session) {
-        this(configuration, null, session);
+        this(configuration, null, session, VulkanGlfwFramePresenter::open);
     }
 
     VulkanRendererHost(RayTracingRendererConfig configuration, VulkanRenderingSessionFactory sessionFactory) {
-        this(configuration, Objects.requireNonNull(sessionFactory, "sessionFactory"), sessionFactory.open());
+        this(
+                configuration,
+                Objects.requireNonNull(sessionFactory, "sessionFactory"),
+                sessionFactory.open(),
+                VulkanGlfwFramePresenter::open
+        );
+    }
+
+    VulkanRendererHost(
+            RayTracingRendererConfig configuration,
+            VulkanRenderingSession session,
+            ManagedPresenterOpener managedPresenterOpener
+    ) {
+        this(configuration, null, session, managedPresenterOpener);
+    }
+
+    VulkanRendererHost(
+            RayTracingRendererConfig configuration,
+            VulkanRenderingSessionFactory sessionFactory,
+            ManagedPresenterOpener managedPresenterOpener
+    ) {
+        this(
+                configuration,
+                Objects.requireNonNull(sessionFactory, "sessionFactory"),
+                sessionFactory.open(),
+                managedPresenterOpener
+        );
     }
 
     private VulkanRendererHost(
             RayTracingRendererConfig configuration,
             VulkanRenderingSessionFactory sessionFactory,
-            VulkanRenderingSession session
+            VulkanRenderingSession session,
+            ManagedPresenterOpener managedPresenterOpener
     ) {
         VulkanRenderingSession ownedSession = Objects.requireNonNull(session, "session");
         RayTracingRendererConfig checkedConfiguration;
@@ -88,6 +152,9 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         this.configuration = checkedConfiguration;
         this.sessionFactory = sessionFactory;
         this.session = ownedSession;
+        this.managedPresenterOpener = Objects.requireNonNull(
+                managedPresenterOpener, "managedPresenterOpener"
+        );
     }
 
     private static void requireEquivalentPreparedStates(
@@ -149,13 +216,21 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     }
 
     @Override
-    public synchronized Status status() {
+    public Status status() {
+        return withLifecycleLock(this::statusLocked);
+    }
+
+    private Status statusLocked() {
         observeSessionState();
         return publicStatus();
     }
 
     @Override
-    public synchronized RendererHealth health() {
+    public RendererHealth health() {
+        return withLifecycleLock(this::healthLocked);
+    }
+
+    private RendererHealth healthLocked() {
         observeSessionState();
         return new RendererHealth(
                 publicStatus(),
@@ -169,7 +244,76 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     }
 
     @Override
-    public synchronized SceneUpdateResult apply(SceneTransaction transaction) {
+    public VulkanFramePresenter openPresenter(
+            VulkanFramePresenterConfig presenterConfiguration
+    ) {
+        return withLifecycleLock(() -> openPresenterLocked(presenterConfiguration));
+    }
+
+    private VulkanFramePresenter openPresenterLocked(
+            VulkanFramePresenterConfig presenterConfiguration
+    ) {
+        requireReady("open Vulkan frame presenter");
+        if (managedPresenterOpen) {
+            throw new RendererStateException(
+                    "this renderer already owns an open Vulkan frame presenter",
+                    publicStatus(),
+                    null
+            );
+        }
+        VulkanFramePresenterConfig checked = Objects.requireNonNull(
+                presenterConfiguration, "presenterConfiguration"
+        );
+        VulkanFramePresenter presenter = Objects.requireNonNull(
+                managedPresenterOpener.open(
+                        session.gpuStableId(),
+                        checked,
+                        this::onManagedFrameRetired,
+                        this::onManagedPresenterClosed
+                ),
+                "managed presenter opener result"
+        );
+        boolean published = false;
+        try {
+            managedPresenterBacklogLimit = checked.maximumFramesQueuedAhead();
+            managedPresenterBackpressure = new FrameSubmissionDeferred(
+                    "Vulkan presenter queue reached its configured producer lead of "
+                            + managedPresenterBacklogLimit + " frames"
+            );
+            managedPresenterOutstandingFrames.clear();
+            managedPresenterOpen = true;
+            published = true;
+            return presenter;
+        } finally {
+            if (!published) presenter.close();
+        }
+    }
+
+    private void onManagedFrameRetired(long frameSequence) {
+        withLifecycleLock(() -> {
+            while (!managedPresenterOutstandingFrames.isEmpty()
+                    && managedPresenterOutstandingFrames.peekFirst() <= frameSequence) {
+                managedPresenterOutstandingFrames.removeFirst();
+            }
+        });
+    }
+
+    private void onManagedPresenterClosed() {
+        withLifecycleLock(() -> {
+            if (!managedPresenterOpen) return;
+            managedPresenterOpen = false;
+            managedPresenterBacklogLimit = 0;
+            managedPresenterBackpressure = null;
+            managedPresenterOutstandingFrames.clear();
+        });
+    }
+
+    @Override
+    public SceneUpdateResult apply(SceneTransaction transaction) {
+        return withLifecycleLock(() -> applyLocked(transaction));
+    }
+
+    private SceneUpdateResult applyLocked(SceneTransaction transaction) {
         requireReady("apply scene transaction");
         PersistentSceneRegistry.PreparedMutation prepared = scene.prepare(transaction);
         VulkanSceneResidency.PreparedUpdate preparedResidency;
@@ -216,7 +360,19 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     }
 
     @Override
-    public synchronized FrameSubmissionResult submit(RenderFrameRequest request) {
+    public FrameSubmissionResult submit(RenderFrameRequest request) {
+        FrameSubmissionAttempt attempt = withLifecycleLock(() -> trySubmitLocked(request));
+        if (attempt instanceof FrameSubmitted submitted) return submitted.submission();
+        FrameSubmissionDeferred deferred = (FrameSubmissionDeferred) attempt;
+        throw new top.ceroxe.rt.renderer.api.SubmissionRejectedException(deferred.reason());
+    }
+
+    @Override
+    public FrameSubmissionAttempt trySubmit(RenderFrameRequest request) {
+        return withLifecycleLock(() -> trySubmitLocked(request));
+    }
+
+    private FrameSubmissionAttempt trySubmitLocked(RenderFrameRequest request) {
         requireReady("submit frame");
         RenderFrameRequest checked = Objects.requireNonNull(request, "request");
         if (checked.sequence() <= latestSubmittedFrameSequence) {
@@ -234,6 +390,14 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             );
         }
 
+        if (managedPresenterOpen
+                && managedPresenterOutstandingFrames.size() >= managedPresenterBacklogLimit) {
+            return Objects.requireNonNull(
+                    managedPresenterBackpressure,
+                    "managed presenter backpressure"
+            );
+        }
+
         VulkanRenderingSession.FrameAdmission admission;
         try {
             admission = Objects.requireNonNull(
@@ -241,7 +405,10 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
                     "session frame admission"
             );
         } catch (VulkanRenderingSession.SubmissionRejectedException rejection) {
-            throw rejected("frame " + checked.sequence(), rejection);
+            return new FrameSubmissionDeferred(
+                    "Vulkan renderer deferred frame " + checked.sequence()
+                            + " without publishing partial state: " + rejection.getMessage()
+            );
         } catch (RuntimeException failure) {
             throw fail("submit frame", failure);
         }
@@ -259,6 +426,7 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             );
         }
         latestSubmittedFrameSequence = checked.sequence();
+        if (managedPresenterOpen) managedPresenterOutstandingFrames.addLast(checked.sequence());
         java.util.Set<HistoryInvalidationReason> historyInvalidations = admission.historyInvalidations();
         if (deviceRecoveredSinceLastFrame && configuration.temporalRendering().enabled()) {
             java.util.EnumSet<HistoryInvalidationReason> augmented = historyInvalidations.isEmpty()
@@ -268,13 +436,17 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             historyInvalidations = java.util.Set.copyOf(augmented);
         }
         deviceRecoveredSinceLastFrame = false;
-        return FrameSubmissionResult.accepted(
+        return new FrameSubmitted(FrameSubmissionResult.accepted(
                 admission.frameSequence(), admission.sceneRevision(), historyInvalidations
-        );
+        ));
     }
 
     @Override
-    public synchronized VulkanFrameInterop.FramePollResult pollLatestFrame() {
+    public VulkanFrameInterop.FramePollResult pollLatestFrame() {
+        return withLifecycleLock(this::pollLatestFrameLocked);
+    }
+
+    private VulkanFrameInterop.FramePollResult pollLatestFrameLocked() {
         requireReady("poll latest GPU frame");
         GpuFrameLease lease;
         try {
@@ -336,8 +508,17 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     }
 
     @Override
-    public synchronized Optional<CpuFrame> pollLatestCpuFrame() {
+    public Optional<CpuFrame> pollLatestCpuFrame() {
+        return withLifecycleLock(this::pollLatestCpuFrameLocked);
+    }
+
+    private Optional<CpuFrame> pollLatestCpuFrameLocked() {
         requireReady("poll latest CPU frame");
+        if (!configuration.cpuFrameReadbackEnabled()) {
+            throw new UnsupportedOperationException(
+                    "managed CPU frame readback is disabled; consume VulkanFrameInterop leases instead"
+            );
+        }
         CpuFrame frame;
         try {
             frame = session.captureLatestCpuFrame(latestCpuFrameSequence);
@@ -367,7 +548,11 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     }
 
     @Override
-    public synchronized RendererDiagnostics diagnostics() {
+    public RendererDiagnostics diagnostics() {
+        return withLifecycleLock(this::diagnosticsLocked);
+    }
+
+    private RendererDiagnostics diagnosticsLocked() {
         observeSessionState();
         if (lifecycle == Lifecycle.READY) {
             refreshTelemetry();
@@ -390,7 +575,11 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     }
 
     @Override
-    public synchronized void close() {
+    public void close() {
+        withLifecycleLock(this::closeLocked);
+    }
+
+    private void closeLocked() {
         if (lifecycle == Lifecycle.CLOSED && sessionClosed) {
             return;
         }
@@ -412,7 +601,11 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         clearResolvedCleanupFailure();
     }
 
-    synchronized Throwable terminalFailure() {
+    Throwable terminalFailure() {
+        return withLifecycleLock(() -> terminalFailure);
+    }
+
+    private Throwable terminalFailureLocked() {
         return terminalFailure;
     }
 
@@ -528,7 +721,11 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         recoverIfPossible();
     }
 
-    private synchronized void onFrameLeaseClosed(FrameLeaseRetirement retirement) {
+    private void onFrameLeaseClosed(FrameLeaseRetirement retirement) {
+        withLifecycleLock(() -> onFrameLeaseClosedLocked(retirement));
+    }
+
+    private void onFrameLeaseClosedLocked(FrameLeaseRetirement retirement) {
         if (!retirement.countRetired) {
             if (openFrameLeases <= 0) {
                 throw new IllegalStateException("GPU frame lease tracking underflow");
@@ -601,6 +798,10 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             VulkanSceneResidency recoveredResidency = replayCommittedScene(candidate);
             session = candidate;
             residency = recoveredResidency;
+            // Accepted frames belonged to the discarded session and can no longer produce a
+            // lease. Retaining their producer permits would deadlock a still-open presenter
+            // immediately after otherwise successful device recreation.
+            managedPresenterOutstandingFrames.clear();
             sessionClosed = false;
             latestSessionCompletedFrameSequence = -1L;
             latestCpuFrameSequence = -1L;
@@ -685,6 +886,20 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         READY,
         FAILED,
         CLOSED
+    }
+
+    /**
+     * Package-private construction seam for deterministic lifecycle and flow-control tests.
+     * Production always binds this seam to the native GLFW/Vulkan presenter.
+     */
+    @FunctionalInterface
+    interface ManagedPresenterOpener {
+        VulkanFramePresenter open(
+                String gpuStableId,
+                VulkanFramePresenterConfig configuration,
+                LongConsumer frameRetiredCallback,
+                Runnable closeCallback
+        );
     }
 
     /**

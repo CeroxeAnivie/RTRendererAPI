@@ -275,6 +275,102 @@ vec3 gsEvaluateTerminalRadiance(GpuScenePayload surfaceSample, vec3 rayOrigin, v
     return mix(gsSkyRadiance(rayDirection), surface, opacity * (1.0 - transmission));
 }
 
+float gsRadicalInverseVdc(uint bits)
+{
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10;
+}
+
+vec2 gsReflectionSample(uint sampleIndex, uint sampleCount, uvec4 launchInfo)
+{
+    // A per-pixel Cranley-Patterson rotation removes coherent GGX bands while preserving
+    // deterministic samples, which is required by temporal reconstruction.
+    uint pixelHash = launchInfo.x * 0x9E3779B9u
+        ^ launchInfo.y * 0x85EBCA6Bu
+        ^ 0xC2B2AE35u;
+    float rotation = gsRadicalInverseVdc(pixelHash);
+    return vec2(
+        (float(sampleIndex) + 0.5) / float(max(sampleCount, 1u)),
+        fract(gsRadicalInverseVdc(sampleIndex) + rotation)
+    );
+}
+
+vec3 gsSampleGgxHalfVector(vec3 normal, float roughness, vec2 samplePoint)
+{
+    float alpha = max(roughness * roughness, 0.0025);
+    float alpha2 = alpha * alpha;
+    float phi = 2.0 * GS_PI * samplePoint.x;
+    float cosineTheta = sqrt(max(
+        (1.0 - samplePoint.y) / (1.0 + (alpha2 - 1.0) * samplePoint.y),
+        0.0
+    ));
+    float sineTheta = sqrt(max(1.0 - cosineTheta * cosineTheta, 0.0));
+    vec3 tangent = normalize(abs(normal.z) < 0.999
+        ? cross(vec3(0.0, 0.0, 1.0), normal)
+        : cross(vec3(0.0, 1.0, 0.0), normal));
+    vec3 bitangent = cross(normal, tangent);
+    return normalize(
+        tangent * (cos(phi) * sineTheta)
+        + bitangent * (sin(phi) * sineTheta)
+        + normal * cosineTheta
+    );
+}
+
+vec3 gsEvaluateOpaqueMetallicReflection(
+    GpuScenePayload surfaceSample,
+    vec3 incidentDirection,
+    uvec4 launchInfo,
+    uint sampleIndex,
+    uint sampleCount
+) {
+    float metallic = clamp(surfaceSample.emissiveAndMetallic.a, 0.0, 1.0);
+    if (metallic <= 1.0e-4) return vec3(0.0);
+
+    vec3 position = surfaceSample.worldPositionAndDistance.xyz;
+    vec3 normal = normalize(surfaceSample.worldNormalAndRoughness.xyz);
+    vec3 view = normalize(-incidentDirection);
+    float normalView = max(dot(normal, view), 0.0);
+    if (normalView <= 1.0e-5) return vec3(0.0);
+
+    float roughness = clamp(surfaceSample.worldNormalAndRoughness.w, 0.025, 1.0);
+    vec3 halfVector = gsSampleGgxHalfVector(
+        normal,
+        roughness,
+        gsReflectionSample(sampleIndex, sampleCount, launchInfo)
+    );
+    float viewHalf = dot(view, halfVector);
+    if (viewHalf <= 1.0e-5) return vec3(0.0);
+
+    vec3 reflectedDirection = normalize(reflect(incidentDirection, halfVector));
+    float normalLight = dot(normal, reflectedDirection);
+    if (normalLight <= 1.0e-5) return vec3(0.0);
+
+    GpuScenePayload reflectedSample = gsTraceRadiance(
+        position + normal * 1.0e-3,
+        reflectedDirection,
+        launchInfo
+    );
+    vec3 reflectedRadiance = gsEvaluateTerminalRadiance(
+        reflectedSample,
+        position + normal * 1.0e-3,
+        reflectedDirection
+    );
+
+    vec3 baseColor = max(surfaceSample.baseColorAndOpacity.rgb, vec3(0.0));
+    vec3 fresnel = gsFresnelSchlick(viewHalf, mix(vec3(0.04), baseColor, metallic));
+    float geometry = gsGeometrySmith(normalView, normalLight, roughness);
+    float normalHalf = max(dot(normal, halfVector), 1.0e-5);
+    // This is f * N.L / pdf for GGX half-vector sampling. Unlike an arbitrary color add,
+    // it preserves Fresnel and masking/shadowing energy terms and remains one-bounce bounded.
+    vec3 sampleWeight = metallic * fresnel * geometry * viewHalf
+        / max(normalView * normalHalf, 1.0e-5);
+    return reflectedRadiance * sampleWeight;
+}
+
 float gsDielectricFresnel(float incidentIor, float transmittedIor, float cosine)
 {
     float denominator = max(incidentIor + transmittedIor, 1.0e-6);
@@ -497,10 +593,19 @@ void main()
             float transmission = clamp(primary.transmissionIor.x, 0.0, 1.0);
             vec3 surface = gsEvaluatePbrSurface(primary, origin);
             vec3 background = gsSkyRadiance(rayDirection);
+            vec3 opaqueReflection = transmission <= 1.0e-4 && opacity >= 0.999
+                ? gsEvaluateOpaqueMetallicReflection(
+                    primary,
+                    rayDirection,
+                    launchInfo,
+                    sampleIndex,
+                    sampleCount
+                )
+                : vec3(0.0);
             vec3 optical = transmission > 0.0
                 ? gsEvaluateOpticalTransmission(primary, rayDirection, launchInfo)
                 : background;
-            vec3 material = mix(surface, optical, transmission);
+            vec3 material = mix(surface + opaqueReflection, optical, transmission);
             radiance = gsApplyCameraMedium(mix(background, material, opacity), distance);
         }
         accumulated += radiance;

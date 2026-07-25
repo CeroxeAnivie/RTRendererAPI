@@ -8,7 +8,20 @@
 
 `VulkanFrameInterop` 是显式 opt-in 的零拷贝外部图像接口。它只适合已经能正确实现 Vulkan external memory、external
 semaphore、queue-family ownership transfer 和 Win32 handle 所有权的调用方。普通应用应使用
-`RayTracingRenderer.pollLatestCpuFrame()` 或有界等待方法。
+`RayTracingRenderer.pollLatestCpuFrame()`/有界等待，或使用官方 `VulkanFramePresenter` 完成 GPU 窗口显示。
+
+## 官方托管 presenter 与自定义专家 consumer
+
+两条 GPU 路径使用同一 lease 契约，但所有权层级不同：
+
+| 路径 | 调用方负责 | API/provider 负责 |
+| --- | --- | --- |
+| `VulkanFramePresenter` | 创建配置、pump event、提交帧、调用 `presentAndRelease` | consumer Vulkan device、external import、swapchain copy/present、completion、lease close |
+| `VulkanFrameInterop` | 全部 consumer Vulkan import、queue ownership、同步、submission、completion 与 lease close | producer image/handle export 与契约验证 |
+
+官方 presenter 通过 `VulkanFramePresenter.open(renderer, config)` 打开。其全部方法绑定创建线程；同一 renderer 同时只允许一个官方 presenter。`maximumFramesQueuedAhead` 按实际 lease retirement 限制 producer lead，防止 uncapped trace 工作饿死 swapchain，但不按时间锁 FPS。关闭 presenter 会清空该流控状态。
+
+`PresentMode.UNCAPPED` 依次偏好 immediate、mailbox、FIFO；`LOW_LATENCY` 偏好 mailbox；`VSYNC` 使用 FIFO。平台可以 fallback，唯一权威结果是 `activePresentMode()`。`PresentationResult` 的 `PRESENTED` 才能计入实际 present FPS；minimized 和 swapchain recreate 结果会安全退休 lease，但不是可见帧。
 
 ## 获取扩展
 
@@ -35,7 +48,7 @@ completion，并关闭。
 `GpuFrameLease` 提供：
 
 - `descriptor()`：帧 sequence、scene revision、extent、Vulkan format/type/tiling/usage/create
-  flags/layout、mip/layer/sample、sharing mode、producer queue family、allocation size/offset 和 dedicated allocation。
+  flags/layout、mip/layer/sample、sharing mode、producer queue family、`memoryTypeIndex`、allocation size/offset 和 dedicated allocation；`resourceId` 在同一底层 image 生命周期内稳定。
 - `memoryHandle()`：导出内存 Win32 handle 的有状态 owner，包含强类型 memory handle type、import disposition 和 handle
   state。
 - `acquireSignal()`：可选 producer completion semaphore；为空表示 producer completion 已由 CPU 观察。
@@ -44,6 +57,8 @@ completion，并关闭。
 
 所有 Vulkan 数值都使用不同的强类型包装。不要把 memory handle type、semaphore handle type、format、layout、queue family 或普通
 `int` 相互替代。
+
+`resourceId` 不是 frame sequence。consumer 可以用它缓存同一个 external image 的 import，但每次 lease 仍拥有独立的 acquire/completion 生命周期。同一 `resourceId` 若对应不同的 extent、format、tiling、usage、layout、memory type 或 allocation metadata，必须拒绝为协议错误。导入前还必须验证 image memory requirements 的 `memoryTypeBits` 包含 descriptor 的 `memoryTypeIndex`。
 
 ## 正确顺序
 
@@ -141,3 +156,5 @@ capability，使用 `RayTracingGpuDevice.capabilities()` 和实际 open 结果�
 - completion 类型已通过当前 lease capability 协商。
 - lease 已成功从 `ACTIVE` 到 `RELEASED` 再到 `CLOSED`。
 - renderer 关闭前 `outstandingGpuFrameLeases == 0`。
+
+普通 uncapped 提交循环应使用 `renderer.trySubmit(...)`。`FrameSubmissionDeferred` 保证该次没有推进 frame sequence 或 native submission；调用方保留同一 request 稍后重试，并让出 CPU。官方 presenter 的默认 producer lead 是 2，允许 trace/present 重叠但不允许生产端无限堆积不可见工作。

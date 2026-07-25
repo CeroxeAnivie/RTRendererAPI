@@ -18,6 +18,7 @@ public final class RayTracingRendererConfig {
     private final int maxFramesInFlight;
     private final boolean validationEnabled;
     private final boolean gpuTimingsEnabled;
+    private final boolean cpuFrameReadbackEnabled;
     private final RayTracingGpuDevice gpuDevice;
     private final FrameOutputFormat frameOutputFormat;
     private final TemporalRenderingOptions temporalRendering;
@@ -29,6 +30,7 @@ public final class RayTracingRendererConfig {
         maxFramesInFlight = builder.maxFramesInFlight;
         validationEnabled = builder.validationEnabled;
         gpuTimingsEnabled = builder.gpuTimingsEnabled;
+        cpuFrameReadbackEnabled = builder.cpuFrameReadbackEnabled;
         gpuDevice = builder.gpuDevice;
         frameOutputFormat = Objects.requireNonNull(builder.frameOutputFormat, "frameOutputFormat");
         temporalRendering = Objects.requireNonNull(builder.temporalRendering, "temporalRendering");
@@ -89,6 +91,20 @@ public final class RayTracingRendererConfig {
     }
 
     /**
+     * Returns whether every frame slot owns an asynchronous managed CPU-readback target.
+     *
+     * <p>Enabled mode keeps {@link RayTracingRenderer#pollLatestCpuFrame()} allocation-stable on
+     * the Vulkan side and never waits for the whole queue to become idle. Expert consumers that
+     * exclusively import {@code VulkanFrameInterop} images may disable this policy to omit the
+     * otherwise unnecessary image-to-buffer copy and host-visible frame ring.</p>
+     *
+     * @return whether managed CPU frame readback is enabled
+     */
+    public boolean cpuFrameReadbackEnabled() {
+        return cpuFrameReadbackEnabled;
+    }
+
+    /**
      * Returns the explicitly selected GPU when device selection is pinned.
      *
      * @return selected GPU snapshot, or empty for backend selection policy
@@ -122,6 +138,7 @@ public final class RayTracingRendererConfig {
         return maxFramesInFlight == config.maxFramesInFlight
                 && validationEnabled == config.validationEnabled
                 && gpuTimingsEnabled == config.gpuTimingsEnabled
+                && cpuFrameReadbackEnabled == config.cpuFrameReadbackEnabled
                 && Objects.equals(gpuDevice, config.gpuDevice)
                 && frameOutputFormat == config.frameOutputFormat
                 && temporalRendering.equals(config.temporalRendering);
@@ -130,7 +147,7 @@ public final class RayTracingRendererConfig {
     @Override
     public int hashCode() {
         return Objects.hash(
-                maxFramesInFlight, validationEnabled, gpuTimingsEnabled,
+                maxFramesInFlight, validationEnabled, gpuTimingsEnabled, cpuFrameReadbackEnabled,
                 gpuDevice, frameOutputFormat, temporalRendering
         );
     }
@@ -140,6 +157,7 @@ public final class RayTracingRendererConfig {
         return "RayTracingRendererConfig[maxFramesInFlight=" + maxFramesInFlight
                 + ", validationEnabled=" + validationEnabled
                 + ", gpuTimingsEnabled=" + gpuTimingsEnabled
+                + ", cpuFrameReadbackEnabled=" + cpuFrameReadbackEnabled
                 + ", gpuDevice=" + gpuDevice
                 + ", frameOutputFormat=" + frameOutputFormat
                 + ", temporalRendering=" + temporalRendering + ']';
@@ -152,6 +170,7 @@ public final class RayTracingRendererConfig {
         private int maxFramesInFlight = DEFAULT_MAX_FRAMES_IN_FLIGHT;
         private boolean validationEnabled;
         private boolean gpuTimingsEnabled = true;
+        private boolean cpuFrameReadbackEnabled = true;
         private RayTracingGpuDevice gpuDevice;
         private FrameOutputFormat frameOutputFormat = FrameOutputFormat.SDR_RGBA8;
         private TemporalRenderingOptions temporalRendering = TemporalRenderingOptions.balanced();
@@ -163,6 +182,7 @@ public final class RayTracingRendererConfig {
             maxFramesInFlight = source.maxFramesInFlight;
             validationEnabled = source.validationEnabled;
             gpuTimingsEnabled = source.gpuTimingsEnabled;
+            cpuFrameReadbackEnabled = source.cpuFrameReadbackEnabled;
             gpuDevice = source.gpuDevice;
             frameOutputFormat = source.frameOutputFormat;
             temporalRendering = source.temporalRendering;
@@ -198,6 +218,22 @@ public final class RayTracingRendererConfig {
          */
         public Builder gpuTimingsEnabled(boolean value) {
             gpuTimingsEnabled = value;
+            return this;
+        }
+
+        /**
+         * Selects whether frame submissions populate a persistent asynchronous CPU-readback ring.
+         *
+         * <p>Disable this only when the application exclusively consumes
+         * {@code VulkanFrameInterop} leases. Calling managed CPU-frame methods on a renderer built
+         * with this policy disabled is rejected instead of silently introducing a synchronous
+         * fallback.</p>
+         *
+         * @param value whether managed CPU frame readback is enabled
+         * @return this builder
+         */
+        public Builder cpuFrameReadbackEnabled(boolean value) {
+            cpuFrameReadbackEnabled = value;
             return this;
         }
 

@@ -1,6 +1,51 @@
 # API 迁移指南
 
-本文记录 0.1.1 公共 API 中需要消费方修改源码或生命周期的迁移。机械边界以同版本 Javadoc、ABI baseline 和隔离 Maven 消费者为准。
+本文记录 0.2.0 公共 API 中需要消费方修改源码或生命周期的迁移。机械边界以同版本 Javadoc、ABI baseline 和隔离 Maven 消费者为准。
+
+## 0.2.0 提交背压
+
+持续渲染循环应从异常型 `submit(...)` 迁移到 `trySubmit(...)`：
+
+```java
+RayTracingRenderer.FrameSubmissionAttempt attempt = renderer.trySubmit(request);
+if (attempt instanceof RayTracingRenderer.FrameSubmitted) {
+    sequence++;
+} else {
+    // 本次没有发布状态；保留 sequence，稍后重试。
+}
+```
+
+只有普通容量拒绝返回 `FrameSubmissionDeferred`；顺序、场景 revision、生命周期和设备错误继续抛 typed exception。不要在 deferred 后推进 sequence、物理状态或 scene revision，也不要无休止 busy-spin。
+
+## 0.2.0 官方 Vulkan presenter
+
+只需要 GPU 窗口显示的应用不再需要自行编写 native import/present 代码。使用 `VulkanFramePresenter.open(renderer, config)`；它拥有窗口、Vulkan consumer device、swapchain、external import、completion 和 lease close。
+
+- `PresentMode` 是偏好；用 `activePresentMode()` 读取平台实际的 `IMMEDIATE`、`MAILBOX` 或 `FIFO`。
+- `maximumFramesQueuedAhead` 是 producer lead 上限，不是 FPS 限制。
+- 只在 `PresentationResult.outcome() == PRESENTED` 时统计实际 present FPS。
+- `SKIPPED_MINIMIZED` 与 `RETIRED_FOR_RECREATE` 已消费 lease，但不代表可见帧。
+
+已有自定义 Vulkan consumer 继续使用 `VulkanFrameInterop`。`FrameDescriptor` 新增：
+
+- `resourceId()`：同一底层 external image 生命周期内稳定，用于安全缓存 import；不得用 frame sequence 代替。
+- `memoryTypeIndex()`：producer allocation 使用的显式 Vulkan memory type；consumer import image requirements 必须允许该 bit。
+
+descriptor metadata 与同一 `resourceId` 冲突必须视为协议错误，不能静默重建或猜测。
+
+## 0.1.2 托管 readback 策略
+
+普通 `CpuFrame` 消费方无需修改：默认路径现在使用 frame-slot 常驻异步 readback，不再为每帧创建 staging buffer、单独提交复制或等待 queue idle。
+
+只消费 Vulkan external-memory lease 的应用可避免任何 host readback 分配与 image-to-buffer copy：
+
+```java
+RayTracingRendererConfig config = RayTracingRendererConfig.builder()
+        .cpuFrameReadbackEnabled(false)
+        .build();
+```
+
+该策略属于 renderer-lifetime 配置。关闭后调用 `pollLatestCpuFrame()` 或托管 await API 会明确抛出 `UnsupportedOperationException`，不会退回同步读回。
 
 ## 托管帧与显式 Vulkan 扩展
 
@@ -18,7 +63,7 @@ VulkanFrameInterop interop = renderer.extension(VulkanFrameInterop.class)
 VulkanFrameInterop.FramePollResult result = interop.pollLatestFrame();
 ```
 
-| 旧入口                                 | 0.1.1 入口                                              |
+| 旧入口                                 | 0.1.1+ 入口                                             |
 |-------------------------------------|-------------------------------------------------------|
 | `renderer.acquireLatestFrame()`     | 已删除；使用 `interop.pollLatestFrame()` 并穷尽处理 typed result |
 | `renderer.pollLatestFrame()`        | `interop.pollLatestFrame()`                           |

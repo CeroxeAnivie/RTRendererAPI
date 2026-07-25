@@ -39,6 +39,8 @@ import top.ceroxe.rt.renderer.api.TextureAsset.Filter;
 import top.ceroxe.rt.renderer.api.TextureSamplingState.MinificationMode;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop;
+import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter;
+import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.ConsumerCompletionCapabilities;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.FrameDescriptor;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.HandleState;
@@ -67,6 +69,7 @@ public final class RendererApiContractSelfTest {
       assertTransactionOwnershipAndConflicts();
       assertDiagnosticsAndResultValidation();
       assertGpuFrameDescriptorValidation();
+      assertManagedPresenterContract();
       assertFramePollingContract();
       assertCpuFrameContract();
       assertExportedHandleLifecycle();
@@ -87,10 +90,11 @@ public final class RendererApiContractSelfTest {
 
    private static void assertConfigurationBounds() {
       require(RayTracingRendererConfig.defaults().maxFramesInFlight() == 3, "default frame ring changed");
+      require(RayTracingRendererConfig.defaults().cpuFrameReadbackEnabled(), "managed CPU readback must remain enabled by default");
       require(RayTracingRendererConfig.defaults().frameOutputFormat() == FrameOutputFormat.SDR_RGBA8, "default native output must be SDR RGBA8");
       require(RayTracingRendererConfig.defaults().temporalRendering().equals(TemporalRenderingOptions.balanced()), "production defaults must enable balanced temporal reconstruction");
-      RayTracingRendererConfig tuned = RayTracingRendererConfig.defaults().toBuilder().maxFramesInFlight(4).validationEnabled(true).gpuTimingsEnabled(false).frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.accumulating(16)).build();
-      require(tuned.maxFramesInFlight() == 4 && tuned.validationEnabled() && !tuned.gpuTimingsEnabled() && tuned.frameOutputFormat() == FrameOutputFormat.LINEAR_HDR_RGBA16F && tuned.temporalRendering().maxHistoryFrames() == 16, "configuration builder lost an independent policy value");
+      RayTracingRendererConfig tuned = RayTracingRendererConfig.defaults().toBuilder().maxFramesInFlight(4).validationEnabled(true).gpuTimingsEnabled(false).cpuFrameReadbackEnabled(false).frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.accumulating(16)).build();
+      require(tuned.maxFramesInFlight() == 4 && tuned.validationEnabled() && !tuned.gpuTimingsEnabled() && !tuned.cpuFrameReadbackEnabled() && tuned.frameOutputFormat() == FrameOutputFormat.LINEAR_HDR_RGBA16F && tuned.temporalRendering().maxHistoryFrames() == 16, "configuration builder lost an independent policy value");
       expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.builder().maxFramesInFlight(1).build());
       expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.builder().maxFramesInFlight(17).build());
       expect(NullPointerException.class, () -> RayTracingRendererConfig.builder().frameOutputFormat((FrameOutputFormat)null));
@@ -409,11 +413,46 @@ public final class RendererApiContractSelfTest {
       require(ConsumerCompletionCapabilities.cpuOnly().cpuCompleted(), "CPU completion must remain available by default");
       require(!ConsumerCompletionCapabilities.cpuOnly().externalSemaphoreSignal(), "default leases must not claim unsupported semaphore completion");
       expect(IllegalArgumentException.class, () -> new GpuFrameLease.ConsumerCompletionCapabilities(false, Set.of()));
-      GpuFrameLease.FrameDescriptor descriptor = FrameDescriptor.builder().frameSequence(8L).renderedSceneRevision(5L).extent(1920, 1080).format(new GpuFrameLease.VulkanFormat(37)).imageType(new GpuFrameLease.VulkanImageType(1)).imageTiling(new GpuFrameLease.VulkanImageTiling(1)).imageUsage(new GpuFrameLease.VulkanImageUsage(16)).imageCreateFlags(new GpuFrameLease.VulkanImageCreateFlags(0)).imageLayout(new GpuFrameLease.VulkanImageLayout(1)).mipLevels(1).arrayLayers(1).sampleCount(new GpuFrameLease.VulkanSampleCount(1)).sharingMode(new GpuFrameLease.VulkanSharingMode(0)).producerQueueFamily(new GpuFrameLease.VulkanQueueFamily(0)).allocationSize(8294400L).allocationOffset(0L).dedicatedAllocation(false).build();
+      GpuFrameLease.FrameDescriptor descriptor = FrameDescriptor.builder().resourceId(3L).frameSequence(8L).renderedSceneRevision(5L).extent(1920, 1080).format(new GpuFrameLease.VulkanFormat(37)).imageType(new GpuFrameLease.VulkanImageType(1)).imageTiling(new GpuFrameLease.VulkanImageTiling(1)).imageUsage(new GpuFrameLease.VulkanImageUsage(16)).imageCreateFlags(new GpuFrameLease.VulkanImageCreateFlags(0)).imageLayout(new GpuFrameLease.VulkanImageLayout(1)).mipLevels(1).arrayLayers(1).sampleCount(new GpuFrameLease.VulkanSampleCount(1)).sharingMode(new GpuFrameLease.VulkanSharingMode(0)).producerQueueFamily(new GpuFrameLease.VulkanQueueFamily(0)).memoryTypeIndex(0).allocationSize(8294400L).allocationOffset(0L).dedicatedAllocation(false).build();
       require(GpuFrameLease.FrameDescriptor.class.getConstructors().length == 0, "GPU frame descriptor exposed an ordered public constructor");
-      require(descriptor.frameSequence() == 8L, "GPU frame descriptor changed");
+      require(descriptor.resourceId() == 3L && descriptor.frameSequence() == 8L, "GPU frame descriptor changed");
+      require(descriptor.equals(descriptor.toBuilder().build()), "GPU frame descriptor copy lost resource identity");
+      expect(IllegalArgumentException.class, () -> descriptor.toBuilder().resourceId(0L).build());
       expect(IllegalArgumentException.class, () -> descriptor.toBuilder().extent(0, 1080).build());
       expect(IllegalArgumentException.class, () -> new GpuFrameLease.ExternalSemaphoreSignal(1L, new GpuFrameLease.VulkanSemaphoreHandleType(2), SemaphoreKind.BINARY, 1L, ImportDisposition.IMPORT_CONSUMES_HANDLE));
+   }
+
+   private static void assertManagedPresenterContract() {
+      VulkanFramePresenterConfig defaults = VulkanFramePresenterConfig.builder().build();
+      require(defaults.initialWidth() == 1280 && defaults.initialHeight() == 720,
+              "managed presenter default extent changed");
+      require(defaults.presentMode() == VulkanFramePresenterConfig.PresentMode.VSYNC,
+              "managed presenter safe default is no longer FIFO-oriented");
+      require(defaults.maximumFramesQueuedAhead() == 2,
+              "managed presenter default producer lead changed");
+      VulkanFramePresenterConfig uncapped = VulkanFramePresenterConfig.builder()
+              .title("contract")
+              .initialExtent(2560, 1600)
+              .resizable(false)
+              .presentMode(VulkanFramePresenterConfig.PresentMode.UNCAPPED)
+              .maximumFramesQueuedAhead(3)
+              .build();
+      require(uncapped.title().equals("contract") && !uncapped.resizable()
+                      && uncapped.maximumFramesQueuedAhead() == 3,
+              "managed presenter builder lost an independent policy");
+      expect(IllegalArgumentException.class,
+              () -> VulkanFramePresenterConfig.builder().maximumFramesQueuedAhead(0));
+      expect(IllegalArgumentException.class,
+              () -> VulkanFramePresenterConfig.builder().maximumFramesQueuedAhead(17));
+      expect(IllegalArgumentException.class,
+              () -> VulkanFramePresenterConfig.builder().initialExtent(0, 720));
+      expect(IllegalArgumentException.class,
+              () -> new VulkanFramePresenter.WindowState(false, 0, 720));
+      expect(IllegalArgumentException.class,
+              () -> new VulkanFramePresenter.PresentationResult(
+                      -1L, 1, 1, VulkanFramePresenter.Outcome.PRESENTED));
+      expect(UnsupportedOperationException.class,
+              () -> VulkanFramePresenter.open(new TrackingRenderer(), defaults));
    }
 
    private static void assertExportedHandleLifecycle() {
