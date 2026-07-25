@@ -47,6 +47,7 @@ java {
         languageVersion = JavaLanguageVersion.of(targetJavaVersion)
     }
     withSourcesJar()
+    withJavadocJar()
 }
 
 tasks.withType<JavaCompile>().configureEach {

@@ -1,12 +1,15 @@
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.HexFormat
+import java.util.zip.ZipFile
 import javax.xml.parsers.DocumentBuilderFactory
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.plugins.signing.SigningExtension
 import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.bundling.Jar
+import org.gradle.api.tasks.bundling.Zip
 import org.w3c.dom.Element
 
 plugins {
@@ -21,6 +24,7 @@ subprojects {
     version = rootProject.version
 
     apply(plugin = "maven-publish")
+    apply(plugin = "signing")
 
     dependencyLocking {
         lockAllConfigurations()
@@ -98,6 +102,18 @@ subprojects {
                 }
             }
         }
+
+        extensions.configure<SigningExtension> {
+            // Local verification remains credential-free. A Central release opts in explicitly,
+            // at which point every publication artifact must receive an OpenPGP signature.
+            useGpgCmd()
+            setRequired(
+                providers.gradleProperty("centralRelease")
+                    .map(String::toBoolean)
+                    .getOrElse(false)
+            )
+            sign(project.extensions.getByType<PublishingExtension>().publications.named("mavenJava").get())
+        }
     }
 }
 
@@ -119,6 +135,68 @@ tasks.register("publishAllToLocalStagingRepository") {
 val publishedRepository = layout.buildDirectory.dir("repository")
 val publishedGroupId = group.toString()
 val publishedVersion = version.toString()
+val centralPortalBundleFile = layout.buildDirectory.file(
+    "release/rtrenderer-api-$publishedVersion-central-bundle.zip"
+)
+
+tasks.register<Zip>("centralPortalBundle") {
+    group = "publishing"
+    description = "Builds the signed Maven repository bundle accepted by the Central Portal API."
+    dependsOn(tasks.named("publishAllToLocalStagingRepository"))
+
+    from(publishedRepository) {
+        include("top/ceroxe/rt/renderer-api/$publishedVersion/**")
+        include("top/ceroxe/rt/renderer-core/$publishedVersion/**")
+    }
+    archiveFileName.set("rtrenderer-api-$publishedVersion-central-bundle.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("release"))
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+
+    doFirst {
+        val centralRelease = providers.gradleProperty("centralRelease")
+            .map(String::toBoolean)
+            .getOrElse(false)
+        if (!centralRelease) {
+            throw GradleException(
+                "Central Portal bundles require -PcentralRelease=true so every artifact is signed"
+            )
+        }
+    }
+}
+
+tasks.register("verifyCentralPortalBundle") {
+    group = "verification"
+    description = "Rejects a Central Portal bundle with missing artifacts or detached signatures."
+    dependsOn(tasks.named("centralPortalBundle"))
+    inputs.file(centralPortalBundleFile)
+
+    doLast {
+        val requiredArtifacts = listOf("renderer-api", "renderer-core").flatMap { module ->
+            val prefix = "top/ceroxe/rt/$module/$publishedVersion/$module-$publishedVersion"
+            listOf(
+                "$prefix.pom",
+                "$prefix.module",
+                "$prefix.jar",
+                "$prefix-sources.jar",
+                "$prefix-javadoc.jar"
+            )
+        }
+        ZipFile(centralPortalBundleFile.get().asFile).use { archive ->
+            val entries = archive.entries().asSequence().map { it.name }.toSet()
+            val missingArtifacts = requiredArtifacts.filterNot(entries::contains)
+            val missingSignatures = requiredArtifacts
+                .map { "$it.asc" }
+                .filterNot(entries::contains)
+            if (missingArtifacts.isNotEmpty() || missingSignatures.isNotEmpty()) {
+                throw GradleException(
+                    "Central Portal bundle is incomplete: " +
+                        "missingArtifacts=$missingArtifacts, missingSignatures=$missingSignatures"
+                )
+            }
+        }
+    }
+}
 
 tasks.register("verifyPublishedMavenTopology") {
     group = "verification"
