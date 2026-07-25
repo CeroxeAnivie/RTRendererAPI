@@ -30,16 +30,16 @@ dependencies {
     testImplementation(project(":renderer-api"))
     implementation("it.unimi.dsi:fastutil:8.5.18")
     api("org.joml:joml:1.10.8")
-    api("org.lwjgl:lwjgl:3.4.1")
-    api("org.lwjgl:lwjgl-vulkan:3.4.1")
-    api("org.lwjgl:lwjgl-vma:3.4.1")
-    implementation("org.lwjgl:lwjgl-shaderc:3.4.1")
+    api("org.lwjgl:lwjgl:3.4.2")
+    api("org.lwjgl:lwjgl-vulkan:3.4.2")
+    api("org.lwjgl:lwjgl-vma:3.4.2")
+    implementation("org.lwjgl:lwjgl-shaderc:3.4.2")
 
     // renderer-core is published as a ready-to-run Windows backend. Keeping natives test-only
     // makes the published provider discoverable but impossible to initialize in a clean host.
-    runtimeOnly("org.lwjgl:lwjgl:3.4.1:natives-windows")
-    runtimeOnly("org.lwjgl:lwjgl-vma:3.4.1:natives-windows")
-    runtimeOnly("org.lwjgl:lwjgl-shaderc:3.4.1:natives-windows")
+    runtimeOnly("org.lwjgl:lwjgl:3.4.2:natives-windows")
+    runtimeOnly("org.lwjgl:lwjgl-vma:3.4.2:natives-windows")
+    runtimeOnly("org.lwjgl:lwjgl-shaderc:3.4.2:natives-windows")
 }
 
 java {
