@@ -13,7 +13,22 @@ gradle/published-consumer-smoke/ 独立 Maven 消费方编译门禁
 docs/                            Java 指南、API 参考、互操作与支持矩阵
 ```
 
-## Maven 坐标
+## 支持范围
+
+| 项目 | 要求 |
+| --- | --- |
+| 操作系统 | Windows 10 x64 或更高版本 |
+| Java | Java 25 |
+| GPU | NVIDIA GeForce RTX 20 系或更新架构 |
+| 图形 API | Vulkan 1.2 或更高版本，并通过运行时 hardware RT capability probe |
+| 普通输出 | 托管 display-ready RGBA8 `CpuFrame` |
+| 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
+
+AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件渲染器不属于当前发布范围。完整声明与实机证据见 [支持与验证矩阵](docs/SUPPORT.md)。
+
+## 快速开始
+
+### Maven 坐标
 
 ```xml
 <dependency>
@@ -23,16 +38,14 @@ docs/                            Java 指南、API 参考、互操作与支持�
 </dependency>
 ```
 
-Gradle Kotlin DSL：
+### Gradle Kotlin DSL：
 
 ```kotlin
 dependencies {
     implementation("top.ceroxe.rt:renderer-api:0.1.0")
 }
 ```
-
-## 快速开始
-
+### 示例代码
 ```java
 import java.time.Duration;
 
@@ -67,19 +80,6 @@ public final class Main {
 ```
 
 这段代码只使用托管 CPU 帧，不要求调用方了解 Vulkan。场景资产、材质、实例和灯光的完整发布流程见 [Java 开发指南](docs/Java.md)。已经拥有 Vulkan device/queue 的调用方再阅读 [Vulkan 专家互操作](docs/Vulkan-Interop.md)。
-
-## 支持范围
-
-| 项目 | 要求 |
-| --- | --- |
-| 操作系统 | Windows 10 x64 或更高版本 |
-| Java | Java 25 |
-| GPU | NVIDIA GeForce RTX 20 系或更新架构 |
-| 图形 API | Vulkan 1.2 或更高版本，并通过运行时 hardware RT capability probe |
-| 普通输出 | 托管 display-ready RGBA8 `CpuFrame` |
-| 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
-
-AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件渲染器不属于当前发布范围。完整声明与实机证据见 [支持与验证矩阵](docs/SUPPORT.md)。
 
 ## 构建与测试
 
