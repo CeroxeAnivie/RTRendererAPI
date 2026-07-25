@@ -28,7 +28,7 @@ dependencies {
     // renderer-api: renderer-api owns the single-coordinate runtime edge to this module.
     compileOnly(project(":renderer-api"))
     testImplementation(project(":renderer-api"))
-    implementation("it.unimi.dsi:fastutil:8.5.18")
+    implementation("it.unimi.dsi:fastutil:8.5.19")
     api("org.joml:joml:1.10.8")
     api("org.lwjgl:lwjgl:3.4.1")
     api("org.lwjgl:lwjgl-vulkan:3.4.1")
