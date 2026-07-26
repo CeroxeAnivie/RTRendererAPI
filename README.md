@@ -148,3 +148,12 @@ Windows 11、RTX 5080 Laptop GPU、独显显示路径 active、2560×1600 全屏
 ```
 
 发布前必须人工确认版本、POM、签名、校验和、ABI baseline、Javadoc、独立 consumer 和支持矩阵证据。
+
+确认后使用 Central Portal 聚合发布链，一条命令构建、签名、上传并以
+`AUTOMATIC` 模式发布当前版本的全部 Maven publications：
+
+```cmd
+.\gradlew.bat publishAggregationToCentralPortal --no-configuration-cache -PcentralRelease=true
+```
+
+Central 凭据只从用户级 Gradle properties 的 `centralUsername` 与 `centralPassword` 读取，不写入仓库。
