@@ -233,7 +233,7 @@ final class RtRayTracingPipelineFactory {
             handles.get(0, copy);
             return copy;
         } finally {
-            MemoryUtil.memFree(handles);
+            MemoryUtil.nmemFree(MemoryUtil.memAddress0(handles));
         }
     }
 

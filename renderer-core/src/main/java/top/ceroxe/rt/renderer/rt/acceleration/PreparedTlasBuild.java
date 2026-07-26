@@ -217,7 +217,7 @@ final class PreparedTlasBuild implements AutoCloseable {
                     VkAccelerationStructureInstanceKHR.SIZEOF
             );
         } finally {
-            MemoryUtil.memFree(instanceBytes);
+            MemoryUtil.nmemFree(MemoryUtil.memAddress0(instanceBytes));
         }
         RtAccelerationStructureCommandRecorder.recordInputUploadBarrier(commandBuffer, stack);
         KHRAccelerationStructure.vkCmdBuildAccelerationStructuresKHR(

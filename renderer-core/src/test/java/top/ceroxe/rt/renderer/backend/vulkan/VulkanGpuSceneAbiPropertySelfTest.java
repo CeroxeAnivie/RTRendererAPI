@@ -86,15 +86,19 @@ public final class VulkanGpuSceneAbiPropertySelfTest {
          float[] transform = new float[]{scaleX, 0.0F, 0.0F, randomFiniteFloat(random), 0.0F, scaleY, 0.0F, randomFiniteFloat(random), 0.0F, 0.0F, scaleZ, randomFiniteFloat(random)};
          int meshSlot = random.nextInt(2147483647);
          float visibility = random.nextFloat();
-         SceneInstance instance = SceneInstance.builder((long)trial, (long)trial + 1L).transform(new AffineTransform(transform)).mobility(random.nextBoolean() ? Mobility.STATIC : Mobility.DYNAMIC).visibilityMask(random.nextInt(1, 256)).castsShadow(random.nextBoolean()).surfaceVisibility(visibility).build();
+         int firstLightCoordinate = random.nextInt(SceneInstance.MAX_LIGHT_COORDINATE + 1);
+         int secondLightCoordinate = random.nextInt(SceneInstance.MAX_LIGHT_COORDINATE + 1);
+         int packedLight = firstLightCoordinate | secondLightCoordinate << 16;
+         SceneInstance instance = SceneInstance.builder((long)trial, (long)trial + 1L).transform(new AffineTransform(transform)).mobility(random.nextBoolean() ? Mobility.STATIC : Mobility.DYNAMIC).visibilityMask(random.nextInt(1, 256)).castsShadow(random.nextBoolean()).surfaceVisibility(visibility).lightmapCoordinates(firstLightCoordinate, secondLightCoordinate).build();
          int[] words = VulkanGpuSceneAbi.packInstance(instance, (ignored) -> meshSlot);
-         require(words.length == 16 && words[0] == meshSlot, trial, "instance slot or record stride changed");
+         require(words.length == 17 && words[0] == meshSlot, trial, "instance slot or record stride changed");
 
          for(int element = 0; element < transform.length; ++element) {
             require(words[3 + element] == Float.floatToRawIntBits(transform[element]), trial, "instance transform lost exact float bits at element " + element);
          }
 
          require(words[15] == Float.floatToRawIntBits(visibility), trial, "instance visibility changed during serialization");
+         require(words[16] == packedLight, trial, "instance lightmap coordinates changed during serialization");
       }
 
    }

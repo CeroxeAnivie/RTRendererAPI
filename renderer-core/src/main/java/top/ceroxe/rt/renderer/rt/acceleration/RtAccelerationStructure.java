@@ -1667,7 +1667,7 @@ public final class RtAccelerationStructure implements AutoCloseable {
             scratchBuffer = null;
             failure = closeCollecting(failure, instanceBuffer);
             instanceBuffer = null;
-            MemoryUtil.memFree(uploadArena);
+            MemoryUtil.nmemFree(MemoryUtil.memAddress0(uploadArena));
             if (failure != null) {
                 throw failure;
             }

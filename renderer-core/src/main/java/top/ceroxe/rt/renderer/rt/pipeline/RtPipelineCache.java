@@ -83,7 +83,7 @@ final class RtPipelineCache implements AutoCloseable {
             }
             return output.get(0);
         } finally {
-            MemoryUtil.memFree(nativeInitialData);
+            MemoryUtil.nmemFree(MemoryUtil.memAddress0(nativeInitialData));
         }
     }
 
@@ -210,7 +210,7 @@ final class RtPipelineCache implements AutoCloseable {
                     nativeData.get(0, copy);
                     return copy;
                 } finally {
-                    MemoryUtil.memFree(nativeData);
+                    MemoryUtil.nmemFree(MemoryUtil.memAddress0(nativeData));
                 }
             }
         }

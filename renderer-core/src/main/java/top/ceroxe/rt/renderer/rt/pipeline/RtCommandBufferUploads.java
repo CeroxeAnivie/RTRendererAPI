@@ -45,7 +45,7 @@ final class RtCommandBufferUploads {
                 );
             }
         } finally {
-            MemoryUtil.memFree(upload);
+            MemoryUtil.nmemFree(MemoryUtil.memAddress0(upload));
         }
     }
 

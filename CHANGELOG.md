@@ -2,6 +2,28 @@
 
 本文记录 RTRendererAPI 面向消费方可见的变化。版本遵循语义化版本；公共二进制兼容性由同版本 ABI baseline 与发布门禁共同验证。
 
+## 0.3.0
+
+### 新增
+
+- `SceneInstance` 新增实例级光照坐标。无逐顶点 lightmap 坐标的 mesh 可通过 `lightmapCoordinates(first, second)` 或 `packedLight(...)` 参与统一 lightmap 调制，而无需重建不可变 mesh 或 BLAS。
+- 公共契约定义 `MAX_LIGHT_COORDINATE` 与 `FULL_BRIGHT_PACKED_LIGHT`，并拒绝越界的 packed 或未打包坐标。
+
+### 修复
+
+- GPUScene 可选 vertex stream 在删除精简 mesh 时只回收真实存在的 arena allocation，避免把缺失的 normal、tangent、UV 或 color stream 误判为非法删除。
+- LWJGL 3.3.3 兼容释放路径使用 native allocation 基址，避免 buffer position 改变后释放偏移地址。
+
+### 兼容性
+
+- 将编译与运行基线从 Java 25 降至 Java 21；API 与 Core 发布物固定为 Java 21 classfile（major version 65），Java 21–25 消费方无需预览特性即可加载。
+- Gradle daemon 可继续运行在 PATH 中的 Java 25；JavaCompile、Javadoc、JavaExec 和隔离发布消费者显式使用 Java 21 toolchain，并通过 `--release 21` 锁定标准库 API 与字节码目标。
+- Java 21 启动器不再接收仅由 Java 24 及更高版本识别的 `--sun-misc-unsafe-memory-access=allow`；`--enable-native-access=ALL-UNNAMED` 保持启用。
+
+### 验证
+
+- 在真实 Oracle GraalVM JDK 21 上通过 API/Core 编译、契约测试和 RTX 5080 Vulkan RT 原生渲染门禁。
+
 ## 0.2.0
 
 ### 新增

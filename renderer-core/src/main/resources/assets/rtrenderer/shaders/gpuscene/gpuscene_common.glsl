@@ -156,6 +156,13 @@ float gsInstanceSurfaceVisibility(uint instanceSlot)
     ), 0.0, 1.0);
 }
 
+vec2 gsInstanceLightmapCoordinate(uint instanceSlot)
+{
+    uint base = instanceSlot * GPU_SCENE_INSTANCE_RECORD_WORDS;
+    uint packed = gsInstances.words[base + GPU_SCENE_INSTANCE_PACKED_LIGHT_WORD];
+    return vec2(float(packed & 0xffffu), float((packed >> 16u) & 0xffffu)) * (1.0 / 240.0);
+}
+
 vec4 gsApplySurfaceVisibility(vec4 color, uint instanceSlot)
 {
     vec4 fogColor = vec4(
@@ -534,12 +541,18 @@ vec4 gsSampleLightmap(vec2 uv)
     return mix(mix(c00, c10, fraction.x), mix(c01, c11, fraction.x), fraction.y);
 }
 
-vec4 gsTriangleLightmapModulatedColor(uint meshBase, uvec3 indices, vec3 barycentrics)
+vec4 gsTriangleLightmapModulatedColor(
+    uint meshBase,
+    uvec3 indices,
+    vec3 barycentrics,
+    uint instanceSlot
+)
 {
     if (!gsOptionalOffsetPresent(
             meshBase,
             GPU_SCENE_MESH_LIGHTMAP_COORDINATE_OFFSET_WORD
-    )) return gsTriangleColor(meshBase, indices, barycentrics);
+    )) return gsTriangleColor(meshBase, indices, barycentrics)
+        * gsSampleLightmap(gsInstanceLightmapCoordinate(instanceSlot));
     // Match terrain.vsh: each vertex samples UV2 and multiplies Color before the rasterizer
     // interpolates the product. Interpolating UV2 first changes smooth-AO gradients.
     vec4 c0 = gsVertexColor(meshBase, indices.x)

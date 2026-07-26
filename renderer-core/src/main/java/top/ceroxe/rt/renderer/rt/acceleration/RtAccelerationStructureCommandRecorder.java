@@ -77,7 +77,9 @@ final class RtAccelerationStructureCommandRecorder {
                 VK10.vkCmdUpdateBuffer(commandBuffer, buffer, (long) offset * Float.BYTES, uploadChunk);
             }
         } finally {
-            MemoryUtil.memFree(uploadChunk);
+            // LWJGL 3.3.3 does not expose the typed-buffer memFree overloads available in newer
+            // releases. Always free the allocation base, regardless of the buffer's position.
+            MemoryUtil.nmemFree(MemoryUtil.memAddress0(uploadChunk));
         }
     }
 
@@ -95,7 +97,7 @@ final class RtAccelerationStructureCommandRecorder {
                 VK10.vkCmdUpdateBuffer(commandBuffer, buffer, (long) offset * Integer.BYTES, uploadChunk);
             }
         } finally {
-            MemoryUtil.memFree(uploadChunk);
+            MemoryUtil.nmemFree(MemoryUtil.memAddress0(uploadChunk));
         }
     }
 
@@ -215,9 +217,9 @@ final class RtAccelerationStructureCommandRecorder {
             }
         } finally {
             if (indexChunk != null) {
-                MemoryUtil.memFree(indexChunk);
+                MemoryUtil.nmemFree(MemoryUtil.memAddress0(indexChunk));
             }
-            MemoryUtil.memFree(vertexChunk);
+            MemoryUtil.nmemFree(MemoryUtil.memAddress0(vertexChunk));
         }
     }
 

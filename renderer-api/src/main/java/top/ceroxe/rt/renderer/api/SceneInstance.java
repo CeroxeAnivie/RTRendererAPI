@@ -5,6 +5,12 @@ package top.ceroxe.rt.renderer.api;
  *
  */
 public final class SceneInstance {
+    /** Largest supported lightmap coordinate on either unsigned 16-bit axis. */
+    public static final int MAX_LIGHT_COORDINATE = 240;
+
+    /** Packed full-bright coordinates used when an instance does not override its lighting. */
+    public static final int FULL_BRIGHT_PACKED_LIGHT = 0x00f0_00f0;
+
     private final long id;
     private final long meshAssetId;
     private final AffineTransform transform;
@@ -12,6 +18,7 @@ public final class SceneInstance {
     private final int visibilityMask;
     private final boolean castsShadow;
     private final float surfaceVisibility;
+    private final int packedLight;
 
     /**
      * Validates and creates an immutable scene instance.
@@ -23,6 +30,7 @@ public final class SceneInstance {
      * @param visibilityMask    non-zero 8-bit ray visibility mask
      * @param castsShadow       whether the instance participates in shadow rays
      * @param surfaceVisibility shader-visible opacity multiplier in {@code [0, 1]}
+     * @param packedLight       two validated lightmap coordinates packed into unsigned 16-bit halves
      */
     private SceneInstance(
             long id,
@@ -31,7 +39,8 @@ public final class SceneInstance {
             Mobility mobility,
             int visibilityMask,
             boolean castsShadow,
-            float surfaceVisibility
+            float surfaceVisibility,
+            int packedLight
     ) {
         MaterialAsset.requireId(id, "id");
         MaterialAsset.requireId(meshAssetId, "meshAssetId");
@@ -49,6 +58,7 @@ public final class SceneInstance {
         this.visibilityMask = visibilityMask;
         this.castsShadow = castsShadow;
         this.surfaceVisibility = surfaceVisibility;
+        this.packedLight = requireValidPackedLight(packedLight);
     }
 
     /**
@@ -126,6 +136,20 @@ public final class SceneInstance {
     }
 
     /**
+     * Returns the instance lightmap coordinates packed into two unsigned 16-bit halves.
+     *
+     * <p>The first coordinate occupies bits {@code [0, 15]} and the second occupies bits
+     * {@code [16, 31]}. Both coordinates are in {@code [0, 240]}. This instance attribute
+     * deliberately does not live in {@link MeshAsset}: moving an object through a light field
+     * must update shading state, not immutable geometry or its acceleration structure.</p>
+     *
+     * @return two lightmap coordinates packed as {@code second << 16 | first}
+     */
+    public int packedLight() {
+        return packedLight;
+    }
+
+    /**
      * Starts an independent builder initialized from this complete instance generation.
      *
      * @return new builder containing every current instance property
@@ -143,6 +167,7 @@ public final class SceneInstance {
                 && visibilityMask == instance.visibilityMask
                 && castsShadow == instance.castsShadow
                 && Float.compare(surfaceVisibility, instance.surfaceVisibility) == 0
+                && packedLight == instance.packedLight
                 && transform.equals(instance.transform)
                 && mobility == instance.mobility;
     }
@@ -151,7 +176,7 @@ public final class SceneInstance {
     public int hashCode() {
         return java.util.Objects.hash(
                 id, meshAssetId, transform, mobility,
-                visibilityMask, castsShadow, surfaceVisibility
+                visibilityMask, castsShadow, surfaceVisibility, packedLight
         );
     }
 
@@ -165,6 +190,7 @@ public final class SceneInstance {
                 + ", visibilityMask=" + visibilityMask
                 + ", castsShadow=" + castsShadow
                 + ", surfaceVisibility=" + surfaceVisibility
+                + ", packedLight=" + packedLight
                 + ']';
     }
 
@@ -193,6 +219,7 @@ public final class SceneInstance {
         private int visibilityMask = 0xff;
         private boolean castsShadow = true;
         private float surfaceVisibility = 1.0F;
+        private int packedLight = FULL_BRIGHT_PACKED_LIGHT;
 
         private Builder(long id, long meshAssetId) {
             MaterialAsset.requireId(id, "id");
@@ -209,6 +236,7 @@ public final class SceneInstance {
             visibilityMask = source.visibilityMask;
             castsShadow = source.castsShadow;
             surfaceVisibility = source.surfaceVisibility;
+            packedLight = source.packedLight;
         }
 
         /**
@@ -267,6 +295,35 @@ public final class SceneInstance {
         }
 
         /**
+         * Selects two packed lightmap coordinates.
+         *
+         * <p>The low and high unsigned 16-bit halves must each be in {@code [0, 240]}.
+         * Prefer {@link #lightmapCoordinates(int, int)} when the caller does not already own a
+         * packed host representation.</p>
+         *
+         * @param value coordinates packed as {@code second << 16 | first}
+         * @return this builder
+         */
+        public Builder packedLight(int value) {
+            packedLight = value;
+            return this;
+        }
+
+        /**
+         * Selects the two lightmap coordinates without requiring bit packing at the call site.
+         *
+         * @param firstCoordinate  coordinate stored in the low unsigned 16-bit half, in {@code [0, 240]}
+         * @param secondCoordinate coordinate stored in the high unsigned 16-bit half, in {@code [0, 240]}
+         * @return this builder
+         */
+        public Builder lightmapCoordinates(int firstCoordinate, int secondCoordinate) {
+            requireValidLightCoordinate(firstCoordinate, "firstCoordinate");
+            requireValidLightCoordinate(secondCoordinate, "secondCoordinate");
+            packedLight = firstCoordinate | secondCoordinate << 16;
+            return this;
+        }
+
+        /**
          * Validates and returns an immutable instance generation.
          *
          * @return immutable validated instance
@@ -274,8 +331,21 @@ public final class SceneInstance {
         public SceneInstance build() {
             return new SceneInstance(
                     id, meshAssetId, transform, mobility,
-                    visibilityMask, castsShadow, surfaceVisibility
+                    visibilityMask, castsShadow, surfaceVisibility, packedLight
             );
+        }
+    }
+
+    private static int requireValidPackedLight(int value) {
+        requireValidLightCoordinate(value & 0xffff, "packedLight low coordinate");
+        requireValidLightCoordinate(value >>> 16, "packedLight high coordinate");
+        return value;
+    }
+
+    private static void requireValidLightCoordinate(int value, String name) {
+        if (value < 0 || value > MAX_LIGHT_COORDINATE) {
+            throw new IllegalArgumentException(name + " must be within [0, "
+                    + MAX_LIGHT_COORDINATE + "]");
         }
     }
 }

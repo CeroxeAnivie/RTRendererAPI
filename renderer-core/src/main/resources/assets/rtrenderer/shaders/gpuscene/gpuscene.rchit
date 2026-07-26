@@ -60,7 +60,9 @@ void main()
         payload.launchInfo
     );
     vec4 vertexColor = shadingModel == GPU_SCENE_SHADING_LIGHTMAP_MODULATED
-        ? gsTriangleLightmapModulatedColor(meshBase, indices, barycentrics)
+        ? gsTriangleLightmapModulatedColor(
+            meshBase, indices, barycentrics, gl_InstanceCustomIndexEXT
+        )
         : gsTriangleColor(meshBase, indices, barycentrics);
     vec4 baseColor = gsUnpackRgba8(gsMaterials.words[
         materialBase + GPU_SCENE_MATERIAL_BASE_COLOR_WORD

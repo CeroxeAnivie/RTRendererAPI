@@ -137,10 +137,15 @@ RenderFrameRequest.builder(sequence, width, height, camera)
 | `TextureAsset` | `color(...)`、`colorMipChain(...)`、`builder(...)` | RGBA8 texture 与 mip chain |
 | `MaterialAsset` | `builder(id)` | PBR/材质状态与 texture 引用 |
 | `MeshAsset` | `triangles(...)`、`builder(...)` | 顶点属性、索引和逐三角形材质 |
-| `SceneInstance` | `builder(id, meshAssetId)` | transform、mobility、visibility 与 shadow |
+| `SceneInstance` | `builder(id, meshAssetId)` | transform、mobility、visibility、shadow 与实例级 lightmap 坐标 |
 | `SceneLight` | `point(...)`、`directional(...)`、`spot(...)` | typed light 与物理参数 |
 
 安全工厂复制调用方数组。需要零额外复制时只能使用标明 `wrapImmutableDirect` 的入口，并保证 direct buffer 在完整资源生命周期内不再被修改。
+
+`SceneInstance` 默认使用 `FULL_BRIGHT_PACKED_LIGHT`。没有逐顶点 lightmap 坐标的 mesh 可调用
+`lightmapCoordinates(first, second)` 设置两个位于 `[0, 240]` 的坐标；已有 packed host 数据可调用
+`packedLight(value)`，其低、高 unsigned 16-bit 半字分别表示 first、second coordinate，并执行相同范围校验。
+光照属于实例 shading state；移动实例只需 upsert 新实例 generation，不应修改 mesh 或重建 BLAS。
 
 ## 设备、诊断与异常
 

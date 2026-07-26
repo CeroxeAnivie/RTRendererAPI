@@ -389,8 +389,10 @@ tasks.register<Exec>("verifyPublishedMavenConsumer") {
     dependsOn(tasks.named("preparePublishedMavenConsumer"))
 
     val stagingRepository = layout.buildDirectory.dir("repository")
+    val javaInstallationPaths = providers.gradleProperty("org.gradle.java.installations.paths")
     inputs.dir(stagingRepository)
     inputs.dir(layout.projectDirectory.dir("gradle/published-consumer-smoke"))
+    inputs.property("javaInstallationPaths", javaInstallationPaths.orElse(""))
     outputs.dir(publishedConsumerDirectory.map { it.dir("build") })
 
     workingDir(publishedConsumerDirectory)
@@ -409,6 +411,14 @@ tasks.register<Exec>("verifyPublishedMavenConsumer") {
         "-PstagingRepository=${stagingRepository.get().asFile.toURI()}",
         "-PrendererVersion=${project.version}"
     )
+    // The consumer is an isolated Gradle invocation and therefore cannot see project properties
+    // passed to this build. Forward only the opt-in toolchain discovery path so a Java 25 daemon
+    // can still compile the consumer with the same explicitly selected Java 21 installation.
+    doFirst {
+        javaInstallationPaths.orNull?.let { paths ->
+            args("-Porg.gradle.java.installations.paths=$paths")
+        }
+    }
 }
 
 tasks.named("check") {

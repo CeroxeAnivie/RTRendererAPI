@@ -14,6 +14,7 @@ public final class VulkanGpuSceneMemorySelfTest {
    public static void main(String[] arguments) {
       preparesAllStreamsWithoutPublishingAndCommitsOneGeneration();
       removingOptionalAttributesRetiresOnlyTheirRanges();
+      removingCompactMeshDoesNotRemoveAbsentOptionalStreams();
       resetRetiresTheCompletePreviousMemoryGeneration();
       allocatesCompleteMipChain();
       System.out.println("VulkanGpuSceneMemorySelfTest passed");
@@ -66,6 +67,26 @@ public final class VulkanGpuSceneMemorySelfTest {
       VulkanGpuSceneMemory.State state = fixture.memory.commit(prepared, 7L);
       fixture.residency.commit(reset);
       require(state.texturePixels().liveAllocations() == 0 && state.texturePixels().retiredRangeCount() == 1 && state.positions().liveAllocations() == 0 && state.positions().retiredRangeCount() == 1 && state.indices().retiredRangeCount() == 1, "authoritative reset did not retire the complete previous memory generation");
+   }
+
+   private static void removingCompactMeshDoesNotRemoveAbsentOptionalStreams() {
+      VulkanSceneResidency residency = new VulkanSceneResidency();
+      VulkanGpuSceneMemory memory = new VulkanGpuSceneMemory();
+      VulkanSceneResidency.PreparedUpdate initial = residency.prepare(scene(0L, true, compactMesh(), (TextureAsset)null));
+      memory.commit(memory.prepare(initial.changeSet()), 0L);
+      residency.commit(initial);
+
+      VulkanSceneResidency.PreparedUpdate removal = residency.prepare(
+              SceneTransaction.builder(1L).removeMesh(compactMesh().id()).build()
+      );
+      VulkanGpuSceneMemory.State state = memory.commit(memory.prepare(removal.changeSet()), 1L);
+      residency.commit(removal);
+
+      require(state.positions().liveAllocations() == 0 && state.indices().liveAllocations() == 0,
+              "compact mesh required streams were not removed");
+      require(state.normals().liveAllocations() == 0 && state.tangents().liveAllocations() == 0
+                      && state.textureCoordinates().liveAllocations() == 0 && state.colors().liveAllocations() == 0,
+              "compact mesh removal fabricated optional stream allocations");
    }
 
    private static Fixture populated() {

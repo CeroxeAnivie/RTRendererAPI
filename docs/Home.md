@@ -1,6 +1,6 @@
 # RTRendererAPI Java 开发指南
 
-RTRendererAPI 是一个 Java 25 多模块工程。`renderer-api` 保持后端无关，`renderer-core` 提供 Windows NVIDIA Vulkan RT
+RTRendererAPI 是一个以 Java 21 为编译与运行基线的多模块工程。`renderer-api` 保持后端无关，`renderer-core` 提供 Windows NVIDIA Vulkan RT
 实现；应用通过 `RendererBootstrap` 发现后端，不直接构造实现类。
 
 ## 入口

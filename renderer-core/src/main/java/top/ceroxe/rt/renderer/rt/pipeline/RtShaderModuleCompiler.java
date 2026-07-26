@@ -50,7 +50,7 @@ final class RtShaderModuleCompiler {
             checkVk(VK10.vkCreateShaderModule(device, createInfo, null, handle), "vkCreateShaderModule");
             return handle.get(0);
         } finally {
-            MemoryUtil.memFree(code);
+            MemoryUtil.nmemFree(MemoryUtil.memAddress0(code));
         }
     }
 

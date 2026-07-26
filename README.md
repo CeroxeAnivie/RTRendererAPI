@@ -1,6 +1,6 @@
 # RTRendererAPI Java
 
-RTRendererAPI 是面向 Java 25 的硬件光线追踪渲染库。当前发布范围只包含 Windows 10 x64 或更高版本、NVIDIA GeForce RTX 20 系或更新架构，以及 Vulkan 1.2 或更高版本。
+RTRendererAPI 是面向 Java 21 或更高版本的硬件光线追踪渲染库。当前发布范围只包含 Windows 10 x64 或更高版本、NVIDIA GeForce RTX 20 系或更新架构，以及 Vulkan 1.2 或更高版本。
 
 应用只需要依赖 `renderer-api`。Windows Vulkan 后端、LWJGL 和对应 Windows natives 会通过 Maven 传递依赖自动解析；业务代码不需要再单独声明 `renderer-core`。
 
@@ -18,7 +18,7 @@ docs/                            Java 指南、API 参考、互操作与支持�
 | 项目 | 要求 |
 | --- | --- |
 | 操作系统 | Windows 10 x64 或更高版本 |
-| Java | Java 25 |
+| Java | Java 21 或更高版本 |
 | GPU | NVIDIA GeForce RTX 20 系或更新架构 |
 | 图形 API | Vulkan 1.2 或更高版本，并通过运行时 hardware RT capability probe |
 | 简单输出 | 异步托管 display-ready RGBA8 `CpuFrame`；无需 Vulkan 知识 |
@@ -35,7 +35,7 @@ AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件渲染器不
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 
@@ -43,7 +43,7 @@ AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件渲染器不
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:0.2.0")
+    implementation("top.ceroxe.rt:renderer-api:0.3.0")
 }
 ```
 

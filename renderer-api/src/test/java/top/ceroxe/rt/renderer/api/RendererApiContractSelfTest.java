@@ -302,10 +302,18 @@ public final class RendererApiContractSelfTest {
       expect(IllegalArgumentException.class, () -> MeshAsset.triangles(4L, new float[]{0.0F, 0.0F, 0.0F}, new int[]{0, 1, 0}, 2L));
       SceneInstance fullyVisible = SceneInstance.builder(5L, 3L).build();
       require(fullyVisible.surfaceVisibility() == 1.0F, "instance builder must default to full surface visibility");
+      require(fullyVisible.packedLight() == SceneInstance.FULL_BRIGHT_PACKED_LIGHT,
+              "instance builder must default to full-bright lightmap coordinates");
+      SceneInstance partiallyLit = fullyVisible.toBuilder().lightmapCoordinates(16, 224).build();
+      require(partiallyLit.packedLight() == 0x00e0_0010,
+              "instance builder changed generic lightmap coordinate packing");
       SceneInstance rebuilt = fullyVisible.toBuilder().build();
       require(fullyVisible.equals(rebuilt) && fullyVisible.hashCode() == rebuilt.hashCode() && fullyVisible.toString().startsWith("SceneInstance["), "scene instance builder round-trip lost immutable value semantics");
       expect(IllegalArgumentException.class, () -> SceneInstance.builder(6L, 3L).surfaceVisibility(0.0F / 0.0F).build());
       expect(IllegalArgumentException.class, () -> SceneInstance.builder(6L, 3L).surfaceVisibility(1.01F).build());
+      expect(IllegalArgumentException.class, () -> SceneInstance.builder(6L, 3L).lightmapCoordinates(-1, 0));
+      expect(IllegalArgumentException.class, () -> SceneInstance.builder(6L, 3L).lightmapCoordinates(0, SceneInstance.MAX_LIGHT_COORDINATE + 1));
+      expect(IllegalArgumentException.class, () -> SceneInstance.builder(6L, 3L).packedLight(0x00f1_0000).build());
    }
 
    private static void assertMipChainContract() {

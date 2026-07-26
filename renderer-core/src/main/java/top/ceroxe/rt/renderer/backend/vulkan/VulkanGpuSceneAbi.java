@@ -50,7 +50,7 @@ final class VulkanGpuSceneAbi {
     static final int TEXTURE_RECORD_WORDS = 14;
     static final int MATERIAL_RECORD_WORDS = 16;
     static final int MESH_RECORD_WORDS = 18;
-    static final int INSTANCE_RECORD_WORDS = 16;
+    static final int INSTANCE_RECORD_WORDS = 17;
     static final int LIGHT_RECORD_WORDS = 24;
 
     static final int FRAME_FOG_COLOR_WORD = 44;
@@ -124,6 +124,7 @@ final class VulkanGpuSceneAbi {
     static final int INSTANCE_VISIBILITY_MASK_WORD = 2;
     static final int INSTANCE_TRANSFORM_WORD = 3;
     static final int INSTANCE_SURFACE_VISIBILITY_WORD = 15;
+    static final int INSTANCE_PACKED_LIGHT_WORD = 16;
 
     static final int LIGHT_FLAGS_WORD = 0;
     static final int LIGHT_POSITION_X_WORD = 1;
@@ -277,6 +278,7 @@ final class VulkanGpuSceneAbi {
         values.put("GPU_SCENE_INSTANCE_VISIBILITY_MASK_WORD", INSTANCE_VISIBILITY_MASK_WORD);
         values.put("GPU_SCENE_INSTANCE_TRANSFORM_WORD", INSTANCE_TRANSFORM_WORD);
         values.put("GPU_SCENE_INSTANCE_SURFACE_VISIBILITY_WORD", INSTANCE_SURFACE_VISIBILITY_WORD);
+        values.put("GPU_SCENE_INSTANCE_PACKED_LIGHT_WORD", INSTANCE_PACKED_LIGHT_WORD);
         values.put("GPU_SCENE_LIGHT_FLAGS_WORD", LIGHT_FLAGS_WORD);
         values.put("GPU_SCENE_LIGHT_POSITION_X_WORD", LIGHT_POSITION_X_WORD);
         values.put("GPU_SCENE_LIGHT_POSITION_Y_WORD", LIGHT_POSITION_Y_WORD);
@@ -435,6 +437,7 @@ final class VulkanGpuSceneAbi {
             words[index + 3] = Float.floatToRawIntBits(transform.get(index));
         }
         words[INSTANCE_SURFACE_VISIBILITY_WORD] = Float.floatToRawIntBits(value.surfaceVisibility());
+        words[INSTANCE_PACKED_LIGHT_WORD] = value.packedLight();
         return words;
     }
 

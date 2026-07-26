@@ -10,7 +10,7 @@
 - Windows 10 x64 或更高版本
 - NVIDIA GeForce RTX 20 系或更新架构
 - Vulkan 1.2 或更高版本
-- Java 25
+- Java 21 或更高版本
 
 AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件后端不属于本合同。
 
@@ -32,7 +32,7 @@ AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件后端不属
   lifetime。
 - [x] `MECHANICAL`：`RendererHealth` 发布稳定 failure kind、recovery action 和资源欠账；lease 使用互斥 `LeaseState`
   ，失败保持可重试阶段。
-- [x] `MECHANICAL`：README、Java 指南、API 参考、Vulkan 专家协议、支持矩阵和迁移指南覆盖当前 0.2.0 接入面。
+- [x] `MECHANICAL`：README、Java 指南、API 参考、Vulkan 专家协议、支持矩阵和迁移指南覆盖当前 0.3.0 接入面。
 - [x] `MECHANICAL`：官方 renderer-bound Vulkan presenter 覆盖 native window/swapchain、external image import 缓存、consumer completion、lease close、实际 present mode 与有界 producer lead；简单 GPU 显示无需调用方自行实现专家同步。
 - [x] `MECHANICAL`：`trySubmit(...)` 将正常容量背压建模为穷尽结果；10,000 次持续尝试不能越过 presenter lead，deferred 不推进 frame authority，lease retirement 恰好恢复一个 permit，presenter close/device recovery 清除失效占位。
 - [ ] 隔离 Maven 消费者已编译 README quick start、设备选择、基础资源、事务、提交、托管帧，以及可执行的 interop

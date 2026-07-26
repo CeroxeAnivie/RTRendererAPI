@@ -59,7 +59,17 @@ final class VulkanGpuSceneMemory {
             long[] removedMeshes,
             Predicate<MeshAsset> present
     ) {
-        LongOpenHashSet removals = new LongOpenHashSet(removedMeshes);
+        LongOpenHashSet removals = new LongOpenHashSet();
+        // A mesh identity exists independently in every optional stream arena. Removing the mesh
+        // from the scene must therefore remove it only from arenas in which that attribute was
+        // actually allocated. Broadcasting all mesh removals to every optional arena makes a
+        // perfectly valid compact mesh (for example, one without normals or tangents) look like
+        // an invalid removal of a missing allocation.
+        for (long meshId : removedMeshes) {
+            if (arena.allocation(meshId) != null) {
+                removals.add(meshId);
+            }
+        }
         for (MeshAsset mesh : meshWrites) {
             if (!present.test(mesh) && arena.allocation(mesh.id()) != null) {
                 removals.add(mesh.id());

@@ -22,26 +22,29 @@ group = rootProject.group
 version = rootProject.version
 
 val targetJavaVersion = rootProject.providers.gradleProperty("java_version").get().toInt()
+val fastutilVersion = rootProject.providers.gradleProperty("fastutil_version").getOrElse("8.5.19")
+val jomlVersion = rootProject.providers.gradleProperty("joml_version").getOrElse("1.10.8")
+val lwjglVersion = rootProject.providers.gradleProperty("lwjgl_version").getOrElse("3.4.2")
 
 dependencies {
     // Core implements the public contracts but must not publish a reverse dependency back to
     // renderer-api: renderer-api owns the single-coordinate runtime edge to this module.
     compileOnly(project(":renderer-api"))
     testImplementation(project(":renderer-api"))
-    implementation("it.unimi.dsi:fastutil:8.5.19")
-    api("org.joml:joml:1.10.8")
-    api("org.lwjgl:lwjgl:3.4.2")
-    api("org.lwjgl:lwjgl-glfw:3.4.2")
-    api("org.lwjgl:lwjgl-vulkan:3.4.2")
-    api("org.lwjgl:lwjgl-vma:3.4.2")
-    implementation("org.lwjgl:lwjgl-shaderc:3.4.2")
+    implementation("it.unimi.dsi:fastutil:$fastutilVersion")
+    api("org.joml:joml:$jomlVersion")
+    api("org.lwjgl:lwjgl:$lwjglVersion")
+    api("org.lwjgl:lwjgl-glfw:$lwjglVersion")
+    api("org.lwjgl:lwjgl-vulkan:$lwjglVersion")
+    api("org.lwjgl:lwjgl-vma:$lwjglVersion")
+    implementation("org.lwjgl:lwjgl-shaderc:$lwjglVersion")
 
     // renderer-core is published as a ready-to-run Windows backend. Keeping natives test-only
     // makes the published provider discoverable but impossible to initialize in a clean host.
-    runtimeOnly("org.lwjgl:lwjgl:3.4.2:natives-windows")
-    runtimeOnly("org.lwjgl:lwjgl-glfw:3.4.2:natives-windows")
-    runtimeOnly("org.lwjgl:lwjgl-vma:3.4.2:natives-windows")
-    runtimeOnly("org.lwjgl:lwjgl-shaderc:3.4.2:natives-windows")
+    runtimeOnly("org.lwjgl:lwjgl:$lwjglVersion:natives-windows")
+    runtimeOnly("org.lwjgl:lwjgl-glfw:$lwjglVersion:natives-windows")
+    runtimeOnly("org.lwjgl:lwjgl-vma:$lwjglVersion:natives-windows")
+    runtimeOnly("org.lwjgl:lwjgl-shaderc:$lwjglVersion:natives-windows")
 }
 
 java {
@@ -77,13 +80,15 @@ tasks.withType<JavaExec>().configureEach {
     })
     jvmArgs(
         "--enable-native-access=ALL-UNNAMED",
-        "--sun-misc-unsafe-memory-access=allow",
         "-Dfile.encoding=UTF-8",
         "-Dstdout.encoding=UTF-8",
         "-Dstderr.encoding=UTF-8",
         "-Duser.language=en",
         "-Duser.country=US"
     )
+    if (targetJavaVersion >= 24) {
+        jvmArgs("--sun-misc-unsafe-memory-access=allow")
+    }
     systemProperties(
         System.getProperties().stringPropertyNames()
             .filter { it.startsWith("top.ceroxe.rt.") }
@@ -204,6 +209,7 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanSceneResidencySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSceneResidencySelfTest",
     "coreVulkanSceneResidencyFlightRecorderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSceneResidencyFlightRecorderSelfTest",
     "coreVulkanGpuSceneAbiSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneAbiSelfTest",
+    "coreVulkanGpuSceneAbiPropertySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneAbiPropertySelfTest",
     "coreVulkanFrameUniformPackerSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameUniformPackerSelfTest",
     "coreVulkanFrameFlightRecorderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameFlightRecorderSelfTest",
     "coreGpuSceneDescriptorResourcesSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuSceneDescriptorResourcesSelfTest",

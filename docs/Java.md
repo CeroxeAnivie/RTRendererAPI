@@ -1,12 +1,12 @@
 # Java 开发指南
 
-RTRendererAPI 适合嵌入 Java 25 桌面或引擎进程。普通调用方只需要理解场景 revision、帧 sequence 和资源生命周期；Vulkan external memory、semaphore、queue-family ownership 等细节被隔离在显式专家扩展中。
+RTRendererAPI 适合嵌入 Java 21 或更高版本的桌面或引擎进程。普通调用方只需要理解场景 revision、帧 sequence 和资源生命周期；Vulkan external memory、semaphore、queue-family ownership 等细节被隔离在显式专家扩展中。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:0.2.0`。只声明这一个依赖即可，Windows Vulkan 后端与 natives 会传递解析。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:0.3.0`。只声明这一个依赖即可，Windows Vulkan 后端与 natives 会传递解析。
 
 ## 最小调用
 
-`RendererBootstrap.open()` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。当前发布只接受 Windows 10+、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 25。
+`RendererBootstrap.open()` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。当前发布只接受 Windows 10+、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 21 或更高版本。
 
 ```java
 try (RayTracingRenderer renderer = RendererBootstrap.open()) {
@@ -60,7 +60,9 @@ MeshAsset mesh = MeshAsset.triangles(
         material.id()
 );
 
-SceneInstance instance = SceneInstance.builder(4L, mesh.id()).build();
+SceneInstance instance = SceneInstance.builder(4L, mesh.id())
+        .lightmapCoordinates(240, 240)
+        .build();
 SceneLight light = SceneLight.directional(5L, -0.4F, -1.0F, -0.2F)
         .intensity(3.0F)
         .build();

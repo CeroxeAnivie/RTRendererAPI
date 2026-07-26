@@ -39,14 +39,23 @@ public final class VulkanGpuSceneShaderSelfTest {
 
    private static void verifyForwardParityContract() {
       String common = read("assets/rtrenderer/shaders/gpuscene/gpuscene_common.glsl");
-      require(common.contains("gsTriangleLightmapModulatedColor"), "forward parity helper must remain explicit");
+      require(common.contains("gsInstanceLightmapCoordinate(uint instanceSlot)")
+              && common.contains("GPU_SCENE_INSTANCE_PACKED_LIGHT_WORD")
+              && common.contains("gsSampleLightmap(gsInstanceLightmapCoordinate(instanceSlot))"),
+              "meshes without vertex lightmap coordinates must sample the instance fallback");
       require(common.contains("gsTriangleTextureFootprint") && common.contains("gsSampleTextureFootprint") && common.contains("gsSampleTextureLod"), "terrain texture sampling must expose one shared footprint/LOD path");
       require(common.contains("GPU_SCENE_FRAME_TEXTURE_MINIFICATION_MODE_WORD"), "frame texture filtering policy is not visible to the shader");
       require(common.contains("GPU_SCENE_FRAME_MAX_ANISOTROPY_WORD") && common.contains("major UV derivative"), "anisotropic filtering must use the bounded major-axis gather path");
       require(common.contains("gsSampleLightmap(gsLightmapCoordinate(meshBase, indices.x))") && common.contains("gsSampleLightmap(gsLightmapCoordinate(meshBase, indices.y))") && common.contains("gsSampleLightmap(gsLightmapCoordinate(meshBase, indices.z))"), "forward parity must sample lightmap independently for all three vertices");
       require(common.contains("return c0 * barycentrics.x + c1 * barycentrics.y + c2 * barycentrics.z"), "forward parity must interpolate sampled vertex products");
-      require(read("assets/rtrenderer/shaders/gpuscene/gpuscene.rchit").contains("gsTriangleLightmapModulatedColor(meshBase, indices, barycentrics)") && read("assets/rtrenderer/shaders/gpuscene/gpuscene.rahit").contains("gsTriangleLightmapModulatedColor(meshBase, indices, barycentrics)"), "closest-hit and any-hit must share the same forward-parity vertex product");
-      require(read("assets/rtrenderer/shaders/gpuscene/gpuscene.rchit").contains("gsSampleTextureFootprint") && read("assets/rtrenderer/shaders/gpuscene/gpuscene.rahit").contains("gsSampleTextureFootprint"), "closest-hit and any-hit must share the same texture footprint sampler");
+      String closestHit = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rchit");
+      String anyHit = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rahit");
+      require(closestHit.contains("gsTriangleLightmapModulatedColor(")
+              && closestHit.contains("barycentrics, gl_InstanceCustomIndexEXT")
+              && anyHit.contains("gsTriangleLightmapModulatedColor(")
+              && anyHit.contains("barycentrics, gl_InstanceCustomIndexEXT"),
+              "closest-hit and any-hit must pass the instance slot to the shared lightmap path");
+      require(closestHit.contains("gsSampleTextureFootprint") && anyHit.contains("gsSampleTextureFootprint"), "closest-hit and any-hit must share the same texture footprint sampler");
       String raygen = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rgen");
       require(raygen.contains("RTRENDERER_LINEAR_HDR_OUTPUT") && raygen.contains("rgba16f") && raygen.contains("accumulated += radiance"), "HDR output must retain untonemapped linear radiance in RGBA16F");
       require(raygen.contains("GPU_SCENE_FRAME_SAMPLE_COUNT_WORD") && raygen.contains("gsSubpixelOffset") && raygen.contains("sampleIndex < 8u"), "deterministic bounded anti-aliasing loop is missing");
