@@ -33,7 +33,7 @@ jobs:
           java-version: '21'
           cache: gradle
       - name: Configure Gradle
-        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92
         with:
           validate-wrappers: true
       - name: Run strict release acceptance
