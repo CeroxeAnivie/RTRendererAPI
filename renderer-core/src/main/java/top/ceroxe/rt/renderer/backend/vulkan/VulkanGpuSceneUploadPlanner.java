@@ -56,27 +56,43 @@ final class VulkanGpuSceneUploadPlanner {
         for (VulkanGpuSceneMemory.MeshUpload upload : placements.meshUploads()) {
             MeshAsset mesh = upload.mesh();
             VulkanGpuSceneAbi.GeometryPlacement placement = upload.placement();
+            VulkanSceneResidency.MeshUpdate update = changes.meshUpdates().get(mesh.id());
             meshPlacements.put(mesh.id(), placement);
-            builder.add(Target.POSITIONS, placement.positionBytes(), floats(mesh.positions()), mesh.vertexCount());
-            addOptional(builder, Target.NORMALS, placement.normalBytes(), mesh.normals(), mesh.vertexCount());
-            addOptional(builder, Target.TANGENTS, placement.tangentBytes(), mesh.tangents(), mesh.vertexCount());
-            addOptional(builder, Target.TEXTURE_COORDINATES, placement.textureCoordinateBytes(),
-                    mesh.textureCoordinates(), mesh.vertexCount());
-            if (placement.colorBytes() >= 0L) {
+            if (update.dirty(VulkanSceneResidency.MeshDirtyMask.POSITIONS)) {
+                builder.add(Target.POSITIONS, placement.positionBytes(), floats(mesh.positions()), mesh.vertexCount());
+            }
+            if (update.dirty(VulkanSceneResidency.MeshDirtyMask.NORMALS)) {
+                addOptional(builder, Target.NORMALS, placement.normalBytes(), mesh.normals(), mesh.vertexCount());
+            }
+            if (update.dirty(VulkanSceneResidency.MeshDirtyMask.TANGENTS)) {
+                addOptional(builder, Target.TANGENTS, placement.tangentBytes(), mesh.tangents(), mesh.vertexCount());
+            }
+            if (update.dirty(VulkanSceneResidency.MeshDirtyMask.TEXTURE_COORDINATES)) {
+                addOptional(builder, Target.TEXTURE_COORDINATES, placement.textureCoordinateBytes(),
+                        mesh.textureCoordinates(), mesh.vertexCount());
+            }
+            if (update.dirty(VulkanSceneResidency.MeshDirtyMask.COLORS) && placement.colorBytes() >= 0L) {
                 builder.add(Target.COLORS, placement.colorBytes(), ints(mesh.vertexColorsRgba8()), mesh.vertexCount());
             }
-            addOptional(
-                    builder,
-                    Target.LIGHTMAP_COORDINATES,
-                    placement.lightmapCoordinateBytes(),
-                    mesh.lightmapCoordinates(),
-                    mesh.vertexCount()
-            );
-            builder.add(Target.INDICES, placement.indexBytes(), ints(mesh.triangleIndices()), mesh.triangleCount());
-            builder.add(Target.TRIANGLE_MATERIAL_SLOTS, placement.triangleMaterialSlotBytes(),
-                    resolvedSlots(mesh.triangleMaterialIds(), slots::materialSlot), mesh.triangleCount());
+            if (update.dirty(VulkanSceneResidency.MeshDirtyMask.LIGHTMAP_COORDINATES)) {
+                addOptional(
+                        builder,
+                        Target.LIGHTMAP_COORDINATES,
+                        placement.lightmapCoordinateBytes(),
+                        mesh.lightmapCoordinates(),
+                        mesh.vertexCount()
+                );
+            }
+            if (update.dirty(VulkanSceneResidency.MeshDirtyMask.INDICES)) {
+                builder.add(Target.INDICES, placement.indexBytes(), ints(mesh.triangleIndices()), mesh.triangleCount());
+            }
+            if (update.dirty(VulkanSceneResidency.MeshDirtyMask.TRIANGLE_MATERIALS)) {
+                builder.add(Target.TRIANGLE_MATERIAL_SLOTS, placement.triangleMaterialSlotBytes(),
+                        resolvedSlots(mesh.triangleMaterialIds(), slots::materialSlot), mesh.triangleCount());
+            }
         }
         for (StableIdentitySlots.SlotWrite<MeshAsset> write : changes.meshes().writes()) {
+            if (changes.meshUpdates().get(write.id()).dirtyMask() == 0) continue;
             VulkanGpuSceneAbi.GeometryPlacement placement = meshPlacements.get(write.id());
             if (placement == null) throw missingPlacement("mesh", write.id());
             builder.add(Target.MESH_RECORDS, recordOffset(write.slot(), VulkanGpuSceneAbi.MESH_RECORD_WORDS),
@@ -189,25 +205,114 @@ final class VulkanGpuSceneUploadPlanner {
         LIGHT_RECORDS
     }
 
-    record Chunk(Target target, long targetOffsetBytes, byte[] payload, int logicalRecords) {
-        Chunk {
-            target = Objects.requireNonNull(target, "target");
+    /**
+     * Immutable logical copy range backed by planner-owned payload segments.
+     *
+     * <p>Segments are never exposed to production consumers. Adjacent records can therefore be
+     * coalesced by joining segment ownership rather than repeatedly reallocating and copying an
+     * ever-growing byte array. The transfer planner performs the only hot-path materialization,
+     * directly into its final staging allocation.</p>
+     */
+    static final class Chunk {
+        private final Target target;
+        private final long targetOffsetBytes;
+        private final List<byte[]> payloadSegments;
+        private final int byteCount;
+        private final int logicalRecords;
+
+        Chunk(Target target, long targetOffsetBytes, byte[] payload, int logicalRecords) {
+            this(target, targetOffsetBytes, List.of(
+                    Objects.requireNonNull(payload, "payload").clone()
+            ), payload.length, logicalRecords);
+        }
+
+        private Chunk(
+                Target target,
+                long targetOffsetBytes,
+                List<byte[]> payloadSegments,
+                int byteCount,
+                int logicalRecords
+        ) {
+            this.target = Objects.requireNonNull(target, "target");
             if (targetOffsetBytes < 0L || (targetOffsetBytes & 3L) != 0L || logicalRecords <= 0) {
                 throw new IllegalArgumentException("GPUScene upload chunk offset or record count is invalid");
             }
-            payload = Objects.requireNonNull(payload, "payload").clone();
-            if (payload.length == 0 || (payload.length & 3) != 0) {
+            if (byteCount <= 0 || (byteCount & 3) != 0) {
                 throw new IllegalArgumentException("GPUScene upload payload must contain aligned words");
+            }
+            this.targetOffsetBytes = targetOffsetBytes;
+            this.payloadSegments = List.copyOf(Objects.requireNonNull(payloadSegments, "payloadSegments"));
+            int measuredBytes = 0;
+            for (byte[] segment : this.payloadSegments) {
+                byte[] checked = Objects.requireNonNull(segment, "payload segment");
+                if (checked.length == 0 || (checked.length & 3) != 0) {
+                    throw new IllegalArgumentException("GPUScene upload payload segment must contain aligned words");
+                }
+                measuredBytes = Math.addExact(measuredBytes, checked.length);
+            }
+            if (measuredBytes != byteCount) {
+                throw new IllegalArgumentException("GPUScene upload payload byte count is inconsistent");
+            }
+            this.byteCount = byteCount;
+            this.logicalRecords = logicalRecords;
+        }
+
+        private static Chunk owned(
+                Target target,
+                long targetOffsetBytes,
+                byte[] payload,
+                int logicalRecords
+        ) {
+            return new Chunk(target, targetOffsetBytes, List.of(payload), payload.length, logicalRecords);
+        }
+
+        private static Chunk ownedSegments(
+                Target target,
+                long targetOffsetBytes,
+                List<byte[]> payloadSegments,
+                int byteCount,
+                int logicalRecords
+        ) {
+            return new Chunk(target, targetOffsetBytes, payloadSegments, byteCount, logicalRecords);
+        }
+
+        Target target() {
+            return target;
+        }
+
+        long targetOffsetBytes() {
+            return targetOffsetBytes;
+        }
+
+        int logicalRecords() {
+            return logicalRecords;
+        }
+
+        int byteCount() {
+            return byteCount;
+        }
+
+        byte[] payload() {
+            byte[] materialized = new byte[byteCount];
+            copyPayloadTo(materialized, 0);
+            return materialized;
+        }
+
+        void copyPayloadTo(byte[] destination, int destinationOffset) {
+            Objects.requireNonNull(destination, "destination");
+            if (destinationOffset < 0 || destinationOffset > destination.length
+                    || byteCount > destination.length - destinationOffset) {
+                throw new IndexOutOfBoundsException("GPUScene staging destination range is invalid");
+            }
+            int offset = destinationOffset;
+            for (byte[] segment : payloadSegments) {
+                System.arraycopy(segment, 0, destination, offset, segment.length);
+                offset += segment.length;
             }
         }
 
-        @Override
-        public byte[] payload() {
-            return payload.clone();
-        }
-
         long endOffsetBytes() {
-            return Math.addExact(targetOffsetBytes, payload.length);
+            return Math.addExact(targetOffsetBytes, byteCount);
         }
     }
 
@@ -233,40 +338,64 @@ final class VulkanGpuSceneUploadPlanner {
         }
 
         private void add(Target target, long offset, byte[] payload, int logicalRecords) {
-            chunks.add(new Chunk(target, offset, payload, logicalRecords));
+            chunks.add(Chunk.owned(target, offset, payload, logicalRecords));
         }
 
         private Plan build() {
             chunks.sort(Comparator.comparing(Chunk::target).thenComparingLong(Chunk::targetOffsetBytes));
             ArrayList<Chunk> coalesced = new ArrayList<>(chunks.size());
+            ChunkAccumulator accumulator = null;
             for (Chunk chunk : chunks) {
-                if (!coalesced.isEmpty()) {
-                    Chunk previous = coalesced.get(coalesced.size() - 1);
-                    if (previous.target() == chunk.target()
-                            && previous.endOffsetBytes() == chunk.targetOffsetBytes()) {
-                        byte[] merged = new byte[Math.addExact(previous.payload.length, chunk.payload.length)];
-                        System.arraycopy(previous.payload, 0, merged, 0, previous.payload.length);
-                        System.arraycopy(chunk.payload, 0, merged, previous.payload.length, chunk.payload.length);
-                        coalesced.set(coalesced.size() - 1, new Chunk(
-                                chunk.target(), previous.targetOffsetBytes(), merged,
-                                Math.addExact(previous.logicalRecords(), chunk.logicalRecords())
-                        ));
-                        continue;
-                    }
-                    if (previous.target() == chunk.target()
-                            && previous.endOffsetBytes() > chunk.targetOffsetBytes()) {
-                        throw new IllegalStateException("overlapping GPUScene upload chunks for " + chunk.target());
-                    }
+                if (accumulator == null) {
+                    accumulator = new ChunkAccumulator(chunk);
+                    continue;
                 }
-                coalesced.add(chunk);
+                if (accumulator.target == chunk.target()
+                        && accumulator.endOffsetBytes == chunk.targetOffsetBytes()) {
+                    accumulator.append(chunk);
+                    continue;
+                }
+                if (accumulator.target == chunk.target()
+                        && accumulator.endOffsetBytes > chunk.targetOffsetBytes()) {
+                    throw new IllegalStateException("overlapping GPUScene upload chunks for " + chunk.target());
+                }
+                coalesced.add(accumulator.finish());
+                accumulator = new ChunkAccumulator(chunk);
             }
+            if (accumulator != null) coalesced.add(accumulator.finish());
             long bytes = 0L;
             int records = 0;
             for (Chunk chunk : coalesced) {
-                bytes = Math.addExact(bytes, chunk.payload.length);
+                bytes = Math.addExact(bytes, chunk.byteCount());
                 records = Math.addExact(records, chunk.logicalRecords());
             }
             return new Plan(revision, coalesced, bytes, records);
+        }
+    }
+
+    private static final class ChunkAccumulator {
+        private final Target target;
+        private final long targetOffsetBytes;
+        private final ArrayList<byte[]> segments = new ArrayList<>();
+        private long endOffsetBytes;
+        private int byteCount;
+        private int logicalRecords;
+
+        private ChunkAccumulator(Chunk first) {
+            target = first.target;
+            targetOffsetBytes = first.targetOffsetBytes;
+            append(first);
+        }
+
+        private void append(Chunk chunk) {
+            segments.addAll(chunk.payloadSegments);
+            byteCount = Math.addExact(byteCount, chunk.byteCount);
+            logicalRecords = Math.addExact(logicalRecords, chunk.logicalRecords);
+            endOffsetBytes = chunk.endOffsetBytes();
+        }
+
+        private Chunk finish() {
+            return Chunk.ownedSegments(target, targetOffsetBytes, segments, byteCount, logicalRecords);
         }
     }
 }

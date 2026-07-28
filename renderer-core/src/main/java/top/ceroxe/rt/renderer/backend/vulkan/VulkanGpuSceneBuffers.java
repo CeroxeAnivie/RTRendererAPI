@@ -36,6 +36,7 @@ final class VulkanGpuSceneBuffers implements VulkanGpuSceneTransferQueue {
     private final ArrayList<RetiredBuffer> retired = new ArrayList<>();
 
     private Pending pending;
+    private RtGpuBuffer reusableStaging;
     private long activeRevision = -1L;
     private boolean closed;
 
@@ -178,12 +179,11 @@ final class VulkanGpuSceneBuffers implements VulkanGpuSceneTransferQueue {
                     targets.put(capacity.target(), current);
                 }
             }
-            byte[] stagingBytes = transfer.stagingBytes();
+            // The transfer plan owns this array until the pending fence completes; keeping the
+            // package-private view avoids a full batch clone immediately before native upload.
+            byte[] stagingBytes = transfer.stagingBytesForSubmit();
             if (stagingBytes.length > 0) {
-                staging = RtGpuBuffer.createHostVisibleUploadBuffer(
-                        device, allocator, stagingBytes.length,
-                        VK10.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, commands.stallTelemetry()
-                );
+                staging = acquireStaging(stagingBytes.length);
                 staging.writeBytes(stagingBytes);
                 RtGpuBuffer ownedStaging = staging;
                 submission = commands.submitTimedOneTimeAsync(
@@ -202,7 +202,7 @@ final class VulkanGpuSceneBuffers implements VulkanGpuSceneTransferQueue {
         } finally {
             if (!transferred) {
                 if (submission != null) submission.close();
-                if (staging != null) staging.close();
+                recycleStaging(staging);
                 closeNewTargets(targets, newlyAllocated, null);
             }
         }
@@ -212,7 +212,8 @@ final class VulkanGpuSceneBuffers implements VulkanGpuSceneTransferQueue {
         if (memoryBudget == null) {
             return;
         }
-        long allocationGrowthBytes = transfer.allocationGrowthBytes();
+        long reusableBytes = reusableStaging == null ? 0L : reusableStaging.sizeBytes();
+        long allocationGrowthBytes = transfer.allocationGrowthBytes(reusableBytes);
         VulkanMemoryBudgetPolicy.Admission admission = VulkanMemoryBudgetPolicy.evaluate(
                 Objects.requireNonNull(memoryBudget.get(), "memory budget snapshot"),
                 allocationGrowthBytes
@@ -287,7 +288,7 @@ final class VulkanGpuSceneBuffers implements VulkanGpuSceneTransferQueue {
 
     private void activate(Pending completed, long retireAfterEpoch) {
         if (completed.activated) throw new IllegalStateException("GPUScene transfer was already activated");
-        if (completed.staging != null) completed.staging.close();
+        recycleStaging(completed.staging);
         for (VulkanGpuSceneUploadPlanner.Target target : completed.newlyAllocated) {
             RtGpuBuffer successor = completed.targets.get(target);
             RtGpuBuffer previous = active.put(target, successor);
@@ -296,6 +297,32 @@ final class VulkanGpuSceneBuffers implements VulkanGpuSceneTransferQueue {
         activeRevision = completed.revision;
         completed.activated = true;
         pending = null;
+    }
+
+    private RtGpuBuffer acquireStaging(long requiredBytes) {
+        if (requiredBytes <= 0L) throw new IllegalArgumentException("staging byte count must be positive");
+        RtGpuBuffer available = reusableStaging;
+        if (available != null && available.sizeBytes() >= requiredBytes) {
+            reusableStaging = null;
+            return available;
+        }
+        if (available != null) {
+            available.close();
+            reusableStaging = null;
+        }
+        return RtGpuBuffer.createHostVisibleUploadBuffer(
+                device, allocator, requiredBytes,
+                VK10.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, commands.stallTelemetry()
+        );
+    }
+
+    private void recycleStaging(RtGpuBuffer staging) {
+        if (staging == null) return;
+        if (reusableStaging == null) {
+            reusableStaging = staging;
+        } else {
+            staging.close();
+        }
     }
 
     private void recordTransfer(
@@ -394,6 +421,14 @@ final class VulkanGpuSceneBuffers implements VulkanGpuSceneTransferQueue {
             }
             failure = closeNewTargets(pending.targets, pending.newlyAllocated, failure);
             pending = null;
+        }
+        if (reusableStaging != null) {
+            try {
+                reusableStaging.close();
+            } catch (RuntimeException ex) {
+                failure = collect(failure, ex);
+            }
+            reusableStaging = null;
         }
         for (RtGpuBuffer buffer : active.values()) {
             try {

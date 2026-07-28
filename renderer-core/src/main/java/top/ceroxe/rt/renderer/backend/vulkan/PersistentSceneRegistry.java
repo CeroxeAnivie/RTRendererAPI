@@ -29,6 +29,9 @@ final class PersistentSceneRegistry {
     private final Long2ObjectOpenHashMap<MeshAsset> meshes = new Long2ObjectOpenHashMap<>();
     private final Long2ObjectOpenHashMap<SceneInstance> instances = new Long2ObjectOpenHashMap<>();
     private final Long2ObjectOpenHashMap<SceneLight> lights = new Long2ObjectOpenHashMap<>();
+    private final ReverseReferences textureMaterials = new ReverseReferences();
+    private final ReverseReferences materialMeshes = new ReverseReferences();
+    private final ReverseReferences meshInstances = new ReverseReferences();
 
     private long revision = -1L;
 
@@ -55,31 +58,14 @@ final class PersistentSceneRegistry {
         return current.size() - removals.size() + added;
     }
 
-    private static <T> void requireOptionalReference(
+    private static <T> boolean referenceExists(
             long id,
             Long2ObjectOpenHashMap<T> current,
             LongOpenHashSet upserts,
             LongOpenHashSet removals,
-            boolean reset,
-            String label
+            boolean reset
     ) {
-        if (id >= 0L) {
-            requireReference(id, current, upserts, removals, reset, label);
-        }
-    }
-
-    private static <T> void requireReference(
-            long id,
-            Long2ObjectOpenHashMap<T> current,
-            LongOpenHashSet upserts,
-            LongOpenHashSet removals,
-            boolean reset,
-            String label
-    ) {
-        boolean exists = upserts.contains(id) || (!reset && !removals.contains(id) && current.containsKey(id));
-        if (!exists) {
-            throw new SceneValidationException(label + " references missing id " + id);
-        }
+        return upserts.contains(id) || (!reset && !removals.contains(id) && current.containsKey(id));
     }
 
     private static <T> void removeAll(Long2ObjectOpenHashMap<T> target, LongBuffer ids) {
@@ -123,6 +109,7 @@ final class PersistentSceneRegistry {
             requireExistingRemovals(checked.removals());
         }
         validateProspectiveGeneration(checked, pending);
+        ReferenceDelta referenceDelta = prepareReferenceDelta(checked, pending);
 
         SceneState prospectiveState = checked.reset()
                 ? new SceneState(
@@ -141,7 +128,7 @@ final class PersistentSceneRegistry {
                 prospectiveSize(instances, pending.instanceUpserts, pending.instanceRemovals),
                 prospectiveSize(lights, pending.lightUpserts, pending.lightRemovals)
         );
-        return new PreparedMutation(this, revision, checked, prospectiveState);
+        return new PreparedMutation(this, revision, checked, prospectiveState, referenceDelta);
     }
 
     synchronized void validate(PreparedMutation mutation) {
@@ -158,6 +145,7 @@ final class PersistentSceneRegistry {
                             + ", actual=" + revision
             );
         }
+        checked.referenceDelta.validate(textureMaterials, materialMeshes, meshInstances);
     }
 
     synchronized SceneState commit(PreparedMutation mutation) {
@@ -173,6 +161,7 @@ final class PersistentSceneRegistry {
         SceneTransaction transaction = checked.transaction;
         if (transaction.reset()) {
             clearMaps();
+            clearReverseReferences();
         }
         removeAll(instances, transaction.removals().instanceIds());
         removeAll(lights, transaction.removals().lightIds());
@@ -185,6 +174,7 @@ final class PersistentSceneRegistry {
         putAll(meshes, transaction.upserts().meshes(), MeshAsset::id);
         putAll(instances, transaction.upserts().instances(), SceneInstance::id);
         putAll(lights, transaction.upserts().lights(), SceneLight::id);
+        checked.referenceDelta.commit(textureMaterials, materialMeshes, meshInstances);
         revision = transaction.revision();
         checked.committed = true;
         return checked.prospectiveState;
@@ -223,64 +213,207 @@ final class PersistentSceneRegistry {
 
     private void validateProspectiveGeneration(SceneTransaction transaction, PendingIds pending) {
         if (!transaction.reset()) {
-            for (MaterialAsset material : materials.values()) {
-                if (!pending.materialUpserts.contains(material.id())
-                        && !pending.materialRemovals.contains(material.id())) {
-                    validateMaterial(material, transaction, pending);
-                }
-            }
-            for (MeshAsset mesh : meshes.values()) {
-                if (!pending.meshUpserts.contains(mesh.id()) && !pending.meshRemovals.contains(mesh.id())) {
-                    validateMesh(mesh, transaction, pending);
-                }
-            }
-            for (SceneInstance instance : instances.values()) {
-                if (!pending.instanceUpserts.contains(instance.id())
-                        && !pending.instanceRemovals.contains(instance.id())) {
-                    validateInstance(instance, transaction, pending);
-                }
-            }
+            requireNoRetainedDependents(
+                    transaction.removals().textureIds(), textureMaterials,
+                    pending.materialUpserts, pending.materialRemovals, "texture", "material"
+            );
+            requireNoRetainedDependents(
+                    transaction.removals().materialIds(), materialMeshes,
+                    pending.meshUpserts, pending.meshRemovals, "material", "mesh"
+            );
+            requireNoRetainedDependents(
+                    transaction.removals().meshIds(), meshInstances,
+                    pending.instanceUpserts, pending.instanceRemovals, "mesh", "instance"
+            );
         }
         transaction.upserts().materials().forEach(material -> validateMaterial(material, transaction, pending));
         transaction.upserts().meshes().forEach(mesh -> validateMesh(mesh, transaction, pending));
         transaction.upserts().instances().forEach(instance -> validateInstance(instance, transaction, pending));
     }
 
+    private static void requireNoRetainedDependents(
+            LongBuffer removedTargets,
+            ReverseReferences references,
+            LongOpenHashSet dependentUpserts,
+            LongOpenHashSet dependentRemovals,
+            String targetLabel,
+            String dependentLabel
+    ) {
+        while (removedTargets.hasRemaining()) {
+            long targetId = removedTargets.get();
+            LongOpenHashSet dependents = references.dependents(targetId);
+            if (dependents == null) continue;
+            for (long dependentId : dependents) {
+                if (!dependentUpserts.contains(dependentId) && !dependentRemovals.contains(dependentId)) {
+                    // Diagnostics are deliberately constructed only on the rejected cold path.
+                    throw new SceneValidationException(
+                            targetLabel + " " + targetId + " is still referenced by "
+                                    + dependentLabel + " " + dependentId
+                    );
+                }
+            }
+        }
+    }
+
     private void validateMaterial(MaterialAsset material, SceneTransaction transaction, PendingIds pending) {
-        requireOptionalReference(
-                material.baseColorTextureId(), textures, pending.textureUpserts, pending.textureRemovals,
-                transaction.reset(), "material " + material.id() + " baseColorTexture"
+        requireTextureReference(material, material.baseColorTextureId(), "baseColorTexture", transaction, pending);
+        requireTextureReference(material, material.normalTextureId(), "normalTexture", transaction, pending);
+        requireTextureReference(
+                material, material.metallicRoughnessTextureId(), "metallicRoughnessTexture", transaction, pending
         );
-        requireOptionalReference(
-                material.normalTextureId(), textures, pending.textureUpserts, pending.textureRemovals,
-                transaction.reset(), "material " + material.id() + " normalTexture"
-        );
-        requireOptionalReference(
-                material.metallicRoughnessTextureId(), textures,
-                pending.textureUpserts, pending.textureRemovals,
-                transaction.reset(), "material " + material.id() + " metallicRoughnessTexture"
-        );
-        requireOptionalReference(
-                material.emissiveTextureId(), textures, pending.textureUpserts, pending.textureRemovals,
-                transaction.reset(), "material " + material.id() + " emissiveTexture"
-        );
+        requireTextureReference(material, material.emissiveTextureId(), "emissiveTexture", transaction, pending);
+    }
+
+    private void requireTextureReference(
+            MaterialAsset material,
+            long textureId,
+            String role,
+            SceneTransaction transaction,
+            PendingIds pending
+    ) {
+        if (textureId >= 0L && !referenceExists(
+                textureId, textures, pending.textureUpserts, pending.textureRemovals, transaction.reset()
+        )) {
+            throw new SceneValidationException(
+                    "material " + material.id() + " " + role + " references missing id " + textureId
+            );
+        }
     }
 
     private void validateMesh(MeshAsset mesh, SceneTransaction transaction, PendingIds pending) {
         LongBuffer materialIds = mesh.triangleMaterialIds();
         while (materialIds.hasRemaining()) {
-            requireReference(
-                    materialIds.get(), materials, pending.materialUpserts, pending.materialRemovals,
-                    transaction.reset(), "mesh " + mesh.id() + " material"
-            );
+            long materialId = materialIds.get();
+            if (!referenceExists(
+                    materialId, materials, pending.materialUpserts, pending.materialRemovals, transaction.reset()
+            )) {
+                throw new SceneValidationException(
+                        "mesh " + mesh.id() + " material references missing id " + materialId
+                );
+            }
         }
     }
 
     private void validateInstance(SceneInstance instance, SceneTransaction transaction, PendingIds pending) {
-        requireReference(
-                instance.meshAssetId(), meshes, pending.meshUpserts, pending.meshRemovals,
-                transaction.reset(), "instance " + instance.id() + " mesh"
+        if (!referenceExists(
+                instance.meshAssetId(), meshes, pending.meshUpserts, pending.meshRemovals, transaction.reset()
+        )) {
+            throw new SceneValidationException(
+                    "instance " + instance.id() + " mesh references missing id " + instance.meshAssetId()
+            );
+        }
+    }
+
+    private ReferenceDelta prepareReferenceDelta(SceneTransaction transaction, PendingIds pending) {
+        if (transaction.reset()) {
+            return new ReferenceDelta(
+                    materialReferenceChanges(transaction.upserts().materials(), true, pending),
+                    meshReferenceChanges(transaction.upserts().meshes(), true, pending),
+                    instanceReferenceChanges(transaction.upserts().instances(), true, pending)
+            );
+        }
+        return new ReferenceDelta(
+                materialReferenceChanges(transaction.upserts().materials(), false, pending),
+                meshReferenceChanges(transaction.upserts().meshes(), false, pending),
+                instanceReferenceChanges(transaction.upserts().instances(), false, pending)
         );
+    }
+
+    private List<ReferenceChange> materialReferenceChanges(
+            Collection<MaterialAsset> upserts,
+            boolean reset,
+            PendingIds pending
+    ) {
+        ArrayList<ReferenceChange> changes = new ArrayList<>(upserts.size() + pending.materialRemovals.size());
+        for (MaterialAsset material : upserts) {
+            MaterialAsset previous = reset ? null : materials.get(material.id());
+            addReferenceChange(changes, material.id(), textureReferences(previous), textureReferences(material));
+        }
+        if (!reset) {
+            for (long id : pending.materialRemovals) {
+                addReferenceChange(changes, id, textureReferences(materials.get(id)), new long[0]);
+            }
+        }
+        return List.copyOf(changes);
+    }
+
+    private List<ReferenceChange> meshReferenceChanges(
+            Collection<MeshAsset> upserts,
+            boolean reset,
+            PendingIds pending
+    ) {
+        ArrayList<ReferenceChange> changes = new ArrayList<>(upserts.size() + pending.meshRemovals.size());
+        for (MeshAsset mesh : upserts) {
+            MeshAsset previous = reset ? null : meshes.get(mesh.id());
+            addReferenceChange(changes, mesh.id(), materialReferences(previous), materialReferences(mesh));
+        }
+        if (!reset) {
+            for (long id : pending.meshRemovals) {
+                addReferenceChange(changes, id, materialReferences(meshes.get(id)), new long[0]);
+            }
+        }
+        return List.copyOf(changes);
+    }
+
+    private List<ReferenceChange> instanceReferenceChanges(
+            Collection<SceneInstance> upserts,
+            boolean reset,
+            PendingIds pending
+    ) {
+        ArrayList<ReferenceChange> changes = new ArrayList<>(upserts.size() + pending.instanceRemovals.size());
+        for (SceneInstance instance : upserts) {
+            SceneInstance previous = reset ? null : instances.get(instance.id());
+            addReferenceChange(changes, instance.id(), meshReferences(previous), meshReferences(instance));
+        }
+        if (!reset) {
+            for (long id : pending.instanceRemovals) {
+                addReferenceChange(changes, id, meshReferences(instances.get(id)), new long[0]);
+            }
+        }
+        return List.copyOf(changes);
+    }
+
+    private static void addReferenceChange(
+            List<ReferenceChange> changes,
+            long dependentId,
+            long[] previousTargets,
+            long[] nextTargets
+    ) {
+        if (!Arrays.equals(previousTargets, nextTargets)) {
+            changes.add(new ReferenceChange(dependentId, previousTargets, nextTargets));
+        }
+    }
+
+    private static long[] textureReferences(MaterialAsset material) {
+        if (material == null) return new long[0];
+        LongOpenHashSet references = new LongOpenHashSet(4);
+        addOptionalReference(references, material.baseColorTextureId());
+        addOptionalReference(references, material.normalTextureId());
+        addOptionalReference(references, material.metallicRoughnessTextureId());
+        addOptionalReference(references, material.emissiveTextureId());
+        return sortedReferences(references);
+    }
+
+    private static long[] materialReferences(MeshAsset mesh) {
+        if (mesh == null) return new long[0];
+        LongOpenHashSet references = new LongOpenHashSet();
+        LongBuffer materialIds = mesh.triangleMaterialIds();
+        while (materialIds.hasRemaining()) references.add(materialIds.get());
+        return sortedReferences(references);
+    }
+
+    private static long[] meshReferences(SceneInstance instance) {
+        return instance == null ? new long[0] : new long[]{instance.meshAssetId()};
+    }
+
+    private static void addOptionalReference(LongOpenHashSet references, long identity) {
+        if (identity >= 0L) references.add(identity);
+    }
+
+    private static long[] sortedReferences(LongOpenHashSet references) {
+        long[] identities = references.toLongArray();
+        Arrays.sort(identities);
+        return identities;
     }
 
     private void clearMaps() {
@@ -291,23 +424,32 @@ final class PersistentSceneRegistry {
         textures.clear();
     }
 
+    private void clearReverseReferences() {
+        textureMaterials.clear();
+        materialMeshes.clear();
+        meshInstances.clear();
+    }
+
     static final class PreparedMutation {
         private final PersistentSceneRegistry owner;
         private final long baseRevision;
         private final SceneTransaction transaction;
         private final SceneState prospectiveState;
+        private final ReferenceDelta referenceDelta;
         private boolean committed;
 
         private PreparedMutation(
                 PersistentSceneRegistry owner,
                 long baseRevision,
                 SceneTransaction transaction,
-                SceneState prospectiveState
+                SceneState prospectiveState,
+                ReferenceDelta referenceDelta
         ) {
             this.owner = owner;
             this.baseRevision = baseRevision;
             this.transaction = transaction;
             this.prospectiveState = prospectiveState;
+            this.referenceDelta = Objects.requireNonNull(referenceDelta, "referenceDelta");
         }
 
         SceneTransaction transaction() {
@@ -316,6 +458,91 @@ final class PersistentSceneRegistry {
 
         SceneState prospectiveState() {
             return prospectiveState;
+        }
+    }
+
+    private static final class ReverseReferences {
+        private final Long2ObjectOpenHashMap<LongOpenHashSet> dependentsByTarget =
+                new Long2ObjectOpenHashMap<>();
+
+        private LongOpenHashSet dependents(long targetId) {
+            return dependentsByTarget.get(targetId);
+        }
+
+        private void replace(long dependentId, long[] previousTargets, long[] nextTargets) {
+            for (long targetId : previousTargets) {
+                LongOpenHashSet dependents = dependentsByTarget.get(targetId);
+                dependents.remove(dependentId);
+                if (dependents.isEmpty()) dependentsByTarget.remove(targetId);
+            }
+            for (long targetId : nextTargets) {
+                dependentsByTarget.computeIfAbsent(targetId, ignored -> new LongOpenHashSet()).add(dependentId);
+            }
+        }
+
+        private void clear() {
+            dependentsByTarget.clear();
+        }
+
+        private void validatePrevious(long dependentId, long[] previousTargets) {
+            for (long targetId : previousTargets) {
+                LongOpenHashSet dependents = dependentsByTarget.get(targetId);
+                if (dependents == null || !dependents.contains(dependentId)) {
+                    throw new IllegalStateException(
+                            "reverse scene reference is missing target " + targetId
+                                    + " for dependent " + dependentId
+                    );
+                }
+            }
+        }
+    }
+
+    private record ReferenceChange(long dependentId, long[] previousTargets, long[] nextTargets) {
+        private ReferenceChange {
+            if (dependentId < 0L) throw new IllegalArgumentException("dependent identity must not be negative");
+            previousTargets = Objects.requireNonNull(previousTargets, "previousTargets").clone();
+            nextTargets = Objects.requireNonNull(nextTargets, "nextTargets").clone();
+        }
+
+        private void commit(ReverseReferences references) {
+            references.replace(dependentId, previousTargets, nextTargets);
+        }
+
+        private void validate(ReverseReferences references) {
+            references.validatePrevious(dependentId, previousTargets);
+        }
+    }
+
+    private record ReferenceDelta(
+            List<ReferenceChange> materialTextures,
+            List<ReferenceChange> meshMaterials,
+            List<ReferenceChange> instanceMeshes
+    ) {
+        private ReferenceDelta {
+            materialTextures = List.copyOf(Objects.requireNonNull(materialTextures, "materialTextures"));
+            meshMaterials = List.copyOf(Objects.requireNonNull(meshMaterials, "meshMaterials"));
+            instanceMeshes = List.copyOf(Objects.requireNonNull(instanceMeshes, "instanceMeshes"));
+        }
+
+        private void commit(
+                ReverseReferences textureMaterials,
+                ReverseReferences materialMeshes,
+                ReverseReferences meshInstances
+        ) {
+            materialTextures.forEach(change -> change.commit(textureMaterials));
+            meshMaterials.forEach(change -> change.commit(materialMeshes));
+            instanceMeshes.forEach(change -> change.commit(meshInstances));
+        }
+
+
+        private void validate(
+                ReverseReferences textureMaterials,
+                ReverseReferences materialMeshes,
+                ReverseReferences meshInstances
+        ) {
+            materialTextures.forEach(change -> change.validate(textureMaterials));
+            meshMaterials.forEach(change -> change.validate(materialMeshes));
+            instanceMeshes.forEach(change -> change.validate(meshInstances));
         }
     }
 

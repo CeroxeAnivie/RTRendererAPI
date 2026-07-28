@@ -2,7 +2,7 @@
 
 本文区分“声明支持”和“已经实机验证”。只有对应操作系统、GPU、驱动和压力条件真实执行完整门禁，才能产生该组合的验证证据。
 
-## 0.3.0 支持边界
+## 0.3.1 支持边界
 
 | 维度                  | 声明支持                                                                    |
 |---------------------|-------------------------------------------------------------------------|
@@ -16,7 +16,7 @@
 | Consumer completion | `CpuCompleted`；以及当前 lease capability 协商接受的 Win32 external semaphore     |
 | 显存治理                | `VK_EXT_memory_budget` 可用时采用驱动预算；VMA allocation 强制 within-budget        |
 
-以下平台和后端不在 0.3.0 支持范围：AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件渲染器。
+以下平台和后端不在 0.3.1 支持范围：AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件渲染器。
 
 ## 当前实机证据
 

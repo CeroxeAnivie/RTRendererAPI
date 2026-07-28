@@ -1,6 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import java.nio.LongBuffer;
 import java.util.*;
@@ -18,7 +19,7 @@ import java.util.function.ToLongFunction;
 final class VulkanRangeArena<T> {
     private final ToLongFunction<T> identityFunction;
     private final Long2ObjectOpenHashMap<Allocation> allocations = new Long2ObjectOpenHashMap<>();
-    private final NavigableMap<Long, Long> freeRanges = new TreeMap<>();
+    private NavigableMap<Long, Long> freeRanges = new TreeMap<>();
     private final ArrayList<RetiredRange> retiredRanges = new ArrayList<>();
 
     private long revision = -1L;
@@ -39,40 +40,43 @@ final class VulkanRangeArena<T> {
         }
         LongBuffer source = Objects.requireNonNull(removals, "removals");
         long[] result = new long[source.remaining()];
+        LongOpenHashSet unique = new LongOpenHashSet(result.length);
         for (int index = 0; index < result.length; index++) {
             long id = source.get();
             if (id < 0L) {
                 throw new IllegalArgumentException("arena removal id must not be negative");
             }
-            for (int previous = 0; previous < index; previous++) {
-                if (result[previous] == id) {
-                    throw new IllegalArgumentException("duplicate arena removal id " + id);
-                }
+            if (!unique.add(id)) {
+                throw new IllegalArgumentException("duplicate arena removal id " + id);
             }
             result[index] = id;
         }
         return result;
     }
 
-    private static boolean contains(long[] values, long value) {
-        for (long candidate : values) {
-            if (candidate == value) return true;
-        }
-        return false;
-    }
-
     private static Allocation allocate(NavigableMap<Long, Long> free, long highWater,
                                        long capacity, long alignment) {
-        for (Map.Entry<Long, Long> entry : new ArrayList<>(free.entrySet())) {
+        long selectedOffset = -1L;
+        long selectedRangeOffset = -1L;
+        long selectedRangeBytes = 0L;
+        for (Map.Entry<Long, Long> entry : free.entrySet()) {
             long start = alignUp(entry.getKey(), alignment);
             long end = Math.addExact(start, capacity);
             long rangeEnd = Math.addExact(entry.getKey(), entry.getValue());
             if (end <= rangeEnd) {
-                free.remove(entry.getKey());
-                addFreeRange(free, entry.getKey(), start - entry.getKey());
-                addFreeRange(free, end, rangeEnd - end);
-                return new Allocation(start, capacity);
+                selectedOffset = start;
+                selectedRangeOffset = entry.getKey();
+                selectedRangeBytes = entry.getValue();
+                break;
             }
+        }
+        if (selectedOffset >= 0L) {
+            long selectedEnd = Math.addExact(selectedOffset, capacity);
+            long rangeEnd = Math.addExact(selectedRangeOffset, selectedRangeBytes);
+            free.remove(selectedRangeOffset);
+            addFreeRange(free, selectedRangeOffset, selectedOffset - selectedRangeOffset);
+            addFreeRange(free, selectedEnd, rangeEnd - selectedEnd);
+            return new Allocation(selectedOffset, capacity);
         }
         long start = alignUp(highWater, alignment);
         addFreeRange(free, highWater, start - highWater);
@@ -142,18 +146,20 @@ final class VulkanRangeArena<T> {
             }
         }
 
+        if (!reset && ordered.isEmpty() && removedIds.length == 0) {
+            return new Prepared<>(
+                    this, revision, stateVersion, nextRevision,
+                    new Long2ObjectOpenHashMap<>(), List.of(), removedIds,
+                    null, highWater, liveBytes
+            );
+        }
+
         NavigableMap<Long, Long> workingFree = new TreeMap<>(freeRanges);
-        Long2ObjectOpenHashMap<Allocation> nextAllocations = new Long2ObjectOpenHashMap<>();
+        Long2ObjectOpenHashMap<Allocation> preparedAllocations = new Long2ObjectOpenHashMap<>(ordered.size());
         ArrayList<PlacementWrite<T>> writes = new ArrayList<>(ordered.size());
         long nextHighWater = highWater;
         long nextLiveBytes = reset ? 0L : liveBytes;
         if (!reset) {
-            for (var entry : allocations.long2ObjectEntrySet()) {
-                long identity = entry.getLongKey();
-                if (!contains(removedIds, identity) && !requestsById.containsKey(identity)) {
-                    nextAllocations.put(identity, entry.getValue());
-                }
-            }
             nextLiveBytes -= removedBytes(removedIds);
         }
 
@@ -175,12 +181,12 @@ final class VulkanRangeArena<T> {
                 nextLiveBytes = Math.subtractExact(nextLiveBytes, previous.capacityBytes());
                 nextLiveBytes = Math.addExact(nextLiveBytes, selected.capacityBytes());
             }
-            nextAllocations.put(id, selected);
+            preparedAllocations.put(id, selected);
         }
         return new Prepared<>(
                 this, revision, stateVersion, nextRevision,
-                Map.copyOf(nextAllocations), List.copyOf(writes), removedIds,
-                Map.copyOf(workingFree), nextHighWater, nextLiveBytes
+                preparedAllocations, List.copyOf(writes), removedIds,
+                workingFree, nextHighWater, nextLiveBytes
         );
     }
 
@@ -206,18 +212,17 @@ final class VulkanRangeArena<T> {
         Prepared<T> checked = Objects.requireNonNull(prepared, "prepared");
         checked.markCommitted();
         for (long id : checked.removedIds()) {
-            Allocation previous = allocations.get(id);
+            Allocation previous = allocations.remove(id);
             retire(previous, retireAfterEpoch);
         }
         for (PlacementWrite<T> write : checked.writes()) {
             if (write.previous() != null) {
                 retire(write.previous(), retireAfterEpoch);
             }
+            allocations.put(write.identity(), write.allocation());
         }
-        allocations.clear();
-        allocations.putAll(checked.nextAllocations());
-        freeRanges.clear();
-        freeRanges.putAll(checked.freeRanges());
+        NavigableMap<Long, Long> preparedFreeRanges = checked.takeFreeRanges();
+        if (preparedFreeRanges != null) freeRanges = preparedFreeRanges;
         highWater = checked.highWater();
         liveBytes = checked.liveBytes();
         revision = checked.revision();
@@ -322,22 +327,22 @@ final class VulkanRangeArena<T> {
         private final long baseRevision;
         private final long baseStateVersion;
         private final long revision;
-        private final Map<Long, Allocation> nextAllocations;
+        private final Long2ObjectOpenHashMap<Allocation> preparedAllocations;
         private final List<PlacementWrite<T>> writes;
         private final long[] removedIds;
-        private final Map<Long, Long> freeRanges;
+        private NavigableMap<Long, Long> freeRanges;
         private final long highWater;
         private final long liveBytes;
         private boolean committed;
 
         private Prepared(VulkanRangeArena<T> owner, long baseRevision, long baseStateVersion, long revision,
-                         Map<Long, Allocation> nextAllocations, List<PlacementWrite<T>> writes,
-                         long[] removedIds, Map<Long, Long> freeRanges, long highWater, long liveBytes) {
+                         Long2ObjectOpenHashMap<Allocation> preparedAllocations, List<PlacementWrite<T>> writes,
+                         long[] removedIds, NavigableMap<Long, Long> freeRanges, long highWater, long liveBytes) {
             this.owner = owner;
             this.baseRevision = baseRevision;
             this.baseStateVersion = baseStateVersion;
             this.revision = revision;
-            this.nextAllocations = nextAllocations;
+            this.preparedAllocations = preparedAllocations;
             this.writes = writes;
             this.removedIds = removedIds.clone();
             this.freeRanges = freeRanges;
@@ -362,7 +367,16 @@ final class VulkanRangeArena<T> {
         }
 
         Map<Long, Allocation> nextAllocations() {
-            return nextAllocations;
+            return Collections.unmodifiableMap(preparedAllocations);
+        }
+
+        Allocation prospectiveAllocation(long identity) {
+            Allocation prepared = preparedAllocations.get(identity);
+            if (prepared != null) return prepared;
+            for (long removedId : removedIds) {
+                if (removedId == identity) return null;
+            }
+            return owner.allocation(identity);
         }
 
         List<PlacementWrite<T>> writes() {
@@ -373,8 +387,10 @@ final class VulkanRangeArena<T> {
             return removedIds.clone();
         }
 
-        Map<Long, Long> freeRanges() {
-            return freeRanges;
+        private NavigableMap<Long, Long> takeFreeRanges() {
+            NavigableMap<Long, Long> transferred = freeRanges;
+            freeRanges = null;
+            return transferred;
         }
 
         long highWater() {

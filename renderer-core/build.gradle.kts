@@ -222,6 +222,7 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanGpuSceneUploadPlannerSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneUploadPlannerSelfTest",
     "coreVulkanGpuSceneTransferPlanSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneTransferPlanSelfTest",
     "coreVulkanGpuSceneSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneSelfTest",
+    "coreVulkanGpuSceneHeavySceneBenchmark" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneHeavySceneBenchmark",
     "coreVulkanRendererHostSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererHostSelfTest",
     "coreVulkanGpuFrameLeaseSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuFrameLeaseSelfTest",
     "coreVulkanTextOverlayRasterizerSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanTextOverlayRasterizerSelfTest",
@@ -234,6 +235,12 @@ contractSelfTests.forEach { (taskName, mainClassName) ->
         mainClassName,
         "Runs the independent renderer-core contract check $mainClassName."
     )
+}
+
+tasks.named<JavaExec>("coreVulkanGpuSceneHeavySceneBenchmark").configure {
+    providers.gradleProperty("gpuSceneHeavySceneJfr").orNull?.let { recordingPath ->
+        jvmArgs("-XX:StartFlightRecording=filename=$recordingPath,settings=profile,dumponexit=true")
+    }
 }
 
 tasks.register("rendererCoreContractGate") {

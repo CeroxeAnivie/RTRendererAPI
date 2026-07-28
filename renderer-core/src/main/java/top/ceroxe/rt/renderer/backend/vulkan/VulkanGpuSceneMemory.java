@@ -84,6 +84,16 @@ final class VulkanGpuSceneMemory {
         return writes.stream().map(StableIdentitySlots.SlotWrite::value).toList();
     }
 
+    private static List<MeshAsset> meshValues(
+            VulkanSceneResidency.SceneChangeSet changes,
+            int dirtyMask
+    ) {
+        return changes.meshes().writes().stream()
+                .filter(write -> changes.meshUpdates().get(write.id()).dirty(dirtyMask))
+                .map(StableIdentitySlots.SlotWrite::value)
+                .toList();
+    }
+
     private static <T> List<VulkanRangeArena.RangeRequest<T>> requests(
             List<T> values,
             ToLongFunction<T> bytes,
@@ -111,7 +121,7 @@ final class VulkanGpuSceneMemory {
     }
 
     private static long offset(VulkanRangeArena.Prepared<?> prepared, long identity) {
-        VulkanRangeArena.Allocation allocation = prepared.nextAllocations().get(identity);
+        VulkanRangeArena.Allocation allocation = prepared.prospectiveAllocation(identity);
         if (allocation == null) {
             throw new IllegalStateException("required GPUScene stream has no prepared allocation for " + identity);
         }
@@ -119,7 +129,7 @@ final class VulkanGpuSceneMemory {
     }
 
     private static long optionalOffset(VulkanRangeArena.Prepared<?> prepared, long identity) {
-        VulkanRangeArena.Allocation allocation = prepared.nextAllocations().get(identity);
+        VulkanRangeArena.Allocation allocation = prepared.prospectiveAllocation(identity);
         return allocation == null ? -1L : allocation.offsetBytes();
     }
 
@@ -132,6 +142,20 @@ final class VulkanGpuSceneMemory {
         VulkanSceneResidency.SceneChangeSet changes = Objects.requireNonNull(scene, "scene");
         List<TextureAsset> textureWrites = values(changes.textures().writes());
         List<MeshAsset> meshWrites = values(changes.meshes().writes());
+        List<MeshAsset> positionWrites = meshValues(changes, VulkanSceneResidency.MeshDirtyMask.POSITIONS);
+        List<MeshAsset> normalWrites = meshValues(changes, VulkanSceneResidency.MeshDirtyMask.NORMALS);
+        List<MeshAsset> tangentWrites = meshValues(changes, VulkanSceneResidency.MeshDirtyMask.TANGENTS);
+        List<MeshAsset> textureCoordinateWrites = meshValues(
+                changes, VulkanSceneResidency.MeshDirtyMask.TEXTURE_COORDINATES
+        );
+        List<MeshAsset> colorWrites = meshValues(changes, VulkanSceneResidency.MeshDirtyMask.COLORS);
+        List<MeshAsset> lightmapWrites = meshValues(
+                changes, VulkanSceneResidency.MeshDirtyMask.LIGHTMAP_COORDINATES
+        );
+        List<MeshAsset> indexWrites = meshValues(changes, VulkanSceneResidency.MeshDirtyMask.INDICES);
+        List<MeshAsset> materialSlotWrites = meshValues(
+                changes, VulkanSceneResidency.MeshDirtyMask.TRIANGLE_MATERIALS
+        );
         LongBuffer removedTextures = removalBuffer(changes.reset(), changes.textures().removedIdentities());
         long[] removedMeshes = changes.meshes().removedIdentities();
 
@@ -142,40 +166,40 @@ final class VulkanGpuSceneMemory {
         );
         VulkanRangeArena.Prepared<MeshAsset> preparedPositions = positions.prepare(
                 changes.revision(), changes.reset(),
-                requests(meshWrites, mesh -> floatBytes(mesh.positions().remaining()), GEOMETRY_ALIGNMENT),
+                requests(positionWrites, mesh -> floatBytes(mesh.positions().remaining()), GEOMETRY_ALIGNMENT),
                 removalBuffer(changes.reset(), removedMeshes)
         );
         VulkanRangeArena.Prepared<MeshAsset> preparedNormals = optionalMeshArena(
-                normals, changes, meshWrites, removedMeshes,
+                normals, changes, normalWrites, removedMeshes,
                 mesh -> mesh.normals().hasRemaining(), mesh -> floatBytes(mesh.normals().remaining())
         );
         VulkanRangeArena.Prepared<MeshAsset> preparedTangents = optionalMeshArena(
-                tangents, changes, meshWrites, removedMeshes,
+                tangents, changes, tangentWrites, removedMeshes,
                 mesh -> mesh.tangents().hasRemaining(), mesh -> floatBytes(mesh.tangents().remaining())
         );
         VulkanRangeArena.Prepared<MeshAsset> preparedTextureCoordinates = optionalMeshArena(
-                textureCoordinates, changes, meshWrites, removedMeshes,
+                textureCoordinates, changes, textureCoordinateWrites, removedMeshes,
                 mesh -> mesh.textureCoordinates().hasRemaining(),
                 mesh -> floatBytes(mesh.textureCoordinates().remaining())
         );
         VulkanRangeArena.Prepared<MeshAsset> preparedColors = optionalMeshArena(
-                colors, changes, meshWrites, removedMeshes,
+                colors, changes, colorWrites, removedMeshes,
                 mesh -> mesh.vertexColorsRgba8().hasRemaining(),
                 mesh -> intBytes(mesh.vertexColorsRgba8().remaining())
         );
         VulkanRangeArena.Prepared<MeshAsset> preparedLightmapCoordinates = optionalMeshArena(
-                lightmapCoordinates, changes, meshWrites, removedMeshes,
+                lightmapCoordinates, changes, lightmapWrites, removedMeshes,
                 mesh -> mesh.lightmapCoordinates().hasRemaining(),
                 mesh -> floatBytes(mesh.lightmapCoordinates().remaining())
         );
         VulkanRangeArena.Prepared<MeshAsset> preparedIndices = indices.prepare(
                 changes.revision(), changes.reset(),
-                requests(meshWrites, mesh -> intBytes(mesh.triangleIndices().remaining()), GEOMETRY_ALIGNMENT),
+                requests(indexWrites, mesh -> intBytes(mesh.triangleIndices().remaining()), GEOMETRY_ALIGNMENT),
                 removalBuffer(changes.reset(), removedMeshes)
         );
         VulkanRangeArena.Prepared<MeshAsset> preparedMaterialSlots = triangleMaterialSlots.prepare(
                 changes.revision(), changes.reset(),
-                requests(meshWrites, mesh -> intBytes(mesh.triangleMaterialIds().remaining()), GEOMETRY_ALIGNMENT),
+                requests(materialSlotWrites, mesh -> intBytes(mesh.triangleMaterialIds().remaining()), GEOMETRY_ALIGNMENT),
                 removalBuffer(changes.reset(), removedMeshes)
         );
 

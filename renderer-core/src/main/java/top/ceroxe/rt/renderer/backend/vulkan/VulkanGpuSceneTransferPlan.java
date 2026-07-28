@@ -54,14 +54,13 @@ final class VulkanGpuSceneTransferPlan {
         ArrayList<StagedCopy> copies = new ArrayList<>(source.chunks().size());
         int stagingOffset = 0;
         for (VulkanGpuSceneUploadPlanner.Chunk chunk : source.chunks()) {
-            byte[] payload = chunk.payload();
-            System.arraycopy(payload, 0, staging, stagingOffset, payload.length);
+            chunk.copyPayloadTo(staging, stagingOffset);
             copies.add(new StagedCopy(
-                    chunk.target(), stagingOffset, chunk.targetOffsetBytes(), payload.length
+                    chunk.target(), stagingOffset, chunk.targetOffsetBytes(), chunk.byteCount()
             ));
-            stagingOffset = Math.addExact(stagingOffset, payload.length);
+            stagingOffset = Math.addExact(stagingOffset, chunk.byteCount());
         }
-        return new Plan(source.revision(), List.copyOf(targets), List.copyOf(copies), staging);
+        return Plan.owned(source.revision(), targets, copies, staging);
     }
 
     private static long growthCapacity(long required) {
@@ -111,22 +110,62 @@ final class VulkanGpuSceneTransferPlan {
         }
     }
 
-    record Plan(long revision, List<TargetCapacity> targets, List<StagedCopy> copies, byte[] stagingBytes) {
-        Plan {
+    static final class Plan {
+        private final long revision;
+        private final List<TargetCapacity> targets;
+        private final List<StagedCopy> copies;
+        private final byte[] stagingBytes;
+
+        Plan(long revision, List<TargetCapacity> targets, List<StagedCopy> copies, byte[] stagingBytes) {
+            this(revision, targets, copies, Objects.requireNonNull(stagingBytes, "stagingBytes").clone(), true);
+        }
+
+        private Plan(
+                long revision,
+                List<TargetCapacity> targets,
+                List<StagedCopy> copies,
+                byte[] stagingBytes,
+                boolean owned
+        ) {
             if (revision < 0L) throw new IllegalArgumentException("transfer revision must not be negative");
-            targets = List.copyOf(Objects.requireNonNull(targets, "targets"));
-            copies = List.copyOf(Objects.requireNonNull(copies, "copies"));
-            stagingBytes = Objects.requireNonNull(stagingBytes, "stagingBytes").clone();
+            this.revision = revision;
+            this.targets = List.copyOf(Objects.requireNonNull(targets, "targets"));
+            this.copies = List.copyOf(Objects.requireNonNull(copies, "copies"));
+            this.stagingBytes = Objects.requireNonNull(stagingBytes, "stagingBytes");
             long expectedBytes = 0L;
-            for (StagedCopy copy : copies) expectedBytes = Math.addExact(expectedBytes, copy.byteCount());
-            if (expectedBytes != stagingBytes.length) {
+            for (StagedCopy copy : this.copies) expectedBytes = Math.addExact(expectedBytes, copy.byteCount());
+            if (expectedBytes != this.stagingBytes.length) {
                 throw new IllegalArgumentException("staging payload length does not match copy schedule");
             }
         }
 
-        @Override
-        public byte[] stagingBytes() {
+        private static Plan owned(
+                long revision,
+                List<TargetCapacity> targets,
+                List<StagedCopy> copies,
+                byte[] stagingBytes
+        ) {
+            return new Plan(revision, targets, copies, stagingBytes, true);
+        }
+
+        long revision() {
+            return revision;
+        }
+
+        List<TargetCapacity> targets() {
+            return targets;
+        }
+
+        List<StagedCopy> copies() {
+            return copies;
+        }
+
+        byte[] stagingBytes() {
             return stagingBytes.clone();
+        }
+
+        byte[] stagingBytesForSubmit() {
+            return stagingBytes;
         }
 
         boolean isEmpty() {
@@ -134,7 +173,14 @@ final class VulkanGpuSceneTransferPlan {
         }
 
         long allocationGrowthBytes() {
-            long growth = stagingBytes.length;
+            return allocationGrowthBytes(0L);
+        }
+
+        long allocationGrowthBytes(long reusableStagingCapacity) {
+            if (reusableStagingCapacity < 0L) {
+                throw new IllegalArgumentException("reusable staging capacity must not be negative");
+            }
+            long growth = Math.max(0L, stagingBytes.length - reusableStagingCapacity);
             for (TargetCapacity target : targets) {
                 if (target.grows()) {
                     /*

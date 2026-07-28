@@ -27,6 +27,7 @@ public final class VulkanGpuSceneUploadPlannerSelfTest {
    public static void main(String[] arguments) {
       completeScenePacksEveryGpuDomainAndResolvesReferences();
       instanceOnlyGenerationDoesNotRewriteUnchangedGpuDomains();
+      triangleMaterialUpdateDoesNotRewriteBlasGeometry();
       uploadsCompleteMipChainAsOneTextureGeneration();
       System.out.println("VulkanGpuSceneUploadPlannerSelfTest passed");
    }
@@ -75,6 +76,20 @@ public final class VulkanGpuSceneUploadPlannerSelfTest {
       require(fixture.memory.state().positions().revision() == 0L, "memory preparation published the next revision before admission");
       fixture.commit(generation, 1L);
       require(fixture.memory.state().positions().revision() == 1L, "accepted empty geometry generation did not advance memory authority");
+   }
+
+   private static void triangleMaterialUpdateDoesNotRewriteBlasGeometry() {
+      Fixture fixture = new Fixture();
+      fixture.commit(fixture.prepare(initialScene()), 0L);
+      MaterialAsset replacement = MaterialAsset.builder(21L).baseColorRgba8(-65536).build();
+      MeshAsset remapped = MeshAsset.builder(30L, new float[]{0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F}, new int[]{0, 1, 2}, new long[]{21L}).normals(new float[]{0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 1.0F}).tangents(new float[]{1.0F, 0.0F, 0.0F, 1.0F, 1.0F, 0.0F, 0.0F, 1.0F, 1.0F, 0.0F, 0.0F, 1.0F}).textureCoordinates(new float[]{0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 1.0F}).lightmapCoordinates(new float[]{0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 1.0F}).vertexColorsRgba8(new int[]{-1, -16711681, -65281}).build();
+      PreparedGeneration generation = fixture.prepare(SceneTransaction.builder(1L).upsert(replacement).upsert(remapped).build());
+      VulkanSceneResidency.MeshUpdate update = generation.residency.changeSet().meshUpdates().get(30L);
+      require(update.dirtyMask() == VulkanSceneResidency.MeshDirtyMask.TRIANGLE_MATERIALS, "material remap was misclassified as geometry work");
+      EnumSet<Target> targets = EnumSet.noneOf(Target.class);
+      generation.plan.chunks().forEach(chunk -> targets.add(chunk.target()));
+      require(targets.equals(EnumSet.of(Target.MATERIAL_RECORDS, Target.MESH_RECORDS, Target.TRIANGLE_MATERIAL_SLOTS)), "material remap uploaded BLAS geometry streams: " + targets);
+      require(generation.residency.changeSet().meshUpdates().blasDirtyCount() == 0, "material remap requested a BLAS build");
    }
 
    private static int chunks(VulkanGpuSceneUploadPlanner.Plan plan, VulkanGpuSceneUploadPlanner.Target target) {

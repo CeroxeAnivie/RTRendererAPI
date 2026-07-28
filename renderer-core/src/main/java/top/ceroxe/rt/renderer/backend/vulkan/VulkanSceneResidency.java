@@ -1,5 +1,6 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.SceneInstance;
@@ -7,6 +8,7 @@ import top.ceroxe.rt.renderer.api.SceneLight;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
 import top.ceroxe.rt.renderer.api.TextureAsset;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -61,6 +63,7 @@ final class VulkanSceneResidency {
                 instances.prepare(checked.revision(), checked.reset(), upserts.instances(), removals.instanceIds());
         StableIdentitySlots.Prepared<SceneLight> preparedLights =
                 lights.prepare(checked.revision(), checked.reset(), upserts.lights(), removals.lightIds());
+        MeshUpdates meshUpdates = meshUpdates(preparedMeshes, checked.reset());
         return new PreparedUpdate(
                 this,
                 revision,
@@ -77,6 +80,7 @@ final class VulkanSceneResidency {
                         change(preparedTextures),
                         change(preparedMaterials),
                         change(preparedMeshes),
+                        meshUpdates,
                         change(preparedInstances),
                         change(preparedLights)
                 )
@@ -149,6 +153,15 @@ final class VulkanSceneResidency {
 
     synchronized int lightSlot(long id) {
         return lights.slot(id);
+    }
+
+    private MeshUpdates meshUpdates(StableIdentitySlots.Prepared<MeshAsset> prepared, boolean reset) {
+        ArrayList<MeshUpdate> updates = new ArrayList<>(prepared.writes().size());
+        for (StableIdentitySlots.SlotWrite<MeshAsset> write : prepared.writes()) {
+            MeshAsset previous = reset ? null : meshes.valueAt(meshes.slot(write.id()));
+            updates.add(new MeshUpdate(write.id(), write.slot(), MeshDirtyMask.between(previous, write.value())));
+        }
+        return new MeshUpdates(updates);
     }
 
     static final class PreparedUpdate {
@@ -227,6 +240,7 @@ final class VulkanSceneResidency {
             DomainChange<TextureAsset> textures,
             DomainChange<MaterialAsset> materials,
             DomainChange<MeshAsset> meshes,
+            MeshUpdates meshUpdates,
             DomainChange<SceneInstance> instances,
             DomainChange<SceneLight> lights
     ) {
@@ -237,8 +251,26 @@ final class VulkanSceneResidency {
             textures = Objects.requireNonNull(textures, "textures");
             materials = Objects.requireNonNull(materials, "materials");
             meshes = Objects.requireNonNull(meshes, "meshes");
+            meshUpdates = Objects.requireNonNull(meshUpdates, "meshUpdates");
             instances = Objects.requireNonNull(instances, "instances");
             lights = Objects.requireNonNull(lights, "lights");
+            meshUpdates.validate(meshes.writes());
+        }
+
+        SceneChangeSet(
+                long baseRevision,
+                long revision,
+                boolean reset,
+                DomainChange<TextureAsset> textures,
+                DomainChange<MaterialAsset> materials,
+                DomainChange<MeshAsset> meshes,
+                DomainChange<SceneInstance> instances,
+                DomainChange<SceneLight> lights
+        ) {
+            this(
+                    baseRevision, revision, reset, textures, materials, meshes,
+                    MeshUpdates.all(meshes.writes()), instances, lights
+            );
         }
 
         int totalWrites() {
@@ -257,6 +289,103 @@ final class VulkanSceneResidency {
             return textures.statistics().removals() + materials.statistics().removals()
                     + meshes.statistics().removals() + instances.statistics().removals()
                     + lights.statistics().removals();
+        }
+    }
+
+    static final class MeshDirtyMask {
+        static final int POSITIONS = 1;
+        static final int NORMALS = 1 << 1;
+        static final int TANGENTS = 1 << 2;
+        static final int TEXTURE_COORDINATES = 1 << 3;
+        static final int COLORS = 1 << 4;
+        static final int LIGHTMAP_COORDINATES = 1 << 5;
+        static final int INDICES = 1 << 6;
+        static final int TRIANGLE_MATERIALS = 1 << 7;
+        static final int BLAS = POSITIONS | INDICES;
+        static final int ALL = (1 << 8) - 1;
+
+        private MeshDirtyMask() {
+        }
+
+        private static int between(MeshAsset previous, MeshAsset next) {
+            if (previous == null) return ALL;
+            int mask = 0;
+            if (!previous.positions().equals(next.positions())) mask |= POSITIONS;
+            if (!previous.normals().equals(next.normals())) mask |= NORMALS;
+            if (!previous.tangents().equals(next.tangents())) mask |= TANGENTS;
+            if (!previous.textureCoordinates().equals(next.textureCoordinates())) mask |= TEXTURE_COORDINATES;
+            if (!previous.vertexColorsRgba8().equals(next.vertexColorsRgba8())) mask |= COLORS;
+            if (!previous.lightmapCoordinates().equals(next.lightmapCoordinates())) mask |= LIGHTMAP_COORDINATES;
+            if (!previous.triangleIndices().equals(next.triangleIndices())) mask |= INDICES;
+            if (!previous.triangleMaterialIds().equals(next.triangleMaterialIds())) mask |= TRIANGLE_MATERIALS;
+            return mask;
+        }
+    }
+
+    record MeshUpdate(long identity, int slot, int dirtyMask) {
+        MeshUpdate {
+            if (identity < 0L || slot < 0 || dirtyMask < 0 || (dirtyMask & ~MeshDirtyMask.ALL) != 0) {
+                throw new IllegalArgumentException("resident mesh update classification is invalid");
+            }
+        }
+
+        boolean dirty(int mask) {
+            return (dirtyMask & mask) != 0;
+        }
+    }
+
+    static final class MeshUpdates {
+        private final List<MeshUpdate> updates;
+        private final Long2IntOpenHashMap indexByIdentity;
+
+        private MeshUpdates(List<MeshUpdate> updates) {
+            this.updates = List.copyOf(Objects.requireNonNull(updates, "updates"));
+            indexByIdentity = new Long2IntOpenHashMap(this.updates.size());
+            indexByIdentity.defaultReturnValue(-1);
+            for (int index = 0; index < this.updates.size(); index++) {
+                MeshUpdate update = this.updates.get(index);
+                if (indexByIdentity.putIfAbsent(update.identity(), index) >= 0) {
+                    throw new IllegalArgumentException("duplicate classified mesh identity " + update.identity());
+                }
+            }
+        }
+
+        private static MeshUpdates all(List<StableIdentitySlots.SlotWrite<MeshAsset>> writes) {
+            ArrayList<MeshUpdate> updates = new ArrayList<>(writes.size());
+            for (StableIdentitySlots.SlotWrite<MeshAsset> write : writes) {
+                updates.add(new MeshUpdate(write.id(), write.slot(), MeshDirtyMask.ALL));
+            }
+            return new MeshUpdates(updates);
+        }
+
+        MeshUpdate get(long identity) {
+            int index = indexByIdentity.get(identity);
+            if (index < 0) throw new IllegalArgumentException("mesh update identity was not classified: " + identity);
+            return updates.get(index);
+        }
+
+        List<MeshUpdate> values() {
+            return updates;
+        }
+
+        int blasDirtyCount() {
+            int count = 0;
+            for (MeshUpdate update : updates) {
+                if (update.dirty(MeshDirtyMask.BLAS)) count++;
+            }
+            return count;
+        }
+
+        private void validate(List<StableIdentitySlots.SlotWrite<MeshAsset>> writes) {
+            if (writes.size() != updates.size()) {
+                throw new IllegalArgumentException("mesh update classification does not match sparse writes");
+            }
+            for (StableIdentitySlots.SlotWrite<MeshAsset> write : writes) {
+                MeshUpdate update = get(write.id());
+                if (update.slot() != write.slot()) {
+                    throw new IllegalArgumentException("mesh update slot does not match sparse write");
+                }
+            }
         }
     }
 

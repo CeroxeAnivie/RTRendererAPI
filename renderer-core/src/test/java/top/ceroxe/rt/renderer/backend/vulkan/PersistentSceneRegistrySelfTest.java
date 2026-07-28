@@ -24,6 +24,8 @@ public final class PersistentSceneRegistrySelfTest {
       invalidReferenceDoesNotAdvanceState();
       stalePreparedMutationCannotOverwriteNewerGeneration();
       strictRemovalAndResetRulesPreserveState();
+      reverseReferencesTrackDependencyRewrites();
+      resetRebuildsReverseReferences();
       snapshotOrderIsDeterministic();
       System.out.println("PersistentSceneRegistrySelfTest passed");
    }
@@ -65,6 +67,24 @@ public final class PersistentSceneRegistrySelfTest {
       PersistentSceneRegistry.PreparedMutation removal = registry.prepare(SceneTransaction.builder(1L).removeTexture(1L).removeMaterial(2L).removeMesh(3L).removeInstance(4L).removeLight(5L).build());
       PersistentSceneRegistry.SceneState empty = registry.commit(removal);
       require(empty.textures() == 0 && empty.materials() == 0 && empty.meshes() == 0 && empty.instances() == 0 && empty.lights() == 0, "complete dependency removal failed");
+   }
+
+   private static void reverseReferencesTrackDependencyRewrites() {
+      PersistentSceneRegistry registry = populatedRegistry();
+      expect(SceneValidationException.class, () -> registry.prepare(SceneTransaction.builder(1L).removeTexture(1L).build()));
+      PersistentSceneRegistry.PreparedMutation rewrite = registry.prepare(SceneTransaction.builder(1L).upsert(material(2L, -1L)).removeTexture(1L).build());
+      registry.commit(rewrite);
+      require(registry.state().revision() == 1L && registry.state().textures() == 0, "dependency rewrite did not release removed texture");
+      expect(SceneValidationException.class, () -> registry.prepare(SceneTransaction.builder(2L).removeMaterial(2L).build()));
+      require(registry.state().revision() == 1L, "failed reverse-reference validation advanced revision");
+   }
+
+   private static void resetRebuildsReverseReferences() {
+      PersistentSceneRegistry registry = populatedRegistry();
+      registry.commit(registry.prepare(SceneTransaction.builder(1L).resetScene().upsert(texture(11L)).upsert(material(12L, 11L)).upsert(mesh(13L, 12L)).upsert(instance(14L, 13L)).build()));
+      expect(SceneValidationException.class, () -> registry.prepare(SceneTransaction.builder(2L).removeTexture(11L).build()));
+      expect(SceneValidationException.class, () -> registry.prepare(SceneTransaction.builder(2L).removeTexture(1L).build()));
+      require(registry.state().revision() == 1L, "reset reverse-reference rejection changed authority");
    }
 
    private static void snapshotOrderIsDeterministic() {

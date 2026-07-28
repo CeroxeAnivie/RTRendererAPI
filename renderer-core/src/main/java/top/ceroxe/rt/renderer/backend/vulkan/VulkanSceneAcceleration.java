@@ -1,5 +1,6 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import top.ceroxe.rt.renderer.api.AffineTransform;
 import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.SceneInstance;
@@ -27,8 +28,8 @@ final class VulkanSceneAcceleration implements AutoCloseable {
     private final ArrayList<RetiredGeneration> retired = new ArrayList<>();
     private final ArrayDeque<RtAccelerationStructure> reusableTlasDestinations = new ArrayDeque<>();
 
-    private Map<Integer, RtAccelerationStructure> activeMeshes = Map.of();
-    private Map<Integer, VulkanGpuScene.InstanceGeometry> activeInstances = Map.of();
+    private final HashMap<Integer, RtAccelerationStructure> activeMeshes = new HashMap<>();
+    private final HashMap<Integer, VulkanGpuScene.InstanceGeometry> activeInstances = new HashMap<>();
     private RtAccelerationStructure activeTlas;
     private PendingGeneration pending;
     private Lifecycle lifecycle = Lifecycle.READY;
@@ -131,19 +132,7 @@ final class VulkanSceneAcceleration implements AutoCloseable {
 
         PendingGeneration generation = null;
         try {
-            Map<Integer, RtAccelerationStructure> candidateMeshes = changes.reset()
-                    ? new HashMap<>()
-                    : new HashMap<>(activeMeshes);
-            for (int clearedSlot : changes.meshes().clearedSlots()) candidateMeshes.remove(clearedSlot);
-
-            Map<Integer, VulkanGpuScene.InstanceGeometry> candidateInstances = changes.reset()
-                    ? new HashMap<>()
-                    : new HashMap<>(activeInstances);
-            boolean accelerationChanged = changes.reset() || activeTlas == null
-                    || !changes.meshes().writes().isEmpty()
-                    || changes.meshes().clearedSlots().length != 0
-                    || changes.instances().clearedSlots().length != 0;
-            for (int clearedSlot : changes.instances().clearedSlots()) candidateInstances.remove(clearedSlot);
+            HashMap<Integer, VulkanGpuScene.InstanceGeometry> instanceWrites = new HashMap<>();
             for (StableIdentitySlots.SlotWrite<SceneInstance> write : changes.instances().writes()) {
                 VulkanGpuScene.InstanceGeometry instance = gpuScene.resolveInstance(
                         write.value(), changes.revision()
@@ -151,16 +140,32 @@ final class VulkanSceneAcceleration implements AutoCloseable {
                 if (instance.instanceSlot() != write.slot()) {
                     throw new IllegalStateException("GPUScene instance slot diverged from resident change set");
                 }
-                if (!instance.equals(activeInstances.get(instance.instanceSlot()))) {
-                    accelerationChanged = true;
+                if (changes.reset() || !instance.equals(activeInstances.get(instance.instanceSlot()))) {
+                    instanceWrites.put(instance.instanceSlot(), instance);
                 }
-                candidateInstances.put(instance.instanceSlot(), instance);
             }
 
-            ArrayList<PendingMeshBuild> meshBuilds = new ArrayList<>(changes.meshes().writes().size());
-            List<StableIdentitySlots.SlotWrite<MeshAsset>> orderedWrites = new ArrayList<>(
-                    changes.meshes().writes()
-            );
+            int[] clearedMeshSlots = changes.meshes().clearedSlots();
+            int[] clearedInstanceSlots = changes.instances().clearedSlots();
+            boolean accelerationChanged = changes.reset() || activeTlas == null
+                    || changes.meshUpdates().blasDirtyCount() != 0
+                    || clearedMeshSlots.length != 0
+                    || clearedInstanceSlots.length != 0
+                    || !instanceWrites.isEmpty();
+            if (!accelerationChanged) {
+                // Texture, material, light, vertex shading attributes and per-instance appearance
+                // never change an acceleration-structure input. Advance causality without copying
+                // either active map or manufacturing native work.
+                activeRevision = changes.revision();
+                return new Admission(changes.revision(), true, 0, activeInstances.size());
+            }
+
+            ArrayList<PendingMeshBuild> meshBuilds = new ArrayList<>(changes.meshUpdates().blasDirtyCount());
+            List<StableIdentitySlots.SlotWrite<MeshAsset>> orderedWrites = changes.meshes().writes().stream()
+                    .filter(write -> changes.meshUpdates().get(write.id()).dirty(
+                            VulkanSceneResidency.MeshDirtyMask.BLAS
+                    ))
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
             orderedWrites.sort(Comparator.comparingInt(StableIdentitySlots.SlotWrite::slot));
             for (StableIdentitySlots.SlotWrite<MeshAsset> write : orderedWrites) {
                 VulkanGpuScene.MeshGeometry geometry = gpuScene.resolveMesh(write.value(), changes.revision());
@@ -182,19 +187,13 @@ final class VulkanSceneAcceleration implements AutoCloseable {
                 );
                 meshBuilds.add(new PendingMeshBuild(geometry.meshSlot(), build));
             }
-            if (!accelerationChanged) {
-                // Material, texture, light and per-instance appearance fields live exclusively
-                // in GPUScene buffers. Their scene revision can advance while retaining the
-                // exact TLAS when BLAS addresses, transforms, masks and membership are unchanged.
-                activeInstances = Map.copyOf(candidateInstances);
-                activeRevision = changes.revision();
-                return new Admission(changes.revision(), true, 0, candidateInstances.size());
-            }
             generation = new PendingGeneration(
                     changes.revision(),
                     retireAfterDescriptorEpoch,
-                    candidateMeshes,
-                    candidateInstances,
+                    changes.reset(),
+                    clearedMeshSlots,
+                    clearedInstanceSlots,
+                    instanceWrites,
                     meshBuilds
             );
             pending = generation;
@@ -203,7 +202,7 @@ final class VulkanSceneAcceleration implements AutoCloseable {
                     changes.revision(),
                     pending == null,
                     meshBuilds.size(),
-                    candidateInstances.size()
+                    prospectiveInstanceCount(generation)
             );
         } catch (RuntimeException failure) {
             if (pending == generation) pending = null;
@@ -285,13 +284,17 @@ final class VulkanSceneAcceleration implements AutoCloseable {
                 continue;
             }
             meshBuild.completed = completed;
-            generation.candidateMeshes.put(meshBuild.meshSlot, completed);
         }
         if (!allMeshesReady) return;
 
         if (generation.tlasSubmission == null) {
             List<RtDeviceTlasBuilder.Instance> instances = tlasInstances(generation);
             List<RtDeviceTlasBuilder.Instance> active = activeTlasInstances();
+            if (instances.equals(active)) {
+                generation.reuseActiveTlas = true;
+                activate(generation);
+                return;
+            }
             boolean update = activeTlas != null && active.size() == instances.size();
             generation.tlasSubmission = update
                     ? tlasBuildLane.submitUpdate(
@@ -312,17 +315,27 @@ final class VulkanSceneAcceleration implements AutoCloseable {
     }
 
     private List<RtDeviceTlasBuilder.Instance> tlasInstances(PendingGeneration generation) {
-        return tlasInstances(generation.candidateMeshes, generation.candidateInstances);
+        ArrayList<VulkanGpuScene.InstanceGeometry> instances = new ArrayList<>(prospectiveInstanceCount(generation));
+        if (!generation.reset) {
+            for (VulkanGpuScene.InstanceGeometry instance : activeInstances.values()) {
+                if (!generation.clearedInstanceSlots.contains(instance.instanceSlot())
+                        && !generation.instanceWrites.containsKey(instance.instanceSlot())) {
+                    instances.add(instance);
+                }
+            }
+        }
+        instances.addAll(generation.instanceWrites.values());
+        return tlasInstances(instances, slot -> generation.mesh(slot, activeMeshes));
     }
 
     private List<RtDeviceTlasBuilder.Instance> activeTlasInstances() {
         if (activeTlas == null) return List.of();
-        return tlasInstances(activeMeshes, activeInstances);
+        return tlasInstances(activeInstances.values(), activeMeshes::get);
     }
 
     private List<RtDeviceTlasBuilder.Instance> tlasInstances(
-            Map<Integer, RtAccelerationStructure> meshes,
-            Map<Integer, VulkanGpuScene.InstanceGeometry> instances
+            Collection<VulkanGpuScene.InstanceGeometry> instances,
+            java.util.function.IntFunction<RtAccelerationStructure> meshResolver
     ) {
         if (instances.isEmpty()) {
             return List.of(new RtDeviceTlasBuilder.Instance(
@@ -330,12 +343,12 @@ final class VulkanSceneAcceleration implements AutoCloseable {
             ));
         }
         ArrayList<VulkanGpuScene.InstanceGeometry> ordered = new ArrayList<>(
-                instances.values()
+                instances
         );
         ordered.sort(Comparator.comparingInt(VulkanGpuScene.InstanceGeometry::instanceSlot));
         ArrayList<RtDeviceTlasBuilder.Instance> result = new ArrayList<>(ordered.size());
         for (VulkanGpuScene.InstanceGeometry instance : ordered) {
-            RtAccelerationStructure blas = meshes.get(instance.meshSlot());
+            RtAccelerationStructure blas = meshResolver.apply(instance.meshSlot());
             if (blas == null) {
                 throw new IllegalStateException(
                         "instance slot " + instance.instanceSlot()
@@ -350,6 +363,18 @@ final class VulkanSceneAcceleration implements AutoCloseable {
             ));
         }
         return List.copyOf(result);
+    }
+
+    private int prospectiveInstanceCount(PendingGeneration generation) {
+        if (generation.reset) return generation.instanceWrites.size();
+        int count = activeInstances.size();
+        for (int slot : generation.clearedInstanceSlots) {
+            if (activeInstances.containsKey(slot) && !generation.instanceWrites.containsKey(slot)) count--;
+        }
+        for (int slot : generation.instanceWrites.keySet()) {
+            if (!activeInstances.containsKey(slot) || generation.clearedInstanceSlots.contains(slot)) count++;
+        }
+        return count;
     }
 
     private static int[] dirtyInstanceSlots(
@@ -368,25 +393,35 @@ final class VulkanSceneAcceleration implements AutoCloseable {
     }
 
     private void activate(PendingGeneration generation) {
-        if (generation != pending || generation.completedTlas == null) {
+        if (generation != pending || generation.completedTlas == null && !generation.reuseActiveTlas) {
             throw new IllegalStateException("acceleration activation generation is stale or incomplete");
         }
         ArrayList<RtAccelerationStructure> displacedBlases = new ArrayList<>();
         for (Map.Entry<Integer, RtAccelerationStructure> entry : activeMeshes.entrySet()) {
-            if (generation.candidateMeshes.get(entry.getKey()) != entry.getValue()) {
+            if (generation.mesh(entry.getKey(), activeMeshes) != entry.getValue()) {
                 displacedBlases.add(entry.getValue());
             }
         }
-        if (activeTlas != null || !displacedBlases.isEmpty()) {
+        RtAccelerationStructure displacedTlas = generation.reuseActiveTlas ? null : activeTlas;
+        if (displacedTlas != null || !displacedBlases.isEmpty()) {
             retired.add(new RetiredGeneration(
                     generation.retireAfterDescriptorEpoch,
-                    activeTlas,
+                    displacedTlas,
                     displacedBlases
             ));
         }
-        activeMeshes = Map.copyOf(generation.candidateMeshes);
-        activeInstances = Map.copyOf(generation.candidateInstances);
-        activeTlas = generation.completedTlas;
+        if (generation.reset) {
+            activeMeshes.clear();
+            activeInstances.clear();
+        } else {
+            for (int slot : generation.clearedMeshSlots) activeMeshes.remove(slot);
+            for (int slot : generation.clearedInstanceSlots) activeInstances.remove(slot);
+        }
+        for (PendingMeshBuild meshBuild : generation.meshBuilds) {
+            activeMeshes.put(meshBuild.meshSlot, meshBuild.completed);
+        }
+        activeInstances.putAll(generation.instanceWrites);
+        if (!generation.reuseActiveTlas) activeTlas = generation.completedTlas;
         activeRevision = generation.revision;
         generation.transferred = true;
         pending = null;
@@ -448,8 +483,8 @@ final class VulkanSceneAcceleration implements AutoCloseable {
         for (RtAccelerationStructure blas : activeMeshes.values()) {
             failure = closeCollecting(failure, blas);
         }
-        activeMeshes = Map.of();
-        activeInstances = Map.of();
+        activeMeshes.clear();
+        activeInstances.clear();
         for (RetiredGeneration generation : retired) {
             failure = closeCollecting(failure, generation);
         }
@@ -533,25 +568,47 @@ final class VulkanSceneAcceleration implements AutoCloseable {
     private static final class PendingGeneration implements AutoCloseable {
         private final long revision;
         private final long retireAfterDescriptorEpoch;
-        private final Map<Integer, RtAccelerationStructure> candidateMeshes;
-        private final Map<Integer, VulkanGpuScene.InstanceGeometry> candidateInstances;
+        private final boolean reset;
+        private final IntOpenHashSet clearedMeshSlots;
+        private final IntOpenHashSet clearedInstanceSlots;
+        private final Map<Integer, VulkanGpuScene.InstanceGeometry> instanceWrites;
         private final List<PendingMeshBuild> meshBuilds;
         private RtDeviceTlasBuilder.PendingBuild tlasSubmission;
         private RtAccelerationStructure completedTlas;
+        private boolean reuseActiveTlas;
         private boolean transferred;
 
         private PendingGeneration(
                 long revision,
                 long retireAfterDescriptorEpoch,
-                Map<Integer, RtAccelerationStructure> candidateMeshes,
-                Map<Integer, VulkanGpuScene.InstanceGeometry> candidateInstances,
+                boolean reset,
+                int[] clearedMeshSlots,
+                int[] clearedInstanceSlots,
+                Map<Integer, VulkanGpuScene.InstanceGeometry> instanceWrites,
                 List<PendingMeshBuild> meshBuilds
         ) {
             this.revision = revision;
             this.retireAfterDescriptorEpoch = retireAfterDescriptorEpoch;
-            this.candidateMeshes = Objects.requireNonNull(candidateMeshes, "candidateMeshes");
-            this.candidateInstances = Objects.requireNonNull(candidateInstances, "candidateInstances");
+            this.reset = reset;
+            this.clearedMeshSlots = new IntOpenHashSet(
+                    Objects.requireNonNull(clearedMeshSlots, "clearedMeshSlots")
+            );
+            this.clearedInstanceSlots = new IntOpenHashSet(
+                    Objects.requireNonNull(clearedInstanceSlots, "clearedInstanceSlots")
+            );
+            this.instanceWrites = Map.copyOf(Objects.requireNonNull(instanceWrites, "instanceWrites"));
             this.meshBuilds = List.copyOf(Objects.requireNonNull(meshBuilds, "meshBuilds"));
+        }
+
+        private RtAccelerationStructure mesh(
+                int slot,
+                Map<Integer, RtAccelerationStructure> activeMeshes
+        ) {
+            for (PendingMeshBuild build : meshBuilds) {
+                if (build.meshSlot == slot) return build.completed;
+            }
+            if (reset || clearedMeshSlots.contains(slot)) return null;
+            return activeMeshes.get(slot);
         }
 
         @Override
