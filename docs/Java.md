@@ -461,5 +461,3 @@ VulkanFrameInterop interop = renderer.extension(VulkanFrameInterop.class)
 | 短 GPU 验收 | `.\gradlew.bat strictAcceptanceTest --dependency-verification=strict --no-daemon --console=plain` |
 | 独立 Maven consumer | `.\gradlew.bat verifyPublishedMavenConsumer --dependency-verification=strict --no-daemon --console=plain` |
 | ABI 验证 | `.\gradlew.bat :renderer-api:verifyRendererApiAbi --dependency-verification=strict --no-daemon --console=plain` |
-
-这些命令不会把制品发布到远程 Maven 仓库。
