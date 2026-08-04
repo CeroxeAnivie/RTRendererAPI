@@ -101,11 +101,16 @@ final class VulkanGpuSceneUploadPlanner {
         addClears(builder, Target.MESH_RECORDS, changes.meshes().clearedSlots(),
                 VulkanGpuSceneAbi.MESH_RECORD_WORDS);
 
-        for (StableIdentitySlots.SlotWrite<top.ceroxe.rt.renderer.api.SceneInstance> write
-                : changes.instances().writes()) {
+        for (VulkanSceneResidency.InstanceMotionWrite motion
+                : changes.instanceMotionWrites()) {
             builder.add(Target.INSTANCE_RECORDS,
-                    recordOffset(write.slot(), VulkanGpuSceneAbi.INSTANCE_RECORD_WORDS),
-                    ints(VulkanGpuSceneAbi.packInstance(write.value(), slots::meshSlot)), 1);
+                    recordOffset(motion.slot(), VulkanGpuSceneAbi.INSTANCE_RECORD_WORDS),
+                    ints(VulkanGpuSceneAbi.packInstance(
+                            motion.current(),
+                            motion.previousTransform(),
+                            changes.revision(),
+                            slots::meshSlot
+                    )), 1);
         }
         addClears(builder, Target.INSTANCE_RECORDS, changes.instances().clearedSlots(),
                 VulkanGpuSceneAbi.INSTANCE_RECORD_WORDS);

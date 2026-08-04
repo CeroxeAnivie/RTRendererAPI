@@ -22,6 +22,7 @@ void main()
     vec3 p0 = gsPosition(meshBase, indices.x);
     vec3 p1 = gsPosition(meshBase, indices.y);
     vec3 p2 = gsPosition(meshBase, indices.z);
+    vec3 localPosition = p0 * barycentrics.x + p1 * barycentrics.y + p2 * barycentrics.z;
     vec3 wp0 = gl_ObjectToWorldEXT * vec4(p0, 1.0);
     vec3 wp1 = gl_ObjectToWorldEXT * vec4(p1, 1.0);
     vec3 wp2 = gl_ObjectToWorldEXT * vec4(p2, 1.0);
@@ -54,10 +55,14 @@ void main()
     uint materialFlags = gsMaterials.words[materialBase + GPU_SCENE_MATERIAL_FLAGS_WORD];
     uint shadingModel = (materialFlags >> GPU_SCENE_SHADING_MODEL_SHIFT)
         & GPU_SCENE_SHADING_MODEL_MASK;
-    vec2 uv = gsTriangleTexcoord(meshBase, indices, barycentrics);
+    vec2 uv = gsInstanceUv(
+        gl_InstanceCustomIndexEXT,
+        gsTriangleTexcoord(meshBase, indices, barycentrics)
+    );
     vec4 uvFootprint = gsTriangleTextureFootprint(
         meshBase, indices, barycentrics, wp0, wp1, wp2, gl_WorldRayOriginEXT,
-        payload.launchInfo
+        payload.launchInfo,
+        gl_InstanceCustomIndexEXT
     );
     vec4 vertexColor = shadingModel == GPU_SCENE_SHADING_LIGHTMAP_MODULATED
         ? gsTriangleLightmapModulatedColor(
@@ -128,6 +133,13 @@ void main()
         gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT,
         gl_HitTEXT
     );
+    // Reproject the same geometric point through the last successfully rendered object transform.
+    // Using a prior scene transaction here would advance temporal state ahead of the GPU frame.
+    payload.previousWorldPosition = vec4(
+        gsPreviousInstancePoint(gl_InstanceCustomIndexEXT, localPosition),
+        1.0
+    );
+    payload.motionRevision = gsInstanceMotionRevision(gl_InstanceCustomIndexEXT);
     payload.worldNormalAndRoughness = vec4(worldNormal, roughness);
     payload.baseColorAndOpacity = vec4(baseColor.rgb, baseColor.a);
     payload.emissiveAndMetallic = vec4(emissive, metallic);
@@ -137,5 +149,20 @@ void main()
         backFace ? GS_PAYLOAD_BACK_FACE : GS_PAYLOAD_RADIANCE_QUERY,
         materialFlags,
         gsInstanceFlags(gl_InstanceCustomIndexEXT)
+    );
+    payload.surfaceState = uvec4(
+        gsInstanceSurfaceMask(gl_InstanceCustomIndexEXT),
+        gsInstanceOverlayReceiverMask(gl_InstanceCustomIndexEXT),
+        gsInstanceObjectMask(gl_InstanceCustomIndexEXT),
+        gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_OUTLINE_COLOR_WORD)
+    );
+    payload.compositeState = vec4(
+        gsInstanceOutlineWidth(gl_InstanceCustomIndexEXT),
+        uintBitsToFloat(gsMaterials.words[
+            materialBase + GPU_SCENE_MATERIAL_OVERLAY_DEPTH_THRESHOLD_WORD
+        ]),
+        float((materialFlags >> GPU_SCENE_OVERLAY_DEPTH_MODE_SHIFT)
+            & GPU_SCENE_OVERLAY_DEPTH_MODE_MASK),
+        0.0
     );
 }

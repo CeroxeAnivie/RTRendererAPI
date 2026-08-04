@@ -2,6 +2,8 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
+import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.FramePrimitiveBatch;
 import top.ceroxe.rt.renderer.rt.acceleration.RtAccelerationStructure;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
@@ -48,6 +50,22 @@ final class VulkanSceneRuntime implements AutoCloseable {
             boolean validationEnabled,
             boolean gpuTimingsEnabled
     ) {
+        return open(
+                capability,
+                diagnostics,
+                validationEnabled,
+                gpuTimingsEnabled,
+                RayTracingRendererConfig.defaults()
+        );
+    }
+
+    static VulkanSceneRuntime open(
+            VulkanRtCapabilityProbe.Result capability,
+            RendererRtDiagnostics diagnostics,
+            boolean validationEnabled,
+            boolean gpuTimingsEnabled,
+            RayTracingRendererConfig configuration
+    ) {
         VulkanDeviceRuntime device = null;
         VulkanGpuScene gpuScene = null;
         VulkanSceneAcceleration acceleration = null;
@@ -56,7 +74,8 @@ final class VulkanSceneRuntime implements AutoCloseable {
                     Objects.requireNonNull(capability, "capability"),
                     Objects.requireNonNull(diagnostics, "diagnostics"),
                     validationEnabled,
-                    gpuTimingsEnabled
+                    gpuTimingsEnabled,
+                    Objects.requireNonNull(configuration, "configuration")
             );
             gpuScene = new VulkanGpuScene(new VulkanGpuSceneBuffers(
                     device.device(), device.allocator(), device.buildCommands(), device::memoryBudget
@@ -110,6 +129,9 @@ final class VulkanSceneRuntime implements AutoCloseable {
             );
         }
         try {
+            // The owning rendering session admits mutation only after all renderer producer fences
+            // have completed. VulkanSceneRuntime has no presentation ownership and must never widen
+            // that precise dependency into a whole-queue idle operation.
             VulkanGpuScene.Admission admission = gpuScene.submit(changes, retireAfterDescriptorEpoch);
             pendingAccelerationChanges = changes;
             pendingRetireEpoch = retireAfterDescriptorEpoch;
@@ -162,6 +184,15 @@ final class VulkanSceneRuntime implements AutoCloseable {
         requireReady("resolve active scene TLAS");
         pumpInternal();
         return acceleration.requireActiveTlas(requiredSceneRevision);
+    }
+
+    synchronized VulkanSceneAcceleration.FrameInstances frameInstances(
+            FramePrimitiveBatch batch,
+            long requiredSceneRevision
+    ) {
+        requireReady("resolve frame primitives");
+        pumpInternal();
+        return acceleration.frameInstances(batch, requiredSceneRevision);
     }
 
     synchronized VulkanGpuSceneTransferQueue.BufferBinding requireBuffer(

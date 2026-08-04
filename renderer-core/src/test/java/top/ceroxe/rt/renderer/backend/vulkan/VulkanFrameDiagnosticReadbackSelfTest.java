@@ -29,6 +29,13 @@ public final class VulkanFrameDiagnosticReadbackSelfTest {
       require(VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8(new byte[0]).length == 0, "empty payload must remain empty");
       expect(IllegalArgumentException.class, () -> VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8(new byte[7]));
       expect(NullPointerException.class, () -> VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8((byte[])null));
+      byte[] finite = new byte[16];
+      putPixel(finite, 0, 0, 15360, 31743, 15360);
+      putPixel(finite, 8, 1, 32768, 48127, 14336);
+      VulkanFramePixelCodec.requireFiniteLinearHdrRgba16f(finite);
+      expect(IllegalStateException.class, () -> VulkanFramePixelCodec.requireFiniteLinearHdrRgba16f(source));
+      expect(IllegalArgumentException.class, () -> VulkanFramePixelCodec.requireFiniteLinearHdrRgba16f(new byte[7]));
+      expect(NullPointerException.class, () -> VulkanFramePixelCodec.requireFiniteLinearHdrRgba16f(null));
       verifiesExhaustiveHalfFloatGolden();
       System.out.println("VulkanFrameDiagnosticReadbackSelfTest passed");
    }

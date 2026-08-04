@@ -13,6 +13,7 @@ import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
 import top.ceroxe.rt.renderer.rt.device.RtGpuImage;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.interop.VulkanImportedSemaphore;
+import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
@@ -33,12 +34,20 @@ final class VulkanFrameSlot implements AutoCloseable {
     private final boolean externalSemaphoreCompletionEnabled;
     private final boolean cpuFrameReadbackEnabled;
     private final boolean temporalEnabled;
+    private boolean denoisingEnabled;
+    private boolean reconstructionEnabled;
+    private boolean frameGenerationEnabled;
     private final RtStallTelemetrySink stalls;
     private final RtGpuBuffer frameUniforms;
 
     private RtGpuImage outputImage;
+    private RtGpuImage reconstructionOutputImage;
+    private RtGpuImage traceImage;
     private long outputResourceId = -1L;
     private RtGpuImage motionImage;
+    private VulkanDenoisingFrameResources denoisingResources;
+    private VulkanFrameReconstructionResources reconstructionResources;
+    private VulkanFrameGenerationResources frameGenerationResources;
     private RtGpuBuffer cpuReadback;
     private RtCommandContext.AsyncSubmission producerSubmission;
     private RtCommandContext.AsyncSubmission consumerSubmission;
@@ -46,6 +55,8 @@ final class VulkanFrameSlot implements AutoCloseable {
     private boolean frameUniformsClosed;
     private State state = State.FREE;
     private int imageLayout = VK10.VK_IMAGE_LAYOUT_UNDEFINED;
+    private boolean traceLayoutInitialized;
+    private boolean reconstructionOutputLayoutInitialized;
     private boolean motionLayoutInitialized;
     private boolean externallyOwned;
     private long frameSequence = -1L;
@@ -55,6 +66,9 @@ final class VulkanFrameSlot implements AutoCloseable {
     private long readyTimelineValue;
     private long observedProducerFrameSequence = -1L;
     private long observedProducerDescriptorEpoch = -1L;
+    private long pendingCompletionEvidenceSequence = -1L;
+    private boolean currentSubmissionUsesSer;
+    private boolean pendingCompletionUsesSer;
     private boolean closed;
 
     VulkanFrameSlot(
@@ -67,6 +81,51 @@ final class VulkanFrameSlot implements AutoCloseable {
             RtStallTelemetrySink stalls,
             boolean temporalEnabled
     ) {
+        this(
+                index,
+                device,
+                frameOutput,
+                dedicatedAllocationRequired,
+                externalSemaphoreCompletionEnabled,
+                cpuFrameReadbackEnabled,
+                stalls,
+                temporalEnabled,
+                false,
+                false,
+                false
+        );
+    }
+
+    VulkanFrameSlot(
+            int index,
+            VulkanDeviceRuntime device,
+            VulkanFrameOutput frameOutput,
+            boolean dedicatedAllocationRequired,
+            boolean externalSemaphoreCompletionEnabled,
+            boolean cpuFrameReadbackEnabled,
+            RtStallTelemetrySink stalls,
+            boolean temporalEnabled,
+            boolean denoisingEnabled
+    ) {
+        this(
+                index, device, frameOutput, dedicatedAllocationRequired, externalSemaphoreCompletionEnabled,
+                cpuFrameReadbackEnabled, stalls, temporalEnabled, denoisingEnabled, false, false
+        );
+    }
+
+    VulkanFrameSlot(
+            int index,
+            VulkanDeviceRuntime device,
+            VulkanFrameOutput frameOutput,
+            boolean dedicatedAllocationRequired,
+            boolean externalSemaphoreCompletionEnabled,
+            boolean cpuFrameReadbackEnabled,
+            RtStallTelemetrySink stalls,
+            boolean temporalEnabled,
+            boolean denoisingEnabled,
+            boolean reconstructionEnabled,
+            boolean frameGenerationEnabled
+    ) {
         if (index < 0) throw new IllegalArgumentException("frame slot index must not be negative");
         this.index = index;
         this.device = Objects.requireNonNull(device, "device");
@@ -75,6 +134,9 @@ final class VulkanFrameSlot implements AutoCloseable {
         this.externalSemaphoreCompletionEnabled = externalSemaphoreCompletionEnabled;
         this.cpuFrameReadbackEnabled = cpuFrameReadbackEnabled;
         this.temporalEnabled = temporalEnabled;
+        this.denoisingEnabled = denoisingEnabled;
+        this.reconstructionEnabled = reconstructionEnabled;
+        this.frameGenerationEnabled = frameGenerationEnabled;
         this.stalls = Objects.requireNonNull(stalls, "stalls");
         this.frameUniforms = RtGpuBuffer.createHostVisibleUploadBuffer(
                 device.device(),
@@ -93,6 +155,15 @@ final class VulkanFrameSlot implements AutoCloseable {
         return failure;
     }
 
+    private static void closeFeatureResource(AutoCloseable resource, String name) {
+        if (resource == null) return;
+        try {
+            resource.close();
+        } catch (Exception failure) {
+            throw new IllegalStateException("failed to release " + name + " during feature fallback", failure);
+        }
+    }
+
     private static long nextExternalResourceId() {
         long identity = EXTERNAL_RESOURCE_IDS.getAndIncrement();
         if (identity <= 0L) {
@@ -105,50 +176,152 @@ final class VulkanFrameSlot implements AutoCloseable {
         return index;
     }
 
+    synchronized boolean denoisingEnabled() {
+        requireOpen();
+        return denoisingEnabled;
+    }
+
+    synchronized boolean reconstructionEnabled() {
+        requireOpen();
+        return reconstructionEnabled;
+    }
+
+    synchronized boolean frameGenerationEnabled() {
+        requireOpen();
+        return frameGenerationEnabled;
+    }
+
     synchronized boolean writable() {
         requireOpen();
-        return state == State.FREE;
+        return state == State.FREE && pendingCompletionEvidenceSequence < 0L;
+    }
+
+    /**
+     * Applies a capability transition only while this slot is free. Disabled feature resources
+     * are released before the next prepare, so a fallback frame cannot reuse their descriptors or
+     * temporal images.
+     */
+    synchronized void reconfigureFeatures(
+            boolean denoising,
+            boolean reconstruction,
+            boolean frameGeneration
+    ) {
+        requireState(State.FREE, "reconfigure frame slot features");
+        if (denoisingEnabled && !denoising) {
+            closeFeatureResource(denoisingResources, "denoising resources");
+            denoisingResources = null;
+            closeFeatureResource(traceImage, "denoising trace image");
+            traceImage = null;
+            traceLayoutInitialized = false;
+        }
+        if (reconstructionEnabled && !reconstruction) {
+            closeFeatureResource(reconstructionResources, "reconstruction resources");
+            reconstructionResources = null;
+            closeFeatureResource(reconstructionOutputImage, "reconstruction output image");
+            reconstructionOutputImage = null;
+            reconstructionOutputLayoutInitialized = false;
+        }
+        if (frameGenerationEnabled && !frameGeneration) {
+            closeFeatureResource(frameGenerationResources, "frame-generation resources");
+            frameGenerationResources = null;
+        }
+        denoisingEnabled = denoising;
+        reconstructionEnabled = reconstruction;
+        frameGenerationEnabled = frameGeneration;
     }
 
     synchronized boolean producerPending() {
         requireOpen();
-        return state == State.SUBMITTED;
+        /*
+         * Managed presentation may lease a SUBMITTED slot before its producer fence signals.
+         * State alone therefore cannot prove that ray traversal stopped reading scene buffers.
+         * The submission handle is the authoritative producer-lifetime token and is cleared only
+         * after its fence has completed (either by polling or by lease release).
+         */
+        return producerSubmission != null;
     }
 
     synchronized void prepare(int width, int height, byte[] uniformBytes) {
+        prepare(VulkanFrameExtents.identity(width, height), uniformBytes);
+    }
+
+    synchronized void prepare(VulkanFrameExtents extents, byte[] uniformBytes) {
+        ensureResources(extents);
+        writeUniforms(uniformBytes);
+    }
+
+    /**
+     * Allocates the images that temporal preparation must reference. This is intentionally
+     * separate from uniform upload: the temporal coordinator derives those uniforms while
+     * borrowing this slot's motion image, so a single prepare call would create a circular
+     * first-frame dependency.
+     */
+    synchronized void ensureResources(VulkanFrameExtents extents) {
         requireState(State.FREE, "prepare frame slot");
-        if (width <= 0 || height <= 0) {
-            throw new IllegalArgumentException("frame extent must be positive");
-        }
-        byte[] checkedUniforms = Objects.requireNonNull(uniformBytes, "uniformBytes");
-        if (checkedUniforms.length != VulkanFrameUniformPacker.BYTE_COUNT) {
-            throw new IllegalArgumentException("frame uniform payload has the wrong ABI size");
-        }
+        VulkanFrameExtents frameExtents = Objects.requireNonNull(extents, "extents");
+        int outputWidth = frameExtents.outputWidth();
+        int outputHeight = frameExtents.outputHeight();
+        int renderWidth = frameExtents.renderWidth();
+        int renderHeight = frameExtents.renderHeight();
         boolean resourcesMatch = outputImage != null
-                && outputImage.width() == width
-                && outputImage.height() == height
+                && outputImage.width() == outputWidth
+                && outputImage.height() == outputHeight
+                && (!denoisingEnabled || traceImage != null
+                && traceImage.width() == renderWidth && traceImage.height() == renderHeight)
                 && (!temporalEnabled || motionImage != null)
+                && (!denoisingEnabled || denoisingResources != null
+                && denoisingResources.matchesExtent(renderWidth, renderHeight))
+                && (!reconstructionEnabled || reconstructionResources != null
+                && reconstructionResources.matchesExtent(frameExtents))
+                && (!requiresPrivateReconstructionOutput() || reconstructionOutputImage != null
+                && reconstructionOutputImage.width() == outputWidth
+                && reconstructionOutputImage.height() == outputHeight)
+                && (!(frameGenerationEnabled && !reconstructionEnabled) || frameGenerationResources != null
+                && frameGenerationResources.matchesExtent(frameExtents))
                 && (!cpuFrameReadbackEnabled || cpuReadback != null);
-        if (resourcesMatch) {
-            frameUniforms.writeBytes(checkedUniforms);
-            return;
-        }
+        if (resourcesMatch) return;
 
         RtGpuImage replacementOutput = null;
+        RtGpuImage replacementReconstructionOutput = null;
+        RtGpuImage replacementTrace = null;
         RtGpuImage replacementMotion = null;
         RtGpuBuffer replacementReadback = null;
+        VulkanDenoisingFrameResources replacementDenoising = null;
+        VulkanFrameReconstructionResources replacementReconstruction = null;
+        VulkanFrameGenerationResources replacementFrameGeneration = null;
         try {
-            replacementOutput = RtGpuImage.createExportableStorageImage(
+            replacementOutput = frameGenerationEnabled
+                    ? RtGpuImage.createExportableStorageSampledImage(
                     device.physicalDevice(),
                     device.device(),
-                    width,
-                    height,
+                    outputWidth,
+                    outputHeight,
+                    frameOutput.vkFormat(),
+                    dedicatedAllocationRequired
+            )
+                    : RtGpuImage.createExportableStorageImage(
+                    device.physicalDevice(),
+                    device.device(),
+                    outputWidth,
+                    outputHeight,
                     frameOutput.vkFormat(),
                     dedicatedAllocationRequired
             );
+            replacementReconstructionOutput = requiresPrivateReconstructionOutput()
+                    ? RtGpuImage.createStorageSampledImage(
+                    device.device(), device.allocator(), outputWidth, outputHeight,
+                    VK10.VK_FORMAT_R16G16B16A16_SFLOAT
+            )
+                    : null;
+            replacementTrace = denoisingEnabled
+                    ? RtGpuImage.createStorageImage(
+                    device.device(), device.allocator(), renderWidth, renderHeight,
+                    VK10.VK_FORMAT_R16G16B16A16_SFLOAT
+            )
+                    : null;
             replacementMotion = temporalEnabled
                     ? RtGpuImage.createStorageImage(
-                    device.device(), device.allocator(), width, height,
+                    device.device(), device.allocator(), renderWidth, renderHeight,
                     VulkanTemporalImageSupport.MOTION_FORMAT
             )
                     : null;
@@ -156,35 +329,76 @@ final class VulkanFrameSlot implements AutoCloseable {
                     ? RtGpuBuffer.createHostVisibleBuffer(
                     device.device(),
                     device.allocator(),
-                    frameOutput.byteCount(width, height),
+                    frameOutput.byteCount(outputWidth, outputHeight),
                     VK10.VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                     stalls
             )
                     : null;
-            frameUniforms.writeBytes(checkedUniforms);
+            replacementDenoising = denoisingEnabled
+                    ? VulkanDenoisingFrameResources.create(device, renderWidth, renderHeight)
+                    : null;
+            if (reconstructionEnabled) {
+                replacementReconstruction = new VulkanFrameReconstructionResources(device);
+                replacementReconstruction.ensureExtent(frameExtents);
+            }
+            if (frameGenerationEnabled && !reconstructionEnabled) {
+                replacementFrameGeneration = new VulkanFrameGenerationResources(device);
+                replacementFrameGeneration.ensureExtent(frameExtents);
+            }
         } catch (RuntimeException | Error failure) {
+            closeAfterFailedReplacement(replacementDenoising, failure);
+            closeAfterFailedReplacement(replacementReconstruction, failure);
+            closeAfterFailedReplacement(replacementFrameGeneration, failure);
             closeAfterFailedReplacement(replacementReadback, failure);
             closeAfterFailedReplacement(replacementMotion, failure);
+            closeAfterFailedReplacement(replacementTrace, failure);
+            closeAfterFailedReplacement(replacementReconstructionOutput, failure);
             closeAfterFailedReplacement(replacementOutput, failure);
             throw failure;
         }
 
         RtGpuImage previousOutput = outputImage;
+        RtGpuImage previousReconstructionOutput = reconstructionOutputImage;
+        RtGpuImage previousTrace = traceImage;
         RtGpuImage previousMotion = motionImage;
         RtGpuBuffer previousReadback = cpuReadback;
+        VulkanDenoisingFrameResources previousDenoising = denoisingResources;
+        VulkanFrameReconstructionResources previousReconstruction = reconstructionResources;
+        VulkanFrameGenerationResources previousFrameGeneration = frameGenerationResources;
         outputImage = replacementOutput;
+        reconstructionOutputImage = replacementReconstructionOutput;
+        traceImage = replacementTrace;
         outputResourceId = nextExternalResourceId();
         motionImage = replacementMotion;
         cpuReadback = replacementReadback;
+        denoisingResources = replacementDenoising;
+        reconstructionResources = replacementReconstruction;
+        frameGenerationResources = replacementFrameGeneration;
         imageLayout = VK10.VK_IMAGE_LAYOUT_UNDEFINED;
+        traceLayoutInitialized = false;
+        reconstructionOutputLayoutInitialized = false;
         externallyOwned = false;
         motionLayoutInitialized = false;
 
         RuntimeException failure = null;
         failure = closeReplaced(previousReadback, failure);
+        failure = closeReplaced(previousDenoising, failure);
+        failure = closeReplaced(previousReconstruction, failure);
+        failure = closeReplaced(previousFrameGeneration, failure);
         failure = closeReplaced(previousMotion, failure);
+        failure = closeReplaced(previousTrace, failure);
+        failure = closeReplaced(previousReconstructionOutput, failure);
         failure = closeReplaced(previousOutput, failure);
         if (failure != null) throw failure;
+    }
+
+    synchronized void writeUniforms(byte[] uniformBytes) {
+        requireState(State.FREE, "write frame uniforms");
+        byte[] checkedUniforms = Objects.requireNonNull(uniformBytes, "uniformBytes");
+        if (checkedUniforms.length != VulkanFrameUniformPacker.BYTE_COUNT) {
+            throw new IllegalArgumentException("frame uniform payload has the wrong ABI size");
+        }
+        frameUniforms.writeBytes(checkedUniforms);
     }
 
     private static void closeAfterFailedReplacement(AutoCloseable resource, Throwable failure) {
@@ -209,13 +423,49 @@ final class VulkanFrameSlot implements AutoCloseable {
     }
 
     synchronized long requiredImageGrowthBytes(int width, int height) {
+        return requiredImageGrowthBytes(VulkanFrameExtents.identity(width, height));
+    }
+
+    synchronized long requiredImageGrowthBytes(VulkanFrameExtents extents) {
         requireState(State.FREE, "estimate frame slot growth");
-        if (width <= 0 || height <= 0) throw new IllegalArgumentException("frame extent must be positive");
-        if (outputImage != null && outputImage.width() == width && outputImage.height() == height
-                && (!temporalEnabled || motionImage != null)) return 0L;
-        long bytes = frameOutput.byteCount(width, height);
+        VulkanFrameExtents frameExtents = Objects.requireNonNull(extents, "extents");
+        int outputWidth = frameExtents.outputWidth();
+        int outputHeight = frameExtents.outputHeight();
+        int renderWidth = frameExtents.renderWidth();
+        int renderHeight = frameExtents.renderHeight();
+        if (outputImage != null && outputImage.width() == outputWidth && outputImage.height() == outputHeight
+                && (!denoisingEnabled || traceImage != null
+                && traceImage.width() == renderWidth && traceImage.height() == renderHeight)
+                && (!temporalEnabled || motionImage != null)
+                && (!denoisingEnabled || denoisingResources != null
+                && denoisingResources.matchesExtent(renderWidth, renderHeight))
+                && (!reconstructionEnabled || reconstructionResources != null
+                && reconstructionResources.matchesExtent(frameExtents))
+                && (!requiresPrivateReconstructionOutput() || reconstructionOutputImage != null
+                && reconstructionOutputImage.width() == outputWidth
+                && reconstructionOutputImage.height() == outputHeight)
+                && (!(frameGenerationEnabled && !reconstructionEnabled) || frameGenerationResources != null
+                && frameGenerationResources.matchesExtent(frameExtents))) {
+            return 0L;
+        }
+        long bytes = frameOutput.byteCount(outputWidth, outputHeight);
+        if (denoisingEnabled) {
+            bytes = Math.addExact(bytes, Math.multiplyExact((long) renderWidth * renderHeight, 8L));
+        }
         if (temporalEnabled) {
-            bytes = Math.addExact(bytes, Math.multiplyExact((long) width * height, 4L));
+            bytes = Math.addExact(bytes, Math.multiplyExact((long) renderWidth * renderHeight, 4L));
+        }
+        if (denoisingEnabled) {
+            bytes = Math.addExact(bytes, VulkanDenoisingFrameResources.requiredBytes(renderWidth, renderHeight));
+        }
+        if (reconstructionEnabled) {
+            bytes = Math.addExact(bytes, VulkanFrameReconstructionResources.requiredBytes(frameExtents));
+            if (requiresPrivateReconstructionOutput()) {
+                bytes = Math.addExact(bytes, Math.multiplyExact((long) outputWidth * outputHeight, 8L));
+            }
+        }
+        if (frameGenerationEnabled && !reconstructionEnabled) {
+            bytes = Math.addExact(bytes, VulkanFrameGenerationResources.requiredBytes(frameExtents));
         }
         return bytes;
     }
@@ -223,30 +473,62 @@ final class VulkanFrameSlot implements AutoCloseable {
     synchronized long trimIdleOutputImage() {
         requireState(State.FREE, "trim idle frame output");
         RtGpuImage idleOutput = outputImage;
+        RtGpuImage idleReconstructionOutput = reconstructionOutputImage;
+        RtGpuImage idleTrace = traceImage;
         RtGpuImage idleMotion = motionImage;
         RtGpuBuffer idleReadback = cpuReadback;
-        if (idleOutput == null && idleMotion == null && idleReadback == null) {
+        VulkanDenoisingFrameResources idleDenoising = denoisingResources;
+        VulkanFrameReconstructionResources idleReconstruction = reconstructionResources;
+        VulkanFrameGenerationResources idleFrameGeneration = frameGenerationResources;
+        if (idleOutput == null && idleReconstructionOutput == null
+                && idleTrace == null && idleMotion == null && idleReadback == null
+                && idleDenoising == null && idleReconstruction == null && idleFrameGeneration == null) {
             return 0L;
         }
         long releasedBytes = idleOutput == null ? 0L : idleOutput.allocationSize();
+        if (idleReconstructionOutput != null) {
+            releasedBytes = Math.addExact(releasedBytes, idleReconstructionOutput.allocationSize());
+        }
+        if (idleTrace != null) releasedBytes = Math.addExact(releasedBytes, idleTrace.allocationSize());
         if (idleMotion != null) {
             releasedBytes = Math.addExact(releasedBytes, idleMotion.allocationSize());
+        }
+        if (idleDenoising != null) {
+            releasedBytes = Math.addExact(releasedBytes, idleDenoising.allocationSizeBytes());
+        }
+        if (idleReconstruction != null) {
+            releasedBytes = Math.addExact(releasedBytes, idleReconstruction.allocationSizeBytes());
+        }
+        if (idleFrameGeneration != null) {
+            releasedBytes = Math.addExact(releasedBytes, idleFrameGeneration.allocationSizeBytes());
         }
         /*
          * Detach the whole resource set before native teardown. This preserves the slot invariant
          * even when one close fails and lets every independent allocation attempt cleanup.
          */
         outputImage = null;
+        reconstructionOutputImage = null;
+        traceImage = null;
         outputResourceId = -1L;
         motionImage = null;
         cpuReadback = null;
+        denoisingResources = null;
+        reconstructionResources = null;
+        frameGenerationResources = null;
         imageLayout = VK10.VK_IMAGE_LAYOUT_UNDEFINED;
+        traceLayoutInitialized = false;
+        reconstructionOutputLayoutInitialized = false;
         externallyOwned = false;
         motionLayoutInitialized = false;
 
         RuntimeException failure = null;
         failure = closeReplaced(idleReadback, failure);
+        failure = closeReplaced(idleDenoising, failure);
+        failure = closeReplaced(idleReconstruction, failure);
+        failure = closeReplaced(idleFrameGeneration, failure);
         failure = closeReplaced(idleMotion, failure);
+        failure = closeReplaced(idleTrace, failure);
+        failure = closeReplaced(idleReconstructionOutput, failure);
         failure = closeReplaced(idleOutput, failure);
         if (failure != null) throw failure;
         return releasedBytes;
@@ -256,6 +538,35 @@ final class VulkanFrameSlot implements AutoCloseable {
         requireOpen();
         if (outputImage == null) throw new IllegalStateException("frame slot has no output image");
         return outputImage;
+    }
+
+    /** Returns the HDR target written by reconstruction before public-format conversion. */
+    synchronized RtGpuImage reconstructionOutputImage() {
+        requireOpen();
+        if (!reconstructionEnabled) {
+            throw new IllegalStateException("frame slot has no active reconstruction output");
+        }
+        return requiresPrivateReconstructionOutput()
+                ? Objects.requireNonNull(reconstructionOutputImage, "private reconstruction output")
+                : outputImage();
+    }
+
+    synchronized boolean reconstructionOutputLayoutInitialized() {
+        requireOpen();
+        return !requiresPrivateReconstructionOutput() || reconstructionOutputLayoutInitialized;
+    }
+
+    private boolean requiresPrivateReconstructionOutput() {
+        return reconstructionEnabled && !frameOutput.linearHdr();
+    }
+
+    /** Returns the linear ray-tracing target when NRD owns final output composition. */
+    synchronized RtGpuImage traceImage() {
+        requireOpen();
+        if (!denoisingEnabled || traceImage == null) {
+            throw new IllegalStateException("frame slot has no denoising trace image");
+        }
+        return traceImage;
     }
 
     synchronized RtGpuBuffer frameUniforms() {
@@ -294,6 +605,30 @@ final class VulkanFrameSlot implements AutoCloseable {
         return motionImage;
     }
 
+    synchronized VulkanDenoisingFrameResources denoisingResources() {
+        requireOpen();
+        if (!denoisingEnabled || denoisingResources == null) {
+            throw new IllegalStateException("frame slot has no active denoising resources");
+        }
+        return denoisingResources;
+    }
+
+    synchronized VulkanFrameReconstructionResources reconstructionResources() {
+        requireOpen();
+        if (!reconstructionEnabled || reconstructionResources == null) {
+            throw new IllegalStateException("frame slot has no active reconstruction resources");
+        }
+        return reconstructionResources;
+    }
+
+    synchronized VulkanFrameGenerationResources frameGenerationResources() {
+        requireOpen();
+        if (!frameGenerationEnabled || reconstructionEnabled || frameGenerationResources == null) {
+            throw new IllegalStateException("frame slot has no active frame-generation resources");
+        }
+        return frameGenerationResources;
+    }
+
     synchronized boolean motionLayoutInitialized() {
         requireOpen();
         return motionLayoutInitialized;
@@ -302,6 +637,11 @@ final class VulkanFrameSlot implements AutoCloseable {
     synchronized int imageLayout() {
         requireOpen();
         return imageLayout;
+    }
+
+    synchronized boolean traceLayoutInitialized() {
+        requireOpen();
+        return traceLayoutInitialized;
     }
 
     synchronized boolean externallyOwned() {
@@ -315,9 +655,13 @@ final class VulkanFrameSlot implements AutoCloseable {
             long sceneRevision,
             long descriptorEpoch,
             boolean externallyOwnedAfterSubmission,
-            VulkanDeviceRuntime.ManagedPresentationSignal readySignal
+            VulkanDeviceRuntime.ManagedPresentationSignal readySignal,
+            boolean usesShaderExecutionReordering
     ) {
         requireState(State.FREE, "publish frame submission");
+        if (pendingCompletionEvidenceSequence >= 0L) {
+            throw new IllegalStateException("previous frame completion evidence is still pending");
+        }
         if (frameSequence < 0L || sceneRevision < 0L || descriptorEpoch < 0L) {
             throw new IllegalArgumentException("frame submission counters must not be negative");
         }
@@ -330,8 +674,11 @@ final class VulkanFrameSlot implements AutoCloseable {
         readyTimelineSemaphore = checkedSignal.semaphore();
         readyTimelineValue = checkedSignal.value();
         imageLayout = VK10.VK_IMAGE_LAYOUT_GENERAL;
+        if (denoisingEnabled) traceLayoutInitialized = true;
+        if (requiresPrivateReconstructionOutput()) reconstructionOutputLayoutInitialized = true;
         if (temporalEnabled) motionLayoutInitialized = true;
         externallyOwned = externallyOwnedAfterSubmission;
+        currentSubmissionUsesSer = usesShaderExecutionReordering;
         state = State.SUBMITTED;
         VulkanFrameFlightRecorder.record(
                 VulkanFrameFlightRecorder.PHASE_ADMITTED,
@@ -348,6 +695,7 @@ final class VulkanFrameSlot implements AutoCloseable {
 
     synchronized boolean pollProducer() {
         requireOpen();
+        publishPendingCompletionEvidence();
         if (state == State.CONSUMER_PENDING) {
             if (!consumerSubmission.pollComplete()) return false;
             consumerSubmission = null;
@@ -363,6 +711,7 @@ final class VulkanFrameSlot implements AutoCloseable {
         RtCommandContext.Timing timing = finishProducerCompletion();
         state = State.COMPLETED;
         recordProducerCompleted(timing);
+        publishPendingCompletionEvidence();
         return true;
     }
 
@@ -371,7 +720,23 @@ final class VulkanFrameSlot implements AutoCloseable {
         producerSubmission = null;
         observedProducerFrameSequence = Math.max(observedProducerFrameSequence, frameSequence);
         observedProducerDescriptorEpoch = Math.max(observedProducerDescriptorEpoch, descriptorEpoch);
+        pendingCompletionEvidenceSequence = frameSequence;
+        pendingCompletionUsesSer = currentSubmissionUsesSer;
+        currentSubmissionUsesSer = false;
         return timing;
+    }
+
+    private void publishPendingCompletionEvidence() {
+        if (pendingCompletionEvidenceSequence < 0L) return;
+        long completedSequence = pendingCompletionEvidenceSequence;
+        if (pendingCompletionUsesSer) {
+            device.markShaderExecutionReorderingExecuted(completedSequence);
+            // The provider callback below may fail and be retried. SER completion belongs to the
+            // device ledger, so consume this flag immediately after its own successful commit.
+            pendingCompletionUsesSer = false;
+        }
+        device.featureSession().observeFrameCompletion(completedSequence);
+        pendingCompletionEvidenceSequence = -1L;
     }
 
     private void recordProducerCompleted(RtCommandContext.Timing timing) {
@@ -581,6 +946,10 @@ final class VulkanFrameSlot implements AutoCloseable {
             producerSubmission.close();
             recordProducerCompleted(finishProducerCompletion());
         }
+        // Publish before releasing the lease identity. If a provider violates the retry-safe
+        // callback contract, the public lease remains ACTIVE and its next release retries the
+        // same completion evidence instead of observing an already-free slot.
+        publishPendingCompletionEvidence();
         recordConsumerCompleted();
         resetIdentity();
         state = State.FREE;
@@ -622,6 +991,7 @@ final class VulkanFrameSlot implements AutoCloseable {
     @Override
     public synchronized void close() {
         if (closed) return;
+        publishPendingCompletionEvidence();
         if (state == State.LEASED) {
             throw new IllegalStateException("cannot close a frame slot retained by an external consumer");
         }
@@ -658,11 +1028,27 @@ final class VulkanFrameSlot implements AutoCloseable {
          * later close can retry after the fence or external semaphore advances.
          */
         if (producerSubmission == null && consumerSubmission == null) {
+            if (reconstructionOutputImage != null) {
+                try {
+                    reconstructionOutputImage.close();
+                    reconstructionOutputImage = null;
+                } catch (RuntimeException ex) {
+                    failure = accumulate(failure, ex);
+                }
+            }
             if (outputImage != null) {
                 try {
                     outputImage.close();
                     outputImage = null;
                     outputResourceId = -1L;
+                } catch (RuntimeException ex) {
+                    failure = accumulate(failure, ex);
+                }
+            }
+            if (traceImage != null) {
+                try {
+                    traceImage.close();
+                    traceImage = null;
                 } catch (RuntimeException ex) {
                     failure = accumulate(failure, ex);
                 }
@@ -683,6 +1069,30 @@ final class VulkanFrameSlot implements AutoCloseable {
                     failure = accumulate(failure, ex);
                 }
             }
+            if (denoisingResources != null) {
+                try {
+                    denoisingResources.close();
+                    denoisingResources = null;
+                } catch (RuntimeException ex) {
+                    failure = accumulate(failure, ex);
+                }
+            }
+            if (reconstructionResources != null) {
+                try {
+                    reconstructionResources.close();
+                    reconstructionResources = null;
+                } catch (RuntimeException ex) {
+                    failure = accumulate(failure, ex);
+                }
+            }
+            if (frameGenerationResources != null) {
+                try {
+                    frameGenerationResources.close();
+                    frameGenerationResources = null;
+                } catch (RuntimeException ex) {
+                    failure = accumulate(failure, ex);
+                }
+            }
             if (!frameUniformsClosed) {
                 try {
                     frameUniforms.close();
@@ -696,8 +1106,13 @@ final class VulkanFrameSlot implements AutoCloseable {
                 && consumerSemaphore == null
                 && producerSubmission == null
                 && outputImage == null
+                && reconstructionOutputImage == null
+                && traceImage == null
                 && motionImage == null
                 && cpuReadback == null
+                && denoisingResources == null
+                && reconstructionResources == null
+                && frameGenerationResources == null
                 && frameUniformsClosed;
         if (failure != null) throw failure;
     }

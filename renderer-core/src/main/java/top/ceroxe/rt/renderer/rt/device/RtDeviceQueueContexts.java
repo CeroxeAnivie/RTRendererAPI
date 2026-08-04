@@ -152,10 +152,37 @@ final class RtDeviceQueueContexts implements AutoCloseable {
     }
 
     static int requestedQueueCount(int availableQueues, boolean timelineSemaphoreSupported) {
+        return requestedQueueCount(availableQueues, timelineSemaphoreSupported, 0, 0);
+    }
+
+    /**
+     * Reserves provider-owned queues before splitting optional renderer command lanes.
+     *
+     * <p>Build and presentation work can safely collapse onto the frame queue. A provider that
+     * explicitly requests extra queues cannot: publishing the renderer queue as a substitute
+     * violates both Vulkan external synchronization and the provider's device-handoff contract.</p>
+     */
+    static int requestedQueueCount(
+            int availableQueues,
+            boolean timelineSemaphoreSupported,
+            int requiredProviderQueues,
+            int preferredProviderQueues
+    ) {
         if (availableQueues <= 0) {
             throw new IllegalArgumentException("availableQueues must be positive");
         }
-        return timelineSemaphoreSupported ? Math.min(availableQueues, 3) : 1;
+        if (requiredProviderQueues < 0 || preferredProviderQueues < 0) {
+            throw new IllegalArgumentException("provider queue counts must not be negative");
+        }
+        int afterRequired = Math.subtractExact(availableQueues, requiredProviderQueues);
+        if (afterRequired <= 0) {
+            throw new IllegalStateException(
+                    "provider queues leave no graphics/compute queue for the renderer"
+            );
+        }
+        int afterPreferred = Math.subtractExact(afterRequired, preferredProviderQueues);
+        int rendererCapacity = afterPreferred > 0 ? afterPreferred : afterRequired;
+        return timelineSemaphoreSupported ? Math.min(rendererCapacity, 3) : 1;
     }
 
     private static void closeSuppressing(AutoCloseable closeable) {

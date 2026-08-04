@@ -3,6 +3,7 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 import java.nio.LongBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import top.ceroxe.rt.renderer.api.AffineTransform;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.SceneInstance;
@@ -23,6 +24,7 @@ public final class VulkanSceneResidencySelfTest {
       retainsIdentitySlotsAndReusesReleasedCapacity();
       rejectsStalePreparedGenerationBeforeAnyDomainMutation();
       resetRetainsSurvivingIdentitiesAndClearsOtherDomains();
+      instanceMotionFollowsOnlySuccessfullyRenderedFrames();
       sparseUpdatesDoNotRewriteOrExpandStableDomain();
       System.out.println("VulkanSceneResidencySelfTest passed");
    }
@@ -101,6 +103,62 @@ public final class VulkanSceneResidencySelfTest {
       slots.validate(sparse);
       slots.commitValidated(sparse);
       require(slots.liveCount() == residentCount && slots.slotUpperBound() == residentCount, "sparse churn changed resident capacity accounting");
+   }
+
+   private static void instanceMotionFollowsOnlySuccessfullyRenderedFrames() {
+      VulkanSceneResidency residency = new VulkanSceneResidency();
+      VulkanSceneResidency.PreparedUpdate initial = residency.prepare(initialScene(0L));
+      require(previousX(initial) == 0.0F, "first frame must not invent instance motion");
+      residency.commit(initial);
+      residency.markFrameRendered(0L);
+
+      VulkanSceneResidency.PreparedUpdate firstMove = residency.prepare(
+            SceneTransaction.builder(1L).upsert(instanceAt(4.0F)).build()
+      );
+      require(previousX(firstMove) == 0.0F, "first move did not retain the rendered source transform");
+      residency.commit(firstMove);
+
+      VulkanSceneResidency.PreparedUpdate supersedingMove = residency.prepare(
+            SceneTransaction.builder(2L).upsert(instanceAt(8.0F)).build()
+      );
+      require(previousX(supersedingMove) == 0.0F,
+            "an unrendered scene transaction advanced instance motion history");
+      residency.commit(supersedingMove);
+      residency.markFrameRendered(2L);
+
+      VulkanSceneResidency.PreparedUpdate nextMove = residency.prepare(
+            SceneTransaction.builder(3L).upsert(instanceAt(12.0F)).build()
+      );
+      require(previousX(nextMove) == 8.0F,
+            "the next move did not use the last successfully rendered transform");
+      residency.commit(nextMove);
+      expect(IllegalArgumentException.class, () -> residency.markFrameRendered(2L));
+
+      VulkanSceneResidency.PreparedUpdate afterRejectedMark = residency.prepare(
+            SceneTransaction.builder(4L).upsert(instanceAt(16.0F)).build()
+      );
+      require(previousX(afterRejectedMark) == 8.0F,
+            "a rejected rendered-revision mark corrupted instance history");
+
+      VulkanSceneResidency.PreparedUpdate reset = residency.prepare(
+            SceneTransaction.builder(5L).resetScene().upsert(instanceAt(20.0F)).build()
+      );
+      require(previousX(reset) == 20.0F, "scene reset must restart instance history at current state");
+   }
+
+   private static float previousX(VulkanSceneResidency.PreparedUpdate update) {
+      List<VulkanSceneResidency.InstanceMotionWrite> writes =
+            update.changeSet().instanceMotionWrites();
+      require(writes.size() == 1, "expected exactly one instance motion write");
+      return writes.get(0).previousTransform().elements().get(3);
+   }
+
+   private static SceneInstance instanceAt(float x) {
+      return SceneInstance.builder(70L, 60L).transform(new AffineTransform(new float[]{
+            1.0F, 0.0F, 0.0F, x,
+            0.0F, 1.0F, 0.0F, 0.0F,
+            0.0F, 0.0F, 1.0F, 0.0F
+      })).build();
    }
 
    private static VulkanSceneResidency populatedResidency() {

@@ -3,8 +3,8 @@ package top.ceroxe.rt.renderer.api.interop.vulkan;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -59,6 +59,10 @@ public interface VulkanFrameInterop {
     /**
      * Runs the bounded wait on a caller-owned executor.
      *
+     * <p>Cancellation succeeds only while the task is still queued. Once polling begins it may
+     * acquire an exclusive GPU-frame lease, so cancellation is rejected and the future remains
+     * responsible for delivering that owned result to the caller.</p>
+     *
      * @param timeout  non-negative maximum wait duration
      * @param executor caller-owned executor
      * @return future completed with an available or timed-out result
@@ -69,14 +73,36 @@ public interface VulkanFrameInterop {
     ) {
         Objects.requireNonNull(timeout, "timeout");
         Objects.requireNonNull(executor, "executor");
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return awaitLatestFrame(timeout);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw new CompletionException(interrupted);
+        final int queued = 0;
+        final int running = 1;
+        final int cancelled = 2;
+        final int terminal = 3;
+        AtomicInteger state = new AtomicInteger(queued);
+        CompletableFuture<FramePollResult> result = new CompletableFuture<>() {
+            @Override
+            public boolean cancel(boolean mayInterruptIfRunning) {
+                if (!state.compareAndSet(queued, cancelled)) return false;
+                return super.cancel(false);
             }
-        }, executor);
+        };
+        try {
+            executor.execute(() -> {
+                if (!state.compareAndSet(queued, running)) return;
+                try {
+                    result.complete(awaitLatestFrame(timeout));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    result.completeExceptionally(interrupted);
+                } catch (Throwable failure) {
+                    result.completeExceptionally(failure);
+                } finally {
+                    state.set(terminal);
+                }
+            });
+        } catch (RuntimeException rejected) {
+            if (state.compareAndSet(queued, terminal)) result.completeExceptionally(rejected);
+        }
+        return result;
     }
 
     /**

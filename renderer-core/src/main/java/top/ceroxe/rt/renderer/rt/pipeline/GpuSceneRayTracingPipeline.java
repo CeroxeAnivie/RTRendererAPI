@@ -4,11 +4,18 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.shaderc.Shaderc;
 import org.lwjgl.vulkan.*;
 import top.ceroxe.rt.renderer.RtEdgeSink;
+import top.ceroxe.rt.renderer.feature.VulkanDenoisingResourceContract;
+import top.ceroxe.rt.renderer.feature.VulkanFrameReconstructionResourceContract;
+import top.ceroxe.rt.renderer.feature.VulkanFrameGenerationResourceContract;
+import top.ceroxe.rt.renderer.feature.VulkanTemporalFrameInput;
 import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
 import top.ceroxe.rt.renderer.rt.device.RtGpuImage;
+import top.ceroxe.rt.renderer.feature.VulkanFeatureFrameContext;
+import top.ceroxe.rt.renderer.feature.VulkanFeatureSession;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Immutable generic GPUScene RT pipeline and descriptor-set bank.
@@ -27,6 +34,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     private final RtShaderBindingTable shaderBindingTable;
     private final RtRayTracingPipelineProperties properties;
     private final long maxStorageBufferRangeBytes;
+    private final boolean shaderExecutionReorderingEnabled;
     private boolean closed;
 
     private GpuSceneRayTracingPipeline(
@@ -36,7 +44,8 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             long pipeline,
             RtShaderBindingTable shaderBindingTable,
             RtRayTracingPipelineProperties properties,
-            long maxStorageBufferRangeBytes
+            long maxStorageBufferRangeBytes,
+            boolean shaderExecutionReorderingEnabled
     ) {
         this.device = Objects.requireNonNull(device, "device");
         this.descriptors = Objects.requireNonNull(descriptors, "descriptors");
@@ -51,6 +60,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             throw new IllegalArgumentException("maxStorageBufferRangeBytes must be positive");
         }
         this.maxStorageBufferRangeBytes = maxStorageBufferRangeBytes;
+        this.shaderExecutionReorderingEnabled = shaderExecutionReorderingEnabled;
     }
 
     /**
@@ -67,6 +77,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             boolean linearHdrOutput
     ) {
         VulkanDeviceRuntime checkedRuntime = Objects.requireNonNull(runtime, "runtime");
+        boolean shaderExecutionReorderingEnabled = checkedRuntime.shaderExecutionReorderingEnabled();
         if (descriptorSetCount <= 0) throw new IllegalArgumentException("descriptorSetCount must be positive");
         VkDevice device = checkedRuntime.device();
         GpuSceneDescriptorLayout descriptors = null;
@@ -92,7 +103,8 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             descriptors = GpuSceneDescriptorLayout.create(stack, device, descriptorSetCount);
             pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout());
             raygenModule = compileModule(
-                    stack, device, "gpuscene.rgen", Shaderc.shaderc_raygen_shader, linearHdrOutput
+                    stack, device, "gpuscene.rgen", Shaderc.shaderc_raygen_shader,
+                    linearHdrOutput, shaderExecutionReorderingEnabled
             );
             missModule = compileModule(stack, device, "gpuscene.rmiss", Shaderc.shaderc_miss_shader);
             closestHitModule = compileModule(
@@ -124,7 +136,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             );
             GpuSceneRayTracingPipeline result = new GpuSceneRayTracingPipeline(
                     device, descriptors, pipelineLayout, pipeline, shaderBindingTable, properties,
-                    maxStorageBufferRangeBytes
+                    maxStorageBufferRangeBytes, shaderExecutionReorderingEnabled
             );
             descriptors = null;
             pipelineLayout = 0L;
@@ -170,6 +182,281 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         );
     }
 
+    private static void transitionDenoisingImage(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanDenoisingResourceContract.Image image,
+            boolean initialized,
+            int destinationAccess,
+            int destinationStage
+    ) {
+        int rayTracingStage = org.lwjgl.vulkan.KHRRayTracingPipeline
+                .VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+        RtFrameDispatchCommands.recordImageLayoutTransition(
+                commandBuffer,
+                stack,
+                image.handle(),
+                initialized ? VK10.VK_IMAGE_LAYOUT_GENERAL : VK10.VK_IMAGE_LAYOUT_UNDEFINED,
+                VK10.VK_IMAGE_LAYOUT_GENERAL,
+                initialized ? VK10.VK_ACCESS_MEMORY_WRITE_BIT : 0,
+                destinationAccess,
+                initialized ? VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT : VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                destinationStage,
+                VK10.VK_QUEUE_FAMILY_IGNORED,
+                VK10.VK_QUEUE_FAMILY_IGNORED
+        );
+    }
+
+    private static void prepareDenoisingResources(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanDenoisingResourceContract resources,
+            boolean layoutsInitialized
+    ) {
+        int rayTracingStage = org.lwjgl.vulkan.KHRRayTracingPipeline
+                .VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+        transitionDenoisingImage(
+                commandBuffer, stack, resources.normalRoughness(), layoutsInitialized,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, rayTracingStage
+        );
+        transitionDenoisingImage(
+                commandBuffer, stack, resources.viewZ(), layoutsInitialized,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, rayTracingStage
+        );
+        transitionDenoisingImage(
+                commandBuffer, stack, resources.motionVectors(), layoutsInitialized,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, rayTracingStage
+        );
+        transitionDenoisingImage(
+                commandBuffer, stack, resources.diffuseRadianceHitDistance(), layoutsInitialized,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, rayTracingStage
+        );
+        transitionDenoisingImage(
+                commandBuffer, stack, resources.specularRadianceHitDistance(), layoutsInitialized,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, rayTracingStage
+        );
+        transitionDenoisingImage(
+                commandBuffer, stack, resources.diffuseMaterialFactor(), layoutsInitialized,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, rayTracingStage
+        );
+        transitionDenoisingImage(
+                commandBuffer, stack, resources.specularMaterialFactor(), layoutsInitialized,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, rayTracingStage
+        );
+        transitionDenoisingImage(
+                commandBuffer, stack, resources.denoisedDiffuseRadianceHitDistance(), layoutsInitialized,
+                VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT,
+                VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+        );
+        transitionDenoisingImage(
+                commandBuffer, stack, resources.denoisedSpecularRadianceHitDistance(), layoutsInitialized,
+                VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT,
+                VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+        );
+    }
+
+    private static void makeDenoisingSignalsAvailable(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanDenoisingResourceContract resources
+    ) {
+        int rayTracingStage = org.lwjgl.vulkan.KHRRayTracingPipeline
+                .VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+        int allCommands = VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+        int nativeAccess = VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT;
+        for (VulkanDenoisingResourceContract.Image image : java.util.List.of(
+                resources.normalRoughness(),
+                resources.viewZ(),
+                resources.motionVectors(),
+                resources.diffuseRadianceHitDistance(),
+                resources.specularRadianceHitDistance()
+        )) {
+            RtFrameDispatchCommands.recordImageLayoutTransition(
+                    commandBuffer, stack, image.handle(),
+                    VK10.VK_IMAGE_LAYOUT_GENERAL, VK10.VK_IMAGE_LAYOUT_GENERAL,
+                    VK10.VK_ACCESS_SHADER_WRITE_BIT, nativeAccess,
+                    rayTracingStage, allCommands,
+                    VK10.VK_QUEUE_FAMILY_IGNORED, VK10.VK_QUEUE_FAMILY_IGNORED
+            );
+        }
+    }
+
+    private static void prepareReconstructionResources(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanFrameReconstructionResourceContract resources,
+            boolean layoutsInitialized
+    ) {
+        int rayTracingStage = org.lwjgl.vulkan.KHRRayTracingPipeline
+                .VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+        /* inputColor is the trace target and is transitioned by the regular trace-output path. */
+        transitionReconstructionImage(
+                commandBuffer, stack, resources.depth(), layoutsInitialized,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, rayTracingStage
+        );
+        transitionReconstructionImage(
+                commandBuffer, stack, resources.motionVectors(), layoutsInitialized,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, rayTracingStage
+        );
+        transitionReconstructionImage(
+                commandBuffer, stack, resources.exposure(), layoutsInitialized,
+                VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT,
+                VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+        );
+    }
+
+    private static void transitionReconstructionImage(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanFrameReconstructionResourceContract.Image image,
+            boolean initialized,
+            int destinationAccess,
+            int destinationStage
+    ) {
+        RtFrameDispatchCommands.recordImageLayoutTransition(
+                commandBuffer,
+                stack,
+                image.handle(),
+                initialized ? VK10.VK_IMAGE_LAYOUT_GENERAL : VK10.VK_IMAGE_LAYOUT_UNDEFINED,
+                VK10.VK_IMAGE_LAYOUT_GENERAL,
+                initialized ? VK10.VK_ACCESS_MEMORY_WRITE_BIT : 0,
+                destinationAccess,
+                initialized ? VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT : VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                destinationStage,
+                VK10.VK_QUEUE_FAMILY_IGNORED,
+                VK10.VK_QUEUE_FAMILY_IGNORED
+        );
+    }
+
+    private static void makeReconstructionInputsAvailable(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanFrameReconstructionResourceContract resources
+    ) {
+        int rayTracingStage = org.lwjgl.vulkan.KHRRayTracingPipeline
+                .VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+        int allCommands = VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+        int nativeAccess = VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT;
+        for (VulkanFrameReconstructionResourceContract.Image image : java.util.List.of(
+                resources.inputColor(), resources.depth(), resources.motionVectors(), resources.exposure()
+        )) {
+            RtFrameDispatchCommands.recordImageLayoutTransition(
+                    commandBuffer, stack, image.handle(),
+                    VK10.VK_IMAGE_LAYOUT_GENERAL, VK10.VK_IMAGE_LAYOUT_GENERAL,
+                    image == resources.exposure() ? nativeAccess : VK10.VK_ACCESS_SHADER_WRITE_BIT,
+                    nativeAccess,
+                    image == resources.exposure() ? allCommands : rayTracingStage,
+                    allCommands,
+                    VK10.VK_QUEUE_FAMILY_IGNORED, VK10.VK_QUEUE_FAMILY_IGNORED
+            );
+        }
+    }
+
+    private static void prepareFrameGenerationResources(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanFrameGenerationResourceContract resources,
+            boolean layoutsInitialized
+    ) {
+        int rayTracingStage = org.lwjgl.vulkan.KHRRayTracingPipeline
+                .VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+        transitionReconstructionImage(
+                commandBuffer, stack, resources.depth(), layoutsInitialized,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, rayTracingStage
+        );
+        transitionReconstructionImage(
+                commandBuffer, stack, resources.motionVectors(), layoutsInitialized,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, rayTracingStage
+        );
+    }
+
+    private static void makeFrameGenerationInputsAvailable(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanFrameGenerationResourceContract resources
+    ) {
+        int rayTracingStage = org.lwjgl.vulkan.KHRRayTracingPipeline
+                .VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+        for (VulkanFrameReconstructionResourceContract.Image image
+                : java.util.List.of(resources.depth(), resources.motionVectors(), resources.exposure())) {
+            RtFrameDispatchCommands.recordImageLayoutTransition(
+                    commandBuffer, stack, image.handle(),
+                    VK10.VK_IMAGE_LAYOUT_GENERAL, VK10.VK_IMAGE_LAYOUT_GENERAL,
+                    image == resources.exposure()
+                            ? VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT
+                            : VK10.VK_ACCESS_SHADER_WRITE_BIT,
+                    VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT,
+                    image == resources.exposure() ? VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT : rayTracingStage,
+                    VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    VK10.VK_QUEUE_FAMILY_IGNORED, VK10.VK_QUEUE_FAMILY_IGNORED
+            );
+        }
+    }
+
+    private static void makeTraceOutputAvailableForCompose(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            RtGpuImage traceImage
+    ) {
+        RtFrameDispatchCommands.recordImageLayoutTransition(
+                commandBuffer, stack, traceImage.image(),
+                VK10.VK_IMAGE_LAYOUT_GENERAL, VK10.VK_IMAGE_LAYOUT_GENERAL,
+                VK10.VK_ACCESS_SHADER_WRITE_BIT, VK10.VK_ACCESS_SHADER_READ_BIT,
+                org.lwjgl.vulkan.KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK10.VK_QUEUE_FAMILY_IGNORED, VK10.VK_QUEUE_FAMILY_IGNORED
+        );
+    }
+
+    private static void makeDenoisingOutputsAvailableForCompose(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanDenoisingResourceContract resources
+    ) {
+        for (VulkanDenoisingResourceContract.Image image : java.util.List.of(
+                resources.diffuseMaterialFactor(),
+                resources.specularMaterialFactor()
+        )) {
+            RtFrameDispatchCommands.recordImageLayoutTransition(
+                    commandBuffer, stack, image.handle(),
+                    VK10.VK_IMAGE_LAYOUT_GENERAL, VK10.VK_IMAGE_LAYOUT_GENERAL,
+                    VK10.VK_ACCESS_SHADER_WRITE_BIT, VK10.VK_ACCESS_SHADER_READ_BIT,
+                    org.lwjgl.vulkan.KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                    VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK10.VK_QUEUE_FAMILY_IGNORED, VK10.VK_QUEUE_FAMILY_IGNORED
+            );
+        }
+        for (VulkanDenoisingResourceContract.Image image : java.util.List.of(
+                resources.diffuseRadianceHitDistance(),
+                resources.specularRadianceHitDistance()
+        )) {
+            /* NRD restores borrowed resources to their declared GENERAL state. Preserve that
+             * layout while making its reads visible to the compose pass that reads them again. */
+            RtFrameDispatchCommands.recordImageLayoutTransition(
+                    commandBuffer, stack, image.handle(),
+                    VK10.VK_IMAGE_LAYOUT_GENERAL, VK10.VK_IMAGE_LAYOUT_GENERAL,
+                    VK10.VK_ACCESS_SHADER_READ_BIT,
+                    VK10.VK_ACCESS_SHADER_READ_BIT,
+                    VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK10.VK_QUEUE_FAMILY_IGNORED, VK10.VK_QUEUE_FAMILY_IGNORED
+            );
+        }
+        for (VulkanDenoisingResourceContract.Image image : java.util.List.of(
+                resources.denoisedDiffuseRadianceHitDistance(),
+                resources.denoisedSpecularRadianceHitDistance()
+        )) {
+            /* NRD keeps outputs in GENERAL; only a memory dependency is needed before compose. */
+            RtFrameDispatchCommands.recordImageLayoutTransition(
+                    commandBuffer, stack, image.handle(),
+                    VK10.VK_IMAGE_LAYOUT_GENERAL, VK10.VK_IMAGE_LAYOUT_GENERAL,
+                    VK10.VK_ACCESS_MEMORY_WRITE_BIT, VK10.VK_ACCESS_SHADER_READ_BIT,
+                    VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK10.VK_QUEUE_FAMILY_IGNORED, VK10.VK_QUEUE_FAMILY_IGNORED
+            );
+        }
+    }
+
     private static long compileModule(MemoryStack stack, VkDevice device, String file, int kind) {
         return compileModule(stack, device, file, kind, false);
     }
@@ -181,13 +468,35 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             int kind,
             boolean linearHdrOutput
     ) {
+        return compileModule(stack, device, file, kind, linearHdrOutput, false);
+    }
+
+    private static long compileModule(
+            MemoryStack stack,
+            VkDevice device,
+            String file,
+            int kind,
+            boolean linearHdrOutput,
+            boolean shaderExecutionReorderingEnabled
+    ) {
         return RtShaderModuleCompiler.createModule(
                 stack,
                 device,
                 RtShaderModuleCompiler.loadProduction(
-                        SHADER_ROOT + file, kind, linearHdrOutput, RtEdgeSink.NOOP
+                        SHADER_ROOT + file, kind, linearHdrOutput,
+                        shaderExecutionReorderingEnabled, RtEdgeSink.NOOP
                 )
         );
+    }
+
+    /**
+     * Returns whether this pipeline contains the executable SER ray-generation permutation.
+     *
+     * @return {@code true} when the SER shader permutation was created
+     */
+    public synchronized boolean shaderExecutionReorderingEnabled() {
+        requireOpen();
+        return shaderExecutionReorderingEnabled;
     }
 
     private static void closeSuppressing(Throwable failure, AutoCloseable resource) {
@@ -285,6 +594,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
      * @param stack                    caller-owned temporary stack
      * @param descriptorSetIndex       published descriptor slot index
      * @param outputImage              dispatch output image
+     * @param publishedOutputImage     externally visible output destination
      * @param cpuReadback              optional slot-owned asynchronous readback destination
      * @param temporalImages           complete temporal images and their committed layout state
      * @param previousImageLayout      layout before this frame
@@ -299,6 +609,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             MemoryStack stack,
             int descriptorSetIndex,
             RtGpuImage outputImage,
+            RtGpuImage publishedOutputImage,
             RtGpuBuffer cpuReadback,
             GpuSceneTemporalFrameResources temporalImages,
             int previousImageLayout,
@@ -308,18 +619,250 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             int width,
             int height
     ) {
+        recordFrame(
+                commandBuffer,
+                stack,
+                descriptorSetIndex,
+                outputImage,
+                publishedOutputImage,
+                publishedOutputImage,
+                cpuReadback,
+                temporalImages,
+                previousImageLayout,
+                false,
+                acquireExternalOwnership,
+                releaseExternalOwnership,
+                producerQueueFamilyIndex,
+                VulkanFrameExtents.identity(width, height),
+                VulkanFeatureSession.disabled(),
+                Optional.empty(),
+                false,
+                Optional.empty(),
+                false,
+                false,
+                Optional.empty(),
+                false,
+                Optional.empty(),
+                0L,
+                0L,
+                false,
+                () -> { },
+                () -> { }
+        );
+    }
+
+    /**
+     * Records RT work and invokes the optional feature boundary before publication.
+     *
+     * @param commandBuffer command recording target
+     * @param stack caller-owned temporary allocation stack
+     * @param descriptorSetIndex descriptor generation index
+     * @param outputImage internal ray-tracing output image
+     * @param publishedOutputImage externally visible output destination
+     * @param cpuReadback optional CPU readback destination
+     * @param temporalImages temporal history resources
+     * @param previousImageLayout previous output layout
+     * @param traceLayoutInitialized whether the trace output has an established layout
+     * @param acquireExternalOwnership whether external ownership is acquired
+     * @param releaseExternalOwnership whether external ownership is released
+     * @param producerQueueFamilyIndex producer queue family
+     * @param width dispatch width
+     * @param height dispatch height
+     * @param featureSession composite optional feature session
+     * @param denoisingResources optional validated denoising resource contract
+     * @param denoisingLayoutsInitialized whether denoising images have established layouts
+     * @param frameSequence non-negative frame identity
+     * @param sceneRevision non-negative scene identity
+     * @param historyReset whether temporal history must be discarded
+     * @param postTraceComposition renderer-owned composition recorded after feature work
+     */
+    public synchronized void recordFrame(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            int descriptorSetIndex,
+            RtGpuImage outputImage,
+            RtGpuImage publishedOutputImage,
+            RtGpuBuffer cpuReadback,
+            GpuSceneTemporalFrameResources temporalImages,
+            int previousImageLayout,
+            boolean traceLayoutInitialized,
+            boolean acquireExternalOwnership,
+            boolean releaseExternalOwnership,
+            int producerQueueFamilyIndex,
+            int width,
+            int height,
+            VulkanFeatureSession featureSession,
+            Optional<VulkanDenoisingResourceContract> denoisingResources,
+            boolean denoisingLayoutsInitialized,
+            long frameSequence,
+            long sceneRevision,
+            boolean historyReset,
+            Runnable postTraceComposition
+    ) {
+        recordFrame(
+                commandBuffer,
+                stack,
+                descriptorSetIndex,
+                outputImage,
+                publishedOutputImage,
+                publishedOutputImage,
+                cpuReadback,
+                temporalImages,
+                previousImageLayout,
+                traceLayoutInitialized,
+                acquireExternalOwnership,
+                releaseExternalOwnership,
+                producerQueueFamilyIndex,
+                VulkanFrameExtents.identity(width, height),
+                featureSession,
+                denoisingResources,
+                denoisingLayoutsInitialized,
+                Optional.empty(),
+                false,
+                false,
+                Optional.empty(),
+                false,
+                Optional.empty(),
+                frameSequence,
+                sceneRevision,
+                historyReset,
+                postTraceComposition,
+                () -> { }
+        );
+    }
+
+    /**
+     * Records RT work over an internal render extent, then publishes at the requested output extent.
+     *
+     * <p>The separate dimensions are intentional: a reconstruction feature observes an internal
+     * ray-traced image and writes the externally visible output image. Existing callers retain the
+     * identity-extent overload above until they negotiate reconstruction settings.</p>
+     *
+     * @param commandBuffer command recording target
+     * @param stack caller-owned temporary allocation stack
+     * @param descriptorSetIndex descriptor generation index
+     * @param outputImage internal ray-tracing output image
+     * @param reconstructionOutputImage reconstruction destination; aliases the public output for
+     *        direct HDR publication and is private RGBA16F for SDR publication
+     * @param publishedOutputImage externally visible output destination
+     * @param cpuReadback optional CPU readback destination
+     * @param temporalImages temporal history resources
+     * @param previousImageLayout prior published-output layout
+     * @param traceLayoutInitialized whether the trace output has an established layout
+     * @param acquireExternalOwnership whether external ownership is acquired
+     * @param releaseExternalOwnership whether external ownership is released after publication
+     * @param producerQueueFamilyIndex producer queue family
+     * @param extents paired internal render and published output dimensions
+     * @param featureSession composite optional feature session
+     * @param denoisingResources optional validated denoising resource contract
+     * @param denoisingLayoutsInitialized whether denoising images have established layouts
+     * @param reconstructionResources optional validated reconstruction resource contract
+     * @param reconstructionLayoutsInitialized whether reconstruction images have established layouts
+     * @param reconstructionOutputLayoutInitialized whether a private reconstruction destination has
+     *        an established layout
+     * @param frameGenerationResources optional validated presentation-time generation inputs
+     * @param frameGenerationLayoutsInitialized whether frame-generation images have established layouts
+     * @param temporalInput optional exact camera facts shared by native temporal integrations
+     * @param frameSequence non-negative frame identity
+     * @param sceneRevision non-negative scene identity
+     * @param historyReset whether temporal history must be discarded
+     * @param postTraceComposition renderer-owned composition recorded after feature work
+     * @param outputPublication renderer-owned conversion from a private reconstruction destination
+     *        into the requested public output format
+     */
+    public synchronized void recordFrame(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            int descriptorSetIndex,
+            RtGpuImage outputImage,
+            RtGpuImage reconstructionOutputImage,
+            RtGpuImage publishedOutputImage,
+            RtGpuBuffer cpuReadback,
+            GpuSceneTemporalFrameResources temporalImages,
+            int previousImageLayout,
+            boolean traceLayoutInitialized,
+            boolean acquireExternalOwnership,
+            boolean releaseExternalOwnership,
+            int producerQueueFamilyIndex,
+            VulkanFrameExtents extents,
+            VulkanFeatureSession featureSession,
+            Optional<VulkanDenoisingResourceContract> denoisingResources,
+            boolean denoisingLayoutsInitialized,
+            Optional<VulkanFrameReconstructionResourceContract> reconstructionResources,
+            boolean reconstructionLayoutsInitialized,
+            boolean reconstructionOutputLayoutInitialized,
+            Optional<VulkanFrameGenerationResourceContract> frameGenerationResources,
+            boolean frameGenerationLayoutsInitialized,
+            Optional<VulkanTemporalFrameInput> temporalInput,
+            long frameSequence,
+            long sceneRevision,
+            boolean historyReset,
+            Runnable postTraceComposition,
+            Runnable outputPublication
+    ) {
         requireOpen();
         Objects.requireNonNull(commandBuffer, "commandBuffer");
         Objects.requireNonNull(stack, "stack");
         RtGpuImage image = Objects.requireNonNull(outputImage, "outputImage");
+        RtGpuImage reconstructionImage = Objects.requireNonNull(
+                reconstructionOutputImage, "reconstructionOutputImage"
+        );
+        RtGpuImage publishedImage = Objects.requireNonNull(publishedOutputImage, "publishedOutputImage");
         GpuSceneTemporalFrameResources temporal = Objects.requireNonNull(
                 temporalImages, "temporalImages"
         );
-        if (image.width() != width || image.height() != height) {
-            throw new IllegalArgumentException("dispatch extent must equal the output-image extent");
+        VulkanFeatureSession checkedFeatureSession = Objects.requireNonNull(featureSession, "featureSession");
+        Runnable checkedPostTraceComposition = Objects.requireNonNull(postTraceComposition, "postTraceComposition");
+        Runnable checkedOutputPublication = Objects.requireNonNull(outputPublication, "outputPublication");
+        Optional<VulkanDenoisingResourceContract> checkedDenoisingResources = Objects.requireNonNull(
+                denoisingResources, "denoisingResources"
+        );
+        Optional<VulkanFrameReconstructionResourceContract> checkedReconstructionResources = Objects.requireNonNull(
+                reconstructionResources, "reconstructionResources"
+        );
+        Optional<VulkanFrameGenerationResourceContract> checkedFrameGenerationResources = Objects.requireNonNull(
+                frameGenerationResources, "frameGenerationResources"
+        );
+        Optional<VulkanTemporalFrameInput> checkedTemporalInput = Objects.requireNonNull(
+                temporalInput, "temporalInput"
+        );
+        VulkanFrameExtents checkedExtents = Objects.requireNonNull(extents, "extents");
+        if (denoisingLayoutsInitialized && checkedDenoisingResources.isEmpty()) {
+            throw new IllegalArgumentException("initialized denoising layouts require denoising resources");
+        }
+        if (reconstructionLayoutsInitialized && checkedReconstructionResources.isEmpty()) {
+            throw new IllegalArgumentException("initialized reconstruction layouts require reconstruction resources");
+        }
+        boolean privateReconstructionOutput = reconstructionImage.image() != publishedImage.image();
+        if (privateReconstructionOutput && checkedReconstructionResources.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "private reconstruction output requires active reconstruction resources"
+            );
+        }
+        if (frameGenerationLayoutsInitialized && checkedFrameGenerationResources.isEmpty()) {
+            throw new IllegalArgumentException("initialized frame-generation layouts require resources");
+        }
+        boolean separateTraceOutput = image.image() != publishedImage.image();
+        if (separateTraceOutput != (checkedDenoisingResources.isPresent() || checkedReconstructionResources.isPresent())) {
+            throw new IllegalArgumentException(
+                    "separate trace output requires at least one active denoising or reconstruction resource contract"
+            );
+        }
+        int renderWidth = checkedExtents.renderWidth();
+        int renderHeight = checkedExtents.renderHeight();
+        int outputWidth = checkedExtents.outputWidth();
+        int outputHeight = checkedExtents.outputHeight();
+        if (image.width() != renderWidth || image.height() != renderHeight
+                || reconstructionImage.width() != outputWidth
+                || reconstructionImage.height() != outputHeight
+                || publishedImage.width() != outputWidth || publishedImage.height() != outputHeight) {
+            throw new IllegalArgumentException("trace and published output images do not match their frame extents");
         }
         if (producerQueueFamilyIndex < 0) {
             throw new IllegalArgumentException("producerQueueFamilyIndex must not be negative");
+        }
+        if (frameSequence < 0L || sceneRevision < 0L) {
+            throw new IllegalArgumentException("feature frame identity must not be negative");
         }
         int sourceAccess;
         int sourceStage;
@@ -347,19 +890,60 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         } else {
             throw new IllegalArgumentException("unsupported GPUScene output layout " + previousImageLayout);
         }
+        int rayTracingStage = org.lwjgl.vulkan.KHRRayTracingPipeline
+                .VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+        int composeStage = VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        if (separateTraceOutput) {
+            /* The trace image never crosses the external ownership boundary. */
+            RtFrameDispatchCommands.recordImageLayoutTransition(
+                    commandBuffer,
+                    stack,
+                    image.image(),
+                    traceLayoutInitialized ? VK10.VK_IMAGE_LAYOUT_GENERAL : VK10.VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK10.VK_IMAGE_LAYOUT_GENERAL,
+                    traceLayoutInitialized ? VK10.VK_ACCESS_SHADER_READ_BIT : 0,
+                    VK10.VK_ACCESS_SHADER_WRITE_BIT,
+                    traceLayoutInitialized ? composeStage : VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    rayTracingStage,
+                    VK10.VK_QUEUE_FAMILY_IGNORED,
+                    VK10.VK_QUEUE_FAMILY_IGNORED
+            );
+        }
         RtFrameDispatchCommands.recordImageLayoutTransition(
                 commandBuffer,
                 stack,
-                image.image(),
+                publishedImage.image(),
                 previousImageLayout,
                 VK10.VK_IMAGE_LAYOUT_GENERAL,
                 sourceAccess,
-                VK10.VK_ACCESS_SHADER_WRITE_BIT,
+                checkedReconstructionResources.isPresent()
+                        ? VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT
+                        : VK10.VK_ACCESS_SHADER_WRITE_BIT,
                 sourceStage,
-                org.lwjgl.vulkan.KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                checkedReconstructionResources.isPresent()
+                        ? VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+                        : separateTraceOutput ? composeStage : rayTracingStage,
                 sourceQueueFamilyIndex,
                 destinationQueueFamilyIndex
         );
+        if (privateReconstructionOutput) {
+            RtFrameDispatchCommands.recordImageLayoutTransition(
+                    commandBuffer,
+                    stack,
+                    reconstructionImage.image(),
+                    reconstructionOutputLayoutInitialized
+                            ? VK10.VK_IMAGE_LAYOUT_GENERAL : VK10.VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK10.VK_IMAGE_LAYOUT_GENERAL,
+                    reconstructionOutputLayoutInitialized ? VK10.VK_ACCESS_MEMORY_WRITE_BIT : 0,
+                    VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT,
+                    reconstructionOutputLayoutInitialized
+                            ? VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+                            : VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    VK10.VK_QUEUE_FAMILY_IGNORED,
+                    VK10.VK_QUEUE_FAMILY_IGNORED
+            );
+        }
         transitionTemporalImage(
                 commandBuffer, stack, temporal.colorInput(), temporal.inputLayoutInitialized(),
                 VK10.VK_ACCESS_SHADER_WRITE_BIT, VK10.VK_ACCESS_SHADER_READ_BIT
@@ -380,26 +964,94 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 commandBuffer, stack, temporal.motionOutput(), temporal.motionLayoutInitialized(),
                 VK10.VK_ACCESS_SHADER_WRITE_BIT, VK10.VK_ACCESS_SHADER_WRITE_BIT
         );
-        recordTrace(commandBuffer, stack, descriptorSetIndex, width, height);
+        checkedDenoisingResources.ifPresent(resources -> prepareDenoisingResources(
+                commandBuffer, stack, resources, denoisingLayoutsInitialized
+        ));
+        checkedReconstructionResources.ifPresent(resources -> prepareReconstructionResources(
+                commandBuffer, stack, resources, reconstructionLayoutsInitialized
+        ));
+        if (checkedDenoisingResources.isPresent() && checkedReconstructionResources.isPresent()) {
+            // NRD writes the reconstruction input after ray tracing. It has its own layout
+            // transition because the reconstruction contract is no longer the trace target.
+            transitionReconstructionImage(
+                    commandBuffer, stack, checkedReconstructionResources.orElseThrow().inputColor(),
+                    reconstructionLayoutsInitialized,
+                    VK10.VK_ACCESS_SHADER_WRITE_BIT,
+                    VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+            );
+        }
+        checkedFrameGenerationResources.ifPresent(resources -> prepareFrameGenerationResources(
+                commandBuffer, stack, resources, frameGenerationLayoutsInitialized
+        ));
+        recordTrace(commandBuffer, stack, descriptorSetIndex, renderWidth, renderHeight);
+        checkedDenoisingResources.ifPresent(resources -> makeDenoisingSignalsAvailable(
+                commandBuffer, stack, resources
+        ));
+        checkedReconstructionResources.ifPresent(resources -> makeReconstructionInputsAvailable(
+                commandBuffer, stack, resources
+        ));
+        checkedFrameGenerationResources.ifPresent(resources -> makeFrameGenerationInputsAvailable(
+                commandBuffer, stack, resources
+        ));
+        VulkanFeatureFrameContext featureContext = new VulkanFeatureFrameContext(
+                commandBuffer,
+                stack,
+                image,
+                reconstructionImage,
+                publishedImage,
+                temporal,
+                checkedDenoisingResources,
+                checkedReconstructionResources,
+                checkedFrameGenerationResources,
+                checkedTemporalInput,
+                frameSequence,
+                sceneRevision,
+                historyReset,
+                checkedExtents
+        );
+        if (checkedDenoisingResources.isPresent()) {
+            makeTraceOutputAvailableForCompose(commandBuffer, stack, image);
+        }
+        // Keep the complete post-trace sequence inside one session boundary. If any optional
+        // provider fails, RtCommandContext discards this unsubmitted recording and the output
+        // image cannot become visible as a half-written frame.
+        checkedFeatureSession.recordPostTrace(featureContext, () -> {
+            checkedDenoisingResources.ifPresent(resources ->
+                    makeDenoisingOutputsAvailableForCompose(commandBuffer, stack, resources));
+            checkedPostTraceComposition.run();
+        });
+        checkedOutputPublication.run();
+        checkedFeatureSession.recordFrameGeneration(featureContext);
+        int publicationSourceStage = checkedReconstructionResources.isPresent()
+                ? privateReconstructionOutput
+                ? VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+                : VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+                : separateTraceOutput ? composeStage : rayTracingStage;
+        int publicationSourceAccess = checkedReconstructionResources.isPresent()
+                ? VK10.VK_ACCESS_MEMORY_WRITE_BIT
+                : VK10.VK_ACCESS_SHADER_WRITE_BIT;
         if (cpuReadback != null) {
-            recordCpuReadback(commandBuffer, stack, image, cpuReadback, width, height);
+            recordCpuReadback(
+                    commandBuffer, stack, publishedImage, cpuReadback, outputWidth, outputHeight,
+                    publicationSourceAccess, publicationSourceStage
+            );
         }
         if (releaseExternalOwnership) {
             /* Expert external interop requires a real ownership release, not fence-only ordering. */
             RtFrameDispatchCommands.recordImageLayoutTransition(
                     commandBuffer,
                     stack,
-                    image.image(),
+                    publishedImage.image(),
                     cpuReadback == null
                             ? VK10.VK_IMAGE_LAYOUT_GENERAL
                             : VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                     VK10.VK_IMAGE_LAYOUT_GENERAL,
                     cpuReadback == null
-                            ? VK10.VK_ACCESS_SHADER_WRITE_BIT
+                            ? publicationSourceAccess
                             : VK10.VK_ACCESS_TRANSFER_READ_BIT,
                     0,
                     cpuReadback == null
-                            ? org.lwjgl.vulkan.KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
+                            ? publicationSourceStage
                             : VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
                     VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                     producerQueueFamilyIndex,
@@ -408,7 +1060,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         } else if (cpuReadback != null) {
             /* Readback changes layout; managed presentation still consumes a GENERAL image. */
             RtFrameDispatchCommands.recordImageLayoutTransition(
-                    commandBuffer, stack, image.image(),
+                    commandBuffer, stack, publishedImage.image(),
                     VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK10.VK_IMAGE_LAYOUT_GENERAL,
                     VK10.VK_ACCESS_TRANSFER_READ_BIT, VK10.VK_ACCESS_TRANSFER_READ_BIT,
                     VK10.VK_PIPELINE_STAGE_TRANSFER_BIT, VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -423,7 +1075,9 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             RtGpuImage outputImage,
             RtGpuBuffer readback,
             int width,
-            int height
+            int height,
+            int sourceAccess,
+            int sourceStage
     ) {
         RtFrameDispatchCommands.recordImageLayoutTransition(
                 commandBuffer,
@@ -431,9 +1085,9 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 outputImage.image(),
                 VK10.VK_IMAGE_LAYOUT_GENERAL,
                 VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK10.VK_ACCESS_SHADER_WRITE_BIT,
+                sourceAccess,
                 VK10.VK_ACCESS_TRANSFER_READ_BIT,
-                org.lwjgl.vulkan.KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                sourceStage,
                 VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK10.VK_QUEUE_FAMILY_IGNORED,
                 VK10.VK_QUEUE_FAMILY_IGNORED

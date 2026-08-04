@@ -6,6 +6,7 @@ import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.LightmapState;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.TemporalRenderingOptions;
+import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -25,9 +26,69 @@ final class VulkanFrameUniformPacker {
             int lightSlotUpperBound,
             long activeSceneRevision,
             TemporalHistoryTracker.PreparedFrame temporalFrame,
-            TemporalRenderingOptions temporalOptions
+            TemporalRenderingOptions temporalOptions,
+            boolean denoisingActive
+    ) {
+        return pack(
+                request,
+                VulkanFrameExtents.identity(request.width(), request.height()),
+                lightSlotUpperBound,
+                activeSceneRevision,
+                temporalFrame,
+                temporalOptions,
+                denoisingActive,
+                false
+        );
+    }
+
+    static byte[] pack(
+            RenderFrameRequest request,
+            VulkanFrameExtents extents,
+            int lightSlotUpperBound,
+            long activeSceneRevision,
+            TemporalHistoryTracker.PreparedFrame temporalFrame,
+            TemporalRenderingOptions temporalOptions,
+            boolean denoisingActive
+    ) {
+        return pack(
+                request, extents, lightSlotUpperBound, activeSceneRevision, temporalFrame,
+                temporalOptions, denoisingActive, false
+        );
+    }
+
+    static byte[] pack(
+            RenderFrameRequest request,
+            VulkanFrameExtents extents,
+            int lightSlotUpperBound,
+            long activeSceneRevision,
+            TemporalHistoryTracker.PreparedFrame temporalFrame,
+            TemporalRenderingOptions temporalOptions,
+            boolean denoisingActive,
+            boolean reconstructionActive
+    ) {
+        return pack(
+                request, extents, lightSlotUpperBound, activeSceneRevision, temporalFrame,
+                temporalOptions, denoisingActive, reconstructionActive,
+                Objects.requireNonNull(temporalOptions, "temporalOptions").enabled()
+        );
+    }
+
+    static byte[] pack(
+            RenderFrameRequest request,
+            VulkanFrameExtents extents,
+            int lightSlotUpperBound,
+            long activeSceneRevision,
+            TemporalHistoryTracker.PreparedFrame temporalFrame,
+            TemporalRenderingOptions temporalOptions,
+            boolean denoisingActive,
+            boolean reconstructionActive,
+            boolean jitterActive
     ) {
         RenderFrameRequest frame = Objects.requireNonNull(request, "request");
+        VulkanFrameExtents frameExtents = Objects.requireNonNull(extents, "extents");
+        if (frameExtents.outputWidth() != frame.width() || frameExtents.outputHeight() != frame.height()) {
+            throw new IllegalArgumentException("frame output extent must match the public frame request");
+        }
         TemporalHistoryTracker.PreparedFrame temporal = Objects.requireNonNull(
                 temporalFrame, "temporalFrame"
         );
@@ -40,8 +101,10 @@ final class VulkanFrameUniformPacker {
         if (temporal.sceneRevision() != activeSceneRevision) {
             throw new IllegalArgumentException("temporal state belongs to a different scene revision");
         }
-        if (temporal.historyValid() && !temporalPolicy.enabled()) {
-            throw new IllegalArgumentException("disabled temporal policy cannot consume history");
+        if (temporal.historyValid() && !temporal.provenanceTracked()) {
+            throw new IllegalArgumentException(
+                    "valid temporal history must come from a tracked provenance source"
+            );
         }
         if (lightSlotUpperBound < 0) {
             throw new IllegalArgumentException("lightSlotUpperBound must not be negative");
@@ -54,8 +117,8 @@ final class VulkanFrameUniformPacker {
         }
 
         ByteBuffer words = ByteBuffer.allocate(BYTE_COUNT).order(ByteOrder.LITTLE_ENDIAN);
-        putInt(words, VulkanGpuSceneAbi.FRAME_EXTENT_WORD, frame.width());
-        putInt(words, VulkanGpuSceneAbi.FRAME_EXTENT_WORD + 1, frame.height());
+        putInt(words, VulkanGpuSceneAbi.FRAME_EXTENT_WORD, frameExtents.renderWidth());
+        putInt(words, VulkanGpuSceneAbi.FRAME_EXTENT_WORD + 1, frameExtents.renderHeight());
         putLong(words, VulkanGpuSceneAbi.FRAME_SEQUENCE_WORD, frame.sequence());
 
         CameraState camera = frame.camera();
@@ -121,8 +184,8 @@ final class VulkanFrameUniformPacker {
         putInt(words, VulkanGpuSceneAbi.FRAME_TEMPORAL_FLAGS_WORD, temporalFlags);
         putInt(words, VulkanGpuSceneAbi.FRAME_MAX_HISTORY_FRAMES_WORD,
                 temporalPolicy.maxHistoryFrames());
-        float[] currentJitter = jitter(frame.sequence(), temporalPolicy.enabled());
-        float[] previousJitter = jitter(temporal.previousSequence(), temporalPolicy.enabled());
+        float[] currentJitter = temporalJitter(frame.sequence(), jitterActive);
+        float[] previousJitter = temporalJitter(temporal.previousSequence(), jitterActive);
         putFloat(words, VulkanGpuSceneAbi.FRAME_CURRENT_JITTER_WORD, currentJitter[0]);
         putFloat(words, VulkanGpuSceneAbi.FRAME_CURRENT_JITTER_WORD + 1, currentJitter[1]);
         putFloat(words, VulkanGpuSceneAbi.FRAME_PREVIOUS_JITTER_WORD, previousJitter[0]);
@@ -145,6 +208,16 @@ final class VulkanFrameUniformPacker {
                 frame.camera().y() - previousCamera.y());
         putDouble(words, VulkanGpuSceneAbi.FRAME_CAMERA_DELTA_WORD + 4,
                 frame.camera().z() - previousCamera.z());
+        int featureFlags = denoisingActive ? VulkanGpuSceneAbi.FEATURE_FLAG_DENOISING_ACTIVE : 0;
+        if (reconstructionActive) featureFlags |= VulkanGpuSceneAbi.FEATURE_FLAG_RECONSTRUCTION_ACTIVE;
+        putInt(words, VulkanGpuSceneAbi.FRAME_FEATURE_FLAGS_WORD, featureFlags);
+        boolean projectionKnown = frame.depthProjection().known();
+        putFloat(words, VulkanGpuSceneAbi.FRAME_RECONSTRUCTION_NEAR_PLANE_WORD,
+                projectionKnown ? frame.depthProjection().nearPlane() : 0.0F);
+        putFloat(words, VulkanGpuSceneAbi.FRAME_RECONSTRUCTION_FAR_PLANE_WORD,
+                projectionKnown ? frame.depthProjection().farPlane() : 0.0F);
+        putInt(words, VulkanGpuSceneAbi.FRAME_RECONSTRUCTION_PROJECTION_KNOWN_WORD,
+                projectionKnown ? 1 : 0);
         return words.array();
     }
 
@@ -167,7 +240,17 @@ final class VulkanFrameUniformPacker {
         putFloat(target, fovWord + 1, camera.tanHalfFovY());
     }
 
-    private static float[] jitter(long sequence, boolean enabled) {
+    /**
+     * Returns the renderer's canonical pixel-centered temporal jitter for a submitted sequence.
+     *
+     * <p>Both the GPU uniform ABI and Streamline's native constants consume these exact values.
+     * Keeping the sequence here prevents a feature integration from introducing a second Halton
+     * implementation that diverges after an otherwise harmless renderer-side change.</p>
+     */
+    static float[] temporalJitter(long sequence, boolean enabled) {
+        if (sequence < 0L) {
+            throw new IllegalArgumentException("temporal jitter sequence must not be negative");
+        }
         if (!enabled) return new float[]{0.0F, 0.0F};
         int index = (int) (sequence % 1_024L) + 1;
         return new float[]{

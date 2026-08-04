@@ -7,6 +7,7 @@ import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -22,17 +23,32 @@ final class RtVulkanDeviceCapabilities {
     }
 
     static List<String> requiredDeviceExtensions(Set<String> extensions, int apiVersion) {
+        return requiredDeviceExtensions(extensions, apiVersion, Set.of(), Set.of());
+    }
+
+    /**
+     * Builds the logical-device extension list after optional feature negotiation.
+     *
+     * <p>Feature requirements are merged here, immediately before device creation, so a provider
+     * cannot claim an extension in a later frame after the Vulkan contract is already fixed.</p>
+     */
+    static List<String> requiredDeviceExtensions(
+            Set<String> extensions,
+            int apiVersion,
+            Set<String> featureRequiredExtensions,
+            Set<String> featurePreferredExtensions
+    ) {
         List<String> enabled = new ArrayList<>();
         requireExtension(enabled, extensions, KHRAccelerationStructure.VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
         requireExtension(enabled, extensions, KHRRayTracingPipeline.VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
         requireExtension(enabled, extensions, KHRDeferredHostOperations.VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
         requireExtension(enabled, extensions, KHRPipelineLibrary.VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
 
-        if (extensions.contains(KHRBufferDeviceAddress.VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)) {
-            enabled.add(KHRBufferDeviceAddress.VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
-        } else if (apiVersion < VK12.VK_API_VERSION_1_2) {
-            throw new IllegalStateException("missing required extension: "
-                    + KHRBufferDeviceAddress.VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+        if (apiVersion < VK12.VK_API_VERSION_1_2) {
+            requireExtension(
+                    enabled, extensions,
+                    KHRBufferDeviceAddress.VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME
+            );
         }
 
         if (apiVersion < VK12.VK_API_VERSION_1_2) {
@@ -49,7 +65,28 @@ final class RtVulkanDeviceCapabilities {
                 enabled, extensions, EXTFullScreenExclusive.VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME
         );
         addOptionalExtension(enabled, extensions, EXTMemoryBudget.VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+        for (String extension : Objects.requireNonNull(featureRequiredExtensions, "featureRequiredExtensions")) {
+            if (isSupersededBufferDeviceAddressAlias(extension, apiVersion)) continue;
+            requireExtension(enabled, extensions, extension);
+        }
+        for (String extension : Objects.requireNonNull(featurePreferredExtensions, "featurePreferredExtensions")) {
+            if (isSupersededBufferDeviceAddressAlias(extension, apiVersion)) continue;
+            addOptionalExtension(enabled, extensions, extension);
+        }
         return enabled;
+    }
+
+    /**
+     * Keeps provider-reported compatibility aliases from creating an invalid logical device.
+     *
+     * <p>The RT core always selects the KHR spelling before Vulkan 1.2 and the promoted core
+     * feature on Vulkan 1.2+. Streamline can report both historical spellings, but Vulkan forbids
+     * enabling the KHR and EXT buffer-device-address extensions together.</p>
+     */
+    private static boolean isSupersededBufferDeviceAddressAlias(String extension, int apiVersion) {
+        if (EXTBufferDeviceAddress.VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME.equals(extension)) return true;
+        return apiVersion >= VK12.VK_API_VERSION_1_2
+                && KHRBufferDeviceAddress.VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME.equals(extension);
     }
 
     static boolean hardwareRtReady(int apiVersion, Set<String> extensions, FeatureFlags features) {

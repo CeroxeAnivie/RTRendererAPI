@@ -17,6 +17,13 @@ public final class VulkanQueueTimelineSelfTest {
       require(RtDeviceQueueContexts.requestedQueueCount(2, true) == 2, "two queues plus timeline support must enable the asynchronous build lane");
       require(RtDeviceQueueContexts.requestedQueueCount(3, true) == 3,
               "three queues plus timeline support must isolate blocking presentation");
+      require(RtDeviceQueueContexts.requestedQueueCount(4, true, 0, 2) == 2,
+              "preferred provider queues must take precedence over an optional presentation lane");
+      require(RtDeviceQueueContexts.requestedQueueCount(4, true, 1, 2) == 1,
+              "renderer lanes must collapse before provider-owned queues alias the frame queue");
+      require(RtDeviceQueueContexts.requestedQueueCount(3, true, 1, 2) == 2,
+              "an all-or-none preferred request must be omitted when it would consume the renderer queue");
+      expectIllegalState(() -> RtDeviceQueueContexts.requestedQueueCount(2, true, 2, 0));
    }
 
    private static void publishesOnlyFenceObservedValues() {
@@ -40,6 +47,15 @@ public final class VulkanQueueTimelineSelfTest {
          watermark.markCompleted(value);
          throw new AssertionError("unsubmitted timeline completion was accepted");
       } catch (IllegalArgumentException value4) {
+      }
+   }
+
+   private static void expectIllegalState(Runnable action) {
+      try {
+         action.run();
+         throw new AssertionError("expected IllegalStateException");
+      } catch (IllegalStateException expected) {
+         // Required provider queues may never consume the renderer's last queue.
       }
    }
 

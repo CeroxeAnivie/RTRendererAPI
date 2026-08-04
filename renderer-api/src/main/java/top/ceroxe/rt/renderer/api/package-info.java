@@ -15,6 +15,10 @@
  *
  * <p>The safe default path contains no Vulkan handles or synchronization values. Applications that
  * deliberately need zero-copy Vulkan access opt into the separately named
- * {@link top.ceroxe.rt.renderer.api.interop.vulkan} package.</p>
+ * {@link top.ceroxe.rt.renderer.api.interop.vulkan} package. Production renderer defaults
+ * capability-gate suitable optional technologies as preferred requests. CPU-readable defaults
+ * omit presentation-time generation, while GPU-presentation defaults additionally prefer ordinary
+ * FG 2x and never auto-select MFG. Explicit option builders provide the equivalent expert controls
+ * without bypassing negotiation or lifecycle safety.</p>
  */
 package top.ceroxe.rt.renderer.api;

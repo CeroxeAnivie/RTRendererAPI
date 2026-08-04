@@ -13,14 +13,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import top.ceroxe.rt.renderer.api.EnvironmentState.Medium;
 import top.ceroxe.rt.renderer.api.MaterialAsset.BlendMode;
 import top.ceroxe.rt.renderer.api.MaterialAsset.ShadingModel;
@@ -58,9 +62,16 @@ public final class RendererApiContractSelfTest {
 
    public static void main(String[] args) {
       assertConfigurationBounds();
+      assertFeatureOptionContracts();
+      assertTechnologyCapabilityContract();
+      assertTechnologyExecutionEvidenceContract();
+      assertFrameGenerationContract();
+      assertLowLatencyContract();
       assertGpuDeviceSelectionContract();
       assertTransformAndLightingValidation();
       assertCameraAndFrameValidation();
+      assertFrameValidationFailureContract();
+      assertFramePrimitiveContract();
       assertAntiAliasingContract();
       assertTemporalRenderingContract();
       assertAssetOwnership();
@@ -75,6 +86,98 @@ public final class RendererApiContractSelfTest {
       assertExportedHandleLifecycle();
       assertProviderSelection();
       System.out.println("RendererApiContractSelfTest passed");
+   }
+
+   private static void assertFramePrimitiveContract() {
+      UvTransform uv = UvTransform.scaleAndOffset(2.0F, 3.0F, 0.25F, -0.5F);
+      require(uv.transformU(0.5F, 0.25F) == 1.25F && uv.transformV(0.5F, 0.25F) == 0.25F,
+              "UV affine transform changed its row-major mapping");
+      require(UvTransform.identity() == UvTransform.of(1.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F),
+              "identity UV transform lost canonicalization");
+      expect(IllegalArgumentException.class,
+              () -> UvTransform.of(Float.NaN, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F));
+      expect(IllegalArgumentException.class,
+              () -> UvTransform.rotation(Float.POSITIVE_INFINITY, 0.0F, 0.0F));
+
+      OutlineStyle outline = OutlineStyle.of(0xff40_20ff, 2.0F);
+      InstanceRenderState renderState = InstanceRenderState.builder()
+              .uvTransform(uv)
+              .surfaceMask(0x04)
+              .overlayReceiverMask(0x04)
+              .objectMask(73)
+              .outline(outline)
+              .build();
+      expect(IllegalArgumentException.class,
+              () -> InstanceRenderState.builder().outline(outline).build());
+      expect(IllegalArgumentException.class, () -> OutlineStyle.of(0x0040_20ff, 1.0F));
+      expect(IllegalArgumentException.class,
+              () -> OutlineStyle.of(0xff40_20ff, OutlineStyle.MAX_WIDTH_PIXELS + 0.01F));
+
+      SurfaceOverlayState overlay = SurfaceOverlayState.depthEqual(0.002F);
+      MaterialAsset unlitOverlay = MaterialAsset.builder(71L)
+              .blendMode(BlendMode.TRANSLUCENT)
+              .baseColorRgba8(0x8040_20ff)
+              .shadingModel(ShadingModel.UNLIT)
+              .surfaceOverlay(overlay)
+              .build();
+      require(unlitOverlay.shadingModel() == ShadingModel.UNLIT
+                      && unlitOverlay.surfaceOverlay().equals(overlay)
+                      && unlitOverlay.equals(unlitOverlay.toBuilder().build()),
+              "material copy lost unlit or overlay policy");
+      expect(IllegalArgumentException.class, () -> SurfaceOverlayState.depthBias(Float.NaN));
+      expect(IllegalArgumentException.class, () -> SurfaceOverlayState.depthEqual(-0.001F));
+      expect(IllegalArgumentException.class, () -> MaterialAsset.builder(72L)
+              .baseColorRgba8(0x8040_20ff)
+              .surfaceOverlay(overlay)
+              .build());
+
+      SceneInstance persistent = SceneInstance.builder(81L, 91L).renderState(renderState).build();
+      PrimitiveInstance primitive = PrimitiveInstance.from(persistent);
+      require(primitive.renderState().equals(persistent.renderState())
+                      && primitive.transform().equals(persistent.transform())
+                      && primitive.previousTransform().equals(persistent.transform())
+                      && primitive.meshAssetId() == persistent.meshAssetId(),
+              "persistent/frame primitive conversion lost shared instance state");
+      AffineTransform primitivePrevious = new AffineTransform(new float[]{
+              1, 0, 0, -1, 0, 1, 0, -2, 0, 0, 1, -3
+      });
+      PrimitiveInstance movingPrimitive = primitive.toBuilder()
+              .previousTransform(primitivePrevious)
+              .build();
+      require(movingPrimitive.previousTransform().equals(primitivePrevious),
+              "frame primitive copy lost explicit previous transform");
+      FramePrimitiveBatch batch = FramePrimitiveBatch.of(new ArrayList<>(List.of(primitive)));
+      require(batch.size() == 1 && batch.primitives().get(0).equals(primitive),
+              "frame primitive batch lost its value");
+      expect(UnsupportedOperationException.class, () -> batch.primitives().clear());
+      expect(NullPointerException.class, () -> FramePrimitiveBatch.of(java.util.Arrays.asList(primitive, null)));
+      expect(IllegalArgumentException.class, () -> FramePrimitiveBatch.of(
+              new java.util.AbstractList<PrimitiveInstance>() {
+                 @Override public PrimitiveInstance get(int index) { throw new AssertionError("oversized list was read"); }
+                 @Override public int size() { return FramePrimitiveBatch.MAX_PRIMITIVES + 1; }
+              }
+      ));
+
+      RenderFrameRequest request = RenderFrameRequest.builder(82L, 1, 1, camera())
+              .primitiveBatch(batch)
+              .build();
+      require(request.primitiveBatch().equals(batch)
+                      && request.toBuilder().build().primitiveBatch().equals(batch),
+              "frame request copy lost the frame primitive batch");
+      expect(NullPointerException.class, () -> request.toBuilder().primitiveBatch(null));
+   }
+
+   private static void assertFrameValidationFailureContract() {
+      FrameValidationException failure = new FrameValidationException(
+              FrameValidationException.Reason.MISSING_DEPTH_PROJECTION,
+              "projection metadata is required"
+      );
+      require(failure.reason() == FrameValidationException.Reason.MISSING_DEPTH_PROJECTION,
+              "frame validation lost its structured reason");
+      expect(NullPointerException.class, () -> new FrameValidationException(null, "reason"));
+      expect(IllegalArgumentException.class, () -> new FrameValidationException(
+              FrameValidationException.Reason.MISSING_DEPTH_PROJECTION, " "
+      ));
    }
 
    private static void assertAntiAliasingContract() {
@@ -93,17 +196,312 @@ public final class RendererApiContractSelfTest {
       require(RayTracingRendererConfig.defaults().cpuFrameReadbackEnabled(), "managed CPU readback must remain enabled by default");
       require(RayTracingRendererConfig.defaults().frameOutputFormat() == FrameOutputFormat.SDR_RGBA8, "default native output must be SDR RGBA8");
       require(RayTracingRendererConfig.defaults().temporalRendering().equals(TemporalRenderingOptions.balanced()), "production defaults must enable balanced temporal reconstruction");
+      require(RayTracingRendererConfig.defaults().denoising().equals(DenoisingOptions.productionDefault()), "ordinary defaults must capability-gate denoising");
+      require(RayTracingRendererConfig.defaults().frameReconstruction().equals(FrameReconstructionOptions.productionDefault()), "ordinary defaults must capability-gate reconstruction");
+      require(RayTracingRendererConfig.defaults().frameGeneration().equals(FrameGenerationOptions.disabled()), "CPU-readable defaults must not arm presentation-time generation");
+      require(RayTracingRendererConfig.defaults().lowLatency().equals(LowLatencyOptions.disabled()), "CPU-readable defaults must not arm display pacing");
+      require(RayTracingRendererConfig.defaults().rayTracingOptimizations().equals(RayTracingOptimizationOptions.productionDefault()), "ordinary defaults must capability-gate SER and RTXMU");
+      RayTracingRendererConfig explicitProduction = RayTracingRendererConfig.builder()
+              .maxFramesInFlight(RayTracingRendererConfig.DEFAULT_MAX_FRAMES_IN_FLIGHT)
+              .validationEnabled(false)
+              .gpuTimingsEnabled(true)
+              .cpuFrameReadbackEnabled(true)
+              .automaticGpuSelection()
+              .frameOutputFormat(FrameOutputFormat.SDR_RGBA8)
+              .temporalRendering(TemporalRenderingOptions.balanced())
+              .frameReconstruction(FrameReconstructionOptions.productionDefault())
+              .frameGeneration(FrameGenerationOptions.disabled())
+              .lowLatency(LowLatencyOptions.disabled())
+              .denoising(DenoisingOptions.productionDefault())
+              .rayTracingOptimizations(RayTracingOptimizationOptions.productionDefault())
+                .build();
+      require(RayTracingRendererConfig.defaults().equals(explicitProduction),
+              "simple production defaults cannot be expressed exactly through expert policies");
+      require(RayTracingRendererConfig.defaults().equals(
+                      RayTracingRendererConfig.defaults().toBuilder().build()),
+              "ordinary defaults lost policy while crossing the expert builder boundary");
+      RayTracingRendererConfig gpuPresentation = RayTracingRendererConfig.gpuPresentationDefaults();
+      require(!gpuPresentation.cpuFrameReadbackEnabled()
+                      && gpuPresentation.frameGeneration().equals(FrameGenerationOptions.productionDefault())
+                      && gpuPresentation.lowLatency().equals(LowLatencyOptions.productionDefault())
+                      && gpuPresentation.frameReconstruction().equals(
+                              RayTracingRendererConfig.defaults().frameReconstruction())
+                      && gpuPresentation.denoising().equals(
+                              RayTracingRendererConfig.defaults().denoising())
+                      && gpuPresentation.rayTracingOptimizations().equals(
+                              RayTracingRendererConfig.defaults().rayTracingOptimizations()),
+              "GPU presentation defaults must add only presentation-safe automatic policies");
+      require(gpuPresentation.equals(gpuPresentation.toBuilder().build()),
+              "managed-presentation defaults lost policy while crossing the expert builder boundary");
+      RayTracingRendererConfig rawInterop = RayTracingRendererConfig.defaults().toBuilder()
+              .cpuFrameReadbackEnabled(false)
+              .build();
+      require(!rawInterop.cpuFrameReadbackEnabled()
+                      && rawInterop.frameGeneration().equals(FrameGenerationOptions.disabled())
+                      && rawInterop.lowLatency().equals(LowLatencyOptions.disabled()),
+              "raw Vulkan interop must not inherit managed-presenter cadence policies");
+      require(gpuPresentation.frameGeneration().mode()
+                      == FrameGenerationOptions.Mode.FRAME_GENERATION
+                      && gpuPresentation.frameGeneration().multiplier()
+                      == FrameGenerationOptions.Multiplier.TWO_X,
+              "ordinary GPU defaults must never auto-select MFG");
+      RayTracingRendererConfig generationOnly = RayTracingRendererConfig.builder()
+              .frameGeneration(FrameGenerationOptions.productionDefault())
+              .build();
+      require(generationOnly.frameReconstruction().equals(FrameReconstructionOptions.disabled())
+                      && generationOnly.denoising().equals(DenoisingOptions.disabled())
+                      && generationOnly.lowLatency().equals(LowLatencyOptions.disabled())
+                      && generationOnly.rayTracingOptimizations().equals(
+                              RayTracingOptimizationOptions.disabled()),
+              "one explicit feature option must not enable unrelated optional policies");
+      require(RayTracingRendererConfig.builder().build().equals(
+                      RayTracingRendererConfig.builder()
+                              .frameReconstruction(FrameReconstructionOptions.disabled())
+                              .frameGeneration(FrameGenerationOptions.disabled())
+                              .lowLatency(LowLatencyOptions.disabled())
+                              .denoising(DenoisingOptions.disabled())
+                              .rayTracingOptimizations(RayTracingOptimizationOptions.disabled())
+                              .build()),
+              "expert builder must keep every unrelated optional feature explicit");
       RayTracingRendererConfig tuned = RayTracingRendererConfig.defaults().toBuilder().maxFramesInFlight(4).validationEnabled(true).gpuTimingsEnabled(false).cpuFrameReadbackEnabled(false).frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.accumulating(16)).build();
       require(tuned.maxFramesInFlight() == 4 && tuned.validationEnabled() && !tuned.gpuTimingsEnabled() && !tuned.cpuFrameReadbackEnabled() && tuned.frameOutputFormat() == FrameOutputFormat.LINEAR_HDR_RGBA16F && tuned.temporalRendering().maxHistoryFrames() == 16, "configuration builder lost an independent policy value");
       expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.builder().maxFramesInFlight(1).build());
       expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.builder().maxFramesInFlight(17).build());
       expect(NullPointerException.class, () -> RayTracingRendererConfig.builder().frameOutputFormat((FrameOutputFormat)null));
       expect(NullPointerException.class, () -> RayTracingRendererConfig.builder().temporalRendering((TemporalRenderingOptions)null));
+      expect(NullPointerException.class, () -> RayTracingRendererConfig.builder().frameGeneration((FrameGenerationOptions)null));
+      expect(NullPointerException.class, () -> RayTracingRendererConfig.builder().lowLatency((LowLatencyOptions)null));
       require(RayTracingBackendProvider.Descriptor.class.getConstructors().length == 0, "provider descriptor exposed an ordered public constructor");
       expect(IllegalArgumentException.class, () -> Descriptor.builder(" ").build());
       expect(IllegalArgumentException.class, () -> Descriptor.builder("vulkan").apiMajor(0).build());
       expect(IllegalArgumentException.class, () -> Descriptor.builder("vulkan").apiMinor(-1).build());
       expect(IllegalArgumentException.class, () -> ProbeResult.compatible(" "));
+   }
+
+   private static void assertFeatureOptionContracts() {
+      expect(IllegalArgumentException.class, () -> FrameReconstructionOptions.builder()
+              .preference(RendererFeaturePreference.REQUIRED)
+              .fallback(FrameReconstructionOptions.Fallback.SPATIAL)
+              .build());
+      expect(IllegalArgumentException.class, () -> DenoisingOptions.builder()
+              .preference(RendererFeaturePreference.REQUIRED)
+              .builtInTemporalFallback(true)
+              .build());
+      expect(IllegalArgumentException.class, () -> FrameGenerationOptions.builder()
+              .preference(RendererFeaturePreference.REQUIRED)
+              .mode(FrameGenerationOptions.Mode.FRAME_GENERATION)
+              .fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES)
+              .build());
+      expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.builder()
+              .temporalRendering(TemporalRenderingOptions.disabled())
+              .frameReconstruction(FrameReconstructionOptions.builder()
+                      .preference(RendererFeaturePreference.PREFERRED)
+                      .fallback(FrameReconstructionOptions.Fallback.BUILT_IN_TEMPORAL)
+                      .build())
+              .build());
+      expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.builder()
+              .temporalRendering(TemporalRenderingOptions.disabled())
+              .denoising(DenoisingOptions.builder()
+                      .preference(RendererFeaturePreference.PREFERRED)
+                      .builtInTemporalFallback(true)
+                      .build())
+              .build());
+   }
+
+   private static void assertTechnologyCapabilityContract() {
+      RenderingFeatureCapabilities empty = RenderingFeatureCapabilities.builder().build();
+      require(empty.features().size() == RenderingFeatureCapabilities.Feature.values().length,
+              "capability snapshot omitted a feature entry");
+      require(empty.technologies().size() == RenderingFeatureCapabilities.Technology.values().length,
+              "capability snapshot omitted a technology entry");
+      for (RenderingFeatureCapabilities.Technology technology
+              : RenderingFeatureCapabilities.Technology.values()) {
+         require(empty.technology(technology).status() == RenderingFeatureCapabilities.Status.DISABLED,
+                 "omitted technology must be explicitly disabled: " + technology);
+      }
+
+      RenderingFeatureCapabilities.Entry unsupported = RenderingFeatureCapabilities.Entry.of(
+              RenderingFeatureCapabilities.Status.NOT_SUPPORTED,
+              "none",
+              "the active adapter does not expose this technology"
+      );
+      RenderingFeatureCapabilities.Entry blocked = RenderingFeatureCapabilities.Entry.of(
+              RenderingFeatureCapabilities.Status.BLOCKED,
+              "nvidia.streamline.dlss-g",
+              "plugin initialization failed"
+      );
+      RenderingFeatureCapabilities capabilities = RenderingFeatureCapabilities.builder()
+              .technology(RenderingFeatureCapabilities.Technology.MULTI_FRAME_GENERATION, unsupported)
+              .technology(RenderingFeatureCapabilities.Technology.FRAME_GENERATION, blocked)
+              .build();
+      require(capabilities.technology(RenderingFeatureCapabilities.Technology.MULTI_FRAME_GENERATION)
+                      .status() == RenderingFeatureCapabilities.Status.NOT_SUPPORTED,
+              "hardware rejection was not retained as NOT_SUPPORTED");
+      require(capabilities.technology(RenderingFeatureCapabilities.Technology.FRAME_GENERATION)
+                      .status() == RenderingFeatureCapabilities.Status.BLOCKED,
+              "runtime failure was not retained as BLOCKED");
+      require(capabilities.equals(RenderingFeatureCapabilities.builder()
+                      .technology(RenderingFeatureCapabilities.Technology.MULTI_FRAME_GENERATION, unsupported)
+                      .technology(RenderingFeatureCapabilities.Technology.FRAME_GENERATION, blocked)
+                      .build()),
+              "technology capabilities lost immutable value semantics");
+      expect(NullPointerException.class, () -> capabilities.technology(null));
+      expect(NullPointerException.class, () -> RenderingFeatureCapabilities.builder()
+              .technology(null, blocked));
+      expect(NullPointerException.class, () -> RenderingFeatureCapabilities.builder()
+              .technology(RenderingFeatureCapabilities.Technology.FRAME_GENERATION, null));
+   }
+
+   private static void assertTechnologyExecutionEvidenceContract() {
+      TechnologyExecutionEvidence.Entry active = TechnologyExecutionEvidence.Entry.builder()
+              .requestPreference(RendererFeaturePreference.PREFERRED)
+              .requestedImplementation("nvidia.dlss-g")
+              .negotiatedImplementation("nvidia.dlss-g")
+              .configuredImplementation("nvidia.dlss-g")
+              .configuredParameter("generated-frames", "2")
+              .recordedCount(12L)
+              .queueAcceptedCount(10L)
+              .gpuCompletedCount(8L)
+              .outputCount(16L)
+              .sequenceRange(3L, 14L)
+              .sequenceDomain(TechnologyExecutionEvidence.SequenceDomain.RENDERER_FRAME)
+              .lastOutputSequence(12L)
+              .resetEpoch(2L)
+              .health(TechnologyExecutionEvidence.Health.ACTIVE)
+              .build();
+      TechnologyExecutionEvidence.Entry unavailable = TechnologyExecutionEvidence.Entry.unavailable(
+              RendererFeaturePreference.PREFERRED,
+              "nvidia.nrd"
+      ).toBuilder().errorCode("SDK_UNAVAILABLE").build();
+      TechnologyExecutionEvidence.Entry fallback = TechnologyExecutionEvidence.Entry.builder()
+              .requestPreference(RendererFeaturePreference.PREFERRED)
+              .requestedImplementation("nvidia.dlss-sr")
+              .negotiatedImplementation("renderer.temporal")
+              .configuredImplementation("renderer.temporal")
+              .fallbackCode("PROVIDER_UNAVAILABLE")
+              .health(TechnologyExecutionEvidence.Health.FALLBACK_PENDING)
+              .build();
+      TechnologyExecutionEvidence evidence = TechnologyExecutionEvidence.builder()
+              .technology(RenderingFeatureCapabilities.Technology.FRAME_GENERATION, active)
+              .technology(RenderingFeatureCapabilities.Technology.RAY_TRACING_DENOISING, unavailable)
+              .technology(RenderingFeatureCapabilities.Technology.TEMPORAL_SUPER_RESOLUTION, fallback)
+              .build();
+
+      require(TechnologyExecutionEvidence.class.getConstructors().length == 0
+                      && TechnologyExecutionEvidence.Entry.class.getConstructors().length == 0,
+              "technology execution evidence exposed ordered public constructors");
+      require(evidence.technologies().size() == RenderingFeatureCapabilities.Technology.values().length,
+              "technology execution evidence must contain every technology");
+      require(evidence.technology(RenderingFeatureCapabilities.Technology.FRAME_GENERATION).equals(active)
+                      && active.outputCount() == 16L
+                      && active.firstSequence().orElseThrow() == 3L
+                      && active.lastSequence().orElseThrow() == 14L
+                      && active.lastOutputSequence().orElseThrow() == 12L
+                      && active.sequenceDomain()
+                      == TechnologyExecutionEvidence.SequenceDomain.RENDERER_FRAME,
+              "technology execution evidence lost execution counters or sequence identity");
+      require(evidence.technology(RenderingFeatureCapabilities.Technology.RAY_TRACING_DENOISING).health()
+                      == TechnologyExecutionEvidence.Health.UNAVAILABLE
+                      && unavailable.errorCode().orElseThrow().equals("SDK_UNAVAILABLE"),
+              "requested but unavailable technology lost its structured failure evidence");
+      require(evidence.technology(RenderingFeatureCapabilities.Technology.MULTI_FRAME_GENERATION)
+                      .equals(TechnologyExecutionEvidence.Entry.disabled()),
+              "omitted technology must remain explicitly disabled");
+      require(evidence.equals(evidence.toBuilder().build())
+                      && evidence.hashCode() == evidence.toBuilder().build().hashCode(),
+              "technology execution evidence copy lost immutable value semantics");
+      expect(UnsupportedOperationException.class, () -> evidence.technologies().clear());
+      expect(NullPointerException.class, () -> evidence.technology(null));
+      expect(NullPointerException.class, () -> TechnologyExecutionEvidence.builder()
+              .technology(null, active));
+      expect(NullPointerException.class, () -> TechnologyExecutionEvidence.builder()
+              .technology(RenderingFeatureCapabilities.Technology.FRAME_GENERATION, null));
+
+      expect(IllegalArgumentException.class, () -> active.toBuilder()
+              .recordedCount(9L)
+              .build());
+      expect(IllegalArgumentException.class, () -> active.toBuilder()
+              .queueAcceptedCount(7L)
+              .build());
+      expect(IllegalArgumentException.class, () -> active.toBuilder()
+              .gpuCompletedCount(0L)
+              .build());
+      expect(IllegalArgumentException.class, () -> active.toBuilder()
+              .configuredParameters(java.util.Map.of("bad key", "2"))
+              .build());
+      expect(IllegalArgumentException.class, () -> active.toBuilder()
+              .clearSequenceRange()
+              .build());
+      expect(IllegalArgumentException.class, () -> active.toBuilder()
+              .sequenceDomain(TechnologyExecutionEvidence.SequenceDomain.NONE)
+              .build());
+      expect(IllegalArgumentException.class, () -> active.toBuilder()
+              .lastOutputSequence(15L)
+              .build());
+      expect(IllegalArgumentException.class, () -> fallback.toBuilder()
+              .clearFallbackCode()
+              .build());
+      expect(IllegalArgumentException.class, () -> active.toBuilder()
+              .fallbackCode("REPLACEMENT_PENDING")
+              .health(TechnologyExecutionEvidence.Health.FALLBACK_PENDING)
+              .build());
+      expect(IllegalArgumentException.class, () -> unavailable.toBuilder()
+              .clearErrorCode()
+              .health(TechnologyExecutionEvidence.Health.FAILED)
+              .build());
+      expect(IllegalArgumentException.class, () -> TechnologyExecutionEvidence.Entry.disabled()
+              .toBuilder()
+              .resetEpoch(1L)
+              .build());
+      expect(IllegalArgumentException.class, () -> unavailable.toBuilder()
+              .requestedImplementation("human readable reason")
+              .build());
+   }
+
+   private static void assertFrameGenerationContract() {
+      FrameGenerationOptions production = FrameGenerationOptions.productionDefault();
+      require(production.preference() == RendererFeaturePreference.PREFERRED
+                      && production.mode() == FrameGenerationOptions.Mode.FRAME_GENERATION
+                      && production.multiplier() == FrameGenerationOptions.Multiplier.TWO_X
+                      && production.fallback() == FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES,
+              "frame generation production policy must remain ordinary FG 2x");
+      require(FrameGenerationOptions.disabled().mode() == FrameGenerationOptions.Mode.DISABLED,
+              "disabled frame generation lost its explicit mode");
+      FrameGenerationOptions multi = FrameGenerationOptions.builder()
+              .preference(RendererFeaturePreference.PREFERRED)
+              .mode(FrameGenerationOptions.Mode.MULTI_FRAME_GENERATION)
+              .multiplier(FrameGenerationOptions.Multiplier.FOUR_X)
+              .fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES)
+              .build();
+      require(multi.equals(multi.toBuilder().build())
+                      && multi.multiplier().presentedFramesPerNativeFrame() == 4,
+              "frame generation copy lost the multi-frame cadence");
+      expect(IllegalArgumentException.class, () -> FrameGenerationOptions.builder()
+              .preference(RendererFeaturePreference.PREFERRED)
+              .mode(FrameGenerationOptions.Mode.FRAME_GENERATION)
+              .multiplier(FrameGenerationOptions.Multiplier.THREE_X)
+              .build());
+      expect(IllegalArgumentException.class, () -> FrameGenerationOptions.builder()
+              .preference(RendererFeaturePreference.PREFERRED)
+              .mode(FrameGenerationOptions.Mode.MULTI_FRAME_GENERATION)
+              .build());
+      expect(IllegalArgumentException.class, () -> FrameGenerationOptions.builder()
+              .mode(FrameGenerationOptions.Mode.FRAME_GENERATION)
+              .build());
+   }
+
+   private static void assertLowLatencyContract() {
+      LowLatencyOptions production = LowLatencyOptions.productionDefault();
+      require(production.preference() == RendererFeaturePreference.PREFERRED,
+              "production low-latency policy must be non-terminal");
+      require(LowLatencyOptions.disabled().preference() == RendererFeaturePreference.DISABLED,
+              "disabled low-latency policy changed");
+      LowLatencyOptions required = LowLatencyOptions.builder()
+              .preference(RendererFeaturePreference.REQUIRED)
+              .build();
+      require(required.equals(required.toBuilder().build()),
+              "low-latency policy copy lost value semantics");
+      expect(NullPointerException.class, () -> LowLatencyOptions.builder().preference(null));
    }
 
    private static void assertFramePollingContract() {
@@ -123,8 +521,66 @@ public final class RendererApiContractSelfTest {
       expect(IllegalArgumentException.class, () -> interop.awaitLatestFrame(Duration.ofNanos(-1L)));
       expect(NullPointerException.class, () -> interop.awaitLatestFrame((Duration)null));
       expect(NullPointerException.class, () -> interop.awaitLatestFrameAsync(Duration.ZERO, (Executor)null));
+      assertQueuedVulkanFrameWaitCanBeCancelled();
+      assertRunningVulkanFrameWaitRetainsResultOwnership();
+      CompletableFuture<VulkanFrameInterop.FramePollResult> rejected = interop.awaitLatestFrameAsync(
+              Duration.ZERO,
+              action -> { throw new java.util.concurrent.RejectedExecutionException("injected rejection"); }
+      );
+      try {
+         rejected.join();
+         throw new AssertionError("rejected Vulkan frame wait did not fail its future");
+      } catch (CompletionException expected) {
+         require(expected.getCause() instanceof java.util.concurrent.RejectedExecutionException,
+                 "executor rejection lost its original cause");
+      }
       TrackingRenderer renderer = new TrackingRenderer();
       require(renderer.extension(VulkanFrameInterop.class).isEmpty(), "ordinary renderer fabricated Vulkan interoperability support");
+   }
+
+   private static void assertQueuedVulkanFrameWaitCanBeCancelled() {
+      AtomicInteger polls = new AtomicInteger();
+      AtomicReference<Runnable> queued = new AtomicReference<>();
+      VulkanFrameInterop interop = () -> {
+         polls.incrementAndGet();
+         return FrameNotReady.INSTANCE;
+      };
+      CompletableFuture<VulkanFrameInterop.FramePollResult> future =
+              interop.awaitLatestFrameAsync(Duration.ZERO, queued::set);
+      require(future.cancel(true), "queued Vulkan frame wait must remain cancellable");
+      queued.get().run();
+      require(polls.get() == 0, "cancelled queued wait must not poll or acquire a frame lease");
+   }
+
+   private static void assertRunningVulkanFrameWaitRetainsResultOwnership() {
+      CountDownLatch polling = new CountDownLatch(1);
+      CountDownLatch releasePoll = new CountDownLatch(1);
+      VulkanFrameInterop interop = () -> {
+         polling.countDown();
+         try {
+            require(releasePoll.await(5L, TimeUnit.SECONDS), "timed out releasing Vulkan frame poll");
+         } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Vulkan frame poll was interrupted", interrupted);
+         }
+         return FrameNotReady.INSTANCE;
+      };
+      ExecutorService executor = Executors.newSingleThreadExecutor();
+      try {
+         CompletableFuture<VulkanFrameInterop.FramePollResult> future =
+                 interop.awaitLatestFrameAsync(Duration.ZERO, executor);
+         require(polling.await(5L, TimeUnit.SECONDS), "Vulkan frame wait did not begin polling");
+         require(!future.cancel(true),
+                 "running Vulkan frame wait must reject cancellation before it can acquire a lease");
+         releasePoll.countDown();
+         require(future.get(5L, TimeUnit.SECONDS) == FrameNotReady.INSTANCE,
+                 "running Vulkan frame wait lost its terminal result");
+      } catch (Exception failure) {
+         throw new AssertionError("running Vulkan frame wait contract failed", failure);
+      } finally {
+         releasePoll.countDown();
+         executor.shutdownNow();
+      }
    }
 
    private static void assertGpuDeviceSelectionContract() {
@@ -396,13 +852,55 @@ public final class RendererApiContractSelfTest {
 
    private static void assertDiagnosticsAndResultValidation() {
       RendererDiagnostics.FrameGpuTiming timing = FrameGpuTiming.builder().enabled(true).completedSamples(10L).averageTraceNanos(400L).averagePostTraceNanos(25L).averageTotalNanos(425L).maxTotalNanos(500L).build();
-      require(RendererDiagnostics.class.getConstructors().length == 0 && RendererDiagnostics.FrameGpuTiming.class.getConstructors().length == 0, "diagnostics types exposed ordered public constructors");
+      FrameGenerationEvidence generation = FrameGenerationEvidence.builder().reported(true).requestedGeneratedFramesPerNativeFrame(2).lastSubmittedGeneratedFramesPerNativeFrame(2).configuredGeneratedFramesPerNativeFrame(2).proxyPresentCalls(10L).stateSamples(8L).stateQueryCalls(12L).totalFramesActuallyPresented(24L).generatedFramesActuallyPresented(16L).lastFramesActuallyPresented(3).maximumSupportedGeneratedFramesPerNativeFrame(3).maximumGeneratedFramesObservedPerSample(2).latestNativeStatus(OptionalInt.of(0)).proxyPresentSequenceRange(3L, 12L).lastGeneratedObservationSequence(12L).resetEpoch(1L).build();
+      TechnologyExecutionEvidence.Entry execution = TechnologyExecutionEvidence.Entry.builder()
+              .requestPreference(RendererFeaturePreference.PREFERRED)
+              .requestedImplementation("nvidia.dlss-g")
+              .negotiatedImplementation("nvidia.dlss-g")
+              .configuredImplementation("nvidia.dlss-g")
+              .health(TechnologyExecutionEvidence.Health.READY)
+              .build();
+      TechnologyExecutionEvidence technologies = TechnologyExecutionEvidence.builder()
+              .technology(RenderingFeatureCapabilities.Technology.FRAME_GENERATION, execution)
+              .build();
+      require(RendererDiagnostics.class.getConstructors().length == 0 && RendererDiagnostics.FrameGpuTiming.class.getConstructors().length == 0 && FrameGenerationEvidence.class.getConstructors().length == 0 && TechnologyExecutionEvidence.class.getConstructors().length == 0, "diagnostics types exposed ordered public constructors");
       require(timing.averageTotalNanos() == 425L, "GPU total timing changed");
+      require(generation.active() && generation.requestedPresentationMultiplier() == 3 && generation.configuredPresentationMultiplier() == 3, "typed frame-generation evidence lost cadence or activity semantics");
+      require(generation.equals(generation.toBuilder().build()) && generation.hashCode() == generation.toBuilder().build().hashCode(), "frame-generation evidence copy lost immutable value semantics");
       expect(IllegalArgumentException.class, () -> timing.toBuilder().averageTotalNanos(420L).build());
       expect(IllegalArgumentException.class, () -> timing.toBuilder().enabled(false).build());
       expect(IllegalArgumentException.class, () -> timing.toBuilder().completedSamples(1L).averageTraceNanos(9223372036854775807L).averagePostTraceNanos(1L).averageTotalNanos(9223372036854775807L).maxTotalNanos(9223372036854775807L).build());
-      RendererDiagnostics diagnostics = RendererDiagnostics.builder().status(Status.READY).latestAcceptedSceneRevision(3L).latestSubmittedFrameSequence(8L).latestCompletedFrameSequence(7L).residentMeshes(2L).residentInstances(4L).deviceRecovery(DeviceRecovery.initial()).frameGpuTiming(timing).build();
+      expect(IllegalArgumentException.class, () -> generation.toBuilder().configuredGeneratedFramesPerNativeFrame(3).build());
+      expect(IllegalArgumentException.class, () -> generation.toBuilder().generatedFramesActuallyPresented(25L).build());
+      expect(IllegalArgumentException.class, () -> generation.toBuilder().generationRequestMisses(11L).build());
+      expect(IllegalArgumentException.class, () -> generation.toBuilder().stateQueryCalls(7L).build());
+      expect(IllegalArgumentException.class, () -> generation.toBuilder().stateSamples(0L).build());
+      expect(IllegalArgumentException.class, () -> generation.toBuilder().reported(false).build());
+      RendererDiagnostics diagnostics = RendererDiagnostics.builder()
+              .status(Status.READY)
+              .latestAcceptedSceneRevision(3L)
+              .latestSubmittedFrameSequence(8L)
+              .latestCompletedFrameSequence(7L)
+              .residentMeshes(2L)
+              .residentInstances(4L)
+              .deviceRecovery(DeviceRecovery.initial())
+              .frameGpuTiming(timing)
+              .frameGenerationEvidence(generation)
+              .technologyExecutionEvidence(technologies)
+              .build();
       require(diagnostics.latestCompletedFrameSequence() == 7L, "renderer diagnostics completion sequence changed");
+      require(diagnostics.frameGenerationEvidence().equals(generation)
+                      && diagnostics.technologyExecutionEvidence().equals(technologies)
+                      && diagnostics.equals(diagnostics.toBuilder().build()),
+              "renderer diagnostics lost structured execution evidence");
+      require(!diagnostics.equals(diagnostics.toBuilder()
+                      .technologyExecutionEvidence(TechnologyExecutionEvidence.disabled())
+                      .build()),
+              "renderer diagnostics value semantics ignored technology execution evidence");
+      require(RendererDiagnostics.builder().status(Status.READY).build()
+                      .technologyExecutionEvidence().equals(TechnologyExecutionEvidence.disabled()),
+              "renderer diagnostics must default to complete disabled technology evidence");
+      expect(NullPointerException.class, () -> diagnostics.toBuilder().technologyExecutionEvidence(null));
       expect(IllegalArgumentException.class, () -> diagnostics.toBuilder().latestSubmittedFrameSequence(7L).latestCompletedFrameSequence(8L).build());
       expect(IllegalArgumentException.class, () -> new RayTracingRenderer.SceneUpdateResult(-1L));
       expect(IllegalArgumentException.class, () -> FrameSubmissionResult.accepted(-1L, 0L, Set.of()));

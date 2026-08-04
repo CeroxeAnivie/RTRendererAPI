@@ -164,6 +164,11 @@ final class PreparedTlasBuild implements AutoCloseable {
         return recycledDestination;
     }
 
+    RtAccelerationStructure accelerationStructure() {
+        requireOpen();
+        return accelerationStructure;
+    }
+
     RtAccelerationStructure releaseAccelerationStructure() {
         requireOpen();
         if (accelerationStructureReleased) {

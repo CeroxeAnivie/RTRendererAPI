@@ -10,8 +10,21 @@ import org.lwjgl.vulkan.KHRSwapchain;
 import org.lwjgl.vulkan.KHRWin32Surface;
 import org.lwjgl.vulkan.KHRGetSurfaceCapabilities2;
 import org.lwjgl.vulkan.EXTFullScreenExclusive;
+import org.lwjgl.vulkan.NVRayTracingInvocationReorder;
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
+import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
+import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
+import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
+import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Entry;
+import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
+import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Status;
+import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Technology;
+import top.ceroxe.rt.renderer.feature.VulkanFeaturePlan;
+import top.ceroxe.rt.renderer.feature.VulkanFeatureRegistry;
+import top.ceroxe.rt.renderer.feature.VulkanFeatureSession;
+import top.ceroxe.rt.renderer.feature.VulkanFeatureQueueAllocation;
 import top.ceroxe.rt.renderer.rt.pipeline.RtRayTracingPipeline;
 
 import java.util.List;
@@ -30,17 +43,27 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
     private final RtResourceScope resources;
     private final RtVulkanDeviceBootstrap bootstrap;
     private final RtDeviceQueueContexts queues;
+    private final RendererFeaturePreference shaderExecutionReorderingPreference;
+    private VulkanFeatureSession featureSession;
+    private long shaderExecutionReorderingCompletedFrames;
+    private long firstShaderExecutionReorderingSequence = -1L;
+    private long lastShaderExecutionReorderingSequence = -1L;
     private boolean managedPresentationActive;
     private boolean closed;
 
     private VulkanDeviceRuntime(
             RtResourceScope resources,
             RtVulkanDeviceBootstrap bootstrap,
-            RtDeviceQueueContexts queues
+            RtDeviceQueueContexts queues,
+            RendererFeaturePreference shaderExecutionReorderingPreference
     ) {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.bootstrap = Objects.requireNonNull(bootstrap, "bootstrap");
         this.queues = Objects.requireNonNull(queues, "queues");
+        this.shaderExecutionReorderingPreference = Objects.requireNonNull(
+                shaderExecutionReorderingPreference,
+                "shaderExecutionReorderingPreference"
+        );
     }
 
     /**
@@ -101,17 +124,45 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
             boolean validationEnabled,
             boolean gpuTimingsEnabled
     ) {
+        return open(
+                capability,
+                diagnostics,
+                validationEnabled,
+                gpuTimingsEnabled,
+                RayTracingRendererConfig.defaults()
+        );
+    }
+
+    /**
+     * Creates the device and optional feature session from one immutable renderer policy.
+     *
+     * @param capability validated hardware-ready capability result
+     * @param diagnostics diagnostic sinks retained by command lanes
+     * @param validationEnabled whether Vulkan validation is enabled
+     * @param gpuTimingsEnabled whether GPU timestamps are allocated
+     * @param configuration complete renderer and optional-feature policy
+     * @return independently owned runtime
+     */
+    public static VulkanDeviceRuntime open(
+            VulkanRtCapabilityProbe.Result capability,
+            RendererRtDiagnostics diagnostics,
+            boolean validationEnabled,
+            boolean gpuTimingsEnabled,
+            RayTracingRendererConfig configuration
+    ) {
         VulkanRtCapabilityProbe.Result checkedCapability = Objects.requireNonNull(capability, "capability");
         RendererRtDiagnostics checkedDiagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
+        RayTracingRendererConfig checkedConfiguration = Objects.requireNonNull(configuration, "configuration");
         if (!checkedCapability.hardwareRayTracingReady()) {
             throw new IllegalArgumentException("Vulkan device runtime requires hardware ray tracing support");
         }
 
         RtResourceScope resources = new RtResourceScope();
-        try (MemoryStack stack = MemoryStack.stackPush()) {
+        try (VulkanFeaturePlan featurePlan = VulkanFeatureRegistry.plan(checkedConfiguration);
+             MemoryStack stack = MemoryStack.stackPush()) {
             RtVulkanDeviceBootstrap bootstrap = resources.retain(
                     "Vulkan device bootstrap",
-                    RtVulkanDeviceBootstrap.open(checkedCapability, validationEnabled)
+                    RtVulkanDeviceBootstrap.open(checkedCapability, validationEnabled, featurePlan)
             );
             RtDeviceQueueContexts queues = resources.retain(
                     "Vulkan command lanes",
@@ -125,7 +176,21 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
                             gpuTimingsEnabled
                     )
             );
-            return new VulkanDeviceRuntime(resources, bootstrap, queues);
+            VulkanDeviceRuntime runtime = new VulkanDeviceRuntime(
+                    resources,
+                    bootstrap,
+                    queues,
+                    checkedConfiguration.rayTracingOptimizations().shaderExecutionReordering()
+            );
+            runtime.featureSession = resources.retain(
+                    "Vulkan feature session",
+                    VulkanFeatureRegistry.openSession(
+                            featurePlan,
+                            runtime,
+                            checkedConfiguration
+                    )
+            );
+            return runtime;
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
             try {
                 resources.close();
@@ -205,6 +270,17 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
     public synchronized int queueFamilyIndex() {
         requireOpen();
         return bootstrap.queueFamilyIndex();
+    }
+
+    /**
+     * Returns the queue roles reserved during logical-device creation for one optional provider.
+     *
+     * @param providerId stable provider id from the negotiated feature plan
+     * @return immutable allocation, or {@link VulkanFeatureQueueAllocation#NONE} when no queue was reserved
+     */
+    public synchronized VulkanFeatureQueueAllocation featureQueueAllocation(String providerId) {
+        requireOpen();
+        return bootstrap.featureQueueAllocation(providerId);
     }
 
     /**
@@ -386,6 +462,132 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
     public synchronized List<String> enabledExtensions() {
         requireOpen();
         return bootstrap.enabledExtensions();
+    }
+
+    /**
+     * Returns the composite optional-feature frame/lifetime boundary.
+     *
+     * @return non-null open feature session
+     */
+    public synchronized VulkanFeatureSession featureSession() {
+        requireOpen();
+        return Objects.requireNonNull(featureSession, "featureSession");
+    }
+
+    /**
+     * Returns the final device-bound optional feature capabilities.
+     *
+     * @return immutable complete capability result
+     */
+    public synchronized RenderingFeatureCapabilities featureCapabilities() {
+        RenderingFeatureCapabilities sessionCapabilities = featureSession().capabilities();
+        if (sessionCapabilities.feature(Feature.SHADER_EXECUTION_REORDERING).status() == Status.DISABLED) {
+            return sessionCapabilities;
+        }
+        RenderingFeatureCapabilities.Builder resolved = RenderingFeatureCapabilities.builder();
+        sessionCapabilities.features().forEach(resolved::feature);
+        sessionCapabilities.technologies().forEach(resolved::technology);
+        if (bootstrap.shaderExecutionReorderingEnabled()) {
+            Entry ser = Entry.of(
+                    shaderExecutionReorderingCompletedFrames > 0L ? Status.ACTIVE : Status.AVAILABLE,
+                    "vulkan.nv.shader-invocation-reorder",
+                    shaderExecutionReorderingCompletedFrames > 0L
+                            ? "SER ray-generation permutation completed on the GPU"
+                            : "device feature is enabled; awaiting the first completed SER dispatch"
+            );
+            resolved.feature(Feature.SHADER_EXECUTION_REORDERING, ser);
+            resolved.technology(Technology.SHADER_EXECUTION_REORDERING, ser);
+        } else if (sessionCapabilities.feature(Feature.SHADER_EXECUTION_REORDERING).status()
+                != Status.DISABLED) {
+            Entry unsupported = Entry.of(
+                    Status.NOT_SUPPORTED,
+                    "none",
+                    "the selected Vulkan device does not expose executable shader invocation reordering"
+            );
+            resolved.feature(Feature.SHADER_EXECUTION_REORDERING, unsupported);
+            resolved.technology(Technology.SHADER_EXECUTION_REORDERING, unsupported);
+        }
+        return resolved.build();
+    }
+
+    /**
+     * Returns whether the logical device enabled the NV invocation-reorder feature bit.
+     * @return {@code true} when SER commands are legal on this device
+     */
+    public synchronized boolean shaderExecutionReorderingEnabled() {
+        requireOpen();
+        return bootstrap.shaderExecutionReorderingEnabled();
+    }
+
+    /**
+     * Publishes execution evidence only after the matching producer fence completed.
+     *
+     * @param frameSequence renderer-frame sequence whose completed submission executed SER
+     */
+    public synchronized void markShaderExecutionReorderingExecuted(long frameSequence) {
+        requireOpen();
+        if (frameSequence < 0L) throw new IllegalArgumentException("frameSequence must not be negative");
+        if (!bootstrap.shaderExecutionReorderingEnabled()) {
+            throw new IllegalStateException("SER execution cannot be marked on a device without SER enabled");
+        }
+        shaderExecutionReorderingCompletedFrames = Math.incrementExact(
+                shaderExecutionReorderingCompletedFrames
+        );
+        firstShaderExecutionReorderingSequence = firstShaderExecutionReorderingSequence < 0L
+                ? frameSequence : Math.min(firstShaderExecutionReorderingSequence, frameSequence);
+        lastShaderExecutionReorderingSequence = Math.max(
+                lastShaderExecutionReorderingSequence, frameSequence
+        );
+    }
+
+    /**
+     * Returns provider evidence plus device-owned SER completion facts.
+     *
+     * @return an immutable snapshot of technology execution evidence for this device session
+     */
+    public synchronized TechnologyExecutionEvidence technologyExecutionEvidence() {
+        requireOpen();
+        TechnologyExecutionEvidence.Builder evidence =
+                featureSession().technologyExecutionEvidence().toBuilder();
+        TechnologyExecutionEvidence.Entry ser;
+        String implementation = "vulkan.nv.shader-invocation-reorder";
+        if (!shaderExecutionReorderingPreference.requested()) {
+            ser = TechnologyExecutionEvidence.Entry.disabled();
+        } else if (!bootstrap.shaderExecutionReorderingEnabled()) {
+            ser = TechnologyExecutionEvidence.Entry.unavailable(
+                    shaderExecutionReorderingPreference,
+                    implementation
+            ).toBuilder().errorCode("DEVICE_FEATURE_UNAVAILABLE").build();
+        } else {
+            TechnologyExecutionEvidence.Entry.Builder builder =
+                    TechnologyExecutionEvidence.Entry.builder()
+                            .requestPreference(shaderExecutionReorderingPreference)
+                            .requestedImplementation(implementation)
+                            .negotiatedImplementation(implementation)
+                            .configuredImplementation(implementation)
+                            .configuredParameter(
+                                    "extension",
+                                    NVRayTracingInvocationReorder.VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME
+                            );
+            if (shaderExecutionReorderingCompletedFrames == 0L) {
+                ser = builder.health(TechnologyExecutionEvidence.Health.READY).build();
+            } else {
+                ser = builder
+                        .recordedCount(shaderExecutionReorderingCompletedFrames)
+                        .queueAcceptedCount(shaderExecutionReorderingCompletedFrames)
+                        .gpuCompletedCount(shaderExecutionReorderingCompletedFrames)
+                        .outputCount(shaderExecutionReorderingCompletedFrames)
+                        .sequenceRange(
+                                firstShaderExecutionReorderingSequence,
+                                lastShaderExecutionReorderingSequence
+                        )
+                        .sequenceDomain(TechnologyExecutionEvidence.SequenceDomain.RENDERER_FRAME)
+                        .lastOutputSequence(lastShaderExecutionReorderingSequence)
+                        .health(TechnologyExecutionEvidence.Health.ACTIVE)
+                        .build();
+            }
+        }
+        return evidence.technology(Technology.SHADER_EXECUTION_REORDERING, ser).build();
     }
 
     /**

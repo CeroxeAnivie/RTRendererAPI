@@ -4,6 +4,9 @@ import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
+import top.ceroxe.rt.renderer.api.FrameGenerationEvidence;
+import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
+import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 
 import java.util.Objects;
@@ -23,9 +26,38 @@ interface VulkanRenderingSession extends AutoCloseable {
     /** Stable UUID-derived identity of the physical GPU that owns exported frame memory. */
     String gpuStableId();
 
+    /** Current immutable snapshot of device-bound optional feature execution state. */
+    default RenderingFeatureCapabilities featureCapabilities() {
+        return RenderingFeatureCapabilities.builder().build();
+    }
+
+    /**
+     * Maximum accepted producer lead while a managed presenter owns frame retirement.
+     *
+     * <p>Most backends impose no tighter limit than the presenter configuration. A backend whose
+     * native presentation feature exposes only frame-local inputs may lower this value so the host
+     * applies recoverable admission backpressure before those inputs can be superseded.</p>
+     */
+    default int managedPresentationProducerLeadLimit() {
+        return Integer.MAX_VALUE;
+    }
+
     SceneAdmission apply(SceneSubmission submission) throws SubmissionRejectedException;
 
     FrameAdmission submit(FrameSubmission submission) throws SubmissionRejectedException;
+
+    /**
+     * Attempts frame admission without representing expected capacity backpressure as an
+     * exception. Implementations should override this on hot paths; the default preserves the
+     * transactional contract for test doubles and alternate backends.
+     */
+    default FrameAdmissionAttempt trySubmit(FrameSubmission submission) {
+        try {
+            return new FrameAdmitted(submit(submission));
+        } catch (SubmissionRejectedException rejection) {
+            return new FrameDeferred(rejection.getMessage());
+        }
+    }
 
     /**
      * Returns a real completed external image lease, or {@code null} when none is newer.
@@ -108,19 +140,70 @@ interface VulkanRenderingSession extends AutoCloseable {
         }
     }
 
+    sealed interface FrameAdmissionAttempt permits FrameAdmitted, FrameDeferred {
+    }
+
+    record FrameAdmitted(FrameAdmission admission) implements FrameAdmissionAttempt {
+        public FrameAdmitted {
+            admission = Objects.requireNonNull(admission, "admission");
+        }
+    }
+
+    record FrameDeferred(String reason) implements FrameAdmissionAttempt {
+        public FrameDeferred {
+            reason = Objects.requireNonNull(reason, "reason");
+            if (reason.isBlank()) throw new IllegalArgumentException("reason must not be blank");
+        }
+    }
+
     record Telemetry(
             long latestCompletedFrameSequence,
-            RendererDiagnostics.FrameGpuTiming frameGpuTiming
+            RendererDiagnostics.FrameGpuTiming frameGpuTiming,
+            FrameGenerationEvidence frameGenerationEvidence,
+            TechnologyExecutionEvidence technologyExecutionEvidence
     ) {
         public Telemetry {
             if (latestCompletedFrameSequence < -1L) {
                 throw new IllegalArgumentException("latestCompletedFrameSequence must be at least -1");
             }
             frameGpuTiming = Objects.requireNonNull(frameGpuTiming, "frameGpuTiming");
+            frameGenerationEvidence = Objects.requireNonNull(
+                    frameGenerationEvidence, "frameGenerationEvidence"
+            );
+            technologyExecutionEvidence = Objects.requireNonNull(
+                    technologyExecutionEvidence, "technologyExecutionEvidence"
+            );
+        }
+
+        Telemetry(long latestCompletedFrameSequence, RendererDiagnostics.FrameGpuTiming frameGpuTiming) {
+            this(
+                    latestCompletedFrameSequence,
+                    frameGpuTiming,
+                    FrameGenerationEvidence.unavailable(),
+                    TechnologyExecutionEvidence.disabled()
+            );
+        }
+
+        Telemetry(
+                long latestCompletedFrameSequence,
+                RendererDiagnostics.FrameGpuTiming frameGpuTiming,
+                FrameGenerationEvidence frameGenerationEvidence
+        ) {
+            this(
+                    latestCompletedFrameSequence,
+                    frameGpuTiming,
+                    frameGenerationEvidence,
+                    TechnologyExecutionEvidence.disabled()
+            );
         }
 
         static Telemetry unavailable() {
-            return new Telemetry(-1L, RendererDiagnostics.FrameGpuTiming.unavailable());
+            return new Telemetry(
+                    -1L,
+                    RendererDiagnostics.FrameGpuTiming.unavailable(),
+                    FrameGenerationEvidence.unavailable(),
+                    TechnologyExecutionEvidence.disabled()
+            );
         }
     }
 

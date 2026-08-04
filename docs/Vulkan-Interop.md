@@ -19,9 +19,34 @@ semaphore、queue-family ownership transfer 和 Win32 handle 所有权的调用�
 | `VulkanFramePresenter` | 创建配置、pump event、提交帧、调用 `presentLatestFrame` | 同设备 managed timeline fast path、swapchain copy/present、HUD、completion、lease close；必要时 external fallback |
 | `VulkanFrameInterop` | 全部 consumer Vulkan import、queue ownership、同步、submission、completion 与 lease close | producer image/handle export 与契约验证 |
 
-官方 presenter 通过 `VulkanFramePresenter.open(renderer, config)` 打开。其全部方法绑定创建线程；同一 renderer 同时只允许一个官方 presenter。简单模式调用 `presentLatestFrame()`，由 provider 获取可用 internal managed lease；该路径复用 renderer 的 `VkInstance`、`VkDevice` 与受控 queue，并用 GPU timeline 表达 producer-ready 依赖，不导出 Win32 memory handle。`VulkanFrameInterop.pollLatestFrame()` 是独立专家入口，继续只返回 CPU 已观察完成的 external lease。`maximumFramesQueuedAhead` 限制 producer lead，但不按时间锁 FPS。
+官方 presenter 通过 `VulkanFramePresenter.open(renderer, config)` 打开。其全部方法绑定创建线程；同一 renderer 同时只允许一个官方 presenter。简单模式调用 `presentLatestFrame()`，由 provider 获取可用 internal managed lease；该路径复用 renderer 的 `VkInstance`、`VkDevice` 与受控 queue，并用 GPU timeline 表达 producer-ready 依赖，不导出 Win32 memory handle。`VulkanFrameInterop.pollLatestFrame()` 是独立专家入口，继续只返回 CPU 已观察完成的 external lease。两种消费模式在同一 renderer session 内互斥：存在 expert lease 时不能打开 presenter，presenter 打开期间也不能 poll expert lease。`maximumFramesQueuedAhead` 限制 producer lead，但不按时间锁 FPS。
 
 `PresentMode.UNCAPPED` 依次偏好 immediate、mailbox、FIFO；`LOW_LATENCY` 偏好 mailbox；`VSYNC` 使用 FIFO。平台可以 fallback，唯一权威结果是 `activePresentMode()`。`PresentationResult` 的 `PRESENTED` 才能计入实际 present FPS；minimized 和 swapchain recreate 结果会安全退休 lease，但不是可见帧。同一 `VkSwapchainKHR` 的 acquire/present host access 必须串行；不得用跨线程竞争伪造吞吐。`performanceSnapshot()` 用于区分 acquire、GPU copy、queue lock 与 native present；`setOverlayText(...)` 可把诊断值直接画入 swapchain。
+
+### Streamline proxy swapchain 与帧生成所有权
+
+FG/MFG 启用时，官方 presenter 通过 Streamline 官方 Vulkan WSI proxy 函数创建、枚举、acquire、present 和销毁 swapchain；
+没有第二套可由应用直接调用的 swapchain owner。proxy 调用仍受 Vulkan host synchronization 约束，全部 acquire/present
+操作保持在 presenter owner 线程串行执行。`VK_SUBOPTIMAL_KHR` 和 `VK_ERROR_OUT_OF_DATE_KHR` 进入有界的
+retire/recreate 路径，不把正常 WSI 重建永久解释为功能熔断。
+
+每个 native frame 使用同一个严格递增 sequence 获取 Streamline frame token。HUD-less color、depth 和 motion vectors 以
+`VK_IMAGE_LAYOUT_GENERAL` 及真实 extent/format/usage 提交 `eValidUntilPresent` tag；只有 exact token、backbuffer extent 和 tagged
+资源合同全部匹配时才请求生成，否则该帧确定性回退为 native present 并增加 request-miss 诊断。presenter 的 copy 目标在
+调用 native 或 proxy `vkQueuePresentKHR` 前必须从 `TRANSFER_DST_OPTIMAL` 回到 `VK_IMAGE_LAYOUT_PRESENT_SRC_KHR`。
+
+同步和资源回收遵循以下边界：
+
+1. presenter 等待 swapchain acquire binary semaphore 和 producer-ready timeline，再提交 copy，并 signal present semaphore。
+2. proxy present 消费该 present semaphore；同一 frame context 的 retirement fence 证明 presenter/Streamline 对 tagged 输入的访问已经完成。
+3. fence 完成后，以原 frame token 为 HUD-less color、depth 和 motion vectors 提交 null tag；null tag 成功前不得释放或复用其 image/view。
+4. tag retirement、managed lease release/close 和 host backlog 通知是一个可重试事务。任一步失败都保留 pending lease，不能提前把 slot 归还 producer。
+5. minimized、skipped、fallback、swapchain recreate 和 presenter close 使用同一 retirement 事务；post-present diagnostics 失败不能跳过清理。
+
+swapchain recreate/close 先把 DLSS-G 配置为 off，再释放全部剩余 tag。配置 off 失败时保留原 proxy swapchain 供重试；tag 释放
+失败时也禁止销毁仍被 Streamline 引用的图像。完成这些资源引用义务后，关闭路径等待 device idle 覆盖 proxy 的异步工作，随后
+销毁 proxy swapchain，最后才销毁 frame-context fence/semaphore、feature session 和 Vulkan device。该顺序是 provider 内部合同，
+应用不得通过直接销毁 window、swapchain 或 renderer 绕过 `VulkanFramePresenter.close()`。
 
 ## 获取扩展
 

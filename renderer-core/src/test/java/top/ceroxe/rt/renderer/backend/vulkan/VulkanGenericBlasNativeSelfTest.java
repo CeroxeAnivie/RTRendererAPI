@@ -4,9 +4,16 @@ import java.io.PrintStream;
 import java.util.List;
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.api.AffineTransform;
+import top.ceroxe.rt.renderer.api.DenoisingOptions;
+import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
+import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
+import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
+import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
+import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.MaterialAsset.BlendMode;
 import top.ceroxe.rt.renderer.api.MaterialAsset.ShadingModel;
 import top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneUploadPlanner.Target;
@@ -17,14 +24,21 @@ import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
 public final class VulkanGenericBlasNativeSelfTest {
    private static final long COMPLETION_TIMEOUT_NANOS = 10000000000L;
-
    private VulkanGenericBlasNativeSelfTest() {
    }
 
    public static void main(String[] arguments) throws Exception {
       VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
       require(capability.hardwareRayTracingReady(), "generic BLAS gate requires hardware RT: " + capability.summary());
-      VulkanDeviceRuntime device = VulkanDeviceRuntime.open(capability);
+      RayTracingRendererConfig configuration = RayTracingRendererConfig.builder()
+              .frameReconstruction(FrameReconstructionOptions.disabled())
+              .frameGeneration(FrameGenerationOptions.disabled())
+              .denoising(DenoisingOptions.disabled())
+              .rayTracingOptimizations(RayTracingOptimizationOptions.disabled())
+              .build();
+      VulkanDeviceRuntime device = VulkanDeviceRuntime.open(
+              capability, RendererRtDiagnostics.noop(), true, true, configuration
+      );
 
       try {
          VulkanGpuScene scene = new VulkanGpuScene(new VulkanGpuSceneBuffers(device.device(), device.allocator(), device.buildCommands()));
@@ -37,7 +51,9 @@ public final class VulkanGenericBlasNativeSelfTest {
             awaitActive(scene, admission.acceptedRevision());
             VulkanGpuSceneTransferQueue.BufferBinding positions = scene.requireBuffer(Target.POSITIONS, 0L);
             VulkanGpuSceneTransferQueue.BufferBinding indices = scene.requireBuffer(Target.INDICES, 0L);
-            RtDeviceTriangleBlasBuilder.Geometry geometry = new RtDeviceTriangleBlasBuilder.Geometry(positions.deviceAddress(), indices.deviceAddress(), 3, 1, true);
+            RtDeviceTriangleBlasBuilder.Geometry geometry = new RtDeviceTriangleBlasBuilder.Geometry(
+                    positions.deviceAddress(), indices.deviceAddress(), 3, 1, true
+            );
             RtDeviceTriangleBlasBuilder.PendingBuild pending = RtDeviceTriangleBlasBuilder.submit(device.device(), device.allocator(), device.buildCommands(), device.accelerationStructureScratchAlignment(), List.of(geometry));
 
             try {

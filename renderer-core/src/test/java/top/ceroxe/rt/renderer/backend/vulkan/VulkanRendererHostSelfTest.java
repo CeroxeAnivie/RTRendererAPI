@@ -2,12 +2,15 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.LongConsumer;
 import java.util.function.Supplier;
 import top.ceroxe.rt.renderer.api.CameraState;
 import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
+import top.ceroxe.rt.renderer.api.FrameValidationException;
+import top.ceroxe.rt.renderer.api.FrameGenerationEvidence;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer;
@@ -17,6 +20,7 @@ import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.api.RendererHealth;
 import top.ceroxe.rt.renderer.api.RendererStateException;
+import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.SceneInstance;
 import top.ceroxe.rt.renderer.api.SceneRevisionException;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
@@ -48,10 +52,14 @@ public final class VulkanRendererHostSelfTest {
 
    public static void main(String[] args) {
       rejectsAndClosesInvalidInitialSession();
+      publishesLiveFeatureCapabilities();
       advancesOnlyAfterBackendAdmission();
       validatesFrameOrderBeforeDispatch();
+      preservesRendererAfterPermanentFrameValidationFailure();
       boundsSustainedProducerLeadUntilPresentationRetiresFrames();
+      honorsBackendManagedPresentationProducerLeadLimit();
       closingManagedPresenterClearsProducerFlowControl();
+      keepsManagedAndExpertFrameConsumersMutuallyExclusive();
       publishesCpuFramesWithoutNativeInterop();
       publishesBoundedDiagnosticsAndClosesOnce();
       retriesFailedSessionClose();
@@ -59,12 +67,31 @@ public final class VulkanRendererHostSelfTest {
       retriesDeferredSessionCloseWithoutRetiringLeaseTwice();
       backendContractViolationFailsPermanently();
       backendFailureClosesResourcesExactlyOnce();
+      outOfMemoryAndDriverFailuresRemainTypedAndDoNotAutoRecover();
       recreatesDeviceAndReplaysCommittedSceneOnce();
       deviceRecoveryClearsDiscardedPresenterBacklog();
       doesNotRecoverBeforeLostSessionCloses();
       recoveryBeforeFirstScenePreservesRevisionZero();
       defersDeviceRecoveryUntilExternalLeaseCompletion();
+      publishesDeviceRecoveryHistoryInvalidationOnFirstRecoveredFrame();
       System.out.println("VulkanRendererHostSelfTest passed");
+   }
+
+   private static void publishesDeviceRecoveryHistoryInvalidationOnFirstRecoveredFrame() {
+      TrackingSession initial = new TrackingSession();
+      TrackingSession recovered = new TrackingSession();
+      int[] opens = new int[]{0};
+      VulkanRendererHost renderer = new VulkanRendererHost(RayTracingRendererConfig.defaults(), () ->
+            opens[0]++ == 0 ? initial : recovered);
+      initial.failNextFrameWith = deviceLost("syntheticRecoveredFrame");
+      expect(RendererDeviceException.class, () -> renderer.submit(frame(0L, 0L)));
+      RayTracingRenderer.FrameSubmissionAttempt retry = renderer.trySubmit(frame(0L, 0L));
+      require(retry instanceof RayTracingRenderer.FrameSubmitted,
+            "first frame after device recovery was not admitted");
+      require(((RayTracingRenderer.FrameSubmitted) retry).submission().historyInvalidations()
+                    .contains(top.ceroxe.rt.renderer.api.HistoryInvalidationReason.DEVICE_RECOVERY),
+            "first frame after device recovery did not force temporal history restart");
+      renderer.close();
    }
 
    private static void rejectsAndClosesInvalidInitialSession() {
@@ -72,6 +99,42 @@ public final class VulkanRendererHostSelfTest {
       session.state = State.FAILED;
       expect(IllegalArgumentException.class, () -> renderer(session));
       require(session.closes == 1, "invalid initial session leaked its resources");
+   }
+
+   private static void publishesLiveFeatureCapabilities() {
+      TrackingSession session = new TrackingSession();
+      session.featureCapabilities = frameGenerationCapability(
+              RenderingFeatureCapabilities.Status.AVAILABLE
+      );
+      VulkanRendererHost renderer = renderer(session);
+      RenderingFeatureCapabilities initial = renderer.extension(RenderingFeatureCapabilities.class)
+              .orElseThrow();
+      require(initial.feature(RenderingFeatureCapabilities.Feature.FRAME_GENERATION).status()
+                      == RenderingFeatureCapabilities.Status.AVAILABLE,
+              "renderer did not publish the armed feature snapshot");
+
+      session.featureCapabilities = frameGenerationCapability(
+              RenderingFeatureCapabilities.Status.ACTIVE
+      );
+      RenderingFeatureCapabilities active = renderer.extension(RenderingFeatureCapabilities.class)
+              .orElseThrow();
+      require(active.feature(RenderingFeatureCapabilities.Feature.FRAME_GENERATION).status()
+                      == RenderingFeatureCapabilities.Status.ACTIVE,
+              "renderer retained a stale feature snapshot after execution evidence changed");
+      renderer.close();
+   }
+
+   private static RenderingFeatureCapabilities frameGenerationCapability(
+           RenderingFeatureCapabilities.Status status
+   ) {
+      return RenderingFeatureCapabilities.builder()
+              .feature(
+                      RenderingFeatureCapabilities.Feature.FRAME_GENERATION,
+                      RenderingFeatureCapabilities.Entry.of(
+                              status, "test.frame-generation", "synthetic execution state"
+                      )
+              )
+              .build();
    }
 
    private static void advancesOnlyAfterBackendAdmission() {
@@ -112,6 +175,28 @@ public final class VulkanRendererHostSelfTest {
               "capacity-aware retry did not preserve frame identity");
       expect(SubmissionOrderException.class, () -> renderer.submit(frame(6L, 0L)));
       require(session.frameSubmissions == 4, "duplicate frame sequence reached backend");
+      renderer.close();
+   }
+
+   private static void preservesRendererAfterPermanentFrameValidationFailure() {
+      TrackingSession session = new TrackingSession();
+      VulkanRendererHost renderer = renderer(session);
+      renderer.apply(scene(0L));
+      session.failNextFrameWith = new FrameValidationException(
+              FrameValidationException.Reason.MISSING_DEPTH_PROJECTION,
+              "synthetic missing projection"
+      );
+      try {
+         renderer.trySubmit(frame(1L, 0L));
+         throw new AssertionError("permanent frame error became a deferred or accepted submission");
+      } catch (FrameValidationException validation) {
+         require(validation.reason() == FrameValidationException.Reason.MISSING_DEPTH_PROJECTION,
+                 "frame validation reason changed at the host boundary");
+      }
+      require(renderer.status() == Status.READY,
+              "caller-correctable frame validation failure poisoned the renderer lifecycle");
+      require(renderer.trySubmit(frame(1L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+              "corrected retry with the same unaccepted sequence was not admitted");
       renderer.close();
    }
 
@@ -172,15 +257,85 @@ public final class VulkanRendererHostSelfTest {
       renderer.close();
    }
 
+   private static void keepsManagedAndExpertFrameConsumersMutuallyExclusive() {
+      TrackingSession session = new TrackingSession();
+      TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
+      VulkanRendererHost renderer = new VulkanRendererHost(
+            RayTracingRendererConfig.defaults(), session, presenterOpener
+      );
+      renderer.apply(scene(0L));
+      renderer.submit(frame(1L, 0L));
+      session.nextFrame = new TrackingFrameLease(1L, 0L);
+      GpuFrameLease expertLease = availableLease(renderer.pollLatestFrame());
+      expect(RendererStateException.class, () -> renderer.openPresenter(
+            VulkanFramePresenterConfig.builder().build()
+      ));
+      expertLease.close();
+
+      TrackingPresenter presenter = presenterOpener.openedBy(renderer, 2);
+      expect(RendererStateException.class, renderer::pollLatestFrame);
+      presenter.close();
+      renderer.close();
+   }
+
+   private static void honorsBackendManagedPresentationProducerLeadLimit() {
+      TrackingSession session = new TrackingSession();
+      session.managedPresentationProducerLeadLimit = 1;
+      TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
+      VulkanRendererHost renderer = new VulkanRendererHost(
+              RayTracingRendererConfig.defaults(), session, presenterOpener
+      );
+      renderer.apply(scene(0L));
+      TrackingPresenter presenter = presenterOpener.openedBy(renderer, 4);
+
+      require(renderer.trySubmit(frame(1L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+              "backend producer-lead limit rejected the first managed frame");
+      require(renderer.trySubmit(frame(2L, 0L)) instanceof RayTracingRenderer.FrameSubmissionDeferred,
+              "presenter configuration bypassed the stricter backend producer-lead contract");
+      require(session.frameSubmissions == 1,
+              "backend-limited managed frame reached the native submission lane");
+      presenter.retire(1L);
+      require(renderer.trySubmit(frame(2L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+              "retiring the frame did not restore the backend producer permit");
+      presenter.close();
+      renderer.close();
+   }
+
    private static void publishesBoundedDiagnosticsAndClosesOnce() {
       TrackingSession session = new TrackingSession();
       VulkanRendererHost renderer = renderer(session);
       renderer.apply(scene(0L));
       renderer.submit(frame(2L, 0L));
-      session.telemetry = new VulkanRenderingSession.Telemetry(2L, FrameGpuTiming.builder().enabled(true).completedSamples(1L).averageTraceNanos(400L).averagePostTraceNanos(100L).averageTotalNanos(500L).maxTotalNanos(500L).build());
+      FrameGenerationEvidence generation = FrameGenerationEvidence.builder()
+              .reported(true)
+              .requestedGeneratedFramesPerNativeFrame(1)
+              .lastSubmittedGeneratedFramesPerNativeFrame(1)
+              .configuredGeneratedFramesPerNativeFrame(1)
+              .proxyPresentCalls(2L)
+              .stateSamples(1L)
+              .stateQueryCalls(2L)
+              .totalFramesActuallyPresented(2L)
+              .generatedFramesActuallyPresented(1L)
+              .lastFramesActuallyPresented(2)
+              .maximumSupportedGeneratedFramesPerNativeFrame(1)
+              .maximumGeneratedFramesObservedPerSample(1)
+              .latestNativeStatus(OptionalInt.of(0))
+              .proxyPresentSequenceRange(1L, 2L)
+              .lastGeneratedObservationSequence(2L)
+              .resetEpoch(1L)
+              .build();
+      session.telemetry = new VulkanRenderingSession.Telemetry(
+              2L,
+              FrameGpuTiming.builder().enabled(true).completedSamples(1L)
+                      .averageTraceNanos(400L).averagePostTraceNanos(100L)
+                      .averageTotalNanos(500L).maxTotalNanos(500L).build(),
+              generation
+      );
       RendererDiagnostics diagnostics = renderer.diagnostics();
       require(diagnostics.latestCompletedFrameSequence() == 2L, "completed frame telemetry changed");
       require(diagnostics.residentMeshes() == 1L && diagnostics.residentInstances() == 1L, "diagnostics leaked incorrect resident counts");
+      require(diagnostics.frameGenerationEvidence().equals(generation),
+              "host lost typed frame-generation session telemetry");
       require(renderer.pollLatestFrame() == FrameNotReady.INSTANCE, "host fabricated a GPU frame lease");
       renderer.close();
       renderer.close();
@@ -280,6 +435,69 @@ public final class VulkanRendererHostSelfTest {
       require(session.closes == 1, "backend failure did not close resources exactly once");
       renderer.close();
       require(session.closes == 1, "explicit close duplicated failed-session cleanup");
+   }
+
+   private static void outOfMemoryAndDriverFailuresRemainTypedAndDoNotAutoRecover() {
+      requireTerminalDeviceFailure(
+              Reason.DEVICE_OUT_OF_MEMORY,
+              RecoveryAction.REDUCE_MEMORY_AND_RECREATE,
+              Kind.DEVICE_OUT_OF_MEMORY,
+              -2
+      );
+      requireTerminalDeviceFailure(
+              Reason.HOST_OUT_OF_MEMORY,
+              RecoveryAction.ABORT,
+              Kind.HOST_OUT_OF_MEMORY,
+              -1
+      );
+      requireTerminalDeviceFailure(
+              Reason.DRIVER_FAILURE,
+              RecoveryAction.ABORT,
+              Kind.DRIVER_FAILURE,
+              -3
+      );
+   }
+
+   private static void requireTerminalDeviceFailure(
+           Reason reason,
+           RecoveryAction recoveryAction,
+           Kind healthKind,
+           int nativeResult
+   ) {
+      TrackingSession session = new TrackingSession();
+      int[] opens = new int[]{0};
+      VulkanRendererHost renderer = new VulkanRendererHost(
+              RayTracingRendererConfig.defaults(),
+              () -> {
+                 opens[0]++;
+                 return session;
+              }
+      );
+      session.failNextFrameWith = new RendererDeviceException(
+              "synthetic " + reason,
+              reason,
+              recoveryAction,
+              "syntheticFrameSubmit",
+              nativeResult
+      );
+      RendererDeviceException failure = (RendererDeviceException) expect(
+              RendererDeviceException.class,
+              () -> renderer.submit(frame(0L, 0L))
+      );
+      require(failure.reason() == reason && failure.recoveryAction() == recoveryAction,
+              "device failure lost its public reason or recovery guidance: " + reason);
+      require(renderer.status() == Status.FAILED && opens[0] == 1,
+              "non-device-loss failure incorrectly attempted automatic device recreation: " + reason);
+      RendererHealth.Failure health = (RendererHealth.Failure) renderer.health()
+              .activeFailure().orElseThrow();
+      require(health.kind() == healthKind && health.recoveryAction() == recoveryAction
+                      && health.nativeResult().orElseThrow() == nativeResult,
+              "renderer health lost typed native failure evidence: " + reason);
+      require(session.closes == 1,
+              "terminal native failure did not release its session exactly once: " + reason);
+      renderer.close();
+      require(session.closes == 1,
+              "explicit close duplicated terminal native cleanup: " + reason);
    }
 
    private static void recreatesDeviceAndReplaysCommittedSceneOnce() {
@@ -469,6 +687,9 @@ public final class VulkanRendererHostSelfTest {
       private CpuFrame nextCpuFrame;
       private int cpuFramePolls;
       private VulkanSceneResidency.SceneChangeSet lastSceneChangeSet;
+      private RenderingFeatureCapabilities featureCapabilities =
+              RenderingFeatureCapabilities.builder().build();
+      private int managedPresentationProducerLeadLimit = Integer.MAX_VALUE;
 
       private TrackingSession() {
          this.state = State.READY;
@@ -477,6 +698,16 @@ public final class VulkanRendererHostSelfTest {
 
       public VulkanRenderingSession.State state() {
          return this.state;
+      }
+
+      @Override
+      public RenderingFeatureCapabilities featureCapabilities() {
+         return featureCapabilities;
+      }
+
+      @Override
+      public int managedPresentationProducerLeadLimit() {
+         return managedPresentationProducerLeadLimit;
       }
 
       public String gpuStableId() {
@@ -508,7 +739,7 @@ public final class VulkanRendererHostSelfTest {
          if (this.failNextFrameWith != null) {
             RuntimeException failure = this.failNextFrameWith;
             this.failNextFrameWith = null;
-            this.state = State.FAILED;
+            if (!(failure instanceof FrameValidationException)) this.state = State.FAILED;
             throw failure;
          } else if (this.rejectNextFrame) {
             this.rejectNextFrame = false;

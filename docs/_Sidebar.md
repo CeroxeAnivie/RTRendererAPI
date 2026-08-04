@@ -2,6 +2,3 @@
 * [Java 开发指南](Java)
 * [Java API 参考](Java-API-Reference)
 * [Vulkan 专家互操作](Vulkan-Interop)
-* [支持与验证矩阵](SUPPORT)
-* [API 迁移指南](MIGRATION)
-* [工业级验收合同](INDUSTRIAL_ACCEPTANCE)

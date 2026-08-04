@@ -111,9 +111,10 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
    }
 
    private static void publish(VulkanFrameSlot slot, VulkanDeviceRuntime producerDevice, long sequence, int width, int height) throws InterruptedException {
-      slot.prepare(width, height, new byte[1392]);
+      slot.prepare(width, height, new byte[VulkanFrameUniformPacker.BYTE_COUNT]);
       slot.submitted(producerDevice.frameCommands().submitOneTimeAsync((commandBuffer, stack) -> {
-      }), sequence, sequence, sequence, true, VulkanDeviceRuntime.ManagedPresentationSignal.disabled());
+      }), sequence, sequence, sequence, true,
+              VulkanDeviceRuntime.ManagedPresentationSignal.disabled(), false);
       awaitProducer(slot);
    }
 

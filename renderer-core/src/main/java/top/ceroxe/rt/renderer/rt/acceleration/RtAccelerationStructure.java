@@ -53,12 +53,14 @@ public final class RtAccelerationStructure implements AutoCloseable {
     private static final int[] BOOTSTRAP_TRIANGLE_INDICES = {0, 1, 2, 2, 1, 3};
 
     private final VkDevice device;
-    private final RtGpuBuffer storageBuffer;
+    private final Runnable storageRelease;
     private final long accelerationStructure;
     private final int type;
     private final long deviceAddress;
+    private final long storageBytes;
     private final long buildScratchBytes;
     private final int scratchAlignmentBytes;
+    private final boolean ownsAccelerationStructureHandle;
     private boolean closed;
 
     private RtAccelerationStructure(
@@ -71,12 +73,73 @@ public final class RtAccelerationStructure implements AutoCloseable {
             int scratchAlignmentBytes
     ) {
         this.device = Objects.requireNonNull(device, "device");
-        this.storageBuffer = Objects.requireNonNull(storageBuffer, "storageBuffer");
+        RtGpuBuffer checkedStorage = Objects.requireNonNull(storageBuffer, "storageBuffer");
+        this.storageRelease = checkedStorage::close;
         this.accelerationStructure = accelerationStructure;
         this.type = type;
         this.deviceAddress = deviceAddress;
+        this.storageBytes = checkedStorage.sizeBytes();
         this.buildScratchBytes = buildScratchBytes;
         this.scratchAlignmentBytes = scratchAlignmentBytes;
+        this.ownsAccelerationStructureHandle = true;
+    }
+
+    private RtAccelerationStructure(
+            VkDevice device,
+            long accelerationStructure,
+            long deviceAddress,
+            long storageBytes,
+            long buildScratchBytes,
+            int scratchAlignmentBytes,
+            Runnable storageRelease
+    ) {
+        this.device = Objects.requireNonNull(device, "device");
+        if (accelerationStructure == 0L || deviceAddress == 0L || storageBytes <= 0L
+                || buildScratchBytes <= 0L || scratchAlignmentBytes <= 0
+                || (scratchAlignmentBytes & (scratchAlignmentBytes - 1)) != 0) {
+            throw new IllegalArgumentException("external BLAS metadata is invalid");
+        }
+        this.storageRelease = Objects.requireNonNull(storageRelease, "storageRelease");
+        this.accelerationStructure = accelerationStructure;
+        this.type = KHRAccelerationStructure.VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+        this.deviceAddress = deviceAddress;
+        this.storageBytes = storageBytes;
+        this.buildScratchBytes = buildScratchBytes;
+        this.scratchAlignmentBytes = scratchAlignmentBytes;
+        this.ownsAccelerationStructureHandle = false;
+    }
+
+    /**
+     * Wraps a vendor-owned BLAS without assuming ownership of its Vulkan handle or backing buffer.
+     * The release callback must destroy both through the same allocator that created them.
+     *
+     * @param device borrowed logical device that owns the external BLAS
+     * @param accelerationStructure non-zero vendor-owned Vulkan BLAS handle
+     * @param deviceAddress non-zero device address used by TLAS instances
+     * @param storageBytes positive final backing-storage size
+     * @param buildScratchBytes positive peak build scratch requirement
+     * @param scratchAlignmentBytes positive power-of-two device scratch alignment
+     * @param storageRelease exactly-once callback that releases the vendor-owned BLAS and storage
+     * @return independently closeable wrapper that delegates storage release to the vendor owner
+     */
+    public static RtAccelerationStructure wrapExternalBottomLevel(
+            VkDevice device,
+            long accelerationStructure,
+            long deviceAddress,
+            long storageBytes,
+            long buildScratchBytes,
+            int scratchAlignmentBytes,
+            Runnable storageRelease
+    ) {
+        return new RtAccelerationStructure(
+                device,
+                accelerationStructure,
+                deviceAddress,
+                storageBytes,
+                buildScratchBytes,
+                scratchAlignmentBytes,
+                storageRelease
+        );
     }
 
     /**
@@ -523,6 +586,41 @@ public final class RtAccelerationStructure implements AutoCloseable {
         );
     }
 
+    /**
+     * Prepares a persistent TLAS build for recording into a caller-owned submission.
+     *
+     * <p>This is the allocation/ownership half of the asynchronous helpers above. It deliberately
+     * does not allocate a command buffer or submit queue work, allowing a frame transaction to
+     * record the build and its dependent ray dispatch in one command buffer. Ownership of a
+     * non-null reusable destination transfers to the returned plan, including on later failure.</p>
+     */
+    static PreparedTlasBuild preparePersistentWorldTlas(
+            VkDevice device,
+            long allocator,
+            int scratchAlignmentBytes,
+            RtAccelerationStructure sourceTlas,
+            RtAccelerationStructure reusableDestinationTlas,
+            Collection<TlasInstance> instances,
+            int[] dirtyInstanceSlots,
+            PersistentTlasBuildInputs persistentInputs,
+            RtStallTelemetrySink stalls
+    ) {
+        boolean update = sourceTlas != null;
+        return prepareTlas(
+                device,
+                allocator,
+                scratchAlignmentBytes,
+                instances,
+                update ? "persistent world TLAS update" : "persistent world TLAS",
+                sourceTlas,
+                update,
+                reusableDestinationTlas,
+                Objects.requireNonNull(stalls, "stalls"),
+                Objects.requireNonNull(persistentInputs, "persistentInputs"),
+                dirtyInstanceSlots
+        );
+    }
+
     private static WorldTlasBuildSubmission submitPersistentWorldTlasAsync(
             VkDevice device,
             long allocator,
@@ -536,21 +634,18 @@ public final class RtAccelerationStructure implements AutoCloseable {
     ) {
         Objects.requireNonNull(commandContext, "commandContext");
         Objects.requireNonNull(persistentInputs, "persistentInputs");
-        boolean update = sourceTlas != null;
         PreparedTlasBuild preparedBuild = null;
         try {
-            preparedBuild = prepareTlas(
+            preparedBuild = preparePersistentWorldTlas(
                     device,
                     allocator,
                     scratchAlignmentBytes,
-                    instances,
-                    update ? "persistent world TLAS update" : "persistent world TLAS",
                     sourceTlas,
-                    update,
                     reusableDestinationTlas,
-                    commandContext.stallTelemetry(),
+                    instances,
+                    dirtyInstanceSlots,
                     persistentInputs,
-                    dirtyInstanceSlots
+                    commandContext.stallTelemetry()
             );
             PreparedTlasBuild recordedBuild = preparedBuild;
             RtCommandContext.AsyncSubmission submission = commandContext.submitTimedOneTimeAsync(
@@ -1430,7 +1525,7 @@ public final class RtAccelerationStructure implements AutoCloseable {
     }
 
     long storageBytes() {
-        return storageBuffer.sizeBytes();
+        return storageBytes;
     }
 
     long buildScratchBytes() {
@@ -1447,7 +1542,7 @@ public final class RtAccelerationStructure implements AutoCloseable {
         return name
                 + "{handle=0x" + Long.toHexString(accelerationStructure)
                 + ", type=" + typeName(type)
-                + ", storageBytes=" + storageBuffer.sizeBytes()
+                + ", storageBytes=" + storageBytes
                 + ", buildScratchBytes=" + buildScratchBytes
                 + ", scratchAlign=" + scratchAlignmentBytes
                 + ", deviceAddress=0x" + Long.toHexString(deviceAddress)
@@ -1460,8 +1555,10 @@ public final class RtAccelerationStructure implements AutoCloseable {
             return;
         }
         closed = true;
-        KHRAccelerationStructure.vkDestroyAccelerationStructureKHR(device, accelerationStructure, null);
-        storageBuffer.close();
+        if (ownsAccelerationStructureHandle) {
+            KHRAccelerationStructure.vkDestroyAccelerationStructureKHR(device, accelerationStructure, null);
+        }
+        storageRelease.run();
     }
 
     /**

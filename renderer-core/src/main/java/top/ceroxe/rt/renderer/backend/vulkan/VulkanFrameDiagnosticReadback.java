@@ -16,6 +16,15 @@ final class VulkanFrameDiagnosticReadback {
     }
 
     static byte[] capture(VulkanDeviceRuntime device, RtGpuImage image) {
+        return capture(device, image, true);
+    }
+
+    /** Reads an image that remains owned by the renderer queue rather than an external consumer. */
+    static byte[] captureInternal(VulkanDeviceRuntime device, RtGpuImage image) {
+        return capture(device, image, false);
+    }
+
+    private static byte[] capture(VulkanDeviceRuntime device, RtGpuImage image, boolean externallyOwned) {
         VulkanDeviceRuntime checkedDevice = Objects.requireNonNull(device, "device");
         RtGpuImage checkedImage = Objects.requireNonNull(image, "image");
         VulkanFrameOutput output = outputForVkFormat(checkedImage.format());
@@ -33,13 +42,17 @@ final class VulkanFrameDiagnosticReadback {
                             stack,
                             checkedImage,
                             readback,
-                            checkedDevice.queueFamilyIndex()
+                            checkedDevice.queueFamilyIndex(),
+                            externallyOwned
                     )
             );
             byte[] nativeBytes = readback.readBytes(bytes);
-            return output.linearHdr()
-                    ? VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8(nativeBytes)
-                    : nativeBytes;
+            if (!output.linearHdr()) return nativeBytes;
+            // Tone mapping would otherwise clamp NaN/Inf into plausible SDR bytes and let a
+            // corrupted temporal history pass visual acceptance. Validate the native half-float
+            // payload before any lossy conversion so NRD/DLSS gates fail at the first bad pixel.
+            VulkanFramePixelCodec.requireFiniteLinearHdrRgba16f(nativeBytes);
+            return VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8(nativeBytes);
         }
     }
 
@@ -58,7 +71,8 @@ final class VulkanFrameDiagnosticReadback {
             MemoryStack stack,
             RtGpuImage image,
             RtGpuBuffer readback,
-            int producerQueueFamilyIndex
+            int producerQueueFamilyIndex,
+            boolean externallyOwned
     ) {
         imageBarrier(
                 commandBuffer, stack, image.image(),
@@ -66,8 +80,8 @@ final class VulkanFrameDiagnosticReadback {
                 0, VK10.VK_ACCESS_TRANSFER_READ_BIT,
                 VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                 VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK11.VK_QUEUE_FAMILY_EXTERNAL,
-                producerQueueFamilyIndex
+                externallyOwned ? VK11.VK_QUEUE_FAMILY_EXTERNAL : VK10.VK_QUEUE_FAMILY_IGNORED,
+                externallyOwned ? producerQueueFamilyIndex : VK10.VK_QUEUE_FAMILY_IGNORED
         );
         VkBufferImageCopy.Buffer copy = VkBufferImageCopy.calloc(1, stack);
         copy.get(0).bufferOffset(0L).bufferRowLength(0).bufferImageHeight(0);
@@ -91,8 +105,8 @@ final class VulkanFrameDiagnosticReadback {
                 VK10.VK_ACCESS_TRANSFER_READ_BIT, 0,
                 VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                producerQueueFamilyIndex,
-                VK11.VK_QUEUE_FAMILY_EXTERNAL
+                externallyOwned ? producerQueueFamilyIndex : VK10.VK_QUEUE_FAMILY_IGNORED,
+                externallyOwned ? VK11.VK_QUEUE_FAMILY_EXTERNAL : VK10.VK_QUEUE_FAMILY_IGNORED
         );
         VkMemoryBarrier.Buffer hostRead = VkMemoryBarrier.calloc(1, stack);
         hostRead.get(0).sType$Default()

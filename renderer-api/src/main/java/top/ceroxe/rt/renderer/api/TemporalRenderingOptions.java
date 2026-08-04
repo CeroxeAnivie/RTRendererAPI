@@ -3,7 +3,7 @@ package top.ceroxe.rt.renderer.api;
 import java.util.Objects;
 
 /**
- * Immutable renderer-lifetime temporal reconstruction policy.
+ * Immutable policy for the renderer's built-in temporal reconstruction path.
  *
  * <p>The presets deliberately expose intent instead of backend thresholds. This keeps applications
  * independent of Vulkan resource layouts while allowing the renderer to improve rejection,
@@ -37,8 +37,10 @@ public final class TemporalRenderingOptions {
     }
 
     /**
-     * Returns a policy that performs no temporal reconstruction or full-resolution history allocation.
-     * Backends may retain constant-size descriptor sentinels that are independent of frame extent.
+     * Returns a policy that performs no built-in temporal reconstruction or full-resolution built-in
+     * history allocation. Independently requested denoisers, reconstruction providers, or frame
+     * generators may still retain CPU-only previous-frame provenance required by their contracts.
+     * Backends may also retain constant-size descriptor sentinels independent of frame extent.
      *
      * @return canonical disabled policy
      */
@@ -88,7 +90,7 @@ public final class TemporalRenderingOptions {
     }
 
     /**
-     * Returns whether this policy requires full-resolution temporal GPU resources.
+     * Returns whether the built-in renderer path requires full-resolution temporal GPU resources.
      *
      * @return {@code true} unless temporal rendering is disabled
      */
@@ -119,7 +121,7 @@ public final class TemporalRenderingOptions {
      */
     public enum Mode {
         /**
-         * Do not allocate or consume temporal history.
+         * Do not allocate or consume the renderer's built-in full-resolution temporal history.
          */
         DISABLED,
         /**

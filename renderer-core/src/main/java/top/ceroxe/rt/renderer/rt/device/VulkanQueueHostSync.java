@@ -98,8 +98,20 @@ public final class VulkanQueueHostSync {
      * @return Vulkan result returned by {@code vkQueuePresentKHR}
      */
     public static int present(VkQueue queue, VkPresentInfoKHR presentInfo) {
+        return present(queue, presentInfo, KHRSwapchain::vkQueuePresentKHR);
+    }
+
+    /**
+     * Presents through a validated WSI call while retaining process-wide queue synchronization.
+     *
+     * @param queue borrowed presentation queue
+     * @param presentInfo borrowed presentation descriptor
+     * @param call direct or feature-proxied native present call
+     * @return Vulkan result code
+     */
+    public static int present(VkQueue queue, VkPresentInfoKHR presentInfo, QueuePresentCall call) {
         synchronized (monitor(queue)) {
-            return KHRSwapchain.vkQueuePresentKHR(queue, presentInfo);
+            return Objects.requireNonNull(call, "call").present(queue, presentInfo);
         }
     }
 
@@ -111,14 +123,43 @@ public final class VulkanQueueHostSync {
      * @return immutable native result and host timing sample
      */
     public static TimedPresent presentTimed(VkQueue queue, VkPresentInfoKHR presentInfo) {
+        return presentTimed(queue, presentInfo, KHRSwapchain::vkQueuePresentKHR);
+    }
+
+    /**
+     * Measures a proxied WSI present under the same queue monitor as direct Vulkan calls.
+     *
+     * @param queue borrowed presentation queue
+     * @param presentInfo borrowed presentation descriptor
+     * @param call direct or feature-proxied native present call
+     * @return immutable result and host timing sample
+     */
+    public static TimedPresent presentTimed(
+            VkQueue queue,
+            VkPresentInfoKHR presentInfo,
+            QueuePresentCall call
+    ) {
         Object queueMonitor = monitor(queue);
+        QueuePresentCall checkedCall = Objects.requireNonNull(call, "call");
         long waitStart = System.nanoTime();
         synchronized (queueMonitor) {
             long acquired = System.nanoTime();
-            int result = KHRSwapchain.vkQueuePresentKHR(queue, presentInfo);
+            int result = checkedCall.present(queue, presentInfo);
             long completed = System.nanoTime();
             return new TimedPresent(result, acquired - waitStart, completed - acquired);
         }
+    }
+
+    /** Native or feature-proxied queue-present call. */
+    @FunctionalInterface
+    public interface QueuePresentCall {
+        /**
+         * Invokes one native or feature-proxied presentation call.
+         * @param queue borrowed presentation queue
+         * @param presentInfo borrowed presentation descriptor
+         * @return Vulkan result code
+         */
+        int present(VkQueue queue, VkPresentInfoKHR presentInfo);
     }
 
     /**

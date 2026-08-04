@@ -23,7 +23,11 @@ final class TemporalHistoryTracker {
     private long generation = -1L;
 
     TemporalHistoryTracker(TemporalRenderingOptions options) {
-        enabled = Objects.requireNonNull(options, "options").enabled();
+        this(options, false);
+    }
+
+    TemporalHistoryTracker(TemporalRenderingOptions options, boolean featureProvenanceRequired) {
+        enabled = Objects.requireNonNull(options, "options").enabled() || featureProvenanceRequired;
     }
 
     private static boolean changed(VulkanSceneResidency.DomainChange<?> change) {
@@ -60,7 +64,7 @@ final class TemporalHistoryTracker {
         if (!enabled) {
             return new PreparedFrame(
                     sourceFrame, sourceSceneRevision, checked, sceneRevision,
-                    false, -1L, Set.of()
+                    false, false, -1L, Set.of()
             );
         }
 
@@ -73,14 +77,15 @@ final class TemporalHistoryTracker {
             if (checked.width() != sourceFrame.width() || checked.height() != sourceFrame.height()) {
                 invalidations.add(HistoryInvalidationReason.OUTPUT_EXTENT_CHANGED);
             }
-            if (!sameProjection(checked.camera(), sourceFrame.camera())) {
+            if (!sameProjection(checked.camera(), sourceFrame.camera())
+                    || !checked.depthProjection().equals(sourceFrame.depthProjection())) {
                 invalidations.add(HistoryInvalidationReason.CAMERA_PROJECTION_CHANGED);
             }
             if (!sameShadingState(checked, sourceFrame)) {
                 invalidations.add(HistoryInvalidationReason.FRAME_SHADING_CHANGED);
             }
-            invalidations.addAll(pendingSceneInvalidations);
         }
+        invalidations.addAll(pendingSceneInvalidations);
         for (HistoryResetReason reason : checked.temporalHistoryResets()) {
             invalidations.add(switch (reason) {
                 case CAMERA_CUT -> HistoryInvalidationReason.CAMERA_CUT;
@@ -96,6 +101,7 @@ final class TemporalHistoryTracker {
                 sourceSceneRevision,
                 checked,
                 sceneRevision,
+                true,
                 invalidations.isEmpty(),
                 preparedGeneration,
                 immutableCopy(invalidations)
@@ -114,6 +120,14 @@ final class TemporalHistoryTracker {
         sourceSceneRevision = checked.sceneRevision();
         generation = checked.generation();
         pendingSceneInvalidations.clear();
+    }
+
+    /**
+     * Invalidates the next prepared frame without advancing the committed source frame.
+     * A discarded feature recording must not be treated as a valid temporal sample on retry.
+     */
+    void invalidate(HistoryInvalidationReason reason) {
+        pendingSceneInvalidations.add(Objects.requireNonNull(reason, "reason"));
     }
 
     void sceneApplied(VulkanSceneResidency.SceneChangeSet changes) {
@@ -161,6 +175,7 @@ final class TemporalHistoryTracker {
             long expectedSourceSceneRevision,
             RenderFrameRequest request,
             long sceneRevision,
+            boolean provenanceTracked,
             boolean historyValid,
             long generation,
             Set<HistoryInvalidationReason> invalidations
@@ -174,6 +189,9 @@ final class TemporalHistoryTracker {
             if (historyValid && !invalidations.isEmpty()) {
                 throw new IllegalArgumentException("valid history cannot carry invalidation reasons");
             }
+            if (historyValid && !provenanceTracked) {
+                throw new IllegalArgumentException("valid history requires tracked temporal provenance");
+            }
         }
 
         CameraState previousCamera() {
@@ -182,6 +200,10 @@ final class TemporalHistoryTracker {
 
         long previousSequence() {
             return expectedSource == null ? request.sequence() : expectedSource.sequence();
+        }
+
+        top.ceroxe.rt.renderer.api.DepthProjectionState previousDepthProjection() {
+            return expectedSource == null ? request.depthProjection() : expectedSource.depthProjection();
         }
 
         long previousSceneRevision() {

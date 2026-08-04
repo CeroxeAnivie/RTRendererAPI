@@ -274,9 +274,9 @@ public final class VulkanValidationFileLogger implements AutoCloseable {
     }
 
     /**
-     * Adds the validation layer, debug-utils extension and creation callback to
-     * the caller's instance create info. All native structures are stack-owned
-     * and are valid for the enclosing vkCreateInstance call.
+     * Adds the validation layer, synchronization validation, debug-utils extension and creation
+     * callback to the caller's instance create info. All native structures are stack-owned and
+     * are valid for the enclosing vkCreateInstance call.
      *
      * @param stack      open stack frame that must outlive the subsequent {@code vkCreateInstance} call
      * @param createInfo mutable instance create info to chain with validation configuration
@@ -294,8 +294,16 @@ public final class VulkanValidationFileLogger implements AutoCloseable {
             }
         }
         extensionNames.put(stack.UTF8(EXTDebugUtils.VK_EXT_DEBUG_UTILS_EXTENSION_NAME)).flip();
+        VkValidationFeaturesEXT validationFeatures = VkValidationFeaturesEXT.calloc(stack)
+                .sType$Default()
+                .pEnabledValidationFeatures(stack.ints(
+                        EXTValidationFeatures.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
+                ));
         VkDebugUtilsMessengerCreateInfoEXT callbackInfo = callbackCreateInfo(stack);
-        callbackInfo.pNext(createInfo.pNext());
+        // Keep the callback first so messages raised while parsing validationFeatures are also
+        // captured. The previous application chain remains the tail and is never discarded.
+        validationFeatures.pNext(createInfo.pNext());
+        callbackInfo.pNext(validationFeatures.address());
         createInfo
                 .ppEnabledLayerNames(layerNames)
                 .ppEnabledExtensionNames(extensionNames)

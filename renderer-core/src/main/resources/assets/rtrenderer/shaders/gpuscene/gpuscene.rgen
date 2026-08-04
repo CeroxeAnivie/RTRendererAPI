@@ -1,6 +1,9 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#ifdef RTRENDERER_SER
+#extension GL_NV_shader_invocation_reorder : require
+#endif
 
 #include "gpuscene_common.glsl"
 
@@ -20,7 +23,78 @@ layout(set = 0, binding = GPU_SCENE_BINDING_HISTORY_GEOMETRY_OUTPUT, rgba16f)
 uniform writeonly image2D historyGeometryOutput;
 layout(set = 0, binding = GPU_SCENE_BINDING_MOTION_OUTPUT, rg16f)
 uniform writeonly image2D motionOutput;
+layout(set = 0, binding = GPU_SCENE_BINDING_DENOISING_NORMAL_ROUGHNESS, rgba16f)
+uniform writeonly image2D denoisingNormalRoughness;
+layout(set = 0, binding = GPU_SCENE_BINDING_DENOISING_VIEW_Z, r32f)
+uniform writeonly image2D denoisingViewZ;
+layout(set = 0, binding = GPU_SCENE_BINDING_DENOISING_MOTION_VECTORS, rgba16f)
+uniform writeonly image2D denoisingMotionVectors;
+layout(set = 0, binding = GPU_SCENE_BINDING_DENOISING_DIFFUSE_RADIANCE_HIT_DISTANCE, rgba16f)
+uniform writeonly image2D denoisingDiffuseRadianceHitDistance;
+layout(set = 0, binding = GPU_SCENE_BINDING_DENOISING_SPECULAR_RADIANCE_HIT_DISTANCE, rgba16f)
+uniform writeonly image2D denoisingSpecularRadianceHitDistance;
+layout(set = 0, binding = GPU_SCENE_BINDING_DENOISING_DIFFUSE_MATERIAL_FACTOR, rgba16f)
+uniform writeonly image2D denoisingDiffuseMaterialFactor;
+layout(set = 0, binding = GPU_SCENE_BINDING_DENOISING_SPECULAR_MATERIAL_FACTOR, rgba16f)
+uniform writeonly image2D denoisingSpecularMaterialFactor;
+layout(set = 0, binding = GPU_SCENE_BINDING_RECONSTRUCTION_DEPTH, r32f)
+uniform writeonly image2D reconstructionDepth;
+layout(set = 0, binding = GPU_SCENE_BINDING_RECONSTRUCTION_MOTION_VECTORS, rg16f)
+uniform writeonly image2D reconstructionMotionVectors;
+layout(set = 0, binding = GPU_SCENE_BINDING_RECONSTRUCTION_EXPOSURE, r32f)
+uniform writeonly image2D reconstructionExposure;
 layout(location = 0) rayPayloadEXT GpuScenePayload payload;
+
+struct GsRadianceSplit {
+    vec3 diffuse;
+    vec3 specular;
+    float diffuseHitDistance;
+    float specularHitDistance;
+    float diffuseHitWeight;
+    float specularHitWeight;
+};
+
+GsRadianceSplit gsRadianceSplit(vec3 diffuse, vec3 specular)
+{
+    GsRadianceSplit result;
+    result.diffuse = diffuse;
+    result.specular = specular;
+    result.diffuseHitDistance = 0.0;
+    result.specularHitDistance = 0.0;
+    result.diffuseHitWeight = 0.0;
+    result.specularHitWeight = 0.0;
+    return result;
+}
+
+float gsLuminance(vec3 value)
+{
+    return dot(max(value, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722));
+}
+
+void gsAccumulateRadianceSplit(inout GsRadianceSplit total, GsRadianceSplit contribution)
+{
+    float diffuseWeight = gsLuminance(contribution.diffuse);
+    float specularWeight = gsLuminance(contribution.specular);
+    total.diffuse += contribution.diffuse;
+    total.specular += contribution.specular;
+    total.diffuseHitDistance += contribution.diffuseHitDistance * diffuseWeight;
+    total.specularHitDistance += contribution.specularHitDistance * specularWeight;
+    total.diffuseHitWeight += diffuseWeight;
+    total.specularHitWeight += specularWeight;
+}
+
+void gsFinalizeRadianceHitDistances(inout GsRadianceSplit split)
+{
+    split.diffuseHitDistance = split.diffuseHitWeight > 1.0e-6
+        ? split.diffuseHitDistance / split.diffuseHitWeight : 0.0;
+    split.specularHitDistance = split.specularHitWeight > 1.0e-6
+        ? split.specularHitDistance / split.specularHitWeight : 0.0;
+}
+
+vec3 gsRadiance(GsRadianceSplit split)
+{
+    return split.diffuse + split.specular;
+}
 
 float gsDistributionGgx(float normalHalf, float roughness)
 {
@@ -44,7 +118,14 @@ vec3 gsFresnelSchlick(float viewHalf, vec3 reflectance)
     return reflectance + (vec3(1.0) - reflectance) * pow(1.0 - viewHalf, 5.0);
 }
 
-vec3 gsEvaluateBrdf(vec3 normal, vec3 view, vec3 light, vec3 baseColor, float roughness, float metallic)
+GsRadianceSplit gsEvaluateBrdf(
+    vec3 normal,
+    vec3 view,
+    vec3 light,
+    vec3 baseColor,
+    float roughness,
+    float metallic
+)
 {
     vec3 halfVector = normalize(view + light);
     float normalView = max(dot(normal, view), 0.0);
@@ -58,7 +139,7 @@ vec3 gsEvaluateBrdf(vec3 normal, vec3 view, vec3 light, vec3 baseColor, float ro
     vec3 specular = fresnel * distribution * geometry
         / max(4.0 * normalView * normalLight, 1.0e-5);
     vec3 diffuse = (vec3(1.0) - fresnel) * (1.0 - metallic) * baseColor * (1.0 / GS_PI);
-    return (diffuse + specular) * normalLight;
+    return gsRadianceSplit(diffuse * normalLight, specular * normalLight);
 }
 
 bool gsShadowVisible(vec3 origin, vec3 normal, vec3 direction, float maximumDistance)
@@ -80,7 +161,7 @@ bool gsShadowVisible(vec3 origin, vec3 normal, vec3 direction, float maximumDist
     return payload.state.x == 0u;
 }
 
-vec3 gsDirectContribution(
+GsRadianceSplit gsDirectContribution(
     vec3 position,
     vec3 normal,
     vec3 view,
@@ -93,15 +174,24 @@ vec3 gsDirectContribution(
     float metallic
 ) {
     if (dot(normal, lightDirection) <= 0.0 || max(max(radiance.r, radiance.g), radiance.b) <= 0.0) {
-        return vec3(0.0);
+        return gsRadianceSplit(vec3(0.0), vec3(0.0));
     }
     if (castsShadow && !gsShadowVisible(position, normal, lightDirection, maximumDistance)) {
-        return vec3(0.0);
+        return gsRadianceSplit(vec3(0.0), vec3(0.0));
     }
-    return gsEvaluateBrdf(normal, view, lightDirection, baseColor, roughness, metallic) * radiance;
+    GsRadianceSplit result = gsEvaluateBrdf(
+        normal, view, lightDirection, baseColor, roughness, metallic
+    );
+    result.diffuse *= radiance;
+    result.specular *= radiance;
+    // Direct-light NRD hitT is the distance to the selected light. It deliberately excludes the
+    // camera-to-primary segment, which is never a valid REBLUR hit distance.
+    result.diffuseHitDistance = maximumDistance;
+    result.specularHitDistance = maximumDistance;
+    return result;
 }
 
-vec3 gsSceneLight(
+GsRadianceSplit gsSceneLight(
     uint slot,
     vec3 position,
     vec3 normal,
@@ -112,7 +202,7 @@ vec3 gsSceneLight(
 ) {
     uint base = slot * GPU_SCENE_LIGHT_RECORD_WORDS;
     uint flags = gsLights.words[base + GPU_SCENE_LIGHT_FLAGS_WORD];
-    if ((flags & GPU_SCENE_FLAG_ACTIVE) == 0u) return vec3(0.0);
+    if ((flags & GPU_SCENE_FLAG_ACTIVE) == 0u) return gsRadianceSplit(vec3(0.0), vec3(0.0));
 
     uint type = (flags >> 1u) & 0x7u;
     vec3 color = vec3(
@@ -142,7 +232,7 @@ vec3 gsSceneLight(
         );
         vec3 delta = lightPosition - position;
         maximumDistance = length(delta);
-        if (maximumDistance <= 1.0e-4) return vec3(0.0);
+        if (maximumDistance <= 1.0e-4) return gsRadianceSplit(vec3(0.0), vec3(0.0));
         direction = delta / maximumDistance;
         float range = uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_RANGE_WORD]);
         float rangeFade = clamp(1.0 - maximumDistance / max(range, 1.0e-4), 0.0, 1.0);
@@ -214,7 +304,21 @@ bool gsLightmapModulated(GpuScenePayload surfaceSample)
             == GPU_SCENE_SHADING_LIGHTMAP_MODULATED;
 }
 
-vec3 gsEvaluatePbrSurface(GpuScenePayload surfaceSample, vec3 rayOrigin)
+bool gsUnlit(GpuScenePayload surfaceSample)
+{
+    return surfaceSample.state.x != 0u
+        && ((surfaceSample.state.z >> GPU_SCENE_SHADING_MODEL_SHIFT) & GPU_SCENE_SHADING_MODEL_MASK)
+            == GPU_SCENE_SHADING_UNLIT;
+}
+
+bool gsSurfaceOverlay(GpuScenePayload surfaceSample)
+{
+    return surfaceSample.state.x != 0u
+        && ((surfaceSample.state.z >> GPU_SCENE_OVERLAY_DEPTH_MODE_SHIFT)
+            & GPU_SCENE_OVERLAY_DEPTH_MODE_MASK) != 0u;
+}
+
+GsRadianceSplit gsEvaluatePbrSurface(GpuScenePayload surfaceSample, vec3 rayOrigin)
 {
     vec3 position = surfaceSample.worldPositionAndDistance.xyz;
     vec3 normal = normalize(surfaceSample.worldNormalAndRoughness.xyz);
@@ -225,18 +329,26 @@ vec3 gsEvaluatePbrSurface(GpuScenePayload surfaceSample, vec3 rayOrigin)
     vec3 view = normalize(rayOrigin - position);
     vec3 sky = gsFrameVec3(GPU_SCENE_FRAME_SKY_COLOR_WORD);
     float ambient = uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_AMBIENT_INTENSITY_WORD]);
-    vec3 radiance = emissive + baseColor * sky * ambient * (1.0 - metallic);
+    GsRadianceSplit radiance = gsRadianceSplit(
+        emissive + baseColor * sky * ambient * (1.0 - metallic),
+        vec3(0.0)
+    );
 
     vec3 sunDirection = -normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
     vec3 sunRadiance = gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)
         * uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
-    radiance += gsDirectContribution(position, normal, view, sunDirection, sunRadiance,
+    GsRadianceSplit sun = gsDirectContribution(position, normal, view, sunDirection, sunRadiance,
         1.0e20, true, baseColor, roughness, metallic);
+    gsAccumulateRadianceSplit(radiance, sun);
 
     uint lightCount = gsFrame.words[GPU_SCENE_FRAME_LIGHT_SLOT_UPPER_BOUND_WORD];
     for (uint slot = 0u; slot < lightCount; ++slot) {
-        radiance += gsSceneLight(slot, position, normal, view, baseColor, roughness, metallic);
+        GsRadianceSplit light = gsSceneLight(
+            slot, position, normal, view, baseColor, roughness, metallic
+        );
+        gsAccumulateRadianceSplit(radiance, light);
     }
+    gsFinalizeRadianceHitDistances(radiance);
     return radiance;
 }
 
@@ -268,11 +380,90 @@ vec3 gsEvaluateTerminalRadiance(GpuScenePayload surfaceSample, vec3 rayOrigin, v
             surfaceSample.transmissionIor.w
         );
     }
+    if (gsUnlit(surfaceSample)) {
+        return max(surfaceSample.baseColorAndOpacity.rgb, vec3(0.0))
+            + max(surfaceSample.emissiveAndMetallic.rgb, vec3(0.0));
+    }
 
-    vec3 surface = gsEvaluatePbrSurface(surfaceSample, rayOrigin);
+    vec3 surface = gsRadiance(gsEvaluatePbrSurface(surfaceSample, rayOrigin));
     float opacity = clamp(surfaceSample.baseColorAndOpacity.a, 0.0, 1.0);
     float transmission = clamp(surfaceSample.transmissionIor.x, 0.0, 1.0);
     return mix(gsSkyRadiance(rayDirection), surface, opacity * (1.0 - transmission));
+}
+
+vec3 gsResolveSurfaceOverlay(
+    GpuScenePayload overlay,
+    vec3 rayOrigin,
+    vec3 rayDirection,
+    uvec4 launchInfo
+) {
+    vec3 overlayPosition = overlay.worldPositionAndDistance.xyz;
+    vec3 receiverOrigin = overlayPosition + rayDirection * 1.0e-3;
+    GpuScenePayload receiver = gsTraceRadiance(receiverOrigin, rayDirection, launchInfo);
+    if (receiver.state.x == 0u) {
+        return receiver.baseColorAndOpacity.rgb;
+    }
+    bool receives = (receiver.surfaceState.x & overlay.surfaceState.y) != 0u;
+    float maximumGap = max(overlay.compositeState.y, 2.0e-3);
+    if (!receives || receiver.worldPositionAndDistance.w > maximumGap) {
+        return gsEvaluateTerminalRadiance(receiver, receiverOrigin, rayDirection);
+    }
+    vec3 receiverColor = gsEvaluateTerminalRadiance(receiver, receiverOrigin, rayDirection);
+    vec3 overlayColor = gsEvaluateTerminalRadiance(overlay, rayOrigin, rayDirection);
+    float alpha = clamp(overlay.baseColorAndOpacity.a, 0.0, 1.0);
+    return mix(receiverColor, overlayColor, alpha);
+}
+
+vec3 gsEvaluateTracedRadiance(
+    GpuScenePayload surfaceSample,
+    vec3 rayOrigin,
+    vec3 rayDirection,
+    uvec4 launchInfo
+) {
+    if (gsSurfaceOverlay(surfaceSample)) {
+        return gsResolveSurfaceOverlay(surfaceSample, rayOrigin, rayDirection, launchInfo);
+    }
+    return gsEvaluateTerminalRadiance(surfaceSample, rayOrigin, rayDirection);
+}
+
+vec3 gsApplyObjectOutline(
+    vec3 currentColor,
+    GpuScenePayload center,
+    vec3 rayOrigin,
+    ivec2 pixel,
+    ivec2 extent,
+    vec3 forward,
+    vec3 right,
+    vec3 up,
+    vec2 fov,
+    uvec4 launchInfo,
+    out bool applied
+) {
+    applied = false;
+    uint centerMask = center.surfaceState.z;
+    float centerWidth = center.compositeState.x;
+    // Outlines are deliberately inner-only. A background pixel must not launch four rays merely
+    // to discover a neighboring outlined object; ordinary frames therefore pay zero outline rays.
+    if (centerMask == 0u || centerWidth <= 0.0) return currentColor;
+    float probeRadius = centerWidth;
+    const vec2 directions[4] = vec2[](
+        vec2(1.0, 0.0), vec2(-1.0, 0.0), vec2(0.0, 1.0), vec2(0.0, -1.0)
+    );
+    for (int index = 0; index < 4; ++index) {
+        vec2 samplePosition = vec2(pixel) + vec2(0.5) + directions[index] * probeRadius;
+        if (any(lessThan(samplePosition, vec2(0.0)))
+                || any(greaterThanEqual(samplePosition, vec2(extent)))) continue;
+        vec2 ndc = samplePosition / vec2(extent) * 2.0 - 1.0;
+        vec3 direction = normalize(forward + right * ndc.x * fov.x - up * ndc.y * fov.y);
+        GpuScenePayload neighbor = gsTraceRadiance(rayOrigin, direction, launchInfo);
+        uint neighborMask = neighbor.surfaceState.z;
+        if (neighborMask != centerMask) {
+            vec4 outline = gsUnpackRgba8(center.surfaceState.w);
+            applied = outline.a > 0.0;
+            if (applied) return mix(currentColor, outline.rgb, outline.a);
+        }
+    }
+    return currentColor;
 }
 
 float gsRadicalInverseVdc(uint bits)
@@ -325,8 +516,10 @@ vec3 gsEvaluateOpaqueMetallicReflection(
     vec3 incidentDirection,
     uvec4 launchInfo,
     uint sampleIndex,
-    uint sampleCount
+    uint sampleCount,
+    out float hitDistance
 ) {
+    hitDistance = 0.0;
     float metallic = clamp(surfaceSample.emissiveAndMetallic.a, 0.0, 1.0);
     if (metallic <= 1.0e-4) return vec3(0.0);
 
@@ -354,10 +547,14 @@ vec3 gsEvaluateOpaqueMetallicReflection(
         reflectedDirection,
         launchInfo
     );
-    vec3 reflectedRadiance = gsEvaluateTerminalRadiance(
+    hitDistance = reflectedSample.state.x == 0u
+        ? 65504.0
+        : max(reflectedSample.worldPositionAndDistance.w, 0.0);
+    vec3 reflectedRadiance = gsEvaluateTracedRadiance(
         reflectedSample,
         position + normal * 1.0e-3,
-        reflectedDirection
+        reflectedDirection,
+        launchInfo
     );
 
     vec3 baseColor = max(surfaceSample.baseColorAndOpacity.rgb, vec3(0.0));
@@ -402,10 +599,11 @@ vec3 gsEvaluateOpticalTransmission(
         reflectedDirection,
         launchInfo
     );
-    vec3 reflected = gsEvaluateTerminalRadiance(
+    vec3 reflected = gsEvaluateTracedRadiance(
         reflectedSample,
         position + normal * 1.0e-3,
-        reflectedDirection
+        reflectedDirection,
+        launchInfo
     );
 
     vec3 refractedDirection = refract(incidentDirection, normal, eta);
@@ -419,10 +617,11 @@ vec3 gsEvaluateOpticalTransmission(
         refractedDirection,
         launchInfo
     );
-    vec3 refracted = gsEvaluateTerminalRadiance(
+    vec3 refracted = gsEvaluateTracedRadiance(
         refractedSample,
         position - normal * 1.0e-3,
-        refractedDirection
+        refractedDirection,
+        launchInfo
     );
     float fresnel = gsDielectricFresnel(incidentIor, transmittedIor, cosine);
     return mix(refracted, reflected, fresnel);
@@ -461,38 +660,147 @@ vec3 gsCameraDelta()
     );
 }
 
-bool gsPreviousPixelPosition(
-    vec3 currentCameraRelativePosition,
+vec2 gsPreviousJitter()
+{
+    return vec2(
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_PREVIOUS_JITTER_WORD]),
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_PREVIOUS_JITTER_WORD + 1u])
+    );
+}
+
+vec3 gsPreviousCameraPosition()
+{
+    uint word = GPU_SCENE_FRAME_PREVIOUS_CAMERA_POSITION_WORD;
+    return vec3(
+        gsFiniteDoubleAsFloat(gsFrame.words[word], gsFrame.words[word + 1u]),
+        gsFiniteDoubleAsFloat(gsFrame.words[word + 2u], gsFrame.words[word + 3u]),
+        gsFiniteDoubleAsFloat(gsFrame.words[word + 4u], gsFrame.words[word + 5u])
+    );
+}
+
+bool gsProjectWorldPosition(
+    vec3 worldPosition,
+    vec3 cameraPosition,
+    vec3 cameraForward,
+    vec3 cameraRight,
+    vec3 cameraUp,
+    vec2 cameraFov,
+    ivec2 extent,
+    out vec2 pixel,
+    out float logDepth
+) {
+    vec3 relative = worldPosition - cameraPosition;
+    vec3 previousForward = normalize(cameraForward);
+    vec3 previousRight = normalize(cameraRight);
+    vec3 previousUp = normalize(cameraUp);
+    float forwardDistance = dot(relative, previousForward);
+    if (forwardDistance <= 1.0e-4 || any(lessThanEqual(cameraFov, vec2(1.0e-6)))) {
+        pixel = vec2(0.0);
+        logDepth = 0.0;
+        return false;
+    }
+    vec2 previousNdc = vec2(
+        dot(relative, previousRight) / (forwardDistance * cameraFov.x),
+        -dot(relative, previousUp) / (forwardDistance * cameraFov.y)
+    );
+    pixel = (previousNdc * 0.5 + 0.5) * vec2(extent);
+    logDepth = log2(1.0 + length(relative));
+    return all(greaterThanEqual(pixel, vec2(0.0)))
+        && all(lessThan(pixel, vec2(extent)));
+}
+
+vec2 gsPreviousCameraFov()
+{
+    return vec2(
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_PREVIOUS_FOV_WORD]),
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_PREVIOUS_FOV_WORD + 1u])
+    );
+}
+
+vec2 gsCurrentCameraFov()
+{
+    return vec2(
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOV_WORD]),
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOV_WORD + 1u])
+    );
+}
+
+bool gsPreviousPixelPositionWorld(
+    vec3 worldPosition,
     ivec2 extent,
     out vec2 previousPixel,
     out float expectedPreviousLogDepth
 ) {
-    vec3 relative = currentCameraRelativePosition + gsCameraDelta();
-    vec3 previousForward = normalize(gsFrameVec3(GPU_SCENE_FRAME_PREVIOUS_CAMERA_FORWARD_WORD));
-    vec3 previousRight = normalize(gsFrameVec3(GPU_SCENE_FRAME_PREVIOUS_CAMERA_RIGHT_WORD));
-    vec3 previousUp = normalize(gsFrameVec3(GPU_SCENE_FRAME_PREVIOUS_CAMERA_UP_WORD));
-    vec2 previousFov = vec2(
-        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_PREVIOUS_FOV_WORD]),
-        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_PREVIOUS_FOV_WORD + 1u])
-    );
-    float forwardDistance = dot(relative, previousForward);
-    if (forwardDistance <= 1.0e-4 || any(lessThanEqual(previousFov, vec2(1.0e-6)))) {
+    vec2 noJitter;
+    if (!gsProjectWorldPosition(
+            worldPosition,
+            gsPreviousCameraPosition(),
+            gsFrameVec3(GPU_SCENE_FRAME_PREVIOUS_CAMERA_FORWARD_WORD),
+            gsFrameVec3(GPU_SCENE_FRAME_PREVIOUS_CAMERA_RIGHT_WORD),
+            gsFrameVec3(GPU_SCENE_FRAME_PREVIOUS_CAMERA_UP_WORD),
+            gsPreviousCameraFov(), extent, noJitter, expectedPreviousLogDepth)) {
         previousPixel = vec2(0.0);
-        expectedPreviousLogDepth = 0.0;
         return false;
     }
-    vec2 previousNdc = vec2(
-        dot(relative, previousRight) / (forwardDistance * previousFov.x),
-        -dot(relative, previousUp) / (forwardDistance * previousFov.y)
-    );
-    vec2 previousJitter = vec2(
-        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_PREVIOUS_JITTER_WORD]),
-        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_PREVIOUS_JITTER_WORD + 1u])
-    );
-    previousPixel = (previousNdc * 0.5 + 0.5) * vec2(extent) - previousJitter;
-    expectedPreviousLogDepth = log2(1.0 + length(relative));
+    previousPixel = noJitter - gsPreviousJitter();
     return all(greaterThanEqual(previousPixel, vec2(0.0)))
         && all(lessThan(previousPixel, vec2(extent)));
+}
+
+bool gsPreviousPixelPositionNoJitter(
+    vec3 worldPosition,
+    ivec2 extent,
+    out vec2 previousPixel,
+    out float expectedPreviousLogDepth
+) {
+    return gsProjectWorldPosition(
+        worldPosition,
+        gsPreviousCameraPosition(),
+        gsFrameVec3(GPU_SCENE_FRAME_PREVIOUS_CAMERA_FORWARD_WORD),
+        gsFrameVec3(GPU_SCENE_FRAME_PREVIOUS_CAMERA_RIGHT_WORD),
+        gsFrameVec3(GPU_SCENE_FRAME_PREVIOUS_CAMERA_UP_WORD),
+        gsPreviousCameraFov(), extent, previousPixel, expectedPreviousLogDepth
+    );
+}
+
+bool gsCurrentPixelPositionNoJitter(
+    vec3 worldPosition,
+    ivec2 extent,
+    out vec2 currentPixel
+) {
+    float ignoredDepth;
+    return gsProjectWorldPosition(
+        worldPosition,
+        gsFrameCameraPosition(),
+        gsFrameVec3(GPU_SCENE_FRAME_CAMERA_FORWARD_WORD),
+        gsFrameVec3(GPU_SCENE_FRAME_CAMERA_RIGHT_WORD),
+        gsFrameVec3(GPU_SCENE_FRAME_CAMERA_UP_WORD),
+        gsCurrentCameraFov(), extent, currentPixel, ignoredDepth
+    );
+}
+
+vec3 gsTemporalPreviousWorldPosition(GpuScenePayload primary)
+{
+    // Frame-local records are already tied to the admitted frame slot. Their explicit previous
+    // transform is authoritative and must not be filtered through persistent scene revisions.
+    if ((primary.state.w & GPU_SCENE_FLAG_FRAME_LOCAL) != 0u) {
+        return primary.previousWorldPosition.w > 0.5
+            ? primary.previousWorldPosition.xyz
+            : primary.worldPositionAndDistance.xyz;
+    }
+    uint currentLow = gsFrame.words[GPU_SCENE_FRAME_SCENE_REVISION_WORD];
+    uint currentHigh = gsFrame.words[GPU_SCENE_FRAME_SCENE_REVISION_WORD + 1u];
+    uint previousLow = gsFrame.words[GPU_SCENE_FRAME_PREVIOUS_SCENE_REVISION_WORD];
+    uint previousHigh = gsFrame.words[GPU_SCENE_FRAME_PREVIOUS_SCENE_REVISION_WORD + 1u];
+    uint64_t currentRevision = gsU64(currentLow, currentHigh);
+    uint64_t previousRevision = gsU64(previousLow, previousHigh);
+    uint64_t motionRevision = gsU64(primary.motionRevision.x, primary.motionRevision.y);
+    // A sparse instance record can outlive unrelated material/light revisions. Consume its prior
+    // transform exactly once: only when this instance was updated after the source frame.
+    bool instanceMoved = motionRevision > previousRevision && motionRevision <= currentRevision;
+    return instanceMoved && primary.previousWorldPosition.w > 0.5
+        ? primary.previousWorldPosition.xyz
+        : primary.worldPositionAndDistance.xyz;
 }
 
 vec4 gsTemporalGeometry(GpuScenePayload primary)
@@ -539,6 +847,119 @@ vec3 gsResolveTemporal(
     return mix(currentColor, clippedHistory, clamp(historyWeight, 0.0, boundedWeight));
 }
 
+bool gsDenoisingActive()
+{
+    return (gsFrame.words[GPU_SCENE_FRAME_FEATURE_FLAGS_WORD]
+        & GPU_SCENE_FEATURE_FLAG_DENOISING_ACTIVE) != 0u;
+}
+
+bool gsReconstructionActive()
+{
+    return (gsFrame.words[GPU_SCENE_FRAME_FEATURE_FLAGS_WORD]
+        & GPU_SCENE_FEATURE_FLAG_RECONSTRUCTION_ACTIVE) != 0u;
+}
+
+float gsReconstructionDepth(float viewZ)
+{
+    float nearPlane = uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_RECONSTRUCTION_NEAR_PLANE_WORD]);
+    float farPlane = uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_RECONSTRUCTION_FAR_PLANE_WORD]);
+    // The native Streamline constants use the matching unjittered Vulkan [0,1] projection.
+    return clamp(farPlane / (farPlane - nearPlane)
+        - (farPlane * nearPlane) / ((farPlane - nearPlane) * max(viewZ, nearPlane)), 0.0, 1.0);
+}
+
+vec4 gsNrdPackNormalRoughness(vec3 normal, float roughness)
+{
+    // Matches NRD_NORMAL_ENCODING=2 and NRD_ROUGHNESS_ENCODING=1 in the native NRD build.
+    vec3 octahedron = normal / max(abs(normal.x) + abs(normal.y) + abs(normal.z), 1.0e-6);
+    vec3 packed;
+    packed.y = octahedron.y * 0.5 + 0.5;
+    packed.x = octahedron.x * 0.5 + packed.y;
+    packed.y -= octahedron.x * 0.5;
+    float signedRoughness = octahedron.z < 0.0
+        ? -max(roughness, 1.5 / 512.0)
+        : max(roughness, 1.5 / 512.0);
+    packed.z = signedRoughness * 0.5 + 0.5;
+    return vec4(packed, 0.0);
+}
+
+vec3 gsNrdEnvironmentTerm(vec3 reflectance, float normalView, float roughness)
+{
+    float m = clamp(roughness * roughness, 0.0, 1.0);
+    vec4 x = vec4(1.0, normalView, normalView * normalView,
+        normalView * normalView * normalView);
+    vec4 y = vec4(1.0, m, m * m, m * m * m);
+    vec2 m1x = vec2(
+        0.99044 * x.x - 1.28514 * x.y,
+        1.29678 * x.x - 0.755907 * x.y
+    );
+    vec3 m2x = vec3(
+        1.0 * x.x + 2.92338 * x.y + 59.4188 * x.w,
+        20.3225 * x.x - 27.0302 * x.y + 222.592 * x.w,
+        121.563 * x.x + 626.13 * x.y + 316.627 * x.w
+    );
+    vec2 m3x = vec2(
+        0.0365463 * x.x + 3.32707 * x.y,
+        9.0632 * x.x - 9.04756 * x.y
+    );
+    vec3 m4x = vec3(
+        1.0 * x.x + 3.59685 * x.z - 1.36772 * x.w,
+        9.04401 * x.x - 16.3174 * x.z + 9.22949 * x.w,
+        5.56589 * x.x + 19.7886 * x.z - 20.2123 * x.w
+    );
+    float bias = dot(m1x, y.xy) / max(dot(m2x, y.xyw), 1.0e-6);
+    float scale = dot(m3x, y.xy) / max(dot(m4x, y.xyw), 1.0e-6);
+    return clamp(reflectance * scale + bias, vec3(0.0), vec3(1.0));
+}
+
+void gsNrdMaterialFactors(
+    GpuScenePayload primary,
+    vec3 rayOrigin,
+    out vec3 diffuseFactor,
+    out vec3 specularFactor
+) {
+    vec3 normal = normalize(primary.worldNormalAndRoughness.xyz);
+    vec3 view = normalize(rayOrigin - primary.worldPositionAndDistance.xyz);
+    vec3 baseColor = max(primary.baseColorAndOpacity.rgb, vec3(0.0));
+    float metallic = clamp(primary.emissiveAndMetallic.a, 0.0, 1.0);
+    float roughness = clamp(primary.worldNormalAndRoughness.w, 0.025, 1.0);
+    vec3 albedo = baseColor * (1.0 - metallic);
+    vec3 reflectance = mix(vec3(0.04), baseColor, metallic);
+    vec3 environment = gsNrdEnvironmentTerm(
+        reflectance, abs(dot(normal, view)), roughness
+    );
+    // Exact NRD_MaterialFactors clamps prevent demodulation from amplifying near-zero lobes.
+    diffuseFactor = mix(vec3(0.02), vec3(1.0), (vec3(1.0) - environment) * albedo);
+    specularFactor = environment * mix(vec3(0.1), vec3(1.0), roughness);
+    specularFactor = mix(vec3(0.02), vec3(1.0), specularFactor);
+}
+
+float gsNrdNormalizedHitDistance(float hitDistance, float viewZ, float roughness)
+{
+    // REBLUR defaults: ReblurHitDistanceParameters{A=3, B=0.1, C=20}.
+    float spread = 1.0 - exp2(-200.0 * roughness * roughness);
+    spread *= sqrt(clamp(roughness, 0.0, 1.0));
+    float normalization = (3.0 + abs(viewZ) * 0.1) * mix(20.0, 1.0, spread);
+    return clamp(max(hitDistance, 0.0) / max(normalization, 1.0e-6), 0.0, 1.0);
+}
+
+vec4 gsNrdPackRadianceHitDistance(
+    vec3 radiance,
+    float hitDistance,
+    float viewZ,
+    float roughness
+) {
+    vec3 sanitized = any(isnan(radiance)) || any(isinf(radiance))
+        ? vec3(0.0)
+        : clamp(radiance, vec3(0.0), vec3(65504.0));
+    vec3 ycocg = vec3(
+        dot(sanitized, vec3(0.25, 0.5, 0.25)),
+        dot(sanitized, vec3(0.5, 0.0, -0.5)),
+        dot(sanitized, vec3(-0.25, 0.5, -0.25))
+    );
+    return vec4(ycocg, gsNrdNormalizedHitDistance(hitDistance, viewZ, roughness));
+}
+
 void main()
 {
     ivec2 extent = imageSize(outputImage);
@@ -555,10 +976,19 @@ void main()
     );
     uint sampleCount = clamp(gsFrame.words[GPU_SCENE_FRAME_SAMPLE_COUNT_WORD], 1u, 8u);
     uvec4 launchInfo = uvec4(uint(pixel.x), uint(pixel.y), uint(extent.x), uint(extent.y));
+    bool denoisingActive = gsDenoisingActive();
+    bool reconstructionActive = gsReconstructionActive();
     vec3 accumulated = vec3(0.0);
+    GsRadianceSplit denoisingSplit = gsRadianceSplit(vec3(0.0), vec3(0.0));
+    float denoisingDiffuseHitDistance = 0.0;
+    float denoisingSpecularHitDistance = 0.0;
+    vec3 denoisingDiffuseFactor = vec3(1.0);
+    vec3 denoisingSpecularFactor = vec3(1.0);
+    bool denoisingPrimary = false;
     GpuScenePayload representative;
     uint lightmapSampleCount = 0u;
     vec3 representativeRayDirection = vec3(0.0);
+    vec2 representativeSamplePosition = vec2(pixel) + vec2(0.5);
     vec2 currentJitter = vec2(
         uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD]),
         uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD + 1u])
@@ -568,10 +998,22 @@ void main()
         vec2 samplePosition = vec2(pixel) + gsSubpixelOffset(sampleIndex, sampleCount) + currentJitter;
         vec2 ndc = samplePosition / vec2(extent) * 2.0 - 1.0;
         vec3 rayDirection = normalize(forward + right * ndc.x * fov.x - up * ndc.y * fov.y);
+#ifdef RTRENDERER_SER
+        // Reorder by direction before the primary trace fans out into material-specific paths.
+        vec3 absoluteDirection = abs(rayDirection);
+        uint dominantAxis = absoluteDirection.x >= absoluteDirection.y
+                && absoluteDirection.x >= absoluteDirection.z ? 0u
+                : (absoluteDirection.y >= absoluteDirection.z ? 1u : 2u);
+        uint directionOctant = (rayDirection.x < 0.0 ? 1u : 0u)
+                | (rayDirection.y < 0.0 ? 2u : 0u)
+                | (rayDirection.z < 0.0 ? 4u : 0u);
+        reorderThreadNV(directionOctant | (dominantAxis << 3u), 5u);
+#endif
         GpuScenePayload primary = gsTraceRadiance(origin, rayDirection, launchInfo);
         if (sampleIndex == 0u) {
             representative = primary;
             representativeRayDirection = rayDirection;
+            representativeSamplePosition = samplePosition;
         }
 
         vec3 radiance;
@@ -579,6 +1021,8 @@ void main()
         if (lightmapModulated) lightmapSampleCount++;
         if (primary.state.x == 0u) {
             radiance = primary.baseColorAndOpacity.rgb;
+        } else if (gsSurfaceOverlay(primary)) {
+            radiance = gsResolveSurfaceOverlay(primary, origin, rayDirection, launchInfo);
         } else if (lightmapModulated) {
             // Host-compatible materials already contain texture, vertex tint, AO and lightmap.
             // Running them through the PBR light loop or ACES would light and curve them twice.
@@ -587,43 +1031,170 @@ void main()
                 primary.transmissionIor.z,
                 primary.transmissionIor.w
             );
+        } else if (gsUnlit(primary)) {
+            radiance = gsEvaluateTerminalRadiance(primary, origin, rayDirection);
         } else {
             float distance = primary.worldPositionAndDistance.w;
             float opacity = clamp(primary.baseColorAndOpacity.a, 0.0, 1.0);
             float transmission = clamp(primary.transmissionIor.x, 0.0, 1.0);
-            vec3 surface = gsEvaluatePbrSurface(primary, origin);
+            GsRadianceSplit surfaceSplit = gsEvaluatePbrSurface(primary, origin);
+            vec3 surface = gsRadiance(surfaceSplit);
             vec3 background = gsSkyRadiance(rayDirection);
+            float opaqueReflectionHitDistance;
             vec3 opaqueReflection = transmission <= 1.0e-4 && opacity >= 0.999
                 ? gsEvaluateOpaqueMetallicReflection(
                     primary,
                     rayDirection,
                     launchInfo,
                     sampleIndex,
-                    sampleCount
+                    sampleCount,
+                    opaqueReflectionHitDistance
                 )
                 : vec3(0.0);
+            if (!(transmission <= 1.0e-4 && opacity >= 0.999)) {
+                opaqueReflectionHitDistance = 0.0;
+            }
             vec3 optical = transmission > 0.0
                 ? gsEvaluateOpticalTransmission(primary, rayDirection, launchInfo)
                 : background;
             vec3 material = mix(surface + opaqueReflection, optical, transmission);
             radiance = gsApplyCameraMedium(mix(background, material, opacity), distance);
+            if (denoisingActive && sampleIndex == 0u) {
+                float surfaceWeight = opacity * (1.0 - transmission);
+                float opticalWeight = opacity * transmission;
+                denoisingSplit.diffuse = surfaceSplit.diffuse * surfaceWeight;
+                denoisingSplit.specular = (surfaceSplit.specular + opaqueReflection) * surfaceWeight
+                    + optical * opticalWeight;
+                denoisingDiffuseHitDistance = surfaceSplit.diffuseHitDistance;
+                denoisingSpecularHitDistance = gsLuminance(opaqueReflection) > 1.0e-6
+                    ? opaqueReflectionHitDistance
+                    : surfaceSplit.specularHitDistance;
+                gsNrdMaterialFactors(
+                    primary, origin, denoisingDiffuseFactor, denoisingSpecularFactor
+                );
+                denoisingPrimary = true;
+            }
         }
         accumulated += radiance;
     }
     vec3 currentColor = accumulated / float(sampleCount);
+    if (denoisingActive && denoisingPrimary) {
+        denoisingSplit.diffuse /= float(sampleCount) * denoisingDiffuseFactor;
+        denoisingSplit.specular /= float(sampleCount) * denoisingSpecularFactor;
+    } else {
+        denoisingSplit = gsRadianceSplit(vec3(0.0), vec3(0.0));
+    }
+    bool outlineApplied;
+    currentColor = gsApplyObjectOutline(
+        currentColor,
+        representative,
+        origin,
+        pixel,
+        extent,
+        forward,
+        right,
+        up,
+        fov,
+        launchInfo,
+        outlineApplied
+    );
+    if (denoisingActive) {
+        vec3 denoisingNormal = denoisingPrimary
+            ? normalize(representative.worldNormalAndRoughness.xyz)
+            : vec3(0.0, 0.0, 1.0);
+        float denoisingRoughness = denoisingPrimary
+            ? clamp(representative.worldNormalAndRoughness.w, 0.025, 1.0)
+            : 1.0;
+        float viewZ = denoisingPrimary
+            ? max(dot(representative.worldPositionAndDistance.xyz - origin, forward), 0.0)
+            : 0.0;
+        vec2 previousPixelNoJitter;
+        vec2 currentPixelNoJitter;
+        float ignoredPreviousDepth;
+        vec3 previousWorldPosition = gsTemporalPreviousWorldPosition(representative);
+        bool reprojected = denoisingPrimary
+            && gsPreviousPixelPositionNoJitter(
+                previousWorldPosition, extent, previousPixelNoJitter, ignoredPreviousDepth
+            )
+            && gsCurrentPixelPositionNoJitter(
+                representative.worldPositionAndDistance.xyz, extent, currentPixelNoJitter
+            );
+        // NRD's contract is MV = previous - current in non-jittered pixel units. Projecting the
+        // actual hit point in both camera states removes both temporal jitter and multi-sample
+        // subpixel offsets; subtracting sample coordinates directly leaks both into the signal.
+        vec2 motionPixels = reprojected
+            ? previousPixelNoJitter - currentPixelNoJitter
+            : vec2(0.0);
+        float previousViewZ = reprojected
+            ? max(dot(previousWorldPosition - gsPreviousCameraPosition(),
+                normalize(gsFrameVec3(GPU_SCENE_FRAME_PREVIOUS_CAMERA_FORWARD_WORD))), 0.0)
+            : viewZ;
+        imageStore(denoisingNormalRoughness, pixel,
+            gsNrdPackNormalRoughness(denoisingNormal, denoisingRoughness));
+        imageStore(denoisingViewZ, pixel, vec4(viewZ, 0.0, 0.0, 0.0));
+        imageStore(denoisingMotionVectors, pixel,
+            vec4(motionPixels, previousViewZ - viewZ, 0.0));
+        imageStore(denoisingDiffuseRadianceHitDistance, pixel,
+            gsNrdPackRadianceHitDistance(
+                denoisingSplit.diffuse,
+                denoisingDiffuseHitDistance,
+                viewZ,
+                denoisingRoughness
+            ));
+        imageStore(denoisingSpecularRadianceHitDistance, pixel,
+            gsNrdPackRadianceHitDistance(
+                denoisingSplit.specular,
+                denoisingSpecularHitDistance,
+                viewZ,
+                denoisingRoughness
+            ));
+        imageStore(denoisingDiffuseMaterialFactor, pixel, vec4(denoisingDiffuseFactor, 1.0));
+        imageStore(denoisingSpecularMaterialFactor, pixel, vec4(denoisingSpecularFactor, 1.0));
+    }
+    if (reconstructionActive) {
+        float reconstructionViewZ = representative.state.x != 0u
+            ? max(dot(representative.worldPositionAndDistance.xyz - origin, forward), 0.0)
+            : 0.0;
+        float ignoredPreviousDepth;
+        vec2 previousPixelNoJitter;
+        vec2 currentPixelNoJitter;
+        bool reprojected = representative.state.x != 0u
+            && gsPreviousPixelPositionNoJitter(
+                gsTemporalPreviousWorldPosition(representative),
+                extent, previousPixelNoJitter, ignoredPreviousDepth
+            )
+            && gsCurrentPixelPositionNoJitter(
+                representative.worldPositionAndDistance.xyz, extent, currentPixelNoJitter
+            );
+        // Streamline receives pixel-space previous-current vectors; its constants normalize them
+        // once. This path deliberately shares the exact no-jitter projection used by NRD.
+        vec2 motionPixels = reprojected
+            ? previousPixelNoJitter - currentPixelNoJitter
+            : vec2(0.0);
+        float reconstructionDepthValue = representative.state.x != 0u
+            ? gsReconstructionDepth(reconstructionViewZ)
+            : 1.0;
+        imageStore(reconstructionDepth, pixel, vec4(reconstructionDepthValue, 0.0, 0.0, 0.0));
+        imageStore(reconstructionMotionVectors, pixel, vec4(motionPixels, 0.0, 0.0));
+        if (all(equal(pixel, ivec2(0)))) {
+            imageStore(reconstructionExposure, ivec2(0), vec4(1.0, 0.0, 0.0, 0.0));
+        }
+    }
     vec3 resolvedColor = currentColor;
     bool temporalEnabled = (gsFrame.words[GPU_SCENE_FRAME_TEMPORAL_FLAGS_WORD]
         & GPU_SCENE_TEMPORAL_FLAG_ENABLED) != 0u;
     if (temporalEnabled) {
         vec4 currentGeometry = gsTemporalGeometry(representative);
-        bool dynamicSurface = (representative.state.w & GPU_SCENE_FLAG_DYNAMIC) != 0u;
+        bool dynamicSurface = (representative.state.w & GPU_SCENE_FLAG_DYNAMIC) != 0u
+            || gsSurfaceOverlay(representative)
+            || outlineApplied;
         if (dynamicSurface) currentGeometry = vec4(0.0);
         vec2 previousPixelPosition;
         float expectedPreviousLogDepth;
         bool reprojected = representative.state.x != 0u
             && !dynamicSurface
-            && gsPreviousPixelPosition(
-                representativeRayDirection * representative.worldPositionAndDistance.w,
+            && gsPreviousPixelPositionWorld(
+                gsTemporalPreviousWorldPosition(representative),
                 extent,
                 previousPixelPosition,
                 expectedPreviousLogDepth
@@ -635,7 +1206,9 @@ void main()
             & GPU_SCENE_TEMPORAL_FLAG_HISTORY_VALID) != 0u;
         bool accepted = false;
         vec4 previousColor = vec4(0.0);
-        if (historyValid && reprojected) {
+        // NRD owns temporal accumulation for its signals. Keep this history warm for a later
+        // non-NRD frame, but never blend it into the trace that NRD will resolve.
+        if (!denoisingActive && historyValid && reprojected) {
             ivec2 previousPixel = ivec2(floor(previousPixelPosition));
             vec4 previousGeometry = imageLoad(historyGeometryInput, previousPixel);
             accepted = gsTemporalGeometryMatches(

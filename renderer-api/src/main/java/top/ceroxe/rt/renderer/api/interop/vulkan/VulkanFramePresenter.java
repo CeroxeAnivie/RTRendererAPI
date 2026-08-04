@@ -9,9 +9,12 @@ import java.util.Optional;
  * Official Windows Vulkan swapchain consumer for {@link VulkanFrameInterop} leases.
  *
  * <p>The presenter is thread-affine: opening, event polling, presentation, and closing must occur
- * on the same thread. {@link #presentAndRelease} always consumes the supplied lease and leaves it
- * closed, including on swapchain recreation or failure. This makes the easy path safe without
- * hiding native synchronization from callers that use {@link VulkanFrameInterop} directly.</p>
+ * on the same thread. {@link #presentAndRelease} transfers exclusive ownership to the presenter,
+ * which closes the lease before returning whenever cleanup succeeds. If vendor tag release or a
+ * host retirement callback fails, the presenter retains the lease and retries it before accepting
+ * another frame or completing {@link #close()}; the caller must never resume ownership after the
+ * transfer. This makes the easy path safe without hiding native synchronization from callers that
+ * use {@link VulkanFrameInterop} directly.</p>
  */
 public interface VulkanFramePresenter extends AutoCloseable {
     /**
@@ -99,6 +102,7 @@ public interface VulkanFramePresenter extends AutoCloseable {
 
     /**
      * Imports, copies, presents, GPU-signals producer completion, and closes one active lease.
+     * Ownership transfers even when this method throws.
      *
      * @param lease active lease transferred exclusively to this call
      * @return immutable evidence of the consumed frame and presentation outcome

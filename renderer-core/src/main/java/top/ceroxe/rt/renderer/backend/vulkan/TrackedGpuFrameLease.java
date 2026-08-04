@@ -70,6 +70,14 @@ final class TrackedGpuFrameLease implements GpuFrameLease, VulkanManagedFrameLea
         }
     }
 
+    @Override
+    public synchronized void releaseAfterPresenterAccessComplete() {
+        managedDelegate().releaseAfterPresenterAccessComplete();
+        if (delegate.state() != LeaseState.RELEASED) {
+            throw new IllegalStateException("presenter completion did not publish released state");
+        }
+    }
+
     private VulkanManagedFrameLease managedDelegate() {
         if (delegate instanceof VulkanManagedFrameLease managed) return managed;
         throw new UnsupportedOperationException("lease has no managed native frame capability");

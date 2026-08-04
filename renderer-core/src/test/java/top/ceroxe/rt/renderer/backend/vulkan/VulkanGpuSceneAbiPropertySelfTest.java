@@ -2,9 +2,12 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 
 import java.util.SplittableRandom;
 import top.ceroxe.rt.renderer.api.AffineTransform;
+import top.ceroxe.rt.renderer.api.InstanceRenderState;
+import top.ceroxe.rt.renderer.api.OutlineStyle;
 import top.ceroxe.rt.renderer.api.SceneInstance;
 import top.ceroxe.rt.renderer.api.SceneLight;
 import top.ceroxe.rt.renderer.api.TextureAsset;
+import top.ceroxe.rt.renderer.api.UvTransform;
 import top.ceroxe.rt.renderer.api.SceneInstance.Mobility;
 
 public final class VulkanGpuSceneAbiPropertySelfTest {
@@ -89,17 +92,59 @@ public final class VulkanGpuSceneAbiPropertySelfTest {
          int firstLightCoordinate = random.nextInt(SceneInstance.MAX_LIGHT_COORDINATE + 1);
          int secondLightCoordinate = random.nextInt(SceneInstance.MAX_LIGHT_COORDINATE + 1);
          int packedLight = firstLightCoordinate | secondLightCoordinate << 16;
-         SceneInstance instance = SceneInstance.builder((long)trial, (long)trial + 1L).transform(new AffineTransform(transform)).mobility(random.nextBoolean() ? Mobility.STATIC : Mobility.DYNAMIC).visibilityMask(random.nextInt(1, 256)).castsShadow(random.nextBoolean()).surfaceVisibility(visibility).lightmapCoordinates(firstLightCoordinate, secondLightCoordinate).build();
+         UvTransform uvTransform = UvTransform.of(
+                 randomFiniteFloat(random), randomFiniteFloat(random), randomFiniteFloat(random),
+                 randomFiniteFloat(random), randomFiniteFloat(random), randomFiniteFloat(random)
+         );
+         int surfaceMask = random.nextInt();
+         int receiverMask = random.nextInt();
+         int objectMask = random.nextInt();
+         if (objectMask == 0) objectMask = 1;
+         int outlineColor = random.nextInt() | 0xff000000;
+         float outlineWidth = 0.25F + random.nextFloat() * OutlineStyle.MAX_WIDTH_PIXELS;
+         if (outlineWidth > OutlineStyle.MAX_WIDTH_PIXELS) outlineWidth = OutlineStyle.MAX_WIDTH_PIXELS;
+         InstanceRenderState state = InstanceRenderState.builder()
+                 .uvTransform(uvTransform)
+                 .surfaceMask(surfaceMask)
+                 .overlayReceiverMask(receiverMask)
+                 .objectMask(objectMask)
+                 .outline(OutlineStyle.of(outlineColor, outlineWidth))
+                 .build();
+         SceneInstance instance = SceneInstance.builder((long)trial, (long)trial + 1L).transform(new AffineTransform(transform)).mobility(random.nextBoolean() ? Mobility.STATIC : Mobility.DYNAMIC).visibilityMask(random.nextInt(1, 256)).castsShadow(random.nextBoolean()).surfaceVisibility(visibility).lightmapCoordinates(firstLightCoordinate, secondLightCoordinate).renderState(state).build();
          int[] words = VulkanGpuSceneAbi.packInstance(instance, (ignored) -> meshSlot);
-         require(words.length == 17 && words[0] == meshSlot, trial, "instance slot or record stride changed");
+         require(words.length == 42 && words[0] == meshSlot, trial, "instance slot or record stride changed");
 
          for(int element = 0; element < transform.length; ++element) {
             require(words[3 + element] == Float.floatToRawIntBits(transform[element]), trial, "instance transform lost exact float bits at element " + element);
+            require(words[28 + element] == Float.floatToRawIntBits(transform[element]), trial, "default previous transform lost exact float bits at element " + element);
          }
 
          require(words[15] == Float.floatToRawIntBits(visibility), trial, "instance visibility changed during serialization");
          require(words[16] == packedLight, trial, "instance lightmap coordinates changed during serialization");
+         for (int element = 0; element < 6; ++element) {
+            require(words[17 + element] == Float.floatToRawIntBits(uvTransform.element(element)), trial,
+                    "instance UV transform lost exact float bits at element " + element);
+         }
+         require(words[23] == surfaceMask && words[24] == receiverMask && words[25] == objectMask
+                        && words[26] == outlineColor && words[27] == Float.floatToRawIntBits(outlineWidth),
+                 trial, "instance render state lost exact ABI bits");
+         require(words[40] == 0 && words[41] == 0, trial,
+                 "default instance motion revision changed");
+
+         long motionRevision = random.nextLong(Long.MAX_VALUE);
+         int[] temporalWords = VulkanGpuSceneAbi.packInstance(
+                 instance, instance.transform(), motionRevision, ignored -> meshSlot
+         );
+         require(join(temporalWords[40], temporalWords[41]) == motionRevision, trial,
+                 "instance motion revision lost exact 64-bit serialization");
       }
+
+      SceneInstance instance = SceneInstance.builder(1L, 2L).build();
+      expect(IllegalArgumentException.class,
+              () -> VulkanGpuSceneAbi.packInstance(
+                      instance, instance.transform(), -1L, ignored -> 0
+              ),
+              -1, "negative instance motion revision was accepted");
 
    }
 

@@ -67,15 +67,31 @@ public final class VulkanGpuSceneUploadPlannerSelfTest {
    private static void instanceOnlyGenerationDoesNotRewriteUnchangedGpuDomains() {
       Fixture fixture = new Fixture();
       fixture.commit(fixture.prepare(initialScene()), 0L);
+      fixture.residency.markFrameRendered(0L);
       SceneInstance moved = SceneInstance.builder(40L, 30L).transform(new AffineTransform(new float[]{1.0F, 0.0F, 0.0F, 8.0F, 0.0F, 1.0F, 0.0F, 4.0F, 0.0F, 0.0F, 1.0F, 2.0F})).mobility(Mobility.DYNAMIC).build();
       SceneTransaction update = SceneTransaction.builder(1L).upsert(moved).build();
       PreparedGeneration generation = fixture.prepare(update);
       boolean condition10000 = generation.plan.chunks().size() == 1 && ((VulkanGpuSceneUploadPlanner.Chunk)generation.plan.chunks().get(0)).target() == Target.INSTANCE_RECORDS;
       String details10001 = String.valueOf(generation.plan.chunks());
       require(condition10000, "instance-only update rewrote unchanged GPUScene domains: " + details10001);
+      VulkanGpuSceneUploadPlanner.Chunk instanceChunk = only(generation.plan, Target.INSTANCE_RECORDS);
+      require(instanceChunk.payload().length == VulkanGpuSceneAbi.INSTANCE_RECORD_WORDS * Integer.BYTES,
+            "instance upload byte stride diverged from the ABI");
+      ByteBuffer instanceWords = ByteBuffer.wrap(instanceChunk.payload()).order(ByteOrder.LITTLE_ENDIAN);
+      require(instanceWords.getFloat(28 * Integer.BYTES + 3 * Float.BYTES) == 0.0F,
+            "instance upload did not retain the last rendered transform");
+      require(instanceWords.getInt(40 * Integer.BYTES) == 1
+                  && instanceWords.getInt(41 * Integer.BYTES) == 0,
+            "instance upload lost the 64-bit motion revision");
       require(fixture.memory.state().positions().revision() == 0L, "memory preparation published the next revision before admission");
       fixture.commit(generation, 1L);
       require(fixture.memory.state().positions().revision() == 1L, "accepted empty geometry generation did not advance memory authority");
+
+      SceneLight brighter = SceneLight.point(50L, 1.0, 2.0, 3.0)
+            .color(1.0F, 0.8F, 0.6F).intensity(200.0F).range(32.0F).build();
+      PreparedGeneration unrelated = fixture.prepare(SceneTransaction.builder(2L).upsert(brighter).build());
+      require(chunks(unrelated.plan, Target.INSTANCE_RECORDS) == 0,
+            "an unrelated light revision rewrote sparse instance records");
    }
 
    private static void triangleMaterialUpdateDoesNotRewriteBlasGeometry() {

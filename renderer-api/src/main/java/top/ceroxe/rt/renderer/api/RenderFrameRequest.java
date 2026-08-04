@@ -19,6 +19,8 @@ public final class RenderFrameRequest {
     private final DistanceFogState fog;
     private final TextureSamplingState textureSampling;
     private final AntiAliasingState antiAliasing;
+    private final DepthProjectionState depthProjection;
+    private final FramePrimitiveBatch primitiveBatch;
     private final Set<HistoryResetReason> temporalHistoryResets;
 
     private RenderFrameRequest(Builder builder) {
@@ -42,6 +44,8 @@ public final class RenderFrameRequest {
         fog = Objects.requireNonNull(builder.fog, "fog");
         textureSampling = Objects.requireNonNull(builder.textureSampling, "textureSampling");
         antiAliasing = Objects.requireNonNull(builder.antiAliasing, "antiAliasing");
+        depthProjection = Objects.requireNonNull(builder.depthProjection, "depthProjection");
+        primitiveBatch = Objects.requireNonNull(builder.primitiveBatch, "primitiveBatch");
         temporalHistoryResets = immutableEnumSet(builder.temporalHistoryResets);
     }
 
@@ -163,6 +167,24 @@ public final class RenderFrameRequest {
     }
 
     /**
+     * Returns the exact depth projection for temporal reconstruction, when the host knows it.
+     *
+     * @return immutable non-null projection state
+     */
+    public DepthProjectionState depthProjection() {
+        return depthProjection;
+    }
+
+    /**
+     * Returns frame-replaced primitive instances referencing persistent mesh assets.
+     *
+     * @return immutable, possibly empty primitive batch
+     */
+    public FramePrimitiveBatch primitiveBatch() {
+        return primitiveBatch;
+    }
+
+    /**
      * Returns an immutable, deduplicated set of caller-known temporal discontinuities.
      *
      * @return immutable, possibly empty reset-reason set
@@ -185,6 +207,8 @@ public final class RenderFrameRequest {
                 && fog.equals(request.fog)
                 && textureSampling.equals(request.textureSampling)
                 && antiAliasing.equals(request.antiAliasing)
+                && depthProjection.equals(request.depthProjection)
+                && primitiveBatch.equals(request.primitiveBatch)
                 && temporalHistoryResets.equals(request.temporalHistoryResets);
     }
 
@@ -192,7 +216,8 @@ public final class RenderFrameRequest {
     public int hashCode() {
         return Objects.hash(
                 sequence, minimumSceneRevision, width, height, camera, environment,
-                lightmap, fog, textureSampling, antiAliasing, temporalHistoryResets
+                lightmap, fog, textureSampling, antiAliasing, depthProjection, primitiveBatch,
+                temporalHistoryResets
         );
     }
 
@@ -208,6 +233,8 @@ public final class RenderFrameRequest {
                 + ", fog=" + fog
                 + ", textureSampling=" + textureSampling
                 + ", antiAliasing=" + antiAliasing
+                + ", depthProjection=" + depthProjection
+                + ", primitiveBatch=" + primitiveBatch
                 + ", temporalHistoryResets=" + temporalHistoryResets + ']';
     }
 
@@ -227,6 +254,8 @@ public final class RenderFrameRequest {
         private DistanceFogState fog = DistanceFogState.disabled();
         private TextureSamplingState textureSampling = TextureSamplingState.pixelStable();
         private AntiAliasingState antiAliasing = AntiAliasingState.disabled();
+        private DepthProjectionState depthProjection = DepthProjectionState.unknown();
+        private FramePrimitiveBatch primitiveBatch = FramePrimitiveBatch.empty();
 
         private Builder(long sequence, int width, int height, CameraState camera) {
             this.sequence = sequence;
@@ -246,6 +275,8 @@ public final class RenderFrameRequest {
             fog = source.fog;
             textureSampling = source.textureSampling;
             antiAliasing = source.antiAliasing;
+            depthProjection = source.depthProjection;
+            primitiveBatch = source.primitiveBatch;
             temporalHistoryResets.addAll(source.temporalHistoryResets);
         }
 
@@ -312,6 +343,36 @@ public final class RenderFrameRequest {
          */
         public Builder antiAliasing(AntiAliasingState value) {
             antiAliasing = Objects.requireNonNull(value, "antiAliasing");
+            return this;
+        }
+
+        /**
+         * Supplies the exact finite forward-Z projection used when writing reconstruction depth.
+         *
+         * <p>Leaving this unset retains {@link DepthProjectionState#unknown()}, which is valid
+         * for ordinary rendering but prevents an integration from falsely enabling DLSS/DLAA.</p>
+         *
+         * @param value non-null exact projection state
+         * @return this builder
+         */
+        public Builder depthProjection(DepthProjectionState value) {
+            depthProjection = Objects.requireNonNull(value, "depthProjection");
+            return this;
+        }
+
+        /**
+         * Replaces the complete frame-scoped primitive batch.
+         *
+         * <p>The batch does not mutate persistent scene revision state. Mesh dependencies must
+         * already be resident at {@link #minimumSceneRevision(long)}.</p>
+         */
+        /**
+         * Replaces frame-scoped primitives for this request.
+         * @param value non-null immutable batch
+         * @return this builder
+         */
+        public Builder primitiveBatch(FramePrimitiveBatch value) {
+            primitiveBatch = Objects.requireNonNull(value, "primitiveBatch");
             return this;
         }
 

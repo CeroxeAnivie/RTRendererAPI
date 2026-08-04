@@ -1,14 +1,18 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
+import top.ceroxe.rt.renderer.api.FrameGenerationEvidence;
+import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
 import top.ceroxe.rt.renderer.api.RendererException;
 import top.ceroxe.rt.renderer.api.RendererHealth;
+import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.RendererStateException;
 import top.ceroxe.rt.renderer.api.SceneRevisionException;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
@@ -41,6 +45,8 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     private final RayTracingRendererConfig configuration;
     private final VulkanRenderingSessionFactory sessionFactory;
     private final ManagedPresenterOpener managedPresenterOpener;
+    private final RenderingFeatureCapabilities negotiatedFeatureCapabilities;
+    private RenderingFeatureCapabilities publishedFeatureCapabilities;
     private final PersistentSceneRegistry scene = new PersistentSceneRegistry();
     /*
      * The lock protects lifecycle publication and the public single-writer contract. It is
@@ -60,6 +66,9 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     private long latestCpuFrameSequence = -1L;
     private boolean deviceRecoveredSinceLastFrame;
     private RendererDiagnostics.FrameGpuTiming latestGpuTiming = RendererDiagnostics.FrameGpuTiming.unavailable();
+    private FrameGenerationEvidence latestFrameGenerationEvidence = FrameGenerationEvidence.unavailable();
+    private TechnologyExecutionEvidence latestTechnologyExecutionEvidence =
+            TechnologyExecutionEvidence.disabled();
     private Throwable terminalFailure;
     private RendererHealth.Failure activeFailure;
     private boolean sessionClosed;
@@ -153,10 +162,66 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         }
         this.configuration = checkedConfiguration;
         this.sessionFactory = sessionFactory;
+        this.negotiatedFeatureCapabilities = Objects.requireNonNull(
+                ownedSession.featureCapabilities(), "session feature capabilities"
+        );
+        this.publishedFeatureCapabilities = negotiatedFeatureCapabilities;
         this.session = ownedSession;
         this.managedPresenterOpener = Objects.requireNonNull(
                 managedPresenterOpener, "managedPresenterOpener"
         );
+    }
+
+    @Override
+    public <T> Optional<T> extension(Class<T> extensionType) {
+        Class<T> checkedType = Objects.requireNonNull(extensionType, "extensionType");
+        if (checkedType.isInstance(publishedFeatureCapabilities)) {
+            return withLifecycleLock(() -> {
+                if (lifecycle == Lifecycle.READY && !sessionClosed) {
+                    publishedFeatureCapabilities = Objects.requireNonNull(
+                            session.featureCapabilities(), "session feature capabilities"
+                    );
+                } else {
+                    publishedFeatureCapabilities = invalidateFeatureCapabilities(
+                            publishedFeatureCapabilities,
+                            publicStatus()
+                    );
+                }
+                return Optional.of(checkedType.cast(publishedFeatureCapabilities));
+            });
+        }
+        return RayTracingRenderer.super.extension(checkedType);
+    }
+
+    private static RenderingFeatureCapabilities invalidateFeatureCapabilities(
+            RenderingFeatureCapabilities source,
+            Status rendererStatus
+    ) {
+        RenderingFeatureCapabilities checked = Objects.requireNonNull(source, "source");
+        String reason = "renderer lifecycle is " + Objects.requireNonNull(rendererStatus, "rendererStatus")
+                + "; prior execution evidence is no longer current";
+        RenderingFeatureCapabilities.Builder invalidated = RenderingFeatureCapabilities.builder();
+        checked.features().forEach((feature, entry) -> invalidated.feature(
+                feature,
+                entry.status() == RenderingFeatureCapabilities.Status.DISABLED
+                        ? entry
+                        : RenderingFeatureCapabilities.Entry.of(
+                                RenderingFeatureCapabilities.Status.BLOCKED,
+                                entry.implementation(),
+                                reason
+                        )
+        ));
+        checked.technologies().forEach((technology, entry) -> invalidated.technology(
+                technology,
+                entry.status() == RenderingFeatureCapabilities.Status.DISABLED
+                        ? entry
+                        : RenderingFeatureCapabilities.Entry.of(
+                                RenderingFeatureCapabilities.Status.BLOCKED,
+                                entry.implementation(),
+                                reason
+                        )
+        ));
+        return invalidated.build();
     }
 
     private static void requireEquivalentPreparedStates(
@@ -263,6 +328,13 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
                     null
             );
         }
+        if (openFrameLeases != 0) {
+            throw new RendererStateException(
+                    "cannot open the managed presenter while an expert Vulkan frame lease is active",
+                    publicStatus(),
+                    null
+            );
+        }
         VulkanFramePresenterConfig checked = Objects.requireNonNull(
                 presenterConfiguration, "presenterConfiguration"
         );
@@ -280,7 +352,13 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         );
         boolean published = false;
         try {
-            managedPresenterBacklogLimit = checked.maximumFramesQueuedAhead();
+            int backendProducerLeadLimit = session.managedPresentationProducerLeadLimit();
+            if (backendProducerLeadLimit <= 0) {
+                throw new IllegalStateException("backend managed-presentation producer lead must be positive");
+            }
+            managedPresenterBacklogLimit = Math.min(
+                    checked.maximumFramesQueuedAhead(), backendProducerLeadLimit
+            );
             managedPresenterBackpressure = new FrameSubmissionDeferred(
                     "Vulkan presenter queue reached its configured producer lead of "
                             + managedPresenterBacklogLimit + " frames"
@@ -424,15 +502,19 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
 
         VulkanRenderingSession.FrameAdmission admission;
         try {
-            admission = Objects.requireNonNull(
-                    session.submit(new VulkanRenderingSession.FrameSubmission(checked, acceptedSceneRevision)),
-                    "session frame admission"
+            VulkanRenderingSession.FrameAdmissionAttempt attempt = Objects.requireNonNull(
+                    session.trySubmit(new VulkanRenderingSession.FrameSubmission(checked, acceptedSceneRevision)),
+                    "session frame admission attempt"
             );
-        } catch (VulkanRenderingSession.SubmissionRejectedException rejection) {
-            return new FrameSubmissionDeferred(
-                    "Vulkan renderer deferred frame " + checked.sequence()
-                            + " without publishing partial state: " + rejection.getMessage()
-            );
+            if (attempt instanceof VulkanRenderingSession.FrameDeferred deferred) {
+                return new FrameSubmissionDeferred(
+                        "Vulkan renderer deferred frame " + checked.sequence()
+                                + " without publishing partial state: " + deferred.reason()
+                );
+            }
+            admission = ((VulkanRenderingSession.FrameAdmitted) attempt).admission();
+        } catch (FrameValidationException validation) {
+            throw validation;
         } catch (RuntimeException failure) {
             throw fail("submit frame", failure);
         }
@@ -449,6 +531,10 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
                     )
             );
         }
+        // The previous-instance transform must follow the last successfully submitted frame. A
+        // scene may be updated several times before a frame is accepted, so recording it at scene
+        // transaction commit would produce a stale or future motion vector.
+        residency.markFrameRendered(acceptedSceneRevision);
         latestSubmittedFrameSequence = checked.sequence();
         if (managedPresenterOpen) managedPresenterOutstandingFrames.addLast(checked.sequence());
         java.util.Set<HistoryInvalidationReason> historyInvalidations = admission.historyInvalidations();
@@ -472,6 +558,13 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
 
     private VulkanFrameInterop.FramePollResult pollLatestFrameLocked() {
         requireReady("poll latest GPU frame");
+        if (managedPresenterOpen) {
+            throw new RendererStateException(
+                    "expert Vulkan frame polling is unavailable while the managed presenter is open",
+                    publicStatus(),
+                    null
+            );
+        }
         GpuFrameLease lease;
         try {
             lease = session.acquireLatestFrame();
@@ -617,6 +710,8 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
                         failedDeviceRecoveries
                 ))
                 .frameGpuTiming(latestGpuTiming)
+                .frameGenerationEvidence(latestFrameGenerationEvidence)
+                .technologyExecutionEvidence(latestTechnologyExecutionEvidence)
                 .build();
     }
 
@@ -682,6 +777,8 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
                     latestSessionCompletedFrameSequence
             );
             latestGpuTiming = telemetry.frameGpuTiming();
+            latestFrameGenerationEvidence = telemetry.frameGenerationEvidence();
+            latestTechnologyExecutionEvidence = telemetry.technologyExecutionEvidence();
         } catch (RuntimeException failure) {
             transitionToFailed("read renderer telemetry", failure);
         }
@@ -835,14 +932,18 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         }
         recoveryPending = false;
         automaticDeviceRecoveries++;
-        VulkanRenderingSession candidate = null;
+            VulkanRenderingSession candidate = null;
         try {
             candidate = Objects.requireNonNull(sessionFactory.open(), "recovered Vulkan session");
             if (candidate.state() != VulkanRenderingSession.State.READY) {
                 throw new IllegalStateException("recovered Vulkan session is not READY: " + candidate.state());
             }
+            if (!negotiatedFeatureCapabilities.equals(candidate.featureCapabilities())) {
+                throw new IllegalStateException("recovered Vulkan session negotiated different feature capabilities");
+            }
             VulkanSceneResidency recoveredResidency = replayCommittedScene(candidate);
             session = candidate;
+            publishedFeatureCapabilities = candidate.featureCapabilities();
             residency = recoveredResidency;
             // Accepted frames belonged to the discarded session and can no longer produce a
             // lease. Retaining their producer permits would deadlock a still-open presenter
@@ -852,6 +953,8 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             latestSessionCompletedFrameSequence = -1L;
             latestCpuFrameSequence = -1L;
             latestGpuTiming = RendererDiagnostics.FrameGpuTiming.unavailable();
+            latestFrameGenerationEvidence = FrameGenerationEvidence.unavailable();
+            latestTechnologyExecutionEvidence = TechnologyExecutionEvidence.disabled();
             terminalFailure = null;
             activeFailure = null;
             lifecycle = Lifecycle.READY;

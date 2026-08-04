@@ -7,11 +7,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import top.ceroxe.rt.renderer.api.AffineTransform;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
+import top.ceroxe.rt.renderer.api.InstanceRenderState;
+import top.ceroxe.rt.renderer.api.OutlineStyle;
+import top.ceroxe.rt.renderer.api.PrimitiveInstance;
 import top.ceroxe.rt.renderer.api.SceneInstance;
 import top.ceroxe.rt.renderer.api.SceneLight;
 import top.ceroxe.rt.renderer.api.TextureAsset;
+import top.ceroxe.rt.renderer.api.UvTransform;
 import top.ceroxe.rt.renderer.api.MaterialAsset.BlendMode;
 import top.ceroxe.rt.renderer.api.MaterialAsset.ShadingModel;
 import top.ceroxe.rt.renderer.api.SceneInstance.Mobility;
@@ -68,10 +73,74 @@ public final class VulkanGpuSceneAbiSelfTest {
       require(meshRecord[2] == -1 && meshRecord[3] == -1, "absent geometry stream did not retain the canonical 64-bit sentinel");
       SceneInstance instance = SceneInstance.builder(40L, 30L).mobility(Mobility.DYNAMIC).visibilityMask(127).surfaceVisibility(0.375F).lightmapCoordinates(32, 176).build();
       int[] instanceRecord = VulkanGpuSceneAbi.packInstance(instance, (id) -> id == 30L ? 9 : -1);
-      require(instanceRecord.length == 17 && instanceRecord[0] == 9 && instanceRecord[2] == 127, "instance descriptor lost mesh slot or visibility mask");
+      require(instanceRecord.length == 42 && instanceRecord[0] == 9 && instanceRecord[2] == 127, "instance descriptor lost mesh slot or visibility mask");
       require(Float.intBitsToFloat(instanceRecord[3]) == 1.0F && Float.intBitsToFloat(instanceRecord[8]) == 1.0F, "instance affine transform changed during packing");
       require(Float.intBitsToFloat(instanceRecord[15]) == 0.375F, "instance surface visibility did not occupy the reserved ABI word");
       require(instanceRecord[16] == 0x00b0_0020, "instance lightmap coordinates did not occupy the final ABI word");
+      require(Float.intBitsToFloat(instanceRecord[17]) == 1.0F
+            && Float.intBitsToFloat(instanceRecord[21]) == 1.0F,
+            "identity UV transform was not encoded into instance state");
+      require(instanceRecord[23] == -1 && instanceRecord[24] == 0
+            && instanceRecord[25] == 0 && instanceRecord[26] == 0,
+            "default receiver/object masks changed during instance packing");
+      for (int element = 0; element < 12; ++element) {
+         require(instanceRecord[28 + element] == instanceRecord[3 + element],
+               "default previous transform diverged at element " + element);
+      }
+      require(instanceRecord[40] == 0 && instanceRecord[41] == 0,
+            "default instance motion revision must be zero");
+
+      AffineTransform previousTransform = new AffineTransform(new float[]{
+            1.0F, 0.0F, 0.0F, -3.0F,
+            0.0F, 1.0F, 0.0F, 2.0F,
+            0.0F, 0.0F, 1.0F, 7.0F
+      });
+      int[] movingRecord = VulkanGpuSceneAbi.packInstance(
+            instance, previousTransform, 0x0000_0002_0000_0001L, id -> id == 30L ? 9 : -1
+      );
+      for (int element = 0; element < 12; ++element) {
+         require(movingRecord[28 + element]
+                     == Float.floatToRawIntBits(previousTransform.elements().get(element)),
+               "explicit previous transform changed at element " + element);
+      }
+      require(movingRecord[40] == 1 && movingRecord[41] == 2,
+            "instance motion revision lost its exact 64-bit value");
+
+      InstanceRenderState frameState = InstanceRenderState.builder()
+            .uvTransform(UvTransform.scaleAndOffset(2.0F, 3.0F, 0.25F, -0.5F))
+            .surfaceMask(0x12)
+            .overlayReceiverMask(0x34)
+            .objectMask(0x56)
+            .outline(OutlineStyle.of(0xff20_40ff, 2.0F))
+            .build();
+      PrimitiveInstance primitive = PrimitiveInstance.builder(30L)
+            .transform(instance.transform())
+            .previousTransform(previousTransform)
+            .renderState(frameState)
+            .surfaceVisibility(0.5F)
+            .build();
+      int[] primitiveRecord = VulkanGpuSceneAbi.packPrimitive(primitive, id -> id == 30L ? 9 : -1);
+      require(primitiveRecord.length == 42 && primitiveRecord[0] == 9
+                  && primitiveRecord[1] == (VulkanGpuSceneAbi.FLAG_ACTIVE
+                  | VulkanGpuSceneAbi.FLAG_CASTS_SHADOW | VulkanGpuSceneAbi.FLAG_DYNAMIC
+                  | VulkanGpuSceneAbi.FLAG_FRAME_LOCAL),
+            "frame primitive did not use the compact dynamic instance ABI");
+      require(Float.intBitsToFloat(primitiveRecord[17]) == 2.0F
+                  && Float.intBitsToFloat(primitiveRecord[21]) == 3.0F
+                  && primitiveRecord[23] == 0x12 && primitiveRecord[24] == 0x34
+                  && primitiveRecord[25] == 0x56 && primitiveRecord[26] == 0xff20_40ff
+                  && Float.intBitsToFloat(primitiveRecord[27]) == 2.0F,
+            "frame primitive render state drifted while packing");
+      for (int element = 0; element < 12; ++element) {
+         require(primitiveRecord[28 + element]
+                     == Float.floatToRawIntBits(previousTransform.elements().get(element)),
+               "transient primitive previous transform changed at element " + element);
+      }
+      require(primitiveRecord[40] == 0 && primitiveRecord[41] == 0,
+            "transient primitive motion revision must remain zero without stable identity");
+      require(VulkanGpuSceneAbi.TRANSIENT_INSTANCE_BIT == 0x0080_0000
+                  && VulkanGpuSceneAbi.TRANSIENT_INSTANCE_BIT == top.ceroxe.rt.renderer.api.FramePrimitiveBatch.MAX_PRIMITIVES,
+            "transient custom-index namespace no longer matches the public batch limit");
    }
 
    private static void preservesDoublePrecisionLightPositions() {
@@ -102,7 +171,7 @@ public final class VulkanGpuSceneAbiSelfTest {
       boolean condition10000 = actual.equals(expected);
       String details10001 = String.valueOf(expected);
       require(condition10000, "Java/GLSL GPUScene ABI drift: expected=" + details10001 + ", actual=" + String.valueOf(actual));
-      boolean[] occupied = new boolean[22];
+      boolean[] occupied = new boolean[31];
       occupied[0] = true;
       occupied[1] = true;
       occupied[2] = true;
@@ -111,6 +180,15 @@ public final class VulkanGpuSceneAbiSelfTest {
       occupied[19] = true;
       occupied[20] = true;
       occupied[21] = true;
+      occupied[22] = true;
+      occupied[23] = true;
+      occupied[24] = true;
+      occupied[25] = true;
+      occupied[26] = true;
+      occupied[27] = true;
+      occupied[28] = true;
+      occupied[29] = true;
+      occupied[30] = true;
 
       for(VulkanGpuSceneUploadPlanner.Target target : Target.values()) {
          int binding = VulkanGpuSceneAbi.descriptorBinding(target);

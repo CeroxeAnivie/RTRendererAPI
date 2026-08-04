@@ -4,21 +4,21 @@ import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
-import top.ceroxe.rt.renderer.api.RendererDiagnostics;
+import top.ceroxe.rt.renderer.api.RenderFrameRequest;
+import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
-import top.ceroxe.rt.renderer.rt.acceleration.RtAccelerationStructure;
-import top.ceroxe.rt.renderer.rt.device.RtCommandContext;
-import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
-import top.ceroxe.rt.renderer.rt.device.RtGpuTimestampPool;
+import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
+import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
+import top.ceroxe.rt.renderer.feature.VulkanFeatureSession;
+import top.ceroxe.rt.renderer.feature.VulkanFeatureFallbackException;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
-import top.ceroxe.rt.renderer.rt.device.VulkanMemoryBudgetPolicy;
-import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneDescriptorResources;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
-import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneTemporalFrameResources;
+import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
 
 /** Production session joining persistent GPUScene convergence to bounded hardware RT frames. */
@@ -29,10 +29,13 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
     private final String gpuStableId;
     private final VulkanSceneRuntime scene;
     private final GpuSceneRayTracingPipeline pipeline;
-    private final VulkanFrameSlot[] frameSlots;
+    private final VulkanGpuSceneFrameRing frameRing;
     private final VulkanFrameAdmissionLimits frameAdmissionLimits;
-    private final TemporalHistoryTracker temporalHistory;
-    private final VulkanTemporalHistory temporalGpuHistory;
+    private final VulkanGpuSceneTemporalCoordinator temporalCoordinator;
+    private final VulkanGpuSceneFeatureComposition featureComposition;
+    private final VulkanGpuSceneDescriptorAssembler descriptorAssembler;
+    private final VulkanGpuSceneFrameDiagnostics frameDiagnostics;
+    private final VulkanGpuSceneFrameSubmitter frameSubmitter;
 
     private State state = State.READY;
     private boolean pipelineClosed;
@@ -40,9 +43,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
     private boolean resourcesClosed;
     private long acceptedSceneRevision = -1L;
     private int acceptedLightSlotUpperBound;
-    private long lastSubmittedDescriptorEpoch;
     private long latestCompletedDescriptorEpoch;
-    private long latestSubmittedFrameSequence = -1L;
     private long latestCompletedFrameSequence = -1L;
     private long latestAcquiredFrameSequence = -1L;
     private RuntimeException terminalFailure;
@@ -55,14 +56,16 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
         RayTracingRendererConfig checkedConfiguration = Objects.requireNonNull(configuration, "configuration");
         VulkanSceneRuntime scene = null;
         GpuSceneRayTracingPipeline pipeline = null;
-        VulkanTemporalHistory temporalGpuHistory = null;
-        VulkanFrameSlot[] slots = null;
+        VulkanGpuSceneTemporalCoordinator temporalCoordinator = null;
+        VulkanGpuSceneFrameRing frameRing = null;
+        VulkanGpuSceneFeatureComposition featureComposition = null;
         try {
             scene = VulkanSceneRuntime.open(
                     Objects.requireNonNull(capability, "capability"),
                     Objects.requireNonNull(diagnostics, "diagnostics"),
                     checkedConfiguration.validationEnabled(),
-                    checkedConfiguration.gpuTimingsEnabled()
+                    checkedConfiguration.gpuTimingsEnabled(),
+                    checkedConfiguration
             );
             VulkanDeviceRuntime device = scene.device();
             VulkanFrameOutput frameOutput = VulkanFrameOutput.from(checkedConfiguration.frameOutputFormat());
@@ -73,25 +76,26 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
                 );
             }
             VulkanFrameOutputSupport.requireSupported(device.physicalDevice(), frameOutput);
-            temporalGpuHistory = new VulkanTemporalHistory(
-                    device, checkedConfiguration.temporalRendering().enabled()
-            );
+            temporalCoordinator = new VulkanGpuSceneTemporalCoordinator(device, checkedConfiguration);
+            VulkanGpuSceneFeatureComposition.Selection featureSelection =
+                    VulkanGpuSceneFeatureComposition.select(device.featureCapabilities());
             pipeline = GpuSceneRayTracingPipeline.open(
-                    device, checkedConfiguration.maxFramesInFlight(), frameOutput.linearHdr()
+                    device,
+                    checkedConfiguration.maxFramesInFlight(),
+                    frameOutput.linearHdr() || featureSelection.denoising() || featureSelection.reconstruction()
             );
-            slots = new VulkanFrameSlot[checkedConfiguration.maxFramesInFlight()];
-            for (int index = 0; index < slots.length; index++) {
-                slots[index] = new VulkanFrameSlot(
-                        index,
-                        device,
-                        frameOutput,
-                        interop.dedicatedAllocationRequired(),
-                        interop.semaphoreImportReady(),
-                        checkedConfiguration.cpuFrameReadbackEnabled(),
-                        diagnostics.stalls(),
-                        checkedConfiguration.temporalRendering().enabled()
-                );
-            }
+            // The monolithic GPUScene descriptor layout always declares both NRD and
+            // reconstruction bindings. These sentinels supply whichever optional feature is
+            // inactive; both families may be active and are composed transactionally.
+            featureComposition = VulkanGpuSceneFeatureComposition.open(
+                    device,
+                    checkedConfiguration.maxFramesInFlight(),
+                    frameOutput.linearHdr(),
+                    featureSelection
+            );
+            frameRing = VulkanGpuSceneFrameRing.open(
+                    device, checkedConfiguration, frameOutput, interop, diagnostics, featureSelection
+            );
             VulkanFrameAdmissionLimits frameAdmissionLimits = new VulkanFrameAdmissionLimits(
                     device.maxImageDimension2D(),
                     capability.preferredDevice().maxRayDispatchInvocationCount()
@@ -101,19 +105,22 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
                     capability.preferredDevice().stableId(),
                     scene,
                     pipeline,
-                    temporalGpuHistory,
-                    slots,
+                    temporalCoordinator,
+                    frameRing,
+                    featureComposition,
                     frameAdmissionLimits
             );
             scene = null;
             pipeline = null;
-            temporalGpuHistory = null;
-            slots = null;
+            temporalCoordinator = null;
+            frameRing = null;
+            featureComposition = null;
             return result;
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
-            closeSlotsSuppressing(failure, slots);
+            closeSuppressing(failure, frameRing);
+            closeSuppressing(failure, featureComposition);
             closeSuppressing(failure, pipeline);
-            closeSuppressing(failure, temporalGpuHistory);
+            closeSuppressing(failure, temporalCoordinator);
             closeSuppressing(failure, scene);
             throw failure;
         }
@@ -124,8 +131,9 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
             String gpuStableId,
             VulkanSceneRuntime scene,
             GpuSceneRayTracingPipeline pipeline,
-            VulkanTemporalHistory temporalGpuHistory,
-            VulkanFrameSlot[] frameSlots,
+            VulkanGpuSceneTemporalCoordinator temporalCoordinator,
+            VulkanGpuSceneFrameRing frameRing,
+            VulkanGpuSceneFeatureComposition featureComposition,
             VulkanFrameAdmissionLimits frameAdmissionLimits
     ) {
         this.configuration = Objects.requireNonNull(configuration, "configuration");
@@ -133,14 +141,21 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
         if (gpuStableId.isBlank()) throw new IllegalArgumentException("gpuStableId must not be blank");
         this.scene = Objects.requireNonNull(scene, "scene");
         this.pipeline = Objects.requireNonNull(pipeline, "pipeline");
-        this.temporalGpuHistory = Objects.requireNonNull(temporalGpuHistory, "temporalGpuHistory");
-        this.frameSlots = Objects.requireNonNull(frameSlots, "frameSlots").clone();
+        this.temporalCoordinator = Objects.requireNonNull(temporalCoordinator, "temporalCoordinator");
+        this.frameRing = Objects.requireNonNull(frameRing, "frameRing");
+        this.featureComposition = Objects.requireNonNull(featureComposition, "featureComposition");
+        descriptorAssembler = new VulkanGpuSceneDescriptorAssembler(scene, featureComposition);
+        frameDiagnostics = new VulkanGpuSceneFrameDiagnostics(
+                scene.device(), featureComposition, configuration.gpuTimingsEnabled(), FRAME_TIMING_LABEL
+        );
+        frameSubmitter = new VulkanGpuSceneFrameSubmitter(
+                scene, pipeline, frameRing, temporalCoordinator, featureComposition,
+                descriptorAssembler, FRAME_TIMING_LABEL
+        );
         this.frameAdmissionLimits = Objects.requireNonNull(frameAdmissionLimits, "frameAdmissionLimits");
-        temporalHistory = new TemporalHistoryTracker(configuration.temporalRendering());
-        if (this.frameSlots.length != configuration.maxFramesInFlight()) {
+        if (this.frameRing.size() != configuration.maxFramesInFlight()) {
             throw new IllegalArgumentException("frame slot count diverges from renderer configuration");
         }
-        for (VulkanFrameSlot slot : this.frameSlots) Objects.requireNonNull(slot, "frame slot");
     }
 
     @Override
@@ -154,14 +169,44 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
     }
 
     @Override
+    public RenderingFeatureCapabilities featureCapabilities() {
+        return scene.device().featureCapabilities();
+    }
+
+    @Override
+    public int managedPresentationProducerLeadLimit() {
+        /*
+         * Every accepted frame owns a distinct slot and Streamline frame token. Frame-generation
+         * tags use eValidUntilPresent, while the slot remains immutable through its matching proxy
+         * present and any published input-completion debt. The native executor retains those tags
+         * by sequence, so multiple bounded slots do not replace one another's bindings. Returning
+         * the ring capacity restores render/present overlap without weakening resource lifetime;
+         * the presenter configuration may still select a smaller queue-ahead limit.
+         */
+        return frameRing.size();
+    }
+
+    @Override
     public synchronized SceneAdmission apply(SceneSubmission submission) throws SubmissionRejectedException {
         requireReady("apply scene");
         SceneSubmission checked = Objects.requireNonNull(submission, "submission");
         try {
             pump();
+            /*
+             * Scene uploads and acceleration updates overwrite storage used by ray dispatches and
+             * same-submission frame-primitive TLAS builds.
+             * Apply backpressure only while a renderer producer fence is outstanding. Waiting for
+             * the whole frame queue here would also include presentation-completion submissions and
+             * can deadlock against the presenter queue's wait on the renderer-ready semaphore.
+             */
+            if (frameRing.hasProducerPending()) {
+                throw new SubmissionRejectedException(
+                        "scene mutation is waiting for submitted renderer frames to release scene references"
+                );
+            }
             VulkanSceneRuntime.Admission admission = scene.apply(
                     checked.residentChanges(),
-                    lastSubmittedDescriptorEpoch
+                    frameSubmitter.lastSubmittedDescriptorEpoch()
             );
             if (admission.revision() != checked.residentChanges().revision()) {
                 throw new IllegalStateException("scene runtime admitted a different revision");
@@ -169,13 +214,13 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
             acceptedSceneRevision = admission.revision();
             acceptedLightSlotUpperBound = checked.residentChanges()
                     .lights().statistics().slotUpperBound();
-            temporalHistory.sceneApplied(checked.residentChanges());
+            temporalCoordinator.sceneApplied(checked.residentChanges());
             return new SceneAdmission(acceptedSceneRevision);
         } catch (VulkanSceneRuntime.BusyException busy) {
             if (busy.getCause() instanceof VulkanMemoryBudgetRejectedException) {
                 long reclaimedBytes;
                 try {
-                    reclaimedBytes = reclaimIdleFrameOutputs();
+                    reclaimedBytes = frameRing.reclaimIdleOutputs();
                 } catch (RuntimeException reclaimFailure) {
                     throw fail("reclaim idle frame outputs after GPU memory pressure", reclaimFailure);
                 }
@@ -191,132 +236,81 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
 
     @Override
     public synchronized FrameAdmission submit(FrameSubmission submission) throws SubmissionRejectedException {
+        FrameAdmissionAttempt attempt = trySubmit(submission);
+        if (attempt instanceof FrameAdmitted admitted) return admitted.admission();
+        throw new SubmissionRejectedException(((FrameDeferred) attempt).reason());
+    }
+
+    @Override
+    public synchronized FrameAdmissionAttempt trySubmit(FrameSubmission submission) {
         requireReady("submit frame");
         FrameSubmission checked = Objects.requireNonNull(submission, "submission");
-        frameAdmissionLimits.validate(checked.request().width(), checked.request().height());
         try {
             pump();
-            if (checked.acceptedSceneRevision() != acceptedSceneRevision) {
-                throw new IllegalStateException(
-                        "host/session accepted scene revisions diverged: host="
-                                + checked.acceptedSceneRevision() + ", session=" + acceptedSceneRevision
+            // Capability probing and extent negotiation can cross the JNI boundary. A saturated
+            // ring cannot admit their result, so reject it before doing that work on every retry.
+            if (frameRing.writableSlot() == null) {
+                return new FrameDeferred(
+                        "all bounded frame slots are retained or in flight"
                 );
             }
-            VulkanSceneRuntime.Snapshot sceneState = scene.snapshot();
-            if (sceneState.activeRevision() != acceptedSceneRevision) {
-                throw new SubmissionRejectedException(
-                        "scene revision " + acceptedSceneRevision + " is still converging on the GPU"
-                );
-            }
-            VulkanFrameSlot slot = writableSlot();
-            if (slot == null) {
-                throw new SubmissionRejectedException("all bounded frame slots are retained or in flight");
-            }
-
-            int width = checked.request().width();
-            int height = checked.request().height();
-            long frameGrowth = slot.requiredImageGrowthBytes(width, height);
-            long temporalGrowth = temporalGpuHistory.requiredGrowthBytes(width, height);
-            requireMemoryHeadroom(
-                    "resize frame resources",
-                    Math.addExact(frameGrowth, temporalGrowth)
-            );
-            if (!temporalGpuHistory.extentMatches(width, height) && hasProducerPending()) {
-                throw new SubmissionRejectedException(
-                        "temporal history resize is waiting for submitted GPU frames"
-                );
-            }
-            temporalGpuHistory.ensureExtent(width, height);
-
-            TemporalHistoryTracker.PreparedFrame temporalFrame =
-                    temporalHistory.prepare(checked.request(), acceptedSceneRevision);
-            byte[] frameUniforms = VulkanFrameUniformPacker.pack(
+            VulkanFeatureSession featureSession = scene.device().featureSession();
+            featureComposition.refresh(featureSession.capabilities());
+            boolean refreshAfterExtentNegotiation =
+                    featureSession.extentNegotiationMayChangeCapabilities();
+            VulkanFrameExtents extents = featureSession.negotiateFrameExtents(
                     checked.request(),
-                    acceptedLightSlotUpperBound,
-                    acceptedSceneRevision,
-                    temporalFrame,
-                    configuration.temporalRendering()
+                    VulkanFrameExtents.identity(checked.request().width(), checked.request().height())
             );
-            slot.prepare(width, height, frameUniforms);
-            VulkanTemporalHistory.PreparedFrame gpuTemporalFrame = temporalGpuHistory.prepareFrame(
-                    configuration.temporalRendering().enabled() ? slot.motionImage() : null,
-                    configuration.temporalRendering().enabled() && slot.motionLayoutInitialized()
-            );
-            GpuSceneTemporalFrameResources temporalResources = new GpuSceneTemporalFrameResources(
-                    gpuTemporalFrame.colorInput(),
-                    gpuTemporalFrame.colorOutput(),
-                    gpuTemporalFrame.geometryInput(),
-                    gpuTemporalFrame.geometryOutput(),
-                    gpuTemporalFrame.motionOutput(),
-                    gpuTemporalFrame.inputLayoutInitialized(),
-                    gpuTemporalFrame.outputLayoutInitialized(),
-                    gpuTemporalFrame.motionLayoutInitialized()
-            );
-            pipeline.updateDescriptorSet(
-                    slot.index(), descriptorResources(slot, acceptedSceneRevision, gpuTemporalFrame)
-            );
-
-            long descriptorEpoch = Math.incrementExact(lastSubmittedDescriptorEpoch);
-            int previousLayout = slot.imageLayout();
-            boolean acquireExternalOwnership = slot.externallyOwned();
-            boolean releaseExternalOwnership = !scene.device().managedPresentationActive();
-            int producerQueueFamilyIndex = scene.device().queueFamilyIndex();
-            VulkanDeviceRuntime.ManagedPresentationSignal readySignal =
-                    releaseExternalOwnership
-                            ? VulkanDeviceRuntime.ManagedPresentationSignal.disabled()
-                            : scene.device().reserveManagedPresentationSignal();
-            RtCommandContext.CommandRecorder frameRecorder =
-                    (commandBuffer, stack) -> pipeline.recordFrame(
-                                    commandBuffer,
-                                    stack,
-                                    slot.index(),
-                                    slot.outputImage(),
-                                    slot.cpuReadbackOrNull(),
-                                    temporalResources,
-                                    previousLayout,
-                                    acquireExternalOwnership,
-                                    releaseExternalOwnership,
-                                    producerQueueFamilyIndex,
-                                    width,
-                                    height
-                            );
-            RtCommandContext.AsyncSubmission nativeSubmission = readySignal.enabled()
-                    ? scene.device().frameCommands().submitTimedOneTimeAsync(
-                            FRAME_TIMING_LABEL,
-                            readySignal.semaphore(),
-                            readySignal.value(),
-                            frameRecorder
-                    )
-                    : scene.device().frameCommands().submitTimedOneTimeAsync(
-                            FRAME_TIMING_LABEL, frameRecorder
-                    );
-            boolean published = false;
-            try {
-                slot.submitted(
-                        nativeSubmission,
-                        checked.request().sequence(),
-                        acceptedSceneRevision,
-                        descriptorEpoch,
-                        releaseExternalOwnership,
-                        readySignal
-                );
-                published = true;
-            } finally {
-                if (!published) nativeSubmission.close();
+            // Extent negotiation may itself select fallback. Refresh before the free slot adopts
+            // the feature contract so a failed implementation cannot leak into this frame.
+            if (refreshAfterExtentNegotiation) {
+                featureComposition.refresh(featureSession.capabilities());
             }
-            lastSubmittedDescriptorEpoch = descriptorEpoch;
-            latestSubmittedFrameSequence = checked.request().sequence();
-            temporalGpuHistory.commit(gpuTemporalFrame);
-            temporalHistory.commit(temporalFrame);
-            return new FrameAdmission(
-                    checked.request().sequence(),
-                    acceptedSceneRevision,
-                    temporalFrame.invalidations()
+            frameAdmissionLimits.validate(extents);
+            validateRequiredTemporalContract(checked.request());
+            return new FrameAdmitted(
+                    frameSubmitter.submit(
+                            checked, extents, acceptedSceneRevision, acceptedLightSlotUpperBound
+                    )
             );
         } catch (SubmissionRejectedException rejection) {
-            throw rejection;
+            return new FrameDeferred(rejection.getMessage());
+        } catch (VulkanFeatureFallbackException fallback) {
+            // The provider changed only its next-frame feature plan. Recording failed before queue
+            // publication, so keep the renderer alive and retry this sequence against that plan.
+            temporalCoordinator.invalidate(HistoryInvalidationReason.EXPLICIT_RESET);
+            return new FrameDeferred(fallback.getMessage());
+        } catch (FrameValidationException validation) {
+            throw validation;
         } catch (RuntimeException failure) {
+            // A command buffer that was not published cannot advance temporal provenance.
+            temporalCoordinator.invalidate(HistoryInvalidationReason.EXPLICIT_RESET);
             throw fail("submit GPUScene frame", failure);
+        }
+    }
+
+    private void validateRequiredTemporalContract(RenderFrameRequest request) {
+        if (request.depthProjection().known()) return;
+        List<String> required = new ArrayList<>(3);
+        if (featureComposition.reconstructionActive()
+                && configuration.frameReconstruction().preference() == RendererFeaturePreference.REQUIRED) {
+            required.add("frame reconstruction");
+        }
+        if (featureComposition.denoisingActive()
+                && configuration.denoising().preference() == RendererFeaturePreference.REQUIRED) {
+            required.add("denoising");
+        }
+        if (featureComposition.frameGenerationActive()
+                && configuration.frameGeneration().preference() == RendererFeaturePreference.REQUIRED) {
+            required.add("frame generation");
+        }
+        if (!required.isEmpty()) {
+            throw new FrameValidationException(
+                    FrameValidationException.Reason.MISSING_DEPTH_PROJECTION,
+                    String.join(", ", required)
+                            + " requires the exact Vulkan depth projection; the request marked it unknown"
+            );
         }
     }
 
@@ -325,7 +319,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
         requireReady("acquire latest frame");
         try {
             pump();
-            VulkanFrameSlot latest = latestCompletedSlot();
+            VulkanFrameSlot latest = frameRing.latestCompletedSlot();
             if (latest == null || latest.frameSequence() <= latestAcquiredFrameSequence) return null;
             /*
              * Completed images are retained until a consumer actually asks for one. Reclaiming
@@ -333,7 +327,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
              * while starving a swapchain consumer on the same physical GPU. Once the caller asks
              * for the latest image, older completions are genuinely superseded and may be freed.
              */
-            discardCompletedExcept(latest);
+            frameRing.discardCompletedExcept(latest);
             GpuFrameLease lease = latest.acquire();
             latestAcquiredFrameSequence = lease.descriptor().frameSequence();
             return lease;
@@ -347,9 +341,9 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
         requireReady("acquire managed frame");
         try {
             pump();
-            VulkanFrameSlot earliest = earliestManagedPresentableSlot();
+            VulkanFrameSlot earliest = frameRing.earliestManagedPresentableSlot(latestAcquiredFrameSequence);
             if (earliest == null || earliest.frameSequence() <= latestAcquiredFrameSequence) return null;
-            discardCompletedExcept(earliest);
+            frameRing.discardCompletedExcept(earliest);
             GpuFrameLease lease = earliest.acquireManaged();
             latestAcquiredFrameSequence = lease.descriptor().frameSequence();
             return lease;
@@ -371,18 +365,12 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
         }
         try {
             pump();
-            VulkanFrameSlot latest = latestCompletedSlot();
+            VulkanFrameSlot latest = frameRing.latestCompletedSlot();
             if (latest == null || latest.frameSequence() <= afterFrameSequence) return null;
-            byte[] rgba8 = latest.captureCpuRgba8();
-            CpuFrame frame = CpuFrame.builder()
-                    .frameSequence(latest.frameSequence())
-                    .renderedSceneRevision(latest.renderedSceneRevision())
-                    .extent(latest.outputImage().width(), latest.outputImage().height())
-                    .pixelsRgba8(rgba8)
-                    .build();
+            CpuFrame frame = frameDiagnostics.captureCpu(latest);
             // The immutable CPU copy owns its pixels, so no completed GPU output must remain
             // retained merely to keep the returned frame alive.
-            discardAllCompleted();
+            frameRing.discardAllCompleted();
             return frame;
         } catch (RuntimeException failure) {
             throw fail("capture latest CPU frame", failure);
@@ -394,7 +382,12 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
         requireReady("read telemetry");
         try {
             pump();
-            return new Telemetry(latestCompletedFrameSequence, frameTiming());
+            return new Telemetry(
+                    latestCompletedFrameSequence,
+                    frameDiagnostics.frameTiming(),
+                    scene.device().featureSession().frameGenerationEvidence(),
+                    scene.device().technologyExecutionEvidence()
+            );
         } catch (RuntimeException failure) {
             throw fail("read GPUScene telemetry", failure);
         }
@@ -404,19 +397,29 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
         requireReady("capture diagnostic frame");
         try {
             pump();
-            VulkanFrameSlot latest = latestCompletedSlot();
+            VulkanFrameSlot latest = frameRing.latestCompletedSlot();
             if (latest == null) return null;
-            byte[] rgba8 = VulkanFrameDiagnosticReadback.capture(scene.device(), latest.outputImage());
-            return new DiagnosticFrame(
-                    latest.frameSequence(),
-                    latest.renderedSceneRevision(),
-                    latest.outputImage().width(),
-                    latest.outputImage().height(),
-                    rgba8
-            );
+            return frameDiagnostics.captureOutput(latest);
         } catch (RuntimeException failure) {
             throw fail("capture GPUScene diagnostic frame", failure);
         }
+    }
+
+    synchronized DiagnosticFrame captureLatestTraceForAcceptance() {
+        requireReady("capture diagnostic trace frame");
+        try {
+            pump();
+            VulkanFrameSlot latest = frameRing.latestCompletedSlot();
+            if (latest == null) return null;
+            return frameDiagnostics.captureTrace(latest);
+        } catch (RuntimeException failure) {
+            throw fail("capture GPUScene diagnostic trace frame", failure);
+        }
+    }
+
+    synchronized void discardCompletedForAcceptance() {
+        requireReady("discard completed acceptance frames");
+        frameRing.discardAllCompleted();
     }
 
     synchronized VulkanDeviceRuntime deviceForAcceptance() {
@@ -424,133 +427,13 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
         return scene.device();
     }
 
-    private GpuSceneDescriptorResources descriptorResources(
-            VulkanFrameSlot slot,
-            long sceneRevision,
-            VulkanTemporalHistory.PreparedFrame temporal
-    ) {
-        RtAccelerationStructure tlas = scene.requireActiveTlas(sceneRevision);
-        ArrayList<GpuSceneDescriptorResources.StorageBinding> sceneBuffers = new ArrayList<>(
-                VulkanGpuSceneUploadPlanner.Target.values().length
-        );
-        for (VulkanGpuSceneUploadPlanner.Target target : VulkanGpuSceneUploadPlanner.Target.values()) {
-            VulkanGpuSceneTransferQueue.BufferBinding binding = scene.requireBuffer(target, sceneRevision);
-            sceneBuffers.add(new GpuSceneDescriptorResources.StorageBinding(
-                    VulkanGpuSceneAbi.descriptorBinding(target),
-                    GpuSceneDescriptorResources.BufferRange.whole(binding.buffer(), binding.capacityBytes())
-            ));
-        }
-        RtGpuBuffer uniforms = slot.frameUniforms();
-        return new GpuSceneDescriptorResources(
-                tlas.handle(),
-                slot.outputImage().imageView(),
-                temporal.colorInput().imageView(),
-                temporal.colorOutput().imageView(),
-                temporal.geometryInput().imageView(),
-                temporal.geometryOutput().imageView(),
-                temporal.motionOutput().imageView(),
-                GpuSceneDescriptorResources.BufferRange.whole(uniforms.buffer(), uniforms.sizeBytes()),
-                sceneBuffers
-        );
-    }
-
-    private boolean hasProducerPending() {
-        for (VulkanFrameSlot slot : frameSlots) {
-            if (slot.producerPending()) return true;
-        }
-        return false;
-    }
-
-    private void requireMemoryHeadroom(String operation, long requestedGrowthBytes)
-            throws SubmissionRejectedException {
-        VulkanMemoryBudgetPolicy.Admission admission = VulkanMemoryBudgetPolicy.evaluate(
-                scene.device().memoryBudget(), requestedGrowthBytes
-        );
-        if (!admission.admitted()) {
-            throw new SubmissionRejectedException(operation + " rejected by GPU memory budget: " + admission.reason());
-        }
-    }
-
-    private long reclaimIdleFrameOutputs() {
-        long reclaimedBytes = 0L;
-        for (VulkanFrameSlot slot : frameSlots) {
-            if (slot.writable()) {
-                reclaimedBytes = Math.addExact(reclaimedBytes, slot.trimIdleOutputImage());
-            }
-        }
-        return reclaimedBytes;
-    }
-
     private void pump() {
-        long completedEpoch = latestCompletedDescriptorEpoch;
-        long completedSequence = latestCompletedFrameSequence;
-        for (VulkanFrameSlot slot : frameSlots) {
-            slot.pollProducer();
-            completedEpoch = Math.max(completedEpoch, slot.observedProducerDescriptorEpoch());
-            completedSequence = Math.max(completedSequence, slot.observedProducerFrameSequence());
-        }
-        latestCompletedDescriptorEpoch = completedEpoch;
-        latestCompletedFrameSequence = completedSequence;
+        VulkanGpuSceneFrameRing.Progress progress = frameRing.poll(
+                latestCompletedDescriptorEpoch, latestCompletedFrameSequence
+        );
+        latestCompletedDescriptorEpoch = progress.descriptorEpoch();
+        latestCompletedFrameSequence = progress.frameSequence();
         scene.poll(latestCompletedDescriptorEpoch);
-    }
-
-    private void discardCompletedExcept(VulkanFrameSlot retained) {
-        Objects.requireNonNull(retained, "retained");
-        for (VulkanFrameSlot slot : frameSlots) {
-            if (slot != retained && slot.completed()) slot.discardCompleted();
-        }
-    }
-
-    private void discardAllCompleted() {
-        for (VulkanFrameSlot slot : frameSlots) {
-            if (slot.completed()) slot.discardCompleted();
-        }
-    }
-
-    private VulkanFrameSlot writableSlot() {
-        for (VulkanFrameSlot slot : frameSlots) {
-            if (slot.writable()) return slot;
-        }
-        return null;
-    }
-
-    private VulkanFrameSlot latestCompletedSlot() {
-        VulkanFrameSlot latest = null;
-        for (VulkanFrameSlot slot : frameSlots) {
-            if (slot.completed() && (latest == null || slot.frameSequence() > latest.frameSequence())) {
-                latest = slot;
-            }
-        }
-        return latest;
-    }
-
-    private VulkanFrameSlot earliestManagedPresentableSlot() {
-        VulkanFrameSlot earliest = null;
-        for (VulkanFrameSlot slot : frameSlots) {
-            if (slot.managedPresentable()
-                    && slot.frameSequence() > latestAcquiredFrameSequence
-                    && (earliest == null || slot.frameSequence() < earliest.frameSequence())) {
-                earliest = slot;
-            }
-        }
-        return earliest;
-    }
-
-    private RendererDiagnostics.FrameGpuTiming frameTiming() {
-        if (!configuration.gpuTimingsEnabled()) return RendererDiagnostics.FrameGpuTiming.unavailable();
-        RtGpuTimestampPool.StageSnapshot timing = scene.device().frameCommands()
-                .gpuStageTimestampSnapshot(FRAME_TIMING_LABEL);
-        if (!timing.enabled()) return RendererDiagnostics.FrameGpuTiming.unavailable();
-        return RendererDiagnostics.FrameGpuTiming.builder()
-                .enabled(true)
-                .completedSamples(timing.completedCaptures())
-                .droppedSamples(timing.droppedCaptures())
-                .failedSamples(timing.failedCaptures())
-                .averageTraceNanos(timing.averageNanos())
-                .averagePostTraceNanos(0L)
-                .averageTotalNanos(timing.averageNanos())
-                .maxTotalNanos(timing.maxNanos())
-                .build();
     }
 
     private void requireReady(String operation) {
@@ -570,37 +453,18 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
     public synchronized void close() {
         if (resourcesClosed) return;
         state = State.CLOSED;
-        RuntimeException failure = null;
-        for (int index = frameSlots.length - 1; index >= 0; index--) {
-            try { frameSlots[index].close(); } catch (RuntimeException ex) { failure = collect(failure, ex); }
-        }
-        if (failure != null) {
-            /* A frame submission may still reference every downstream pipeline resource. */
-            throw failure;
-        }
+        frameRing.close();
+        featureComposition.close();
         if (!pipelineClosed) {
             pipeline.close();
             pipelineClosed = true;
         }
-        temporalGpuHistory.close();
+        temporalCoordinator.close();
         if (!sceneClosed) {
             scene.close();
             sceneClosed = true;
         }
         resourcesClosed = true;
-    }
-
-    private static RuntimeException collect(RuntimeException current, RuntimeException next) {
-        if (current == null) return next;
-        current.addSuppressed(next);
-        return current;
-    }
-
-    private static void closeSlotsSuppressing(Throwable failure, VulkanFrameSlot[] slots) {
-        if (slots == null) return;
-        for (int index = slots.length - 1; index >= 0; index--) {
-            closeSuppressing(failure, slots[index]);
-        }
     }
 
     private static void closeSuppressing(Throwable failure, AutoCloseable resource) {
@@ -628,4 +492,5 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
             return rgba8.clone();
         }
     }
+
 }

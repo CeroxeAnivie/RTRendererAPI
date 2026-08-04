@@ -5,6 +5,7 @@ plugins {
 }
 
 val rendererVersion = providers.gradleProperty("rendererVersion")
+val toolchainJavaVersion = providers.gradleProperty("java_toolchain_version").orElse("25").get().toInt()
 
 dependencies {
     implementation("top.ceroxe.rt:renderer-api:${rendererVersion.get()}")
@@ -12,12 +13,14 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(toolchainJavaVersion)
     }
 }
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
+    // This isolated consumer is part of the Java 21 compatibility gate. Project properties must
+    // never be able to relax or raise the bytecode/API baseline under test.
     options.release = 21
     options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
 }
@@ -47,7 +50,8 @@ tasks.register("verifyPublishedRuntimeClasspath") {
         val version = rendererVersion.get()
         val requiredComponents = listOf(
             "top.ceroxe.rt:renderer-api:$version",
-            "top.ceroxe.rt:renderer-core:$version"
+            "top.ceroxe.rt:renderer-core:$version",
+            "top.ceroxe.rt:renderer-nvidia:$version"
         )
         val missingComponents = requiredComponents.filterNot(resolvedComponents::contains)
         if (missingComponents.isNotEmpty()) {
@@ -69,5 +73,9 @@ tasks.register("verifyPublishedRuntimeClasspath") {
         if (missing.isNotEmpty()) {
             throw GradleException("Published runtime classpath is incomplete: $missing")
         }
+
+        configurations.named("runtimeClasspath").get().files.singleOrNull {
+            it.name == "renderer-nvidia-$version.jar"
+        } ?: throw GradleException("Published runtime classpath omits renderer-nvidia-$version.jar")
     }
 }

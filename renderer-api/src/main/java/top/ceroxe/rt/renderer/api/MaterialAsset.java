@@ -21,6 +21,7 @@ public final class MaterialAsset {
     private final float indexOfRefraction;
     private final boolean doubleSided;
     private final ShadingModel shadingModel;
+    private final SurfaceOverlayState surfaceOverlay;
 
     /**
      * Validates and creates an immutable material.
@@ -60,11 +61,13 @@ public final class MaterialAsset {
             float transmission,
             float indexOfRefraction,
             boolean doubleSided,
-            ShadingModel shadingModel
+            ShadingModel shadingModel,
+            SurfaceOverlayState surfaceOverlay
     ) {
         requireId(id, "id");
         this.blendMode = java.util.Objects.requireNonNull(blendMode, "blendMode");
         this.shadingModel = java.util.Objects.requireNonNull(shadingModel, "shadingModel");
+        this.surfaceOverlay = java.util.Objects.requireNonNull(surfaceOverlay, "surfaceOverlay");
         requireOptionalId(baseColorTextureId, "baseColorTextureId");
         requireOptionalId(normalTextureId, "normalTextureId");
         requireOptionalId(metallicRoughnessTextureId, "metallicRoughnessTextureId");
@@ -77,6 +80,12 @@ public final class MaterialAsset {
         requireRange(indexOfRefraction, 1.0F, 4.0F, "indexOfRefraction");
         if (blendMode == BlendMode.OPAQUE && transmission > 0.0F) {
             throw new IllegalArgumentException("opaque material must not transmit light");
+        }
+        if (surfaceOverlay.enabled() && blendMode == BlendMode.OPAQUE
+                && ((baseColorRgba8 >>> 24) & 0xff) != 0xff) {
+            throw new IllegalArgumentException(
+                    "alpha-blended surface overlay must use TRANSLUCENT blend mode"
+            );
         }
         this.id = id;
         this.baseColorRgba8 = baseColorRgba8;
@@ -280,6 +289,22 @@ public final class MaterialAsset {
         return shadingModel;
     }
 
+    /**
+     * Returns receiver-aware surface-overlay policy.
+     * @return non-null overlay policy
+     */
+    public SurfaceOverlayState surfaceOverlay() {
+        return surfaceOverlay;
+    }
+
+    /**
+     * Copies this material into an independent builder.
+     * @return initialized material builder
+     */
+    public Builder toBuilder() {
+        return new Builder(this);
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
@@ -299,7 +324,8 @@ public final class MaterialAsset {
                 && Float.compare(indexOfRefraction, material.indexOfRefraction) == 0
                 && doubleSided == material.doubleSided
                 && blendMode == material.blendMode
-                && shadingModel == material.shadingModel;
+                && shadingModel == material.shadingModel
+                && surfaceOverlay.equals(material.surfaceOverlay);
     }
 
     @Override
@@ -309,7 +335,7 @@ public final class MaterialAsset {
                 baseColorTextureId, normalTextureId, metallicRoughnessTextureId,
                 emissiveTextureId, emissiveColorRgba8, emissiveStrength,
                 alphaCutoff, roughness, metallic, transmission, indexOfRefraction,
-                doubleSided, shadingModel
+                doubleSided, shadingModel, surfaceOverlay
         );
     }
 
@@ -332,6 +358,7 @@ public final class MaterialAsset {
                 + ", indexOfRefraction=" + indexOfRefraction
                 + ", doubleSided=" + doubleSided
                 + ", shadingModel=" + shadingModel
+                + ", surfaceOverlay=" + surfaceOverlay
                 + ']';
     }
 
@@ -364,7 +391,14 @@ public final class MaterialAsset {
         /**
          * Texture color multiplied by interpolated per-vertex color and frame lightmap.
          */
-        LIGHTMAP_MODULATED
+        LIGHTMAP_MODULATED,
+        /**
+         * Base color and emissive contribution bypass all direct and indirect lighting.
+         *
+         * <p>UNLIT remains depth-tested and may still be masked, translucent, outlined, or used
+         * as a receiver-aware surface overlay.</p>
+         */
+        UNLIT
     }
 
     /**
@@ -388,10 +422,32 @@ public final class MaterialAsset {
         private float indexOfRefraction = 1.5F;
         private boolean doubleSided;
         private ShadingModel shadingModel = ShadingModel.PHYSICALLY_BASED;
+        private SurfaceOverlayState surfaceOverlay = SurfaceOverlayState.disabled();
 
         private Builder(long id) {
             requireId(id, "id");
             this.id = id;
+        }
+
+        private Builder(MaterialAsset source) {
+            id = source.id;
+            blendMode = source.blendMode;
+            blendModeExplicit = true;
+            baseColorRgba8 = source.baseColorRgba8;
+            baseColorTextureId = source.baseColorTextureId;
+            normalTextureId = source.normalTextureId;
+            metallicRoughnessTextureId = source.metallicRoughnessTextureId;
+            emissiveTextureId = source.emissiveTextureId;
+            emissiveColorRgba8 = source.emissiveColorRgba8;
+            emissiveStrength = source.emissiveStrength;
+            alphaCutoff = source.alphaCutoff;
+            roughness = source.roughness;
+            metallic = source.metallic;
+            transmission = source.transmission;
+            indexOfRefraction = source.indexOfRefraction;
+            doubleSided = source.doubleSided;
+            shadingModel = source.shadingModel;
+            surfaceOverlay = source.surfaceOverlay;
         }
 
         /**
@@ -614,6 +670,20 @@ public final class MaterialAsset {
         }
 
         /**
+         * Selects receiver-aware surface compositing for this material.
+         *
+         * <p>The overlay's receiver mask is instance state because one immutable material may be
+         * reused by unrelated semantic layers.</p>
+         *
+         * @param value non-null overlay policy
+         * @return this builder
+         */
+        public Builder surfaceOverlay(SurfaceOverlayState value) {
+            surfaceOverlay = java.util.Objects.requireNonNull(value, "surfaceOverlay");
+            return this;
+        }
+
+        /**
          * Builds a validated immutable material.
          *
          * @return immutable material generation
@@ -627,7 +697,7 @@ public final class MaterialAsset {
                     baseColorTextureId, normalTextureId, metallicRoughnessTextureId,
                     emissiveTextureId, emissiveColorRgba8, emissiveStrength,
                     alphaCutoff, roughness, metallic, transmission, indexOfRefraction,
-                    doubleSided, shadingModel
+                    doubleSided, shadingModel, surfaceOverlay
             );
         }
     }

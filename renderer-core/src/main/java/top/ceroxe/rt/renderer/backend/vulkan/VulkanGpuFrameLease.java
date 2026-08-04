@@ -131,6 +131,19 @@ final class VulkanGpuFrameLease implements GpuFrameLease, VulkanManagedFrameLeas
         release(new CpuCompleted());
     }
 
+    /**
+     * Publishes the presenter's internal proof that it either submitted no consumer work or
+     * already waited that work to completion. This is intentionally package-private: external
+     * consumers must use the advertised semaphore contract and cannot manufacture this proof.
+     */
+    @Override
+    public synchronized void releaseAfterPresenterAccessComplete() {
+        if (state == LeaseState.CLOSED) throw new IllegalStateException("frame lease is closed");
+        if (state == LeaseState.RELEASED) return;
+        completionObserver.accept(new CpuCompleted());
+        state = LeaseState.RELEASED;
+    }
+
     @Override
     public synchronized void close() {
         if (state == LeaseState.CLOSED) return;

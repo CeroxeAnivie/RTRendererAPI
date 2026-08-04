@@ -16,6 +16,9 @@ interface VulkanManagedFrameLease {
 
     void releaseAfterManagedQueueSubmission();
 
+    /** Publishes presenter-owned proof that all consumer access is complete or never began. */
+    void releaseAfterPresenterAccessComplete();
+
     /** Borrowed native identity whose lifetime is bounded by the enclosing lease. */
     record NativeFrame(
             VkDevice device,

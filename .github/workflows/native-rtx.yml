@@ -23,26 +23,54 @@ jobs:
     # hosted runner without a hardware ray-tracing device.
     runs-on: [ self-hosted, Windows, X64, rtrenderer-rtx ]
     timeout-minutes: 120
+    env:
+      RTRENDERER_CMAKE_EXECUTABLE: ${{ vars.RTRENDERER_CMAKE_EXECUTABLE }}
+      RTRENDERER_NRD_SDK_ROOT: ${{ vars.RTRENDERER_NRD_SDK_ROOT }}
+      RTRENDERER_NRI_SDK_ROOT: ${{ vars.RTRENDERER_NRI_SDK_ROOT }}
+      RTRENDERER_STREAMLINE_SDK_ROOT: ${{ vars.RTRENDERER_STREAMLINE_SDK_ROOT }}
+      RTRENDERER_RTXMU_SDK_ROOT: ${{ vars.RTRENDERER_RTXMU_SDK_ROOT }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Install Java 21
+      - name: Install Java 25
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95
         with:
-          distribution: temurin
-          java-version: '21'
+          distribution: graalvm
+          java-version: '25'
           cache: gradle
       - name: Configure Gradle
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92
         with:
           validate-wrappers: true
+      - name: Validate fixed NVIDIA SDK inputs
+        shell: pwsh
+        run: |
+          $required = @(
+            'RTRENDERER_CMAKE_EXECUTABLE',
+            'RTRENDERER_NRD_SDK_ROOT',
+            'RTRENDERER_NRI_SDK_ROOT',
+            'RTRENDERER_STREAMLINE_SDK_ROOT',
+            'RTRENDERER_RTXMU_SDK_ROOT'
+          )
+          $missing = $required | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
+          if ($missing.Count -ne 0) { throw "Missing native-rtx repository variables: $($missing -join ', ')" }
+          if (-not (Test-Path -LiteralPath $env:RTRENDERER_CMAKE_EXECUTABLE -PathType Leaf)) {
+            throw "CMake executable does not exist: $env:RTRENDERER_CMAKE_EXECUTABLE"
+          }
       - name: Run strict release acceptance
         shell: pwsh
-        run: >-
-          .\gradlew.bat strictAcceptanceTest
-          --dependency-verification=strict --no-daemon --console=plain --stacktrace
-      - name: Upload native diagnostics on failure
-        if: failure()
+        run: |
+          .\gradlew.bat strictAcceptanceTest `
+            -Pjava_version=21 `
+            -PcmakeExecutable="$env:RTRENDERER_CMAKE_EXECUTABLE" `
+            -PnrdSdkRoot="$env:RTRENDERER_NRD_SDK_ROOT" `
+            -PnriSdkRoot="$env:RTRENDERER_NRI_SDK_ROOT" `
+            -PstreamlineSdkRoot="$env:RTRENDERER_STREAMLINE_SDK_ROOT" `
+            -PrtxmuSdkRoot="$env:RTRENDERER_RTXMU_SDK_ROOT" `
+            -PjdkHome="$env:JAVA_HOME" `
+            --dependency-verification=strict --no-daemon --console=plain --stacktrace
+      - name: Upload native diagnostics
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: native-rtx-diagnostics-${{ github.run_id }}
@@ -50,5 +78,5 @@ jobs:
             **/build/reports/**
             **/build/test-results/**
             **/hs_err_pid*.log
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 14

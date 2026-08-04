@@ -16,11 +16,18 @@ import top.ceroxe.rt.renderer.api.AffineTransform;
 import top.ceroxe.rt.renderer.api.AntiAliasingState;
 import top.ceroxe.rt.renderer.api.CameraState;
 import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
+import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameOutputFormat;
+import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
+import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
+import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
+import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Status;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.SceneInstance;
 import top.ceroxe.rt.renderer.api.SceneLight;
@@ -47,6 +54,7 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
    private static final long TIMEOUT_NANOS = 15000000000L;
    private static final int WIDTH = 960;
    private static final int HEIGHT = 540;
+   private static final boolean REQUIRE_SER = Boolean.getBoolean("top.ceroxe.rt.ser.requiredGate");
 
    private VulkanGpuSceneRenderingSessionNativeSelfTest() {
    }
@@ -54,14 +62,39 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
    public static void main(String[] arguments) throws Exception {
       VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
       require(capability.hardwareRayTracingReady(), "complex GPUScene gate requires hardware RT: " + capability.summary());
-      RayTracingRendererConfig configuration = RayTracingRendererConfig.builder().maxFramesInFlight(3).validationEnabled(true).gpuTimingsEnabled(true).build();
+      RayTracingRendererConfig configuration = RayTracingRendererConfig.builder()
+              .maxFramesInFlight(3)
+              .validationEnabled(true)
+              .gpuTimingsEnabled(true)
+              // SER gates must not acquire Streamline or NRD process state. Their evidence is
+              // meaningful only when the requested optimization is the sole optional feature.
+              .frameReconstruction(FrameReconstructionOptions.disabled())
+              .frameGeneration(FrameGenerationOptions.disabled())
+              .denoising(DenoisingOptions.disabled())
+              .rayTracingOptimizations(RayTracingOptimizationOptions.builder()
+                      .shaderExecutionReordering(REQUIRE_SER
+                              ? RendererFeaturePreference.REQUIRED
+                              : RendererFeaturePreference.PREFERRED)
+                      .build())
+              .build();
       VulkanGpuSceneRenderingSession session = VulkanGpuSceneRenderingSession.open(capability, configuration, RendererRtDiagnostics.noop());
       VulkanRendererHost renderer = new VulkanRendererHost(configuration, session);
 
       try {
+         Status serBeforeDispatch = session.featureCapabilities()
+                 .feature(Feature.SHADER_EXECUTION_REORDERING).status();
+         if (REQUIRE_SER) require(serBeforeDispatch == Status.AVAILABLE,
+                 "required SER must remain AVAILABLE until real queue submission: " + serBeforeDispatch);
          renderer.apply(complexScene());
          RenderFrameRequest frame = frameRequest(0L, 0L, AntiAliasingState.disabled());
          awaitFrameAdmission(renderer, frame);
+         Status serAfterDispatch = session.featureCapabilities()
+                 .feature(Feature.SHADER_EXECUTION_REORDERING).status();
+         if (REQUIRE_SER || serBeforeDispatch == Status.AVAILABLE) {
+            require(serAfterDispatch == Status.ACTIVE,
+                    "SER did not publish real queue-submission evidence: before="
+                            + serBeforeDispatch + ", after=" + serAfterDispatch);
+         }
          VulkanGpuSceneRenderingSession.DiagnosticFrame diagnostic = awaitDiagnostic(session);
          ImageStatistics statistics = statistics(diagnostic.rgba8());
          require(statistics.nonBlackPixels() > 86400L, "complex scene did not produce enough visible coverage: " + statistics);
@@ -102,7 +135,7 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
             releaseThroughExternalBinarySemaphore(session, lease);
          }
 
-         System.out.println("VulkanGpuSceneRenderingSessionNativeSelfTest passed: device=" + capability.preferredDevice().name() + ", statistics=" + statistics + ", refractiveIndexStatistics=" + refractiveIndexStatistics + ", updatedStatistics=" + updatedStatistics + ", diagnosticPng=" + png + ", updatedDiagnosticPng=" + updatedPng);
+         System.out.println("VulkanGpuSceneRenderingSessionNativeSelfTest passed: device=" + capability.preferredDevice().name() + ", ser=" + serAfterDispatch + ", statistics=" + statistics + ", refractiveIndexStatistics=" + refractiveIndexStatistics + ", updatedStatistics=" + updatedStatistics + ", diagnosticPng=" + png + ", updatedDiagnosticPng=" + updatedPng);
       } catch (Throwable value28) {
          try {
             renderer.close();
@@ -297,6 +330,23 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
    private static SceneTransaction refractiveIndexSceneUpdate() {
       MaterialAsset opticallyNeutralGlass = material(205L, BlendMode.TRANSLUCENT, -2141136656, -1L, 0.08F, 0.0F, 0.82F, 1.0F, true);
       return SceneTransaction.builder(1L).upsert(opticallyNeutralGlass).build();
+   }
+
+   private static SceneTransaction maskedTextureSceneUpdate() {
+      int extent = 32;
+      byte[] pixels = new byte[extent * extent * 4];
+      for (int offset = 0; offset < pixels.length; offset += 4) {
+         pixels[offset] = (byte) 255;
+         pixels[offset + 1] = (byte) 255;
+         pixels[offset + 2] = (byte) 255;
+      }
+      TextureAsset transparent = TextureAsset.builder(101L, extent, extent)
+              .colorSpace(ColorSpace.SRGB)
+              .addressModes(AddressMode.REPEAT, AddressMode.REPEAT)
+              .filter(Filter.LINEAR)
+              .pixelsRgba8(pixels)
+              .build();
+      return SceneTransaction.builder(3L).upsert(transparent).build();
    }
 
    private static TextureAsset checkerTexture(long id, int extent, boolean cutout) {

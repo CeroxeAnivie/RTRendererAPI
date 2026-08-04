@@ -89,6 +89,28 @@ final class GpuSceneDescriptorLayout implements AutoCloseable {
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
         bind(bindings, GpuSceneShaderBindings.MOTION_OUTPUT,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, GpuSceneShaderBindings.TRANSIENT_INSTANCE_RECORDS,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
+        bind(bindings, GpuSceneShaderBindings.DENOISING_NORMAL_ROUGHNESS,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, GpuSceneShaderBindings.DENOISING_VIEW_Z,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, GpuSceneShaderBindings.DENOISING_MOTION_VECTORS,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, GpuSceneShaderBindings.DENOISING_DIFFUSE_RADIANCE_HIT_DISTANCE,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, GpuSceneShaderBindings.DENOISING_SPECULAR_RADIANCE_HIT_DISTANCE,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, GpuSceneShaderBindings.DENOISING_DIFFUSE_MATERIAL_FACTOR,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, GpuSceneShaderBindings.DENOISING_SPECULAR_MATERIAL_FACTOR,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, GpuSceneShaderBindings.RECONSTRUCTION_DEPTH,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, GpuSceneShaderBindings.RECONSTRUCTION_MOTION_VECTORS,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, GpuSceneShaderBindings.RECONSTRUCTION_EXPOSURE,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
         VkDescriptorSetLayoutCreateInfo createInfo = VkDescriptorSetLayoutCreateInfo.calloc(stack)
                 .sType$Default().pBindings(bindings);
         LongBuffer handle = stack.longs(0L);

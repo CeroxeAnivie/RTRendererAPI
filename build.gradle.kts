@@ -10,6 +10,7 @@ import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.bundling.Zip
+import org.gradle.api.tasks.compile.JavaCompile
 import org.w3c.dom.Element
 
 plugins {
@@ -22,6 +23,13 @@ version = providers.gradleProperty("project_version").get()
 subprojects {
     group = rootProject.group
     version = rootProject.version
+
+    tasks.withType<JavaCompile>().configureEach {
+        // JDK 25 runs the compiler, while the repository's immutable runtime contract remains
+        // Java 21. Keeping this literal at the root prevents -P properties from changing the
+        // emitted class-file version for any production module, test source set, or demo.
+        options.release = 21
+    }
 
     apply(plugin = "maven-publish")
     apply(plugin = "signing")
@@ -52,20 +60,20 @@ subprojects {
                     artifactId = project.name
 
                     pom {
-                        name.set(
-                            if (project.name == "renderer-api") {
-                                "RTRendererAPI"
-                            } else {
-                                "RTRendererAPI Vulkan Backend"
-                            }
-                        )
-                        description.set(
-                            if (project.name == "renderer-api") {
-                                "Public ray tracing contracts with the transitive Windows NVIDIA Vulkan runtime."
-                            } else {
-                                "Vulkan ray tracing renderer implementation."
-                            }
-                        )
+                        name.set(when (project.name) {
+                            "renderer-api" -> "RTRendererAPI"
+                            "renderer-core" -> "RTRendererAPI Vulkan Backend"
+                            "renderer-nvidia" -> "RTRendererAPI NVIDIA Features"
+                            else -> project.name
+                        })
+                        description.set(when (project.name) {
+                            "renderer-api" ->
+                                "Public ray tracing contracts with the transitive Windows Vulkan runtime."
+                            "renderer-core" -> "Vulkan ray tracing renderer implementation."
+                            "renderer-nvidia" ->
+                                "Optional NVIDIA DLSS, NIS, NRD, SER, and RTXMU integration."
+                            else -> project.description ?: project.name
+                        })
                         url.set("https://github.com/CeroxeAnivie/RTRendererAPI")
 
                         licenses {
@@ -121,11 +129,11 @@ subprojects {
 }
 
 tasks.named("assemble") {
-    dependsOn(":renderer-api:assemble", ":renderer-core:assemble")
+    dependsOn(":renderer-api:assemble", ":renderer-core:assemble", ":renderer-nvidia:assemble")
 }
 
 tasks.named("check") {
-    dependsOn(":renderer-api:check", ":renderer-core:check")
+    dependsOn(":renderer-api:check", ":renderer-core:check", ":renderer-nvidia:check")
 }
 
 tasks.register("publishAllToLocalStagingRepository") {
@@ -133,6 +141,19 @@ tasks.register("publishAllToLocalStagingRepository") {
     description = "Publishes every RTRendererAPI module into build/repository."
     dependsOn(":renderer-api:publishMavenJavaPublicationToLocalStagingRepository")
     dependsOn(":renderer-core:publishMavenJavaPublicationToLocalStagingRepository")
+    dependsOn(":renderer-nvidia:publishMavenJavaPublicationToLocalStagingRepository")
+}
+
+val verifyPublishedNvidiaRuntimeClosure = tasks.register("verifyPublishedNvidiaRuntimeClosure") {
+    group = "verification"
+    description = "Verifies the staged renderer-nvidia artifact with the shared runtime closure contract."
+    dependsOn(tasks.named("publishAllToLocalStagingRepository"))
+    doLast {
+        val artifact = layout.buildDirectory.file(
+            "repository/top/ceroxe/rt/renderer-nvidia/$version/renderer-nvidia-$version.jar"
+        ).get().asFile
+        NvidiaRuntimeClosure.verify(artifact, "staged renderer-nvidia runtime JAR")
+    }
 }
 
 val publishedRepository = layout.buildDirectory.dir("repository")
@@ -150,6 +171,7 @@ tasks.register<Zip>("centralPortalBundle") {
     from(publishedRepository) {
         include("top/ceroxe/rt/renderer-api/$publishedVersion/**")
         include("top/ceroxe/rt/renderer-core/$publishedVersion/**")
+        include("top/ceroxe/rt/renderer-nvidia/$publishedVersion/**")
     }
     archiveFileName.set("rtrenderer-api-$publishedVersion-central-bundle.zip")
     destinationDirectory.set(layout.buildDirectory.dir("release"))
@@ -175,7 +197,7 @@ tasks.register("verifyCentralPortalBundle") {
     inputs.file(centralPortalBundleFile)
 
     doLast {
-        val requiredArtifacts = listOf("renderer-api", "renderer-core").flatMap { module ->
+        val requiredArtifacts = listOf("renderer-api", "renderer-core", "renderer-nvidia").flatMap { module ->
             val prefix = "top/ceroxe/rt/$module/$publishedVersion/$module-$publishedVersion"
             listOf(
                 "$prefix.pom",
@@ -242,6 +264,12 @@ tasks.register("verifyPublishedMavenTopology") {
                 "top/ceroxe/rt/renderer-core/$publishedVersion/renderer-core-$publishedVersion.pom"
             )
         )
+        val nvidiaDependencies = readDependencies(
+            File(
+                repository,
+                "top/ceroxe/rt/renderer-nvidia/$publishedVersion/renderer-nvidia-$publishedVersion.pom"
+            )
+        )
         val apiRuntime = apiDependencies.filter {
             it["groupId"] == publishedGroupId &&
                 it["artifactId"] == "renderer-core" &&
@@ -253,12 +281,39 @@ tasks.register("verifyPublishedMavenTopology") {
                 "renderer-api POM must contain exactly one runtime renderer-core dependency"
             )
         }
+        val apiNvidiaRuntime = apiDependencies.filter {
+            it["groupId"] == publishedGroupId &&
+                it["artifactId"] == "renderer-nvidia" &&
+                it["version"] == publishedVersion &&
+                it["scope"] == "runtime"
+        }
+        if (apiNvidiaRuntime.size != 1) {
+            throw GradleException(
+                "renderer-api POM must contain exactly one runtime renderer-nvidia dependency"
+            )
+        }
         val reverseEdges = coreDependencies.filter {
             it["groupId"] == publishedGroupId && it["artifactId"] == "renderer-api"
         }
         if (reverseEdges.isNotEmpty()) {
             throw GradleException(
                 "renderer-core POM must not depend on renderer-api; that would create a cycle"
+            )
+        }
+        val nvidiaApiEdges = nvidiaDependencies.filter {
+            it["groupId"] == publishedGroupId && it["artifactId"] == "renderer-api"
+        }
+        if (nvidiaApiEdges.isNotEmpty()) {
+            throw GradleException(
+                "renderer-nvidia POM must not publish a renderer-api dependency; the API owns the runtime edge"
+            )
+        }
+        val nvidiaCoreEdges = nvidiaDependencies.filter {
+            it["groupId"] == publishedGroupId && it["artifactId"] == "renderer-core"
+        }
+        if (nvidiaCoreEdges.isNotEmpty()) {
+            throw GradleException(
+                "renderer-nvidia POM must reach renderer-core through renderer-api runtime metadata"
             )
         }
     }
@@ -386,13 +441,16 @@ tasks.register<Exec>("verifyPublishedMavenConsumer") {
     description = "Publishes both modules and compiles an isolated consumer through their Maven POMs."
     dependsOn(tasks.named("publishAllToLocalStagingRepository"))
     dependsOn(tasks.named("verifyPublishedMavenTopology"))
+    dependsOn(verifyPublishedNvidiaRuntimeClosure)
     dependsOn(tasks.named("preparePublishedMavenConsumer"))
 
     val stagingRepository = layout.buildDirectory.dir("repository")
     val javaInstallationPaths = providers.gradleProperty("org.gradle.java.installations.paths")
+    val toolchainJavaVersion = providers.gradleProperty("java_toolchain_version").orElse("25")
     inputs.dir(stagingRepository)
     inputs.dir(layout.projectDirectory.dir("gradle/published-consumer-smoke"))
     inputs.property("javaInstallationPaths", javaInstallationPaths.orElse(""))
+    inputs.property("toolchainJavaVersion", toolchainJavaVersion)
     outputs.dir(publishedConsumerDirectory.map { it.dir("build") })
 
     workingDir(publishedConsumerDirectory)
@@ -411,13 +469,13 @@ tasks.register<Exec>("verifyPublishedMavenConsumer") {
         "-PstagingRepository=${stagingRepository.get().asFile.toURI()}",
         "-PrendererVersion=${project.version}"
     )
-    // The consumer is an isolated Gradle invocation and therefore cannot see project properties
-    // passed to this build. Forward only the opt-in toolchain discovery path so a Java 25 daemon
-    // can still compile the consumer with the same explicitly selected Java 21 installation.
+    // The consumer is an isolated Gradle invocation and therefore cannot see root properties.
+    // Forward only the compiler toolchain; its own build fixes --release to Java 21.
     doFirst {
         javaInstallationPaths.orNull?.let { paths ->
             args("-Porg.gradle.java.installations.paths=$paths")
         }
+        args("-Pjava_toolchain_version=${toolchainJavaVersion.get()}")
     }
 }
 
@@ -430,6 +488,7 @@ tasks.named("check") {
 val repositoryTextFiles = fileTree(layout.projectDirectory) {
     include(
         "**/*.bat",
+        "**/*.cpp",
         "**/*.gradle.kts",
         "**/*.java",
         "**/*.json",
@@ -499,4 +558,5 @@ tasks.register("strictAcceptanceTest") {
     description = "Runs all CPU/publication checks and the bounded RTX Vulkan native acceptance gate."
     dependsOn(tasks.named("check"))
     dependsOn(":renderer-core:rendererCoreGpuSceneNativeGate")
+    dependsOn(":renderer-nvidia:nvidiaNativeAcceptanceGate")
 }

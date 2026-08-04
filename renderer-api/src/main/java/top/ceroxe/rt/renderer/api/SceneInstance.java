@@ -19,6 +19,7 @@ public final class SceneInstance {
     private final boolean castsShadow;
     private final float surfaceVisibility;
     private final int packedLight;
+    private final InstanceRenderState renderState;
 
     /**
      * Validates and creates an immutable scene instance.
@@ -40,7 +41,8 @@ public final class SceneInstance {
             int visibilityMask,
             boolean castsShadow,
             float surfaceVisibility,
-            int packedLight
+            int packedLight,
+            InstanceRenderState renderState
     ) {
         MaterialAsset.requireId(id, "id");
         MaterialAsset.requireId(meshAssetId, "meshAssetId");
@@ -59,6 +61,7 @@ public final class SceneInstance {
         this.castsShadow = castsShadow;
         this.surfaceVisibility = surfaceVisibility;
         this.packedLight = requireValidPackedLight(packedLight);
+        this.renderState = java.util.Objects.requireNonNull(renderState, "renderState");
     }
 
     /**
@@ -150,6 +153,14 @@ public final class SceneInstance {
     }
 
     /**
+     * Returns per-instance UV, receiver-mask, object-mask, and outline state.
+     * @return non-null render state
+     */
+    public InstanceRenderState renderState() {
+        return renderState;
+    }
+
+    /**
      * Starts an independent builder initialized from this complete instance generation.
      *
      * @return new builder containing every current instance property
@@ -169,14 +180,15 @@ public final class SceneInstance {
                 && Float.compare(surfaceVisibility, instance.surfaceVisibility) == 0
                 && packedLight == instance.packedLight
                 && transform.equals(instance.transform)
-                && mobility == instance.mobility;
+                && mobility == instance.mobility
+                && renderState.equals(instance.renderState);
     }
 
     @Override
     public int hashCode() {
         return java.util.Objects.hash(
                 id, meshAssetId, transform, mobility,
-                visibilityMask, castsShadow, surfaceVisibility, packedLight
+                visibilityMask, castsShadow, surfaceVisibility, packedLight, renderState
         );
     }
 
@@ -191,6 +203,7 @@ public final class SceneInstance {
                 + ", castsShadow=" + castsShadow
                 + ", surfaceVisibility=" + surfaceVisibility
                 + ", packedLight=" + packedLight
+                + ", renderState=" + renderState
                 + ']';
     }
 
@@ -220,6 +233,7 @@ public final class SceneInstance {
         private boolean castsShadow = true;
         private float surfaceVisibility = 1.0F;
         private int packedLight = FULL_BRIGHT_PACKED_LIGHT;
+        private InstanceRenderState renderState = InstanceRenderState.defaults();
 
         private Builder(long id, long meshAssetId) {
             MaterialAsset.requireId(id, "id");
@@ -237,6 +251,7 @@ public final class SceneInstance {
             castsShadow = source.castsShadow;
             surfaceVisibility = source.surfaceVisibility;
             packedLight = source.packedLight;
+            renderState = source.renderState;
         }
 
         /**
@@ -323,6 +338,17 @@ public final class SceneInstance {
             return this;
         }
 
+        /** Selects immutable instance-local UV, masking, and outline state. */
+        /**
+         * Replaces the shared per-instance shading state.
+         * @param value non-null render state
+         * @return this builder
+         */
+        public Builder renderState(InstanceRenderState value) {
+            renderState = java.util.Objects.requireNonNull(value, "renderState");
+            return this;
+        }
+
         /**
          * Validates and returns an immutable instance generation.
          *
@@ -331,18 +357,18 @@ public final class SceneInstance {
         public SceneInstance build() {
             return new SceneInstance(
                     id, meshAssetId, transform, mobility,
-                    visibilityMask, castsShadow, surfaceVisibility, packedLight
+                    visibilityMask, castsShadow, surfaceVisibility, packedLight, renderState
             );
         }
     }
 
-    private static int requireValidPackedLight(int value) {
+    static int requireValidPackedLight(int value) {
         requireValidLightCoordinate(value & 0xffff, "packedLight low coordinate");
         requireValidLightCoordinate(value >>> 16, "packedLight high coordinate");
         return value;
     }
 
-    private static void requireValidLightCoordinate(int value, String name) {
+    static void requireValidLightCoordinate(int value, String name) {
         if (value < 0 || value > MAX_LIGHT_COORDINATE) {
             throw new IllegalArgumentException(name + " must be within [0, "
                     + MAX_LIGHT_COORDINATE + "]");

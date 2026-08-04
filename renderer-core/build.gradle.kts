@@ -21,7 +21,7 @@ abstract class RendererCoreHardwareGateLock : BuildService<BuildServiceParameter
 group = rootProject.group
 version = rootProject.version
 
-val targetJavaVersion = rootProject.providers.gradleProperty("java_version").get().toInt()
+val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version").get().toInt()
 val fastutilVersion = rootProject.providers.gradleProperty("fastutil_version").getOrElse("8.5.19")
 val jomlVersion = rootProject.providers.gradleProperty("joml_version").getOrElse("1.10.8")
 val lwjglVersion = rootProject.providers.gradleProperty("lwjgl_version").getOrElse("3.4.2")
@@ -31,6 +31,10 @@ dependencies {
     // renderer-api: renderer-api owns the single-coordinate runtime edge to this module.
     compileOnly(project(":renderer-api"))
     testImplementation(project(":renderer-api"))
+    // The API publishes an external runtime coordinate for NVIDIA so consumers can resolve a
+    // single artifact. In this composite build, make the sibling implementation explicit for
+    // core self-tests; otherwise Gradle attempts to fetch the unreleased 0.5.0 module remotely.
+    testRuntimeOnly(project(":renderer-nvidia"))
     implementation("it.unimi.dsi:fastutil:$fastutilVersion")
     api("org.joml:joml:$jomlVersion")
     api("org.lwjgl:lwjgl:$lwjglVersion")
@@ -49,7 +53,7 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+        languageVersion = JavaLanguageVersion.of(toolchainJavaVersion)
     }
     withSourcesJar()
     withJavadocJar()
@@ -57,7 +61,6 @@ java {
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
-    options.release = targetJavaVersion
     options.compilerArgs.addAll(listOf("-Xlint:deprecation", "-Xlint:unchecked"))
 }
 
@@ -76,7 +79,7 @@ tasks.withType<Test>().configureEach {
 
 tasks.withType<JavaExec>().configureEach {
     javaLauncher.set(javaToolchains.launcherFor {
-        languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+        languageVersion = JavaLanguageVersion.of(toolchainJavaVersion)
     })
     jvmArgs(
         "--enable-native-access=ALL-UNNAMED",
@@ -86,7 +89,7 @@ tasks.withType<JavaExec>().configureEach {
         "-Duser.language=en",
         "-Duser.country=US"
     )
-    if (targetJavaVersion >= 24) {
+    if (toolchainJavaVersion >= 24) {
         jvmArgs("--sun-misc-unsafe-memory-access=allow")
     }
     systemProperties(
@@ -154,12 +157,20 @@ val registerCoreSelfTest =
             group = "verification"
             description = taskDescription
             dependsOn(tasks.named("testClasses"))
-            classpath = sourceSets.test.get().runtimeClasspath
+            // Core gates validate the host-independent Vulkan backend. The API test graph also
+            // resolves renderer-nvidia to prove the published single-coordinate dependency, but
+            // putting that ServiceLoader provider in every forked core JVM would silently turn
+            // dozens of core tests into duplicate Streamline initializations. NVIDIA behavior has
+            // its own real-device acceptance gate, so keep this execution boundary provider-free.
+            classpath = sourceSets.test.get().runtimeClasspath.filter { file ->
+                !file.name.startsWith("renderer-nvidia-")
+            }
             mainClass.set(mainClassName)
         }
     }
 
 val contractSelfTests = linkedMapOf(
+    "coreVulkanBlasBuildCoordinatorSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanBlasBuildCoordinatorSelfTest",
     "coreVulkanRendererRuntimeLifecycleSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererRuntimeLifecycleSelfTest",
     "coreRtActiveSectionContentStateSelfTest" to "top.ceroxe.rt.renderer.rt.acceleration.RtActiveSectionContentStateSelfTest",
     "coreRtCommittedFrontPolicySelfTest" to "top.ceroxe.rt.renderer.rt.device.RtCommittedFrontPolicySelfTest",
@@ -179,6 +190,7 @@ val contractSelfTests = linkedMapOf(
     "coreRtMaterialUploadStatisticsSelfTest" to "top.ceroxe.rt.renderer.rt.material.RtMaterialUploadStatisticsSelfTest",
     "coreMaterialSlotAllocatorSelfTest" to "top.ceroxe.rt.renderer.rt.material.MaterialSlotAllocatorSelfTest",
     "coreRtResourceScopeSelfTest" to "top.ceroxe.rt.renderer.rt.device.RtResourceScopeSelfTest",
+    "coreVulkanFailuresSelfTest" to "top.ceroxe.rt.renderer.rt.device.VulkanFailuresSelfTest",
     "coreRtVulkanDeviceCapabilitiesSelfTest" to "top.ceroxe.rt.renderer.rt.device.RtVulkanDeviceCapabilitiesSelfTest",
     "coreRtDeferredWorldSceneBindSchedulerSelfTest" to "top.ceroxe.rt.renderer.rt.device.RtDeferredWorldSceneBindSchedulerSelfTest",
     "coreRtDynamicSceneDispatchPolicySelfTest" to "top.ceroxe.rt.renderer.rt.device.RtDynamicSceneDispatchPolicySelfTest",
@@ -204,6 +216,8 @@ val contractSelfTests = linkedMapOf(
     "coreRtSectionTerrainOwnershipPublisherSelfTest" to "top.ceroxe.rt.renderer.rt.acceleration.RtSectionTerrainOwnershipPublisherSelfTest",
     "coreRtSectionTlasBuildInputCacheSelfTest" to "top.ceroxe.rt.renderer.rt.acceleration.RtSectionTlasBuildInputCacheSelfTest",
     "coreVulkanQueueHostSyncSelfTest" to "top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSyncSelfTest",
+    "coreVulkanQueueTimelineSelfTest" to "top.ceroxe.rt.renderer.rt.device.VulkanQueueTimelineSelfTest",
+    "coreVulkanProviderQueueAllocatorSelfTest" to "top.ceroxe.rt.renderer.rt.device.VulkanProviderQueueAllocatorSelfTest",
     "coreVulkanRtDeviceCapabilitySelfTest" to "top.ceroxe.rt.renderer.rt.device.VulkanRtDeviceCapabilitySelfTest",
     "corePersistentSceneRegistrySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.PersistentSceneRegistrySelfTest",
     "coreVulkanSceneResidencySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSceneResidencySelfTest",
@@ -211,8 +225,19 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanGpuSceneAbiSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneAbiSelfTest",
     "coreVulkanGpuSceneAbiPropertySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneAbiPropertySelfTest",
     "coreVulkanFrameUniformPackerSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameUniformPackerSelfTest",
+    "coreTemporalHistoryTrackerSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.TemporalHistoryTrackerSelfTest",
+    "coreVulkanFrameExtentsSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtentsSelfTest",
     "coreVulkanFrameFlightRecorderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameFlightRecorderSelfTest",
     "coreGpuSceneDescriptorResourcesSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuSceneDescriptorResourcesSelfTest",
+    "coreVulkanDenoisingResourceContractSelfTest" to "top.ceroxe.rt.renderer.feature.VulkanDenoisingResourceContractSelfTest",
+    "coreVulkanFrameReconstructionResourceContractSelfTest" to "top.ceroxe.rt.renderer.feature.VulkanFrameReconstructionResourceContractSelfTest",
+    "coreVulkanStreamlineFrameResourceContractSelfTest" to "top.ceroxe.rt.renderer.feature.VulkanStreamlineFrameResourceContractSelfTest",
+    "coreVulkanFeatureRequirementsSelfTest" to "top.ceroxe.rt.renderer.feature.VulkanFeatureRequirementsSelfTest",
+    "coreVulkanFeatureRuntimeStateSelfTest" to "top.ceroxe.rt.renderer.feature.VulkanFeatureRuntimeStateSelfTest",
+    "coreVulkanGpuSceneFeatureCompositionSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneFeatureCompositionSelfTest",
+    "coreVulkanFeatureSubmissionTransactionSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFeatureSubmissionTransactionSelfTest",
+    "coreVulkanDenoisingFrameResourcesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanDenoisingFrameResourcesSelfTest",
+    "coreVulkanFrameReconstructionResourcesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameReconstructionResourcesSelfTest",
     "coreVulkanGpuSceneShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.VulkanGpuSceneShaderSelfTest",
     "coreRtPrecompiledShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.RtPrecompiledShaderSelfTest",
     "coreVulkanFramePixelCodecSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDiagnosticReadbackSelfTest",
@@ -235,6 +260,20 @@ contractSelfTests.forEach { (taskName, mainClassName) ->
         mainClassName,
         "Runs the independent renderer-core contract check $mainClassName."
     )
+}
+
+/*
+ * Pinned SPIR-V is a production resource.  Generation deliberately invokes the same Java
+ * compiler implementation as verification, so a source edit cannot silently produce assets
+ * compiled with a different shaderc configuration.
+ */
+tasks.register<JavaExec>("generateRtPrecompiledShaders") {
+    group = "build"
+    description = "Regenerates pinned RT SPIR-V resources from the current GLSL sources."
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rt.pipeline.RtPrecompiledShaderSelfTest")
+    args(layout.projectDirectory.dir("src/main/resources/assets/rtrenderer/shaders/spv").asFile.absolutePath)
 }
 
 tasks.named<JavaExec>("coreVulkanGpuSceneHeavySceneBenchmark").configure {
@@ -288,11 +327,24 @@ nativeSelfTests.forEach { (taskName, mainClassName) ->
     )
 }
 
+registerCoreSelfTest(
+    "vulkanSerNativeSelfTest",
+    "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneRenderingSessionNativeSelfTest",
+    "Runs the required NVIDIA SER device-feature, shader-permutation, and queue-submission gate."
+)
+tasks.named<JavaExec>("vulkanSerNativeSelfTest").configure {
+    systemProperty("top.ceroxe.rt.ser.requiredGate", "true")
+}
+
 val rendererCoreHardwareGateLock = gradle.sharedServices.registerIfAbsent(
     "rendererCoreHardwareGateLock",
     RendererCoreHardwareGateLock::class
 ) {
     maxParallelUsages.set(1)
+}
+
+tasks.named("vulkanSerNativeSelfTest").configure {
+    usesService(rendererCoreHardwareGateLock)
 }
 
 nativeSelfTests.keys.forEach { taskName ->
@@ -335,6 +387,7 @@ val gpuSceneNativeSelfTests = listOf(
     "vulkanSceneRuntimeNativeSelfTest",
     "gpuSceneRayTracingPipelineNativeSelfTest",
     "vulkanGpuSceneRenderingSessionNativeSelfTest",
+    "vulkanSerNativeSelfTest",
     "vulkanFrameSlotExternalCompletionNativeSelfTest",
     "vulkanGpuSceneThroughputNativeSelfTest"
 )

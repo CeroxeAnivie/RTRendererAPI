@@ -1,53 +1,79 @@
-# RTRendererAPI Java
+# RTRendererAPI
 
-RTRendererAPI 是面向 Java 21 或更高版本的硬件光线追踪渲染库。当前发布范围只包含 Windows 10 x64 或更高版本、NVIDIA GeForce RTX 20 系或更新架构，以及 Vulkan 1.2 或更高版本。
+**由 Java 驱动的硬件光线追踪渲染库**
 
-应用只需要依赖 `renderer-api`。Windows Vulkan 后端、LWJGL 和对应 Windows natives 会通过 Maven 传递依赖自动解析；业务代码不需要再单独声明 `renderer-core`。
+托管 CPU 帧 / Vulkan GPU 直显 / NVIDIA RTX 技术扩展
 
-## 目录结构
+![Java](https://img.shields.io/badge/Java-21%2B-orange?style=flat-square&logo=openjdk&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-lightgrey?style=flat-square&logo=windows&logoColor=white)
+![GPU](https://img.shields.io/badge/GPU-NVIDIA%20RTX-76B900?style=flat-square&logo=nvidia&logoColor=white)
+![Vulkan](https://img.shields.io/badge/Vulkan-1.2%2B-AC162C?style=flat-square&logo=vulkan&logoColor=white)
+![Build](https://img.shields.io/badge/Build-Gradle-02303A?style=flat-square&logo=gradle&logoColor=white)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 
-```text
-renderer-api/                    公共 API、不可变模型、异常、SPI 与 Vulkan 专家扩展
-renderer-core/                   Windows NVIDIA Vulkan RT 后端与预编译 SPIR-V
-gradle/published-consumer-smoke/ 独立 Maven 消费方编译门禁
-docs/                            Java 指南、API 参考、互操作与支持矩阵
-```
+---
 
-## 支持范围
+> **简介**
+>
+> RTRendererAPI 是面向 Java 桌面应用与引擎进程的 Windows NVIDIA Vulkan RT 渲染库。应用只需依赖
+> `renderer-api`，即可获得后端发现、场景提交、异步 CPU 帧、官方 GPU presenter 与显式 Vulkan 专家互操作。Windows Vulkan 后端、LWJGL、对应 Windows natives 与 NVIDIA provider 均通过 Maven 传递依赖解析，无需手工部署 DLL。
+>
+> **推荐场景**：Java 桌面渲染器、离屏光追、实时 RTX 预览、已有 Vulkan 管线的 GPU 帧集成。
 
-| 项目 | 要求 |
+---
+
+### ✨ 核心亮点
+
+- 🚀 **硬件光线追踪**：基于 Vulkan RT 的 BLAS/TLAS、GPUScene 与预编译 SPIR-V 管线。
+- ☕ **现代 Java API**：以 Java 21 为基线，提供不可变模型、Builder、类型化异常和确定性生命周期。
+- 🖼️ **两类托管输出**：支持异步 display-ready RGBA8 `CpuFrame` 与无 CPU 回读的官方 GPU presenter。
+- 🔗 **专家级 Vulkan 互操作**：支持 Win32 external memory lease，并可选 linear HDR RGBA16F。
+- 🧠 **显式 RTX 能力协商**：可独立请求 DLSS SR、DLAA、NIS、NRD、FG/MFG、Reflex/PCL、SER 与 RTXMU。
+- 🛡️ **可验证的降级策略**：能力拒绝、运行失败、等待证据和实际 fallback 使用不同状态表达。
+- 📊 **结构化诊断**：性能、资源义务与帧生成证据均通过不可变快照发布，不依赖日志文本解析。
+- 📦 **方便接入**：业务应用只需导入坐标，无需手工部署 DLL。
+
+### 🧩 支持范围
+
+| 项目 | 当前要求 |
 | --- | --- |
-| 操作系统 | Windows 10 x64 或更高版本 |
+| 操作系统 | Windows 10 x64 或更高版本；当前实机证据为 Windows 11 x64 |
 | Java | Java 21 或更高版本 |
 | GPU | NVIDIA GeForce RTX 20 系或更新架构 |
 | 图形 API | Vulkan 1.2 或更高版本，并通过运行时 hardware RT capability probe |
-| 简单输出 | 异步托管 display-ready RGBA8 `CpuFrame`；无需 Vulkan 知识 |
-| GPU 显示 | 官方托管 Vulkan swapchain presenter；无 CPU 图像回读 |
+| 简单输出 | 异步托管 display-ready RGBA8 `CpuFrame` |
+| GPU 显示 | 官方 Vulkan swapchain presenter，无 CPU 图像回读 |
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
-AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 和软件渲染器不属于当前发布范围。完整声明与实机证据见 [支持与验证矩阵](docs/SUPPORT.md)。
+> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `0.5.0` 发布范围。
 
-## 快速开始
+---
 
-### Maven 坐标
+## 🚀 快速开始
+
+### 📦 添加依赖
+
+**Maven**
 
 ```xml
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>0.3.1</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
-### Gradle Kotlin DSL：
+**Gradle Kotlin DSL**
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:0.3.1")
+    implementation("top.ceroxe.rt:renderer-api:0.5.0")
 }
 ```
 
-### 示例代码
+### ☕ 渲染第一帧
+
+下面的最小示例只使用托管 CPU 帧，调用方不需要了解 Vulkan：
 
 ```java
 import java.time.Duration;
@@ -82,16 +108,16 @@ public final class Main {
 }
 ```
 
-这段代码只使用托管 CPU 帧，不要求调用方了解 Vulkan。场景资产、材质、实例和灯光的完整发布流程见 [Java 开发指南](docs/Java.md)。已经拥有 Vulkan device/queue 的调用方再阅读 [Vulkan 专家互操作](docs/Vulkan-Interop.md)。
+`RayTracingRenderer` 必须确定性关闭。场景 revision 与帧 sequence 必须严格递增；等待 API 始终有界，超时返回
+`Optional.empty()`。完整资产、材质、实例与灯光流程见 [Java 开发指南](docs/Java.md)。
 
-### 官方 GPU 显示路径
+### 🖥️ 直接显示 GPU 帧
 
-普通桌面应用无需自己编写 Vulkan import/swapchain 代码。关闭 CPU readback 后，通过 renderer 绑定的官方 presenter 直接显示 GPU 帧。内置 renderer 的默认路径复用同一 `VkInstance`、`VkDevice` 与受控 queue；只有真正的外部 consumer 才走 Win32 external-memory 协议：
+桌面应用可关闭 CPU readback，并使用 renderer 绑定的官方 presenter。内置路径复用同一 Vulkan device 与受控 queue；
+只有真正的外部 consumer 才进入 Win32 external-memory 协议。
 
 ```java
-RayTracingRendererConfig config = RayTracingRendererConfig.builder()
-        .cpuFrameReadbackEnabled(false)
-        .build();
+RayTracingRendererConfig config = RayTracingRendererConfig.gpuPresentationDefaults();
 
 try (RayTracingRenderer renderer = RendererBootstrap.open(config);
      VulkanFramePresenter presenter = VulkanFramePresenter.open(
@@ -100,60 +126,198 @@ try (RayTracingRenderer renderer = RendererBootstrap.open(config);
                      .presentMode(VulkanFramePresenterConfig.PresentMode.UNCAPPED)
                      .maximumFramesQueuedAhead(2)
                      .build())) {
-    // apply scene, then submit with trySubmit(...)
-    var presented = presenter.presentLatestFrame();
-    if (presented.isPresent()) {
-        VulkanFramePresenter.PresentationResult result = presented.orElseThrow();
-        // Only Outcome.PRESENTED counts as an actually visible/present-queued frame.
-    }
-    presenter.setOverlayText("PRESENT: 145.2 FPS\nTRACE CAPACITY: 266.3 FPS");
-    VulkanFramePresenter.PerformanceSnapshot timings = presenter.performanceSnapshot();
-    System.out.println(presenter.activePresentMode());
+    presenter.pollEvents();
+    presenter.presentLatestFrame().ifPresent(result -> {
+        if (result.outcome() != VulkanFramePresenter.Outcome.PRESENTED) {
+            throw new IllegalStateException("frame was not presented: " + result.outcome());
+        }
+    });
 }
 ```
 
-`presentLatestFrame()` 是普通应用的主推入口：provider 可在 CPU 观察 producer fence 前用内部 GPU timeline 排入同设备 presentation fast path。专家 `VulkanFrameInterop.pollLatestFrame()` 仍只发布 CPU 已确认完成、可按 external-memory 契约消费的 lease。`maximumFramesQueuedAhead` 限制的是尚未被 presenter 消费的生产者领先量，不是时间型 FPS 锁。`trySubmit(...)` 在队列满时返回 `FrameSubmissionDeferred`；`activePresentMode()` 返回平台最终选择的 `IMMEDIATE`、`MAILBOX` 或 `FIFO`。`setOverlayText(...)` 使用 transfer-only GPU HUD，不开启 CPU readback；`performanceSnapshot()` 不会伪造缺失的 GPU copy 样本。
+`presentLatestFrame()` 是普通应用的主推入口。`maximumFramesQueuedAhead` 控制尚未被 presenter 消费的生产者领先量，
+不是 FPS 限制器。已有 Vulkan device/queue 的调用方再阅读 [Vulkan 专家互操作](docs/Vulkan-Interop.md)。
 
-### FPS 口径与当前实机证据
+---
 
-- **Present FPS**：仅在 presenter 返回 `Outcome.PRESENTED` 后计数，表示进入平台 presentation queue 的实际帧。
-- **Trace capacity**：由 GPU ray-trace timing 的倒数估算，只描述光追阶段理论吞吐；它不包含 swapchain acquire、managed GPU copy 和 present，不能当作肉眼看到的 FPS。
+## ⚙️ RTX 能力与运行状态
 
-Windows 11、RTX 5080 Laptop GPU、独显显示路径 active、2560×1600 全屏、2 spp、三球动态场景、平台实际 `IMMEDIATE`、1200 个 present 的当前证据为：滚动 Present 189.1 FPS、全程平均 176.1 FPS、trace 4.20 ms / 238.3 FPS、acquire 0.632 ms、native present 0.400 ms。独立 presentation queue 路径当前不发布 managed-copy GPU timestamp，`PerformanceSnapshot` 以零样本/`NaN` 如实表示未知。Khronos Validation 的 180 帧 smoke 无 ERROR/WARNING/VUID。该数字是本机证据，不是跨驱动或硬件的性能承诺。
+`RendererBootstrap.open()` 与 `RayTracingRendererConfig.defaults()` 使用简单模式：默认仅启用 renderer 内建的
+balanced temporal path。DLSS/DLAA/NIS、NRD、FG/MFG、Reflex/PCL、SER 与 RTXMU 均保持禁用，必须由应用显式
+opt-in；安装了 vendor runtime 或匹配到某个 GPU 型号不会静默改变画质、资源预算或 presentation ownership。
 
-## 构建与测试
+专家模式仍使用同一个 `RayTracingRendererConfig.builder()`。Option value 是能力协商的唯一输入：
 
-```cmd
-.\gradlew.bat check --dependency-verification=strict --no-daemon --console=plain
+- `disabled()`：明确禁用该能力。
+- `PREFERRED`：能力不可用时按显式 fallback 降级，否则保留基础路径并报告 `NOT_SUPPORTED`。
+- `REQUIRED`：无法满足且未配置 fallback 时，在请求边界失败。
+
+应用通过 `RenderingFeatureCapabilities` 读取功能域和具体技术状态：
+
+```java
+RenderingFeatureCapabilities capabilities = renderer
+        .extension(RenderingFeatureCapabilities.class)
+        .orElseThrow();
+
+for (var technology : RenderingFeatureCapabilities.Technology.values()) {
+    var entry = capabilities.technology(technology);
+    System.out.println(technology + ": " + entry.status() + " (" + entry.reason() + ")");
+}
 ```
 
-在符合支持范围的 RTX 主机上运行短 GPU 验收：
+| 状态 | 含义 |
+| --- | --- |
+| `AVAILABLE` | 能力已协商，尚无首帧执行证据 |
+| `ACTIVE` | 已获得真实 dispatch、evaluate 或 present 证据 |
+| `NOT_SUPPORTED` | 硬件、驱动、SDK 或当前渲染路径不支持 |
+| `BLOCKED` | 初始化或运行期执行失败 |
+| `FALLBACK_PENDING` | 已选择替代实现，尚无其执行证据 |
+| `FALLBACK` | 替代实现已经实际接管 |
 
-```cmd
+帧生成倍率与实际产出必须读取类型化证据，不得从 `reason()` 或日志反向解析：
+
+```java
+FrameGenerationEvidence generation = renderer.diagnostics().frameGenerationEvidence();
+if (generation.reported()) {
+    System.out.printf(
+            "requested=%dx configured=%dx proxy=%d generated=%d misses=%d%n",
+            generation.requestedPresentationMultiplier(),
+            generation.configuredPresentationMultiplier(),
+            generation.proxyPresentCalls(),
+            generation.generatedFramesActuallyPresented(),
+            generation.generationRequestMisses()
+    );
+}
+```
+
+`generatedFramesActuallyPresented` 是 provider/SDK 的累计呈现证据，不是显示器 scanout 测量。
+Capability 与 diagnostics 都是不可变时间点快照；长期监控必须重新查询。
+
+---
+
+## 🗂️ 项目结构
+
+```text
+renderer-api/                    公共 API、不可变模型、异常、SPI 与 Vulkan 专家扩展
+renderer-core/                   Windows NVIDIA Vulkan RT 后端与预编译 SPIR-V
+renderer-nvidia/                 可选 NVIDIA Streamline、NRD、SER 与 RTXMU 集成
+demos/hex-ball/                  交互 Demo 与有界 GPU 验收入口
+gradle/published-consumer-smoke/ 独立 Maven 消费方编译门禁
+docs/                            指南、API 参考、互操作与支持矩阵
+```
+
+模块边界是发布契约的一部分：业务代码依赖 `renderer-api`，不直接构造或编译耦合后端实现。
+
+---
+
+## 🛠️ 构建与验证
+
+项目包含 Gradle Wrapper，并默认使用 JDK 25 toolchain 编译与运行测试；所有 `JavaCompile` 任务强制
+`--release 21`，因此发布字节码与 API 仍兼容 Java 21。IDEA 的 Gradle JVM 指向本机 JDK 25 后即可直接同步，
+无需为日常构建附加版本属性。
+
+Windows PowerShell 下执行完整 CPU、发布拓扑、ABI、Javadoc 与独立消费方门禁：
+
+```powershell
+$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+.\gradlew.bat clean check assemble --dependency-verification=strict --no-daemon --console=plain
+```
+
+在符合支持范围的 RTX 主机上运行完整有界硬件验收：
+
+```powershell
 .\gradlew.bat strictAcceptanceTest --dependency-verification=strict --no-daemon --console=plain
 ```
 
-验证“只依赖 `renderer-api`”的独立 Maven 消费方：
+单独验证“消费方只声明 `renderer-api`”的 Maven 发布拓扑：
 
-```cmd
+```powershell
 .\gradlew.bat verifyPublishedMavenConsumer --dependency-verification=strict --no-daemon --console=plain
 ```
 
-## 发布
+### 🎮 运行 Hex Ball Demo
 
-本地 staging 与发布门禁不会自动上传远程仓库：
-
-```cmd
-.\gradlew.bat verifyReleaseArtifacts --dependency-verification=strict --no-daemon --console=plain
+```powershell
+.\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
+.\gradlew.bat :demos:hex-ball:shadowJar
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-0.5.0.jar `
+  --width=2560 --height=1440 --spp=2
 ```
 
-发布前必须人工确认版本、POM、签名、校验和、ABI baseline、Javadoc、独立 consumer 和支持矩阵证据。
+使用 `--duration-seconds=90` 可执行有界验收并走正常关闭路径。FG/MFG 的通过条件与证据字段见
+[Demo 说明](demos/hex-ball/README.md)。
 
-确认后使用 Central Portal 聚合发布链，一条命令构建、签名、上传并以
-`AUTOMATIC` 模式发布当前版本的全部 Maven publications：
+### 🔧 构建 NVIDIA 原生发布物
 
-```cmd
-.\gradlew.bat publishAggregationToCentralPortal --no-configuration-cache -PcentralRelease=true
+普通使用者不需要 NVIDIA SDK 或 CMake。只有维护者构建原生发布物时，才需要外部 NRD、NRI、
+Streamline 与 RTXMU SDK。RTXMU 必须为官方 `v1.4` checkout 的固定 commit
+`0c9ce1177000d5923e2cc6a35ae9cb7ff03748d2`。
+
+```powershell
+.\gradlew.bat :renderer-nvidia:compileNvidiaBridge `
+  -PcmakeExecutable='<cmake-root>\bin\cmake.exe' `
+  -PnrdSdkRoot='<nrd-root>' `
+  -PnriSdkRoot='<nri-root>' `
+  -PstreamlineSdkRoot='<streamline-root>' `
+  -PrtxmuSdkRoot='<rtxmu-root>' `
+  -PjdkHome='<jdk-21-root>' `
+  --no-daemon --console=plain
 ```
 
-Central 凭据只从用户级 Gradle properties 的 `centralUsername` 与 `centralPassword` 读取，不写入仓库。
+这些路径只参与本机构建，不会写入发布物或仓库配置。
+
+---
+
+## 📈 当前实机证据
+
+当前基线来自 Windows 11、RTX 5080 Laptop GPU、独显显示路径、2560x1600 全屏、2 spp、动态三球场景、
+平台实际 `IMMEDIATE` 与 1200 个成功 present：
+
+| 指标 | 结果 |
+| --- | ---: |
+| 滚动 Present | 189.1 FPS |
+| 全程平均 Present | 176.1 FPS |
+| Ray trace | 4.20 ms / 238.3 FPS capacity |
+| Swapchain acquire | 0.632 ms |
+| Native present | 0.400 ms |
+
+Present FPS 只统计 `Outcome.PRESENTED`；trace capacity 仅表示光追阶段理论吞吐，不包含 acquire、managed GPU copy
+和 present。独立 presentation queue 当前没有 managed-copy GPU timestamp，因此以零样本/`NaN` 表示未知。
+Khronos Validation 的 180 帧 smoke 无 ERROR、WARNING 或 VUID。以上是单机证据，不是跨驱动或硬件的性能承诺。
+
+---
+
+## 📚 文档
+
+- [Java 开发指南](docs/Java.md)：完整场景、配置、背压、诊断与各 RTX 能力示例。
+- [Java API 参考](docs/Java-API-Reference.md)：公共类型与稳定契约。
+- [Vulkan 专家互操作](docs/Vulkan-Interop.md)：external memory、semaphore 与 queue ownership。
+
+---
+
+## 🤔 常见问题（FAQ）
+
+**Q：应用需要同时依赖 `renderer-core` 或 `renderer-nvidia` 吗？**
+
+A：不需要。只声明 api 坐标即可，运行时实现与 native 依赖会传递解析。
+
+**Q：为什么请求了 DLSS、NRD 或 FG，状态却不是 `ACTIVE`？**
+
+A：请求成功只代表能力进入协商。只有真实 dispatch、evaluate 或 present 完成后才会发布 `ACTIVE`；请读取结构化
+capability 与 diagnostics，而不是根据 GPU 型号或日志猜测。
+
+**Q：`presentLatestFrame()` 暂时返回空，是否表示渲染失败？**
+
+A：不一定。它是非阻塞轮询，空值通常表示当前没有可呈现的新帧。应用应通过事件循环稍后重试，并同时检查
+`renderer.health()` 与 diagnostics。
+
+**Q：AMD、Intel 或 Linux 能运行吗？**
+
+A：不能把它们视为 `0.5.0` 的受支持目标。当前发布范围只包含 Windows x64 与通过 capability gate 的 NVIDIA RTX GPU。
+
+---
+
+## 🔐 许可证
+
+本项目基于 [MIT License](LICENSE) 开源发布。

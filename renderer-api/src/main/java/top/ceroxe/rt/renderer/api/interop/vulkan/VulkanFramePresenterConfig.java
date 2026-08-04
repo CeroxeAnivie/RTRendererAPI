@@ -47,7 +47,10 @@ public final class VulkanFramePresenterConfig {
     }
 
     /**
-     * Returns the positive initial framebuffer width.
+     * Returns the requested positive initial framebuffer width.
+     *
+     * <p>The presenter converts this physical-pixel request to native window coordinates on
+     * DPI-scaled desktops. A platform may round the resulting framebuffer by one pixel.</p>
      *
      * @return initial width in pixels
      */
@@ -56,7 +59,10 @@ public final class VulkanFramePresenterConfig {
     }
 
     /**
-     * Returns the positive initial framebuffer height.
+     * Returns the requested positive initial framebuffer height.
+     *
+     * <p>The presenter converts this physical-pixel request to native window coordinates on
+     * DPI-scaled desktops. A platform may round the resulting framebuffer by one pixel.</p>
      *
      * @return initial height in pixels
      */
@@ -146,7 +152,9 @@ public final class VulkanFramePresenterConfig {
         }
 
         /**
-         * Selects positive initial framebuffer dimensions.
+         * Selects requested positive initial framebuffer dimensions.
+         *
+         * <p>These values are physical framebuffer pixels, not DPI-scaled desktop coordinates.</p>
          *
          * @param width  positive initial width in pixels
          * @param height positive initial height in pixels

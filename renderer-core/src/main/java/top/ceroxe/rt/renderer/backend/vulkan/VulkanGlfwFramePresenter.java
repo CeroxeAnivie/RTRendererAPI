@@ -9,6 +9,7 @@ import org.lwjgl.vulkan.*;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
+import top.ceroxe.rt.renderer.feature.VulkanSwapchainInterceptor;
 import top.ceroxe.rt.renderer.rt.device.interop.VulkanWin32ExternalSemaphoreProbe;
 import top.ceroxe.rt.renderer.rt.device.interop.Win32HandleSupport;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
@@ -18,6 +19,7 @@ import top.ceroxe.rt.renderer.rt.device.RtCommandContext;
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -40,11 +42,13 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     private static final int MAX_RETAINED_IMPORTED_IMAGES = 16;
     private static final int FRAME_CONTEXT_COUNT = 3;
     private static final int OVERLAY_MARGIN = 16;
+    private static final int OVERLAY_COPY_BATCH_SIZE = 256;
     private static final long UINT64_MAX = -1L;
 
     private final Thread ownerThread;
     private final VulkanFramePresenterConfig configuration;
     private final VulkanDeviceRuntime sharedRuntime;
+    private final VulkanSwapchainInterceptor swapchainInterceptor;
     private final String gpuStableId;
     private final Runnable closeCallback;
     private final LongConsumer frameRetiredCallback;
@@ -83,6 +87,9 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     private long managedCopyGpuNanos;
     private String overlayText = "";
     private long overlayRevision;
+    private GpuFrameLease pendingTagRetirementLease;
+    private boolean closeStarted;
+    private boolean resourcesClosed;
 
     private VulkanGlfwFramePresenter(
             VulkanDeviceRuntime sharedRuntime,
@@ -94,6 +101,9 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     ) {
         ownerThread = Thread.currentThread();
         this.sharedRuntime = sharedRuntime;
+        this.swapchainInterceptor = sharedRuntime == null
+                ? null
+                : sharedRuntime.featureSession().swapchainInterceptor().orElse(null);
         this.gpuStableId = Objects.requireNonNull(gpuStableId, "gpuStableId");
         if (gpuStableId.isBlank()) throw new IllegalArgumentException("gpuStableId must not be blank");
         this.configuration = Objects.requireNonNull(configuration, "configuration");
@@ -156,6 +166,13 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             width = videoMode.width();
             height = videoMode.height();
             GLFW.glfwWindowHint(GLFW.GLFW_REFRESH_RATE, videoMode.refreshRate());
+        } else {
+            GlfwFramebufferExtent.Extent initialWindowExtent =
+                    GlfwFramebufferExtent.initialWindowExtent(
+                            GLFW.glfwGetPrimaryMonitor(), width, height
+                    );
+            width = initialWindowExtent.width();
+            height = initialWindowExtent.height();
         }
         window = GLFW.glfwCreateWindow(
                 width,
@@ -165,6 +182,11 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 0L
         );
         if (window == 0L) throw new IllegalStateException("GLFW failed to create the Vulkan window");
+        if (!fullScreen) {
+            GlfwFramebufferExtent.normalizeWindowedFramebuffer(
+                    window, configuration.initialWidth(), configuration.initialHeight()
+            );
+        }
     }
 
     private void createVulkanRuntime() {
@@ -180,6 +202,11 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         physicalDevice = sharedRuntime.physicalDevice();
         device = sharedRuntime.device();
         queueFamilyIndex = sharedRuntime.queueFamilyIndex();
+        /*
+         * DLSS-G's Vulkan eBlockNoClientQueues mode keeps the proxy pacer off the renderer queue.
+         * The NVIDIA session enables that mode only with its input-completion timeline gate, so
+         * tagged frame resources remain protected while the two queues make progress in parallel.
+         */
         queue = sharedRuntime.presentationQueue();
         sharedDeviceFastPath = true;
         fullScreenExclusiveAvailable = sharedRuntime.fullScreenExclusivePresentationEnabled();
@@ -335,21 +362,29 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
 
     private FrameContext createFrameContext(MemoryStack stack, long commandBufferAddress) {
         long acquireSemaphore = 0L;
+        long proxyPresentSemaphore = 0L;
         long fence = 0L;
         VulkanTextOverlayUpload overlayUpload = null;
         try {
             acquireSemaphore = createSemaphore(stack, false);
+            if (swapchainInterceptor != null) {
+                proxyPresentSemaphore = createSemaphore(stack, false);
+            }
             fence = createFence(stack, true);
             overlayUpload = VulkanTextOverlayUpload.create(physicalDevice, device);
             return new FrameContext(
                     new VkCommandBuffer(commandBufferAddress, device),
                     acquireSemaphore,
+                    proxyPresentSemaphore,
                     fence,
                     overlayUpload
             );
         } catch (RuntimeException | Error failure) {
             if (overlayUpload != null) overlayUpload.close();
             if (fence != 0L) VK10.vkDestroyFence(device, fence, null);
+            if (proxyPresentSemaphore != 0L) {
+                VK10.vkDestroySemaphore(device, proxyPresentSemaphore, null);
+            }
             if (acquireSemaphore != 0L) VK10.vkDestroySemaphore(device, acquireSemaphore, null);
             throw failure;
         }
@@ -423,13 +458,24 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     @Override
     public Optional<PresentationResult> presentLatestFrame() {
         requireOwnerAndOpen();
+        pollCompletedManagedRetirements();
         GpuFrameLease lease = managedFrameSupplier.get();
-        return lease == null ? Optional.empty() : Optional.of(presentAndRelease(lease));
+        return lease == null
+                ? Optional.empty()
+                : Optional.of(presentAndRelease(lease, true));
     }
 
     @Override
     public PresentationResult presentAndRelease(GpuFrameLease lease) {
+        return presentAndRelease(lease, false);
+    }
+
+    private PresentationResult presentAndRelease(
+            GpuFrameLease lease,
+            boolean allowDeferredManagedRetirement
+    ) {
         requireOwnerAndOpen();
+        retryPendingTagRetirement();
         GpuFrameLease checkedLease = Objects.requireNonNull(lease, "lease");
         if (checkedLease.state() != GpuFrameLease.LeaseState.ACTIVE) {
             throw new IllegalArgumentException("presenter requires an active frame lease");
@@ -444,29 +490,95 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             } else {
                 ensureSwapchain(state.framebufferWidth(), state.framebufferHeight());
                 result = presentDrawable(checkedLease, descriptor);
+                if (result.outcome() == Outcome.RETIRED_FOR_RECREATE) recreateSwapchain();
             }
         } catch (Throwable presentFailure) {
             failure = presentFailure;
         } finally {
-            if (checkedLease.state() != GpuFrameLease.LeaseState.CLOSED) {
+            if (!managedLeaseRetained(checkedLease)) {
                 try {
-                    checkedLease.close();
+                    retireTagsAndLease(checkedLease);
                 } catch (Throwable closeFailure) {
                     if (failure == null) failure = closeFailure;
                     else failure.addSuppressed(closeFailure);
                 }
             }
         }
-        if (checkedLease.state() == GpuFrameLease.LeaseState.CLOSED) {
+        boolean retirementOwnedByContext = managedLeaseRetained(checkedLease);
+        if (retirementOwnedByContext && !allowDeferredManagedRetirement) {
             try {
-                frameRetiredCallback.accept(descriptor.frameSequence());
-            } catch (Throwable callbackFailure) {
-                if (failure == null) failure = callbackFailure;
-                else failure.addSuppressed(callbackFailure);
+                awaitRetainedManagedLease(checkedLease);
+            } catch (Throwable retirementFailure) {
+                if (failure == null) failure = retirementFailure;
+                else failure.addSuppressed(retirementFailure);
             }
         }
         if (failure != null) rethrow(failure);
         return Objects.requireNonNull(result, "presentation result");
+    }
+
+    /**
+     * Completes vendor tag retirement, lease release, and host backlog notification as one
+     * retryable transaction. The field is installed before any fallible step so a failed null-tag
+     * can never return the slot to the producer while Streamline still references its images.
+     */
+    private void retireTagsAndLease(GpuFrameLease lease) {
+        if (pendingTagRetirementLease != null && pendingTagRetirementLease != lease) {
+            throw new IllegalStateException("another frame is awaiting vendor tag retirement");
+        }
+        pendingTagRetirementLease = lease;
+        retryPendingTagRetirement();
+    }
+
+    private void retryPendingTagRetirement() {
+        GpuFrameLease pending = pendingTagRetirementLease;
+        if (pending == null) return;
+        long frameSequence = pending.descriptor().frameSequence();
+        if (swapchainInterceptor != null) swapchainInterceptor.retireFrame(frameSequence);
+        if (pending.state() == GpuFrameLease.LeaseState.ACTIVE
+                && pending instanceof VulkanManagedFrameLease rendererLease) {
+            // Every submitted non-retained path waits its frame context before reaching here;
+            // pre-submit failures performed no consumer GPU access. Both cases are a stronger
+            // completion proof than exporting a synthetic semaphore merely to close the lease.
+            rendererLease.releaseAfterPresenterAccessComplete();
+        }
+        pending.close();
+        if (pending.state() != GpuFrameLease.LeaseState.CLOSED) {
+            throw new IllegalStateException("retired frame lease did not reach CLOSED state");
+        }
+        frameRetiredCallback.accept(frameSequence);
+        pendingTagRetirementLease = null;
+    }
+
+    /**
+     * Retires completed proxy-present contexts even when the producer has no free slot from which
+     * to create another frame. Without this progress point, retained leases can fill the producer
+     * admission bound and prevent the next context reuse that previously performed retirement.
+     */
+    private void pollCompletedManagedRetirements() {
+        if (frameContexts == null) return;
+        for (FrameContext context : frameContexts) {
+            if (context.retainedManagedLease == null) continue;
+            if (!context.fencePending) {
+                throw new IllegalStateException("retained managed lease has no retirement fence");
+            }
+            int status = VK10.vkGetFenceStatus(device, context.fence);
+            if (status == VK10.VK_NOT_READY) continue;
+            checkVk(status, "vkGetFenceStatus.managedRetirement");
+            awaitFrameContext(context);
+        }
+    }
+
+    private void awaitRetainedManagedLease(GpuFrameLease lease) {
+        if (frameContexts == null) {
+            throw new IllegalStateException("managed lease retained without frame contexts");
+        }
+        for (FrameContext context : frameContexts) {
+            if (!context.retains(lease)) continue;
+            awaitFrameContext(context);
+            return;
+        }
+        throw new IllegalStateException("managed lease retention context disappeared");
     }
 
     private PresentationResult presentDrawable(
@@ -499,7 +611,6 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
          */
         ManagedAcquisition acquisition = acquireManagedImage();
         if (acquisition.result == KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR) {
-            recreateSwapchain();
             return result(descriptor, Outcome.RETIRED_FOR_RECREATE);
         }
         if (acquisition.result != VK10.VK_SUCCESS
@@ -511,6 +622,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         prepareOverlay(context);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             boolean submitted = false;
+            boolean retirementSubmitted = false;
             try {
                 if (source.readyTimelineSemaphore() != 0L) {
                     recordCopy(
@@ -525,21 +637,13 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     );
                     submitDedicatedManagedCopy(stack, context, source, imageIndex);
                     submitted = true;
-
-                    /*
-                     * This fence is the slot-lifetime boundary. Unlike the legacy same-queue
-                     * path, queue submission alone is insufficient: the renderer queue could
-                     * otherwise reuse and overwrite the source while the independent
-                     * presentation queue is still reading it. The copy itself is tiny, while
-                     * moving it off the frame queue removes the much larger queue-tail bubble.
-                     */
-                    awaitFrameContext(context);
                 } else {
-                    RtCommandContext.AsyncSubmission managedSubmission = sharedRuntime.frameCommands()
+                    RtCommandContext.AsyncSubmission managedSubmission;
+                    managedSubmission = sharedRuntime.frameCommands()
                             .submitTimedBinarySynchronizedOneTimeAsync(
                                     MANAGED_COPY_TIMING_LABEL,
                                     context.acquireSemaphore,
-                                    presentationSemaphores[imageIndex],
+                                    presentSemaphore(context, imageIndex),
                                     (commandBuffer, commandStack) -> recordCopyCommands(
                                             commandBuffer,
                                             commandStack,
@@ -556,27 +660,24 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     submitted = true;
                 }
 
-                try {
-                    /*
-                     * The legacy path is protected by same-queue ordering. The dedicated path
-                     * reaches this point only after its fence proves that the source read has
-                     * retired, so both paths can safely publish CPU completion to the slot.
-                     */
-                    managedLease.releaseAfterManagedQueueSubmission();
-                    lease.close();
-                } catch (RuntimeException releaseFailure) {
-                    awaitFrameContext(context);
-                    throw releaseFailure;
-                }
-
                 /*
                  * VkSwapchainKHR is externally synchronized. In particular, vkQueuePresentKHR
                  * and vkAcquireNextImageKHR must never race on different host threads. Keep both
                  * calls on the presenter owner thread just as a conventional RHI viewport does;
                  * the renderer submission lane remains independently asynchronous.
                  */
-                VulkanQueueHostSync.TimedPresent presentTiming = presentManagedImage(imageIndex);
+                VulkanQueueHostSync.TimedPresent presentTiming = presentManagedImage(
+                        context, imageIndex, descriptor.frameSequence()
+                );
                 int presented = presentTiming.result();
+                if (source.readyTimelineSemaphore() != 0L) {
+                    submitManagedRetirementFence(stack, context);
+                    retirementSubmitted = true;
+                    retainManagedLease(context, lease);
+                } else {
+                    managedLease.releaseAfterManagedQueueSubmission();
+                    lease.close();
+                }
                 presentQueueLockNanos = Math.addExact(
                         presentQueueLockNanos, presentTiming.queueLockWaitNanos()
                 );
@@ -593,13 +694,16 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 if (presented == KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR
                         || presented == KHRSwapchain.VK_SUBOPTIMAL_KHR
                         || acquisition.result == KHRSwapchain.VK_SUBOPTIMAL_KHR) {
-                    recreateSwapchain();
                     return result(descriptor, Outcome.RETIRED_FOR_RECREATE);
                 }
                 checkVk(presented, "vkQueuePresentKHR.managed");
                 return result(descriptor, Outcome.PRESENTED);
             } finally {
-                if (submitted && lease.state() == GpuFrameLease.LeaseState.ACTIVE) {
+                if (submitted && lease.state() == GpuFrameLease.LeaseState.ACTIVE
+                        && !context.retains(lease)) {
+                    if (source.readyTimelineSemaphore() != 0L && !retirementSubmitted) {
+                        submitManagedRetirementFence(stack, context);
+                    }
                     awaitFrameContext(context);
                 }
             }
@@ -615,16 +719,15 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         if (source.readyTimelineSemaphore() == 0L || source.readyTimelineValue() <= 0L) {
             throw new IllegalArgumentException("dedicated managed copy requires a ready timeline signal");
         }
-        checkVk(VK10.vkResetFences(device, context.fence), "vkResetFences.managedPresenter");
         LongBuffer waitSemaphores = stack.longs(
                 context.acquireSemaphore,
                 source.readyTimelineSemaphore()
         );
         IntBuffer waitStages = stack.ints(
-                VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK10.VK_PIPELINE_STAGE_TRANSFER_BIT
         );
-        LongBuffer signalSemaphores = stack.longs(presentationSemaphores[imageIndex]);
+        LongBuffer signalSemaphores = stack.longs(presentSemaphore(context, imageIndex));
         VkTimelineSemaphoreSubmitInfo timeline = VkTimelineSemaphoreSubmitInfo.calloc(stack)
                 .sType$Default()
                 .pWaitSemaphoreValues(stack.longs(0L, source.readyTimelineValue()))
@@ -638,9 +741,57 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 .pCommandBuffers(stack.pointers(context.commandBuffer.address()))
                 .pSignalSemaphores(signalSemaphores);
         checkVk(
-                VulkanQueueHostSync.submit(queue, submit, context.fence),
+                VulkanQueueHostSync.submit(queue, submit, VK10.VK_NULL_HANDLE),
                 "vkQueueSubmit.managedPresenterDedicated"
         );
+    }
+
+    /**
+     * Appends the slot-lifetime boundary after proxy present on the same queue.
+     *
+     * <p>In Streamline's default presenting-client-queue mode, this marker cannot complete until
+     * the copy and the SDK's input processing ahead of it have retired. Waiting only when this
+     * frame context is reused preserves bounded ownership without serializing every present on
+     * the CPU.</p>
+     */
+    private void submitManagedRetirementFence(MemoryStack stack, FrameContext context) {
+        checkVk(VK10.vkResetFences(device, context.fence), "vkResetFences.managedRetirement");
+        VkSubmitInfo.Buffer marker = VkSubmitInfo.calloc(1, stack).sType$Default();
+        try {
+            checkVk(
+                    VulkanQueueHostSync.submit(queue, marker, context.fence),
+                    "vkQueueSubmit.managedRetirement"
+            );
+            context.fencePending = true;
+        } catch (RuntimeException submissionFailure) {
+            /* vkResetFences succeeded but no successful submission owns the fence. Waiting for it
+             * would deadlock cleanup forever. Queue idle is the only valid CPU-completion fallback
+             * after the copy submission has already escaped this method. */
+            try {
+                waitPresenterIdle("managedRetirementSubmitFailure");
+            } catch (RuntimeException idleFailure) {
+                submissionFailure.addSuppressed(idleFailure);
+            }
+            throw submissionFailure;
+        }
+    }
+
+    private void retainManagedLease(FrameContext context, GpuFrameLease lease) {
+        if (context.retainedManagedLease != null) {
+            throw new IllegalStateException("frame context already retains a managed lease");
+        }
+        if (lease.state() != GpuFrameLease.LeaseState.ACTIVE) {
+            throw new IllegalStateException("only an active managed lease may be retained");
+        }
+        context.retainedManagedLease = lease;
+    }
+
+    private boolean managedLeaseRetained(GpuFrameLease lease) {
+        if (frameContexts == null) return false;
+        for (FrameContext context : frameContexts) {
+            if (context.retains(lease)) return true;
+        }
+        return false;
     }
 
     private ManagedAcquisition acquireManagedImage() {
@@ -650,7 +801,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer imageIndexBuffer = stack.ints(0);
             long acquireStart = System.nanoTime();
-            int acquire = KHRSwapchain.vkAcquireNextImageKHR(
+            int acquire = acquireNextImage(
                     device, swapchain, UINT64_MAX, context.acquireSemaphore,
                     VK10.VK_NULL_HANDLE, imageIndexBuffer
             );
@@ -664,8 +815,12 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         }
     }
 
-    private VulkanQueueHostSync.TimedPresent presentManagedImage(int imageIndex) {
-        long waitSemaphore = presentationSemaphores[imageIndex];
+    private VulkanQueueHostSync.TimedPresent presentManagedImage(
+            FrameContext context,
+            int imageIndex,
+            long frameSequence
+    ) {
+        long waitSemaphore = presentSemaphore(context, imageIndex);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkPresentInfoKHR present = VkPresentInfoKHR.calloc(stack)
                     .sType$Default()
@@ -674,7 +829,79 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     .pSwapchains(stack.longs(swapchain))
                     .pImageIndices(stack.ints(imageIndex));
             VkPresentInfoKHR.nwaitSemaphoreCount(present.address(), 1);
-            return VulkanQueueHostSync.presentTimed(queue, present);
+            return VulkanQueueHostSync.presentTimed(
+                    queue, present, (targetQueue, presentInfo) ->
+                            queuePresent(targetQueue, presentInfo, frameSequence)
+            );
+        }
+    }
+
+    private int createSwapchain(VkSwapchainCreateInfoKHR createInfo, LongBuffer output) {
+        return !proxySwapchainActive()
+                ? KHRSwapchain.vkCreateSwapchainKHR(device, createInfo, null, output)
+                : swapchainInterceptor.createSwapchain(device, createInfo, output);
+    }
+
+    private void destroySwapchain(long value) {
+        if (!proxySwapchainActive()) {
+            KHRSwapchain.vkDestroySwapchainKHR(device, value, null);
+        } else {
+            swapchainInterceptor.destroySwapchain(device, value);
+        }
+    }
+
+    private int getSwapchainImages(IntBuffer count, LongBuffer images) {
+        return !proxySwapchainActive()
+                ? KHRSwapchain.vkGetSwapchainImagesKHR(device, swapchain, count, images)
+                : swapchainInterceptor.getSwapchainImages(device, swapchain, count, images);
+    }
+
+    private int acquireNextImage(
+            VkDevice targetDevice,
+            long targetSwapchain,
+            long timeout,
+            long semaphore,
+            long fence,
+            IntBuffer imageIndex
+    ) {
+        return !proxySwapchainActive()
+                ? KHRSwapchain.vkAcquireNextImageKHR(
+                        targetDevice, targetSwapchain, timeout, semaphore, fence, imageIndex
+                )
+                : swapchainInterceptor.acquireNextImage(
+                        targetDevice, targetSwapchain, timeout, semaphore, fence, imageIndex
+                );
+    }
+
+    private int queuePresent(VkQueue targetQueue, VkPresentInfoKHR presentInfo, long frameSequence) {
+        final int result;
+        try {
+            result = !proxySwapchainActive()
+                    ? KHRSwapchain.vkQueuePresentKHR(targetQueue, presentInfo)
+                    : swapchainInterceptor.queuePresent(targetQueue, presentInfo, frameSequence);
+        } catch (RuntimeException | Error failure) {
+            observePresentationSuppressing(frameSequence, false, failure);
+            throw failure;
+        }
+        if (sharedRuntime != null) {
+            sharedRuntime.featureSession().observePresentation(
+                    frameSequence,
+                    result == VK10.VK_SUCCESS || result == KHRSwapchain.VK_SUBOPTIMAL_KHR
+            );
+        }
+        return result;
+    }
+
+    private void observePresentationSuppressing(
+            long frameSequence,
+            boolean succeeded,
+            Throwable primaryFailure
+    ) {
+        if (sharedRuntime == null) return;
+        try {
+            sharedRuntime.featureSession().observePresentation(frameSequence, succeeded);
+        } catch (RuntimeException | Error observationFailure) {
+            primaryFailure.addSuppressed(observationFailure);
         }
     }
 
@@ -689,7 +916,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         ImportedFrame imported = importOrReuse(lease);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer imageIndexBuffer = stack.ints(0);
-            int acquire = KHRSwapchain.vkAcquireNextImageKHR(
+            int acquire = acquireNextImage(
                     device,
                     swapchain,
                     UINT64_MAX,
@@ -698,7 +925,6 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     imageIndexBuffer
             );
             if (acquire == KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR) {
-                recreateSwapchain();
                 return result(descriptor, Outcome.RETIRED_FOR_RECREATE);
             }
             if (acquire != VK10.VK_SUCCESS && acquire != KHRSwapchain.VK_SUBOPTIMAL_KHR) {
@@ -719,16 +945,17 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                         .sType$Default()
                         .waitSemaphoreCount(1)
                         .pWaitSemaphores(stack.longs(context.acquireSemaphore))
-                        .pWaitDstStageMask(stack.ints(VK10.VK_PIPELINE_STAGE_TRANSFER_BIT))
+                        .pWaitDstStageMask(stack.ints(VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT))
                         .pCommandBuffers(stack.pointers(context.commandBuffer.address()))
                         .pSignalSemaphores(stack.longs(
-                                presentationSemaphores[imageIndex],
+                                presentSemaphore(context, imageIndex),
                                 completion.semaphore()
                         ));
                 checkVk(
                         VulkanQueueHostSync.submit(queue, submit, context.fence),
                         "vkQueueSubmit.presenter"
                 );
+                context.fencePending = true;
                 submitted = true;
                 imported.inFlightUses++;
                 context.importedFrame = imported;
@@ -754,16 +981,18 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
 
                 VkPresentInfoKHR present = VkPresentInfoKHR.calloc(stack)
                         .sType$Default()
-                        .pWaitSemaphores(stack.longs(presentationSemaphores[imageIndex]))
+                        .pWaitSemaphores(stack.longs(presentSemaphore(context, imageIndex)))
                         .swapchainCount(1)
                         .pSwapchains(stack.longs(swapchain))
                         .pImageIndices(stack.ints(imageIndex));
                 VkPresentInfoKHR.nwaitSemaphoreCount(present.address(), 1);
-                int presented = VulkanQueueHostSync.present(queue, present);
+                int presented = VulkanQueueHostSync.present(
+                        queue, present, (targetQueue, presentInfo) ->
+                                queuePresent(targetQueue, presentInfo, descriptor.frameSequence())
+                );
                 if (presented == KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR
                         || presented == KHRSwapchain.VK_SUBOPTIMAL_KHR
                         || acquire == KHRSwapchain.VK_SUBOPTIMAL_KHR) {
-                    recreateSwapchain();
                     return result(descriptor, Outcome.RETIRED_FOR_RECREATE);
                 }
                 checkVk(presented, "vkQueuePresentKHR");
@@ -840,11 +1069,11 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     sourceImage,
                     VK10.VK_IMAGE_LAYOUT_GENERAL,
                     VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                    sourceExternallyOwned ? 0 : VK10.VK_ACCESS_SHADER_WRITE_BIT,
+                    sourceExternallyOwned ? 0 : VK10.VK_ACCESS_MEMORY_WRITE_BIT,
                     VK10.VK_ACCESS_TRANSFER_READ_BIT,
                     sourceExternallyOwned
                             ? VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT
-                            : KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                            : VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                     VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
                     sourceExternallyOwned ? VK11.VK_QUEUE_FAMILY_EXTERNAL : VK10.VK_QUEUE_FAMILY_IGNORED,
                     sourceExternallyOwned ? queueFamilyIndex : VK10.VK_QUEUE_FAMILY_IGNORED
@@ -913,7 +1142,25 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                                 : VK10.VK_FILTER_LINEAR
                 );
             }
+            /* The overlay may overlap the full-frame transfer write. Order the two writes even
+             * though both keep the destination in TRANSFER_DST_OPTIMAL. */
+            imageBarrier(
+                    stack,
+                    commandBuffer,
+                    destinationImage,
+                    VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK10.VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK10.VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK10.VK_QUEUE_FAMILY_IGNORED,
+                    VK10.VK_QUEUE_FAMILY_IGNORED
+            );
             recordOverlayCommands(commandBuffer, stack, destinationImage, context);
+            /* Streamline intercepts the ordinary Vulkan WSI calls; it does not replace the host
+             * image-layout contract. Every image named by VkPresentInfoKHR therefore enters
+             * PRESENT_SRC_KHR before either the native or intercepted vkQueuePresentKHR call. */
             imageBarrier(
                     stack,
                     commandBuffer,
@@ -934,11 +1181,13 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                     VK10.VK_IMAGE_LAYOUT_GENERAL,
                     VK10.VK_ACCESS_TRANSFER_READ_BIT,
-                    sourceExternallyOwned ? 0 : VK10.VK_ACCESS_SHADER_WRITE_BIT,
+                    sourceExternallyOwned
+                            ? 0
+                            : VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT,
                     VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
                     sourceExternallyOwned
                             ? VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
-                            : KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                            : VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                     sourceExternallyOwned ? queueFamilyIndex : VK10.VK_QUEUE_FAMILY_IGNORED,
                     sourceExternallyOwned ? VK11.VK_QUEUE_FAMILY_EXTERNAL : VK10.VK_QUEUE_FAMILY_IGNORED
             );
@@ -969,6 +1218,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         if (raster.width() > 0) context.overlayUpload.write(raster);
         context.overlayWidth = raster.width();
         context.overlayHeight = raster.height();
+        context.overlaySpans = raster.copySpans();
         context.overlayRevision = overlayRevision;
         context.overlayFormat = swapchainFormat;
         context.overlayTargetWidth = availableWidth;
@@ -981,7 +1231,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             long destinationImage,
             FrameContext context
     ) {
-        if (context.overlayWidth == 0 || context.overlayHeight == 0) return;
+        if (context.overlayWidth == 0 || context.overlayHeight == 0 || context.overlaySpans.isEmpty()) return;
         VkBufferMemoryBarrier.Buffer uploadReady = VkBufferMemoryBarrier.calloc(1, stack)
                 .sType$Default()
                 .srcAccessMask(VK10.VK_ACCESS_HOST_WRITE_BIT)
@@ -1000,24 +1250,38 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 uploadReady,
                 null
         );
-        VkBufferImageCopy.Buffer copy = VkBufferImageCopy.calloc(1, stack)
-                .bufferOffset(0L)
-                .bufferRowLength(0)
-                .bufferImageHeight(0);
-        copy.imageSubresource()
-                .aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
-                .mipLevel(0)
-                .baseArrayLayer(0)
-                .layerCount(1);
-        copy.imageOffset().set(OVERLAY_MARGIN, OVERLAY_MARGIN, 0);
-        copy.imageExtent().set(context.overlayWidth, context.overlayHeight, 1);
-        VK10.vkCmdCopyBufferToImage(
-                commandBuffer,
-                context.overlayUpload.buffer(),
-                destinationImage,
-                VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                copy
-        );
+        for (int first = 0; first < context.overlaySpans.size(); first += OVERLAY_COPY_BATCH_SIZE) {
+            int count = Math.min(OVERLAY_COPY_BATCH_SIZE, context.overlaySpans.size() - first);
+            /*
+             * A full transparent HUD can contain thousands of disjoint glyph runs. A bounded
+             * nested stack frame keeps native recording memory constant without retaining native
+             * structs after vkCmdCopyBufferToImage has copied them into the command buffer.
+             */
+            try (MemoryStack copyStack = MemoryStack.stackPush()) {
+                VkBufferImageCopy.Buffer copy = VkBufferImageCopy.calloc(count, copyStack);
+                for (int local = 0; local < count; local++) {
+                    VulkanTextOverlayRasterizer.CopySpan span = context.overlaySpans.get(first + local);
+                    VkBufferImageCopy region = copy.get(local)
+                            .bufferOffset(((long) span.y() * context.overlayWidth + span.x()) * 4L)
+                            .bufferRowLength(context.overlayWidth)
+                            .bufferImageHeight(0);
+                    region.imageSubresource()
+                            .aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
+                            .mipLevel(0)
+                            .baseArrayLayer(0)
+                            .layerCount(1);
+                    region.imageOffset().set(OVERLAY_MARGIN + span.x(), OVERLAY_MARGIN + span.y(), 0);
+                    region.imageExtent().set(span.width(), span.height(), 1);
+                }
+                VK10.vkCmdCopyBufferToImage(
+                        commandBuffer,
+                        context.overlayUpload.buffer(),
+                        destinationImage,
+                        VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        copy
+                );
+            }
+        }
     }
 
     private static void imageBarrier(
@@ -1186,16 +1450,28 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     }
 
     private void ensureSwapchain(int width, int height) {
-        if (swapchain == 0L || swapchainWidth != width || swapchainHeight != height) {
+        if (swapchain == 0L || swapchainWidth != width || swapchainHeight != height
+                || proxySwapchainRebuildRequired()) {
             recreateSwapchain();
         }
     }
 
     private void recreateSwapchain() {
+        boolean oneWayFallback = proxySwapchainRebuildRequired();
         waitPresenterIdle("recreateSwapchain");
         retireAllFrameContexts();
         destroySwapchain();
+        if (oneWayFallback) swapchainInterceptor.prepareOneWayFallback();
         createSwapchain();
+        if (swapchainInterceptor != null) swapchainInterceptor.acknowledgeSwapchainRebuild();
+    }
+
+    private boolean proxySwapchainRebuildRequired() {
+        return swapchainInterceptor != null && swapchainInterceptor.swapchainRebuildRequired();
+    }
+
+    private boolean proxySwapchainActive() {
+        return swapchainInterceptor != null && swapchainInterceptor.proxyActive();
     }
 
     private void createSwapchain() {
@@ -1230,7 +1506,11 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     .imageFormat(selectedFormat.format)
                     .imageColorSpace(selectedFormat.colorSpace)
                     .imageArrayLayers(1)
-                    .imageUsage(VK10.VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+                    // Streamline's Vulkan swapchain proxy creates views for generated-frame
+                    // composition. COLOR_ATTACHMENT makes those views legal while TRANSFER_DST
+                    // remains the renderer's only direct use of the backbuffer.
+                    .imageUsage(VK10.VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                            | VK10.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
                     .imageSharingMode(VK10.VK_SHARING_MODE_EXCLUSIVE)
                     .preTransform(capabilities.currentTransform())
                     .compositeAlpha(selectCompositeAlpha(capabilities.supportedCompositeAlpha()))
@@ -1251,12 +1531,12 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             }
             createInfo.imageExtent().set(width, height);
             LongBuffer handle = stack.longs(0L);
-            int createResult = KHRSwapchain.vkCreateSwapchainKHR(device, createInfo, null, handle);
+            int createResult = createSwapchain(createInfo, handle);
             if (fullScreenInfo != null && createResult == VK10.VK_ERROR_INITIALIZATION_FAILED) {
                 /* Optional RHI fullscreen metadata must never make presentation unusable. */
                 createInfo.pNext(VK10.VK_NULL_HANDLE);
                 handle.put(0, 0L);
-                createResult = KHRSwapchain.vkCreateSwapchainKHR(device, createInfo, null, handle);
+                createResult = createSwapchain(createInfo, handle);
             }
             checkVk(createResult, "vkCreateSwapchainKHR");
             swapchain = handle.get(0);
@@ -1265,14 +1545,17 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             swapchainHeight = height;
 
             IntBuffer count = stack.ints(0);
-            checkVk(KHRSwapchain.vkGetSwapchainImagesKHR(device, swapchain, count, null), "vkGetSwapchainImagesKHR.count");
+            checkVk(getSwapchainImages(count, null), "vkGetSwapchainImagesKHR.count");
             LongBuffer images = stack.mallocLong(count.get(0));
-            checkVk(KHRSwapchain.vkGetSwapchainImagesKHR(device, swapchain, count, images), "vkGetSwapchainImagesKHR.list");
+            checkVk(getSwapchainImages(count, images), "vkGetSwapchainImagesKHR.list");
             swapchainImages = new long[images.remaining()];
-            presentationSemaphores = new long[images.remaining()];
+            presentationSemaphores = !proxySwapchainActive()
+                    ? new long[images.remaining()] : new long[0];
             for (int index = 0; index < images.remaining(); index++) {
                 swapchainImages[index] = images.get(index);
-                presentationSemaphores[index] = createSemaphore(stack, false);
+                if (!proxySwapchainActive()) {
+                    presentationSemaphores[index] = createSemaphore(stack, false);
+                }
             }
         }
     }
@@ -1344,9 +1627,25 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 managedCopyGpuSamples = Math.incrementExact(managedCopyGpuSamples);
             }
             context.managedSubmission = null;
-            return;
         }
-        checkVk(VK10.vkWaitForFences(device, context.fence, true, UINT64_MAX), "vkWaitForFences.presenter");
+        if (context.fencePending) {
+            checkVk(
+                    VK10.vkWaitForFences(device, context.fence, true, UINT64_MAX),
+                    "vkWaitForFences.presenter"
+            );
+            // Publish completion before fallible lease and host callbacks so retries never wait
+            // on a fence that has already proved the queue-lifetime boundary.
+            context.fencePending = false;
+        }
+        if (context.retainedManagedLease != null) {
+            GpuFrameLease retained = context.retainedManagedLease;
+            // Keep ownership attached until tag retirement, lease release, and the host callback
+            // all succeed. The completed same-queue fence is the proof that Streamline's Vulkan
+            // pacer has consumed this frame's tagged inputs; retiring them at proxy-call return
+            // races the asynchronous pacer and suppresses generated output.
+            retireTagsAndLease(retained);
+            context.retainedManagedLease = null;
+        }
         if (context.completionSemaphore != null) {
             context.completionSemaphore.close();
             context.completionSemaphore = null;
@@ -1380,20 +1679,16 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     public void close() {
         requireOwner();
         if (closed) return;
-        RuntimeException failure = null;
-        try {
+        closeStarted = true;
+        if (!resourcesClosed) {
             closePartial(true);
-        } catch (RuntimeException closeFailure) {
-            failure = closeFailure;
-        } finally {
-            closed = true;
-            try {
-                closeCallback.run();
-            } catch (RuntimeException callbackFailure) {
-                failure = accumulate(failure, callbackFailure);
-            }
+            resourcesClosed = true;
         }
-        if (failure != null) throw failure;
+        // The host callback is intentionally last and retryable. A failed native teardown keeps
+        // the renderer/session alive; a failed callback keeps close() retryable without touching
+        // already destroyed Vulkan handles a second time.
+        closeCallback.run();
+        closed = true;
     }
 
     private void closePartial(boolean glfwAcquired) {
@@ -1410,20 +1705,37 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 failure = accumulate(failure, closeFailure);
             }
         }
-        for (ImportedFrame imported : importedFrames.values()) {
+        try {
+            retryPendingTagRetirement();
+        } catch (RuntimeException closeFailure) {
+            failure = accumulate(failure, closeFailure);
+        }
+        var importedIterator = importedFrames.entrySet().iterator();
+        while (importedIterator.hasNext()) {
+            ImportedFrame imported = importedIterator.next().getValue();
             try {
                 imported.close();
+                importedIterator.remove();
             } catch (RuntimeException closeFailure) {
                 failure = accumulate(failure, closeFailure);
             }
         }
-        importedFrames.clear();
+        // Queue completion, tag release, and imported-memory retirement are ownership proofs.
+        // Never destroy their device/session below after one of those proofs failed.
+        if (failure != null) throw failure;
         destroySwapchain();
+        if (managedPresentationRegistered) {
+            sharedRuntime.endManagedPresentation();
+            managedPresentationRegistered = false;
+        }
         if (device != null && frameContexts != null) {
             for (FrameContext context : frameContexts) {
                 if (context == null) continue;
                 if (context.completionSemaphore != null) context.completionSemaphore.close();
                 if (context.acquireSemaphore != 0L) VK10.vkDestroySemaphore(device, context.acquireSemaphore, null);
+                if (context.proxyPresentSemaphore != 0L) {
+                    VK10.vkDestroySemaphore(device, context.proxyPresentSemaphore, null);
+                }
                 if (context.fence != 0L) VK10.vkDestroyFence(device, context.fence, null);
                 context.overlayUpload.close();
             }
@@ -1433,14 +1745,6 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         commandPool = 0L;
         if (instance != null && surface != 0L) KHRSurface.vkDestroySurfaceKHR(instance, surface, null);
         surface = 0L;
-        if (managedPresentationRegistered) {
-            try {
-                sharedRuntime.endManagedPresentation();
-                managedPresentationRegistered = false;
-            } catch (RuntimeException closeFailure) {
-                failure = accumulate(failure, closeFailure);
-            }
-        }
         if (!sharedDeviceFastPath && device != null) VK10.vkDestroyDevice(device, null);
         device = null;
         if (!sharedDeviceFastPath && instance != null) VK10.vkDestroyInstance(instance, null);
@@ -1450,8 +1754,6 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         if (window != 0L) GLFW.glfwDestroyWindow(window);
         window = 0L;
         if (glfwAcquired) GlfwRuntime.release();
-        closed = true;
-        if (failure != null) throw failure;
     }
 
     private void waitPresenterIdle(String operation) {
@@ -1463,15 +1765,34 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 : "vkDeviceWaitIdle." + operation);
     }
 
+    /**
+     * Selects the binary semaphore whose reuse is proven by the matching WSI contract.
+     *
+     * <p>A native swapchain reacquires a concrete image, so its present semaphore remains tied to
+     * that image. Streamline instead exposes an off-screen proxy index and asynchronously pairs
+     * each present wait with the acquire signal for the next frame context. Binding both proxy
+     * semaphores to the context preserves that pair without pretending the proxy index identifies
+     * the real presentable image.</p>
+     */
+    private long presentSemaphore(FrameContext context, int imageIndex) {
+        return proxySwapchainActive()
+                ? context.proxyPresentSemaphore
+                : presentationSemaphores[imageIndex];
+    }
+
     private void destroySwapchain() {
         if (device == null) return;
+        // The vendor proxy may reject eOff/null-tag cleanup and deliberately retain its
+        // swapchain for retry. Keep every Java-side handle intact until that transaction succeeds.
+        if (swapchain != 0L) {
+            destroySwapchain(swapchain);
+            swapchain = 0L;
+        }
         for (long semaphore : presentationSemaphores) {
             if (semaphore != 0L) VK10.vkDestroySemaphore(device, semaphore, null);
         }
         presentationSemaphores = new long[0];
         swapchainImages = new long[0];
-        if (swapchain != 0L) KHRSwapchain.vkDestroySwapchainKHR(device, swapchain, null);
-        swapchain = 0L;
         swapchainFormat = 0;
         swapchainWidth = 0;
         swapchainHeight = 0;
@@ -1567,7 +1888,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
 
     private void requireOwnerAndOpen() {
         requireOwner();
-        if (closed) throw new IllegalStateException("Vulkan frame presenter is closed");
+        if (closed || closeStarted) throw new IllegalStateException("Vulkan frame presenter is closing or closed");
     }
 
     private void requireOwner() {
@@ -1605,28 +1926,38 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     private static final class FrameContext {
         private final VkCommandBuffer commandBuffer;
         private final long acquireSemaphore;
+        private final long proxyPresentSemaphore;
         private final long fence;
         private final VulkanTextOverlayUpload overlayUpload;
         private VulkanWin32ExternalSemaphoreProbe.ExportedSemaphore completionSemaphore;
         private ImportedFrame importedFrame;
         private RtCommandContext.AsyncSubmission managedSubmission;
+        private GpuFrameLease retainedManagedLease;
+        private boolean fencePending;
         private long overlayRevision = Long.MIN_VALUE;
         private int overlayFormat;
         private int overlayTargetWidth;
         private int overlayTargetHeight;
         private int overlayWidth;
         private int overlayHeight;
+        private List<VulkanTextOverlayRasterizer.CopySpan> overlaySpans = List.of();
 
         private FrameContext(
                 VkCommandBuffer commandBuffer,
                 long acquireSemaphore,
+                long proxyPresentSemaphore,
                 long fence,
                 VulkanTextOverlayUpload overlayUpload
         ) {
             this.commandBuffer = commandBuffer;
             this.acquireSemaphore = acquireSemaphore;
+            this.proxyPresentSemaphore = proxyPresentSemaphore;
             this.fence = fence;
             this.overlayUpload = Objects.requireNonNull(overlayUpload, "overlayUpload");
+        }
+
+        private boolean retains(GpuFrameLease lease) {
+            return retainedManagedLease == lease;
         }
     }
 

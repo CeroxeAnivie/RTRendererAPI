@@ -185,8 +185,9 @@ public interface RayTracingRenderer extends AutoCloseable {
      * to the ordinary renderer lifecycle.
      *
      * <p>The default recognizes interfaces implemented directly by the renderer. Providers may
-     * override this method for delegated extension objects, but must return the same object for the
-     * lifetime of the renderer and must not fabricate support.</p>
+     * override this method for delegated extension objects. Stateful service extensions must keep
+     * stable identity for the renderer lifetime; explicitly documented immutable snapshot value
+     * types may return a newer value on each query. Neither form may fabricate support.</p>
      *
      * @param extensionType non-null extension interface
      * @param <T>           extension interface type

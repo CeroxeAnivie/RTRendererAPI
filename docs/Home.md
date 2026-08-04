@@ -1,23 +1,21 @@
 # RTRendererAPI Java 开发指南
 
-RTRendererAPI 是一个以 Java 21 为编译与运行基线的多模块工程。`renderer-api` 保持后端无关，`renderer-core` 提供 Windows NVIDIA Vulkan RT
-实现；应用通过 `RendererBootstrap` 发现后端，不直接构造实现类。
+RTRendererAPI 是一个以 JDK 25 构建、以 Java 21 字节码与运行时为公开基线的多模块工程。所有 Java 编译任务强制
+`--release 21`。`renderer-api` 保持后端无关，`renderer-core` 提供 Windows NVIDIA Vulkan RT 实现；应用通过
+`RendererBootstrap` 发现后端，不直接构造实现类。
 
 ## 入口
 
 - [Java 开发指南](Java)
 - [Java API 参考](Java-API-Reference)
 - [Vulkan 专家互操作](Vulkan-Interop)
-- [支持与验证矩阵](SUPPORT)
-- [API 迁移指南](MIGRATION)
-- [工业级验收合同](INDUSTRIAL_ACCEPTANCE)
 
 ## 模块边界
 
 - `renderer-api/`：Maven 公共契约。包含不可变场景模型、渲染器生命周期、托管 CPU 帧、稳定异常、SPI 和显式 Vulkan 扩展。
 - `renderer-core/`：Windows NVIDIA Vulkan RT 后端。包含设备探测、GPUScene、BLAS/TLAS、帧资源、SPIR-V、外部内存和诊断实现。
 - `gradle/published-consumer-smoke/`：只从本地 Maven 制品解析依赖的独立消费方，用于阻止项目 classpath 掩盖发布缺陷。
-- `docs/`：面向使用者的开发文档、兼容性事实和发布验收合同。
+- `docs/`：面向使用者的开发文档、兼容性事实和支持验证证据。
 
 ## 使用层级
 

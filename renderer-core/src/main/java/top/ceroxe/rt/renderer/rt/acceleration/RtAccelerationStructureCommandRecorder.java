@@ -32,7 +32,9 @@ final class RtAccelerationStructureCommandRecorder {
         uploadBarrier.get(0)
                 .sType$Default()
                 .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
-                .dstAccessMask(KHRAccelerationStructure.VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR);
+                /* Instance, vertex and index buffers are shader reads performed by the AS build
+                 * stage. AS_READ describes acceleration-structure object access, not its inputs. */
+                .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT);
         VK10.vkCmdPipelineBarrier(
                 commandBuffer,
                 VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,

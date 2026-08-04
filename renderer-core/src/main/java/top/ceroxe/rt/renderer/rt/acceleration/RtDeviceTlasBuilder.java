@@ -174,6 +174,7 @@ public final class RtDeviceTlasBuilder {
         private final int scratchAlignmentBytes;
         private final RtAccelerationStructure.PersistentTlasBuildInputs inputs;
         private PendingBuild pending;
+        private RtTlasBuildPlan prepared;
         private boolean closed;
 
         private PersistentBuildLane(
@@ -251,6 +252,67 @@ public final class RtDeviceTlasBuilder {
             ), true);
         }
 
+        /**
+         * Prepares an allocation-stable full build for a caller-owned command buffer.
+         *
+         * <p>The returned plan exclusively owns the destination until it is committed after a
+         * successful queue submission or closed on failure. The lane's persistent upload and
+         * scratch storage must not be reused until that external submission has completed.</p>
+         *
+         * @param instances complete TLAS instance set
+         * @return exclusive prepared full-build plan
+         */
+        public synchronized RtTlasBuildPlan prepareBuild(List<Instance> instances) {
+            requireAvailable();
+            List<RtAccelerationStructure.TlasInstance> nativeInstances = nativeInstances(instances);
+            return publishPrepared(RtAccelerationStructure.preparePersistentWorldTlas(
+                    device,
+                    allocator,
+                    scratchAlignmentBytes,
+                    null,
+                    null,
+                    nativeInstances,
+                    allSlots(nativeInstances.size()),
+                    inputs,
+                    commands.stallTelemetry()
+            ), false);
+        }
+
+        /**
+         * Prepares a descriptor-safe TLAS update for a caller-owned command buffer.
+         * Ownership of {@code reusableDestination} transfers to the returned plan.
+         *
+         * @param source active source TLAS read by the update
+         * @param reusableDestination inactive destination transferred to the plan
+         * @param instances complete post-update instance set
+         * @param dirtyInstanceSlots sorted instance slots requiring upload
+         * @return exclusive prepared update plan
+         */
+        public synchronized RtTlasBuildPlan prepareUpdate(
+                RtAccelerationStructure source,
+                RtAccelerationStructure reusableDestination,
+                List<Instance> instances,
+                int[] dirtyInstanceSlots
+        ) {
+            requireAvailable();
+            List<RtAccelerationStructure.TlasInstance> nativeInstances = nativeInstances(instances);
+            int[] checkedDirtySlots = Objects.requireNonNull(
+                    dirtyInstanceSlots, "dirtyInstanceSlots"
+            ).clone();
+            RtTlasInstanceEncoder.validateDirtySlots(checkedDirtySlots, nativeInstances.size());
+            return publishPrepared(RtAccelerationStructure.preparePersistentWorldTlas(
+                    device,
+                    allocator,
+                    scratchAlignmentBytes,
+                    Objects.requireNonNull(source, "source"),
+                    reusableDestination,
+                    nativeInstances,
+                    checkedDirtySlots,
+                    inputs,
+                    commands.stallTelemetry()
+            ), true);
+        }
+
         private PendingBuild publish(
                 RtAccelerationStructure.WorldTlasBuildSubmission submission,
                 boolean update
@@ -260,13 +322,26 @@ public final class RtDeviceTlasBuilder {
             return result;
         }
 
+        private RtTlasBuildPlan publishPrepared(
+                PreparedTlasBuild build,
+                boolean update
+        ) {
+            RtTlasBuildPlan result = new RtTlasBuildPlan(build, update, this::retirePrepared);
+            prepared = result;
+            return result;
+        }
+
         private synchronized void retirePending() {
             pending = null;
         }
 
+        private synchronized void retirePrepared() {
+            prepared = null;
+        }
+
         private void requireAvailable() {
             if (closed) throw new IllegalStateException("persistent TLAS build lane is closed");
-            if (pending != null) {
+            if (pending != null || prepared != null) {
                 throw new IllegalStateException("persistent TLAS build lane already has pending work");
             }
         }
@@ -283,6 +358,15 @@ public final class RtDeviceTlasBuilder {
                     failure = closeFailure;
                 }
                 pending = null;
+            }
+            if (prepared != null) {
+                try {
+                    prepared.close();
+                } catch (RuntimeException closeFailure) {
+                    if (failure == null) failure = closeFailure;
+                    else failure.addSuppressed(closeFailure);
+                }
+                prepared = null;
             }
             try {
                 inputs.close();

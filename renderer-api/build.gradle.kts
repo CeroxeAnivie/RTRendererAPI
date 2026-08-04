@@ -49,17 +49,36 @@ data class RuntimeModuleInventory(
 group = rootProject.group
 version = rootProject.version
 
-val javaVersion = rootProject.providers.gradleProperty("java_version").get().toInt()
+val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version").get().toInt()
 
 dependencies {
     // Consumers declare one coordinate. The API remains compile-time independent from the
-    // backend, while the published runtime graph supplies the Windows NVIDIA implementation.
+    // backend, while the published runtime graph supplies both the Vulkan core and the optional
+    // NVIDIA provider. Keep the provider as an external runtime coordinate here: making it a
+    // project dependency would create a Gradle task-cycle because the provider compiles against
+    // this API contract.
     runtimeOnly(project(":renderer-core"))
+    runtimeOnly("${rootProject.group}:renderer-nvidia:${rootProject.version}")
+    // In the composite build, use the sibling project for API contract tests. Published metadata
+    // still contains only the external runtime coordinate above, while local tests remain
+    // self-contained and do not require a repository to already contain this version.
+    testRuntimeOnly(project(":renderer-nvidia"))
+}
+
+// The published POM intentionally keeps renderer-nvidia as an external runtime coordinate, but
+// repository-local verification must resolve the sibling project instead of querying Maven
+// Central for the unreleased 0.5.0 artifact. This substitution is configuration-local and does
+// not alter publication metadata or the single-coordinate consumer contract.
+configurations.named("runtimeClasspath") {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("${rootProject.group}:renderer-nvidia:${rootProject.version}"))
+            .using(project(":renderer-nvidia"))
+    }
 }
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(javaVersion)
+        languageVersion = JavaLanguageVersion.of(toolchainJavaVersion)
     }
     withSourcesJar()
     withJavadocJar()
@@ -67,7 +86,6 @@ java {
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
-    options.release = javaVersion
     options.compilerArgs.addAll(listOf("-Xlint:deprecation", "-Xlint:unchecked"))
 }
 
@@ -166,7 +184,7 @@ tasks.register("generateRendererApiAbi") {
         }
 
         val launcher = javaToolchains.launcherFor {
-            languageVersion = JavaLanguageVersion.of(javaVersion)
+            languageVersion = JavaLanguageVersion.of(toolchainJavaVersion)
         }.get()
         val javapExecutable = launcher.metadata.installationPath.file("bin/javap.exe").asFile
         if (!javapExecutable.isFile) {
@@ -249,6 +267,7 @@ val runtimeProjectCoordinates = rootProject.subprojects.associate { child ->
 }
 val runtimeLicensePolicy = mapOf(
     "top.ceroxe.rt:renderer-core" to RuntimeLicensePolicy("MIT", "MIT License"),
+    "top.ceroxe.rt:renderer-nvidia" to RuntimeLicensePolicy("MIT", "MIT License"),
     "it.unimi.dsi:fastutil" to RuntimeLicensePolicy("Apache-2.0", "Apache License 2.0"),
     "org.joml:joml" to RuntimeLicensePolicy("MIT", "MIT License"),
     "org.lwjgl:lwjgl" to RuntimeLicensePolicy("BSD-3-Clause", "BSD 3-Clause License"),

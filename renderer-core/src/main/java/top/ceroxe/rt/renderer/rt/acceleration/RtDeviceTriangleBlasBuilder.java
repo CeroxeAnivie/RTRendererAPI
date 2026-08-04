@@ -223,7 +223,8 @@ public final class RtDeviceTriangleBlasBuilder {
                 VkAccelerationStructureGeometryKHR.calloc(geometries.size(), stack);
         for (int index = 0; index < geometries.size(); index++) {
             Geometry geometry = geometries.get(index);
-            nativeGeometries.get(index)
+            VkAccelerationStructureGeometryKHR nativeGeometry = nativeGeometries.get(index);
+            nativeGeometry
                     .sType$Default()
                     .geometryType(KHRAccelerationStructure.VK_GEOMETRY_TYPE_TRIANGLES_KHR)
                     .geometry(data -> data.triangles(triangles -> triangles
@@ -318,7 +319,7 @@ public final class RtDeviceTriangleBlasBuilder {
      * <p>A successful completion transfers exactly one acceleration structure to the caller. Until
      * that transfer, callers must retain this owner and all source geometry buffers.</p>
      */
-    public static final class PendingBuild implements AutoCloseable {
+    public static final class PendingBuild implements RtBottomLevelBuild {
         private final VkDevice device;
         private final long allocator;
         private final RtCommandContext commands;

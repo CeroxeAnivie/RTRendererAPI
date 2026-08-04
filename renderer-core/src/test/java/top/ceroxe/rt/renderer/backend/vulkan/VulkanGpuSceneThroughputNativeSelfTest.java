@@ -5,12 +5,18 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
+import top.ceroxe.rt.renderer.api.DenoisingOptions;
+import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
+import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
+import top.ceroxe.rt.renderer.api.LowLatencyOptions;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.api.SubmissionRejectedException;
+import top.ceroxe.rt.renderer.api.TemporalRenderingOptions;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease.LeaseState;
@@ -32,7 +38,22 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
    public static void main(String[] arguments) throws Exception {
       VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
       require(capability.hardwareRayTracingReady(), "GPUScene throughput gate requires hardware RT: " + capability.summary());
-      RayTracingRendererConfig configuration = RayTracingRendererConfig.builder().maxFramesInFlight(8).validationEnabled(false).gpuTimingsEnabled(true).build();
+      /*
+       * Keep this historical throughput comparison independent of production feature defaults.
+       * An API-version A/B must measure the base GPUScene pipeline, not whatever optional provider
+       * policy happened to become the public default in that release.
+       */
+      RayTracingRendererConfig configuration = RayTracingRendererConfig.builder()
+              .temporalRendering(TemporalRenderingOptions.disabled())
+              .frameReconstruction(FrameReconstructionOptions.disabled())
+              .denoising(DenoisingOptions.disabled())
+              .frameGeneration(FrameGenerationOptions.disabled())
+              .lowLatency(LowLatencyOptions.disabled())
+              .rayTracingOptimizations(RayTracingOptimizationOptions.disabled())
+              .maxFramesInFlight(8)
+              .validationEnabled(false)
+              .gpuTimingsEnabled(true)
+              .build();
       long coldStartNanos = System.nanoTime();
       RayTracingRenderer renderer = RendererBootstrap.openProvider("vulkan-rt", configuration);
 

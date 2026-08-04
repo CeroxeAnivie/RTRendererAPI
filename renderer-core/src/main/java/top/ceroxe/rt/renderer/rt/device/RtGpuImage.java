@@ -4,6 +4,7 @@ import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.Vma;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
+import org.lwjgl.util.vma.VmaAllocationInfo;
 import org.lwjgl.vulkan.*;
 import top.ceroxe.rt.renderer.rt.device.interop.VulkanWin32ExternalMemoryProbe;
 import top.ceroxe.rt.renderer.rt.device.interop.Win32HandleSupport;
@@ -24,6 +25,8 @@ public final class RtGpuImage implements AutoCloseable {
     private static final int STORAGE_IMAGE_USAGE = VK10.VK_IMAGE_USAGE_STORAGE_BIT
             | VK10.VK_IMAGE_USAGE_TRANSFER_SRC_BIT
             | VK10.VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    private static final int STORAGE_SAMPLED_IMAGE_USAGE = STORAGE_IMAGE_USAGE
+            | VK10.VK_IMAGE_USAGE_SAMPLED_BIT;
 
     private final VkDevice device;
     private final long allocator;
@@ -92,6 +95,42 @@ public final class RtGpuImage implements AutoCloseable {
             int height,
             int format
     ) {
+        return createVmaImage(device, allocator, width, height, format, STORAGE_IMAGE_USAGE);
+    }
+
+    /**
+     * Creates a device-local image that can be written by the renderer and sampled by a
+     * reconstruction implementation such as DLSS.
+     *
+     * <p>This is deliberately separate from {@link #createStorageImage(VkDevice, long, int, int, int)}.
+     * Adding sampled usage to every renderer storage image would broaden resource contracts and
+     * driver requirements for unrelated render targets.</p>
+     *
+     * @param device    logical device that owns the image and view
+     * @param allocator live VMA allocator associated with {@code device}
+     * @param width     positive image width in pixels
+     * @param height    positive image height in pixels
+     * @param format    Vulkan image format
+     * @return independently owned storage-and-sampled image
+     */
+    public static RtGpuImage createStorageSampledImage(
+            VkDevice device,
+            long allocator,
+            int width,
+            int height,
+            int format
+    ) {
+        return createVmaImage(device, allocator, width, height, format, STORAGE_SAMPLED_IMAGE_USAGE);
+    }
+
+    private static RtGpuImage createVmaImage(
+            VkDevice device,
+            long allocator,
+            int width,
+            int height,
+            int format,
+            int usageFlags
+    ) {
         Objects.requireNonNull(device, "device");
         if (allocator == 0L) {
             throw new IllegalArgumentException("allocator must not be null");
@@ -101,7 +140,7 @@ public final class RtGpuImage implements AutoCloseable {
         }
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            VkImageCreateInfo imageCreateInfo = storageImageCreateInfo(stack, width, height, format, 0L);
+            VkImageCreateInfo imageCreateInfo = imageCreateInfo(stack, width, height, format, usageFlags, 0L);
 
             VmaAllocationCreateInfo allocationCreateInfo = VmaAllocationCreateInfo.calloc(stack)
                     .usage(Vma.VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE)
@@ -119,18 +158,24 @@ public final class RtGpuImage implements AutoCloseable {
             long allocationSize = 0L;
             try {
                 allocationSize = queryMemoryRequirements(stack, device, image).size();
+                VmaAllocationInfo allocationInfo = VmaAllocationInfo.calloc(stack);
+                Vma.vmaGetAllocationInfo(allocator, allocation, allocationInfo);
+                long memory = allocationInfo.deviceMemory();
+                if (memory == VK10.VK_NULL_HANDLE) {
+                    throw new IllegalStateException("VMA storage image has no VkDeviceMemory backing");
+                }
                 long imageView = createImageView(stack, device, image, format);
                 return new RtGpuImage(
                         device,
                         allocator,
                         image,
                         allocation,
-                        VK10.VK_NULL_HANDLE,
+                        memory,
                         imageView,
                         width,
                         height,
                         format,
-                        STORAGE_IMAGE_USAGE,
+                        usageFlags,
                         allocationSize,
                         -1,
                         false,
@@ -163,6 +208,46 @@ public final class RtGpuImage implements AutoCloseable {
             int format,
             boolean dedicatedAllocationRequired
     ) {
+        return createExportableImage(
+                physicalDevice, device, width, height, format,
+                dedicatedAllocationRequired, STORAGE_IMAGE_USAGE
+        );
+    }
+
+    /**
+     * Creates exportable storage that may also be sampled by presentation-time features.
+     *
+     * @param physicalDevice physical device used to select an export-compatible memory type
+     * @param device logical device that owns the image, memory, and view
+     * @param width positive image width in pixels
+     * @param height positive image height in pixels
+     * @param format Vulkan image format
+     * @param dedicatedAllocationRequired whether the export contract requires dedicated memory
+     * @return independently owned exportable storage-and-sampled image
+     */
+    public static RtGpuImage createExportableStorageSampledImage(
+            VkPhysicalDevice physicalDevice,
+            VkDevice device,
+            int width,
+            int height,
+            int format,
+            boolean dedicatedAllocationRequired
+    ) {
+        return createExportableImage(
+                physicalDevice, device, width, height, format,
+                dedicatedAllocationRequired, STORAGE_SAMPLED_IMAGE_USAGE
+        );
+    }
+
+    private static RtGpuImage createExportableImage(
+            VkPhysicalDevice physicalDevice,
+            VkDevice device,
+            int width,
+            int height,
+            int format,
+            boolean dedicatedAllocationRequired,
+            int usageFlags
+    ) {
         Objects.requireNonNull(physicalDevice, "physicalDevice");
         Objects.requireNonNull(device, "device");
         if (width <= 0 || height <= 0) {
@@ -173,11 +258,12 @@ public final class RtGpuImage implements AutoCloseable {
             VkExternalMemoryImageCreateInfo externalImageInfo = VkExternalMemoryImageCreateInfo.calloc(stack)
                     .sType$Default()
                     .handleTypes(EXTERNAL_WIN32_HANDLE_TYPE);
-            VkImageCreateInfo imageCreateInfo = storageImageCreateInfo(
+            VkImageCreateInfo imageCreateInfo = imageCreateInfo(
                     stack,
                     width,
                     height,
                     format,
+                    usageFlags,
                     externalImageInfo.address()
             );
 
@@ -209,7 +295,7 @@ public final class RtGpuImage implements AutoCloseable {
                         width,
                         height,
                         format,
-                        STORAGE_IMAGE_USAGE,
+                        usageFlags,
                         allocationSize,
                         memoryTypeIndex,
                         true,
@@ -225,11 +311,12 @@ public final class RtGpuImage implements AutoCloseable {
         }
     }
 
-    private static VkImageCreateInfo storageImageCreateInfo(
+    private static VkImageCreateInfo imageCreateInfo(
             MemoryStack stack,
             int width,
             int height,
             int format,
+            int usageFlags,
             long pNext
     ) {
         VkImageCreateInfo imageCreateInfo = VkImageCreateInfo.calloc(stack)
@@ -241,7 +328,7 @@ public final class RtGpuImage implements AutoCloseable {
                 .arrayLayers(1)
                 .samples(VK10.VK_SAMPLE_COUNT_1_BIT)
                 .tiling(VK10.VK_IMAGE_TILING_OPTIMAL)
-                .usage(STORAGE_IMAGE_USAGE)
+                .usage(usageFlags)
                 .sharingMode(VK10.VK_SHARING_MODE_EXCLUSIVE)
                 .initialLayout(VK10.VK_IMAGE_LAYOUT_UNDEFINED);
         imageCreateInfo.extent()
@@ -369,7 +456,7 @@ public final class RtGpuImage implements AutoCloseable {
     /**
      * Returns directly allocated device memory without transferring ownership.
      *
-     * @return owned {@code VkDeviceMemory}, or zero for VMA-owned images
+     * @return owned {@code VkDeviceMemory}; VMA-backed images expose the allocation's device memory
      */
     public long memory() {
         return memory;

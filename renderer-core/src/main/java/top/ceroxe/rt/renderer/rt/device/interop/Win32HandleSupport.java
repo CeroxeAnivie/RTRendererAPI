@@ -23,6 +23,8 @@ public final class Win32HandleSupport {
             Kernel32.getLibrary().getFunctionAddress("GetHandleInformation");
     private static final long DUPLICATE_HANDLE =
             Kernel32.getLibrary().getFunctionAddress("DuplicateHandle");
+    private static final long GET_PROCESS_HANDLE_COUNT =
+            Kernel32.getLibrary().getFunctionAddress("GetProcessHandleCount");
     private static final int DUPLICATE_SAME_ACCESS = 0x00000002;
     private static final int ERROR_PROC_NOT_FOUND = 127;
     private static final ThreadLocal<Integer> LAST_CLOSE_ERROR = ThreadLocal.withInitial(() -> 0);
@@ -70,6 +72,22 @@ public final class Win32HandleSupport {
      */
     public static int lastError() {
         return LAST_CLOSE_ERROR.get();
+    }
+
+    /**
+     * Returns the current process kernel-handle count for bounded native-growth diagnostics.
+     *
+     * @return non-negative handle count, or {@code -1} when the Win32 query is unavailable/fails
+     */
+    public static int processHandleCount() {
+        if (GET_PROCESS_HANDLE_COUNT == 0L) return -1;
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            IntBuffer count = stack.callocInt(1);
+            long succeeded = JNI.invokePPI(
+                    Kernel32.GetCurrentProcess(), MemoryUtil.memAddress(count), GET_PROCESS_HANDLE_COUNT
+            );
+            return succeeded == 0L ? -1 : count.get(0);
+        }
     }
 
     /**

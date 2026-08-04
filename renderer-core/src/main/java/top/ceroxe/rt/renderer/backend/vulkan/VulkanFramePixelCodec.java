@@ -27,6 +27,24 @@ final class VulkanFramePixelCodec {
         return rgba8;
     }
 
+    static void requireFiniteLinearHdrRgba16f(byte[] rgba16f) {
+        byte[] checked = Objects.requireNonNull(rgba16f, "rgba16f");
+        if ((checked.length & 7) != 0) {
+            throw new IllegalArgumentException("RGBA16F payload must contain complete eight-byte pixels");
+        }
+        for (int offset = 0; offset < checked.length; offset += Short.BYTES) {
+            int bits = readHalf(checked, offset) & 0xffff;
+            if ((bits & 0x7c00) == 0x7c00) {
+                int component = offset / Short.BYTES;
+                throw new IllegalStateException(
+                        "linear HDR readback contains NaN/Inf at pixel=" + (component / 4)
+                                + ", channel=" + (component % 4)
+                                + ", halfBits=0x" + Integer.toHexString(bits)
+                );
+            }
+        }
+    }
+
     private static short readHalf(byte[] bytes, int offset) {
         return (short) ((bytes[offset] & 0xff) | ((bytes[offset + 1] & 0xff) << 8));
     }

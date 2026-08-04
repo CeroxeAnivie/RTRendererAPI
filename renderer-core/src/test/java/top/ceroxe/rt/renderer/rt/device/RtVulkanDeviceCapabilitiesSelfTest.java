@@ -12,6 +12,7 @@ public final class RtVulkanDeviceCapabilitiesSelfTest {
 
    public static void main(String[] args) {
       acceptsCoreBufferDeviceAddressOnVulkan12();
+      removesProviderBufferDeviceAddressAliasesOnVulkan12();
       requiresPre12CompatibilityExtensions();
       rejectsMissingRequiredRayTracingExtension();
       rejectsMissingShaderInt64Feature();
@@ -25,6 +26,22 @@ public final class RtVulkanDeviceCapabilitiesSelfTest {
       List<String> enabled = RtVulkanDeviceCapabilities.requiredDeviceExtensions(available, VK12.VK_API_VERSION_1_2);
       require(!enabled.contains("VK_KHR_buffer_device_address"), "Vulkan 1.2 must accept core buffer-device-address support without enabling the KHR alias");
       require(RtVulkanDeviceCapabilities.hardwareRtReady(VK12.VK_API_VERSION_1_2, available, fullyEnabledFeatures()), "Vulkan 1.2 core BDA/SPIR-V 1.4/float-controls support should satisfy RT policy");
+   }
+
+   private static void removesProviderBufferDeviceAddressAliasesOnVulkan12() {
+      Set<String> available = baseRtExtensions();
+      available.add("VK_KHR_buffer_device_address");
+      available.add("VK_EXT_buffer_device_address");
+      List<String> enabled = RtVulkanDeviceCapabilities.requiredDeviceExtensions(
+              available,
+              VK12.VK_API_VERSION_1_2,
+              Set.of("VK_KHR_buffer_device_address", "VK_EXT_buffer_device_address"),
+              Set.of()
+      );
+      require(!enabled.contains("VK_KHR_buffer_device_address"),
+              "Vulkan 1.2 must discard a provider-reported KHR BDA alias");
+      require(!enabled.contains("VK_EXT_buffer_device_address"),
+              "Vulkan 1.2 must discard a provider-reported EXT BDA alias");
    }
 
    private static void requiresPre12CompatibilityExtensions() {

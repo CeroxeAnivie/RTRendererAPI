@@ -7,9 +7,12 @@ import top.ceroxe.rt.renderer.api.SceneInstance;
 import top.ceroxe.rt.renderer.api.SceneLight;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
 import top.ceroxe.rt.renderer.api.TextureAsset;
+import top.ceroxe.rt.renderer.api.AffineTransform;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -21,6 +24,8 @@ final class VulkanSceneResidency {
     private final StableIdentitySlots<MeshAsset> meshes = new StableIdentitySlots<>(MeshAsset::id);
     private final StableIdentitySlots<SceneInstance> instances = new StableIdentitySlots<>(SceneInstance::id);
     private final StableIdentitySlots<SceneLight> lights = new StableIdentitySlots<>(SceneLight::id);
+    /** Last instance transforms used by a successfully submitted frame, not merely by a scene update. */
+    private final Map<Long, AffineTransform> lastRenderedTransforms = new HashMap<>();
 
     private long revision = -1L;
 
@@ -64,6 +69,7 @@ final class VulkanSceneResidency {
         StableIdentitySlots.Prepared<SceneLight> preparedLights =
                 lights.prepare(checked.revision(), checked.reset(), upserts.lights(), removals.lightIds());
         MeshUpdates meshUpdates = meshUpdates(preparedMeshes, checked.reset());
+        List<InstanceMotionWrite> instanceMotionWrites = instanceMotionWrites(preparedInstances, checked.reset());
         return new PreparedUpdate(
                 this,
                 revision,
@@ -82,6 +88,7 @@ final class VulkanSceneResidency {
                         change(preparedMeshes),
                         meshUpdates,
                         change(preparedInstances),
+                        instanceMotionWrites,
                         change(preparedLights)
                 )
         );
@@ -155,6 +162,29 @@ final class VulkanSceneResidency {
         return lights.slot(id);
     }
 
+    /**
+     * Commits the instance transforms actually consumed by a successfully admitted frame. A scene
+     * transaction can be prepared more often than frames are rendered, so this is deliberately a
+     * frame boundary rather than part of {@link #commitValidated(PreparedUpdate)}.
+     */
+    synchronized void markFrameRendered(long renderedRevision) {
+        // Before the first scene transaction, the public scene authority is the empty revision 0
+        // while the internal -1 sentinel means only that no slot transaction has been committed.
+        // Empty-scene frames are therefore valid and must use the same normalized revision exposed
+        // by state(); no instance transform can be lost because the residency is necessarily empty.
+        long effectiveRevision = Math.max(0L, revision);
+        if (renderedRevision != effectiveRevision) {
+            throw new IllegalArgumentException(
+                    "rendered scene revision does not match resident revision: rendered="
+                            + renderedRevision + ", resident=" + effectiveRevision
+            );
+        }
+        lastRenderedTransforms.clear();
+        for (SceneInstance instance : instances.valuesSnapshot()) {
+            lastRenderedTransforms.put(instance.id(), instance.transform());
+        }
+    }
+
     private MeshUpdates meshUpdates(StableIdentitySlots.Prepared<MeshAsset> prepared, boolean reset) {
         ArrayList<MeshUpdate> updates = new ArrayList<>(prepared.writes().size());
         for (StableIdentitySlots.SlotWrite<MeshAsset> write : prepared.writes()) {
@@ -162,6 +192,20 @@ final class VulkanSceneResidency {
             updates.add(new MeshUpdate(write.id(), write.slot(), MeshDirtyMask.between(previous, write.value())));
         }
         return new MeshUpdates(updates);
+    }
+
+    private List<InstanceMotionWrite> instanceMotionWrites(
+            StableIdentitySlots.Prepared<SceneInstance> prepared,
+            boolean reset
+    ) {
+        ArrayList<InstanceMotionWrite> writes = new ArrayList<>(prepared.writes().size());
+        for (StableIdentitySlots.SlotWrite<SceneInstance> write : prepared.writes()) {
+            AffineTransform previous = reset ? null : lastRenderedTransforms.get(write.id());
+            writes.add(new InstanceMotionWrite(
+                    write.slot(), write.id(), write.value(), previous == null ? write.value().transform() : previous
+            ));
+        }
+        return List.copyOf(writes);
     }
 
     static final class PreparedUpdate {
@@ -242,6 +286,7 @@ final class VulkanSceneResidency {
             DomainChange<MeshAsset> meshes,
             MeshUpdates meshUpdates,
             DomainChange<SceneInstance> instances,
+            List<InstanceMotionWrite> instanceMotionWrites,
             DomainChange<SceneLight> lights
     ) {
         SceneChangeSet {
@@ -253,8 +298,20 @@ final class VulkanSceneResidency {
             meshes = Objects.requireNonNull(meshes, "meshes");
             meshUpdates = Objects.requireNonNull(meshUpdates, "meshUpdates");
             instances = Objects.requireNonNull(instances, "instances");
+            instanceMotionWrites = List.copyOf(Objects.requireNonNull(instanceMotionWrites, "instanceMotionWrites"));
             lights = Objects.requireNonNull(lights, "lights");
             meshUpdates.validate(meshes.writes());
+            if (instanceMotionWrites.size() != instances.writes().size()) {
+                throw new IllegalArgumentException("instance motion writes do not match instance writes");
+            }
+            for (int index = 0; index < instanceMotionWrites.size(); index++) {
+                InstanceMotionWrite motion = instanceMotionWrites.get(index);
+                StableIdentitySlots.SlotWrite<SceneInstance> write = instances.writes().get(index);
+                if (motion.slot() != write.slot() || motion.id() != write.id()
+                        || motion.current() != write.value()) {
+                    throw new IllegalArgumentException("instance motion write diverges from instance write");
+                }
+            }
         }
 
         SceneChangeSet(
@@ -269,8 +326,21 @@ final class VulkanSceneResidency {
         ) {
             this(
                     baseRevision, revision, reset, textures, materials, meshes,
-                    MeshUpdates.all(meshes.writes()), instances, lights
+                    MeshUpdates.all(meshes.writes()), instances,
+                    defaultInstanceMotionWrites(instances), lights
             );
+        }
+
+        private static List<InstanceMotionWrite> defaultInstanceMotionWrites(
+                DomainChange<SceneInstance> instances
+        ) {
+            ArrayList<InstanceMotionWrite> result = new ArrayList<>(instances.writes().size());
+            for (StableIdentitySlots.SlotWrite<SceneInstance> write : instances.writes()) {
+                result.add(new InstanceMotionWrite(
+                        write.slot(), write.id(), write.value(), write.value().transform()
+                ));
+            }
+            return List.copyOf(result);
         }
 
         int totalWrites() {
@@ -423,6 +493,20 @@ final class VulkanSceneResidency {
             if (writes < 0 || removals < 0 || clears < 0 || liveSlots < 0 || slotUpperBound < liveSlots) {
                 throw new IllegalArgumentException("resident domain update statistics are invalid");
             }
+        }
+    }
+
+    record InstanceMotionWrite(
+            int slot,
+            long id,
+            SceneInstance current,
+            AffineTransform previousTransform
+    ) {
+        InstanceMotionWrite {
+            if (slot < 0 || id < 0L) throw new IllegalArgumentException("instance motion identity is invalid");
+            current = Objects.requireNonNull(current, "current");
+            previousTransform = Objects.requireNonNull(previousTransform, "previousTransform");
+            if (current.id() != id) throw new IllegalArgumentException("instance motion id does not match current instance");
         }
     }
 

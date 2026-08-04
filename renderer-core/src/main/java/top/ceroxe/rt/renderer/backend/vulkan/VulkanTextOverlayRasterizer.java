@@ -1,12 +1,19 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 /** Produces a compact, dependency-free 5x7 diagnostic HUD for transfer-only presentation. */
 final class VulkanTextOverlayRasterizer {
     static final int MAX_WIDTH = 1_024;
-    static final int MAX_HEIGHT = 256;
+    // Twelve lines are required by the public technology HUD (two performance plus ten features).
+    // Keep a hard cap so arbitrary overlay text cannot create an unbounded upload allocation.
+    static final int MAX_HEIGHT = 384;
 
     private static final int SCALE = 3;
     private static final int GLYPH_WIDTH = 5;
@@ -48,8 +55,6 @@ final class VulkanTextOverlayRasterizer {
         );
         int height = PADDING * 2 + GLYPH_HEIGHT * SCALE + (lineCount - 1) * LINE_ADVANCE;
         byte[] pixels = new byte[Math.multiplyExact(Math.multiplyExact(width, height), 4)];
-        fill(pixels, width, height, bgra, 10, 15, 23);
-
         for (int line = 0; line < lineCount; line++) {
             String value = requestedLines[line];
             int characters = Math.min(value.length(), maximumCharacters);
@@ -72,23 +77,41 @@ final class VulkanTextOverlayRasterizer {
                 );
             }
         }
-        return new Raster(width, height, pixels);
+        return new Raster(width, height, pixels, copySpans(pixels, width, height));
     }
 
-    private static void fill(
-            byte[] pixels,
-            int width,
-            int height,
-            boolean bgra,
-            int red,
-            int green,
-            int blue
-    ) {
+    private static List<CopySpan> copySpans(byte[] pixels, int width, int height) {
+        ArrayList<SpanBuilder> completed = new ArrayList<>();
+        Map<Long, SpanBuilder> active = Map.of();
         for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                putPixel(pixels, width, x, y, bgra, red, green, blue);
+            Map<Long, SpanBuilder> next = new HashMap<>();
+            int x = 0;
+            while (x < width) {
+                while (x < width && pixels[(y * width + x) * 4 + 3] == 0) x++;
+                int start = x;
+                while (x < width && pixels[(y * width + x) * 4 + 3] != 0) x++;
+                if (start == x) continue;
+                int spanWidth = x - start;
+                long key = ((long) start << 32) | Integer.toUnsignedLong(spanWidth);
+                SpanBuilder span = active.get(key);
+                if (span == null) {
+                    span = new SpanBuilder(start, y, spanWidth);
+                } else {
+                    span.height++;
+                }
+                next.put(key, span);
             }
+            for (Map.Entry<Long, SpanBuilder> entry : active.entrySet()) {
+                if (!next.containsKey(entry.getKey())) completed.add(entry.getValue());
+            }
+            active = next;
         }
+        completed.addAll(active.values());
+        completed.sort(Comparator.comparingInt((SpanBuilder span) -> span.y)
+                .thenComparingInt(span -> span.x));
+        return completed.stream()
+                .map(span -> new CopySpan(span.x, span.y, span.width, span.height))
+                .toList();
     }
 
     private static void drawGlyph(
@@ -177,6 +200,7 @@ final class VulkanTextOverlayRasterizer {
             case '.' -> 0b00000_00000_00000_00000_00000_00110_00110L;
             case ':' -> 0b00000_00110_00110_00000_00110_00110_00000L;
             case '-' -> 0b00000_00000_00000_11111_00000_00000_00000L;
+            case '|' -> 0b00100_00100_00100_00100_00100_00100_00100L;
             case '/' -> 0b00001_00010_00010_00100_01000_01000_10000L;
             case '(' -> 0b00010_00100_01000_01000_01000_00100_00010L;
             case ')' -> 0b01000_00100_00010_00010_00010_00100_01000L;
@@ -185,17 +209,44 @@ final class VulkanTextOverlayRasterizer {
         };
     }
 
-    record Raster(int width, int height, byte[] pixels) {
-        private static final Raster EMPTY = new Raster(0, 0, new byte[0]);
+    record Raster(int width, int height, byte[] pixels, List<CopySpan> copySpans) {
+        private static final Raster EMPTY = new Raster(0, 0, new byte[0], List.of());
 
         Raster {
             if (width < 0 || height < 0 || (width == 0) != (height == 0)) {
                 throw new IllegalArgumentException("overlay dimensions must both be zero or positive");
             }
             pixels = Objects.requireNonNull(pixels, "pixels");
+            copySpans = List.copyOf(Objects.requireNonNull(copySpans, "copySpans"));
             if (pixels.length != Math.multiplyExact(Math.multiplyExact(width, height), 4)) {
                 throw new IllegalArgumentException("overlay byte count does not match its dimensions");
             }
+            for (CopySpan span : copySpans) {
+                if (span.x() + span.width() > width || span.y() + span.height() > height) {
+                    throw new IllegalArgumentException("overlay copy span exceeds its dimensions");
+                }
+            }
+        }
+    }
+
+    record CopySpan(int x, int y, int width, int height) {
+        CopySpan {
+            if (x < 0 || y < 0 || width <= 0 || height <= 0) {
+                throw new IllegalArgumentException("overlay copy span must have positive geometry");
+            }
+        }
+    }
+
+    private static final class SpanBuilder {
+        private final int x;
+        private final int y;
+        private final int width;
+        private int height = 1;
+
+        private SpanBuilder(int x, int y, int width) {
+            this.x = x;
+            this.y = y;
+            this.width = width;
         }
     }
 }

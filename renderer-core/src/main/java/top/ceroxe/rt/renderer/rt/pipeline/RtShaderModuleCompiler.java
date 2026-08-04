@@ -60,6 +60,7 @@ final class RtShaderModuleCompiler {
                 shaderKind,
                 Boolean.getBoolean(DIAGNOSTIC_GBUFFER_ENABLED_PROPERTY),
                 false,
+                false,
                 edges
         );
     }
@@ -74,6 +75,16 @@ final class RtShaderModuleCompiler {
             boolean linearHdrOutput,
             RtEdgeSink edges
     ) {
+        return loadProduction(resourcePath, shaderKind, linearHdrOutput, false, edges);
+    }
+
+    static byte[] loadProduction(
+            String resourcePath,
+            int shaderKind,
+            boolean linearHdrOutput,
+            boolean shaderExecutionReorderingEnabled,
+            RtEdgeSink edges
+    ) {
         RtEdgeSink checkedEdges = java.util.Objects.requireNonNull(edges, "edges");
         boolean diagnosticGBufferEnabled = Boolean.getBoolean(DIAGNOSTIC_GBUFFER_ENABLED_PROPERTY);
         boolean disableDynamicAnalyticLoop = "assets/rtrenderer/shaders/bootstrap.rgen".equals(resourcePath)
@@ -81,13 +92,18 @@ final class RtShaderModuleCompiler {
                 && Boolean.getBoolean(DISABLE_DYNAMIC_ANALYTIC_LOOP_PROPERTY);
         if (disableDynamicAnalyticLoop) {
             /* This fault-isolation variant is intentionally diagnostic-only and not a startup dependency. */
-            return compile(resourcePath, shaderKind, diagnosticGBufferEnabled, linearHdrOutput, checkedEdges);
+            return compile(
+                    resourcePath, shaderKind, diagnosticGBufferEnabled, linearHdrOutput,
+                    shaderExecutionReorderingEnabled, checkedEdges
+            );
         }
-        return loadPrecompiled(resourcePath, diagnosticGBufferEnabled, linearHdrOutput);
+        return loadPrecompiled(
+                resourcePath, diagnosticGBufferEnabled, linearHdrOutput, shaderExecutionReorderingEnabled
+        );
     }
 
     static byte[] compileForVerification(String resourcePath, int shaderKind, boolean diagnosticGBufferEnabled) {
-        return compile(resourcePath, shaderKind, diagnosticGBufferEnabled, false, RtEdgeSink.NOOP);
+        return compile(resourcePath, shaderKind, diagnosticGBufferEnabled, false, false, RtEdgeSink.NOOP);
     }
 
     static byte[] compileForVerification(
@@ -96,7 +112,22 @@ final class RtShaderModuleCompiler {
             boolean diagnosticGBufferEnabled,
             boolean linearHdrOutput
     ) {
-        return compile(resourcePath, shaderKind, diagnosticGBufferEnabled, linearHdrOutput, RtEdgeSink.NOOP);
+        return compile(
+                resourcePath, shaderKind, diagnosticGBufferEnabled, linearHdrOutput, false, RtEdgeSink.NOOP
+        );
+    }
+
+    static byte[] compileForVerification(
+            String resourcePath,
+            int shaderKind,
+            boolean diagnosticGBufferEnabled,
+            boolean linearHdrOutput,
+            boolean shaderExecutionReorderingEnabled
+    ) {
+        return compile(
+                resourcePath, shaderKind, diagnosticGBufferEnabled, linearHdrOutput,
+                shaderExecutionReorderingEnabled, RtEdgeSink.NOOP
+        );
     }
 
     static byte[] loadPrecompiled(String resourcePath, boolean diagnosticGBufferEnabled) {
@@ -108,13 +139,23 @@ final class RtShaderModuleCompiler {
             boolean diagnosticGBufferEnabled,
             boolean linearHdrOutput
     ) {
+        return loadPrecompiled(resourcePath, diagnosticGBufferEnabled, linearHdrOutput, false);
+    }
+
+    static byte[] loadPrecompiled(
+            String resourcePath,
+            boolean diagnosticGBufferEnabled,
+            boolean linearHdrOutput,
+            boolean shaderExecutionReorderingEnabled
+    ) {
         String normalized = normalizeResourcePath(resourcePath);
         String shaderRoot = "assets/rtrenderer/shaders/";
         if (!normalized.startsWith(shaderRoot)) {
             throw new IllegalArgumentException("shader is outside the renderer shader root: " + resourcePath);
         }
         String variant = (diagnosticGBufferEnabled ? "gbuffer" : "base")
-                + (linearHdrOutput ? "-hdr" : "");
+                + (linearHdrOutput ? "-hdr" : "")
+                + (shaderExecutionReorderingEnabled ? "-ser" : "");
         String file = normalized.substring(shaderRoot.length()).replace('/', '_') + ".spv";
         String spirvPath = shaderRoot + "spv/" + variant + "/" + file;
         byte[] spirv = readBinaryResource(spirvPath);
@@ -126,7 +167,7 @@ final class RtShaderModuleCompiler {
     }
 
     static byte[] compileForDiagnosticVerification(String resourcePath, int shaderKind) {
-        return compile(resourcePath, shaderKind, true, false, RtEdgeSink.NOOP);
+        return compile(resourcePath, shaderKind, true, false, false, RtEdgeSink.NOOP);
     }
 
     private static byte[] compile(
@@ -134,6 +175,7 @@ final class RtShaderModuleCompiler {
             int shaderKind,
             boolean diagnosticGBufferEnabled,
             boolean linearHdrOutput,
+            boolean shaderExecutionReorderingEnabled,
             RtEdgeSink edges
     ) {
         String source = readExpandedUtf8Resource(resourcePath);
@@ -147,6 +189,9 @@ final class RtShaderModuleCompiler {
             throw new IllegalStateException("shaderc_compile_options_initialize returned null");
         }
         long result = 0L;
+        ByteBuffer sourceUtf8 = null;
+        ByteBuffer resourcePathUtf8 = null;
+        ByteBuffer entryPointUtf8 = null;
         try {
             Shaderc.shaderc_compile_options_set_source_language(options, Shaderc.shaderc_source_language_glsl);
             Shaderc.shaderc_compile_options_set_target_env(
@@ -174,7 +219,22 @@ final class RtShaderModuleCompiler {
                         options, "RTRENDERER_LINEAR_HDR_OUTPUT", "1"
                 );
             }
-            result = Shaderc.shaderc_compile_into_spv(compiler, source, shaderKind, resourcePath, "main", options);
+            if (shaderExecutionReorderingEnabled) {
+                Shaderc.shaderc_compile_options_add_macro_definition(options, "RTRENDERER_SER", "1");
+            }
+            /*
+             * The CharSequence overload marshals the fully expanded source through LWJGL's
+             * thread-local MemoryStack. GPUScene includes are intentionally substantial, so that
+             * transient command stack is not a valid ownership boundary for shader source.
+             */
+            // Shaderc receives source length explicitly; including a terminal NUL would make it
+            // part of the GLSL token stream. File name and entry point remain C strings.
+            sourceUtf8 = MemoryUtil.memUTF8(source, false);
+            resourcePathUtf8 = MemoryUtil.memUTF8(resourcePath);
+            entryPointUtf8 = MemoryUtil.memUTF8("main");
+            result = Shaderc.shaderc_compile_into_spv(
+                    compiler, sourceUtf8, shaderKind, resourcePathUtf8, entryPointUtf8, options
+            );
             if (result == 0L) {
                 throw new IllegalStateException("shaderc_compile_into_spv returned null for " + resourcePath);
             }
@@ -198,6 +258,9 @@ final class RtShaderModuleCompiler {
             if (result != 0L) {
                 Shaderc.shaderc_result_release(result);
             }
+            MemoryUtil.memFree(entryPointUtf8);
+            MemoryUtil.memFree(resourcePathUtf8);
+            MemoryUtil.memFree(sourceUtf8);
             Shaderc.shaderc_compile_options_release(options);
             Shaderc.shaderc_compiler_release(compiler);
         }

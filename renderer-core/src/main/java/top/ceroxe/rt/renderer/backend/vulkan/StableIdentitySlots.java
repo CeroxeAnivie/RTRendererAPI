@@ -155,6 +155,10 @@ final class StableIdentitySlots<T> {
         return slot < 0 || slot >= valuesBySlot.size() ? null : valuesBySlot.get(slot);
     }
 
+    List<T> valuesSnapshot() {
+        return valuesBySlot.stream().filter(Objects::nonNull).toList();
+    }
+
     int liveCount() {
         return liveCount;
     }

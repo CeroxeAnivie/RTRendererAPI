@@ -209,6 +209,38 @@ public final class RtGpuBuffer implements AutoCloseable {
         );
     }
 
+    /**
+     * Creates sequential-write host-visible storage whose address is consumed by native build
+     * descriptors. This is reserved for small, immutable build inputs; large geometry continues
+     * to use device-local buffers and transfer uploads.
+     *
+     * @param device logical device that owns the buffer
+     * @param allocator non-zero VMA allocator handle
+     * @param sizeBytes positive allocation size
+     * @param usageFlags Vulkan usage flags combined with shader-device-address access
+     * @param stallTelemetry non-null sink for allocation and mapping stalls
+     * @return independently owned host-visible addressable buffer
+     */
+    public static RtGpuBuffer createHostVisibleDeviceAddressBuffer(
+            VkDevice device,
+            long allocator,
+            long sizeBytes,
+            int usageFlags,
+            RtStallTelemetrySink stallTelemetry
+    ) {
+        return createBuffer(
+                device,
+                allocator,
+                sizeBytes,
+                usageFlags | VK12.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                Vma.VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+                Vma.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+                true,
+                true,
+                stallTelemetry
+        );
+    }
+
     private static RtGpuBuffer createBuffer(
             VkDevice device,
             long allocator,
@@ -324,6 +356,16 @@ public final class RtGpuBuffer implements AutoCloseable {
      * @param values non-empty payload copied into this buffer
      */
     public synchronized void writeBytes(byte[] values) {
+        writeBytesAt(0L, values);
+    }
+
+    /**
+     * Writes an opaque payload at an explicit byte offset, including non-word-aligned data.
+     *
+     * @param byteOffset non-negative destination byte offset
+     * @param values non-empty payload that must fit the allocation
+     */
+    public synchronized void writeBytesAt(long byteOffset, byte[] values) {
         Objects.requireNonNull(values, "values");
         if (!hostVisible) {
             throw new IllegalStateException("buffer was not created as host-visible");
@@ -334,9 +376,10 @@ public final class RtGpuBuffer implements AutoCloseable {
         if (values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        if (values.length > sizeBytes) {
+        if (byteOffset < 0L || byteOffset > sizeBytes - values.length) {
             throw new IllegalArgumentException(
-                    "write exceeds buffer size: requested=" + values.length + ", size=" + sizeBytes
+                    "write exceeds buffer size: offset=" + byteOffset
+                            + ", requested=" + values.length + ", size=" + sizeBytes
             );
         }
 
@@ -345,8 +388,8 @@ public final class RtGpuBuffer implements AutoCloseable {
             PointerBuffer mapped = stack.mallocPointer(1);
             checkVk(Vma.vmaMapMemory(allocator, allocation, mapped), "vmaMapMemory.writeBytes");
             try {
-                MemoryUtil.memByteBuffer(mapped.get(0), values.length).put(values);
-                Vma.vmaFlushAllocation(allocator, allocation, 0L, values.length);
+                MemoryUtil.memByteBuffer(mapped.get(0) + byteOffset, values.length).put(values);
+                Vma.vmaFlushAllocation(allocator, allocation, byteOffset, values.length);
             } finally {
                 Vma.vmaUnmapMemory(allocator, allocation);
             }

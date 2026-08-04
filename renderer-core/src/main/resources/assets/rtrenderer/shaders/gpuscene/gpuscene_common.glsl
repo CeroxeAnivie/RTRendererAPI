@@ -37,16 +37,26 @@ layout(set = 0, binding = GPU_SCENE_BINDING_TRIANGLE_MATERIAL_SLOTS, std430)
 readonly buffer GsTriangleMaterialWords { uint words[]; } gsTriangleMaterials;
 layout(set = 0, binding = GPU_SCENE_BINDING_INSTANCE_RECORDS, std430)
 readonly buffer GsInstanceRecordWords { uint words[]; } gsInstances;
+layout(set = 0, binding = GPU_SCENE_BINDING_TRANSIENT_INSTANCE_RECORDS, std430)
+readonly buffer GsTransientInstanceRecordWords { uint words[]; } gsTransientInstances;
 layout(set = 0, binding = GPU_SCENE_BINDING_LIGHT_RECORDS, std430)
 readonly buffer GsLightRecordWords { uint words[]; } gsLights;
 
 struct GpuScenePayload {
     vec4 worldPositionAndDistance;
+    // Previous-frame object-space transform result. w=1 only for a real surface hit.
+    vec4 previousWorldPosition;
+    // Scene revision that installed the current/previous transform pair for this instance.
+    uvec2 motionRevision;
     vec4 worldNormalAndRoughness;
     vec4 baseColorAndOpacity;
     vec4 emissiveAndMetallic;
     vec4 transmissionIor;
     uvec4 state;
+    // Receiver/object masks and outline color are instance state; compositeState carries outline
+    // width, overlay depth threshold, and overlay mode without consuming material payload lanes.
+    uvec4 surfaceState;
+    vec4 compositeState;
     // Launch pixel and extent survive closest/any-hit traversal so the hit shader can reconstruct
     // the rasterizer's screen-space UV footprint without relying on derivative instructions.
     uvec4 launchInfo;
@@ -136,31 +146,123 @@ vec3 gsSkyRadiance(vec3 rayDirection)
     return sky * max(ambient, 0.05) * horizon + sunColor * sunIntensity * sunDisk;
 }
 
+bool gsTransientInstance(uint instanceIndex)
+{
+    return (instanceIndex & GPU_SCENE_TRANSIENT_INSTANCE_BIT) != 0u;
+}
+
+uint gsInstanceSlot(uint instanceIndex)
+{
+    return instanceIndex & ~GPU_SCENE_TRANSIENT_INSTANCE_BIT;
+}
+
+uint gsInstanceWord(uint instanceIndex, uint offset)
+{
+    uint base = gsInstanceSlot(instanceIndex) * GPU_SCENE_INSTANCE_RECORD_WORDS;
+    return gsTransientInstance(instanceIndex)
+        ? gsTransientInstances.words[base + offset]
+        : gsInstances.words[base + offset];
+}
+
 uint gsInstanceMeshSlot(uint instanceSlot)
 {
-    uint base = instanceSlot * GPU_SCENE_INSTANCE_RECORD_WORDS;
-    return gsInstances.words[base + GPU_SCENE_INSTANCE_MESH_SLOT_WORD];
+    return gsInstanceWord(instanceSlot, GPU_SCENE_INSTANCE_MESH_SLOT_WORD);
+}
+
+vec3 gsPreviousInstancePoint(uint instanceSlot, vec3 point)
+{
+    uint base = gsInstanceSlot(instanceSlot) * GPU_SCENE_INSTANCE_RECORD_WORDS
+        + GPU_SCENE_INSTANCE_PREVIOUS_TRANSFORM_WORD;
+    vec4 local = vec4(point, 1.0);
+    return vec3(
+        dot(local, vec4(
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base] : gsInstances.words[base]),
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base + 1u] : gsInstances.words[base + 1u]),
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base + 2u] : gsInstances.words[base + 2u]),
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base + 3u] : gsInstances.words[base + 3u])
+        )),
+        dot(local, vec4(
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base + 4u] : gsInstances.words[base + 4u]),
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base + 5u] : gsInstances.words[base + 5u]),
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base + 6u] : gsInstances.words[base + 6u]),
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base + 7u] : gsInstances.words[base + 7u])
+        )),
+        dot(local, vec4(
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base + 8u] : gsInstances.words[base + 8u]),
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base + 9u] : gsInstances.words[base + 9u]),
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base + 10u] : gsInstances.words[base + 10u]),
+            uintBitsToFloat(gsTransientInstance(instanceSlot) ? gsTransientInstances.words[base + 11u] : gsInstances.words[base + 11u])
+        ))
+    );
+}
+
+uvec2 gsInstanceMotionRevision(uint instanceIndex)
+{
+    return uvec2(
+        gsInstanceWord(instanceIndex, GPU_SCENE_INSTANCE_MOTION_REVISION_WORD),
+        gsInstanceWord(instanceIndex, GPU_SCENE_INSTANCE_MOTION_REVISION_WORD + 1u)
+    );
 }
 
 uint gsInstanceFlags(uint instanceSlot)
 {
-    uint base = instanceSlot * GPU_SCENE_INSTANCE_RECORD_WORDS;
-    return gsInstances.words[base + GPU_SCENE_INSTANCE_FLAGS_WORD];
+    return gsInstanceWord(instanceSlot, GPU_SCENE_INSTANCE_FLAGS_WORD);
 }
 
 float gsInstanceSurfaceVisibility(uint instanceSlot)
 {
-    uint base = instanceSlot * GPU_SCENE_INSTANCE_RECORD_WORDS;
     return clamp(uintBitsToFloat(
-        gsInstances.words[base + GPU_SCENE_INSTANCE_SURFACE_VISIBILITY_WORD]
+        gsInstanceWord(instanceSlot, GPU_SCENE_INSTANCE_SURFACE_VISIBILITY_WORD)
     ), 0.0, 1.0);
 }
 
 vec2 gsInstanceLightmapCoordinate(uint instanceSlot)
 {
-    uint base = instanceSlot * GPU_SCENE_INSTANCE_RECORD_WORDS;
-    uint packed = gsInstances.words[base + GPU_SCENE_INSTANCE_PACKED_LIGHT_WORD];
+    uint packed = gsInstanceWord(instanceSlot, GPU_SCENE_INSTANCE_PACKED_LIGHT_WORD);
     return vec2(float(packed & 0xffffu), float((packed >> 16u) & 0xffffu)) * (1.0 / 240.0);
+}
+
+vec2 gsInstanceUv(uint instanceSlot, vec2 uv)
+{
+    uint word = GPU_SCENE_INSTANCE_UV_TRANSFORM_WORD;
+    vec3 first = vec3(
+        uintBitsToFloat(gsInstanceWord(instanceSlot, word)),
+        uintBitsToFloat(gsInstanceWord(instanceSlot, word + 1u)),
+        uintBitsToFloat(gsInstanceWord(instanceSlot, word + 2u))
+    );
+    vec3 second = vec3(
+        uintBitsToFloat(gsInstanceWord(instanceSlot, word + 3u)),
+        uintBitsToFloat(gsInstanceWord(instanceSlot, word + 4u)),
+        uintBitsToFloat(gsInstanceWord(instanceSlot, word + 5u))
+    );
+    return vec2(dot(first, vec3(uv, 1.0)), dot(second, vec3(uv, 1.0)));
+}
+
+uint gsInstanceSurfaceMask(uint instanceSlot)
+{
+    return gsInstanceWord(instanceSlot, GPU_SCENE_INSTANCE_SURFACE_MASK_WORD);
+}
+
+uint gsInstanceOverlayReceiverMask(uint instanceSlot)
+{
+    return gsInstanceWord(instanceSlot, GPU_SCENE_INSTANCE_OVERLAY_RECEIVER_MASK_WORD);
+}
+
+uint gsInstanceObjectMask(uint instanceSlot)
+{
+    return gsInstanceWord(instanceSlot, GPU_SCENE_INSTANCE_OBJECT_MASK_WORD);
+}
+
+vec4 gsInstanceOutlineColor(uint instanceSlot)
+{
+    return gsUnpackRgba8(gsInstanceWord(instanceSlot, GPU_SCENE_INSTANCE_OUTLINE_COLOR_WORD));
+}
+
+float gsInstanceOutlineWidth(uint instanceSlot)
+{
+    return clamp(uintBitsToFloat(
+        gsInstanceWord(instanceSlot, GPU_SCENE_INSTANCE_OUTLINE_WIDTH_WORD)
+    ), 0.0, 8.0);
 }
 
 vec4 gsApplySurfaceVisibility(vec4 color, uint instanceSlot)
@@ -389,7 +491,8 @@ vec4 gsTriangleTextureFootprint(
     vec3 worldP1,
     vec3 worldP2,
     vec3 rayOrigin,
-    uvec4 launchInfo
+    uvec4 launchInfo,
+    uint instanceSlot
 )
 {
     if (!gsOptionalOffsetPresent(meshBase, GPU_SCENE_MESH_TEXCOORD_OFFSET_WORD)) {
@@ -401,7 +504,10 @@ vec4 gsTriangleTextureFootprint(
     float normalLength = length(normal);
     if (normalLength < 1.0e-8 || any(lessThanEqual(extent, ivec2(0)))) return vec4(0.0);
     normal /= normalLength;
-    vec2 currentUv = gsTriangleTexcoord(meshBase, indices, barycentrics);
+    vec2 currentUv = gsInstanceUv(
+        instanceSlot,
+        gsTriangleTexcoord(meshBase, indices, barycentrics)
+    );
     vec2 derivatives[2];
     for (int axis = 0; axis < 2; ++axis) {
         ivec2 neighborPixel = pixel;
@@ -414,7 +520,10 @@ vec4 gsTriangleTextureFootprint(
         vec3 neighborBarycentrics = gsWorldBarycentrics(
             neighborPoint, worldP0, worldP1, worldP2
         );
-        vec2 neighborUv = gsTriangleTexcoord(meshBase, indices, neighborBarycentrics);
+        vec2 neighborUv = gsInstanceUv(
+            instanceSlot,
+            gsTriangleTexcoord(meshBase, indices, neighborBarycentrics)
+        );
         derivatives[axis] = neighborUv - currentUv;
     }
     return vec4(derivatives[0].xy, derivatives[1].xy);

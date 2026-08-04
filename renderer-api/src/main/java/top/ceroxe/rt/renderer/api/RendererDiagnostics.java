@@ -18,6 +18,8 @@ public final class RendererDiagnostics {
     private final long residentInstances;
     private final DeviceRecovery deviceRecovery;
     private final FrameGpuTiming frameGpuTiming;
+    private final FrameGenerationEvidence frameGenerationEvidence;
+    private final TechnologyExecutionEvidence technologyExecutionEvidence;
 
     private RendererDiagnostics(Builder builder) {
         status = requireSelected(builder.status, "status");
@@ -28,6 +30,12 @@ public final class RendererDiagnostics {
         residentInstances = builder.residentInstances;
         deviceRecovery = requireSelected(builder.deviceRecovery, "deviceRecovery");
         frameGpuTiming = requireSelected(builder.frameGpuTiming, "frameGpuTiming");
+        frameGenerationEvidence = requireSelected(
+                builder.frameGenerationEvidence, "frameGenerationEvidence"
+        );
+        technologyExecutionEvidence = requireSelected(
+                builder.technologyExecutionEvidence, "technologyExecutionEvidence"
+        );
         if (latestAcceptedSceneRevision < 0L || latestSubmittedFrameSequence < -1L
                 || latestCompletedFrameSequence < -1L || residentMeshes < 0L || residentInstances < 0L) {
             throw new IllegalArgumentException("renderer diagnostics counters are out of range");
@@ -132,6 +140,25 @@ public final class RendererDiagnostics {
         return frameGpuTiming;
     }
 
+    /**
+     * Returns authoritative presentation-time frame-generation evidence.
+     *
+     * @return immutable evidence, or {@link FrameGenerationEvidence#unavailable()} when no
+     * provider reports frame-generation runtime facts
+     */
+    public FrameGenerationEvidence frameGenerationEvidence() {
+        return frameGenerationEvidence;
+    }
+
+    /**
+     * Returns structured execution evidence for every concrete rendering technology.
+     *
+     * @return immutable complete technology evidence snapshot
+     */
+    public TechnologyExecutionEvidence technologyExecutionEvidence() {
+        return technologyExecutionEvidence;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
@@ -143,13 +170,16 @@ public final class RendererDiagnostics {
                 && residentInstances == diagnostics.residentInstances
                 && status == diagnostics.status
                 && deviceRecovery.equals(diagnostics.deviceRecovery)
-                && frameGpuTiming.equals(diagnostics.frameGpuTiming);
+                && frameGpuTiming.equals(diagnostics.frameGpuTiming)
+                && frameGenerationEvidence.equals(diagnostics.frameGenerationEvidence)
+                && technologyExecutionEvidence.equals(diagnostics.technologyExecutionEvidence);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(status, latestAcceptedSceneRevision, latestSubmittedFrameSequence,
-                latestCompletedFrameSequence, residentMeshes, residentInstances, deviceRecovery, frameGpuTiming);
+                latestCompletedFrameSequence, residentMeshes, residentInstances, deviceRecovery,
+                frameGpuTiming, frameGenerationEvidence, technologyExecutionEvidence);
     }
 
     @Override
@@ -161,7 +191,9 @@ public final class RendererDiagnostics {
                 + ", residentMeshes=" + residentMeshes
                 + ", residentInstances=" + residentInstances
                 + ", deviceRecovery=" + deviceRecovery
-                + ", frameGpuTiming=" + frameGpuTiming + ']';
+                + ", frameGpuTiming=" + frameGpuTiming
+                + ", frameGenerationEvidence=" + frameGenerationEvidence
+                + ", technologyExecutionEvidence=" + technologyExecutionEvidence + ']';
     }
 
     /**
@@ -176,6 +208,9 @@ public final class RendererDiagnostics {
         private long residentInstances;
         private DeviceRecovery deviceRecovery = DeviceRecovery.initial();
         private FrameGpuTiming frameGpuTiming = FrameGpuTiming.unavailable();
+        private FrameGenerationEvidence frameGenerationEvidence = FrameGenerationEvidence.unavailable();
+        private TechnologyExecutionEvidence technologyExecutionEvidence =
+                TechnologyExecutionEvidence.disabled();
 
         private Builder() {
         }
@@ -189,6 +224,8 @@ public final class RendererDiagnostics {
             residentInstances = source.residentInstances;
             deviceRecovery = source.deviceRecovery;
             frameGpuTiming = source.frameGpuTiming;
+            frameGenerationEvidence = source.frameGenerationEvidence;
+            technologyExecutionEvidence = source.technologyExecutionEvidence;
         }
 
         /**
@@ -276,6 +313,28 @@ public final class RendererDiagnostics {
          */
         public Builder frameGpuTiming(FrameGpuTiming value) {
             frameGpuTiming = Objects.requireNonNull(value, "frameGpuTiming");
+            return this;
+        }
+
+        /**
+         * Selects authoritative frame-generation runtime evidence.
+         *
+         * @param value non-null immutable evidence
+         * @return this builder
+         */
+        public Builder frameGenerationEvidence(FrameGenerationEvidence value) {
+            frameGenerationEvidence = Objects.requireNonNull(value, "frameGenerationEvidence");
+            return this;
+        }
+
+        /**
+         * Selects the complete structured execution evidence snapshot.
+         *
+         * @param value non-null immutable technology evidence
+         * @return this builder
+         */
+        public Builder technologyExecutionEvidence(TechnologyExecutionEvidence value) {
+            technologyExecutionEvidence = Objects.requireNonNull(value, "technologyExecutionEvidence");
             return this;
         }
 

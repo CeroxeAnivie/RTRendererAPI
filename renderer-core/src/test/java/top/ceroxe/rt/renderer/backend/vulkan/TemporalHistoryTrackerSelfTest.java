@@ -3,6 +3,7 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 import java.util.List;
 import java.util.Set;
 import top.ceroxe.rt.renderer.api.CameraState;
+import top.ceroxe.rt.renderer.api.DepthProjectionState;
 import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
 import top.ceroxe.rt.renderer.api.HistoryResetReason;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
@@ -16,9 +17,12 @@ public final class TemporalHistoryTrackerSelfTest {
 
    public static void main(String[] args) {
       disabledModePublishesNoTemporalReasons();
+      disabledBuiltInModeTracksRequestedFeatureProvenance();
       rejectedPreparationDoesNotAdvanceSource();
       frameAndSceneInvalidationsAreExact();
+      depthProjectionChangesInvalidateHistory();
       dynamicInstanceWritesPreserveStaticHistory();
+      abortedFeatureFrameInvalidatesNextRetry();
       System.out.println("TemporalHistoryTrackerSelfTest passed");
    }
 
@@ -29,6 +33,23 @@ public final class TemporalHistoryTrackerSelfTest {
       tracker.commit(first);
       TemporalHistoryTracker.PreparedFrame second = tracker.prepare(frame(1L, 64, 36, camera(60.0)), 0L);
       require(!second.historyValid() && second.invalidations().isEmpty(), "disabled temporal mode retained a hidden history source");
+   }
+
+   private static void disabledBuiltInModeTracksRequestedFeatureProvenance() {
+      TemporalHistoryTracker tracker = new TemporalHistoryTracker(
+            TemporalRenderingOptions.disabled(), true
+      );
+      TemporalHistoryTracker.PreparedFrame first = tracker.prepare(
+            frame(0L, 64, 36, camera(60.0)), 0L
+      );
+      require(first.invalidations().equals(Set.of(HistoryInvalidationReason.FIRST_FRAME)),
+            "requested vendor temporal provenance did not reset its first frame");
+      tracker.commit(first);
+      TemporalHistoryTracker.PreparedFrame second = tracker.prepare(
+            frame(1L, 64, 36, camera(60.0)), 0L
+      );
+      require(second.historyValid() && second.invalidations().isEmpty(),
+            "requested vendor temporal provenance did not retain its committed source");
    }
 
    private static void rejectedPreparationDoesNotAdvanceSource() {
@@ -62,6 +83,20 @@ public final class TemporalHistoryTrackerSelfTest {
       return RenderFrameRequest.builder(sequence, width, height, camera).build();
    }
 
+   private static void depthProjectionChangesInvalidateHistory() {
+      TemporalHistoryTracker tracker = new TemporalHistoryTracker(TemporalRenderingOptions.balanced());
+      RenderFrameRequest firstRequest = RenderFrameRequest.builder(0L, 64, 36, camera(60.0))
+              .depthProjection(DepthProjectionState.vulkanPerspective(0.05F, 256.0F))
+              .build();
+      tracker.commit(tracker.prepare(firstRequest, 0L));
+      RenderFrameRequest changedProjection = RenderFrameRequest.builder(1L, 64, 36, camera(60.0))
+              .depthProjection(DepthProjectionState.vulkanPerspective(0.05F, 512.0F))
+              .build();
+      TemporalHistoryTracker.PreparedFrame prepared = tracker.prepare(changedProjection, 0L);
+      require(prepared.invalidations().equals(Set.of(HistoryInvalidationReason.CAMERA_PROJECTION_CHANGED)),
+              "depth near/far change reused an incompatible temporal projection: " + prepared.invalidations());
+   }
+
    private static void dynamicInstanceWritesPreserveStaticHistory() {
       TemporalHistoryTracker tracker = new TemporalHistoryTracker(TemporalRenderingOptions.balanced());
       TemporalHistoryTracker.PreparedFrame first = tracker.prepare(frame(0L, 64, 36, camera(60.0)), 0L);
@@ -73,6 +108,16 @@ public final class TemporalHistoryTrackerSelfTest {
       tracker.sceneApplied(instanceWrite(2L, Mobility.STATIC));
       TemporalHistoryTracker.PreparedFrame staticWrite = tracker.prepare(frame(2L, 64, 36, camera(60.0)), 2L);
       require(staticWrite.invalidations().equals(Set.of(HistoryInvalidationReason.SCENE_TOPOLOGY_CHANGED)), "static instance write did not invalidate temporal geometry");
+   }
+
+   private static void abortedFeatureFrameInvalidatesNextRetry() {
+      TemporalHistoryTracker tracker = new TemporalHistoryTracker(TemporalRenderingOptions.balanced());
+      tracker.commit(tracker.prepare(frame(0L, 64, 36, camera(60.0)), 0L));
+      tracker.invalidate(HistoryInvalidationReason.EXPLICIT_RESET);
+      TemporalHistoryTracker.PreparedFrame retry = tracker.prepare(frame(1L, 64, 36, camera(60.0)), 0L);
+      require(retry.invalidations().contains(HistoryInvalidationReason.EXPLICIT_RESET),
+              "an aborted feature frame must reset temporal history on the next retry");
+      require(!retry.historyValid(), "an aborted feature frame must not publish valid history");
    }
 
    private static VulkanSceneResidency.SceneChangeSet instanceWrite(long revision, SceneInstance.Mobility mobility) {

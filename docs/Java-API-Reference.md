@@ -61,8 +61,12 @@ public final class RayTracingRendererConfig
 
 | 静态入口 | 说明 |
 | --- | --- |
-| `builder()` | 从生产默认值创建 Builder |
-| `defaults()` | 返回不可变生产默认配置 |
+| `builder()` | 创建专家显式 Builder；可选 vendor 技术均禁用 |
+| `defaults()` | 返回 CPU-readable 的能力驱动 preset：自动协商 SR、NRD、SER、RTXMU，FG/MFG 关闭 |
+| `gpuPresentationDefaults()` | 返回 GPU presenter preset：关闭 CPU readback，并额外自动协商 FG 2x 与 Reflex/PCL；MFG 不自动开启 |
+
+`MIN_MAX_FRAMES_IN_FLIGHT`、`DEFAULT_MAX_FRAMES_IN_FLIGHT` 和
+`MAX_MAX_FRAMES_IN_FLIGHT` 分别定义合法下界、默认值和上界。
 
 | Builder 方法 | 说明 |
 | --- | --- |
@@ -70,9 +74,15 @@ public final class RayTracingRendererConfig
 | `validationEnabled(boolean)` | Vulkan validation 策略 |
 | `gpuTimingsEnabled(boolean)` | GPU timing 策略 |
 | `cpuFrameReadbackEnabled(boolean)` | 是否分配并复制异步托管 CPU 帧；默认开启 |
+| `gpuDevice(RayTracingGpuDevice)` | 绑定枚举所得稳定设备对象 |
+| `automaticGpuSelection()` | 恢复 provider 的自动设备选择 |
 | `frameOutputFormat(FrameOutputFormat)` | SDR RGBA8 或 linear HDR RGBA16F |
 | `temporalRendering(TemporalRenderingOptions)` | temporal reconstruction 策略 |
-| `gpuDevice(RayTracingGpuDevice)` | 绑定枚举所得稳定设备对象 |
+| `frameReconstruction(FrameReconstructionOptions)` | DLSS SR、DLAA、NIS 或禁用策略 |
+| `frameGeneration(FrameGenerationOptions)` | 互斥 FG/MFG 模式、倍率与 fallback 策略 |
+| `lowLatency(LowLatencyOptions)` | Reflex/PCL 请求策略 |
+| `denoising(DenoisingOptions)` | NRD 请求与 fallback 策略 |
+| `rayTracingOptimizations(RayTracingOptimizationOptions)` | SER 与 RTXMU 独立策略 |
 | `build()` | 验证全部不变量并创建配置 |
 
 ## 场景与帧

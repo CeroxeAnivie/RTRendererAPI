@@ -97,17 +97,42 @@ public final class GpuSceneShaderBindings {
      */
     public static final int MOTION_OUTPUT = 21;
     /**
+     * Frame-slot-local primitive instance records. A dedicated lane keeps persistent scene
+     * buffers immutable while earlier frames remain in flight.
+     */
+    public static final int TRANSIENT_INSTANCE_RECORDS = 22;
+    /** NRD normal/roughness input signal. */
+    public static final int DENOISING_NORMAL_ROUGHNESS = 23;
+    /** NRD camera-space view-Z input signal. */
+    public static final int DENOISING_VIEW_Z = 24;
+    /** NRD motion-vector input, independent from renderer temporal history. */
+    public static final int DENOISING_MOTION_VECTORS = 25;
+    /** NRD diffuse radiance/hit-distance input signal. */
+    public static final int DENOISING_DIFFUSE_RADIANCE_HIT_DISTANCE = 26;
+    /** NRD specular radiance/hit-distance input signal. */
+    public static final int DENOISING_SPECULAR_RADIANCE_HIT_DISTANCE = 27;
+    /** Per-pixel diffuse material factor used to remodulate NRD output. */
+    public static final int DENOISING_DIFFUSE_MATERIAL_FACTOR = 28;
+    /** Per-pixel specular material factor used to remodulate NRD output. */
+    public static final int DENOISING_SPECULAR_MATERIAL_FACTOR = 29;
+    /** Streamline reconstruction linear-depth input. */
+    public static final int RECONSTRUCTION_DEPTH = 30;
+    /** Streamline reconstruction pixel-space motion input. */
+    public static final int RECONSTRUCTION_MOTION_VECTORS = 31;
+    /** Streamline reconstruction one-texel exposure input. */
+    public static final int RECONSTRUCTION_EXPOSURE = 32;
+    /**
      * 描述符集合总绑定数。
      */
-    public static final int COUNT = 22;
+    public static final int COUNT = 33;
     /**
      * 存储缓冲区类型绑定数。
      */
-    public static final int STORAGE_BUFFER_COUNT = 15;
+    public static final int STORAGE_BUFFER_COUNT = 16;
     /**
      * Storage-image bindings per descriptor set, including the public output.
      */
-    public static final int STORAGE_IMAGE_COUNT = 6;
+    public static final int STORAGE_IMAGE_COUNT = 16;
 
     private GpuSceneShaderBindings() {
     }

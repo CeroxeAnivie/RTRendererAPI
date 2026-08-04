@@ -1,10 +1,14 @@
 /.gradle/
+/**/.gradle/
 /build/
 /**/build/
 /out/
+/**/out/
 /logs/
+/**/logs/
 
 /.idea/
+/**/.idea/
 *.iml
 
 hs_err_pid*.log

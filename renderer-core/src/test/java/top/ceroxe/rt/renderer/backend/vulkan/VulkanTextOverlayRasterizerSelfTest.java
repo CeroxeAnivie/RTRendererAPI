@@ -37,14 +37,11 @@ public final class VulkanTextOverlayRasterizerSelfTest {
                 "channel order must not alter overlay geometry");
 
         int backgroundOffset = 0;
-        require(unsigned(rgba.pixels()[backgroundOffset]) == 10
-                        && unsigned(rgba.pixels()[backgroundOffset + 1]) == 15
-                        && unsigned(rgba.pixels()[backgroundOffset + 2]) == 23,
-                "RGBA background bytes are incorrect");
-        require(unsigned(bgra.pixels()[backgroundOffset]) == 23
-                        && unsigned(bgra.pixels()[backgroundOffset + 1]) == 15
-                        && unsigned(bgra.pixels()[backgroundOffset + 2]) == 10,
-                "BGRA background bytes are incorrect");
+        require(unsigned(rgba.pixels()[backgroundOffset + 3]) == 0
+                        && unsigned(bgra.pixels()[backgroundOffset + 3]) == 0,
+                "background pixels must stay transparent");
+        require(!rgba.copySpans().isEmpty() && !bgra.copySpans().isEmpty(),
+                "foreground pixels must produce sparse transfer spans");
 
         int litPixel = ((12 * rgba.width()) + 15) * 4;
         require(unsigned(rgba.pixels()[litPixel]) == 245
@@ -69,6 +66,7 @@ public final class VulkanTextOverlayRasterizerSelfTest {
         require(raster.height() == 72, "two-line HUD height is unexpected: " + raster.height());
         require(raster.pixels().length == raster.width() * raster.height() * 4,
                 "HUD byte count must exactly match its extent");
+        require(!raster.copySpans().isEmpty(), "multiline HUD must contain transfer spans");
     }
 
     private static int unsigned(byte value) {

@@ -32,6 +32,8 @@ public final class VulkanGpuSceneShaderSelfTest {
       verifyTemporalReconstructionContract();
       verifyTransmissionOpticsContract();
       verifyOpaqueMetallicReflectionContract();
+      verifyNrdSignalContract();
+      verifyReconstructionSignalContract();
       PrintStream output10000 = System.out;
       int size10001 = stages.size();
       output10000.println("VulkanGpuSceneShaderSelfTest passed: stages=" + size10001 + ", spirvBytes=" + totalBytes);
@@ -89,6 +91,80 @@ public final class VulkanGpuSceneShaderSelfTest {
       require(raygen.contains("gsSampleGgxHalfVector") && raygen.contains("roughness * roughness") && raygen.contains("gsReflectionSample(sampleIndex, sampleCount, launchInfo)"), "opaque reflection direction must use deterministic roughness-aware GGX sampling");
       require(raygen.contains("f * N.L / pdf") && raygen.contains("gsFresnelSchlick(viewHalf") && raygen.contains("gsGeometrySmith(normalView, normalLight, roughness)"), "opaque reflection contribution must retain Fresnel and GGX visibility energy terms");
       require(raygen.contains("transmission <= 1.0e-4 && opacity >= 0.999") && raygen.contains("surface + opaqueReflection"), "metallic reflection must be isolated to opaque non-transmissive material evaluation");
+   }
+
+   private static void verifyNrdSignalContract() {
+      String raygen = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rgen");
+      String closestHit = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rchit");
+      String miss = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rmiss");
+      String compose = read("assets/rtrenderer/shaders/gpuscene/gpuscene_nrd_compose.comp");
+      require(raygen.contains("GPU_SCENE_BINDING_DENOISING_NORMAL_ROUGHNESS")
+              && raygen.contains("GPU_SCENE_BINDING_DENOISING_VIEW_Z")
+              && raygen.contains("GPU_SCENE_BINDING_DENOISING_MOTION_VECTORS")
+              && raygen.contains("GPU_SCENE_BINDING_DENOISING_DIFFUSE_RADIANCE_HIT_DISTANCE")
+              && raygen.contains("GPU_SCENE_BINDING_DENOISING_SPECULAR_RADIANCE_HIT_DISTANCE")
+              && raygen.contains("GPU_SCENE_BINDING_DENOISING_DIFFUSE_MATERIAL_FACTOR")
+              && raygen.contains("GPU_SCENE_BINDING_DENOISING_SPECULAR_MATERIAL_FACTOR"),
+              "ray generation must declare every NRD signal binding");
+      require(raygen.contains("gsDenoisingActive()")
+              && raygen.contains("GPU_SCENE_FRAME_FEATURE_FLAGS_WORD")
+              && raygen.contains("GPU_SCENE_FEATURE_FLAG_DENOISING_ACTIVE"),
+              "NRD image writes must be gated by explicit frame capability state");
+      require(raygen.contains("GsRadianceSplit")
+              && raygen.contains("surfaceSplit.diffuse")
+              && raygen.contains("surfaceSplit.specular"),
+              "NRD inputs must preserve the PBR diffuse/specular split");
+      require(raygen.contains("gsNrdPackNormalRoughness")
+              && raygen.contains("NRD_NORMAL_ENCODING=2")
+              && raygen.contains("gsNrdNormalizedHitDistance")
+              && raygen.contains("ReblurHitDistanceParameters{A=3, B=0.1, C=20}"),
+              "NRD guide and hit-distance encodings must match the native REBLUR build defaults");
+      String noJitterMotion = "previousPixelNoJitter - currentPixelNoJitter";
+      require(raygen.contains("dot(sanitized, vec3(0.25, 0.5, 0.25))")
+              && raygen.contains("gsPreviousPixelPositionNoJitter")
+              && raygen.contains("gsCurrentPixelPositionNoJitter")
+              && raygen.indexOf(noJitterMotion) != raygen.lastIndexOf(noJitterMotion)
+              && raygen.contains("imageStore(denoisingDiffuseRadianceHitDistance")
+              && raygen.contains("imageStore(denoisingSpecularRadianceHitDistance"),
+              "NRD and Streamline must share dense previous-current motion from non-jittered projections");
+      require(closestHit.contains("payload.previousWorldPosition = vec4(")
+              && closestHit.contains("gsPreviousInstancePoint(gl_InstanceCustomIndexEXT, localPosition)")
+              && closestHit.contains("payload.motionRevision = gsInstanceMotionRevision")
+              && miss.contains("payload.previousWorldPosition = vec4(0.0)")
+              && miss.contains("payload.motionRevision = uvec2(0u)")
+              && raygen.contains("motionRevision > previousRevision && motionRevision <= currentRevision"),
+              "instance reprojection payload and per-instance revision gate must be initialized end to end");
+      require(raygen.contains("denoisingActive && sampleIndex == 0u")
+              && raygen.contains("denoisingSplit.diffuse /= float(sampleCount) * denoisingDiffuseFactor")
+              && raygen.contains("denoisingSplit.specular /= float(sampleCount) * denoisingSpecularFactor"),
+              "NRD signal and guide must describe the same primary sample contribution");
+      require(raygen.contains("gsNrdMaterialFactors")
+              && raygen.contains("previousViewZ - viewZ")
+              && !raygen.contains("denoisingHitDistance = max(distance"),
+              "NRD must demodulate materials, provide 2.5D motion, and exclude primary hitT");
+      require(raygen.contains("if (!denoisingActive && historyValid && reprojected)"),
+              "the renderer temporal resolve must not accumulate over NRD temporal history");
+      require(compose.contains("vec3 resolved = max(trace + denoised - noisy, vec3(0.0))")
+              && compose.contains("uniform readonly image2D traceImage")
+              && compose.contains("uniform readonly image2D diffuseMaterialFactor")
+              && compose.contains("uniform readonly image2D specularMaterialFactor")
+              && compose.contains("uniform writeonly image2D outputImage"),
+              "NRD compose must replace only the noisy radiance component in the published image");
+   }
+
+   private static void verifyReconstructionSignalContract() {
+      String raygen = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rgen");
+      require(raygen.contains("GPU_SCENE_BINDING_RECONSTRUCTION_DEPTH")
+                  && raygen.contains("GPU_SCENE_BINDING_RECONSTRUCTION_MOTION_VECTORS")
+                  && raygen.contains("GPU_SCENE_BINDING_RECONSTRUCTION_EXPOSURE"),
+              "ray generation must declare every reconstruction signal binding");
+      require(raygen.contains("gsReconstructionActive()")
+                  && raygen.contains("GPU_SCENE_FEATURE_FLAG_RECONSTRUCTION_ACTIVE"),
+              "reconstruction writes must be gated by the resolved feature capability");
+      require(raygen.contains("imageStore(reconstructionDepth")
+                  && raygen.contains("imageStore(reconstructionMotionVectors")
+                  && raygen.contains("imageStore(reconstructionExposure"),
+              "reconstruction must produce depth, motion, and exposure rather than reuse temporal images");
    }
 
    private static String read(String path) {
