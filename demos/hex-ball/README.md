@@ -1,8 +1,9 @@
 # Hex Ball Demo
 
-该可选模块是仓库自带的交互示例与 GPU smoke workload。它编译依赖 `:renderer-api`，并从同一
-checkout 解析 `:renderer-core` 与 `:renderer-nvidia`，因此本地运行不会静默使用旧版已发布
-NVIDIA provider。
+该可选模块是仓库自带的交互示例与 GPU smoke workload。它只解析 Maven Central 已发布的
+`top.ceroxe.rt:renderer-api:0.5.0` 及其完整传递运行时，因此 clone 仓库后运行 Demo 不需要
+用于构建 `renderer-nvidia` 的 CMake、Visual Studio C++、Vulkan SDK、NRD、NRI、Streamline
+或 RTXMU 源码工具链。fat JAR 门禁仍会验证打包后的 NVIDIA DLL 清单和 SHA-256。
 
 在仓库根目录执行：
 

@@ -9,17 +9,10 @@ plugins {
 description = "Interactive hex-ball sample and GPU smoke workload for RTRendererAPI."
 
 dependencies {
-    // Compile against the repository contract and consume its complete runtime graph. The
-    // substitution below ensures every local execution path resolves the sibling NVIDIA module.
-    implementation(project(":renderer-api"))
-}
-
-configurations.configureEach {
-    resolutionStrategy.dependencySubstitution {
-        substitute(module("top.ceroxe.rt:renderer-nvidia"))
-            .using(project(":renderer-nvidia"))
-            .because("repository demos must never resolve a historical published NVIDIA runtime")
-    }
+    // The runnable sample is also the clean-consumer path: cloning the repository and running
+    // this module must not require the native SDK toolchain used to build renderer-nvidia.
+    // renderer-api publishes the complete runtime graph, including the packaged NVIDIA DLLs.
+    implementation("top.ceroxe.rt:renderer-api:${rootProject.version}")
 }
 
 val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version").get().toInt()
@@ -57,13 +50,6 @@ tasks.withType<JavaExec>().configureEach {
     }
 }
 
-tasks.named<JavaExec>("run") {
-    // The interactive path must prove the same provider JAR that supplies its runtime classpath.
-    // This turns a missing sidecar into a build-time failure instead of a delayed GUI startup
-    // failure after the user has already launched the demo.
-    dependsOn(":renderer-nvidia:verifyPackagedNvidiaRuntime")
-}
-
 tasks.withType<AbstractArchiveTask>().configureEach {
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
@@ -80,12 +66,8 @@ tasks.jar {
 
 val shadowJar = tasks.register<Jar>("shadowJar") {
     group = "build"
-    description = "Builds the self-contained executable hex-ball demo from sibling projects."
-    dependsOn(
-        tasks.classes,
-        configurations.runtimeClasspath,
-        ":renderer-nvidia:verifyPackagedNvidiaRuntime"
-    )
+    description = "Builds the self-contained executable hex-ball demo from the released runtime."
+    dependsOn(tasks.classes, configurations.runtimeClasspath)
     archiveBaseName.set("RTRendererAPI-HexBallDemo")
     archiveClassifier.set("")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
