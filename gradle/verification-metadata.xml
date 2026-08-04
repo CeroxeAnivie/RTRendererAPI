@@ -11,6 +11,10 @@
               Maven sources-JAR naming convention. Scope this exception to Gradle itself so
               executable ZIP dependencies from every other component remain strictly verified. -->
          <trust group="gradle" name="gradle" file="gradle-.*-src\.zip" regex="true" reason="IDE-only Gradle source attachment"/>
+         <!-- Repository demos intentionally consume the latest published RTRendererAPI runtime.
+              Trust the project's own Central namespace so every release does not require a
+              circular checksum update; third-party executable dependencies remain verified. -->
+         <trust group="top.ceroxe.rt" reason="Artifacts produced by the signed RTRendererAPI Central release pipeline"/>
       </trusted-artifacts>
    </configuration>
    <components>
