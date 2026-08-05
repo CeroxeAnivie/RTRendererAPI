@@ -7,6 +7,7 @@ import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.plugins.signing.SigningExtension
 import org.gradle.api.tasks.Sync
+import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.bundling.Zip
@@ -136,6 +137,114 @@ tasks.named("check") {
     dependsOn(":renderer-api:check", ":renderer-core:check", ":renderer-nvidia:check")
 }
 
+val releaseVersionDocuments = files(
+    "README.md",
+    fileTree("docs") { include("**/*.md") },
+    fileTree("demos/hex-ball") {
+        include("**/*.md", "src/**/*.java", "*.gradle.kts")
+        exclude("build/**")
+    }
+)
+
+val verifyReleaseVersionConsistency = tasks.register("verifyReleaseVersionConsistency") {
+    group = "verification"
+    description = "Rejects divergent Maven coordinates, Demo artifact names, and version-tag facts."
+    inputs.files(releaseVersionDocuments)
+    inputs.property("projectVersion", project.version.toString())
+
+    doLast {
+        val expected = project.version.toString()
+        val canonicalVersion = Regex("(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)")
+        if (!canonicalVersion.matches(expected)) {
+            throw GradleException("project_version must be canonical MAJOR.MINOR.PATCH: $expected")
+        }
+        val staleFacts = mutableListOf<String>()
+        val publishedVersionPatterns = listOf(
+            Regex("top\\.ceroxe\\.rt:renderer-api:([0-9]+\\.[0-9]+\\.[0-9]+)"),
+            Regex("<version>([0-9]+\\.[0-9]+\\.[0-9]+)</version>"),
+            Regex("RTRendererAPI-HexBallDemo-([0-9]+\\.[0-9]+\\.[0-9]+)\\.jar")
+        )
+        releaseVersionDocuments.files.sorted().forEach { file ->
+            val text = file.readText(StandardCharsets.UTF_8)
+            publishedVersionPatterns.forEach { pattern ->
+                pattern.findAll(text).forEach { match ->
+                    val actual = match.groupValues[1]
+                    if (actual != expected) {
+                        staleFacts += "${rootDir.toPath().relativize(file.toPath())}: $actual"
+                    }
+                }
+            }
+        }
+        if (staleFacts.isNotEmpty()) {
+            throw GradleException(
+                "Published documentation versions differ from project_version=$expected:\n" +
+                    staleFacts.joinToString("\n")
+            )
+        }
+
+        val githubRefType = System.getenv("GITHUB_REF_TYPE")
+        val githubRefName = System.getenv("GITHUB_REF_NAME")
+        if (githubRefType == "tag" && githubRefName != "v$expected") {
+            throw GradleException(
+                "Release tag must match project_version exactly: tag=$githubRefName, expected=v$expected"
+            )
+        }
+    }
+}
+
+val previousApiVersion = providers.gradleProperty("previous_api_version")
+val previousApiConsumerDirectory = layout.projectDirectory.dir("gradle/previous-api-consumer")
+val previousApiConsumerClasses = previousApiConsumerDirectory.dir("build/classes/java/main")
+val previousConsumerJavaInstallationPaths = providers.gradleProperty(
+    "org.gradle.java.installations.paths"
+)
+val previousConsumerToolchainVersion = providers.gradleProperty("java_toolchain_version")
+
+val compilePreviousApiConsumer = tasks.register<Exec>("compilePreviousApiConsumer") {
+    group = "verification"
+    description = "Compiles a consumer in isolation against the previous Maven Central API artifact."
+    workingDir(previousApiConsumerDirectory)
+    executable(rootProject.file("gradlew.bat"))
+    args(
+        "--no-daemon",
+        "--console=plain",
+        "--project-dir",
+        previousApiConsumerDirectory.asFile.absolutePath,
+        "clean",
+        "compileJava",
+        "-PrendererVersion=${previousApiVersion.get()}",
+        "-Pjava_toolchain_version=${previousConsumerToolchainVersion.get()}"
+    )
+    inputs.files(fileTree(previousApiConsumerDirectory) {
+        include("build.gradle.kts", "settings.gradle.kts", "src/**/*.java")
+    })
+    inputs.property("previousApiVersion", previousApiVersion)
+    inputs.property("javaInstallationPaths", previousConsumerJavaInstallationPaths.orElse(""))
+    inputs.property("toolchainJavaVersion", previousConsumerToolchainVersion)
+    outputs.dir(previousApiConsumerClasses)
+    doFirst {
+        previousConsumerJavaInstallationPaths.orNull?.let { paths ->
+            args("-Porg.gradle.java.installations.paths=$paths")
+        }
+    }
+}
+
+val verifyPreviousApiConsumerRuntime = tasks.register<JavaExec>("verifyPreviousApiConsumerRuntime") {
+    group = "verification"
+    description = "Runs a previous-release client using only the current renderer-api classes."
+    dependsOn(compilePreviousApiConsumer, ":renderer-api:classes")
+    classpath = files(
+        previousApiConsumerClasses,
+        project(":renderer-api").layout.buildDirectory.dir("classes/java/main")
+    )
+    mainClass.set("compatibility.PreviousApiConsumer")
+}
+
+tasks.named("check") {
+    dependsOn(verifyReleaseVersionConsistency)
+    dependsOn(verifyPreviousApiConsumerRuntime)
+}
+
 tasks.register("publishAllToLocalStagingRepository") {
     group = "publishing"
     description = "Publishes every RTRendererAPI module into build/repository."
@@ -194,6 +303,7 @@ tasks.register("verifyCentralPortalBundle") {
     group = "verification"
     description = "Rejects a Central Portal bundle with missing artifacts or detached signatures."
     dependsOn(tasks.named("centralPortalBundle"))
+    dependsOn(verifyReleaseVersionConsistency)
     inputs.file(centralPortalBundleFile)
 
     doLast {
@@ -480,9 +590,7 @@ tasks.register<Exec>("verifyPublishedMavenConsumer") {
 }
 
 tasks.named("check") {
-    dependsOn(tasks.named("verifyPublishedMavenConsumer"))
     dependsOn(tasks.named("verifyReproducibleArchiveConfiguration"))
-    dependsOn(tasks.named("verifyReleaseChecksums"))
 }
 
 val repositoryTextFiles = fileTree(layout.projectDirectory) {
@@ -557,6 +665,8 @@ tasks.register("strictAcceptanceTest") {
     group = "verification"
     description = "Runs all CPU/publication checks and the bounded RTX Vulkan native acceptance gate."
     dependsOn(tasks.named("check"))
+    dependsOn(tasks.named("verifyPublishedMavenConsumer"))
+    dependsOn(tasks.named("verifyReleaseChecksums"))
     dependsOn(":renderer-core:rendererCoreGpuSceneNativeGate")
     dependsOn(":renderer-nvidia:nvidiaNativeAcceptanceGate")
 }

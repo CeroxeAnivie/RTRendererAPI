@@ -83,6 +83,7 @@ public final class RendererApiContractSelfTest {
       assertManagedPresenterContract();
       assertFramePollingContract();
       assertCpuFrameContract();
+      assertSubmissionDeferralAndCloseContract();
       assertExportedHandleLifecycle();
       assertProviderSelection();
       System.out.println("RendererApiContractSelfTest passed");
@@ -641,6 +642,43 @@ public final class RendererApiContractSelfTest {
          executor.shutdownNow();
       }
 
+   }
+
+   private static void assertSubmissionDeferralAndCloseContract() {
+      RayTracingRenderer.FrameSubmissionDeferred typed = RayTracingRenderer.FrameSubmissionDeferred.because(
+            SubmissionDeferralReason.FRAME_RING_FULL,
+            "all contract-test frame slots are retained"
+      );
+      require(typed.deferralReason() == SubmissionDeferralReason.FRAME_RING_FULL
+                  && typed.detail().equals("all contract-test frame slots are retained"),
+            "typed frame deferral lost its stable reason or diagnostic detail");
+
+      RayTracingRenderer.FrameSubmissionDeferred legacy =
+            new RayTracingRenderer.FrameSubmissionDeferred("legacy provider capacity");
+      require(legacy.deferralReason() == SubmissionDeferralReason.UNSPECIFIED
+                  && legacy.detail().equals(legacy.reason()),
+            "legacy frame deferral was assigned a fabricated category");
+
+      SubmissionRejectedException rejection = new SubmissionRejectedException(
+            SubmissionDeferralReason.RESOURCE_PRESSURE,
+            "contract memory budget is saturated"
+      );
+      require(rejection.deferralReason() == SubmissionDeferralReason.RESOURCE_PRESSURE
+                  && rejection.detail().equals("contract memory budget is saturated"),
+            "typed rejection lost its stable reason or diagnostic detail");
+
+      TrackingRenderer renderer = new TrackingRenderer();
+      require(renderer.closeAsync().toCompletableFuture().isDone(),
+            "synchronous provider default did not complete closeAsync");
+      try {
+         require(renderer.awaitClosed(Duration.ZERO),
+               "synchronous provider default did not report completed cleanup");
+      } catch (InterruptedException interrupted) {
+         Thread.currentThread().interrupt();
+         throw new AssertionError("synchronous close wait was unexpectedly interrupted", interrupted);
+      }
+      expect(IllegalArgumentException.class, () -> renderer.awaitClosed(Duration.ofNanos(-1L)));
+      expect(NullPointerException.class, () -> renderer.awaitClosed(null));
    }
 
    private static RayTracingGpuDevice gpuDevice(String backendId, String stableId) {

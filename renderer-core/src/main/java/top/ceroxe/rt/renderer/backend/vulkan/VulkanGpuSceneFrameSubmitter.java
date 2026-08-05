@@ -1,5 +1,6 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
+import top.ceroxe.rt.renderer.api.SubmissionDeferralReason;
 import top.ceroxe.rt.renderer.rt.device.RtCommandContext;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.VulkanMemoryBudgetPolicy;
@@ -85,12 +86,14 @@ final class VulkanGpuSceneFrameSubmitter {
         VulkanSceneRuntime.Snapshot sceneState = scene.snapshot();
         if (sceneState.activeRevision() != acceptedSceneRevision) {
             throw new VulkanRenderingSession.SubmissionRejectedException(
+                    SubmissionDeferralReason.SCENE_UPDATE_BACKLOG,
                     "scene revision " + acceptedSceneRevision + " is still converging on the GPU"
             );
         }
         VulkanFrameSlot slot = frameRing.writableSlot();
         if (slot == null) {
             throw new VulkanRenderingSession.SubmissionRejectedException(
+                    SubmissionDeferralReason.FRAME_RING_FULL,
                     "all bounded frame slots are retained or in flight"
             );
         }
@@ -118,6 +121,7 @@ final class VulkanGpuSceneFrameSubmitter {
         requireMemoryHeadroom("resize frame resources", requestedGrowth);
         if (!temporal.extentMatches(width, height) && frameRing.hasProducerPending()) {
             throw new VulkanRenderingSession.SubmissionRejectedException(
+                    SubmissionDeferralReason.FRAME_RESOURCES_BUSY,
                     "temporal history resize is waiting for submitted GPU frames"
             );
         }
@@ -283,6 +287,7 @@ final class VulkanGpuSceneFrameSubmitter {
         );
         if (!admission.admitted()) {
             throw new VulkanRenderingSession.SubmissionRejectedException(
+                    SubmissionDeferralReason.RESOURCE_PRESSURE,
                     operation + " rejected by GPU memory budget: " + admission.reason()
             );
         }

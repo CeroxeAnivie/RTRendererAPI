@@ -6,6 +6,7 @@ import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.api.FrameGenerationEvidence;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
+import top.ceroxe.rt.renderer.api.SubmissionDeferralReason;
 import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 
@@ -55,7 +56,7 @@ interface VulkanRenderingSession extends AutoCloseable {
         try {
             return new FrameAdmitted(submit(submission));
         } catch (SubmissionRejectedException rejection) {
-            return new FrameDeferred(rejection.getMessage());
+            return new FrameDeferred(rejection.deferralReason(), rejection.detail());
         }
     }
 
@@ -149,10 +150,14 @@ interface VulkanRenderingSession extends AutoCloseable {
         }
     }
 
-    record FrameDeferred(String reason) implements FrameAdmissionAttempt {
+    record FrameDeferred(
+            SubmissionDeferralReason deferralReason,
+            String detail
+    ) implements FrameAdmissionAttempt {
         public FrameDeferred {
-            reason = Objects.requireNonNull(reason, "reason");
-            if (reason.isBlank()) throw new IllegalArgumentException("reason must not be blank");
+            deferralReason = Objects.requireNonNull(deferralReason, "deferralReason");
+            detail = Objects.requireNonNull(detail, "detail");
+            if (detail.isBlank()) throw new IllegalArgumentException("detail must not be blank");
         }
     }
 
@@ -213,9 +218,24 @@ interface VulkanRenderingSession extends AutoCloseable {
      */
     final class SubmissionRejectedException extends Exception {
         private static final long serialVersionUID = 1L;
+        private final SubmissionDeferralReason deferralReason;
 
         SubmissionRejectedException(String message) {
-            super(Objects.requireNonNull(message, "message"));
+            this(SubmissionDeferralReason.PROVIDER_CAPACITY, message);
+        }
+
+        SubmissionRejectedException(SubmissionDeferralReason deferralReason, String detail) {
+            super(Objects.requireNonNull(detail, "detail"));
+            if (detail.isBlank()) throw new IllegalArgumentException("detail must not be blank");
+            this.deferralReason = Objects.requireNonNull(deferralReason, "deferralReason");
+        }
+
+        SubmissionDeferralReason deferralReason() {
+            return deferralReason;
+        }
+
+        String detail() {
+            return getMessage();
         }
     }
 }

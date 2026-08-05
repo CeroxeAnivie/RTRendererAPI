@@ -2,11 +2,11 @@
 
 RTRendererAPI 适合嵌入 Java 21 或更高版本的桌面或引擎进程。普通调用方只需要理解场景 revision、帧 sequence 和资源生命周期；Vulkan external memory、semaphore、queue-family ownership 等细节被隔离在显式专家扩展中。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:0.5.0`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:0.5.1`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。
 
 ## 最小调用
 
-`RendererBootstrap.open()` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。当前声明支持 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 21 或更高版本；本轮只在 Windows 11 x64 上进行实机验收。
+`RendererBootstrap.open()` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 21 或更高版本；`0.5.1` 的仓库实机验收只证明 README 支持表所列 Windows 11 x64 与 RTX 5080 Laptop。其他系统、GPU、显存和驱动组合不是已验证的生产稳定性声明。
 
 ```java
 try (RayTracingRenderer renderer = RendererBootstrap.open()) {
@@ -33,6 +33,7 @@ try (RayTracingRenderer renderer = RendererBootstrap.open()) {
 - 场景 revision 必须严格递增；帧的 `minimumSceneRevision` 防止旧场景被误当成新结果。
 - 帧 sequence 必须严格递增，不可重用。
 - `pollLatestCpuFrame()` 非阻塞；`awaitLatestCpuFrame(Duration)` 是有界等待，超时返回 `Optional.empty()`。
+- `close()` 发起确定性关闭；存在外部 GPU lease 时用 `closeAsync()` 或 `awaitClosed(Duration)` 等待 native 资源真实释放。
 - API 不使用 `null` 表示“暂时无帧”，也不会无限等待。
 - 普通路径的 readback 使用 frame-slot 常驻异步 ring，不会逐帧创建 staging buffer 或执行 queue-idle；但把图像送到 CPU 本身仍有带宽成本。
 
@@ -191,7 +192,7 @@ RayTracingRendererConfig explicitProduction = RayTracingRendererConfig.builder()
 ### 完整专家配置
 
 专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
-显式覆盖 0.5.0 的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
+显式覆盖 0.5.1 的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
 NRD 不可用时保留内建时域路径，FG/MFG 不可用时继续发布原生帧。SER 和 RTXMU 独立
 协商，某一项不支持不会阻止其他项启用。
 
@@ -235,7 +236,7 @@ Reflex/PCL 通过 `LowLatencyOptions` 独立于 FG/MFG 协商，因此原生展�
 
 ### 各能力的最短配置
 
-以下片段都只需要 `top.ceroxe.rt:renderer-api:0.5.0`。把对应 options 传给
+以下片段都只需要 `top.ceroxe.rt:renderer-api:0.5.1`。把对应 options 传给
 `RayTracingRendererConfig.builder()` 即可；没有任何片段要求额外模块或手工 DLL。
 
 ```java
@@ -376,12 +377,15 @@ RayTracingRenderer.FrameSubmissionAttempt attempt = renderer.trySubmit(request);
 if (attempt instanceof RayTracingRenderer.FrameSubmitted submitted) {
     sequence = Math.addExact(sequence, 1L);
 } else if (attempt instanceof RayTracingRenderer.FrameSubmissionDeferred deferred) {
-    // 保留相同 request/sequence，稍后重试；不要 busy-spin。
-    LockSupport.parkNanos(25_000L);
+    // 控制流读取稳定枚举，detail() 只用于诊断；保留相同 request/sequence 稍后重试。
+    switch (deferred.deferralReason()) {
+        case PRESENTATION_BACKLOG, FRAME_RING_FULL -> LockSupport.parkNanos(250_000L);
+        default -> LockSupport.parkNanos(1_000_000L);
+    }
 }
 ```
 
-`FrameSubmissionDeferred` 只代表本次没有发布任何逻辑或 native submission 状态。顺序、revision、生命周期和 device failure 仍抛出对应 typed exception。`submit(...)` 保留给“拒绝即异常”的控制流。
+`FrameSubmissionDeferred` 只代表本次没有发布任何逻辑或 native submission 状态。`deferralReason()` 是稳定遥测与重试分类，旧 provider 返回 `UNSPECIFIED`；不要解析 `reason()` 或 `detail()`。顺序、revision、生命周期和 device failure 仍抛出对应 typed exception。`submit(...)` 保留给“拒绝即异常”的控制流。
 
 ## 结果与健康状态
 
@@ -411,7 +415,7 @@ GPU 名称、配置请求或 implementation 字符串反推状态：`ACTIVE` 需
 | `SceneValidationException` | 场景数据违反契约 |
 | `SceneRevisionException` | revision 非法或倒退 |
 | `SubmissionOrderException` | 帧 sequence 顺序非法 |
-| `SubmissionRejectedException` | 有界队列或运行期策略拒绝提交 |
+| `SubmissionRejectedException` | 仅表示未保留部分状态的可重试容量拒绝，带稳定 `deferralReason()` |
 
 不要解析异常 message 做控制流；使用结构化字段、reason 和 recovery action。
 

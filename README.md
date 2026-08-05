@@ -37,15 +37,15 @@
 
 | 项目 | 当前要求 |
 | --- | --- |
-| 操作系统 | Windows 10 x64 或更高版本；当前实机证据为 Windows 11 x64 |
+| 操作系统 | 兼容目标为 Windows 10 x64 或更高版本；`0.5.1` 实机验收仅证明 Windows 11 x64 |
 | Java | Java 21 或更高版本 |
-| GPU | NVIDIA GeForce RTX 20 系或更新架构 |
+| GPU | 兼容目标为 NVIDIA GeForce RTX 20 系或更新架构；`0.5.1` 实机验收仅证明 RTX 5080 Laptop |
 | 图形 API | Vulkan 1.2 或更高版本，并通过运行时 hardware RT capability probe |
 | 简单输出 | 异步托管 display-ready RGBA8 `CpuFrame` |
 | GPU 显示 | 官方 Vulkan swapchain presenter，无 CPU 图像回读 |
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
-> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `0.5.0` 发布范围。
+> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `0.5.1` 发布范围。兼容目标不是生产稳定性声明；支持表没有明确列为实机验收证据的系统、GPU 与驱动组合必须由消费方自行验收。
 
 ---
 
@@ -59,7 +59,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>0.5.0</version>
+    <version>0.5.1</version>
 </dependency>
 ```
 
@@ -67,7 +67,7 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:0.5.0")
+    implementation("top.ceroxe.rt:renderer-api:0.5.1")
 }
 ```
 
@@ -241,7 +241,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-0.5.0.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-0.5.1.jar `
   --width=2560 --height=1440 --spp=2
 ```
 
@@ -274,6 +274,7 @@ Streamline 与 RTXMU SDK。RTXMU 必须为官方 `v1.4` checkout 的固定 commi
 - [Java 开发指南](docs/Java.md)：完整场景、配置、背压、诊断与各 RTX 能力示例。
 - [Java API 参考](docs/Java-API-Reference.md)：公共类型与稳定契约。
 - [Vulkan 专家互操作](docs/Vulkan-Interop.md)：external memory、semaphore 与 queue ownership。
+- [兼容性与版本策略](docs/COMPATIBILITY.md)：SemVer、公共 API/SPI 边界、弃用与发布事实。
 
 ---
 
@@ -295,7 +296,7 @@ A：不一定。它是非阻塞轮询，空值通常表示当前没有可呈现�
 
 **Q：AMD、Intel 或 Linux 能运行吗？**
 
-A：不能把它们视为 `0.5.0` 的受支持目标。当前发布范围只包含 Windows x64 与通过 capability gate 的 NVIDIA RTX GPU。
+A：不能把它们视为 `0.5.1` 的受支持目标。当前发布范围只包含 Windows x64 与通过 capability gate 的 NVIDIA RTX GPU。
 
 ---
 

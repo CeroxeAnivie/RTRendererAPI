@@ -40,6 +40,21 @@ data class RuntimeArtifactInventory(
     val sha256: String
 )
 
+data class SemanticVersion(val major: Int, val minor: Int, val patch: Int) : Comparable<SemanticVersion> {
+    override fun compareTo(other: SemanticVersion): Int =
+        compareValuesBy(this, other, SemanticVersion::major, SemanticVersion::minor, SemanticVersion::patch)
+}
+
+fun parseSemanticVersion(value: String, label: String): SemanticVersion {
+    val match = Regex("(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)").matchEntire(value)
+        ?: throw GradleException("$label must be a canonical MAJOR.MINOR.PATCH version: $value")
+    return SemanticVersion(
+        match.groupValues[1].toInt(),
+        match.groupValues[2].toInt(),
+        match.groupValues[3].toInt()
+    )
+}
+
 data class RuntimeModuleInventory(
     val coordinate: String,
     val license: RuntimeLicensePolicy,
@@ -50,6 +65,7 @@ group = rootProject.group
 version = rootProject.version
 
 val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version").get().toInt()
+val previousApiVersion = providers.gradleProperty("previous_api_version")
 
 dependencies {
     // Consumers declare one coordinate. The API remains compile-time independent from the
@@ -67,7 +83,7 @@ dependencies {
 
 // The published POM intentionally keeps renderer-nvidia as an external runtime coordinate, but
 // repository-local verification must resolve the sibling project instead of querying Maven
-// Central for the unreleased 0.5.0 artifact. This substitution is configuration-local and does
+// Central for the current unreleased artifact. This substitution is configuration-local and does
 // not alter publication metadata or the single-coordinate consumer contract.
 configurations.named("runtimeClasspath") {
     resolutionStrategy.dependencySubstitution {
@@ -156,6 +172,9 @@ tasks.register<JavaExec>("rendererApiContractSelfTest") {
 // gate below then prevents later edits from silently changing that reviewed release surface.
 val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-${project.version}.abi")
 val rendererApiAbiSnapshot = layout.buildDirectory.file("abi/renderer-api-${project.version}.abi")
+val previousRendererApiAbiBaseline = previousApiVersion.map { version ->
+    layout.projectDirectory.file("abi/renderer-api-$version.abi")
+}
 
 tasks.register("generateRendererApiAbi") {
     group = "verification"
@@ -248,6 +267,80 @@ tasks.register("verifyRendererApiAbi") {
             throw GradleException(
                 "renderer-api ABI differs from $baseline. " +
                     "Review the public binary change before updating the baseline."
+            )
+        }
+    }
+}
+
+tasks.register("verifyRendererApiBackwardCompatibility") {
+    group = "verification"
+    description = "Rejects binary API removals relative to the previous formal release."
+    dependsOn(tasks.named("generateRendererApiAbi"))
+    inputs.file(previousRendererApiAbiBaseline)
+    inputs.file(rendererApiAbiSnapshot)
+    inputs.property("previousApiVersion", previousApiVersion)
+
+    doLast {
+        val current = parseSemanticVersion(project.version.toString(), "project_version")
+        val previousText = previousApiVersion.get()
+        val previous = parseSemanticVersion(previousText, "previous_api_version")
+        if (current <= previous) {
+            throw GradleException(
+                "project_version must advance beyond previous_api_version: current=$current, previous=$previous"
+            )
+        }
+
+        val compatibilityRequired = if (current.major == 0) {
+            current.minor == previous.minor
+        } else {
+            current.major == previous.major
+        }
+        val previousBaseline = previousRendererApiAbiBaseline.get().asFile
+        if (!previousBaseline.isFile || previousBaseline.length() == 0L) {
+            throw GradleException("Missing previous renderer-api ABI baseline: $previousBaseline")
+        }
+
+        fun declarations(file: File): Set<String> {
+            val declarations = mutableSetOf<String>()
+            var owner: String? = null
+            var member: String? = null
+            file.readLines(StandardCharsets.UTF_8).forEach { rawLine ->
+                val line = rawLine.trim()
+                when {
+                    line.isEmpty() || line == "}" || line.startsWith("Compiled from ") -> Unit
+                    line.endsWith("{") -> {
+                        owner = line.removeSuffix("{").trim()
+                        member = null
+                        declarations += "TYPE::$owner"
+                    }
+                    line.startsWith("descriptor:") -> {
+                        val currentOwner = owner
+                            ?: throw GradleException("Malformed ABI snapshot without an owning type: $line")
+                        val currentMember = member
+                            ?: throw GradleException("Malformed ABI snapshot without a member: $line")
+                        declarations += "$currentOwner::$currentMember::$line"
+                        member = null
+                    }
+                    else -> member = line
+                }
+            }
+            if (member != null) {
+                throw GradleException("Malformed ABI snapshot with a descriptor-less member: $member")
+            }
+            return declarations
+        }
+
+        val missing = (declarations(previousBaseline) - declarations(rendererApiAbiSnapshot.get().asFile)).sorted()
+        if (missing.isNotEmpty() && compatibilityRequired) {
+            throw GradleException(
+                "renderer-api ${project.version} is not binary compatible with $previousText; " +
+                    "removed or changed declarations:\n${missing.joinToString("\n")}"
+            )
+        }
+        if (missing.isNotEmpty()) {
+            logger.lifecycle(
+                "renderer-api ${project.version} crosses a SemVer compatibility boundary; " +
+                    "reviewed incompatible declarations: ${missing.size}"
             )
         }
     }
@@ -520,5 +613,6 @@ tasks.named("check") {
     dependsOn(tasks.named("rendererApiContractSelfTest"))
     dependsOn(tasks.named("verifyRendererApiBoundary"))
     dependsOn(tasks.named("verifyRendererApiAbi"))
+    dependsOn(tasks.named("verifyRendererApiBackwardCompatibility"))
     dependsOn(tasks.named("verifyRuntimeSupplyChainMetadata"))
 }

@@ -348,7 +348,7 @@ public final class HexBallDemo {
             JOptionPane.showMessageDialog(
                     null,
                     message,
-                    "RTRendererAPI 0.5.0 Demo failed",
+                    "RTRendererAPI " + DemoBuildInfo.version() + " Demo failed",
                     JOptionPane.ERROR_MESSAGE
             );
         } catch (RuntimeException dialogFailure) {

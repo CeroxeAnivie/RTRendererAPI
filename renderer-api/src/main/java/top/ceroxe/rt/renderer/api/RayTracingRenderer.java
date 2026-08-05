@@ -53,7 +53,7 @@ public interface RayTracingRenderer extends AutoCloseable {
         try {
             return new FrameSubmitted(submit(request));
         } catch (SubmissionRejectedException rejection) {
-            return new FrameSubmissionDeferred(rejection.getMessage());
+            return FrameSubmissionDeferred.because(rejection.deferralReason(), rejection.detail());
         }
     }
 
@@ -111,6 +111,7 @@ public interface RayTracingRenderer extends AutoCloseable {
             java.util.function.BooleanSupplier cancelled
     ) throws InterruptedException {
         long started = System.nanoTime();
+        long backoffNanos = 250_000L;
         while (true) {
             if (cancelled.getAsBoolean()) {
                 throw new java.util.concurrent.CancellationException("CPU frame wait was cancelled");
@@ -127,7 +128,8 @@ public interface RayTracingRenderer extends AutoCloseable {
             if (cancelled.getAsBoolean()) {
                 throw new java.util.concurrent.CancellationException("CPU frame wait was cancelled");
             }
-            java.util.concurrent.locks.LockSupport.parkNanos(Math.min(timeoutNanos - elapsed, 250_000L));
+            java.util.concurrent.locks.LockSupport.parkNanos(Math.min(timeoutNanos - elapsed, backoffNanos));
+            backoffNanos = Math.min(4_000_000L, backoffNanos << 1);
         }
     }
 
@@ -213,6 +215,56 @@ public interface RayTracingRenderer extends AutoCloseable {
      */
     @Override
     void close();
+
+    /**
+     * Requests closure and completes only after all renderer-owned native resources are released.
+     *
+     * <p>The default preserves binary compatibility for providers whose {@link #close()} is fully
+     * synchronous. Providers that permit deferred cleanup must override this method and complete
+     * the returned stage only after outstanding external ownership has retired.</p>
+     *
+     * @return non-null close-completion stage
+     */
+    default java.util.concurrent.CompletionStage<Void> closeAsync() {
+        try {
+            close();
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        } catch (Throwable failure) {
+            return java.util.concurrent.CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    /**
+     * Requests closure and waits for native resource release for at most {@code timeout}.
+     *
+     * @param timeout non-negative maximum wait duration
+     * @return {@code true} when cleanup completed, or {@code false} on timeout
+     * @throws InterruptedException     if the waiting thread is interrupted
+     * @throws IllegalArgumentException if the timeout is negative or cannot be represented
+     */
+    default boolean awaitClosed(java.time.Duration timeout) throws InterruptedException {
+        java.util.Objects.requireNonNull(timeout, "timeout");
+        if (timeout.isNegative()) throw new IllegalArgumentException("timeout must not be negative");
+        final long timeoutNanos;
+        try {
+            timeoutNanos = timeout.toNanos();
+        } catch (ArithmeticException overflow) {
+            throw new IllegalArgumentException("timeout is too large", overflow);
+        }
+        try {
+            java.util.Objects.requireNonNull(closeAsync(), "close completion stage")
+                    .toCompletableFuture()
+                    .get(timeoutNanos, java.util.concurrent.TimeUnit.NANOSECONDS);
+            return true;
+        } catch (java.util.concurrent.TimeoutException timedOut) {
+            return false;
+        } catch (java.util.concurrent.ExecutionException failed) {
+            Throwable cause = failed.getCause();
+            if (cause instanceof RuntimeException runtimeFailure) throw runtimeFailure;
+            if (cause instanceof Error error) throw error;
+            throw new IllegalStateException("renderer close failed", cause);
+        }
+    }
 
     /**
      * Lifecycle state of one renderer instance.
@@ -373,6 +425,38 @@ public interface RayTracingRenderer extends AutoCloseable {
         public FrameSubmissionDeferred {
             reason = java.util.Objects.requireNonNull(reason, "reason");
             if (reason.isBlank()) throw new IllegalArgumentException("reason must not be blank");
+        }
+
+        /**
+         * Creates a refusal with a stable category and human-readable diagnostic detail.
+         *
+         * @param deferralReason stable capacity classification
+         * @param detail         non-blank provider diagnostic detail
+         * @return immutable deferred attempt preserving the original one-string binary shape
+         */
+        public static FrameSubmissionDeferred because(
+                SubmissionDeferralReason deferralReason,
+                String detail
+        ) {
+            return new FrameSubmissionDeferred(SubmissionDeferralReason.encode(deferralReason, detail));
+        }
+
+        /**
+         * Returns a stable category without requiring callers to parse {@link #reason()}.
+         *
+         * @return typed category, or {@link SubmissionDeferralReason#UNSPECIFIED} for legacy values
+         */
+        public SubmissionDeferralReason deferralReason() {
+            return SubmissionDeferralReason.decode(reason);
+        }
+
+        /**
+         * Returns provider diagnostic detail without the internal stable-category marker.
+         *
+         * @return non-blank diagnostic detail
+         */
+        public String detail() {
+            return SubmissionDeferralReason.detail(reason);
         }
     }
 

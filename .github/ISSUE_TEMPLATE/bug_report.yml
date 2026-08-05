@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible non-security defect
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Security vulnerabilities must use the private process in SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: RTRendererAPI version
+      placeholder: 0.5.1
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Java, GPU, driver, Vulkan runtime and presentation path.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include exact steps, configuration and structured diagnostics.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true

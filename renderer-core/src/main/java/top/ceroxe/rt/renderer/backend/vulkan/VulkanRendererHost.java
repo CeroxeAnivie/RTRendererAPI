@@ -17,6 +17,7 @@ import top.ceroxe.rt.renderer.api.RendererStateException;
 import top.ceroxe.rt.renderer.api.SceneRevisionException;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
 import top.ceroxe.rt.renderer.api.SubmissionOrderException;
+import top.ceroxe.rt.renderer.api.SubmissionDeferralReason;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter;
@@ -27,6 +28,8 @@ import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.ArrayDeque;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.LongConsumer;
 import java.util.function.Supplier;
@@ -82,6 +85,7 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     private int managedPresenterBacklogLimit;
     private FrameSubmissionDeferred managedPresenterBackpressure;
     private final ArrayDeque<Long> managedPresenterOutstandingFrames = new ArrayDeque<>();
+    private final CompletableFuture<Void> closeCompletion = new CompletableFuture<>();
 
     private <T> T withLifecycleLock(Supplier<T> action) {
         lifecycleLock.lock();
@@ -359,7 +363,8 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             managedPresenterBacklogLimit = Math.min(
                     checked.maximumFramesQueuedAhead(), backendProducerLeadLimit
             );
-            managedPresenterBackpressure = new FrameSubmissionDeferred(
+            managedPresenterBackpressure = FrameSubmissionDeferred.because(
+                    SubmissionDeferralReason.PRESENTATION_BACKLOG,
                     "Vulkan presenter queue reached its configured producer lead of "
                             + managedPresenterBacklogLimit + " frames"
             );
@@ -466,7 +471,9 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         FrameSubmissionAttempt attempt = withLifecycleLock(() -> trySubmitLocked(request));
         if (attempt instanceof FrameSubmitted submitted) return submitted.submission();
         FrameSubmissionDeferred deferred = (FrameSubmissionDeferred) attempt;
-        throw new top.ceroxe.rt.renderer.api.SubmissionRejectedException(deferred.reason());
+        throw new top.ceroxe.rt.renderer.api.SubmissionRejectedException(
+                deferred.deferralReason(), deferred.detail()
+        );
     }
 
     @Override
@@ -507,9 +514,10 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
                     "session frame admission attempt"
             );
             if (attempt instanceof VulkanRenderingSession.FrameDeferred deferred) {
-                return new FrameSubmissionDeferred(
+                return FrameSubmissionDeferred.because(
+                        deferred.deferralReason(),
                         "Vulkan renderer deferred frame " + checked.sequence()
-                                + " without publishing partial state: " + deferred.reason()
+                                + " without publishing partial state: " + deferred.detail()
                 );
             }
             admission = ((VulkanRenderingSession.FrameAdmitted) attempt).admission();
@@ -720,6 +728,16 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         withLifecycleLock(this::closeLocked);
     }
 
+    @Override
+    public CompletionStage<Void> closeAsync() {
+        try {
+            close();
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+        return closeCompletion.minimalCompletionStage();
+    }
+
     private void closeLocked() {
         if (lifecycle == Lifecycle.CLOSED && sessionClosed) {
             return;
@@ -740,6 +758,7 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             throw closeFailure;
         }
         clearResolvedCleanupFailure();
+        if (sessionClosed) closeCompletion.complete(null);
     }
 
     Throwable terminalFailure() {
@@ -819,8 +838,9 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             VulkanRenderingSession.SubmissionRejectedException rejection
     ) {
         return new top.ceroxe.rt.renderer.api.SubmissionRejectedException(
+                rejection.deferralReason(),
                 "Vulkan renderer rejected " + submission + " without publishing partial state: "
-                        + rejection.getMessage(),
+                        + rejection.detail(),
                 rejection
         );
     }
@@ -905,6 +925,7 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         try {
             session.close();
             sessionClosed = true;
+            if (lifecycle == Lifecycle.CLOSED) closeCompletion.complete(null);
             return null;
         } catch (RuntimeException failure) {
             return failure;

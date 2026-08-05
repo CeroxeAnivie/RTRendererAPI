@@ -34,7 +34,7 @@ final class RenderWindow implements AutoCloseable {
     private final boolean fullScreen;
 
     private RenderWindow(DemoConfig config, AtomicBoolean running, RenderStats stats) {
-        frame = new JFrame("RTRendererAPI 0.5.0 - Uncapped Hex Ball Ray Tracing");
+        frame = new JFrame("RTRendererAPI " + DemoBuildInfo.version() + " - Uncapped Hex Ball Ray Tracing");
         panel = new FramePanel(config, stats);
         graphicsDevice = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
         fullScreen = !config.windowed();

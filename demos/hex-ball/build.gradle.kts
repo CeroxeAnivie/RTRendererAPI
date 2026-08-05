@@ -55,6 +55,10 @@ tasks.withType<AbstractArchiveTask>().configureEach {
     isReproducibleFileOrder = true
 }
 
+tasks.withType<Jar>().configureEach {
+    manifest.attributes("Implementation-Version" to project.version.toString())
+}
+
 tasks.test {
     // This module uses executable contract tests and intentionally has no test-engine dependency.
     failOnNoDiscoveredTests = false
@@ -75,7 +79,8 @@ val shadowJar = tasks.register<Jar>("shadowJar") {
     manifest {
         attributes(
             "Main-Class" to "demo.DemoLauncher",
-            "Enable-Native-Access" to "ALL-UNNAMED"
+            "Enable-Native-Access" to "ALL-UNNAMED",
+            "Implementation-Version" to project.version.toString()
         )
     }
     from(sourceSets.main.get().output)

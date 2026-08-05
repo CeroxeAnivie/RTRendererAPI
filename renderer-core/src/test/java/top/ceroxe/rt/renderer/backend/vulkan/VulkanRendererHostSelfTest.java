@@ -26,6 +26,7 @@ import top.ceroxe.rt.renderer.api.SceneRevisionException;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
 import top.ceroxe.rt.renderer.api.SubmissionOrderException;
 import top.ceroxe.rt.renderer.api.SubmissionRejectedException;
+import top.ceroxe.rt.renderer.api.SubmissionDeferralReason;
 import top.ceroxe.rt.renderer.api.MaterialAsset.BlendMode;
 import top.ceroxe.rt.renderer.api.MaterialAsset.ShadingModel;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer.Status;
@@ -218,6 +219,9 @@ public final class VulkanRendererHostSelfTest {
          require(deferred instanceof RayTracingRenderer.FrameSubmissionDeferred,
                  "sustained producer attempts bypassed the managed presentation bound");
          if (attempt == 0) {
+            require(((RayTracingRenderer.FrameSubmissionDeferred) deferred).deferralReason()
+                        == SubmissionDeferralReason.PRESENTATION_BACKLOG,
+                  "managed presenter backlog lost its stable deferral classification");
             require(deferred == renderer.trySubmit(frame(3L, 0L)),
                     "managed queue backpressure allocated a new result on every hot-loop attempt");
          }
@@ -390,8 +394,16 @@ public final class VulkanRendererHostSelfTest {
       session.nextFrame = new TrackingFrameLease(2L, 0L);
       GpuFrameLease lease = availableLease(renderer.pollLatestFrame());
       require(lease.memoryHandle().markImported(), "memory handle import was not recorded");
-      renderer.close();
+      var closeCompletion = renderer.closeAsync().toCompletableFuture();
       require(session.closes == 0, "renderer destroyed a session with consumer-owned GPU work");
+      require(!closeCompletion.isDone(), "closeAsync completed before external GPU ownership retired");
+      try {
+         require(!renderer.awaitClosed(java.time.Duration.ZERO),
+               "zero-timeout close wait fabricated native cleanup completion");
+      } catch (InterruptedException interrupted) {
+         Thread.currentThread().interrupt();
+         throw new AssertionError("close wait was unexpectedly interrupted", interrupted);
+      }
       require(renderer.health().obligations().outstandingGpuFrameLeases() == 1 && renderer.health().obligations().nativeCleanupPending(), "deferred close debt was not observable");
       Objects.requireNonNull(lease);
       expect(IllegalStateException.class, lease::close);
@@ -399,6 +411,8 @@ public final class VulkanRendererHostSelfTest {
       lease.release(new GpuFrameLease.CpuCompleted());
       lease.close();
       require(session.closes == 1, "last completed frame lease did not release the deferred session");
+      require(closeCompletion.isDone() && !closeCompletion.isCompletedExceptionally(),
+            "closeAsync did not complete after the last external lease retired");
       require(lease.state() == LeaseState.CLOSED, "completed frame lease did not close");
       renderer.close();
       require(session.closes == 1, "deferred session close was not idempotent");
@@ -433,7 +447,9 @@ public final class VulkanRendererHostSelfTest {
       require(((RendererHealth.Failure)renderer.health().activeFailure().orElseThrow()).kind() == Kind.BACKEND_FAILURE, "backend failure was not classified for policy");
       require(renderer.diagnostics().latestAcceptedSceneRevision() == 0L, "backend failure published scene state");
       require(session.closes == 1, "backend failure did not close resources exactly once");
-      renderer.close();
+      var closeCompletion = renderer.closeAsync().toCompletableFuture();
+      require(closeCompletion.isDone() && !closeCompletion.isCompletedExceptionally(),
+            "closeAsync remained pending after failure cleanup had already released the session");
       require(session.closes == 1, "explicit close duplicated failed-session cleanup");
    }
 

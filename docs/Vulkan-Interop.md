@@ -182,4 +182,4 @@ capability，使用 `RayTracingGpuDevice.capabilities()` 和实际 open 结果�
 - lease 已成功从 `ACTIVE` 到 `RELEASED` 再到 `CLOSED`。
 - renderer 关闭前 `outstandingGpuFrameLeases == 0`。
 
-普通 uncapped 提交循环应使用 `renderer.trySubmit(...)`。`FrameSubmissionDeferred` 保证该次没有推进 frame sequence 或 native submission；调用方保留同一 request 稍后重试，并让出 CPU。官方 presenter 的默认 producer lead 是 2，允许 trace/present 重叠但不允许生产端无限堆积不可见工作。
+普通 uncapped 提交循环应使用 `renderer.trySubmit(...)`。`FrameSubmissionDeferred` 保证该次没有推进 frame sequence 或 native submission；调用方保留同一 request 稍后重试，并让出 CPU。重试与统计读取 `deferralReason()`，`detail()` 只作诊断，禁止解析自然语言。官方 presenter 的默认 producer lead 是 2，允许 trace/present 重叠但不允许生产端无限堆积不可见工作。

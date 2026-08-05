@@ -9,6 +9,7 @@ RTRendererAPI 是一个以 JDK 25 构建、以 Java 21 字节码与运行时为�
 - [Java 开发指南](Java)
 - [Java API 参考](Java-API-Reference)
 - [Vulkan 专家互操作](Vulkan-Interop)
+- [兼容性与版本策略](COMPATIBILITY)
 
 ## 模块边界
 

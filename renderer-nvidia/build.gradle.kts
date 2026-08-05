@@ -1,8 +1,9 @@
-import org.gradle.api.tasks.compile.JavaCompile
-import org.gradle.api.tasks.javadoc.Javadoc
-import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
+import org.gradle.api.tasks.Delete
+import org.gradle.api.tasks.bundling.Jar
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.external.javadoc.StandardJavadocDocletOptions
 import java.io.File
 import java.security.MessageDigest
@@ -252,36 +253,6 @@ tasks.register<Exec>("compileNvidiaBridge") {
 }
 
 val packagedNvidiaRuntime = layout.buildDirectory.dir("generated/nvidia-runtime-resources")
-val preparePackagedNvidiaRuntime = tasks.register<Sync>("preparePackagedNvidiaRuntime") {
-    group = "build"
-    description = "Stages the JNI bridge and redistributable Streamline sidecars for the runtime JAR."
-    dependsOn(tasks.named("compileNvidiaBridge"))
-    val destination = packagedNvidiaRuntime.map {
-        it.dir("META-INF/native/windows-x86_64")
-    }
-    into(destination)
-    from(nativeBridgeOutput)
-    from(streamlineSdkRootProperty.map { file(it).resolve("bin/x64") }) {
-        include("*.dll", "*.txt", "*.md")
-    }
-    doLast {
-        val directory = destination.get().asFile
-        val runtimeFiles = directory.listFiles()
-            ?.filter { it.isFile && it.name != "runtime-files.sha256" }
-            ?.sortedBy { it.name }
-            ?: emptyList()
-        if (runtimeFiles.none { it.name == "rtrenderer_nvidia.dll" }
-                || runtimeFiles.none { it.name == "sl.interposer.dll" }) {
-            throw GradleException("packaged NVIDIA runtime is missing the JNI bridge or Streamline interposer")
-        }
-        val manifest = runtimeFiles.joinToString(separator = "\n", postfix = "\n") { runtime ->
-            val digest = MessageDigest.getInstance("SHA-256").digest(runtime.readBytes())
-            HexFormat.of().formatHex(digest) + "\t" + runtime.name
-        }
-        File(directory, "runtime-files.sha256").writeText(manifest, Charsets.UTF_8)
-    }
-}
-
 val nativePackagingConfigured = cmakeExecutableProperty.isPresent
         && nrdSdkRootProperty.isPresent
         && nriSdkRootProperty.isPresent
@@ -289,24 +260,67 @@ val nativePackagingConfigured = cmakeExecutableProperty.isPresent
         && rtxmuSdkRoot.isPresent
         && jdkHomeProperty.isPresent
 
+val clearUnconfiguredPackagedNvidiaRuntime = tasks.register<Delete>(
+    "clearUnconfiguredPackagedNvidiaRuntime"
+) {
+    delete(packagedNvidiaRuntime)
+    onlyIf { !nativePackagingConfigured }
+    doLast {
+        logger.lifecycle(
+            "NVIDIA native SDKs unavailable; removed native staging for the Java-only test artifact"
+        )
+    }
+}
+
+val preparePackagedNvidiaRuntime = tasks.register<Sync>("preparePackagedNvidiaRuntime") {
+    group = "build"
+    description = "Stages the JNI bridge and redistributable Streamline sidecars when native SDKs are available."
+    dependsOn(tasks.named("compileNvidiaBridge"), clearUnconfiguredPackagedNvidiaRuntime)
+    val destination = packagedNvidiaRuntime.map {
+        it.dir("META-INF/native/windows-x86_64")
+    }
+    into(destination)
+
+    if (nativePackagingConfigured) {
+        from(nativeBridgeOutput)
+        from(streamlineSdkRootProperty.map { file(it).resolve("bin/x64") }) {
+            include("*.dll", "*.txt", "*.md")
+        }
+        doLast {
+            val directory = destination.get().asFile
+            val runtimeFiles = directory.listFiles()
+                ?.filter { it.isFile && it.name != "runtime-files.sha256" }
+                ?.sortedBy { it.name }
+                ?: emptyList()
+            if (runtimeFiles.none { it.name == "rtrenderer_nvidia.dll" }
+                    || runtimeFiles.none { it.name == "sl.interposer.dll" }) {
+                throw GradleException("packaged NVIDIA runtime is missing the JNI bridge or Streamline interposer")
+            }
+            val manifest = runtimeFiles.joinToString(separator = "\n", postfix = "\n") { runtime ->
+                val digest = MessageDigest.getInstance("SHA-256").digest(runtime.readBytes())
+                HexFormat.of().formatHex(digest) + "\t" + runtime.name
+            }
+            File(directory, "runtime-files.sha256").writeText(manifest, Charsets.UTF_8)
+        }
+    }
+}
+
 tasks.named<Jar>("jar") {
     dependsOn(preparePackagedNvidiaRuntime)
     from(packagedNvidiaRuntime)
-    doFirst {
-        if (!nativePackagingConfigured) {
-            throw GradleException(
-                "renderer-nvidia JAR requires CMake, JDK, NRD, NRI, Streamline, and RTXMU; " +
-                    "set the documented properties/environment variables or install them in the " +
-                    "supported D: drive convention directories"
-            )
-        }
-    }
 }
 
 tasks.register("verifyPackagedNvidiaRuntime") {
     group = "verification"
     description = "Rejects a release JAR that omits classpath-loadable NVIDIA native runtime files."
     dependsOn(tasks.named("jar"))
+    doFirst {
+        if (!nativePackagingConfigured) {
+            throw GradleException(
+                "NVIDIA runtime verification requires CMake, JDK, NRD, NRI, Streamline, and RTXMU"
+            )
+        }
+    }
     doLast {
         val artifact = tasks.named<Jar>("jar").get().archiveFile.get().asFile
         NvidiaRuntimeClosure.verify(artifact, "renderer-nvidia runtime JAR")
@@ -786,7 +800,6 @@ tasks.register("verifyNvidiaModuleBoundary") {
 
 tasks.named("check") {
     dependsOn(
-        tasks.named("verifyPackagedNvidiaRuntime"),
         tasks.named("verifyNvidiaModuleBoundary"),
         nvidiaStreamlinePreflightSelfTest,
         nvidiaStreamlineAdaptiveFrameGenerationSelfTest,

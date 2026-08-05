@@ -33,7 +33,7 @@ dependencies {
     testImplementation(project(":renderer-api"))
     // The API publishes an external runtime coordinate for NVIDIA so consumers can resolve a
     // single artifact. In this composite build, make the sibling implementation explicit for
-    // core self-tests; otherwise Gradle attempts to fetch the unreleased 0.5.0 module remotely.
+    // core self-tests; otherwise Gradle attempts to fetch the current unreleased module remotely.
     testRuntimeOnly(project(":renderer-nvidia"))
     implementation("it.unimi.dsi:fastutil:$fastutilVersion")
     api("org.joml:joml:$jomlVersion")

@@ -50,6 +50,12 @@ public interface RayTracingRenderer extends AutoCloseable
 | `health()` | `RendererHealth` | 结构化失败与资源欠账 |
 | `extension(Class<T>)` | `Optional<T>` | 显式发现可选专家扩展 |
 | `close()` | `void` | 关闭 renderer；未归还资源会按契约报告 |
+| `closeAsync()` | `CompletionStage<Void>` | 请求关闭，仅在 native 资源实际释放后完成 |
+| `awaitClosed(Duration)` | `boolean` | 请求关闭并有界等待真实资源释放；超时返回 `false` |
+
+`FrameSubmissionDeferred.deferralReason()` 和 `SubmissionRejectedException.deferralReason()` 返回稳定的
+`SubmissionDeferralReason`，用于重试策略和遥测聚合；`detail()` 仅用于人类诊断。旧 provider 只提供自由文本时明确返回
+`UNSPECIFIED`，不会从自然语言猜测类别。
 
 ## RayTracingRendererConfig
 

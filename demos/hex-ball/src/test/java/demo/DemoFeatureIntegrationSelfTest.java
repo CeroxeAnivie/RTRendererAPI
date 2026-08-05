@@ -116,7 +116,7 @@ public final class DemoFeatureIntegrationSelfTest {
                     "the native baseline property must disable frame generation");
 
             List<String> command = DemoLauncher.childCommand(
-                    Path.of("RTRendererAPI-HexBallDemo-0.5.0.jar"),
+                    Path.of("RTRendererAPI-HexBallDemo-test.jar"),
                     new String[]{"--width=640", "--height=360"}
             );
             String forwarded = "-D" + property + "=true";
@@ -191,7 +191,7 @@ public final class DemoFeatureIntegrationSelfTest {
                     "all-except-MFG must request SER and RTXMU policy");
 
             List<String> command = DemoLauncher.childCommand(
-                    Path.of("RTRendererAPI-HexBallDemo-0.5.0.jar"), new String[0]
+                    Path.of("RTRendererAPI-HexBallDemo-test.jar"), new String[0]
             );
             int propertyIndex = command.indexOf("-D" + profileProperty + "=all-except-mfg");
             require(propertyIndex >= 0 && propertyIndex < command.indexOf("-jar"),

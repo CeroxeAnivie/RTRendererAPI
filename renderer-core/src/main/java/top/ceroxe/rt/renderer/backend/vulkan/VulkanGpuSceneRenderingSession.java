@@ -8,6 +8,7 @@ import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
+import top.ceroxe.rt.renderer.api.SubmissionDeferralReason;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
@@ -201,6 +202,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
              */
             if (frameRing.hasProducerPending()) {
                 throw new SubmissionRejectedException(
+                        SubmissionDeferralReason.SCENE_UPDATE_BACKLOG,
                         "scene mutation is waiting for submitted renderer frames to release scene references"
                 );
             }
@@ -228,7 +230,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
                     return apply(checked);
                 }
             }
-            throw new SubmissionRejectedException(busy.getMessage());
+            SubmissionDeferralReason reason = busy.getCause() instanceof VulkanMemoryBudgetRejectedException
+                    ? SubmissionDeferralReason.RESOURCE_PRESSURE
+                    : SubmissionDeferralReason.PROVIDER_CAPACITY;
+            throw new SubmissionRejectedException(reason, busy.getMessage());
         } catch (RuntimeException failure) {
             throw fail("apply GPUScene generation", failure);
         }
@@ -238,7 +243,8 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
     public synchronized FrameAdmission submit(FrameSubmission submission) throws SubmissionRejectedException {
         FrameAdmissionAttempt attempt = trySubmit(submission);
         if (attempt instanceof FrameAdmitted admitted) return admitted.admission();
-        throw new SubmissionRejectedException(((FrameDeferred) attempt).reason());
+        FrameDeferred deferred = (FrameDeferred) attempt;
+        throw new SubmissionRejectedException(deferred.deferralReason(), deferred.detail());
     }
 
     @Override
@@ -251,6 +257,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
             // ring cannot admit their result, so reject it before doing that work on every retry.
             if (frameRing.writableSlot() == null) {
                 return new FrameDeferred(
+                        SubmissionDeferralReason.FRAME_RING_FULL,
                         "all bounded frame slots are retained or in flight"
                 );
             }
@@ -275,12 +282,15 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
                     )
             );
         } catch (SubmissionRejectedException rejection) {
-            return new FrameDeferred(rejection.getMessage());
+            return new FrameDeferred(rejection.deferralReason(), rejection.detail());
         } catch (VulkanFeatureFallbackException fallback) {
             // The provider changed only its next-frame feature plan. Recording failed before queue
             // publication, so keep the renderer alive and retry this sequence against that plan.
             temporalCoordinator.invalidate(HistoryInvalidationReason.EXPLICIT_RESET);
-            return new FrameDeferred(fallback.getMessage());
+            return new FrameDeferred(
+                    SubmissionDeferralReason.FEATURE_RECONFIGURATION,
+                    fallback.getMessage()
+            );
         } catch (FrameValidationException validation) {
             throw validation;
         } catch (RuntimeException failure) {
