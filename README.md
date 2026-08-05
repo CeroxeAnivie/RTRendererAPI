@@ -269,25 +269,6 @@ Streamline 与 RTXMU SDK。RTXMU 必须为官方 `v1.4` checkout 的固定 commi
 
 ---
 
-## 📈 当前实机证据
-
-当前基线来自 Windows 11、RTX 5080 Laptop GPU、独显显示路径、2560x1600 全屏、2 spp、动态三球场景、
-平台实际 `IMMEDIATE` 与 1200 个成功 present：
-
-| 指标 | 结果 |
-| --- | ---: |
-| 滚动 Present | 189.1 FPS |
-| 全程平均 Present | 176.1 FPS |
-| Ray trace | 4.20 ms / 238.3 FPS capacity |
-| Swapchain acquire | 0.632 ms |
-| Native present | 0.400 ms |
-
-Present FPS 只统计 `Outcome.PRESENTED`；trace capacity 仅表示光追阶段理论吞吐，不包含 acquire、managed GPU copy
-和 present。独立 presentation queue 当前没有 managed-copy GPU timestamp，因此以零样本/`NaN` 表示未知。
-Khronos Validation 的 180 帧 smoke 无 ERROR、WARNING 或 VUID。以上是单机证据，不是跨驱动或硬件的性能承诺。
-
----
-
 ## 📚 文档
 
 - [Java 开发指南](docs/Java.md)：完整场景、配置、背压、诊断与各 RTX 能力示例。
