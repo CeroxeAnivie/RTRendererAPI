@@ -139,6 +139,64 @@ public final class top.ceroxe.rt.renderer.api.CameraState$ExplicitBasisBuilder {
     descriptor: ()Ltop/ceroxe/rt/renderer/api/CameraState;
 }
 
+Compiled from "CardinalLightingState.java"
+public final class top.ceroxe.rt.renderer.api.CardinalLightingState {
+  public static top.ceroxe.rt.renderer.api.CardinalLightingState disabled();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/CardinalLightingState;
+
+  public static top.ceroxe.rt.renderer.api.CardinalLightingState objectSpace(float, float, float, float, float, float);
+    descriptor: (FFFFFF)Ltop/ceroxe/rt/renderer/api/CardinalLightingState;
+
+  public static top.ceroxe.rt.renderer.api.CardinalLightingState worldSpace(float, float, float, float, float, float);
+    descriptor: (FFFFFF)Ltop/ceroxe/rt/renderer/api/CardinalLightingState;
+
+  public top.ceroxe.rt.renderer.api.CardinalLightingState$CoordinateSpace coordinateSpace();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/CardinalLightingState$CoordinateSpace;
+
+  public float negativeX();
+    descriptor: ()F
+
+  public float positiveX();
+    descriptor: ()F
+
+  public float negativeY();
+    descriptor: ()F
+
+  public float positiveY();
+    descriptor: ()F
+
+  public float negativeZ();
+    descriptor: ()F
+
+  public float positiveZ();
+    descriptor: ()F
+
+  public boolean enabled();
+    descriptor: ()Z
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "CardinalLightingState.java"
+public final class top.ceroxe.rt.renderer.api.CardinalLightingState$CoordinateSpace extends java.lang.Enum<top.ceroxe.rt.renderer.api.CardinalLightingState$CoordinateSpace> {
+  public static final top.ceroxe.rt.renderer.api.CardinalLightingState$CoordinateSpace OBJECT;
+    descriptor: Ltop/ceroxe/rt/renderer/api/CardinalLightingState$CoordinateSpace;
+  public static final top.ceroxe.rt.renderer.api.CardinalLightingState$CoordinateSpace WORLD;
+    descriptor: Ltop/ceroxe/rt/renderer/api/CardinalLightingState$CoordinateSpace;
+  public static top.ceroxe.rt.renderer.api.CardinalLightingState$CoordinateSpace[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/CardinalLightingState$CoordinateSpace;
+
+  public static top.ceroxe.rt.renderer.api.CardinalLightingState$CoordinateSpace valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/CardinalLightingState$CoordinateSpace;
+}
+
 Compiled from "CpuFrame.java"
 public final class top.ceroxe.rt.renderer.api.CpuFrame {
   public static top.ceroxe.rt.renderer.api.CpuFrame$Builder builder();
@@ -1003,6 +1061,9 @@ public final class top.ceroxe.rt.renderer.api.InstanceRenderState {
   public top.ceroxe.rt.renderer.api.OutlineStyle outline();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/OutlineStyle;
 
+  public top.ceroxe.rt.renderer.api.CardinalLightingState cardinalLighting();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/CardinalLightingState;
+
   public top.ceroxe.rt.renderer.api.InstanceRenderState$Builder toBuilder();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/InstanceRenderState$Builder;
 
@@ -1032,6 +1093,9 @@ public final class top.ceroxe.rt.renderer.api.InstanceRenderState$Builder {
 
   public top.ceroxe.rt.renderer.api.InstanceRenderState$Builder outline(top.ceroxe.rt.renderer.api.OutlineStyle);
     descriptor: (Ltop/ceroxe/rt/renderer/api/OutlineStyle;)Ltop/ceroxe/rt/renderer/api/InstanceRenderState$Builder;
+
+  public top.ceroxe.rt.renderer.api.InstanceRenderState$Builder cardinalLighting(top.ceroxe.rt.renderer.api.CardinalLightingState);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/CardinalLightingState;)Ltop/ceroxe/rt/renderer/api/InstanceRenderState$Builder;
 
   public top.ceroxe.rt.renderer.api.InstanceRenderState build();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/InstanceRenderState;
@@ -3077,14 +3141,23 @@ public final class top.ceroxe.rt.renderer.api.SurfaceOverlayState {
   public static top.ceroxe.rt.renderer.api.SurfaceOverlayState depthEqual(float);
     descriptor: (F)Ltop/ceroxe/rt/renderer/api/SurfaceOverlayState;
 
+  public static top.ceroxe.rt.renderer.api.SurfaceOverlayState depthEqual(float, top.ceroxe.rt.renderer.api.SurfaceOverlayState$CompositionMode);
+    descriptor: (FLtop/ceroxe/rt/renderer/api/SurfaceOverlayState$CompositionMode;)Ltop/ceroxe/rt/renderer/api/SurfaceOverlayState;
+
   public static top.ceroxe.rt.renderer.api.SurfaceOverlayState depthBias(float);
     descriptor: (F)Ltop/ceroxe/rt/renderer/api/SurfaceOverlayState;
+
+  public static top.ceroxe.rt.renderer.api.SurfaceOverlayState depthBias(float, top.ceroxe.rt.renderer.api.SurfaceOverlayState$CompositionMode);
+    descriptor: (FLtop/ceroxe/rt/renderer/api/SurfaceOverlayState$CompositionMode;)Ltop/ceroxe/rt/renderer/api/SurfaceOverlayState;
 
   public top.ceroxe.rt.renderer.api.SurfaceOverlayState$DepthMode depthMode();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/SurfaceOverlayState$DepthMode;
 
   public float depthThreshold();
     descriptor: ()F
+
+  public top.ceroxe.rt.renderer.api.SurfaceOverlayState$CompositionMode compositionMode();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SurfaceOverlayState$CompositionMode;
 
   public boolean enabled();
     descriptor: ()Z
@@ -3097,6 +3170,19 @@ public final class top.ceroxe.rt.renderer.api.SurfaceOverlayState {
 
   public java.lang.String toString();
     descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "SurfaceOverlayState.java"
+public final class top.ceroxe.rt.renderer.api.SurfaceOverlayState$CompositionMode extends java.lang.Enum<top.ceroxe.rt.renderer.api.SurfaceOverlayState$CompositionMode> {
+  public static final top.ceroxe.rt.renderer.api.SurfaceOverlayState$CompositionMode ALPHA_OVER;
+    descriptor: Ltop/ceroxe/rt/renderer/api/SurfaceOverlayState$CompositionMode;
+  public static final top.ceroxe.rt.renderer.api.SurfaceOverlayState$CompositionMode MULTIPLY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/SurfaceOverlayState$CompositionMode;
+  public static top.ceroxe.rt.renderer.api.SurfaceOverlayState$CompositionMode[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/SurfaceOverlayState$CompositionMode;
+
+  public static top.ceroxe.rt.renderer.api.SurfaceOverlayState$CompositionMode valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/SurfaceOverlayState$CompositionMode;
 }
 
 Compiled from "SurfaceOverlayState.java"

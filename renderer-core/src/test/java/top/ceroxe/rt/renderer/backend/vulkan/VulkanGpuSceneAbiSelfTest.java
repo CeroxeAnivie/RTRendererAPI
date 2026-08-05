@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import top.ceroxe.rt.renderer.api.AffineTransform;
+import top.ceroxe.rt.renderer.api.CardinalLightingState;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.InstanceRenderState;
@@ -17,6 +18,7 @@ import top.ceroxe.rt.renderer.api.SceneInstance;
 import top.ceroxe.rt.renderer.api.SceneLight;
 import top.ceroxe.rt.renderer.api.TextureAsset;
 import top.ceroxe.rt.renderer.api.UvTransform;
+import top.ceroxe.rt.renderer.api.SurfaceOverlayState;
 import top.ceroxe.rt.renderer.api.MaterialAsset.BlendMode;
 import top.ceroxe.rt.renderer.api.MaterialAsset.ShadingModel;
 import top.ceroxe.rt.renderer.api.SceneInstance.Mobility;
@@ -63,6 +65,17 @@ public final class VulkanGpuSceneAbiSelfTest {
       require(materialRecord[2] == 3 && materialRecord[3] == -1 && materialRecord[4] == 7 && materialRecord[5] == -1, "material texture identities were not resolved to stable slots");
       require(Float.intBitsToFloat(materialRecord[9]) == 0.75F && Float.intBitsToFloat(materialRecord[12]) == 1.45F, "material PBR scalars changed during packing");
       require((materialRecord[0] >> 7 & 3) == ShadingModel.LIGHTMAP_MODULATED.ordinal(), "material shading model was not encoded into GPU flags");
+      MaterialAsset multiplyOverlay = MaterialAsset.builder(21L)
+            .blendMode(BlendMode.TRANSLUCENT)
+            .surfaceOverlay(SurfaceOverlayState.depthEqual(
+                  0.002F, SurfaceOverlayState.CompositionMode.MULTIPLY
+            ))
+            .build();
+      int[] multiplyRecord = VulkanGpuSceneAbi.packMaterial(multiplyOverlay, ignored -> -1);
+      require((multiplyRecord[0] >> VulkanGpuSceneAbi.OVERLAY_COMPOSITION_MODE_SHIFT
+                  & VulkanGpuSceneAbi.OVERLAY_COMPOSITION_MODE_MASK)
+                  == SurfaceOverlayState.CompositionMode.MULTIPLY.ordinal(),
+            "multiply overlay composition was not encoded into GPU flags");
    }
 
    private static void packsGeometryAndInstanceReferences() {
@@ -73,7 +86,7 @@ public final class VulkanGpuSceneAbiSelfTest {
       require(meshRecord[2] == -1 && meshRecord[3] == -1, "absent geometry stream did not retain the canonical 64-bit sentinel");
       SceneInstance instance = SceneInstance.builder(40L, 30L).mobility(Mobility.DYNAMIC).visibilityMask(127).surfaceVisibility(0.375F).lightmapCoordinates(32, 176).build();
       int[] instanceRecord = VulkanGpuSceneAbi.packInstance(instance, (id) -> id == 30L ? 9 : -1);
-      require(instanceRecord.length == 42 && instanceRecord[0] == 9 && instanceRecord[2] == 127, "instance descriptor lost mesh slot or visibility mask");
+      require(instanceRecord.length == 48 && instanceRecord[0] == 9 && instanceRecord[2] == 127, "instance descriptor lost mesh slot or visibility mask");
       require(Float.intBitsToFloat(instanceRecord[3]) == 1.0F && Float.intBitsToFloat(instanceRecord[8]) == 1.0F, "instance affine transform changed during packing");
       require(Float.intBitsToFloat(instanceRecord[15]) == 0.375F, "instance surface visibility did not occupy the reserved ABI word");
       require(instanceRecord[16] == 0x00b0_0020, "instance lightmap coordinates did not occupy the final ABI word");
@@ -89,6 +102,10 @@ public final class VulkanGpuSceneAbiSelfTest {
       }
       require(instanceRecord[40] == 0 && instanceRecord[41] == 0,
             "default instance motion revision must be zero");
+      for (int direction = 0; direction < 6; ++direction) {
+         require(Float.intBitsToFloat(instanceRecord[42 + direction]) == 1.0F,
+               "default cardinal lighting must remain a no-op at direction " + direction);
+      }
 
       AffineTransform previousTransform = new AffineTransform(new float[]{
             1.0F, 0.0F, 0.0F, -3.0F,
@@ -112,6 +129,9 @@ public final class VulkanGpuSceneAbiSelfTest {
             .overlayReceiverMask(0x34)
             .objectMask(0x56)
             .outline(OutlineStyle.of(0xff20_40ff, 2.0F))
+            .cardinalLighting(CardinalLightingState.worldSpace(
+                  0.4F, 0.5F, 0.6F, 0.7F, 0.8F, 0.9F
+            ))
             .build();
       PrimitiveInstance primitive = PrimitiveInstance.builder(30L)
             .transform(instance.transform())
@@ -120,10 +140,12 @@ public final class VulkanGpuSceneAbiSelfTest {
             .surfaceVisibility(0.5F)
             .build();
       int[] primitiveRecord = VulkanGpuSceneAbi.packPrimitive(primitive, id -> id == 30L ? 9 : -1);
-      require(primitiveRecord.length == 42 && primitiveRecord[0] == 9
+      require(primitiveRecord.length == 48 && primitiveRecord[0] == 9
                   && primitiveRecord[1] == (VulkanGpuSceneAbi.FLAG_ACTIVE
                   | VulkanGpuSceneAbi.FLAG_CASTS_SHADOW | VulkanGpuSceneAbi.FLAG_DYNAMIC
-                  | VulkanGpuSceneAbi.FLAG_FRAME_LOCAL),
+                  | VulkanGpuSceneAbi.FLAG_FRAME_LOCAL
+                  | VulkanGpuSceneAbi.INSTANCE_CARDINAL_LIGHTING_ENABLED
+                  | VulkanGpuSceneAbi.INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE),
             "frame primitive did not use the compact dynamic instance ABI");
       require(Float.intBitsToFloat(primitiveRecord[17]) == 2.0F
                   && Float.intBitsToFloat(primitiveRecord[21]) == 3.0F
@@ -138,6 +160,12 @@ public final class VulkanGpuSceneAbiSelfTest {
       }
       require(primitiveRecord[40] == 0 && primitiveRecord[41] == 0,
             "transient primitive motion revision must remain zero without stable identity");
+      float[] cardinalMultipliers = {0.4F, 0.5F, 0.6F, 0.7F, 0.8F, 0.9F};
+      for (int direction = 0; direction < cardinalMultipliers.length; ++direction) {
+         require(primitiveRecord[42 + direction]
+                     == Float.floatToRawIntBits(cardinalMultipliers[direction]),
+               "transient primitive cardinal multiplier changed at direction " + direction);
+      }
       require(VulkanGpuSceneAbi.TRANSIENT_INSTANCE_BIT == 0x0080_0000
                   && VulkanGpuSceneAbi.TRANSIENT_INSTANCE_BIT == top.ceroxe.rt.renderer.api.FramePrimitiveBatch.MAX_PRIMITIVES,
             "transient custom-index namespace no longer matches the public batch limit");

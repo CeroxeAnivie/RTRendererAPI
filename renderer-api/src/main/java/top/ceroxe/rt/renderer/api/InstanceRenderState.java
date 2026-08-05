@@ -9,11 +9,13 @@ import java.util.Objects;
  * <p>Masks are raw 32-bit bit sets. A regular surface publishes {@link #surfaceMask()}; an overlay
  * is composited only over a hit sharing at least one bit with {@link #overlayReceiverMask()}.
  * Object mask zero disables outline identity, while non-zero values let adjacent hits be compared
- * without coupling the API to any host application's object model.</p>
+ * without coupling the API to any host application's object model. Cardinal lighting is likewise
+ * instance-owned, allowing shared mesh geometry and one BLAS to retain distinct face shading.</p>
  */
 public final class InstanceRenderState {
     private static final InstanceRenderState DEFAULT = new InstanceRenderState(
-            UvTransform.identity(), -1, 0, 0, OutlineStyle.disabled()
+            UvTransform.identity(), -1, 0, 0, OutlineStyle.disabled(),
+            CardinalLightingState.disabled()
     );
 
     private final UvTransform uvTransform;
@@ -21,6 +23,7 @@ public final class InstanceRenderState {
     private final int overlayReceiverMask;
     private final int objectMask;
     private final OutlineStyle outline;
+    private final CardinalLightingState cardinalLighting;
 
     private InstanceRenderState(Builder builder) {
         uvTransform = Objects.requireNonNull(builder.uvTransform, "uvTransform");
@@ -28,6 +31,7 @@ public final class InstanceRenderState {
         overlayReceiverMask = builder.overlayReceiverMask;
         objectMask = builder.objectMask;
         outline = Objects.requireNonNull(builder.outline, "outline");
+        cardinalLighting = Objects.requireNonNull(builder.cardinalLighting, "cardinalLighting");
         if (outline.enabled() && objectMask == 0) {
             throw new IllegalArgumentException("enabled outline requires a non-zero objectMask");
         }
@@ -38,13 +42,15 @@ public final class InstanceRenderState {
             int surfaceMask,
             int overlayReceiverMask,
             int objectMask,
-            OutlineStyle outline
+            OutlineStyle outline,
+            CardinalLightingState cardinalLighting
     ) {
         this.uvTransform = uvTransform;
         this.surfaceMask = surfaceMask;
         this.overlayReceiverMask = overlayReceiverMask;
         this.objectMask = objectMask;
         this.outline = outline;
+        this.cardinalLighting = cardinalLighting;
     }
 
     /** Returns the shared identity/default state. */
@@ -106,6 +112,14 @@ public final class InstanceRenderState {
     }
 
     /**
+     * Returns instance-local dominant-axis base-color modulation.
+     * @return non-null cardinal-lighting state
+     */
+    public CardinalLightingState cardinalLighting() {
+        return cardinalLighting;
+    }
+
+    /**
      * Copies this state into an independent builder.
      * @return initialized state builder
      */
@@ -120,12 +134,15 @@ public final class InstanceRenderState {
                 && overlayReceiverMask == state.overlayReceiverMask
                 && objectMask == state.objectMask
                 && uvTransform.equals(state.uvTransform)
-                && outline.equals(state.outline);
+                && outline.equals(state.outline)
+                && cardinalLighting.equals(state.cardinalLighting);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(uvTransform, surfaceMask, overlayReceiverMask, objectMask, outline);
+        return Objects.hash(
+                uvTransform, surfaceMask, overlayReceiverMask, objectMask, outline, cardinalLighting
+        );
     }
 
     @Override
@@ -134,7 +151,8 @@ public final class InstanceRenderState {
                 + ", surfaceMask=" + surfaceMask
                 + ", overlayReceiverMask=" + overlayReceiverMask
                 + ", objectMask=" + objectMask
-                + ", outline=" + outline + ']';
+                + ", outline=" + outline
+                + ", cardinalLighting=" + cardinalLighting + ']';
     }
 
     /** Single-thread-confined semantic builder. */
@@ -144,6 +162,7 @@ public final class InstanceRenderState {
         private int overlayReceiverMask;
         private int objectMask;
         private OutlineStyle outline = OutlineStyle.disabled();
+        private CardinalLightingState cardinalLighting = CardinalLightingState.disabled();
 
         private Builder() {
         }
@@ -154,6 +173,7 @@ public final class InstanceRenderState {
             overlayReceiverMask = source.overlayReceiverMask;
             objectMask = source.objectMask;
             outline = source.outline;
+            cardinalLighting = source.cardinalLighting;
         }
 
         /**
@@ -207,13 +227,24 @@ public final class InstanceRenderState {
         }
 
         /**
+         * Replaces dominant-axis base-color modulation.
+         * @param value non-null cardinal-lighting state
+         * @return this builder
+         */
+        public Builder cardinalLighting(CardinalLightingState value) {
+            cardinalLighting = Objects.requireNonNull(value, "cardinalLighting");
+            return this;
+        }
+
+        /**
          * Builds validated immutable state.
          * @return immutable render state
          */
         public InstanceRenderState build() {
             if (uvTransform.equals(UvTransform.identity()) && surfaceMask == -1
                     && overlayReceiverMask == 0 && objectMask == 0
-                    && outline.equals(OutlineStyle.disabled())) {
+                    && outline.equals(OutlineStyle.disabled())
+                    && cardinalLighting.equals(CardinalLightingState.disabled())) {
                 return DEFAULT;
             }
             return new InstanceRenderState(this);

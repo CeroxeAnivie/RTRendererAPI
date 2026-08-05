@@ -91,6 +91,8 @@ InstanceRenderState markerState = InstanceRenderState.builder()
         .surfaceMask(0x04)
         .objectMask(42)
         .outline(OutlineStyle.of(0xff40_20ff, 1.5F))
+        .cardinalLighting(CardinalLightingState.objectSpace(
+                0.80F, 0.80F, 0.55F, 1.00F, 0.70F, 0.70F))
         .build();
 
 PrimitiveInstance marker = PrimitiveInstance.builder(mesh.id())
@@ -120,6 +122,27 @@ provider 为批次使用 frame-slot-local 实例记录与 TLAS，并复用常驻
 `SceneInstance` 与 `PrimitiveInstance` 共享 `InstanceRenderState`：`surfaceMask` 声明普通表面
 receiver，`overlayReceiverMask` 选择 overlay 可合成的 receiver，`objectMask` 提供 outline
 比较所需的对象 identity。启用 `OutlineStyle` 时 `objectMask` 必须非零。
+
+`CardinalLightingState` 按未受 normal map 扰动的几何法线主轴选择 -X/+X/-Y/+Y/-Z/+Z
+倍率，并在 terminal shading 前调制 base-color RGB。`objectSpace(...)` 让明暗模式跟随实例旋转，
+`worldSpace(...)` 则按变换后的世界方向分类；六个倍率都必须位于 `[0, 1]`。该状态只更新实例
+SSBO，mesh 与 BLAS 继续共享，不会因每实例光照差异复制或重建。
+
+裂纹、破坏纹理等 receiver-aware overlay 应显式选择乘法合成，不能用 alpha-over 模拟：
+
+```java
+MaterialAsset crackMaterial = MaterialAsset.builder(crackMaterialId)
+        .blendMode(MaterialAsset.BlendMode.TRANSLUCENT)
+        .shadingModel(MaterialAsset.ShadingModel.UNLIT)
+        .baseColorTextureId(crackTextureId)
+        .surfaceOverlay(SurfaceOverlayState.depthEqual(
+                0.002F, SurfaceOverlayState.CompositionMode.MULTIPLY))
+        .build();
+```
+
+`MULTIPLY` 的定义是 `receiver * mix(1, overlayRgb, alpha)`：透明 texel 保留 receiver，
+不透明深色 texel 执行真正的乘法压暗。未传 composition mode 的 `depthEqual(...)` 和
+`depthBias(...)` 保持 `ALPHA_OVER`，以兼容普通 decal。
 
 ## 选择 GPU
 

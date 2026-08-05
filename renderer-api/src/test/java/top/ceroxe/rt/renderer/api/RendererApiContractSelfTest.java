@@ -101,13 +101,29 @@ public final class RendererApiContractSelfTest {
               () -> UvTransform.rotation(Float.POSITIVE_INFINITY, 0.0F, 0.0F));
 
       OutlineStyle outline = OutlineStyle.of(0xff40_20ff, 2.0F);
+      CardinalLightingState cardinalLighting = CardinalLightingState.worldSpace(
+              0.45F, 0.55F, 0.65F, 0.75F, 0.85F, 0.95F
+      );
       InstanceRenderState renderState = InstanceRenderState.builder()
               .uvTransform(uv)
               .surfaceMask(0x04)
               .overlayReceiverMask(0x04)
               .objectMask(73)
               .outline(outline)
+              .cardinalLighting(cardinalLighting)
               .build();
+      require(renderState.cardinalLighting().equals(cardinalLighting)
+                      && renderState.equals(renderState.toBuilder().build()),
+              "instance copy lost cardinal-lighting state");
+      require(CardinalLightingState.objectSpace(1, 1, 1, 1, 1, 1)
+                      == CardinalLightingState.disabled(),
+              "no-op cardinal lighting lost canonicalization");
+      expect(IllegalArgumentException.class,
+              () -> CardinalLightingState.objectSpace(-0.01F, 1, 1, 1, 1, 1));
+      expect(IllegalArgumentException.class,
+              () -> CardinalLightingState.worldSpace(1, 1, Float.NaN, 1, 1, 1));
+      expect(IllegalArgumentException.class,
+              () -> CardinalLightingState.objectSpace(1, 1, 1, 1.01F, 1, 1));
       expect(IllegalArgumentException.class,
               () -> InstanceRenderState.builder().outline(outline).build());
       expect(IllegalArgumentException.class, () -> OutlineStyle.of(0x0040_20ff, 1.0F));
@@ -115,6 +131,13 @@ public final class RendererApiContractSelfTest {
               () -> OutlineStyle.of(0xff40_20ff, OutlineStyle.MAX_WIDTH_PIXELS + 0.01F));
 
       SurfaceOverlayState overlay = SurfaceOverlayState.depthEqual(0.002F);
+      SurfaceOverlayState multiplyOverlay = SurfaceOverlayState.depthBias(
+              0.004F, SurfaceOverlayState.CompositionMode.MULTIPLY
+      );
+      require(overlay.compositionMode() == SurfaceOverlayState.CompositionMode.ALPHA_OVER
+                      && multiplyOverlay.compositionMode()
+                      == SurfaceOverlayState.CompositionMode.MULTIPLY,
+              "overlay composition mode lost explicit/default semantics");
       MaterialAsset unlitOverlay = MaterialAsset.builder(71L)
               .blendMode(BlendMode.TRANSLUCENT)
               .baseColorRgba8(0x8040_20ff)
@@ -127,6 +150,8 @@ public final class RendererApiContractSelfTest {
               "material copy lost unlit or overlay policy");
       expect(IllegalArgumentException.class, () -> SurfaceOverlayState.depthBias(Float.NaN));
       expect(IllegalArgumentException.class, () -> SurfaceOverlayState.depthEqual(-0.001F));
+      expect(NullPointerException.class,
+              () -> SurfaceOverlayState.depthEqual(0.0F, null));
       expect(IllegalArgumentException.class, () -> MaterialAsset.builder(72L)
               .baseColorRgba8(0x8040_20ff)
               .surfaceOverlay(overlay)

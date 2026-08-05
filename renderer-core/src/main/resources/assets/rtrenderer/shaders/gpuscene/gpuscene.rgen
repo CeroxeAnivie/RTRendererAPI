@@ -411,6 +411,11 @@ vec3 gsResolveSurfaceOverlay(
     vec3 receiverColor = gsEvaluateTerminalRadiance(receiver, receiverOrigin, rayDirection);
     vec3 overlayColor = gsEvaluateTerminalRadiance(overlay, rayOrigin, rayDirection);
     float alpha = clamp(overlay.baseColorAndOpacity.a, 0.0, 1.0);
+    uint compositionMode = (overlay.state.z >> GPU_SCENE_OVERLAY_COMPOSITION_MODE_SHIFT)
+        & GPU_SCENE_OVERLAY_COMPOSITION_MODE_MASK;
+    if (compositionMode == GPU_SCENE_OVERLAY_COMPOSITION_MULTIPLY) {
+        return receiverColor * mix(vec3(1.0), overlayColor, alpha);
+    }
     return mix(receiverColor, overlayColor, alpha);
 }
 

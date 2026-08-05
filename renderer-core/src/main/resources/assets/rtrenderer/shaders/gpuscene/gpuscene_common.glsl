@@ -265,6 +265,26 @@ float gsInstanceOutlineWidth(uint instanceSlot)
     ), 0.0, 8.0);
 }
 
+float gsInstanceCardinalLighting(
+    uint instanceSlot,
+    vec3 objectGeometricNormal,
+    vec3 worldGeometricNormal
+) {
+    uint flags = gsInstanceFlags(instanceSlot);
+    if ((flags & GPU_SCENE_INSTANCE_CARDINAL_LIGHTING_ENABLED) == 0u) return 1.0;
+
+    vec3 normal = (flags & GPU_SCENE_INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE) != 0u
+        ? worldGeometricNormal
+        : objectGeometricNormal;
+    vec3 magnitude = abs(normal);
+    uint axis = magnitude.x >= magnitude.y && magnitude.x >= magnitude.z
+        ? 0u
+        : magnitude.y >= magnitude.z ? 1u : 2u;
+    uint direction = normal[axis] >= 0.0 ? 1u : 0u;
+    uint word = GPU_SCENE_INSTANCE_CARDINAL_LIGHTING_WORD + axis * 2u + direction;
+    return clamp(uintBitsToFloat(gsInstanceWord(instanceSlot, word)), 0.0, 1.0);
+}
+
 vec4 gsApplySurfaceVisibility(vec4 color, uint instanceSlot)
 {
     vec4 fogColor = vec4(

@@ -151,9 +151,9 @@ RenderFrameRequest.builder(sequence, width, height, camera)
 | 类型 | 推荐入口 | 作用 |
 | --- | --- | --- |
 | `TextureAsset` | `color(...)`、`colorMipChain(...)`、`builder(...)` | RGBA8 texture 与 mip chain |
-| `MaterialAsset` | `builder(id)` | PBR/材质状态与 texture 引用 |
+| `MaterialAsset` | `builder(id)` | PBR/材质状态、receiver-aware overlay 与 texture 引用 |
 | `MeshAsset` | `triangles(...)`、`builder(...)` | 顶点属性、索引和逐三角形材质 |
-| `SceneInstance` | `builder(id, meshAssetId)` | transform、mobility、visibility、shadow 与实例级 lightmap 坐标 |
+| `SceneInstance` | `builder(id, meshAssetId)` | transform、visibility、lightmap 与实例级 cardinal lighting |
 | `SceneLight` | `point(...)`、`directional(...)`、`spot(...)` | typed light 与物理参数 |
 
 安全工厂复制调用方数组。需要零额外复制时只能使用标明 `wrapImmutableDirect` 的入口，并保证 direct buffer 在完整资源生命周期内不再被修改。
@@ -162,6 +162,21 @@ RenderFrameRequest.builder(sequence, width, height, camera)
 `lightmapCoordinates(first, second)` 设置两个位于 `[0, 240]` 的坐标；已有 packed host 数据可调用
 `packedLight(value)`，其低、高 unsigned 16-bit 半字分别表示 first、second coordinate，并执行相同范围校验。
 光照属于实例 shading state；移动实例只需 upsert 新实例 generation，不应修改 mesh 或重建 BLAS。
+
+### SurfaceOverlayState
+
+`depthEqual(tolerance)` 与 `depthBias(maximumBias)` 保持 `ALPHA_OVER` 默认语义。需要裂纹或破坏
+纹理时，使用接收 `CompositionMode` 的重载并选择 `MULTIPLY`。其精确定义为
+`receiver * mix(1, overlayRgb, alpha)`，不是 alpha blending 的近似；overlay 仍复用普通 mesh
+BLAS，并由 `InstanceRenderState.overlayReceiverMask()` 与 receiver 的 `surfaceMask()` 做匹配。
+
+### CardinalLightingState
+
+`CardinalLightingState.objectSpace(...)` 和 `worldSpace(...)` 分别按 object/world 几何法线的
+dominant axis 选择 -X/+X/-Y/+Y/-Z/+Z multiplier。六个值均为 `[0, 1]` 内的有限数，默认
+`disabled()` 等价于六个 `1.0`。分类只读取未扰动几何法线，normal map 不改变 face 归属；结果
+在材质 base-color 采样后进行 RGB 调制。状态属于 `InstanceRenderState`，因此不同实例可以共享
+同一 mesh/BLAS 而采用不同方向光照。
 
 ## 设备、诊断与异常
 

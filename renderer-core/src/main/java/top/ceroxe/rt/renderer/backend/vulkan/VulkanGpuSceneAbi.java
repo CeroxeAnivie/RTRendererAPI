@@ -1,8 +1,9 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
+import top.ceroxe.rt.renderer.api.CardinalLightingState;
+import top.ceroxe.rt.renderer.api.InstanceRenderState;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
-import top.ceroxe.rt.renderer.api.InstanceRenderState;
 import top.ceroxe.rt.renderer.api.PrimitiveInstance;
 import top.ceroxe.rt.renderer.api.SceneInstance;
 import top.ceroxe.rt.renderer.api.SceneLight;
@@ -65,8 +66,8 @@ final class VulkanGpuSceneAbi {
     static final int TEXTURE_RECORD_WORDS = 14;
     static final int MATERIAL_RECORD_WORDS = 16;
     static final int MESH_RECORD_WORDS = 18;
-    /** Current state, previous-frame transform, and the revision that made that transform current. */
-    static final int INSTANCE_RECORD_WORDS = 42;
+    /** Current shading state, previous-frame transform, and its committed motion revision. */
+    static final int INSTANCE_RECORD_WORDS = 48;
     static final int LIGHT_RECORD_WORDS = 24;
 
     static final int FRAME_FOG_COLOR_WORD = 44;
@@ -156,6 +157,7 @@ final class VulkanGpuSceneAbi {
     static final int INSTANCE_OUTLINE_WIDTH_WORD = 27;
     static final int INSTANCE_PREVIOUS_TRANSFORM_WORD = 28;
     static final int INSTANCE_MOTION_REVISION_WORD = 40;
+    static final int INSTANCE_CARDINAL_LIGHTING_WORD = 42;
 
     static final int LIGHT_FLAGS_WORD = 0;
     static final int LIGHT_POSITION_X_WORD = 1;
@@ -197,6 +199,14 @@ final class VulkanGpuSceneAbi {
     static final int SHADING_MODEL_MASK = 0x3;
     static final int OVERLAY_DEPTH_MODE_SHIFT = 9;
     static final int OVERLAY_DEPTH_MODE_MASK = 0x3;
+    static final int OVERLAY_COMPOSITION_MODE_SHIFT = 11;
+    static final int OVERLAY_COMPOSITION_MODE_MASK = 0x1;
+    static final int OVERLAY_COMPOSITION_ALPHA_OVER =
+            top.ceroxe.rt.renderer.api.SurfaceOverlayState.CompositionMode.ALPHA_OVER.ordinal();
+    static final int OVERLAY_COMPOSITION_MULTIPLY =
+            top.ceroxe.rt.renderer.api.SurfaceOverlayState.CompositionMode.MULTIPLY.ordinal();
+    static final int INSTANCE_CARDINAL_LIGHTING_ENABLED = 1 << 8;
+    static final int INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE = 1 << 9;
     static final int TRANSIENT_INSTANCE_BIT = 0x0080_0000;
 
     static final int BLEND_OPAQUE = MaterialAsset.BlendMode.OPAQUE.ordinal();
@@ -336,6 +346,7 @@ final class VulkanGpuSceneAbi {
         values.put("GPU_SCENE_INSTANCE_OUTLINE_WIDTH_WORD", INSTANCE_OUTLINE_WIDTH_WORD);
         values.put("GPU_SCENE_INSTANCE_PREVIOUS_TRANSFORM_WORD", INSTANCE_PREVIOUS_TRANSFORM_WORD);
         values.put("GPU_SCENE_INSTANCE_MOTION_REVISION_WORD", INSTANCE_MOTION_REVISION_WORD);
+        values.put("GPU_SCENE_INSTANCE_CARDINAL_LIGHTING_WORD", INSTANCE_CARDINAL_LIGHTING_WORD);
         values.put("GPU_SCENE_LIGHT_FLAGS_WORD", LIGHT_FLAGS_WORD);
         values.put("GPU_SCENE_LIGHT_POSITION_X_WORD", LIGHT_POSITION_X_WORD);
         values.put("GPU_SCENE_LIGHT_POSITION_Y_WORD", LIGHT_POSITION_Y_WORD);
@@ -404,6 +415,12 @@ final class VulkanGpuSceneAbi {
         values.put("GPU_SCENE_SHADING_MODEL_MASK", SHADING_MODEL_MASK);
         values.put("GPU_SCENE_OVERLAY_DEPTH_MODE_SHIFT", OVERLAY_DEPTH_MODE_SHIFT);
         values.put("GPU_SCENE_OVERLAY_DEPTH_MODE_MASK", OVERLAY_DEPTH_MODE_MASK);
+        values.put("GPU_SCENE_OVERLAY_COMPOSITION_MODE_SHIFT", OVERLAY_COMPOSITION_MODE_SHIFT);
+        values.put("GPU_SCENE_OVERLAY_COMPOSITION_MODE_MASK", OVERLAY_COMPOSITION_MODE_MASK);
+        values.put("GPU_SCENE_OVERLAY_COMPOSITION_ALPHA_OVER", OVERLAY_COMPOSITION_ALPHA_OVER);
+        values.put("GPU_SCENE_OVERLAY_COMPOSITION_MULTIPLY", OVERLAY_COMPOSITION_MULTIPLY);
+        values.put("GPU_SCENE_INSTANCE_CARDINAL_LIGHTING_ENABLED", INSTANCE_CARDINAL_LIGHTING_ENABLED);
+        values.put("GPU_SCENE_INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE", INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE);
         values.put("GPU_SCENE_TRANSIENT_INSTANCE_BIT", TRANSIENT_INSTANCE_BIT);
         values.put("GPU_SCENE_BLEND_OPAQUE", BLEND_OPAQUE);
         values.put("GPU_SCENE_BLEND_MASKED", BLEND_MASKED);
@@ -452,7 +469,8 @@ final class VulkanGpuSceneAbi {
         words[0] = FLAG_ACTIVE | asset.blendMode().ordinal() << 1
                 | (asset.doubleSided() ? FLAG_DOUBLE_SIDED : 0)
                 | asset.shadingModel().ordinal() << SHADING_MODEL_SHIFT
-                | asset.surfaceOverlay().depthMode().ordinal() << OVERLAY_DEPTH_MODE_SHIFT;
+                | asset.surfaceOverlay().depthMode().ordinal() << OVERLAY_DEPTH_MODE_SHIFT
+                | asset.surfaceOverlay().compositionMode().ordinal() << OVERLAY_COMPOSITION_MODE_SHIFT;
         words[1] = asset.baseColorRgba8();
         words[2] = optionalSlot(asset.baseColorTextureId(), slots, "baseColorTexture");
         words[3] = optionalSlot(asset.normalTextureId(), slots, "normalTexture");
@@ -561,9 +579,15 @@ final class VulkanGpuSceneAbi {
     ) {
         if (motionRevision < 0L) throw new IllegalArgumentException("motionRevision must be non-negative");
         int[] words = new int[INSTANCE_RECORD_WORDS];
+        InstanceRenderState state = Objects.requireNonNull(renderState, "renderState");
+        CardinalLightingState cardinalLighting = state.cardinalLighting();
         words[0] = requiredSlot(meshAssetId, Objects.requireNonNull(meshSlots, "meshSlots"), "mesh");
         words[1] = FLAG_ACTIVE | (castsShadow ? FLAG_CASTS_SHADOW : 0)
-                | (dynamic ? FLAG_DYNAMIC : 0) | additionalFlags;
+                | (dynamic ? FLAG_DYNAMIC : 0) | additionalFlags
+                | (cardinalLighting.enabled() ? INSTANCE_CARDINAL_LIGHTING_ENABLED : 0)
+                | (cardinalLighting.enabled()
+                        && cardinalLighting.coordinateSpace() == CardinalLightingState.CoordinateSpace.WORLD
+                        ? INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE : 0);
         words[2] = visibilityMask;
         FloatBuffer transformElements = Objects.requireNonNull(transform, "transform").elements();
         for (int index = 0; index < 12; index++) {
@@ -576,7 +600,6 @@ final class VulkanGpuSceneAbi {
         putLong(words, INSTANCE_MOTION_REVISION_WORD, motionRevision);
         words[INSTANCE_SURFACE_VISIBILITY_WORD] = Float.floatToRawIntBits(surfaceVisibility);
         words[INSTANCE_PACKED_LIGHT_WORD] = packedLight;
-        InstanceRenderState state = Objects.requireNonNull(renderState, "renderState");
         for (int index = 0; index < 6; index++) {
             words[INSTANCE_UV_TRANSFORM_WORD + index] = Float.floatToRawIntBits(
                     state.uvTransform().element(index)
@@ -587,6 +610,12 @@ final class VulkanGpuSceneAbi {
         words[INSTANCE_OBJECT_MASK_WORD] = state.objectMask();
         words[INSTANCE_OUTLINE_COLOR_WORD] = state.outline().colorRgba8();
         words[INSTANCE_OUTLINE_WIDTH_WORD] = Float.floatToRawIntBits(state.outline().widthPixels());
+        words[INSTANCE_CARDINAL_LIGHTING_WORD] = Float.floatToRawIntBits(cardinalLighting.negativeX());
+        words[INSTANCE_CARDINAL_LIGHTING_WORD + 1] = Float.floatToRawIntBits(cardinalLighting.positiveX());
+        words[INSTANCE_CARDINAL_LIGHTING_WORD + 2] = Float.floatToRawIntBits(cardinalLighting.negativeY());
+        words[INSTANCE_CARDINAL_LIGHTING_WORD + 3] = Float.floatToRawIntBits(cardinalLighting.positiveY());
+        words[INSTANCE_CARDINAL_LIGHTING_WORD + 4] = Float.floatToRawIntBits(cardinalLighting.negativeZ());
+        words[INSTANCE_CARDINAL_LIGHTING_WORD + 5] = Float.floatToRawIntBits(cardinalLighting.positiveZ());
         return words;
     }
 

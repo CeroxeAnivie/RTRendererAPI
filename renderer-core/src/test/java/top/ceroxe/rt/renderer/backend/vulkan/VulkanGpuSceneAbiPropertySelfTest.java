@@ -2,6 +2,7 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 
 import java.util.SplittableRandom;
 import top.ceroxe.rt.renderer.api.AffineTransform;
+import top.ceroxe.rt.renderer.api.CardinalLightingState;
 import top.ceroxe.rt.renderer.api.InstanceRenderState;
 import top.ceroxe.rt.renderer.api.OutlineStyle;
 import top.ceroxe.rt.renderer.api.SceneInstance;
@@ -103,16 +104,31 @@ public final class VulkanGpuSceneAbiPropertySelfTest {
          int outlineColor = random.nextInt() | 0xff000000;
          float outlineWidth = 0.25F + random.nextFloat() * OutlineStyle.MAX_WIDTH_PIXELS;
          if (outlineWidth > OutlineStyle.MAX_WIDTH_PIXELS) outlineWidth = OutlineStyle.MAX_WIDTH_PIXELS;
+         float[] cardinalMultipliers = new float[6];
+         for (int direction = 0; direction < cardinalMultipliers.length; ++direction) {
+            cardinalMultipliers[direction] = random.nextFloat();
+         }
+         boolean worldSpace = random.nextBoolean();
+         CardinalLightingState cardinalLighting = worldSpace
+                 ? CardinalLightingState.worldSpace(
+                         cardinalMultipliers[0], cardinalMultipliers[1], cardinalMultipliers[2],
+                         cardinalMultipliers[3], cardinalMultipliers[4], cardinalMultipliers[5]
+                 )
+                 : CardinalLightingState.objectSpace(
+                         cardinalMultipliers[0], cardinalMultipliers[1], cardinalMultipliers[2],
+                         cardinalMultipliers[3], cardinalMultipliers[4], cardinalMultipliers[5]
+                 );
          InstanceRenderState state = InstanceRenderState.builder()
                  .uvTransform(uvTransform)
                  .surfaceMask(surfaceMask)
                  .overlayReceiverMask(receiverMask)
                  .objectMask(objectMask)
                  .outline(OutlineStyle.of(outlineColor, outlineWidth))
+                 .cardinalLighting(cardinalLighting)
                  .build();
          SceneInstance instance = SceneInstance.builder((long)trial, (long)trial + 1L).transform(new AffineTransform(transform)).mobility(random.nextBoolean() ? Mobility.STATIC : Mobility.DYNAMIC).visibilityMask(random.nextInt(1, 256)).castsShadow(random.nextBoolean()).surfaceVisibility(visibility).lightmapCoordinates(firstLightCoordinate, secondLightCoordinate).renderState(state).build();
          int[] words = VulkanGpuSceneAbi.packInstance(instance, (ignored) -> meshSlot);
-         require(words.length == 42 && words[0] == meshSlot, trial, "instance slot or record stride changed");
+         require(words.length == 48 && words[0] == meshSlot, trial, "instance slot or record stride changed");
 
          for(int element = 0; element < transform.length; ++element) {
             require(words[3 + element] == Float.floatToRawIntBits(transform[element]), trial, "instance transform lost exact float bits at element " + element);
@@ -130,6 +146,16 @@ public final class VulkanGpuSceneAbiPropertySelfTest {
                  trial, "instance render state lost exact ABI bits");
          require(words[40] == 0 && words[41] == 0, trial,
                  "default instance motion revision changed");
+         require((words[1] & VulkanGpuSceneAbi.INSTANCE_CARDINAL_LIGHTING_ENABLED) != 0,
+                 trial, "enabled cardinal lighting lost its instance flag");
+         require(((words[1] & VulkanGpuSceneAbi.INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE) != 0)
+                         == worldSpace,
+                 trial, "cardinal-lighting coordinate space changed during serialization");
+         for (int direction = 0; direction < cardinalMultipliers.length; ++direction) {
+            require(words[42 + direction]
+                            == Float.floatToRawIntBits(cardinalMultipliers[direction]),
+                    trial, "cardinal multiplier lost exact float bits at direction " + direction);
+         }
 
          long motionRevision = random.nextLong(Long.MAX_VALUE);
          int[] temporalWords = VulkanGpuSceneAbi.packInstance(

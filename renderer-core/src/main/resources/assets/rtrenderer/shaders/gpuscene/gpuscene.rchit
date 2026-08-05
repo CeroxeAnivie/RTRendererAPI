@@ -22,6 +22,7 @@ void main()
     vec3 p0 = gsPosition(meshBase, indices.x);
     vec3 p1 = gsPosition(meshBase, indices.y);
     vec3 p2 = gsPosition(meshBase, indices.z);
+    vec3 objectGeometricNormal = normalize(cross(p1 - p0, p2 - p0));
     vec3 localPosition = p0 * barycentrics.x + p1 * barycentrics.y + p2 * barycentrics.z;
     vec3 wp0 = gl_ObjectToWorldEXT * vec4(p0, 1.0);
     vec3 wp1 = gl_ObjectToWorldEXT * vec4(p1, 1.0);
@@ -76,6 +77,9 @@ void main()
     if (baseTexture != GS_INVALID_SLOT) {
         baseColor *= gsSampleTextureFootprint(baseTexture, uv, uvFootprint.xy, uvFootprint.zw);
     }
+    baseColor.rgb *= gsInstanceCardinalLighting(
+        gl_InstanceCustomIndexEXT, objectGeometricNormal, geometricNormal
+    );
     if (shadingModel == GPU_SCENE_SHADING_LIGHTMAP_MODULATED) {
         baseColor = gsApplySurfaceVisibility(baseColor, gl_InstanceCustomIndexEXT);
     }

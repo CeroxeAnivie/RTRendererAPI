@@ -153,7 +153,7 @@ public final class SceneInstance {
     }
 
     /**
-     * Returns per-instance UV, receiver-mask, object-mask, and outline state.
+     * Returns per-instance UV, receiver-mask, object-mask, outline, and cardinal-lighting state.
      * @return non-null render state
      */
     public InstanceRenderState renderState() {
@@ -338,7 +338,7 @@ public final class SceneInstance {
             return this;
         }
 
-        /** Selects immutable instance-local UV, masking, and outline state. */
+        /** Selects immutable instance-local UV, masking, outline, and cardinal-lighting state. */
         /**
          * Replaces the shared per-instance shading state.
          * @param value non-null render state
