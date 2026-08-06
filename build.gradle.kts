@@ -672,3 +672,21 @@ tasks.register("strictAcceptanceTest") {
     dependsOn(":renderer-core:rendererCoreGpuSceneNativeGate")
     dependsOn(":renderer-nvidia:nvidiaNativeAcceptanceGate")
 }
+
+// The NVIDIA gate owns a real Vulkan device and Streamline's process-global pacer. Keep it
+// isolated from the other strict-acceptance branches; dependsOn alone permits Gradle to run these
+// GPU workloads concurrently and can starve FG before its asynchronous output is published.
+listOf(
+    "check",
+    "verifyPublishedMavenConsumer",
+    "verifyReleaseChecksums"
+).forEach { taskName ->
+    tasks.named(taskName).configure {
+        mustRunAfter(":renderer-nvidia:nvidiaNativeAcceptanceGate")
+    }
+}
+gradle.projectsEvaluated {
+    project(":renderer-core").tasks.named("rendererCoreGpuSceneNativeGate").configure {
+        mustRunAfter(":renderer-nvidia:nvidiaNativeAcceptanceGate")
+    }
+}
