@@ -19,6 +19,11 @@ val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_
     .orElse(JavaVersion.current().majorVersion)
     .get()
     .toInt()
+val unsafeAccessJvmArg = if (toolchainJavaVersion >= 24) {
+    "--sun-misc-unsafe-memory-access=allow"
+} else {
+    null
+}
 
 java {
     toolchain {
@@ -31,7 +36,7 @@ application {
     applicationDefaultJvmArgs = listOf(
         "-Dfile.encoding=UTF-8",
         "--enable-native-access=ALL-UNNAMED"
-    )
+    ) + listOfNotNull(unsafeAccessJvmArg)
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -44,6 +49,7 @@ tasks.withType<JavaExec>().configureEach {
         "-Dfile.encoding=UTF-8",
         "--enable-native-access=ALL-UNNAMED"
     )
+    unsafeAccessJvmArg?.let { jvmArgs(it) }
     // Process isolation does not inherit Gradle JVM system properties. Forward only the three
     // reviewed demo controls so :run and the executable JAR expose the same feature policy.
     listOf("demo.feature-profile", "demo.disable-fg", "demo.fg-multiplier").forEach { propertyName ->
