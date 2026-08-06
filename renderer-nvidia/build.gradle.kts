@@ -734,6 +734,26 @@ listOf(
     }
 }
 
+val nvidiaAcceptanceTaskNames = listOf(
+    "verifyPackagedNvidiaRuntime",
+    "nvidiaNativeBridgeSelfTest",
+    "nvidiaStreamlineFrameConstantsSelfTest",
+    "nvidiaNrdFrameConstantsSelfTest",
+    // DLSS-G/MFG owns the process-global Streamline present path. Run it before the other
+    // Streamline/NRD GPU gates so their teardown cannot poison this generation acceptance.
+    "nvidiaStreamlineFrameGenerationNativeSelfTest",
+    "nvidiaStreamlineMultiFrameGenerationNativeSelfTest",
+    "nvidiaStreamlinePlanLeaseNativeSelfTest",
+    "nvidiaStreamlineDeviceHandoffNativeSelfTest",
+    "nvidiaStreamlineGpuSceneNativeSelfTest",
+    "nvidiaStreamlineDlaaGpuSceneNativeSelfTest",
+    "nvidiaStreamlineNisGpuSceneNativeSelfTest",
+    "nvidiaNrdGpuSceneNativeSelfTest",
+    "nvidiaNrdDlaaGpuSceneNativeSelfTest",
+    "nvidiaNrdDlssGpuSceneNativeSelfTest",
+    "nvidiaRtxmuGpuSceneNativeSelfTest"
+)
+
 /**
  * Single release-facing gate for the NVIDIA native surface. Each child task remains independently
  * runnable for diagnosis, while this aggregate makes the published claim mechanically depend on
@@ -759,36 +779,27 @@ tasks.register("nvidiaNativeAcceptanceGate") {
             )
         }
     }
-    val acceptanceTaskNames = listOf(
-        "verifyPackagedNvidiaRuntime",
-        "nvidiaNativeBridgeSelfTest",
-        "nvidiaStreamlineFrameConstantsSelfTest",
-        "nvidiaNrdFrameConstantsSelfTest",
-        "nvidiaStreamlinePlanLeaseNativeSelfTest",
-        "nvidiaStreamlineDeviceHandoffNativeSelfTest",
-        "nvidiaStreamlineGpuSceneNativeSelfTest",
-        "nvidiaStreamlineDlaaGpuSceneNativeSelfTest",
-        "nvidiaStreamlineNisGpuSceneNativeSelfTest",
-        "nvidiaStreamlineFrameGenerationNativeSelfTest",
-        "nvidiaStreamlineMultiFrameGenerationNativeSelfTest",
-        "nvidiaNrdGpuSceneNativeSelfTest",
-        "nvidiaNrdDlaaGpuSceneNativeSelfTest",
-        "nvidiaNrdDlssGpuSceneNativeSelfTest",
-        "nvidiaRtxmuGpuSceneNativeSelfTest"
-    )
     dependsOn(
-        acceptanceTaskNames
+        nvidiaAcceptanceTaskNames
     )
     doLast {
         val report = layout.buildDirectory.file("reports/nvidia-native-acceptance/summary.txt").get().asFile
         report.parentFile.mkdirs()
         report.writeText(
             "NVIDIA native acceptance dependencies completed successfully\n"
-                    + acceptanceTaskNames.joinToString(separator = "\n") { "- $it" }
+                    + nvidiaAcceptanceTaskNames.joinToString(separator = "\n") { "- $it" }
                     + "\n",
             Charsets.UTF_8
         )
         logger.lifecycle("NVIDIA native acceptance report: $report")
+    }
+}
+
+// Configure ordering after every child has been registered. Keeping this outside the aggregate
+// task action avoids Gradle's restriction on configuring another task while a task is registering.
+nvidiaAcceptanceTaskNames.zipWithNext().forEach { (before, after) ->
+    tasks.named(after).configure {
+        mustRunAfter(before)
     }
 }
 
