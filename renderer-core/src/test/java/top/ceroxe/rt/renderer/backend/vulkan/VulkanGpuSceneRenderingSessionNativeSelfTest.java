@@ -88,14 +88,14 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
          renderer.apply(complexScene());
          RenderFrameRequest frame = frameRequest(0L, 0L, AntiAliasingState.disabled());
          awaitFrameAdmission(renderer, frame);
-         Status serAfterDispatch = session.featureCapabilities()
+         VulkanGpuSceneRenderingSession.DiagnosticFrame diagnostic = awaitDiagnostic(session);
+         Status serAfterCompletion = session.featureCapabilities()
                  .feature(Feature.SHADER_EXECUTION_REORDERING).status();
          if (REQUIRE_SER || serBeforeDispatch == Status.AVAILABLE) {
-            require(serAfterDispatch == Status.ACTIVE,
-                    "SER did not publish real queue-submission evidence: before="
-                            + serBeforeDispatch + ", after=" + serAfterDispatch);
+            require(serAfterCompletion == Status.ACTIVE,
+                    "SER did not publish completed GPU-submission evidence: before="
+                            + serBeforeDispatch + ", after=" + serAfterCompletion);
          }
-         VulkanGpuSceneRenderingSession.DiagnosticFrame diagnostic = awaitDiagnostic(session);
          ImageStatistics statistics = statistics(diagnostic.rgba8());
          require(statistics.nonBlackPixels() > 86400L, "complex scene did not produce enough visible coverage: " + statistics);
          require(statistics.uniqueSampledColors() >= 24, "complex scene lost material/light variation: " + String.valueOf(statistics));
@@ -135,7 +135,7 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
             releaseThroughExternalBinarySemaphore(session, lease);
          }
 
-         System.out.println("VulkanGpuSceneRenderingSessionNativeSelfTest passed: device=" + capability.preferredDevice().name() + ", ser=" + serAfterDispatch + ", statistics=" + statistics + ", refractiveIndexStatistics=" + refractiveIndexStatistics + ", updatedStatistics=" + updatedStatistics + ", diagnosticPng=" + png + ", updatedDiagnosticPng=" + updatedPng);
+         System.out.println("VulkanGpuSceneRenderingSessionNativeSelfTest passed: device=" + capability.preferredDevice().name() + ", ser=" + serAfterCompletion + ", statistics=" + statistics + ", refractiveIndexStatistics=" + refractiveIndexStatistics + ", updatedStatistics=" + updatedStatistics + ", diagnosticPng=" + png + ", updatedDiagnosticPng=" + updatedPng);
       } catch (Throwable value28) {
          try {
             renderer.close();
