@@ -22,7 +22,10 @@ import java.util.concurrent.locks.LockSupport;
 
 /** Real swapchain gate for Streamline DLSS Frame Generation and static Multi Frame Generation. */
 public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
-    private static final int PRESENT_COUNT = 12;
+    private static final int MINIMUM_PRESENT_COUNT = 12;
+    // A cold driver/Streamline startup can defer generation for roughly two seconds. Six seconds
+    // keeps the gate bounded while leaving enough margin for loaded CI and post-reboot systems.
+    private static final int MAXIMUM_PRESENT_COUNT = 360;
     // DLSS-G requires a supported backbuffer size; the 640x360 extent used by reconstruction
     // gates is below the generator's minimum and must not be used for this acceptance test.
     private static final int FRAME_GENERATION_WIDTH = 1280;
@@ -66,7 +69,11 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                 .fallback(FrameGenerationOptions.Fallback.NONE)
                 .build();
         RayTracingRendererConfig configuration = RayTracingRendererConfig.builder()
-                .maxFramesInFlight(3)
+                // The acceptance may need a bounded warm-up while the asynchronous pacer
+                // publishes generated output. Match the presenter lead to the legal renderer
+                // ring maximum so that warm-up measures Streamline latency instead of admission
+                // backpressure.
+                .maxFramesInFlight(16)
                 .frameOutputFormat(composed
                         ? FrameOutputFormat.LINEAR_HDR_RGBA16F : FrameOutputFormat.SDR_RGBA8)
                 .frameReconstruction(composed
@@ -127,7 +134,12 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                     renderer, presenterConfiguration
             )) {
                 long nextFrameDeadline = System.nanoTime();
-                for (long sequence = 0L; sequence < PRESENT_COUNT; sequence++) {
+                long presentedFrames = 0L;
+                NvidiaStreamlineDiagnostics.FrameGenerationSnapshot stats =
+                        NvidiaStreamlineDiagnostics.frameGenerationSnapshot();
+                long observedGeneratedFrames = stats.generatedFramesActuallyPresented();
+                int consecutiveGeneratedSamples = 0;
+                for (long sequence = 0L; sequence < MAXIMUM_PRESENT_COUNT; sequence++) {
                     if (sequence > 0L) {
                         nextFrameDeadline += BASE_FRAME_PERIOD_NANOS;
                         awaitBaseFrameDeadline(nextFrameDeadline);
@@ -155,13 +167,26 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                             result.outcome() == VulkanFramePresenter.Outcome.PRESENTED,
                             featureName + " did not reach the platform presentation queue: " + result
                     );
+                    presentedFrames++;
+                    stats = NvidiaStreamlineDiagnostics.frameGenerationSnapshot();
+                    long generatedDelta = stats.generatedFramesActuallyPresented()
+                            - observedGeneratedFrames;
+                    observedGeneratedFrames = stats.generatedFramesActuallyPresented();
+                    consecutiveGeneratedSamples = generatedDelta >= requestedGeneratedFrames
+                            ? consecutiveGeneratedSamples + 1 : 0;
+                    // DLSS-G proxy presentation is asynchronous. Keep supplying real game frames
+                    // until the pacer publishes a sustained native-to-generated cadence. A single
+                    // late output is not enough to certify FG 2x, and the fixed upper bound still
+                    // fails a genuinely inactive or severely degraded implementation.
+                    if (presentedFrames >= MINIMUM_PRESENT_COUNT
+                            && (multiFrame || consecutiveGeneratedSamples >= MINIMUM_PRESENT_COUNT)) {
+                        break;
+                    }
                 }
 
-                NvidiaStreamlineDiagnostics.FrameGenerationSnapshot stats =
-                        NvidiaStreamlineDiagnostics.frameGenerationSnapshot();
                 long presenterCalls = presenter.performanceSnapshot().presentSamples();
                 NvidiaGpuSceneNativeTestSupport.require(
-                        presenterCalls == PRESENT_COUNT,
+                        presenterCalls == presentedFrames,
                         "presenter did not issue exactly one application present per rendered frame: "
                                 + presenterCalls
                 );
@@ -195,6 +220,10 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                     NvidiaGpuSceneNativeTestSupport.require(
                             stats.active(),
                             featureName + " produced no authoritative generated-frame presentation: " + stats
+                    );
+                    NvidiaGpuSceneNativeTestSupport.require(
+                            consecutiveGeneratedSamples >= MINIMUM_PRESENT_COUNT,
+                            featureName + " did not sustain the requested generated-frame cadence: " + stats
                     );
                     NvidiaGpuSceneNativeTestSupport.require(
                             stats.maxGeneratedFramesInSample() >= (composed
@@ -245,6 +274,8 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                 }
                 System.out.println("NvidiaStreamlineFrameGenerationNativeSelfTest passed: feature="
                         + featureName + ", device=" + capability.preferredDevice().name()
+                        + ", presentedFrames=" + presentedFrames
+                        + ", consecutiveGeneratedSamples=" + consecutiveGeneratedSamples
                         + ", stats=" + stats);
             }
         } finally {

@@ -736,13 +736,13 @@ listOf(
 
 val nvidiaAcceptanceTaskNames = listOf(
     "verifyPackagedNvidiaRuntime",
+    // DLSS-G/MFG owns the process-global Streamline present path. Run it before any test that
+    // performs Streamline preflight so a previous SDK lifecycle cannot poison generation.
+    "nvidiaStreamlineFrameGenerationNativeSelfTest",
+    "nvidiaStreamlineMultiFrameGenerationNativeSelfTest",
     "nvidiaNativeBridgeSelfTest",
     "nvidiaStreamlineFrameConstantsSelfTest",
     "nvidiaNrdFrameConstantsSelfTest",
-    // DLSS-G/MFG owns the process-global Streamline present path. Run it before the other
-    // Streamline/NRD GPU gates so their teardown cannot poison this generation acceptance.
-    "nvidiaStreamlineFrameGenerationNativeSelfTest",
-    "nvidiaStreamlineMultiFrameGenerationNativeSelfTest",
     "nvidiaStreamlinePlanLeaseNativeSelfTest",
     "nvidiaStreamlineDeviceHandoffNativeSelfTest",
     "nvidiaStreamlineGpuSceneNativeSelfTest",
