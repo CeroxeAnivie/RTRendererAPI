@@ -199,6 +199,7 @@ val previousConsumerJavaInstallationPaths = providers.gradleProperty(
     "org.gradle.java.installations.paths"
 )
 val previousConsumerToolchainVersion = providers.gradleProperty("java_toolchain_version")
+    .orElse(JavaVersion.current().majorVersion)
 
 val compilePreviousApiConsumer = tasks.register<Exec>("compilePreviousApiConsumer") {
     group = "verification"
@@ -556,7 +557,8 @@ tasks.register<Exec>("verifyPublishedMavenConsumer") {
 
     val stagingRepository = layout.buildDirectory.dir("repository")
     val javaInstallationPaths = providers.gradleProperty("org.gradle.java.installations.paths")
-    val toolchainJavaVersion = providers.gradleProperty("java_toolchain_version").orElse("25")
+    val toolchainJavaVersion = providers.gradleProperty("java_toolchain_version")
+        .orElse(JavaVersion.current().majorVersion)
     inputs.dir(stagingRepository)
     inputs.dir(layout.projectDirectory.dir("gradle/published-consumer-smoke"))
     inputs.property("javaInstallationPaths", javaInstallationPaths.orElse(""))

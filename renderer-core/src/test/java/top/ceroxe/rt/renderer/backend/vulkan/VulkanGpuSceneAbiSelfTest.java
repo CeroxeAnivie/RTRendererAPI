@@ -3,12 +3,14 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import top.ceroxe.rt.renderer.api.AffineTransform;
 import top.ceroxe.rt.renderer.api.CardinalLightingState;
+import top.ceroxe.rt.renderer.api.DirectionalDiffuseState;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.InstanceRenderState;
@@ -37,6 +39,7 @@ public final class VulkanGpuSceneAbiSelfTest {
    public static void main(String[] arguments) {
       packsTextureAndMaterialReferences();
       packsGeometryAndInstanceReferences();
+      verifiesDirectionalDiffuseNumericalOracle();
       preservesDoublePrecisionLightPositions();
       rejectsUnresolvedAndMismatchedResources();
       matchesShaderContractExactly();
@@ -86,7 +89,7 @@ public final class VulkanGpuSceneAbiSelfTest {
       require(meshRecord[2] == -1 && meshRecord[3] == -1, "absent geometry stream did not retain the canonical 64-bit sentinel");
       SceneInstance instance = SceneInstance.builder(40L, 30L).mobility(Mobility.DYNAMIC).visibilityMask(127).surfaceVisibility(0.375F).lightmapCoordinates(32, 176).build();
       int[] instanceRecord = VulkanGpuSceneAbi.packInstance(instance, (id) -> id == 30L ? 9 : -1);
-      require(instanceRecord.length == 48 && instanceRecord[0] == 9 && instanceRecord[2] == 127, "instance descriptor lost mesh slot or visibility mask");
+      require(instanceRecord.length == 57 && instanceRecord[0] == 9 && instanceRecord[2] == 127, "instance descriptor lost mesh slot or visibility mask");
       require(Float.intBitsToFloat(instanceRecord[3]) == 1.0F && Float.intBitsToFloat(instanceRecord[8]) == 1.0F, "instance affine transform changed during packing");
       require(Float.intBitsToFloat(instanceRecord[15]) == 0.375F, "instance surface visibility did not occupy the reserved ABI word");
       require(instanceRecord[16] == 0x00b0_0020, "instance lightmap coordinates did not occupy the final ABI word");
@@ -105,6 +108,10 @@ public final class VulkanGpuSceneAbiSelfTest {
       for (int direction = 0; direction < 6; ++direction) {
          require(Float.intBitsToFloat(instanceRecord[42 + direction]) == 1.0F,
                "default cardinal lighting must remain a no-op at direction " + direction);
+      }
+      for (int element = 48; element < 57; ++element) {
+         require(instanceRecord[element] == 0,
+               "disabled directional diffuse payload must remain zero at word " + element);
       }
 
       AffineTransform previousTransform = new AffineTransform(new float[]{
@@ -140,7 +147,7 @@ public final class VulkanGpuSceneAbiSelfTest {
             .surfaceVisibility(0.5F)
             .build();
       int[] primitiveRecord = VulkanGpuSceneAbi.packPrimitive(primitive, id -> id == 30L ? 9 : -1);
-      require(primitiveRecord.length == 48 && primitiveRecord[0] == 9
+      require(primitiveRecord.length == 57 && primitiveRecord[0] == 9
                   && primitiveRecord[1] == (VulkanGpuSceneAbi.FLAG_ACTIVE
                   | VulkanGpuSceneAbi.FLAG_CASTS_SHADOW | VulkanGpuSceneAbi.FLAG_DYNAMIC
                   | VulkanGpuSceneAbi.FLAG_FRAME_LOCAL
@@ -166,6 +173,40 @@ public final class VulkanGpuSceneAbiSelfTest {
                      == Float.floatToRawIntBits(cardinalMultipliers[direction]),
                "transient primitive cardinal multiplier changed at direction " + direction);
       }
+
+      DirectionalDiffuseState directionalDiffuse = DirectionalDiffuseState.builder()
+            .coordinateSpace(DirectionalDiffuseState.CoordinateSpace.WORLD)
+            .firstDirection(0.0F, 0.6F, 0.8F)
+            .firstIntensity(0.6F)
+            .secondDirection(-0.8F, 0.0F, 0.6F)
+            .secondIntensity(0.5F)
+            .ambient(0.4F)
+            .backFacePolicy(DirectionalDiffuseState.BackFacePolicy.FLIP_ON_BACK_FACE)
+            .build();
+      SceneInstance directionalInstance = SceneInstance.builder(41L, 30L)
+            .renderState(InstanceRenderState.builder()
+                  .directionalDiffuse(directionalDiffuse)
+                  .build())
+            .build();
+      int[] directionalRecord = VulkanGpuSceneAbi.packInstance(
+            directionalInstance, id -> id == 30L ? 9 : -1
+      );
+      require((directionalRecord[1] & VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_ENABLED) != 0
+                  && (directionalRecord[1]
+                  & VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_WORLD_SPACE) != 0
+                  && (directionalRecord[1]
+                  & VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_FLIP_BACK_FACE) != 0
+                  && (directionalRecord[1]
+                  & VulkanGpuSceneAbi.INSTANCE_CARDINAL_LIGHTING_ENABLED) == 0,
+            "directional diffuse flags lost enabled, coordinate-space, or back-face semantics");
+      float[] directionalPayload = {
+            0.0F, 0.6F, 0.8F, -0.8F, 0.0F, 0.6F, 0.4F, 0.6F, 0.5F
+      };
+      for (int element = 0; element < directionalPayload.length; ++element) {
+         require(directionalRecord[48 + element]
+                     == Float.floatToRawIntBits(directionalPayload[element]),
+               "directional diffuse payload changed at element " + element);
+      }
       require(VulkanGpuSceneAbi.TRANSIENT_INSTANCE_BIT == 0x0080_0000
                   && VulkanGpuSceneAbi.TRANSIENT_INSTANCE_BIT == top.ceroxe.rt.renderer.api.FramePrimitiveBatch.MAX_PRIMITIVES,
             "transient custom-index namespace no longer matches the public batch limit");
@@ -176,6 +217,113 @@ public final class VulkanGpuSceneAbiSelfTest {
       int[] record = VulkanGpuSceneAbi.packLight(light);
       require(record.length == 24, "light descriptor stride changed");
       require(Double.longBitsToDouble(join(record[1], record[2])) == light.x() && Double.longBitsToDouble(join(record[3], record[4])) == light.y(), "persistent light position was truncated to float precision");
+   }
+
+   private static void verifiesDirectionalDiffuseNumericalOracle() {
+      DirectionalDiffuseState objectLighting = DirectionalDiffuseState.builder()
+            .coordinateSpace(DirectionalDiffuseState.CoordinateSpace.OBJECT)
+            .firstDirection(0.2F, 1.0F, -0.7F)
+            .firstIntensity(0.6F)
+            .secondDirection(-0.2F, 1.0F, 0.7F)
+            .secondIntensity(0.6F)
+            .ambient(0.4F)
+            .backFacePolicy(DirectionalDiffuseState.BackFacePolicy.FLIP_ON_BACK_FACE)
+            .build();
+      InstanceRenderState renderState = InstanceRenderState.builder()
+            .directionalDiffuse(objectLighting)
+            .build();
+      SceneInstance persistent = SceneInstance.builder(60L, 30L)
+            .renderState(renderState)
+            .build();
+      PrimitiveInstance frameLocal = PrimitiveInstance.builder(30L)
+            .renderState(renderState)
+            .build();
+      int[] persistentWords = VulkanGpuSceneAbi.packInstance(persistent, ignored -> 9);
+      int[] frameWords = VulkanGpuSceneAbi.packPrimitive(frameLocal, ignored -> 9);
+      int directionalFlags = VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_ENABLED
+            | VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_WORLD_SPACE
+            | VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_FLIP_BACK_FACE;
+      require((persistentWords[1] & directionalFlags) ==
+                  (VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_ENABLED
+                  | VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_FLIP_BACK_FACE),
+            "object-space directional diffuse flags changed in the persistent lane");
+      require((persistentWords[1] & directionalFlags) == (frameWords[1] & directionalFlags)
+                  && Arrays.equals(
+                  Arrays.copyOfRange(persistentWords, 48, 57),
+                  Arrays.copyOfRange(frameWords, 48, 57)),
+            "persistent and frame-local lanes serialized different directional diffuse payloads");
+
+      float[] oblique = {0.8F, 0.6F, 0.0F};
+      float[] unlit = {0.0F, 0.0F, -1.0F};
+      requireNear(evaluateDirectionalDiffuse(persistentWords, oblique, unlit, false),
+            0.9820855F, 1.0E-6F,
+            "reference oblique object normal changed its numerical result");
+      requireNear(evaluateDirectionalDiffuse(persistentWords, oblique, unlit, true),
+            0.4F, 1.0E-6F,
+            "back-face flip failed to return the reference ambient floor");
+      requireNear(evaluateDirectionalDiffuse(persistentWords, new float[]{0.0F, 1.0F, 0.0F},
+                  unlit, false),
+            1.0F, 0.0F,
+            "directional diffuse failed to clamp a saturated two-light contribution");
+
+      DirectionalDiffuseState worldLighting = objectLighting.toBuilder()
+            .coordinateSpace(DirectionalDiffuseState.CoordinateSpace.WORLD)
+            .build();
+      SceneInstance worldInstance = SceneInstance.builder(61L, 30L)
+            .renderState(InstanceRenderState.builder()
+                  .directionalDiffuse(worldLighting)
+                  .build())
+            .build();
+      int[] worldWords = VulkanGpuSceneAbi.packInstance(worldInstance, ignored -> 9);
+      requireNear(evaluateDirectionalDiffuse(worldWords, unlit, oblique, false),
+            0.9820855F, 1.0E-6F,
+            "world-space directional diffuse selected the object-space normal");
+      requireNear(evaluateDirectionalDiffuse(persistentWords, oblique, oblique, false),
+            0.9820855F, 1.0E-6F,
+            "geometric-normal fallback changed the oblique Lambert result");
+   }
+
+   private static float evaluateDirectionalDiffuse(
+         int[] words,
+         float[] objectNormal,
+         float[] worldNormal,
+         boolean backFace
+   ) {
+      int flags = words[VulkanGpuSceneAbi.INSTANCE_FLAGS_WORD];
+      if ((flags & VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_ENABLED) == 0) return 1.0F;
+      float[] normal = (flags & VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_WORLD_SPACE) != 0
+            ? worldNormal.clone() : objectNormal.clone();
+      if (backFace
+            && (flags & VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_FLIP_BACK_FACE) != 0) {
+         normal[0] = -normal[0];
+         normal[1] = -normal[1];
+         normal[2] = -normal[2];
+      }
+      float first = Math.max(dot(words,
+            VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_DIRECTION_WORD, normal), 0.0F);
+      float second = Math.max(dot(words,
+            VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_DIRECTION_WORD, normal), 0.0F);
+      float value = real(words, VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_AMBIENT_WORD)
+            + real(words, VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_INTENSITY_WORD)
+            * first
+            + real(words, VulkanGpuSceneAbi.INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_INTENSITY_WORD)
+            * second;
+      return Math.min(Math.max(value, 0.0F), 1.0F);
+   }
+
+   private static float dot(int[] words, int directionWord, float[] normal) {
+      return real(words, directionWord) * normal[0]
+            + real(words, directionWord + 1) * normal[1]
+            + real(words, directionWord + 2) * normal[2];
+   }
+
+   private static float real(int[] words, int index) {
+      return Float.intBitsToFloat(words[index]);
+   }
+
+   private static void requireNear(float actual, float expected, float tolerance, String message) {
+      require(Math.abs(actual - expected) <= tolerance,
+            message + ": expected=" + expected + ", actual=" + actual);
    }
 
    private static void rejectsUnresolvedAndMismatchedResources() {

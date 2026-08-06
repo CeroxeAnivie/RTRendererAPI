@@ -59,7 +59,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>0.5.1</version>
+    <version>0.5.2</version>
 </dependency>
 ```
 
@@ -67,7 +67,7 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:0.5.1")
+    implementation("top.ceroxe.rt:renderer-api:0.5.2")
 }
 ```
 
@@ -241,7 +241,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-0.5.1.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-0.5.2.jar `
   --width=2560 --height=1440 --spp=2
 ```
 

@@ -5,7 +5,10 @@ plugins {
 }
 
 val rendererVersion = providers.gradleProperty("rendererVersion")
-val toolchainJavaVersion = providers.gradleProperty("java_toolchain_version").orElse("25").get().toInt()
+val toolchainJavaVersion = providers.gradleProperty("java_toolchain_version")
+    .orElse(JavaVersion.current().majorVersion)
+    .get()
+    .toInt()
 
 dependencies {
     implementation("top.ceroxe.rt:renderer-api:${rendererVersion.get()}") {

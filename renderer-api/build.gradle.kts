@@ -64,7 +64,10 @@ data class RuntimeModuleInventory(
 group = rootProject.group
 version = rootProject.version
 
-val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version").get().toInt()
+val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version")
+    .orElse(JavaVersion.current().majorVersion)
+    .get()
+    .toInt()
 val previousApiVersion = providers.gradleProperty("previous_api_version")
 
 dependencies {

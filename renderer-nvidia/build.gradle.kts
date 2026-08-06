@@ -18,7 +18,10 @@ abstract class NvidiaStreamlineNativeGateLock : BuildService<BuildServiceParamet
 group = rootProject.group
 version = rootProject.version
 
-val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version").get().toInt()
+val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version")
+    .orElse(JavaVersion.current().majorVersion)
+    .get()
+    .toInt()
 
 fun discoveredPath(
     propertyName: String,

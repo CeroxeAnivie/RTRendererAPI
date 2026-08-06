@@ -38,17 +38,19 @@ void main()
         + max(length(cameraRelative1.xz), abs(cameraRelative1.y)) * barycentrics.y
         + max(length(cameraRelative2.xz), abs(cameraRelative2.y)) * barycentrics.z;
     vec3 geometricNormal = normalize(cross(wp1 - wp0, wp2 - wp0));
-    vec3 worldNormal = geometricNormal;
+    vec3 objectShadingNormal = objectGeometricNormal;
+    vec3 worldShadingNormal = geometricNormal;
     mat3 objectToWorld = mat3(gl_ObjectToWorldEXT);
     if (gsOptionalOffsetPresent(meshBase, GPU_SCENE_MESH_NORMAL_OFFSET_WORD)) {
-        vec3 objectNormal = normalize(
+        objectShadingNormal = normalize(
             gsNormal(meshBase, indices.x) * barycentrics.x
             + gsNormal(meshBase, indices.y) * barycentrics.y
             + gsNormal(meshBase, indices.z) * barycentrics.z
         );
-        worldNormal = normalize(transpose(inverse(objectToWorld)) * objectNormal);
+        worldShadingNormal = normalize(transpose(inverse(objectToWorld)) * objectShadingNormal);
     }
     bool backFace = dot(geometricNormal, gl_WorldRayDirectionEXT) > 0.0;
+    vec3 worldNormal = worldShadingNormal;
     if (dot(worldNormal, gl_WorldRayDirectionEXT) > 0.0) worldNormal = -worldNormal;
 
     uint materialSlot = gsTriangleMaterialSlot(meshBase, gl_PrimitiveID);
@@ -79,6 +81,9 @@ void main()
     }
     baseColor.rgb *= gsInstanceCardinalLighting(
         gl_InstanceCustomIndexEXT, objectGeometricNormal, geometricNormal
+    );
+    baseColor.rgb *= gsInstanceDirectionalDiffuse(
+        gl_InstanceCustomIndexEXT, objectShadingNormal, worldShadingNormal, backFace
     );
     if (shadingModel == GPU_SCENE_SHADING_LIGHTMAP_MODULATED) {
         baseColor = gsApplySurfaceVisibility(baseColor, gl_InstanceCustomIndexEXT);

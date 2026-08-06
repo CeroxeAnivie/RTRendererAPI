@@ -124,6 +124,49 @@ public final class RendererApiContractSelfTest {
               () -> CardinalLightingState.worldSpace(1, 1, Float.NaN, 1, 1, 1));
       expect(IllegalArgumentException.class,
               () -> CardinalLightingState.objectSpace(1, 1, 1, 1.01F, 1, 1));
+
+      DirectionalDiffuseState directionalDiffuse = DirectionalDiffuseState.builder()
+              .coordinateSpace(DirectionalDiffuseState.CoordinateSpace.WORLD)
+              .firstDirection(0.0F, 3.0F, 4.0F)
+              .firstIntensity(0.6F)
+              .secondDirection(-4.0F, 0.0F, 3.0F)
+              .secondIntensity(0.6F)
+              .ambient(0.4F)
+              .backFacePolicy(DirectionalDiffuseState.BackFacePolicy.FLIP_ON_BACK_FACE)
+              .build();
+      InstanceRenderState directionalState = InstanceRenderState.builder()
+              .directionalDiffuse(directionalDiffuse)
+              .build();
+      require(directionalDiffuse.enabled()
+                      && directionalDiffuse.firstDirectionY() == 0.6F
+                      && directionalDiffuse.firstDirectionZ() == 0.8F
+                      && directionalDiffuse.secondDirectionX() == -0.8F
+                      && directionalDiffuse.secondDirectionZ() == 0.6F
+                      && directionalState.equals(directionalState.toBuilder().build()),
+              "directional diffuse state lost normalization or instance-copy semantics");
+      require(DirectionalDiffuseState.builder().ambient(1.0F).build()
+                      == DirectionalDiffuseState.disabled(),
+              "no-op directional diffuse state lost canonicalization");
+      expect(IllegalArgumentException.class,
+              () -> DirectionalDiffuseState.builder().firstDirection(0.0F, 0.0F, 0.0F));
+      expect(IllegalArgumentException.class,
+              () -> DirectionalDiffuseState.builder().secondDirection(Float.NaN, 1.0F, 0.0F));
+      expect(IllegalArgumentException.class,
+              () -> DirectionalDiffuseState.builder().ambient(-0.01F));
+      expect(IllegalArgumentException.class,
+              () -> DirectionalDiffuseState.builder().firstIntensity(1.01F));
+      expect(IllegalStateException.class,
+              () -> DirectionalDiffuseState.builder().ambient(0.4F)
+                      .firstIntensity(0.6F).build());
+      expect(NullPointerException.class,
+              () -> DirectionalDiffuseState.builder().coordinateSpace(null));
+      expect(NullPointerException.class,
+              () -> DirectionalDiffuseState.builder().backFacePolicy(null));
+      expect(IllegalArgumentException.class,
+              () -> InstanceRenderState.builder()
+                      .cardinalLighting(cardinalLighting)
+                      .directionalDiffuse(directionalDiffuse)
+                      .build());
       expect(IllegalArgumentException.class,
               () -> InstanceRenderState.builder().outline(outline).build());
       expect(IllegalArgumentException.class, () -> OutlineStyle.of(0x0040_20ff, 1.0F));

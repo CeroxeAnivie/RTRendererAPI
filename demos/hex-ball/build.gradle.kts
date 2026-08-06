@@ -15,7 +15,10 @@ dependencies {
     implementation("top.ceroxe.rt:renderer-api:${rootProject.version}")
 }
 
-val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version").get().toInt()
+val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version")
+    .orElse(JavaVersion.current().majorVersion)
+    .get()
+    .toInt()
 
 java {
     toolchain {

@@ -285,6 +285,51 @@ float gsInstanceCardinalLighting(
     return clamp(uintBitsToFloat(gsInstanceWord(instanceSlot, word)), 0.0, 1.0);
 }
 
+float gsInstanceDirectionalDiffuse(
+    uint instanceSlot,
+    vec3 objectShadingNormal,
+    vec3 worldShadingNormal,
+    bool backFace
+) {
+    uint flags = gsInstanceFlags(instanceSlot);
+    if ((flags & GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_ENABLED) == 0u) return 1.0;
+
+    vec3 normal = (flags & GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_WORLD_SPACE) != 0u
+        ? worldShadingNormal
+        : objectShadingNormal;
+    if (backFace && (flags & GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_FLIP_BACK_FACE) != 0u) {
+        normal = -normal;
+    }
+    uint firstWord = GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_DIRECTION_WORD;
+    vec3 firstDirection = vec3(
+        uintBitsToFloat(gsInstanceWord(instanceSlot, firstWord)),
+        uintBitsToFloat(gsInstanceWord(instanceSlot, firstWord + 1u)),
+        uintBitsToFloat(gsInstanceWord(instanceSlot, firstWord + 2u))
+    );
+    uint secondWord = GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_DIRECTION_WORD;
+    vec3 secondDirection = vec3(
+        uintBitsToFloat(gsInstanceWord(instanceSlot, secondWord)),
+        uintBitsToFloat(gsInstanceWord(instanceSlot, secondWord + 1u)),
+        uintBitsToFloat(gsInstanceWord(instanceSlot, secondWord + 2u))
+    );
+    float ambient = uintBitsToFloat(gsInstanceWord(
+        instanceSlot, GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_AMBIENT_WORD
+    ));
+    float firstIntensity = uintBitsToFloat(gsInstanceWord(
+        instanceSlot, GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_INTENSITY_WORD
+    ));
+    float secondIntensity = uintBitsToFloat(gsInstanceWord(
+        instanceSlot, GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_INTENSITY_WORD
+    ));
+    return clamp(
+        ambient
+            + firstIntensity * max(dot(normal, firstDirection), 0.0)
+            + secondIntensity * max(dot(normal, secondDirection), 0.0),
+        0.0,
+        1.0
+    );
+}
+
 vec4 gsApplySurfaceVisibility(vec4 color, uint instanceSlot)
 {
     vec4 fogColor = vec4(

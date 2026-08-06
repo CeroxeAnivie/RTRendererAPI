@@ -29,6 +29,7 @@ public final class VulkanGpuSceneShaderSelfTest {
       require(hdrRaygen.length > 20 && (hdrRaygen.length & 3) == 0, "HDR ray generation did not produce aligned SPIR-V");
       totalBytes += (long)hdrRaygen.length;
       verifyForwardParityContract();
+      verifyDirectionalDiffuseContract();
       verifyTemporalReconstructionContract();
       verifyTransmissionOpticsContract();
       verifyOpaqueMetallicReflectionContract();
@@ -74,6 +75,24 @@ public final class VulkanGpuSceneShaderSelfTest {
       require(raygen.contains("gsTemporalGeometryMatches") && raygen.contains("dot(currentNormal, previousNormal) >= 0.85") && raygen.contains("expectedPreviousLogDepth") && raygen.contains("depthTolerance"), "temporal reconstruction must reject normal and log-depth discontinuities");
       require(raygen.contains("GPU_SCENE_FLAG_DYNAMIC") && closestHit.contains("gsInstanceFlags(gl_InstanceCustomIndexEXT)"), "dynamic instances must not consume camera-only reprojection history");
       require(raygen.contains("GPU_SCENE_FRAME_MAX_HISTORY_FRAMES_WORD") && raygen.contains("nextHistoryAge") && raygen.contains("previousColor.a * historyConfidence") && raygen.indexOf("gsResolveTemporal") < raygen.indexOf("gsToneMap(resolvedColor)"), "linear temporal accumulation must be bounded and precede display encoding");
+   }
+
+   private static void verifyDirectionalDiffuseContract() {
+      String common = read("assets/rtrenderer/shaders/gpuscene/gpuscene_common.glsl");
+      String closestHit = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rchit");
+      require(common.contains("gsInstanceDirectionalDiffuse(")
+                  && common.contains("firstIntensity * max(dot(normal, firstDirection), 0.0)")
+                  && common.contains("secondIntensity * max(dot(normal, secondDirection), 0.0)")
+                  && common.contains("GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_FLIP_BACK_FACE"),
+            "directional diffuse must retain the two-direction Lambert and back-face contracts");
+      require(closestHit.contains("objectShadingNormal = normalize(")
+                  && closestHit.contains("worldShadingNormal = normalize(")
+                  && closestHit.contains("objectShadingNormal = objectGeometricNormal")
+                  && closestHit.contains("worldShadingNormal = geometricNormal")
+                  && closestHit.contains("objectShadingNormal, worldShadingNormal, backFace")
+                  && closestHit.indexOf("gsInstanceDirectionalDiffuse(")
+                  < closestHit.indexOf("uint normalTexture ="),
+            "directional diffuse must use interpolated/fallback normals before normal-map perturbation");
    }
 
    private static void verifyTransmissionOpticsContract() {

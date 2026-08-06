@@ -21,7 +21,10 @@ abstract class RendererCoreHardwareGateLock : BuildService<BuildServiceParameter
 group = rootProject.group
 version = rootProject.version
 
-val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version").get().toInt()
+val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version")
+    .orElse(JavaVersion.current().majorVersion)
+    .get()
+    .toInt()
 val fastutilVersion = rootProject.providers.gradleProperty("fastutil_version").getOrElse("8.5.19")
 val jomlVersion = rootProject.providers.gradleProperty("joml_version").getOrElse("1.10.8")
 val lwjglVersion = rootProject.providers.gradleProperty("lwjgl_version").getOrElse("3.4.2")

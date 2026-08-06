@@ -1,6 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import top.ceroxe.rt.renderer.api.CardinalLightingState;
+import top.ceroxe.rt.renderer.api.DirectionalDiffuseState;
 import top.ceroxe.rt.renderer.api.InstanceRenderState;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
@@ -67,7 +68,7 @@ final class VulkanGpuSceneAbi {
     static final int MATERIAL_RECORD_WORDS = 16;
     static final int MESH_RECORD_WORDS = 18;
     /** Current shading state, previous-frame transform, and its committed motion revision. */
-    static final int INSTANCE_RECORD_WORDS = 48;
+    static final int INSTANCE_RECORD_WORDS = 57;
     static final int LIGHT_RECORD_WORDS = 24;
 
     static final int FRAME_FOG_COLOR_WORD = 44;
@@ -158,6 +159,11 @@ final class VulkanGpuSceneAbi {
     static final int INSTANCE_PREVIOUS_TRANSFORM_WORD = 28;
     static final int INSTANCE_MOTION_REVISION_WORD = 40;
     static final int INSTANCE_CARDINAL_LIGHTING_WORD = 42;
+    static final int INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_DIRECTION_WORD = 48;
+    static final int INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_DIRECTION_WORD = 51;
+    static final int INSTANCE_DIRECTIONAL_DIFFUSE_AMBIENT_WORD = 54;
+    static final int INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_INTENSITY_WORD = 55;
+    static final int INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_INTENSITY_WORD = 56;
 
     static final int LIGHT_FLAGS_WORD = 0;
     static final int LIGHT_POSITION_X_WORD = 1;
@@ -207,6 +213,9 @@ final class VulkanGpuSceneAbi {
             top.ceroxe.rt.renderer.api.SurfaceOverlayState.CompositionMode.MULTIPLY.ordinal();
     static final int INSTANCE_CARDINAL_LIGHTING_ENABLED = 1 << 8;
     static final int INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE = 1 << 9;
+    static final int INSTANCE_DIRECTIONAL_DIFFUSE_ENABLED = 1 << 10;
+    static final int INSTANCE_DIRECTIONAL_DIFFUSE_WORLD_SPACE = 1 << 11;
+    static final int INSTANCE_DIRECTIONAL_DIFFUSE_FLIP_BACK_FACE = 1 << 12;
     static final int TRANSIENT_INSTANCE_BIT = 0x0080_0000;
 
     static final int BLEND_OPAQUE = MaterialAsset.BlendMode.OPAQUE.ordinal();
@@ -347,6 +356,16 @@ final class VulkanGpuSceneAbi {
         values.put("GPU_SCENE_INSTANCE_PREVIOUS_TRANSFORM_WORD", INSTANCE_PREVIOUS_TRANSFORM_WORD);
         values.put("GPU_SCENE_INSTANCE_MOTION_REVISION_WORD", INSTANCE_MOTION_REVISION_WORD);
         values.put("GPU_SCENE_INSTANCE_CARDINAL_LIGHTING_WORD", INSTANCE_CARDINAL_LIGHTING_WORD);
+        values.put("GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_DIRECTION_WORD",
+                INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_DIRECTION_WORD);
+        values.put("GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_DIRECTION_WORD",
+                INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_DIRECTION_WORD);
+        values.put("GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_AMBIENT_WORD",
+                INSTANCE_DIRECTIONAL_DIFFUSE_AMBIENT_WORD);
+        values.put("GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_INTENSITY_WORD",
+                INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_INTENSITY_WORD);
+        values.put("GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_INTENSITY_WORD",
+                INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_INTENSITY_WORD);
         values.put("GPU_SCENE_LIGHT_FLAGS_WORD", LIGHT_FLAGS_WORD);
         values.put("GPU_SCENE_LIGHT_POSITION_X_WORD", LIGHT_POSITION_X_WORD);
         values.put("GPU_SCENE_LIGHT_POSITION_Y_WORD", LIGHT_POSITION_Y_WORD);
@@ -421,6 +440,11 @@ final class VulkanGpuSceneAbi {
         values.put("GPU_SCENE_OVERLAY_COMPOSITION_MULTIPLY", OVERLAY_COMPOSITION_MULTIPLY);
         values.put("GPU_SCENE_INSTANCE_CARDINAL_LIGHTING_ENABLED", INSTANCE_CARDINAL_LIGHTING_ENABLED);
         values.put("GPU_SCENE_INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE", INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE);
+        values.put("GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_ENABLED", INSTANCE_DIRECTIONAL_DIFFUSE_ENABLED);
+        values.put("GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_WORLD_SPACE",
+                INSTANCE_DIRECTIONAL_DIFFUSE_WORLD_SPACE);
+        values.put("GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_FLIP_BACK_FACE",
+                INSTANCE_DIRECTIONAL_DIFFUSE_FLIP_BACK_FACE);
         values.put("GPU_SCENE_TRANSIENT_INSTANCE_BIT", TRANSIENT_INSTANCE_BIT);
         values.put("GPU_SCENE_BLEND_OPAQUE", BLEND_OPAQUE);
         values.put("GPU_SCENE_BLEND_MASKED", BLEND_MASKED);
@@ -581,13 +605,23 @@ final class VulkanGpuSceneAbi {
         int[] words = new int[INSTANCE_RECORD_WORDS];
         InstanceRenderState state = Objects.requireNonNull(renderState, "renderState");
         CardinalLightingState cardinalLighting = state.cardinalLighting();
+        DirectionalDiffuseState directionalDiffuse = state.directionalDiffuse();
         words[0] = requiredSlot(meshAssetId, Objects.requireNonNull(meshSlots, "meshSlots"), "mesh");
         words[1] = FLAG_ACTIVE | (castsShadow ? FLAG_CASTS_SHADOW : 0)
                 | (dynamic ? FLAG_DYNAMIC : 0) | additionalFlags
                 | (cardinalLighting.enabled() ? INSTANCE_CARDINAL_LIGHTING_ENABLED : 0)
                 | (cardinalLighting.enabled()
                         && cardinalLighting.coordinateSpace() == CardinalLightingState.CoordinateSpace.WORLD
-                        ? INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE : 0);
+                        ? INSTANCE_CARDINAL_LIGHTING_WORLD_SPACE : 0)
+                | (directionalDiffuse.enabled() ? INSTANCE_DIRECTIONAL_DIFFUSE_ENABLED : 0)
+                | (directionalDiffuse.enabled()
+                        && directionalDiffuse.coordinateSpace()
+                        == DirectionalDiffuseState.CoordinateSpace.WORLD
+                        ? INSTANCE_DIRECTIONAL_DIFFUSE_WORLD_SPACE : 0)
+                | (directionalDiffuse.enabled()
+                        && directionalDiffuse.backFacePolicy()
+                        == DirectionalDiffuseState.BackFacePolicy.FLIP_ON_BACK_FACE
+                        ? INSTANCE_DIRECTIONAL_DIFFUSE_FLIP_BACK_FACE : 0);
         words[2] = visibilityMask;
         FloatBuffer transformElements = Objects.requireNonNull(transform, "transform").elements();
         for (int index = 0; index < 12; index++) {
@@ -616,6 +650,29 @@ final class VulkanGpuSceneAbi {
         words[INSTANCE_CARDINAL_LIGHTING_WORD + 3] = Float.floatToRawIntBits(cardinalLighting.positiveY());
         words[INSTANCE_CARDINAL_LIGHTING_WORD + 4] = Float.floatToRawIntBits(cardinalLighting.negativeZ());
         words[INSTANCE_CARDINAL_LIGHTING_WORD + 5] = Float.floatToRawIntBits(cardinalLighting.positiveZ());
+        // Disabled records remain zero-filled: the shader returns on the enable bit before
+        // reading this payload, so writing canonical no-op values would add nine hot-path stores
+        // per instance without strengthening the ABI contract.
+        if (directionalDiffuse.enabled()) {
+            words[INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_DIRECTION_WORD] =
+                    Float.floatToRawIntBits(directionalDiffuse.firstDirectionX());
+            words[INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_DIRECTION_WORD + 1] =
+                    Float.floatToRawIntBits(directionalDiffuse.firstDirectionY());
+            words[INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_DIRECTION_WORD + 2] =
+                    Float.floatToRawIntBits(directionalDiffuse.firstDirectionZ());
+            words[INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_DIRECTION_WORD] =
+                    Float.floatToRawIntBits(directionalDiffuse.secondDirectionX());
+            words[INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_DIRECTION_WORD + 1] =
+                    Float.floatToRawIntBits(directionalDiffuse.secondDirectionY());
+            words[INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_DIRECTION_WORD + 2] =
+                    Float.floatToRawIntBits(directionalDiffuse.secondDirectionZ());
+            words[INSTANCE_DIRECTIONAL_DIFFUSE_AMBIENT_WORD] =
+                    Float.floatToRawIntBits(directionalDiffuse.ambient());
+            words[INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_INTENSITY_WORD] =
+                    Float.floatToRawIntBits(directionalDiffuse.firstIntensity());
+            words[INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_INTENSITY_WORD] =
+                    Float.floatToRawIntBits(directionalDiffuse.secondIntensity());
+        }
         return words;
     }
 

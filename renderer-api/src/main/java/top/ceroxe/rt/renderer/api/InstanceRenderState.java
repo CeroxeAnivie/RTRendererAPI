@@ -9,13 +9,13 @@ import java.util.Objects;
  * <p>Masks are raw 32-bit bit sets. A regular surface publishes {@link #surfaceMask()}; an overlay
  * is composited only over a hit sharing at least one bit with {@link #overlayReceiverMask()}.
  * Object mask zero disables outline identity, while non-zero values let adjacent hits be compared
- * without coupling the API to any host application's object model. Cardinal lighting is likewise
- * instance-owned, allowing shared mesh geometry and one BLAS to retain distinct face shading.</p>
+ * without coupling the API to any host application's object model. Instance-owned lighting lets
+ * shared mesh geometry and one BLAS retain distinct shading without mutating either resource.</p>
  */
 public final class InstanceRenderState {
     private static final InstanceRenderState DEFAULT = new InstanceRenderState(
             UvTransform.identity(), -1, 0, 0, OutlineStyle.disabled(),
-            CardinalLightingState.disabled()
+            CardinalLightingState.disabled(), DirectionalDiffuseState.disabled()
     );
 
     private final UvTransform uvTransform;
@@ -24,6 +24,7 @@ public final class InstanceRenderState {
     private final int objectMask;
     private final OutlineStyle outline;
     private final CardinalLightingState cardinalLighting;
+    private final DirectionalDiffuseState directionalDiffuse;
 
     private InstanceRenderState(Builder builder) {
         uvTransform = Objects.requireNonNull(builder.uvTransform, "uvTransform");
@@ -32,8 +33,14 @@ public final class InstanceRenderState {
         objectMask = builder.objectMask;
         outline = Objects.requireNonNull(builder.outline, "outline");
         cardinalLighting = Objects.requireNonNull(builder.cardinalLighting, "cardinalLighting");
+        directionalDiffuse = Objects.requireNonNull(builder.directionalDiffuse, "directionalDiffuse");
         if (outline.enabled() && objectMask == 0) {
             throw new IllegalArgumentException("enabled outline requires a non-zero objectMask");
+        }
+        if (cardinalLighting.enabled() && directionalDiffuse.enabled()) {
+            throw new IllegalArgumentException(
+                    "cardinalLighting and directionalDiffuse are mutually exclusive"
+            );
         }
     }
 
@@ -43,7 +50,8 @@ public final class InstanceRenderState {
             int overlayReceiverMask,
             int objectMask,
             OutlineStyle outline,
-            CardinalLightingState cardinalLighting
+            CardinalLightingState cardinalLighting,
+            DirectionalDiffuseState directionalDiffuse
     ) {
         this.uvTransform = uvTransform;
         this.surfaceMask = surfaceMask;
@@ -51,6 +59,7 @@ public final class InstanceRenderState {
         this.objectMask = objectMask;
         this.outline = outline;
         this.cardinalLighting = cardinalLighting;
+        this.directionalDiffuse = directionalDiffuse;
     }
 
     /** Returns the shared identity/default state. */
@@ -120,6 +129,14 @@ public final class InstanceRenderState {
     }
 
     /**
+     * Returns instance-local continuous two-direction Lambert modulation.
+     * @return non-null directional diffuse state
+     */
+    public DirectionalDiffuseState directionalDiffuse() {
+        return directionalDiffuse;
+    }
+
+    /**
      * Copies this state into an independent builder.
      * @return initialized state builder
      */
@@ -135,13 +152,15 @@ public final class InstanceRenderState {
                 && objectMask == state.objectMask
                 && uvTransform.equals(state.uvTransform)
                 && outline.equals(state.outline)
-                && cardinalLighting.equals(state.cardinalLighting);
+                && cardinalLighting.equals(state.cardinalLighting)
+                && directionalDiffuse.equals(state.directionalDiffuse);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(
-                uvTransform, surfaceMask, overlayReceiverMask, objectMask, outline, cardinalLighting
+                uvTransform, surfaceMask, overlayReceiverMask, objectMask, outline,
+                cardinalLighting, directionalDiffuse
         );
     }
 
@@ -152,7 +171,8 @@ public final class InstanceRenderState {
                 + ", overlayReceiverMask=" + overlayReceiverMask
                 + ", objectMask=" + objectMask
                 + ", outline=" + outline
-                + ", cardinalLighting=" + cardinalLighting + ']';
+                + ", cardinalLighting=" + cardinalLighting
+                + ", directionalDiffuse=" + directionalDiffuse + ']';
     }
 
     /** Single-thread-confined semantic builder. */
@@ -163,6 +183,7 @@ public final class InstanceRenderState {
         private int objectMask;
         private OutlineStyle outline = OutlineStyle.disabled();
         private CardinalLightingState cardinalLighting = CardinalLightingState.disabled();
+        private DirectionalDiffuseState directionalDiffuse = DirectionalDiffuseState.disabled();
 
         private Builder() {
         }
@@ -174,6 +195,7 @@ public final class InstanceRenderState {
             objectMask = source.objectMask;
             outline = source.outline;
             cardinalLighting = source.cardinalLighting;
+            directionalDiffuse = source.directionalDiffuse;
         }
 
         /**
@@ -237,6 +259,16 @@ public final class InstanceRenderState {
         }
 
         /**
+         * Replaces continuous two-direction Lambert base-color modulation.
+         * @param value non-null directional diffuse state
+         * @return this builder
+         */
+        public Builder directionalDiffuse(DirectionalDiffuseState value) {
+            directionalDiffuse = Objects.requireNonNull(value, "directionalDiffuse");
+            return this;
+        }
+
+        /**
          * Builds validated immutable state.
          * @return immutable render state
          */
@@ -244,7 +276,8 @@ public final class InstanceRenderState {
             if (uvTransform.equals(UvTransform.identity()) && surfaceMask == -1
                     && overlayReceiverMask == 0 && objectMask == 0
                     && outline.equals(OutlineStyle.disabled())
-                    && cardinalLighting.equals(CardinalLightingState.disabled())) {
+                    && cardinalLighting.equals(CardinalLightingState.disabled())
+                    && directionalDiffuse.equals(DirectionalDiffuseState.disabled())) {
                 return DEFAULT;
             }
             return new InstanceRenderState(this);

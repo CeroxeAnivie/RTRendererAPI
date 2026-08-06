@@ -153,7 +153,7 @@ RenderFrameRequest.builder(sequence, width, height, camera)
 | `TextureAsset` | `color(...)`、`colorMipChain(...)`、`builder(...)` | RGBA8 texture 与 mip chain |
 | `MaterialAsset` | `builder(id)` | PBR/材质状态、receiver-aware overlay 与 texture 引用 |
 | `MeshAsset` | `triangles(...)`、`builder(...)` | 顶点属性、索引和逐三角形材质 |
-| `SceneInstance` | `builder(id, meshAssetId)` | transform、visibility、lightmap 与实例级 cardinal lighting |
+| `SceneInstance` | `builder(id, meshAssetId)` | transform、visibility、lightmap 与实例级 lighting |
 | `SceneLight` | `point(...)`、`directional(...)`、`spot(...)` | typed light 与物理参数 |
 
 安全工厂复制调用方数组。需要零额外复制时只能使用标明 `wrapImmutableDirect` 的入口，并保证 direct buffer 在完整资源生命周期内不再被修改。
@@ -177,6 +177,19 @@ dominant axis 选择 -X/+X/-Y/+Y/-Z/+Z multiplier。六个值均为 `[0, 1]` 内
 `disabled()` 等价于六个 `1.0`。分类只读取未扰动几何法线，normal map 不改变 face 归属；结果
 在材质 base-color 采样后进行 RGB 调制。状态属于 `InstanceRenderState`，因此不同实例可以共享
 同一 mesh/BLAS 而采用不同方向光照。
+
+### DirectionalDiffuseState
+
+`DirectionalDiffuseState.builder()` 定义最多两条 surface-to-light 方向、各自的 `[0, 1]` 强度、
+`[0, 1]` ambient、object/world 坐标空间与显式背面策略。active state 的非零强度必须配套显式
+方向；方向必须为非零有限向量并在构建时归一化。精确调制公式为
+`clamp(ambient + I0 * max(dot(N, L0), 0) + I1 * max(dot(N, L1), 0), 0, 1)`。
+
+`N` 是 normal map 之前的重心插值顶点法线；没有 normal stream 时回退到几何法线。
+`KEEP_AUTHORED` 保留 mesh 朝向，`FLIP_ON_BACK_FACE` 在背面命中时翻转。unit ambient 会规范化为
+共享 `disabled()`，因为非负直射项不可能改变最终的 unit multiplier。该状态与
+`CardinalLightingState` 互斥，冲突配置由 `InstanceRenderState.Builder.build()` 拒绝；两者都只进入
+实例 SSBO，不改变 mesh 或 BLAS。
 
 ## 设备、诊断与异常
 

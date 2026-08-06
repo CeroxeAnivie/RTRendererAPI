@@ -2,7 +2,7 @@
 
 RTRendererAPI 适合嵌入 Java 21 或更高版本的桌面或引擎进程。普通调用方只需要理解场景 revision、帧 sequence 和资源生命周期；Vulkan external memory、semaphore、queue-family ownership 等细节被隔离在显式专家扩展中。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:0.5.1`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:0.5.2`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。
 
 ## 最小调用
 
@@ -127,6 +127,31 @@ receiver，`overlayReceiverMask` 选择 overlay 可合成的 receiver，`objectM
 倍率，并在 terminal shading 前调制 base-color RGB。`objectSpace(...)` 让明暗模式跟随实例旋转，
 `worldSpace(...)` 则按变换后的世界方向分类；六个倍率都必须位于 `[0, 1]`。该状态只更新实例
 SSBO，mesh 与 BLAS 继续共享，不会因每实例光照差异复制或重建。
+
+连续表面光照使用独立的 `DirectionalDiffuseState`，不能与 `CardinalLightingState` 同时启用：
+
+```java
+DirectionalDiffuseState actorLighting = DirectionalDiffuseState.builder()
+        .coordinateSpace(DirectionalDiffuseState.CoordinateSpace.OBJECT)
+        .firstDirection(0.2F, 1.0F, -0.7F)
+        .firstIntensity(0.6F)
+        .secondDirection(-0.2F, 1.0F, 0.7F)
+        .secondIntensity(0.6F)
+        .ambient(0.4F)
+        .backFacePolicy(DirectionalDiffuseState.BackFacePolicy.FLIP_ON_BACK_FACE)
+        .build();
+
+InstanceRenderState actorState = InstanceRenderState.builder()
+        .directionalDiffuse(actorLighting)
+        .build();
+```
+
+方向表示从着色点指向光源，构建时会归一化；精确倍率为
+`clamp(ambient + firstIntensity * max(dot(normal, firstDirection), 0)
++ secondIntensity * max(dot(normal, secondDirection), 0), 0, 1)`。法线使用 normal map
+之前的重心插值顶点法线；mesh 没有 normal stream 时回退到几何法线。`KEEP_AUTHORED` 保留
+背面的原始朝向，`FLIP_ON_BACK_FACE` 只在真实背面命中时翻转一次。该状态同样只修改实例 SSBO，
+不会复制 mesh 或重建 BLAS；同时配置 cardinal 与 directional diffuse 会在 `build()` 时失败。
 
 裂纹、破坏纹理等 receiver-aware overlay 应显式选择乘法合成，不能用 alpha-over 模拟：
 
@@ -259,7 +284,7 @@ Reflex/PCL 通过 `LowLatencyOptions` 独立于 FG/MFG 协商，因此原生展�
 
 ### 各能力的最短配置
 
-以下片段都只需要 `top.ceroxe.rt:renderer-api:0.5.1`。把对应 options 传给
+以下片段都只需要 `top.ceroxe.rt:renderer-api:0.5.2`。把对应 options 传给
 `RayTracingRendererConfig.builder()` 即可；没有任何片段要求额外模块或手工 DLL。
 
 ```java
