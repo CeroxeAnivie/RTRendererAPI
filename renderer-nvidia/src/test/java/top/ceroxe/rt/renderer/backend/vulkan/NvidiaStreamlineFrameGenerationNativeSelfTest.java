@@ -23,6 +23,10 @@ import java.util.concurrent.locks.LockSupport;
 /** Real swapchain gate for Streamline DLSS Frame Generation and static Multi Frame Generation. */
 public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
     private static final int PRESENT_COUNT = 12;
+    // DLSS-G requires a supported backbuffer size; the 640x360 extent used by reconstruction
+    // gates is below the generator's minimum and must not be used for this acceptance test.
+    private static final int FRAME_GENERATION_WIDTH = 1280;
+    private static final int FRAME_GENERATION_HEIGHT = 720;
     private static final long TIMEOUT_NANOS = 30_000_000_000L;
     private static final long BASE_FRAME_PERIOD_NANOS = 1_000_000_000L / 60L;
 
@@ -109,8 +113,8 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
             VulkanFramePresenterConfig presenterConfiguration = VulkanFramePresenterConfig.builder()
                     .title("RTRendererAPI " + featureName + " Native Gate")
                     .initialExtent(
-                            NvidiaGpuSceneNativeTestSupport.OUTPUT_WIDTH,
-                            NvidiaGpuSceneNativeTestSupport.OUTPUT_HEIGHT
+                            FRAME_GENERATION_WIDTH,
+                            FRAME_GENERATION_HEIGHT
                     )
                     .resizable(false)
                     .presentMode(VulkanFramePresenterConfig.PresentMode.UNCAPPED)
@@ -125,7 +129,17 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                         nextFrameDeadline += BASE_FRAME_PERIOD_NANOS;
                         awaitBaseFrameDeadline(nextFrameDeadline);
                     }
-                    RenderFrameRequest frame = NvidiaGpuSceneNativeTestSupport.frame(sequence);
+                    RenderFrameRequest frame = NvidiaGpuSceneNativeTestSupport.frame(
+                            sequence,
+                            FRAME_GENERATION_WIDTH,
+                            FRAME_GENERATION_HEIGHT,
+                            NvidiaGpuSceneNativeTestSupport.camera(
+                                    sequence * 0.025,
+                                    (sequence - 4L) * 0.0025,
+                                    FRAME_GENERATION_WIDTH,
+                                    FRAME_GENERATION_HEIGHT
+                            )
+                    );
                     NvidiaGpuSceneNativeTestSupport.awaitFrameAdmission(renderer, frame, featureName);
                     VulkanFramePresenter.PresentationResult result = awaitPresentation(
                             renderer, presenter, featureName

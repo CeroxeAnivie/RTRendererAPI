@@ -112,11 +112,11 @@ public final class NvidiaStreamlineGpuSceneNativeSelfTest {
                                 )
                         );
                 NvidiaGpuSceneNativeTestSupport.awaitFrameAdmission(renderer, movingFrame, featureName);
-                NvidiaGpuSceneNativeTestSupport.require(
-                        session.featureCapabilities().feature(Feature.FRAME_RECONSTRUCTION).status() == Status.ACTIVE,
-                        featureName + " capability did not activate after successful slEvaluateFeature");
                 VulkanGpuSceneRenderingSession.DiagnosticFrame completed =
                         NvidiaGpuSceneNativeTestSupport.awaitCompletedFrame(session, sequence, featureName);
+                NvidiaGpuSceneNativeTestSupport.require(
+                        session.featureCapabilities().feature(Feature.FRAME_RECONSTRUCTION).status() == Status.ACTIVE,
+                        featureName + " capability did not activate after completed slEvaluateFeature");
                 VulkanGpuSceneRenderingSession.DiagnosticFrame trace = session.captureLatestTraceForAcceptance();
                 NvidiaGpuSceneNativeTestSupport.require(trace != null,
                         "completed " + featureName + " frame lost its internal trace image");

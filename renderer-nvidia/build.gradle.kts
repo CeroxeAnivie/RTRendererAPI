@@ -22,6 +22,11 @@ val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_
     .orElse(JavaVersion.current().majorVersion)
     .get()
     .toInt()
+val unsafeAccessJvmArg = if (toolchainJavaVersion >= 24) {
+    "--sun-misc-unsafe-memory-access=allow"
+} else {
+    null
+}
 
 fun discoveredPath(
     propertyName: String,
@@ -78,6 +83,7 @@ tasks.withType<JavaExec>().configureEach {
     // The test runtime graph reaches this module through renderer-api metadata. Make the
     // self-artifact producer explicit so Gradle never observes an undeclared JAR dependency.
     dependsOn(tasks.named("jar"))
+    unsafeAccessJvmArg?.let { jvmArgs(it) }
 }
 
 val nativeBridgeOutput = layout.buildDirectory.file("native/rtrenderer_nvidia.dll")
