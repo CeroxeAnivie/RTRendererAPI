@@ -218,6 +218,7 @@ interface VulkanRenderingSession extends AutoCloseable {
      */
     final class SubmissionRejectedException extends Exception {
         private static final long serialVersionUID = 1L;
+        /** Typed reason that lets callers distinguish retryable capacity from lifecycle failure. */
         private final SubmissionDeferralReason deferralReason;
 
         SubmissionRejectedException(String message) {

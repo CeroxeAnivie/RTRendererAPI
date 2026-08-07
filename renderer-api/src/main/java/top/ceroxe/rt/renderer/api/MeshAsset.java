@@ -137,7 +137,8 @@ public final class MeshAsset {
      * @param tangents            empty or one xyzw tangent per vertex
      * @param textureCoordinates  empty or one uv pair per vertex
      * @param lightmapCoordinates empty or one lightmap uv pair per vertex
-     * @param vertexColorsRgba8   empty or one packed RGBA8 value per vertex
+     * @param vertexColorsRgba8   empty or one packed RGBA8 value per vertex; channels remain raw
+     *                            numeric authored data and are not implicitly sRGB-decoded
      * @param triangleIndices     triangle vertex indices in groups of three
      * @param triangleMaterialIds one material identifier per triangle
      * @return mesh retaining immutable direct storage without copying it
@@ -375,7 +376,8 @@ public final class MeshAsset {
     }
 
     /**
-     * Returns vertex colors.
+     * Returns raw authored vertex colors. RGBA8 channels are normalized numerically by the
+     * renderer; this field deliberately has no implicit sRGB transfer-function semantics.
      *
      * @return independent read-only packed vertex-color view positioned at zero, possibly empty
      */

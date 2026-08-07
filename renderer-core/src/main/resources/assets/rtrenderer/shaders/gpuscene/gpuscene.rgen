@@ -458,8 +458,7 @@ vec3 gsApplyObjectOutline(
         vec2 samplePosition = vec2(pixel) + vec2(0.5) + directions[index] * probeRadius;
         if (any(lessThan(samplePosition, vec2(0.0)))
                 || any(greaterThanEqual(samplePosition, vec2(extent)))) continue;
-        vec2 ndc = samplePosition / vec2(extent) * 2.0 - 1.0;
-        vec3 direction = normalize(forward + right * ndc.x * fov.x - up * ndc.y * fov.y);
+        vec3 direction = gsRayDirectionAtSample(samplePosition, extent);
         GpuScenePayload neighbor = gsTraceRadiance(rayOrigin, direction, launchInfo);
         uint neighborMask = neighbor.surfaceState.z;
         if (neighborMask != centerMask) {
@@ -1000,9 +999,9 @@ void main()
     );
     for (uint sampleIndex = 0u; sampleIndex < 8u; ++sampleIndex) {
         if (sampleIndex >= sampleCount) break;
-        vec2 samplePosition = vec2(pixel) + gsSubpixelOffset(sampleIndex, sampleCount) + currentJitter;
-        vec2 ndc = samplePosition / vec2(extent) * 2.0 - 1.0;
-        vec3 rayDirection = normalize(forward + right * ndc.x * fov.x - up * ndc.y * fov.y);
+        vec2 samplePosition = vec2(pixel) + gsSubpixelOffset(sampleIndex, sampleCount);
+        if (!gsExactProjectionActive()) samplePosition += currentJitter;
+        vec3 rayDirection = gsRayDirectionAtSample(samplePosition, extent);
 #ifdef RTRENDERER_SER
         // Reorder by direction before the primary trace fans out into material-specific paths.
         vec3 absoluteDirection = abs(rayDirection);

@@ -70,6 +70,7 @@ public final class RendererApiContractSelfTest {
       assertGpuDeviceSelectionContract();
       assertTransformAndLightingValidation();
       assertCameraAndFrameValidation();
+      assertExactProjectionContract();
       assertFrameValidationFailureContract();
       assertFramePrimitiveContract();
       assertAntiAliasingContract();
@@ -820,6 +821,104 @@ public final class RendererApiContractSelfTest {
       expect(IllegalArgumentException.class, () -> RenderFrameRequest.builder(1L, 2147483647, 2147483647, camera).build());
    }
 
+   private static void assertExactProjectionContract() {
+      double[] identityView = {
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, -100.0 / 99.0, -100.0 / 99.0,
+            0, 0, -1, 0
+      };
+      double[] rigid = {
+            0, 0, -1, 4,
+            0, 1, 0, 5,
+            1, 0, 0, 6,
+            0, 0, 0, 1
+      };
+      ExactProjectionState exact = ExactProjectionState.builder(1280, 800)
+            .matrixLayout(ExactProjectionState.MatrixLayout.ROW_MAJOR)
+            .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+            .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+            .cameraToWorld(rigid)
+            .clipFromView(identityView)
+            .build();
+      ExactProjectionState.Ray center = exact.rayForPixel(639.5, 399.5);
+      require(Math.abs(center.originX() - 4.0) < 1.0E-9 && Math.abs(center.originY() - 5.0) < 1.0E-9
+                  && Math.abs(center.originZ() - 6.0) < 1.0E-9,
+            "exact camera-to-world translation was not retained");
+      require(Math.abs(center.directionX() - 1.0) < 1.0E-6
+                  && Math.abs(center.directionY()) < 1.0E-6
+                  && Math.abs(center.directionZ()) < 1.0E-6,
+            "rigid rotation did not rotate the exact primary ray");
+      ExactProjectionState columnMajor = ExactProjectionState.builder(1280, 800)
+            .matrixLayout(ExactProjectionState.MatrixLayout.COLUMN_MAJOR)
+            .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+            .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+            .cameraToWorld(transpose(rigid))
+            .clipFromView(transpose(identityView))
+            .build();
+      ExactProjectionState.Ray columnRay = columnMajor.rayForPixel(639.5, 399.5);
+      require(Math.abs(columnRay.directionX() - center.directionX()) < 1.0E-9
+                  && Math.abs(columnRay.directionY() - center.directionY()) < 1.0E-9
+                  && Math.abs(columnRay.directionZ() - center.directionZ()) < 1.0E-9,
+            "explicit column-major layout was not canonicalized exactly");
+      CameraState exactCamera = CameraState.exactProjection(exact);
+      require(exactCamera.projectionPath() == CameraState.ProjectionPath.EXACT_CLIP
+                  && exactCamera.hasExactProjection()
+                  && exactCamera.exactProjection().equals(exact),
+            "exact camera path lost its explicit discriminator");
+      expect(IllegalStateException.class, () -> camera().exactProjection());
+
+      double[] warp = identityView.clone();
+      warp[1] = 0.25;
+      warp[4] = -0.15;
+      ExactProjectionState warped = ExactProjectionState.builder(1280, 800)
+            .matrixLayout(ExactProjectionState.MatrixLayout.ROW_MAJOR)
+            .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+            .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+            .cameraToWorld(new double[]{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1})
+            .clipFromView(warp)
+            .build();
+      ExactProjectionState.Ray warpedRay = warped.rayForPixel(800.0, 400.0);
+      require(Math.abs(warpedRay.directionY()) > 1.0E-4,
+            "rotated non-uniform projection warp was ignored");
+      ExactProjectionState jittered = ExactProjectionState.builder(1280, 800)
+            .matrixLayout(ExactProjectionState.MatrixLayout.ROW_MAJOR)
+            .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+            .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+            .jitter(ExactProjectionState.JitterConvention.PIXEL_CENTER_OFFSET, 0.5, -0.25)
+            .cameraToWorld(new double[]{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1})
+            .clipFromView(identityView)
+            .build();
+      require(Math.abs(jittered.rayForPixel(639.5, 359.5).directionX()
+                  - exact.rayForPixel(639.5, 359.5).directionX()) > 1.0E-5,
+            "pixel jitter did not affect exact ray mapping");
+
+      expect(IllegalArgumentException.class, () -> ExactProjectionState.builder(1280, 800)
+            .matrixLayout(ExactProjectionState.MatrixLayout.ROW_MAJOR)
+            .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+            .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+            .cameraToWorld(new double[16]).clipFromView(identityView).build());
+      expect(IllegalArgumentException.class, () -> ExactProjectionState.builder(1280, 800)
+            .matrixLayout(ExactProjectionState.MatrixLayout.ROW_MAJOR)
+            .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+            .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+            .cameraToWorld(rigid).clipFromView(new double[]{Double.NaN, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}).build());
+      expect(IllegalArgumentException.class, () -> ExactProjectionState.builder(1280, 800)
+            .matrixLayout(ExactProjectionState.MatrixLayout.ROW_MAJOR)
+            .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+            .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+            .jitter(ExactProjectionState.JitterConvention.NONE, 1, 0)
+            .cameraToWorld(rigid).clipFromView(identityView).build());
+      expect(IllegalArgumentException.class, () -> ExactProjectionState.builder(1280, 800)
+            .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+            .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+            .cameraToWorld(rigid).clipFromView(identityView).build());
+      require(camera().projectionPath() == CameraState.ProjectionPath.BASIS_FOV
+                  && !camera().hasExactProjection()
+                  && camera().tanHalfFovX() == 1.0F,
+            "legacy CameraState basis/FOV regression detected");
+   }
+
    private static void assertTemporalRenderingContract() {
       require(!TemporalRenderingOptions.disabled().enabled() && TemporalRenderingOptions.disabled().maxHistoryFrames() == 0, "disabled temporal policy must allocate no history");
       require(TemporalRenderingOptions.balanced().enabled() && TemporalRenderingOptions.balanced().maxHistoryFrames() == 8, "balanced temporal policy changed its bounded history contract");
@@ -1102,6 +1201,14 @@ public final class RendererApiContractSelfTest {
 
    private static CameraState camera() {
       return CameraState.explicitBasis(0.0, 0.0, 0.0).forward(0.0F, 0.0F, -1.0F).right(1.0F, 0.0F, 0.0F).up(0.0F, 1.0F, 0.0F).projectionTangents(1.0F, 0.5625F).build();
+   }
+
+   private static double[] transpose(double[] matrix) {
+      double[] result = new double[16];
+      for (int row = 0; row < 4; row++) for (int column = 0; column < 4; column++) {
+         result[column * 4 + row] = matrix[row * 4 + column];
+      }
+      return result;
    }
 
    private static MaterialAsset material(long id) {

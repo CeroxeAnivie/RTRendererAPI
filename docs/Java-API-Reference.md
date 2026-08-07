@@ -134,6 +134,18 @@ RenderFrameRequest.builder(sequence, width, height, camera)
 
 使用 `CameraState.lookAt(eyeX, eyeY, eyeZ, targetX, targetY, targetZ)` 创建 Builder，再设置 aspect ratio、FOV、near/far plane 等参数。
 
+### ExactProjectionState
+
+`ExactProjectionState` is the generic exact projection contract. It requires an explicit matrix
+layout, right-handed `-Z` view convention, viewport, depth convention, and jitter convention.
+`CameraState.exactProjection(mapping)` selects the `EXACT_CLIP` discriminator; the existing
+`lookAt` and `explicitBasis` factories select `BASIS_FOV` and retain their old ABI and behavior.
+The Vulkan provider consumes the inverse clip matrix and camera-to-world rotation in primary
+raygen. Singular, non-finite, non-rigid, missing-layout, or viewport-mismatched input fails closed.
+
+`MeshAsset.vertexColorsRgba8()` remains raw numeric RGBA8 channel data. It is not sRGB-decoded;
+that gamma meaning is intentionally unchanged.
+
 ### CpuFrame
 
 托管、display-ready RGBA8 帧。普通调用方使用它完成截图、编码、UI 或 CPU 后处理，不需要管理 native handle。

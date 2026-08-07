@@ -1,5 +1,7 @@
 package top.ceroxe.rt.renderer;
 
+import top.ceroxe.rt.renderer.api.ExactProjectionState;
+
 /**
  * Shared camera-ray math used by both Java diagnostics and the Vulkan raygen
  * uniform packer.
@@ -16,6 +18,24 @@ public final class CameraRayMath {
     private static final float MAX_VERTICAL_TAN = tangentDegrees(65.0F);
 
     private CameraRayMath() {
+    }
+
+    /**
+     * Uses the public exact clip mapping without reducing it to a guessed FOV. This mirrors the
+     * GPUScene raygen contract and gives host diagnostics a deterministic CPU reference.
+     *
+     * @param projection immutable exact projection mapping
+     * @param pixelX top-left-origin pixel x coordinate
+     * @param pixelY top-left-origin pixel y coordinate
+     * @return normalized world-space primary ray
+     */
+    public static ExactProjectionState.Ray exactScreenRay(
+            ExactProjectionState projection,
+            double pixelX,
+            double pixelY
+    ) {
+        if (projection == null) throw new IllegalArgumentException("projection must not be null");
+        return projection.rayForPixel(pixelX, pixelY);
     }
 
     /**

@@ -345,8 +345,11 @@ final class VulkanRendererRuntime implements AutoCloseable {
      */
     @SuppressWarnings("serial") // Diagnostic snapshots intentionally remain typed and process-local.
     public static final class InitializationException extends IllegalStateException {
+        /** Capability probe captured before initialization failed. */
         private final VulkanRtCapabilityProbe.Result capability;
+        /** Terminal runtime state reached by the failed initialization transaction. */
         private final RtCore.State terminalState;
+        /** Guarded runtime summary captured at the failure boundary. */
         private final RtCore.Summary summary;
 
         private InitializationException(

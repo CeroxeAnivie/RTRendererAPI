@@ -1,6 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import top.ceroxe.rt.renderer.api.CameraState;
+import top.ceroxe.rt.renderer.api.ExactProjectionState;
 import top.ceroxe.rt.renderer.api.DistanceFogState;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.LightmapState;
@@ -179,8 +180,15 @@ final class VulkanFrameUniformPacker {
                 VulkanGpuSceneAbi.FRAME_PREVIOUS_CAMERA_UP_WORD,
                 VulkanGpuSceneAbi.FRAME_PREVIOUS_FOV_WORD);
         putLong(words, VulkanGpuSceneAbi.FRAME_PREVIOUS_SEQUENCE_WORD, temporal.previousSequence());
-        int temporalFlags = temporalPolicy.enabled() ? VulkanGpuSceneAbi.TEMPORAL_FLAG_ENABLED : 0;
-        if (temporal.historyValid()) temporalFlags |= VulkanGpuSceneAbi.TEMPORAL_FLAG_HISTORY_VALID;
+        boolean exactProjection = camera.hasExactProjection();
+        /* The legacy temporal reprojection shader is FOV/basis based. Keep exact primary rays
+         * correct by failing closed for that secondary history path until it has an exact inverse
+         * projection contract of its own. */
+        int temporalFlags = !exactProjection && temporalPolicy.enabled()
+                ? VulkanGpuSceneAbi.TEMPORAL_FLAG_ENABLED : 0;
+        if (!exactProjection && temporal.historyValid()) {
+            temporalFlags |= VulkanGpuSceneAbi.TEMPORAL_FLAG_HISTORY_VALID;
+        }
         putInt(words, VulkanGpuSceneAbi.FRAME_TEMPORAL_FLAGS_WORD, temporalFlags);
         putInt(words, VulkanGpuSceneAbi.FRAME_MAX_HISTORY_FRAMES_WORD,
                 temporalPolicy.maxHistoryFrames());
@@ -209,7 +217,9 @@ final class VulkanFrameUniformPacker {
         putDouble(words, VulkanGpuSceneAbi.FRAME_CAMERA_DELTA_WORD + 4,
                 frame.camera().z() - previousCamera.z());
         int featureFlags = denoisingActive ? VulkanGpuSceneAbi.FEATURE_FLAG_DENOISING_ACTIVE : 0;
-        if (reconstructionActive) featureFlags |= VulkanGpuSceneAbi.FEATURE_FLAG_RECONSTRUCTION_ACTIVE;
+        if (reconstructionActive && !exactProjection) {
+            featureFlags |= VulkanGpuSceneAbi.FEATURE_FLAG_RECONSTRUCTION_ACTIVE;
+        }
         putInt(words, VulkanGpuSceneAbi.FRAME_FEATURE_FLAGS_WORD, featureFlags);
         boolean projectionKnown = frame.depthProjection().known();
         putFloat(words, VulkanGpuSceneAbi.FRAME_RECONSTRUCTION_NEAR_PLANE_WORD,
@@ -218,7 +228,62 @@ final class VulkanFrameUniformPacker {
                 projectionKnown ? frame.depthProjection().farPlane() : 0.0F);
         putInt(words, VulkanGpuSceneAbi.FRAME_RECONSTRUCTION_PROJECTION_KNOWN_WORD,
                 projectionKnown ? 1 : 0);
+        putExactProjection(words, camera, frameExtents);
         return words.array();
+    }
+
+    private static void putExactProjection(
+            ByteBuffer target,
+            CameraState camera,
+            VulkanFrameExtents extents
+    ) {
+        putInt(target, VulkanGpuSceneAbi.FRAME_PROJECTION_PATH_WORD,
+                camera.hasExactProjection()
+                        ? VulkanGpuSceneAbi.PROJECTION_PATH_EXACT_CLIP
+                        : VulkanGpuSceneAbi.PROJECTION_PATH_BASIS_FOV);
+        if (!camera.hasExactProjection()) return;
+
+        ExactProjectionState exact = camera.exactProjection();
+        if (exact.depthConvention() != ExactProjectionState.DepthConvention.ZERO_TO_ONE) {
+            throw new IllegalArgumentException(
+                    "current Vulkan depth attachment requires ZERO_TO_ONE exact depth convention"
+            );
+        }
+        if (exact.viewportWidth() != extents.outputWidth()
+                || exact.viewportHeight() != extents.outputHeight()) {
+            throw new IllegalArgumentException(
+                    "exact projection viewport must match the public frame extent"
+            );
+        }
+        putInt(target, VulkanGpuSceneAbi.FRAME_EXACT_VIEWPORT_WIDTH_WORD, exact.viewportWidth());
+        putInt(target, VulkanGpuSceneAbi.FRAME_EXACT_VIEWPORT_HEIGHT_WORD, exact.viewportHeight());
+        putInt(target, VulkanGpuSceneAbi.FRAME_EXACT_DEPTH_CONVENTION_WORD, exact.depthConvention().ordinal());
+        putInt(target, VulkanGpuSceneAbi.FRAME_EXACT_JITTER_CONVENTION_WORD, exact.jitterConvention().ordinal());
+        putFloat(target, VulkanGpuSceneAbi.FRAME_EXACT_JITTER_WORD, exact.jitterXAsFloat());
+        putFloat(target, VulkanGpuSceneAbi.FRAME_EXACT_JITTER_WORD + 1, exact.jitterYAsFloat());
+        putInt(target, VulkanGpuSceneAbi.FRAME_EXACT_COORDINATE_SYSTEM_WORD, exact.coordinateSystem().ordinal());
+
+        double[] inverse = exact.inverseClipFromView();
+        for (int index = 0; index < inverse.length; index++) {
+            putFloat(target, VulkanGpuSceneAbi.FRAME_EXACT_INVERSE_CLIP_FROM_VIEW_WORD + index,
+                    exactFloat(inverse[index], "inverse clip matrix"));
+        }
+        /* Translation stays in the existing lossless double camera-position words. */
+        double[] transform = exact.cameraToWorld();
+        int base = VulkanGpuSceneAbi.FRAME_EXACT_CAMERA_TO_WORLD_WORD;
+        int[] rotation = {0, 1, 2, 4, 5, 6, 8, 9, 10};
+        for (int index = 0; index < rotation.length; index++) {
+            putFloat(target, base + index, exactFloat(transform[rotation[index]], "camera rotation"));
+        }
+        for (int index = 9; index < 15; index++) putFloat(target, base + index, 0.0F);
+        putFloat(target, base + 15, 1.0F);
+    }
+
+    private static float exactFloat(double value, String label) {
+        if (!Double.isFinite(value) || value < -Float.MAX_VALUE || value > Float.MAX_VALUE) {
+            throw new IllegalArgumentException(label + " is outside the shader float ABI");
+        }
+        return (float) value;
     }
 
     private static void putCamera(

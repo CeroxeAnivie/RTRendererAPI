@@ -6,6 +6,7 @@ import top.ceroxe.rt.renderer.api.AntiAliasingState;
 import top.ceroxe.rt.renderer.api.CameraState;
 import top.ceroxe.rt.renderer.api.DistanceFogState;
 import top.ceroxe.rt.renderer.api.DepthProjectionState;
+import top.ceroxe.rt.renderer.api.ExactProjectionState;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
 import top.ceroxe.rt.renderer.api.LightmapState;
@@ -25,7 +26,7 @@ public final class VulkanFrameUniformPackerSelfTest {
       TemporalHistoryTracker tracker = new TemporalHistoryTracker(TemporalRenderingOptions.balanced());
       TemporalHistoryTracker.PreparedFrame temporal = tracker.prepare(frame, sceneRevision);
       byte[] encoded = VulkanFrameUniformPacker.pack(frame, 37, sceneRevision, temporal, TemporalRenderingOptions.balanced(), false);
-      require(encoded.length == 1408, "frame ABI byte count changed");
+      require(encoded.length == 1600, "frame ABI byte count changed");
       ByteBuffer words = ByteBuffer.wrap(encoded).order(ByteOrder.LITTLE_ENDIAN);
       require(integer(words, 0) == 1920 && integer(words, 1) == 1080, "frame extent was not encoded exactly");
       require(longInteger(words, 2) == 8589934595L, "64-bit frame sequence was truncated");
@@ -93,6 +94,29 @@ public final class VulkanFrameUniformPackerSelfTest {
       require(real32(projectedWords, 349) == 0.125F && real32(projectedWords, 350) == 4096.0F
                       && integer(projectedWords, 351) == 1,
               "known Vulkan depth projection was not packed exactly");
+      RenderFrameRequest exactFrame = RenderFrameRequest.builder(
+                  frame.sequence() + 2L, frame.width(), frame.height(), CameraState.exactProjection(
+                          ExactProjectionState.builder(frame.width(), frame.height())
+                                  .matrixLayout(ExactProjectionState.MatrixLayout.ROW_MAJOR)
+                                  .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+                                  .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+                                  .cameraToWorld(new double[]{1, 0, 0, 3, 0, 1, 0, 4, 0, 0, 1, 5, 0, 0, 0, 1})
+                                  .clipFromView(new double[]{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -1, 0})
+                                  .build()
+                  )
+            ).build();
+      TemporalHistoryTracker.PreparedFrame exactTemporal = tracker.prepare(exactFrame, sceneRevision);
+      ByteBuffer exactWords = ByteBuffer.wrap(VulkanFrameUniformPacker.pack(
+              exactFrame, 37, sceneRevision, exactTemporal, TemporalRenderingOptions.balanced(), false
+      )).order(ByteOrder.LITTLE_ENDIAN);
+      require(integer(exactWords, VulkanGpuSceneAbi.FRAME_PROJECTION_PATH_WORD)
+                      == VulkanGpuSceneAbi.PROJECTION_PATH_EXACT_CLIP
+                      && integer(exactWords, VulkanGpuSceneAbi.FRAME_EXACT_VIEWPORT_WIDTH_WORD) == frame.width()
+                      && real32(exactWords, VulkanGpuSceneAbi.FRAME_EXACT_INVERSE_CLIP_FROM_VIEW_WORD) != 0.0F
+                      && integer(exactWords, VulkanGpuSceneAbi.FRAME_TEMPORAL_FLAGS_WORD) == 0
+                      && (integer(exactWords, VulkanGpuSceneAbi.FRAME_FEATURE_FLAGS_WORD)
+                          & VulkanGpuSceneAbi.FEATURE_FLAG_RECONSTRUCTION_ACTIVE) == 0,
+              "exact projection discriminator or matrix was not encoded");
       expect(IllegalArgumentException.class, () -> VulkanFrameUniformPacker.pack(frame, -1, sceneRevision, temporal, TemporalRenderingOptions.balanced(), false));
       expect(IllegalArgumentException.class, () -> VulkanFrameUniformPacker.pack(frame, 0, 6L, temporal, TemporalRenderingOptions.balanced(), false));
       expect(IllegalArgumentException.class, () -> VulkanFrameUniformPacker.temporalJitter(-1L, true));

@@ -36,6 +36,8 @@ final class TemporalHistoryTracker {
     }
 
     private static boolean sameProjection(CameraState first, CameraState second) {
+        if (first.projectionPath() != second.projectionPath()) return false;
+        if (first.hasExactProjection()) return first.exactProjection().equals(second.exactProjection());
         return Float.floatToIntBits(first.tanHalfFovX()) == Float.floatToIntBits(second.tanHalfFovX())
                 && Float.floatToIntBits(first.tanHalfFovY()) == Float.floatToIntBits(second.tanHalfFovY());
     }

@@ -518,9 +518,62 @@ float gsImplicitTextureLod(uint textureBase, vec2 du, vec2 dv)
     return max(0.0, log2(max(footprint, 1.0e-8)));
 }
 
-vec3 gsPrimaryRayDirection(ivec2 pixel, ivec2 extent)
+bool gsExactProjectionActive()
 {
-    vec2 ndc = (vec2(pixel) + vec2(0.5)) / vec2(extent) * 2.0 - 1.0;
+    return gsFrame.words[GPU_SCENE_FRAME_PROJECTION_PATH_WORD]
+            == GPU_SCENE_PROJECTION_PATH_EXACT_CLIP;
+}
+
+vec4 gsExactInverseClipMultiply(vec4 clip)
+{
+    uint base = GPU_SCENE_FRAME_EXACT_INVERSE_CLIP_FROM_VIEW_WORD;
+    return vec4(
+        dot(vec4(uintBitsToFloat(gsFrame.words[base + 0u]), uintBitsToFloat(gsFrame.words[base + 1u]),
+                 uintBitsToFloat(gsFrame.words[base + 2u]), uintBitsToFloat(gsFrame.words[base + 3u])), clip),
+        dot(vec4(uintBitsToFloat(gsFrame.words[base + 4u]), uintBitsToFloat(gsFrame.words[base + 5u]),
+                 uintBitsToFloat(gsFrame.words[base + 6u]), uintBitsToFloat(gsFrame.words[base + 7u])), clip),
+        dot(vec4(uintBitsToFloat(gsFrame.words[base + 8u]), uintBitsToFloat(gsFrame.words[base + 9u]),
+                 uintBitsToFloat(gsFrame.words[base + 10u]), uintBitsToFloat(gsFrame.words[base + 11u])), clip),
+        dot(vec4(uintBitsToFloat(gsFrame.words[base + 12u]), uintBitsToFloat(gsFrame.words[base + 13u]),
+                 uintBitsToFloat(gsFrame.words[base + 14u]), uintBitsToFloat(gsFrame.words[base + 15u])), clip)
+    );
+}
+
+vec3 gsExactWorldPoint(vec3 viewPoint)
+{
+    uint base = GPU_SCENE_FRAME_EXACT_CAMERA_TO_WORLD_WORD;
+    vec3 origin = gsFrameCameraPosition();
+    vec3 world = vec3(
+        dot(vec3(uintBitsToFloat(gsFrame.words[base + 0u]), uintBitsToFloat(gsFrame.words[base + 1u]), uintBitsToFloat(gsFrame.words[base + 2u])), viewPoint),
+        dot(vec3(uintBitsToFloat(gsFrame.words[base + 4u]), uintBitsToFloat(gsFrame.words[base + 5u]), uintBitsToFloat(gsFrame.words[base + 6u])), viewPoint),
+        dot(vec3(uintBitsToFloat(gsFrame.words[base + 8u]), uintBitsToFloat(gsFrame.words[base + 9u]), uintBitsToFloat(gsFrame.words[base + 10u])), viewPoint)
+    );
+    return origin + world;
+}
+
+vec3 gsRayDirectionAtSample(vec2 samplePosition, ivec2 extent)
+{
+    if (gsExactProjectionActive()) {
+        uint jitterConvention = gsFrame.words[GPU_SCENE_FRAME_EXACT_JITTER_CONVENTION_WORD];
+        vec2 jitter = vec2(
+            uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_EXACT_JITTER_WORD]),
+            uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_EXACT_JITTER_WORD + 1u])
+        );
+        if (jitterConvention == 1u) samplePosition += jitter;
+        vec2 ndc = samplePosition / vec2(extent) * 2.0 - 1.0;
+        ndc.y = -ndc.y;
+        if (jitterConvention == 2u) ndc += jitter;
+        uint depthConvention = gsFrame.words[GPU_SCENE_FRAME_EXACT_DEPTH_CONVENTION_WORD];
+        float nearDepth = depthConvention == 0u ? 0.0 : (depthConvention == 1u ? -1.0 : 1.0);
+        float farDepth = depthConvention == 0u ? 1.0 : (depthConvention == 1u ? 1.0 : (depthConvention == 2u ? 0.0 : -1.0));
+        vec4 nearView = gsExactInverseClipMultiply(vec4(ndc, nearDepth, 1.0));
+        vec4 farView = gsExactInverseClipMultiply(vec4(ndc, farDepth, 1.0));
+        if (abs(nearView.w) <= 1.0e-7 || abs(farView.w) <= 1.0e-7) return vec3(0.0, 0.0, -1.0);
+        vec3 nearWorld = gsExactWorldPoint(nearView.xyz / nearView.w);
+        vec3 farWorld = gsExactWorldPoint(farView.xyz / farView.w);
+        return normalize(farWorld - nearWorld);
+    }
+    vec2 ndc = samplePosition / vec2(extent) * 2.0 - 1.0;
     vec3 forward = normalize(gsFrameVec3(GPU_SCENE_FRAME_CAMERA_FORWARD_WORD));
     vec3 right = normalize(gsFrameVec3(GPU_SCENE_FRAME_CAMERA_RIGHT_WORD));
     vec3 up = normalize(gsFrameVec3(GPU_SCENE_FRAME_CAMERA_UP_WORD));
@@ -529,6 +582,11 @@ vec3 gsPrimaryRayDirection(ivec2 pixel, ivec2 extent)
         uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_FOV_WORD + 1u])
     );
     return normalize(forward + right * ndc.x * fov.x - up * ndc.y * fov.y);
+}
+
+vec3 gsPrimaryRayDirection(ivec2 pixel, ivec2 extent)
+{
+    return gsRayDirectionAtSample(vec2(pixel) + vec2(0.5), extent);
 }
 
 vec3 gsWorldBarycentrics(vec3 point, vec3 p0, vec3 p1, vec3 p2)

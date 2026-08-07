@@ -26,6 +26,16 @@ public final class CameraState {
     private final float upZ;
     private final float tanHalfFovX;
     private final float tanHalfFovY;
+    private final ProjectionPath projectionPath;
+    private final ExactProjectionState exactProjection;
+
+    /** Explicit discriminator for the two camera contracts. */
+    public enum ProjectionPath {
+        /** Legacy normalized basis plus FOV tangents. */
+        BASIS_FOV,
+        /** Exact camera-to-world plus clip-from-view mapping. */
+        EXACT_CLIP
+    }
 
     /**
      * Validates and creates a camera state.
@@ -62,6 +72,35 @@ public final class CameraState {
             float tanHalfFovX,
             float tanHalfFovY
     ) {
+        this(
+                x, y, z,
+                forwardX, forwardY, forwardZ,
+                rightX, rightY, rightZ,
+                upX, upY, upZ,
+                tanHalfFovX, tanHalfFovY,
+                ProjectionPath.BASIS_FOV,
+                null
+        );
+    }
+
+    private CameraState(
+            double x,
+            double y,
+            double z,
+            float forwardX,
+            float forwardY,
+            float forwardZ,
+            float rightX,
+            float rightY,
+            float rightZ,
+            float upX,
+            float upY,
+            float upZ,
+            float tanHalfFovX,
+            float tanHalfFovY,
+            ProjectionPath projectionPath,
+            ExactProjectionState exactProjection
+    ) {
         requireFinite(x, "x");
         requireFinite(y, "y");
         requireFinite(z, "z");
@@ -94,6 +133,14 @@ public final class CameraState {
         this.upZ = upZ;
         this.tanHalfFovX = tanHalfFovX;
         this.tanHalfFovY = tanHalfFovY;
+        this.projectionPath = java.util.Objects.requireNonNull(projectionPath, "projectionPath");
+        if (projectionPath == ProjectionPath.EXACT_CLIP && exactProjection == null) {
+            throw new IllegalArgumentException("exact camera path requires an exact projection");
+        }
+        if (projectionPath == ProjectionPath.BASIS_FOV && exactProjection != null) {
+            throw new IllegalArgumentException("basis camera path cannot carry an exact projection");
+        }
+        this.exactProjection = exactProjection;
     }
 
     /**
@@ -131,6 +178,44 @@ public final class CameraState {
      */
     public static ExplicitBasisBuilder explicitBasis(double x, double y, double z) {
         return new ExplicitBasisBuilder(x, y, z);
+    }
+
+    /**
+     * Creates an exact camera path from a validated, immutable mapping. The derived basis values
+     * remain available for old consumers, but the exact discriminator makes it impossible for a
+     * provider to silently fall back to FOV math.
+     *
+     * @param mapping validated exact projection mapping
+     * @return immutable camera state selecting the exact projection path
+     */
+    public static CameraState exactProjection(ExactProjectionState mapping) {
+        ExactProjectionState exact = java.util.Objects.requireNonNull(mapping, "mapping");
+        double[] transform = exact.cameraToWorld();
+        float rightX = finiteFloat(transform[0], "cameraToWorld.rightX");
+        float rightY = finiteFloat(transform[4], "cameraToWorld.rightY");
+        float rightZ = finiteFloat(transform[8], "cameraToWorld.rightZ");
+        float upX = finiteFloat(transform[1], "cameraToWorld.upX");
+        float upY = finiteFloat(transform[5], "cameraToWorld.upY");
+        float upZ = finiteFloat(transform[9], "cameraToWorld.upZ");
+        float forwardX = -finiteFloat(transform[2], "cameraToWorld.forwardX");
+        float forwardY = -finiteFloat(transform[6], "cameraToWorld.forwardY");
+        float forwardZ = -finiteFloat(transform[10], "cameraToWorld.forwardZ");
+        return new CameraState(
+                exact.cameraX(), exact.cameraY(), exact.cameraZ(),
+                forwardX, forwardY, forwardZ,
+                rightX, rightY, rightZ,
+                upX, upY, upZ,
+                1.0F, 1.0F,
+                ProjectionPath.EXACT_CLIP,
+                exact
+        );
+    }
+
+    private static float finiteFloat(double value, String name) {
+        if (!Double.isFinite(value) || value < -Float.MAX_VALUE || value > Float.MAX_VALUE) {
+            throw new IllegalArgumentException(name + " exceeds the float camera ABI");
+        }
+        return (float) value;
     }
 
     private static void requireUnit(float x, float y, float z, String name) {
@@ -301,6 +386,35 @@ public final class CameraState {
         return tanHalfFovY;
     }
 
+    /**
+     * Returns the explicit projection path discriminator.
+     *
+     * @return basis/FOV or exact-clip path
+     */
+    public ProjectionPath projectionPath() {
+        return projectionPath;
+    }
+
+    /**
+     * Returns whether this camera carries an exact projection mapping.
+     *
+     * @return {@code true} only for the exact path
+     */
+    public boolean hasExactProjection() {
+        return projectionPath == ProjectionPath.EXACT_CLIP;
+    }
+
+    /**
+     * Returns the exact mapping selected by {@link #exactProjection(ExactProjectionState)}.
+     *
+     * @return immutable exact mapping
+     * @throws IllegalStateException when this camera uses the legacy basis/FOV path
+     */
+    public ExactProjectionState exactProjection() {
+        if (exactProjection == null) throw new IllegalStateException("camera uses the basis/FOV projection path");
+        return exactProjection;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
@@ -318,7 +432,9 @@ public final class CameraState {
                 && Float.compare(upY, camera.upY) == 0
                 && Float.compare(upZ, camera.upZ) == 0
                 && Float.compare(tanHalfFovX, camera.tanHalfFovX) == 0
-                && Float.compare(tanHalfFovY, camera.tanHalfFovY) == 0;
+                && Float.compare(tanHalfFovY, camera.tanHalfFovY) == 0
+                && projectionPath == camera.projectionPath
+                && java.util.Objects.equals(exactProjection, camera.exactProjection);
     }
 
     @Override
@@ -328,7 +444,7 @@ public final class CameraState {
                 forwardX, forwardY, forwardZ,
                 rightX, rightY, rightZ,
                 upX, upY, upZ,
-                tanHalfFovX, tanHalfFovY
+                tanHalfFovX, tanHalfFovY, projectionPath, exactProjection
         );
     }
 
@@ -349,6 +465,7 @@ public final class CameraState {
                 + ", upZ=" + upZ
                 + ", tanHalfFovX=" + tanHalfFovX
                 + ", tanHalfFovY=" + tanHalfFovY
+                + ", projectionPath=" + projectionPath
                 + ']';
     }
 

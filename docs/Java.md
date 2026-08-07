@@ -2,7 +2,7 @@
 
 RTRendererAPI 适合嵌入 Java 21 或更高版本的桌面或引擎进程。普通调用方只需要理解场景 revision、帧 sequence 和资源生命周期；Vulkan external memory、semaphore、queue-family ownership 等细节被隔离在显式专家扩展中。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:0.5.2`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:0.6.0`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。
 
 ## 最小调用
 
@@ -40,6 +40,48 @@ try (RayTracingRenderer renderer = RendererBootstrap.open()) {
 ## 发布一个最小场景
 
 公共模型使用语义工厂与 Builder，避免长有序构造器。调用方提供的数组会在安全工厂中复制；高吞吐路径可以显式使用只读 direct buffer 工厂。
+
+## Exact clip-space projection
+
+Hosts that already own the final projection must use the explicit exact path. It is not inferred
+from a matrix and it never silently falls back to the basis/FOV path. Matrices are validated,
+copied, inverted once, and stored canonically as row-major values. The renderer currently accepts
+the Vulkan forward depth attachment convention (`ZERO_TO_ONE`); other conventions remain
+representable in the API but fail closed at the Vulkan provider boundary.
+
+```java
+double[] cameraToWorld = {
+        1, 0, 0, 3,
+        0, 1, 0, 4,
+        0, 0, 1, 5,
+        0, 0, 0, 1
+};
+double[] clipFromView = {
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, -100.0 / 99.0, -100.0 / 99.0,
+        0, 0, -1, 0
+};
+ExactProjectionState projection = ExactProjectionState.builder(1920, 1080)
+        .matrixLayout(ExactProjectionState.MatrixLayout.ROW_MAJOR)
+        .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+        .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+        .jitter(ExactProjectionState.JitterConvention.PIXEL_CENTER_OFFSET, 0.25, -0.25)
+        .cameraToWorld(cameraToWorld)
+        .clipFromView(clipFromView)
+        .build();
+CameraState camera = CameraState.exactProjection(projection);
+```
+
+`CameraState.lookAt(...)` and `explicitBasis(...)` remain the compatible fast path. The exact
+path consumes the inverse clip matrix and camera-to-world rotation in GPU raygen; it is therefore
+safe for rotated, non-uniform, non-16:9 projections. A malformed, singular, non-finite, layout-
+unspecified, or viewport-mismatched mapping is rejected before submission.
+
+The existing `MeshAsset.vertexColorsRgba8()` field is raw authored RGBA8 data normalized by the
+renderer as numeric channels. It is not implicitly decoded as sRGB. Hosts that need authored sRGB
+tints require a separate future semantic field; changing this field would be a color-management
+regression.
 
 ```java
 TextureAsset texture = TextureAsset.color(1L, 1, 1,
@@ -284,7 +326,7 @@ Reflex/PCL 通过 `LowLatencyOptions` 独立于 FG/MFG 协商，因此原生展�
 
 ### 各能力的最短配置
 
-以下片段都只需要 `top.ceroxe.rt:renderer-api:0.5.2`。把对应 options 传给
+以下片段都只需要 `top.ceroxe.rt:renderer-api:0.6.0`。把对应 options 传给
 `RayTracingRendererConfig.builder()` 即可；没有任何片段要求额外模块或手工 DLL。
 
 ```java
