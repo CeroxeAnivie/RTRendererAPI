@@ -47,7 +47,7 @@ public final class VulkanFeatureRequirementsSelfTest {
     }
 
     private static RayTracingRendererConfig configuration(RendererFeaturePreference preference) {
-        return RayTracingRendererConfig.builder()
+        return RayTracingRendererConfig.expertBuilder()
                 .frameReconstruction(FrameReconstructionOptions.disabled())
                 .frameGeneration(FrameGenerationOptions.disabled())
                 .denoising(DenoisingOptions.disabled())

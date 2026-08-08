@@ -47,7 +47,7 @@ public final class RayTracingOptimizationOptions {
      *
      * @return preferred adaptive optimization policy
      */
-    public static RayTracingOptimizationOptions productionDefault() {
+    public static RayTracingOptimizationOptions recommended() {
         return PRODUCTION_DEFAULT;
     }
 

@@ -60,7 +60,7 @@ public final class FrameReconstructionOptions {
      *
      * @return preferred adaptive reconstruction policy
      */
-    public static FrameReconstructionOptions productionDefault() {
+    public static FrameReconstructionOptions recommended() {
         return PRODUCTION_DEFAULT;
     }
 

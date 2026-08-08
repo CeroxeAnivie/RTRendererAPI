@@ -6,6 +6,7 @@ import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
+import top.ceroxe.rt.renderer.api.RendererPreset;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Status;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Technology;
@@ -46,7 +47,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
 
     private static void productionDefaultsDoNotRequestPresentationOwnership() {
         Map<Technology, RenderingFeatureCapabilities.Entry> technologies = requirements(
-                RayTracingRendererConfig.defaults(),
+                RendererPreset.CPU_READBACK.configuration(),
                 new NvidiaNativeBridge.Probe(true, ALL_NATIVE_CAPABILITIES, "native SDKs loaded"),
                 readyPreflight(
                         NvidiaStreamlineRuntime.Feature.DLSS,
@@ -116,8 +117,8 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
     }
 
     private static void nativeLoadAndCapabilityFailuresRemainDistinct() {
-        RayTracingRendererConfig requested = RayTracingRendererConfig.defaults().toBuilder()
-                .denoising(DenoisingOptions.productionDefault())
+        RayTracingRendererConfig requested = RendererPreset.CPU_READBACK.configuration().copyBuilder()
+                .denoising(DenoisingOptions.recommended())
                 .rayTracingOptimizations(RayTracingOptimizationOptions.builder()
                         .memoryOptimization(RendererFeaturePreference.PREFERRED)
                         .build())
@@ -218,7 +219,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
                 .multiplier(FrameGenerationOptions.Multiplier.TWO_X)
                 .fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES)
                 .build();
-        RayTracingRendererConfig configuration = RayTracingRendererConfig.defaults().toBuilder()
+        RayTracingRendererConfig configuration = RendererPreset.CPU_READBACK.configuration().copyBuilder()
                 .frameGeneration(twoTimes)
                 .build();
         RenderingFeatureCapabilities.Builder target = RenderingFeatureCapabilities.builder();
@@ -240,7 +241,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
 
     private static void runtimeExecutionEvidenceActivatesOnlyTheExecutedTechnology() {
         NvidiaRuntimeCapabilities.Denoising denoising = new NvidiaRuntimeCapabilities.Denoising(
-                DenoisingOptions.productionDefault(),
+                DenoisingOptions.recommended(),
                 true,
                 false,
                 null,
@@ -252,7 +253,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
         );
         NvidiaRuntimeCapabilities.Reconstruction reconstruction =
                 new NvidiaRuntimeCapabilities.Reconstruction(
-                        FrameReconstructionOptions.productionDefault(),
+                        FrameReconstructionOptions.recommended(),
                         NvidiaStreamlineRuntime.Feature.NIS,
                         true,
                         false,
@@ -377,7 +378,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
     }
 
     private static RenderingFeatureCapabilities runtimeBaseline() {
-        return runtimeBaseline(FrameGenerationOptions.productionDefault());
+        return runtimeBaseline(FrameGenerationOptions.recommended());
     }
 
     private static RenderingFeatureCapabilities runtimeBaseline(FrameGenerationOptions generation) {
@@ -405,7 +406,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
 
     private static NvidiaRuntimeCapabilities.Denoising inactiveDenoising() {
         return new NvidiaRuntimeCapabilities.Denoising(
-                DenoisingOptions.productionDefault(),
+                DenoisingOptions.recommended(),
                 false,
                 false,
                 null,
@@ -419,20 +420,20 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
 
     private static NvidiaRuntimeCapabilities.Reconstruction inactiveReconstruction() {
         return new NvidiaRuntimeCapabilities.Reconstruction(
-                FrameReconstructionOptions.productionDefault(), null, false, false, null
+                FrameReconstructionOptions.recommended(), null, false, false, null
         );
     }
 
     private static NvidiaRuntimeCapabilities.FrameGeneration inactiveGeneration() {
         return new NvidiaRuntimeCapabilities.FrameGeneration(
-                FrameGenerationOptions.productionDefault(), false, false, false, null, emptyStats()
+                FrameGenerationOptions.recommended(), false, false, false, null, emptyStats()
         );
     }
 
     private static NvidiaRuntimeCapabilities.FrameGeneration activeGeneration(
             NvidiaStreamlineFrameGenerationRuntime.Stats stats
     ) {
-        return activeGeneration(FrameGenerationOptions.productionDefault(), stats);
+        return activeGeneration(FrameGenerationOptions.recommended(), stats);
     }
 
     private static NvidiaRuntimeCapabilities.FrameGeneration activeGeneration(
@@ -472,8 +473,8 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
     }
 
     private static RayTracingRendererConfig generatedMultiFramePresentationConfiguration() {
-        return RayTracingRendererConfig.defaults().toBuilder()
-                .frameReconstruction(FrameReconstructionOptions.productionDefault())
+        return RendererPreset.CPU_READBACK.configuration().copyBuilder()
+                .frameReconstruction(FrameReconstructionOptions.recommended())
                 .frameGeneration(multiFrameGenerationOptions())
                 .build();
     }

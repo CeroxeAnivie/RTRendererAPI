@@ -37,7 +37,7 @@ public final class LowLatencyOptions {
      *
      * @return preferred immutable production policy
      */
-    public static LowLatencyOptions productionDefault() {
+    public static LowLatencyOptions recommended() {
         return PRODUCTION_DEFAULT;
     }
 

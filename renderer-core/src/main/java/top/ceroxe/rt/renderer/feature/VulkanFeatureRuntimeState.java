@@ -56,6 +56,16 @@ public final class VulkanFeatureRuntimeState {
      */
     public synchronized boolean active() { return snapshot.status() == Status.ACTIVE; }
 
+    /**
+     * Publishes a reserved but not-yet-executed implementation after an explicit re-enable.
+     *
+     * @param implementation reserved implementation identity
+     * @param reason transition explanation
+     */
+    public synchronized void available(String implementation, String reason) {
+        transition(Status.AVAILABLE, implementation, reason);
+    }
+
     /** Publishes successful runtime activation.
      * @param implementation implementation that executed
      * @param reason evidence for activation

@@ -15,8 +15,11 @@
 
 > **简介**
 >
-> RTRendererAPI 是面向 Java 桌面应用与引擎进程的 Windows NVIDIA Vulkan RT 渲染库。应用只需依赖
-> `renderer-api`，即可获得后端发现、场景提交、异步 CPU 帧、官方 GPU presenter 与显式 Vulkan 专家互操作。Windows Vulkan 后端、LWJGL、对应 Windows natives 与 NVIDIA provider 均通过 Maven 传递依赖解析，无需手工部署 DLL。
+> RTRendererAPI 为 Java 桌面应用与引擎进程提供厂商中立、宿主无关的光线追踪契约。公共 `renderer-api`
+> 不包含游戏、引擎或 NVIDIA 专用场景字段；当前随 1.0.0 发布的实现范围是 Windows NVIDIA Vulkan RT。
+> 应用只需依赖 `renderer-api`，即可获得后端发现、场景提交、异步 CPU 帧、官方 GPU presenter 与显式
+> Vulkan 专家互操作。Windows Vulkan 后端、LWJGL、对应 Windows natives 与 NVIDIA provider 均通过
+> Maven 传递依赖解析，无需手工部署 DLL。
 >
 > **推荐场景**：Java 桌面渲染器、离屏光追、实时 RTX 预览、已有 Vulkan 管线的 GPU 帧集成。
 
@@ -29,6 +32,8 @@
 - 🖼️ **两类托管输出**：支持异步 display-ready RGBA8 `CpuFrame` 与无 CPU 回读的官方 GPU presenter。
 - 🔗 **专家级 Vulkan 互操作**：支持 Win32 external memory lease，并可选 linear HDR RGBA16F。
 - 🧠 **显式 RTX 能力协商**：可独立请求 DLSS SR、DLAA、NIS、NRD、FG/MFG、Reflex/PCL、SER 与 RTXMU。
+- 🔎 **分层能力事实**：物理硬件、格式/handle 互操作、session 协商和真实执行状态互不混淆。
+- 🔁 **事务式功能变更**：专家 controller 先给出精确同步或 rebuild 边界，只有 `APPLIED` 才表示提交成功。
 - 🛡️ **可验证的降级策略**：能力拒绝、运行失败、等待证据和实际 fallback 使用不同状态表达。
 - 📊 **结构化诊断**：性能、资源义务与帧生成证据均通过不可变快照发布，不依赖日志文本解析。
 - 📦 **方便接入**：业务应用只需导入坐标，无需手工部署 DLL。
@@ -37,15 +42,15 @@
 
 | 项目 | 当前要求 |
 | --- | --- |
-| 操作系统 | 兼容目标为 Windows 10 x64 或更高版本；`0.5.1` 实机验收仅证明 Windows 11 x64 |
+| 操作系统 | 兼容目标为 Windows 10 x64 或更高版本 |
 | Java | Java 21 或更高版本 |
-| GPU | 兼容目标为 NVIDIA GeForce RTX 20 系或更新架构；`0.5.1` 实机验收仅证明 RTX 5080 Laptop |
+| GPU | 兼容目标为 NVIDIA GeForce RTX 20 系或更新架构，并通过运行时能力探测 |
 | 图形 API | Vulkan 1.2 或更高版本，并通过运行时 hardware RT capability probe |
 | 简单输出 | 异步托管 display-ready RGBA8 `CpuFrame` |
 | GPU 显示 | 官方 Vulkan swapchain presenter，无 CPU 图像回读 |
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
-> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `0.5.1` 发布范围。兼容目标不是生产稳定性声明；支持表没有明确列为实机验收证据的系统、GPU 与驱动组合必须由消费方自行验收。
+> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `1.0.0` 发布范围。兼容目标不是实机验收结论；本文不把尚未运行的 1.0.0 GPU smoke、Minecraft 或跨硬件验证声明为已通过。
 
 ---
 
@@ -59,7 +64,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>0.6.0</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -67,9 +72,12 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:0.6.0")
+    implementation("top.ceroxe.rt:renderer-api:1.0.0")
 }
 ```
+
+Maven Central 是发布制品的唯一事实源。GitHub 仅保存源码与对应的 `vMAJOR.MINOR.PATCH` provenance tag，
+不维护另一套 Release 二进制资产。
 
 ### ☕ 渲染第一帧
 
@@ -83,11 +91,12 @@ import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
+import top.ceroxe.rt.renderer.api.RendererPreset;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
 
 public final class Main {
     public static void main(String[] args) throws Exception {
-        try (RayTracingRenderer renderer = RendererBootstrap.open()) {
+        try (RayTracingRenderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
             long sceneRevision = renderer.apply(SceneTransaction.empty(0L))
                     .acceptedSceneRevision();
 
@@ -117,9 +126,7 @@ public final class Main {
 只有真正的外部 consumer 才进入 Win32 external-memory 协议。
 
 ```java
-RayTracingRendererConfig config = RayTracingRendererConfig.gpuPresentationDefaults();
-
-try (RayTracingRenderer renderer = RendererBootstrap.open(config);
+try (RayTracingRenderer renderer = RendererBootstrap.open(RendererPreset.MANAGED_GPU_PRESENTATION);
      VulkanFramePresenter presenter = VulkanFramePresenter.open(
              renderer,
              VulkanFramePresenterConfig.builder()
@@ -142,11 +149,12 @@ try (RayTracingRenderer renderer = RendererBootstrap.open(config);
 
 ## ⚙️ RTX 能力与运行状态
 
-`RendererBootstrap.open()` 与 `RayTracingRendererConfig.defaults()` 使用简单模式：默认仅启用 renderer 内建的
-balanced temporal path。DLSS/DLAA/NIS、NRD、FG/MFG、Reflex/PCL、SER 与 RTXMU 均保持禁用，必须由应用显式
-opt-in；安装了 vendor runtime 或匹配到某个 GPU 型号不会静默改变画质、资源预算或 presentation ownership。
+`RendererBootstrap.open(RendererPreset.CPU_READBACK)` 是 CPU-readable 简单模式：它保留 balanced temporal path，
+并以 `PREFERRED` 策略协商重建、降噪、SER 与 acceleration-structure memory optimization；能力不可用时按各自明确
+fallback 保留基础渲染。`RendererPreset.MANAGED_GPU_PRESENTATION` 在同一策略上关闭 CPU readback，并在受支持时
+请求普通 FG 2x 与低延迟 pacing。MFG 永不自动开启。安装 vendor runtime 或匹配 GPU 名称本身不能产生 `ACTIVE`。
 
-专家模式仍使用同一个 `RayTracingRendererConfig.builder()`。Option value 是能力协商的唯一输入：
+专家模式仍使用同一个 `RayTracingRendererConfig.expertBuilder()`。Option value 是能力协商的唯一输入：
 
 - `disabled()`：明确禁用该能力。
 - `PREFERRED`：能力不可用时按显式 fallback 降级，否则保留基础路径并报告 `NOT_SUPPORTED`。
@@ -192,6 +200,14 @@ if (generation.reported()) {
 
 `generatedFramesActuallyPresented` 是 provider/SDK 的累计呈现证据，不是显示器 scanout 测量。
 Capability 与 diagnostics 都是不可变时间点快照；长期监控必须重新查询。
+
+`RayTracingGpuDevice.hardwareCapabilities()` 只描述完整物理设备 probe 得到的厂商中立事实，
+包括 RT prerequisites、limits、memory budget、timestamp，以及按 output format 和 native handle
+区分的 external memory/semaphore 证据。它不表示某项 DLSS、NRD 或 FG 技术已请求或已运行。
+
+需要运行期改变高级功能时，专家调用方通过 `RendererFeatureController` 先 `plan(target)`，再根据
+`RendererFeaturePlan.disposition()` 和 `boundary()` 决定是否调用 `apply(plan)`。swapchain、pipeline、
+scene 或 renderer rebuild 永远由结果显式返回，不会被库静默执行；只有 `APPLIED` 证明 profile 已提交。
 
 ---
 
@@ -241,7 +257,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-0.6.0.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-1.0.0.jar `
   --width=2560 --height=1440 --spp=2
 ```
 
@@ -296,7 +312,7 @@ A：不一定。它是非阻塞轮询，空值通常表示当前没有可呈现�
 
 **Q：AMD、Intel 或 Linux 能运行吗？**
 
-A：不能把它们视为 `0.5.1` 的受支持目标。当前发布范围只包含 Windows x64 与通过 capability gate 的 NVIDIA RTX GPU。
+A：不能把它们视为 `1.0.0` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
 
 ---
 

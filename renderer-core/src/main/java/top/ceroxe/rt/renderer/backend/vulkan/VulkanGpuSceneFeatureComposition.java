@@ -30,6 +30,7 @@ final class VulkanGpuSceneFeatureComposition implements AutoCloseable {
     private boolean reconstructionActive;
     private boolean frameGenerationActive;
     private boolean temporalReconstructionActive;
+    private final Selection reservedSelection;
     private final VulkanDenoisingDescriptorPlaceholders placeholders;
     private final VulkanNrdComposePipeline nrdComposePipeline;
     private final VulkanFramePublicationPipeline publicationPipeline;
@@ -98,6 +99,7 @@ final class VulkanGpuSceneFeatureComposition implements AutoCloseable {
         reconstructionActive = selection.reconstruction();
         frameGenerationActive = selection.frameGeneration();
         temporalReconstructionActive = selection.temporalReconstruction();
+        reservedSelection = selection;
         this.placeholders = Objects.requireNonNull(placeholders, "placeholders");
         this.nrdComposePipeline = nrdComposePipeline;
         this.publicationPipeline = publicationPipeline;
@@ -148,6 +150,14 @@ final class VulkanGpuSceneFeatureComposition implements AutoCloseable {
         reconstructionActive = retained.reconstruction();
         frameGenerationActive = retained.frameGeneration();
         temporalReconstructionActive = retained.temporalReconstruction();
+    }
+
+    void applyReconfiguration(RenderingFeatureCapabilities capabilities) {
+        Selection selected = reservedSelection.retain(select(capabilities));
+        denoisingActive = selected.denoising();
+        reconstructionActive = selected.reconstruction();
+        frameGenerationActive = selected.frameGeneration();
+        temporalReconstructionActive = selected.temporalReconstruction();
     }
 
     private Selection selection() {

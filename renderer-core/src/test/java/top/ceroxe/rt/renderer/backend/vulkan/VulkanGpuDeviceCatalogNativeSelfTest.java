@@ -5,7 +5,8 @@ import java.util.List;
 import top.ceroxe.rt.renderer.api.RayTracingGpuDevice;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
-import top.ceroxe.rt.renderer.api.RayTracingGpuDevice.Capability;
+import top.ceroxe.rt.renderer.api.RendererPreset;
+import top.ceroxe.rt.renderer.api.HardwareCapabilities;
 import top.ceroxe.rt.renderer.spi.RayTracingBackendProvider.Compatibility;
 
 public final class VulkanGpuDeviceCatalogNativeSelfTest {
@@ -25,7 +26,7 @@ public final class VulkanGpuDeviceCatalogNativeSelfTest {
                throw new AssertionError("duplicate public GPU identity: " + device.stableId());
             }
 
-            if (!device.capabilities().contains(Capability.HARDWARE_RAY_TRACING)) {
+            if (!device.hardwareCapabilities().supports(HardwareCapabilities.Feature.HARDWARE_RAY_TRACING)) {
                throw new AssertionError("catalog exposed a non-RT device: " + String.valueOf(device));
             }
 
@@ -33,7 +34,7 @@ public final class VulkanGpuDeviceCatalogNativeSelfTest {
                throw new AssertionError("Vulkan device identity is not a 128-bit UUID: " + device.stableId());
             }
 
-            RayTracingRendererConfig selected = RayTracingRendererConfig.defaults().toBuilder().gpuDevice(device).build();
+            RayTracingRendererConfig selected = RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(device).build();
             if ((new VulkanRayTracingBackendProvider()).probe(selected).compatibility() != Compatibility.COMPATIBLE) {
                throw new AssertionError("fresh catalog device could not be selected: " + String.valueOf(device));
             }

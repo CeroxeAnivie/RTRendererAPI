@@ -49,13 +49,7 @@ public interface RayTracingRenderer extends AutoCloseable {
      * @param request immutable render request whose sequence must advance when accepted
      * @return exhaustive submitted-or-deferred result
      */
-    default FrameSubmissionAttempt trySubmit(RenderFrameRequest request) {
-        try {
-            return new FrameSubmitted(submit(request));
-        } catch (SubmissionRejectedException rejection) {
-            return FrameSubmissionDeferred.because(rejection.deferralReason(), rejection.detail());
-        }
-    }
+    FrameSubmissionAttempt trySubmit(RenderFrameRequest request);
 
     /**
      * Copies the newest completed frame into an immutable CPU-readable value when one is available.
@@ -195,12 +189,7 @@ public interface RayTracingRenderer extends AutoCloseable {
      * @param <T>           extension interface type
      * @return supported extension instance, or empty when unavailable
      */
-    default <T> java.util.Optional<T> extension(Class<T> extensionType) {
-        java.util.Objects.requireNonNull(extensionType, "extensionType");
-        return extensionType.isInstance(this)
-                ? java.util.Optional.of(extensionType.cast(this))
-                : java.util.Optional.empty();
-    }
+    <T> java.util.Optional<T> extension(Class<T> extensionType);
 
     /**
      * Returns typed immutable diagnostics without waiting for GPU completion.
@@ -219,20 +208,11 @@ public interface RayTracingRenderer extends AutoCloseable {
     /**
      * Requests closure and completes only after all renderer-owned native resources are released.
      *
-     * <p>The default preserves binary compatibility for providers whose {@link #close()} is fully
-     * synchronous. Providers that permit deferred cleanup must override this method and complete
-     * the returned stage only after outstanding external ownership has retired.</p>
+     * <p>The returned stage completes only after outstanding external ownership has retired.</p>
      *
      * @return non-null close-completion stage
      */
-    default java.util.concurrent.CompletionStage<Void> closeAsync() {
-        try {
-            close();
-            return java.util.concurrent.CompletableFuture.completedFuture(null);
-        } catch (Throwable failure) {
-            return java.util.concurrent.CompletableFuture.failedFuture(failure);
-        }
-    }
+    java.util.concurrent.CompletionStage<Void> closeAsync();
 
     /**
      * Requests closure and waits for native resource release for at most {@code timeout}.
@@ -418,45 +398,18 @@ public interface RayTracingRenderer extends AutoCloseable {
     /**
      * Recoverable capacity refusal that retained no logical or native submission state.
      *
-     * @param reason non-blank diagnostic reason suitable for telemetry
+     * @param deferralReason typed capacity or lifecycle reason
+     * @param detail non-blank diagnostic detail suitable for telemetry
      */
-    record FrameSubmissionDeferred(String reason) implements FrameSubmissionAttempt {
+    record FrameSubmissionDeferred(
+            SubmissionDeferralReason deferralReason,
+            String detail
+    ) implements FrameSubmissionAttempt {
         /** Validates the deferred attempt. */
         public FrameSubmissionDeferred {
-            reason = java.util.Objects.requireNonNull(reason, "reason");
-            if (reason.isBlank()) throw new IllegalArgumentException("reason must not be blank");
-        }
-
-        /**
-         * Creates a refusal with a stable category and human-readable diagnostic detail.
-         *
-         * @param deferralReason stable capacity classification
-         * @param detail         non-blank provider diagnostic detail
-         * @return immutable deferred attempt preserving the original one-string binary shape
-         */
-        public static FrameSubmissionDeferred because(
-                SubmissionDeferralReason deferralReason,
-                String detail
-        ) {
-            return new FrameSubmissionDeferred(SubmissionDeferralReason.encode(deferralReason, detail));
-        }
-
-        /**
-         * Returns a stable category without requiring callers to parse {@link #reason()}.
-         *
-         * @return typed category, or {@link SubmissionDeferralReason#UNSPECIFIED} for legacy values
-         */
-        public SubmissionDeferralReason deferralReason() {
-            return SubmissionDeferralReason.decode(reason);
-        }
-
-        /**
-         * Returns provider diagnostic detail without the internal stable-category marker.
-         *
-         * @return non-blank diagnostic detail
-         */
-        public String detail() {
-            return SubmissionDeferralReason.detail(reason);
+            deferralReason = java.util.Objects.requireNonNull(deferralReason, "deferralReason");
+            detail = java.util.Objects.requireNonNull(detail, "detail");
+            if (detail.isBlank()) throw new IllegalArgumentException("detail must not be blank");
         }
     }
 

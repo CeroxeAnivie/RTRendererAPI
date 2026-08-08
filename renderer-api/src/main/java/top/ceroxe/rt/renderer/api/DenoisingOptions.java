@@ -47,7 +47,7 @@ public final class DenoisingOptions {
      *
      * @return preferred denoising policy with a deterministic built-in fallback
      */
-    public static DenoisingOptions productionDefault() {
+    public static DenoisingOptions recommended() {
         return PRODUCTION_DEFAULT;
     }
 

@@ -7,24 +7,10 @@ public final class SubmissionRejectedException extends RendererException {
     @java.io.Serial
     private static final long serialVersionUID = 1L;
 
-    /**
-     * Creates a recoverable admission refusal without a cause.
-     *
-     * @param message human-readable rejection reason
-     */
-    public SubmissionRejectedException(String message) {
-        super(message);
-    }
-
-    /**
-     * Creates a recoverable admission refusal with its originating cause.
-     *
-     * @param message human-readable rejection reason
-     * @param cause   originating capacity or admission failure
-     */
-    public SubmissionRejectedException(String message, Throwable cause) {
-        super(message, cause);
-    }
+    /** Stable typed refusal category. */
+    private final SubmissionDeferralReason reason;
+    /** Bounded provider detail retained for diagnostics. */
+    private final String detail;
 
     /**
      * Creates a typed recoverable admission refusal without a cause.
@@ -33,7 +19,7 @@ public final class SubmissionRejectedException extends RendererException {
      * @param detail non-blank provider diagnostic detail
      */
     public SubmissionRejectedException(SubmissionDeferralReason reason, String detail) {
-        super(SubmissionDeferralReason.encode(reason, detail));
+        this(reason, detail, null);
     }
 
     /**
@@ -48,16 +34,18 @@ public final class SubmissionRejectedException extends RendererException {
             String detail,
             Throwable cause
     ) {
-        super(SubmissionDeferralReason.encode(reason, detail), cause);
+        super(requireDetail(detail), cause);
+        this.reason = java.util.Objects.requireNonNull(reason, "reason");
+        this.detail = detail;
     }
 
     /**
      * Returns the stable refusal category without requiring diagnostic-text parsing by callers.
      *
-     * @return typed category, or {@link SubmissionDeferralReason#UNSPECIFIED} for legacy providers
+     * @return typed category
      */
     public SubmissionDeferralReason deferralReason() {
-        return SubmissionDeferralReason.decode(getMessage());
+        return reason;
     }
 
     /**
@@ -66,6 +54,12 @@ public final class SubmissionRejectedException extends RendererException {
      * @return non-blank diagnostic detail
      */
     public String detail() {
-        return SubmissionDeferralReason.detail(getMessage());
+        return detail;
+    }
+
+    private static String requireDetail(String detail) {
+        String checked = java.util.Objects.requireNonNull(detail, "detail");
+        if (checked.isBlank()) throw new IllegalArgumentException("detail must not be blank");
+        return checked;
     }
 }

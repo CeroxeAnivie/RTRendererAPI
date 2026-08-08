@@ -9,6 +9,7 @@ import top.ceroxe.rt.renderer.api.AntiAliasingState;
 import top.ceroxe.rt.renderer.api.CameraState;
 import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.FrameOutputFormat;
+import top.ceroxe.rt.renderer.api.HardwareCapabilities;
 import top.ceroxe.rt.renderer.api.HistoryResetReason;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
@@ -16,7 +17,12 @@ import top.ceroxe.rt.renderer.api.RayTracingGpuDevice;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
+import top.ceroxe.rt.renderer.api.RendererFeatureApplyResult;
+import top.ceroxe.rt.renderer.api.RendererFeatureController;
+import top.ceroxe.rt.renderer.api.RendererFeaturePlan;
+import top.ceroxe.rt.renderer.api.RendererFeatureProfile;
 import top.ceroxe.rt.renderer.api.RendererHealth;
+import top.ceroxe.rt.renderer.api.RendererPreset;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.SceneInstance;
 import top.ceroxe.rt.renderer.api.SceneLight;
@@ -46,25 +52,31 @@ public final class PublishedRendererConsumer {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Unknown RT GPU: " + backendId + "/" + stableId
                 ));
-        return RayTracingRendererConfig.defaults().toBuilder().gpuDevice(selected).build();
+        return RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(selected).build();
     }
 
     public static RayTracingRendererConfig selectHighestMemoryDiscreteDevice() {
         RayTracingGpuDevice selected = enumerateRayTracingDevices().stream()
                 .filter(device -> device.type() == RayTracingGpuDevice.Type.DISCRETE)
-                .max(Comparator.comparingLong(RayTracingGpuDevice::deviceLocalMemoryBytes))
+                .max(Comparator.comparingLong(
+                        device -> device.hardwareCapabilities().deviceLocalMemoryBytes()
+                ))
                 .orElseThrow(() -> new IllegalStateException("No discrete hardware RT GPU available"));
-        return RayTracingRendererConfig.defaults().toBuilder().gpuDevice(selected).build();
+        return RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(selected).build();
+    }
+
+    public static HardwareCapabilities hardwareCapabilities(RayTracingGpuDevice device) {
+        return Objects.requireNonNull(device, "device").hardwareCapabilities();
     }
 
     public static RayTracingRendererConfig selectLinearHdrOutput(RayTracingRendererConfig configuration) {
-        return Objects.requireNonNull(configuration, "configuration").toBuilder()
+        return Objects.requireNonNull(configuration, "configuration").copyBuilder()
                 .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F)
                 .build();
     }
 
     public static RayTracingRenderer open(String backendId, String stableId) {
-        return RendererBootstrap.open(selectDevice(backendId, stableId));
+        return RendererBootstrap.openExpert(selectDevice(backendId, stableId));
     }
 
     /**
@@ -129,6 +141,33 @@ public final class PublishedRendererConsumer {
         return Objects.requireNonNull(renderer, "renderer").health();
     }
 
+    public static RendererFeaturePlan planFeatures(
+            RayTracingRenderer renderer,
+            RendererFeatureProfile target
+    ) {
+        RendererFeatureController controller = Objects.requireNonNull(renderer, "renderer")
+                .extension(RendererFeatureController.class)
+                .orElseThrow(() -> new IllegalStateException("runtime feature control unavailable"));
+        return controller.plan(Objects.requireNonNull(target, "target"));
+    }
+
+    public static RendererFeatureApplyResult applyInSessionPlan(
+            RayTracingRenderer renderer,
+            RendererFeaturePlan plan
+    ) {
+        Objects.requireNonNull(plan, "plan");
+        if (plan.disposition() != RendererFeaturePlan.Disposition.APPLICABLE
+                && plan.disposition() != RendererFeaturePlan.Disposition.UNCHANGED) {
+            throw new IllegalArgumentException(
+                    "plan requires an application-owned rebuild: " + plan.boundary()
+            );
+        }
+        RendererFeatureController controller = Objects.requireNonNull(renderer, "renderer")
+                .extension(RendererFeatureController.class)
+                .orElseThrow(() -> new IllegalStateException("runtime feature control unavailable"));
+        return controller.apply(plan);
+    }
+
     public static RenderFrameRequest withDeterministicAntiAliasing(
             RenderFrameRequest request,
             int samplesPerPixel
@@ -139,7 +178,7 @@ public final class PublishedRendererConsumer {
     }
 
     public static RayTracingRendererConfig accumulatingTemporalHistory(int maxHistoryFrames) {
-        return RayTracingRendererConfig.builder()
+        return RayTracingRendererConfig.expertBuilder()
                 .temporalRendering(TemporalRenderingOptions.accumulating(maxHistoryFrames))
                 .build();
     }

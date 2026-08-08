@@ -2,12 +2,12 @@
 
 ## Supported versions
 
-RTRendererAPI is a `0.x` technology preview. Security fixes are provided for the latest patch of the current minor line only. Older Maven Central artifacts remain immutable and should be upgraded before reporting a defect.
+RTRendererAPI 1.x is the stable API line. Security fixes are provided for the latest patch of the current major line. Older Maven Central artifacts remain immutable and should be upgraded before reporting a defect.
 
 | Version | Security fixes |
 | --- | --- |
-| `0.5.x` | Supported when running the latest patch |
-| `< 0.5` | Not supported |
+| `1.x` | Supported when running the latest patch |
+| `< 1.0` | Not supported |
 
 ## Reporting a vulnerability
 

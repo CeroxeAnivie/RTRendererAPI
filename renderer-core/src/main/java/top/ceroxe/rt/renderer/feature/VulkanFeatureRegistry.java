@@ -7,6 +7,7 @@ import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
+import top.ceroxe.rt.renderer.api.RendererFeatureProfile;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.FrameGenerationEvidence;
 import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
@@ -512,6 +513,94 @@ public final class VulkanFeatureRegistry {
                 }
             }
             return resolved.build();
+        }
+
+        @Override
+        public ReconfigurationAssessment assessReconfiguration(
+                RendererFeatureProfile source,
+                RendererFeatureProfile target
+        ) {
+            if (closed) throw new IllegalStateException("Vulkan feature session is closed");
+            RendererFeatureProfile checkedSource = Objects.requireNonNull(source, "source");
+            RendererFeatureProfile checkedTarget = Objects.requireNonNull(target, "target");
+            Set<Feature> changed = changedFeatures(checkedSource, checkedTarget);
+            if (changed.isEmpty()) {
+                return ReconfigurationAssessment.frameDrain("provider-owned profile is unchanged");
+            }
+            List<OwnedSession> affected = sessions.stream()
+                    .filter(session -> !java.util.Collections.disjoint(session.features(), changed))
+                    .toList();
+            Set<Feature> covered = EnumSet.noneOf(Feature.class);
+            affected.forEach(session -> covered.addAll(session.features()));
+            if (!covered.containsAll(changed)) {
+                return ReconfigurationAssessment.rendererRebuild(
+                        "target enables or changes a feature with no reserved provider session: "
+                                + difference(changed, covered)
+                );
+            }
+            if (affected.size() != 1) {
+                return ReconfigurationAssessment.rendererRebuild(
+                        "atomic runtime transition spans multiple provider sessions"
+                );
+            }
+            return affected.get(0).session().assessReconfiguration(
+                    checkedSource, checkedTarget
+            );
+        }
+
+        @Override
+        public void applyReconfiguration(
+                RendererFeatureProfile source,
+                RendererFeatureProfile target
+        ) {
+            if (closed) throw new IllegalStateException("Vulkan feature session is closed");
+            Set<Feature> changed = changedFeatures(
+                    Objects.requireNonNull(source, "source"),
+                    Objects.requireNonNull(target, "target")
+            );
+            List<OwnedSession> affected = sessions.stream()
+                    .filter(session -> !java.util.Collections.disjoint(session.features(), changed))
+                    .toList();
+            if (affected.size() != 1) {
+                throw new IllegalStateException(
+                        "feature transition no longer has one atomic provider owner"
+                );
+            }
+            affected.get(0).session().applyReconfiguration(source, target);
+        }
+
+        private static Set<Feature> changedFeatures(
+                RendererFeatureProfile source,
+                RendererFeatureProfile target
+        ) {
+            EnumSet<Feature> changed = EnumSet.noneOf(Feature.class);
+            if (!source.frameReconstruction().equals(target.frameReconstruction())) {
+                changed.add(Feature.FRAME_RECONSTRUCTION);
+            }
+            if (!source.frameGeneration().equals(target.frameGeneration())) {
+                changed.add(Feature.FRAME_GENERATION);
+            }
+            if (!source.lowLatency().equals(target.lowLatency())) {
+                changed.add(Feature.LOW_LATENCY);
+            }
+            if (!source.denoising().equals(target.denoising())) {
+                changed.add(Feature.DENOISING);
+            }
+            if (source.rayTracingOptimizations().shaderExecutionReordering()
+                    != target.rayTracingOptimizations().shaderExecutionReordering()) {
+                changed.add(Feature.SHADER_EXECUTION_REORDERING);
+            }
+            if (source.rayTracingOptimizations().memoryOptimization()
+                    != target.rayTracingOptimizations().memoryOptimization()) {
+                changed.add(Feature.MEMORY_OPTIMIZATION);
+            }
+            return changed;
+        }
+
+        private static Set<Feature> difference(Set<Feature> left, Set<Feature> right) {
+            EnumSet<Feature> result = EnumSet.copyOf(left);
+            result.removeAll(right);
+            return Set.copyOf(result);
         }
 
         @Override

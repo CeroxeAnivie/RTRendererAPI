@@ -8,6 +8,7 @@ import top.ceroxe.rt.renderer.api.LowLatencyOptions;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
+import top.ceroxe.rt.renderer.api.RendererFeatureProfile;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Entry;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
@@ -48,10 +49,14 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
     }
 
     private final RenderingFeatureCapabilities capabilities;
-    private final DenoisingOptions denoising;
-    private final FrameReconstructionOptions reconstruction;
-    private final FrameGenerationOptions frameGeneration;
-    private final LowLatencyOptions lowLatency;
+    private final DenoisingOptions reservedDenoising;
+    private final FrameReconstructionOptions reservedReconstruction;
+    private final FrameGenerationOptions reservedFrameGeneration;
+    private final LowLatencyOptions reservedLowLatency;
+    private DenoisingOptions denoising;
+    private FrameReconstructionOptions reconstruction;
+    private FrameGenerationOptions frameGeneration;
+    private LowLatencyOptions lowLatency;
     private final RayTracingOptimizationOptions optimizations;
     private final Set<NvidiaStreamlineRuntime.Feature> streamlineFeatures;
     private NvidiaStreamlineRuntime.Feature streamlineFeature;
@@ -118,6 +123,10 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
         this.reconstruction = Objects.requireNonNull(reconstruction, "reconstruction");
         this.frameGeneration = Objects.requireNonNull(frameGeneration, "frameGeneration");
         this.lowLatency = Objects.requireNonNull(lowLatency, "lowLatency");
+        this.reservedDenoising = this.denoising;
+        this.reservedReconstruction = this.reconstruction;
+        this.reservedFrameGeneration = this.frameGeneration;
+        this.reservedLowLatency = this.lowLatency;
         this.optimizations = Objects.requireNonNull(
                 context.configuration().rayTracingOptimizations(), "optimizations"
         );
@@ -181,7 +190,7 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
             case ACTIVE -> VulkanFeatureRuntimeState.Status.ACTIVE;
             case FALLBACK_PENDING -> VulkanFeatureRuntimeState.Status.RECOVERING;
             case FALLBACK -> VulkanFeatureRuntimeState.Status.FALLBACK;
-            case UNAVAILABLE, NOT_SUPPORTED, BLOCKED -> VulkanFeatureRuntimeState.Status.UNAVAILABLE;
+            case NOT_SUPPORTED, BLOCKED -> VulkanFeatureRuntimeState.Status.UNAVAILABLE;
             default -> VulkanFeatureRuntimeState.Status.AVAILABLE;
         };
         return new VulkanFeatureRuntimeState(initial,
@@ -236,7 +245,8 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
                 new NvidiaRuntimeCapabilities.LowLatency(
                         lowLatency,
                         lowLatencyBound(streamlineFeatures),
-                        executionEvidence.lowLatencyPresentCommitted(),
+                        executionEvidence.lowLatencyPresentCommitted()
+                                && lowLatencyState.active(),
                         lowLatencyFailed,
                         lowLatencyFailureReason,
                         lowLatencyState.snapshot().status()
@@ -254,6 +264,185 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
                                 )
                 )
         );
+    }
+
+    @Override
+    public synchronized VulkanFeatureSession.ReconfigurationAssessment assessReconfiguration(
+            RendererFeatureProfile source,
+            RendererFeatureProfile target
+    ) {
+        if (closed) throw new IllegalStateException("NVIDIA feature session is closed");
+        RendererFeatureProfile checkedSource = Objects.requireNonNull(source, "source");
+        RendererFeatureProfile checkedTarget = Objects.requireNonNull(target, "target");
+        if (!profile().equals(checkedSource)) {
+            return VulkanFeatureSession.ReconfigurationAssessment.rendererRebuild(
+                    "NVIDIA session source profile does not match the controller generation"
+            );
+        }
+        if (checkedTarget.rayTracingOptimizations().shaderExecutionReordering()
+                != checkedSource.rayTracingOptimizations().shaderExecutionReordering()
+                || checkedTarget.rayTracingOptimizations().memoryOptimization()
+                != checkedSource.rayTracingOptimizations().memoryOptimization()) {
+            return VulkanFeatureSession.ReconfigurationAssessment.rendererRebuild(
+                    "NVIDIA provider does not own SER or RTXMU transition boundaries"
+            );
+        }
+        if (!reservedReconstructionTarget(checkedTarget.frameReconstruction())) {
+            return VulkanFeatureSession.ReconfigurationAssessment.rendererRebuild(
+                    "reconstruction mode, quality, or fallback was not reserved for hot switching"
+            );
+        }
+        if (!reservedDenoisingTarget(checkedTarget.denoising())) {
+            return VulkanFeatureSession.ReconfigurationAssessment.rendererRebuild(
+                    "denoising strategy or fallback was not reserved for hot switching"
+            );
+        }
+        if (!reservedFrameGenerationTarget(checkedTarget.frameGeneration())) {
+            return VulkanFeatureSession.ReconfigurationAssessment.rendererRebuild(
+                    "frame-generation family or fallback was not reserved for hot switching"
+            );
+        }
+        if (!reservedLowLatencyTarget(checkedTarget.lowLatency())) {
+            return VulkanFeatureSession.ReconfigurationAssessment.rendererRebuild(
+                    "low-latency provider was not reserved for hot switching"
+            );
+        }
+        if (checkedTarget.frameReconstruction().preference().requested()) {
+            NvidiaStreamlineRuntime.Feature requested = reconstructionFeature(
+                    checkedTarget.frameReconstruction()
+            );
+            if (!streamlineFeatures.contains(requested) || reconstructionFailed) {
+                return VulkanFeatureSession.ReconfigurationAssessment.rendererRebuild(
+                        "requested reconstruction implementation was not reserved or has failed"
+                );
+            }
+        }
+        if (checkedTarget.frameGeneration().preference().requested()) {
+            if (!streamlineFeatures.contains(NvidiaStreamlineRuntime.Feature.DLSS_FRAME_GENERATION)
+                    || frameGenerationFailed || swapchainInterceptor == null
+                    || !swapchainInterceptor.proxyActive()) {
+                return VulkanFeatureSession.ReconfigurationAssessment.rendererRebuild(
+                        "frame generation requires a healthy reserved Streamline proxy swapchain"
+                );
+            }
+        }
+        if (checkedTarget.lowLatency().preference().requested()
+                && (!lowLatencyBound(streamlineFeatures) || lowLatencyFailed)) {
+            return VulkanFeatureSession.ReconfigurationAssessment.rendererRebuild(
+                    "Reflex/PCL was not reserved as a healthy provider pair"
+            );
+        }
+        if (checkedTarget.denoising().preference().requested()
+                && (!nativeSessions.nrdAvailable() || denoisingFailed)) {
+            return VulkanFeatureSession.ReconfigurationAssessment.rendererRebuild(
+                    "NRD resources were not reserved or the NRD session has failed"
+            );
+        }
+        return VulkanFeatureSession.ReconfigurationAssessment.frameDrain(
+                "reserved NVIDIA feature session can apply the target at a drained frame boundary"
+        );
+    }
+
+    @Override
+    public synchronized void applyReconfiguration(
+            RendererFeatureProfile source,
+            RendererFeatureProfile target
+    ) {
+        if (closed) throw new IllegalStateException("NVIDIA feature session is closed");
+        RendererFeatureProfile checkedSource = Objects.requireNonNull(source, "source");
+        RendererFeatureProfile checkedTarget = Objects.requireNonNull(target, "target");
+        if (!profile().equals(checkedSource)) {
+            throw new IllegalStateException("NVIDIA feature transition source is stale");
+        }
+        if (swapchainInterceptor != null) {
+            // This may call slDLSSGSetOptions(eOff) and release valid-until-present tags. The core
+            // caller has already proved that every frame slot and external lease is retired.
+            swapchainInterceptor.reconfigure(checkedTarget.frameGeneration());
+        } else if (checkedTarget.frameGeneration().preference().requested()) {
+            throw new IllegalStateException("frame-generation proxy was not reserved");
+        }
+        denoising = checkedTarget.denoising();
+        reconstruction = checkedTarget.frameReconstruction();
+        frameGeneration = checkedTarget.frameGeneration();
+        lowLatency = checkedTarget.lowLatency();
+        streamlineFeature = reconstruction.preference().requested()
+                ? reconstructionFeature(reconstruction) : null;
+        streamlineEvaluated = false;
+        pendingInputCompletion = VulkanFeatureSession.InputCompletion.none();
+        publishReconfigurationStates();
+    }
+
+    private RendererFeatureProfile profile() {
+        return new RendererFeatureProfile(
+                reconstruction, frameGeneration, lowLatency, denoising, optimizations
+        );
+    }
+
+    /**
+     * Runtime transitions may only alter preference once the resource-producing shape was
+     * reserved. Disabled is a valid target because it releases provider work without inventing
+     * resources; changing reconstruction mode/quality would require a new extent contract.
+     */
+    private boolean reservedReconstructionTarget(FrameReconstructionOptions target) {
+        if (!target.preference().requested()) return true;
+        return reservedReconstruction.preference().requested()
+                && target.mode() == reservedReconstruction.mode()
+                && target.quality() == reservedReconstruction.quality();
+    }
+
+    private boolean reservedDenoisingTarget(DenoisingOptions target) {
+        if (!target.preference().requested()) return true;
+        return reservedDenoising.preference().requested()
+                && target.strategy() == reservedDenoising.strategy();
+    }
+
+    private boolean reservedFrameGenerationTarget(FrameGenerationOptions target) {
+        if (!target.preference().requested()) return true;
+        return reservedFrameGeneration.preference().requested()
+                && target.mode() != FrameGenerationOptions.Mode.DISABLED;
+    }
+
+    private boolean reservedLowLatencyTarget(LowLatencyOptions target) {
+        return !target.preference().requested() || reservedLowLatency.preference().requested();
+    }
+
+    private static NvidiaStreamlineRuntime.Feature reconstructionFeature(
+            FrameReconstructionOptions options
+    ) {
+        return options.mode() == FrameReconstructionOptions.Mode.SPATIAL_UPSCALING
+                ? NvidiaStreamlineRuntime.Feature.NIS : NvidiaStreamlineRuntime.Feature.DLSS;
+    }
+
+    private void publishReconfigurationStates() {
+        if (denoising.preference().requested()) {
+            denoisingState.available("nvidia.nrd", "NRD reserved session re-enabled; awaiting GPU completion");
+        } else {
+            denoisingState.unavailable("denoising disabled by the effective feature profile");
+        }
+        if (reconstruction.preference().requested()) {
+            reconstructionState.available(
+                    implementation(streamlineFeature),
+                    "Streamline reconstruction reserved session re-enabled; awaiting evaluate"
+            );
+        } else {
+            reconstructionState.unavailable("frame reconstruction disabled by the effective feature profile");
+        }
+        if (frameGeneration.preference().requested()) {
+            frameGenerationState.available(
+                    "nvidia.streamline.dlss-g",
+                    "frame-generation cadence committed; awaiting tagged present"
+            );
+        } else {
+            frameGenerationState.unavailable("frame generation disabled by the effective feature profile");
+        }
+        if (lowLatency.preference().requested()) {
+            lowLatencyState.available(
+                    "nvidia.streamline.reflex-pcl",
+                    "Reflex/PCL markers reserved session re-enabled; awaiting present"
+            );
+        } else {
+            lowLatencyState.unavailable("low-latency markers disabled by the effective feature profile");
+        }
     }
 
     @Override
@@ -290,6 +479,7 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
                 .generationRequestMisses(stats.generationRequestMisses())
                 .maximumGeneratedFramesObservedPerSample(stats.maxGeneratedFramesInSample())
                 .latestNativeStatus(nativeStatus)
+                .latestQuerySucceeded(nativeStatus.isPresent())
                 .resetEpoch(stats.resetEpoch());
         if (stats.proxyPresentCalls() > 0L) {
             evidence.proxyPresentSequenceRange(
@@ -493,7 +683,7 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
     @Override
     public synchronized void beginFramePreparation(long frameSequence) {
         if (closed) throw new IllegalStateException("NVIDIA feature session is closed");
-        if (lowLatencyBound(streamlineFeatures) && !lowLatencyFailed) {
+        if (latencyExecutionRequested() && lowLatencyBound(streamlineFeatures) && !lowLatencyFailed) {
             try {
                 NvidiaStreamlineFrameGenerationRuntime.beginPreparation(frameSequence);
             } catch (RuntimeException | LinkageError failure) {
@@ -505,7 +695,7 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
     @Override
     public synchronized void cancelFramePreparation(long frameSequence) {
         if (closed) throw new IllegalStateException("NVIDIA feature session is closed");
-        if (lowLatencyBound(streamlineFeatures) && !lowLatencyFailed) {
+        if (latencyExecutionRequested() && lowLatencyBound(streamlineFeatures) && !lowLatencyFailed) {
             try {
                 NvidiaStreamlineFrameGenerationRuntime.cancelPreparation(frameSequence);
             } catch (RuntimeException | LinkageError failure) {
@@ -517,7 +707,7 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
     @Override
     public synchronized void beginFrameSubmission(long frameSequence) {
         if (closed) throw new IllegalStateException("NVIDIA feature session is closed");
-        if (lowLatencyBound(streamlineFeatures) && !lowLatencyFailed) {
+        if (latencyExecutionRequested() && lowLatencyBound(streamlineFeatures) && !lowLatencyFailed) {
             try {
                 NvidiaStreamlineFrameGenerationRuntime.beginSubmission(frameSequence);
             } catch (RuntimeException | LinkageError failure) {
@@ -561,7 +751,7 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
     @Override
     public synchronized void endFrameSubmission(long frameSequence) {
         if (closed) throw new IllegalStateException("NVIDIA feature session is closed");
-        if (lowLatencyBound(streamlineFeatures) && !lowLatencyFailed) {
+        if (latencyExecutionRequested() && lowLatencyBound(streamlineFeatures) && !lowLatencyFailed) {
             try {
                 NvidiaStreamlineFrameGenerationRuntime.endSubmission(frameSequence);
                 executionEvidence.recordLowLatencyRenderEnd(frameSequence);
@@ -647,6 +837,13 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
         absorbPresentationFailure();
         executionEvidence.observePresent(frameSequence, succeeded);
         if (!succeeded) return;
+        if (latencyExecutionRequested() && !lowLatencyFailed
+                && executionEvidence.lowLatencyPresentCommitted()) {
+            lowLatencyState.active(
+                    "nvidia.streamline.reflex-pcl",
+                    "Reflex/PCL markers completed on a successfully presented frame"
+            );
+        }
         if (frameGenerationFailed
                 && frameSequence > frameGenerationFallbackPresentAfter
                 && frameGenerationState.snapshot().status()
@@ -689,6 +886,10 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
             throw (LinkageError) failure;
         }
         return fallbackBoundary(lowLatencyFailureReason, failure);
+    }
+
+    private boolean latencyExecutionRequested() {
+        return lowLatency.preference().requested() || frameGeneration.preference().requested();
     }
 
     private void markFrameGenerationFallbackPending(String reason) {

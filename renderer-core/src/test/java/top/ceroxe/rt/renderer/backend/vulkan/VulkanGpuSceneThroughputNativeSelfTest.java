@@ -43,7 +43,7 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
        * An API-version A/B must measure the base GPUScene pipeline, not whatever optional provider
        * policy happened to become the public default in that release.
        */
-      RayTracingRendererConfig configuration = RayTracingRendererConfig.builder()
+      RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
               .temporalRendering(TemporalRenderingOptions.disabled())
               .frameReconstruction(FrameReconstructionOptions.disabled())
               .denoising(DenoisingOptions.disabled())
@@ -55,7 +55,7 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
               .gpuTimingsEnabled(true)
               .build();
       long coldStartNanos = System.nanoTime();
-      RayTracingRenderer renderer = RendererBootstrap.openProvider("vulkan-rt", configuration);
+      RayTracingRenderer renderer = RendererBootstrap.openExpertProvider("vulkan-rt", configuration);
 
       try {
          VulkanFrameInterop interop = (VulkanFrameInterop)renderer.extension(VulkanFrameInterop.class).orElseThrow(() -> new AssertionError("Vulkan backend omitted its interop extension"));

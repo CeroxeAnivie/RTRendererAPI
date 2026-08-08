@@ -62,9 +62,7 @@ public interface VulkanFramePresenter extends AutoCloseable {
      *
      * @return immutable point-in-time timing counters
      */
-    default PerformanceSnapshot performanceSnapshot() {
-        return new PerformanceSnapshot(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
-    }
+    PerformanceSnapshot performanceSnapshot();
 
     /**
      * Replaces the native window title on the presenter thread.
@@ -78,14 +76,11 @@ public interface VulkanFramePresenter extends AutoCloseable {
      *
      * <p>The managed presenter implements this as a tiny transfer-only overlay, so enabling a
      * diagnostic HUD does not enable CPU frame readback or add a graphics-pipeline dependency.
-     * An empty string disables the overlay. Providers that do not support an overlay may retain
-     * this binary-compatible default implementation.</p>
+     * An empty string disables the overlay.</p>
      *
      * @param text non-null text; line feeds request additional rows
      */
-    default void setOverlayText(String text) {
-        Objects.requireNonNull(text, "text");
-    }
+    void setOverlayText(String text);
 
     /**
      * Presents the next renderer-owned frame using the provider's GPU-timeline fast path.
@@ -96,9 +91,7 @@ public interface VulkanFramePresenter extends AutoCloseable {
      *
      * @return presentation evidence, or empty when no submitted frame is available
      */
-    default Optional<PresentationResult> presentLatestFrame() {
-        throw new UnsupportedOperationException("presenter does not own a managed frame source");
-    }
+    Optional<PresentationResult> presentLatestFrame();
 
     /**
      * Imports, copies, presents, GPU-signals producer completion, and closes one active lease.

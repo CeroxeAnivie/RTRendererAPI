@@ -170,7 +170,7 @@ renderer 创建时选择 `FrameOutputFormat`：
 | `LINEAR_HDR_RGBA16F` | linear scene-referred RGBA16F | 线性 radiance resolve，不 tone-map        |
 
 后端在 probe/open 阶段验证对应 storage image 与 Win32 external-memory export 能力；不支持时拒绝配置，不会改成另一种格式。不要根据设备名称推断
-capability，使用 `RayTracingGpuDevice.capabilities()` 和实际 open 结果。
+capability，使用 `RayTracingGpuDevice.hardwareCapabilities()` 的格式与句柄级证据，并以实际 open 结果为最终准入结论。
 
 ## 关闭检查表
 

@@ -24,7 +24,7 @@ final class DemoGpuBenchmark {
 
     static void run(DemoConfig config, AtomicBoolean running, RenderStats stats)
             throws InterruptedException {
-        try (RayTracingRenderer renderer = RendererBootstrap.open(DemoRendererProfile.benchmark())) {
+        try (RayTracingRenderer renderer = RendererBootstrap.openExpert(DemoRendererProfile.benchmark())) {
             VulkanFrameInterop interop = renderer.extension(VulkanFrameInterop.class)
                     .orElseThrow(() -> new IllegalStateException(
                             "Vulkan frame interop is unavailable for the GPU benchmark"));

@@ -345,11 +345,6 @@ final class NvidiaTechnologyEvidenceProjector {
     }
 
     private static boolean notSupported(Status status) {
-        return status == Status.NOT_SUPPORTED || legacyUnavailable(status);
-    }
-
-    @SuppressWarnings("deprecation")
-    private static boolean legacyUnavailable(Status status) {
-        return status == Status.UNAVAILABLE;
+        return status == Status.NOT_SUPPORTED;
     }
 }

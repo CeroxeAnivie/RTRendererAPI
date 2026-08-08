@@ -57,14 +57,9 @@ public interface GpuFrameLease extends AutoCloseable {
     /**
      * Declares which completion mechanisms this concrete lease accepts.
      *
-     * <p>The default is deliberately CPU-only so a backend can never appear to support
-     * semaphore import merely because the common API defines that completion value.</p>
-     *
      * @return immutable completion capability set for this lease
      */
-    default ConsumerCompletionCapabilities consumerCompletionCapabilities() {
-        return ConsumerCompletionCapabilities.cpuOnly();
-    }
+    ConsumerCompletionCapabilities consumerCompletionCapabilities();
 
     /**
      * Returns the slot after consumer access and any required external queue-family release.

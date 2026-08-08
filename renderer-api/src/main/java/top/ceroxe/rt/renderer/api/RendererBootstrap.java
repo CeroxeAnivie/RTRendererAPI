@@ -14,19 +14,25 @@ public final class RendererBootstrap {
     /**
      * Opens the highest-priority compatible provider using default policy.
      *
+     * @param preset simple-mode renderer preset
      * @return newly owned renderer instance
      */
-    public static RayTracingRenderer open() {
-        return open(RayTracingRendererConfig.defaults());
+    public static RayTracingRenderer open(RendererPreset preset) {
+        RendererPreset checkedPreset = Objects.requireNonNull(preset, "preset");
+        return openCandidates(
+                null,
+                checkedPreset.configuration(),
+                discover(Thread.currentThread().getContextClassLoader())
+        );
     }
 
     /**
-     * Opens the highest-priority provider compatible with a configuration.
+     * Opens the highest-priority provider using one complete expert configuration.
      *
-     * @param configuration immutable renderer policy
+     * @param configuration immutable expert renderer policy
      * @return newly owned renderer instance
      */
-    public static RayTracingRenderer open(RayTracingRendererConfig configuration) {
+    public static RayTracingRenderer openExpert(RayTracingRendererConfig configuration) {
         return openCandidates(
                 null,
                 Objects.requireNonNull(configuration, "configuration"),
@@ -41,7 +47,7 @@ public final class RendererBootstrap {
      * @param configuration      immutable renderer policy
      * @return newly owned renderer instance
      */
-    public static RayTracingRenderer openProvider(
+    public static RayTracingRenderer openExpertProvider(
             String requiredProviderId,
             RayTracingRendererConfig configuration
     ) {
@@ -184,7 +190,8 @@ public final class RendererBootstrap {
             RayTracingBackendProvider.Descriptor descriptor = Objects.requireNonNull(
                     provider.descriptor(), "provider descriptor"
             );
-            if (descriptor.apiMajor() != RayTracingBackendProvider.API_MAJOR) {
+            if (descriptor.apiMajor() != RayTracingBackendProvider.API_MAJOR
+                    || descriptor.apiMinor() > RayTracingBackendProvider.API_MINOR) {
                 continue;
             }
             if (!ids.add(descriptor.id())) {

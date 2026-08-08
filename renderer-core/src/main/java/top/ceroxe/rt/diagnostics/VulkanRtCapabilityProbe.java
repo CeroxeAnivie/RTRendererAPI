@@ -108,13 +108,29 @@ public final class VulkanRtCapabilityProbe {
         }
 
         List<DeviceReport> reports = new ArrayList<>(deviceCount);
+        List<String> deviceFailures = new ArrayList<>();
         for (int index = 0; index < deviceCount; index++) {
             VkPhysicalDevice device = new VkPhysicalDevice(devices.get(index), instance);
             try (MemoryStack deviceStack = MemoryStack.stackPush()) {
-                reports.add(captureDeviceReport(deviceStack, device));
+                try {
+                    reports.add(captureDeviceReport(deviceStack, device));
+                } catch (RuntimeException failure) {
+                    deviceFailures.add(
+                            "device[" + index + "]=" + failure.getClass().getSimpleName()
+                                    + (failure.getMessage() == null ? "" : ":" + failure.getMessage())
+                    );
+                }
             }
         }
-        return new Result(requestedApiVersion, true, false, "ok", VK10.VK_SUCCESS, "", reports);
+        return new Result(
+                requestedApiVersion,
+                true,
+                false,
+                "ok",
+                VK10.VK_SUCCESS,
+                String.join("; ", deviceFailures),
+                reports
+        );
     }
 
     private static DeviceReport captureDeviceReport(MemoryStack stack, VkPhysicalDevice device) {
@@ -134,11 +150,14 @@ public final class VulkanRtCapabilityProbe {
         PropertyReport deviceProperties = queryRtProperties(stack, device, properties);
         VulkanQueueFamilyCapabilities queueFamily = VulkanQueueFamilyCapabilities.select(stack, device);
         long deviceLocalMemoryBytes = queryDeviceLocalMemoryBytes(stack, device);
-        boolean sdrRgba8Output = supportsExternalFrameFormat(
-                stack, device, extensions, VK10.VK_FORMAT_R8G8B8A8_UNORM
+        ExternalImageSupport sdrRgba8Output = queryExternalFrameFormat(
+                stack, device, properties.apiVersion(), extensions, VK10.VK_FORMAT_R8G8B8A8_UNORM
         );
-        boolean linearHdrRgba16fOutput = supportsExternalFrameFormat(
-                stack, device, extensions, VK10.VK_FORMAT_R16G16B16A16_SFLOAT
+        ExternalImageSupport linearHdrRgba16fOutput = queryExternalFrameFormat(
+                stack, device, properties.apiVersion(), extensions, VK10.VK_FORMAT_R16G16B16A16_SFLOAT
+        );
+        boolean externalSemaphore = supportsOpaqueWin32Semaphore(
+                stack, device, properties.apiVersion(), extensions
         );
 
         return new DeviceReport(
@@ -155,15 +174,19 @@ public final class VulkanRtCapabilityProbe {
                 bufferDeviceAddress,
                 spirv14,
                 shaderFloatControls,
-                extensions.contains(KHRExternalMemory.VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME)
-                        || properties.apiVersion() >= VK11.VK_API_VERSION_1_1,
-                extensions.contains(KHRExternalSemaphore.VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME)
-                        || properties.apiVersion() >= VK11.VK_API_VERSION_1_1,
-                sdrRgba8Output,
-                linearHdrRgba16fOutput,
+                sdrRgba8Output.hasExternalMemoryOperation()
+                        || linearHdrRgba16fOutput.hasExternalMemoryOperation(),
+                externalSemaphore,
+                sdrRgba8Output.exportable(),
+                sdrRgba8Output.importable(),
+                sdrRgba8Output.dedicatedOnly(),
+                linearHdrRgba16fOutput.exportable(),
+                linearHdrRgba16fOutput.importable(),
+                linearHdrRgba16fOutput.dedicatedOnly(),
                 extensions.contains(EXTMemoryBudget.VK_EXT_MEMORY_BUDGET_EXTENSION_NAME),
                 queueFamily.gpuTimestamps(),
                 deviceLocalMemoryBytes,
+                properties.limits().maxImageDimension2D(),
                 features.accelerationStructure(),
                 features.rayTracingPipeline(),
                 features.bufferDeviceAddress(),
@@ -178,19 +201,21 @@ public final class VulkanRtCapabilityProbe {
         );
     }
 
-    private static boolean supportsExternalFrameFormat(
+    private static ExternalImageSupport queryExternalFrameFormat(
             MemoryStack stack,
             VkPhysicalDevice device,
+            int apiVersion,
             Set<String> extensions,
             int format
     ) {
-        if (!extensions.contains(KHRExternalMemoryWin32.VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME)) {
-            return false;
+        if (apiVersion < VK11.VK_API_VERSION_1_1
+                || !extensions.contains(KHRExternalMemoryWin32.VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME)) {
+            return ExternalImageSupport.UNSUPPORTED;
         }
         VkFormatProperties formatProperties = VkFormatProperties.calloc(stack);
         VK10.vkGetPhysicalDeviceFormatProperties(device, format, formatProperties);
         if ((formatProperties.optimalTilingFeatures() & VK10.VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) == 0) {
-            return false;
+            return ExternalImageSupport.UNSUPPORTED;
         }
         int handleType = VK11.VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
         VkPhysicalDeviceExternalImageFormatInfo externalInfo =
@@ -214,11 +239,37 @@ public final class VulkanRtCapabilityProbe {
                 .pNext(externalProperties);
         if (VK11.vkGetPhysicalDeviceImageFormatProperties2(device, formatInfo, imageProperties)
                 != VK10.VK_SUCCESS) {
-            return false;
+            return ExternalImageSupport.UNSUPPORTED;
         }
         VkExternalMemoryProperties memory = externalProperties.externalMemoryProperties();
-        return (memory.compatibleHandleTypes() & handleType) != 0
-                && (memory.externalMemoryFeatures() & VK11.VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT) != 0;
+        boolean compatible = (memory.compatibleHandleTypes() & handleType) != 0;
+        int features = memory.externalMemoryFeatures();
+        return new ExternalImageSupport(
+                compatible && (features & VK11.VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT) != 0,
+                compatible && (features & VK11.VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT) != 0,
+                compatible && (features & VK11.VK_EXTERNAL_MEMORY_FEATURE_DEDICATED_ONLY_BIT) != 0
+        );
+    }
+
+    private static boolean supportsOpaqueWin32Semaphore(
+            MemoryStack stack,
+            VkPhysicalDevice device,
+            int apiVersion,
+            Set<String> extensions
+    ) {
+        if (apiVersion < VK11.VK_API_VERSION_1_1
+                || !extensions.contains(KHRExternalSemaphoreWin32.VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME)) {
+            return false;
+        }
+        VkPhysicalDeviceExternalSemaphoreInfo info = VkPhysicalDeviceExternalSemaphoreInfo.calloc(stack)
+                .sType$Default()
+                .handleType(VK11.VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT);
+        VkExternalSemaphoreProperties properties = VkExternalSemaphoreProperties.calloc(stack)
+                .sType$Default();
+        VK11.vkGetPhysicalDeviceExternalSemaphoreProperties(device, info, properties);
+        int features = properties.externalSemaphoreFeatures();
+        return (features & VK11.VK_EXTERNAL_SEMAPHORE_FEATURE_EXPORTABLE_BIT) != 0
+                && (features & VK11.VK_EXTERNAL_SEMAPHORE_FEATURE_IMPORTABLE_BIT) != 0;
     }
 
     private static FeatureReport queryRtFeatures(MemoryStack stack, VkPhysicalDevice device, int deviceApiVersion) {
@@ -394,7 +445,21 @@ public final class VulkanRtCapabilityProbe {
             failureStage = failureStage == null ? "" : failureStage;
             message = message == null ? "" : message;
             devices = List.copyOf(devices);
-            selectedStableId = selectedStableId == null ? "" : selectedStableId;
+            selectedStableId = selectedStableId == null || selectedStableId.isEmpty()
+                    ? "" : requireRecordText(selectedStableId, "selectedStableId");
+            if (!instanceCreated && !devices.isEmpty()) {
+                throw new IllegalArgumentException("probe without a Vulkan instance cannot publish devices");
+            }
+            if (failed && !selectedStableId.isBlank()) {
+                throw new IllegalArgumentException("failed probe cannot select a physical device");
+            }
+            Set<String> identities = new HashSet<>();
+            for (DeviceReport device : devices) {
+                DeviceReport checked = Objects.requireNonNull(device, "device report");
+                if (!identities.add(checked.stableId())) {
+                    throw new IllegalArgumentException("duplicate physical-device identity: " + checked.stableId());
+                }
+            }
         }
 
         /**
@@ -442,8 +507,10 @@ public final class VulkanRtCapabilityProbe {
          * @throws IllegalArgumentException if the identity is blank, absent, or not RT-capable
          */
         public Result select(String stableId) {
-            String checked = java.util.Objects.requireNonNull(stableId, "stableId");
-            if (checked.isBlank()) throw new IllegalArgumentException("stableId must not be blank");
+            if (failed || !instanceCreated) {
+                throw new IllegalStateException("failed or incomplete probe cannot select a device");
+            }
+            String checked = requireRecordText(stableId, "stableId");
             DeviceReport selected = devices.stream()
                     .filter(DeviceReport::hardwareRayTracingReady)
                     .filter(device -> checked.equals(device.stableId()))
@@ -459,7 +526,7 @@ public final class VulkanRtCapabilityProbe {
          * @return whether at least one eligible device can be selected
          */
         public boolean hardwareRayTracingReady() {
-            return preferredDevice() != null;
+            return !failed && instanceCreated && preferredDevice() != null;
         }
 
         /**
@@ -469,6 +536,7 @@ public final class VulkanRtCapabilityProbe {
          * @return preferred eligible device, or {@code null} when none is ready
          */
         public DeviceReport preferredDevice() {
+            if (failed || !instanceCreated) return null;
             if (!selectedStableId.isBlank()) {
                 return devices.stream()
                         .filter(DeviceReport::hardwareRayTracingReady)
@@ -523,13 +591,18 @@ public final class VulkanRtCapabilityProbe {
      * @param bufferDeviceAddress                      buffer-device-address extension/core availability
      * @param spirv14                                  SPIR-V 1.4 extension/core availability
      * @param shaderFloatControls                      shader-float-controls extension/core availability
-     * @param externalMemory                           external-memory availability for public GPU frames
+     * @param externalMemory                           whether any format-specific external-memory operation was proven
      * @param externalSemaphore                        external-semaphore availability
      * @param sdrRgba8Output                           exportable SDR RGBA8 storage-image availability
+     * @param sdrRgba8Import                           importable SDR RGBA8 storage-image availability
+     * @param sdrRgba8DedicatedOnly                    whether SDR RGBA8 export requires dedicated allocation
      * @param linearHdrRgba16fOutput                   exportable linear HDR RGBA16F storage-image availability
+     * @param linearHdrRgba16fImport                   importable linear HDR RGBA16F storage-image availability
+     * @param linearHdrRgba16fDedicatedOnly            whether HDR RGBA16F export requires dedicated allocation
      * @param memoryBudget                             memory-budget telemetry availability
      * @param gpuTimestamps                            timestamp-query availability
      * @param deviceLocalMemoryBytes                   total device-local heap capacity in bytes
+     * @param maxImageDimension2D                      maximum legal two-dimensional image dimension
      * @param accelerationStructureFeature             acceleration-structure feature enablement
      * @param rayTracingPipelineFeature                ray-tracing-pipeline feature enablement
      * @param bufferDeviceAddressFeature               buffer-device-address feature enablement
@@ -559,10 +632,15 @@ public final class VulkanRtCapabilityProbe {
             boolean externalMemory,
             boolean externalSemaphore,
             boolean sdrRgba8Output,
+            boolean sdrRgba8Import,
+            boolean sdrRgba8DedicatedOnly,
             boolean linearHdrRgba16fOutput,
+            boolean linearHdrRgba16fImport,
+            boolean linearHdrRgba16fDedicatedOnly,
             boolean memoryBudget,
             boolean gpuTimestamps,
             long deviceLocalMemoryBytes,
+            int maxImageDimension2D,
             boolean accelerationStructureFeature,
             boolean rayTracingPipelineFeature,
             boolean bufferDeviceAddressFeature,
@@ -575,6 +653,51 @@ public final class VulkanRtCapabilityProbe {
             long maxRayDispatchInvocationCount,
             int minAccelerationStructureScratchAlignment
     ) {
+        /** Validates native probe facts before they can participate in device admission. */
+        public DeviceReport {
+            stableId = requireRecordText(stableId, "stableId");
+            name = requireRecordText(name, "name");
+            if (VK10.VK_VERSION_MAJOR(apiVersion) <= 0) {
+                throw new IllegalArgumentException("apiVersion must contain a positive major version");
+            }
+            if (deviceLocalMemoryBytes < 0L) {
+                throw new IllegalArgumentException("deviceLocalMemoryBytes must not be negative");
+            }
+            if (maxImageDimension2D <= 0) {
+                throw new IllegalArgumentException("maxImageDimension2D must be positive");
+            }
+            if ((sdrRgba8Output || sdrRgba8Import || linearHdrRgba16fOutput || linearHdrRgba16fImport)
+                    && !externalMemory) {
+                throw new IllegalArgumentException("format interoperability requires external memory support");
+            }
+            if (externalMemory
+                    && !sdrRgba8Output && !sdrRgba8Import
+                    && !linearHdrRgba16fOutput && !linearHdrRgba16fImport) {
+                throw new IllegalArgumentException(
+                        "external memory support requires a proven import or export format operation"
+                );
+            }
+            if (sdrRgba8DedicatedOnly && !sdrRgba8Output && !sdrRgba8Import) {
+                throw new IllegalArgumentException(
+                        "SDR dedicated-only evidence requires import or export support"
+                );
+            }
+            if (linearHdrRgba16fDedicatedOnly && !linearHdrRgba16fOutput && !linearHdrRgba16fImport) {
+                throw new IllegalArgumentException(
+                        "HDR dedicated-only evidence requires import or export support"
+                );
+            }
+            if (maxRayRecursionDepth < 0
+                    || shaderGroupHandleSize < 0
+                    || shaderGroupHandleAlignment < 0
+                    || shaderGroupBaseAlignment < 0
+                    || maxShaderGroupStride < 0
+                    || maxRayDispatchInvocationCount < 0L
+                    || minAccelerationStructureScratchAlignment < 0) {
+                throw new IllegalArgumentException("ray-tracing limits must not be negative");
+            }
+        }
+
         /**
          * Creates the reduced capability report used by deterministic unit fixtures.
          * Production probing uses the canonical constructor and supplies all native limits.
@@ -617,9 +740,107 @@ public final class VulkanRtCapabilityProbe {
                     name, vendorId, deviceId, deviceType, apiVersion,
                     accelerationStructure, rayTracingPipeline, deferredHostOperations, pipelineLibrary,
                     bufferDeviceAddress, spirv14, shaderFloatControls,
-                    false, false, false, false, false, false, 0L,
+                    false, false,
+                    false, false, false,
+                    false, false, false,
+                    false, false, 0L, 1,
                     accelerationStructureFeature, rayTracingPipelineFeature, bufferDeviceAddressFeature, true,
                     1, 1, 1, 1, 1, 1L, 1);
+        }
+
+        /**
+         * Preserves the pre-stable-id complete constructor for source compatibility.
+         * Production probing uses the canonical constructor and supplies the authoritative
+         * Vulkan device UUID; deterministic fixtures derive the same kind of local identity
+         * used by the reduced constructor instead of silently accepting an empty identity.
+         *
+         * @param name device display name
+         * @param vendorId PCI vendor identifier
+         * @param deviceId vendor device identifier
+         * @param deviceType Vulkan physical-device type
+         * @param apiVersion supported Vulkan API version
+         * @param accelerationStructure acceleration-structure extension availability
+         * @param rayTracingPipeline ray-tracing-pipeline extension availability
+         * @param deferredHostOperations deferred-host-operations extension availability
+         * @param pipelineLibrary pipeline-library extension availability
+         * @param bufferDeviceAddress buffer-device-address availability
+         * @param spirv14 SPIR-V 1.4 availability
+         * @param shaderFloatControls shader-float-controls availability
+         * @param externalMemory external-memory availability
+         * @param externalSemaphore external-semaphore availability
+         * @param sdrRgba8Output SDR RGBA8 export availability
+         * @param sdrRgba8Import SDR RGBA8 import availability
+         * @param sdrRgba8DedicatedOnly SDR RGBA8 dedicated-allocation requirement
+         * @param linearHdrRgba16fOutput HDR RGBA16F export availability
+         * @param linearHdrRgba16fImport HDR RGBA16F import availability
+         * @param linearHdrRgba16fDedicatedOnly HDR RGBA16F dedicated-allocation requirement
+         * @param memoryBudget memory-budget telemetry availability
+         * @param gpuTimestamps timestamp-query availability
+         * @param deviceLocalMemoryBytes device-local memory capacity in bytes
+         * @param maxImageDimension2D maximum legal 2D image dimension
+         * @param accelerationStructureFeature acceleration-structure feature enablement
+         * @param rayTracingPipelineFeature ray-tracing-pipeline feature enablement
+         * @param bufferDeviceAddressFeature buffer-device-address feature enablement
+         * @param shaderInt64Feature shader-int64 feature enablement
+         * @param maxRayRecursionDepth maximum ray recursion depth
+         * @param shaderGroupHandleSize shader-group handle size in bytes
+         * @param shaderGroupHandleAlignment shader-group handle alignment in bytes
+         * @param shaderGroupBaseAlignment shader-binding-table base alignment in bytes
+         * @param maxShaderGroupStride maximum shader-group stride in bytes
+         * @param maxRayDispatchInvocationCount maximum ray-dispatch invocation count
+         * @param minAccelerationStructureScratchAlignment scratch-buffer alignment in bytes
+         */
+        public DeviceReport(
+                String name,
+                int vendorId,
+                int deviceId,
+                int deviceType,
+                int apiVersion,
+                boolean accelerationStructure,
+                boolean rayTracingPipeline,
+                boolean deferredHostOperations,
+                boolean pipelineLibrary,
+                boolean bufferDeviceAddress,
+                boolean spirv14,
+                boolean shaderFloatControls,
+                boolean externalMemory,
+                boolean externalSemaphore,
+                boolean sdrRgba8Output,
+                boolean sdrRgba8Import,
+                boolean sdrRgba8DedicatedOnly,
+                boolean linearHdrRgba16fOutput,
+                boolean linearHdrRgba16fImport,
+                boolean linearHdrRgba16fDedicatedOnly,
+                boolean memoryBudget,
+                boolean gpuTimestamps,
+                long deviceLocalMemoryBytes,
+                int maxImageDimension2D,
+                boolean accelerationStructureFeature,
+                boolean rayTracingPipelineFeature,
+                boolean bufferDeviceAddressFeature,
+                boolean shaderInt64Feature,
+                int maxRayRecursionDepth,
+                int shaderGroupHandleSize,
+                int shaderGroupHandleAlignment,
+                int shaderGroupBaseAlignment,
+                int maxShaderGroupStride,
+                long maxRayDispatchInvocationCount,
+                int minAccelerationStructureScratchAlignment
+        ) {
+            this("test-" + Integer.toUnsignedString(vendorId, 16) + "-"
+                            + Integer.toUnsignedString(deviceId, 16) + "-" + name,
+                    name, vendorId, deviceId, deviceType, apiVersion,
+                    accelerationStructure, rayTracingPipeline, deferredHostOperations,
+                    pipelineLibrary, bufferDeviceAddress, spirv14, shaderFloatControls,
+                    externalMemory, externalSemaphore,
+                    sdrRgba8Output, sdrRgba8Import, sdrRgba8DedicatedOnly,
+                    linearHdrRgba16fOutput, linearHdrRgba16fImport, linearHdrRgba16fDedicatedOnly,
+                    memoryBudget, gpuTimestamps, deviceLocalMemoryBytes, maxImageDimension2D,
+                    accelerationStructureFeature, rayTracingPipelineFeature,
+                    bufferDeviceAddressFeature, shaderInt64Feature,
+                    maxRayRecursionDepth, shaderGroupHandleSize, shaderGroupHandleAlignment,
+                    shaderGroupBaseAlignment, maxShaderGroupStride,
+                    maxRayDispatchInvocationCount, minAccelerationStructureScratchAlignment);
         }
 
         /**
@@ -679,6 +900,37 @@ public final class VulkanRtCapabilityProbe {
                     + ", localMemory=" + deviceLocalMemoryBytes
                     + ", ready=" + hardwareRayTracingReady() + "}";
         }
+    }
+
+    private static String requireRecordText(String value, String name) {
+        String checked = Objects.requireNonNull(value, name);
+        if (checked.isBlank() || !checked.equals(checked.trim())) {
+            throw new IllegalArgumentException(name + " must be non-blank and normalized");
+        }
+        for (int index = 0; index < checked.length(); index++) {
+            if (Character.isISOControl(checked.charAt(index))) {
+                throw new IllegalArgumentException(name + " must not contain control characters");
+            }
+        }
+        return checked;
+    }
+
+    private record ExternalImageSupport(boolean exportable, boolean importable, boolean dedicatedOnly) {
+        private static final ExternalImageSupport UNSUPPORTED =
+                new ExternalImageSupport(false, false, false);
+
+        private ExternalImageSupport {
+            if (dedicatedOnly && !exportable && !importable) {
+                throw new IllegalArgumentException(
+                        "dedicated-only evidence requires an external memory operation"
+                );
+            }
+        }
+
+        private boolean hasExternalMemoryOperation() {
+            return exportable || importable;
+        }
+
     }
 
     private record FeatureReport(

@@ -147,9 +147,6 @@ public final class RenderingFeatureCapabilities {
     public enum Status {
         /** Feature was not requested and owns no resources. */
         DISABLED,
-        /** Requested feature cannot be provided in this renderer. */
-        @Deprecated(forRemoval = false, since = "0.5.0")
-        UNAVAILABLE,
         /** Current hardware, driver, provider, or rendering path does not support the request. */
         NOT_SUPPORTED,
         /** Provider/device support is present but no execution session is active. */
@@ -178,6 +175,16 @@ public final class RenderingFeatureCapabilities {
             this.reason = requireText(reason, "reason");
             if (status == Status.DISABLED && !"none".equals(this.implementation)) {
                 throw new IllegalArgumentException("disabled feature implementation must be none");
+            }
+            if (status == Status.NOT_SUPPORTED && !"none".equals(this.implementation)) {
+                throw new IllegalArgumentException("unsupported feature implementation must be none");
+            }
+            if ((status == Status.AVAILABLE || status == Status.FALLBACK_PENDING
+                    || status == Status.FALLBACK || status == Status.ACTIVE)
+                    && "none".equals(this.implementation)) {
+                throw new IllegalArgumentException(
+                        status + " feature entry must identify an executable implementation"
+                );
             }
         }
 

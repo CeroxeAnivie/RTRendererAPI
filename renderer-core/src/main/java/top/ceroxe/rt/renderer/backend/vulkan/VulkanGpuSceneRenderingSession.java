@@ -8,6 +8,8 @@ import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
+import top.ceroxe.rt.renderer.api.RendererFeaturePlan;
+import top.ceroxe.rt.renderer.api.RendererFeatureProfile;
 import top.ceroxe.rt.renderer.api.SubmissionDeferralReason;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
@@ -48,6 +50,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
     private long latestCompletedFrameSequence = -1L;
     private long latestAcquiredFrameSequence = -1L;
     private RuntimeException terminalFailure;
+    private RendererFeatureProfile currentFeatureProfile;
 
     static VulkanGpuSceneRenderingSession open(
             VulkanRtCapabilityProbe.Result capability,
@@ -154,6 +157,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
                 descriptorAssembler, FRAME_TIMING_LABEL
         );
         this.frameAdmissionLimits = Objects.requireNonNull(frameAdmissionLimits, "frameAdmissionLimits");
+        currentFeatureProfile = featureProfile(configuration);
         if (this.frameRing.size() != configuration.maxFramesInFlight()) {
             throw new IllegalArgumentException("frame slot count diverges from renderer configuration");
         }
@@ -185,6 +189,91 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
          * the presenter configuration may still select a smaller queue-ahead limit.
          */
         return frameRing.size();
+    }
+
+    @Override
+    public synchronized FeatureReconfigurationAssessment assessFeatureReconfiguration(
+            RendererFeatureProfile source,
+            RendererFeatureProfile target
+    ) {
+        requireReady("plan feature transition");
+        RendererFeatureProfile checkedSource = Objects.requireNonNull(source, "source");
+        RendererFeatureProfile checkedTarget = Objects.requireNonNull(target, "target");
+        if (!currentFeatureProfile.equals(checkedSource)) {
+            return FeatureReconfigurationAssessment.rendererRebuild(
+                    "controller source profile no longer matches the rendering session"
+            );
+        }
+        boolean serChanged = checkedSource.rayTracingOptimizations().shaderExecutionReordering()
+                != checkedTarget.rayTracingOptimizations().shaderExecutionReordering();
+        boolean memoryChanged = checkedSource.rayTracingOptimizations().memoryOptimization()
+                != checkedTarget.rayTracingOptimizations().memoryOptimization();
+        if (serChanged && memoryChanged) {
+            return FeatureReconfigurationAssessment.rendererRebuild(
+                    "combined SER pipeline and acceleration-memory ownership change requires renderer rebuild"
+            );
+        }
+        if (serChanged) {
+            return new FeatureReconfigurationAssessment(
+                    RendererFeaturePlan.Disposition.REQUIRES_PIPELINE_REBUILD,
+                    RendererFeaturePlan.Boundary.PIPELINE_REBUILD,
+                    "SER is compiled into the active ray-generation pipeline permutation"
+            );
+        }
+        if (memoryChanged) {
+            return new FeatureReconfigurationAssessment(
+                    RendererFeaturePlan.Disposition.REQUIRES_SCENE_REBUILD,
+                    RendererFeaturePlan.Boundary.SCENE_REBUILD,
+                    "acceleration-structure memory ownership is retained by existing BLAS resources"
+            );
+        }
+        VulkanFeatureSession.ReconfigurationAssessment provider =
+                scene.device().featureSession().assessReconfiguration(
+                        checkedSource, checkedTarget
+                );
+        return new FeatureReconfigurationAssessment(
+                provider.disposition(), provider.boundary(), provider.reason()
+        );
+    }
+
+    @Override
+    public synchronized FeatureReconfigurationResult applyFeatureReconfiguration(
+            RendererFeatureProfile target
+    ) {
+        requireReady("apply feature transition");
+        RendererFeatureProfile checkedTarget = Objects.requireNonNull(target, "target");
+        pump();
+        if (!frameRing.allSlotsWritable()) {
+            return FeatureReconfigurationResult.retry(
+                    "feature transition is waiting for every producer and external frame lease to retire"
+            );
+        }
+        VulkanFeatureSession featureSession = scene.device().featureSession();
+        try {
+            featureSession.applyReconfiguration(currentFeatureProfile, checkedTarget);
+            RenderingFeatureCapabilities capabilities = Objects.requireNonNull(
+                    featureSession.capabilities(), "reconfigured feature capabilities"
+            );
+            featureComposition.applyReconfiguration(capabilities);
+            temporalCoordinator.invalidate(HistoryInvalidationReason.EXPLICIT_RESET);
+            // Publish the Java profile only after every native/core owner has committed. If any
+            // step above throws, fail-closed keeps the old profile from being reported as live.
+            currentFeatureProfile = checkedTarget;
+        } catch (RuntimeException failure) {
+            // Provider application may have crossed a native boundary before reporting failure.
+            // Poison this session immediately so the controller cannot publish the old profile
+            // while queued work observes a partially changed provider state.
+            throw fail("apply feature reconfiguration", failure);
+        } catch (LinkageError failure) {
+            state = State.FAILED;
+            terminalFailure = new IllegalStateException(
+                    "native feature reconfiguration crossed an unrecoverable boundary", failure
+            );
+            throw failure;
+        }
+        return FeatureReconfigurationResult.applied(
+                "feature profile committed after a drained frame boundary; temporal history reset"
+        );
     }
 
     @Override
@@ -304,15 +393,18 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
         if (request.depthProjection().known()) return;
         List<String> required = new ArrayList<>(3);
         if (featureComposition.reconstructionActive()
-                && configuration.frameReconstruction().preference() == RendererFeaturePreference.REQUIRED) {
+                && currentFeatureProfile.frameReconstruction().preference()
+                == RendererFeaturePreference.REQUIRED) {
             required.add("frame reconstruction");
         }
         if (featureComposition.denoisingActive()
-                && configuration.denoising().preference() == RendererFeaturePreference.REQUIRED) {
+                && currentFeatureProfile.denoising().preference()
+                == RendererFeaturePreference.REQUIRED) {
             required.add("denoising");
         }
         if (featureComposition.frameGenerationActive()
-                && configuration.frameGeneration().preference() == RendererFeaturePreference.REQUIRED) {
+                && currentFeatureProfile.frameGeneration().preference()
+                == RendererFeaturePreference.REQUIRED) {
             required.add("frame generation");
         }
         if (!required.isEmpty()) {
@@ -322,6 +414,16 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
                             + " requires the exact Vulkan depth projection; the request marked it unknown"
             );
         }
+    }
+
+    private static RendererFeatureProfile featureProfile(RayTracingRendererConfig configuration) {
+        return new RendererFeatureProfile(
+                configuration.frameReconstruction(),
+                configuration.frameGeneration(),
+                configuration.lowLatency(),
+                configuration.denoising(),
+                configuration.rayTracingOptimizations()
+        );
     }
 
     @Override

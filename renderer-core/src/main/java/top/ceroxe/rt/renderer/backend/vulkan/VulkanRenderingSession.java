@@ -5,6 +5,8 @@ import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.api.FrameGenerationEvidence;
+import top.ceroxe.rt.renderer.api.RendererFeaturePlan;
+import top.ceroxe.rt.renderer.api.RendererFeatureProfile;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.SubmissionDeferralReason;
 import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
@@ -41,6 +43,24 @@ interface VulkanRenderingSession extends AutoCloseable {
      */
     default int managedPresentationProducerLeadLimit() {
         return Integer.MAX_VALUE;
+    }
+
+    /** Plans a provider-backed transition without mutating session state. */
+    default FeatureReconfigurationAssessment assessFeatureReconfiguration(
+            RendererFeatureProfile source,
+            RendererFeatureProfile target
+    ) {
+        Objects.requireNonNull(source, "source");
+        Objects.requireNonNull(target, "target");
+        return FeatureReconfigurationAssessment.rendererRebuild(
+                "rendering session does not support runtime feature transitions"
+        );
+    }
+
+    /** Applies a previously assessed target only at a safe session boundary. */
+    default FeatureReconfigurationResult applyFeatureReconfiguration(RendererFeatureProfile target) {
+        Objects.requireNonNull(target, "target");
+        return FeatureReconfigurationResult.retry("rendering session cannot apply feature transitions");
     }
 
     SceneAdmission apply(SceneSubmission submission) throws SubmissionRejectedException;
@@ -209,6 +229,52 @@ interface VulkanRenderingSession extends AutoCloseable {
                     FrameGenerationEvidence.unavailable(),
                     TechnologyExecutionEvidence.disabled()
             );
+        }
+    }
+
+    /** Internal planning value projected without loss into the public typed plan. */
+    record FeatureReconfigurationAssessment(
+            RendererFeaturePlan.Disposition disposition,
+            RendererFeaturePlan.Boundary boundary,
+            String reason
+    ) {
+        public FeatureReconfigurationAssessment {
+            disposition = Objects.requireNonNull(disposition, "disposition");
+            boundary = Objects.requireNonNull(boundary, "boundary");
+            reason = Objects.requireNonNull(reason, "reason").trim();
+            if (reason.isEmpty()) throw new IllegalArgumentException("reason must not be blank");
+        }
+
+        static FeatureReconfigurationAssessment unchanged() {
+            return new FeatureReconfigurationAssessment(
+                    RendererFeaturePlan.Disposition.UNCHANGED,
+                    RendererFeaturePlan.Boundary.NEXT_FRAME,
+                    "target profile already effective"
+            );
+        }
+
+        static FeatureReconfigurationAssessment rendererRebuild(String reason) {
+            return new FeatureReconfigurationAssessment(
+                    RendererFeaturePlan.Disposition.REQUIRES_RENDERER_REBUILD,
+                    RendererFeaturePlan.Boundary.RENDERER_REBUILD,
+                    reason
+            );
+        }
+    }
+
+    /** Internal commit outcome; false means no feature state was mutated. */
+    record FeatureReconfigurationResult(boolean applied, String reason) {
+        public FeatureReconfigurationResult {
+            reason = Objects.requireNonNull(reason, "reason").trim();
+            if (reason.isEmpty()) throw new IllegalArgumentException("reason must not be blank");
+        }
+
+        static FeatureReconfigurationResult applied(String reason) {
+            return new FeatureReconfigurationResult(true, reason);
+        }
+
+        static FeatureReconfigurationResult retry(String reason) {
+            return new FeatureReconfigurationResult(false, reason);
         }
     }
 

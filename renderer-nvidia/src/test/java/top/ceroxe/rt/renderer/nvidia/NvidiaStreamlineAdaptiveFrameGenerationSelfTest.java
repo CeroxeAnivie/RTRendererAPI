@@ -9,7 +9,7 @@ public final class NvidiaStreamlineAdaptiveFrameGenerationSelfTest {
     }
 
     public static void main(String[] arguments) {
-        require(request(FrameGenerationOptions.productionDefault()) == 1,
+        require(request(FrameGenerationOptions.recommended()) == 1,
                 "ordinary production policy must request FG 2x without automatically selecting MFG");
         require(request(explicit(FrameGenerationOptions.Mode.FRAME_GENERATION,
                 FrameGenerationOptions.Multiplier.TWO_X)) == 1, "explicit 2x request changed");

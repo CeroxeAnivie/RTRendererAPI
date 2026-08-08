@@ -23,7 +23,7 @@ public final class NvidiaRtxmuGpuSceneNativeSelfTest {
                 capability.hardwareRayTracingReady(),
                 "RTXMU GPUScene gate requires Vulkan RT: " + capability.summary()
         );
-        RayTracingRendererConfig configuration = RayTracingRendererConfig.builder()
+        RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
                 .validationEnabled(true)
                 .frameReconstruction(FrameReconstructionOptions.disabled())
                 .frameGeneration(FrameGenerationOptions.disabled())

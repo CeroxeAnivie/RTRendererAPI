@@ -5,11 +5,11 @@ import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingGpuDevice;
+import top.ceroxe.rt.renderer.api.HardwareCapabilities;
 import top.ceroxe.rt.renderer.api.FrameOutputFormat;
 import top.ceroxe.rt.renderer.spi.RayTracingBackendProvider;
 import org.lwjgl.vulkan.VK10;
 
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -84,13 +84,30 @@ public final class VulkanRayTracingBackendProvider implements RayTracingBackendP
         if (!DESCRIPTOR.id().equals(selected.backendId())) {
             throw new IllegalArgumentException("selected GPU belongs to backend " + selected.backendId());
         }
-        return capability.select(selected.stableId());
+        VulkanRtCapabilityProbe.Result selectedCapability = capability.select(selected.stableId());
+        RayTracingGpuDevice authoritative = toPublicDevice(selectedCapability.preferredDevice());
+        validateSelectedSnapshot(authoritative, selected);
+        return selectedCapability;
+    }
+
+    static void validateSelectedSnapshot(
+            RayTracingGpuDevice authoritative,
+            RayTracingGpuDevice selected
+    ) {
+        RayTracingGpuDevice fresh = Objects.requireNonNull(authoritative, "authoritative");
+        RayTracingGpuDevice supplied = Objects.requireNonNull(selected, "selected");
+        if (!fresh.equals(supplied)) {
+            throw new IllegalArgumentException(
+                    "selected GPU snapshot is stale or does not match the current hardware probe: "
+                            + supplied.backendId() + '/' + supplied.stableId()
+            );
+        }
     }
 
     private static List<RayTracingGpuDevice> publicDevices(VulkanRtCapabilityProbe.Result capability) {
         if (capability.failed()) return List.of();
         return capability.devices().stream()
-                .filter(VulkanRayTracingBackendProvider::publicFrameApiReady)
+                .filter(VulkanRtCapabilityProbe.DeviceReport::hardwareRayTracingReady)
                 .map(VulkanRayTracingBackendProvider::toPublicDevice)
                 .toList();
     }
@@ -113,22 +130,7 @@ public final class VulkanRayTracingBackendProvider implements RayTracingBackendP
     }
 
     static RayTracingGpuDevice toPublicDevice(VulkanRtCapabilityProbe.DeviceReport device) {
-        EnumSet<RayTracingGpuDevice.Capability> capabilities = EnumSet.of(
-                RayTracingGpuDevice.Capability.HARDWARE_RAY_TRACING,
-                RayTracingGpuDevice.Capability.ACCELERATION_STRUCTURE,
-                RayTracingGpuDevice.Capability.RAY_TRACING_PIPELINE,
-                RayTracingGpuDevice.Capability.BUFFER_DEVICE_ADDRESS,
-                RayTracingGpuDevice.Capability.SHADER_INT64
-        );
-        if (device.externalMemory()) capabilities.add(RayTracingGpuDevice.Capability.EXTERNAL_MEMORY);
-        if (device.externalSemaphore()) capabilities.add(RayTracingGpuDevice.Capability.EXTERNAL_SEMAPHORE);
-        if (device.sdrRgba8Output()) capabilities.add(RayTracingGpuDevice.Capability.NATIVE_SDR_RGBA8);
-        if (device.linearHdrRgba16fOutput()) {
-            capabilities.add(RayTracingGpuDevice.Capability.NATIVE_LINEAR_HDR_RGBA16F);
-        }
-        if (device.memoryBudget()) capabilities.add(RayTracingGpuDevice.Capability.MEMORY_BUDGET);
-        if (device.gpuTimestamps()) capabilities.add(RayTracingGpuDevice.Capability.GPU_TIMESTAMPS);
-        RayTracingGpuDevice.RayTracingLimits limits = RayTracingGpuDevice.RayTracingLimits.builder()
+        HardwareCapabilities.RayTracingLimits limits = HardwareCapabilities.RayTracingLimits.builder()
                 .maxRayRecursionDepth(device.maxRayRecursionDepth())
                 .shaderGroupHandleSize(device.shaderGroupHandleSize())
                 .shaderGroupHandleAlignment(device.shaderGroupHandleAlignment())
@@ -138,6 +140,71 @@ public final class VulkanRayTracingBackendProvider implements RayTracingBackendP
                 .minAccelerationStructureScratchAlignment(
                         device.minAccelerationStructureScratchAlignment()
                 )
+                .build();
+        HardwareCapabilities hardware = HardwareCapabilities.builder()
+                .probeState(HardwareCapabilities.ProbeState.COMPLETE)
+                .feature(
+                        HardwareCapabilities.Feature.HARDWARE_RAY_TRACING,
+                        support(device.hardwareRayTracingReady(),
+                                "Vulkan RT extensions, features, and limits were queried")
+                )
+                .feature(
+                        HardwareCapabilities.Feature.ACCELERATION_STRUCTURE,
+                        support(device.accelerationStructure() && device.accelerationStructureFeature(),
+                                "VK_KHR_acceleration_structure extension and feature were queried")
+                )
+                .feature(
+                        HardwareCapabilities.Feature.RAY_TRACING_PIPELINE,
+                        support(device.rayTracingPipeline() && device.rayTracingPipelineFeature(),
+                                "VK_KHR_ray_tracing_pipeline extension and feature were queried")
+                )
+                .feature(
+                        HardwareCapabilities.Feature.BUFFER_DEVICE_ADDRESS,
+                        support(device.bufferDeviceAddress() && device.bufferDeviceAddressFeature(),
+                                "bufferDeviceAddress API support and feature were queried")
+                )
+                .feature(
+                        HardwareCapabilities.Feature.SHADER_INT64,
+                        support(device.shaderInt64Feature(), "shaderInt64 feature was queried")
+                )
+                .feature(
+                        HardwareCapabilities.Feature.EXTERNAL_MEMORY,
+                        support(device.externalMemory(),
+                                "OPAQUE_WIN32 storage-image memory import and export were queried per output format")
+                )
+                .feature(
+                        HardwareCapabilities.Feature.EXTERNAL_SEMAPHORE,
+                        support(device.externalSemaphore(),
+                                "OPAQUE_WIN32 binary semaphore export and import were queried")
+                )
+                .feature(
+                        HardwareCapabilities.Feature.MEMORY_BUDGET,
+                        support(device.memoryBudget(), "VK_EXT_memory_budget availability was queried")
+                )
+                .feature(
+                        HardwareCapabilities.Feature.GPU_TIMESTAMPS,
+                        support(device.gpuTimestamps(), "selected queue-family timestamp bits were queried")
+                )
+                .deviceLocalMemoryBytes(device.deviceLocalMemoryBytes())
+                .maxImageDimension2D(device.maxImageDimension2D())
+                .rayTracingLimits(limits)
+                .frameInterop(
+                        FrameOutputFormat.SDR_RGBA8,
+                        HardwareCapabilities.ExternalHandleType.OPAQUE_WIN32,
+                        frameInterop(
+                                device.sdrRgba8Output(), device.sdrRgba8Import(),
+                                device.sdrRgba8DedicatedOnly(), device.externalSemaphore()
+                        )
+                )
+                .frameInterop(
+                        FrameOutputFormat.LINEAR_HDR_RGBA16F,
+                        HardwareCapabilities.ExternalHandleType.OPAQUE_WIN32,
+                        frameInterop(
+                                device.linearHdrRgba16fOutput(), device.linearHdrRgba16fImport(),
+                                device.linearHdrRgba16fDedicatedOnly(), device.externalSemaphore()
+                        )
+                )
+                .reason("complete Vulkan physical-device capability probe")
                 .build();
         return RayTracingGpuDevice.builder()
                 .backendId(DESCRIPTOR.id())
@@ -156,9 +223,41 @@ public final class VulkanRayTracingBackendProvider implements RayTracingBackendP
                         VK10.VK_VERSION_MINOR(device.apiVersion()),
                         VK10.VK_VERSION_PATCH(device.apiVersion())
                 ))
-                .deviceLocalMemoryBytes(device.deviceLocalMemoryBytes())
-                .capabilities(capabilities)
-                .rayTracingLimits(limits)
+                .hardwareCapabilities(hardware)
                 .build();
+    }
+
+    private static HardwareCapabilities.Support support(boolean supported, String evidence) {
+        return supported
+                ? HardwareCapabilities.Support.supported(evidence)
+                : HardwareCapabilities.Support.unsupported(evidence + "; required support was absent");
+    }
+
+    private static HardwareCapabilities.FrameInteropSupport frameInterop(
+            boolean memoryExport,
+            boolean memoryImport,
+            boolean dedicatedOnly,
+            boolean semaphoreBidirectional
+    ) {
+        HardwareCapabilities.Support memoryExportSupport = support(
+                memoryExport, "OPAQUE_WIN32 storage-image memory export was queried"
+        );
+        HardwareCapabilities.Support memoryImportSupport = support(
+                memoryImport, "OPAQUE_WIN32 storage-image memory import was queried"
+        );
+        HardwareCapabilities.Support semaphoreSupport = support(
+                semaphoreBidirectional, "OPAQUE_WIN32 binary semaphore export and import were queried"
+        );
+        return new HardwareCapabilities.FrameInteropSupport(
+                memoryExportSupport,
+                memoryImportSupport,
+                semaphoreSupport,
+                semaphoreSupport,
+                memoryExport || memoryImport
+                        ? dedicatedOnly
+                                ? HardwareCapabilities.DedicatedAllocation.REQUIRED
+                                : HardwareCapabilities.DedicatedAllocation.NOT_REQUIRED
+                        : HardwareCapabilities.DedicatedAllocation.UNKNOWN
+        );
     }
 }

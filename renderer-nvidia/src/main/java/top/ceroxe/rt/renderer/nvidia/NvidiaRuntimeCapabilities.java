@@ -33,7 +33,11 @@ final class NvidiaRuntimeCapabilities {
         applyDenoising(target, Objects.requireNonNull(denoising, "denoising"));
         applyReconstruction(target, Objects.requireNonNull(reconstruction, "reconstruction"));
         applyFrameGeneration(target, Objects.requireNonNull(frameGeneration, "frameGeneration"));
-        applyLowLatency(target, Objects.requireNonNull(lowLatency, "lowLatency"));
+        applyLowLatency(
+                target,
+                Objects.requireNonNull(lowLatency, "lowLatency"),
+                frameGeneration.options().preference().requested()
+        );
         applyMemoryOptimization(
                 target,
                 Objects.requireNonNull(memoryOptimization, "memoryOptimization")
@@ -101,6 +105,11 @@ final class NvidiaRuntimeCapabilities {
             RenderingFeatureCapabilities.Builder target,
             Denoising observation
     ) {
+        if (!observation.options().preference().requested()) {
+            target.feature(Feature.DENOISING, Entry.disabled());
+            target.technology(Technology.RAY_TRACING_DENOISING, Entry.disabled());
+            return;
+        }
         if (observation.failed()) {
             Entry fallback = runtimeEntry(observation.runtimeState());
             target.feature(Feature.DENOISING, fallback);
@@ -120,6 +129,13 @@ final class NvidiaRuntimeCapabilities {
             RenderingFeatureCapabilities.Builder target,
             Reconstruction observation
     ) {
+        if (!observation.options().preference().requested()) {
+            target.feature(Feature.FRAME_RECONSTRUCTION, Entry.disabled());
+            target.technology(Technology.TEMPORAL_SUPER_RESOLUTION, Entry.disabled());
+            target.technology(Technology.NATIVE_TEMPORAL_ANTI_ALIASING, Entry.disabled());
+            target.technology(Technology.SPATIAL_UPSCALING, Entry.disabled());
+            return;
+        }
         Technology requested = NvidiaTechnologyCapabilities.reconstructionTechnology(observation.options());
         if (observation.failed()) {
             target.feature(Feature.FRAME_RECONSTRUCTION, runtimeEntry(observation.runtimeState()));
@@ -160,6 +176,12 @@ final class NvidiaRuntimeCapabilities {
             RenderingFeatureCapabilities.Builder target,
             FrameGeneration observation
     ) {
+        if (!observation.options().preference().requested()) {
+            target.feature(Feature.FRAME_GENERATION, Entry.disabled());
+            target.technology(Technology.FRAME_GENERATION, Entry.disabled());
+            target.technology(Technology.MULTI_FRAME_GENERATION, Entry.disabled());
+            return;
+        }
         if (!observation.featureBound()) return;
         NvidiaStreamlineFrameGenerationRuntime.Stats stats = observation.stats();
         if (!observation.failed() && observation.enabled() && stats.active()) {
@@ -241,6 +263,11 @@ final class NvidiaRuntimeCapabilities {
             target.feature(Feature.FRAME_GENERATION, Entry.of(
                     Status.AVAILABLE, "nvidia.streamline.dlss-g", evidence
             ));
+            target.technology(Technology.LOW_LATENCY_MARKERS, Entry.of(
+                    Status.AVAILABLE,
+                    "nvidia.streamline.reflex-pcl",
+                    "Reflex/PCL is reserved as a frame-generation dependency; awaiting present"
+            ));
             if (NvidiaTechnologyCapabilities.multiFrameRequested(observation.options())) {
                 target.technology(Technology.MULTI_FRAME_GENERATION, Entry.of(
                         Status.AVAILABLE, "nvidia.streamline.dlss-g.mfg", evidence
@@ -255,9 +282,16 @@ final class NvidiaRuntimeCapabilities {
 
     private static void applyLowLatency(
             RenderingFeatureCapabilities.Builder target,
-            LowLatency observation
+            LowLatency observation,
+            boolean frameGenerationRequested
     ) {
-        if (!observation.options().preference().requested()) return;
+        if (!observation.options().preference().requested()) {
+            target.feature(Feature.LOW_LATENCY, Entry.disabled());
+            if (!frameGenerationRequested) {
+                target.technology(Technology.LOW_LATENCY_MARKERS, Entry.disabled());
+            }
+            return;
+        }
         if (observation.failed()) {
             String reason = failureReason(
                     observation.failureReason(),
@@ -293,7 +327,8 @@ final class NvidiaRuntimeCapabilities {
             case RECOVERING -> Status.FALLBACK_PENDING;
             case ACTIVE -> Status.ACTIVE;
             case FALLBACK -> Status.FALLBACK;
-            case UNAVAILABLE, CLOSED -> Status.BLOCKED;
+            case UNAVAILABLE -> Status.NOT_SUPPORTED;
+            case CLOSED -> Status.BLOCKED;
         };
         return Entry.of(status, checked.implementation(), checked.reason());
     }
@@ -379,6 +414,16 @@ final class NvidiaRuntimeCapabilities {
         FrameGeneration {
             Objects.requireNonNull(options, "options");
             Objects.requireNonNull(stats, "stats");
+            if (enabled && (!featureBound || failed)) {
+                throw new IllegalArgumentException(
+                        "enabled frame generation requires a healthy bound feature"
+                );
+            }
+            if (failed && (failureReason == null || failureReason.isBlank())) {
+                throw new IllegalArgumentException(
+                        "failed frame generation requires a failure reason"
+                );
+            }
         }
 
         FrameGeneration(

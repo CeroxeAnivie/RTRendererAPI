@@ -14,6 +14,7 @@ import org.lwjgl.vulkan.NVRayTracingInvocationReorder;
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererPreset;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
@@ -129,7 +130,7 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
                 diagnostics,
                 validationEnabled,
                 gpuTimingsEnabled,
-                RayTracingRendererConfig.defaults()
+                RendererPreset.CPU_READBACK.configuration()
         );
     }
 

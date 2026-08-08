@@ -19,6 +19,7 @@ import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.api.RendererHealth;
+import top.ceroxe.rt.renderer.api.RendererPreset;
 import top.ceroxe.rt.renderer.api.RendererStateException;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.SceneInstance;
@@ -82,7 +83,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession initial = new TrackingSession();
       TrackingSession recovered = new TrackingSession();
       int[] opens = new int[]{0};
-      VulkanRendererHost renderer = new VulkanRendererHost(RayTracingRendererConfig.defaults(), () ->
+      VulkanRendererHost renderer = new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), () ->
             opens[0]++ == 0 ? initial : recovered);
       initial.failNextFrameWith = deviceLost("syntheticRecoveredFrame");
       expect(RendererDeviceException.class, () -> renderer.submit(frame(0L, 0L)));
@@ -205,7 +206,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession session = new TrackingSession();
       TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
       VulkanRendererHost renderer = new VulkanRendererHost(
-              RayTracingRendererConfig.defaults(), session, presenterOpener
+              RendererPreset.CPU_READBACK.configuration(), session, presenterOpener
       );
       renderer.apply(scene(0L));
       TrackingPresenter presenter = presenterOpener.openedBy(renderer, 2);
@@ -244,7 +245,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession session = new TrackingSession();
       TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
       VulkanRendererHost renderer = new VulkanRendererHost(
-              RayTracingRendererConfig.defaults(), session, presenterOpener
+              RendererPreset.CPU_READBACK.configuration(), session, presenterOpener
       );
       renderer.apply(scene(0L));
       TrackingPresenter presenter = presenterOpener.openedBy(renderer, 1);
@@ -265,7 +266,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession session = new TrackingSession();
       TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
       VulkanRendererHost renderer = new VulkanRendererHost(
-            RayTracingRendererConfig.defaults(), session, presenterOpener
+            RendererPreset.CPU_READBACK.configuration(), session, presenterOpener
       );
       renderer.apply(scene(0L));
       renderer.submit(frame(1L, 0L));
@@ -287,7 +288,7 @@ public final class VulkanRendererHostSelfTest {
       session.managedPresentationProducerLeadLimit = 1;
       TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
       VulkanRendererHost renderer = new VulkanRendererHost(
-              RayTracingRendererConfig.defaults(), session, presenterOpener
+              RendererPreset.CPU_READBACK.configuration(), session, presenterOpener
       );
       renderer.apply(scene(0L));
       TrackingPresenter presenter = presenterOpener.openedBy(renderer, 4);
@@ -483,7 +484,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession session = new TrackingSession();
       int[] opens = new int[]{0};
       VulkanRendererHost renderer = new VulkanRendererHost(
-              RayTracingRendererConfig.defaults(),
+              RendererPreset.CPU_READBACK.configuration(),
               () -> {
                  opens[0]++;
                  return session;
@@ -520,7 +521,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession initial = new TrackingSession();
       TrackingSession recovered = new TrackingSession();
       int[] opens = new int[]{0};
-      VulkanRendererHost renderer = new VulkanRendererHost(RayTracingRendererConfig.defaults(), () -> {
+      VulkanRendererHost renderer = new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), () -> {
          int value10003 = opens[0];
          int value10000 = opens[0];
          opens[0] = value10003 + 1;
@@ -547,7 +548,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
       int[] opens = new int[]{0};
       VulkanRendererHost renderer = new VulkanRendererHost(
-              RayTracingRendererConfig.defaults(),
+              RendererPreset.CPU_READBACK.configuration(),
               () -> opens[0]++ == 0 ? initial : recovered,
               presenterOpener
       );
@@ -578,7 +579,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession recovered = new TrackingSession();
       initial.closeFailuresRemaining = 1;
       int[] opens = new int[]{0};
-      VulkanRendererHost renderer = new VulkanRendererHost(RayTracingRendererConfig.defaults(), () -> {
+      VulkanRendererHost renderer = new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), () -> {
          int value10003 = opens[0];
          int value10000 = opens[0];
          opens[0] = value10003 + 1;
@@ -597,7 +598,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession initial = new TrackingSession();
       TrackingSession recovered = new TrackingSession();
       int[] opens = new int[]{0};
-      VulkanRendererHost renderer = new VulkanRendererHost(RayTracingRendererConfig.defaults(), () -> {
+      VulkanRendererHost renderer = new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), () -> {
          int value10003 = opens[0];
          int value10000 = opens[0];
          opens[0] = value10003 + 1;
@@ -615,7 +616,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession initial = new TrackingSession();
       TrackingSession recovered = new TrackingSession();
       int[] opens = new int[]{0};
-      VulkanRendererHost renderer = new VulkanRendererHost(RayTracingRendererConfig.defaults(), () -> {
+      VulkanRendererHost renderer = new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), () -> {
          int value10003 = opens[0];
          int value10000 = opens[0];
          opens[0] = value10003 + 1;
@@ -643,7 +644,7 @@ public final class VulkanRendererHostSelfTest {
    }
 
    private static VulkanRendererHost renderer(TrackingSession session) {
-      return new VulkanRendererHost(RayTracingRendererConfig.defaults(), session);
+      return new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), session);
    }
 
    private static SceneTransaction scene(long revision) {
@@ -827,6 +828,10 @@ public final class VulkanRendererHostSelfTest {
          return Optional.empty();
       }
 
+      public GpuFrameLease.ConsumerCompletionCapabilities consumerCompletionCapabilities() {
+         return GpuFrameLease.ConsumerCompletionCapabilities.cpuOnly();
+      }
+
       public void release(GpuFrameLease.ConsumerCompletion completion) {
          Objects.requireNonNull(completion, "completion");
          if (!this.released && !this.closed) {
@@ -915,8 +920,23 @@ public final class VulkanRendererHostSelfTest {
       }
 
       @Override
+      public PerformanceSnapshot performanceSnapshot() {
+         return new PerformanceSnapshot(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
+      }
+
+      @Override
       public void setTitle(String title) {
          require(!closed && title != null && !title.isBlank(), "invalid test presenter title");
+      }
+
+      @Override
+      public void setOverlayText(String text) {
+         Objects.requireNonNull(text, "text");
+      }
+
+      @Override
+      public Optional<PresentationResult> presentLatestFrame() {
+         return Optional.empty();
       }
 
       @Override

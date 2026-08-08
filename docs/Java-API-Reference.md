@@ -12,6 +12,7 @@
 - [场景与帧](#场景与帧)
 - [资产与实例](#资产与实例)
 - [设备、诊断与异常](#设备诊断与异常)
+- [运行期功能控制](#运行期功能控制)
 - [官方 Vulkan presenter](#官方-vulkan-presenter)
 - [Vulkan 专家扩展](#vulkan-专家扩展)
 
@@ -25,9 +26,9 @@ public final class RendererBootstrap
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
-| `open()` | `RayTracingRenderer` | 使用默认现代配置打开最佳可用后端 |
-| `open(RayTracingRendererConfig)` | `RayTracingRenderer` | 使用显式配置打开最佳可用后端 |
-| `openProvider(String, RayTracingRendererConfig)` | `RayTracingRenderer` | 按 provider id 打开，用于确定性部署或诊断 |
+| `open(RendererPreset)` | `RayTracingRenderer` | 简单模式；按明确的 CPU readback 或 managed GPU presentation preset 打开最佳可用后端 |
+| `openExpert(RayTracingRendererConfig)` | `RayTracingRenderer` | 专家模式；使用完整显式配置打开最佳可用后端 |
+| `openExpertProvider(String, RayTracingRendererConfig)` | `RayTracingRenderer` | 专家模式；按 provider id 打开，用于确定性部署或诊断 |
 | `availableGpuDevices()` | `List<RayTracingGpuDevice>` | 返回通过 provider 探测得到的不可变设备列表 |
 
 ## RayTracingRenderer
@@ -54,8 +55,20 @@ public interface RayTracingRenderer extends AutoCloseable
 | `awaitClosed(Duration)` | `boolean` | 请求关闭并有界等待真实资源释放；超时返回 `false` |
 
 `FrameSubmissionDeferred.deferralReason()` 和 `SubmissionRejectedException.deferralReason()` 返回稳定的
-`SubmissionDeferralReason`，用于重试策略和遥测聚合；`detail()` 仅用于人类诊断。旧 provider 只提供自由文本时明确返回
-`UNSPECIFIED`，不会从自然语言猜测类别。
+`SubmissionDeferralReason`，用于重试策略和遥测聚合；`detail()` 仅用于人类诊断。1.0 provider
+必须提供类型化分类，API 不从自然语言猜测类别。
+
+## RendererPreset
+
+普通调用方直接把 preset 传给 `RendererBootstrap.open(...)`，不需要接触完整配置：
+
+| 值 | 说明 |
+| --- | --- |
+| `CPU_READBACK` | 托管 CPU frame 路径；优选重建、降噪、SER 与 AS memory optimization，不请求 presentation-time FG/MFG |
+| `MANAGED_GPU_PRESENTATION` | 官方 GPU presenter 路径；关闭 CPU readback，并在支持时额外优选普通 FG 2x 与低延迟 pacing；不自动请求 MFG |
+
+`configuration()` 只供专家检查或复制 preset。派生配置使用 `copyBuilder()`，并通过
+`RendererBootstrap.openExpert(...)` 打开。
 
 ## RayTracingRendererConfig
 
@@ -63,13 +76,14 @@ public interface RayTracingRenderer extends AutoCloseable
 public final class RayTracingRendererConfig
 ```
 
-只提供 Builder 与 `toBuilder()` 现代路径，不提供有序兼容构造器。
+只提供显式 expert Builder 与 `copyBuilder()`，不提供有序兼容构造器或隐式默认入口。
 
 | 静态入口 | 说明 |
 | --- | --- |
-| `builder()` | 创建专家显式 Builder；可选 vendor 技术均禁用 |
-| `defaults()` | 返回 CPU-readable 的能力驱动 preset：自动协商 SR、NRD、SER、RTXMU，FG/MFG 关闭 |
-| `gpuPresentationDefaults()` | 返回 GPU presenter preset：关闭 CPU readback，并额外自动协商 FG 2x 与 Reflex/PCL；MFG 不自动开启 |
+| `expertBuilder()` | 创建专家显式 Builder；可选 vendor 技术均禁用 |
+
+已有配置通过 `copyBuilder()` 派生。简单模式配置由 `RendererPreset` 独立表达，避免把 preset 与
+专家配置入口混为一谈。
 
 `MIN_MAX_FRAMES_IN_FLIGHT`、`DEFAULT_MAX_FRAMES_IN_FLIGHT` 和
 `MAX_MAX_FRAMES_IN_FLIGHT` 分别定义合法下界、默认值和上界。
@@ -207,7 +221,16 @@ dominant axis 选择 -X/+X/-Y/+Y/-Z/+Z multiplier。六个值均为 `[0, 1]` 内
 
 ### RayTracingGpuDevice
 
-设备对象提供 provider id、stable id、名称、类型、API version、显存、capabilities 和 RT limits。设备选择应依据 stable identity 与能力，不依据展示名称。
+设备对象提供 provider id、stable id、名称、类型、API version 和完整 `HardwareCapabilities`。
+设备选择应依据 stable identity 与能力，不依据展示名称。`hardwareCapabilities()` 是物理设备事实；
+`RenderingFeatureCapabilities` 是已打开 session 的协商/运行状态，两者不得互相推导。
+
+### HardwareCapabilities
+
+`probeState()` 必须为 `COMPLETE`，`supports(feature)` 才可能返回 true。每项 `Support` 都是
+`SUPPORTED`、`UNSUPPORTED` 或 `UNKNOWN`，失败/缺失查询不能乐观升级为支持。
+`frameInterop(format, handleType)` 按输出格式与 native handle 精确区分 memory export/import、
+semaphore export/import 和 dedicated-allocation 要求；扩展名存在本身不构成互操作证据。
 
 ### RendererDiagnostics
 
@@ -233,6 +256,28 @@ RendererException
 ├── SubmissionOrderException
 └── SubmissionRejectedException
 ```
+
+## 运行期功能控制
+
+`RendererFeatureController` 是显式专家扩展：
+
+```java
+RendererFeatureController controller = renderer
+        .extension(RendererFeatureController.class)
+        .orElseThrow();
+RendererFeaturePlan plan = controller.plan(targetProfile);
+```
+
+`RendererFeatureProfile` 是完整、厂商中立的目标策略，不允许用省略字段表达隐式意图。plan 绑定
+controller generation 且只能消费一次。`Disposition.APPLICABLE` 只允许 `NEXT_FRAME` 或
+`FRAME_DRAIN`；其他 disposition 明确要求 swapchain、pipeline、scene 或 renderer rebuild。
+库不会静默执行这些 rebuild。
+
+调用 `apply(plan)` 后，只有 `RendererFeatureApplyResult.Outcome.APPLIED` 证明 profile 已提交；
+`UNCHANGED`、`STALE_PLAN`、`RETRY_AFTER_FRAME_DRAIN`、各类 `REQUIRES_*_REBUILD` 和 `REJECTED`
+都没有相同含义。`featureControlDiagnostics()` 提供 generation、计划/应用/拒绝计数和最近一次
+plan/result，不重新探测 vendor runtime。当前 backend 是否支持某一 in-session 转换必须以该次
+plan/result 为准，不能从 controller 扩展存在本身推断。
 
 ## 官方 Vulkan presenter
 

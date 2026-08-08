@@ -1,7 +1,7 @@
 # Hex Ball Demo
 
 该可选模块是仓库自带的交互示例与 GPU smoke workload。它只解析 Maven Central 已发布的
-`top.ceroxe.rt:renderer-api:0.6.0` 及其完整传递运行时，因此 clone 仓库后运行 Demo 不需要
+`top.ceroxe.rt:renderer-api:1.0.0` 及其完整传递运行时，因此 clone 仓库后运行 Demo 不需要
 用于构建 `renderer-nvidia` 的 CMake、Visual Studio C++、Vulkan SDK、NRD、NRI、Streamline
 或 RTXMU 源码工具链。fat JAR 门禁仍会验证打包后的 NVIDIA DLL 清单和 SHA-256。
 
@@ -10,12 +10,15 @@
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-0.6.0.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-1.0.0.jar `
   --width=2560 --height=1440 --spp=2
 ```
 
 使用 `--duration-seconds=90` 可执行有界验收；进程会通过 presenter 与 renderer 的正常关闭路径
 退出。该参数与 `--frames` 互斥；两者都省略时，交互窗口会持续运行，直到用户主动关闭。
+
+以下命令定义可复现的 smoke workload，不构成预先通过声明。只有保存了对应提交、硬件、驱动、
+命令输出与结构化证据的实际运行，才能写入版本验收结论。
 
 Demo 默认请求 2x 帧生成。只有技术状态达到 `ACTIVE`，且类型化的
 `RendererDiagnostics.frameGenerationEvidence()` 计数器产生对应证据，才能证明生成帧已经到达
@@ -23,15 +26,15 @@ provider presentation path；仅提出配置请求不构成证据。每个进程
 
 ```powershell
 # 原生基线
-java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-0.6.0.jar `
+java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-1.0.0.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 
 # FG 2x
-java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-0.6.0.jar `
+java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-1.0.0.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 
 # MFG 3x
-java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-0.6.0.jar `
+java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-1.0.0.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 ```
 

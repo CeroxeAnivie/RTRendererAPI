@@ -19,7 +19,45 @@ public final class VulkanRtDeviceCapabilitySelfTest {
       prefersLargerDiscreteRtDeviceWithoutVendorBias();
       acceptsIntegratedHardwareRtDevice();
       honorsExplicitStableDeviceIdentity();
+      failedProbeNeverSelectsReadyDevice();
+      rejectsMalformedDeviceReports();
+      acceptsImportOnlyExternalMemoryEvidence();
       System.out.println("VulkanRtDeviceCapabilitySelfTest passed");
+   }
+
+   private static void failedProbeNeverSelectsReadyDevice() {
+      VulkanRtCapabilityProbe.DeviceReport ready = device("Ready but untrusted", AMD_VENDOR_ID, 40,
+              VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU, true);
+      VulkanRtCapabilityProbe.Result failed = new VulkanRtCapabilityProbe.Result(
+              VK_API_VERSION_1_2, true, true, "device-query", -3, "query failed", List.of(ready)
+      );
+      require(!failed.hardwareRayTracingReady() && failed.preferredDevice() == null,
+              "failed probe leaked a ready device into admission");
+      expect(IllegalStateException.class, () -> failed.select(ready.stableId()));
+   }
+
+   private static void rejectsMalformedDeviceReports() {
+      expect(IllegalArgumentException.class, () -> device(" bad", INTEL_VENDOR_ID, 50,
+              VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU, true));
+      VulkanRtCapabilityProbe.DeviceReport duplicate = device("Duplicate", NVIDIA_VENDOR_ID, 60,
+              VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU, true);
+      expect(IllegalArgumentException.class, () -> capability(List.of(duplicate, duplicate)));
+   }
+
+   private static void acceptsImportOnlyExternalMemoryEvidence() {
+      VulkanRtCapabilityProbe.DeviceReport report = new VulkanRtCapabilityProbe.DeviceReport(
+              "Import-only frame device", NVIDIA_VENDOR_ID, 70, VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU,
+              VK_API_VERSION_1_2,
+              true, true, true, true, true, true, true,
+              true, false,
+              false, true, true,
+              false, false, false,
+              false, false, 0L, 1,
+              true, true, true, true,
+              1, 1, 1, 1, 1, 1L, 1
+      );
+      require(report.externalMemory() && report.sdrRgba8Import() && !report.sdrRgba8Output(),
+              "import-only external-memory evidence was rejected or rewritten");
    }
 
    private static void prefersLargerDiscreteRtDeviceWithoutVendorBias() {

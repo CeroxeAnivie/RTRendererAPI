@@ -130,6 +130,23 @@ final class NvidiaStreamlineSwapchainInterceptor implements VulkanSwapchainInter
         return presentCircuitBreaker.requestedGeneratedFrames();
     }
 
+    synchronized void reconfigure(FrameGenerationOptions options) {
+        FrameGenerationOptions checked = Objects.requireNonNull(options, "options");
+        int limit = checked.preference().requested()
+                ? checked.multiplier().presentedFramesPerNativeFrame() - 1 : 0;
+        int requested = checked.preference().requested()
+                && checked.mode() == FrameGenerationOptions.Mode.ADAPTIVE ? -limit : limit;
+        if (requested != 0 && !proxyActive) {
+            throw new IllegalStateException("frame-generation proxy requires swapchain rebuild");
+        }
+        if (requested == 0 && presentCircuitBreaker.generatedFramesForPresent() != 0) {
+            // The frame ring is drained before this call, so releasing every outstanding tag is
+            // both sufficient and necessary before those images can return to ordinary reuse.
+            NvidiaStreamlineFrameGenerationRuntime.disableFrameGeneration();
+        }
+        presentCircuitBreaker.reconfigure(requested);
+    }
+
     Optional<NvidiaStreamlinePresentCircuitBreaker.FailureSnapshot> presentationFailure() {
         return presentCircuitBreaker.failureSnapshot();
     }

@@ -8,6 +8,7 @@ import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
+import top.ceroxe.rt.renderer.api.RendererPreset;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Entry;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Status;
@@ -383,7 +384,7 @@ public final class NvidiaProviderFaultIsolationSelfTest {
         LowLatencyOptions latencyOptions = lowLatency == RendererFeaturePreference.DISABLED
                 ? LowLatencyOptions.disabled()
                 : LowLatencyOptions.builder().preference(lowLatency).build();
-        return RayTracingRendererConfig.defaults().toBuilder()
+        return RendererPreset.CPU_READBACK.configuration().copyBuilder()
                 .denoising(denoising)
                 .rayTracingOptimizations(RayTracingOptimizationOptions.builder()
                         .memoryOptimization(rtxmu)

@@ -16,6 +16,9 @@ public interface RayTracingBackendProvider {
      */
     int API_MAJOR = 1;
 
+    /** Highest minor SPI contract this host can consume without a provider upgrade. */
+    int API_MINOR = 0;
+
     /**
      * Returns immutable provider identity and compatibility metadata.
      *
@@ -28,9 +31,7 @@ public interface RayTracingBackendProvider {
      *
      * @return immutable device list; empty when discovery is unsupported or no device qualifies
      */
-    default List<RayTracingGpuDevice> availableGpuDevices() {
-        return List.of();
-    }
+    List<RayTracingGpuDevice> availableGpuDevices();
 
     /**
      * Performs a read-only configuration-aware probe without retaining native resources.

@@ -3,6 +3,8 @@ package top.ceroxe.rt.renderer.feature;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.FrameGenerationEvidence;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
+import top.ceroxe.rt.renderer.api.RendererFeaturePlan;
+import top.ceroxe.rt.renderer.api.RendererFeatureProfile;
 import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
 import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents;
 
@@ -81,6 +83,40 @@ public interface VulkanFeatureSession extends AutoCloseable {
      */
     default boolean extentNegotiationMayChangeCapabilities() {
         return false;
+    }
+
+    /**
+     * Assesses whether this already-open provider session can honor a target profile without
+     * inventing resources that were not reserved during device negotiation.
+     *
+     * @param source currently effective profile
+     * @param target requested profile
+     * @return typed transition assessment
+     */
+    default ReconfigurationAssessment assessReconfiguration(
+            RendererFeatureProfile source,
+            RendererFeatureProfile target
+    ) {
+        java.util.Objects.requireNonNull(source, "source");
+        java.util.Objects.requireNonNull(target, "target");
+        return ReconfigurationAssessment.rendererRebuild(
+                "feature provider does not support runtime reconfiguration"
+        );
+    }
+
+    /**
+     * Commits one already-assessed profile after core proves the frame ring is drained.
+     *
+     * @param source profile used for the assessment
+     * @param target profile to commit
+     */
+    default void applyReconfiguration(
+            RendererFeatureProfile source,
+            RendererFeatureProfile target
+    ) {
+        java.util.Objects.requireNonNull(source, "source");
+        java.util.Objects.requireNonNull(target, "target");
+        throw new UnsupportedOperationException("feature provider does not support runtime reconfiguration");
     }
 
     /**
@@ -266,6 +302,55 @@ public interface VulkanFeatureSession extends AutoCloseable {
          */
         public static InputCompletion none() {
             return new InputCompletion(0L, 0L);
+        }
+    }
+
+    /**
+     * Provider-local transition assessment aggregated by the feature registry.
+     *
+     * @param disposition transition classification
+     * @param boundary earliest safe transition boundary
+     * @param reason bounded assessment explanation
+     */
+    record ReconfigurationAssessment(
+            RendererFeaturePlan.Disposition disposition,
+            RendererFeaturePlan.Boundary boundary,
+            String reason
+    ) {
+        /** Validates a complete provider assessment. */
+        public ReconfigurationAssessment {
+            disposition = java.util.Objects.requireNonNull(disposition, "disposition");
+            boundary = java.util.Objects.requireNonNull(boundary, "boundary");
+            reason = java.util.Objects.requireNonNull(reason, "reason").trim();
+            if (reason.isEmpty()) throw new IllegalArgumentException("reason must not be blank");
+        }
+
+        /**
+         * Returns the normal in-session transition boundary.
+         *
+         * @param reason bounded transition explanation
+         * @return frame-drain assessment
+         */
+        public static ReconfigurationAssessment frameDrain(String reason) {
+            return new ReconfigurationAssessment(
+                    RendererFeaturePlan.Disposition.APPLICABLE,
+                    RendererFeaturePlan.Boundary.FRAME_DRAIN,
+                    reason
+            );
+        }
+
+        /**
+         * Returns the fail-closed boundary for an unreserved provider resource.
+         *
+         * @param reason bounded transition explanation
+         * @return renderer-rebuild assessment
+         */
+        public static ReconfigurationAssessment rendererRebuild(String reason) {
+            return new ReconfigurationAssessment(
+                    RendererFeaturePlan.Disposition.REQUIRES_RENDERER_REBUILD,
+                    RendererFeaturePlan.Boundary.RENDERER_REBUILD,
+                    reason
+            );
         }
     }
 

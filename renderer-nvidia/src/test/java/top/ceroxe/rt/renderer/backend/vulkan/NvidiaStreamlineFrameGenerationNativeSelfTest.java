@@ -57,7 +57,7 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
         );
 
         FrameGenerationOptions generation = adaptive || composed
-                ? FrameGenerationOptions.productionDefault()
+                ? FrameGenerationOptions.recommended()
                 : FrameGenerationOptions.builder()
                 .preference(RendererFeaturePreference.REQUIRED)
                 .mode(multiFrame
@@ -68,7 +68,7 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                         : FrameGenerationOptions.Multiplier.TWO_X)
                 .fallback(FrameGenerationOptions.Fallback.NONE)
                 .build();
-        RayTracingRendererConfig configuration = RayTracingRendererConfig.builder()
+        RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
                 // The acceptance may need a bounded warm-up while the asynchronous pacer
                 // publishes generated output. Match the presenter lead to the legal renderer
                 // ring maximum so that warm-up measures Streamline latency instead of admission

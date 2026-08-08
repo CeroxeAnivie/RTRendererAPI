@@ -37,7 +37,7 @@ public final class NvidiaFeatureFailurePolicySelfTest {
 
         require(NvidiaFeatureFailurePolicy.frameGeneration(frameGeneration(RendererFeaturePreference.REQUIRED))
                 == NvidiaFeatureFailurePolicy.Action.FAIL_REQUIRED);
-        require(NvidiaFeatureFailurePolicy.frameGeneration(FrameGenerationOptions.productionDefault())
+        require(NvidiaFeatureFailurePolicy.frameGeneration(FrameGenerationOptions.recommended())
                 == NvidiaFeatureFailurePolicy.Action.FALLBACK_NATIVE_PRESENTATION);
         NvidiaProviderFaultIsolationSelfTest.runAll();
         System.out.println("NvidiaFeatureFailurePolicySelfTest passed");

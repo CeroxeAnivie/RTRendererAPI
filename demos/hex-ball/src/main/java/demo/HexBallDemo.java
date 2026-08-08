@@ -75,13 +75,13 @@ public final class HexBallDemo {
 
         if (config.cpuPresentation()) {
             try (RenderWindow window = RenderWindow.open(config, running, stats);
-                 RayTracingRenderer renderer = RendererBootstrap.open(rendererConfig)) {
+                 RayTracingRenderer renderer = RendererBootstrap.openExpert(rendererConfig)) {
                 runRenderer(config, running, stats, window, renderer);
                 presentTotalFps = DemoTechnologyHud.presentTotalFps(renderer, stats);
                 requireHealthyRenderer(renderer);
             }
         } else {
-            try (RayTracingRenderer renderer = RendererBootstrap.open(rendererConfig)) {
+            try (RayTracingRenderer renderer = RendererBootstrap.openExpert(rendererConfig)) {
                 try (VulkanFramePresenter presenter = VulkanFramePresenter.open(
                         renderer,
                         VulkanFramePresenterConfig.builder()

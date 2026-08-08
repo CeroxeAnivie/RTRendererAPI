@@ -15,6 +15,12 @@ plugins {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        providers.gradleProperty("stagingRepository").orNull?.let { repositoryUri ->
+            maven {
+                name = "localStaging"
+                url = uri(repositoryUri)
+            }
+        }
         mavenCentral()
     }
 }

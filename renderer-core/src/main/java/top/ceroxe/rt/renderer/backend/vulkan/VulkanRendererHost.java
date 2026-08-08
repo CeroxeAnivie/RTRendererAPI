@@ -13,6 +13,8 @@ import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
 import top.ceroxe.rt.renderer.api.RendererException;
 import top.ceroxe.rt.renderer.api.RendererHealth;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
+import top.ceroxe.rt.renderer.api.RendererFeatureController;
+import top.ceroxe.rt.renderer.api.RendererFeatureProfile;
 import top.ceroxe.rt.renderer.api.RendererStateException;
 import top.ceroxe.rt.renderer.api.SceneRevisionException;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
@@ -49,6 +51,7 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     private final VulkanRenderingSessionFactory sessionFactory;
     private final ManagedPresenterOpener managedPresenterOpener;
     private final RenderingFeatureCapabilities negotiatedFeatureCapabilities;
+    private final VulkanRendererFeatureController featureController;
     private RenderingFeatureCapabilities publishedFeatureCapabilities;
     private final PersistentSceneRegistry scene = new PersistentSceneRegistry();
     /*
@@ -171,6 +174,53 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         );
         this.publishedFeatureCapabilities = negotiatedFeatureCapabilities;
         this.session = ownedSession;
+        RendererFeatureProfile initialFeatureProfile = featureProfile(checkedConfiguration);
+        this.featureController = new VulkanRendererFeatureController(
+                initialFeatureProfile,
+                new VulkanRendererFeatureController.Backend() {
+                    @Override
+                    public VulkanRenderingSession.FeatureReconfigurationAssessment assess(
+                            RendererFeatureProfile source,
+                            RendererFeatureProfile target
+                    ) {
+                        return withLifecycleLock(() -> {
+                            requireReady("plan feature transition");
+                            return VulkanRendererHost.this.session.assessFeatureReconfiguration(
+                                    source, target
+                            );
+                        });
+                    }
+
+                    @Override
+                    public VulkanRenderingSession.FeatureReconfigurationResult apply(
+                            RendererFeatureProfile target
+                    ) {
+                        return withLifecycleLock(() -> {
+                            requireReady("apply feature transition");
+                            VulkanRenderingSession.FeatureReconfigurationResult result;
+                            try {
+                                result = VulkanRendererHost.this.session.applyFeatureReconfiguration(target);
+                            } catch (RuntimeException failure) {
+                                transitionToFailed("apply feature transition", failure);
+                                throw failure;
+                            } catch (LinkageError failure) {
+                                RuntimeException wrapped = new IllegalStateException(
+                                        "native feature reconfiguration failed during apply", failure
+                                );
+                                transitionToFailed("apply feature transition", wrapped);
+                                throw failure;
+                            }
+                            if (result.applied()) {
+                                publishedFeatureCapabilities = Objects.requireNonNull(
+                                        VulkanRendererHost.this.session.featureCapabilities(),
+                                        "reconfigured session feature capabilities"
+                                );
+                            }
+                            return result;
+                        });
+                    }
+                }
+        );
         this.managedPresenterOpener = Objects.requireNonNull(
                 managedPresenterOpener, "managedPresenterOpener"
         );
@@ -179,6 +229,9 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     @Override
     public <T> Optional<T> extension(Class<T> extensionType) {
         Class<T> checkedType = Objects.requireNonNull(extensionType, "extensionType");
+        if (checkedType.isInstance(featureController)) {
+            return Optional.of(checkedType.cast(featureController));
+        }
         if (checkedType.isInstance(publishedFeatureCapabilities)) {
             return withLifecycleLock(() -> {
                 if (lifecycle == Lifecycle.READY && !sessionClosed) {
@@ -194,7 +247,20 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
                 return Optional.of(checkedType.cast(publishedFeatureCapabilities));
             });
         }
-        return RayTracingRenderer.super.extension(checkedType);
+        return checkedType.isInstance(this)
+                ? Optional.of(checkedType.cast(this))
+                : Optional.empty();
+    }
+
+    private static RendererFeatureProfile featureProfile(RayTracingRendererConfig configuration) {
+        RayTracingRendererConfig checked = Objects.requireNonNull(configuration, "configuration");
+        return new RendererFeatureProfile(
+                checked.frameReconstruction(),
+                checked.frameGeneration(),
+                checked.lowLatency(),
+                checked.denoising(),
+                checked.rayTracingOptimizations()
+        );
     }
 
     private static RenderingFeatureCapabilities invalidateFeatureCapabilities(
@@ -363,7 +429,7 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             managedPresenterBacklogLimit = Math.min(
                     checked.maximumFramesQueuedAhead(), backendProducerLeadLimit
             );
-            managedPresenterBackpressure = FrameSubmissionDeferred.because(
+            managedPresenterBackpressure = new FrameSubmissionDeferred(
                     SubmissionDeferralReason.PRESENTATION_BACKLOG,
                     "Vulkan presenter queue reached its configured producer lead of "
                             + managedPresenterBacklogLimit + " frames"
@@ -514,7 +580,7 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
                     "session frame admission attempt"
             );
             if (attempt instanceof VulkanRenderingSession.FrameDeferred deferred) {
-                return FrameSubmissionDeferred.because(
+                return new FrameSubmissionDeferred(
                         deferred.deferralReason(),
                         "Vulkan renderer deferred frame " + checked.sequence()
                                 + " without publishing partial state: " + deferred.detail()

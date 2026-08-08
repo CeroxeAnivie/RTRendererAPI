@@ -12,6 +12,7 @@ import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
+import top.ceroxe.rt.renderer.api.RendererPreset;
 import top.ceroxe.rt.renderer.api.TemporalRenderingOptions;
 
 /** Centralizes the demo's production renderer policy and exact camera projection contract. */
@@ -72,7 +73,7 @@ final class DemoRendererProfile {
 
     private static RayTracingRendererConfig baseConfig(int maxFramesInFlight, boolean cpuReadback) {
         DemoFeatureProfile profile = DemoFeatureProfile.configured();
-        RayTracingRendererConfig.Builder builder = RayTracingRendererConfig.defaults().toBuilder()
+        RayTracingRendererConfig.Builder builder = RendererPreset.CPU_READBACK.configuration().copyBuilder()
                 .maxFramesInFlight(maxFramesInFlight)
                 .gpuTimingsEnabled(true)
                 .cpuFrameReadbackEnabled(cpuReadback)
@@ -112,11 +113,11 @@ final class DemoRendererProfile {
             );
         }
         return builder.temporalRendering(TemporalRenderingOptions.balanced())
-                .frameReconstruction(FrameReconstructionOptions.productionDefault())
-                .denoising(DenoisingOptions.productionDefault())
+                .frameReconstruction(FrameReconstructionOptions.recommended())
+                .denoising(DenoisingOptions.recommended())
                 .frameGeneration(generationOptions(FrameGenerationOptions.Multiplier.TWO_X))
-                .lowLatency(LowLatencyOptions.productionDefault())
-                .rayTracingOptimizations(RayTracingOptimizationOptions.productionDefault());
+                .lowLatency(LowLatencyOptions.recommended())
+                .rayTracingOptimizations(RayTracingOptimizationOptions.recommended());
     }
 
     private static FrameGenerationOptions configuredGenerationPolicy() {

@@ -26,6 +26,7 @@ import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
+import top.ceroxe.rt.renderer.api.RendererPreset;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Status;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
@@ -62,7 +63,7 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
    public static void main(String[] arguments) throws Exception {
       VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
       require(capability.hardwareRayTracingReady(), "complex GPUScene gate requires hardware RT: " + capability.summary());
-      RayTracingRendererConfig configuration = RayTracingRendererConfig.builder()
+      RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
               .maxFramesInFlight(3)
               .validationEnabled(true)
               .gpuTimingsEnabled(true)
@@ -152,7 +153,7 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
 
    private static void verifyLinearHdrOutput(VulkanRtCapabilityProbe.Result capability) throws Exception {
       require(capability.preferredDevice().linearHdrRgba16fOutput(), "selected target GPU does not expose exportable RGBA16F storage images");
-      RayTracingRendererConfig configuration = RayTracingRendererConfig.defaults().toBuilder().frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).build();
+      RayTracingRendererConfig configuration = RendererPreset.CPU_READBACK.configuration().copyBuilder().frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).build();
       VulkanGpuSceneRenderingSession session = VulkanGpuSceneRenderingSession.open(capability, configuration, RendererRtDiagnostics.noop());
       VulkanRendererHost renderer = new VulkanRendererHost(configuration, session);
 

@@ -8,7 +8,7 @@ import java.util.Optional;
 
 /** One-way DLSS-G/MFG presentation fuse scoped to a negotiated feature session. */
 final class NvidiaStreamlinePresentCircuitBreaker {
-    private final int requestedGeneratedFrames;
+    private int requestedGeneratedFrames;
     private boolean disabled;
     private FailureSnapshot failure;
 
@@ -55,8 +55,18 @@ final class NvidiaStreamlinePresentCircuitBreaker {
         return requestedGeneratedFrames != 0 && !disabled;
     }
 
-    int requestedGeneratedFrames() {
+    synchronized int requestedGeneratedFrames() {
         return requestedGeneratedFrames;
+    }
+
+    synchronized void reconfigure(int generatedFrames) {
+        if (generatedFrames < -3 || generatedFrames > 3) {
+            throw new IllegalArgumentException("generated frame request must be in [-3, 3]");
+        }
+        if (disabled && generatedFrames != 0) {
+            throw new IllegalStateException("tripped frame-generation circuit requires swapchain rebuild");
+        }
+        requestedGeneratedFrames = generatedFrames;
     }
 
     synchronized Optional<FailureSnapshot> failureSnapshot() {

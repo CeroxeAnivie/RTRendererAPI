@@ -175,19 +175,19 @@ public final class DemoFeatureIntegrationSelfTest {
             require(renderer.temporalRendering().equals(TemporalRenderingOptions.balanced()),
                     "all-except-MFG must enable the built-in temporal fallback resources");
             require(renderer.frameReconstruction().equals(
-                            FrameReconstructionOptions.productionDefault()),
+                            FrameReconstructionOptions.recommended()),
                     "all-except-MFG must request SR with its explicit NIS fallback");
-            require(renderer.denoising().equals(DenoisingOptions.productionDefault()),
+            require(renderer.denoising().equals(DenoisingOptions.recommended()),
                     "all-except-MFG must request production NRD policy");
             require(renderer.frameGeneration().mode()
                             == FrameGenerationOptions.Mode.FRAME_GENERATION
                             && renderer.frameGeneration().multiplier()
                             == FrameGenerationOptions.Multiplier.TWO_X,
                     "all-except-MFG must select FG 2x and exclude MFG");
-            require(renderer.lowLatency().equals(LowLatencyOptions.productionDefault()),
+            require(renderer.lowLatency().equals(LowLatencyOptions.recommended()),
                     "all-except-MFG must explicitly request Reflex/PCL");
             require(renderer.rayTracingOptimizations().equals(
-                            RayTracingOptimizationOptions.productionDefault()),
+                            RayTracingOptimizationOptions.recommended()),
                     "all-except-MFG must request SER and RTXMU policy");
 
             List<String> command = DemoLauncher.childCommand(

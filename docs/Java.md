@@ -2,14 +2,16 @@
 
 RTRendererAPI 适合嵌入 Java 21 或更高版本的桌面或引擎进程。普通调用方只需要理解场景 revision、帧 sequence 和资源生命周期；Vulkan external memory、semaphore、queue-family ownership 等细节被隔离在显式专家扩展中。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:0.6.0`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。
+公共模型是厂商中立、宿主无关的渲染契约：场景、相机、exact clip-space projection、资源所有权和能力状态均不包含游戏或引擎专用字段。Windows NVIDIA Vulkan 是当前发布实现，不是公共 API 的身份。
+
+Maven 坐标是 `top.ceroxe.rt:renderer-api:1.0.0`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。Maven Central 是这些制品的唯一发布事实源；Git tag 只用于定位构建相同制品的源码。
 
 ## 最小调用
 
-`RendererBootstrap.open()` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 21 或更高版本；`0.5.1` 的仓库实机验收只证明 README 支持表所列 Windows 11 x64 与 RTX 5080 Laptop。其他系统、GPU、显存和驱动组合不是已验证的生产稳定性声明。
+`RendererBootstrap.open(RendererPreset.CPU_READBACK)` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 21 或更高版本。兼容目标不是实机验收结论；本文不把尚未运行的 1.0.0 GPU smoke、Minecraft 或跨硬件验证声明为已通过。
 
 ```java
-try (RayTracingRenderer renderer = RendererBootstrap.open()) {
+try (RayTracingRenderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
     long revision = renderer.apply(SceneTransaction.empty(0L))
             .acceptedSceneRevision();
 
@@ -222,14 +224,31 @@ RayTracingGpuDevice selected = devices.stream()
         .max(Comparator.comparingLong(RayTracingGpuDevice::deviceLocalMemoryBytes))
         .orElseThrow(() -> new IllegalStateException("No supported RTX GPU"));
 
-RayTracingRendererConfig config = RayTracingRendererConfig.builder()
+RayTracingRendererConfig config = RayTracingRendererConfig.expertBuilder()
         .gpuDevice(selected)
         .build();
 
-try (RayTracingRenderer renderer = RendererBootstrap.open(config)) {
+try (RayTracingRenderer renderer = RendererBootstrap.openExpert(config)) {
     // publish scene and submit frames
 }
 ```
+
+设备枚举返回的 `HardwareCapabilities` 是物理 probe 事实，不是技术运行状态：
+
+```java
+HardwareCapabilities hardware = selected.hardwareCapabilities();
+if (!hardware.supports(HardwareCapabilities.Feature.HARDWARE_RAY_TRACING)) {
+    throw new IllegalStateException(hardware.reason());
+}
+HardwareCapabilities.FrameInteropSupport rgba8Win32 = hardware.frameInterop(
+        FrameOutputFormat.SDR_RGBA8,
+        HardwareCapabilities.ExternalHandleType.OPAQUE_WIN32
+);
+```
+
+`SupportState.UNKNOWN` 表示未取得可靠证据，不能当作支持。external interop 必须读取具体
+format/handle 的 memory 与 semaphore 方向，不能只检查 Vulkan extension 名称。renderer 打开后，
+可选技术是否协商或真正执行仍分别读取 `RenderingFeatureCapabilities` 与 diagnostics。
 
 ## 常用配置
 
@@ -248,46 +267,48 @@ try (RayTracingRenderer renderer = RendererBootstrap.open(config)) {
 | `rayTracingOptimizations(RayTracingOptimizationOptions)` | SER、RTXMU 均禁用 | 显式请求某项优化 |
 | `gpuDevice(RayTracingGpuDevice)` | 自动选择 | 必须绑定确定 GPU 时修改 |
 
-普通 CPU-readable 路径直接使用 `RayTracingRendererConfig.defaults()`：它以 `PREFERRED`
+普通 CPU-readable 路径直接调用 `RendererBootstrap.open(RendererPreset.CPU_READBACK)`：该 preset 以 `PREFERRED`
 自动协商 SR、NRD、SER 与 RTXMU，不支持的实现保留各自的 renderer fallback。该路径没有
 swapchain ownership，因此不会请求 FG/MFG 或 display pacing，避免产生无法 retire 的
 presentation-time 输入。
 
-只通过官方 GPU presenter 消费帧时，使用
-`RayTracingRendererConfig.gpuPresentationDefaults()`；它关闭 CPU readback，并在普通自动质量
+只通过官方 GPU presenter 消费帧时，调用
+`RendererBootstrap.open(RendererPreset.MANAGED_GPU_PRESENTATION)`；该 preset 关闭 CPU readback，并在普通自动质量
 策略之上请求 FG 2x 与 Reflex/PCL。MFG 永远不由普通 preset 自动开启，只能通过专家 builder
 显式选择 3x/4x。provider 始终检查 Vulkan feature/extension、SDK、驱动、真实 adapter 和
 资源合同，不能由 GPU 型号字符串猜测能力；显式 `REQUIRED` 也不允许被 fallback 吞掉。
 只使用专家 `VulkanFrameInterop`、但没有官方 managed presenter 的应用，应从
-`defaults().toBuilder().cpuFrameReadbackEnabled(false)` 开始，不能错误借用会请求 swapchain
-frame generation 的 GPU-presenter preset。
+`RendererPreset.CPU_READBACK.configuration().copyBuilder().cpuFrameReadbackEnabled(false)` 开始，
+再交给 `RendererBootstrap.openExpert(...)`；不能错误借用会请求 swapchain frame generation 的
+GPU-presenter preset。
 
-`RayTracingRendererConfig.builder()` 是专家显式基线，所有 vendor 技术默认禁用；
-`RayTracingRendererConfig.defaults().toBuilder()` 和
-`gpuPresentationDefaults().toBuilder()` 用于调整相应普通 preset。两种入口最终进入同一
+`RayTracingRendererConfig.expertBuilder()` 是专家显式基线，所有 vendor 技术默认禁用；
+`RendererPreset.CPU_READBACK.configuration().copyBuilder()` 和
+`RendererPreset.MANAGED_GPU_PRESENTATION.configuration().copyBuilder()` 用于专家派生相应 preset。
+派生后的配置必须通过 `RendererBootstrap.openExpert(...)` 打开。两种入口最终进入同一
 capability negotiation 和执行状态机，不存在绕过生命周期约束的隐藏模式开关。下面是普通
 CPU-readable preset 的等价专家配置：
 
 ```java
-RayTracingRendererConfig explicitProduction = RayTracingRendererConfig.builder()
+RayTracingRendererConfig explicitProduction = RayTracingRendererConfig.expertBuilder()
         .temporalRendering(TemporalRenderingOptions.balanced())
-        .frameReconstruction(FrameReconstructionOptions.productionDefault())
-        .denoising(DenoisingOptions.productionDefault())
+        .frameReconstruction(FrameReconstructionOptions.recommended())
+        .denoising(DenoisingOptions.recommended())
         .frameGeneration(FrameGenerationOptions.disabled())
         .lowLatency(LowLatencyOptions.disabled())
-        .rayTracingOptimizations(RayTracingOptimizationOptions.productionDefault())
+        .rayTracingOptimizations(RayTracingOptimizationOptions.recommended())
         .build();
 ```
 
 ### 完整专家配置
 
 专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
-显式覆盖 0.5.1 的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
+显式覆盖 1.0.0 的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
 NRD 不可用时保留内建时域路径，FG/MFG 不可用时继续发布原生帧。SER 和 RTXMU 独立
 协商，某一项不支持不会阻止其他项启用。
 
 ```java
-RayTracingRendererConfig expert = RayTracingRendererConfig.builder()
+RayTracingRendererConfig expert = RayTracingRendererConfig.expertBuilder()
         .maxFramesInFlight(3)
         .validationEnabled(false)
         .gpuTimingsEnabled(true)
@@ -311,7 +332,7 @@ RayTracingRendererConfig expert = RayTracingRendererConfig.builder()
                 .multiplier(FrameGenerationOptions.Multiplier.FOUR_X)
                 .fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES)
                 .build())
-        .lowLatency(LowLatencyOptions.productionDefault())
+        .lowLatency(LowLatencyOptions.recommended())
         .rayTracingOptimizations(RayTracingOptimizationOptions.builder()
                 .shaderExecutionReordering(RendererFeaturePreference.PREFERRED)
                 .memoryOptimization(RendererFeaturePreference.PREFERRED)
@@ -324,10 +345,40 @@ frame ring 和 backend owner 管理，API 不暴露会破坏关闭顺序的 SDK 
 Reflex/PCL 通过 `LowLatencyOptions` 独立于 FG/MFG 协商，因此原生展示和 DLSS SR 也能使用
 低延迟 pacing。FG/MFG 仍把 Reflex/PCL 作为强制内部依赖；关闭独立策略不会绕过该依赖。
 
+### 运行期功能变更
+
+只有需要显式运行期控制的专家调用方才发现 `RendererFeatureController`。先创建完整 target profile，
+再规划一次 generation-bound 转换：
+
+```java
+RendererFeatureController controller = renderer
+        .extension(RendererFeatureController.class)
+        .orElseThrow(() -> new IllegalStateException("runtime feature control unavailable"));
+RendererFeatureProfile target = controller.effectiveProfile().toBuilder()
+        .frameReconstruction(FrameReconstructionOptions.recommended())
+        .build();
+RendererFeaturePlan plan = controller.plan(target);
+
+if (plan.disposition() == RendererFeaturePlan.Disposition.APPLICABLE
+        || plan.disposition() == RendererFeaturePlan.Disposition.UNCHANGED) {
+    RendererFeatureApplyResult result = controller.apply(plan);
+    if (result.outcome() != RendererFeatureApplyResult.Outcome.APPLIED
+            && result.outcome() != RendererFeatureApplyResult.Outcome.UNCHANGED) {
+        throw new IllegalStateException(result.reason());
+    }
+}
+```
+
+plan 是 single-use，旧 generation、其他 controller、已消费或被后续 plan 取代的值返回
+`STALE_PLAN`。`RETRY_AFTER_FRAME_DRAIN` 要求应用在安全边界重新规划；`REQUIRES_SWAPCHAIN_REBUILD`、
+`REQUIRES_PIPELINE_REBUILD`、`REQUIRES_SCENE_REBUILD` 与 `REQUIRES_RENDERER_REBUILD` 把最小重建
+责任明确交还应用。库不会为了“热切换”静默重建或丢弃资源。controller 存在不证明某项转换可在
+session 内完成，只有 `APPLIED` 是提交证据。
+
 ### 各能力的最短配置
 
-以下片段都只需要 `top.ceroxe.rt:renderer-api:0.6.0`。把对应 options 传给
-`RayTracingRendererConfig.builder()` 即可；没有任何片段要求额外模块或手工 DLL。
+以下片段都只需要 `top.ceroxe.rt:renderer-api:1.0.0`。把对应 options 传给
+`RayTracingRendererConfig.expertBuilder()` 即可；没有任何片段要求额外模块或手工 DLL。
 
 ```java
 // DLSS Super Resolution；不可用时允许 NIS。
@@ -426,10 +477,10 @@ FrameGenerationEvidence generation = diagnostics.frameGenerationEvidence();
 native present。它们证明生成链实际工作，但不冒充显示器 scanout；物理显示测量仍属于外部
 显示遥测工具的职责。
 
-修改已有配置使用 `toBuilder()`，不要重新拼长参数列表：
+修改已有配置使用 `copyBuilder()`，不要重新拼长参数列表：
 
 ```java
-RayTracingRendererConfig hdr = config.toBuilder()
+RayTracingRendererConfig hdr = config.copyBuilder()
         .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F)
         .temporalRendering(TemporalRenderingOptions.accumulating(16))
         .build();
@@ -475,7 +526,7 @@ if (attempt instanceof RayTracingRenderer.FrameSubmitted submitted) {
 }
 ```
 
-`FrameSubmissionDeferred` 只代表本次没有发布任何逻辑或 native submission 状态。`deferralReason()` 是稳定遥测与重试分类，旧 provider 返回 `UNSPECIFIED`；不要解析 `reason()` 或 `detail()`。顺序、revision、生命周期和 device failure 仍抛出对应 typed exception。`submit(...)` 保留给“拒绝即异常”的控制流。
+`FrameSubmissionDeferred` 只代表本次没有发布任何逻辑或 native submission 状态。`deferralReason()` 是所有 provider 必须提供的稳定遥测与重试分类；`detail()` 只供人类诊断，禁止解析。顺序、revision、生命周期和 device failure 仍抛出对应 typed exception。`submit(...)` 保留给“拒绝即异常”的控制流。
 
 ## 结果与健康状态
 
@@ -514,9 +565,7 @@ GPU 名称、配置请求或 implementation 字符串反推状态：`ACTIVE` 需
 需要窗口显示但不想自行实现 Vulkan interop 的应用，使用官方 renderer-bound presenter：
 
 ```java
-RayTracingRendererConfig config = RayTracingRendererConfig.gpuPresentationDefaults();
-
-try (RayTracingRenderer renderer = RendererBootstrap.open(config);
+try (RayTracingRenderer renderer = RendererBootstrap.open(RendererPreset.MANAGED_GPU_PRESENTATION);
      VulkanFramePresenter presenter = VulkanFramePresenter.open(
              renderer,
              VulkanFramePresenterConfig.builder()

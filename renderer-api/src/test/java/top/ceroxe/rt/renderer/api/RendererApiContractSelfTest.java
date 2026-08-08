@@ -28,8 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import top.ceroxe.rt.renderer.api.EnvironmentState.Medium;
 import top.ceroxe.rt.renderer.api.MaterialAsset.BlendMode;
 import top.ceroxe.rt.renderer.api.MaterialAsset.ShadingModel;
-import top.ceroxe.rt.renderer.api.RayTracingGpuDevice.Capability;
-import top.ceroxe.rt.renderer.api.RayTracingGpuDevice.RayTracingLimits;
+import top.ceroxe.rt.renderer.api.HardwareCapabilities.RayTracingLimits;
 import top.ceroxe.rt.renderer.api.RayTracingGpuDevice.Type;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer.FrameSubmissionResult;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer.Status;
@@ -68,6 +67,7 @@ public final class RendererApiContractSelfTest {
       assertFrameGenerationContract();
       assertLowLatencyContract();
       assertGpuDeviceSelectionContract();
+      assertHardwareCapabilitiesContract();
       assertTransformAndLightingValidation();
       assertCameraAndFrameValidation();
       assertExactProjectionContract();
@@ -262,16 +262,16 @@ public final class RendererApiContractSelfTest {
    }
 
    private static void assertConfigurationBounds() {
-      require(RayTracingRendererConfig.defaults().maxFramesInFlight() == 3, "default frame ring changed");
-      require(RayTracingRendererConfig.defaults().cpuFrameReadbackEnabled(), "managed CPU readback must remain enabled by default");
-      require(RayTracingRendererConfig.defaults().frameOutputFormat() == FrameOutputFormat.SDR_RGBA8, "default native output must be SDR RGBA8");
-      require(RayTracingRendererConfig.defaults().temporalRendering().equals(TemporalRenderingOptions.balanced()), "production defaults must enable balanced temporal reconstruction");
-      require(RayTracingRendererConfig.defaults().denoising().equals(DenoisingOptions.productionDefault()), "ordinary defaults must capability-gate denoising");
-      require(RayTracingRendererConfig.defaults().frameReconstruction().equals(FrameReconstructionOptions.productionDefault()), "ordinary defaults must capability-gate reconstruction");
-      require(RayTracingRendererConfig.defaults().frameGeneration().equals(FrameGenerationOptions.disabled()), "CPU-readable defaults must not arm presentation-time generation");
-      require(RayTracingRendererConfig.defaults().lowLatency().equals(LowLatencyOptions.disabled()), "CPU-readable defaults must not arm display pacing");
-      require(RayTracingRendererConfig.defaults().rayTracingOptimizations().equals(RayTracingOptimizationOptions.productionDefault()), "ordinary defaults must capability-gate SER and RTXMU");
-      RayTracingRendererConfig explicitProduction = RayTracingRendererConfig.builder()
+      require(RendererPreset.CPU_READBACK.configuration().maxFramesInFlight() == 3, "default frame ring changed");
+      require(RendererPreset.CPU_READBACK.configuration().cpuFrameReadbackEnabled(), "managed CPU readback must remain enabled by default");
+      require(RendererPreset.CPU_READBACK.configuration().frameOutputFormat() == FrameOutputFormat.SDR_RGBA8, "default native output must be SDR RGBA8");
+      require(RendererPreset.CPU_READBACK.configuration().temporalRendering().equals(TemporalRenderingOptions.balanced()), "production defaults must enable balanced temporal reconstruction");
+      require(RendererPreset.CPU_READBACK.configuration().denoising().equals(DenoisingOptions.recommended()), "ordinary defaults must capability-gate denoising");
+      require(RendererPreset.CPU_READBACK.configuration().frameReconstruction().equals(FrameReconstructionOptions.recommended()), "ordinary defaults must capability-gate reconstruction");
+      require(RendererPreset.CPU_READBACK.configuration().frameGeneration().equals(FrameGenerationOptions.disabled()), "CPU-readable defaults must not arm presentation-time generation");
+      require(RendererPreset.CPU_READBACK.configuration().lowLatency().equals(LowLatencyOptions.disabled()), "CPU-readable defaults must not arm display pacing");
+      require(RendererPreset.CPU_READBACK.configuration().rayTracingOptimizations().equals(RayTracingOptimizationOptions.recommended()), "ordinary defaults must capability-gate SER and RTXMU");
+      RayTracingRendererConfig explicitProduction = RayTracingRendererConfig.expertBuilder()
               .maxFramesInFlight(RayTracingRendererConfig.DEFAULT_MAX_FRAMES_IN_FLIGHT)
               .validationEnabled(false)
               .gpuTimingsEnabled(true)
@@ -279,31 +279,31 @@ public final class RendererApiContractSelfTest {
               .automaticGpuSelection()
               .frameOutputFormat(FrameOutputFormat.SDR_RGBA8)
               .temporalRendering(TemporalRenderingOptions.balanced())
-              .frameReconstruction(FrameReconstructionOptions.productionDefault())
+              .frameReconstruction(FrameReconstructionOptions.recommended())
               .frameGeneration(FrameGenerationOptions.disabled())
               .lowLatency(LowLatencyOptions.disabled())
-              .denoising(DenoisingOptions.productionDefault())
-              .rayTracingOptimizations(RayTracingOptimizationOptions.productionDefault())
+              .denoising(DenoisingOptions.recommended())
+              .rayTracingOptimizations(RayTracingOptimizationOptions.recommended())
                 .build();
-      require(RayTracingRendererConfig.defaults().equals(explicitProduction),
+      require(RendererPreset.CPU_READBACK.configuration().equals(explicitProduction),
               "simple production defaults cannot be expressed exactly through expert policies");
-      require(RayTracingRendererConfig.defaults().equals(
-                      RayTracingRendererConfig.defaults().toBuilder().build()),
+      require(RendererPreset.CPU_READBACK.configuration().equals(
+                      RendererPreset.CPU_READBACK.configuration().copyBuilder().build()),
               "ordinary defaults lost policy while crossing the expert builder boundary");
-      RayTracingRendererConfig gpuPresentation = RayTracingRendererConfig.gpuPresentationDefaults();
+      RayTracingRendererConfig gpuPresentation = RendererPreset.MANAGED_GPU_PRESENTATION.configuration();
       require(!gpuPresentation.cpuFrameReadbackEnabled()
-                      && gpuPresentation.frameGeneration().equals(FrameGenerationOptions.productionDefault())
-                      && gpuPresentation.lowLatency().equals(LowLatencyOptions.productionDefault())
+                      && gpuPresentation.frameGeneration().equals(FrameGenerationOptions.recommended())
+                      && gpuPresentation.lowLatency().equals(LowLatencyOptions.recommended())
                       && gpuPresentation.frameReconstruction().equals(
-                              RayTracingRendererConfig.defaults().frameReconstruction())
+                              RendererPreset.CPU_READBACK.configuration().frameReconstruction())
                       && gpuPresentation.denoising().equals(
-                              RayTracingRendererConfig.defaults().denoising())
+                              RendererPreset.CPU_READBACK.configuration().denoising())
                       && gpuPresentation.rayTracingOptimizations().equals(
-                              RayTracingRendererConfig.defaults().rayTracingOptimizations()),
+                              RendererPreset.CPU_READBACK.configuration().rayTracingOptimizations()),
               "GPU presentation defaults must add only presentation-safe automatic policies");
-      require(gpuPresentation.equals(gpuPresentation.toBuilder().build()),
+      require(gpuPresentation.equals(gpuPresentation.copyBuilder().build()),
               "managed-presentation defaults lost policy while crossing the expert builder boundary");
-      RayTracingRendererConfig rawInterop = RayTracingRendererConfig.defaults().toBuilder()
+      RayTracingRendererConfig rawInterop = RendererPreset.CPU_READBACK.configuration().copyBuilder()
               .cpuFrameReadbackEnabled(false)
               .build();
       require(!rawInterop.cpuFrameReadbackEnabled()
@@ -315,8 +315,8 @@ public final class RendererApiContractSelfTest {
                       && gpuPresentation.frameGeneration().multiplier()
                       == FrameGenerationOptions.Multiplier.TWO_X,
               "ordinary GPU defaults must never auto-select MFG");
-      RayTracingRendererConfig generationOnly = RayTracingRendererConfig.builder()
-              .frameGeneration(FrameGenerationOptions.productionDefault())
+      RayTracingRendererConfig generationOnly = RayTracingRendererConfig.expertBuilder()
+              .frameGeneration(FrameGenerationOptions.recommended())
               .build();
       require(generationOnly.frameReconstruction().equals(FrameReconstructionOptions.disabled())
                       && generationOnly.denoising().equals(DenoisingOptions.disabled())
@@ -324,8 +324,8 @@ public final class RendererApiContractSelfTest {
                       && generationOnly.rayTracingOptimizations().equals(
                               RayTracingOptimizationOptions.disabled()),
               "one explicit feature option must not enable unrelated optional policies");
-      require(RayTracingRendererConfig.builder().build().equals(
-                      RayTracingRendererConfig.builder()
+      require(RayTracingRendererConfig.expertBuilder().build().equals(
+                      RayTracingRendererConfig.expertBuilder()
                               .frameReconstruction(FrameReconstructionOptions.disabled())
                               .frameGeneration(FrameGenerationOptions.disabled())
                               .lowLatency(LowLatencyOptions.disabled())
@@ -333,14 +333,14 @@ public final class RendererApiContractSelfTest {
                               .rayTracingOptimizations(RayTracingOptimizationOptions.disabled())
                               .build()),
               "expert builder must keep every unrelated optional feature explicit");
-      RayTracingRendererConfig tuned = RayTracingRendererConfig.defaults().toBuilder().maxFramesInFlight(4).validationEnabled(true).gpuTimingsEnabled(false).cpuFrameReadbackEnabled(false).frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.accumulating(16)).build();
+      RayTracingRendererConfig tuned = RendererPreset.CPU_READBACK.configuration().copyBuilder().maxFramesInFlight(4).validationEnabled(true).gpuTimingsEnabled(false).cpuFrameReadbackEnabled(false).frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.accumulating(16)).build();
       require(tuned.maxFramesInFlight() == 4 && tuned.validationEnabled() && !tuned.gpuTimingsEnabled() && !tuned.cpuFrameReadbackEnabled() && tuned.frameOutputFormat() == FrameOutputFormat.LINEAR_HDR_RGBA16F && tuned.temporalRendering().maxHistoryFrames() == 16, "configuration builder lost an independent policy value");
-      expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.builder().maxFramesInFlight(1).build());
-      expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.builder().maxFramesInFlight(17).build());
-      expect(NullPointerException.class, () -> RayTracingRendererConfig.builder().frameOutputFormat((FrameOutputFormat)null));
-      expect(NullPointerException.class, () -> RayTracingRendererConfig.builder().temporalRendering((TemporalRenderingOptions)null));
-      expect(NullPointerException.class, () -> RayTracingRendererConfig.builder().frameGeneration((FrameGenerationOptions)null));
-      expect(NullPointerException.class, () -> RayTracingRendererConfig.builder().lowLatency((LowLatencyOptions)null));
+      expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.expertBuilder().maxFramesInFlight(1).build());
+      expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.expertBuilder().maxFramesInFlight(17).build());
+      expect(NullPointerException.class, () -> RayTracingRendererConfig.expertBuilder().frameOutputFormat((FrameOutputFormat)null));
+      expect(NullPointerException.class, () -> RayTracingRendererConfig.expertBuilder().temporalRendering((TemporalRenderingOptions)null));
+      expect(NullPointerException.class, () -> RayTracingRendererConfig.expertBuilder().frameGeneration((FrameGenerationOptions)null));
+      expect(NullPointerException.class, () -> RayTracingRendererConfig.expertBuilder().lowLatency((LowLatencyOptions)null));
       require(RayTracingBackendProvider.Descriptor.class.getConstructors().length == 0, "provider descriptor exposed an ordered public constructor");
       expect(IllegalArgumentException.class, () -> Descriptor.builder(" ").build());
       expect(IllegalArgumentException.class, () -> Descriptor.builder("vulkan").apiMajor(0).build());
@@ -362,14 +362,14 @@ public final class RendererApiContractSelfTest {
               .mode(FrameGenerationOptions.Mode.FRAME_GENERATION)
               .fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES)
               .build());
-      expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.builder()
+      expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.expertBuilder()
               .temporalRendering(TemporalRenderingOptions.disabled())
               .frameReconstruction(FrameReconstructionOptions.builder()
                       .preference(RendererFeaturePreference.PREFERRED)
                       .fallback(FrameReconstructionOptions.Fallback.BUILT_IN_TEMPORAL)
                       .build())
               .build());
-      expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.builder()
+      expect(IllegalArgumentException.class, () -> RayTracingRendererConfig.expertBuilder()
               .temporalRendering(TemporalRenderingOptions.disabled())
               .denoising(DenoisingOptions.builder()
                       .preference(RendererFeaturePreference.PREFERRED)
@@ -529,7 +529,7 @@ public final class RendererApiContractSelfTest {
    }
 
    private static void assertFrameGenerationContract() {
-      FrameGenerationOptions production = FrameGenerationOptions.productionDefault();
+      FrameGenerationOptions production = FrameGenerationOptions.recommended();
       require(production.preference() == RendererFeaturePreference.PREFERRED
                       && production.mode() == FrameGenerationOptions.Mode.FRAME_GENERATION
                       && production.multiplier() == FrameGenerationOptions.Multiplier.TWO_X
@@ -561,7 +561,7 @@ public final class RendererApiContractSelfTest {
    }
 
    private static void assertLowLatencyContract() {
-      LowLatencyOptions production = LowLatencyOptions.productionDefault();
+      LowLatencyOptions production = LowLatencyOptions.recommended();
       require(production.preference() == RendererFeaturePreference.PREFERRED,
               "production low-latency policy must be non-terminal");
       require(LowLatencyOptions.disabled().preference() == RendererFeaturePreference.DISABLED,
@@ -655,21 +655,81 @@ public final class RendererApiContractSelfTest {
 
    private static void assertGpuDeviceSelectionContract() {
       RayTracingGpuDevice device = gpuDevice("vulkan", "00112233445566778899aabbccddeeff");
-      RayTracingRendererConfig selected = RayTracingRendererConfig.defaults().toBuilder().gpuDevice(device).build();
+      RayTracingRendererConfig selected = RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(device).build();
       require(((RayTracingGpuDevice)selected.gpuDevice().orElseThrow()).equals(device), "configuration lost selected GPU identity");
       require(RayTracingGpuDevice.class.getConstructors().length == 0, "GPU device exposed an ordered public constructor");
-      require(RayTracingGpuDevice.RayTracingLimits.class.getConstructors().length == 0, "ray-tracing limits exposed an ordered public constructor");
+      require(HardwareCapabilities.RayTracingLimits.class.getConstructors().length == 0, "ray-tracing limits exposed an ordered public constructor");
       require(device.equals(device.toBuilder().build()), "GPU device toBuilder changed structural value semantics");
-      expect(NullPointerException.class, () -> RayTracingRendererConfig.builder().gpuDevice((RayTracingGpuDevice)null));
+      expect(NullPointerException.class, () -> RayTracingRendererConfig.expertBuilder().gpuDevice((RayTracingGpuDevice)null));
       expect(NullPointerException.class, () -> RayTracingGpuDevice.builder().backendId((String)null));
+      expect(IllegalArgumentException.class, () -> device.toBuilder().stableId(" " + device.stableId()));
+      expect(IllegalArgumentException.class, () -> device.toBuilder().name("bad\nname"));
+      expect(IllegalStateException.class, () -> RayTracingGpuDevice.builder()
+              .backendId("vulkan")
+              .stableId("explicit-id-contract")
+              .name("Missing identifiers")
+              .type(Type.DISCRETE)
+              .apiVersion(new RayTracingGpuDevice.ApiVersion(1, 3, 0))
+              .hardwareCapabilities(device.hardwareCapabilities())
+              .build());
       expect(IllegalStateException.class, () -> RayTracingLimits.builder().maxRayRecursionDepth(1).build());
-      expect(IllegalArgumentException.class, () -> device.toBuilder().capabilities(Set.of()).build());
+      expect(IllegalArgumentException.class, () -> device.toBuilder()
+              .hardwareCapabilities(HardwareCapabilities.builder()
+                      .probeState(HardwareCapabilities.ProbeState.FAILED)
+                      .reason("contract probe failed")
+                      .build())
+              .build());
       TrackingProvider wrongBackend = new TrackingProvider("other", 1000, ProbeResult.compatible("ready"), false);
       TrackingProvider selectedBackend = new TrackingProvider("vulkan", 1, ProbeResult.compatible("ready"), false);
       RayTracingRenderer renderer = RendererBootstrap.openProviders((String)null, selected, List.of(wrongBackend, selectedBackend));
       require(renderer == selectedBackend.renderer, "selected GPU did not route to its owning backend");
       require(wrongBackend.opens.get() == 0, "bootstrap opened a backend that does not own the selected GPU");
       expect(IllegalArgumentException.class, () -> RendererBootstrap.openProviders("other", selected, List.of(wrongBackend, selectedBackend)));
+   }
+
+   private static void assertHardwareCapabilitiesContract() {
+      HardwareCapabilities.RayTracingLimits limits = RayTracingLimits.builder()
+              .maxRayRecursionDepth(2)
+              .shaderGroupHandleSize(32)
+              .shaderGroupHandleAlignment(32)
+              .shaderGroupBaseAlignment(64)
+              .maxShaderGroupStride(4096)
+              .maxRayDispatchInvocationCount(1_073_741_824L)
+              .minAccelerationStructureScratchAlignment(256)
+              .build();
+      HardwareCapabilities capabilities = hardwareCapabilities(limits);
+      require(capabilities.probeState() == HardwareCapabilities.ProbeState.COMPLETE
+                      && capabilities.features().size() == HardwareCapabilities.Feature.values().length
+                      && capabilities.supports(HardwareCapabilities.Feature.HARDWARE_RAY_TRACING),
+              "complete hardware snapshot lost total, positive RT evidence");
+      require(capabilities.feature(HardwareCapabilities.Feature.MEMORY_BUDGET).state()
+                      == HardwareCapabilities.SupportState.UNSUPPORTED,
+              "complete hardware snapshot did not preserve queried unsupported evidence");
+      require(capabilities.frameInterop(
+                      FrameOutputFormat.SDR_RGBA8,
+                      HardwareCapabilities.ExternalHandleType.OPAQUE_WIN32
+              ).semaphoreImport().state() == HardwareCapabilities.SupportState.SUPPORTED,
+              "format/handle-specific semaphore import evidence was lost");
+      expect(UnsupportedOperationException.class, () -> capabilities.features().clear());
+      expect(UnsupportedOperationException.class, () -> capabilities.frameInterop().clear());
+      expect(IllegalArgumentException.class, () -> HardwareCapabilities.builder()
+              .probeState(HardwareCapabilities.ProbeState.FAILED)
+              .feature(
+                      HardwareCapabilities.Feature.HARDWARE_RAY_TRACING,
+                      HardwareCapabilities.Support.supported("fabricated support")
+              )
+              .reason("failed probe")
+              .build());
+      expect(IllegalArgumentException.class, () -> HardwareCapabilities.builder()
+              .probeState(HardwareCapabilities.ProbeState.COMPLETE)
+              .feature(
+                      HardwareCapabilities.Feature.HARDWARE_RAY_TRACING,
+                      HardwareCapabilities.Support.supported("incomplete RT evidence")
+              )
+              .maxImageDimension2D(16_384)
+              .rayTracingLimits(limits)
+              .reason("missing prerequisite")
+              .build());
    }
 
    private static void assertCpuFrameContract() {
@@ -714,7 +774,7 @@ public final class RendererApiContractSelfTest {
    }
 
    private static void assertSubmissionDeferralAndCloseContract() {
-      RayTracingRenderer.FrameSubmissionDeferred typed = RayTracingRenderer.FrameSubmissionDeferred.because(
+      RayTracingRenderer.FrameSubmissionDeferred typed = new RayTracingRenderer.FrameSubmissionDeferred(
             SubmissionDeferralReason.FRAME_RING_FULL,
             "all contract-test frame slots are retained"
       );
@@ -722,11 +782,10 @@ public final class RendererApiContractSelfTest {
                   && typed.detail().equals("all contract-test frame slots are retained"),
             "typed frame deferral lost its stable reason or diagnostic detail");
 
-      RayTracingRenderer.FrameSubmissionDeferred legacy =
-            new RayTracingRenderer.FrameSubmissionDeferred("legacy provider capacity");
-      require(legacy.deferralReason() == SubmissionDeferralReason.UNSPECIFIED
-                  && legacy.detail().equals(legacy.reason()),
-            "legacy frame deferral was assigned a fabricated category");
+      expect(NullPointerException.class, () -> new RayTracingRenderer.FrameSubmissionDeferred(
+              null, "missing typed category"));
+      expect(IllegalArgumentException.class, () -> new RayTracingRenderer.FrameSubmissionDeferred(
+              SubmissionDeferralReason.PROVIDER_CAPACITY, " "));
 
       SubmissionRejectedException rejection = new SubmissionRejectedException(
             SubmissionDeferralReason.RESOURCE_PRESSURE,
@@ -751,8 +810,51 @@ public final class RendererApiContractSelfTest {
    }
 
    private static RayTracingGpuDevice gpuDevice(String backendId, String stableId) {
-      RayTracingGpuDevice.RayTracingLimits limits = RayTracingLimits.builder().maxRayRecursionDepth(31).shaderGroupHandleSize(32).shaderGroupHandleAlignment(32).shaderGroupBaseAlignment(64).maxShaderGroupStride(4096).maxRayDispatchInvocationCount(1073741824L).minAccelerationStructureScratchAlignment(256).build();
-      return RayTracingGpuDevice.builder().backendId(backendId).stableId(stableId).name("Contract GPU").vendorId(4318).deviceId(1).type(Type.DISCRETE).apiVersion(new RayTracingGpuDevice.ApiVersion(1, 3, 0)).deviceLocalMemoryBytes(8589934592L).capabilities(Set.of(Capability.HARDWARE_RAY_TRACING, Capability.ACCELERATION_STRUCTURE, Capability.RAY_TRACING_PIPELINE)).rayTracingLimits(limits).build();
+      HardwareCapabilities.RayTracingLimits limits = RayTracingLimits.builder().maxRayRecursionDepth(31).shaderGroupHandleSize(32).shaderGroupHandleAlignment(32).shaderGroupBaseAlignment(64).maxShaderGroupStride(4096).maxRayDispatchInvocationCount(1073741824L).minAccelerationStructureScratchAlignment(256).build();
+      return RayTracingGpuDevice.builder().backendId(backendId).stableId(stableId).name("Contract GPU").vendorId(4318).deviceId(1).type(Type.DISCRETE).apiVersion(new RayTracingGpuDevice.ApiVersion(1, 3, 0)).hardwareCapabilities(hardwareCapabilities(limits)).build();
+   }
+
+   private static HardwareCapabilities hardwareCapabilities(HardwareCapabilities.RayTracingLimits limits) {
+      HardwareCapabilities.Support supported = HardwareCapabilities.Support.supported("contract evidence");
+      HardwareCapabilities.Support unsupported = HardwareCapabilities.Support.unsupported("contract absence");
+      return HardwareCapabilities.builder()
+              .probeState(HardwareCapabilities.ProbeState.COMPLETE)
+              .feature(HardwareCapabilities.Feature.HARDWARE_RAY_TRACING, supported)
+              .feature(HardwareCapabilities.Feature.ACCELERATION_STRUCTURE, supported)
+              .feature(HardwareCapabilities.Feature.RAY_TRACING_PIPELINE, supported)
+              .feature(HardwareCapabilities.Feature.BUFFER_DEVICE_ADDRESS, supported)
+              .feature(HardwareCapabilities.Feature.SHADER_INT64, supported)
+              .feature(HardwareCapabilities.Feature.EXTERNAL_MEMORY, supported)
+              .feature(HardwareCapabilities.Feature.EXTERNAL_SEMAPHORE, supported)
+              .feature(HardwareCapabilities.Feature.MEMORY_BUDGET, unsupported)
+              .feature(HardwareCapabilities.Feature.GPU_TIMESTAMPS, supported)
+              .deviceLocalMemoryBytes(8_589_934_592L)
+              .maxImageDimension2D(16_384)
+              .rayTracingLimits(limits)
+              .frameInterop(
+                      FrameOutputFormat.SDR_RGBA8,
+                      HardwareCapabilities.ExternalHandleType.OPAQUE_WIN32,
+                      new HardwareCapabilities.FrameInteropSupport(
+                              supported,
+                              supported,
+                              supported,
+                              supported,
+                              HardwareCapabilities.DedicatedAllocation.NOT_REQUIRED
+                      )
+              )
+              .frameInterop(
+                      FrameOutputFormat.LINEAR_HDR_RGBA16F,
+                      HardwareCapabilities.ExternalHandleType.OPAQUE_WIN32,
+                      new HardwareCapabilities.FrameInteropSupport(
+                              unsupported,
+                              unsupported,
+                              supported,
+                              supported,
+                              HardwareCapabilities.DedicatedAllocation.UNKNOWN
+                      )
+              )
+              .reason("complete contract probe")
+              .build();
    }
 
    private static void assertTransformAndLightingValidation() {
@@ -1185,15 +1287,15 @@ public final class RendererApiContractSelfTest {
    private static void assertProviderSelection() {
       TrackingProvider unsupported = new TrackingProvider("unsupported", 100, ProbeResult.unsupported("missing feature"), false);
       TrackingProvider compatible = new TrackingProvider("vulkan", 10, ProbeResult.compatible("ready"), false);
-      RayTracingRenderer selected = RendererBootstrap.openProviders((String)null, RayTracingRendererConfig.defaults(), List.of(compatible, unsupported));
+      RayTracingRenderer selected = RendererBootstrap.openProviders((String)null, RendererPreset.CPU_READBACK.configuration(), List.of(compatible, unsupported));
       require(selected == compatible.renderer, "bootstrap did not select the compatible provider");
       require(unsupported.opens.get() == 0 && compatible.opens.get() == 1, "bootstrap opened an incompatible provider or opened twice");
-      expect(RendererInitializationException.class, () -> RendererBootstrap.openProviders((String)null, RayTracingRendererConfig.defaults(), List.of(compatible, new TrackingProvider("vulkan", 1, ProbeResult.compatible("duplicate"), false))));
+      expect(RendererInitializationException.class, () -> RendererBootstrap.openProviders((String)null, RendererPreset.CPU_READBACK.configuration(), List.of(compatible, new TrackingProvider("vulkan", 1, ProbeResult.compatible("duplicate"), false))));
       TrackingProvider broken = new TrackingProvider("broken", 200, ProbeResult.compatible("probe ready"), true);
-      RendererInitializationException initialization = (RendererInitializationException)expect(RendererInitializationException.class, () -> RendererBootstrap.openProviders((String)null, RayTracingRendererConfig.defaults(), List.of(compatible, broken)));
+      RendererInitializationException initialization = (RendererInitializationException)expect(RendererInitializationException.class, () -> RendererBootstrap.openProviders((String)null, RendererPreset.CPU_READBACK.configuration(), List.of(compatible, broken)));
       require(initialization.providerId().equals("broken"), "initialization failure lost provider identity");
       require(compatible.opens.get() == 1, "bootstrap silently fell back after initialization failure");
-      RendererUnavailableException unavailable = (RendererUnavailableException)expect(RendererUnavailableException.class, () -> RendererBootstrap.openProviders("missing", RayTracingRendererConfig.defaults(), List.of(compatible)));
+      RendererUnavailableException unavailable = (RendererUnavailableException)expect(RendererUnavailableException.class, () -> RendererBootstrap.openProviders("missing", RendererPreset.CPU_READBACK.configuration(), List.of(compatible)));
       require(unavailable.attempts().isEmpty(), "explicit missing provider fabricated probe attempts");
       RendererUnavailableException.BackendAttempt attempt = BackendAttempt.of("vulkan-rt", Compatibility.UNSUPPORTED, "missing ray tracing support");
       require(RendererUnavailableException.BackendAttempt.class.getConstructors().length == 0 && attempt.compatibility() == Compatibility.UNSUPPORTED, "provider failure evidence exposed a positional or stringly compatibility surface");
@@ -1302,6 +1404,10 @@ public final class RendererApiContractSelfTest {
          return this.descriptor;
       }
 
+      public List<RayTracingGpuDevice> availableGpuDevices() {
+         return List.of();
+      }
+
       public RayTracingBackendProvider.ProbeResult probe(RayTracingRendererConfig configuration) {
          return this.probe;
       }
@@ -1333,12 +1439,25 @@ public final class RendererApiContractSelfTest {
          throw new UnsupportedOperationException();
       }
 
+      public RayTracingRenderer.FrameSubmissionAttempt trySubmit(RenderFrameRequest request) {
+         throw new UnsupportedOperationException();
+      }
+
       public Optional<CpuFrame> pollLatestCpuFrame() {
          return Optional.empty();
       }
 
       public RendererDiagnostics diagnostics() {
          throw new UnsupportedOperationException();
+      }
+
+      public <T> Optional<T> extension(Class<T> extensionType) {
+         return Optional.empty();
+      }
+
+      public java.util.concurrent.CompletionStage<Void> closeAsync() {
+         close();
+         return java.util.concurrent.CompletableFuture.completedFuture(null);
       }
 
       public void close() {

@@ -19,18 +19,6 @@ public final class RayTracingRendererConfig {
     /** Largest supported bounded frame ring. */
     public static final int MAX_MAX_FRAMES_IN_FLIGHT = 16;
 
-    private static final RayTracingRendererConfig AUTOMATIC_DEFAULTS = builder()
-            .frameReconstruction(FrameReconstructionOptions.productionDefault())
-            .denoising(DenoisingOptions.productionDefault())
-            .rayTracingOptimizations(RayTracingOptimizationOptions.productionDefault())
-            .build();
-    private static final RayTracingRendererConfig AUTOMATIC_GPU_PRESENTATION_DEFAULTS =
-            AUTOMATIC_DEFAULTS.toBuilder()
-                    .cpuFrameReadbackEnabled(false)
-                    .frameGeneration(FrameGenerationOptions.productionDefault())
-                    .lowLatency(LowLatencyOptions.productionDefault())
-                    .build();
-
     private final int maxFramesInFlight;
     private final boolean validationEnabled;
     private final boolean gpuTimingsEnabled;
@@ -81,48 +69,16 @@ public final class RayTracingRendererConfig {
     }
 
     /**
-     * Starts an expert configuration builder with explicit, conservative feature defaults.
+     * Starts the expert configuration surface with explicit, conservative feature defaults.
      *
      * <p>All vendor and advanced optional features begin disabled so setting one expert policy
      * cannot silently enable unrelated owners. Applications wanting the ordinary capability-driven
-     * policy should tune {@link #defaults()} through {@link #toBuilder()}.</p>
+     * policy should use {@link RendererBootstrap#open(RendererPreset)} instead.</p>
      *
      * @return new single-thread-confined configuration builder
      */
-    public static Builder builder() {
+    public static Builder expertBuilder() {
         return new Builder();
-    }
-
-    /**
-     * Returns the ordinary capability-driven production configuration.
-     *
-     * <p>Reconstruction, denoising, SER, and AS-memory optimization are preferred and negotiate
-     * independently. Unsupported implementations retain their documented renderer fallbacks.
-     * Presentation-time generation and latency pacing stay disabled because this CPU-readable
-     * preset does not own a display cadence; use {@link #gpuPresentationDefaults()} when the
-     * application will open the managed GPU presenter.</p>
-     *
-     * @return immutable production defaults
-     */
-    public static RayTracingRendererConfig defaults() {
-        return AUTOMATIC_DEFAULTS;
-    }
-
-    /**
-     * Returns production defaults for applications that consume frames through the managed GPU
-     * presenter.
-     *
-     * <p>This preset disables the independent CPU-readback ring and prefers ordinary FG 2x with
-     * its Reflex/PCL pacing dependency. MFG is never selected automatically. The caller still
-     * opens and owns the managed presenter explicitly; unavailable presentation features retain
-     * native one-frame-per-submission presentation. Raw {@code VulkanFrameInterop} consumers do
-     * not own this swapchain cadence and should instead disable CPU readback on
-     * {@link #defaults()} through {@link #toBuilder()}.</p>
-     *
-     * @return immutable production defaults without CPU frame readback
-     */
-    public static RayTracingRendererConfig gpuPresentationDefaults() {
-        return AUTOMATIC_GPU_PRESENTATION_DEFAULTS;
     }
 
     /**
@@ -130,7 +86,7 @@ public final class RayTracingRendererConfig {
      *
      * @return new builder containing every current policy
      */
-    public Builder toBuilder() {
+    public Builder copyBuilder() {
         return new Builder(this);
     }
 

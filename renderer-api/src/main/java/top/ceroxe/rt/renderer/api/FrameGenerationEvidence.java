@@ -30,6 +30,7 @@ public final class FrameGenerationEvidence {
     private final long generationRequestMisses;
     private final int maximumGeneratedFramesObservedPerSample;
     private final OptionalInt latestNativeStatus;
+    private final boolean latestQuerySucceeded;
     private final OptionalLong firstProxyPresentSequence;
     private final OptionalLong lastProxyPresentSequence;
     private final OptionalLong lastGeneratedObservationSequence;
@@ -54,6 +55,8 @@ public final class FrameGenerationEvidence {
         maximumGeneratedFramesObservedPerSample =
                 builder.maximumGeneratedFramesObservedPerSample;
         latestNativeStatus = Objects.requireNonNull(builder.latestNativeStatus, "latestNativeStatus");
+        latestQuerySucceeded = builder.latestQuerySucceeded != null
+                ? builder.latestQuerySucceeded : latestNativeStatus.isPresent();
         firstProxyPresentSequence = optionalSequence(
                 builder.firstProxyPresentSequence, "firstProxyPresentSequence"
         );
@@ -230,6 +233,19 @@ public final class FrameGenerationEvidence {
     }
 
     /**
+     * Returns whether the latest authoritative native state query succeeded.
+     *
+     * <p>A successful query may report zero generated frames; it still supersedes an older
+     * delivery sample. This flag prevents a historical status from being presented as the latest
+     * observation after a subsequent query failure.</p>
+     *
+     * @return whether the most recent query succeeded
+     */
+    public boolean latestQuerySucceeded() {
+        return latestQuerySucceeded;
+    }
+
+    /**
      * Returns the first renderer frame sequence routed through the proxy.
      *
      * @return first proxy-present sequence, or empty before the first proxy present
@@ -304,7 +320,8 @@ public final class FrameGenerationEvidence {
      * @return {@code true} only after successful runtime status and generated output are observed
      */
     public boolean active() {
-        return reported && latestNativeStatus.isPresent() && latestNativeStatus.orElseThrow() == 0
+        return reported && latestQuerySucceeded && latestNativeStatus.isPresent()
+                && latestNativeStatus.orElseThrow() == 0
                 && generatedFramesActuallyPresented > 0L;
     }
 
@@ -328,7 +345,8 @@ public final class FrameGenerationEvidence {
         if (generatedFramesActuallyPresented > totalFramesActuallyPresented) {
             throw new IllegalArgumentException("generated frames must not exceed total actually presented frames");
         }
-        if (stateSamples > stateQueryCalls || stateQueryFailures > stateQueryCalls) {
+        if (stateSamples > stateQueryCalls || stateQueryFailures > stateQueryCalls
+                || stateQueryFailures > stateQueryCalls - stateSamples) {
             throw new IllegalArgumentException("frame-generation state-query counters are inconsistent");
         }
         if (generationRequestMisses > proxyPresentCalls) {
@@ -343,8 +361,13 @@ public final class FrameGenerationEvidence {
         if (maximumGeneratedFramesObservedPerSample > generatedFramesActuallyPresented) {
             throw new IllegalArgumentException("sample maximum exceeds cumulative generated frames");
         }
-        if (stateQueryCalls == stateQueryFailures && latestNativeStatus.isPresent()) {
-            throw new IllegalArgumentException("native status requires a successful state query");
+        if (latestQuerySucceeded != latestNativeStatus.isPresent()) {
+            throw new IllegalArgumentException(
+                    "latest query success must agree with the presence of native status"
+            );
+        }
+        if (!reported && latestQuerySucceeded) {
+            throw new IllegalArgumentException("unreported evidence cannot contain a successful query");
         }
         if ((proxyPresentCalls > 0L) != firstProxyPresentSequence.isPresent()
                 || firstProxyPresentSequence.isPresent() != lastProxyPresentSequence.isPresent()) {
@@ -418,6 +441,7 @@ public final class FrameGenerationEvidence {
                 && maximumGeneratedFramesObservedPerSample
                 == evidence.maximumGeneratedFramesObservedPerSample
                 && resetEpoch == evidence.resetEpoch
+                && latestQuerySucceeded == evidence.latestQuerySucceeded
                 && latestNativeStatus.equals(evidence.latestNativeStatus)
                 && firstProxyPresentSequence.equals(evidence.firstProxyPresentSequence)
                 && lastProxyPresentSequence.equals(evidence.lastProxyPresentSequence)
@@ -436,7 +460,7 @@ public final class FrameGenerationEvidence {
                 stateQueryFailures, generationRequestMisses,
                 maximumGeneratedFramesObservedPerSample, latestNativeStatus,
                 firstProxyPresentSequence, lastProxyPresentSequence,
-                lastGeneratedObservationSequence, resetEpoch);
+                lastGeneratedObservationSequence, resetEpoch, latestQuerySucceeded);
     }
 
     @Override
@@ -464,6 +488,7 @@ public final class FrameGenerationEvidence {
                 + ", firstProxyPresentSequence=" + firstProxyPresentSequence
                 + ", lastProxyPresentSequence=" + lastProxyPresentSequence
                 + ", lastGeneratedObservationSequence=" + lastGeneratedObservationSequence
+                + ", latestQuerySucceeded=" + latestQuerySucceeded
                 + ", resetEpoch=" + resetEpoch + ']';
     }
 
@@ -484,6 +509,7 @@ public final class FrameGenerationEvidence {
         private long generationRequestMisses;
         private int maximumGeneratedFramesObservedPerSample;
         private OptionalInt latestNativeStatus = OptionalInt.empty();
+        private Boolean latestQuerySucceeded;
         private Long firstProxyPresentSequence;
         private Long lastProxyPresentSequence;
         private Long lastGeneratedObservationSequence;
@@ -511,6 +537,7 @@ public final class FrameGenerationEvidence {
             maximumGeneratedFramesObservedPerSample =
                     source.maximumGeneratedFramesObservedPerSample;
             latestNativeStatus = source.latestNativeStatus;
+            latestQuerySucceeded = source.latestQuerySucceeded;
             firstProxyPresentSequence = source.firstProxyPresentSequence.isPresent()
                     ? source.firstProxyPresentSequence.getAsLong() : null;
             lastProxyPresentSequence = source.lastProxyPresentSequence.isPresent()
@@ -682,6 +709,17 @@ public final class FrameGenerationEvidence {
          */
         public Builder latestNativeStatus(OptionalInt value) {
             latestNativeStatus = Objects.requireNonNull(value, "latestNativeStatus");
+            return this;
+        }
+
+        /**
+         * Selects whether the most recent authoritative native state query succeeded.
+         *
+         * @param value whether the latest query returned authoritative status
+         * @return this builder
+         */
+        public Builder latestQuerySucceeded(boolean value) {
+            latestQuerySucceeded = value;
             return this;
         }
 

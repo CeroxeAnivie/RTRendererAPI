@@ -68,7 +68,7 @@ public final class FrameGenerationOptions {
      *
      * @return preferred immutable production policy
      */
-    public static FrameGenerationOptions productionDefault() {
+    public static FrameGenerationOptions recommended() {
         return PRODUCTION_DEFAULT;
     }
 
