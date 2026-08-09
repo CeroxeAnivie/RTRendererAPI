@@ -1,18 +1,18 @@
-# Security Policy
+# 安全策略
 
-## Supported versions
+## 支持版本
 
-RTRendererAPI 1.x is the stable API line. Security fixes are provided for the latest patch of the current major line. Older Maven Central artifacts remain immutable and should be upgraded before reporting a defect.
+RTRendererAPI `1.x` 是稳定 API 线。当前 major 仅为最新 patch 版本提供安全修复。Maven Central 上的旧制品保持不可变；报告缺陷前应先升级到最新 patch。
 
-| Version | Security fixes |
+| 版本 | 安全修复状态 |
 | --- | --- |
-| `1.x` | Supported when running the latest patch |
-| `< 1.0` | Not supported |
+| `1.x` | 仅支持最新 patch |
+| `< 1.0` | 不支持 |
 
-## Reporting a vulnerability
+## 报告安全漏洞
 
-Do not disclose exploitable details in a public issue. Use the repository's [private security advisory form](https://github.com/CeroxeAnivie/RTRendererAPI/security/advisories/new). Include affected coordinates, platform and driver versions, a minimal reproducer, impact, and whether native code or untrusted assets are involved.
+请勿在公开 Issue 中披露可利用细节。请使用仓库的[私有安全公告表单](https://github.com/CeroxeAnivie/RTRendererAPI/security/advisories/new)，并提供受影响的 Maven 坐标、平台与驱动版本、最小复现、影响范围，以及问题是否涉及 native 代码或不受信任的资源。
 
-The maintainer targets acknowledgement within 7 days and an initial severity assessment within 14 days. These are response targets, not a guaranteed SLA. A confirmed issue is handled in a private advisory, assigned a compatible patch or an explicitly breaking release, and published with affected-version and mitigation details. Signing keys and Central credentials must be rotated if exposure cannot be excluded.
+维护者目标是在 7 天内确认收到报告，并在 14 天内完成初步严重性评估；这些是响应目标，不构成 SLA 保证。确认后的问题将在私有安全公告中处理，分配至兼容 patch 或明确包含破坏性变更的版本，并随受影响版本和缓解措施一并发布。若无法排除泄露可能，必须轮换签名密钥与 Maven Central 凭据。
 
-Public, non-sensitive defects belong in GitHub Issues. Dependency vulnerabilities are assessed against the shipped runtime graph rather than scanner presence alone; a suppression must identify the exact component, reachability rationale and review date.
+公开且不敏感的缺陷应提交至 GitHub Issues。依赖漏洞依据实际发布的运行时依赖图及其可达性评估，不能仅凭扫描器是否报出漏洞判断；任何抑制项都必须注明精确组件、不可达理由和复核日期。

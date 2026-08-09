@@ -13,9 +13,9 @@ import top.ceroxe.rt.renderer.api.SceneTransaction;
 /**
  * Consumer compiled against the previous formal artifact and executed with only the current API.
  *
- * <p>APIs introduced after the baseline must not appear in static bytecode. Reflection verifies
- * that a new default lifecycle method dispatches on an old provider implementation without
- * {@code AbstractMethodError}.</p>
+ * <p>The implementation deliberately satisfies the complete previous-release interface. Running
+ * this class with only the current API verifies that existing provider bytecode still links and
+ * dispatches without {@code AbstractMethodError}.</p>
  */
 public final class PreviousApiConsumer implements RayTracingRenderer {
     private boolean closed;
@@ -70,6 +70,11 @@ public final class PreviousApiConsumer implements RayTracingRenderer {
     }
 
     @Override
+    public FrameSubmissionAttempt trySubmit(RenderFrameRequest request) {
+        throw new UnsupportedOperationException("not needed by compatibility fixture");
+    }
+
+    @Override
     public Optional<CpuFrame> pollLatestCpuFrame() {
         return Optional.empty();
     }
@@ -77,6 +82,20 @@ public final class PreviousApiConsumer implements RayTracingRenderer {
     @Override
     public RendererDiagnostics diagnostics() {
         throw new UnsupportedOperationException("not needed by compatibility fixture");
+    }
+
+    @Override
+    public <T> Optional<T> extension(Class<T> extensionType) {
+        if (extensionType == null) throw new NullPointerException("extensionType");
+        return extensionType.isInstance(this)
+                ? Optional.of(extensionType.cast(this))
+                : Optional.empty();
+    }
+
+    @Override
+    public CompletionStage<Void> closeAsync() {
+        close();
+        return java.util.concurrent.CompletableFuture.completedFuture(null);
     }
 
     @Override

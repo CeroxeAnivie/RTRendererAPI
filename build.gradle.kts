@@ -79,8 +79,8 @@ subprojects {
 
                         licenses {
                             license {
-                                name.set("MIT License")
-                                url.set("https://opensource.org/licenses/MIT")
+                                name.set("Apache License, Version 2.0")
+                                url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
                                 distribution.set("repo")
                             }
                         }
@@ -129,12 +129,73 @@ subprojects {
     }
 }
 
+val projectLicenseName = "Apache License, Version 2.0"
+val projectLicenseUrl = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+val publishedModuleNames = listOf("renderer-api", "renderer-core", "renderer-nvidia")
+
+val verifyProjectLicenseConsistency = tasks.register("verifyProjectLicenseConsistency") {
+    group = "verification"
+    description = "Verifies the repository, generated POMs, and published JARs use Apache License 2.0."
+    publishedModuleNames.forEach { moduleName ->
+        dependsOn(":$moduleName:generatePomFileForMavenJavaPublication")
+        dependsOn(":$moduleName:jar")
+    }
+    inputs.file(layout.projectDirectory.file("LICENSE"))
+
+    doLast {
+        val licenseFile = layout.projectDirectory.file("LICENSE").asFile
+        val licenseBytes = licenseFile.readBytes()
+        val licenseText = licenseBytes.toString(StandardCharsets.UTF_8)
+        if (!licenseText.startsWith("                                 Apache License\n")
+            || !licenseText.contains("Version 2.0, January 2004")) {
+            throw GradleException("Root LICENSE is not the canonical Apache License 2.0 text")
+        }
+
+        fun secureDocument(file: File) = DocumentBuilderFactory.newInstance().apply {
+            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            setFeature("http://xml.org/sax/features/external-general-entities", false)
+            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+            isXIncludeAware = false
+            isExpandEntityReferences = false
+        }.newDocumentBuilder().parse(file)
+
+        publishedModuleNames.forEach { moduleName ->
+            val moduleDirectory = project(moduleName).layout.projectDirectory.asFile
+            val pomFile = File(moduleDirectory, "build/publications/mavenJava/pom-default.xml")
+            val document = secureDocument(pomFile)
+            val licenses = document.getElementsByTagName("license")
+            if (licenses.length != 1) {
+                throw GradleException("$moduleName POM must declare exactly one project license")
+            }
+            val license = licenses.item(0) as Element
+            fun licenseValue(tag: String): String =
+                license.getElementsByTagName(tag).item(0)?.textContent?.trim().orEmpty()
+            val actual = listOf(licenseValue("name"), licenseValue("url"), licenseValue("distribution"))
+            val expected = listOf(projectLicenseName, projectLicenseUrl, "repo")
+            if (actual != expected) {
+                throw GradleException("$moduleName POM license differs: expected=$expected, actual=$actual")
+            }
+
+            val jarFile = File(moduleDirectory, "build/libs/$moduleName-$version.jar")
+            ZipFile(jarFile).use { archive ->
+                val entry = archive.getEntry("META-INF/LICENSE")
+                    ?: throw GradleException("$moduleName JAR does not contain META-INF/LICENSE")
+                val embedded = archive.getInputStream(entry).use { it.readAllBytes() }
+                if (!licenseBytes.contentEquals(embedded)) {
+                    throw GradleException("$moduleName JAR embeds a LICENSE different from the repository root")
+                }
+            }
+        }
+    }
+}
+
 tasks.named("assemble") {
     dependsOn(":renderer-api:assemble", ":renderer-core:assemble", ":renderer-nvidia:assemble")
 }
 
 tasks.named("check") {
     dependsOn(":renderer-api:check", ":renderer-core:check", ":renderer-nvidia:check")
+    dependsOn(verifyProjectLicenseConsistency)
 }
 
 val releaseVersionDocuments = files(
@@ -595,32 +656,35 @@ tasks.named("check") {
     dependsOn(tasks.named("verifyReproducibleArchiveConfiguration"))
 }
 
-val repositoryTextFiles = fileTree(layout.projectDirectory) {
-    include(
-        "**/*.bat",
-        "**/*.cpp",
-        "**/*.gradle.kts",
-        "**/*.java",
-        "**/*.json",
-        "**/*.md",
-        "**/*.properties",
-        "**/*.ps1",
-        "**/*.txt",
-        "**/*.xml",
-        "**/*.yaml",
-        "**/*.yml",
-        "**/*.glsl",
-        "**/*.rchit",
-        "**/*.rgen",
-        "**/*.rmiss"
-    )
-    exclude(".git/**", ".gradle/**", ".idea/**", "**/build/**")
-}
+val repositoryNeutralityFiles = files(
+    // These files define the published coordinates, module graph, and release metadata.
+    file("build.gradle.kts"),
+    file("settings.gradle.kts"),
+    file("gradle.properties"),
+    publishedModuleNames.map { moduleName ->
+        fileTree(moduleName) {
+            include(
+                "build.gradle.kts",
+                "src/main/**/*.comp",
+                "src/main/**/*.cpp",
+                "src/main/**/*.glsl",
+                "src/main/**/*.hpp",
+                "src/main/**/*.java",
+                "src/main/**/*.rahit",
+                "src/main/**/*.rchit",
+                "src/main/**/*.rgen",
+                "src/main/**/*.rmiss",
+                "src/main/**/*.txt",
+                "src/main/resources/META-INF/services/**"
+            )
+        }
+    }
+)
 
 tasks.register("verifyRepositoryNeutrality") {
     group = "verification"
-    description = "Rejects legacy engine identities and project-specific terminology."
-    inputs.files(repositoryTextFiles)
+    description = "Rejects host-specific identities from published modules and release metadata."
+    inputs.files(repositoryNeutralityFiles)
 
     doLast {
         val forbidden = listOf(
@@ -631,7 +695,7 @@ tasks.register("verifyRepositoryNeutrality") {
             "external engine version" to Regex("(?i)\\b${"ue" + "5"}\\b")
         )
         val violations = mutableListOf<String>()
-        repositoryTextFiles.files.sorted().forEach { file ->
+        repositoryNeutralityFiles.files.sorted().forEach { file ->
             val relativePath = rootDir.toPath().relativize(file.toPath()).toString().replace('\\', '/')
             forbidden.forEach { (label, pattern) ->
                 if (pattern.containsMatchIn(relativePath)) {

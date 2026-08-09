@@ -796,6 +796,11 @@ public final class RendererApiContractSelfTest {
             "typed rejection lost its stable reason or diagnostic detail");
 
       TrackingRenderer renderer = new TrackingRenderer();
+      require(renderer.extension(RayTracingRenderer.class).orElseThrow() == renderer,
+            "default extension discovery did not recognize the renderer's own interface");
+      require(renderer.extension(VulkanFrameInterop.class).isEmpty(),
+            "default extension discovery fabricated an unsupported interface");
+      expect(NullPointerException.class, () -> renderer.extension(null));
       require(renderer.closeAsync().toCompletableFuture().isDone(),
             "synchronous provider default did not complete closeAsync");
       try {
@@ -1449,15 +1454,6 @@ public final class RendererApiContractSelfTest {
 
       public RendererDiagnostics diagnostics() {
          throw new UnsupportedOperationException();
-      }
-
-      public <T> Optional<T> extension(Class<T> extensionType) {
-         return Optional.empty();
-      }
-
-      public java.util.concurrent.CompletionStage<Void> closeAsync() {
-         close();
-         return java.util.concurrent.CompletableFuture.completedFuture(null);
       }
 
       public void close() {

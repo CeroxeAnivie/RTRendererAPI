@@ -303,8 +303,8 @@ tasks.register("verifyRendererApiBackwardCompatibility") {
             throw GradleException("Missing previous renderer-api ABI baseline: $previousBaseline")
         }
 
-        fun declarations(file: File): Set<String> {
-            val declarations = mutableSetOf<String>()
+        fun declarations(file: File): Map<String, String> {
+            val declarations = linkedMapOf<String, String>()
             var owner: String? = null
             var member: String? = null
             file.readLines(StandardCharsets.UTF_8).forEach { rawLine ->
@@ -314,14 +314,20 @@ tasks.register("verifyRendererApiBackwardCompatibility") {
                     line.endsWith("{") -> {
                         owner = line.removeSuffix("{").trim()
                         member = null
-                        declarations += "TYPE::$owner"
+                        declarations["TYPE::$owner"] = owner
                     }
                     line.startsWith("descriptor:") -> {
                         val currentOwner = owner
                             ?: throw GradleException("Malformed ABI snapshot without an owning type: $line")
                         val currentMember = member
                             ?: throw GradleException("Malformed ABI snapshot without a member: $line")
-                        declarations += "$currentOwner::$currentMember::$line"
+                        // An abstract interface method becoming default preserves its JVM linkage.
+                        // Match members by binary name and descriptor, then audit implementation
+                        // removal in the direction where it is actually incompatible.
+                        val binaryMember = currentMember
+                            .replaceFirst("public abstract ", "public ")
+                            .replaceFirst("public default ", "public ")
+                        declarations["$currentOwner::$binaryMember::$line"] = currentMember
                         member = null
                     }
                     else -> member = line
@@ -333,17 +339,30 @@ tasks.register("verifyRendererApiBackwardCompatibility") {
             return declarations
         }
 
-        val missing = (declarations(previousBaseline) - declarations(rendererApiAbiSnapshot.get().asFile)).sorted()
-        if (missing.isNotEmpty() && compatibilityRequired) {
+        val previousDeclarations = declarations(previousBaseline)
+        val currentDeclarations = declarations(rendererApiAbiSnapshot.get().asFile)
+        val missing = (previousDeclarations.keys - currentDeclarations.keys).sorted()
+        val implementationRemovals = (previousDeclarations.keys intersect currentDeclarations.keys)
+            .filter { key ->
+                val previousMember = previousDeclarations.getValue(key)
+                val currentMember = currentDeclarations.getValue(key)
+                !previousMember.startsWith("public abstract ")
+                        && currentMember.startsWith("public abstract ")
+            }
+            .sorted()
+        val incompatible = missing + implementationRemovals.map { key ->
+            "$key (implementation changed to abstract)"
+        }
+        if (incompatible.isNotEmpty() && compatibilityRequired) {
             throw GradleException(
                 "renderer-api ${project.version} is not binary compatible with $previousText; " +
-                    "removed or changed declarations:\n${missing.joinToString("\n")}"
+                    "removed or changed declarations:\n${incompatible.joinToString("\n")}"
             )
         }
-        if (missing.isNotEmpty()) {
+        if (incompatible.isNotEmpty()) {
             logger.lifecycle(
                 "renderer-api ${project.version} crosses a SemVer compatibility boundary; " +
-                    "reviewed incompatible declarations: ${missing.size}"
+                    "reviewed incompatible declarations: ${incompatible.size}"
             )
         }
     }
@@ -362,8 +381,8 @@ val runtimeProjectCoordinates = rootProject.subprojects.associate { child ->
     )
 }
 val runtimeLicensePolicy = mapOf(
-    "top.ceroxe.rt:renderer-core" to RuntimeLicensePolicy("MIT", "MIT License"),
-    "top.ceroxe.rt:renderer-nvidia" to RuntimeLicensePolicy("MIT", "MIT License"),
+    "top.ceroxe.rt:renderer-core" to RuntimeLicensePolicy("Apache-2.0", "Apache License 2.0"),
+    "top.ceroxe.rt:renderer-nvidia" to RuntimeLicensePolicy("Apache-2.0", "Apache License 2.0"),
     "it.unimi.dsi:fastutil" to RuntimeLicensePolicy("Apache-2.0", "Apache License 2.0"),
     "org.joml:joml" to RuntimeLicensePolicy("MIT", "MIT License"),
     "org.lwjgl:lwjgl" to RuntimeLicensePolicy("BSD-3-Clause", "BSD 3-Clause License"),
@@ -516,7 +535,7 @@ tasks.register("generateRuntimeSupplyChainMetadata") {
                     "version" to publishedApiVersion,
                     "purl" to rootReference,
                     "licenses" to listOf(
-                        mapOf("license" to mapOf("id" to "MIT", "name" to "MIT License"))
+                        mapOf("license" to mapOf("id" to "Apache-2.0", "name" to "Apache License 2.0"))
                     )
                 )
             ),

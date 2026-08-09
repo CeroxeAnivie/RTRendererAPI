@@ -4,11 +4,11 @@ RTRendererAPI 适合嵌入 Java 21 或更高版本的桌面或引擎进程。普
 
 公共模型是厂商中立、宿主无关的渲染契约：场景、相机、exact clip-space projection、资源所有权和能力状态均不包含游戏或引擎专用字段。Windows NVIDIA Vulkan 是当前发布实现，不是公共 API 的身份。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:1.0.0`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。Maven Central 是这些制品的唯一发布事实源；Git tag 只用于定位构建相同制品的源码。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:1.0.1`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。Maven Central 是这些制品的唯一发布事实源；Git tag 只用于定位构建相同制品的源码。
 
 ## 最小调用
 
-`RendererBootstrap.open(RendererPreset.CPU_READBACK)` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 21 或更高版本。兼容目标不是实机验收结论；本文不把尚未运行的 1.0.0 GPU smoke、Minecraft 或跨硬件验证声明为已通过。
+`RendererBootstrap.open(RendererPreset.CPU_READBACK)` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 21 或更高版本。兼容目标不是实机验收结论；本文不把尚未运行的 1.0.1 GPU smoke、特定宿主集成或跨硬件验证声明为已通过。
 
 ```java
 try (RayTracingRenderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
@@ -303,7 +303,7 @@ RayTracingRendererConfig explicitProduction = RayTracingRendererConfig.expertBui
 ### 完整专家配置
 
 专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
-显式覆盖 1.0.0 的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
+显式覆盖 1.0.1 的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
 NRD 不可用时保留内建时域路径，FG/MFG 不可用时继续发布原生帧。SER 和 RTXMU 独立
 协商，某一项不支持不会阻止其他项启用。
 
@@ -377,7 +377,7 @@ session 内完成，只有 `APPLIED` 是提交证据。
 
 ### 各能力的最短配置
 
-以下片段都只需要 `top.ceroxe.rt:renderer-api:1.0.0`。把对应 options 传给
+以下片段都只需要 `top.ceroxe.rt:renderer-api:1.0.1`。把对应 options 传给
 `RayTracingRendererConfig.expertBuilder()` 即可；没有任何片段要求额外模块或手工 DLL。
 
 ```java

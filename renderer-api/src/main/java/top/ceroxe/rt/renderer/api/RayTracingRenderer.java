@@ -189,7 +189,12 @@ public interface RayTracingRenderer extends AutoCloseable {
      * @param <T>           extension interface type
      * @return supported extension instance, or empty when unavailable
      */
-    <T> java.util.Optional<T> extension(Class<T> extensionType);
+    default <T> java.util.Optional<T> extension(Class<T> extensionType) {
+        java.util.Objects.requireNonNull(extensionType, "extensionType");
+        return extensionType.isInstance(this)
+                ? java.util.Optional.of(extensionType.cast(this))
+                : java.util.Optional.empty();
+    }
 
     /**
      * Returns typed immutable diagnostics without waiting for GPU completion.
@@ -212,7 +217,10 @@ public interface RayTracingRenderer extends AutoCloseable {
      *
      * @return non-null close-completion stage
      */
-    java.util.concurrent.CompletionStage<Void> closeAsync();
+    default java.util.concurrent.CompletionStage<Void> closeAsync() {
+        close();
+        return java.util.concurrent.CompletableFuture.completedFuture(null);
+    }
 
     /**
      * Requests closure and waits for native resource release for at most {@code timeout}.
