@@ -810,6 +810,14 @@ public final class RendererApiContractSelfTest {
          Thread.currentThread().interrupt();
          throw new AssertionError("synchronous close wait was unexpectedly interrupted", interrupted);
       }
+      TrackingRenderer deferredRenderer = new TrackingRenderer(false);
+      CompletableFuture<Void> deferredClose = deferredRenderer.closeAsync().toCompletableFuture();
+      require(deferredClose.isCompletedExceptionally(),
+            "deferred provider default falsely reported close completion");
+      CompletionException deferredFailure = expect(CompletionException.class, deferredClose::join);
+      require(deferredFailure.getCause() instanceof IllegalStateException
+                  && deferredFailure.getCause().getMessage().contains("must override closeAsync"),
+            "deferred provider default did not fail with the required override diagnostic");
       expect(IllegalArgumentException.class, () -> renderer.awaitClosed(Duration.ofNanos(-1L)));
       expect(NullPointerException.class, () -> renderer.awaitClosed(null));
    }
@@ -1428,12 +1436,26 @@ public final class RendererApiContractSelfTest {
    }
 
    private static final class TrackingRenderer implements RayTracingRenderer {
+      private final boolean synchronousClose;
+      private boolean closed;
+
+      private TrackingRenderer() {
+         this(true);
+      }
+
+      private TrackingRenderer(boolean synchronousClose) {
+         this.synchronousClose = synchronousClose;
+      }
+
       public RayTracingRenderer.Status status() {
-         return Status.READY;
+         if (closed) {
+            return Status.CLOSED;
+         }
+         return synchronousClose ? Status.READY : Status.RECOVERING;
       }
 
       public RendererHealth health() {
-         return new RendererHealth(Status.READY, Optional.empty(), ResourceObligations.none());
+         return new RendererHealth(status(), Optional.empty(), ResourceObligations.none());
       }
 
       public RayTracingRenderer.SceneUpdateResult apply(SceneTransaction transaction) {
@@ -1457,6 +1479,9 @@ public final class RendererApiContractSelfTest {
       }
 
       public void close() {
+         if (synchronousClose) {
+            closed = true;
+         }
       }
    }
 

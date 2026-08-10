@@ -16,7 +16,7 @@
 > **简介**
 >
 > RTRendererAPI 为 Java 桌面应用与引擎进程提供厂商中立、宿主无关的光线追踪契约。公共 `renderer-api`
-> 不包含游戏、引擎或 NVIDIA 专用场景字段；当前随 1.0.1 发布的实现范围是 Windows NVIDIA Vulkan RT。
+> 不包含游戏、引擎或 NVIDIA 专用场景字段；当前随 1.0.2 发布的实现范围是 Windows NVIDIA Vulkan RT。
 > 应用只需依赖 `renderer-api`，即可获得后端发现、场景提交、异步 CPU 帧、官方 GPU presenter 与显式
 > Vulkan 专家互操作。Windows Vulkan 后端、LWJGL、对应 Windows natives 与 NVIDIA provider 均通过
 > Maven 传递依赖解析，无需手工部署 DLL。
@@ -50,7 +50,7 @@
 | GPU 显示 | 官方 Vulkan swapchain presenter，无 CPU 图像回读 |
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
-> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `1.0.1` 发布范围。兼容目标不是实机验收结论；本文不把尚未运行的 1.0.1 GPU smoke、特定宿主集成或跨硬件验证声明为已通过。
+> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `1.0.2` 发布范围。兼容目标不是实机验收结论；本文不把尚未运行的 1.0.2 GPU smoke、特定宿主集成或跨硬件验证声明为已通过。
 
 ---
 
@@ -64,7 +64,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
 </dependency>
 ```
 
@@ -72,7 +72,7 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:1.0.1")
+    implementation("top.ceroxe.rt:renderer-api:1.0.2")
 }
 ```
 
@@ -257,7 +257,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-1.0.1.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-1.0.2.jar `
   --width=2560 --height=1440 --spp=2
 ```
 
@@ -312,7 +312,7 @@ A：不一定。它是非阻塞轮询，空值通常表示当前没有可呈现�
 
 **Q：AMD、Intel 或 Linux 能运行吗？**
 
-A：不能把它们视为 `1.0.1` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
+A：不能把它们视为 `1.0.2` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
 
 ---
 

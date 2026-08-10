@@ -214,12 +214,20 @@ public interface RayTracingRenderer extends AutoCloseable {
      * Requests closure and completes only after all renderer-owned native resources are released.
      *
      * <p>The returned stage completes only after outstanding external ownership has retired.</p>
+     * <p>The default implementation is fail-closed: it succeeds only when {@link #close()}
+     * synchronously reaches {@link Status#CLOSED}. Providers with deferred teardown must
+     * override this method and return their real completion stage.</p>
      *
      * @return non-null close-completion stage
      */
     default java.util.concurrent.CompletionStage<Void> closeAsync() {
         close();
-        return java.util.concurrent.CompletableFuture.completedFuture(null);
+        if (status() == Status.CLOSED) {
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
+        return java.util.concurrent.CompletableFuture.failedFuture(
+                new IllegalStateException(
+                        "Provider with deferred teardown must override closeAsync()"));
     }
 
     /**
