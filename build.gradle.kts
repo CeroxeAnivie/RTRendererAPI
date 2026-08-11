@@ -256,6 +256,9 @@ val verifyReleaseVersionConsistency = tasks.register("verifyReleaseVersionConsis
 val previousApiVersion = providers.gradleProperty("previous_api_version")
 val previousApiConsumerDirectory = layout.projectDirectory.dir("gradle/previous-api-consumer")
 val previousApiConsumerClasses = previousApiConsumerDirectory.dir("build/classes/java/main")
+val previousApiCentralAbi = previousApiVersion.map { version ->
+    previousApiConsumerDirectory.file("build/abi/renderer-api-$version.abi")
+}
 val previousConsumerJavaInstallationPaths = providers.gradleProperty(
     "org.gradle.java.installations.paths"
 )
@@ -264,7 +267,7 @@ val previousConsumerToolchainVersion = providers.gradleProperty("java_toolchain_
 
 val compilePreviousApiConsumer = tasks.register<Exec>("compilePreviousApiConsumer") {
     group = "verification"
-    description = "Compiles a consumer in isolation against the previous Maven Central API artifact."
+    description = "Compiles a consumer and derives exhaustive ABI evidence from the previous Maven Central API artifact."
     workingDir(previousApiConsumerDirectory)
     executable(rootProject.file("gradlew.bat"))
     args(
@@ -274,6 +277,7 @@ val compilePreviousApiConsumer = tasks.register<Exec>("compilePreviousApiConsume
         previousApiConsumerDirectory.asFile.absolutePath,
         "clean",
         "compileJava",
+        "generatePreviousRendererApiAbi",
         "-PrendererVersion=${previousApiVersion.get()}",
         "-Pjava_toolchain_version=${previousConsumerToolchainVersion.get()}"
     )
@@ -284,6 +288,7 @@ val compilePreviousApiConsumer = tasks.register<Exec>("compilePreviousApiConsume
     inputs.property("javaInstallationPaths", previousConsumerJavaInstallationPaths.orElse(""))
     inputs.property("toolchainJavaVersion", previousConsumerToolchainVersion)
     outputs.dir(previousApiConsumerClasses)
+    outputs.file(previousApiCentralAbi)
     doFirst {
         previousConsumerJavaInstallationPaths.orNull?.let { paths ->
             args("-Porg.gradle.java.installations.paths=$paths")

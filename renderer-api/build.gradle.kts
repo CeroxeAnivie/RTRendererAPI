@@ -170,13 +170,15 @@ tasks.register<JavaExec>("rendererApiContractSelfTest") {
     mainClass.set("top.ceroxe.rt.renderer.api.RendererApiContractSelfTest")
 }
 
-// Each published surface remains immutable and reviewable. Before checking in a new versioned
-// baseline, reviewers compare its generated snapshot with the last published baseline; the exact
-// gate below then prevents later edits from silently changing that reviewed release surface.
+// Each published surface remains immutable and reviewable. The checked-in current-version
+// baseline prevents later edits from silently changing that reviewed release surface. Backward
+// compatibility is independently measured from the previous Maven Central JAR below.
 val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-${project.version}.abi")
 val rendererApiAbiSnapshot = layout.buildDirectory.file("abi/renderer-api-${project.version}.abi")
-val previousRendererApiAbiBaseline = previousApiVersion.map { version ->
-    layout.projectDirectory.file("abi/renderer-api-$version.abi")
+val previousRendererApiCentralAbi = previousApiVersion.map { version ->
+    rootProject.layout.projectDirectory.file(
+        "gradle/previous-api-consumer/build/abi/renderer-api-$version.abi"
+    )
 }
 
 tasks.register("generateRendererApiAbi") {
@@ -277,9 +279,9 @@ tasks.register("verifyRendererApiAbi") {
 
 tasks.register("verifyRendererApiBackwardCompatibility") {
     group = "verification"
-    description = "Rejects binary API removals relative to the previous formal release."
-    dependsOn(tasks.named("generateRendererApiAbi"))
-    inputs.file(previousRendererApiAbiBaseline)
+    description = "Rejects binary API removals relative to the previous Maven Central release."
+    dependsOn(tasks.named("generateRendererApiAbi"), ":compilePreviousApiConsumer")
+    inputs.file(previousRendererApiCentralAbi)
     inputs.file(rendererApiAbiSnapshot)
     inputs.property("previousApiVersion", previousApiVersion)
 
@@ -298,9 +300,11 @@ tasks.register("verifyRendererApiBackwardCompatibility") {
         } else {
             current.major == previous.major
         }
-        val previousBaseline = previousRendererApiAbiBaseline.get().asFile
-        if (!previousBaseline.isFile || previousBaseline.length() == 0L) {
-            throw GradleException("Missing previous renderer-api ABI baseline: $previousBaseline")
+        val previousCentralAbi = previousRendererApiCentralAbi.get().asFile
+        if (!previousCentralAbi.isFile || previousCentralAbi.length() == 0L) {
+            throw GradleException(
+                "Missing ABI generated from previous Maven Central renderer-api JAR: $previousCentralAbi"
+            )
         }
 
         fun declarations(file: File): Map<String, String> {
@@ -339,7 +343,7 @@ tasks.register("verifyRendererApiBackwardCompatibility") {
             return declarations
         }
 
-        val previousDeclarations = declarations(previousBaseline)
+        val previousDeclarations = declarations(previousCentralAbi)
         val currentDeclarations = declarations(rendererApiAbiSnapshot.get().asFile)
         val missing = (previousDeclarations.keys - currentDeclarations.keys).sorted()
         val implementationRemovals = (previousDeclarations.keys intersect currentDeclarations.keys)
