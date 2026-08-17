@@ -260,6 +260,10 @@ public final class DemoFeatureIntegrationSelfTest {
                 Optional.of(capabilities.build()), "PERFORMANCE"
         ).text();
         require(text.startsWith("RTRendererAPI "), "HUD must identify the API version");
+        require(!text.startsWith("RTRendererAPI development"),
+                "a built Demo must not label the API as development");
+        require(DemoBuildInfo.version().matches("[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?"),
+                "the packaged Demo must expose a semantic API version");
         require(text.contains("DLSS SR: ACTIVE"), "DLSS SR status was not projected");
         require(text.contains("DLAA: AVAILABLE"), "DLAA status was not projected");
         require(text.contains("NIS: FALLBACK"), "NIS status was not projected");

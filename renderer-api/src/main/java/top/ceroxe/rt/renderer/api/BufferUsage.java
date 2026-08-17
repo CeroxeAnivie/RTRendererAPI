@@ -11,5 +11,7 @@ public enum BufferUsage {
     UNIFORM,
     STORAGE_READ,
     STORAGE_READ_WRITE,
-    INDIRECT
+    INDIRECT,
+    /** Permits this buffer to supply geometry or instance input to an acceleration-structure build. */
+    ACCELERATION_STRUCTURE_BUILD_INPUT
 }

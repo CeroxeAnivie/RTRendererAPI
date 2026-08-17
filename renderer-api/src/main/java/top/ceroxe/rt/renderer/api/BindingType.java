@@ -17,5 +17,7 @@ public enum BindingType {
      * declarations. It is deliberately distinct from adjacent {@link #SAMPLED_TEXTURE} and
      * {@link #SAMPLER} bindings: consumers must never infer, split, or re-number this binding.</p>
      */
-    COMBINED_IMAGE_SAMPLER
+    COMBINED_IMAGE_SAMPLER,
+    /** One top-level acceleration structure consumed by a ray-tracing shader. */
+    ACCELERATION_STRUCTURE
 }

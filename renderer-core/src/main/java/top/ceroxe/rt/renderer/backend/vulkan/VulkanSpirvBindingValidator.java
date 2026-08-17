@@ -38,6 +38,9 @@ final class VulkanSpirvBindingValidator {
     private static final int OP_TYPE_POINTER = 32;
     private static final int OP_CONSTANT = 43;
     private static final int OP_VARIABLE = 59;
+    // SPV_KHR_ray_tracing assigns this extension opcode. It is a descriptor type, not an opaque
+    // storage buffer, so treating it as unknown would reject every valid generic RT raygen module.
+    private static final int OP_TYPE_ACCELERATION_STRUCTURE_KHR = 5341;
     private static final int DECORATION_NON_WRITABLE = 24;
     private static final int DECORATION_BINDING = 33;
     private static final int DECORATION_DESCRIPTOR_SET = 34;
@@ -166,6 +169,10 @@ final class VulkanSpirvBindingValidator {
                     requireWords(wordCount, 2, "OpTypeStruct");
                     types.put(word(code, offset, 1), new StructType());
                 }
+                case OP_TYPE_ACCELERATION_STRUCTURE_KHR -> {
+                    requireWords(wordCount, 2, "OpTypeAccelerationStructureKHR");
+                    types.put(word(code, offset, 1), new AccelerationStructureType());
+                }
                 case OP_TYPE_POINTER -> {
                     requireWords(wordCount, 4, "OpTypePointer");
                     types.put(word(code, offset, 1), new PointerType(word(code, offset, 2), word(code, offset, 3)));
@@ -233,6 +240,7 @@ final class VulkanSpirvBindingValidator {
         if (storageClass == STORAGE_UNIFORM_CONSTANT) {
             if (type instanceof SampledImageType) return BindingType.COMBINED_IMAGE_SAMPLER;
             if (type instanceof SamplerType) return BindingType.SAMPLER;
+            if (type instanceof AccelerationStructureType) return BindingType.ACCELERATION_STRUCTURE;
             if (type instanceof ImageType image) {
                 return switch (image.sampled()) {
                     case IMAGE_SAMPLED -> BindingType.SAMPLED_TEXTURE;
@@ -313,7 +321,7 @@ final class VulkanSpirvBindingValidator {
         );
     }
 
-    private sealed interface Type permits ScalarType, ImageType, SamplerType, SampledImageType,
+    private sealed interface Type permits ScalarType, ImageType, SamplerType, SampledImageType, AccelerationStructureType,
             ArrayType, RuntimeArrayType, StructType, PointerType {
     }
 
@@ -327,6 +335,9 @@ final class VulkanSpirvBindingValidator {
     }
 
     private record SampledImageType() implements Type {
+    }
+
+    private record AccelerationStructureType() implements Type {
     }
 
     private record ArrayType(int elementType, int lengthId) implements Type {

@@ -64,6 +64,15 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
 }
 
+tasks.processResources {
+    // `gradle run` executes class directories, which have no JAR manifest. Emit the same build
+    // identity into every runtime layout so the HUD never mislabels a released API as a dev build.
+    inputs.property("apiVersion", project.version.toString())
+    filesMatching("META-INF/rtrenderer-api-demo.properties") {
+        expand("apiVersion" to project.version.toString())
+    }
+}
+
 tasks.withType<JavaExec>().configureEach {
     jvmArgs(
         "-Dfile.encoding=UTF-8",
@@ -132,7 +141,7 @@ val physicsSelfTest = tasks.register<JavaExec>("physicsSelfTest") {
 val featureIntegrationSelfTest = tasks.register<JavaExec>("featureIntegrationSelfTest") {
     group = "verification"
     description = "Verifies the production feature profile, projection contract, and HUD mapping."
-    dependsOn(tasks.testClasses)
+    dependsOn(tasks.testClasses, tasks.processResources)
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("demo.DemoFeatureIntegrationSelfTest")
 }

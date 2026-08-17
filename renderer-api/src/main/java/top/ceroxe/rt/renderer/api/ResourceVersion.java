@@ -1,11 +1,13 @@
 package top.ceroxe.rt.renderer.api;
 
 /**
- * Immutable monotonically assigned content version of one rendering resource.
+ * Immutable monotonically assigned storage-descriptor generation of one rendering resource.
  *
- * <p>The API does not infer versions from object identity or byte equality. A caller publishes a
- * new version whenever content or descriptor semantics change, allowing transactions to reject
- * stale bindings before work is recorded.</p>
+ * <p>The API does not infer generations from object identity or byte equality. A new generation
+ * is required only when storage shape or declared usage changes. Ordered writes mutate the
+ * contents of the same generation and produce new fence-backed residency evidence; forcing a
+ * new allocation for every uniform or vertex update would make high-frequency submission
+ * intrinsically unbounded.</p>
  *
  * @param value non-negative resource version
  */

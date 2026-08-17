@@ -2,6 +2,9 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VK10;
+import org.lwjgl.vulkan.KHRRayTracingPipeline;
+import org.lwjgl.vulkan.VkMemoryBarrier;
+import org.lwjgl.vulkan.VkStridedDeviceAddressRegionKHR;
 import org.lwjgl.vulkan.VkBufferCopy;
 import org.lwjgl.vulkan.VkBufferMemoryBarrier;
 import org.lwjgl.vulkan.VkBufferImageCopy;
@@ -52,6 +55,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     private final VulkanGenericResourceRegistry resources;
     private final VulkanGenericComputePipelines computePipelines;
     private final VulkanGenericGraphicsPipelines graphicsPipelines;
+    private final VulkanGenericAccelerationStructures accelerationStructures;
+    private final VulkanGenericRayTracingPipelines rayTracingPipelines;
     private final Map<Long, CommandExecutionEvidence> commandEvidence = new LinkedHashMap<>();
     private final Map<Long, PendingSubmission> pending = new LinkedHashMap<>();
     private long latestCommandSequence = -1L;
@@ -70,6 +75,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         this.graphicsPipelines = new VulkanGenericGraphicsPipelines(
                 device.device(), resources, device.maxBoundDescriptorSets()
         );
+        this.accelerationStructures = new VulkanGenericAccelerationStructures(device);
+        this.rayTracingPipelines = new VulkanGenericRayTracingPipelines(device, resources);
     }
 
     RenderingSemanticCapabilities capabilities() {
@@ -82,6 +89,14 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 "texture upload uses staging copies and image-layout transitions retained through fence completion");
         executable(result, RenderingSemanticCapabilities.Feature.TEXTURE_COPY,
                 "texture-to-texture copy is executable for GPU-ready source and uninitialized destination generations");
+        executable(result, RenderingSemanticCapabilities.Feature.BUFFER_TO_TEXTURE_COPY,
+                "buffer-to-texture copy records exact regions when the portable byte pitch is Vulkan-representable");
+        executable(result, RenderingSemanticCapabilities.Feature.TEXTURE_TO_BUFFER_COPY,
+                "texture-to-buffer copy records exact regions when the portable byte pitch is Vulkan-representable");
+        executable(result, RenderingSemanticCapabilities.Feature.COLOR_CLEAR,
+                "color image clear records exact color subresource ranges outside render passes");
+        executable(result, RenderingSemanticCapabilities.Feature.DEPTH_STENCIL_CLEAR,
+                "depth/stencil image clear records exact aspect subresource ranges outside render passes");
         executable(result, RenderingSemanticCapabilities.Feature.TEXTURE_BARRIERS,
                 "typed texture barriers record exact aspect/mip/layer image barriers with submission-local layout planning");
         executable(result, RenderingSemanticCapabilities.Feature.COMPUTE_PIPELINES,
@@ -104,6 +119,12 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 "buffer-to-buffer copy is executable for GPU-ready exact generations");
         executable(result, RenderingSemanticCapabilities.Feature.BUFFER_BARRIERS,
                 "buffer memory barriers are executable without queue-family ownership transfer");
+        executable(result, RenderingSemanticCapabilities.Feature.ACCELERATION_STRUCTURE_BUILDS,
+                "generic BLAS and TLAS builds own exact input generations, scratch allocations, and fence completion");
+        executable(result, RenderingSemanticCapabilities.Feature.RAY_TRACING_PIPELINES,
+                "generic RT SPIR-V programs compile with explicit shader groups and aligned shader-binding tables");
+        executable(result, RenderingSemanticCapabilities.Feature.RAY_TRACING_DISPATCH,
+                "trace-rays commands bind generic RT descriptors and dispatch into explicit storage textures");
         return result.build();
     }
 
@@ -141,7 +162,9 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         }
         final VulkanGenericCommandPlan plan;
         try {
-            plan = VulkanGenericCommandPlan.compile(resources, computePipelines, graphicsPipelines, checked);
+            plan = VulkanGenericCommandPlan.compile(
+                    resources, computePipelines, graphicsPipelines, rayTracingPipelines, accelerationStructures, checked
+            );
         } catch (UnsupportedOperationException unsupported) {
             return rejected(checked.sequence(), CommandExecutionEvidence.Reason.UNSUPPORTED_FEATURE, unsupported.getMessage());
         } catch (VulkanGenericPipelineCompilationException pipelineFailure) {
@@ -154,6 +177,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
 
         ArrayList<StagingUpload> staging = new ArrayList<>();
         RtCommandContext.AsyncSubmission submission = null;
+        boolean submitted = false;
+        boolean submissionOwnedByPending = false;
         VulkanGenericTextureLayoutUpdates textureLayouts = new VulkanGenericTextureLayoutUpdates();
         try {
             for (VulkanGenericCommandPlan.Action action : plan.actions()) {
@@ -165,6 +190,10 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                     computePipelines.updateBindings(bindings.pipeline(), bindings.command().bindingSet());
                 } else if (action instanceof VulkanGenericCommandPlan.BindGraphicsBindings bindings) {
                     graphicsPipelines.updateBindings(bindings.pipeline(), bindings.command().bindingSet());
+                } else if (action instanceof VulkanGenericCommandPlan.BindRayTracingBindings bindings) {
+                    rayTracingPipelines.updateBindings(
+                            bindings.pipeline(), bindings.command().bindingSet(), plan.accelerationStructures()
+                    );
                 }
             }
             List<StagingUpload> immutableStaging = List.copyOf(staging);
@@ -173,6 +202,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                             commandBuffer, stack, plan, immutableStaging, textureLayouts
                     )
             );
+            submitted = true;
+            plan.accelerationStructures().commit(checked.sequence());
             resources.markRecorded(plan.writes(), checked.sequence());
             resources.markTextureRecorded(plan.textureWrites(), checked.sequence());
             resources.noteReadUse(plan.reads(), checked.sequence());
@@ -186,7 +217,9 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             );
             commandEvidence.put(checked.sequence(), evidence);
             pending.put(checked.sequence(), new PendingSubmission(
-                    checked.sequence(), submission, immutableStaging, plan.writes(), plan.textureWrites(), plan.outputResource()));
+                    checked.sequence(), submission, immutableStaging, plan.writes(), plan.textureWrites(), plan.outputResource(),
+                    plan.accelerationStructures()));
+            submissionOwnedByPending = true;
             submission = null;
             staging = null;
             return evidence;
@@ -202,6 +235,10 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         } finally {
             if (submission != null) submission.close();
             if (staging != null) closeStaging(staging);
+            if (!submissionOwnedByPending) {
+                if (submitted) plan.accelerationStructures().discardAfterDeviceFailure();
+                else plan.accelerationStructures().close();
+            }
         }
     }
 
@@ -226,6 +263,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                         deviceFailure.operation() + " failed with native result " + deviceFailure.nativeResult()
                                 + "; recovery=" + deviceFailure.recoveryAction()));
                 closeStaging(current.staging());
+                current.accelerationStructures().discardAfterDeviceFailure();
                 iterator.remove();
                 continue;
             }
@@ -233,6 +271,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             try {
                 resources.markCompleted(current.writes(), current.sequence());
                 resources.markTextureCompleted(current.textureWrites(), current.sequence());
+                current.accelerationStructures().complete(current.sequence());
                 latestCompletedSequence = Math.max(latestCompletedSequence, current.sequence());
                 boolean output = current.outputResource().isPresent();
                 commandEvidence.put(current.sequence(), new CommandExecutionEvidence(
@@ -246,6 +285,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 ));
             } finally {
                 closeStaging(current.staging());
+                current.accelerationStructures().close();
                 iterator.remove();
             }
         }
@@ -291,6 +331,22 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 case VulkanGenericCommandPlan.Dispatch dispatch -> VK10.vkCmdDispatch(
                         commandBuffer, dispatch.command().groupsX(), dispatch.command().groupsY(), dispatch.command().groupsZ()
                 );
+                case VulkanGenericCommandPlan.BindRayTracing bind -> VK10.vkCmdBindPipeline(
+                        commandBuffer, KHRRayTracingPipeline.VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                        bind.pipeline().pipeline()
+                );
+                case VulkanGenericCommandPlan.BindRayTracingBindings bind -> recordRayTracingBindings(
+                        commandBuffer, stack, bind
+                );
+                case VulkanGenericCommandPlan.RayTracingPushConstants push -> VK10.vkCmdPushConstants(
+                        commandBuffer, push.pipeline().layout(), push.pipeline().shaderStageFlags(),
+                        push.command().offsetBytes(), push.command().data().bytes()
+                );
+                case VulkanGenericCommandPlan.BuildAccelerationStructure build ->
+                        plan.accelerationStructures().recordBuild(commandBuffer, stack, build.build());
+                case VulkanGenericCommandPlan.TraceRays trace -> recordTraceRays(
+                        commandBuffer, stack, trace, textureLayouts
+                );
                 case VulkanGenericCommandPlan.Write write -> {
                     StagingUpload upload = staging.get(writeIndex++);
                     VkBufferCopy.Buffer region = VkBufferCopy.calloc(1, stack)
@@ -308,6 +364,18 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 case VulkanGenericCommandPlan.CopyTextureRegion copy -> recordTextureRegionCopy(
                         commandBuffer, stack, copy, textureLayouts
                 );
+                case VulkanGenericCommandPlan.CopyBufferToTexture copy -> recordBufferToTextureCopy(
+                        commandBuffer, stack, copy, textureLayouts
+                );
+                case VulkanGenericCommandPlan.CopyTextureToBuffer copy -> recordTextureToBufferCopy(
+                        commandBuffer, stack, copy, textureLayouts
+                );
+                case VulkanGenericCommandPlan.ClearColor clear -> recordColorClear(
+                        commandBuffer, stack, clear, textureLayouts
+                );
+                case VulkanGenericCommandPlan.ClearDepthStencil clear -> recordDepthStencilClear(
+                        commandBuffer, stack, clear, textureLayouts
+                );
                 case VulkanGenericCommandPlan.Copy copy -> {
                     VkBufferCopy.Buffer region = VkBufferCopy.calloc(1, stack)
                             .srcOffset(copy.sourceOffset())
@@ -317,6 +385,14 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                             commandBuffer, copy.source().buffer().buffer(), copy.destination().buffer().buffer(), region
                     );
                 }
+                case VulkanGenericCommandPlan.AutoBufferVisibility visibility -> recordAutomaticBufferVisibility(
+                        commandBuffer, stack, visibility.resource()
+                );
+                case VulkanGenericCommandPlan.AutoAccelerationStructureInputVisibility visibility ->
+                        recordAutomaticAccelerationStructureInputVisibility(commandBuffer, stack, visibility.resource());
+                case VulkanGenericCommandPlan.AutoTextureVisibility visibility -> recordAutomaticTextureVisibility(
+                        commandBuffer, stack, visibility, textureLayouts
+                );
                 case VulkanGenericCommandPlan.Barrier barrier -> {
                     recordBarriers(commandBuffer, stack, barrier.buffers());
                     recordTextureBarriers(commandBuffer, stack, barrier.textures(), textureLayouts);
@@ -343,6 +419,59 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         dynamicOffsets.flip();
         VK10.vkCmdBindDescriptorSets(commandBuffer, VK10.VK_PIPELINE_BIND_POINT_COMPUTE,
                 bind.pipeline().layout(), 0, sets, dynamicOffsets);
+    }
+
+    private static void recordRayTracingBindings(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanGenericCommandPlan.BindRayTracingBindings bind
+    ) {
+        VulkanGenericDescriptorSetBank descriptors = bind.pipeline().descriptors();
+        if (descriptors == null) return;
+        List<Integer> groups = descriptors.groups();
+        java.nio.LongBuffer sets = stack.mallocLong(groups.size());
+        for (int group : groups) sets.put(descriptors.set(group));
+        sets.flip();
+        java.nio.IntBuffer dynamicOffsets = stack.mallocInt(bind.command().dynamicOffsets().size());
+        for (long offset : bind.command().dynamicOffsets()) dynamicOffsets.put((int) offset);
+        dynamicOffsets.flip();
+        VK10.vkCmdBindDescriptorSets(commandBuffer, KHRRayTracingPipeline.VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                bind.pipeline().layout(), 0, sets, dynamicOffsets);
+    }
+
+    private static void recordTraceRays(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanGenericCommandPlan.TraceRays trace,
+            VulkanGenericTextureLayoutUpdates textureLayouts
+    ) {
+        var output = trace.output();
+        var range = trace.command().output().range();
+        transitionTextureForRayTracing(commandBuffer, stack, output, range, textureLayouts);
+        VulkanGenericRayTracingPipelines.Sbt sbt = trace.pipeline().sbt();
+        VkMemoryBarrier.Buffer hostVisibility = VkMemoryBarrier.calloc(1, stack);
+        hostVisibility.get(0).sType$Default().srcAccessMask(VK10.VK_ACCESS_HOST_WRITE_BIT)
+                .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT);
+        VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_HOST_BIT,
+                KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 0,
+                hostVisibility, null, null);
+        KHRRayTracingPipeline.vkCmdTraceRaysKHR(
+                commandBuffer,
+                sbtRegion(stack, sbt, sbt.raygen()),
+                sbtRegion(stack, sbt, sbt.miss()),
+                sbtRegion(stack, sbt, sbt.hit()),
+                sbtRegion(stack, sbt, sbt.callable()),
+                trace.command().width(), trace.command().height(), trace.command().depth()
+        );
+    }
+
+    private static VkStridedDeviceAddressRegionKHR sbtRegion(
+            MemoryStack stack, VulkanGenericRayTracingPipelines.Sbt sbt, VulkanGenericRayTracingPipelines.Region region
+    ) {
+        if (region.size() == 0) return VkStridedDeviceAddressRegionKHR.calloc(stack);
+        return VkStridedDeviceAddressRegionKHR.calloc(stack)
+                .deviceAddress(Math.addExact(Math.addExact(sbt.buffer().deviceAddress(), sbt.baseOffset()), region.offset()))
+                .stride(region.stride()).size(region.size());
     }
 
     private static void recordTextureWrite(
@@ -442,6 +571,135 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 copy.destination().image().image(), VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
     }
 
+    private static void recordBufferToTextureCopy(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanGenericCommandPlan.CopyBufferToTexture copy,
+            VulkanGenericTextureLayoutUpdates textureLayouts
+    ) {
+        var command = copy.command();
+        var destination = copy.destination();
+        TextureSubresourceRange range = uploadRange(destination, command.destination().range(), command.destinationOrigin().z(),
+                command.extent().depth());
+        transitionTextureForTransfer(commandBuffer, stack, destination, range, VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK10.VK_ACCESS_TRANSFER_WRITE_BIT, textureLayouts);
+        VkBufferImageCopy.Buffer region = VkBufferImageCopy.calloc(1, stack);
+        populateBufferImageCopy(region, command.source().range().offsetBytes(), command.sourceLayout(), destination,
+                command.destination().range(), command.destinationOrigin(), command.extent());
+        VK10.vkCmdCopyBufferToImage(commandBuffer, copy.source().buffer().buffer(), destination.image().image(),
+                VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
+    }
+
+    private static void recordTextureToBufferCopy(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanGenericCommandPlan.CopyTextureToBuffer copy,
+            VulkanGenericTextureLayoutUpdates textureLayouts
+    ) {
+        var command = copy.command();
+        var source = copy.source();
+        TextureSubresourceRange range = uploadRange(source, command.source().range(), command.sourceOrigin().z(),
+                command.extent().depth());
+        transitionTextureForTransfer(commandBuffer, stack, source, range, VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK10.VK_ACCESS_TRANSFER_READ_BIT, textureLayouts);
+        VkBufferImageCopy.Buffer region = VkBufferImageCopy.calloc(1, stack);
+        populateBufferImageCopy(region, command.destination().range().offsetBytes(), command.destinationLayout(), source,
+                command.source().range(), command.sourceOrigin(), command.extent());
+        VK10.vkCmdCopyImageToBuffer(commandBuffer, source.image().image(), VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                copy.destination().buffer().buffer(), region);
+    }
+
+    private static void populateBufferImageCopy(
+            VkBufferImageCopy.Buffer region,
+            long sliceOffset,
+            top.ceroxe.rt.renderer.api.TextureDataLayout layout,
+            VulkanGenericResourceRegistry.TextureRecord texture,
+            TextureSubresourceRange textureRange,
+            top.ceroxe.rt.renderer.api.TextureOrigin origin,
+            top.ceroxe.rt.renderer.api.TextureExtent extent
+    ) {
+        int bytesPerTexel = bytesPerTexel(texture.descriptor().format());
+        if (layout.bytesPerRow() % bytesPerTexel != 0L) {
+            throw new UnsupportedOperationException("Vulkan buffer-image copy requires bytesPerRow divisible by the texture texel size");
+        }
+        long rowLength = layout.bytesPerRow() / bytesPerTexel;
+        if (rowLength > Integer.MAX_VALUE || layout.rowsPerImage() > Integer.MAX_VALUE) {
+            throw new UnsupportedOperationException("Vulkan buffer-image copy pitch exceeds uint32 limits");
+        }
+        long offset;
+        try {
+            offset = Math.addExact(sliceOffset, layout.offsetBytes());
+        } catch (ArithmeticException overflow) {
+            throw new IllegalArgumentException("buffer-image copy offset overflows long", overflow);
+        }
+        region.bufferOffset(offset).bufferRowLength((int) rowLength).bufferImageHeight((int) layout.rowsPerImage());
+        region.imageSubresource().aspectMask(VulkanGenericTextureMappings.aspectMask(textureRange.aspect()))
+                .mipLevel(textureRange.baseMipLevel())
+                .baseArrayLayer(baseArrayLayer(texture, textureRange.baseArrayLayer(), origin.z()))
+                .layerCount(texture.descriptor().dimension() == TextureDimension.TEXTURE_3D ? 1 : extent.depth());
+        region.imageOffset().set(origin.x(), origin.y(),
+                texture.descriptor().dimension() == TextureDimension.TEXTURE_3D ? origin.z() : 0);
+        region.imageExtent().set(extent.width(), extent.height(),
+                texture.descriptor().dimension() == TextureDimension.TEXTURE_3D ? extent.depth() : 1);
+    }
+
+    private static void recordColorClear(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanGenericCommandPlan.ClearColor clear,
+            VulkanGenericTextureLayoutUpdates textureLayouts
+    ) {
+        var command = clear.command();
+        TextureSubresourceRange range = command.destination().range();
+        transitionTextureForTransfer(commandBuffer, stack, clear.destination(), range, VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK10.VK_ACCESS_TRANSFER_WRITE_BIT, textureLayouts);
+        org.lwjgl.vulkan.VkClearColorValue value = org.lwjgl.vulkan.VkClearColorValue.calloc(stack);
+        value.float32(0, command.value().red());
+        value.float32(1, command.value().green());
+        value.float32(2, command.value().blue());
+        value.float32(3, command.value().alpha());
+        org.lwjgl.vulkan.VkImageSubresourceRange.Buffer nativeRange = org.lwjgl.vulkan.VkImageSubresourceRange.calloc(1, stack);
+        populateNativeRange(nativeRange.get(0), range);
+        VK10.vkCmdClearColorImage(commandBuffer, clear.destination().image().image(),
+                VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, value, nativeRange);
+    }
+
+    private static void recordDepthStencilClear(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanGenericCommandPlan.ClearDepthStencil clear,
+            VulkanGenericTextureLayoutUpdates textureLayouts
+    ) {
+        var command = clear.command();
+        TextureSubresourceRange range = command.destination().range();
+        transitionTextureForTransfer(commandBuffer, stack, clear.destination(), range, VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK10.VK_ACCESS_TRANSFER_WRITE_BIT, textureLayouts);
+        org.lwjgl.vulkan.VkClearDepthStencilValue value = org.lwjgl.vulkan.VkClearDepthStencilValue.calloc(stack)
+                .depth(command.depth()).stencil(command.stencil());
+        org.lwjgl.vulkan.VkImageSubresourceRange.Buffer nativeRange = org.lwjgl.vulkan.VkImageSubresourceRange.calloc(1, stack);
+        populateNativeRange(nativeRange.get(0), range);
+        VK10.vkCmdClearDepthStencilImage(commandBuffer, clear.destination().image().image(),
+                VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, value, nativeRange);
+    }
+
+    private static void populateNativeRange(org.lwjgl.vulkan.VkImageSubresourceRange range, TextureSubresourceRange source) {
+        range.aspectMask(VulkanGenericTextureMappings.aspectMask(source.aspect()))
+                .baseMipLevel(source.baseMipLevel()).levelCount(source.mipLevelCount())
+                .baseArrayLayer(source.baseArrayLayer()).layerCount(source.arrayLayerCount());
+    }
+
+    private static int bytesPerTexel(top.ceroxe.rt.renderer.api.TextureFormat format) {
+        return switch (format) {
+            case R8_UNORM -> 1;
+            case RG8_UNORM, R16_FLOAT -> 2;
+            case RGBA8_UNORM, RGBA8_SRGB, R32_FLOAT, D32_FLOAT, D24_UNORM_S8_UINT -> 4;
+            case RG16_FLOAT -> 4;
+            case RGBA16_FLOAT -> 8;
+            case RG32_FLOAT -> 8;
+            case RGBA32_FLOAT -> 16;
+        };
+    }
+
     private static TextureSubresourceRange uploadRange(
             VulkanGenericResourceRegistry.TextureRecord record,
             TextureSubresourceRange source,
@@ -477,6 +735,23 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             }
         });
         textureLayouts.set(record, range, newLayout);
+    }
+
+    private static void transitionTextureForRayTracing(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanGenericResourceRegistry.TextureRecord record,
+            TextureSubresourceRange range,
+            VulkanGenericTextureLayoutUpdates textureLayouts
+    ) {
+        forEachSubresource(range, (aspect, mip, layer) -> {
+            int oldLayout = textureLayouts.layout(record, aspect, mip, layer);
+            recordTextureBarrier(commandBuffer, stack, record, aspect, mip, layer, oldLayout,
+                    VK10.VK_IMAGE_LAYOUT_GENERAL, textureStageMask(oldLayout), textureAccessMask(oldLayout),
+                    KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                    VK10.VK_ACCESS_SHADER_READ_BIT | VK10.VK_ACCESS_SHADER_WRITE_BIT);
+        });
+        textureLayouts.set(record, range, VK10.VK_IMAGE_LAYOUT_GENERAL);
     }
 
     private static void recordTextureBarriers(
@@ -600,6 +875,57 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         );
     }
 
+    private static void recordAutomaticBufferVisibility(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanGenericResourceRegistry.BufferRecord record
+    ) {
+        VkBufferMemoryBarrier.Buffer barrier = VkBufferMemoryBarrier.calloc(1, stack);
+        barrier.sType$Default()
+                .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                .dstAccessMask(VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT)
+                .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .buffer(record.buffer().buffer()).offset(0L).size(record.descriptor().byteSize());
+        VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, null, barrier, null);
+    }
+
+    private static void recordAutomaticAccelerationStructureInputVisibility(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanGenericResourceRegistry.BufferRecord record
+    ) {
+        VkBufferMemoryBarrier.Buffer barrier = VkBufferMemoryBarrier.calloc(1, stack);
+        barrier.get(0).sType$Default().srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT)
+                .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .buffer(record.buffer().buffer()).offset(0L).size(VK10.VK_WHOLE_SIZE);
+        VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                org.lwjgl.vulkan.KHRAccelerationStructure.VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                0, null, barrier, null);
+    }
+
+    private static void recordAutomaticTextureVisibility(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            VulkanGenericCommandPlan.AutoTextureVisibility visibility,
+            VulkanGenericTextureLayoutUpdates textureLayouts
+    ) {
+        int newLayout = visibility.writable() ? VK10.VK_IMAGE_LAYOUT_GENERAL : VK10.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        int destinationAccess = visibility.writable()
+                ? VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT
+                : VK10.VK_ACCESS_SHADER_READ_BIT;
+        forEachSubresource(visibility.range(), (aspect, mip, layer) -> {
+            int oldLayout = textureLayouts.layout(visibility.resource(), aspect, mip, layer);
+            recordTextureBarrier(commandBuffer, stack, visibility.resource(), aspect, mip, layer, oldLayout, newLayout,
+                    VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK10.VK_ACCESS_MEMORY_WRITE_BIT,
+                    VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, destinationAccess);
+        });
+        textureLayouts.set(visibility.resource(), visibility.range(), newLayout);
+    }
+
     private static int stageMask(java.util.Set<RenderPipelineStage> stages) {
         int result = 0;
         for (RenderPipelineStage stage : stages) {
@@ -703,11 +1029,14 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 else failure.addSuppressed(closeFailure);
             } finally {
                 closeStaging(submission.staging());
+                submission.accelerationStructures().discardAfterDeviceFailure();
             }
         }
         pending.clear();
         computePipelines.close();
         graphicsPipelines.close();
+        rayTracingPipelines.close();
+        accelerationStructures.close();
         resources.close();
         if (failure != null) throw failure;
     }
@@ -718,7 +1047,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             List<StagingUpload> staging,
             List<VulkanGenericResourceRegistry.BufferRecord> writes,
             List<VulkanGenericResourceRegistry.TextureRecord> textureWrites,
-            java.util.Optional<top.ceroxe.rt.renderer.api.RenderResourceId> outputResource
+            java.util.Optional<top.ceroxe.rt.renderer.api.RenderResourceId> outputResource,
+            VulkanGenericAccelerationStructures.Compilation accelerationStructures
     ) { }
 
     private static final class StagingUpload implements AutoCloseable {

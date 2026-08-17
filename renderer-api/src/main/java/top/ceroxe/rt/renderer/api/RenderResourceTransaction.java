@@ -12,36 +12,37 @@ import java.util.Set;
  *
  * <p>The revision is non-negative here; the renderer session, not this value object, must reject
  * a revision that is not strictly greater than its last accepted revision. Every upsert retains
- * its exact buffer or texture generation. Retirement names a stable identity explicitly and never
- * infers lifetime from an omitted object. A stable identity cannot be both upserted and retired in
- * one transaction, and resource kind changes are rejected within one batch.</p>
+ * its exact buffer or texture generation. Retirement names an exact generation; broad retirement
+ * by stable identity is deliberately not available because it could destroy a newer in-flight
+ * allocation. A generation cannot be both upserted and retired in one transaction, and resource
+ * kind changes are rejected within one batch.</p>
  */
 public final class RenderResourceTransaction {
     private final long revision;
     private final List<BufferResource> buffers;
     private final List<TextureResource> textures;
-    private final Set<RenderResourceId> retiredResourceIds;
+    private final Set<ResourceGenerationKey> retiredGenerations;
 
     /** Creates and validates one immutable resource transaction. */
     public RenderResourceTransaction(
             long revision,
             List<? extends BufferResource> buffers,
             List<? extends TextureResource> textures,
-            Collection<? extends RenderResourceId> retiredResourceIds
+            Collection<? extends ResourceGenerationKey> retiredGenerations
     ) {
         if (revision < 0L) throw new IllegalArgumentException("resource transaction revision must not be negative");
         this.revision = revision;
         this.buffers = copyResources(buffers, "buffers");
         this.textures = copyResources(textures, "textures");
-        Objects.requireNonNull(retiredResourceIds, "retiredResourceIds");
-        HashSet<RenderResourceId> retired = new HashSet<>();
-        for (RenderResourceId id : retiredResourceIds) {
-            if (!retired.add(Objects.requireNonNull(id, "retiredResourceIds element"))) {
-                throw new IllegalArgumentException("retiredResourceIds contains a duplicate id");
+        Objects.requireNonNull(retiredGenerations, "retiredGenerations");
+        HashSet<ResourceGenerationKey> retired = new HashSet<>();
+        for (ResourceGenerationKey generation : retiredGenerations) {
+            if (!retired.add(Objects.requireNonNull(generation, "retiredGenerations element"))) {
+                throw new IllegalArgumentException("retiredGenerations contains a duplicate generation");
             }
         }
-        this.retiredResourceIds = Set.copyOf(retired);
-        validateConflicts(this.buffers, this.textures, this.retiredResourceIds);
+        this.retiredGenerations = Set.copyOf(retired);
+        validateConflicts(this.buffers, this.textures, this.retiredGenerations);
     }
 
     private static <T extends RenderResource> List<T> copyResources(List<? extends T> values, String name) {
@@ -54,22 +55,25 @@ public final class RenderResourceTransaction {
     private static void validateConflicts(
             List<BufferResource> buffers,
             List<TextureResource> textures,
-            Set<RenderResourceId> retired
+            Set<ResourceGenerationKey> retired
     ) {
-        HashSet<RenderResourceId> upserted = new HashSet<>();
+        HashSet<RenderResourceId> upsertedIdentities = new HashSet<>();
+        HashSet<ResourceGenerationKey> upsertedGenerations = new HashSet<>();
         for (BufferResource buffer : buffers) {
-            if (!upserted.add(buffer.id())) {
+            if (!upsertedIdentities.add(buffer.id())) {
                 throw new IllegalArgumentException("resource transaction contains duplicate buffer identity " + buffer.id());
             }
+            upsertedGenerations.add(ResourceGenerationKey.of(buffer));
         }
         for (TextureResource texture : textures) {
-            if (!upserted.add(texture.id())) {
+            if (!upsertedIdentities.add(texture.id())) {
                 throw new IllegalArgumentException("resource transaction contains duplicate or cross-kind identity " + texture.id());
             }
+            upsertedGenerations.add(ResourceGenerationKey.of(texture));
         }
-        for (RenderResourceId id : retired) {
-            if (upserted.contains(id)) {
-                throw new IllegalArgumentException("resource identity is both upserted and retired: " + id);
+        for (ResourceGenerationKey generation : retired) {
+            if (upsertedGenerations.contains(generation)) {
+                throw new IllegalArgumentException("resource generation is both upserted and retired: " + generation);
             }
         }
     }
@@ -83,8 +87,8 @@ public final class RenderResourceTransaction {
     /** @return immutable exact texture generations */
     public List<TextureResource> textures() { return textures; }
 
-    /** @return immutable stable identities explicitly retired by this transaction */
-    public Set<RenderResourceId> retiredResourceIds() { return retiredResourceIds; }
+    /** @return immutable exact resource generations explicitly retired by this transaction */
+    public Set<ResourceGenerationKey> retiredGenerations() { return retiredGenerations; }
 
     /** @return exact generation keys in buffer-then-texture order */
     public List<ResourceGenerationKey> upsertGenerationKeys() {
@@ -96,7 +100,7 @@ public final class RenderResourceTransaction {
 
     /** @return whether this transaction publishes or retires any identity */
     public boolean hasChanges() {
-        return !buffers.isEmpty() || !textures.isEmpty() || !retiredResourceIds.isEmpty();
+        return !buffers.isEmpty() || !textures.isEmpty() || !retiredGenerations.isEmpty();
     }
 
     /** Requires a candidate revision to be strictly newer than a session's accepted revision. */
@@ -114,7 +118,7 @@ public final class RenderResourceTransaction {
         private final long revision;
         private final ArrayList<BufferResource> buffers = new ArrayList<>();
         private final ArrayList<TextureResource> textures = new ArrayList<>();
-        private final ArrayList<RenderResourceId> retiredResourceIds = new ArrayList<>();
+        private final ArrayList<ResourceGenerationKey> retiredGenerations = new ArrayList<>();
 
         private Builder(long revision) {
             if (revision < 0L) throw new IllegalArgumentException("resource transaction revision must not be negative");
@@ -133,15 +137,15 @@ public final class RenderResourceTransaction {
             return this;
         }
 
-        /** Retires one stable identity explicitly. */
-        public Builder retire(RenderResourceId id) {
-            retiredResourceIds.add(Objects.requireNonNull(id, "id"));
+        /** Retires one exact storage generation after its consumers have completed. */
+        public Builder retire(ResourceGenerationKey generation) {
+            retiredGenerations.add(Objects.requireNonNull(generation, "generation"));
             return this;
         }
 
         /** Builds a fully validated immutable transaction. */
         public RenderResourceTransaction build() {
-            return new RenderResourceTransaction(revision, buffers, textures, retiredResourceIds);
+            return new RenderResourceTransaction(revision, buffers, textures, retiredGenerations);
         }
     }
 }

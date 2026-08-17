@@ -1,6 +1,6 @@
 # Generic Rendering Semantics
 
-`2.0.0` has one `Renderer` surface with two explicit workload modes: retained scene and command
+`3.0.0` has one `Renderer` surface with two explicit workload modes: retained scene and command
 transactions. A missing scene field never turns a scene request into a command transaction, and a
 command transaction is never silently rewritten as a PBR scene.
 
@@ -14,7 +14,7 @@ backward-compatible default.
 
 The expert path is:
 
-1. publish immutable `BufferResource` and `TextureResource` generations with `submitResources`;
+1. publish immutable `BufferResource` and `TextureResource` storage generations with `submitResources`;
 2. build an immutable `RenderCommandTransaction` with explicit sequence and command order;
 3. use `BeginRenderPassCommand`, a validated `GraphicsPipelineState`, explicit bindings and draw
    commands, then `EndRenderPassCommand`;
@@ -22,10 +22,18 @@ The expert path is:
 
 The Vulkan backend records dynamic-rendering passes, typed attachment transitions, load/store and
 resolve operations, descriptor sets, push constants, vertex/index bindings, direct/indexed/instanced
-draws, multi-draws, fixed-count indirect draws, copies, and explicit barriers. Count-buffer indirect
-draws are rejected unless the backend advertises the corresponding Vulkan extension. Unsupported
-shader stages, vertex formats, multisample modes, layouts, and resource states fail closed during
-admission.
+draws, multi-draws, fixed-count indirect draws, buffer/texture copies, buffer-image copies, color and
+depth/stencil clears, and explicit barriers. Buffer-image copies whose byte pitch cannot be represented
+by Vulkan texel units are rejected rather than rounded. Count-buffer indirect draws are rejected unless
+the backend advertises the corresponding Vulkan extension. Unsupported shader stages, vertex formats,
+multisample modes, layouts, and resource states fail closed during admission.
+
+For one transaction, an earlier transfer write consumed later as a vertex, index, indirect, transfer, or
+AS-build input buffer read receives a submission-local Vulkan visibility dependency automatically. AS input
+uses the exact `TRANSFER_WRITE -> ACCELERATION_STRUCTURE_BUILD` edge; this does not create
+cross-submission readiness: a resource written by an earlier transaction must still have `GPU_READY`
+evidence. `ResourceBarrierCommand` remains necessary whenever the caller requires an explicit stage,
+access, layout, or ownership contract beyond that narrow automatic edge.
 
 `BindingType.COMBINED_IMAGE_SAMPLER` represents a single texture-view/sampler pair at one shader
 location. It maps directly to `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`; it is not an alias for
@@ -37,6 +45,46 @@ binding type and cannot be accepted through a split descriptor declaration.
 attachment resource. `RECORDED` is not GPU completion. Device loss changes the generic command lane
 to a terminal structured `DEVICE_LOST` state; callers must recreate the renderer according to the
 reported recovery action.
+
+`ResourceVersion` identifies storage shape and declared usage, not every content update. A later write
+to a GPU-ready generation produces later fence-backed residency evidence. Retirement always names an
+exact `ResourceGenerationKey`; the API deliberately has no broad identity-retirement operation that
+could destroy a newer in-flight allocation.
+
+`ResourceMutationKey` identifies the command-sequence snapshot of that storage. It is the stable
+in-flight token for a completed or pending content write, rather than a `ByteBuffer` wrapper identity.
+
+## Generic ray tracing command model
+
+The command algebra can express BLAS/TLAS declarations and builds, explicit ray-tracing shader groups,
+pipeline binding, AS descriptors, and `TraceRaysCommand`. This is distinct from the retained scene path;
+it does not reinterpret raster GLSL or infer hit shaders from PBR materials.
+
+On a Vulkan device that advertises these capabilities, the generic backend allocates BLAS/TLAS storage,
+uses device-addressable declared AS input buffers, bounds scratch and TLAS-instance allocations to the
+submitting fence, validates and compiles the supplied SPIR-V pipeline, packs its explicit groups into an
+aligned SBT, writes exact TLAS descriptors, and records `vkCmdTraceRaysKHR`. A trace output becomes
+`OUTPUT_PRODUCED` only after that submission fence completes. The result is GPU-completion evidence,
+not display visibility; constructing an RT command or observing `RECORDED` never proves either.
+
+An AS `UPDATE` requires the exact existing generation to be fence-idle. A transaction can build a BLAS
+and a TLAS that references it, then trace through that TLAS in command order; the backend inserts the
+AS-build-to-ray-shader dependency in the same command buffer. Missing exact resources, a non-addressable
+AS input, a stale TLAS descriptor, unsupported SPIR-V, invalid SBT layout, or an unresolved prior AS
+build fails closed at admission.
+
+`DestroyAccelerationStructureCommand` retires one exact AS generation only after all of its recorded
+build and trace uses have completed. It cannot be combined with a build or a descriptor use of that same
+AS in one transaction; this preserves bounded native ownership without a broad stable-identity destroy.
+
+## Composition and presentation evidence
+
+`FrameCompositionPlan` expresses ordered project-neutral source mutations and one exact target mutation.
+`FramePresentationEvidence` separates `GPU_COMPLETED`, `CONSUMER_ACCEPTED`, and `VISIBLE`; a fence never
+proves display visibility. The current Vulkan generic backend does not yet consume composition plans or
+publish visible-present evidence. It therefore reports `FRAME_COMPOSITION` and
+`FRAME_PRESENTATION_EVIDENCE` as `UNSUPPORTED`; callers must not infer consumer acceptance or visibility
+from generic command evidence.
 
 ## Explicit RT/raster composition
 

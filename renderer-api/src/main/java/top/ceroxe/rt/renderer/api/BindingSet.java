@@ -15,7 +15,8 @@ import java.util.Objects;
  */
 public final class BindingSet {
     /** One typed value accepted by a binding slot. */
-    public sealed interface Value permits BufferValue, TextureValue, SamplerValue, CombinedImageSamplerValue {
+    public sealed interface Value permits BufferValue, TextureValue, SamplerValue, CombinedImageSamplerValue,
+            AccelerationStructureValue {
         /** @return exact binding category represented by this value */
         BindingType type();
     }
@@ -95,6 +96,23 @@ public final class BindingSet {
         @Override
         public BindingType type() {
             return BindingType.COMBINED_IMAGE_SAMPLER;
+        }
+    }
+
+    /** Exact top-level acceleration structure bound to a ray-tracing shader slot. */
+    public record AccelerationStructureValue(AccelerationStructureResource accelerationStructure) implements Value {
+        /** Rejects bottom-level structures because shader-visible trace roots must be top-level. */
+        public AccelerationStructureValue {
+            accelerationStructure = Objects.requireNonNull(accelerationStructure, "accelerationStructure");
+            if (accelerationStructure.kind() != AccelerationStructureKind.TOP_LEVEL) {
+                throw new IllegalArgumentException("shader acceleration-structure bindings require a TOP_LEVEL resource");
+            }
+        }
+
+        /** @return the exact shader-visible descriptor category */
+        @Override
+        public BindingType type() {
+            return BindingType.ACCELERATION_STRUCTURE;
         }
     }
 

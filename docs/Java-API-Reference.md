@@ -59,7 +59,7 @@ discriminator；直接使用 `apply/trySubmit` 或 `submitCommands` 时，调用
 
 ### 通用渲染语义
 
-`2.0.0` 的 command path 语义、Vulkan 后端支持边界和证据规则见
+`3.0.0` 的 command path 语义、Vulkan 后端支持边界和证据规则见
 [Generic-Rendering-Semantics.md](Generic-Rendering-Semantics.md)。这条路径真实消费 graphics
 pipeline、attachment、binding 和 draw 命令；未被后端支持的 shader、格式或同步要求会在 admission
 阶段拒绝，不会降级成固定 PBR 场景。

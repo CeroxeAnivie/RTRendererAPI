@@ -11,6 +11,7 @@ import org.lwjgl.vulkan.VkDescriptorSetLayoutBinding;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutCreateInfo;
 import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkWriteDescriptorSet;
+import org.lwjgl.vulkan.VkWriteDescriptorSetAccelerationStructureKHR;
 import top.ceroxe.rt.renderer.api.BindingKey;
 import top.ceroxe.rt.renderer.api.BindingLayout;
 import top.ceroxe.rt.renderer.api.BindingLayoutEntry;
@@ -112,6 +113,19 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
     }
 
     void update(BindingSet bindings, VulkanGenericResourceRegistry resources, VulkanGenericSamplerCache samplers) {
+        update(bindings, resources, samplers, null);
+    }
+
+    /**
+     * Writes one immutable descriptor snapshot, resolving AS values through the transaction-local
+     * RT registry rather than accepting a raw handle from the API boundary.
+     */
+    void update(
+            BindingSet bindings,
+            VulkanGenericResourceRegistry resources,
+            VulkanGenericSamplerCache samplers,
+            AccelerationStructureResolver accelerationStructures
+    ) {
         requireOpen();
         BindingSet checked = Objects.requireNonNull(bindings, "bindings");
         if (!checked.layout().entries().equals(layout.entries())) {
@@ -140,7 +154,7 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
                     VkDescriptorImageInfo.Buffer infos = VkDescriptorImageInfo.calloc(values.size(), stack);
                     for (int index = 0; index < values.size(); index++) {
                         BindingSet.TextureValue value = (BindingSet.TextureValue) values.get(index);
-                        long view = resources.requireTextureView(value.view());
+                        long view = resources.requirePlannedTextureView(value.view());
                         int imageLayout = entry.type() == BindingType.SAMPLED_TEXTURE
                                 ? VK10.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK10.VK_IMAGE_LAYOUT_GENERAL;
                         infos.get(index).sampler(VK10.VK_NULL_HANDLE).imageView(view).imageLayout(imageLayout);
@@ -151,11 +165,29 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
                     for (int index = 0; index < values.size(); index++) {
                         BindingSet.CombinedImageSamplerValue value =
                                 (BindingSet.CombinedImageSamplerValue) values.get(index);
-                        long view = resources.requireTextureView(value.view());
+                        long view = resources.requirePlannedTextureView(value.view());
                         infos.get(index).sampler(samplers.require(value.sampler()))
                                 .imageView(view).imageLayout(VK10.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
                     }
                     write.pImageInfo(infos);
+                } else if (entry.type() == BindingType.ACCELERATION_STRUCTURE) {
+                    if (accelerationStructures == null) {
+                        throw new UnsupportedOperationException(
+                                "acceleration-structure bindings require an executable generic RT transaction"
+                        );
+                    }
+                    LongBuffer handles = stack.mallocLong(values.size());
+                    for (int index = 0; index < values.size(); index++) {
+                        BindingSet.AccelerationStructureValue value =
+                                (BindingSet.AccelerationStructureValue) values.get(index);
+                        handles.put(accelerationStructures.requireTopLevel(value.accelerationStructure()));
+                    }
+                    handles.flip();
+                    VkWriteDescriptorSetAccelerationStructureKHR nativeAs =
+                            VkWriteDescriptorSetAccelerationStructureKHR.calloc(stack)
+                                    .sType$Default().accelerationStructureCount(values.size())
+                                    .pAccelerationStructures(handles);
+                    write.pNext(nativeAs.address());
                 } else {
                     VkDescriptorImageInfo.Buffer infos = VkDescriptorImageInfo.calloc(values.size(), stack);
                     for (int index = 0; index < values.size(); index++) {
@@ -245,6 +277,7 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
             case READ_ONLY_STORAGE_TEXTURE, READ_WRITE_STORAGE_TEXTURE -> VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             case SAMPLER, COMPARISON_SAMPLER -> VK10.VK_DESCRIPTOR_TYPE_SAMPLER;
             case COMBINED_IMAGE_SAMPLER -> VK10.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            case ACCELERATION_STRUCTURE -> org.lwjgl.vulkan.KHRAccelerationStructure.VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
         };
     }
 
@@ -281,5 +314,10 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
 
     private void requireOpen() {
         if (closed) throw new IllegalStateException("generic descriptor set bank is closed");
+    }
+
+    /** Resolves an API AS identity only after the generic RT path has established its native ownership. */
+    interface AccelerationStructureResolver {
+        long requireTopLevel(top.ceroxe.rt.renderer.api.AccelerationStructureResource resource);
     }
 }

@@ -21,9 +21,16 @@ public final class ResourceLifecycleContractSelfTest {
         expect(IllegalArgumentException.class, () -> RenderResourceTransaction.builder(1L)
                 .upsert(buffer).upsert(buffer).build());
         expect(IllegalArgumentException.class, () -> RenderResourceTransaction.builder(1L)
-                .upsert(buffer).retire(buffer.id()).build());
+                .upsert(buffer).retire(ResourceGenerationKey.of(buffer)).build());
         expect(IllegalArgumentException.class, () -> RenderResourceTransaction.builder(1L)
-                .retire(buffer.id()).retire(buffer.id()).build());
+                .retire(ResourceGenerationKey.of(buffer)).retire(ResourceGenerationKey.of(buffer)).build());
+        BufferResource replacement = new BufferResource(
+                buffer.id(), new ResourceVersion(1L), 128L, Set.of(BufferUsage.VERTEX)
+        );
+        RenderResourceTransaction replacementTransaction = RenderResourceTransaction.builder(2L)
+                .upsert(replacement).retire(ResourceGenerationKey.of(buffer)).build();
+        require(replacementTransaction.retiredGenerations().equals(Set.of(ResourceGenerationKey.of(buffer))),
+                "exact old-generation retirement was not retained beside its replacement");
         expect(UnsupportedOperationException.class, () -> transaction.buffers().clear());
         RenderResourceTransaction.requireStrictlyAfter(1L, 2L);
         expect(IllegalArgumentException.class, () -> RenderResourceTransaction.requireStrictlyAfter(2L, 2L));
@@ -36,6 +43,9 @@ public final class ResourceLifecycleContractSelfTest {
         ResourceResidencyEvidence ready = evidence(
                 key, ResourceResidencyEvidence.Outcome.GPU_READY, OptionalLong.of(7L), OptionalLong.empty()
         );
+        require(ready.mutationKey().orElseThrow().equals(new ResourceMutationKey(key, 7L)),
+                "GPU-ready residency did not retain its exact content mutation token");
+        require(accepted.mutationKey().isEmpty(), "unrecorded storage fabricated a content mutation token");
         ResourceResidencyEvidence pending = evidence(
                 key, ResourceResidencyEvidence.Outcome.RETIRE_PENDING, OptionalLong.of(7L), OptionalLong.of(9L)
         );

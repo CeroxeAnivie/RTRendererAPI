@@ -305,6 +305,7 @@ tasks.named("check") {
 
 val nativeSelfTests = linkedMapOf(
     "vulkanGenericCommandNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericCommandNativeSelfTest",
+    "vulkanGenericRayTracingNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericRayTracingNativeSelfTest",
     "vulkanGpuSceneNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneNativeSelfTest",
     "vulkanGenericAccelerationNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericBlasNativeSelfTest",
     "vulkanSceneAccelerationNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSceneAccelerationNativeSelfTest",

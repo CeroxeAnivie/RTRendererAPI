@@ -1,6 +1,7 @@
 package top.ceroxe.rt.renderer.api;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
 
 /**
@@ -79,6 +80,22 @@ public record ResourceResidencyEvidence(
     }
 
     /**
+     * Returns the exact recorded content snapshot when this evidence has a GPU submission.
+     *
+     * <p>The token is empty for accepted, rejected, and unused-retired storage because none of
+     * those states may fabricate content execution. It remains stable from recorded through
+     * completion and retirement, so a consumer can distinguish storage identity from the exact
+     * in-flight mutation it is waiting to retire.</p>
+     *
+     * @return immutable mutation token, or empty before any command recording
+     */
+    public Optional<ResourceMutationKey> mutationKey() {
+        return submissionSequence.isPresent()
+                ? Optional.of(new ResourceMutationKey(generation, submissionSequence.getAsLong()))
+                : Optional.empty();
+    }
+
+    /**
      * Validates a legal one-step lifecycle transition.
      *
      * @param next next immutable evidence snapshot for the same generation
@@ -92,9 +109,14 @@ public record ResourceResidencyEvidence(
         if (!outcome.mayAdvanceTo(next.outcome)) {
             throw new IllegalArgumentException("illegal residency evidence transition: " + outcome + " -> " + next.outcome);
         }
-        if (submissionSequence.isPresent()
-                && !submissionSequence.equals(next.submissionSequence)) {
-            throw new IllegalArgumentException("residency evidence cannot change its submission sequence");
+        if (submissionSequence.isPresent() && !submissionSequence.equals(next.submissionSequence)) {
+            boolean nextOrderedMutation = outcome == Outcome.GPU_READY
+                    && next.outcome == Outcome.UPLOAD_RECORDED
+                    && next.submissionSequence.isPresent()
+                    && next.submissionSequence.getAsLong() > submissionSequence.getAsLong();
+            if (!nextOrderedMutation) {
+                throw new IllegalArgumentException("residency evidence cannot change its submission sequence outside a later mutation");
+            }
         }
     }
 
@@ -142,7 +164,7 @@ public record ResourceResidencyEvidence(
             return switch (this) {
                 case ACCEPTED -> next == UPLOAD_RECORDED || next == RETIRED_UNUSED || next == REJECTED;
                 case UPLOAD_RECORDED -> next == GPU_READY || next == REJECTED;
-                case GPU_READY -> next == RETIRE_PENDING;
+                case GPU_READY -> next == UPLOAD_RECORDED || next == RETIRE_PENDING;
                 case RETIRE_PENDING -> next == RETIRED;
                 case RETIRED, RETIRED_UNUSED, REJECTED -> false;
             };

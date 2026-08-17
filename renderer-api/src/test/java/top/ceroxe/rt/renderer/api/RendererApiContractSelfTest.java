@@ -105,6 +105,7 @@ public final class RendererApiContractSelfTest {
       assertMipChainContract();
       assertTransactionOwnershipAndConflicts();
       assertWorkloadExecutionEvidenceContract();
+      assertGenericCompositionEvidenceContract();
       assertDiagnosticsAndResultValidation();
       assertGpuFrameDescriptorValidation();
       assertManagedPresenterContract();
@@ -163,6 +164,31 @@ public final class RendererApiContractSelfTest {
                       && acceptedCombined.sceneSubmission().isPresent()
                       && acceptedCombined.graphicsExecution().isPresent(),
               "combined workload evidence did not preserve both ordered lanes");
+   }
+
+   private static void assertGenericCompositionEvidenceContract() {
+      ResourceGenerationKey generation = new ResourceGenerationKey(new RenderResourceId(981L), ResourceVersion.initial());
+      ResourceMutationKey target = new ResourceMutationKey(generation, 77L);
+      ResourceMutationKey source = new ResourceMutationKey(
+              new ResourceGenerationKey(new RenderResourceId(982L), ResourceVersion.initial()), 76L);
+      FrameCompositionPlan plan = new FrameCompositionPlan(target, List.of(
+              new FrameCompositionPlan.Layer(source, FrameCompositionPlan.Operation.ALPHA_OVER)
+      ));
+      require(plan.layers().size() == 1 && plan.target().equals(target),
+              "generic composition plan did not preserve exact source and target mutations");
+      expect(IllegalArgumentException.class, () -> new FrameCompositionPlan(target, List.of(
+              new FrameCompositionPlan.Layer(target, FrameCompositionPlan.Operation.REPLACE)
+      )));
+      FramePresentationEvidence completed = new FramePresentationEvidence(
+              target, 77L, FramePresentationEvidence.Outcome.GPU_COMPLETED, OptionalLong.empty(), "fence complete"
+      );
+      require(completed.outcome() != FramePresentationEvidence.Outcome.VISIBLE,
+              "GPU completion was confused with visible presentation");
+      expect(IllegalArgumentException.class, () -> new FramePresentationEvidence(
+              target, 77L, FramePresentationEvidence.Outcome.VISIBLE, OptionalLong.empty(), "missing consumer evidence"
+      ));
+      new FramePresentationEvidence(target, 77L, FramePresentationEvidence.Outcome.VISIBLE,
+              OptionalLong.of(91L), "consumer reported visible present");
    }
 
    private static void assertExternalFrameConsumerContracts() {

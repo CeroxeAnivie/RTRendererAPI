@@ -362,7 +362,7 @@ tasks.register("verifyPublishedMavenTopology") {
             val factory = DocumentBuilderFactory.newInstance().apply {
                 setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
                 setFeature("http://xml.org/sax/features/external-general-entities", false)
-                setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+                setFeature("        http://xml.org/sax/features/external-parameter-entities", false)
                 isXIncludeAware = false
                 isExpandEntityReferences = false
             }

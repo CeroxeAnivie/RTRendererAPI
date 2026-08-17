@@ -29,5 +29,14 @@ public sealed interface RenderCommand permits
         CopyBufferCommand,
         CopyTextureCommand,
         CopyTextureRegionCommand,
+        CopyBufferToTextureCommand,
+        CopyTextureToBufferCommand,
+        ClearColorCommand,
+        ClearDepthStencilCommand,
+        BuildBottomLevelAccelerationStructureCommand,
+        BuildTopLevelAccelerationStructureCommand,
+        DestroyAccelerationStructureCommand,
+        BindRayTracingPipelineCommand,
+        TraceRaysCommand,
         ResourceBarrierCommand {
 }

@@ -30,6 +30,9 @@ public final class VulkanSpirvBindingValidatorSelfTest {
         VulkanSpirvBindingValidator.requireDeclaredInterface(module(
                 ShaderStage.FRAGMENT, "main", List.of(combined)
         ));
+        VulkanSpirvBindingValidator.requireDeclaredInterface(accelerationStructureModule(
+                binding(0, 0, BindingType.ACCELERATION_STRUCTURE, ShaderStage.RAY_GENERATION)
+        ));
 
         requireRejected(() -> VulkanSpirvBindingValidator.requireDeclaredInterface(module(
                 ShaderStage.FRAGMENT, "main", List.of(binding(0, 0, BindingType.SAMPLED_TEXTURE))
@@ -75,6 +78,26 @@ public final class VulkanSpirvBindingValidatorSelfTest {
         return new ShaderModule(
                 new RenderResourceId(1L), ResourceVersion.initial(), stage, entryPoint, words,
                 new ShaderReflection(bindings, 0)
+        );
+    }
+
+    private static ShaderModule accelerationStructureModule(BindingLayoutEntry binding) {
+        ByteBuffer words = ByteBuffer.allocateDirect(33 * Integer.BYTES).order(ByteOrder.nativeOrder());
+        words.putInt(0x07230203); // SPIR-V magic
+        words.putInt(0x00010000); // SPIR-V 1.0 header is sufficient for descriptor parsing
+        words.putInt(0);
+        words.putInt(5);
+        words.putInt(0);
+        instruction(words, 15, 5, 5313, 1, 0x6e69616d, 0); // OpEntryPoint RayGenerationKHR %1 "main"
+        instruction(words, 71, 4, 4, 34, 0); // OpDecorate %4 DescriptorSet 0
+        instruction(words, 71, 4, 4, 33, 0); // OpDecorate %4 Binding 0
+        instruction(words, 5341, 2, 2); // OpTypeAccelerationStructureKHR %2
+        instruction(words, 32, 4, 3, 0, 2); // OpTypePointer UniformConstant %2
+        instruction(words, 59, 4, 3, 4, 0); // OpVariable %3 %4 UniformConstant
+        words.flip();
+        return new ShaderModule(
+                new RenderResourceId(2L), ResourceVersion.initial(), ShaderStage.RAY_GENERATION, "main", words,
+                new ShaderReflection(List.of(binding), 0)
         );
     }
 

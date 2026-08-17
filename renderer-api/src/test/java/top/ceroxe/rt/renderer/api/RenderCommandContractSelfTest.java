@@ -29,6 +29,8 @@ public final class RenderCommandContractSelfTest {
         drawAndIndirectContract();
         zeroStepVertexRangeContract();
         copyAndBarrierContract();
+        transferAndClearContract();
+        rayTracingCommandContract();
     }
 
     private static void passAttachmentContract() {
@@ -379,6 +381,98 @@ public final class RenderCommandContractSelfTest {
                 Set.of(RenderPipelineStage.COPY), Set.of(RenderResourceAccess.COPY_READ),
                 Set.of(RenderPipelineStage.COPY), Set.of()
         ));
+    }
+
+    private static void transferAndClearContract() {
+        BufferResource upload = buffer(410L, 256, BufferUsage.COPY_SOURCE);
+        BufferResource readback = buffer(411L, 256, BufferUsage.COPY_DESTINATION);
+        TextureResource color = colorTexture(new RenderResourceId(412L), 8, 4, 1, 1, 1,
+                TextureUsage.COPY_SOURCE, TextureUsage.COPY_DESTINATION, TextureUsage.COLOR_ATTACHMENT);
+        ResourceSlice.BufferSlice uploadSlice = new ResourceSlice.BufferSlice(upload, new ByteRange(0, 256));
+        ResourceSlice.BufferSlice readbackSlice = new ResourceSlice.BufferSlice(readback, new ByteRange(0, 256));
+        ResourceSlice.TextureSlice colorSlice = new ResourceSlice.TextureSlice(
+                color, new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, 0, 1));
+        TextureDataLayout tight = new TextureDataLayout(0, 32, 4);
+        new CopyBufferToTextureCommand(uploadSlice, colorSlice, new TextureOrigin(0, 0, 0),
+                new TextureExtent(8, 4, 1), tight);
+        new CopyTextureToBufferCommand(colorSlice, new TextureOrigin(0, 0, 0),
+                new TextureExtent(8, 4, 1), readbackSlice, tight);
+        new ClearColorCommand(colorSlice, new ClearColorValue(0.0f, 0.5f, 1.0f, 1.0f));
+        expectFailure(() -> new ClearColorCommand(
+                new ResourceSlice.TextureSlice(color, new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, 0, 1)),
+                new ClearColorValue(Float.NaN, 0.0f, 0.0f, 1.0f)));
+        expectFailure(() -> new CopyBufferToTextureCommand(
+                new ResourceSlice.BufferSlice(upload, new ByteRange(0, 31)), colorSlice,
+                new TextureOrigin(0, 0, 0), new TextureExtent(8, 1, 1), new TextureDataLayout(0, 32, 1)));
+
+        TextureResource depth = new TextureResource(new RenderResourceId(413L), INITIAL, TextureDimension.TEXTURE_2D,
+                8, 4, 1, 1, 1, 1, TextureFormat.D24_UNORM_S8_UINT,
+                EnumSet.of(TextureUsage.COPY_DESTINATION, TextureUsage.DEPTH_STENCIL_ATTACHMENT));
+        ResourceSlice.TextureSlice depthSlice = new ResourceSlice.TextureSlice(
+                depth, new TextureSubresourceRange(TextureAspect.DEPTH, 0, 1, 0, 1));
+        new ClearDepthStencilCommand(depthSlice, 1.0f, 0);
+        expectFailure(() -> new ClearDepthStencilCommand(depthSlice, 1.1f, 0));
+        expectFailure(() -> new ClearDepthStencilCommand(colorSlice, 1.0f, 0));
+    }
+
+    private static void rayTracingCommandContract() {
+        ShaderModule rayGeneration = module(new RenderResourceId(420L), ShaderStage.RAY_GENERATION,
+                new ShaderReflection(List.of(), 0));
+        ShaderProgram program = new ShaderProgram(new RenderResourceId(421L), INITIAL, ShaderProgram.Kind.RAY_TRACING,
+                List.of(rayGeneration), new BindingLayout(List.of()), 0);
+        RayTracingPipelineState pipeline = new RayTracingPipelineState(program,
+                List.of(RayTracingShaderGroup.general(rayGeneration)), 1);
+        TextureResource output = colorTexture(new RenderResourceId(422L), 8, 4, 1, 1, 1,
+                TextureUsage.STORAGE_READ_WRITE);
+        TraceRaysCommand trace = new TraceRaysCommand(colorView(output, 1), 8, 4, 1);
+        expectFailure(() -> new RenderCommandTransaction(421L, List.of(trace)));
+        new RenderCommandTransaction(422L, List.of(new BindRayTracingPipelineCommand(pipeline), trace));
+
+        BufferResource positions = buffer(423L, 36, BufferUsage.ACCELERATION_STRUCTURE_BUILD_INPUT);
+        AccelerationStructureTriangleGeometry triangles = new AccelerationStructureTriangleGeometry(
+                new ResourceSlice.BufferSlice(positions, new ByteRange(0, 36)), 12, 3, null, null, 0);
+        AccelerationStructureResource bottom = new AccelerationStructureResource(
+                new RenderResourceId(424L), INITIAL, AccelerationStructureKind.BOTTOM_LEVEL, false);
+        new BuildBottomLevelAccelerationStructureCommand(bottom, AccelerationStructureBuildMode.BUILD, List.of(triangles));
+        expectFailure(() -> new BuildBottomLevelAccelerationStructureCommand(
+                bottom, AccelerationStructureBuildMode.UPDATE, List.of(triangles)));
+
+        expectFailure(() -> new AccelerationStructureTriangleGeometry(
+                new ResourceSlice.BufferSlice(positions, new ByteRange(0, 35)), 12, 3, null, null, 0));
+        expectFailure(() -> new AccelerationStructureTriangleGeometry(
+                new ResourceSlice.BufferSlice(positions, new ByteRange(0, 36)), 10, 3, null, null, 0));
+        BufferResource ordinary = buffer(425L, 36, BufferUsage.VERTEX);
+        expectFailure(() -> new AccelerationStructureTriangleGeometry(
+                new ResourceSlice.BufferSlice(ordinary, new ByteRange(0, 36)), 12, 3, null, null, 0));
+
+        AccelerationStructureResource top = new AccelerationStructureResource(
+                new RenderResourceId(426L), INITIAL, AccelerationStructureKind.TOP_LEVEL, true);
+        AccelerationStructureInstance instance = new AccelerationStructureInstance(
+                bottom, AffineTransform3x4.identity(), 0, 0xff, 0, false, false);
+        new BuildTopLevelAccelerationStructureCommand(top, AccelerationStructureBuildMode.BUILD, List.of(instance));
+        new BuildTopLevelAccelerationStructureCommand(top, AccelerationStructureBuildMode.UPDATE, List.of(instance));
+        new DestroyAccelerationStructureCommand(top);
+        expectFailure(() -> new BuildBottomLevelAccelerationStructureCommand(
+                top, AccelerationStructureBuildMode.BUILD, List.of(triangles)));
+        expectFailure(() -> new BuildTopLevelAccelerationStructureCommand(
+                bottom, AccelerationStructureBuildMode.BUILD, List.of(instance)));
+        expectFailure(() -> new AccelerationStructureInstance(top, AffineTransform3x4.identity(), 0, 0xff, 0, false, false));
+        expectFailure(() -> new AccelerationStructureInstance(bottom, AffineTransform3x4.identity(), 0, 0xff, 0, true, true));
+        expectFailure(() -> new BindingSet.AccelerationStructureValue(bottom));
+        expectFailure(() -> new TraceRaysCommand(colorView(output, 1), 9, 4, 1));
+
+        ShaderModule miss = module(new RenderResourceId(427L), ShaderStage.RAY_MISS,
+                new ShaderReflection(List.of(), 0));
+        ShaderProgram completeProgram = new ShaderProgram(new RenderResourceId(428L), INITIAL,
+                ShaderProgram.Kind.RAY_TRACING, List.of(rayGeneration, miss), new BindingLayout(List.of()), 0);
+        new RayTracingPipelineState(completeProgram, List.of(
+                RayTracingShaderGroup.general(rayGeneration), RayTracingShaderGroup.general(miss)
+        ), 1);
+        expectFailure(() -> new RayTracingPipelineState(completeProgram, List.of(
+                RayTracingShaderGroup.general(rayGeneration), RayTracingShaderGroup.general(rayGeneration)
+        ), 1));
+        expectFailure(() -> RayTracingShaderGroup.triangles(rayGeneration, null));
+        expectFailure(() -> RayTracingShaderGroup.procedural(null, null, rayGeneration));
     }
 
     private static RenderPassDescriptor simplePass() {

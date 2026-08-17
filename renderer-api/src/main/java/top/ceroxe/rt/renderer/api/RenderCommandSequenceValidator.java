@@ -10,6 +10,7 @@ final class RenderCommandSequenceValidator {
     private RenderPassDescriptor pass;
     private GraphicsPipelineState pipeline;
     private ComputePipelineState computePipeline;
+    private RayTracingPipelineState rayTracingPipeline;
     private Viewport viewport;
     private ScissorRectangle scissor;
     private BindingSet bindingSet;
@@ -38,15 +39,27 @@ final class RenderCommandSequenceValidator {
             case EndRenderPassCommand ignored -> end();
             case BindGraphicsPipelineCommand bind -> {
                 requireInsidePass("bind graphics pipeline");
-                if (computePipeline != null) throw new IllegalArgumentException("graphics and compute pipeline state cannot be active together");
+                if (computePipeline != null || rayTracingPipeline != null) {
+                    throw new IllegalArgumentException("graphics, compute, and ray-tracing pipeline state cannot be active together");
+                }
                 requirePipelineCompatible(bind.pipeline());
                 pipeline = bind.pipeline();
                 bindingSet = null;
             }
             case BindComputePipelineCommand bind -> {
                 requireOutsidePass("bind compute pipeline");
-                if (pipeline != null) throw new IllegalArgumentException("graphics and compute pipeline state cannot be active together");
+                if (pipeline != null || rayTracingPipeline != null) {
+                    throw new IllegalArgumentException("graphics, compute, and ray-tracing pipeline state cannot be active together");
+                }
                 computePipeline = bind.pipeline();
+                bindingSet = null;
+            }
+            case BindRayTracingPipelineCommand bind -> {
+                requireOutsidePass("bind ray-tracing pipeline");
+                if (pipeline != null || computePipeline != null) {
+                    throw new IllegalArgumentException("graphics, compute, and ray-tracing pipeline state cannot be active together");
+                }
+                rayTracingPipeline = bind.pipeline();
                 bindingSet = null;
             }
             case BindBindingSetCommand bind -> {
@@ -96,19 +109,29 @@ final class RenderCommandSequenceValidator {
             case IndirectDrawCommand indirect -> requireDrawState(indirect.kind().indexed());
             case DispatchCommand ignored -> requireComputeState("dispatch");
             case DispatchIndirectCommand ignored -> requireComputeState("dispatch indirect");
+            case TraceRaysCommand ignored -> requireRayTracingState();
             case SetPushConstantsCommand set -> requirePushConstants(set);
             case WriteBufferCommand ignored -> requireOutsidePass("write buffer");
             case WriteTextureCommand ignored -> requireOutsidePass("write texture");
             case CopyBufferCommand ignored -> requireOutsidePass("copy buffer");
             case CopyTextureCommand ignored -> requireOutsidePass("copy texture");
             case CopyTextureRegionCommand ignored -> requireOutsidePass("copy texture region");
+            case CopyBufferToTextureCommand ignored -> requireOutsidePass("copy buffer to texture");
+            case CopyTextureToBufferCommand ignored -> requireOutsidePass("copy texture to buffer");
+            case ClearColorCommand ignored -> requireOutsidePass("clear color");
+            case ClearDepthStencilCommand ignored -> requireOutsidePass("clear depth/stencil");
+            case BuildBottomLevelAccelerationStructureCommand ignored -> requireOutsidePass("build bottom-level AS");
+            case BuildTopLevelAccelerationStructureCommand ignored -> requireOutsidePass("build top-level AS");
+            case DestroyAccelerationStructureCommand ignored -> requireOutsidePass("destroy acceleration structure");
             case ResourceBarrierCommand ignored -> requireOutsidePass("apply resource barrier");
         }
     }
 
     private void begin(RenderPassDescriptor descriptor) {
         requireOutsidePass("begin render pass");
-        if (computePipeline != null) throw new IllegalArgumentException("cannot begin a graphics pass while a compute pipeline is active");
+        if (computePipeline != null || rayTracingPipeline != null) {
+            throw new IllegalArgumentException("cannot begin a graphics pass while a compute or ray-tracing pipeline is active");
+        }
         pass = descriptor;
         pipeline = null;
         viewport = null;
@@ -117,6 +140,7 @@ final class RenderCommandSequenceValidator {
         vertexBuffers.clear();
         indexBuffer = null;
         computePipeline = null;
+        rayTracingPipeline = null;
     }
 
     private void end() {
@@ -226,6 +250,14 @@ final class RenderCommandSequenceValidator {
         }
     }
 
+    private void requireRayTracingState() {
+        requireOutsidePass("trace rays");
+        if (rayTracingPipeline == null) throw new IllegalArgumentException("trace rays requires a bound ray-tracing pipeline");
+        if (!rayTracingPipeline.program().bindingLayout().entries().isEmpty() && bindingSet == null) {
+            throw new IllegalArgumentException("trace rays requires the bound pipeline's complete binding set");
+        }
+    }
+
     private void requirePushConstants(SetPushConstantsCommand command) {
         requireActiveProgram("set push constants");
         ShaderProgram program = activeProgram();
@@ -246,17 +278,20 @@ final class RenderCommandSequenceValidator {
     }
 
     private void requireActiveProgram(String operation) {
-        if (pipeline == null && computePipeline == null) {
-            throw new IllegalArgumentException(operation + " requires an active graphics or compute pipeline");
+        if (pipeline == null && computePipeline == null && rayTracingPipeline == null) {
+            throw new IllegalArgumentException(operation + " requires an active graphics, compute, or ray-tracing pipeline");
         }
-        if (pipeline != null && computePipeline != null) {
-            throw new IllegalArgumentException("graphics and compute pipeline state cannot be active together");
+        int active = (pipeline != null ? 1 : 0) + (computePipeline != null ? 1 : 0) + (rayTracingPipeline != null ? 1 : 0);
+        if (active != 1) {
+            throw new IllegalArgumentException("graphics, compute, and ray-tracing pipeline state cannot be active together");
         }
     }
 
     private ShaderProgram activeProgram() {
         requireActiveProgram("active program");
-        return pipeline != null ? pipeline.program() : computePipeline.program();
+        if (pipeline != null) return pipeline.program();
+        if (computePipeline != null) return computePipeline.program();
+        return rayTracingPipeline.program();
     }
 
     private void requirePipelineCompatible(GraphicsPipelineState candidate) {
