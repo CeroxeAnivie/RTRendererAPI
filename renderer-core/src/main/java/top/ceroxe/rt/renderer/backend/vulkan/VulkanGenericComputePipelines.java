@@ -87,6 +87,7 @@ final class VulkanGenericComputePipelines implements AutoCloseable {
         long pipeline = VK10.VK_NULL_HANDLE;
         VulkanGenericDescriptorSetBank descriptors = null;
         try (MemoryStack stack = MemoryStack.stackPush()) {
+            VulkanSpirvBindingValidator.requireDeclaredInterface(module);
             shaderModule = createShaderModule(stack, module);
             if (!state.program().bindingLayout().entries().isEmpty()) {
                 descriptors = VulkanGenericDescriptorSetBank.create(

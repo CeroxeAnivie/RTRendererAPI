@@ -1,6 +1,6 @@
 package top.ceroxe.rt.renderer.feature;
 
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
 import java.util.Objects;
@@ -16,7 +16,7 @@ import java.util.Objects;
  */
 public record VulkanFeatureOpenContext(
         VulkanDeviceRuntime device,
-        RayTracingRendererConfig configuration
+        RendererConfig configuration
 ) {
     /** Validates the borrowed runtime and immutable configuration. */
     public VulkanFeatureOpenContext {

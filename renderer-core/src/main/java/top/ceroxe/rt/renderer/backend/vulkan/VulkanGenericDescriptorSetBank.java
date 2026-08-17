@@ -146,6 +146,16 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
                         infos.get(index).sampler(VK10.VK_NULL_HANDLE).imageView(view).imageLayout(imageLayout);
                     }
                     write.pImageInfo(infos);
+                } else if (entry.type() == BindingType.COMBINED_IMAGE_SAMPLER) {
+                    VkDescriptorImageInfo.Buffer infos = VkDescriptorImageInfo.calloc(values.size(), stack);
+                    for (int index = 0; index < values.size(); index++) {
+                        BindingSet.CombinedImageSamplerValue value =
+                                (BindingSet.CombinedImageSamplerValue) values.get(index);
+                        long view = resources.requireTextureView(value.view());
+                        infos.get(index).sampler(samplers.require(value.sampler()))
+                                .imageView(view).imageLayout(VK10.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                    }
+                    write.pImageInfo(infos);
                 } else {
                     VkDescriptorImageInfo.Buffer infos = VkDescriptorImageInfo.calloc(values.size(), stack);
                     for (int index = 0; index < values.size(); index++) {
@@ -234,6 +244,7 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
             case SAMPLED_TEXTURE -> VK10.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             case READ_ONLY_STORAGE_TEXTURE, READ_WRITE_STORAGE_TEXTURE -> VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             case SAMPLER, COMPARISON_SAMPLER -> VK10.VK_DESCRIPTOR_TYPE_SAMPLER;
+            case COMBINED_IMAGE_SAMPLER -> VK10.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         };
     }
 

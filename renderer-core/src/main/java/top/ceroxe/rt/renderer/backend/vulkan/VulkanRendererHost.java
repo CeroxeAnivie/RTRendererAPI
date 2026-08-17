@@ -3,8 +3,8 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.Renderer;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
@@ -50,14 +50,14 @@ import java.util.function.Supplier;
  * Provider-side lifecycle and ordering authority for one Vulkan renderer instance.
  *
  * <p>This class deliberately has package visibility: hosts can only obtain the public
- * {@link RayTracingRenderer} contract from a fully wired provider. Until the generic mesh and
+ * {@link Renderer} contract from a fully wired provider. Until the generic mesh and
  * material adapter supplies a real {@link VulkanRenderingSession}, no service registration can
  * accidentally expose a renderer that acknowledges work without dispatching it.</p>
  */
 final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFramePresenterFactory {
     private static final int MAX_AUTOMATIC_DEVICE_RECOVERIES = 1;
 
-    private final RayTracingRendererConfig configuration;
+    private final RendererConfig configuration;
     private final VulkanRenderingSessionFactory sessionFactory;
     private final ManagedPresenterOpener managedPresenterOpener;
     private final RenderingFeatureCapabilities negotiatedFeatureCapabilities;
@@ -122,11 +122,11 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
         }
     }
 
-    VulkanRendererHost(RayTracingRendererConfig configuration, VulkanRenderingSession session) {
+    VulkanRendererHost(RendererConfig configuration, VulkanRenderingSession session) {
         this(configuration, null, session, VulkanGlfwFramePresenter::open);
     }
 
-    VulkanRendererHost(RayTracingRendererConfig configuration, VulkanRenderingSessionFactory sessionFactory) {
+    VulkanRendererHost(RendererConfig configuration, VulkanRenderingSessionFactory sessionFactory) {
         this(
                 configuration,
                 Objects.requireNonNull(sessionFactory, "sessionFactory"),
@@ -136,7 +136,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     }
 
     VulkanRendererHost(
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             VulkanRenderingSession session,
             ManagedPresenterOpener managedPresenterOpener
     ) {
@@ -144,7 +144,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     }
 
     VulkanRendererHost(
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             VulkanRenderingSessionFactory sessionFactory,
             ManagedPresenterOpener managedPresenterOpener
     ) {
@@ -157,13 +157,13 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     }
 
     private VulkanRendererHost(
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             VulkanRenderingSessionFactory sessionFactory,
             VulkanRenderingSession session,
             ManagedPresenterOpener managedPresenterOpener
     ) {
         VulkanRenderingSession ownedSession = Objects.requireNonNull(session, "session");
-        RayTracingRendererConfig checkedConfiguration;
+        RendererConfig checkedConfiguration;
         try {
             checkedConfiguration = Objects.requireNonNull(configuration, "configuration");
             VulkanRenderingSession.State initialState = Objects.requireNonNull(
@@ -246,7 +246,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
 
     private static VulkanGenericCommandSession openGenericCommands(
             VulkanRenderingSession session,
-            RayTracingRendererConfig configuration
+            RendererConfig configuration
     ) {
         Objects.requireNonNull(session, "session");
         Objects.requireNonNull(configuration, "configuration");
@@ -285,8 +285,8 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
                 : Optional.empty();
     }
 
-    private static RendererFeatureProfile featureProfile(RayTracingRendererConfig configuration) {
-        RayTracingRendererConfig checked = Objects.requireNonNull(configuration, "configuration");
+    private static RendererFeatureProfile featureProfile(RendererConfig configuration) {
+        RendererConfig checked = Objects.requireNonNull(configuration, "configuration");
         return new RendererFeatureProfile(
                 checked.frameReconstruction(),
                 checked.frameGeneration(),
@@ -646,7 +646,19 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
         return withLifecycleLock(() -> {
             requireReady("submit general render resources");
             RenderResourceTransaction checked = Objects.requireNonNull(transaction, "transaction");
-            if (genericCommands == null) return Renderer.super.submitResources(checked);
+            if (genericCommands == null) {
+                java.util.ArrayList<ResourceResidencyEvidence> rejected = new java.util.ArrayList<>();
+                for (ResourceGenerationKey generation : checked.upsertGenerationKeys()) {
+                    rejected.add(ResourceResidencyEvidence.rejected(
+                            generation, checked.revision(),
+                            "general resource execution is unavailable for this Vulkan session"
+                    ));
+                }
+                return new ResourceTransactionEvidence(
+                        checked.revision(), ResourceTransactionEvidence.Outcome.REJECTED, rejected,
+                        "general resource execution is unavailable for this Vulkan session"
+                );
+            }
             try {
                 return genericCommands.submitResources(checked);
             } catch (RuntimeException failure) {

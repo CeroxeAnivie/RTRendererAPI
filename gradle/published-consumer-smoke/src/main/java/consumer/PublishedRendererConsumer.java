@@ -13,9 +13,9 @@ import top.ceroxe.rt.renderer.api.HardwareCapabilities;
 import top.ceroxe.rt.renderer.api.HistoryResetReason;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
-import top.ceroxe.rt.renderer.api.RayTracingGpuDevice;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererGpuDevice;
+import top.ceroxe.rt.renderer.api.Renderer;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
 import top.ceroxe.rt.renderer.api.RendererFeatureApplyResult;
 import top.ceroxe.rt.renderer.api.RendererFeatureController;
@@ -39,14 +39,14 @@ public final class PublishedRendererConsumer {
     private PublishedRendererConsumer() {
     }
 
-    public static List<RayTracingGpuDevice> enumerateRayTracingDevices() {
+    public static List<RendererGpuDevice> enumerateRayTracingDevices() {
         return RendererBootstrap.availableGpuDevices();
     }
 
-    public static RayTracingRendererConfig selectDevice(String backendId, String stableId) {
+    public static RendererConfig selectDevice(String backendId, String stableId) {
         Objects.requireNonNull(backendId, "backendId");
         Objects.requireNonNull(stableId, "stableId");
-        RayTracingGpuDevice selected = enumerateRayTracingDevices().stream()
+        RendererGpuDevice selected = enumerateRayTracingDevices().stream()
                 .filter(device -> backendId.equals(device.backendId()) && stableId.equals(device.stableId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -55,9 +55,9 @@ public final class PublishedRendererConsumer {
         return RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(selected).build();
     }
 
-    public static RayTracingRendererConfig selectHighestMemoryDiscreteDevice() {
-        RayTracingGpuDevice selected = enumerateRayTracingDevices().stream()
-                .filter(device -> device.type() == RayTracingGpuDevice.Type.DISCRETE)
+    public static RendererConfig selectHighestMemoryDiscreteDevice() {
+        RendererGpuDevice selected = enumerateRayTracingDevices().stream()
+                .filter(device -> device.type() == RendererGpuDevice.Type.DISCRETE)
                 .max(Comparator.comparingLong(
                         device -> device.hardwareCapabilities().deviceLocalMemoryBytes()
                 ))
@@ -65,18 +65,18 @@ public final class PublishedRendererConsumer {
         return RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(selected).build();
     }
 
-    public static HardwareCapabilities hardwareCapabilities(RayTracingGpuDevice device) {
+    public static HardwareCapabilities hardwareCapabilities(RendererGpuDevice device) {
         return Objects.requireNonNull(device, "device").hardwareCapabilities();
     }
 
-    public static RayTracingRendererConfig selectLinearHdrOutput(RayTracingRendererConfig configuration) {
+    public static RendererConfig selectLinearHdrOutput(RendererConfig configuration) {
         return Objects.requireNonNull(configuration, "configuration").copyBuilder()
                 .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F)
                 .build();
     }
 
-    public static RayTracingRenderer open(String backendId, String stableId) {
-        return RendererBootstrap.openExpert(selectDevice(backendId, stableId));
+    public static Renderer open(String backendId, String stableId) {
+        return RendererBootstrap.open(selectDevice(backendId, stableId));
     }
 
     /**
@@ -91,7 +91,7 @@ public final class PublishedRendererConsumer {
      * @return the accepted scene revision
      */
     public static long publishBeginnerScene(
-            RayTracingRenderer renderer,
+            Renderer renderer,
             long revision,
             int width,
             int height,
@@ -129,20 +129,20 @@ public final class PublishedRendererConsumer {
                 .build();
     }
 
-    public static Optional<CpuFrame> pollManagedFrame(RayTracingRenderer renderer) {
+    public static Optional<CpuFrame> pollManagedFrame(Renderer renderer) {
         return Objects.requireNonNull(renderer, "renderer").pollLatestCpuFrame();
     }
 
-    public static Optional<VulkanFrameInterop> vulkanInterop(RayTracingRenderer renderer) {
+    public static Optional<VulkanFrameInterop> vulkanInterop(Renderer renderer) {
         return Objects.requireNonNull(renderer, "renderer").extension(VulkanFrameInterop.class);
     }
 
-    public static RendererHealth health(RayTracingRenderer renderer) {
+    public static RendererHealth health(Renderer renderer) {
         return Objects.requireNonNull(renderer, "renderer").health();
     }
 
     public static RendererFeaturePlan planFeatures(
-            RayTracingRenderer renderer,
+            Renderer renderer,
             RendererFeatureProfile target
     ) {
         RendererFeatureController controller = Objects.requireNonNull(renderer, "renderer")
@@ -152,7 +152,7 @@ public final class PublishedRendererConsumer {
     }
 
     public static RendererFeatureApplyResult applyInSessionPlan(
-            RayTracingRenderer renderer,
+            Renderer renderer,
             RendererFeaturePlan plan
     ) {
         Objects.requireNonNull(plan, "plan");
@@ -177,8 +177,8 @@ public final class PublishedRendererConsumer {
                 .build();
     }
 
-    public static RayTracingRendererConfig accumulatingTemporalHistory(int maxHistoryFrames) {
-        return RayTracingRendererConfig.expertBuilder()
+    public static RendererConfig accumulatingTemporalHistory(int maxHistoryFrames) {
+        return RendererConfig.expertBuilder()
                 .temporalRendering(TemporalRenderingOptions.accumulating(maxHistoryFrames))
                 .build();
     }

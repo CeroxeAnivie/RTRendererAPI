@@ -15,7 +15,7 @@ import java.util.Objects;
  */
 public final class BindingSet {
     /** One typed value accepted by a binding slot. */
-    public sealed interface Value permits BufferValue, TextureValue, SamplerValue {
+    public sealed interface Value permits BufferValue, TextureValue, SamplerValue, CombinedImageSamplerValue {
         /** @return exact binding category represented by this value */
         BindingType type();
     }
@@ -72,6 +72,29 @@ public final class BindingSet {
             if (comparison != (type == BindingType.COMPARISON_SAMPLER)) {
                 throw new IllegalArgumentException("sampler comparison state does not match its binding type");
             }
+        }
+    }
+
+    /**
+     * Immutable sampled texture and sampler pair for one combined-image-sampler descriptor.
+     *
+     * <p>The pair is one value because native combined descriptors occupy one binding and one array
+     * element. Splitting it into two values would alter the shader's reflected descriptor layout.</p>
+     */
+    public record CombinedImageSamplerValue(TextureView view, SamplerState sampler) implements Value {
+        /** Validates sampled texture usage and both immutable pair members. */
+        public CombinedImageSamplerValue {
+            Objects.requireNonNull(view, "view");
+            Objects.requireNonNull(sampler, "sampler");
+            if (!view.texture().usage().contains(TextureUsage.SAMPLED)) {
+                throw new IllegalArgumentException("combined image sampler view requires SAMPLED texture usage");
+            }
+        }
+
+        /** @return the one exact descriptor category represented by this pair */
+        @Override
+        public BindingType type() {
+            return BindingType.COMBINED_IMAGE_SAMPLER;
         }
     }
 

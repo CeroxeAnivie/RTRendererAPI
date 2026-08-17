@@ -5,7 +5,7 @@ import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
@@ -46,8 +46,8 @@ public final class VulkanFeatureRequirementsSelfTest {
         require(!required.preferredDeviceExtensions().contains(extension));
     }
 
-    private static RayTracingRendererConfig configuration(RendererFeaturePreference preference) {
-        return RayTracingRendererConfig.expertBuilder()
+    private static RendererConfig configuration(RendererFeaturePreference preference) {
+        return RendererConfig.expertBuilder()
                 .frameReconstruction(FrameReconstructionOptions.disabled())
                 .frameGeneration(FrameGenerationOptions.disabled())
                 .denoising(DenoisingOptions.disabled())
@@ -187,7 +187,7 @@ public final class VulkanFeatureRequirementsSelfTest {
         }
 
         @Override
-        public VulkanFeatureRequirements requirements(RayTracingRendererConfig configuration) {
+        public VulkanFeatureRequirements requirements(RendererConfig configuration) {
             return VulkanFeatureRequirements.builder().build();
         }
 

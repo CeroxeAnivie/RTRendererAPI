@@ -15,7 +15,7 @@ import java.util.OptionalInt;
  * @param obligations   bounded externally visible resource and recovery debt
  */
 public record RendererHealth(
-        RayTracingRenderer.Status status,
+        Renderer.Status status,
         Optional<Failure> activeFailure,
         ResourceObligations obligations
 ) {
@@ -30,14 +30,14 @@ public record RendererHealth(
         status = Objects.requireNonNull(status, "status");
         activeFailure = Objects.requireNonNull(activeFailure, "activeFailure");
         obligations = Objects.requireNonNull(obligations, "obligations");
-        if ((status == RayTracingRenderer.Status.FAILED || status == RayTracingRenderer.Status.RECOVERING)
+        if ((status == Renderer.Status.FAILED || status == Renderer.Status.RECOVERING)
                 && activeFailure.isEmpty()) {
             throw new IllegalArgumentException("failed or recovering renderer health requires an active failure");
         }
-        if (status == RayTracingRenderer.Status.READY && activeFailure.isPresent()) {
+        if (status == Renderer.Status.READY && activeFailure.isPresent()) {
             throw new IllegalArgumentException("ready renderer health must not report an active failure");
         }
-        if (status == RayTracingRenderer.Status.RECOVERING && !obligations.deviceRecoveryPending()) {
+        if (status == Renderer.Status.RECOVERING && !obligations.deviceRecoveryPending()) {
             throw new IllegalArgumentException("recovering renderer health requires pending device recovery");
         }
     }

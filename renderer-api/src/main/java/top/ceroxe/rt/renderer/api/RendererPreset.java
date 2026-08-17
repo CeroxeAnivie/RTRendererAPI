@@ -21,8 +21,8 @@ public enum RendererPreset {
      *
      * @return complete immutable renderer configuration
      */
-    public RayTracingRendererConfig configuration() {
-        RayTracingRendererConfig.Builder builder = RayTracingRendererConfig.expertBuilder()
+    public RendererConfig configuration() {
+        RendererConfig.Builder builder = RendererConfig.expertBuilder()
                 .frameReconstruction(FrameReconstructionOptions.recommended())
                 .denoising(DenoisingOptions.recommended())
                 .rayTracingOptimizations(RayTracingOptimizationOptions.recommended());

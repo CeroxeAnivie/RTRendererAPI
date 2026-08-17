@@ -3,7 +3,7 @@ package consumer;
 import java.time.Duration;
 import java.util.Objects;
 
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
+import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop;
@@ -29,7 +29,7 @@ public final class PublishedVulkanInteropConsumer {
      * @throws InterruptedException if the waiting thread is interrupted
      */
     public static boolean consumeLatest(
-            RayTracingRenderer renderer,
+            Renderer renderer,
             Duration timeout,
             NativeFrameConsumer consumer
     ) throws InterruptedException {

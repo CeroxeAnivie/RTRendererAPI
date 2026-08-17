@@ -13,8 +13,8 @@ import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.FrameGenerationEvidence;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.Renderer;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
@@ -30,7 +30,7 @@ import top.ceroxe.rt.renderer.api.SubmissionRejectedException;
 import top.ceroxe.rt.renderer.api.SubmissionDeferralReason;
 import top.ceroxe.rt.renderer.api.MaterialAsset.BlendMode;
 import top.ceroxe.rt.renderer.api.MaterialAsset.ShadingModel;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer.Status;
+import top.ceroxe.rt.renderer.api.Renderer.Status;
 import top.ceroxe.rt.renderer.api.RendererDeviceException.Reason;
 import top.ceroxe.rt.renderer.api.RendererDeviceException.RecoveryAction;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics.FrameGpuTiming;
@@ -87,10 +87,10 @@ public final class VulkanRendererHostSelfTest {
             opens[0]++ == 0 ? initial : recovered);
       initial.failNextFrameWith = deviceLost("syntheticRecoveredFrame");
       expect(RendererDeviceException.class, () -> renderer.submit(frame(0L, 0L)));
-      RayTracingRenderer.FrameSubmissionAttempt retry = renderer.trySubmit(frame(0L, 0L));
-      require(retry instanceof RayTracingRenderer.FrameSubmitted,
+      Renderer.FrameSubmissionAttempt retry = renderer.trySubmit(frame(0L, 0L));
+      require(retry instanceof Renderer.FrameSubmitted,
             "first frame after device recovery was not admitted");
-      require(((RayTracingRenderer.FrameSubmitted) retry).submission().historyInvalidations()
+      require(((Renderer.FrameSubmitted) retry).submission().historyInvalidations()
                     .contains(top.ceroxe.rt.renderer.api.HistoryInvalidationReason.DEVICE_RECOVERY),
             "first frame after device recovery did not force temporal history restart");
       renderer.close();
@@ -142,14 +142,14 @@ public final class VulkanRendererHostSelfTest {
    private static void advancesOnlyAfterBackendAdmission() {
       TrackingSession session = new TrackingSession();
       VulkanRendererHost renderer = renderer(session);
-      RayTracingRenderer.SceneUpdateResult initial = renderer.apply(scene(0L));
+      Renderer.SceneUpdateResult initial = renderer.apply(scene(0L));
       require(initial.acceptedSceneRevision() == 0L, "initial scene revision changed");
       require(session.lastSceneChangeSet != null && session.lastSceneChangeSet.materials().statistics().writes() == 1 && session.lastSceneChangeSet.meshes().statistics().writes() == 1 && session.lastSceneChangeSet.instances().statistics().writes() == 1, "host did not submit the sparse GPUScene payload to native admission");
       session.rejectNextScene = true;
       expect(SubmissionRejectedException.class, () -> renderer.apply(SceneTransaction.empty(1L)));
       require(renderer.status() == Status.READY, "recoverable scene rejection failed renderer");
       require(renderer.diagnostics().latestAcceptedSceneRevision() == 0L, "rejected scene advanced host authority");
-      RayTracingRenderer.SceneUpdateResult retried = renderer.apply(SceneTransaction.empty(1L));
+      Renderer.SceneUpdateResult retried = renderer.apply(SceneTransaction.empty(1L));
       require(retried.acceptedSceneRevision() == 1L, "same revision could not retry after atomic rejection");
       require(session.sceneSubmissions == 3, "scene submissions were not delegated exactly once per attempt");
       require(session.lastSceneChangeSet.baseRevision() == 0L && session.lastSceneChangeSet.revision() == 1L && session.lastSceneChangeSet.totalWrites() == 0 && session.lastSceneChangeSet.totalClears() == 0, "rejected native admission mutated GPUScene residency before retry");
@@ -165,14 +165,14 @@ public final class VulkanRendererHostSelfTest {
       session.rejectNextFrame = true;
       expect(SubmissionRejectedException.class, () -> renderer.submit(frame(5L, 0L)));
       require(renderer.diagnostics().latestSubmittedFrameSequence() == -1L, "rejected frame advanced submitted sequence");
-      RayTracingRenderer.FrameSubmissionResult accepted = renderer.submit(frame(5L, 0L));
+      Renderer.FrameSubmissionResult accepted = renderer.submit(frame(5L, 0L));
       require(accepted.frameSequence() == 5L && accepted.scheduledSceneRevision() == 0L, "accepted frame submission changed");
       session.rejectNextFrame = true;
-      RayTracingRenderer.FrameSubmissionAttempt deferred = renderer.trySubmit(frame(6L, 0L));
-      require(deferred instanceof RayTracingRenderer.FrameSubmissionDeferred,
+      Renderer.FrameSubmissionAttempt deferred = renderer.trySubmit(frame(6L, 0L));
+      require(deferred instanceof Renderer.FrameSubmissionDeferred,
               "capacity-aware submission converted recoverable backpressure into an exception");
-      RayTracingRenderer.FrameSubmissionAttempt submitted = renderer.trySubmit(frame(6L, 0L));
-      require(submitted instanceof RayTracingRenderer.FrameSubmitted success
+      Renderer.FrameSubmissionAttempt submitted = renderer.trySubmit(frame(6L, 0L));
+      require(submitted instanceof Renderer.FrameSubmitted success
                       && success.submission().frameSequence() == 6L,
               "capacity-aware retry did not preserve frame identity");
       expect(SubmissionOrderException.class, () -> renderer.submit(frame(6L, 0L)));
@@ -197,7 +197,7 @@ public final class VulkanRendererHostSelfTest {
       }
       require(renderer.status() == Status.READY,
               "caller-correctable frame validation failure poisoned the renderer lifecycle");
-      require(renderer.trySubmit(frame(1L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+      require(renderer.trySubmit(frame(1L, 0L)) instanceof Renderer.FrameSubmitted,
               "corrected retry with the same unaccepted sequence was not admitted");
       renderer.close();
    }
@@ -211,16 +211,16 @@ public final class VulkanRendererHostSelfTest {
       renderer.apply(scene(0L));
       TrackingPresenter presenter = presenterOpener.openedBy(renderer, 2);
 
-      require(renderer.trySubmit(frame(1L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+      require(renderer.trySubmit(frame(1L, 0L)) instanceof Renderer.FrameSubmitted,
               "managed presenter rejected the first producer frame");
-      require(renderer.trySubmit(frame(2L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+      require(renderer.trySubmit(frame(2L, 0L)) instanceof Renderer.FrameSubmitted,
               "managed presenter rejected the configured overlap frame");
       for (int attempt = 0; attempt < 10_000; attempt++) {
-         RayTracingRenderer.FrameSubmissionAttempt deferred = renderer.trySubmit(frame(3L, 0L));
-         require(deferred instanceof RayTracingRenderer.FrameSubmissionDeferred,
+         Renderer.FrameSubmissionAttempt deferred = renderer.trySubmit(frame(3L, 0L));
+         require(deferred instanceof Renderer.FrameSubmissionDeferred,
                  "sustained producer attempts bypassed the managed presentation bound");
          if (attempt == 0) {
-            require(((RayTracingRenderer.FrameSubmissionDeferred) deferred).deferralReason()
+            require(((Renderer.FrameSubmissionDeferred) deferred).deferralReason()
                         == SubmissionDeferralReason.PRESENTATION_BACKLOG,
                   "managed presenter backlog lost its stable deferral classification");
             require(deferred == renderer.trySubmit(frame(3L, 0L)),
@@ -233,7 +233,7 @@ public final class VulkanRendererHostSelfTest {
               "deferred submission advanced public frame authority");
 
       presenter.retire(1L);
-      require(renderer.trySubmit(frame(3L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+      require(renderer.trySubmit(frame(3L, 0L)) instanceof Renderer.FrameSubmitted,
               "actual frame retirement did not restore exactly one producer permit");
       require(session.frameSubmissions == 3,
               "retirement did not admit exactly one replacement frame");
@@ -250,12 +250,12 @@ public final class VulkanRendererHostSelfTest {
       renderer.apply(scene(0L));
       TrackingPresenter presenter = presenterOpener.openedBy(renderer, 1);
 
-      require(renderer.trySubmit(frame(7L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+      require(renderer.trySubmit(frame(7L, 0L)) instanceof Renderer.FrameSubmitted,
               "single-frame presenter bound rejected its first frame");
-      require(renderer.trySubmit(frame(8L, 0L)) instanceof RayTracingRenderer.FrameSubmissionDeferred,
+      require(renderer.trySubmit(frame(8L, 0L)) instanceof Renderer.FrameSubmissionDeferred,
               "single-frame presenter bound did not defer producer lead");
       presenter.close();
-      require(renderer.trySubmit(frame(8L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+      require(renderer.trySubmit(frame(8L, 0L)) instanceof Renderer.FrameSubmitted,
               "closed presenter left stale producer flow-control state");
       require(session.frameSubmissions == 2,
               "presenter close admitted an unexpected number of backend frames");
@@ -293,14 +293,14 @@ public final class VulkanRendererHostSelfTest {
       renderer.apply(scene(0L));
       TrackingPresenter presenter = presenterOpener.openedBy(renderer, 4);
 
-      require(renderer.trySubmit(frame(1L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+      require(renderer.trySubmit(frame(1L, 0L)) instanceof Renderer.FrameSubmitted,
               "backend producer-lead limit rejected the first managed frame");
-      require(renderer.trySubmit(frame(2L, 0L)) instanceof RayTracingRenderer.FrameSubmissionDeferred,
+      require(renderer.trySubmit(frame(2L, 0L)) instanceof Renderer.FrameSubmissionDeferred,
               "presenter configuration bypassed the stricter backend producer-lead contract");
       require(session.frameSubmissions == 1,
               "backend-limited managed frame reached the native submission lane");
       presenter.retire(1L);
-      require(renderer.trySubmit(frame(2L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+      require(renderer.trySubmit(frame(2L, 0L)) instanceof Renderer.FrameSubmitted,
               "retiring the frame did not restore the backend producer permit");
       presenter.close();
       renderer.close();
@@ -536,7 +536,7 @@ public final class VulkanRendererHostSelfTest {
       require(renderer.status() == Status.READY, "successful device recreation did not restore READY");
       require(renderer.diagnostics().deviceRecovery().generation() == 1L && renderer.diagnostics().deviceRecovery().attempts() == 1L && renderer.diagnostics().deviceRecovery().failures() == 0L, "successful device recreation did not publish bounded generation evidence");
       require(recovered.lastSceneChangeSet != null && recovered.lastSceneChangeSet.reset() && recovered.lastSceneChangeSet.revision() == 0L && recovered.lastSceneChangeSet.materials().statistics().writes() == 1 && recovered.lastSceneChangeSet.meshes().statistics().writes() == 1 && recovered.lastSceneChangeSet.instances().statistics().writes() == 1, "replacement session did not receive an authoritative full-scene replay");
-      RayTracingRenderer.SceneUpdateResult retry = renderer.apply(SceneTransaction.empty(1L));
+      Renderer.SceneUpdateResult retry = renderer.apply(SceneTransaction.empty(1L));
       require(retry.acceptedSceneRevision() == 1L, "failed scene revision could not retry after recovery");
       renderer.close();
       require(recovered.closes == 1, "replacement session leaked during renderer close");
@@ -554,9 +554,9 @@ public final class VulkanRendererHostSelfTest {
       );
       renderer.apply(scene(0L));
       TrackingPresenter presenter = presenterOpener.openedBy(renderer, 1);
-      require(renderer.trySubmit(frame(1L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+      require(renderer.trySubmit(frame(1L, 0L)) instanceof Renderer.FrameSubmitted,
               "pre-recovery presenter frame was not admitted");
-      require(renderer.trySubmit(frame(2L, 0L)) instanceof RayTracingRenderer.FrameSubmissionDeferred,
+      require(renderer.trySubmit(frame(2L, 0L)) instanceof Renderer.FrameSubmissionDeferred,
               "pre-recovery presenter backlog did not reach its bound");
 
       initial.failNextSceneWith = deviceLost("syntheticPresenterRecovery");
@@ -566,7 +566,7 @@ public final class VulkanRendererHostSelfTest {
       );
       require(recovery.recoveryAction() == RecoveryAction.RETRY_OPERATION,
               "presenter recovery did not complete device recreation");
-      require(renderer.trySubmit(frame(2L, 0L)) instanceof RayTracingRenderer.FrameSubmitted,
+      require(renderer.trySubmit(frame(2L, 0L)) instanceof Renderer.FrameSubmitted,
               "discarded pre-recovery frames retained stale presenter permits");
       require(recovered.frameSubmissions == 1,
               "post-recovery frame was not submitted exactly once to the replacement session");

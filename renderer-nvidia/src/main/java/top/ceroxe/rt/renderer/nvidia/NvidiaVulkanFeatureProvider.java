@@ -4,7 +4,7 @@ import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.LowLatencyOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Entry;
@@ -55,8 +55,8 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
     }
 
     @Override
-    public VulkanFeatureRequirements requirements(RayTracingRendererConfig configuration) {
-        RayTracingRendererConfig checked = Objects.requireNonNull(configuration, "configuration");
+    public VulkanFeatureRequirements requirements(RendererConfig configuration) {
+        RendererConfig checked = Objects.requireNonNull(configuration, "configuration");
         VulkanFeatureRequirements.Builder result = VulkanFeatureRequirements.builder();
         if (!nvidiaFeatureRequested(checked)) return result.build();
 
@@ -136,7 +136,7 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
     @Override
     public VulkanFeatureSession open(VulkanFeatureOpenContext context) {
         VulkanFeatureOpenContext checked = Objects.requireNonNull(context, "context");
-        RayTracingRendererConfig configuration = checked.configuration();
+        RendererConfig configuration = checked.configuration();
         NvidiaNativeBridge.Probe probe = NvidiaNativeBridge.probe();
         EnumMap<Feature, Entry> active = activeFeatures(configuration, probe);
         NvidiaStreamlineRuntime.Preflight plannedStreamline = claimPreparedStreamline();
@@ -258,11 +258,11 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
     /** Applies only the documented PREFERRED Streamline fallback; strict failures escape intact. */
     static void handleStreamlineOpenFailure(
             EnumMap<Feature, Entry> active,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             Throwable failure
     ) {
         Objects.requireNonNull(active, "active");
-        RayTracingRendererConfig checked = Objects.requireNonNull(configuration, "configuration");
+        RendererConfig checked = Objects.requireNonNull(configuration, "configuration");
         Throwable checkedFailure = Objects.requireNonNull(failure, "failure");
         if (streamlineRequired(checked)
                 || checkedFailure instanceof top.ceroxe.rt.renderer.api.RendererDeviceException) {
@@ -296,11 +296,11 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
 
     static void applyNativeOpenOutcomes(
             EnumMap<Feature, Entry> active,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaNativeFeatureSessions sessions
     ) {
         EnumMap<Feature, Entry> checkedActive = Objects.requireNonNull(active, "active");
-        RayTracingRendererConfig checkedConfiguration =
+        RendererConfig checkedConfiguration =
                 Objects.requireNonNull(configuration, "configuration");
         NvidiaNativeFeatureSessions checkedSessions = Objects.requireNonNull(sessions, "sessions");
         if (checkedSessions.nrdAvailable()) {
@@ -341,7 +341,7 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
 
     private void addReconstructionSupport(
             VulkanFeatureRequirements.Builder result,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaNativeBridge.Probe probe,
             NvidiaStreamlineRuntime.Preflight preflight
     ) {
@@ -399,7 +399,7 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
 
     private void addFrameGenerationSupport(
             VulkanFeatureRequirements.Builder result,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaStreamlineRuntime.Preflight preflight
     ) {
         FrameGenerationOptions options = configuration.frameGeneration();
@@ -443,7 +443,7 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
 
     private static void addLowLatencySupport(
             VulkanFeatureRequirements.Builder result,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaStreamlineRuntime.Preflight preflight
     ) {
         LowLatencyOptions options = configuration.lowLatency();
@@ -498,7 +498,7 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
         );
     }
 
-    private static boolean nvidiaFeatureRequested(RayTracingRendererConfig configuration) {
+    private static boolean nvidiaFeatureRequested(RendererConfig configuration) {
         return configuration.frameReconstruction().preference().requested()
                 || configuration.frameGeneration().preference().requested()
                 || configuration.lowLatency().preference().requested()
@@ -507,7 +507,7 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
     }
 
     private static EnumMap<Feature, Entry> activeFeatures(
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaNativeBridge.Probe probe
     ) {
         EnumMap<Feature, Entry> result = new EnumMap<>(Feature.class);
@@ -530,20 +530,20 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
         return result;
     }
 
-    private static boolean streamlineRequested(RayTracingRendererConfig configuration) {
+    private static boolean streamlineRequested(RendererConfig configuration) {
         return configuration.frameReconstruction().preference().requested()
                 || configuration.frameGeneration().preference().requested()
                 || configuration.lowLatency().preference().requested();
     }
 
-    private static boolean streamlineRequired(RayTracingRendererConfig configuration) {
+    private static boolean streamlineRequired(RendererConfig configuration) {
         return configuration.frameReconstruction().preference() == RendererFeaturePreference.REQUIRED
                 || configuration.frameGeneration().preference() == RendererFeaturePreference.REQUIRED
                 || configuration.lowLatency().preference() == RendererFeaturePreference.REQUIRED;
     }
 
     private synchronized NvidiaStreamlineRuntime.Preflight prepareStreamline(
-            RayTracingRendererConfig configuration
+            RendererConfig configuration
     ) {
         if (streamlinePreflight != null) return streamlinePreflight;
         FrameReconstructionOptions reconstruction = configuration.frameReconstruction();
@@ -596,7 +596,7 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
     }
 
     private static Set<NvidiaStreamlineRuntime.Feature> requiredStreamlineFeatures(
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             Set<NvidiaStreamlineRuntime.Feature> prepared
     ) {
         EnumSet<NvidiaStreamlineRuntime.Feature> required =
@@ -689,7 +689,7 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
     }
 
     private static int requestedMask(
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaNativeBridge.Probe probe
     ) {
         int mask = 0;
@@ -714,7 +714,7 @@ public final class NvidiaVulkanFeatureProvider implements VulkanFeatureProvider 
 
     private static RenderingFeatureCapabilities capabilities(
             Map<Feature, Entry> active,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaNativeBridge.Probe probe,
             NvidiaStreamlineRuntime.Preflight preflight,
             Set<NvidiaStreamlineRuntime.Feature> streamlineFeatures

@@ -1,7 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
 import java.util.Objects;
@@ -15,14 +15,14 @@ final class VulkanGpuSceneFrameRing implements AutoCloseable {
 
     static VulkanGpuSceneFrameRing open(
             VulkanDeviceRuntime device,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             VulkanFrameOutput frameOutput,
             VulkanDeviceRuntime.ExternalFrameInterop interop,
             RendererRtDiagnostics diagnostics,
             VulkanGpuSceneFeatureComposition.Selection features
     ) {
         VulkanDeviceRuntime checkedDevice = Objects.requireNonNull(device, "device");
-        RayTracingRendererConfig checkedConfiguration = Objects.requireNonNull(configuration, "configuration");
+        RendererConfig checkedConfiguration = Objects.requireNonNull(configuration, "configuration");
         VulkanDeviceRuntime.ExternalFrameInterop checkedInterop = Objects.requireNonNull(interop, "interop");
         RendererRtDiagnostics checkedDiagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         VulkanGpuSceneFeatureComposition.Selection checkedFeatures = Objects.requireNonNull(features, "features");

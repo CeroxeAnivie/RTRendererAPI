@@ -257,63 +257,8 @@ val verifyReleaseVersionConsistency = tasks.register("verifyReleaseVersionConsis
     }
 }
 
-val previousApiVersion = providers.gradleProperty("previous_api_version")
-val previousApiConsumerDirectory = layout.projectDirectory.dir("gradle/previous-api-consumer")
-val previousApiConsumerClasses = previousApiConsumerDirectory.dir("build/classes/java/main")
-val previousApiCentralAbi = previousApiVersion.map { version ->
-    previousApiConsumerDirectory.file("build/abi/renderer-api-$version.abi")
-}
-val previousConsumerJavaInstallationPaths = providers.gradleProperty(
-    "org.gradle.java.installations.paths"
-)
-val previousConsumerToolchainVersion = providers.gradleProperty("java_toolchain_version")
-    .orElse(JavaVersion.current().majorVersion)
-
-val compilePreviousApiConsumer = tasks.register<Exec>("compilePreviousApiConsumer") {
-    group = "verification"
-    description = "Compiles a consumer and derives exhaustive ABI evidence from the previous Maven Central API artifact."
-    workingDir(previousApiConsumerDirectory)
-    executable(rootProject.file("gradlew.bat"))
-    args(
-        "--no-daemon",
-        "--console=plain",
-        "--project-dir",
-        previousApiConsumerDirectory.asFile.absolutePath,
-        "clean",
-        "compileJava",
-        "generatePreviousRendererApiAbi",
-        "-PrendererVersion=${previousApiVersion.get()}",
-        "-Pjava_toolchain_version=${previousConsumerToolchainVersion.get()}"
-    )
-    inputs.files(fileTree(previousApiConsumerDirectory) {
-        include("build.gradle.kts", "settings.gradle.kts", "src/**/*.java")
-    })
-    inputs.property("previousApiVersion", previousApiVersion)
-    inputs.property("javaInstallationPaths", previousConsumerJavaInstallationPaths.orElse(""))
-    inputs.property("toolchainJavaVersion", previousConsumerToolchainVersion)
-    outputs.dir(previousApiConsumerClasses)
-    outputs.file(previousApiCentralAbi)
-    doFirst {
-        previousConsumerJavaInstallationPaths.orNull?.let { paths ->
-            args("-Porg.gradle.java.installations.paths=$paths")
-        }
-    }
-}
-
-val verifyPreviousApiConsumerRuntime = tasks.register<JavaExec>("verifyPreviousApiConsumerRuntime") {
-    group = "verification"
-    description = "Runs a previous-release client using only the current renderer-api classes."
-    dependsOn(compilePreviousApiConsumer, ":renderer-api:classes")
-    classpath = files(
-        previousApiConsumerClasses,
-        project(":renderer-api").layout.buildDirectory.dir("classes/java/main")
-    )
-    mainClass.set("compatibility.PreviousApiConsumer")
-}
-
 tasks.named("check") {
     dependsOn(verifyReleaseVersionConsistency)
-    dependsOn(verifyPreviousApiConsumerRuntime)
 }
 
 tasks.register("publishAllToLocalStagingRepository") {

@@ -173,7 +173,7 @@ public final class FrameReconstructionOptions {
         /**
          * Permit the renderer's built-in temporal accumulation path.
          *
-         * <p>The enclosing {@link RayTracingRendererConfig} must keep
+         * <p>The enclosing {@link RendererConfig} must keep
          * {@link TemporalRenderingOptions} enabled so this fallback is executable.</p>
          */
         BUILT_IN_TEMPORAL

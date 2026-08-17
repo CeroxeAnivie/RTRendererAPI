@@ -3,7 +3,7 @@ package top.ceroxe.rt.renderer.nvidia;
 import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RendererPreset;
@@ -117,7 +117,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
     }
 
     private static void nativeLoadAndCapabilityFailuresRemainDistinct() {
-        RayTracingRendererConfig requested = RendererPreset.CPU_READBACK.configuration().copyBuilder()
+        RendererConfig requested = RendererPreset.CPU_READBACK.configuration().copyBuilder()
                 .denoising(DenoisingOptions.recommended())
                 .rayTracingOptimizations(RayTracingOptimizationOptions.builder()
                         .memoryOptimization(RendererFeaturePreference.PREFERRED)
@@ -156,7 +156,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
         NvidiaNativeBridge.Probe probe = new NvidiaNativeBridge.Probe(
                 true, ALL_NATIVE_CAPABILITIES, "native SDKs loaded"
         );
-        RayTracingRendererConfig generationConfiguration = generatedMultiFramePresentationConfiguration();
+        RendererConfig generationConfiguration = generatedMultiFramePresentationConfiguration();
         Map<Technology, RenderingFeatureCapabilities.Entry> blocked = requirements(
                 generationConfiguration,
                 probe,
@@ -180,7 +180,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
     }
 
     private static void deviceHandoffPrunesUnsupportedGenerationFamilies() {
-        RayTracingRendererConfig generationConfiguration = generatedMultiFramePresentationConfiguration();
+        RendererConfig generationConfiguration = generatedMultiFramePresentationConfiguration();
         RenderingFeatureCapabilities.Builder supported = RenderingFeatureCapabilities.builder();
         NvidiaTechnologyCapabilities.refineDeviceSupport(
                 supported,
@@ -219,7 +219,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
                 .multiplier(FrameGenerationOptions.Multiplier.TWO_X)
                 .fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES)
                 .build();
-        RayTracingRendererConfig configuration = RendererPreset.CPU_READBACK.configuration().copyBuilder()
+        RendererConfig configuration = RendererPreset.CPU_READBACK.configuration().copyBuilder()
                 .frameGeneration(twoTimes)
                 .build();
         RenderingFeatureCapabilities.Builder target = RenderingFeatureCapabilities.builder();
@@ -450,7 +450,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
     }
 
     private static Map<Technology, RenderingFeatureCapabilities.Entry> requirements(
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaNativeBridge.Probe probe,
             NvidiaStreamlineRuntime.Preflight preflight
     ) {
@@ -472,7 +472,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
         return new NvidiaStreamlineRuntime.Preflight(true, "Streamline preflight succeeded", requirements);
     }
 
-    private static RayTracingRendererConfig generatedMultiFramePresentationConfiguration() {
+    private static RendererConfig generatedMultiFramePresentationConfiguration() {
         return RendererPreset.CPU_READBACK.configuration().copyBuilder()
                 .frameReconstruction(FrameReconstructionOptions.recommended())
                 .frameGeneration(multiFrameGenerationOptions())

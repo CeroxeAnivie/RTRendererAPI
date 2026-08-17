@@ -4,7 +4,7 @@ import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RendererFeatureProfile;
@@ -50,8 +50,8 @@ public final class VulkanFeatureRegistry {
      * @param configuration immutable renderer configuration
      * @return deterministic pre-device plan
      */
-    public static VulkanFeaturePlan plan(RayTracingRendererConfig configuration) {
-        RayTracingRendererConfig checked = Objects.requireNonNull(configuration, "configuration");
+    public static VulkanFeaturePlan plan(RendererConfig configuration) {
+        RendererConfig checked = Objects.requireNonNull(configuration, "configuration");
         EnumMap<Feature, RendererFeaturePreference> preferences = preferences(checked);
         RenderingFeatureCapabilities.Builder capabilities = RenderingFeatureCapabilities.builder();
         LinkedHashSet<String> requiredInstanceExtensions = new LinkedHashSet<>();
@@ -201,7 +201,7 @@ public final class VulkanFeatureRegistry {
     public static VulkanFeatureSession openSession(
             VulkanFeaturePlan plan,
             VulkanDeviceRuntime device,
-            RayTracingRendererConfig configuration
+            RendererConfig configuration
     ) {
         VulkanFeaturePlan checkedPlan = Objects.requireNonNull(plan, "plan");
         List<VulkanFeatureProvider> providers = checkedPlan.claimProviders();
@@ -345,7 +345,7 @@ public final class VulkanFeatureRegistry {
     }
 
     private static EnumMap<Feature, RendererFeaturePreference> preferences(
-            RayTracingRendererConfig configuration
+            RendererConfig configuration
     ) {
         EnumMap<Feature, RendererFeaturePreference> result = new EnumMap<>(Feature.class);
         result.put(Feature.FRAME_RECONSTRUCTION, configuration.frameReconstruction().preference());
@@ -360,7 +360,7 @@ public final class VulkanFeatureRegistry {
         return result;
     }
 
-    private static Entry fallback(Feature feature, RayTracingRendererConfig configuration) {
+    private static Entry fallback(Feature feature, RendererConfig configuration) {
         if (feature == Feature.FRAME_RECONSTRUCTION) {
             FrameReconstructionOptions options = configuration.frameReconstruction();
             if (options.fallback() == FrameReconstructionOptions.Fallback.BUILT_IN_TEMPORAL

@@ -40,21 +40,6 @@ data class RuntimeArtifactInventory(
     val sha256: String
 )
 
-data class SemanticVersion(val major: Int, val minor: Int, val patch: Int) : Comparable<SemanticVersion> {
-    override fun compareTo(other: SemanticVersion): Int =
-        compareValuesBy(this, other, SemanticVersion::major, SemanticVersion::minor, SemanticVersion::patch)
-}
-
-fun parseSemanticVersion(value: String, label: String): SemanticVersion {
-    val match = Regex("(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)").matchEntire(value)
-        ?: throw GradleException("$label must be a canonical MAJOR.MINOR.PATCH version: $value")
-    return SemanticVersion(
-        match.groupValues[1].toInt(),
-        match.groupValues[2].toInt(),
-        match.groupValues[3].toInt()
-    )
-}
-
 data class RuntimeModuleInventory(
     val coordinate: String,
     val license: RuntimeLicensePolicy,
@@ -68,8 +53,6 @@ val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_
     .orElse(JavaVersion.current().majorVersion)
     .get()
     .toInt()
-val previousApiVersion = providers.gradleProperty("previous_api_version")
-
 dependencies {
     // Consumers declare one coordinate. The API remains compile-time independent from the
     // backend, while the published runtime graph supplies both the Vulkan core and the optional
@@ -190,17 +173,10 @@ tasks.register<JavaExec>("resourceLifecycleContractSelfTest") {
     mainClass.set("top.ceroxe.rt.renderer.api.ResourceLifecycleContractSelfTest")
 }
 
-// Each published surface remains immutable and reviewable. The checked-in current-version
-// baseline prevents later edits from silently changing that reviewed release surface. Backward
-// compatibility is independently measured from the previous Maven Central JAR below.
+// Each major release owns an explicit, immutable public ABI baseline. The 2.0 surface deliberately
+// breaks 1.x compatibility, so a 1.x consumer fixture would be misleading rather than protective.
 val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-${project.version}.abi")
 val rendererApiAbiSnapshot = layout.buildDirectory.file("abi/renderer-api-${project.version}.abi")
-val previousRendererApiCentralAbi = previousApiVersion.map { version ->
-    rootProject.layout.projectDirectory.file(
-        "gradle/previous-api-consumer/build/abi/renderer-api-$version.abi"
-    )
-}
-
 tasks.register("generateRendererApiAbi") {
     group = "verification"
     description = "Generates a deterministic javap snapshot of every public renderer-api binary type."
@@ -292,101 +268,6 @@ tasks.register("verifyRendererApiAbi") {
             throw GradleException(
                 "renderer-api ABI differs from $baseline. " +
                     "Review the public binary change before updating the baseline."
-            )
-        }
-    }
-}
-
-tasks.register("verifyRendererApiBackwardCompatibility") {
-    group = "verification"
-    description = "Rejects binary API removals relative to the previous Maven Central release."
-    dependsOn(tasks.named("generateRendererApiAbi"), ":compilePreviousApiConsumer")
-    inputs.file(previousRendererApiCentralAbi)
-    inputs.file(rendererApiAbiSnapshot)
-    inputs.property("previousApiVersion", previousApiVersion)
-
-    doLast {
-        val current = parseSemanticVersion(project.version.toString(), "project_version")
-        val previousText = previousApiVersion.get()
-        val previous = parseSemanticVersion(previousText, "previous_api_version")
-        if (current <= previous) {
-            throw GradleException(
-                "project_version must advance beyond previous_api_version: current=$current, previous=$previous"
-            )
-        }
-
-        val compatibilityRequired = if (current.major == 0) {
-            current.minor == previous.minor
-        } else {
-            current.major == previous.major
-        }
-        val previousCentralAbi = previousRendererApiCentralAbi.get().asFile
-        if (!previousCentralAbi.isFile || previousCentralAbi.length() == 0L) {
-            throw GradleException(
-                "Missing ABI generated from previous Maven Central renderer-api JAR: $previousCentralAbi"
-            )
-        }
-
-        fun declarations(file: File): Map<String, String> {
-            val declarations = linkedMapOf<String, String>()
-            var owner: String? = null
-            var member: String? = null
-            file.readLines(StandardCharsets.UTF_8).forEach { rawLine ->
-                val line = rawLine.trim()
-                when {
-                    line.isEmpty() || line == "}" || line.startsWith("Compiled from ") -> Unit
-                    line.endsWith("{") -> {
-                        owner = line.removeSuffix("{").trim()
-                        member = null
-                        declarations["TYPE::$owner"] = owner
-                    }
-                    line.startsWith("descriptor:") -> {
-                        val currentOwner = owner
-                            ?: throw GradleException("Malformed ABI snapshot without an owning type: $line")
-                        val currentMember = member
-                            ?: throw GradleException("Malformed ABI snapshot without a member: $line")
-                        // An abstract interface method becoming default preserves its JVM linkage.
-                        // Match members by binary name and descriptor, then audit implementation
-                        // removal in the direction where it is actually incompatible.
-                        val binaryMember = currentMember
-                            .replaceFirst("public abstract ", "public ")
-                            .replaceFirst("public default ", "public ")
-                        declarations["$currentOwner::$binaryMember::$line"] = currentMember
-                        member = null
-                    }
-                    else -> member = line
-                }
-            }
-            if (member != null) {
-                throw GradleException("Malformed ABI snapshot with a descriptor-less member: $member")
-            }
-            return declarations
-        }
-
-        val previousDeclarations = declarations(previousCentralAbi)
-        val currentDeclarations = declarations(rendererApiAbiSnapshot.get().asFile)
-        val missing = (previousDeclarations.keys - currentDeclarations.keys).sorted()
-        val implementationRemovals = (previousDeclarations.keys intersect currentDeclarations.keys)
-            .filter { key ->
-                val previousMember = previousDeclarations.getValue(key)
-                val currentMember = currentDeclarations.getValue(key)
-                !previousMember.startsWith("public abstract ")
-                        && currentMember.startsWith("public abstract ")
-            }
-            .sorted()
-        val incompatible = missing + implementationRemovals.map { key ->
-            "$key (implementation changed to abstract)"
-        }
-        if (incompatible.isNotEmpty() && compatibilityRequired) {
-            throw GradleException(
-                "renderer-api ${project.version} is not binary compatible with $previousText; " +
-                    "removed or changed declarations:\n${incompatible.joinToString("\n")}"
-            )
-        }
-        if (incompatible.isNotEmpty()) {
-            logger.lifecycle(
-                "renderer-api ${project.version} crosses a SemVer compatibility boundary; " +
-                    "reviewed incompatible declarations: ${incompatible.size}"
             )
         }
     }
@@ -659,6 +540,5 @@ tasks.named("check") {
     dependsOn(tasks.named("rendererApiContractSelfTest"))
     dependsOn(tasks.named("verifyRendererApiBoundary"))
     dependsOn(tasks.named("verifyRendererApiAbi"))
-    dependsOn(tasks.named("verifyRendererApiBackwardCompatibility"))
     dependsOn(tasks.named("verifyRuntimeSupplyChainMetadata"))
 }

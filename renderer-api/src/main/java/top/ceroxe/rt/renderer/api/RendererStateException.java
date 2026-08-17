@@ -12,7 +12,7 @@ public final class RendererStateException extends RendererException {
     /**
      * Lifecycle state that rejected the operation.
      */
-    private final RayTracingRenderer.Status status;
+    private final Renderer.Status status;
 
     /**
      * Creates a lifecycle-state failure.
@@ -21,7 +21,7 @@ public final class RendererStateException extends RendererException {
      * @param status  lifecycle state that rejected the operation
      * @param cause   originating failure, or {@code null}
      */
-    public RendererStateException(String message, RayTracingRenderer.Status status, Throwable cause) {
+    public RendererStateException(String message, Renderer.Status status, Throwable cause) {
         super(message, cause);
         this.status = Objects.requireNonNull(status, "status");
     }
@@ -31,7 +31,7 @@ public final class RendererStateException extends RendererException {
      *
      * @return non-null renderer status
      */
-    public RayTracingRenderer.Status status() {
+    public Renderer.Status status() {
         return status;
     }
 }

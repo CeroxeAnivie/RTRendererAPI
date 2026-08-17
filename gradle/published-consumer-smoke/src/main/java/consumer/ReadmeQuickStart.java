@@ -4,7 +4,7 @@ import java.time.Duration;
 
 import top.ceroxe.rt.renderer.api.CameraState;
 import top.ceroxe.rt.renderer.api.CpuFrame;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
+import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
 import top.ceroxe.rt.renderer.api.RendererPreset;
@@ -24,7 +24,7 @@ public final class ReadmeQuickStart {
      * @throws Exception if initialization, submission, waiting, or shutdown fails
      */
     public static void main(String[] args) throws Exception {
-        try (RayTracingRenderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
+        try (Renderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
             long sceneRevision = renderer.apply(SceneTransaction.empty(0L))
                     .acceptedSceneRevision();
 

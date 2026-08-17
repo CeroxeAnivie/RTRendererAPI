@@ -4,7 +4,7 @@ import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.feature.VulkanFeaturePlan;
 import top.ceroxe.rt.renderer.feature.VulkanFeatureRegistry;
@@ -16,7 +16,7 @@ public final class NvidiaStreamlinePlanLeaseNativeSelfTest {
 
     public static void main(String[] arguments) {
         WindowsChildProcessIsolation.preventGradlePipeInheritance();
-        RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.expertBuilder()
                 .frameReconstruction(FrameReconstructionOptions.builder()
                         .preference(RendererFeaturePreference.PREFERRED)
                         .build())

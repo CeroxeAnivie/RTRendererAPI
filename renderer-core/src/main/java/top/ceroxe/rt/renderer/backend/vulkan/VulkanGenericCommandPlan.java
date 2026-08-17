@@ -265,7 +265,12 @@ final class VulkanGenericCommandPlan {
                         }
                         VulkanGenericResourceRegistry.TextureRecord record = resources.requireTexture(
                                 source.slice().resource());
-                        resources.requireReadable(record);
+                        // A barrier may be the exact transition from an earlier write in this
+                        // transaction to a later shader read. That generation is deliberately
+                        // not GPU_READY until this submission's fence completes. Requiring ready
+                        // here would make the normal write -> barrier -> use sequence impossible.
+                        // Without a preceding write, retain the cross-transaction readiness gate.
+                        if (!wasWrittenEarlier(record, textureWrites)) resources.requireReadable(record);
                         resolvedTextures.add(new ResolvedTextureBarrier(record, source));
                         textureReads.add(record);
                     }
@@ -299,6 +304,12 @@ final class VulkanGenericCommandPlan {
                         resources.requireReadable(record);
                         textureReads.add(record);
                     }
+                    case BindingSet.CombinedImageSamplerValue combined -> {
+                        VulkanGenericResourceRegistry.TextureRecord record =
+                                resources.requireTexture(combined.view().texture());
+                        resources.requireReadable(record);
+                        textureReads.add(record);
+                    }
                     case BindingSet.SamplerValue ignored -> { }
                 }
             }
@@ -327,6 +338,13 @@ final class VulkanGenericCommandPlan {
         LinkedHashMap<Object, VulkanGenericResourceRegistry.TextureRecord> distinct = new LinkedHashMap<>();
         for (VulkanGenericResourceRegistry.TextureRecord record : source) distinct.put(record.generation(), record);
         return List.copyOf(distinct.values());
+    }
+
+    private static boolean wasWrittenEarlier(
+            VulkanGenericResourceRegistry.TextureRecord target,
+            List<VulkanGenericResourceRegistry.TextureRecord> priorWrites
+    ) {
+        return priorWrites.stream().anyMatch(written -> written.generation().equals(target.generation()));
     }
 
     sealed interface Action permits BeginPass, EndPass, BindGraphics, BindGraphicsBindings, GraphicsPushConstants,

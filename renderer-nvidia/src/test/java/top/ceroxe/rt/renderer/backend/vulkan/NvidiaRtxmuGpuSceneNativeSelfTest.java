@@ -6,7 +6,7 @@ import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Status;
@@ -23,7 +23,7 @@ public final class NvidiaRtxmuGpuSceneNativeSelfTest {
                 capability.hardwareRayTracingReady(),
                 "RTXMU GPUScene gate requires Vulkan RT: " + capability.summary()
         );
-        RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.expertBuilder()
                 .validationEnabled(true)
                 .frameReconstruction(FrameReconstructionOptions.disabled())
                 .frameGeneration(FrameGenerationOptions.disabled())
@@ -69,7 +69,7 @@ public final class NvidiaRtxmuGpuSceneNativeSelfTest {
 
     private static void verifyConcurrentDeviceSessionRejected(
             VulkanRtCapabilityProbe.Result capability,
-            RayTracingRendererConfig configuration
+            RendererConfig configuration
     ) {
         try (VulkanDeviceRuntime ignored = VulkanDeviceRuntime.open(
                 capability, RendererRtDiagnostics.noop(), false, false, configuration

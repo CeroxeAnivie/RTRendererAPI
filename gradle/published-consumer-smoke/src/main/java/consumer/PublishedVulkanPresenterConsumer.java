@@ -3,7 +3,7 @@ package consumer;
 import java.util.Objects;
 import java.util.Optional;
 
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
+import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter;
@@ -28,7 +28,7 @@ public final class PublishedVulkanPresenterConsumer {
      * @return caller-owned thread-affine presenter
      */
     public static VulkanFramePresenter openUncapped(
-            RayTracingRenderer renderer,
+            Renderer renderer,
             int width,
             int height
     ) {
@@ -52,13 +52,13 @@ public final class PublishedVulkanPresenterConsumer {
      * @return {@code true} only when the backend admitted the request
      */
     public static boolean trySubmit(
-            RayTracingRenderer renderer,
+            Renderer renderer,
             RenderFrameRequest request
     ) {
-        RayTracingRenderer.FrameSubmissionAttempt attempt = Objects.requireNonNull(
+        Renderer.FrameSubmissionAttempt attempt = Objects.requireNonNull(
                 renderer, "renderer"
         ).trySubmit(Objects.requireNonNull(request, "request"));
-        return attempt instanceof RayTracingRenderer.FrameSubmitted;
+        return attempt instanceof Renderer.FrameSubmitted;
     }
 
     /**
@@ -69,10 +69,10 @@ public final class PublishedVulkanPresenterConsumer {
      * @return empty when no frame is ready, otherwise exact presentation evidence
      */
     public static Optional<VulkanFramePresenter.PresentationResult> presentLatest(
-            RayTracingRenderer renderer,
+            Renderer renderer,
             VulkanFramePresenter presenter
     ) {
-        RayTracingRenderer checkedRenderer = Objects.requireNonNull(renderer, "renderer");
+        Renderer checkedRenderer = Objects.requireNonNull(renderer, "renderer");
         VulkanFramePresenter checkedPresenter = Objects.requireNonNull(presenter, "presenter");
         VulkanFrameInterop interop = checkedRenderer.extension(VulkanFrameInterop.class)
                 .orElseThrow(() -> new IllegalStateException("Vulkan frame interop is unavailable"));

@@ -1,6 +1,6 @@
 package top.ceroxe.rt.renderer.api;
 
-import top.ceroxe.rt.renderer.spi.RayTracingBackendProvider;
+import top.ceroxe.rt.renderer.spi.RendererBackendProvider;
 
 import java.util.List;
 import java.util.Objects;
@@ -51,7 +51,7 @@ public final class RendererUnavailableException extends RendererException {
         /**
          * Strongly typed probe compatibility classification.
          */
-        private final RayTracingBackendProvider.Compatibility compatibility;
+        private final RendererBackendProvider.Compatibility compatibility;
         /**
          * Bounded human-readable probe diagnostic.
          */
@@ -59,7 +59,7 @@ public final class RendererUnavailableException extends RendererException {
 
         private BackendAttempt(
                 String providerId,
-                RayTracingBackendProvider.Compatibility compatibility,
+                RendererBackendProvider.Compatibility compatibility,
                 String reason
         ) {
             this.providerId = requireText(providerId, "providerId");
@@ -77,7 +77,7 @@ public final class RendererUnavailableException extends RendererException {
          */
         public static BackendAttempt of(
                 String providerId,
-                RayTracingBackendProvider.Compatibility compatibility,
+                RendererBackendProvider.Compatibility compatibility,
                 String reason
         ) {
             return new BackendAttempt(providerId, compatibility, reason);
@@ -105,7 +105,7 @@ public final class RendererUnavailableException extends RendererException {
          *
          * @return non-null compatibility classification
          */
-        public RayTracingBackendProvider.Compatibility compatibility() {
+        public RendererBackendProvider.Compatibility compatibility() {
             return compatibility;
         }
 

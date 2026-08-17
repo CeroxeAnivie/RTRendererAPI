@@ -1,6 +1,6 @@
 package top.ceroxe.rt.renderer.api.interop.vulkan;
 
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
+import top.ceroxe.rt.renderer.api.Renderer;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -26,10 +26,10 @@ public interface VulkanFramePresenter extends AutoCloseable {
      * @throws UnsupportedOperationException if the provider has no managed Vulkan presenter
      */
     static VulkanFramePresenter open(
-            RayTracingRenderer renderer,
+            Renderer renderer,
             VulkanFramePresenterConfig configuration
     ) {
-        RayTracingRenderer checkedRenderer = Objects.requireNonNull(renderer, "renderer");
+        Renderer checkedRenderer = Objects.requireNonNull(renderer, "renderer");
         VulkanFramePresenterFactory factory = checkedRenderer
                 .extension(VulkanFramePresenterFactory.class)
                 .orElseThrow(() -> new UnsupportedOperationException(

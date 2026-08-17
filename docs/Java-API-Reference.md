@@ -8,8 +8,7 @@
 
 - [RendererBootstrap](#rendererbootstrap)
 - [Renderer](#renderer)
-- [RayTracingRenderer](#raytracingrenderer)
-- [RayTracingRendererConfig](#raytracingrendererconfig)
+- [RendererConfig](#rendererconfig)
 - [场景与帧](#场景与帧)
 - [资产与实例](#资产与实例)
 - [设备、诊断与异常](#设备诊断与异常)
@@ -24,25 +23,24 @@
 public final class RendererBootstrap
 ```
 
-后端发现与打开的唯一公共入口。通过 `ServiceLoader` 发现 `RayTracingBackendProvider`，按 descriptor priority 和兼容性结果选择后端。
+后端发现与打开的唯一公共入口。通过 `ServiceLoader` 发现 `RendererBackendProvider`，按 descriptor priority 和兼容性结果选择后端。
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
-| `open(RendererPreset)` | `RayTracingRenderer` | 简单模式；按明确的 CPU readback 或 managed GPU presentation preset 打开最佳可用后端 |
-| `openExpert(RayTracingRendererConfig)` | `RayTracingRenderer` | 专家模式；使用完整显式配置打开最佳可用后端 |
-| `openExpertProvider(String, RayTracingRendererConfig)` | `RayTracingRenderer` | 专家模式；按 provider id 打开，用于确定性部署或诊断 |
-| `openRenderer(RendererPreset)` | `Renderer` | 1.1 显式通用 renderer 入口；preset 仍选择 retained-scene 普通路径 |
-| `openExpertRenderer(RayTracingRendererConfig)` | `Renderer` | 1.1 专家通用语义入口；不会将 command transaction 转写为场景资产 |
-| `openExpertProviderRenderer(String, RayTracingRendererConfig)` | `Renderer` | 固定 provider 的 1.1 专家入口 |
-| `availableGpuDevices()` | `List<RayTracingGpuDevice>` | 返回通过 provider 探测得到的不可变设备列表 |
+| `open(RendererPreset)` | `Renderer` | 简单模式；按明确的 CPU readback 或 managed GPU presentation preset 打开最佳可用后端 |
+| `open(RendererConfig)` | `Renderer` | 专家模式；使用完整显式配置打开最佳可用后端 |
+| `open(String, RendererConfig)` | `Renderer` | 专家模式；按 provider id 打开，用于确定性部署或诊断 |
+| `availableGpuDevices()` | `List<RendererGpuDevice>` | 返回通过 provider 探测得到的不可变设备列表 |
 
 ## Renderer
 
 ```java
-public interface Renderer extends RayTracingRenderer
+public interface Renderer extends AutoCloseable
 ```
 
-这是通用 command path 的明确类型 discriminator。`RayTracingRenderer` 的旧场景 API 保持原有 ABI 与行为；`Renderer` 新增的方法不会隐式修改 retained-scene 提交。
+一个 `Renderer` 同时承载 retained-scene 与通用 command path。`RenderWorkload.Mode` 是工作负载
+discriminator；直接使用 `apply/trySubmit` 或 `submitCommands` 时，调用的方法本身就是明确模式，
+不会隐式修改或改写另一条路径。
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
@@ -54,17 +52,22 @@ public interface Renderer extends RayTracingRenderer
 
 普通场景调用方不需要创建这些对象。专家调用方必须先发布精确 resource generation，再提交仅引用这些 generation 的 command transaction，并始终以 capability 与 typed evidence 作为可执行性依据。
 
+`BindingType.COMBINED_IMAGE_SAMPLER` 以一个 `BindingSet.CombinedImageSamplerValue(TextureView, SamplerState)`
+表达一个 binding 元素。它对应 Vulkan 的 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`，不是
+`SAMPLED_TEXTURE` 与 `SAMPLER` 的便利组合；shader reflection、binding layout 和 binding set 都必须使用
+同一精确类别。
+
 ### 通用渲染语义
 
-`1.1.0` 的 command path 语义、Vulkan 后端支持边界和证据规则见
+`2.0.0` 的 command path 语义、Vulkan 后端支持边界和证据规则见
 [Generic-Rendering-Semantics.md](Generic-Rendering-Semantics.md)。这条路径真实消费 graphics
 pipeline、attachment、binding 和 draw 命令；未被后端支持的 shader、格式或同步要求会在 admission
 阶段拒绝，不会降级成固定 PBR 场景。
 
-## RayTracingRenderer
+## Renderer
 
 ```java
-public interface RayTracingRenderer extends AutoCloseable
+public interface Renderer extends AutoCloseable
 ```
 
 线程安全边界、状态转换和资源所有权由具体方法契约定义。调用方必须确定性关闭实例。
@@ -98,12 +101,12 @@ public interface RayTracingRenderer extends AutoCloseable
 | `MANAGED_GPU_PRESENTATION` | 官方 GPU presenter 路径；关闭 CPU readback，并在支持时额外优选普通 FG 2x 与低延迟 pacing；不自动请求 MFG |
 
 `configuration()` 只供专家检查或复制 preset。派生配置使用 `copyBuilder()`，并通过
-`RendererBootstrap.openExpert(...)` 打开。
+`RendererBootstrap.open(...)` 打开。
 
-## RayTracingRendererConfig
+## RendererConfig
 
 ```java
-public final class RayTracingRendererConfig
+public final class RendererConfig
 ```
 
 只提供显式 expert Builder 与 `copyBuilder()`，不提供有序兼容构造器或隐式默认入口。
@@ -124,7 +127,7 @@ public final class RayTracingRendererConfig
 | `validationEnabled(boolean)` | Vulkan validation 策略 |
 | `gpuTimingsEnabled(boolean)` | GPU timing 策略 |
 | `cpuFrameReadbackEnabled(boolean)` | 是否分配并复制异步托管 CPU 帧；默认开启 |
-| `gpuDevice(RayTracingGpuDevice)` | 绑定枚举所得稳定设备对象 |
+| `gpuDevice(RendererGpuDevice)` | 绑定枚举所得稳定设备对象 |
 | `automaticGpuSelection()` | 恢复 provider 的自动设备选择 |
 | `frameOutputFormat(FrameOutputFormat)` | SDR RGBA8 或 linear HDR RGBA16F |
 | `temporalRendering(TemporalRenderingOptions)` | temporal reconstruction 策略 |
@@ -249,7 +252,7 @@ dominant axis 选择 -X/+X/-Y/+Y/-Z/+Z multiplier。六个值均为 `[0, 1]` 内
 
 ## 设备、诊断与异常
 
-### RayTracingGpuDevice
+### RendererGpuDevice
 
 设备对象提供 provider id、stable id、名称、类型、API version 和完整 `HardwareCapabilities`。
 设备选择应依据 stable identity 与能力，不依据展示名称。`hardwareCapabilities()` 是物理设备事实；

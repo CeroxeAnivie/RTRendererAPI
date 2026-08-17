@@ -6,7 +6,7 @@ import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameOutputFormat;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
@@ -68,7 +68,7 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                         : FrameGenerationOptions.Multiplier.TWO_X)
                 .fallback(FrameGenerationOptions.Fallback.NONE)
                 .build();
-        RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.expertBuilder()
                 // The acceptance may need a bounded warm-up while the asynchronous pacer
                 // publishes generated output. Match the presenter lead to the legal renderer
                 // ring maximum so that warm-up measures Streamline latency instead of admission

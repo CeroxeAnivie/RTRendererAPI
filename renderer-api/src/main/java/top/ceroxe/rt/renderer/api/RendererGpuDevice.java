@@ -8,13 +8,13 @@ import java.util.Objects;
  *
  * <p>The pair {@code (backendId, stableId)} is the selection identity. Callers must pass the
  * object returned by {@link RendererBootstrap#availableGpuDevices()} back through
- * {@link RayTracingRendererConfig.Builder#gpuDevice(RayTracingGpuDevice)}; names and enumeration
+ * {@link RendererConfig.Builder#gpuDevice(RendererGpuDevice)}; names and enumeration
  * indices are deliberately not selection keys because both can change or collide.</p>
  *
  * <p>Providers construct snapshots through {@link #builder()}. The semantic setters prevent the
  * three adjacent strings and the device/vendor identifiers from being exchanged positionally.</p>
  */
-public final class RayTracingGpuDevice {
+public final class RendererGpuDevice {
     private final String backendId;
     private final String stableId;
     private final String name;
@@ -24,7 +24,7 @@ public final class RayTracingGpuDevice {
     private final ApiVersion apiVersion;
     private final HardwareCapabilities hardwareCapabilities;
 
-    private RayTracingGpuDevice(Builder builder) {
+    private RendererGpuDevice(Builder builder) {
         backendId = requireText(requireSelected(builder.backendId, "backendId"), "backendId");
         stableId = requireText(requireSelected(builder.stableId, "stableId"), "stableId");
         name = requireText(requireSelected(builder.name, "name"), "name");
@@ -154,7 +154,7 @@ public final class RayTracingGpuDevice {
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
-        if (!(other instanceof RayTracingGpuDevice device)) return false;
+        if (!(other instanceof RendererGpuDevice device)) return false;
         return vendorId == device.vendorId
                 && deviceId == device.deviceId
                 && backendId.equals(device.backendId)
@@ -175,7 +175,7 @@ public final class RayTracingGpuDevice {
 
     @Override
     public String toString() {
-        return "RayTracingGpuDevice[backendId=" + backendId
+        return "RendererGpuDevice[backendId=" + backendId
                 + ", stableId=" + stableId
                 + ", name=" + name
                 + ", vendorId=" + vendorId
@@ -225,7 +225,7 @@ public final class RayTracingGpuDevice {
         private Builder() {
         }
 
-        private Builder(RayTracingGpuDevice source) {
+        private Builder(RendererGpuDevice source) {
             backendId = source.backendId;
             stableId = source.stableId;
             name = source.name;
@@ -333,8 +333,8 @@ public final class RayTracingGpuDevice {
          *
          * @return validated device snapshot
          */
-        public RayTracingGpuDevice build() {
-            return new RayTracingGpuDevice(this);
+        public RendererGpuDevice build() {
+            return new RendererGpuDevice(this);
         }
     }
 

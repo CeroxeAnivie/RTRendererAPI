@@ -3,7 +3,7 @@ package top.ceroxe.rt.renderer.nvidia;
 import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Status;
@@ -36,7 +36,7 @@ public final class NvidiaNativeBridgeSelfTest {
     }
 
     private static void verifiesOfficialStreamlineProviderRequirements() {
-        RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.expertBuilder()
                 .frameReconstruction(FrameReconstructionOptions.builder()
                         .preference(RendererFeaturePreference.PREFERRED)
                         .mode(FrameReconstructionOptions.Mode.SUPER_RESOLUTION)

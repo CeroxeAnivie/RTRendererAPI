@@ -13,9 +13,9 @@ Native RTX acceptance requires the documented SDK roots and a trusted Windows RT
 ## API changes
 
 - Preserve the compatibility levels in `docs/COMPATIBILITY.md`.
-- Add public methods through builders, new types or interface default methods when required for binary compatibility.
+- Add public methods through builders, new types or interface default methods when required for binary compatibility within the active major.
 - Add contract tests for empty, invalid, concurrent, cancellation and cleanup paths affected by the change.
-- Update `previous_api_version` only after a formal Central release becomes the compatibility baseline.
+- Update the checked-in ABI baseline only after reviewing the public binary diff for the active major.
 - Never describe an implementation as active without typed execution evidence.
 
 ## Pull requests
@@ -25,7 +25,7 @@ Explain the root cause, behavioral contract, failure/rollback behavior, and veri
 ## Release flow
 
 1. Select a SemVer version and update all checked version facts.
-2. Pass deterministic checks, previous-release ABI compatibility, published-consumer verification and bounded RTX acceptance.
+2. Pass deterministic checks, current-major ABI verification, published-consumer verification and bounded RTX acceptance.
 3. Build and verify the signed Central Portal bundle.
 4. Publish through Maven Central and confirm all three modules are available.
 5. Create the matching annotated `vMAJOR.MINOR.PATCH` source tag. GitHub Releases are not a binary distribution channel for this project.

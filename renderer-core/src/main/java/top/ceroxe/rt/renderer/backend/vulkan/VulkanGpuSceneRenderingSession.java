@@ -5,7 +5,7 @@ import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.FrameValidationException;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RendererFeaturePlan;
@@ -28,7 +28,7 @@ import java.util.Objects;
 final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, VulkanGenericCommandRuntimeProvider {
     private static final String FRAME_TIMING_LABEL = "gpuSceneFrame";
 
-    private final RayTracingRendererConfig configuration;
+    private final RendererConfig configuration;
     private final String gpuStableId;
     private final VulkanSceneRuntime scene;
     private final GpuSceneRayTracingPipeline pipeline;
@@ -54,10 +54,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
 
     static VulkanGpuSceneRenderingSession open(
             VulkanRtCapabilityProbe.Result capability,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             RendererRtDiagnostics diagnostics
     ) {
-        RayTracingRendererConfig checkedConfiguration = Objects.requireNonNull(configuration, "configuration");
+        RendererConfig checkedConfiguration = Objects.requireNonNull(configuration, "configuration");
         VulkanSceneRuntime scene = null;
         GpuSceneRayTracingPipeline pipeline = null;
         VulkanGpuSceneTemporalCoordinator temporalCoordinator = null;
@@ -131,7 +131,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     }
 
     private VulkanGpuSceneRenderingSession(
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             String gpuStableId,
             VulkanSceneRuntime scene,
             GpuSceneRayTracingPipeline pipeline,
@@ -421,7 +421,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         }
     }
 
-    private static RendererFeatureProfile featureProfile(RayTracingRendererConfig configuration) {
+    private static RendererFeatureProfile featureProfile(RendererConfig configuration) {
         return new RendererFeatureProfile(
                 configuration.frameReconstruction(),
                 configuration.frameGeneration(),

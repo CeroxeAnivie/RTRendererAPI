@@ -10,7 +10,7 @@ import java.util.Objects;
  * to exchange without a compiler error.</p>
  */
 public final class RendererDiagnostics {
-    private final RayTracingRenderer.Status status;
+    private final Renderer.Status status;
     private final long latestAcceptedSceneRevision;
     private final long latestSubmittedFrameSequence;
     private final long latestCompletedFrameSequence;
@@ -73,7 +73,7 @@ public final class RendererDiagnostics {
      *
      * @return non-null renderer state
      */
-    public RayTracingRenderer.Status status() {
+    public Renderer.Status status() {
         return status;
     }
 
@@ -200,7 +200,7 @@ public final class RendererDiagnostics {
      * Single-thread-confined semantic builder for one diagnostics snapshot.
      */
     public static final class Builder {
-        private RayTracingRenderer.Status status;
+        private Renderer.Status status;
         private long latestAcceptedSceneRevision;
         private long latestSubmittedFrameSequence = -1L;
         private long latestCompletedFrameSequence = -1L;
@@ -234,7 +234,7 @@ public final class RendererDiagnostics {
          * @param value non-null renderer state
          * @return this builder
          */
-        public Builder status(RayTracingRenderer.Status value) {
+        public Builder status(Renderer.Status value) {
             status = Objects.requireNonNull(value, "status");
             return this;
         }

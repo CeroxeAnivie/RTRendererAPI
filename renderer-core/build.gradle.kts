@@ -34,9 +34,9 @@ dependencies {
     // renderer-api: renderer-api owns the single-coordinate runtime edge to this module.
     compileOnly(project(":renderer-api"))
     testImplementation(project(":renderer-api"))
-    // The API publishes an external runtime coordinate for NVIDIA so consumers can resolve a
-    // single artifact. In this composite build, make the sibling implementation explicit for
-    // core self-tests; otherwise Gradle attempts to fetch the current unreleased module remotely.
+    // renderer-api publishes NVIDIA as an external runtime coordinate. The composite build must
+    // resolve that coordinate to its sibling implementation for core test classpaths; individual
+    // provider-free JavaExec tasks filter the resulting JAR before launching their test process.
     testRuntimeOnly(project(":renderer-nvidia"))
     implementation("it.unimi.dsi:fastutil:$fastutilVersion")
     api("org.joml:joml:$jomlVersion")
@@ -255,7 +255,8 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanGpuFrameLeaseSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuFrameLeaseSelfTest",
     "coreVulkanExternalFrameConsumerAdapterSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanExternalFrameConsumerAdapterSelfTest",
     "coreVulkanTextOverlayRasterizerSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanTextOverlayRasterizerSelfTest",
-    "coreVulkanRayTracingBackendProviderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRayTracingBackendProviderSelfTest"
+    "coreVulkanSpirvBindingValidatorSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSpirvBindingValidatorSelfTest",
+    "coreVulkanRendererBackendProviderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererBackendProviderSelfTest"
 )
 
 contractSelfTests.forEach { (taskName, mainClassName) ->

@@ -4,11 +4,11 @@
 是随发布门禁编译的完整控制流样例：它演示 extension discovery、有界等待、非空结果、lease 的
 `ACTIVE -> RELEASED -> CLOSED` 顺序，以及只按 `RendererDeviceException.RecoveryAction` 决策的恢复路径。应用只需在
 `NativeFrameConsumer` 内实现自身 Vulkan device/queue 的 import、ownership transfer 与 submission；不得把这些 native
-职责隐藏回普通 `RayTracingRenderer` 路径。
+职责隐藏回普通 `Renderer` 路径。
 
 `VulkanFrameInterop` 是显式 opt-in 的零拷贝外部图像接口。它只适合已经能正确实现 Vulkan external memory、external
 semaphore、queue-family ownership transfer 和 Win32 handle 所有权的调用方。普通应用应使用
-`RayTracingRenderer.pollLatestCpuFrame()`/有界等待，或使用官方 `VulkanFramePresenter` 完成 GPU 窗口显示。
+`Renderer.pollLatestCpuFrame()`/有界等待，或使用官方 `VulkanFramePresenter` 完成 GPU 窗口显示。
 
 ## 官方托管 presenter 与自定义专家 consumer
 
@@ -170,7 +170,7 @@ renderer 创建时选择 `FrameOutputFormat`：
 | `LINEAR_HDR_RGBA16F` | linear scene-referred RGBA16F | 线性 radiance resolve，不 tone-map        |
 
 后端在 probe/open 阶段验证对应 storage image 与 Win32 external-memory export 能力；不支持时拒绝配置，不会改成另一种格式。不要根据设备名称推断
-capability，使用 `RayTracingGpuDevice.hardwareCapabilities()` 的格式与句柄级证据，并以实际 open 结果为最终准入结论。
+capability，使用 `RendererGpuDevice.hardwareCapabilities()` 的格式与句柄级证据，并以实际 open 结果为最终准入结论。
 
 ## 关闭检查表
 

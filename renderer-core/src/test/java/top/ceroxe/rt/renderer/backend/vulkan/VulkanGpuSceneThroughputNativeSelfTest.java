@@ -9,8 +9,8 @@ import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.LowLatencyOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.Renderer;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
@@ -43,7 +43,7 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
        * An API-version A/B must measure the base GPUScene pipeline, not whatever optional provider
        * policy happened to become the public default in that release.
        */
-      RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
+      RendererConfig configuration = RendererConfig.expertBuilder()
               .temporalRendering(TemporalRenderingOptions.disabled())
               .frameReconstruction(FrameReconstructionOptions.disabled())
               .denoising(DenoisingOptions.disabled())
@@ -55,7 +55,7 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
               .gpuTimingsEnabled(true)
               .build();
       long coldStartNanos = System.nanoTime();
-      RayTracingRenderer renderer = RendererBootstrap.openExpertProvider("vulkan-rt", configuration);
+      Renderer renderer = RendererBootstrap.open("vulkan-rt", configuration);
 
       try {
          VulkanFrameInterop interop = (VulkanFrameInterop)renderer.extension(VulkanFrameInterop.class).orElseThrow(() -> new AssertionError("Vulkan backend omitted its interop extension"));
@@ -97,7 +97,7 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
 
    }
 
-   private static Measurement runRange(RayTracingRenderer renderer, VulkanFrameInterop interop, long firstSequence, int frameCount, boolean measure) throws InterruptedException {
+   private static Measurement runRange(Renderer renderer, VulkanFrameInterop interop, long firstSequence, int frameCount, boolean measure) throws InterruptedException {
       long finalSequence = firstSequence + (long)frameCount - 1L;
       long nextSequence = firstSequence;
       long latestCompleted = firstSequence - 1L;

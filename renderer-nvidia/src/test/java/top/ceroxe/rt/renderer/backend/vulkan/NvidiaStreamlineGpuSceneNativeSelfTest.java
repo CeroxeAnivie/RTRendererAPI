@@ -11,7 +11,7 @@ import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
@@ -44,7 +44,7 @@ public final class NvidiaStreamlineGpuSceneNativeSelfTest {
         NvidiaGpuSceneNativeTestSupport.require(capability.preferredDevice().linearHdrRgba16fOutput(),
                 featureName + " frame gate requires exportable RGBA16F output on the selected device");
 
-        RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.expertBuilder()
                 .maxFramesInFlight(2)
                 .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F)
                 .frameGeneration(FrameGenerationOptions.disabled())

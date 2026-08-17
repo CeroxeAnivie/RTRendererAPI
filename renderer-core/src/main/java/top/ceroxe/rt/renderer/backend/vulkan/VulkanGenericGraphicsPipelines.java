@@ -111,6 +111,7 @@ final class VulkanGenericGraphicsPipelines implements AutoCloseable {
             );
             int stageIndex = 0;
             for (ShaderModule module : state.program().modules()) {
+                VulkanSpirvBindingValidator.requireDeclaredInterface(module);
                 long shaderModule = createShaderModule(stack, module);
                 shaderModules.add(shaderModule);
                 VkPipelineShaderStageCreateInfo stage = stages.get(stageIndex++)

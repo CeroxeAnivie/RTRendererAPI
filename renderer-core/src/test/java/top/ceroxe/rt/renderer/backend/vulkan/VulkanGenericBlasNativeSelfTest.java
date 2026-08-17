@@ -11,7 +11,7 @@ import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.MaterialAsset.BlendMode;
@@ -30,7 +30,7 @@ public final class VulkanGenericBlasNativeSelfTest {
    public static void main(String[] arguments) throws Exception {
       VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
       require(capability.hardwareRayTracingReady(), "generic BLAS gate requires hardware RT: " + capability.summary());
-      RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
+      RendererConfig configuration = RendererConfig.expertBuilder()
               .frameReconstruction(FrameReconstructionOptions.disabled())
               .frameGeneration(FrameGenerationOptions.disabled())
               .denoising(DenoisingOptions.disabled())

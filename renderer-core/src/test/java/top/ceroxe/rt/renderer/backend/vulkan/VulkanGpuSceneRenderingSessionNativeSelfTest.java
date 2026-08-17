@@ -23,7 +23,7 @@ import top.ceroxe.rt.renderer.api.FrameOutputFormat;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.MeshAsset;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RendererPreset;
@@ -63,7 +63,7 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
    public static void main(String[] arguments) throws Exception {
       VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
       require(capability.hardwareRayTracingReady(), "complex GPUScene gate requires hardware RT: " + capability.summary());
-      RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
+      RendererConfig configuration = RendererConfig.expertBuilder()
               .maxFramesInFlight(3)
               .validationEnabled(true)
               .gpuTimingsEnabled(true)
@@ -153,7 +153,7 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
 
    private static void verifyLinearHdrOutput(VulkanRtCapabilityProbe.Result capability) throws Exception {
       require(capability.preferredDevice().linearHdrRgba16fOutput(), "selected target GPU does not expose exportable RGBA16F storage images");
-      RayTracingRendererConfig configuration = RendererPreset.CPU_READBACK.configuration().copyBuilder().frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).build();
+      RendererConfig configuration = RendererPreset.CPU_READBACK.configuration().copyBuilder().frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).build();
       VulkanGpuSceneRenderingSession session = VulkanGpuSceneRenderingSession.open(capability, configuration, RendererRtDiagnostics.noop());
       VulkanRendererHost renderer = new VulkanRendererHost(configuration, session);
 

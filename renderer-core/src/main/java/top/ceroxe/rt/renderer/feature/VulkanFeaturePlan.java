@@ -167,7 +167,7 @@ public final class VulkanFeaturePlan implements AutoCloseable {
      *
      * <p>Once {@link VulkanFeatureRegistry#openSession(VulkanFeaturePlan,
      * top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime,
-     * top.ceroxe.rt.renderer.api.RayTracingRendererConfig)} claims the plan, provider ownership is
+     * top.ceroxe.rt.renderer.api.RendererConfig)} claims the plan, provider ownership is
      * transferred to the session-opening transaction and this method becomes an idempotent no-op.</p>
      */
     @Override

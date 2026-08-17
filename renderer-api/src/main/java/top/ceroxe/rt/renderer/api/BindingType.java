@@ -9,5 +9,13 @@ public enum BindingType {
     READ_ONLY_STORAGE_TEXTURE,
     READ_WRITE_STORAGE_TEXTURE,
     SAMPLER,
-    COMPARISON_SAMPLER
+    COMPARISON_SAMPLER,
+    /**
+     * One texture view and sampler bound atomically at one shader location.
+     *
+     * <p>This preserves the native descriptor shape emitted for conventional sampled-image
+     * declarations. It is deliberately distinct from adjacent {@link #SAMPLED_TEXTURE} and
+     * {@link #SAMPLER} bindings: consumers must never infer, split, or re-number this binding.</p>
+     */
+    COMBINED_IMAGE_SAMPLER
 }

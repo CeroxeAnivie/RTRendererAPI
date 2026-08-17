@@ -2,7 +2,7 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RendererPreset;
 import top.ceroxe.rt.renderer.api.FramePrimitiveBatch;
 import top.ceroxe.rt.renderer.rt.acceleration.RtAccelerationStructure;
@@ -65,7 +65,7 @@ final class VulkanSceneRuntime implements AutoCloseable {
             RendererRtDiagnostics diagnostics,
             boolean validationEnabled,
             boolean gpuTimingsEnabled,
-            RayTracingRendererConfig configuration
+            RendererConfig configuration
     ) {
         VulkanDeviceRuntime device = null;
         VulkanGpuScene gpuScene = null;

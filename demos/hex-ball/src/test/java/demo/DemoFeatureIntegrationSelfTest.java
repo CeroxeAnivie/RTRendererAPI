@@ -12,7 +12,7 @@ import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameGenerationEvidence;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.LowLatencyOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
@@ -45,7 +45,7 @@ public final class DemoFeatureIntegrationSelfTest {
         DemoConfig config = new DemoConfig(
                 640, 360, 1, true, false, false, 0, 1, Duration.ZERO
         );
-        RayTracingRendererConfig renderer = DemoRendererProfile.interactive(config);
+        RendererConfig renderer = DemoRendererProfile.interactive(config);
         require(renderer.temporalRendering().equals(TemporalRenderingOptions.disabled()),
                 "built-in temporal rendering must be disabled in the FG-only profile");
         require(renderer.frameReconstruction().equals(FrameReconstructionOptions.disabled()),
@@ -111,7 +111,7 @@ public final class DemoFeatureIntegrationSelfTest {
             DemoConfig config = new DemoConfig(
                     640, 360, 1, true, false, false, 0, 1, Duration.ZERO
             );
-            RayTracingRendererConfig renderer = DemoRendererProfile.interactive(config);
+            RendererConfig renderer = DemoRendererProfile.interactive(config);
             require(renderer.frameGeneration().equals(FrameGenerationOptions.disabled()),
                     "the native baseline property must disable frame generation");
 
@@ -141,7 +141,7 @@ public final class DemoFeatureIntegrationSelfTest {
         String previous = System.getProperty(property);
         try {
             System.setProperty(property, "4");
-            RayTracingRendererConfig renderer = DemoRendererProfile.interactive(
+            RendererConfig renderer = DemoRendererProfile.interactive(
                     new DemoConfig(
                             640, 360, 1, true, false, false, 0, 1, Duration.ZERO
                     )
@@ -167,7 +167,7 @@ public final class DemoFeatureIntegrationSelfTest {
             System.setProperty(profileProperty, "all-except-mfg");
             System.clearProperty(disableProperty);
             System.setProperty(multiplierProperty, "2");
-            RayTracingRendererConfig renderer = DemoRendererProfile.interactive(
+            RendererConfig renderer = DemoRendererProfile.interactive(
                     new DemoConfig(
                             640, 360, 1, true, false, false, 0, 1, Duration.ZERO
                     )
@@ -259,6 +259,7 @@ public final class DemoFeatureIntegrationSelfTest {
         String text = DemoTechnologyHud.snapshot(
                 Optional.of(capabilities.build()), "PERFORMANCE"
         ).text();
+        require(text.startsWith("RTRendererAPI "), "HUD must identify the API version");
         require(text.contains("DLSS SR: ACTIVE"), "DLSS SR status was not projected");
         require(text.contains("DLAA: AVAILABLE"), "DLAA status was not projected");
         require(text.contains("NIS: FALLBACK"), "NIS status was not projected");
@@ -320,8 +321,10 @@ public final class DemoFeatureIntegrationSelfTest {
         String hud = DemoTechnologyHud.snapshot(
                 Optional.of(capabilities), "PERFORMANCE", evidence
         ).text();
-        require(hud.contains("DLSS MFG: ACTIVE | 3x | generated N/A FPS | effective 3.00x"),
+        require(hud.contains("DLSS MFG: ACTIVE | 3x | generated N/A FPS"),
                 "HUD did not project typed MFG cadence evidence");
+        require(!hud.contains("effective"),
+                "HUD must not duplicate the configured multiplier as an effective multiplier");
         require(!hud.contains("DLSS FG: AVAILABLE | 3x"),
                 "HUD attached MFG evidence to the mutually exclusive FG mode");
     }
@@ -343,7 +346,7 @@ public final class DemoFeatureIntegrationSelfTest {
         require(blockedLine.endsWith("...)"), "bounded blocked reason must remain explicit");
 
         String missing = DemoTechnologyHud.snapshot(Optional.empty(), "PERFORMANCE").text();
-        require(missing.lines().skip(1).allMatch(line -> line.endsWith("NOT_SUPPORTED")),
+        require(missing.lines().skip(3).allMatch(line -> line.endsWith("NOT_SUPPORTED")),
                 "missing capability extension must not fabricate ACTIVE or BLOCKED states");
     }
 

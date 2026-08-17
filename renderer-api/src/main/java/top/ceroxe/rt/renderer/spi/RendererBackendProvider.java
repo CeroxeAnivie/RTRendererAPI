@@ -1,8 +1,8 @@
 package top.ceroxe.rt.renderer.spi;
 
-import top.ceroxe.rt.renderer.api.RayTracingGpuDevice;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererGpuDevice;
+import top.ceroxe.rt.renderer.api.Renderer;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 
 import java.util.List;
 import java.util.Objects;
@@ -10,11 +10,11 @@ import java.util.Objects;
 /**
  * Service-provider boundary implemented by a renderer backend module.
  */
-public interface RayTracingBackendProvider {
+public interface RendererBackendProvider {
     /**
      * Major SPI contract version required by {@code renderer-api}.
      */
-    int API_MAJOR = 1;
+    int API_MAJOR = 2;
 
     /** Highest minor SPI contract this host can consume without a provider upgrade. */
     int API_MINOR = 0;
@@ -31,7 +31,7 @@ public interface RayTracingBackendProvider {
      *
      * @return immutable device list; empty when discovery is unsupported or no device qualifies
      */
-    List<RayTracingGpuDevice> availableGpuDevices();
+    List<RendererGpuDevice> availableGpuDevices();
 
     /**
      * Performs a read-only configuration-aware probe without retaining native resources.
@@ -39,7 +39,7 @@ public interface RayTracingBackendProvider {
      * @param configuration immutable requested renderer policy
      * @return non-null compatibility result with a diagnostic reason
      */
-    ProbeResult probe(RayTracingRendererConfig configuration);
+    ProbeResult probe(RendererConfig configuration);
 
     /**
      * Opens one independently owned renderer instance.
@@ -47,7 +47,7 @@ public interface RayTracingBackendProvider {
      * @param configuration immutable renderer configuration accepted by {@link #probe}
      * @return newly owned renderer instance
      */
-    RayTracingRenderer open(RayTracingRendererConfig configuration);
+    Renderer open(RendererConfig configuration);
 
     /**
      * Backend compatibility classification used during deterministic provider selection.

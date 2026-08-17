@@ -16,7 +16,7 @@ import top.ceroxe.rt.renderer.api.CameraState;
 import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.FramePrimitiveBatch;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
+import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
@@ -76,13 +76,13 @@ public final class HexBallDemo {
 
         if (config.cpuPresentation()) {
             try (RenderWindow window = RenderWindow.open(config, running, stats);
-                 Renderer renderer = RendererBootstrap.openExpertRenderer(rendererConfig)) {
+                 Renderer renderer = RendererBootstrap.open(rendererConfig)) {
                 runRenderer(config, running, stats, window, renderer);
                 presentTotalFps = DemoTechnologyHud.presentTotalFps(renderer, stats);
                 requireHealthyRenderer(renderer);
             }
         } else {
-            try (Renderer renderer = RendererBootstrap.openExpertRenderer(rendererConfig)) {
+            try (Renderer renderer = RendererBootstrap.open(rendererConfig)) {
                 try (VulkanFramePresenter presenter = VulkanFramePresenter.open(
                         renderer,
                         VulkanFramePresenterConfig.builder()
@@ -145,7 +145,7 @@ public final class HexBallDemo {
             DemoConfig config,
             AtomicBoolean running,
             RenderStats stats,
-            RayTracingRenderer renderer,
+            Renderer renderer,
             VulkanFramePresenter presenter
     ) throws InterruptedException {
         presenter.pollEvents();
@@ -237,7 +237,7 @@ public final class HexBallDemo {
             DemoConfig config,
             AtomicBoolean running,
             RenderStats stats,
-            RayTracingRenderer renderer,
+            Renderer renderer,
             AtomicLong renderExtent,
             AtomicReference<RuntimeException> failure
     ) {
@@ -291,8 +291,8 @@ public final class HexBallDemo {
                         .environment(environment)
                         .antiAliasing(antiAliasing)
                         .build();
-                RayTracingRenderer.FrameSubmissionAttempt attempt = renderer.trySubmit(request);
-                if (attempt instanceof RayTracingRenderer.FrameSubmitted) {
+                Renderer.FrameSubmissionAttempt attempt = renderer.trySubmit(request);
+                if (attempt instanceof Renderer.FrameSubmitted) {
                     previousBatch = pendingBatch;
                     pendingBatch = null;
                     nextSequence = Math.addExact(nextSequence, 1L);
@@ -357,12 +357,12 @@ public final class HexBallDemo {
         }
     }
 
-    private static void requireHealthyRenderer(RayTracingRenderer renderer) {
+    private static void requireHealthyRenderer(Renderer renderer) {
         requireHealthyRenderer(renderer.health());
     }
 
     private static void requireHealthyRenderer(RendererHealth health) {
-        if (health.status() != RayTracingRenderer.Status.READY
+        if (health.status() != Renderer.Status.READY
                 || health.activeFailure().isPresent()
                 || !health.obligations().equals(RendererHealth.ResourceObligations.none())) {
             throw new IllegalStateException("renderer finished with unhealthy state: " + health);
@@ -374,7 +374,7 @@ public final class HexBallDemo {
             AtomicBoolean running,
             RenderStats stats,
             RenderWindow window,
-            RayTracingRenderer renderer
+            Renderer renderer
     ) throws InterruptedException {
         HexPhysics physics = new HexPhysics();
         DemoScene scene = new DemoScene();
@@ -409,7 +409,7 @@ public final class HexBallDemo {
             DemoConfig config,
             AtomicBoolean running,
             RenderStats stats,
-            RayTracingRenderer renderer,
+            Renderer renderer,
             HexPhysics physics,
             DemoScene scene,
             long initialRevision
@@ -483,7 +483,7 @@ public final class HexBallDemo {
     }
 
     private static void readFrames(
-            RayTracingRenderer renderer,
+            Renderer renderer,
             RenderWindow window,
             DemoConfig config,
             AtomicBoolean running,

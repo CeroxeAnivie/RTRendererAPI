@@ -32,7 +32,7 @@ public final class WorkloadExecutionEvidence {
     private final RenderWorkload.Mode mode;
     private final Outcome outcome;
     private final Reason reason;
-    private final Optional<RayTracingRenderer.FrameSubmissionResult> sceneSubmission;
+    private final Optional<Renderer.FrameSubmissionResult> sceneSubmission;
     private final Optional<CommandExecutionEvidence> graphicsExecution;
     private final String detail;
 
@@ -41,7 +41,7 @@ public final class WorkloadExecutionEvidence {
             RenderWorkload.Mode mode,
             Outcome outcome,
             Reason reason,
-            Optional<RayTracingRenderer.FrameSubmissionResult> sceneSubmission,
+            Optional<Renderer.FrameSubmissionResult> sceneSubmission,
             Optional<CommandExecutionEvidence> graphicsExecution,
             String detail
     ) {
@@ -77,9 +77,9 @@ public final class WorkloadExecutionEvidence {
 
     /** Creates evidence for successful retained-scene admission. */
     public static WorkloadExecutionEvidence sceneAccepted(
-            RayTracingRenderer.FrameSubmissionResult submission
+            Renderer.FrameSubmissionResult submission
     ) {
-        RayTracingRenderer.FrameSubmissionResult checked = Objects.requireNonNull(submission, "submission");
+        Renderer.FrameSubmissionResult checked = Objects.requireNonNull(submission, "submission");
         return new WorkloadExecutionEvidence(checked.frameSequence(), RenderWorkload.Mode.RAY_TRACING_SCENE,
                 Outcome.ACCEPTED, Reason.NONE, Optional.of(checked), Optional.empty(),
                 "retained ray-tracing scene workload admitted by its dedicated fast path");
@@ -112,10 +112,10 @@ public final class WorkloadExecutionEvidence {
 
     /** Creates evidence for a combined workload submitted in the declared RT-then-raster order. */
     public static WorkloadExecutionEvidence combined(
-            RayTracingRenderer.FrameSubmissionResult scene,
+            Renderer.FrameSubmissionResult scene,
             CommandExecutionEvidence graphics
     ) {
-        RayTracingRenderer.FrameSubmissionResult checkedScene = Objects.requireNonNull(scene, "scene");
+        Renderer.FrameSubmissionResult checkedScene = Objects.requireNonNull(scene, "scene");
         CommandExecutionEvidence checkedGraphics = Objects.requireNonNull(graphics, "graphics");
         if (checkedScene.frameSequence() != checkedGraphics.transactionSequence()) {
             throw new IllegalArgumentException("combined evidence lanes must share one sequence");
@@ -157,7 +157,7 @@ public final class WorkloadExecutionEvidence {
     public RenderWorkload.Mode mode() { return mode; }
     public Outcome outcome() { return outcome; }
     public Reason reason() { return reason; }
-    public Optional<RayTracingRenderer.FrameSubmissionResult> sceneSubmission() { return sceneSubmission; }
+    public Optional<Renderer.FrameSubmissionResult> sceneSubmission() { return sceneSubmission; }
     public Optional<CommandExecutionEvidence> graphicsExecution() { return graphicsExecution; }
     public String detail() { return detail; }
 }

@@ -26,7 +26,7 @@ Maven Central 是发布制品的唯一事实源。Git tag 只标识对应制品�
 
 | 层级          | 入口                                             | 调用方需要掌握                               |
 |-------------|------------------------------------------------|---------------------------------------|
-| 普通托管路径      | `RayTracingRenderer` + `CpuFrame`              | Java 生命周期、场景 revision、帧 sequence      |
+| 普通托管路径      | `Renderer` + `CpuFrame`              | Java 生命周期、场景 revision、帧 sequence      |
 | 高级渲染控制      | 配置、设备枚举、HDR、抗锯齿、诊断                             | 显存预算、帧并发、输出策略                         |
 | Vulkan 专家路径 | `renderer.extension(VulkanFrameInterop.class)` | 外部内存、队列所有权、semaphore、Win32 handle 所有权 |
 

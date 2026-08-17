@@ -6,7 +6,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import top.ceroxe.rt.renderer.api.FrameGenerationEvidence;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
+import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Entry;
@@ -31,12 +31,12 @@ final class DemoTechnologyHud {
     private DemoTechnologyHud() {
     }
 
-    static Snapshot capture(RayTracingRenderer renderer, DemoConfig config, RenderStats stats) {
+    static Snapshot capture(Renderer renderer, DemoConfig config, RenderStats stats) {
         return capture(renderer, config, stats, renderer.diagnostics());
     }
 
     static Snapshot capture(
-            RayTracingRenderer renderer,
+            Renderer renderer,
             DemoConfig config,
             RenderStats stats,
             RendererDiagnostics diagnostics
@@ -57,7 +57,7 @@ final class DemoTechnologyHud {
         );
     }
 
-    static double presentTotalFps(RayTracingRenderer renderer, RenderStats stats) {
+    static double presentTotalFps(Renderer renderer, RenderStats stats) {
         Objects.requireNonNull(renderer, "renderer");
         Objects.requireNonNull(stats, "stats");
         double nativeFps = stats.framesPerSecond();
@@ -103,7 +103,9 @@ final class DemoTechnologyHud {
     ) {
         Objects.requireNonNull(capabilities, "capabilities");
         Objects.requireNonNull(generation, "generation");
-        StringBuilder text = new StringBuilder(requireText(performanceLine, "performanceLine"));
+        StringBuilder text = new StringBuilder()
+                .append("RTRendererAPI ").append(DemoBuildInfo.version()).append('\n')
+                .append(requireText(performanceLine, "performanceLine"));
         for (TechnologyLine technology : TECHNOLOGIES) {
             text.append('\n').append(technology.label()).append(": ");
             if (capabilities.isEmpty()) {
@@ -136,8 +138,6 @@ final class DemoTechnologyHud {
         long presents = generation.proxyPresentCalls();
         double generatedFps = presents == 0L || !Double.isFinite(presentFps)
                 ? Double.NaN : generated * presentFps / presents;
-        double effectiveMultiplier = presents == 0L
-                ? Double.NaN : generation.effectivePresentationMultiplier();
         text.append(" | ")
                 .append(generation.configuredPresentationMultiplier())
                 .append("x | generated ");
@@ -146,13 +146,7 @@ final class DemoTechnologyHud {
         } else {
             text.append("N/A");
         }
-        text.append(" FPS | effective ");
-        if (Double.isFinite(effectiveMultiplier)) {
-            text.append(String.format(Locale.ROOT, "%.2f", effectiveMultiplier));
-        } else {
-            text.append("N/A");
-        }
-        text.append('x');
+        text.append(" FPS");
     }
 
     private static String performanceLine(

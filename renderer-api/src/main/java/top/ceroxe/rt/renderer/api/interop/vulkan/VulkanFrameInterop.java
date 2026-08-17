@@ -11,7 +11,7 @@ import java.util.concurrent.locks.LockSupport;
  * Opt-in Vulkan expert extension for zero-copy external-image consumption.
  *
  * <p>Ordinary applications should use the managed CPU-frame methods on
- * {@link top.ceroxe.rt.renderer.api.RayTracingRenderer}. Experts obtain this extension
+ * {@link top.ceroxe.rt.renderer.api.Renderer}. Experts obtain this extension
  * through {@code renderer.extension(VulkanFrameInterop.class)}; doing so makes every Vulkan
  * handle, layout, queue-family and explicit synchronization obligation locally visible.</p>
  */

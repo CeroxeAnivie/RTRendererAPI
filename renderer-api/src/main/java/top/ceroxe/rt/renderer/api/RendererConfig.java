@@ -9,7 +9,7 @@ import java.util.Objects;
  * does not change a public constructor descriptor or force applications to depend on argument
  * ordering.</p>
  */
-public final class RayTracingRendererConfig {
+public final class RendererConfig {
     /**
      * Default bounded frame concurrency.
      */
@@ -23,7 +23,7 @@ public final class RayTracingRendererConfig {
     private final boolean validationEnabled;
     private final boolean gpuTimingsEnabled;
     private final boolean cpuFrameReadbackEnabled;
-    private final RayTracingGpuDevice gpuDevice;
+    private final RendererGpuDevice gpuDevice;
     private final FrameOutputFormat frameOutputFormat;
     private final TemporalRenderingOptions temporalRendering;
     private final FrameReconstructionOptions frameReconstruction;
@@ -32,7 +32,7 @@ public final class RayTracingRendererConfig {
     private final DenoisingOptions denoising;
     private final RayTracingOptimizationOptions rayTracingOptimizations;
 
-    private RayTracingRendererConfig(Builder builder) {
+    private RendererConfig(Builder builder) {
         if (builder.maxFramesInFlight < MIN_MAX_FRAMES_IN_FLIGHT
                 || builder.maxFramesInFlight > MAX_MAX_FRAMES_IN_FLIGHT) {
             throw new IllegalArgumentException(
@@ -121,7 +121,7 @@ public final class RayTracingRendererConfig {
     /**
      * Returns whether every frame slot owns an asynchronous managed CPU-readback target.
      *
-     * <p>Enabled mode keeps {@link RayTracingRenderer#pollLatestCpuFrame()} allocation-stable on
+     * <p>Enabled mode keeps {@link Renderer#pollLatestCpuFrame()} allocation-stable on
      * the Vulkan side and never waits for the whole queue to become idle. Expert consumers that
      * exclusively import {@code VulkanFrameInterop} images may disable this policy to omit the
      * otherwise unnecessary image-to-buffer copy and host-visible frame ring.</p>
@@ -137,7 +137,7 @@ public final class RayTracingRendererConfig {
      *
      * @return selected GPU snapshot, or empty for backend selection policy
      */
-    public java.util.Optional<RayTracingGpuDevice> gpuDevice() {
+    public java.util.Optional<RendererGpuDevice> gpuDevice() {
         return java.util.Optional.ofNullable(gpuDevice);
     }
 
@@ -207,7 +207,7 @@ public final class RayTracingRendererConfig {
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
-        if (!(other instanceof RayTracingRendererConfig config)) return false;
+        if (!(other instanceof RendererConfig config)) return false;
         return maxFramesInFlight == config.maxFramesInFlight
                 && validationEnabled == config.validationEnabled
                 && gpuTimingsEnabled == config.gpuTimingsEnabled
@@ -233,7 +233,7 @@ public final class RayTracingRendererConfig {
 
     @Override
     public String toString() {
-        return "RayTracingRendererConfig[maxFramesInFlight=" + maxFramesInFlight
+        return "RendererConfig[maxFramesInFlight=" + maxFramesInFlight
                 + ", validationEnabled=" + validationEnabled
                 + ", gpuTimingsEnabled=" + gpuTimingsEnabled
                 + ", cpuFrameReadbackEnabled=" + cpuFrameReadbackEnabled
@@ -255,7 +255,7 @@ public final class RayTracingRendererConfig {
         private boolean validationEnabled;
         private boolean gpuTimingsEnabled = true;
         private boolean cpuFrameReadbackEnabled = true;
-        private RayTracingGpuDevice gpuDevice;
+        private RendererGpuDevice gpuDevice;
         private FrameOutputFormat frameOutputFormat = FrameOutputFormat.SDR_RGBA8;
         private TemporalRenderingOptions temporalRendering = TemporalRenderingOptions.balanced();
         private FrameReconstructionOptions frameReconstruction = FrameReconstructionOptions.disabled();
@@ -268,7 +268,7 @@ public final class RayTracingRendererConfig {
         private Builder() {
         }
 
-        private Builder(RayTracingRendererConfig source) {
+        private Builder(RendererConfig source) {
             maxFramesInFlight = source.maxFramesInFlight;
             validationEnabled = source.validationEnabled;
             gpuTimingsEnabled = source.gpuTimingsEnabled;
@@ -339,7 +339,7 @@ public final class RayTracingRendererConfig {
          * @param value enumerated RT-capable device snapshot
          * @return this builder
          */
-        public Builder gpuDevice(RayTracingGpuDevice value) {
+        public Builder gpuDevice(RendererGpuDevice value) {
             gpuDevice = Objects.requireNonNull(value, "gpuDevice");
             return this;
         }
@@ -436,8 +436,8 @@ public final class RayTracingRendererConfig {
          *
          * @return immutable validated configuration
          */
-        public RayTracingRendererConfig build() {
-            return new RayTracingRendererConfig(this);
+        public RendererConfig build() {
+            return new RendererConfig(this);
         }
     }
 }

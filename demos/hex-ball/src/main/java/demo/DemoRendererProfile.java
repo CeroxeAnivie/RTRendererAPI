@@ -8,7 +8,7 @@ import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.LowLatencyOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
@@ -26,11 +26,11 @@ final class DemoRendererProfile {
     private DemoRendererProfile() {
     }
 
-    static RayTracingRendererConfig interactive(DemoConfig config) {
+    static RendererConfig interactive(DemoConfig config) {
         return baseConfig(config.cpuPresentation() ? 4 : 3, config.cpuPresentation());
     }
 
-    static RayTracingRendererConfig benchmark() {
+    static RendererConfig benchmark() {
         return baseConfig(8, false);
     }
 
@@ -71,9 +71,9 @@ final class DemoRendererProfile {
                 : AntiAliasingState.multisampled(samplesPerPixel);
     }
 
-    private static RayTracingRendererConfig baseConfig(int maxFramesInFlight, boolean cpuReadback) {
+    private static RendererConfig baseConfig(int maxFramesInFlight, boolean cpuReadback) {
         DemoFeatureProfile profile = DemoFeatureProfile.configured();
-        RayTracingRendererConfig.Builder builder = RendererPreset.CPU_READBACK.configuration().copyBuilder()
+        RendererConfig.Builder builder = RendererPreset.CPU_READBACK.configuration().copyBuilder()
                 .maxFramesInFlight(maxFramesInFlight)
                 .gpuTimingsEnabled(true)
                 .cpuFrameReadbackEnabled(cpuReadback)
@@ -84,8 +84,8 @@ final class DemoRendererProfile {
         }).build();
     }
 
-    private static RayTracingRendererConfig.Builder generationOnly(
-            RayTracingRendererConfig.Builder builder
+    private static RendererConfig.Builder generationOnly(
+            RendererConfig.Builder builder
     ) {
         // A single-variable generation lane keeps every unrelated optional path disabled.
         return builder.temporalRendering(TemporalRenderingOptions.disabled())
@@ -96,8 +96,8 @@ final class DemoRendererProfile {
                 .rayTracingOptimizations(RayTracingOptimizationOptions.disabled());
     }
 
-    private static RayTracingRendererConfig.Builder allExceptMfg(
-            RayTracingRendererConfig.Builder builder
+    private static RendererConfig.Builder allExceptMfg(
+            RendererConfig.Builder builder
     ) {
         if (Boolean.getBoolean(DISABLE_FRAME_GENERATION_PROPERTY)) {
             throw new IllegalArgumentException(

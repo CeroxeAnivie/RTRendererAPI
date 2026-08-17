@@ -2,25 +2,25 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 
 import java.util.HashSet;
 import java.util.List;
-import top.ceroxe.rt.renderer.api.RayTracingGpuDevice;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererGpuDevice;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
 import top.ceroxe.rt.renderer.api.RendererPreset;
 import top.ceroxe.rt.renderer.api.HardwareCapabilities;
-import top.ceroxe.rt.renderer.spi.RayTracingBackendProvider.Compatibility;
+import top.ceroxe.rt.renderer.spi.RendererBackendProvider.Compatibility;
 
 public final class VulkanGpuDeviceCatalogNativeSelfTest {
    private VulkanGpuDeviceCatalogNativeSelfTest() {
    }
 
    public static void main(String[] args) {
-      List<RayTracingGpuDevice> devices = RendererBootstrap.availableGpuDevices();
+      List<RendererGpuDevice> devices = RendererBootstrap.availableGpuDevices();
       if (devices.isEmpty()) {
          throw new AssertionError("no hardware RT GPU was exposed by the public catalog");
       } else {
          HashSet<String> identities = new HashSet<>();
 
-         for(RayTracingGpuDevice device : devices) {
+         for(RendererGpuDevice device : devices) {
             String details10001 = device.backendId();
             if (!identities.add(details10001 + "/" + device.stableId())) {
                throw new AssertionError("duplicate public GPU identity: " + device.stableId());
@@ -34,8 +34,8 @@ public final class VulkanGpuDeviceCatalogNativeSelfTest {
                throw new AssertionError("Vulkan device identity is not a 128-bit UUID: " + device.stableId());
             }
 
-            RayTracingRendererConfig selected = RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(device).build();
-            if ((new VulkanRayTracingBackendProvider()).probe(selected).compatibility() != Compatibility.COMPATIBLE) {
+            RendererConfig selected = RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(device).build();
+            if ((new VulkanRendererBackendProvider()).probe(selected).compatibility() != Compatibility.COMPATIBLE) {
                throw new AssertionError("fresh catalog device could not be selected: " + String.valueOf(device));
             }
          }

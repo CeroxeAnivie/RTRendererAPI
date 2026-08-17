@@ -2,19 +2,19 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
-import top.ceroxe.rt.renderer.api.RayTracingGpuDevice;
+import top.ceroxe.rt.renderer.api.Renderer;
+import top.ceroxe.rt.renderer.api.RendererConfig;
+import top.ceroxe.rt.renderer.api.RendererGpuDevice;
 import top.ceroxe.rt.renderer.api.HardwareCapabilities;
 import top.ceroxe.rt.renderer.api.FrameOutputFormat;
-import top.ceroxe.rt.renderer.spi.RayTracingBackendProvider;
+import top.ceroxe.rt.renderer.spi.RendererBackendProvider;
 import org.lwjgl.vulkan.VK10;
 
 import java.util.List;
 import java.util.Objects;
 
 /** Service-provider entry point for the standalone hardware Vulkan ray tracing backend. */
-public final class VulkanRayTracingBackendProvider implements RayTracingBackendProvider {
+public final class VulkanRendererBackendProvider implements RendererBackendProvider {
     private static final Descriptor DESCRIPTOR = Descriptor.builder("vulkan-rt")
             .priority(1_000)
             .apiMajor(API_MAJOR)
@@ -22,7 +22,7 @@ public final class VulkanRayTracingBackendProvider implements RayTracingBackendP
             .build();
 
     /** Creates the stateless Vulkan RT service provider discovered by {@link java.util.ServiceLoader}. */
-    public VulkanRayTracingBackendProvider() {
+    public VulkanRendererBackendProvider() {
     }
 
     @Override
@@ -31,12 +31,12 @@ public final class VulkanRayTracingBackendProvider implements RayTracingBackendP
     }
 
     @Override
-    public List<RayTracingGpuDevice> availableGpuDevices() {
+    public List<RendererGpuDevice> availableGpuDevices() {
         return publicDevices(VulkanRtCapabilityProbe.capture());
     }
 
     @Override
-    public ProbeResult probe(RayTracingRendererConfig configuration) {
+    public ProbeResult probe(RendererConfig configuration) {
         Objects.requireNonNull(configuration, "configuration");
         VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
         capability = selectConfiguredDevice(capability, configuration);
@@ -56,12 +56,12 @@ public final class VulkanRayTracingBackendProvider implements RayTracingBackendP
     }
 
     @Override
-    public RayTracingRenderer open(RayTracingRendererConfig configuration) {
-        RayTracingRendererConfig checked = Objects.requireNonNull(configuration, "configuration");
+    public Renderer open(RendererConfig configuration) {
+        RendererConfig checked = Objects.requireNonNull(configuration, "configuration");
         return new VulkanRendererHost(checked, () -> openSession(checked));
     }
 
-    private static VulkanRenderingSession openSession(RayTracingRendererConfig configuration) {
+    private static VulkanRenderingSession openSession(RendererConfig configuration) {
         VulkanRtCapabilityProbe.Result capability = selectConfiguredDevice(
                 VulkanRtCapabilityProbe.capture(), configuration);
         if (!capability.hardwareRayTracingReady()) {
@@ -77,25 +77,25 @@ public final class VulkanRayTracingBackendProvider implements RayTracingBackendP
 
     private static VulkanRtCapabilityProbe.Result selectConfiguredDevice(
             VulkanRtCapabilityProbe.Result capability,
-            RayTracingRendererConfig configuration
+            RendererConfig configuration
     ) {
-        RayTracingGpuDevice selected = configuration.gpuDevice().orElse(null);
+        RendererGpuDevice selected = configuration.gpuDevice().orElse(null);
         if (selected == null) return capability;
         if (!DESCRIPTOR.id().equals(selected.backendId())) {
             throw new IllegalArgumentException("selected GPU belongs to backend " + selected.backendId());
         }
         VulkanRtCapabilityProbe.Result selectedCapability = capability.select(selected.stableId());
-        RayTracingGpuDevice authoritative = toPublicDevice(selectedCapability.preferredDevice());
+        RendererGpuDevice authoritative = toPublicDevice(selectedCapability.preferredDevice());
         validateSelectedSnapshot(authoritative, selected);
         return selectedCapability;
     }
 
     static void validateSelectedSnapshot(
-            RayTracingGpuDevice authoritative,
-            RayTracingGpuDevice selected
+            RendererGpuDevice authoritative,
+            RendererGpuDevice selected
     ) {
-        RayTracingGpuDevice fresh = Objects.requireNonNull(authoritative, "authoritative");
-        RayTracingGpuDevice supplied = Objects.requireNonNull(selected, "selected");
+        RendererGpuDevice fresh = Objects.requireNonNull(authoritative, "authoritative");
+        RendererGpuDevice supplied = Objects.requireNonNull(selected, "selected");
         if (!fresh.equals(supplied)) {
             throw new IllegalArgumentException(
                     "selected GPU snapshot is stale or does not match the current hardware probe: "
@@ -104,11 +104,11 @@ public final class VulkanRayTracingBackendProvider implements RayTracingBackendP
         }
     }
 
-    private static List<RayTracingGpuDevice> publicDevices(VulkanRtCapabilityProbe.Result capability) {
+    private static List<RendererGpuDevice> publicDevices(VulkanRtCapabilityProbe.Result capability) {
         if (capability.failed()) return List.of();
         return capability.devices().stream()
                 .filter(VulkanRtCapabilityProbe.DeviceReport::hardwareRayTracingReady)
-                .map(VulkanRayTracingBackendProvider::toPublicDevice)
+                .map(VulkanRendererBackendProvider::toPublicDevice)
                 .toList();
     }
 
@@ -129,7 +129,7 @@ public final class VulkanRayTracingBackendProvider implements RayTracingBackendP
                 };
     }
 
-    static RayTracingGpuDevice toPublicDevice(VulkanRtCapabilityProbe.DeviceReport device) {
+    static RendererGpuDevice toPublicDevice(VulkanRtCapabilityProbe.DeviceReport device) {
         HardwareCapabilities.RayTracingLimits limits = HardwareCapabilities.RayTracingLimits.builder()
                 .maxRayRecursionDepth(device.maxRayRecursionDepth())
                 .shaderGroupHandleSize(device.shaderGroupHandleSize())
@@ -206,19 +206,19 @@ public final class VulkanRayTracingBackendProvider implements RayTracingBackendP
                 )
                 .reason("complete Vulkan physical-device capability probe")
                 .build();
-        return RayTracingGpuDevice.builder()
+        return RendererGpuDevice.builder()
                 .backendId(DESCRIPTOR.id())
                 .stableId(device.stableId())
                 .name(device.name())
                 .vendorId(device.vendorId())
                 .deviceId(device.deviceId())
                 .type(switch (device.deviceType()) {
-                    case VK10.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU -> RayTracingGpuDevice.Type.DISCRETE;
-                    case VK10.VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU -> RayTracingGpuDevice.Type.INTEGRATED;
-                    case VK10.VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU -> RayTracingGpuDevice.Type.VIRTUAL;
-                    default -> RayTracingGpuDevice.Type.OTHER;
+                    case VK10.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU -> RendererGpuDevice.Type.DISCRETE;
+                    case VK10.VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU -> RendererGpuDevice.Type.INTEGRATED;
+                    case VK10.VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU -> RendererGpuDevice.Type.VIRTUAL;
+                    default -> RendererGpuDevice.Type.OTHER;
                 })
-                .apiVersion(new RayTracingGpuDevice.ApiVersion(
+                .apiVersion(new RendererGpuDevice.ApiVersion(
                         VK10.VK_VERSION_MAJOR(device.apiVersion()),
                         VK10.VK_VERSION_MINOR(device.apiVersion()),
                         VK10.VK_VERSION_PATCH(device.apiVersion())

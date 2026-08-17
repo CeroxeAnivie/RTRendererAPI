@@ -13,7 +13,7 @@ import org.lwjgl.vulkan.EXTFullScreenExclusive;
 import org.lwjgl.vulkan.NVRayTracingInvocationReorder;
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RendererPreset;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
@@ -149,11 +149,11 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
             RendererRtDiagnostics diagnostics,
             boolean validationEnabled,
             boolean gpuTimingsEnabled,
-            RayTracingRendererConfig configuration
+            RendererConfig configuration
     ) {
         VulkanRtCapabilityProbe.Result checkedCapability = Objects.requireNonNull(capability, "capability");
         RendererRtDiagnostics checkedDiagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
-        RayTracingRendererConfig checkedConfiguration = Objects.requireNonNull(configuration, "configuration");
+        RendererConfig checkedConfiguration = Objects.requireNonNull(configuration, "configuration");
         if (!checkedCapability.hardwareRayTracingReady()) {
             throw new IllegalArgumentException("Vulkan device runtime requires hardware ray tracing support");
         }

@@ -1,8 +1,8 @@
 # Generic Rendering Semantics
 
-`1.1.0` keeps the 1.0.x retained scene API and adds an explicit command transaction path. The
-two paths are selected by their entry points. A missing scene field never turns a scene request
-into a command transaction, and a command transaction is never silently rewritten as a PBR scene.
+`2.0.0` has one `Renderer` surface with two explicit workload modes: retained scene and command
+transactions. A missing scene field never turns a scene request into a command transaction, and a
+command transaction is never silently rewritten as a PBR scene.
 
 ## Ordinary path
 
@@ -26,6 +26,12 @@ draws, multi-draws, fixed-count indirect draws, copies, and explicit barriers. C
 draws are rejected unless the backend advertises the corresponding Vulkan extension. Unsupported
 shader stages, vertex formats, multisample modes, layouts, and resource states fail closed during
 admission.
+
+`BindingType.COMBINED_IMAGE_SAMPLER` represents a single texture-view/sampler pair at one shader
+location. It maps directly to `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`; it is not an alias for
+adjacent sampled-texture and sampler slots. The Vulkan backend validates the SPIR-V descriptor
+shape before pipeline creation, so a binary using `OpTypeSampledImage` must declare this exact
+binding type and cannot be accepted through a split descriptor declaration.
 
 `OUTPUT_PRODUCED` is emitted only after the submission fence completes and names the first stored
 attachment resource. `RECORDED` is not GPU completion. Device loss changes the generic command lane

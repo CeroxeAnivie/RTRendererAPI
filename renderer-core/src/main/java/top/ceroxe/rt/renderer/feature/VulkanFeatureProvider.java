@@ -1,6 +1,6 @@
 package top.ceroxe.rt.renderer.feature;
 
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 
 /**
  * Service-provider boundary for optional Vulkan rendering technologies.
@@ -32,7 +32,7 @@ public interface VulkanFeatureProvider {
      * @param configuration immutable renderer configuration
      * @return non-null provider declaration
      */
-    VulkanFeatureRequirements requirements(RayTracingRendererConfig configuration);
+    VulkanFeatureRequirements requirements(RendererConfig configuration);
 
     /**
      * Releases provider-owned state created while producing pre-device requirements when the

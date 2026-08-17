@@ -5,7 +5,7 @@ import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.LowLatencyOptions;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RendererPreset;
@@ -82,7 +82,7 @@ public final class NvidiaProviderFaultIsolationSelfTest {
     }
 
     private static void preferredStreamlineFailureDoesNotOverwriteNativeSiblings() {
-        RayTracingRendererConfig configuration = configuration(
+        RendererConfig configuration = configuration(
                 RendererFeaturePreference.REQUIRED,
                 RendererFeaturePreference.REQUIRED,
                 RendererFeaturePreference.PREFERRED,
@@ -160,7 +160,7 @@ public final class NvidiaProviderFaultIsolationSelfTest {
         require(deviceFailure.closeOrder.equals(List.of("NRD:41")),
                 "device failure must roll back every earlier owner");
 
-        RayTracingRendererConfig requiredStreamline = configuration(
+        RendererConfig requiredStreamline = configuration(
                 RendererFeaturePreference.DISABLED,
                 RendererFeaturePreference.DISABLED,
                 RendererFeaturePreference.REQUIRED,
@@ -176,7 +176,7 @@ public final class NvidiaProviderFaultIsolationSelfTest {
         require(observedStreamline == streamlineFailure,
                 "required Streamline failure must escape unchanged");
 
-        RayTracingRendererConfig preferredStreamline = configuration(
+        RendererConfig preferredStreamline = configuration(
                 RendererFeaturePreference.DISABLED,
                 RendererFeaturePreference.DISABLED,
                 RendererFeaturePreference.PREFERRED,
@@ -267,7 +267,7 @@ public final class NvidiaProviderFaultIsolationSelfTest {
     }
 
     private static void fallbackOnlySnapshotContainsNoPhantomOwner() {
-        RayTracingRendererConfig configuration = configuration(
+        RendererConfig configuration = configuration(
                 RendererFeaturePreference.PREFERRED,
                 RendererFeaturePreference.PREFERRED,
                 RendererFeaturePreference.PREFERRED,
@@ -306,7 +306,7 @@ public final class NvidiaProviderFaultIsolationSelfTest {
     }
 
     private static void capabilitiesFollowActuallyOpenedOwners() {
-        RayTracingRendererConfig configuration = configuration(
+        RendererConfig configuration = configuration(
                 RendererFeaturePreference.PREFERRED,
                 RendererFeaturePreference.PREFERRED,
                 RendererFeaturePreference.DISABLED,
@@ -347,7 +347,7 @@ public final class NvidiaProviderFaultIsolationSelfTest {
         return active;
     }
 
-    private static RayTracingRendererConfig configuration(
+    private static RendererConfig configuration(
             RendererFeaturePreference nrd,
             RendererFeaturePreference rtxmu,
             RendererFeaturePreference reconstruction,

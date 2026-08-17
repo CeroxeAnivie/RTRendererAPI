@@ -16,7 +16,7 @@
 > **简介**
 >
 > RTRendererAPI 为 Java 桌面应用与引擎进程提供厂商中立、宿主无关的通用渲染语义契约。公共
-> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段；1.1.0 同时保留 retained RT 场景快速路径，
+> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段；2.0.0 同时保留 retained RT 场景快速路径，
 > 并提供显式资源、shader、binding、pipeline、render-pass、barrier、draw 和 external-frame 语义。
 > 应用只需依赖 `renderer-api`，即可获得后端发现、场景提交、通用 command transaction、异步 CPU 帧、
 > 官方 GPU presenter 与显式 Vulkan 专家互操作。Windows Vulkan 后端、LWJGL、对应 Windows natives
@@ -53,7 +53,7 @@
 | GPU 显示 | 官方 Vulkan swapchain presenter，无 CPU 图像回读 |
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
-> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `1.1.0` 当前后端实现范围。
+> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `2.0.0` 当前后端实现范围。
 > 兼容目标不是跨硬件验收结论；未执行的长时稳定性、跨硬件矩阵和特定宿主集成不在本版本声明为已通过。
 
 ---
@@ -68,7 +68,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>1.1.0</version>
+    <version>2.0.0</version>
 </dependency>
 ```
 
@@ -76,7 +76,7 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:1.1.0")
+    implementation("top.ceroxe.rt:renderer-api:2.0.0")
 }
 ```
 
@@ -92,7 +92,7 @@ import java.time.Duration;
 
 import top.ceroxe.rt.renderer.api.CameraState;
 import top.ceroxe.rt.renderer.api.CpuFrame;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
+import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
 import top.ceroxe.rt.renderer.api.RendererPreset;
@@ -100,7 +100,7 @@ import top.ceroxe.rt.renderer.api.SceneTransaction;
 
 public final class Main {
     public static void main(String[] args) throws Exception {
-        try (RayTracingRenderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
+        try (Renderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
             long sceneRevision = renderer.apply(SceneTransaction.empty(0L))
                     .acceptedSceneRevision();
 
@@ -121,7 +121,7 @@ public final class Main {
 }
 ```
 
-`RayTracingRenderer` 必须确定性关闭。场景 revision 与帧 sequence 必须严格递增；等待 API 始终有界，超时返回
+`Renderer` 必须确定性关闭。场景 revision 与帧 sequence 必须严格递增；等待 API 始终有界，超时返回
 `Optional.empty()`。完整资产、材质、实例与灯光流程见 [Java 开发指南](docs/Java.md)。
 
 ### 🖥️ 直接显示 GPU 帧
@@ -130,7 +130,7 @@ public final class Main {
 只有真正的外部 consumer 才进入 Win32 external-memory 协议。
 
 ```java
-try (RayTracingRenderer renderer = RendererBootstrap.open(RendererPreset.MANAGED_GPU_PRESENTATION);
+try (Renderer renderer = RendererBootstrap.open(RendererPreset.MANAGED_GPU_PRESENTATION);
      VulkanFramePresenter presenter = VulkanFramePresenter.open(
              renderer,
              VulkanFramePresenterConfig.builder()
@@ -158,7 +158,7 @@ try (RayTracingRenderer renderer = RendererBootstrap.open(RendererPreset.MANAGED
 fallback 保留基础渲染。`RendererPreset.MANAGED_GPU_PRESENTATION` 在同一策略上关闭 CPU readback，并在受支持时
 请求普通 FG 2x 与低延迟 pacing。MFG 永不自动开启。安装 vendor runtime 或匹配 GPU 名称本身不能产生 `ACTIVE`。
 
-专家模式仍使用同一个 `RayTracingRendererConfig.expertBuilder()`。Option value 是能力协商的唯一输入：
+专家模式仍使用同一个 `RendererConfig.expertBuilder()`。Option value 是能力协商的唯一输入：
 
 - `disabled()`：明确禁用该能力。
 - `PREFERRED`：能力不可用时按显式 fallback 降级，否则保留基础路径并报告 `NOT_SUPPORTED`。
@@ -205,7 +205,7 @@ if (generation.reported()) {
 `generatedFramesActuallyPresented` 是 provider/SDK 的累计呈现证据，不是显示器 scanout 测量。
 Capability 与 diagnostics 都是不可变时间点快照；长期监控必须重新查询。
 
-`RayTracingGpuDevice.hardwareCapabilities()` 只描述完整物理设备 probe 得到的厂商中立事实，
+`RendererGpuDevice.hardwareCapabilities()` 只描述完整物理设备 probe 得到的厂商中立事实，
 包括 RT prerequisites、limits、memory budget、timestamp，以及按 output format 和 native handle
 区分的 external memory/semaphore 证据。它不表示某项 DLSS、NRD 或 FG 技术已请求或已运行。
 
@@ -261,7 +261,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-1.1.0.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-2.0.0.jar `
   --width=2560 --height=1440 --spp=2
 ```
 
@@ -316,7 +316,7 @@ A：不一定。它是非阻塞轮询，空值通常表示当前没有可呈现�
 
 **Q：AMD、Intel 或 Linux 能运行吗？**
 
-A：不能把它们视为 `1.1.0` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
+A：不能把它们视为 `2.0.0` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
 
 ---
 

@@ -8,7 +8,7 @@ import top.ceroxe.rt.renderer.api.AntiAliasingState;
 import top.ceroxe.rt.renderer.api.CameraState;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.FramePrimitiveBatch;
-import top.ceroxe.rt.renderer.api.RayTracingRenderer;
+import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
@@ -25,7 +25,7 @@ final class DemoGpuBenchmark {
 
     static void run(DemoConfig config, AtomicBoolean running, RenderStats stats)
             throws InterruptedException {
-        try (Renderer renderer = RendererBootstrap.openExpertRenderer(DemoRendererProfile.benchmark())) {
+        try (Renderer renderer = RendererBootstrap.open(DemoRendererProfile.benchmark())) {
             VulkanFrameInterop interop = renderer.extension(VulkanFrameInterop.class)
                     .orElseThrow(() -> new IllegalStateException(
                             "Vulkan frame interop is unavailable for the GPU benchmark"));
@@ -56,8 +56,8 @@ final class DemoGpuBenchmark {
                         .environment(environment)
                         .antiAliasing(antiAliasing)
                         .build();
-                RayTracingRenderer.FrameSubmissionAttempt attempt = renderer.trySubmit(request);
-                if (attempt instanceof RayTracingRenderer.FrameSubmitted) {
+                Renderer.FrameSubmissionAttempt attempt = renderer.trySubmit(request);
+                if (attempt instanceof Renderer.FrameSubmitted) {
                     previousBatch = pendingBatch;
                     pendingBatch = null;
                     nextSequence = Math.addExact(nextSequence, 1L);
@@ -82,7 +82,7 @@ final class DemoGpuBenchmark {
 
     private static void awaitCompletion(
             VulkanFrameInterop interop,
-            RayTracingRenderer renderer,
+            Renderer renderer,
             RenderStats stats,
             long finalFrameSequence
     ) throws InterruptedException {
@@ -101,7 +101,7 @@ final class DemoGpuBenchmark {
 
     private static void discardReadyFrames(
             VulkanFrameInterop interop,
-            RayTracingRenderer renderer,
+            Renderer renderer,
             RenderStats stats
     ) {
         while (true) {
@@ -112,9 +112,9 @@ final class DemoGpuBenchmark {
         }
     }
 
-    private static void requireHealthy(RayTracingRenderer renderer) {
+    private static void requireHealthy(Renderer renderer) {
         RendererHealth health = renderer.health();
-        if (health.status() != RayTracingRenderer.Status.READY
+        if (health.status() != Renderer.Status.READY
                 || health.activeFailure().isPresent()
                 || !health.obligations().equals(RendererHealth.ResourceObligations.none())) {
             throw new IllegalStateException("renderer finished with unhealthy state: " + health);

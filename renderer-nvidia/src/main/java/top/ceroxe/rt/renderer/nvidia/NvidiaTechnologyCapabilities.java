@@ -2,7 +2,7 @@ package top.ceroxe.rt.renderer.nvidia;
 
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Entry;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Status;
@@ -19,12 +19,12 @@ final class NvidiaTechnologyCapabilities {
 
     static void declareRequirements(
             VulkanFeatureRequirements.Builder target,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaNativeBridge.Probe probe,
             NvidiaStreamlineRuntime.Preflight preflight
     ) {
         Objects.requireNonNull(target, "target");
-        RayTracingRendererConfig checked = Objects.requireNonNull(configuration, "configuration");
+        RendererConfig checked = Objects.requireNonNull(configuration, "configuration");
         declareReconstruction(target, checked.frameReconstruction(), preflight);
         declareFrameGeneration(target, checked.frameGeneration(), preflight);
         declareLowLatency(target, checked, preflight);
@@ -48,11 +48,11 @@ final class NvidiaTechnologyCapabilities {
 
     static void refineDeviceSupport(
             RenderingFeatureCapabilities.Builder target,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             Set<NvidiaStreamlineRuntime.Feature> executable
     ) {
         Objects.requireNonNull(target, "target");
-        RayTracingRendererConfig checked = Objects.requireNonNull(configuration, "configuration");
+        RendererConfig checked = Objects.requireNonNull(configuration, "configuration");
         Set<NvidiaStreamlineRuntime.Feature> features = Set.copyOf(executable);
         FrameReconstructionOptions reconstruction = checked.frameReconstruction();
         if (reconstruction.preference().requested()) {
@@ -88,12 +88,12 @@ final class NvidiaTechnologyCapabilities {
 
     static void declareSession(
             RenderingFeatureCapabilities.Builder target,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaNativeBridge.Probe probe,
             NvidiaStreamlineRuntime.Preflight preflight,
             Set<NvidiaStreamlineRuntime.Feature> executable
     ) {
-        RayTracingRendererConfig checked = Objects.requireNonNull(configuration, "configuration");
+        RendererConfig checked = Objects.requireNonNull(configuration, "configuration");
         if (preflight != null && preflight.ready()) {
             refineDeviceSupport(target, checked, executable);
         } else {
@@ -119,7 +119,7 @@ final class NvidiaTechnologyCapabilities {
 
     private static void declareBlockedStreamlineSession(
             RenderingFeatureCapabilities.Builder target,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaStreamlineRuntime.Preflight preflight
     ) {
         String reason = "Streamline preflight failed: "
@@ -224,7 +224,7 @@ final class NvidiaTechnologyCapabilities {
 
     private static void declareLowLatency(
             VulkanFeatureRequirements.Builder target,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             NvidiaStreamlineRuntime.Preflight preflight
     ) {
         if (!lowLatencyRequested(configuration)) return;
@@ -252,7 +252,7 @@ final class NvidiaTechnologyCapabilities {
     }
 
 
-    private static boolean lowLatencyRequested(RayTracingRendererConfig configuration) {
+    private static boolean lowLatencyRequested(RendererConfig configuration) {
         return configuration.lowLatency().preference().requested()
                 || configuration.frameGeneration().preference().requested();
     }

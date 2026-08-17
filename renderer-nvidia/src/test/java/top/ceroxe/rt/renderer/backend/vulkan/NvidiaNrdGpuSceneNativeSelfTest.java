@@ -6,7 +6,7 @@ import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameOutputFormat;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.HistoryResetReason;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
@@ -38,7 +38,7 @@ public final class NvidiaNrdGpuSceneNativeSelfTest {
         NvidiaGpuSceneNativeTestSupport.require(capability.preferredDevice().linearHdrRgba16fOutput(),
                 "NRD frame gate requires exportable RGBA16F output on the selected device");
 
-        RayTracingRendererConfig configuration = RayTracingRendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.expertBuilder()
                 .maxFramesInFlight(2)
                 .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F)
                 .frameGeneration(FrameGenerationOptions.disabled())
@@ -117,7 +117,7 @@ public final class NvidiaNrdGpuSceneNativeSelfTest {
 
     private static VulkanMemoryBudgetSnapshot verifyRecoveredDeviceSession(
             VulkanRtCapabilityProbe.Result capability,
-            RayTracingRendererConfig configuration
+            RendererConfig configuration
     ) throws Exception {
         VulkanGpuSceneRenderingSession session = VulkanGpuSceneRenderingSession.open(
                 capability, configuration, RendererRtDiagnostics.noop()
@@ -156,7 +156,7 @@ public final class NvidiaNrdGpuSceneNativeSelfTest {
 
     private static RenderedSequence renderTemporalSequence(
             VulkanRtCapabilityProbe.Result capability,
-            RayTracingRendererConfig configuration,
+            RendererConfig configuration,
             boolean combo,
             boolean dlssCombo
     ) throws Exception {

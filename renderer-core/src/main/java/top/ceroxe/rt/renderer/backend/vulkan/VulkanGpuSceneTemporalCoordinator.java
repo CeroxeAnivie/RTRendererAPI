@@ -1,7 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
-import top.ceroxe.rt.renderer.api.RayTracingRendererConfig;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.feature.VulkanTemporalFrameInput;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
@@ -14,11 +14,11 @@ import java.util.Set;
 
 /** Coordinates CPU temporal provenance and GPU ping-pong history as one transaction. */
 final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
-    private final RayTracingRendererConfig configuration;
+    private final RendererConfig configuration;
     private final TemporalHistoryTracker sourceHistory;
     private final VulkanTemporalHistory gpuHistory;
 
-    VulkanGpuSceneTemporalCoordinator(VulkanDeviceRuntime device, RayTracingRendererConfig configuration) {
+    VulkanGpuSceneTemporalCoordinator(VulkanDeviceRuntime device, RendererConfig configuration) {
         this.configuration = Objects.requireNonNull(configuration, "configuration");
         sourceHistory = new TemporalHistoryTracker(
                 configuration.temporalRendering(), vendorTemporalProvenanceRequested(configuration)
@@ -110,7 +110,7 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
     }
 
     private static boolean vendorTemporalProvenanceRequested(
-            RayTracingRendererConfig configuration
+            RendererConfig configuration
     ) {
         boolean temporalReconstruction = configuration.frameReconstruction()
                 .preference().requested()
