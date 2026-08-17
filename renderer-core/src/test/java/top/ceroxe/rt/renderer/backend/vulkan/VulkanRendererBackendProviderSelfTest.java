@@ -15,7 +15,9 @@ public final class VulkanRendererBackendProviderSelfTest {
    public static void main(String[] arguments) {
       RendererBackendProvider provider = (RendererBackendProvider)ServiceLoader.load(RendererBackendProvider.class).stream().map(ServiceLoader.Provider::get).filter((candidate) -> candidate.descriptor().id().equals("vulkan-rt")).findFirst().orElseThrow(() -> new AssertionError("vulkan-rt backend provider was not discovered"));
       RendererBackendProvider.Descriptor descriptor = provider.descriptor();
-      if (descriptor.apiMajor() == 1 && descriptor.priority() > 0) {
+      if (descriptor.apiMajor() == RendererBackendProvider.API_MAJOR
+              && descriptor.apiMinor() <= RendererBackendProvider.API_MINOR
+              && descriptor.priority() > 0) {
          verifyPublicFrameCapabilityGate();
          verifyAuthoritativeSelection();
          System.out.println("VulkanRendererBackendProviderSelfTest passed: " + String.valueOf(descriptor));

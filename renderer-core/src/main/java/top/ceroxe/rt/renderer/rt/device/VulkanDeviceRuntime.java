@@ -455,25 +455,41 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
         return bootstrap.properties().maxImageDimension2D();
     }
 
-    /** @return positive maximum number of descriptor sets in one pipeline layout */
+    /**
+     * Returns the positive maximum number of descriptor sets in one pipeline layout.
+     *
+     * @return descriptor-set limit
+     */
     public synchronized int maxBoundDescriptorSets() {
         requireOpen();
         return bootstrap.properties().maxBoundDescriptorSets();
     }
 
-    /** @return finite maximum sampler anisotropy advertised by the selected physical device */
+    /**
+     * Returns the finite maximum sampler anisotropy advertised by the selected physical device.
+     *
+     * @return sampler anisotropy limit
+     */
     public synchronized float maxSamplerAnisotropy() {
         requireOpen();
         return bootstrap.properties().maxSamplerAnisotropy();
     }
 
-    /** @return whether anisotropic sampling was enabled on the logical device */
+    /**
+     * Returns whether anisotropic sampling was enabled on the logical device.
+     *
+     * @return {@code true} when sampler anisotropy is enabled
+     */
     public synchronized boolean samplerAnisotropyEnabled() {
         requireOpen();
         return bootstrap.samplerAnisotropyEnabled();
     }
 
-    /** @return whether Vulkan dynamic rendering was enabled for this logical device */
+    /**
+     * Returns whether Vulkan dynamic rendering was enabled for this logical device.
+     *
+     * @return {@code true} when dynamic rendering is enabled
+     */
     public synchronized boolean dynamicRenderingEnabled() {
         requireOpen();
         return bootstrap.dynamicRenderingEnabled();
