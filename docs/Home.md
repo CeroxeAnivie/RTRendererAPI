@@ -6,9 +6,21 @@ RTRendererAPI 是一个以 JDK 25 构建、以 Java 21 字节码与运行时为�
 
 Maven Central 是发布制品的唯一事实源。Git tag 只标识对应制品的源码 provenance，不承载第二套 GitHub Release 二进制分发。
 
+## 阅读路线
+
+先按自己的角色选择一条路径，不需要从头阅读全部文档：
+
+| 你要完成的事 | 从这里开始 | 接下来阅读 |
+| --- | --- | --- |
+| 第一次渲染一帧或维护 retained scene | [Java 开发指南](Java) | [Java API 参考](Java-API-Reference) |
+| 保留已有 resource、shader 和 command 顺序 | [通用命令与硬件光追](Generic-Commands-and-Ray-Tracing) | [通用渲染语义参考](Generic-Rendering-Semantics) |
+| 消费 GPU frame 或管理 native synchronization | [Vulkan 专家互操作](Vulkan-Interop) | [Java API 参考](Java-API-Reference) |
+| 升级、发布或实现 provider | [兼容性与版本策略](COMPATIBILITY) | `CONTRIBUTING.md` |
+
 ## 入口
 
 - [Java 开发指南](Java)
+- [通用命令与硬件光追](Generic-Commands-and-Ray-Tracing)
 - [Java API 参考](Java-API-Reference)
 - [Vulkan 专家互操作](Vulkan-Interop)
 - [兼容性与版本策略](COMPATIBILITY)
@@ -27,24 +39,25 @@ Maven Central 是发布制品的唯一事实源。Git tag 只标识对应制品�
 | 层级          | 入口                                             | 调用方需要掌握                               |
 |-------------|------------------------------------------------|---------------------------------------|
 | 普通托管路径      | `Renderer` + `CpuFrame`              | Java 生命周期、场景 revision、帧 sequence      |
+| 通用命令与 RT 路径 | `submitResources` + `submitCommands` | resource generation、SPIR-V、同步与完成 evidence |
 | 高级渲染控制      | 配置、设备枚举、HDR、抗锯齿、诊断                             | 显存预算、帧并发、输出策略                         |
 | Vulkan 专家路径 | `renderer.extension(VulkanFrameInterop.class)` | 外部内存、队列所有权、semaphore、Win32 handle 所有权 |
 
 ## 构建与测试
 
-```cmd
+```powershell
 .\gradlew.bat check --dependency-verification=strict --no-daemon --console=plain
 ```
 
 完整硬件验收必须在符合支持范围的 RTX 主机上显式执行：
 
-```cmd
+```powershell
 .\gradlew.bat strictAcceptanceTest --dependency-verification=strict --no-daemon --console=plain
 ```
 
 ## 本地制品验证
 
-```cmd
+```powershell
 .\gradlew.bat verifyPublishedMavenConsumer --dependency-verification=strict --no-daemon --console=plain
 ```
 

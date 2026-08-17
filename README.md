@@ -32,7 +32,7 @@
 - ☕ **现代 Java API**：以 Java 21 为基线，提供不可变模型、Builder、类型化异常和确定性生命周期。
 - 🖼️ **两类托管输出**：支持异步 display-ready RGBA8 `CpuFrame` 与无 CPU 回读的官方 GPU presenter。
 - 🔗 **专家级 Vulkan 互操作**：支持 Win32 external memory lease，并可选 linear HDR RGBA16F。
-- 🧠 **分层渲染语义**：普通模式保持安全默认值；专家模式可显式提交资源、绑定、pipeline、pass、draw、barrier 与外部帧 consumer。
+- 🧠 **分层渲染语义**：普通模式保持安全默认值；专家模式可显式提交资源、绑定、pipeline、pass、draw、barrier、BLAS/TLAS、SBT、trace 与外部帧 consumer。
 - 🧩 **明确 workload discriminator**：`RenderWorkload` 区分 retained RT、generic raster command 和有序 RT/raster 组合，不根据缺失字段猜测意图。
 - 🧠 **显式 RTX 能力协商**：可独立请求 DLSS SR、DLAA、NIS、NRD、FG/MFG、Reflex/PCL、SER 与 RTXMU。
 - 🔎 **分层能力事实**：物理硬件、格式/handle 互操作、session 协商和真实执行状态互不混淆。
@@ -292,6 +292,7 @@ Streamline 与 RTXMU SDK。RTXMU 必须为官方 `v1.4` checkout 的固定 commi
 ## 📚 文档
 
 - [Java 开发指南](docs/Java.md)：完整场景、配置、背压、诊断与各 RTX 能力示例。
+- [通用命令与硬件光追](docs/Generic-Commands-and-Ray-Tracing.md)：资源 generation、通用 command transaction、BLAS/TLAS、SPIR-V、SBT、trace、完成证据与回收。
 - [Java API 参考](docs/Java-API-Reference.md)：公共类型与稳定契约。
 - [Vulkan 专家互操作](docs/Vulkan-Interop.md)：external memory、semaphore 与 queue ownership。
 - [兼容性与版本策略](docs/COMPATIBILITY.md)：SemVer、公共 API/SPI 边界、弃用与发布事实。

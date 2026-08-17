@@ -1,108 +1,97 @@
-# Generic Rendering Semantics
+# 通用渲染语义参考
 
-`3.0.0` has one `Renderer` surface with two explicit workload modes: retained scene and command
-transactions. A missing scene field never turns a scene request into a command transaction, and a
-command transaction is never silently rewritten as a PBR scene.
+本页定义 `3.0.0` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
+实现通用 RT 提交时，先阅读[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)；该指南
+提供由资源发布到 `TraceRaysCommand` 的完整最小流程，本页则说明每一步为什么成立。
 
-## Ordinary path
+## 两个明确工作负载
 
-Use `Renderer` scene methods when the application wants the renderer to own resource lifetime,
-frame pacing, and the retained ray-tracing scene. This path is intentionally small and remains the
-backward-compatible default.
+一个 `Renderer` 同时提供 retained-scene 与 command transaction 两条路径。`RenderWorkload.Mode` 是唯一
+的组合 discriminator；缺少 scene 字段不会把请求解释成 command transaction，command transaction 也不会被
+静默改写为 PBR scene。
 
-## Expert command path
+| 路径 | 适合的输入 | renderer 承担的职责 |
+| --- | --- | --- |
+| retained scene | 资产、PBR 材质、实例、灯光与相机 | 资源生命周期、帧节奏、保留式 RT scene |
+| command transaction | 已确定的 resource、shader、binding、pass 与顺序 | 精确 admission、Vulkan 映射、fence evidence |
 
-The expert path is:
+普通调用方应使用 retained-scene。专家路径不尝试分类或转换应用私有的材质、世界或 shader 语义。
 
-1. publish immutable `BufferResource` and `TextureResource` storage generations with `submitResources`;
-2. build an immutable `RenderCommandTransaction` with explicit sequence and command order;
-3. use `BeginRenderPassCommand`, a validated `GraphicsPipelineState`, explicit bindings and draw
-   commands, then `EndRenderPassCommand`;
-4. observe `CommandExecutionEvidence` until it reaches `GPU_COMPLETED` or `OUTPUT_PRODUCED`.
+## Command transaction 的顺序与同步
 
-The Vulkan backend records dynamic-rendering passes, typed attachment transitions, load/store and
-resolve operations, descriptor sets, push constants, vertex/index bindings, direct/indexed/instanced
-draws, multi-draws, fixed-count indirect draws, buffer/texture copies, buffer-image copies, color and
-depth/stencil clears, and explicit barriers. Buffer-image copies whose byte pitch cannot be represented
-by Vulkan texel units are rejected rather than rounded. Count-buffer indirect draws are rejected unless
-the backend advertises the corresponding Vulkan extension. Unsupported shader stages, vertex formats,
-multisample modes, layouts, and resource states fail closed during admission.
+专家提交按下列顺序建立：
 
-For one transaction, an earlier transfer write consumed later as a vertex, index, indirect, transfer, or
-AS-build input buffer read receives a submission-local Vulkan visibility dependency automatically. AS input
-uses the exact `TRANSFER_WRITE -> ACCELERATION_STRUCTURE_BUILD` edge; this does not create
-cross-submission readiness: a resource written by an earlier transaction must still have `GPU_READY`
-evidence. `ResourceBarrierCommand` remains necessary whenever the caller requires an explicit stage,
-access, layout, or ownership contract beyond that narrow automatic edge.
+1. 以 `submitResources(...)` 发布不可变的 `BufferResource`、`TextureResource` storage generation；
+2. 创建带严格递增 sequence 的不可变 `RenderCommandTransaction`；
+3. 录制 render pass、graphics/compute/RT pipeline、binding、draw/dispatch/trace 及显式资源操作；
+4. 通过 `CommandExecutionEvidence` 观察 `GPU_COMPLETED` 或 `OUTPUT_PRODUCED`。
 
-`BindingType.COMBINED_IMAGE_SAMPLER` represents a single texture-view/sampler pair at one shader
-location. It maps directly to `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`; it is not an alias for
-adjacent sampled-texture and sampler slots. The Vulkan backend validates the SPIR-V descriptor
-shape before pipeline creation, so a binary using `OpTypeSampledImage` must declare this exact
-binding type and cannot be accepted through a split descriptor declaration.
+Vulkan backend 可执行动态 rendering pass、attachment load/store/resolve、descriptor set、push constant、
+vertex/index binding、direct/indexed/instanced/multi/固定计数 indirect draw、buffer/texture copy、
+buffer-image copy、color/depth-stencil clear 与显式 barrier。无法用 Vulkan texel unit 精确表示 row pitch 的
+buffer-image copy 会被拒绝，count-buffer indirect draw 需要对应扩展。未支持的 shader stage、format、
+multisample、layout 与 resource state 同样在 admission 阶段 fail-closed。
 
-`OUTPUT_PRODUCED` is emitted only after the submission fence completes and names the first stored
-attachment resource. `RECORDED` is not GPU completion. Device loss changes the generic command lane
-to a terminal structured `DEVICE_LOST` state; callers must recreate the renderer according to the
-reported recovery action.
+同一 transaction 中，先前 transfer write 被随后 vertex/index/indirect/transfer/AS-build input 读取时，
+backend 会建立 submission-local visibility dependency；AS 输入使用精确的
+`TRANSFER_WRITE -> ACCELERATION_STRUCTURE_BUILD` edge。这不改变跨 transaction 规则：前一提交的写入
+仍须先达到 `GPU_READY`。调用方要求特定 stage/access/layout/queue ownership 时，必须使用
+`ResourceBarrierCommand` 明确表达。
 
-`ResourceVersion` identifies storage shape and declared usage, not every content update. A later write
-to a GPU-ready generation produces later fence-backed residency evidence. Retirement always names an
-exact `ResourceGenerationKey`; the API deliberately has no broad identity-retirement operation that
-could destroy a newer in-flight allocation.
+## Binding、完成与资源代际
 
-`ResourceMutationKey` identifies the command-sequence snapshot of that storage. It is the stable
-in-flight token for a completed or pending content write, rather than a `ByteBuffer` wrapper identity.
+`BindingType.COMBINED_IMAGE_SAMPLER` 表示一个 texture view/sampler pair，对应
+`VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`。它不是相邻 `SAMPLED_TEXTURE` 与 `SAMPLER` binding 的
+别名。SPIR-V validator 会核对 descriptor shape；使用 `OpTypeSampledImage` 的模块只能使用这一精确 binding
+类型，不能通过拆分 declaration 进入 backend。
 
-## Generic ray tracing command model
+`RECORDED` 仅表示 command 被记录，不表示 GPU 已完成。`OUTPUT_PRODUCED` 只会在提交 fence 完成后发布，
+并标识第一个 storage attachment resource。device loss 会将 command lane 置为结构化终态
+`DEVICE_LOST`，调用方必须按报告的 recovery action 重建 renderer。
 
-The command algebra can express BLAS/TLAS declarations and builds, explicit ray-tracing shader groups,
-pipeline binding, AS descriptors, and `TraceRaysCommand`. This is distinct from the retained scene path;
-it does not reinterpret raster GLSL or infer hit shaders from PBR materials.
+`ResourceVersion` 标识 buffer/texture storage shape 与 declared usage，不标识每次内容写入。对 GPU-ready
+generation 的后续写入产生新的 fence-backed mutation evidence。`ResourceMutationKey` 标识该 command sequence
+的内容快照，而不是 `ByteBuffer` wrapper identity。buffer/texture 回收只能指定精确
+`ResourceGenerationKey`，不存在能误删新 in-flight allocation 的宽泛 identity retirement。AS 不属于 resource
+transaction；其精确 generation 由 `DestroyAccelerationStructureCommand` 单独回收。
 
-On a Vulkan device that advertises these capabilities, the generic backend allocates BLAS/TLAS storage,
-uses device-addressable declared AS input buffers, bounds scratch and TLAS-instance allocations to the
-submitting fence, validates and compiles the supplied SPIR-V pipeline, packs its explicit groups into an
-aligned SBT, writes exact TLAS descriptors, and records `vkCmdTraceRaysKHR`. A trace output becomes
-`OUTPUT_PRODUCED` only after that submission fence completes. The result is GPU-completion evidence,
-not display visibility; constructing an RT command or observing `RECORDED` never proves either.
+## 通用硬件 RT command model
 
-An AS `UPDATE` requires the exact existing generation to be fence-idle. A transaction can build a BLAS
-and a TLAS that references it, then trace through that TLAS in command order; the backend inserts the
-AS-build-to-ray-shader dependency in the same command buffer. Missing exact resources, a non-addressable
-AS input, a stale TLAS descriptor, unsupported SPIR-V, invalid SBT layout, or an unresolved prior AS
-build fails closed at admission.
+command algebra 可表达 BLAS/TLAS declaration/build、显式 RT shader group、RT pipeline binding、AS descriptor
+和 `TraceRaysCommand`。它与 retained-scene 路径独立：不会把 raster GLSL 重新解释为 RT hit shader，也不会
+从 PBR material 猜测任意 shader 的 fog、discard、atlas、lightmap、blend 或屏幕依赖语义。
 
-`DestroyAccelerationStructureCommand` retires one exact AS generation only after all of its recorded
-build and trace uses have completed. It cannot be combined with a build or a descriptor use of that same
-AS in one transaction; this preserves bounded native ownership without a broad stable-identity destroy.
+设备声明对应 capability 为 `EXECUTABLE` 时，Vulkan backend 会：
 
-## Composition and presentation evidence
+- 分配 BLAS/TLAS storage，使用 device-addressable 的已声明 AS input buffer；
+- 将 scratch 与 TLAS instance allocation 的所有权约束到提交 fence；
+- 验证并创建提交的 SPIR-V pipeline，将显式 group 以对齐 SBT 记录；
+- 写入精确 TLAS descriptor，录制 `vkCmdTraceRaysKHR`；
+- 只在 trace submission fence 完成后发布 `OUTPUT_PRODUCED`。
 
-`FrameCompositionPlan` expresses ordered project-neutral source mutations and one exact target mutation.
-`FramePresentationEvidence` separates `GPU_COMPLETED`, `CONSUMER_ACCEPTED`, and `VISIBLE`; a fence never
-proves display visibility. The current Vulkan generic backend does not yet consume composition plans or
-publish visible-present evidence. It therefore reports `FRAME_COMPOSITION` and
-`FRAME_PRESENTATION_EVIDENCE` as `UNSUPPORTED`; callers must not infer consumer acceptance or visibility
-from generic command evidence.
+`UPDATE` 必须引用同一且 fence-idle 的 AS generation。一个 transaction 可以依次 build BLAS、build 引用它
+的 TLAS、再 trace；backend 会加入 AS-build 到 ray-shader 的依赖。缺失资源、不可寻址输入、stale TLAS descriptor、
+不支持的 SPIR-V、无效 SBT layout 或未解决的先前 build 都会使 admission 失败。
 
-## Explicit RT/raster composition
+`DestroyAccelerationStructureCommand` 仅在所有相关 build/trace use 已完成后回收一个精确 AS generation；它
+不能与同一个 AS 的 build 或 descriptor use 出现在一个 transaction 中。
 
-`RenderWorkload` is the composition discriminator. A combined workload must carry one identical
-sequence in both its retained scene frame and its command transaction. The Vulkan provider exposes
-`COMBINED_WORKLOADS` only when both lanes are present and routes the retained RT submission first,
-followed by the raster transaction through the same frame-queue submission authority. The returned
-`WorkloadExecutionEvidence` retains both lane records; a deferred or rejected raster lane is not
-reported as a successful combined workload. Providers without a real ordered composition path
-return `UNSUPPORTED_COMBINATION`.
+## Composition、显示与互操作
 
-## Interop boundary
+`FrameCompositionPlan` 表达项目无关的有序 source mutation 与一个精确 target mutation。
+`FramePresentationEvidence` 区分 `GPU_COMPLETED`、`CONSUMER_ACCEPTED` 与 `VISIBLE`；renderer fence 不能证明
+可见显示。当前 generic Vulkan backend 尚不消费 composition plan 或发布 visible-present evidence，因此将
+`FRAME_COMPOSITION` 与 `FRAME_PRESENTATION_EVIDENCE` 报告为 `UNSUPPORTED`，调用方不得从 command evidence
+反推 consumer acceptance 或 visibility。
 
-`renderer-api` defines the project-independent `ExternalFrameConsumer` negotiation and lease
-contract. The Vulkan provider exposes a narrow adapter over the existing
-`VulkanFrameInterop/GpuFrameLease` ABI, preserving both APIs. The adapter advertises only the
-CPU-observed completion contract currently proven by the producer; unsupported acquire signals,
-formats, or completion mechanisms fail closed. CPU readback, managed presentation, and external
-zero-copy each have distinct ownership and completion rules.
+`RenderWorkload` 的 combined mode 要求 retained RT frame 与 command transaction 使用相同 sequence。Vulkan
+provider 只有在两条 lane 都存在时才声明 `COMBINED_WORKLOADS`，并通过同一 frame-queue authority 先提交 retained
+RT、再提交 raster transaction。返回的 `WorkloadExecutionEvidence` 保留两条 lane 的独立记录；任一 lane deferred
+或 rejected 都不会被包装为成功组合。没有真实有序组合路径的 provider 返回 `UNSUPPORTED_COMBINATION`。
 
-No public type assumes a game, engine, vendor, or window-system-specific material model.
+`renderer-api` 还定义了项目无关的 `ExternalFrameConsumer` negotiation/lease contract。Vulkan provider 在现有
+`VulkanFrameInterop/GpuFrameLease` ABI 上提供窄适配，只宣称 producer 已实际证明的 CPU-observed completion。
+不支持的 acquire signal、format 或 completion mechanism 会 fail-closed。CPU readback、官方 managed presentation
+与 external zero-copy 是三条不同的 ownership/completion 路径。
+
+公共类型不包含游戏、引擎、厂商或窗口系统专用的材质模型。

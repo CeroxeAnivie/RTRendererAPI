@@ -7,6 +7,7 @@
 ## 目录
 
 - [RendererBootstrap](#rendererbootstrap)
+- [通用 command path](#通用-command-path)
 - [Renderer](#renderer)
 - [RendererConfig](#rendererconfig)
 - [场景与帧](#场景与帧)
@@ -15,7 +16,7 @@
 - [运行期功能控制](#运行期功能控制)
 - [官方 Vulkan presenter](#官方-vulkan-presenter)
 - [Vulkan 专家扩展](#vulkan-专家扩展)
-- [通用渲染语义](#通用渲染语义)
+- [通用命令与硬件光追](#通用命令与硬件光追)
 
 ## RendererBootstrap
 
@@ -32,7 +33,7 @@ public final class RendererBootstrap
 | `open(String, RendererConfig)` | `Renderer` | 专家模式；按 provider id 打开，用于确定性部署或诊断 |
 | `availableGpuDevices()` | `List<RendererGpuDevice>` | 返回通过 provider 探测得到的不可变设备列表 |
 
-## Renderer
+## 通用 command path
 
 ```java
 public interface Renderer extends AutoCloseable
@@ -57,12 +58,16 @@ discriminator；直接使用 `apply/trySubmit` 或 `submitCommands` 时，调用
 `SAMPLED_TEXTURE` 与 `SAMPLER` 的便利组合；shader reflection、binding layout 和 binding set 都必须使用
 同一精确类别。
 
-### 通用渲染语义
+### 通用命令与硬件光追
 
-`3.0.0` 的 command path 语义、Vulkan 后端支持边界和证据规则见
-[Generic-Rendering-Semantics.md](Generic-Rendering-Semantics.md)。这条路径真实消费 graphics
-pipeline、attachment、binding 和 draw 命令；未被后端支持的 shader、格式或同步要求会在 admission
-阶段拒绝，不会降级成固定 PBR 场景。
+专家入口先使用 `renderingSemanticCapabilities()` 确认必需语义为 `EXECUTABLE`，再依次调用
+`submitResources(...)` 与 `submitCommands(...)`。资源的 accepted、写入 recorded、GPU ready、
+retirement 与 command output 都是不同的类型化 evidence，不能由构造成功或日志推断。
+
+[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md) 提供完整顺序：资源发布、
+同 transaction 的上传与 BLAS/TLAS build、SPIR-V reflection、RT pipeline/SBT、typed AS binding、
+`TraceRaysCommand`、完成轮询和精确 retirement。后端不把 graphics shader 猜测性转换成 PBR 或
+RT hit shader；不能精确执行的 shader、格式或同步要求会在 admission 阶段拒绝。
 
 ## Renderer
 
@@ -88,7 +93,7 @@ public interface Renderer extends AutoCloseable
 | `awaitClosed(Duration)` | `boolean` | 请求关闭并有界等待真实资源释放；超时返回 `false` |
 
 `FrameSubmissionDeferred.deferralReason()` 和 `SubmissionRejectedException.deferralReason()` 返回稳定的
-`SubmissionDeferralReason`，用于重试策略和遥测聚合；`detail()` 仅用于人类诊断。1.0 provider
+`SubmissionDeferralReason`，用于重试策略和遥测聚合；`detail()` 仅用于人类诊断。所有 provider
 必须提供类型化分类，API 不从自然语言猜测类别。
 
 ## RendererPreset

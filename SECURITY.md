@@ -2,11 +2,12 @@
 
 ## 支持版本
 
-RTRendererAPI `1.x` 是稳定 API 线。当前 major 仅为最新 patch 版本提供安全修复。Maven Central 上的旧制品保持不可变；报告缺陷前应先升级到最新 patch。
+RTRendererAPI `3.x` 是当前稳定 API 线。每个仍受支持的 major 仅为其最新 patch 提供安全修复。
+Maven Central 上的制品不可变；报告缺陷前请先确认已升级到相应 major 的最新 patch。
 
 | 版本 | 安全修复状态 |
 | --- | --- |
-| `1.x` | 仅支持最新 patch |
+| `3.x` | 仅支持最新 patch |
 | `< 1.0` | 不支持 |
 
 ## 报告安全漏洞

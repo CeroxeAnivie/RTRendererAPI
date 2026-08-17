@@ -41,10 +41,12 @@ try (Renderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
 
 ## 通用命令语义：专家入口
 
-`Renderer` 是 2.0 唯一的公共入口。retained-scene 快速路径与版本化资源、严格有序的
+`Renderer` 是 3.0 的唯一公共入口。retained-scene 快速路径与版本化资源、严格有序的
 `RenderCommandTransaction` 共存于同一实例；`RenderWorkload.Mode` 或被直接调用的提交方法明确
 选择语义，两种输入不会相互猜测或转换。普通调用方继续使用 `RendererPreset` 与
-`SceneTransaction`。只有需要保留既有图形提交语义的宿主才应使用 command path。
+`SceneTransaction`。只有需要保留既有图形提交语义的宿主才应使用 command path。完整学习顺序、
+通用 RT 最小事务、SPIR-V/SBT 规则、错误处理和 retirement 边界见
+[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)。
 
 ```java
 try (Renderer renderer = RendererBootstrap.open(

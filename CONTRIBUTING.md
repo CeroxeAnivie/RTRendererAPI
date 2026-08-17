@@ -1,31 +1,34 @@
-# Contributing
+# 贡献指南
 
-## Before opening a pull request
+## 提交 Pull Request 前
 
-Use JDK 25 to build the Java 21 public ABI and the checked-in Gradle wrapper. Keep changes within one ownership boundary and do not update ABI baselines to hide an unexplained difference.
+使用 JDK 25、仓库内 Gradle Wrapper 构建 Java 21 公共 ABI。一次改动应保持在一个明确的
+ownership boundary 内；不得通过更新 ABI baseline 掩盖尚未解释的二进制差异。
 
 ```powershell
 .\gradlew.bat clean check assemble --dependency-verification=strict --no-daemon --console=plain
 ```
 
-Native RTX acceptance requires the documented SDK roots and a trusted Windows RTX runner. Fork pull requests must not execute on the self-hosted GPU runner; merge queue or a maintainer-owned branch supplies that gate.
+native RTX 验收需要文档规定的 SDK 根目录和可信 Windows RTX runner。来自 fork 的 Pull Request 不得在
+self-hosted GPU runner 上执行；该门禁仅由 merge queue 或维护者拥有的分支触发。
 
-## API changes
+## 公共 API 变更
 
-- Preserve the compatibility levels in `docs/COMPATIBILITY.md`.
-- Add public methods through builders, new types or interface default methods when required for binary compatibility within the active major.
-- Add contract tests for empty, invalid, concurrent, cancellation and cleanup paths affected by the change.
-- Update the checked-in ABI baseline only after reviewing the public binary diff for the active major.
-- Never describe an implementation as active without typed execution evidence.
+- 遵守 `docs/COMPATIBILITY.md` 中的兼容级别与版本策略。
+- 在当前 major 内需要二进制兼容时，优先通过 builder、新类型或 interface default method 增加公共能力。
+- 为改动覆盖的空输入、非法输入、并发、取消和清理路径补充 contract test。
+- 只有审查过当前 major 的公共二进制差分后，才能更新版本化 ABI baseline。
+- 没有类型化 execution evidence 时，不得把实现描述为 active。
 
-## Pull requests
+## Pull Request 内容
 
-Explain the root cause, behavioral contract, failure/rollback behavior, and verification performed. Generated files, local SDK paths, credentials, downloaded tools and build outputs must not be committed. Security-sensitive reports follow `SECURITY.md`, not the public review flow.
+说明根因、行为契约、失败/回滚行为与已执行验证。不得提交生成文件、本地 SDK 路径、凭据、下载工具或构建输出。
+安全敏感问题遵循 `SECURITY.md`，不进入公开 review 流程。
 
-## Release flow
+## 发布流程
 
-1. Select a SemVer version and update all checked version facts.
-2. Pass deterministic checks, current-major ABI verification, published-consumer verification and bounded RTX acceptance.
-3. Build and verify the signed Central Portal bundle.
-4. Publish through Maven Central and confirm all three modules are available.
-5. Create the matching annotated `vMAJOR.MINOR.PATCH` source tag. GitHub Releases are not a binary distribution channel for this project.
+1. 选择 SemVer 版本并同步全部版本事实。
+2. 通过确定性检查、当前 major ABI 验证、published-consumer 验证和有界 RTX 验收。
+3. 构建并验证已签名的 Central Portal bundle。
+4. 通过 Maven Central 发布，并确认三个模块均可解析。
+5. 创建对应的 annotated `vMAJOR.MINOR.PATCH` 源码 tag。GitHub Releases 不是本项目的二进制分发渠道。
