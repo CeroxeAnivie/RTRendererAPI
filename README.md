@@ -15,11 +15,12 @@
 
 > **简介**
 >
-> RTRendererAPI 为 Java 桌面应用与引擎进程提供厂商中立、宿主无关的光线追踪契约。公共 `renderer-api`
-> 不包含游戏、引擎或 NVIDIA 专用场景字段；当前随 1.0.3 发布的实现范围是 Windows NVIDIA Vulkan RT。
-> 应用只需依赖 `renderer-api`，即可获得后端发现、场景提交、异步 CPU 帧、官方 GPU presenter 与显式
-> Vulkan 专家互操作。Windows Vulkan 后端、LWJGL、对应 Windows natives 与 NVIDIA provider 均通过
-> Maven 传递依赖解析，无需手工部署 DLL。
+> RTRendererAPI 为 Java 桌面应用与引擎进程提供厂商中立、宿主无关的通用渲染语义契约。公共
+> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段；1.1.0 同时保留 retained RT 场景快速路径，
+> 并提供显式资源、shader、binding、pipeline、render-pass、barrier、draw 和 external-frame 语义。
+> 应用只需依赖 `renderer-api`，即可获得后端发现、场景提交、通用 command transaction、异步 CPU 帧、
+> 官方 GPU presenter 与显式 Vulkan 专家互操作。Windows Vulkan 后端、LWJGL、对应 Windows natives
+> 与 NVIDIA provider 均通过 Maven 传递依赖解析，无需手工部署 DLL。
 >
 > **推荐场景**：Java 桌面渲染器、离屏光追、实时 RTX 预览、已有 Vulkan 管线的 GPU 帧集成。
 
@@ -31,6 +32,8 @@
 - ☕ **现代 Java API**：以 Java 21 为基线，提供不可变模型、Builder、类型化异常和确定性生命周期。
 - 🖼️ **两类托管输出**：支持异步 display-ready RGBA8 `CpuFrame` 与无 CPU 回读的官方 GPU presenter。
 - 🔗 **专家级 Vulkan 互操作**：支持 Win32 external memory lease，并可选 linear HDR RGBA16F。
+- 🧠 **分层渲染语义**：普通模式保持安全默认值；专家模式可显式提交资源、绑定、pipeline、pass、draw、barrier 与外部帧 consumer。
+- 🧩 **明确 workload discriminator**：`RenderWorkload` 区分 retained RT、generic raster command 和有序 RT/raster 组合，不根据缺失字段猜测意图。
 - 🧠 **显式 RTX 能力协商**：可独立请求 DLSS SR、DLAA、NIS、NRD、FG/MFG、Reflex/PCL、SER 与 RTXMU。
 - 🔎 **分层能力事实**：物理硬件、格式/handle 互操作、session 协商和真实执行状态互不混淆。
 - 🔁 **事务式功能变更**：专家 controller 先给出精确同步或 rebuild 边界，只有 `APPLIED` 才表示提交成功。
@@ -50,7 +53,8 @@
 | GPU 显示 | 官方 Vulkan swapchain presenter，无 CPU 图像回读 |
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
-> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `1.0.3` 发布范围。兼容目标不是实机验收结论；本文不把尚未运行的 1.0.3 GPU smoke、特定宿主集成或跨硬件验证声明为已通过。
+> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `1.1.0` 当前后端实现范围。
+> 兼容目标不是跨硬件验收结论；未执行的长时稳定性、跨硬件矩阵和特定宿主集成不在本版本声明为已通过。
 
 ---
 
@@ -64,7 +68,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>1.0.3</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
@@ -72,7 +76,7 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:1.0.3")
+    implementation("top.ceroxe.rt:renderer-api:1.1.0")
 }
 ```
 
@@ -257,7 +261,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-1.0.3.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-1.1.0.jar `
   --width=2560 --height=1440 --spp=2
 ```
 
@@ -312,7 +316,7 @@ A：不一定。它是非阻塞轮询，空值通常表示当前没有可呈现�
 
 **Q：AMD、Intel 或 Linux 能运行吗？**
 
-A：不能把它们视为 `1.0.3` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
+A：不能把它们视为 `1.1.0` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
 
 ---
 

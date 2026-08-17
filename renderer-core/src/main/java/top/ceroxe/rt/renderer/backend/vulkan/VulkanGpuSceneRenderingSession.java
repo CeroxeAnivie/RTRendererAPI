@@ -25,7 +25,7 @@ import java.util.ArrayList;
 import java.util.Objects;
 
 /** Production session joining persistent GPUScene convergence to bounded hardware RT frames. */
-final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
+final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, VulkanGenericCommandRuntimeProvider {
     private static final String FRAME_TIMING_LABEL = "gpuSceneFrame";
 
     private final RayTracingRendererConfig configuration;
@@ -171,6 +171,11 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession {
     @Override
     public String gpuStableId() {
         return gpuStableId;
+    }
+
+    @Override
+    public VulkanDeviceRuntime genericCommandRuntime() {
+        return scene.device();
     }
 
     @Override

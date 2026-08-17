@@ -9,10 +9,30 @@ plugins {
 description = "Interactive hex-ball sample and GPU smoke workload for RTRendererAPI."
 
 dependencies {
-    // The runnable sample is also the clean-consumer path: cloning the repository and running
-    // this module must not require the native SDK toolchain used to build renderer-nvidia.
-    // renderer-api publishes the complete runtime graph, including the packaged NVIDIA DLLs.
-    implementation("top.ceroxe.rt:renderer-api:${rootProject.version}")
+    // The in-repository smoke must exercise the exact source revision being released. Published
+    // consumer verification remains a separate Central-resolution gate, so this test module never
+    // accidentally validates an older artifact with the same public API shape.
+    implementation(project(":renderer-api"))
+}
+
+// renderer-api deliberately publishes the NVIDIA runtime as a Maven dependency so external
+// consumers need one coordinate. A repository-local smoke must instead exercise this checkout's
+// unreleased runtime, never fail by asking Central for the version currently under test.
+configurations.named("runtimeClasspath") {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("${rootProject.group}:renderer-nvidia:${rootProject.version}"))
+            .using(project(":renderer-nvidia"))
+    }
+}
+
+// Executable contract tests resolve their own test runtime graph. Keep the same
+// repository-local substitution there so an unreleased project version never
+// leaks into a Central lookup during this composite build.
+configurations.named("testRuntimeClasspath") {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("${rootProject.group}:renderer-nvidia:${rootProject.version}"))
+            .using(project(":renderer-nvidia"))
+    }
 }
 
 val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version")

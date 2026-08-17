@@ -1,0 +1,24 @@
+package top.ceroxe.rt.renderer.api;
+
+/** Source or destination factor used by color attachment blending. */
+public enum BlendFactor {
+    ZERO,
+    ONE,
+    SOURCE_COLOR,
+    ONE_MINUS_SOURCE_COLOR,
+    DESTINATION_COLOR,
+    ONE_MINUS_DESTINATION_COLOR,
+    SOURCE_ALPHA,
+    ONE_MINUS_SOURCE_ALPHA,
+    DESTINATION_ALPHA,
+    ONE_MINUS_DESTINATION_ALPHA,
+    CONSTANT_COLOR,
+    ONE_MINUS_CONSTANT_COLOR,
+    CONSTANT_ALPHA,
+    ONE_MINUS_CONSTANT_ALPHA,
+    SOURCE_ALPHA_SATURATE,
+    SOURCE1_COLOR,
+    ONE_MINUS_SOURCE1_COLOR,
+    SOURCE1_ALPHA,
+    ONE_MINUS_SOURCE1_ALPHA
+}

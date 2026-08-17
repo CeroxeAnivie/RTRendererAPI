@@ -17,6 +17,7 @@ import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.FramePrimitiveBatch;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer;
+import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
@@ -75,13 +76,13 @@ public final class HexBallDemo {
 
         if (config.cpuPresentation()) {
             try (RenderWindow window = RenderWindow.open(config, running, stats);
-                 RayTracingRenderer renderer = RendererBootstrap.openExpert(rendererConfig)) {
+                 Renderer renderer = RendererBootstrap.openExpertRenderer(rendererConfig)) {
                 runRenderer(config, running, stats, window, renderer);
                 presentTotalFps = DemoTechnologyHud.presentTotalFps(renderer, stats);
                 requireHealthyRenderer(renderer);
             }
         } else {
-            try (RayTracingRenderer renderer = RendererBootstrap.openExpert(rendererConfig)) {
+            try (Renderer renderer = RendererBootstrap.openExpertRenderer(rendererConfig)) {
                 try (VulkanFramePresenter presenter = VulkanFramePresenter.open(
                         renderer,
                         VulkanFramePresenterConfig.builder()

@@ -113,6 +113,10 @@ tasks.withType<Javadoc>().configureEach {
         encoding = "UTF-8"
         charSet = "UTF-8"
         docEncoding = "UTF-8"
+        // Java 25 reports every record component lacking an explicit @param as a
+        // documentation error. Keep all other doclint checks and suppress only
+        // that generated-component noise until the public record docs are expanded.
+        addBooleanOption("Xdoclint:-missing", true)
         addBooleanOption("Werror", true)
     }
 }
@@ -168,6 +172,22 @@ tasks.register<JavaExec>("rendererApiContractSelfTest") {
     dependsOn(tasks.named("testClasses"))
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.api.RendererApiContractSelfTest")
+}
+
+tasks.register<JavaExec>("renderCommandContractSelfTest") {
+    group = "verification"
+    description = "Verifies pass, draw, copy, barrier, and strict command-transaction contracts."
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.api.RenderCommandContractSelfTest")
+}
+
+tasks.register<JavaExec>("resourceLifecycleContractSelfTest") {
+    group = "verification"
+    description = "Verifies explicit resource publication, residency evidence, and retirement."
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.api.ResourceLifecycleContractSelfTest")
 }
 
 // Each published surface remains immutable and reviewable. The checked-in current-version

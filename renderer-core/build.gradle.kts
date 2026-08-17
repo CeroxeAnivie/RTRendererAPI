@@ -253,6 +253,7 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanGpuSceneHeavySceneBenchmark" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneHeavySceneBenchmark",
     "coreVulkanRendererHostSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererHostSelfTest",
     "coreVulkanGpuFrameLeaseSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuFrameLeaseSelfTest",
+    "coreVulkanExternalFrameConsumerAdapterSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanExternalFrameConsumerAdapterSelfTest",
     "coreVulkanTextOverlayRasterizerSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanTextOverlayRasterizerSelfTest",
     "coreVulkanRayTracingBackendProviderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRayTracingBackendProviderSelfTest"
 )
@@ -302,6 +303,7 @@ tasks.named("check") {
 }
 
 val nativeSelfTests = linkedMapOf(
+    "vulkanGenericCommandNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericCommandNativeSelfTest",
     "vulkanGpuSceneNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneNativeSelfTest",
     "vulkanGenericAccelerationNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericBlasNativeSelfTest",
     "vulkanSceneAccelerationNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSceneAccelerationNativeSelfTest",

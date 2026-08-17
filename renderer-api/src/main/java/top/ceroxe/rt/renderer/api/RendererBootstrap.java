@@ -27,6 +27,26 @@ public final class RendererBootstrap {
     }
 
     /**
+     * Opens the highest-priority provider that implements the general 1.1 renderer contract.
+     *
+     * <p>The old {@link #open(RendererPreset)} entry point intentionally retains its 1.0 binary
+     * signature. This explicit entry point fails closed when an installed legacy provider exposes
+     * only the scene fast path.</p>
+     *
+     * @param preset simple-mode renderer preset
+     * @return newly owned general renderer instance
+     */
+    public static Renderer openRenderer(RendererPreset preset) {
+        RendererPreset checkedPreset = Objects.requireNonNull(preset, "preset");
+        return (Renderer) openCandidates(
+                null,
+                checkedPreset.configuration(),
+                discover(Thread.currentThread().getContextClassLoader()),
+                true
+        );
+    }
+
+    /**
      * Opens the highest-priority provider using one complete expert configuration.
      *
      * @param configuration immutable expert renderer policy
@@ -37,6 +57,21 @@ public final class RendererBootstrap {
                 null,
                 Objects.requireNonNull(configuration, "configuration"),
                 discover(Thread.currentThread().getContextClassLoader())
+        );
+    }
+
+    /**
+     * Opens a general renderer using one complete expert configuration.
+     *
+     * @param configuration immutable expert renderer policy
+     * @return newly owned general renderer instance
+     */
+    public static Renderer openExpertRenderer(RayTracingRendererConfig configuration) {
+        return (Renderer) openCandidates(
+                null,
+                Objects.requireNonNull(configuration, "configuration"),
+                discover(Thread.currentThread().getContextClassLoader()),
+                true
         );
     }
 
@@ -60,6 +95,30 @@ public final class RendererBootstrap {
                 requiredProviderId,
                 configuration,
                 discover(Thread.currentThread().getContextClassLoader())
+        );
+    }
+
+    /**
+     * Opens a general renderer from one explicitly required provider.
+     *
+     * @param requiredProviderId required non-blank provider id
+     * @param configuration immutable expert renderer policy
+     * @return newly owned general renderer instance
+     */
+    public static Renderer openExpertProviderRenderer(
+            String requiredProviderId,
+            RayTracingRendererConfig configuration
+    ) {
+        Objects.requireNonNull(requiredProviderId, "requiredProviderId");
+        Objects.requireNonNull(configuration, "configuration");
+        if (requiredProviderId.isBlank()) {
+            throw new IllegalArgumentException("requiredProviderId must be non-blank");
+        }
+        return (Renderer) openCandidates(
+                requiredProviderId,
+                configuration,
+                discover(Thread.currentThread().getContextClassLoader()),
+                true
         );
     }
 
@@ -120,6 +179,15 @@ public final class RendererBootstrap {
             RayTracingRendererConfig configuration,
             List<Candidate> candidates
     ) {
+        return openCandidates(requiredProviderId, configuration, candidates, false);
+    }
+
+    private static RayTracingRenderer openCandidates(
+            String requiredProviderId,
+            RayTracingRendererConfig configuration,
+            List<Candidate> candidates,
+            boolean generalRendererRequired
+    ) {
         RayTracingGpuDevice selectedGpu = configuration.gpuDevice().orElse(null);
         if (selectedGpu != null && requiredProviderId != null
                 && !requiredProviderId.equals(selectedGpu.backendId())) {
@@ -152,11 +220,29 @@ public final class RendererBootstrap {
                 continue;
             }
             try {
-                return Objects.requireNonNull(
+                RayTracingRenderer opened = Objects.requireNonNull(
                         candidate.provider().open(configuration),
                         () -> "backend provider returned null: " + candidate.descriptor().id()
                 );
+                if (!generalRendererRequired || opened instanceof Renderer) return opened;
+                try {
+                    opened.close();
+                } catch (RuntimeException closeFailure) {
+                    throw new RendererInitializationException(
+                            "provider does not implement the general renderer contract and failed to close: "
+                                    + candidate.descriptor().id(),
+                            candidate.descriptor().id(), closeFailure
+                    );
+                }
+                throw new RendererInitializationException(
+                        "provider does not implement the general renderer contract: "
+                                + candidate.descriptor().id(),
+                        candidate.descriptor().id(), null
+                );
             } catch (RuntimeException failure) {
+                if (failure instanceof RendererInitializationException initializationFailure) {
+                    throw initializationFailure;
+                }
                 throw new RendererInitializationException(
                         "backend initialization failed: " + candidate.descriptor().id(),
                         candidate.descriptor().id(),

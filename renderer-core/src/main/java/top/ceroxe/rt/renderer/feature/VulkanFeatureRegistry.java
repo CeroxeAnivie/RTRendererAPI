@@ -62,6 +62,10 @@ public final class VulkanFeatureRegistry {
         EnumSet<Vulkan12Feature> preferredVulkan12Features = EnumSet.noneOf(Vulkan12Feature.class);
         EnumSet<Vulkan13Feature> requiredVulkan13Features = EnumSet.noneOf(Vulkan13Feature.class);
         EnumSet<Vulkan13Feature> preferredVulkan13Features = EnumSet.noneOf(Vulkan13Feature.class);
+        // Generic render-command transactions use Vulkan dynamic rendering. Keep this optional so
+        // the retained 1.0.x scene path still opens on Vulkan 1.2 devices, while the generic lane
+        // can report itself unsupported instead of issuing illegal VK13 commands.
+        preferredVulkan13Features.add(Vulkan13Feature.DYNAMIC_RENDERING);
         VulkanQueueRequirements requiredQueues = VulkanQueueRequirements.NONE;
         VulkanQueueRequirements preferredQueues = VulkanQueueRequirements.NONE;
         addCoreVulkanRequirements(

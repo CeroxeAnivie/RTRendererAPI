@@ -9,6 +9,7 @@ import top.ceroxe.rt.renderer.api.CameraState;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.FramePrimitiveBatch;
 import top.ceroxe.rt.renderer.api.RayTracingRenderer;
+import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererBootstrap;
 import top.ceroxe.rt.renderer.api.RendererHealth;
@@ -24,7 +25,7 @@ final class DemoGpuBenchmark {
 
     static void run(DemoConfig config, AtomicBoolean running, RenderStats stats)
             throws InterruptedException {
-        try (RayTracingRenderer renderer = RendererBootstrap.openExpert(DemoRendererProfile.benchmark())) {
+        try (Renderer renderer = RendererBootstrap.openExpertRenderer(DemoRendererProfile.benchmark())) {
             VulkanFrameInterop interop = renderer.extension(VulkanFrameInterop.class)
                     .orElseThrow(() -> new IllegalStateException(
                             "Vulkan frame interop is unavailable for the GPU benchmark"));

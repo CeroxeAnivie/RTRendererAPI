@@ -4,11 +4,11 @@ RTRendererAPI 适合嵌入 Java 21 或更高版本的桌面或引擎进程。普
 
 公共模型是厂商中立、宿主无关的渲染契约：场景、相机、exact clip-space projection、资源所有权和能力状态均不包含游戏或引擎专用字段。Windows NVIDIA Vulkan 是当前发布实现，不是公共 API 的身份。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:1.0.3`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。Maven Central 是这些制品的唯一发布事实源；Git tag 只用于定位构建相同制品的源码。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:1.1.0`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。Maven Central 是这些制品的唯一发布事实源；Git tag 只用于定位构建相同制品的源码。
 
 ## 最小调用
 
-`RendererBootstrap.open(RendererPreset.CPU_READBACK)` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 21 或更高版本。兼容目标不是实机验收结论；本文不把尚未运行的 1.0.3 GPU smoke、特定宿主集成或跨硬件验证声明为已通过。
+`RendererBootstrap.open(RendererPreset.CPU_READBACK)` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 21 或更高版本。兼容目标不是实机验收结论；本文不把尚未运行的 1.1.0 GPU smoke、特定宿主集成或跨硬件验证声明为已通过。
 
 ```java
 try (RayTracingRenderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
@@ -38,6 +38,41 @@ try (RayTracingRenderer renderer = RendererBootstrap.open(RendererPreset.CPU_REA
 - `close()` 发起确定性关闭；存在外部 GPU lease 时用 `closeAsync()` 或 `awaitClosed(Duration)` 等待 native 资源真实释放。
 - API 不使用 `null` 表示“暂时无帧”，也不会无限等待。
 - 普通路径的 readback 使用 frame-slot 常驻异步 ring，不会逐帧创建 staging buffer 或执行 queue-idle；但把图像送到 CPU 本身仍有带宽成本。
+
+## 通用命令语义：专家入口
+
+`Renderer` 是 1.1 的显式 discriminator。它继承 `RayTracingRenderer` 的 retained-scene 快速路径，并额外提供版本化资源与严格有序的 `RenderCommandTransaction`；两种输入不会相互猜测或转换。普通调用方继续使用 `RendererPreset` 与 `SceneTransaction`。只有需要保留既有图形提交语义的宿主才应使用此入口。
+
+```java
+try (Renderer renderer = RendererBootstrap.openExpertRenderer(
+        RayTracingRendererConfig.expertBuilder().build())) {
+    RenderingSemanticCapabilities capabilities = renderer.renderingSemanticCapabilities();
+    if (!capabilities.feature(RenderingSemanticCapabilities.Feature.BUFFER_UPLOAD).executable()) {
+        throw new IllegalStateException("当前后端不能执行所需的通用 buffer 路径");
+    }
+
+    BufferResource input = new BufferResource(
+            new RenderResourceId(1L), ResourceVersion.initial(), 256,
+            Set.of(BufferUsage.COPY_DESTINATION, BufferUsage.COPY_SOURCE)
+    );
+    ResourceTransactionEvidence published = renderer.submitResources(
+            RenderResourceTransaction.builder(1L).upsert(input).build()
+    );
+    if (published.outcome() != ResourceTransactionEvidence.Outcome.ACCEPTED) {
+        throw new IllegalStateException(published.detail());
+    }
+
+    ResourceData bytes = new ResourceData(ByteBuffer.allocateDirect(256).order(ByteOrder.nativeOrder()));
+    CommandExecutionEvidence submitted = renderer.submitCommands(
+            RenderCommandTransaction.builder(1L)
+                    .add(new WriteBufferCommand(new ResourceSlice.BufferSlice(input, new ByteRange(0, 256)), bytes))
+                    .build()
+    );
+    // RECORDED 只表示已提交；随后用 commandExecutionEvidence(1L) 观察 GPU_COMPLETED。
+}
+```
+
+能力必须逐项查询。`1.1.0` 的 Vulkan 后端真实执行 buffer generation、staging upload、buffer copy、buffer barrier 和 fence completion evidence。它目前会 fail-closed 地拒绝 texture、sampler、shader、binding、graphics/compute pipeline、draw、texture barrier 和 external consumer command；这些公共类型可表达语义，但不构成 backend 执行承诺。`RESOURCE_COPY` 与 `EXPLICIT_BARRIERS` 只有完整资源类别都可执行时才会标记为 executable，不能用 buffer 子集冒充整体支持。
 
 ## 发布一个最小场景
 
@@ -303,7 +338,7 @@ RayTracingRendererConfig explicitProduction = RayTracingRendererConfig.expertBui
 ### 完整专家配置
 
 专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
-显式覆盖 1.0.3 的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
+显式覆盖 1.1.0 中保留的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
 NRD 不可用时保留内建时域路径，FG/MFG 不可用时继续发布原生帧。SER 和 RTXMU 独立
 协商，某一项不支持不会阻止其他项启用。
 
@@ -377,7 +412,7 @@ session 内完成，只有 `APPLIED` 是提交证据。
 
 ### 各能力的最短配置
 
-以下片段都只需要 `top.ceroxe.rt:renderer-api:1.0.3`。把对应 options 传给
+以下片段都只需要 `top.ceroxe.rt:renderer-api:1.1.0`。把对应 options 传给
 `RayTracingRendererConfig.expertBuilder()` 即可；没有任何片段要求额外模块或手工 DLL。
 
 ```java

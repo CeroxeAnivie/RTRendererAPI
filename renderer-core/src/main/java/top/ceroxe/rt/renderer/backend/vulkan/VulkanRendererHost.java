@@ -13,6 +13,16 @@ import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
 import top.ceroxe.rt.renderer.api.RendererException;
 import top.ceroxe.rt.renderer.api.RendererHealth;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
+import top.ceroxe.rt.renderer.api.Renderer;
+import top.ceroxe.rt.renderer.api.RenderingSemanticCapabilities;
+import top.ceroxe.rt.renderer.api.RenderCommandTransaction;
+import top.ceroxe.rt.renderer.api.CommandExecutionEvidence;
+import top.ceroxe.rt.renderer.api.RenderResourceTransaction;
+import top.ceroxe.rt.renderer.api.RenderWorkload;
+import top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence;
+import top.ceroxe.rt.renderer.api.ResourceGenerationKey;
+import top.ceroxe.rt.renderer.api.ResourceResidencyEvidence;
+import top.ceroxe.rt.renderer.api.ResourceTransactionEvidence;
 import top.ceroxe.rt.renderer.api.RendererFeatureController;
 import top.ceroxe.rt.renderer.api.RendererFeatureProfile;
 import top.ceroxe.rt.renderer.api.RendererStateException;
@@ -44,7 +54,7 @@ import java.util.function.Supplier;
  * material adapter supplies a real {@link VulkanRenderingSession}, no service registration can
  * accidentally expose a renderer that acknowledges work without dispatching it.</p>
  */
-final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop, VulkanFramePresenterFactory {
+final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFramePresenterFactory {
     private static final int MAX_AUTOMATIC_DEVICE_RECOVERIES = 1;
 
     private final RayTracingRendererConfig configuration;
@@ -63,6 +73,10 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     private final ReentrantLock lifecycleLock = new ReentrantLock();
     private VulkanSceneResidency residency = new VulkanSceneResidency();
     private VulkanRenderingSession session;
+    /* Generic command resources are isolated from retained GPUScene residency and frame slots. */
+    private VulkanGenericCommandSession genericCommands;
+    /* Stable adapter identity for the project-independent external-frame contract. */
+    private final VulkanExternalFrameConsumerAdapter externalFrameConsumer;
 
     private Lifecycle lifecycle = Lifecycle.READY;
     private long latestSubmittedFrameSequence = -1L;
@@ -168,12 +182,16 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
             throw initializationFailure;
         }
         this.configuration = checkedConfiguration;
+        this.externalFrameConsumer = new VulkanExternalFrameConsumerAdapter(
+                this, checkedConfiguration.frameOutputFormat()
+        );
         this.sessionFactory = sessionFactory;
         this.negotiatedFeatureCapabilities = Objects.requireNonNull(
                 ownedSession.featureCapabilities(), "session feature capabilities"
         );
         this.publishedFeatureCapabilities = negotiatedFeatureCapabilities;
         this.session = ownedSession;
+        this.genericCommands = openGenericCommands(ownedSession, checkedConfiguration);
         RendererFeatureProfile initialFeatureProfile = featureProfile(checkedConfiguration);
         this.featureController = new VulkanRendererFeatureController(
                 initialFeatureProfile,
@@ -226,6 +244,18 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         );
     }
 
+    private static VulkanGenericCommandSession openGenericCommands(
+            VulkanRenderingSession session,
+            RayTracingRendererConfig configuration
+    ) {
+        Objects.requireNonNull(session, "session");
+        Objects.requireNonNull(configuration, "configuration");
+        if (!(session instanceof VulkanGenericCommandRuntimeProvider provider)) {
+            return null;
+        }
+        return new VulkanGenericCommandSession(provider.genericCommandRuntime(), configuration.maxFramesInFlight());
+    }
+
     @Override
     public <T> Optional<T> extension(Class<T> extensionType) {
         Class<T> checkedType = Objects.requireNonNull(extensionType, "extensionType");
@@ -246,6 +276,9 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
                 }
                 return Optional.of(checkedType.cast(publishedFeatureCapabilities));
             });
+        }
+        if (checkedType.isInstance(externalFrameConsumer)) {
+            return Optional.of(checkedType.cast(externalFrameConsumer));
         }
         return checkedType.isInstance(this)
                 ? Optional.of(checkedType.cast(this))
@@ -545,6 +578,122 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
     @Override
     public FrameSubmissionAttempt trySubmit(RenderFrameRequest request) {
         return withLifecycleLock(() -> trySubmitLocked(request));
+    }
+
+    @Override
+    public RenderingSemanticCapabilities renderingSemanticCapabilities() {
+        return withLifecycleLock(() -> {
+            requireReady("query general rendering capabilities");
+            RenderingSemanticCapabilities capabilities = genericCommands == null
+                    ? RenderingSemanticCapabilities.unsupported()
+                    : genericCommands.capabilities();
+            if (genericCommands != null) {
+                RenderingSemanticCapabilities.Builder builder = RenderingSemanticCapabilities.builder();
+                for (RenderingSemanticCapabilities.Feature feature : RenderingSemanticCapabilities.Feature.values()) {
+                    builder.feature(feature, capabilities.feature(feature));
+                }
+                builder.feature(
+                        RenderingSemanticCapabilities.Feature.COMBINED_WORKLOADS,
+                        new RenderingSemanticCapabilities.Entry(
+                                RenderingSemanticCapabilities.Status.EXECUTABLE,
+                                "retained RT submission is ordered before generic raster submission on the shared Vulkan frame queue"
+                        )
+                );
+                return builder.build();
+            }
+            return capabilities;
+        });
+    }
+
+    @Override
+    public WorkloadExecutionEvidence submitWorkload(RenderWorkload workload) {
+        return withLifecycleLock(() -> {
+            requireReady("submit workload");
+            RenderWorkload checked = Objects.requireNonNull(workload, "workload");
+            if (checked.mode() != RenderWorkload.Mode.COMBINED) {
+                return Renderer.super.submitWorkload(checked);
+            }
+            if (genericCommands == null) {
+                return WorkloadExecutionEvidence.combinedUnsupported(
+                        checked.sceneFrame().orElseThrow().sequence(),
+                        "generic Vulkan command lane is unavailable for ordered RT/raster composition"
+                );
+            }
+            FrameSubmissionAttempt sceneAttempt;
+            try {
+                sceneAttempt = trySubmitLocked(checked.sceneFrame().orElseThrow());
+            } catch (RuntimeException failure) {
+                throw fail("submit combined retained scene workload", failure);
+            }
+            if (sceneAttempt instanceof FrameSubmissionDeferred deferred) {
+                return WorkloadExecutionEvidence.combinedDeferred(
+                        checked.sceneFrame().orElseThrow().sequence(), deferred.detail()
+                );
+            }
+            FrameSubmissionResult sceneSubmission = ((FrameSubmitted) sceneAttempt).submission();
+            CommandExecutionEvidence graphics;
+            try {
+                graphics = genericCommands.submit(checked.graphicsCommands().orElseThrow());
+            } catch (RuntimeException failure) {
+                throw fail("submit combined generic commands", failure);
+            }
+            return WorkloadExecutionEvidence.combined(sceneSubmission, graphics);
+        });
+    }
+
+    @Override
+    public ResourceTransactionEvidence submitResources(RenderResourceTransaction transaction) {
+        return withLifecycleLock(() -> {
+            requireReady("submit general render resources");
+            RenderResourceTransaction checked = Objects.requireNonNull(transaction, "transaction");
+            if (genericCommands == null) return Renderer.super.submitResources(checked);
+            try {
+                return genericCommands.submitResources(checked);
+            } catch (RuntimeException failure) {
+                throw fail("submit general render resources", failure);
+            }
+        });
+    }
+
+    @Override
+    public Optional<ResourceResidencyEvidence> resourceResidencyEvidence(ResourceGenerationKey generation) {
+        Objects.requireNonNull(generation, "generation");
+        return withLifecycleLock(() -> {
+            requireReady("query general resource evidence");
+            return genericCommands == null ? Optional.empty() : genericCommands.resourceEvidence(generation);
+        });
+    }
+
+    @Override
+    public CommandExecutionEvidence submitCommands(RenderCommandTransaction transaction) {
+        return withLifecycleLock(() -> {
+            requireReady("submit general render commands");
+            RenderCommandTransaction checked = Objects.requireNonNull(transaction, "transaction");
+            if (genericCommands == null) {
+                return new CommandExecutionEvidence(
+                        checked.sequence(), CommandExecutionEvidence.Outcome.REJECTED,
+                        CommandExecutionEvidence.Reason.UNSUPPORTED_FEATURE,
+                        java.util.OptionalLong.empty(), Optional.empty(), 0L,
+                        "general render-command execution is unavailable for this Vulkan session"
+                );
+            }
+            try {
+                return genericCommands.submit(checked);
+            } catch (RuntimeException failure) {
+                throw fail("submit general render commands", failure);
+            }
+        });
+    }
+
+    @Override
+    public Optional<CommandExecutionEvidence> commandExecutionEvidence(long transactionSequence) {
+        if (transactionSequence < 0L) {
+            throw new IllegalArgumentException("transaction sequence must not be negative");
+        }
+        return withLifecycleLock(() -> {
+            requireReady("query general render-command evidence");
+            return genericCommands == null ? Optional.empty() : genericCommands.commandEvidence(transactionSequence);
+        });
     }
 
     private FrameSubmissionAttempt trySubmitLocked(RenderFrameRequest request) {
@@ -988,14 +1137,26 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
         if (sessionClosed || openFrameLeases != 0 || managedPresenterRetainsSession) {
             return null;
         }
+        RuntimeException failure = null;
+        if (lifecycle == Lifecycle.CLOSED) externalFrameConsumer.close();
+        if (genericCommands != null) {
+            try {
+                genericCommands.close();
+            } catch (RuntimeException closeFailure) {
+                failure = closeFailure;
+            } finally {
+                genericCommands = null;
+            }
+        }
         try {
             session.close();
             sessionClosed = true;
             if (lifecycle == Lifecycle.CLOSED) closeCompletion.complete(null);
-            return null;
-        } catch (RuntimeException failure) {
-            return failure;
+        } catch (RuntimeException closeFailure) {
+            if (failure == null) failure = closeFailure;
+            else failure.addSuppressed(closeFailure);
         }
+        return failure;
     }
 
     private void clearResolvedCleanupFailure() {
@@ -1029,7 +1190,9 @@ final class VulkanRendererHost implements RayTracingRenderer, VulkanFrameInterop
                 throw new IllegalStateException("recovered Vulkan session negotiated different feature capabilities");
             }
             VulkanSceneResidency recoveredResidency = replayCommittedScene(candidate);
+            VulkanGenericCommandSession recoveredGenericCommands = openGenericCommands(candidate, configuration);
             session = candidate;
+            genericCommands = recoveredGenericCommands;
             publishedFeatureCapabilities = candidate.featureCapabilities();
             residency = recoveredResidency;
             // Accepted frames belonged to the discarded session and can no longer produce a

@@ -9,6 +9,7 @@ RTRendererAPI `1.x` 是稳定 API 线。Maven Central 是唯一二进制事实�
   `1.0.0` Central 制品编译的消费者验证运行时链接兼容性。
 - `1.0.2` 收紧 `closeAsync()` 默认实现：只有同步关闭后状态已经为 `CLOSED` 才报告完成；延迟 teardown 的 provider 必须显式覆盖异步关闭契约。
 - `1.0.3` 以 Maven Central 上一正式版本 JAR 的完整 `javap` 输出作为 exhaustive ABI 差分输入；仓库版本化 `.abi` 仅负责当前版本人工审查与防止静默漂移。
+- `1.1.0` 新增显式 `Renderer` 通用语义入口、版本化资源与命令事务；旧 `RayTracingRenderer` retained-scene 路径保持独立。通用能力仅按 `RenderingSemanticCapabilities` 的逐项 executable 证据声明，静态类型存在不等于 GPU 后端已经执行该语义。
 - patch 版本只能提供兼容修复；minor 版本可以增加兼容能力；删除或改变既有公共二进制声明必须升级 major。
 - 仓库的 `previous_api_version` 指向上一正式版本；`verifyRendererApiBackwardCompatibility` 从 Maven Central 解析该版本 JAR 并生成完整 ABI，再与当前构件比较。补丁版本不能通过更新仓库快照绕过兼容检查。
 

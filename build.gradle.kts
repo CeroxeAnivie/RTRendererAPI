@@ -117,9 +117,12 @@ subprojects {
             // at which point every publication artifact must receive an OpenPGP signature. Do
             // not even wire Sign tasks for ordinary checks/local staging: Gradle may otherwise
             // execute an optional sign task as a publication dependency and invoke GPG anyway.
+            val centralPublishRequested = gradle.startParameter.taskNames.any {
+                it.contains("CentralPortal", ignoreCase = true)
+            }
             val centralRelease = providers.gradleProperty("centralRelease")
                 .map(String::toBoolean)
-                .getOrElse(false)
+                .getOrElse(centralPublishRequested)
             setRequired(centralRelease)
             if (centralRelease) {
                 useGpgCmd()
@@ -199,7 +202,8 @@ tasks.named("check") {
 }
 
 val releaseVersionDocuments = files(
-    "README.md",
+    // README is maintained by the calling project and is intentionally outside the
+    // published-version gate. Release-owned docs and metadata remain authoritative.
     fileTree("docs") { include("**/*.md") },
     fileTree("demos/hex-ball") {
         include("**/*.md", "src/**/*.java", "*.gradle.kts")
@@ -355,12 +359,15 @@ tasks.register<Zip>("centralPortalBundle") {
     isReproducibleFileOrder = true
 
     doFirst {
+        val centralPublishRequested = gradle.startParameter.taskNames.any {
+            it.contains("CentralPortal", ignoreCase = true)
+        }
         val centralRelease = providers.gradleProperty("centralRelease")
             .map(String::toBoolean)
-            .getOrElse(false)
+            .getOrElse(centralPublishRequested)
         if (!centralRelease) {
             throw GradleException(
-                "Central Portal bundles require -PcentralRelease=true so every artifact is signed"
+                "Central Portal bundles require centralRelease signing to be enabled"
             )
         }
     }

@@ -7,6 +7,7 @@
 ## 目录
 
 - [RendererBootstrap](#rendererbootstrap)
+- [Renderer](#renderer)
 - [RayTracingRenderer](#raytracingrenderer)
 - [RayTracingRendererConfig](#raytracingrendererconfig)
 - [场景与帧](#场景与帧)
@@ -15,6 +16,7 @@
 - [运行期功能控制](#运行期功能控制)
 - [官方 Vulkan presenter](#官方-vulkan-presenter)
 - [Vulkan 专家扩展](#vulkan-专家扩展)
+- [通用渲染语义](#通用渲染语义)
 
 ## RendererBootstrap
 
@@ -29,7 +31,35 @@ public final class RendererBootstrap
 | `open(RendererPreset)` | `RayTracingRenderer` | 简单模式；按明确的 CPU readback 或 managed GPU presentation preset 打开最佳可用后端 |
 | `openExpert(RayTracingRendererConfig)` | `RayTracingRenderer` | 专家模式；使用完整显式配置打开最佳可用后端 |
 | `openExpertProvider(String, RayTracingRendererConfig)` | `RayTracingRenderer` | 专家模式；按 provider id 打开，用于确定性部署或诊断 |
+| `openRenderer(RendererPreset)` | `Renderer` | 1.1 显式通用 renderer 入口；preset 仍选择 retained-scene 普通路径 |
+| `openExpertRenderer(RayTracingRendererConfig)` | `Renderer` | 1.1 专家通用语义入口；不会将 command transaction 转写为场景资产 |
+| `openExpertProviderRenderer(String, RayTracingRendererConfig)` | `Renderer` | 固定 provider 的 1.1 专家入口 |
 | `availableGpuDevices()` | `List<RayTracingGpuDevice>` | 返回通过 provider 探测得到的不可变设备列表 |
+
+## Renderer
+
+```java
+public interface Renderer extends RayTracingRenderer
+```
+
+这是通用 command path 的明确类型 discriminator。`RayTracingRenderer` 的旧场景 API 保持原有 ABI 与行为；`Renderer` 新增的方法不会隐式修改 retained-scene 提交。
+
+| 方法 | 返回 | 说明 |
+| --- | --- | --- |
+| `renderingSemanticCapabilities()` | `RenderingSemanticCapabilities` | 每项通用语义的真实可执行状态；不存在“设备支持 Vulkan 即全部可用”的推断 |
+| `submitResources(RenderResourceTransaction)` | `ResourceTransactionEvidence` | 原子发布/回收精确资源 generation；接受不等于 GPU ready |
+| `resourceResidencyEvidence(ResourceGenerationKey)` | `Optional<ResourceResidencyEvidence>` | 查询 exact generation 的 accepted/recorded/ready/retirement 证据 |
+| `submitCommands(RenderCommandTransaction)` | `CommandExecutionEvidence` | 有序 command admission；返回时最高只可能是 recorded |
+| `commandExecutionEvidence(long)` | `Optional<CommandExecutionEvidence>` | 观察与 transaction sequence 关联的后续 fence completion |
+
+普通场景调用方不需要创建这些对象。专家调用方必须先发布精确 resource generation，再提交仅引用这些 generation 的 command transaction，并始终以 capability 与 typed evidence 作为可执行性依据。
+
+### 通用渲染语义
+
+`1.1.0` 的 command path 语义、Vulkan 后端支持边界和证据规则见
+[Generic-Rendering-Semantics.md](Generic-Rendering-Semantics.md)。这条路径真实消费 graphics
+pipeline、attachment、binding 和 draw 命令；未被后端支持的 shader、格式或同步要求会在 admission
+阶段拒绝，不会降级成固定 PBR 场景。
 
 ## RayTracingRenderer
 

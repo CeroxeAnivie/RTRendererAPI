@@ -46,6 +46,8 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
     private final int accelerationStructureScratchAlignment;
     private final boolean memoryBudgetEnabled;
     private final boolean shaderExecutionReorderingEnabled;
+    private final boolean samplerAnisotropyEnabled;
+    private final boolean dynamicRenderingEnabled;
     private final Map<String, top.ceroxe.rt.renderer.feature.VulkanFeatureQueueAllocation> featureQueues;
 
     private RtVulkanDeviceBootstrap(
@@ -61,6 +63,8 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
             int accelerationStructureScratchAlignment,
             boolean memoryBudgetEnabled,
             boolean shaderExecutionReorderingEnabled,
+            boolean samplerAnisotropyEnabled,
+            boolean dynamicRenderingEnabled,
             Map<String, top.ceroxe.rt.renderer.feature.VulkanFeatureQueueAllocation> featureQueues
     ) {
         this.resources = Objects.requireNonNull(resources, "resources");
@@ -82,6 +86,8 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         this.accelerationStructureScratchAlignment = accelerationStructureScratchAlignment;
         this.memoryBudgetEnabled = memoryBudgetEnabled;
         this.shaderExecutionReorderingEnabled = shaderExecutionReorderingEnabled;
+        this.samplerAnisotropyEnabled = samplerAnisotropyEnabled;
+        this.dynamicRenderingEnabled = dynamicRenderingEnabled;
         this.featureQueues = Map.copyOf(featureQueues);
     }
 
@@ -202,6 +208,8 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                     resources, instanceHandle, physicalDevice, device, allocator, enabledExtensions, queueFamily.index(),
                     requestedQueueCount, timelineSemaphoreEnabled, scratchAlignment, memoryBudgetEnabled,
                     featureSelection.shaderExecutionReordering(),
+                    featureSelection.samplerAnisotropy(),
+                    featureSelection.vulkan13Features().contains(Vulkan13Feature.DYNAMIC_RENDERING),
                     queueTopology.featureQueues());
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
             try {
@@ -211,6 +219,10 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
             }
             throw failure;
         }
+    }
+
+    boolean dynamicRenderingEnabled() {
+        return dynamicRenderingEnabled;
     }
 
     private static VulkanInstanceHandle createInstance(
@@ -352,6 +364,7 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                 VkPhysicalDeviceRayTracingPipelineFeaturesKHR.calloc(stack).sType$Default().rayTracingPipeline(true);
         VkPhysicalDeviceFeatures2 features = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
         features.features().shaderInt64(true);
+        features.features().samplerAnisotropy(featureSelection.samplerAnisotropy());
         features.pNext(acceleration.address());
         acceleration.pNext(rayTracing.address());
         long featureChainTail = rayTracing.address();
@@ -428,7 +441,8 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
             Set<Vulkan12Feature> vulkan12Features,
             Set<Vulkan13Feature> vulkan13Features,
             boolean computeDerivativeGroupQuads,
-            boolean shaderExecutionReordering
+            boolean shaderExecutionReordering,
+            boolean samplerAnisotropy
     ) {
         private DeviceFeatureSelection {
             vulkan12Features = Set.copyOf(vulkan12Features);
@@ -517,8 +531,11 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                         "required Vulkan feature is unavailable: computeDerivativeGroupQuads"
                 );
             }
+            VkPhysicalDeviceFeatures2 coreFeatures = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
+            VK11.vkGetPhysicalDeviceFeatures2(physicalDevice, coreFeatures);
             return new DeviceFeatureSelection(
-                    enabled12, enabled13, computeDerivativeGroupQuads, serEnabled
+                    enabled12, enabled13, computeDerivativeGroupQuads, serEnabled,
+                    coreFeatures.features().samplerAnisotropy()
             );
         }
 
@@ -759,6 +776,10 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
 
     boolean shaderExecutionReorderingEnabled() {
         return shaderExecutionReorderingEnabled;
+    }
+
+    boolean samplerAnisotropyEnabled() {
+        return samplerAnisotropyEnabled;
     }
 
 

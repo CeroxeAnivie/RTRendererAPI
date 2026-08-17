@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -54,6 +55,27 @@ import top.ceroxe.rt.renderer.spi.RayTracingBackendProvider;
 import top.ceroxe.rt.renderer.spi.RayTracingBackendProvider.Compatibility;
 import top.ceroxe.rt.renderer.spi.RayTracingBackendProvider.Descriptor;
 import top.ceroxe.rt.renderer.spi.RayTracingBackendProvider.ProbeResult;
+import top.ceroxe.rt.renderer.api.interop.ExternalFrameCompletionEvidence;
+import top.ceroxe.rt.renderer.api.interop.ExternalFrameConsumerCapabilities;
+import top.ceroxe.rt.renderer.api.interop.ExternalFrameConsumerSession;
+import top.ceroxe.rt.renderer.api.interop.ExternalFrameConsumptionEvidence;
+import top.ceroxe.rt.renderer.api.interop.ExternalFrameInterop;
+import top.ceroxe.rt.renderer.api.interop.ExternalFrameLease;
+import top.ceroxe.rt.renderer.api.interop.ExternalFrameNegotiation;
+import top.ceroxe.rt.renderer.api.interop.ExternalFrameOffer;
+import top.ceroxe.rt.renderer.api.interop.ExternalFrameTransport;
+import top.ceroxe.rt.renderer.api.interop.ExternalHandleOwnership;
+import top.ceroxe.rt.renderer.api.interop.ExternalHandleState;
+import top.ceroxe.rt.renderer.api.interop.ExternalHandleTransport;
+import top.ceroxe.rt.renderer.api.interop.ExternalImageImportProfile;
+import top.ceroxe.rt.renderer.api.interop.ExternalMemoryHandleType;
+import top.ceroxe.rt.renderer.api.interop.ExternalMemoryRegion;
+import top.ceroxe.rt.renderer.api.interop.ExternalSynchronizationContract;
+import top.ceroxe.rt.renderer.api.interop.ExternalSynchronizationHandleType;
+import top.ceroxe.rt.renderer.api.interop.ExternalSynchronizationSignal;
+import top.ceroxe.rt.renderer.api.interop.OwnedExternalHandle;
+import top.ceroxe.rt.renderer.api.interop.PortableFrameDescriptor;
+import top.ceroxe.rt.renderer.api.interop.SynchronizationPrimitiveKind;
 
 public final class RendererApiContractSelfTest {
    private RendererApiContractSelfTest() {
@@ -75,10 +97,14 @@ public final class RendererApiContractSelfTest {
       assertFramePrimitiveContract();
       assertAntiAliasingContract();
       assertTemporalRenderingContract();
+      assertGenericRenderingResourceContracts();
+      assertGenericPipelineContracts();
+      assertExternalFrameConsumerContracts();
       assertAssetOwnership();
       assertDirectAssetOwnership();
       assertMipChainContract();
       assertTransactionOwnershipAndConflicts();
+      assertWorkloadExecutionEvidenceContract();
       assertDiagnosticsAndResultValidation();
       assertGpuFrameDescriptorValidation();
       assertManagedPresenterContract();
@@ -88,6 +114,819 @@ public final class RendererApiContractSelfTest {
       assertExportedHandleLifecycle();
       assertProviderSelection();
       System.out.println("RendererApiContractSelfTest passed");
+   }
+
+   private static void assertGenericRenderingResourceContracts() {
+      assertGenericBufferResourceContract();
+      assertGenericTextureResourceContract();
+      assertGenericSamplerStateContract();
+      assertGenericShaderBindingContract();
+   }
+
+   private static void assertWorkloadExecutionEvidenceContract() {
+      RayTracingRenderer.FrameSubmissionResult scene = RayTracingRenderer.FrameSubmissionResult.accepted(
+              7L, 3L, Set.of()
+      );
+      WorkloadExecutionEvidence sceneEvidence = WorkloadExecutionEvidence.sceneAccepted(scene);
+      require(sceneEvidence.outcome() == WorkloadExecutionEvidence.Outcome.ACCEPTED
+                      && sceneEvidence.sceneSubmission().orElseThrow() == scene,
+              "scene workload evidence lost the retained fast-path submission");
+
+      CommandExecutionEvidence rejected = new CommandExecutionEvidence(
+              8L, CommandExecutionEvidence.Outcome.REJECTED,
+              CommandExecutionEvidence.Reason.UNSUPPORTED_FEATURE,
+              OptionalLong.empty(), Optional.empty(), 0L,
+              "graphics lane is unsupported"
+      );
+      WorkloadExecutionEvidence graphicsEvidence = WorkloadExecutionEvidence.graphics(rejected);
+      require(graphicsEvidence.outcome() == WorkloadExecutionEvidence.Outcome.REJECTED
+                      && graphicsEvidence.reason() == WorkloadExecutionEvidence.Reason.COMMAND_REJECTED,
+              "graphics workload evidence did not preserve typed rejection");
+
+      WorkloadExecutionEvidence combined = WorkloadExecutionEvidence.combinedUnsupported(
+              9L, "ordered RT/raster composition is unsupported"
+      );
+      require(combined.mode() == RenderWorkload.Mode.COMBINED
+                      && combined.reason() == WorkloadExecutionEvidence.Reason.UNSUPPORTED_COMBINATION
+                      && combined.sceneSubmission().isEmpty()
+                      && combined.graphicsExecution().isEmpty(),
+              "combined workload rejection fabricated a single-lane result");
+
+      CommandExecutionEvidence acceptedGraphics = new CommandExecutionEvidence(
+              7L, CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED,
+              CommandExecutionEvidence.Reason.NONE,
+              OptionalLong.of(7L), Optional.of(new RenderResourceId(1L)), 1L,
+              "combined raster output produced"
+      );
+      WorkloadExecutionEvidence acceptedCombined = WorkloadExecutionEvidence.combined(scene, acceptedGraphics);
+      require(acceptedCombined.outcome() == WorkloadExecutionEvidence.Outcome.ACCEPTED
+                      && acceptedCombined.sceneSubmission().isPresent()
+                      && acceptedCombined.graphicsExecution().isPresent(),
+              "combined workload evidence did not preserve both ordered lanes");
+   }
+
+   private static void assertExternalFrameConsumerContracts() {
+      expect(NullPointerException.class,
+              () -> new ExternalHandleTransport(null, "name", ExternalHandleTransport.Representation.SIGNED_INTEGER));
+      expect(IllegalArgumentException.class,
+              () -> new ExternalHandleTransport("bad namespace", "name", ExternalHandleTransport.Representation.SIGNED_INTEGER));
+      expect(NullPointerException.class,
+              () -> new ExternalMemoryHandleType(ExternalHandleTransport.POSIX_FILE_DESCRIPTOR, null, "memory"));
+      expect(IllegalArgumentException.class,
+              () -> new ExternalSynchronizationHandleType(ExternalHandleTransport.POSIX_FILE_DESCRIPTOR, "test", "bad name"));
+      expect(IllegalArgumentException.class,
+              () -> new ExternalImageImportProfile("test", "profile", 0));
+
+      ExternalMemoryHandleType memoryType = new ExternalMemoryHandleType(
+              ExternalHandleTransport.POSIX_FILE_DESCRIPTOR, "test", "memory");
+      ExternalSynchronizationHandleType synchronizationType = new ExternalSynchronizationHandleType(
+              ExternalHandleTransport.POSIX_FILE_DESCRIPTOR, "test", "timeline");
+      ExternalImageImportProfile profile = new ExternalImageImportProfile("test", "rgba-profile", 1);
+      ExternalSynchronizationContract.ExternalSignal timelineContract =
+              new ExternalSynchronizationContract.ExternalSignal(
+                      synchronizationType, SynchronizationPrimitiveKind.TIMELINE);
+      ExternalFrameTransport transport = new ExternalFrameTransport(
+              FrameOutputFormat.SDR_RGBA8,
+              memoryType,
+              profile,
+              ExternalSynchronizationContract.CpuObserved.INSTANCE,
+              Set.of(ExternalSynchronizationContract.CpuObserved.INSTANCE, timelineContract));
+      expect(UnsupportedOperationException.class, () -> transport.consumerCompletions().clear());
+
+      expect(IllegalArgumentException.class,
+              () -> new ExternalFrameOffer(List.of(transport, transport)));
+      expect(IllegalArgumentException.class,
+              () -> new ExternalFrameConsumerCapabilities(List.of(transport, transport)));
+      expect(IllegalArgumentException.class,
+              () -> new ExternalFrameOffer(List.of()));
+      expect(IllegalArgumentException.class,
+              () -> new ExternalFrameConsumerCapabilities(List.of()));
+      ExternalFrameOffer offer = new ExternalFrameOffer(List.of(transport));
+      ExternalFrameConsumerCapabilities capabilities = new ExternalFrameConsumerCapabilities(List.of(transport));
+      expect(UnsupportedOperationException.class, () -> offer.transports().clear());
+      expect(UnsupportedOperationException.class, () -> capabilities.acceptedTransports().clear());
+      require(capabilities.selectFrom(offer).orElseThrow().equals(transport),
+              "exact external transport negotiation did not select the shared contract");
+      require(ExternalFrameInterop.requireCommonTransport(offer, capabilities).equals(transport),
+              "common external transport helper selected the wrong contract");
+      ExternalFrameTransport mismatchedProfile = new ExternalFrameTransport(
+              FrameOutputFormat.SDR_RGBA8,
+              memoryType,
+              new ExternalImageImportProfile("test", "other-profile", 1),
+              ExternalSynchronizationContract.CpuObserved.INSTANCE,
+              Set.of(ExternalSynchronizationContract.CpuObserved.INSTANCE));
+      require(capabilities.selectFrom(new ExternalFrameOffer(List.of(mismatchedProfile))).isEmpty(),
+              "negotiation accepted a partial or mismatched transport");
+      expect(IllegalArgumentException.class,
+              () -> ExternalFrameInterop.requireCommonTransport(
+                      new ExternalFrameOffer(List.of(mismatchedProfile)), capabilities));
+
+      TrackingExternalHandle<ExternalMemoryHandleType> consumedHandle = new TrackingExternalHandle<>(
+              memoryType, ExternalHandleOwnership.IMPORT_CONSUMES_HANDLE, 0L);
+      require(consumedHandle.nativeValue() == 0L, "zero-valued descriptor handle was rejected");
+      require(consumedHandle.markImported() && !consumedHandle.markImported(),
+              "handle import was not an exactly-once transition");
+      require(consumedHandle.state() == ExternalHandleState.IMPORTED,
+              "successful import did not enter IMPORTED state");
+      consumedHandle.close();
+      require(consumedHandle.state() == ExternalHandleState.CLOSED && consumedHandle.nativeCloses == 0,
+              "consumed handle was incorrectly closed by exporter owner");
+      TrackingExternalHandle<ExternalMemoryHandleType> retainedHandle = new TrackingExternalHandle<>(
+              memoryType, ExternalHandleOwnership.EXPORTER_RETAINS_HANDLE, 3L);
+      retainedHandle.markImported();
+      retainedHandle.close();
+      require(retainedHandle.nativeCloses == 1, "retained handle was not closed by exporter owner");
+      expect(IllegalStateException.class, retainedHandle::nativeValue);
+
+      expect(IllegalArgumentException.class,
+              () -> new ExternalMemoryRegion(Long.MAX_VALUE, 1L, Long.MAX_VALUE, false));
+      expect(IllegalArgumentException.class,
+              () -> new ExternalMemoryRegion(16L, 1L, 15L, true));
+      ExternalMemoryRegion region = new ExternalMemoryRegion(16L, 0L, 16L, true);
+      PortableFrameDescriptor descriptor = new PortableFrameDescriptor(
+              new RenderResourceId(7L), new ResourceVersion(2L), 11L, 1280, 720,
+              FrameOutputFormat.SDR_RGBA8,
+              PortableFrameDescriptor.ImageOrigin.TOP_LEFT,
+              PortableFrameDescriptor.AlphaMode.OPAQUE);
+
+      TrackingExternalHandle<ExternalSynchronizationHandleType> acquireHandle = new TrackingExternalHandle<>(
+              synchronizationType, ExternalHandleOwnership.EXPORTER_RETAINS_HANDLE, 9L);
+      expect(IllegalArgumentException.class,
+              () -> new ExternalSynchronizationSignal(
+                      acquireHandle, SynchronizationPrimitiveKind.BINARY, OptionalLong.of(1L)));
+      expect(IllegalArgumentException.class,
+              () -> new ExternalSynchronizationSignal(
+                      acquireHandle, SynchronizationPrimitiveKind.TIMELINE, OptionalLong.empty()));
+      ExternalSynchronizationSignal timelineSignal = new ExternalSynchronizationSignal(
+              acquireHandle, SynchronizationPrimitiveKind.TIMELINE, OptionalLong.of(4L));
+      require(timelineSignal.contract().equals(timelineContract),
+              "timeline signal lost its typed contract");
+
+      TrackingExternalHandle<ExternalMemoryHandleType> leaseMemory = new TrackingExternalHandle<>(
+              memoryType, ExternalHandleOwnership.EXPORTER_RETAINS_HANDLE, 4L);
+      TrackingExternalLease lease = new TrackingExternalLease(descriptor, transport, leaseMemory, region);
+      expect(IllegalArgumentException.class,
+              () -> lease.release(new ExternalFrameCompletionEvidence.CpuObserved(12L)));
+      ExternalSynchronizationHandleType wrongSynchronizationType = new ExternalSynchronizationHandleType(
+              ExternalHandleTransport.POSIX_FILE_DESCRIPTOR, "test", "binary");
+      TrackingExternalHandle<ExternalSynchronizationHandleType> wrongSignalHandle = new TrackingExternalHandle<>(
+              wrongSynchronizationType, ExternalHandleOwnership.EXPORTER_RETAINS_HANDLE, 5L);
+      ExternalSynchronizationSignal wrongSignal = new ExternalSynchronizationSignal(
+              wrongSignalHandle, SynchronizationPrimitiveKind.BINARY, OptionalLong.empty());
+      expect(IllegalArgumentException.class,
+              () -> lease.release(new ExternalFrameCompletionEvidence.ExternalSignal(11L, wrongSignal)));
+      lease.release(new ExternalFrameCompletionEvidence.CpuObserved(11L));
+      require(lease.state() == ExternalFrameLease.LeaseState.RELEASED
+                      && lease.evidence().outcome() == ExternalFrameConsumptionEvidence.Outcome.COMPLETION_PUBLISHED,
+              "lease did not publish completion evidence after valid release");
+      expect(IllegalStateException.class,
+              () -> lease.release(new ExternalFrameCompletionEvidence.CpuObserved(11L)));
+      lease.close();
+      acquireHandle.close();
+      wrongSignalHandle.close();
+
+      ExternalFrameCompletionEvidence.CpuObserved validCompletion =
+              new ExternalFrameCompletionEvidence.CpuObserved(11L);
+      expect(IllegalArgumentException.class,
+              () -> new ExternalFrameConsumptionEvidence(
+                      11L, ExternalFrameConsumptionEvidence.Outcome.LEASED,
+                      Optional.of(validCompletion), 0L, "invalid"));
+      expect(IllegalArgumentException.class,
+              () -> new ExternalFrameConsumptionEvidence(
+                      11L, ExternalFrameConsumptionEvidence.Outcome.COMPLETION_PUBLISHED,
+                      Optional.empty(), 0L, "missing"));
+      expect(IllegalArgumentException.class,
+              () -> new ExternalFrameConsumptionEvidence(
+                      11L, ExternalFrameConsumptionEvidence.Outcome.COMPLETION_PUBLISHED,
+                      Optional.of(new ExternalFrameCompletionEvidence.CpuObserved(12L)), 0L, "wrong frame"));
+      ExternalFrameConsumptionEvidence retired = new ExternalFrameConsumptionEvidence(
+              11L, ExternalFrameConsumptionEvidence.Outcome.RETIRED,
+              Optional.of(validCompletion), 2L, "completion observed");
+      require(retired.outcome().completionObserved() && retired.outcome().terminal()
+                      && retired.completion().orElseThrow().frameSequence() == 11L,
+              "retired evidence did not preserve completion invariants");
+
+      ExternalFrameConsumerSession session = new ExternalFrameConsumerSession() {
+         public ExternalFrameTransport transport() {
+            return transport;
+         }
+
+         public PollResult pollLatestFrame() {
+            return ExternalFrameConsumerSession.FrameNotReady.INSTANCE;
+         }
+
+         public void close() {
+         }
+      };
+      ExternalFrameNegotiation.Accepted accepted = new ExternalFrameNegotiation.Accepted(session);
+      require(accepted.session().transport().equals(transport),
+              "accepted negotiation did not retain provider-created session");
+      expect(IllegalArgumentException.class,
+              () -> new ExternalFrameNegotiation.Rejected(
+                      ExternalFrameNegotiation.Reason.NO_COMMON_TRANSPORT, " "));
+   }
+
+   private static void assertGenericPipelineContracts() {
+      require(VertexFormat.FLOAT32X3.byteSize() == 12
+                      && VertexFormat.FLOAT32X3.componentCount() == 3
+                      && VertexFormat.UNORM10_10_10_2.normalized()
+                      && IndexFormat.UINT32.primitiveRestartValue() == 0xFFFF_FFFFL,
+              "vertex or index format metadata changed");
+      expect(IllegalArgumentException.class,
+              () -> new VertexAttribute(-1, 0, 0, VertexFormat.FLOAT32));
+      expect(IllegalArgumentException.class,
+              () -> new VertexAttribute(0, -1, 0, VertexFormat.FLOAT32));
+      expect(IllegalArgumentException.class,
+              () -> new VertexAttribute(0, 0, -1, VertexFormat.FLOAT32));
+      expect(IllegalArgumentException.class,
+              () -> new VertexAttribute(0, 0, Integer.MAX_VALUE, VertexFormat.FLOAT64X4));
+      expect(NullPointerException.class,
+              () -> new VertexAttribute(0, 0, 0, null));
+      expect(IllegalArgumentException.class,
+              () -> new VertexBufferLayout(0, -1, VertexBufferLayout.StepMode.VERTEX, 1));
+      expect(IllegalArgumentException.class,
+              () -> new VertexBufferLayout(0, 16, VertexBufferLayout.StepMode.VERTEX, 2));
+      expect(IllegalArgumentException.class,
+              () -> new VertexBufferLayout(0, 16, VertexBufferLayout.StepMode.INSTANCE, -1));
+      expect(NullPointerException.class,
+              () -> new VertexBufferLayout(0, 16, null, 1));
+
+      VertexBufferLayout zeroStride = VertexBufferLayout.perVertex(0, 0);
+      VertexBufferLayout zeroInstanceDivisor = VertexBufferLayout.perInstance(1, 16, 0);
+      VertexAttribute position = new VertexAttribute(0, 0, 32, VertexFormat.FLOAT32X3);
+      VertexAttribute instanceValue = new VertexAttribute(1, 1, 0, VertexFormat.UINT32);
+      ArrayList<VertexBufferLayout> mutableBuffers = new ArrayList<>(
+              List.of(zeroStride, zeroInstanceDivisor));
+      ArrayList<VertexAttribute> mutableAttributes = new ArrayList<>(
+              List.of(position, instanceValue));
+      VertexLayout vertexLayout = new VertexLayout(mutableBuffers, mutableAttributes);
+      mutableBuffers.clear();
+      mutableAttributes.clear();
+      require(vertexLayout.buffers().size() == 2 && vertexLayout.attributes().size() == 2
+                      && vertexLayout.requireAttribute(0) == position
+                      && vertexLayout.requireBuffer(1) == zeroInstanceDivisor,
+              "vertex layout lost zero-stride/divisor or defensive ownership semantics");
+      expect(UnsupportedOperationException.class, () -> vertexLayout.buffers().clear());
+      expect(UnsupportedOperationException.class, () -> vertexLayout.attributesByLocation().clear());
+      expect(IllegalArgumentException.class, () -> new VertexLayout(
+              List.of(zeroStride, VertexBufferLayout.perVertex(0, 16)), List.of(position)));
+      expect(IllegalArgumentException.class, () -> new VertexLayout(
+              List.of(zeroStride), List.of(position,
+                      new VertexAttribute(0, 0, 0, VertexFormat.FLOAT32))));
+      expect(IllegalArgumentException.class, () -> new VertexLayout(
+              List.of(zeroStride), List.of(new VertexAttribute(2, 9, 0, VertexFormat.FLOAT32))));
+      expect(NullPointerException.class,
+              () -> new VertexLayout(java.util.Arrays.asList(zeroStride, null), List.of(position)));
+
+      RasterState filledRaster = RasterState.filled();
+      RasterState discardedRaster = new RasterState(
+              true, false, RasterState.PolygonMode.FILL, RasterState.CullMode.NONE,
+              RasterState.FrontFace.COUNTER_CLOCKWISE, false, 0.0, 0.0, 0.0, 1.0
+      );
+      expect(IllegalArgumentException.class, () -> new RasterState(
+              false, false, RasterState.PolygonMode.FILL, RasterState.CullMode.NONE,
+              RasterState.FrontFace.COUNTER_CLOCKWISE, true,
+              Double.POSITIVE_INFINITY, 0.0, 0.0, 1.0));
+      expect(IllegalArgumentException.class, () -> new RasterState(
+              false, false, RasterState.PolygonMode.FILL, RasterState.CullMode.NONE,
+              RasterState.FrontFace.COUNTER_CLOCKWISE, false,
+              0.0, 0.0, 0.0, Double.NaN));
+      expect(IllegalArgumentException.class, () -> new RasterState(
+              false, false, RasterState.PolygonMode.FILL, RasterState.CullMode.NONE,
+              RasterState.FrontFace.COUNTER_CLOCKWISE, false,
+              0.0, 0.0, 0.0, 0.0));
+
+      StencilFaceState keepStencil = StencilFaceState.keep();
+      expect(IllegalArgumentException.class, () -> new StencilFaceState(
+              StencilOperation.KEEP, StencilOperation.KEEP, StencilOperation.REPLACE,
+              CompareOperation.ALWAYS, 256, 0xFF, 0));
+      expect(NullPointerException.class, () -> new StencilFaceState(
+              null, StencilOperation.KEEP, StencilOperation.KEEP,
+              CompareOperation.ALWAYS, 0xFF, 0xFF, 0));
+      DepthStencilState disabledDepthWriteRetained = new DepthStencilState(
+              false, true, CompareOperation.ALWAYS, false, 0.0, 1.0,
+              false, keepStencil, keepStencil
+      );
+      require(disabledDepthWriteRetained.depthWriteEnabled(),
+              "disabled depth test incorrectly discarded retained depth-write state");
+      expect(IllegalArgumentException.class, () -> new DepthStencilState(
+              true, true, CompareOperation.LESS, true, Double.NaN, 1.0,
+              false, keepStencil, keepStencil));
+      expect(IllegalArgumentException.class, () -> new DepthStencilState(
+              true, true, CompareOperation.LESS, true, 0.8, 0.2,
+              false, keepStencil, keepStencil));
+
+      ColorTargetBlendState retainedDisabledBlend = new ColorTargetBlendState(
+              false,
+              BlendFactor.SOURCE_ALPHA, BlendFactor.DESTINATION_COLOR, BlendOperation.SUBTRACT,
+              BlendFactor.SOURCE1_ALPHA, BlendFactor.ONE_MINUS_DESTINATION_ALPHA,
+              BlendOperation.REVERSE_SUBTRACT, ColorWriteMask.all()
+      );
+      ArrayList<ColorTargetBlendState> mutableTargets = new ArrayList<>(List.of(
+              retainedDisabledBlend,
+              ColorTargetBlendState.sourceOver(ColorWriteMask.all())
+      ));
+      BlendState twoTargetBlend = new BlendState(
+              mutableTargets, null, 0.25, 0.5, 0.75, 1.0
+      );
+      mutableTargets.clear();
+      require(twoTargetBlend.targets().size() == 2
+                      && twoTargetBlend.targets().get(0).sourceColorFactor() == BlendFactor.SOURCE_ALPHA,
+              "blend state lost defensive ownership or disabled-but-retained factors");
+      expect(UnsupportedOperationException.class, () -> twoTargetBlend.targets().clear());
+      expect(UnsupportedOperationException.class, () -> ColorWriteMask.all().components().clear());
+      expect(IllegalArgumentException.class,
+              () -> new BlendState(List.of(), null, Double.NaN, 0.0, 0.0, 0.0));
+      expect(NullPointerException.class,
+              () -> new BlendState(java.util.Arrays.asList(retainedDisabledBlend, null),
+                      null, 0.0, 0.0, 0.0, 0.0));
+
+      MultisampleState retainedSampleFraction = new MultisampleState(
+              4, 0b1111L, false, 0.75, true, false
+      );
+      require(retainedSampleFraction.minimumSampleShading() == 0.75,
+              "disabled sample shading discarded its retained minimum fraction");
+      require(MultisampleState.allSamples(64).sampleMask() == -1L,
+              "64-sample coverage mask lost unsigned bits");
+      expect(IllegalArgumentException.class,
+              () -> MultisampleState.allSamples(3));
+      expect(IllegalArgumentException.class,
+              () -> new MultisampleState(4, 0b1_0000L, false, 0.0, false, false));
+      expect(IllegalArgumentException.class,
+              () -> new MultisampleState(4, 0b1111L, true, Double.POSITIVE_INFINITY, false, false));
+
+      ShaderProgram graphicsProgram = graphicsProgramWithVertexInputs(100L, List.of(
+              new ShaderInterfaceVariable(0, new ShaderInterfaceType(
+                      ShaderInterfaceType.NumericType.FLOATING_POINT, 32, 3),
+                      ShaderInterfaceVariable.Interpolation.SMOOTH),
+              new ShaderInterfaceVariable(1, new ShaderInterfaceType(
+                      ShaderInterfaceType.NumericType.UNSIGNED_INTEGER, 32, 1),
+                      ShaderInterfaceVariable.Interpolation.FLAT)
+      ), ShaderStage.VERTEX, ShaderStage.FRAGMENT);
+      GraphicsPipelineState pipeline = GraphicsPipelineState.builder(graphicsProgram)
+              .vertexLayout(vertexLayout)
+              .rasterState(filledRaster)
+              .multisampleState(retainedSampleFraction)
+              .colorTargets(List.of(TextureFormat.RGBA8_UNORM, TextureFormat.RGBA16_FLOAT), twoTargetBlend)
+              .depthStencil(TextureFormat.D24_UNORM_S8_UINT, new DepthStencilState(
+                      true, true, CompareOperation.LESS_OR_EQUAL, false, 0.0, 1.0,
+                      true, keepStencil, keepStencil))
+              .build();
+      require(pipeline.program() == graphicsProgram && pipeline.colorTargetFormats().size() == 2
+                      && pipeline.depthStencilFormat().orElseThrow() == TextureFormat.D24_UNORM_S8_UINT
+                      && pipeline.multisampleState().sampleCount() == 4,
+              "graphics pipeline lost program, attachment, or sample state");
+      expect(UnsupportedOperationException.class, () -> pipeline.colorTargetFormats().clear());
+      expect(IllegalArgumentException.class, () -> GraphicsPipelineState.builder(graphicsProgram)
+              .colorTargets(List.of(TextureFormat.RGBA8_UNORM), BlendState.replace(0)).build());
+      expect(IllegalArgumentException.class, () -> GraphicsPipelineState.builder(graphicsProgram)
+              .colorTargets(List.of(TextureFormat.D32_FLOAT), BlendState.replace(1)).build());
+      expect(IllegalArgumentException.class, () -> GraphicsPipelineState.builder(graphicsProgram)
+              .depthStencil(TextureFormat.RGBA8_UNORM, DepthStencilState.disabled()).build());
+      expect(IllegalArgumentException.class, () -> GraphicsPipelineState.builder(graphicsProgram)
+              .depthStencil(TextureFormat.D32_FLOAT, new DepthStencilState(
+                      false, false, CompareOperation.ALWAYS, false, 0.0, 1.0,
+                      true, keepStencil, keepStencil)).build());
+      expect(NullPointerException.class, () -> GraphicsPipelineState.builder(graphicsProgram)
+              .depthStencil(null, DepthStencilState.disabled()));
+      expect(IllegalArgumentException.class, () -> GraphicsPipelineState.builder(
+              graphicsProgram(105L, ShaderStage.VERTEX, ShaderStage.FRAGMENT)
+      ).vertexLayout(vertexLayout).build());
+
+      ShaderProgram fragmentlessProgram = graphicsProgram(110L, ShaderStage.VERTEX);
+      expect(IllegalArgumentException.class,
+              () -> GraphicsPipelineState.builder(fragmentlessProgram).build());
+      GraphicsPipelineState discardedPipeline = GraphicsPipelineState.builder(fragmentlessProgram)
+              .rasterState(discardedRaster)
+              .build();
+      require(discardedPipeline.rasterState().rasterizerDiscardEnabled(),
+              "fragmentless graphics pipeline lost mandatory rasterizer discard");
+
+      ShaderProgram tessellatedProgram = graphicsProgram(
+              120L, ShaderStage.VERTEX, ShaderStage.TESSELLATION_CONTROL,
+              ShaderStage.TESSELLATION_EVALUATION, ShaderStage.FRAGMENT
+      );
+      expect(IllegalArgumentException.class,
+              () -> GraphicsPipelineState.builder(tessellatedProgram).build());
+      expect(IllegalArgumentException.class, () -> GraphicsPipelineState.builder(graphicsProgram)
+              .patchAssembly(3).build());
+      expect(IllegalArgumentException.class, () -> GraphicsPipelineState.builder(tessellatedProgram)
+              .primitiveAssembly(PrimitiveTopology.PATCH_LIST, false).build());
+      GraphicsPipelineState patchPipeline = GraphicsPipelineState.builder(tessellatedProgram)
+              .patchAssembly(3, true)
+              .build();
+      require(patchPipeline.topology() == PrimitiveTopology.PATCH_LIST
+                      && patchPipeline.patchControlPoints().orElseThrow() == 3
+                      && patchPipeline.primitiveRestartEnabled(),
+              "patch pipeline lost tessellation assembly state");
+   }
+
+   private static void assertGenericBufferResourceContract() {
+      expect(IllegalArgumentException.class, () -> new RenderResourceId(-1L));
+      expect(IllegalArgumentException.class, () -> new ResourceVersion(-1L));
+      require(ResourceVersion.initial().value() == 0L,
+              "initial resource version changed from zero");
+
+      ByteRange completeRange = new ByteRange(0L, 64L);
+      require(completeRange.endExclusive() == 64L && completeRange.fitsWithin(64L),
+              "byte range lost its half-open boundary semantics");
+      require(new ByteRange(64L, 0L).fitsWithin(64L),
+              "empty byte range at the buffer end must remain valid");
+      expect(IllegalArgumentException.class, () -> new ByteRange(-1L, 0L));
+      expect(IllegalArgumentException.class, () -> new ByteRange(0L, -1L));
+      expect(IllegalArgumentException.class, () -> new ByteRange(Long.MAX_VALUE, 1L));
+      expect(IllegalArgumentException.class, () -> completeRange.fitsWithin(-1L));
+
+      java.util.EnumSet<BufferUsage> mutableBufferUsage = java.util.EnumSet.of(
+              BufferUsage.VERTEX, BufferUsage.COPY_DESTINATION
+      );
+      BufferResource buffer = new BufferResource(
+              new RenderResourceId(1L), new ResourceVersion(2L), 64L, mutableBufferUsage
+      );
+      mutableBufferUsage.clear();
+      require(buffer.usage().equals(Set.of(BufferUsage.VERTEX, BufferUsage.COPY_DESTINATION))
+                      && buffer.requireContained(completeRange) == completeRange,
+              "buffer descriptor did not retain an immutable usage set or exact range");
+      expect(UnsupportedOperationException.class, () -> buffer.usage().clear());
+      expect(IllegalArgumentException.class,
+              () -> buffer.requireContained(new ByteRange(63L, 2L)));
+      expect(NullPointerException.class, () -> buffer.requireContained(null));
+      expect(NullPointerException.class,
+              () -> new BufferResource(null, ResourceVersion.initial(), 1L, Set.of(BufferUsage.VERTEX)));
+      expect(NullPointerException.class,
+              () -> new BufferResource(new RenderResourceId(2L), null, 1L, Set.of(BufferUsage.VERTEX)));
+      expect(IllegalArgumentException.class, () -> new BufferResource(
+              new RenderResourceId(2L), ResourceVersion.initial(), 0L, Set.of(BufferUsage.VERTEX)
+      ));
+      expect(IllegalArgumentException.class, () -> new BufferResource(
+              new RenderResourceId(2L), ResourceVersion.initial(), 1L, Set.of()
+      ));
+      expect(NullPointerException.class, () -> new BufferResource(
+              new RenderResourceId(2L), ResourceVersion.initial(), 1L, null
+      ));
+      java.util.Set<BufferUsage> bufferUsageWithNull = new java.util.HashSet<>();
+      bufferUsageWithNull.add(BufferUsage.VERTEX);
+      bufferUsageWithNull.add(null);
+      expect(NullPointerException.class, () -> new BufferResource(
+              new RenderResourceId(2L), ResourceVersion.initial(), 1L, bufferUsageWithNull
+      ));
+   }
+
+   private static void assertGenericTextureResourceContract() {
+      TextureResource colorTexture = new TextureResource(
+              new RenderResourceId(10L), new ResourceVersion(3L), TextureDimension.TEXTURE_2D,
+              64, 32, 1, 7, 4, 1, TextureFormat.RGBA8_UNORM,
+              Set.of(TextureUsage.SAMPLED, TextureUsage.STORAGE_READ)
+      );
+      TextureSubresourceRange colorRange = new TextureSubresourceRange(
+              TextureAspect.COLOR, 1, 2, 1, 2
+      );
+      require(colorTexture.requireContained(colorRange) == colorRange
+                      && TextureResource.maximumMipLevelCount(64, 32, 1) == 7,
+              "texture descriptor lost a contained subresource or mip bound");
+      expect(UnsupportedOperationException.class, () -> colorTexture.usage().clear());
+      expect(UnsupportedOperationException.class, () -> TextureFormat.D24_UNORM_S8_UINT.aspects().clear());
+      expect(IllegalArgumentException.class, () -> TextureResource.maximumMipLevelCount(0, 1, 1));
+      expect(IllegalArgumentException.class, () -> new TextureResource(
+              new RenderResourceId(11L), ResourceVersion.initial(), TextureDimension.TEXTURE_1D,
+              16, 2, 1, 1, 1, 1, TextureFormat.R8_UNORM, Set.of(TextureUsage.SAMPLED)
+      ));
+      expect(IllegalArgumentException.class, () -> new TextureResource(
+              new RenderResourceId(11L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              16, 16, 2, 1, 1, 1, TextureFormat.R8_UNORM, Set.of(TextureUsage.SAMPLED)
+      ));
+      expect(IllegalArgumentException.class, () -> new TextureResource(
+              new RenderResourceId(11L), ResourceVersion.initial(), TextureDimension.TEXTURE_3D,
+              16, 16, 16, 1, 2, 1, TextureFormat.R8_UNORM, Set.of(TextureUsage.SAMPLED)
+      ));
+      expect(IllegalArgumentException.class, () -> new TextureResource(
+              new RenderResourceId(11L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              16, 16, 1, 2, 1, 4, TextureFormat.R8_UNORM, Set.of(TextureUsage.SAMPLED)
+      ));
+      expect(IllegalArgumentException.class, () -> new TextureResource(
+              new RenderResourceId(11L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              16, 16, 1, 6, 1, 1, TextureFormat.R8_UNORM, Set.of(TextureUsage.SAMPLED)
+      ));
+      expect(IllegalArgumentException.class, () -> new TextureResource(
+              new RenderResourceId(11L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              16, 16, 1, 1, 1, 0, TextureFormat.R8_UNORM, Set.of(TextureUsage.SAMPLED)
+      ));
+      expect(IllegalArgumentException.class, () -> new TextureResource(
+              new RenderResourceId(11L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              16, 16, 1, 1, 0, 1, TextureFormat.R8_UNORM, Set.of(TextureUsage.SAMPLED)
+      ));
+      expect(IllegalArgumentException.class, () -> new TextureResource(
+              new RenderResourceId(11L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              16, 16, 1, 1, 1, 1, TextureFormat.R8_UNORM, Set.of()
+      ));
+      expect(NullPointerException.class, () -> new TextureResource(
+              new RenderResourceId(11L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              16, 16, 1, 1, 1, 1, TextureFormat.R8_UNORM, null
+      ));
+      java.util.Set<TextureUsage> textureUsageWithNull = new java.util.HashSet<>();
+      textureUsageWithNull.add(TextureUsage.SAMPLED);
+      textureUsageWithNull.add(null);
+      expect(NullPointerException.class, () -> new TextureResource(
+              new RenderResourceId(11L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              16, 16, 1, 1, 1, 1, TextureFormat.R8_UNORM, textureUsageWithNull
+      ));
+
+      expect(IllegalArgumentException.class,
+              () -> new TextureSubresourceRange(TextureAspect.COLOR, -1, 1, 0, 1));
+      expect(IllegalArgumentException.class,
+              () -> new TextureSubresourceRange(TextureAspect.COLOR, 0, 0, 0, 1));
+      expect(IllegalArgumentException.class,
+              () -> new TextureSubresourceRange(TextureAspect.COLOR, Integer.MAX_VALUE, 1, 0, 1));
+      expect(IllegalArgumentException.class,
+              () -> new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, Integer.MAX_VALUE, 1));
+      expect(NullPointerException.class,
+              () -> new TextureSubresourceRange(null, 0, 1, 0, 1));
+      expect(IllegalArgumentException.class, () -> colorTexture.requireContained(
+              new TextureSubresourceRange(TextureAspect.DEPTH, 0, 1, 0, 1)
+      ));
+      expect(IllegalArgumentException.class, () -> colorTexture.requireContained(
+              new TextureSubresourceRange(TextureAspect.COLOR, 6, 2, 0, 1)
+      ));
+      expect(IllegalArgumentException.class, () -> colorTexture.requireContained(
+              new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, 3, 2)
+      ));
+
+      TextureView twoDimensionalView = new TextureView(
+              colorTexture, TextureViewDimension.TEXTURE_2D,
+              new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, 0, 1)
+      );
+      TextureView arrayView = new TextureView(colorTexture, TextureViewDimension.TEXTURE_2D_ARRAY, colorRange);
+      require(twoDimensionalView.texture() == colorTexture && arrayView.range().equals(colorRange),
+              "texture view lost its exact resource or subresource identity");
+      expect(IllegalArgumentException.class,
+              () -> new TextureView(colorTexture, TextureViewDimension.TEXTURE_2D, colorRange));
+      expect(IllegalArgumentException.class,
+              () -> new TextureView(colorTexture, TextureViewDimension.TEXTURE_3D, colorRange));
+
+      TextureResource cubeTexture = new TextureResource(
+              new RenderResourceId(12L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              32, 32, 1, 6, 12, 1, TextureFormat.RGBA8_UNORM, Set.of(TextureUsage.SAMPLED)
+      );
+      TextureView cubeView = new TextureView(
+              cubeTexture, TextureViewDimension.CUBE,
+              new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, 0, 6)
+      );
+      TextureView cubeArrayView = new TextureView(
+              cubeTexture, TextureViewDimension.CUBE_ARRAY,
+              new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, 0, 12)
+      );
+      require(cubeView.dimension() == TextureViewDimension.CUBE
+                      && cubeArrayView.dimension() == TextureViewDimension.CUBE_ARRAY,
+              "cube view shapes were not retained explicitly");
+      expect(IllegalArgumentException.class, () -> new TextureView(
+              cubeTexture, TextureViewDimension.CUBE,
+              new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, 0, 5)
+      ));
+      expect(IllegalArgumentException.class, () -> new TextureView(
+              cubeTexture, TextureViewDimension.CUBE_ARRAY,
+              new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, 0, 7)
+      ));
+      TextureResource nonSquareCube = new TextureResource(
+              new RenderResourceId(13L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              32, 16, 1, 1, 6, 1, TextureFormat.RGBA8_UNORM, Set.of(TextureUsage.SAMPLED)
+      );
+      expect(IllegalArgumentException.class, () -> new TextureView(
+              nonSquareCube, TextureViewDimension.CUBE,
+              new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, 0, 6)
+      ));
+      TextureResource multisampledTexture = new TextureResource(
+              new RenderResourceId(14L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              16, 16, 1, 1, 1, 4, TextureFormat.RGBA8_UNORM, Set.of(TextureUsage.COLOR_ATTACHMENT)
+      );
+      require(multisampledTexture.sampleCount() == 4,
+              "valid multisample texture lost its sample count");
+   }
+
+   private static void assertGenericSamplerStateContract() {
+      SamplerState sampler = SamplerState.builder()
+              .minFilter(SamplerState.Filter.NEAREST)
+              .magFilter(SamplerState.Filter.LINEAR)
+              .mipFilter(SamplerState.MipFilter.NEAREST)
+              .addressModes(SamplerState.AddressMode.REPEAT,
+                      SamplerState.AddressMode.MIRRORED_REPEAT,
+                      SamplerState.AddressMode.CLAMP_TO_EDGE)
+              .lodClamp(-2.0F, 8.0F)
+              .maximumAnisotropy(16.0F)
+              .build();
+      require(sampler.lodMinClamp() == -2.0F && sampler.lodMaxClamp() == 8.0F
+                      && sampler.maximumAnisotropy() == 16.0F,
+              "sampler lost finite LOD or anisotropy semantics");
+      expect(IllegalArgumentException.class,
+              () -> SamplerState.builder().lodClamp(Float.NaN, 1.0F));
+      expect(IllegalArgumentException.class,
+              () -> SamplerState.builder().lodClamp(0.0F, Float.POSITIVE_INFINITY));
+      expect(IllegalArgumentException.class,
+              () -> SamplerState.builder().lodClamp(2.0F, 1.0F));
+      expect(IllegalArgumentException.class,
+              () -> SamplerState.builder().maximumAnisotropy(Float.NaN));
+      expect(IllegalArgumentException.class,
+              () -> SamplerState.builder().maximumAnisotropy(Float.POSITIVE_INFINITY));
+      expect(IllegalArgumentException.class,
+              () -> SamplerState.builder().maximumAnisotropy(0.99F));
+      expect(IllegalArgumentException.class,
+              () -> SamplerState.builder().maximumAnisotropy(16.01F));
+      expect(NullPointerException.class, () -> SamplerState.builder().minFilter(null));
+      expect(NullPointerException.class, () -> SamplerState.builder().magFilter(null));
+      expect(NullPointerException.class, () -> SamplerState.builder().mipFilter(null));
+      expect(NullPointerException.class,
+              () -> SamplerState.builder().addressModes(null,
+                      SamplerState.AddressMode.REPEAT, SamplerState.AddressMode.REPEAT));
+   }
+
+   private static void assertGenericShaderBindingContract() {
+      BindingKey uniformKey = new BindingKey(0, 0);
+      BindingKey textureKey = new BindingKey(0, 1);
+      BindingKey samplerKey = new BindingKey(0, 2);
+      expect(IllegalArgumentException.class, () -> new BindingKey(-1, 0));
+      expect(IllegalArgumentException.class, () -> new BindingKey(0, -1));
+      java.util.EnumSet<ShaderStage> mutableStages = java.util.EnumSet.of(ShaderStage.VERTEX);
+      BindingLayoutEntry uniformEntry = new BindingLayoutEntry(
+              uniformKey, BindingType.UNIFORM_BUFFER, 1, mutableStages, true
+      );
+      mutableStages.add(ShaderStage.FRAGMENT);
+      require(uniformEntry.visibleStages().equals(Set.of(ShaderStage.VERTEX)),
+              "binding entry did not defensively copy stage visibility");
+      expect(UnsupportedOperationException.class, () -> uniformEntry.visibleStages().clear());
+      expect(IllegalArgumentException.class, () -> new BindingLayoutEntry(
+              textureKey, BindingType.SAMPLED_TEXTURE, 1, Set.of(ShaderStage.FRAGMENT), true
+      ));
+      expect(IllegalArgumentException.class, () -> new BindingLayoutEntry(
+              textureKey, BindingType.SAMPLED_TEXTURE, 0, Set.of(ShaderStage.FRAGMENT), false
+      ));
+      expect(IllegalArgumentException.class, () -> new BindingLayoutEntry(
+              textureKey, BindingType.SAMPLED_TEXTURE, -1, Set.of(ShaderStage.FRAGMENT), false
+      ));
+      expect(IllegalArgumentException.class, () -> new BindingLayoutEntry(
+              textureKey, BindingType.SAMPLED_TEXTURE, 1, Set.of(), false
+      ));
+      expect(NullPointerException.class, () -> new BindingLayoutEntry(
+              null, BindingType.SAMPLED_TEXTURE, 1, Set.of(ShaderStage.FRAGMENT), false
+      ));
+      expect(NullPointerException.class, () -> new BindingLayoutEntry(
+              textureKey, null, 1, Set.of(ShaderStage.FRAGMENT), false
+      ));
+      expect(NullPointerException.class, () -> new BindingLayoutEntry(
+              textureKey, BindingType.SAMPLED_TEXTURE, 1, null, false
+      ));
+      java.util.Set<ShaderStage> stagesWithNull = new java.util.HashSet<>();
+      stagesWithNull.add(ShaderStage.VERTEX);
+      stagesWithNull.add(null);
+      expect(NullPointerException.class, () -> new BindingLayoutEntry(
+              textureKey, BindingType.SAMPLED_TEXTURE, 1, stagesWithNull, false
+      ));
+
+      BindingLayoutEntry textureEntry = new BindingLayoutEntry(
+              textureKey, BindingType.SAMPLED_TEXTURE, 1, Set.of(ShaderStage.VERTEX), false
+      );
+      BindingLayoutEntry samplerEntry = new BindingLayoutEntry(
+              samplerKey, BindingType.SAMPLER, 1, Set.of(ShaderStage.VERTEX), false
+      );
+      ArrayList<BindingLayoutEntry> mutableEntries = new ArrayList<>(
+              List.of(uniformEntry, textureEntry, samplerEntry)
+      );
+      BindingLayout layout = new BindingLayout(mutableEntries);
+      mutableEntries.clear();
+      require(layout.entries().size() == 3 && layout.require(textureKey) == textureEntry,
+              "binding layout did not retain immutable declaration order or lookup");
+      expect(UnsupportedOperationException.class, () -> layout.entries().clear());
+      expect(UnsupportedOperationException.class, () -> layout.entriesByKey().clear());
+      expect(IllegalArgumentException.class, () -> layout.require(new BindingKey(9, 9)));
+      expect(IllegalArgumentException.class,
+              () -> new BindingLayout(List.of(uniformEntry, uniformEntry)));
+      expect(NullPointerException.class,
+              () -> new BindingLayout(java.util.Arrays.asList(uniformEntry, null)));
+      expect(NullPointerException.class, () -> new BindingLayout(null));
+
+      ShaderReflection reflection = new ShaderReflection(layout.entries(), 16);
+      require(reflection.bindings().size() == 3 && reflection.pushConstantByteSize() == 16,
+              "shader reflection lost its binding interface or push-constant extent");
+      expect(UnsupportedOperationException.class, () -> reflection.bindings().clear());
+      expect(IllegalArgumentException.class, () -> new ShaderReflection(List.of(), -4));
+      expect(IllegalArgumentException.class, () -> new ShaderReflection(List.of(), 2));
+      expect(NullPointerException.class, () -> new ShaderReflection(null, 0));
+
+      ByteBuffer spirv = ByteBuffer.allocateDirect(20).order(ByteOrder.nativeOrder());
+      spirv.putInt(0x0723_0203).putInt(0x0001_0000).putInt(0).putInt(1).putInt(0).flip();
+      ShaderModule module = new ShaderModule(
+              new RenderResourceId(20L), new ResourceVersion(4L), ShaderStage.VERTEX,
+              "main", spirv, reflection
+      );
+      spirv.putInt(0, 0);
+      ByteBuffer firstModuleView = module.spirv();
+      ByteBuffer secondModuleView = module.spirv();
+      firstModuleView.position(4);
+      require(secondModuleView.position() == 0 && secondModuleView.getInt(0) == 0x0723_0203
+                      && secondModuleView.isReadOnly(),
+              "shader module did not defensively copy bytes or return independent read-only views");
+      expect(ReadOnlyBufferException.class, () -> module.spirv().putInt(0, 0));
+      expect(IllegalArgumentException.class, () -> new ShaderModule(
+              new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
+              "invalid-entry", ByteBuffer.allocate(20).order(ByteOrder.nativeOrder()),
+              new ShaderReflection(List.of(), 0)
+      ));
+      expect(IllegalArgumentException.class, () -> new ShaderModule(
+              new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
+              "main", ByteBuffer.allocate(16).order(ByteOrder.nativeOrder()),
+              new ShaderReflection(List.of(), 0)
+      ));
+      ByteBuffer misalignedSpirv = ByteBuffer.allocate(21).order(ByteOrder.nativeOrder());
+      misalignedSpirv.putInt(0, 0x0723_0203);
+      expect(IllegalArgumentException.class, () -> new ShaderModule(
+              new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
+              "main", misalignedSpirv, new ShaderReflection(List.of(), 0)
+      ));
+      ByteBuffer invalidMagicSpirv = ByteBuffer.allocate(20).order(ByteOrder.nativeOrder());
+      invalidMagicSpirv.putInt(0, 0x0302_2307);
+      expect(IllegalArgumentException.class, () -> new ShaderModule(
+              new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
+              "main", invalidMagicSpirv, new ShaderReflection(List.of(), 0)
+      ));
+      ByteOrder nonNativeOrder = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN
+              ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN;
+      ByteBuffer nonNativeSpirv = ByteBuffer.allocate(20).order(nonNativeOrder);
+      nonNativeSpirv.putInt(0, 0x0723_0203);
+      expect(IllegalArgumentException.class, () -> new ShaderModule(
+              new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
+              "main", nonNativeSpirv, new ShaderReflection(List.of(), 0)
+      ));
+      BindingLayoutEntry fragmentOnlyEntry = new BindingLayoutEntry(
+              new BindingKey(1, 0), BindingType.SAMPLED_TEXTURE, 1,
+              Set.of(ShaderStage.FRAGMENT), false
+      );
+      expect(IllegalArgumentException.class, () -> new ShaderModule(
+              new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
+              "main", secondModuleView, new ShaderReflection(List.of(fragmentOnlyEntry), 0)
+      ));
+
+      BufferResource uniformBuffer = new BufferResource(
+              new RenderResourceId(30L), ResourceVersion.initial(), 256L, Set.of(BufferUsage.UNIFORM)
+      );
+      TextureResource sampledTexture = new TextureResource(
+              new RenderResourceId(31L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
+              16, 16, 1, 1, 1, 1, TextureFormat.RGBA8_UNORM, Set.of(TextureUsage.SAMPLED)
+      );
+      TextureView twoDimensionalView = new TextureView(
+              sampledTexture, TextureViewDimension.TEXTURE_2D,
+              new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, 0, 1)
+      );
+      SamplerState sampler = SamplerState.builder().build();
+      BindingSet.BufferValue uniformValue = new BindingSet.BufferValue(
+              uniformBuffer, new ByteRange(0L, 64L), BindingType.UNIFORM_BUFFER
+      );
+      BindingSet.TextureValue textureValue = new BindingSet.TextureValue(
+              twoDimensionalView, BindingType.SAMPLED_TEXTURE
+      );
+      BindingSet.SamplerValue samplerValue = new BindingSet.SamplerValue(
+              SamplerState.builder().build(), BindingType.SAMPLER
+      );
+      java.util.Map<BindingKey, List<? extends BindingSet.Value>> mutableBindings =
+              new java.util.LinkedHashMap<>();
+      mutableBindings.put(uniformKey, List.of(uniformValue));
+      mutableBindings.put(textureKey, List.of(textureValue));
+      mutableBindings.put(samplerKey, List.of(samplerValue));
+      BindingSet bindingSet = new BindingSet(layout, mutableBindings);
+      mutableBindings.clear();
+      require(bindingSet.values().size() == 3 && bindingSet.layout() == layout,
+              "binding set did not defensively retain its exact values and layout");
+      expect(UnsupportedOperationException.class, () -> bindingSet.values().clear());
+      expect(UnsupportedOperationException.class,
+              () -> bindingSet.values().get(uniformKey).clear());
+      expect(IllegalArgumentException.class, () -> new BindingSet(
+              layout, java.util.Map.of(uniformKey, List.of(uniformValue))
+      ));
+      expect(NullPointerException.class, () -> new BindingSet(null, java.util.Map.of()));
+      expect(NullPointerException.class, () -> new BindingSet(layout, null));
+      BindingLayout arrayLayout = new BindingLayout(List.of(new BindingLayoutEntry(
+              uniformKey, BindingType.UNIFORM_BUFFER, 2, Set.of(ShaderStage.VERTEX), false
+      )));
+      expect(IllegalArgumentException.class, () -> new BindingSet(
+              arrayLayout, java.util.Map.of(uniformKey, List.of(uniformValue))
+      ));
+      expect(IllegalArgumentException.class, () -> new BindingSet(
+              new BindingLayout(List.of(textureEntry)),
+              java.util.Map.of(textureKey, List.of(uniformValue))
+      ));
+      expect(IllegalArgumentException.class,
+              () -> new BindingSet.BufferValue(uniformBuffer, new ByteRange(0L, 0L),
+                      BindingType.UNIFORM_BUFFER));
+      expect(IllegalArgumentException.class,
+              () -> new BindingSet.BufferValue(uniformBuffer, new ByteRange(0L, 64L),
+                      BindingType.READ_ONLY_STORAGE_BUFFER));
+      expect(IllegalArgumentException.class,
+              () -> new BindingSet.TextureValue(twoDimensionalView,
+                      BindingType.READ_WRITE_STORAGE_TEXTURE));
+      SamplerState comparisonSampler = SamplerState.builder()
+              .compareOperation(SamplerState.CompareOperation.LESS)
+              .build();
+      expect(IllegalArgumentException.class,
+              () -> new BindingSet.SamplerValue(comparisonSampler, BindingType.SAMPLER));
+      expect(IllegalArgumentException.class,
+              () -> new BindingSet.SamplerValue(sampler, BindingType.COMPARISON_SAMPLER));
    }
 
    private static void assertFramePrimitiveContract() {
@@ -1314,6 +2153,30 @@ public final class RendererApiContractSelfTest {
       require(RendererUnavailableException.BackendAttempt.class.getConstructors().length == 0 && attempt.compatibility() == Compatibility.UNSUPPORTED, "provider failure evidence exposed a positional or stringly compatibility surface");
    }
 
+   private static ShaderProgram graphicsProgram(long programId, ShaderStage... stages) {
+      return graphicsProgramWithVertexInputs(programId, List.of(), stages);
+   }
+
+   private static ShaderProgram graphicsProgramWithVertexInputs(
+           long programId, List<ShaderInterfaceVariable> vertexInputs, ShaderStage... stages
+   ) {
+      ArrayList<ShaderModule> modules = new ArrayList<>(stages.length);
+      for (int index = 0; index < stages.length; index++) {
+         ByteBuffer spirv = ByteBuffer.allocateDirect(20).order(ByteOrder.nativeOrder());
+         spirv.putInt(0x0723_0203).putInt(0x0001_0000).putInt(0).putInt(1).putInt(0).flip();
+         modules.add(new ShaderModule(
+                 new RenderResourceId(Math.addExact(Math.multiplyExact(programId, 16L), index + 1L)),
+                 ResourceVersion.initial(), stages[index], "main", spirv,
+                 new ShaderReflection(List.of(), 0,
+                         stages[index] == ShaderStage.VERTEX ? vertexInputs : List.of(), List.of())
+         ));
+      }
+      return new ShaderProgram(
+              new RenderResourceId(programId), ResourceVersion.initial(), ShaderProgram.Kind.GRAPHICS,
+              modules, new BindingLayout(List.of()), 0
+      );
+   }
+
    private static CameraState camera() {
       return CameraState.explicitBasis(0.0, 0.0, 0.0).forward(0.0F, 0.0F, -1.0F).right(1.0F, 0.0F, 0.0F).up(0.0F, 1.0F, 0.0F).projectionTangents(1.0F, 0.5625F).build();
    }
@@ -1347,6 +2210,137 @@ public final class RendererApiContractSelfTest {
    private static void require(boolean condition, String message) {
       if (!condition) {
          throw new AssertionError(message);
+      }
+   }
+
+   private static final class TrackingExternalHandle<T> implements OwnedExternalHandle<T> {
+      private final T handleType;
+      private final ExternalHandleOwnership ownership;
+      private final long nativeValue;
+      private ExternalHandleState state = ExternalHandleState.EXPORTED;
+      private int nativeCloses;
+
+      private TrackingExternalHandle(T handleType, ExternalHandleOwnership ownership, long nativeValue) {
+         this.handleType = Objects.requireNonNull(handleType, "handleType");
+         this.ownership = Objects.requireNonNull(ownership, "ownership");
+         this.nativeValue = nativeValue;
+      }
+
+      public T handleType() {
+         return handleType;
+      }
+
+      public ExternalHandleOwnership ownership() {
+         return ownership;
+      }
+
+      public ExternalHandleState state() {
+         return state;
+      }
+
+      public long nativeValue() {
+         if (state != ExternalHandleState.EXPORTED) {
+            throw new IllegalStateException("native value is unavailable after export ownership changes");
+         }
+         return nativeValue;
+      }
+
+      public boolean markImported() {
+         if (state != ExternalHandleState.EXPORTED) return false;
+         state = ExternalHandleState.IMPORTED;
+         return true;
+      }
+
+      public void close() {
+         if (state == ExternalHandleState.CLOSED) return;
+         if (state == ExternalHandleState.EXPORTED
+                 || ownership == ExternalHandleOwnership.EXPORTER_RETAINS_HANDLE) {
+            nativeCloses++;
+         }
+         state = ExternalHandleState.CLOSED;
+      }
+   }
+
+   private static final class TrackingExternalLease implements ExternalFrameLease {
+      private final PortableFrameDescriptor descriptor;
+      private final ExternalFrameTransport transport;
+      private final OwnedExternalHandle<ExternalMemoryHandleType> memoryHandle;
+      private final ExternalMemoryRegion memoryRegion;
+      private LeaseState state = LeaseState.ACTIVE;
+      private ExternalFrameConsumptionEvidence evidence;
+
+      private TrackingExternalLease(
+              PortableFrameDescriptor descriptor,
+              ExternalFrameTransport transport,
+              OwnedExternalHandle<ExternalMemoryHandleType> memoryHandle,
+              ExternalMemoryRegion memoryRegion
+      ) {
+         this.descriptor = Objects.requireNonNull(descriptor, "descriptor");
+         this.transport = Objects.requireNonNull(transport, "transport");
+         this.memoryHandle = Objects.requireNonNull(memoryHandle, "memoryHandle");
+         this.memoryRegion = Objects.requireNonNull(memoryRegion, "memoryRegion");
+         if (!descriptor.format().equals(transport.format())) {
+            throw new IllegalArgumentException("descriptor and transport formats differ");
+         }
+         this.evidence = new ExternalFrameConsumptionEvidence(
+                 descriptor.frameSequence(), ExternalFrameConsumptionEvidence.Outcome.LEASED,
+                 Optional.empty(), 0L, "leased");
+      }
+
+      public PortableFrameDescriptor descriptor() {
+         return descriptor;
+      }
+
+      public ExternalFrameTransport transport() {
+         return transport;
+      }
+
+      public OwnedExternalHandle<ExternalMemoryHandleType> memoryHandle() {
+         return memoryHandle;
+      }
+
+      public ExternalMemoryRegion memoryRegion() {
+         return memoryRegion;
+      }
+
+      public Optional<ExternalSynchronizationSignal> acquireSignal() {
+         return Optional.empty();
+      }
+
+      public void release(ExternalFrameCompletionEvidence completion) {
+         Objects.requireNonNull(completion, "completion");
+         if (state != LeaseState.ACTIVE) throw new IllegalStateException("lease is no longer active");
+         if (completion.frameSequence() != descriptor.frameSequence()) {
+            throw new IllegalArgumentException("completion belongs to a different frame");
+         }
+         if (!transport.consumerCompletions().contains(completion.contract())) {
+            throw new IllegalArgumentException("completion contract was not negotiated");
+         }
+         state = LeaseState.RELEASED;
+         evidence = new ExternalFrameConsumptionEvidence(
+                 descriptor.frameSequence(), ExternalFrameConsumptionEvidence.Outcome.COMPLETION_PUBLISHED,
+                 Optional.of(completion), 0L, "consumer completion published");
+      }
+
+      public LeaseState state() {
+         return state;
+      }
+
+      public ExternalFrameConsumptionEvidence evidence() {
+         return evidence;
+      }
+
+      public void close() {
+         if (state == LeaseState.ACTIVE && memoryHandle.state() == ExternalHandleState.IMPORTED) {
+            throw new IllegalStateException("active imported lease cannot be abandoned");
+         }
+         memoryHandle.close();
+         state = LeaseState.CLOSED;
+         if (evidence.outcome() == ExternalFrameConsumptionEvidence.Outcome.LEASED) {
+            evidence = new ExternalFrameConsumptionEvidence(
+                    descriptor.frameSequence(), ExternalFrameConsumptionEvidence.Outcome.ABANDONED,
+                    Optional.empty(), 0L, "lease closed before completion");
+         }
       }
    }
 

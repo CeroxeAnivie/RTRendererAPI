@@ -249,9 +249,11 @@ public final class DemoFeatureIntegrationSelfTest {
         require(statuses.length == technologies.length,
                 "the HUD self-test must cover every public technology exactly once");
         for (int index = 0; index < technologies.length; index++) {
+            String implementation = statuses[index] == Status.NOT_SUPPORTED || statuses[index] == Status.DISABLED
+                    ? "none" : "provider." + index;
             capabilities.technology(
                     technologies[index],
-                    Entry.of(statuses[index], "provider." + index, "capability evidence " + index)
+                    Entry.of(statuses[index], implementation, "capability evidence " + index)
             );
         }
         String text = DemoTechnologyHud.snapshot(
