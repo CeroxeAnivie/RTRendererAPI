@@ -17,6 +17,7 @@ import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongConsumer;
 
 /**
  * Bounded ownership unit for one output image, frame constants, descriptor set, and producer fence.
@@ -69,6 +70,7 @@ final class VulkanFrameSlot implements AutoCloseable {
     private long pendingCompletionEvidenceSequence = -1L;
     private boolean currentSubmissionUsesSer;
     private boolean pendingCompletionUsesSer;
+    private LongConsumer producerCompletionObserver;
     private boolean closed;
 
     VulkanFrameSlot(
@@ -720,6 +722,7 @@ final class VulkanFrameSlot implements AutoCloseable {
         producerSubmission = null;
         observedProducerFrameSequence = Math.max(observedProducerFrameSequence, frameSequence);
         observedProducerDescriptorEpoch = Math.max(observedProducerDescriptorEpoch, descriptorEpoch);
+        if (producerCompletionObserver != null) producerCompletionObserver.accept(frameSequence);
         pendingCompletionEvidenceSequence = frameSequence;
         pendingCompletionUsesSer = currentSubmissionUsesSer;
         currentSubmissionUsesSer = false;
@@ -775,6 +778,13 @@ final class VulkanFrameSlot implements AutoCloseable {
 
     synchronized long observedProducerFrameSequence() {
         return observedProducerFrameSequence;
+    }
+
+    synchronized void setProducerCompletionObserver(LongConsumer observer) {
+        if (producerCompletionObserver != null) {
+            throw new IllegalStateException("producer completion observer is already configured");
+        }
+        producerCompletionObserver = Objects.requireNonNull(observer, "observer");
     }
 
     synchronized long observedProducerDescriptorEpoch() {

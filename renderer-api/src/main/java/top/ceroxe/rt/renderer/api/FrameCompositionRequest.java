@@ -12,13 +12,13 @@ import java.util.Objects;
  * generic resource identity is never guessed or reused as an external frame identity.</p>
  */
 public final class FrameCompositionRequest {
-    private static final int MAX_LAYERS = 8;
     private final List<FrameCompositionPlan.Layer> layers;
     private final int width;
     private final int height;
     private final FrameOutputFormat format;
     private final long frameSequence;
     private final long sceneRevision;
+    private final AlphaEncoding alphaEncoding;
 
     /** Creates an immutable ordered request for one provider-owned output frame. */
     public FrameCompositionRequest(
@@ -29,15 +29,25 @@ public final class FrameCompositionRequest {
             long frameSequence,
             long sceneRevision
     ) {
+        this(layers, width, height, format, frameSequence, sceneRevision, AlphaEncoding.PREMULTIPLIED);
+    }
+
+    /** Creates a request with an explicit alpha representation for blend operations. */
+    public FrameCompositionRequest(
+            List<? extends FrameCompositionPlan.Layer> layers,
+            int width,
+            int height,
+            FrameOutputFormat format,
+            long frameSequence,
+            long sceneRevision,
+            AlphaEncoding alphaEncoding
+    ) {
         Objects.requireNonNull(layers, "layers");
         ArrayList<FrameCompositionPlan.Layer> copy = new ArrayList<>(layers.size());
         for (FrameCompositionPlan.Layer layer : layers) {
             copy.add(Objects.requireNonNull(layer, "layer"));
         }
         if (copy.isEmpty()) throw new IllegalArgumentException("composition requires at least one layer");
-        if (copy.size() > MAX_LAYERS) {
-            throw new IllegalArgumentException("composition supports at most " + MAX_LAYERS + " ordered layers");
-        }
         if (width <= 0 || height <= 0) throw new IllegalArgumentException("composition extent must be positive");
         if (frameSequence < 0L || sceneRevision < 0L) {
             throw new IllegalArgumentException("composition sequence and scene revision must not be negative");
@@ -48,6 +58,10 @@ public final class FrameCompositionRequest {
         this.format = Objects.requireNonNull(format, "format");
         this.frameSequence = frameSequence;
         this.sceneRevision = sceneRevision;
+        this.alphaEncoding = Objects.requireNonNull(alphaEncoding, "alphaEncoding");
+        if (copy.get(0).operation() != FrameCompositionPlan.Operation.REPLACE) {
+            throw new IllegalArgumentException("the first composition layer must use REPLACE");
+        }
     }
 
     /** @return ordered back-to-front source mutations */
@@ -67,4 +81,12 @@ public final class FrameCompositionRequest {
 
     /** @return scene revision associated with the output */
     public long sceneRevision() { return sceneRevision; }
+
+    /** @return alpha representation consumed by ALPHA_OVER layers */
+    public AlphaEncoding alphaEncoding() { return alphaEncoding; }
+
+    /** Portable alpha representation; the Vulkan provider currently executes premultiplied alpha. */
+    public enum AlphaEncoding {
+        PREMULTIPLIED
+    }
 }

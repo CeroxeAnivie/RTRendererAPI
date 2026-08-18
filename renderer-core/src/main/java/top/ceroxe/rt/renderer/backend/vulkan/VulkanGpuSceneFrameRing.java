@@ -5,11 +5,15 @@ import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
 import java.util.Objects;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /** Owns the bounded frame-slot ring and per-slot primitive acceleration resources. */
 final class VulkanGpuSceneFrameRing implements AutoCloseable {
     private final VulkanFrameSlot[] slots;
     private final VulkanFramePrimitiveResources[] primitiveResources;
+    private final ConcurrentLinkedQueue<Long> producerCompletionEvents = new ConcurrentLinkedQueue<>();
     private boolean slotsClosed;
     private boolean primitivesClosed;
 
@@ -47,7 +51,11 @@ final class VulkanGpuSceneFrameRing implements AutoCloseable {
                         checkedDevice, checkedDiagnostics.stalls()
                 );
             }
-            return new VulkanGpuSceneFrameRing(slots, primitives);
+            VulkanGpuSceneFrameRing ring = new VulkanGpuSceneFrameRing(slots, primitives);
+            for (VulkanFrameSlot slot : slots) {
+                slot.setProducerCompletionObserver(ring.producerCompletionEvents::add);
+            }
+            return ring;
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
             closeSuppressingReverse(failure, primitives);
             closeSuppressingReverse(failure, slots);
@@ -109,6 +117,13 @@ final class VulkanGpuSceneFrameRing implements AutoCloseable {
             sequence = Math.max(sequence, slot.observedProducerFrameSequence());
         }
         return new Progress(epoch, sequence);
+    }
+
+    List<Long> drainProducerCompletionEvents() {
+        ArrayList<Long> events = new ArrayList<>();
+        Long sequence;
+        while ((sequence = producerCompletionEvents.poll()) != null) events.add(sequence);
+        return List.copyOf(events);
     }
 
     VulkanFrameSlot writableSlot() {
@@ -183,6 +198,7 @@ final class VulkanGpuSceneFrameRing implements AutoCloseable {
             if (failure == null) primitivesClosed = true;
         }
         if (failure != null) throw failure;
+        producerCompletionEvents.clear();
     }
 
     private static RuntimeException closeReverse(AutoCloseable[] resources) {

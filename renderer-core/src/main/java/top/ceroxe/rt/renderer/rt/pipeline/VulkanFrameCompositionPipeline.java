@@ -25,6 +25,7 @@ import java.util.Objects;
 
 /** Ordered generic image composition into one provider-owned frame image. */
 public final class VulkanFrameCompositionPipeline implements AutoCloseable {
+    /** Portable maximum advertised by the Vulkan provider for one ordered composition. */
     public static final int MAX_LAYERS = 8;
     private static final int BINDING_COUNT = MAX_LAYERS + 1;
     private static final int WORKGROUP_SIZE = 8;
@@ -50,6 +51,14 @@ public final class VulkanFrameCompositionPipeline implements AutoCloseable {
         this.descriptorSets = descriptorSets;
     }
 
+    /**
+     * Creates the descriptor and compute resources for a bounded frame ring.
+     *
+     * @param runtime selected Vulkan device runtime
+     * @param frameCount number of provider-owned frame slots
+     * @param linearHdr whether the output shader variant uses RGBA16F
+     * @return an initialized composition pipeline
+     */
     public static VulkanFrameCompositionPipeline open(VulkanDeviceRuntime runtime, int frameCount, boolean linearHdr) {
         Objects.requireNonNull(runtime, "runtime");
         if (frameCount <= 0) throw new IllegalArgumentException("frameCount must be positive");
@@ -76,7 +85,18 @@ public final class VulkanFrameCompositionPipeline implements AutoCloseable {
         }
     }
 
-    /** Records one ordered composition. All image views must be full single-layer 2D views. */
+    /**
+     * Records one ordered composition. All image views must be full single-layer 2D views.
+     *
+     * @param commands command buffer receiving the dispatch
+     * @param stack scoped native allocation stack
+     * @param slot provider-owned descriptor-set slot
+     * @param width output width in pixels
+     * @param height output height in pixels
+     * @param sourceViews ordered source image views
+     * @param outputView writable destination image view
+     * @param operations encoded REPLACE, ALPHA_OVER, or ADDITIVE operations
+     */
     public synchronized void record(
             VkCommandBuffer commands, MemoryStack stack, int slot, int width, int height,
             long[] sourceViews, long outputView, int[] operations
@@ -104,6 +124,12 @@ public final class VulkanFrameCompositionPipeline implements AutoCloseable {
         VK10.vkCmdDispatch(commands, divideUp(width), divideUp(height), 1);
     }
 
+    /**
+     * Records the compute-write barrier required before a consumer reads the destination image.
+     *
+     * @param commands command buffer receiving the barrier
+     * @param stack scoped native allocation stack
+     */
     public static void recordCompletionBarrier(VkCommandBuffer commands, MemoryStack stack) {
         VkMemoryBarrier.Buffer barrier = VkMemoryBarrier.calloc(1, stack);
         barrier.get(0).sType$Default().srcAccessMask(VK10.VK_ACCESS_SHADER_WRITE_BIT)

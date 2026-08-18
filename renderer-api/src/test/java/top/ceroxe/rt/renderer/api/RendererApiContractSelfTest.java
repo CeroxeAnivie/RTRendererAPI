@@ -210,6 +210,10 @@ public final class RendererApiContractSelfTest {
               List.of(new FrameCompositionPlan.Layer(source, FrameCompositionPlan.Operation.REPLACE)),
               1, 1, FrameOutputFormat.SDR_RGBA8, -1L, 0L
       ));
+      expect(IllegalArgumentException.class, () -> new FrameCompositionRequest(
+              List.of(new FrameCompositionPlan.Layer(source, FrameCompositionPlan.Operation.ALPHA_OVER)),
+              1, 1, FrameOutputFormat.SDR_RGBA8, 1L, 0L
+      ));
       FrameCompositionEvidence submitted = new FrameCompositionEvidence(
               78L, 12L, 1920, 1080, FrameOutputFormat.SDR_RGBA8,
               FrameCompositionEvidence.Outcome.SUBMITTED, OptionalLong.empty(), "submitted to provider frame ring"
@@ -223,6 +227,10 @@ public final class RendererApiContractSelfTest {
       expect(IllegalArgumentException.class, () -> new FrameCompositionEvidence(
               78L, 12L, 1920, 1080, FrameOutputFormat.SDR_RGBA8,
               FrameCompositionEvidence.Outcome.REJECTED, OptionalLong.empty(), "forged output identity"
+      ));
+      expect(IllegalArgumentException.class, () -> new FrameCompositionEvidence(
+              -1L, -1L, 0, 0, FrameOutputFormat.SDR_RGBA8,
+              FrameCompositionEvidence.Outcome.SUBMITTED, OptionalLong.empty(), "missing output identity"
       ));
       FrameCompositionEvidence.rejected(FrameOutputFormat.SDR_RGBA8, "source output is not ready");
       FrameCompositionProvider provider = request1 -> submitted;

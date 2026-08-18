@@ -63,9 +63,8 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     private long latestCompletedDescriptorEpoch;
     private long latestCompletedFrameSequence = -1L;
     private long latestCompositionSubmissionSequence = -1L;
-    private final Map<Long, VulkanGenericCompositionSource[]> compositionPins = new LinkedHashMap<>();
+    private final Map<Long, VulkanGenericResourceRegistry.CompositionPinLease> compositionPins = new LinkedHashMap<>();
     private final Map<Long, FrameCompositionEvidence> compositionEvidence = new LinkedHashMap<>();
-    private VulkanGenericCommandSession compositionGenericCommands;
     private long latestAcquiredFrameSequence = -1L;
     private RuntimeException terminalFailure;
     private RendererFeatureProfile currentFeatureProfile;
@@ -221,6 +220,11 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             return FrameCompositionEvidence.rejected(checked.format(),
                     "composition format must equal the renderer frame output format");
         }
+        if (checked.layers().size() > compositionPipeline.MAX_LAYERS) {
+            return FrameCompositionEvidence.rejected(checked.format(),
+                    "composition layer count exceeds the provider capability of "
+                            + compositionPipeline.MAX_LAYERS);
+        }
         if (checked.frameSequence() <= latestCompositionSubmissionSequence) {
             return FrameCompositionEvidence.rejected(checked.format(),
                     "composition frame sequence must strictly advance");
@@ -259,7 +263,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         VulkanDeviceRuntime.ManagedPresentationSignal readySignal = device.reserveManagedPresentationSignal();
         RtCommandContext.AsyncSubmission submission = null;
         boolean transferred = false;
-        boolean pinned = false;
+        VulkanGenericResourceRegistry.CompositionPinLease pinLease = null;
         try {
             RtCommandContext.CommandRecorder recorder = (commandBuffer, stack) -> {
                 recordCompositionBarriers(commandBuffer, stack, sources, slot.outputImage(), slot.imageLayout());
@@ -267,29 +271,24 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                         views, slot.outputImage().imageView(), operations);
                 VulkanFrameCompositionPipeline.recordCompletionBarrier(commandBuffer, stack);
             };
+            for (VulkanGenericCompositionSource source : sources) genericCommands.markCompositionRead(source);
+            pinLease = genericCommands.pinComposition(sources);
             submission = readySignal.enabled()
                     ? device.frameCommands().submitTimedOneTimeAsync(
                     "genericFrameComposition", readySignal.semaphore(), readySignal.value(), recorder)
                     : device.frameCommands().submitTimedOneTimeAsync("genericFrameComposition", recorder);
-            for (VulkanGenericCompositionSource source : sources) genericCommands.markCompositionRead(source);
+            compositionPins.put(checked.frameSequence(), pinLease);
             try {
-                for (VulkanGenericCompositionSource source : sources) genericCommands.pinComposition(source);
-                pinned = true;
+                slot.submitted(submission, checked.frameSequence(), checked.sceneRevision(), 0L,
+                        false, readySignal, false);
             } catch (RuntimeException failure) {
-                for (VulkanGenericCompositionSource source : sources) {
-                    try {
-                        genericCommands.releaseComposition(source);
-                    } catch (RuntimeException ignored) {
-                        failure.addSuppressed(ignored);
-                    }
-                }
+                compositionPins.remove(checked.frameSequence());
+                pinLease.close();
                 throw failure;
             }
-            slot.submitted(submission, checked.frameSequence(), checked.sceneRevision(), 0L,
-                    false, readySignal, false);
             transferred = true;
             latestCompositionSubmissionSequence = checked.frameSequence();
-            compositionPins.put(checked.frameSequence(), sources);
+            pinLease = null;
             compositionEvidence.put(checked.frameSequence(), new FrameCompositionEvidence(
                     checked.frameSequence(), checked.sceneRevision(), checked.width(), checked.height(),
                     checked.format(), FrameCompositionEvidence.Outcome.SUBMITTED,
@@ -299,18 +298,11 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             while (compositionEvidence.size() > Math.max(2, frameRing.size() * 2)) {
                 compositionEvidence.remove(compositionEvidence.keySet().iterator().next());
             }
-            compositionGenericCommands = genericCommands;
             return compositionEvidence.get(checked.frameSequence());
         } finally {
             if (!transferred && submission != null) submission.close();
-            if (!transferred && pinned) {
-                for (VulkanGenericCompositionSource source : sources) {
-                    try {
-                        genericCommands.releaseComposition(source);
-                    } catch (RuntimeException ignored) {
-                        // Preserve the original submission failure; registry close remains retryable.
-                    }
-                }
+            if (pinLease != null) {
+                pinLease.close();
             }
         }
     }
@@ -740,27 +732,19 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         latestCompletedDescriptorEpoch = progress.descriptorEpoch();
         latestCompletedFrameSequence = progress.frameSequence();
         scene.poll(latestCompletedDescriptorEpoch);
-        if (!compositionPins.isEmpty()) {
-            java.util.Iterator<Map.Entry<Long, VulkanGenericCompositionSource[]>> iterator = compositionPins.entrySet().iterator();
-            while (iterator.hasNext()) {
-                Map.Entry<Long, VulkanGenericCompositionSource[]> entry = iterator.next();
-                if (!frameRing.completed(entry.getKey())) continue;
-                FrameCompositionEvidence current = compositionEvidence.get(entry.getKey());
+        for (long completedSequence : frameRing.drainProducerCompletionEvents()) {
+            VulkanGenericResourceRegistry.CompositionPinLease pinLease = compositionPins.remove(completedSequence);
+            if (pinLease == null) continue;
+            FrameCompositionEvidence current = compositionEvidence.get(completedSequence);
                 if (current != null && current.outcome() == FrameCompositionEvidence.Outcome.SUBMITTED) {
-                    compositionEvidence.put(entry.getKey(), new FrameCompositionEvidence(
+                    compositionEvidence.put(completedSequence, new FrameCompositionEvidence(
                             current.frameSequence(), current.sceneRevision(), current.width(), current.height(),
                             current.format(), FrameCompositionEvidence.Outcome.GPU_COMPLETED,
                             java.util.OptionalLong.empty(),
-                            "provider observed completion of the composition command submission"
+                        "provider observed completion of the composition command submission"
                     ));
                 }
-                if (compositionGenericCommands != null) {
-                    for (VulkanGenericCompositionSource source : entry.getValue()) {
-                        compositionGenericCommands.releaseComposition(source);
-                    }
-                }
-                iterator.remove();
-            }
+            pinLease.close();
         }
     }
 
@@ -782,6 +766,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         if (resourcesClosed) return;
         state = State.CLOSED;
         frameRing.close();
+        for (VulkanGenericResourceRegistry.CompositionPinLease pinLease : compositionPins.values()) {
+            pinLease.close();
+        }
+        compositionPins.clear();
         compositionPipeline.close();
         featureComposition.close();
         if (!pipelineClosed) {

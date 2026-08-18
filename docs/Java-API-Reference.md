@@ -78,8 +78,10 @@ FrameCompositionEvidence latest = composition.compositionEvidence(evidence.frame
 ```
 
 每个 source 必须仍 resident，且对应 command evidence 已达到 `OUTPUT_PRODUCED`；generation、command
-sequence、format、extent 与 storage-read usage 都会精确验证。`REPLACE`、`ALPHA_OVER`、`ADDITIVE` 按 layer
-顺序执行。`SUBMITTED` 只证明 composition command 已进入 provider-owned frame ring；GPU completion、
+sequence、format、extent 与 storage-read usage 都会精确验证。第一层必须是 `REPLACE`，后续层按顺序执行
+`REPLACE`、`ALPHA_OVER` 或 `ADDITIVE`；`ALPHA_OVER` 的输入约定是 premultiplied alpha。请求形状不固化
+层数上限，调用方应先读取 `FrameCompositionProvider.maxLayers()`，provider 会对超过自身能力的请求 fail-closed。
+`SUBMITTED` 只证明 composition command 已进入 provider-owned frame ring；GPU completion、
 consumer acceptance 和 `VISIBLE` 是独立事实，不能由该值推导。未能完整执行 source validation、GPU barrier、
 frame-slot ownership 和 external lease 的 backend 必须返回空 extension。
 `compositionEvidence(frameSequence)` 是后续状态的权威只读查询；Vulkan 仅在 exact external lease 发布 consumer

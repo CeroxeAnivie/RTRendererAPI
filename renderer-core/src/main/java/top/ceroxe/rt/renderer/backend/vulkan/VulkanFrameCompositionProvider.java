@@ -3,6 +3,7 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 import top.ceroxe.rt.renderer.api.FrameCompositionEvidence;
 import top.ceroxe.rt.renderer.api.FrameCompositionProvider;
 import top.ceroxe.rt.renderer.api.FrameCompositionRequest;
+import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameCompositionPipeline;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -13,6 +14,11 @@ final class VulkanFrameCompositionProvider implements FrameCompositionProvider {
 
     VulkanFrameCompositionProvider(VulkanRendererHost host) {
         this.host = Objects.requireNonNull(host, "host");
+    }
+
+    @Override
+    public int maxLayers() {
+        return VulkanFrameCompositionPipeline.MAX_LAYERS;
     }
 
     @Override

@@ -25,8 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Owns generic Vulkan buffer and texture generations independently from the retained GPUScene registry.
@@ -49,7 +47,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
      */
     private final Map<ResourceGenerationKey, ResourceMutationKey> inFlightMutations = new HashMap<>();
     /* Composition reads use a frame-sequence domain, so they have their own exact pin ledger. */
-    private final Set<ResourceGenerationKey> compositionPins = new HashSet<>();
+    private final Map<ResourceGenerationKey, Integer> compositionPinCounts = new HashMap<>();
     private final Map<RenderResourceId, Long> highestVersionById = new HashMap<>();
     private final Map<RenderResourceId, ResourceKind> resourceKinds = new HashMap<>();
     private long latestTransactionRevision = -1L;
@@ -272,18 +270,60 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         ), org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_GENERAL);
     }
 
-    void pinComposition(ResourceMutationKey mutation) {
+    CompositionPinLease acquireCompositionPins(VulkanGenericCompositionSource[] sources) {
         requireOpen();
-        ResourceGenerationKey generation = Objects.requireNonNull(mutation, "mutation").generation();
-        if (!textures.containsKey(generation)) {
-            throw new IllegalArgumentException("composition source texture is not resident: " + generation);
+        Objects.requireNonNull(sources, "sources");
+        LinkedHashMap<ResourceGenerationKey, Integer> acquired = new LinkedHashMap<>();
+        try {
+            for (VulkanGenericCompositionSource source : sources) {
+                ResourceGenerationKey generation = Objects.requireNonNull(source, "sources contains null")
+                        .mutation().generation();
+                if (!textures.containsKey(generation)) {
+                    throw new IllegalArgumentException("composition source texture is not resident: " + generation);
+                }
+                int acquiredCount = Math.addExact(acquired.getOrDefault(generation, 0), 1);
+                int residentCount = Math.addExact(compositionPinCounts.getOrDefault(generation, 0), 1);
+                compositionPinCounts.put(generation, residentCount);
+                acquired.put(generation, acquiredCount);
+            }
+            return new CompositionPinLease(this, Map.copyOf(acquired));
+        } catch (RuntimeException failure) {
+            releaseCompositionPins(acquired);
+            throw failure;
         }
-        compositionPins.add(generation);
     }
 
-    void releaseComposition(ResourceMutationKey mutation) {
-        requireOpen();
-        compositionPins.remove(Objects.requireNonNull(mutation, "mutation").generation());
+    private void releaseCompositionPins(Map<ResourceGenerationKey, Integer> releases) {
+        for (Map.Entry<ResourceGenerationKey, Integer> entry : releases.entrySet()) {
+            ResourceGenerationKey generation = entry.getKey();
+            int amount = entry.getValue();
+            int current = compositionPinCounts.getOrDefault(generation, 0);
+            if (amount <= 0 || current < amount) {
+                throw new IllegalStateException("composition pin release underflow: " + generation);
+            }
+            if (current == amount) compositionPinCounts.remove(generation);
+            else compositionPinCounts.put(generation, current - amount);
+        }
+    }
+
+    static final class CompositionPinLease implements AutoCloseable {
+        private final VulkanGenericResourceRegistry owner;
+        private final Map<ResourceGenerationKey, Integer> pins;
+        private boolean closed;
+
+        private CompositionPinLease(
+                VulkanGenericResourceRegistry owner, Map<ResourceGenerationKey, Integer> pins
+        ) {
+            this.owner = owner;
+            this.pins = pins;
+        }
+
+        @Override
+        public void close() {
+            if (closed) return;
+            owner.releaseCompositionPins(pins);
+            closed = true;
+        }
     }
 
     void requireReadable(BufferRecord record) {
@@ -461,7 +501,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         ArrayList<TextureRecord> records = new ArrayList<>();
         for (ResourceGenerationKey generation : transaction.retiredGenerations()) {
             requireNoInFlightMutation(generation);
-            if (compositionPins.contains(generation)) {
+            if (compositionPinCounts.containsKey(generation)) {
                 throw new IllegalStateException("texture generation is retained by an external-frame composition: " + generation);
             }
             TextureRecord record = textures.get(generation);
@@ -637,7 +677,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         closed = true;
         samplers.close();
         inFlightMutations.clear();
-        compositionPins.clear();
+        compositionPinCounts.clear();
         for (BufferRecord record : buffers.values()) record.buffer().close();
         buffers.clear();
         for (TextureRecord record : textures.values()) record.close();

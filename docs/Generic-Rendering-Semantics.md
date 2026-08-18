@@ -1,6 +1,6 @@
 # 通用渲染语义参考
 
-本页定义 `3.1.0` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
+本页定义 `3.1.1` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
 实现通用 RT 提交时，先阅读[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)；该指南
 提供由资源发布到 `TraceRaysCommand` 的完整最小流程，本页则说明每一步为什么成立。
 
@@ -86,7 +86,8 @@ destination frame identity。它绝不把 generic `RenderResourceId` 猜测为 e
 
 Vulkan 只有在每个 source mutation 的 command evidence 已为 `OUTPUT_PRODUCED`、generation 仍 resident、
 format/extent/二维单样本 storage-read usage 完全匹配时才记录 composition。source image 仅读、frame-slot
-output 仅写，真实 Vulkan barrier 与 compute submission 连接二者；slot 随后通过既有 external-memory lease
+output 仅写，真实 Vulkan barrier 与 compute submission 连接二者；第一层必须是 `REPLACE`，后续
+`ALPHA_OVER` 使用 premultiplied-alpha 输入约定；slot 随后通过既有 external-memory lease
 路径发布，直到 consumer release 后才能复用。`SUBMITTED` 和 `GPU_COMPLETED` 都不是 consumer acceptance 或
 display visibility；调用方通过 `compositionEvidence(frameSequence)` 查询后续状态，只有 exact external lease
 发布 completion 才得到 `CONSUMER_ACCEPTED`。`VISIBLE` 必须携带 presenter-owned 证据；composition provider

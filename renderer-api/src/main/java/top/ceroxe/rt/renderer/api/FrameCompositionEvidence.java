@@ -21,9 +21,6 @@ public record FrameCompositionEvidence(
 ) {
     /** Validates that only consumer milestones carry consumer-owned completion evidence. */
     public FrameCompositionEvidence {
-        if (frameSequence < -1L || sceneRevision < -1L) {
-            throw new IllegalArgumentException("composition evidence counters must be at least -1");
-        }
         if (width < 0 || height < 0) throw new IllegalArgumentException("composition evidence extent must not be negative");
         format = Objects.requireNonNull(format, "format");
         outcome = Objects.requireNonNull(outcome, "outcome");
@@ -36,8 +33,12 @@ public record FrameCompositionEvidence(
         if (outcome.consumerEvidenceRequired() != consumerSequence.isPresent()) {
             throw new IllegalArgumentException("consumer sequence is required exactly for consumer milestones");
         }
-        if (outcome == Outcome.REJECTED && (frameSequence >= 0L || sceneRevision >= 0L)) {
-            throw new IllegalArgumentException("rejected composition cannot claim an output identity");
+        if (outcome == Outcome.REJECTED) {
+            if (frameSequence != -1L || sceneRevision != -1L || width != 0 || height != 0) {
+                throw new IllegalArgumentException("rejected composition must not claim output identity or extent");
+            }
+        } else if (frameSequence < 0L || sceneRevision < 0L || width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("non-rejected composition must carry a complete output identity");
         }
     }
 

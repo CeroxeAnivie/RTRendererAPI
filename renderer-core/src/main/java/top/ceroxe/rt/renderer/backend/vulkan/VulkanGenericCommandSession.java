@@ -279,14 +279,11 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         resources.markCompositionRead(Objects.requireNonNull(source, "source").mutation());
     }
 
-    void pinComposition(VulkanGenericCompositionSource source) {
+    VulkanGenericResourceRegistry.CompositionPinLease pinComposition(
+            VulkanGenericCompositionSource[] sources
+    ) {
         requireOpen();
-        resources.pinComposition(Objects.requireNonNull(source, "source").mutation());
-    }
-
-    void releaseComposition(VulkanGenericCompositionSource source) {
-        requireOpen();
-        resources.releaseComposition(Objects.requireNonNull(source, "source").mutation());
+        return resources.acquireCompositionPins(Objects.requireNonNull(sources, "sources"));
     }
 
     void pump() {

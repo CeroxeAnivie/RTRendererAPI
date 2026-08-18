@@ -11,6 +11,14 @@ import java.util.Optional;
  */
 public interface FrameCompositionProvider {
     /**
+     * Returns the provider's portable layer limit. Requests above this limit must be rejected
+     * without partially submitting work; the limit is not part of the API request shape.
+     */
+    default int maxLayers() {
+        return Integer.MAX_VALUE;
+    }
+
+    /**
      * Records an ordered composition into a provider-owned external frame slot.
      *
      * @param request exact source mutations and requested output metadata
