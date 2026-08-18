@@ -1,6 +1,6 @@
 # 通用渲染语义参考
 
-本页定义 `3.0.0` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
+本页定义 `3.1.0` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
 实现通用 RT 提交时，先阅读[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)；该指南
 提供由资源发布到 `TraceRaysCommand` 的完整最小流程，本页则说明每一步为什么成立。
 
@@ -78,11 +78,21 @@ command algebra 可表达 BLAS/TLAS declaration/build、显式 RT shader group�
 
 ## Composition、显示与互操作
 
-`FrameCompositionPlan` 表达项目无关的有序 source mutation 与一个精确 target mutation。
-`FramePresentationEvidence` 区分 `GPU_COMPLETED`、`CONSUMER_ACCEPTED` 与 `VISIBLE`；renderer fence 不能证明
-可见显示。当前 generic Vulkan backend 尚不消费 composition plan 或发布 visible-present evidence，因此将
-`FRAME_COMPOSITION` 与 `FRAME_PRESENTATION_EVIDENCE` 报告为 `UNSUPPORTED`，调用方不得从 command evidence
-反推 consumer acceptance 或 visibility。
+`FrameCompositionPlan` 与 `FramePresentationEvidence` 保留为兼容的 target-based 表达，但 provider-owned
+external output 必须使用 `FrameCompositionProvider` 的 `FrameCompositionRequest`。它由精确 source
+`ResourceMutationKey`、有序 `REPLACE`/`ALPHA_OVER`/`ADDITIVE` layer、输出 extent/format、frame sequence 与
+scene revision 组成；provider 选择 bounded writable frame slot，并以独立的 `FrameCompositionEvidence` 报告
+destination frame identity。它绝不把 generic `RenderResourceId` 猜测为 external frame。
+
+Vulkan 只有在每个 source mutation 的 command evidence 已为 `OUTPUT_PRODUCED`、generation 仍 resident、
+format/extent/二维单样本 storage-read usage 完全匹配时才记录 composition。source image 仅读、frame-slot
+output 仅写，真实 Vulkan barrier 与 compute submission 连接二者；slot 随后通过既有 external-memory lease
+路径发布，直到 consumer release 后才能复用。`SUBMITTED` 和 `GPU_COMPLETED` 都不是 consumer acceptance 或
+display visibility；调用方通过 `compositionEvidence(frameSequence)` 查询后续状态，只有 exact external lease
+发布 completion 才得到 `CONSUMER_ACCEPTED`。`VISIBLE` 必须携带 presenter-owned 证据；composition provider
+不拥有显示系统，因此不会自行发布它。不能执行该完整链路的
+backend 必须使 extension 为空且把 `FRAME_COMPOSITION`、`FRAME_PRESENTATION_EVIDENCE` 与
+`EXTERNAL_FRAME_CONSUMER` 保持为 `UNSUPPORTED`。
 
 `RenderWorkload` 的 combined mode 要求 retained RT frame 与 command transaction 使用相同 sequence。Vulkan
 provider 只有在两条 lane 都存在时才声明 `COMBINED_WORKLOADS`，并通过同一 frame-queue authority 先提交 retained

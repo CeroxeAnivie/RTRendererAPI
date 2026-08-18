@@ -189,6 +189,46 @@ public final class RendererApiContractSelfTest {
       ));
       new FramePresentationEvidence(target, 77L, FramePresentationEvidence.Outcome.VISIBLE,
               OptionalLong.of(91L), "consumer reported visible present");
+
+      FrameCompositionRequest request = new FrameCompositionRequest(
+              List.of(
+                      new FrameCompositionPlan.Layer(source, FrameCompositionPlan.Operation.REPLACE),
+                      new FrameCompositionPlan.Layer(
+                              new ResourceMutationKey(
+                                      new ResourceGenerationKey(new RenderResourceId(983L), ResourceVersion.initial()), 75L),
+                              FrameCompositionPlan.Operation.ADDITIVE
+                      )
+              ),
+              1920, 1080, FrameOutputFormat.SDR_RGBA8, 78L, 12L
+      );
+      require(request.layers().size() == 2 && request.frameSequence() == 78L,
+              "targetless composition request lost ordered source or output identity");
+      expect(IllegalArgumentException.class, () -> new FrameCompositionRequest(
+              List.of(), 1, 1, FrameOutputFormat.SDR_RGBA8, 0L, 0L
+      ));
+      expect(IllegalArgumentException.class, () -> new FrameCompositionRequest(
+              List.of(new FrameCompositionPlan.Layer(source, FrameCompositionPlan.Operation.REPLACE)),
+              1, 1, FrameOutputFormat.SDR_RGBA8, -1L, 0L
+      ));
+      FrameCompositionEvidence submitted = new FrameCompositionEvidence(
+              78L, 12L, 1920, 1080, FrameOutputFormat.SDR_RGBA8,
+              FrameCompositionEvidence.Outcome.SUBMITTED, OptionalLong.empty(), "submitted to provider frame ring"
+      );
+      require(submitted.outcome() != FrameCompositionEvidence.Outcome.VISIBLE,
+              "composition submission was confused with visible presentation");
+      expect(IllegalArgumentException.class, () -> new FrameCompositionEvidence(
+              78L, 12L, 1920, 1080, FrameOutputFormat.SDR_RGBA8,
+              FrameCompositionEvidence.Outcome.CONSUMER_ACCEPTED, OptionalLong.empty(), "missing consumer completion"
+      ));
+      expect(IllegalArgumentException.class, () -> new FrameCompositionEvidence(
+              78L, 12L, 1920, 1080, FrameOutputFormat.SDR_RGBA8,
+              FrameCompositionEvidence.Outcome.REJECTED, OptionalLong.empty(), "forged output identity"
+      ));
+      FrameCompositionEvidence.rejected(FrameOutputFormat.SDR_RGBA8, "source output is not ready");
+      FrameCompositionProvider provider = request1 -> submitted;
+      require(provider.compositionEvidence(78L).isEmpty(),
+              "default composition evidence query must not fabricate consumer state");
+      expect(IllegalArgumentException.class, () -> provider.compositionEvidence(-1L));
    }
 
    private static void assertExternalFrameConsumerContracts() {

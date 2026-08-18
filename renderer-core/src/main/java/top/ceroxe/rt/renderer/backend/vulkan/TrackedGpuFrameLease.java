@@ -4,6 +4,7 @@ import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.LongConsumer;
 
 /**
  * Makes lease relinquishment observable without weakening the public ownership contract.
@@ -16,12 +17,22 @@ import java.util.Optional;
 final class TrackedGpuFrameLease implements GpuFrameLease, VulkanManagedFrameLease {
     private final GpuFrameLease delegate;
     private final Runnable closeObserver;
+    private final LongConsumer consumerAcceptanceObserver;
 
     private boolean closeObserved;
 
     TrackedGpuFrameLease(GpuFrameLease delegate, Runnable closeObserver) {
+        this(delegate, closeObserver, ignored -> { });
+    }
+
+    TrackedGpuFrameLease(
+            GpuFrameLease delegate, Runnable closeObserver, LongConsumer consumerAcceptanceObserver
+    ) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
         this.closeObserver = Objects.requireNonNull(closeObserver, "closeObserver");
+        this.consumerAcceptanceObserver = Objects.requireNonNull(
+                consumerAcceptanceObserver, "consumerAcceptanceObserver"
+        );
     }
 
     @Override
@@ -50,6 +61,7 @@ final class TrackedGpuFrameLease implements GpuFrameLease, VulkanManagedFrameLea
         if (delegate.state() != LeaseState.RELEASED) {
             throw new IllegalStateException("backend lease accepted release without publishing released state");
         }
+        consumerAcceptanceObserver.accept(descriptor().frameSequence());
     }
 
     @Override

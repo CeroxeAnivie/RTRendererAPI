@@ -85,6 +85,12 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 "Vulkan buffer generations, staging upload, copy and fence evidence are implemented");
         executable(result, RenderingSemanticCapabilities.Feature.VERSIONED_TEXTURES,
                 "Vulkan texture generations use VMA-backed storage with typed residency and safe unused retirement");
+        executable(result, RenderingSemanticCapabilities.Feature.TEXTURE_VIEWS,
+                "resident texture generations expose validated full and subresource Vulkan image views");
+        executable(result, RenderingSemanticCapabilities.Feature.SAMPLERS,
+                "validated immutable sampler descriptors are cached and bound by generic pipeline records");
+        executable(result, RenderingSemanticCapabilities.Feature.SPIRV_SHADER_MODULES,
+                "generic compute, graphics, and ray-tracing pipelines validate and compile caller SPIR-V modules");
         executable(result, RenderingSemanticCapabilities.Feature.TEXTURE_UPLOAD,
                 "texture upload uses staging copies and image-layout transitions retained through fence completion");
         executable(result, RenderingSemanticCapabilities.Feature.TEXTURE_COPY,
@@ -112,6 +118,10 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                     "direct indexed draws are recorded with exact index format, base vertex, and instance parameters");
             executable(result, RenderingSemanticCapabilities.Feature.INSTANCED_DRAW,
                     "direct draws preserve explicit instance counts, first instance, and per-instance vertex bindings");
+            executable(result, RenderingSemanticCapabilities.Feature.MULTI_DRAW,
+                    "multi-draw and multi-indexed-draw commands preserve every draw range and instance parameter");
+            executable(result, RenderingSemanticCapabilities.Feature.INDIRECT_DRAW,
+                    "indirect draw commands validate exact argument buffers and record the requested draw count");
         }
         executable(result, RenderingSemanticCapabilities.Feature.BUFFER_UPLOAD,
                 "buffer upload uses staging copies retained through fence completion");
@@ -119,6 +129,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 "buffer-to-buffer copy is executable for GPU-ready exact generations");
         executable(result, RenderingSemanticCapabilities.Feature.BUFFER_BARRIERS,
                 "buffer memory barriers are executable without queue-family ownership transfer");
+        executable(result, RenderingSemanticCapabilities.Feature.EXPLICIT_BARRIERS,
+                "explicit buffer and texture barriers are recorded with exact stage, access, and subresource scopes");
         executable(result, RenderingSemanticCapabilities.Feature.ACCELERATION_STRUCTURE_BUILDS,
                 "generic BLAS and TLAS builds own exact input generations, scratch allocations, and fence completion");
         executable(result, RenderingSemanticCapabilities.Feature.RAY_TRACING_PIPELINES,
@@ -247,6 +259,34 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         requireOpen();
         pump();
         return Optional.ofNullable(commandEvidence.get(sequence));
+    }
+
+    VulkanGenericCompositionSource requireCompositionSource(top.ceroxe.rt.renderer.api.ResourceMutationKey mutation) {
+        requireOpen();
+        top.ceroxe.rt.renderer.api.ResourceMutationKey checked = Objects.requireNonNull(mutation, "mutation");
+        pump();
+        CommandExecutionEvidence evidence = commandEvidence.get(checked.commandSequence());
+        if (evidence == null || !evidence.outcome().outputProduced()
+                || evidence.outputResource().isEmpty()
+                || !evidence.outputResource().get().equals(checked.generation().id())) {
+            throw new IllegalStateException("composition source command has no completed exact output: " + checked);
+        }
+        return resources.requireCompositionSource(checked);
+    }
+
+    void markCompositionRead(VulkanGenericCompositionSource source) {
+        requireOpen();
+        resources.markCompositionRead(Objects.requireNonNull(source, "source").mutation());
+    }
+
+    void pinComposition(VulkanGenericCompositionSource source) {
+        requireOpen();
+        resources.pinComposition(Objects.requireNonNull(source, "source").mutation());
+    }
+
+    void releaseComposition(VulkanGenericCompositionSource source) {
+        requireOpen();
+        resources.releaseComposition(Objects.requireNonNull(source, "source").mutation());
     }
 
     void pump() {

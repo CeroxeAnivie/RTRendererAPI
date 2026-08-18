@@ -8,6 +8,7 @@
 
 - [RendererBootstrap](#rendererbootstrap)
 - [通用 command path](#通用-command-path)
+- [External frame composition](#external-frame-composition)
 - [Renderer](#renderer)
 - [RendererConfig](#rendererconfig)
 - [场景与帧](#场景与帧)
@@ -52,6 +53,37 @@ discriminator；直接使用 `apply/trySubmit` 或 `submitCommands` 时，调用
 | `commandExecutionEvidence(long)` | `Optional<CommandExecutionEvidence>` | 观察与 transaction sequence 关联的后续 fence completion |
 
 普通场景调用方不需要创建这些对象。专家调用方必须先发布精确 resource generation，再提交仅引用这些 generation 的 command transaction，并始终以 capability 与 typed evidence 作为可执行性依据。
+
+## External frame composition
+
+`renderer.extension(FrameCompositionProvider.class)` 是从 generic command output 到 provider-owned
+external frame ring 的唯一公共桥接。它不是 `FrameCompositionPlan.target()` 的别名：targetless
+`FrameCompositionRequest` 让 provider 选择真正可写的 frame slot，返回的 `FrameCompositionEvidence` 使用
+独立的 frame sequence/scene revision，不伪装成普通 `ResourceMutationKey`。
+
+```java
+FrameCompositionProvider composition = renderer.extension(FrameCompositionProvider.class)
+        .orElseThrow(() -> new IllegalStateException("backend has no executable frame composition"));
+FrameCompositionRequest request = new FrameCompositionRequest(
+        List.of(new FrameCompositionPlan.Layer(
+                new ResourceMutationKey(outputGeneration, commandSequence),
+                FrameCompositionPlan.Operation.REPLACE)),
+        2560, 1440, FrameOutputFormat.SDR_RGBA8, nextFrameSequence, sceneRevision);
+FrameCompositionEvidence evidence = composition.compose(request);
+if (evidence.outcome() == FrameCompositionEvidence.Outcome.REJECTED) {
+    throw new IllegalStateException(evidence.detail());
+}
+FrameCompositionEvidence latest = composition.compositionEvidence(evidence.frameSequence())
+        .orElseThrow();
+```
+
+每个 source 必须仍 resident，且对应 command evidence 已达到 `OUTPUT_PRODUCED`；generation、command
+sequence、format、extent 与 storage-read usage 都会精确验证。`REPLACE`、`ALPHA_OVER`、`ADDITIVE` 按 layer
+顺序执行。`SUBMITTED` 只证明 composition command 已进入 provider-owned frame ring；GPU completion、
+consumer acceptance 和 `VISIBLE` 是独立事实，不能由该值推导。未能完整执行 source validation、GPU barrier、
+frame-slot ownership 和 external lease 的 backend 必须返回空 extension。
+`compositionEvidence(frameSequence)` 是后续状态的权威只读查询；Vulkan 仅在 exact external lease 发布 consumer
+completion 后推进到 `CONSUMER_ACCEPTED`。该 provider 不拥有显示系统，因此不会伪造 `VISIBLE`。
 
 `BindingType.COMBINED_IMAGE_SAMPLER` 以一个 `BindingSet.CombinedImageSamplerValue(TextureView, SamplerState)`
 表达一个 binding 元素。它对应 Vulkan 的 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`，不是

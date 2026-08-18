@@ -15,6 +15,9 @@ import top.ceroxe.rt.renderer.api.RendererHealth;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RenderingSemanticCapabilities;
+import top.ceroxe.rt.renderer.api.FrameCompositionEvidence;
+import top.ceroxe.rt.renderer.api.FrameCompositionProvider;
+import top.ceroxe.rt.renderer.api.FrameCompositionRequest;
 import top.ceroxe.rt.renderer.api.RenderCommandTransaction;
 import top.ceroxe.rt.renderer.api.CommandExecutionEvidence;
 import top.ceroxe.rt.renderer.api.RenderResourceTransaction;
@@ -77,6 +80,8 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     private VulkanGenericCommandSession genericCommands;
     /* Stable adapter identity for the project-independent external-frame contract. */
     private final VulkanExternalFrameConsumerAdapter externalFrameConsumer;
+    /* Stable only when the current session owns a real frame-ring composition path. */
+    private final VulkanFrameCompositionProvider compositionProvider;
 
     private Lifecycle lifecycle = Lifecycle.READY;
     private long latestSubmittedFrameSequence = -1L;
@@ -192,6 +197,9 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
         this.publishedFeatureCapabilities = negotiatedFeatureCapabilities;
         this.session = ownedSession;
         this.genericCommands = openGenericCommands(ownedSession, checkedConfiguration);
+        this.compositionProvider = ownedSession instanceof VulkanFrameCompositionRuntime runtime
+                && runtime.compositionExecutable() && this.genericCommands != null
+                ? new VulkanFrameCompositionProvider(this) : null;
         RendererFeatureProfile initialFeatureProfile = featureProfile(checkedConfiguration);
         this.featureController = new VulkanRendererFeatureController(
                 initialFeatureProfile,
@@ -280,9 +288,65 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
         if (checkedType.isInstance(externalFrameConsumer)) {
             return Optional.of(checkedType.cast(externalFrameConsumer));
         }
+        if (compositionProvider != null && checkedType.isInstance(compositionProvider)) {
+            return Optional.of(checkedType.cast(compositionProvider));
+        }
         return checkedType.isInstance(this)
                 ? Optional.of(checkedType.cast(this))
                 : Optional.empty();
+    }
+
+    FrameCompositionEvidence composeFrame(FrameCompositionRequest request) {
+        Objects.requireNonNull(request, "request");
+        return withLifecycleLock(() -> {
+            if (lifecycle != Lifecycle.READY || sessionClosed) {
+                return FrameCompositionEvidence.rejected(request.format(),
+                        "renderer lifecycle is not ready for composition: " + publicStatus());
+            }
+            if (!(session instanceof VulkanFrameCompositionRuntime runtime) || genericCommands == null
+                    || !runtime.compositionExecutable()) {
+                return FrameCompositionEvidence.rejected(request.format(),
+                        "Vulkan provider has no executable external-frame composition path");
+            }
+            if (request.frameSequence() <= latestSubmittedFrameSequence) {
+                return FrameCompositionEvidence.rejected(request.format(),
+                        "composition frame sequence must advance the renderer frame timeline");
+            }
+            if (request.sceneRevision() > scene.state().revision()) {
+                return FrameCompositionEvidence.rejected(request.format(),
+                        "composition scene revision exceeds the latest accepted scene revision");
+            }
+            try {
+                FrameCompositionEvidence evidence = runtime.compose(request, genericCommands);
+                if (evidence.outcome() != FrameCompositionEvidence.Outcome.REJECTED) {
+                    latestSubmittedFrameSequence = evidence.frameSequence();
+                }
+                return evidence;
+            } catch (RuntimeException failure) {
+                return FrameCompositionEvidence.rejected(request.format(),
+                        "Vulkan composition rejected: " + failure.getMessage());
+            }
+        });
+    }
+
+    java.util.Optional<FrameCompositionEvidence> compositionEvidence(long frameSequence) {
+        return withLifecycleLock(() -> {
+            if (frameSequence < 0L) throw new IllegalArgumentException("frameSequence must not be negative");
+            if (lifecycle != Lifecycle.READY || sessionClosed
+                    || !(session instanceof VulkanFrameCompositionRuntime runtime)) {
+                return java.util.Optional.empty();
+            }
+            return runtime.compositionEvidence(frameSequence);
+        });
+    }
+
+    private void observeCompositionConsumerAccepted(long frameSequence) {
+        withLifecycleLock(() -> {
+            if (lifecycle == Lifecycle.READY && !sessionClosed
+                    && session instanceof VulkanFrameCompositionRuntime runtime) {
+                runtime.observeCompositionConsumerAccepted(frameSequence);
+            }
+        });
     }
 
     private static RendererFeatureProfile featureProfile(RendererConfig configuration) {
@@ -599,6 +663,14 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
                                 "retained RT submission is ordered before generic raster submission on the shared Vulkan frame queue"
                         )
                 );
+                if (compositionProvider != null) {
+                    RenderingSemanticCapabilities.Entry composition = new RenderingSemanticCapabilities.Entry(
+                            RenderingSemanticCapabilities.Status.EXECUTABLE,
+                            "ordered source mutations are composed into a writable Vulkan external-frame slot"
+                    );
+                    builder.feature(RenderingSemanticCapabilities.Feature.FRAME_COMPOSITION, composition);
+                    builder.feature(RenderingSemanticCapabilities.Feature.EXTERNAL_FRAME_CONSUMER, composition);
+                }
                 return builder.build();
             }
             return capabilities;
@@ -870,7 +942,12 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
                 );
             }
             openFrameLeases++;
-            return new TrackedGpuFrameLease(lease, new FrameLeaseRetirement());
+            long leasedSequence = descriptor.frameSequence();
+            return new TrackedGpuFrameLease(
+                    lease,
+                    new FrameLeaseRetirement(),
+                    ignored -> observeCompositionConsumerAccepted(leasedSequence)
+            );
         } catch (RuntimeException contractFailure) {
             try {
                 lease.close();
@@ -1151,22 +1228,27 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
         }
         RuntimeException failure = null;
         if (lifecycle == Lifecycle.CLOSED) externalFrameConsumer.close();
-        if (genericCommands != null) {
-            try {
-                genericCommands.close();
-            } catch (RuntimeException closeFailure) {
-                failure = closeFailure;
-            } finally {
-                genericCommands = null;
-            }
-        }
+        /*
+         * The retained session may still own an in-flight composition submission whose command
+         * buffer reads a generic texture. Retire the frame ring first; closing the generic registry
+         * first would destroy that source image while Vulkan still owns the composition command.
+         */
         try {
             session.close();
             sessionClosed = true;
             if (lifecycle == Lifecycle.CLOSED) closeCompletion.complete(null);
         } catch (RuntimeException closeFailure) {
-            if (failure == null) failure = closeFailure;
-            else failure.addSuppressed(closeFailure);
+            failure = closeFailure;
+        }
+        if (sessionClosed && genericCommands != null) {
+            try {
+                genericCommands.close();
+            } catch (RuntimeException closeFailure) {
+                if (failure == null) failure = closeFailure;
+                else failure.addSuppressed(closeFailure);
+            } finally {
+                genericCommands = null;
+            }
         }
         return failure;
     }

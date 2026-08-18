@@ -84,11 +84,14 @@ public final class RtPrecompiledShaderSelfTest {
       stages.put("gpuscene/gpuscene.rahit", 15);
       stages.put("gpuscene/gpuscene_nrd_compose.comp", Shaderc.shaderc_compute_shader);
       stages.put("gpuscene/gpuscene_reconstruction_publish.comp", Shaderc.shaderc_compute_shader);
+      stages.put("gpuscene/generic_frame_composition.comp", Shaderc.shaderc_compute_shader);
       return Map.copyOf(stages);
    }
 
    private static boolean[] hdrVariants(String stage) {
-      return "gpuscene/gpuscene.rgen".equals(stage) || "gpuscene/gpuscene_nrd_compose.comp".equals(stage)
+      return "gpuscene/gpuscene.rgen".equals(stage)
+              || "gpuscene/gpuscene_nrd_compose.comp".equals(stage)
+              || "gpuscene/generic_frame_composition.comp".equals(stage)
               ? new boolean[]{false, true} : new boolean[]{false};
    }
 

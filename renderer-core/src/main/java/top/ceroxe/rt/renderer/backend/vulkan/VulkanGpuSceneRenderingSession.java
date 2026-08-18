@@ -14,18 +14,31 @@ import top.ceroxe.rt.renderer.api.SubmissionDeferralReason;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
+import top.ceroxe.rt.renderer.api.FrameCompositionEvidence;
+import top.ceroxe.rt.renderer.api.FrameCompositionPlan;
+import top.ceroxe.rt.renderer.api.FrameCompositionRequest;
+import top.ceroxe.rt.renderer.api.FrameOutputFormat;
 import top.ceroxe.rt.renderer.feature.VulkanFeatureSession;
 import top.ceroxe.rt.renderer.feature.VulkanFeatureFallbackException;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
+import top.ceroxe.rt.renderer.rt.device.RtCommandContext;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents;
+import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameCompositionPipeline;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.VK10;
+import org.lwjgl.vulkan.VkCommandBuffer;
+import org.lwjgl.vulkan.VkImageMemoryBarrier;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /** Production session joining persistent GPUScene convergence to bounded hardware RT frames. */
-final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, VulkanGenericCommandRuntimeProvider {
+final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, VulkanGenericCommandRuntimeProvider,
+        VulkanFrameCompositionRuntime {
     private static final String FRAME_TIMING_LABEL = "gpuSceneFrame";
 
     private final RendererConfig configuration;
@@ -39,6 +52,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     private final VulkanGpuSceneDescriptorAssembler descriptorAssembler;
     private final VulkanGpuSceneFrameDiagnostics frameDiagnostics;
     private final VulkanGpuSceneFrameSubmitter frameSubmitter;
+    private final VulkanFrameCompositionPipeline compositionPipeline;
 
     private State state = State.READY;
     private boolean pipelineClosed;
@@ -48,6 +62,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     private int acceptedLightSlotUpperBound;
     private long latestCompletedDescriptorEpoch;
     private long latestCompletedFrameSequence = -1L;
+    private long latestCompositionSubmissionSequence = -1L;
+    private final Map<Long, VulkanGenericCompositionSource[]> compositionPins = new LinkedHashMap<>();
+    private final Map<Long, FrameCompositionEvidence> compositionEvidence = new LinkedHashMap<>();
+    private VulkanGenericCommandSession compositionGenericCommands;
     private long latestAcquiredFrameSequence = -1L;
     private RuntimeException terminalFailure;
     private RendererFeatureProfile currentFeatureProfile;
@@ -63,6 +81,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         VulkanGpuSceneTemporalCoordinator temporalCoordinator = null;
         VulkanGpuSceneFrameRing frameRing = null;
         VulkanGpuSceneFeatureComposition featureComposition = null;
+        VulkanFrameCompositionPipeline compositionPipeline = null;
         try {
             scene = VulkanSceneRuntime.open(
                     Objects.requireNonNull(capability, "capability"),
@@ -98,7 +117,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                     featureSelection
             );
             frameRing = VulkanGpuSceneFrameRing.open(
-                    device, checkedConfiguration, frameOutput, interop, diagnostics, featureSelection
+                device, checkedConfiguration, frameOutput, interop, diagnostics, featureSelection
+            );
+            compositionPipeline = VulkanFrameCompositionPipeline.open(
+                    device, checkedConfiguration.maxFramesInFlight(), frameOutput.linearHdr()
             );
             VulkanFrameAdmissionLimits frameAdmissionLimits = new VulkanFrameAdmissionLimits(
                     device.maxImageDimension2D(),
@@ -112,6 +134,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                     temporalCoordinator,
                     frameRing,
                     featureComposition,
+                    compositionPipeline,
                     frameAdmissionLimits
             );
             scene = null;
@@ -119,10 +142,12 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             temporalCoordinator = null;
             frameRing = null;
             featureComposition = null;
+            compositionPipeline = null;
             return result;
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
             closeSuppressing(failure, frameRing);
             closeSuppressing(failure, featureComposition);
+            closeSuppressing(failure, compositionPipeline);
             closeSuppressing(failure, pipeline);
             closeSuppressing(failure, temporalCoordinator);
             closeSuppressing(failure, scene);
@@ -138,6 +163,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             VulkanGpuSceneTemporalCoordinator temporalCoordinator,
             VulkanGpuSceneFrameRing frameRing,
             VulkanGpuSceneFeatureComposition featureComposition,
+            VulkanFrameCompositionPipeline compositionPipeline,
             VulkanFrameAdmissionLimits frameAdmissionLimits
     ) {
         this.configuration = Objects.requireNonNull(configuration, "configuration");
@@ -148,6 +174,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         this.temporalCoordinator = Objects.requireNonNull(temporalCoordinator, "temporalCoordinator");
         this.frameRing = Objects.requireNonNull(frameRing, "frameRing");
         this.featureComposition = Objects.requireNonNull(featureComposition, "featureComposition");
+        this.compositionPipeline = Objects.requireNonNull(compositionPipeline, "compositionPipeline");
         descriptorAssembler = new VulkanGpuSceneDescriptorAssembler(scene, featureComposition);
         frameDiagnostics = new VulkanGpuSceneFrameDiagnostics(
                 scene.device(), featureComposition, configuration.gpuTimingsEnabled(), FRAME_TIMING_LABEL
@@ -176,6 +203,168 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     @Override
     public VulkanDeviceRuntime genericCommandRuntime() {
         return scene.device();
+    }
+
+    @Override
+    public boolean compositionExecutable() {
+        return compositionPipeline != null;
+    }
+
+    @Override
+    public synchronized FrameCompositionEvidence compose(
+            FrameCompositionRequest request, VulkanGenericCommandSession genericCommands
+    ) {
+        requireReady("compose external frame");
+        FrameCompositionRequest checked = Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(genericCommands, "genericCommands");
+        if (checked.format() != configuration.frameOutputFormat()) {
+            return FrameCompositionEvidence.rejected(checked.format(),
+                    "composition format must equal the renderer frame output format");
+        }
+        if (checked.frameSequence() <= latestCompositionSubmissionSequence) {
+            return FrameCompositionEvidence.rejected(checked.format(),
+                    "composition frame sequence must strictly advance");
+        }
+        VulkanGenericCompositionSource[] sources = new VulkanGenericCompositionSource[checked.layers().size()];
+        for (int index = 0; index < sources.length; index++) {
+            sources[index] = genericCommands.requireCompositionSource(checked.layers().get(index).source());
+            if (sources[index].width() != checked.width() || sources[index].height() != checked.height()) {
+                return FrameCompositionEvidence.rejected(checked.format(),
+                        "composition source extent does not match the requested output extent");
+            }
+            if ((checked.format() == FrameOutputFormat.SDR_RGBA8
+                    && sources[index].format() != top.ceroxe.rt.renderer.api.TextureFormat.RGBA8_UNORM)
+                    || (checked.format() == FrameOutputFormat.LINEAR_HDR_RGBA16F
+                    && sources[index].format() != top.ceroxe.rt.renderer.api.TextureFormat.RGBA16_FLOAT)) {
+                return FrameCompositionEvidence.rejected(checked.format(),
+                        "composition source format does not match the requested output encoding");
+            }
+        }
+        VulkanFrameSlot slot = frameRing.writableSlot();
+        if (slot == null) {
+            return FrameCompositionEvidence.rejected(checked.format(), "all external frame slots are in use");
+        }
+        slot.ensureResources(VulkanFrameExtents.identity(checked.width(), checked.height()));
+        int[] operations = new int[sources.length];
+        long[] views = new long[sources.length];
+        for (int index = 0; index < sources.length; index++) {
+            views[index] = sources[index].view();
+            operations[index] = switch (checked.layers().get(index).operation()) {
+                case REPLACE -> 0;
+                case ALPHA_OVER -> 1;
+                case ADDITIVE -> 2;
+            };
+        }
+        VulkanDeviceRuntime device = scene.device();
+        VulkanDeviceRuntime.ManagedPresentationSignal readySignal = device.reserveManagedPresentationSignal();
+        RtCommandContext.AsyncSubmission submission = null;
+        boolean transferred = false;
+        boolean pinned = false;
+        try {
+            RtCommandContext.CommandRecorder recorder = (commandBuffer, stack) -> {
+                recordCompositionBarriers(commandBuffer, stack, sources, slot.outputImage(), slot.imageLayout());
+                compositionPipeline.record(commandBuffer, stack, slot.index(), checked.width(), checked.height(),
+                        views, slot.outputImage().imageView(), operations);
+                VulkanFrameCompositionPipeline.recordCompletionBarrier(commandBuffer, stack);
+            };
+            submission = readySignal.enabled()
+                    ? device.frameCommands().submitTimedOneTimeAsync(
+                    "genericFrameComposition", readySignal.semaphore(), readySignal.value(), recorder)
+                    : device.frameCommands().submitTimedOneTimeAsync("genericFrameComposition", recorder);
+            for (VulkanGenericCompositionSource source : sources) genericCommands.markCompositionRead(source);
+            try {
+                for (VulkanGenericCompositionSource source : sources) genericCommands.pinComposition(source);
+                pinned = true;
+            } catch (RuntimeException failure) {
+                for (VulkanGenericCompositionSource source : sources) {
+                    try {
+                        genericCommands.releaseComposition(source);
+                    } catch (RuntimeException ignored) {
+                        failure.addSuppressed(ignored);
+                    }
+                }
+                throw failure;
+            }
+            slot.submitted(submission, checked.frameSequence(), checked.sceneRevision(), 0L,
+                    false, readySignal, false);
+            transferred = true;
+            latestCompositionSubmissionSequence = checked.frameSequence();
+            compositionPins.put(checked.frameSequence(), sources);
+            compositionEvidence.put(checked.frameSequence(), new FrameCompositionEvidence(
+                    checked.frameSequence(), checked.sceneRevision(), checked.width(), checked.height(),
+                    checked.format(), FrameCompositionEvidence.Outcome.SUBMITTED,
+                    java.util.OptionalLong.empty(),
+                    "ordered composition submitted to the provider-owned external frame ring"
+            ));
+            while (compositionEvidence.size() > Math.max(2, frameRing.size() * 2)) {
+                compositionEvidence.remove(compositionEvidence.keySet().iterator().next());
+            }
+            compositionGenericCommands = genericCommands;
+            return compositionEvidence.get(checked.frameSequence());
+        } finally {
+            if (!transferred && submission != null) submission.close();
+            if (!transferred && pinned) {
+                for (VulkanGenericCompositionSource source : sources) {
+                    try {
+                        genericCommands.releaseComposition(source);
+                    } catch (RuntimeException ignored) {
+                        // Preserve the original submission failure; registry close remains retryable.
+                    }
+                }
+            }
+        }
+    }
+
+    @Override
+    public synchronized java.util.Optional<FrameCompositionEvidence> compositionEvidence(long frameSequence) {
+        if (frameSequence < 0L) throw new IllegalArgumentException("frameSequence must not be negative");
+        pump();
+        return java.util.Optional.ofNullable(compositionEvidence.get(frameSequence));
+    }
+
+    @Override
+    public synchronized void observeCompositionConsumerAccepted(long frameSequence) {
+        if (frameSequence < 0L) return;
+        FrameCompositionEvidence current = compositionEvidence.get(frameSequence);
+        if (current == null || current.outcome() == FrameCompositionEvidence.Outcome.REJECTED
+                || current.outcome() == FrameCompositionEvidence.Outcome.VISIBLE
+                || current.outcome() == FrameCompositionEvidence.Outcome.CONSUMER_ACCEPTED) {
+            return;
+        }
+        compositionEvidence.put(frameSequence, new FrameCompositionEvidence(
+                current.frameSequence(), current.sceneRevision(), current.width(), current.height(),
+                current.format(), FrameCompositionEvidence.Outcome.CONSUMER_ACCEPTED,
+                java.util.OptionalLong.of(frameSequence),
+                "external consumer published completion for the exact composition frame"
+        ));
+    }
+
+    private static void recordCompositionBarriers(
+            VkCommandBuffer commandBuffer, MemoryStack stack,
+            VulkanGenericCompositionSource[] sources, top.ceroxe.rt.renderer.rt.device.RtGpuImage output,
+            int outputLayout
+    ) {
+        for (VulkanGenericCompositionSource source : sources) {
+            VkImageMemoryBarrier.Buffer barrier = VkImageMemoryBarrier.calloc(1, stack).sType$Default()
+                    .srcAccessMask(VK10.VK_ACCESS_MEMORY_WRITE_BIT)
+                    .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT)
+                    .oldLayout(source.layout()).newLayout(VK10.VK_IMAGE_LAYOUT_GENERAL)
+                    .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                    .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED).image(source.image());
+            barrier.subresourceRange().aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
+                    .baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1);
+            VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, null, null, barrier);
+        }
+        VkImageMemoryBarrier.Buffer outputBarrier = VkImageMemoryBarrier.calloc(1, stack).sType$Default()
+                .srcAccessMask(0).dstAccessMask(VK10.VK_ACCESS_SHADER_WRITE_BIT)
+                .oldLayout(outputLayout).newLayout(VK10.VK_IMAGE_LAYOUT_GENERAL)
+                .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED).image(output.image());
+        outputBarrier.subresourceRange().aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
+                .baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1);
+        VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, null, null, outputBarrier);
     }
 
     @Override
@@ -551,6 +740,28 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         latestCompletedDescriptorEpoch = progress.descriptorEpoch();
         latestCompletedFrameSequence = progress.frameSequence();
         scene.poll(latestCompletedDescriptorEpoch);
+        if (!compositionPins.isEmpty()) {
+            java.util.Iterator<Map.Entry<Long, VulkanGenericCompositionSource[]>> iterator = compositionPins.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<Long, VulkanGenericCompositionSource[]> entry = iterator.next();
+                if (!frameRing.completed(entry.getKey())) continue;
+                FrameCompositionEvidence current = compositionEvidence.get(entry.getKey());
+                if (current != null && current.outcome() == FrameCompositionEvidence.Outcome.SUBMITTED) {
+                    compositionEvidence.put(entry.getKey(), new FrameCompositionEvidence(
+                            current.frameSequence(), current.sceneRevision(), current.width(), current.height(),
+                            current.format(), FrameCompositionEvidence.Outcome.GPU_COMPLETED,
+                            java.util.OptionalLong.empty(),
+                            "provider observed completion of the composition command submission"
+                    ));
+                }
+                if (compositionGenericCommands != null) {
+                    for (VulkanGenericCompositionSource source : entry.getValue()) {
+                        compositionGenericCommands.releaseComposition(source);
+                    }
+                }
+                iterator.remove();
+            }
+        }
     }
 
     private void requireReady(String operation) {
@@ -571,6 +782,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         if (resourcesClosed) return;
         state = State.CLOSED;
         frameRing.close();
+        compositionPipeline.close();
         featureComposition.close();
         if (!pipelineClosed) {
             pipeline.close();

@@ -156,7 +156,11 @@ tasks.register<JavaExec>("rendererApiContractSelfTest") {
     // API contract checks validate immutable values and SPI rules only. Resolving the optional
     // NVIDIA provider here would configure its native CMake bridge and turn a CPU-only gate into
     // an accidental SDK/network requirement. Native provider behavior has its own dedicated gate.
-    classpath = sourceSets.test.get().output + sourceSets.main.get().output + configurations.testCompileClasspath.get()
+    classpath = files(
+        sourceSets.test.get().output.classesDirs,
+        sourceSets.main.get().output.classesDirs,
+        configurations.testCompileClasspath.get()
+    )
     mainClass.set("top.ceroxe.rt.renderer.api.RendererApiContractSelfTest")
 }
 
@@ -164,7 +168,11 @@ tasks.register<JavaExec>("renderCommandContractSelfTest") {
     group = "verification"
     description = "Verifies pass, draw, copy, barrier, and strict command-transaction contracts."
     dependsOn(tasks.named("testClasses"))
-    classpath = sourceSets.test.get().output + sourceSets.main.get().output + configurations.testCompileClasspath.get()
+    classpath = files(
+        sourceSets.test.get().output.classesDirs,
+        sourceSets.main.get().output.classesDirs,
+        configurations.testCompileClasspath.get()
+    )
     mainClass.set("top.ceroxe.rt.renderer.api.RenderCommandContractSelfTest")
 }
 
@@ -172,7 +180,11 @@ tasks.register<JavaExec>("resourceLifecycleContractSelfTest") {
     group = "verification"
     description = "Verifies explicit resource publication, residency evidence, and retirement."
     dependsOn(tasks.named("testClasses"))
-    classpath = sourceSets.test.get().output + sourceSets.main.get().output + configurations.testCompileClasspath.get()
+    classpath = files(
+        sourceSets.test.get().output.classesDirs,
+        sourceSets.main.get().output.classesDirs,
+        configurations.testCompileClasspath.get()
+    )
     mainClass.set("top.ceroxe.rt.renderer.api.ResourceLifecycleContractSelfTest")
 }
 

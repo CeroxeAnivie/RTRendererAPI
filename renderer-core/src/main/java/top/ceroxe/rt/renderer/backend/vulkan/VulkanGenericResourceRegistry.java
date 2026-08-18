@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Owns generic Vulkan buffer and texture generations independently from the retained GPUScene registry.
@@ -46,6 +48,8 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
      * token until its fence completes so admission and retirement remain exact.
      */
     private final Map<ResourceGenerationKey, ResourceMutationKey> inFlightMutations = new HashMap<>();
+    /* Composition reads use a frame-sequence domain, so they have their own exact pin ledger. */
+    private final Set<ResourceGenerationKey> compositionPins = new HashSet<>();
     private final Map<RenderResourceId, Long> highestVersionById = new HashMap<>();
     private final Map<RenderResourceId, ResourceKind> resourceKinds = new HashMap<>();
     private long latestTransactionRevision = -1L;
@@ -224,6 +228,64 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         return samplers;
     }
 
+    VulkanGenericCompositionSource requireCompositionSource(ResourceMutationKey mutation) {
+        requireOpen();
+        ResourceMutationKey checked = Objects.requireNonNull(mutation, "mutation");
+        TextureRecord record = textures.get(checked.generation());
+        if (record == null) throw new IllegalArgumentException("composition source texture is not resident: " + checked.generation());
+        if (record.evidence().outcome() != ResourceResidencyEvidence.Outcome.GPU_READY) {
+            throw new IllegalStateException("composition source is not GPU-ready: " + checked);
+        }
+        TextureResource descriptor = record.descriptor();
+        if (descriptor.dimension() != top.ceroxe.rt.renderer.api.TextureDimension.TEXTURE_2D
+                || descriptor.sampleCount() != 1 || descriptor.mipLevelCount() != 1
+                || descriptor.arrayLayerCount() != 1) {
+            throw new IllegalArgumentException("composition sources must be single-sample 2D full-resolution textures");
+        }
+        if (!descriptor.usage().contains(top.ceroxe.rt.renderer.api.TextureUsage.STORAGE_READ)
+                && !descriptor.usage().contains(top.ceroxe.rt.renderer.api.TextureUsage.STORAGE_READ_WRITE)) {
+            throw new IllegalArgumentException("composition source must declare storage-read usage");
+        }
+        if (descriptor.format() != top.ceroxe.rt.renderer.api.TextureFormat.RGBA8_UNORM
+                && descriptor.format() != top.ceroxe.rt.renderer.api.TextureFormat.RGBA16_FLOAT) {
+            throw new IllegalArgumentException("composition source format is not supported by the Vulkan composition shader");
+        }
+        top.ceroxe.rt.renderer.api.TextureView view = new top.ceroxe.rt.renderer.api.TextureView(
+                descriptor,
+                top.ceroxe.rt.renderer.api.TextureViewDimension.TEXTURE_2D,
+                new top.ceroxe.rt.renderer.api.TextureSubresourceRange(
+                        top.ceroxe.rt.renderer.api.TextureAspect.COLOR, 0, 1, 0, 1
+                )
+        );
+        return new VulkanGenericCompositionSource(
+                checked, descriptor.format(), descriptor.width(), descriptor.height(),
+                record.image().image(), record.views().require(view),
+                record.layouts().layout(top.ceroxe.rt.renderer.api.TextureAspect.COLOR, 0, 0)
+        );
+    }
+
+    void markCompositionRead(ResourceMutationKey mutation) {
+        TextureRecord record = textures.get(Objects.requireNonNull(mutation, "mutation").generation());
+        if (record == null) throw new IllegalArgumentException("composition source texture is not resident: " + mutation);
+        record.layouts().set(new top.ceroxe.rt.renderer.api.TextureSubresourceRange(
+                top.ceroxe.rt.renderer.api.TextureAspect.COLOR, 0, 1, 0, 1
+        ), org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_GENERAL);
+    }
+
+    void pinComposition(ResourceMutationKey mutation) {
+        requireOpen();
+        ResourceGenerationKey generation = Objects.requireNonNull(mutation, "mutation").generation();
+        if (!textures.containsKey(generation)) {
+            throw new IllegalArgumentException("composition source texture is not resident: " + generation);
+        }
+        compositionPins.add(generation);
+    }
+
+    void releaseComposition(ResourceMutationKey mutation) {
+        requireOpen();
+        compositionPins.remove(Objects.requireNonNull(mutation, "mutation").generation());
+    }
+
     void requireReadable(BufferRecord record) {
         ResourceResidencyEvidence current = evidence(record.generation());
         if (current.outcome() != ResourceResidencyEvidence.Outcome.GPU_READY) {
@@ -399,6 +461,9 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         ArrayList<TextureRecord> records = new ArrayList<>();
         for (ResourceGenerationKey generation : transaction.retiredGenerations()) {
             requireNoInFlightMutation(generation);
+            if (compositionPins.contains(generation)) {
+                throw new IllegalStateException("texture generation is retained by an external-frame composition: " + generation);
+            }
             TextureRecord record = textures.get(generation);
             if (record == null) continue;
             ResourceResidencyEvidence current = record.evidence();
@@ -572,6 +637,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         closed = true;
         samplers.close();
         inFlightMutations.clear();
+        compositionPins.clear();
         for (BufferRecord record : buffers.values()) record.buffer().close();
         buffers.clear();
         for (TextureRecord record : textures.values()) record.close();

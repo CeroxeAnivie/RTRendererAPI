@@ -135,6 +135,14 @@ final class VulkanGpuSceneFrameRing implements AutoCloseable {
         return latest;
     }
 
+    boolean completed(long frameSequence) {
+        if (frameSequence < 0L) return false;
+        for (VulkanFrameSlot slot : slots) {
+            if (slot.frameSequence() == frameSequence && slot.completed()) return true;
+        }
+        return false;
+    }
+
     VulkanFrameSlot earliestManagedPresentableSlot(long afterFrameSequence) {
         VulkanFrameSlot earliest = null;
         for (VulkanFrameSlot slot : slots) {
