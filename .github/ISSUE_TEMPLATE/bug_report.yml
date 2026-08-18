@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: RTRendererAPI version
-      placeholder: 0.5.1
+      placeholder: 3.0.0
     validations:
       required: true
   - type: textarea

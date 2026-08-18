@@ -61,7 +61,6 @@ jobs:
         shell: pwsh
         run: |
           .\gradlew.bat strictAcceptanceTest `
-            -Pjava_version=21 `
             -PcmakeExecutable="$env:RTRENDERER_CMAKE_EXECUTABLE" `
             -PnrdSdkRoot="$env:RTRENDERER_NRD_SDK_ROOT" `
             -PnriSdkRoot="$env:RTRENDERER_NRI_SDK_ROOT" `
