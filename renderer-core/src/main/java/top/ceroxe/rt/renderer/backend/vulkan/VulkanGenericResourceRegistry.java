@@ -262,12 +262,37 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         );
     }
 
-    void markCompositionRead(ResourceMutationKey mutation) {
-        TextureRecord record = textures.get(Objects.requireNonNull(mutation, "mutation").generation());
-        if (record == null) throw new IllegalArgumentException("composition source texture is not resident: " + mutation);
-        record.layouts().set(new top.ceroxe.rt.renderer.api.TextureSubresourceRange(
-                top.ceroxe.rt.renderer.api.TextureAspect.COLOR, 0, 1, 0, 1
-        ), org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_GENERAL);
+    VulkanGenericTextureLayoutUpdates beginCompositionLayoutUpdates() {
+        requireOpen();
+        return new VulkanGenericTextureLayoutUpdates();
+    }
+
+    int stageCompositionRead(
+            ResourceMutationKey mutation,
+            VulkanGenericTextureLayoutUpdates layoutUpdates
+    ) {
+        requireOpen();
+        ResourceMutationKey checked = Objects.requireNonNull(mutation, "mutation");
+        VulkanGenericTextureLayoutUpdates checkedUpdates =
+                Objects.requireNonNull(layoutUpdates, "layoutUpdates");
+        TextureRecord record = textures.get(checked.generation());
+        if (record == null) {
+            throw new IllegalArgumentException("composition source texture is not resident: " + checked);
+        }
+        top.ceroxe.rt.renderer.api.TextureSubresourceRange fullColor =
+                new top.ceroxe.rt.renderer.api.TextureSubresourceRange(
+                        top.ceroxe.rt.renderer.api.TextureAspect.COLOR, 0, 1, 0, 1
+                );
+        int previousLayout = checkedUpdates.layout(
+                record, top.ceroxe.rt.renderer.api.TextureAspect.COLOR, 0, 0
+        );
+        checkedUpdates.set(record, fullColor, org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_GENERAL);
+        return previousLayout;
+    }
+
+    void commitCompositionLayoutUpdates(VulkanGenericTextureLayoutUpdates layoutUpdates) {
+        requireOpen();
+        Objects.requireNonNull(layoutUpdates, "layoutUpdates").commit();
     }
 
     CompositionPinLease acquireCompositionPins(VulkanGenericCompositionSource[] sources) {

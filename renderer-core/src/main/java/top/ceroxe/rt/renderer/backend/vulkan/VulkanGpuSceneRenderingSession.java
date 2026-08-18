@@ -262,33 +262,62 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         VulkanDeviceRuntime device = scene.device();
         VulkanDeviceRuntime.ManagedPresentationSignal readySignal = device.reserveManagedPresentationSignal();
         RtCommandContext.AsyncSubmission submission = null;
-        boolean transferred = false;
         VulkanGenericResourceRegistry.CompositionPinLease pinLease = null;
+        VulkanFrameSlot.SubmissionReservation slotReservation = null;
+        boolean pinRegistered = false;
         try {
+            VulkanGenericTextureLayoutUpdates layoutUpdates = genericCommands.beginCompositionLayoutUpdates();
+            int[] sourceLayouts = new int[sources.length];
+            for (int index = 0; index < sources.length; index++) {
+                sourceLayouts[index] = genericCommands.stageCompositionRead(sources[index], layoutUpdates);
+            }
+            slotReservation = slot.reserveSubmission(
+                    checked.frameSequence(), checked.sceneRevision(), 0L, false, readySignal, false
+            );
+            pinLease = genericCommands.pinComposition(sources);
+            if (compositionPins.putIfAbsent(checked.frameSequence(), pinLease) != null) {
+                throw new IllegalStateException("composition frame sequence already owns source pins");
+            }
+            pinRegistered = true;
             RtCommandContext.CommandRecorder recorder = (commandBuffer, stack) -> {
-                recordCompositionBarriers(commandBuffer, stack, sources, slot.outputImage(), slot.imageLayout());
+                recordCompositionBarriers(
+                        commandBuffer, stack, sources, sourceLayouts, slot.outputImage(), slot.imageLayout()
+                );
                 compositionPipeline.record(commandBuffer, stack, slot.index(), checked.width(), checked.height(),
                         views, slot.outputImage().imageView(), operations);
-                VulkanFrameCompositionPipeline.recordCompletionBarrier(commandBuffer, stack);
+                if (slot.cpuReadbackOrNull() == null) {
+                    VulkanFrameCompositionPipeline.recordCompletionBarrier(commandBuffer, stack);
+                } else {
+                    VulkanFrameCompositionPipeline.recordCpuReadback(
+                            commandBuffer, stack, slot.outputImage(), slot.cpuReadbackOrNull()
+                    );
+                }
             };
-            for (VulkanGenericCompositionSource source : sources) genericCommands.markCompositionRead(source);
-            pinLease = genericCommands.pinComposition(sources);
             submission = readySignal.enabled()
                     ? device.frameCommands().submitTimedOneTimeAsync(
                     "genericFrameComposition", readySignal.semaphore(), readySignal.value(), recorder)
                     : device.frameCommands().submitTimedOneTimeAsync("genericFrameComposition", recorder);
-            compositionPins.put(checked.frameSequence(), pinLease);
+            /*
+             * The overlay is deliberately committed before slot publication. Its inputs were
+             * validated while recording, and commit only applies those already-valid scalar
+             * layout values. If an unexpected runtime failure occurs, close() waits for the
+             * submitted fence and the session becomes terminal instead of exposing a ledger that
+             * later commands could trust incorrectly.
+             */
             try {
-                slot.submitted(submission, checked.frameSequence(), checked.sceneRevision(), 0L,
-                        false, readySignal, false);
-            } catch (RuntimeException failure) {
-                compositionPins.remove(checked.frameSequence());
-                pinLease.close();
-                throw failure;
+                genericCommands.commitCompositionLayoutUpdates(layoutUpdates);
+            } catch (RuntimeException commitFailure) {
+                state = State.FAILED;
+                terminalFailure = commitFailure;
+                throw commitFailure;
             }
-            transferred = true;
+            slotReservation.publish(submission);
+            submission = null;
             latestCompositionSubmissionSequence = checked.frameSequence();
             pinLease = null;
+            pinRegistered = false;
+            slotReservation.close();
+            slotReservation = null;
             compositionEvidence.put(checked.frameSequence(), new FrameCompositionEvidence(
                     checked.frameSequence(), checked.sceneRevision(), checked.width(), checked.height(),
                     checked.format(), FrameCompositionEvidence.Outcome.SUBMITTED,
@@ -300,8 +329,18 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             }
             return compositionEvidence.get(checked.frameSequence());
         } finally {
-            if (!transferred && submission != null) submission.close();
+            if (slotReservation != null) {
+                boolean published = slotReservation.published();
+                slotReservation.close();
+                if (published) {
+                    submission = null;
+                    pinLease = null;
+                    pinRegistered = false;
+                }
+            }
+            if (submission != null) submission.close();
             if (pinLease != null) {
+                if (pinRegistered) compositionPins.remove(checked.frameSequence(), pinLease);
                 pinLease.close();
             }
         }
@@ -333,14 +372,19 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
 
     private static void recordCompositionBarriers(
             VkCommandBuffer commandBuffer, MemoryStack stack,
-            VulkanGenericCompositionSource[] sources, top.ceroxe.rt.renderer.rt.device.RtGpuImage output,
+            VulkanGenericCompositionSource[] sources, int[] sourceLayouts,
+            top.ceroxe.rt.renderer.rt.device.RtGpuImage output,
             int outputLayout
     ) {
-        for (VulkanGenericCompositionSource source : sources) {
+        if (sources.length != sourceLayouts.length) {
+            throw new IllegalArgumentException("composition source layout count is inconsistent");
+        }
+        for (int index = 0; index < sources.length; index++) {
+            VulkanGenericCompositionSource source = sources[index];
             VkImageMemoryBarrier.Buffer barrier = VkImageMemoryBarrier.calloc(1, stack).sType$Default()
                     .srcAccessMask(VK10.VK_ACCESS_MEMORY_WRITE_BIT)
                     .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT)
-                    .oldLayout(source.layout()).newLayout(VK10.VK_IMAGE_LAYOUT_GENERAL)
+                    .oldLayout(sourceLayouts[index]).newLayout(VK10.VK_IMAGE_LAYOUT_GENERAL)
                     .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
                     .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED).image(source.image());
             barrier.subresourceRange().aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)

@@ -173,6 +173,8 @@ val registerCoreSelfTest =
     }
 
 val contractSelfTests = linkedMapOf(
+    "vulkanGenericTextureLayoutUpdatesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericTextureLayoutUpdatesSelfTest",
+    "vulkanFrameCompositionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameCompositionNativeSelfTest",
     "coreVulkanBlasBuildCoordinatorSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanBlasBuildCoordinatorSelfTest",
     "coreVulkanRendererRuntimeLifecycleSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererRuntimeLifecycleSelfTest",
     "coreRtActiveSectionContentStateSelfTest" to "top.ceroxe.rt.renderer.rt.acceleration.RtActiveSectionContentStateSelfTest",

@@ -12,7 +12,7 @@ RTRendererAPI `3.x` 是稳定 API 线。Maven Central 是唯一二进制事实�
 - `1.1.0` 建立了显式的通用资源与命令语义。
 - `2.0.0` 是刻意的主版本断代：一个 `Renderer` 直接承载 retained-scene 与通用 command transaction 两种显式模式，移除了重名入口、旧类型与 1.x provider 兼容层。`COMBINED_IMAGE_SAMPLER` 是原生的单一 binding/value，并由 Vulkan 后端映射到对应 descriptor。通用能力只按 `RenderingSemanticCapabilities` 的逐项 executable 证据声明，静态类型存在不等于 GPU 后端已经执行该语义。
 - `3.0.0` 继续采用 retained-scene 与通用 command transaction 的显式工作负载区分，并移除按稳定资源 identity 批量退休的危险语义：资源回收必须指定 `ResourceGenerationKey`。它新增通用 buffer-image copy、clear 与 RT command path；在满足 Vulkan 能力门槛时，generic backend 以独立 AS/SBT/trace/evidence 链执行该路径，不能由静态类型或 `RECORDED` 推断画面可见。
-- `3.1.1` 是兼容 patch：修复 provider-owned composition 的共享 source 引用计数、early managed lease producer-completion 释放、首层 blend 约束与 evidence 不变量；既有 `3.1.0` 公共调用路径保持兼容。
+- `3.1.2` 是兼容 patch：composition source layout 改为 submit-success-only 的局部事务，且在 frame-slot publication 前提交；提交意外失败会使 host/session terminal failed，撤销可执行 capability，避免后续命令复用不可信 layout ledger。slot 在 queue submit 前完成 admission reservation；同时修复共享 source 引用计数、early managed lease producer-completion 释放、CPU readback publication、首层 blend 约束与 evidence 不变量。既有 `3.1.0` 公共调用路径保持兼容。
 - patch 版本只能提供兼容修复；minor 版本可以增加兼容能力；删除或改变既有公共二进制声明必须升级 major。
 - 每个主版本都提交当前版本的完整 `javap` ABI baseline。`verifyRendererApiAbi` 阻止在同一主版本内未经审查的二进制漂移；跨 major 的移除必须有对应的版本策略记录，不能伪装成兼容变更。
 

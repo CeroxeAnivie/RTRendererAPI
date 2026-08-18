@@ -71,6 +71,7 @@ final class VulkanFrameSlot implements AutoCloseable {
     private boolean currentSubmissionUsesSer;
     private boolean pendingCompletionUsesSer;
     private LongConsumer producerCompletionObserver;
+    private SubmissionReservation activeSubmissionReservation;
     private boolean closed;
 
     VulkanFrameSlot(
@@ -695,6 +696,97 @@ final class VulkanFrameSlot implements AutoCloseable {
         );
     }
 
+    /**
+     * Reserves this slot before a composition command is submitted to Vulkan.
+     *
+     * <p>All validation that may reject publication happens here, before queue submission. The
+     * returned reservation can then adopt the submitted fence without another fallible state
+     * transition. Closing an unpublished reservation restores the slot to {@link State#FREE}.</p>
+     */
+    synchronized SubmissionReservation reserveSubmission(
+            long frameSequence,
+            long sceneRevision,
+            long descriptorEpoch,
+            boolean externallyOwnedAfterSubmission,
+            VulkanDeviceRuntime.ManagedPresentationSignal readySignal,
+            boolean usesShaderExecutionReordering
+    ) {
+        requireState(State.FREE, "reserve frame submission");
+        if (pendingCompletionEvidenceSequence >= 0L) {
+            throw new IllegalStateException("previous frame completion evidence is still pending");
+        }
+        if (frameSequence < 0L || sceneRevision < 0L || descriptorEpoch < 0L) {
+            throw new IllegalArgumentException("frame submission counters must not be negative");
+        }
+        VulkanDeviceRuntime.ManagedPresentationSignal checkedSignal =
+                Objects.requireNonNull(readySignal, "readySignal");
+        SubmissionReservation reservation = new SubmissionReservation(
+                this,
+                frameSequence,
+                sceneRevision,
+                descriptorEpoch,
+                externallyOwnedAfterSubmission,
+                checkedSignal,
+                usesShaderExecutionReordering
+        );
+        activeSubmissionReservation = reservation;
+        state = State.RESERVED;
+        return reservation;
+    }
+
+    private synchronized void publishReservedSubmission(
+            SubmissionReservation reservation,
+            RtCommandContext.AsyncSubmission submission
+    ) {
+        requireOpen();
+        SubmissionReservation checked = Objects.requireNonNull(reservation, "reservation");
+        RtCommandContext.AsyncSubmission checkedSubmission = Objects.requireNonNull(submission, "submission");
+        if (state != State.RESERVED || activeSubmissionReservation != checked) {
+            throw new IllegalStateException("frame submission reservation is no longer active");
+        }
+
+        /*
+         * From this assignment onward the slot is the sole owner of the already-submitted fence.
+         * Keep this publication block free of callbacks and allocation so no recoverable Java
+         * failure can strand an executing command outside the frame ring.
+         */
+        producerSubmission = checkedSubmission;
+        frameSequence = checked.frameSequence;
+        sceneRevision = checked.sceneRevision;
+        descriptorEpoch = checked.descriptorEpoch;
+        readyTimelineSemaphore = checked.readySignal.semaphore();
+        readyTimelineValue = checked.readySignal.value();
+        imageLayout = VK10.VK_IMAGE_LAYOUT_GENERAL;
+        if (denoisingEnabled) traceLayoutInitialized = true;
+        if (requiresPrivateReconstructionOutput()) reconstructionOutputLayoutInitialized = true;
+        if (temporalEnabled) motionLayoutInitialized = true;
+        externallyOwned = checked.externallyOwnedAfterSubmission;
+        currentSubmissionUsesSer = checked.usesShaderExecutionReordering;
+        activeSubmissionReservation = null;
+        checked.published = true;
+        state = State.SUBMITTED;
+        VulkanFrameFlightRecorder.record(
+                VulkanFrameFlightRecorder.PHASE_ADMITTED,
+                index,
+                frameSequence,
+                sceneRevision,
+                descriptorEpoch,
+                outputImage.width(),
+                outputImage.height(),
+                0L,
+                0L
+        );
+    }
+
+    private synchronized void cancelSubmissionReservation(SubmissionReservation reservation) {
+        if (reservation.published) return;
+        if (state != State.RESERVED || activeSubmissionReservation != reservation) {
+            throw new IllegalStateException("frame submission reservation is no longer active");
+        }
+        activeSubmissionReservation = null;
+        state = State.FREE;
+    }
+
     synchronized boolean pollProducer() {
         requireOpen();
         publishPendingCompletionEvidence();
@@ -998,10 +1090,64 @@ final class VulkanFrameSlot implements AutoCloseable {
         if (closed) throw new IllegalStateException("frame slot is closed");
     }
 
+    /**
+     * Prevalidated ownership token connecting one free frame slot to one future queue submission.
+     * The token deliberately owns no native object until {@link #publish(RtCommandContext.AsyncSubmission)}
+     * succeeds, so recorder or queue-submit failures can cancel it without waiting for the device.
+     */
+    final class SubmissionReservation implements AutoCloseable {
+        private final VulkanFrameSlot owner;
+        private final long frameSequence;
+        private final long sceneRevision;
+        private final long descriptorEpoch;
+        private final boolean externallyOwnedAfterSubmission;
+        private final VulkanDeviceRuntime.ManagedPresentationSignal readySignal;
+        private final boolean usesShaderExecutionReordering;
+        private boolean published;
+        private boolean closed;
+
+        private SubmissionReservation(
+                VulkanFrameSlot owner,
+                long frameSequence,
+                long sceneRevision,
+                long descriptorEpoch,
+                boolean externallyOwnedAfterSubmission,
+                VulkanDeviceRuntime.ManagedPresentationSignal readySignal,
+                boolean usesShaderExecutionReordering
+        ) {
+            this.owner = owner;
+            this.frameSequence = frameSequence;
+            this.sceneRevision = sceneRevision;
+            this.descriptorEpoch = descriptorEpoch;
+            this.externallyOwnedAfterSubmission = externallyOwnedAfterSubmission;
+            this.readySignal = readySignal;
+            this.usesShaderExecutionReordering = usesShaderExecutionReordering;
+        }
+
+        void publish(RtCommandContext.AsyncSubmission submission) {
+            if (closed) throw new IllegalStateException("frame submission reservation is closed");
+            owner.publishReservedSubmission(this, submission);
+        }
+
+        boolean published() {
+            return published;
+        }
+
+        @Override
+        public void close() {
+            if (closed) return;
+            if (!published) owner.cancelSubmissionReservation(this);
+            closed = true;
+        }
+    }
+
     @Override
     public synchronized void close() {
         if (closed) return;
         publishPendingCompletionEvidence();
+        if (state == State.RESERVED) {
+            throw new IllegalStateException("cannot close a frame slot with an active submission reservation");
+        }
         if (state == State.LEASED) {
             throw new IllegalStateException("cannot close a frame slot retained by an external consumer");
         }
@@ -1129,6 +1275,7 @@ final class VulkanFrameSlot implements AutoCloseable {
 
     private enum State {
         FREE,
+        RESERVED,
         SUBMITTED,
         COMPLETED,
         LEASED,

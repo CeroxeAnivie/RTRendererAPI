@@ -1,6 +1,6 @@
 # 通用渲染语义参考
 
-本页定义 `3.1.1` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
+本页定义 `3.1.2` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
 实现通用 RT 提交时，先阅读[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)；该指南
 提供由资源发布到 `TraceRaysCommand` 的完整最小流程，本页则说明每一步为什么成立。
 
@@ -94,6 +94,12 @@ display visibility；调用方通过 `compositionEvidence(frameSequence)` 查询
 不拥有显示系统，因此不会自行发布它。不能执行该完整链路的
 backend 必须使 extension 为空且把 `FRAME_COMPOSITION`、`FRAME_PRESENTATION_EVIDENCE` 与
 `EXTERNAL_FRAME_CONSUMER` 保持为 `UNSUPPORTED`。
+
+source layout 是 submission-local overlay：仅在 Vulkan queue submission 成功后、frame slot publication 前才写回
+persistent layout ledger。slot 也在 submit 前完成 admission reservation，因此失败的录制、pin 或 queue-submit 不会污染
+后续 barrier 的 old layout，更不会释放已经开始执行的 submission。若这个已验证 overlay 的提交仍发生运行时异常，provider
+会等待该 submission 完成；host 随即转入 terminal failure，撤销可执行 capability，并拒绝后续命令。它不会继续以不可信 ledger 接受新命令。启用 CPU readback 时，composition 在同一 submission 中把 output
+copy 到 slot-owned buffer、发布 host-read barrier，再恢复 output 的 `GENERAL` layout。
 
 `RenderWorkload` 的 combined mode 要求 retained RT frame 与 command transaction 使用相同 sequence。Vulkan
 provider 只有在两条 lane 都存在时才声明 `COMBINED_WORKLOADS`，并通过同一 frame-queue authority 先提交 retained

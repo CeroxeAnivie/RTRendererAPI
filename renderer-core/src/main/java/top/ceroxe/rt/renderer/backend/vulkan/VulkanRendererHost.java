@@ -323,6 +323,12 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
                 }
                 return evidence;
             } catch (RuntimeException failure) {
+                /*
+                 * A composition exception may follow successful queue submission. Treat it as
+                 * terminal at the host boundary so no public capability can outlive a session
+                 * whose resource-layout ledger is no longer trustworthy.
+                 */
+                transitionToFailed("compose external frame", failure);
                 return FrameCompositionEvidence.rejected(request.format(),
                         "Vulkan composition rejected: " + failure.getMessage());
             }

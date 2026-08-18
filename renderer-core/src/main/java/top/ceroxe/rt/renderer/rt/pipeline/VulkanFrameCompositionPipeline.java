@@ -15,9 +15,14 @@ import org.lwjgl.vulkan.VkPipelineShaderStageCreateInfo;
 import org.lwjgl.vulkan.VkPushConstantRange;
 import org.lwjgl.vulkan.VkWriteDescriptorSet;
 import org.lwjgl.vulkan.VkMemoryBarrier;
+import org.lwjgl.vulkan.VkBufferImageCopy;
+import org.lwjgl.vulkan.VkBufferMemoryBarrier;
+import org.lwjgl.vulkan.VkImageMemoryBarrier;
 import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.util.shaderc.Shaderc;
 import top.ceroxe.rt.renderer.RtEdgeSink;
+import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
+import top.ceroxe.rt.renderer.rt.device.RtGpuImage;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
 import java.nio.LongBuffer;
@@ -136,6 +141,99 @@ public final class VulkanFrameCompositionPipeline implements AutoCloseable {
                 .dstAccessMask(VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT);
         VK10.vkCmdPipelineBarrier(commands, VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                 VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, barrier, null, null);
+    }
+
+    /**
+     * Copies the composed output into the slot-local CPU readback buffer and restores the public
+     * image layout. Composition frames must honor the same CPU-frame contract as ray-traced
+     * frames; a completed fence alone does not populate a host-visible buffer.
+     *
+     * @param commands command buffer receiving the copy and visibility barriers
+     * @param stack scoped native allocation stack
+     * @param output provider-owned composition output in {@code GENERAL} layout
+     * @param readback host-visible destination owned by the same frame slot
+     */
+    public static void recordCpuReadback(
+            VkCommandBuffer commands,
+            MemoryStack stack,
+            RtGpuImage output,
+            RtGpuBuffer readback
+    ) {
+        Objects.requireNonNull(commands, "commands");
+        Objects.requireNonNull(stack, "stack");
+        RtGpuImage checkedOutput = Objects.requireNonNull(output, "output");
+        RtGpuBuffer checkedReadback = Objects.requireNonNull(readback, "readback");
+        VkImageMemoryBarrier.Buffer toTransfer = VkImageMemoryBarrier.calloc(1, stack).sType$Default()
+                .srcAccessMask(VK10.VK_ACCESS_SHADER_WRITE_BIT)
+                .dstAccessMask(VK10.VK_ACCESS_TRANSFER_READ_BIT)
+                .oldLayout(VK10.VK_IMAGE_LAYOUT_GENERAL)
+                .newLayout(VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+                .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .image(checkedOutput.image());
+        toTransfer.subresourceRange().aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
+                .baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1);
+        VK10.vkCmdPipelineBarrier(
+                commands,
+                VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                0,
+                null,
+                null,
+                toTransfer
+        );
+
+        VkBufferImageCopy.Buffer copy = VkBufferImageCopy.calloc(1, stack);
+        copy.get(0).bufferOffset(0L).bufferRowLength(0).bufferImageHeight(0);
+        copy.get(0).imageSubresource().aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
+                .mipLevel(0).baseArrayLayer(0).layerCount(1);
+        copy.get(0).imageOffset().set(0, 0, 0);
+        copy.get(0).imageExtent().set(checkedOutput.width(), checkedOutput.height(), 1);
+        VK10.vkCmdCopyImageToBuffer(
+                commands,
+                checkedOutput.image(),
+                VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                checkedReadback.buffer(),
+                copy
+        );
+
+        VkBufferMemoryBarrier.Buffer hostRead = VkBufferMemoryBarrier.calloc(1, stack).sType$Default()
+                .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                .dstAccessMask(VK10.VK_ACCESS_HOST_READ_BIT)
+                .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .buffer(checkedReadback.buffer())
+                .offset(0L)
+                .size(checkedReadback.sizeBytes());
+        VK10.vkCmdPipelineBarrier(
+                commands,
+                VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK10.VK_PIPELINE_STAGE_HOST_BIT,
+                0,
+                null,
+                hostRead,
+                null
+        );
+
+        VkImageMemoryBarrier.Buffer restoreGeneral = VkImageMemoryBarrier.calloc(1, stack).sType$Default()
+                .srcAccessMask(VK10.VK_ACCESS_TRANSFER_READ_BIT)
+                .dstAccessMask(VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT)
+                .oldLayout(VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+                .newLayout(VK10.VK_IMAGE_LAYOUT_GENERAL)
+                .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .image(checkedOutput.image());
+        restoreGeneral.subresourceRange().aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
+                .baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1);
+        VK10.vkCmdPipelineBarrier(
+                commands,
+                VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                0,
+                null,
+                null,
+                restoreGeneral
+        );
     }
 
     private void updateDescriptors(MemoryStack stack, long set, long[] sources, long output) {

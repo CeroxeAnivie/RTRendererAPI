@@ -10,38 +10,57 @@ import java.util.Objects;
 /** Submission-local overlay: native recording never mutates persistent layout state before submit succeeds. */
 final class VulkanGenericTextureLayoutUpdates {
     private final Map<Key, Integer> values = new HashMap<>();
+    private boolean committed;
 
     int layout(VulkanGenericResourceRegistry.TextureRecord record, TextureAspect aspect, int mipLevel, int arrayLayer) {
-        Key key = new Key(record, aspect, mipLevel, arrayLayer);
-        return values.getOrDefault(key, record.layouts().layout(aspect, mipLevel, arrayLayer));
+        Objects.requireNonNull(record, "record");
+        return layout(record.layouts(), aspect, mipLevel, arrayLayer);
+    }
+
+    int layout(VulkanGenericTextureLayoutState persistent, TextureAspect aspect, int mipLevel, int arrayLayer) {
+        requireOpen();
+        Key key = new Key(persistent, aspect, mipLevel, arrayLayer);
+        return values.getOrDefault(key, persistent.layout(aspect, mipLevel, arrayLayer));
     }
 
     void set(VulkanGenericResourceRegistry.TextureRecord record, TextureSubresourceRange range, int layout) {
         Objects.requireNonNull(record, "record");
+        set(record.layouts(), range, layout);
+    }
+
+    void set(VulkanGenericTextureLayoutState persistent, TextureSubresourceRange range, int layout) {
+        requireOpen();
         Objects.requireNonNull(range, "range");
         for (int mip = range.baseMipLevel(); mip < range.mipEndExclusive(); mip++) {
             for (int layer = range.baseArrayLayer(); layer < range.arrayLayerEndExclusive(); layer++) {
-                values.put(new Key(record, range.aspect(), mip, layer), layout);
+                values.put(new Key(persistent, range.aspect(), mip, layer), layout);
             }
         }
     }
 
     void commit() {
+        requireOpen();
         for (Map.Entry<Key, Integer> entry : values.entrySet()) {
             Key key = entry.getKey();
-            key.record().layouts().set(new TextureSubresourceRange(key.aspect(), key.mipLevel(), 1, key.arrayLayer(), 1),
+            key.persistent().set(new TextureSubresourceRange(key.aspect(), key.mipLevel(), 1, key.arrayLayer(), 1),
                     entry.getValue());
         }
+        values.clear();
+        committed = true;
+    }
+
+    private void requireOpen() {
+        if (committed) throw new IllegalStateException("texture layout overlay has already been committed");
     }
 
     private record Key(
-            VulkanGenericResourceRegistry.TextureRecord record,
+            VulkanGenericTextureLayoutState persistent,
             TextureAspect aspect,
             int mipLevel,
             int arrayLayer
     ) {
         private Key {
-            Objects.requireNonNull(record, "record");
+            Objects.requireNonNull(persistent, "persistent");
             Objects.requireNonNull(aspect, "aspect");
             if (mipLevel < 0 || arrayLayer < 0) throw new IllegalArgumentException("subresource coordinates must be non-negative");
         }

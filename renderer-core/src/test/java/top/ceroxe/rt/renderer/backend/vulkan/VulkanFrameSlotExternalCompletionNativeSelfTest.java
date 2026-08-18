@@ -29,6 +29,7 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
          VulkanFrameSlot slot = new VulkanFrameSlot(0, producerDevice, VulkanFrameOutput.from(FrameOutputFormat.SDR_RGBA8), interop.dedicatedAllocationRequired(), true, true, RendererRtDiagnostics.noop().stalls(), false);
 
          try {
+            verifyCancelledReservation(slot);
             publish(slot, producerDevice, 0L);
             VulkanDeviceRuntime consumerDevice = VulkanDeviceRuntime.open(capability, RendererRtDiagnostics.noop(), false, false);
             long stableResourceId;
@@ -112,10 +113,33 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
 
    private static void publish(VulkanFrameSlot slot, VulkanDeviceRuntime producerDevice, long sequence, int width, int height) throws InterruptedException {
       slot.prepare(width, height, new byte[VulkanFrameUniformPacker.BYTE_COUNT]);
-      slot.submitted(producerDevice.frameCommands().submitOneTimeAsync((commandBuffer, stack) -> {
-      }), sequence, sequence, sequence, true,
-              VulkanDeviceRuntime.ManagedPresentationSignal.disabled(), false);
+      VulkanFrameSlot.SubmissionReservation reservation = slot.reserveSubmission(
+              sequence, sequence, sequence, true,
+              VulkanDeviceRuntime.ManagedPresentationSignal.disabled(), false
+      );
+      RtCommandContext.AsyncSubmission submission = null;
+      try {
+         submission = producerDevice.frameCommands().submitOneTimeAsync((commandBuffer, stack) -> {
+         });
+         reservation.publish(submission);
+         submission = null;
+      } finally {
+         boolean published = reservation.published();
+         reservation.close();
+         if (published) submission = null;
+         if (submission != null) submission.close();
+      }
       awaitProducer(slot);
+   }
+
+   private static void verifyCancelledReservation(VulkanFrameSlot slot) {
+      slot.prepare(64, 64, new byte[VulkanFrameUniformPacker.BYTE_COUNT]);
+      VulkanFrameSlot.SubmissionReservation reservation = slot.reserveSubmission(
+              0L, 0L, 0L, false, VulkanDeviceRuntime.ManagedPresentationSignal.disabled(), false
+      );
+      require(!slot.writable(), "reserved slot remained writable before queue submission");
+      reservation.close();
+      require(slot.writable(), "cancelled pre-submit reservation did not restore slot writability");
    }
 
    private static void rejectInvalidExternalHandle(VulkanFrameSlot slot, long expectedResourceId) {
