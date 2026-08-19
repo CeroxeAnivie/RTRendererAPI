@@ -144,8 +144,8 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
                     VkDescriptorBufferInfo.Buffer infos = VkDescriptorBufferInfo.calloc(values.size(), stack);
                     for (int index = 0; index < values.size(); index++) {
                         BindingSet.BufferValue value = (BindingSet.BufferValue) values.get(index);
-                        VulkanGenericResourceRegistry.BufferRecord record = resources.requireBuffer(value.buffer());
-                        resources.requireReadable(record);
+                        VulkanGenericResourceRegistry.BufferRecord record =
+                                resources.requirePlannedBuffer(value.buffer());
                         infos.get(index).buffer(record.buffer().buffer())
                                 .offset(value.range().offsetBytes()).range(value.range().lengthBytes());
                     }

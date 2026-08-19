@@ -101,13 +101,17 @@ public final class VulkanGenericRayTracingNativeSelfTest {
                     new RenderResourceId(70_001L), ResourceVersion.initial(), 36L,
                     EnumSet.of(BufferUsage.COPY_DESTINATION, BufferUsage.ACCELERATION_STRUCTURE_BUILD_INPUT)
             );
+            BufferResource frameData = new BufferResource(
+                    new RenderResourceId(70_005L), ResourceVersion.initial(), Float.BYTES,
+                    EnumSet.of(BufferUsage.COPY_DESTINATION, BufferUsage.STORAGE_READ)
+            );
             TextureResource output = new TextureResource(
                     new RenderResourceId(70_002L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
                     OUTPUT_WIDTH, OUTPUT_HEIGHT, 1, 1, 1, 1, TextureFormat.RGBA8_UNORM,
                     EnumSet.of(TextureUsage.COPY_DESTINATION, TextureUsage.STORAGE_READ_WRITE)
             );
             requireAccepted(session.submitResources(new RenderResourceTransaction(
-                    0L, List.of(positions), List.of(output), List.of()
+                    0L, List.of(positions, frameData), List.of(output), List.of()
             )));
 
             AccelerationStructureResource bottomLevel = new AccelerationStructureResource(
@@ -119,6 +123,7 @@ public final class VulkanGenericRayTracingNativeSelfTest {
                     AccelerationStructureKind.TOP_LEVEL, false
             );
             ByteBuffer triangle = MemoryUtil.memAlloc(36).order(ByteOrder.nativeOrder());
+            ByteBuffer frameValue = MemoryUtil.memAlloc(Float.BYTES).order(ByteOrder.nativeOrder());
             try {
                 triangle.putFloat(-0.75F).putFloat(-0.75F).putFloat(0.0F);
                 triangle.putFloat(0.75F).putFloat(-0.75F).putFloat(0.0F);
@@ -126,6 +131,10 @@ public final class VulkanGenericRayTracingNativeSelfTest {
                 ResourceSlice.BufferSlice positionSlice = new ResourceSlice.BufferSlice(
                         positions, new ByteRange(0L, positions.byteSize())
                 );
+                ResourceSlice.BufferSlice frameSlice = new ResourceSlice.BufferSlice(
+                        frameData, new ByteRange(0L, frameData.byteSize())
+                );
+                frameValue.putFloat(1.0F).flip();
                 TextureSubresourceRange outputRange = new TextureSubresourceRange(
                         TextureAspect.COLOR, 0, 1, 0, 1
                 );
@@ -160,9 +169,16 @@ public final class VulkanGenericRayTracingNativeSelfTest {
                         new BindingKey(0, 0), List.of(new BindingSet.TextureValue(
                                 outputView, BindingType.READ_WRITE_STORAGE_TEXTURE
                         )),
-                        new BindingKey(0, 1), List.of(new BindingSet.AccelerationStructureValue(topLevel))
+                        new BindingKey(0, 1), List.of(new BindingSet.AccelerationStructureValue(topLevel)),
+                        new BindingKey(0, 2), List.of(new BindingSet.BufferValue(
+                                frameData, frameSlice.range(), BindingType.READ_ONLY_STORAGE_BUFFER
+                        ))
                 ));
                 CommandExecutionEvidence trace = session.submit(new RenderCommandTransaction(1L, List.of(
+                        // This generation is still ACCEPTED here. The command planner must prove
+                        // the local write/visibility edge without the descriptor allocator
+                        // incorrectly demanding a completed earlier submission.
+                        new WriteBufferCommand(frameSlice, new ResourceData(frameValue)),
                         new BindRayTracingPipelineCommand(pipeline),
                         BindBindingSetCommand.fixed(bindings),
                         new TraceRaysCommand(outputView, OUTPUT_WIDTH, OUTPUT_HEIGHT, 1)
@@ -177,6 +193,7 @@ public final class VulkanGenericRayTracingNativeSelfTest {
                 System.out.println("VulkanGenericRayTracingNativeSelfTest passed: build=" + build
                         + "; trace=" + completed);
             } finally {
+                MemoryUtil.memFree(frameValue);
                 MemoryUtil.memFree(triangle);
             }
         }
@@ -191,20 +208,25 @@ public final class VulkanGenericRayTracingNativeSelfTest {
                 new BindingKey(0, 1), BindingType.ACCELERATION_STRUCTURE, 1,
                 Set.of(ShaderStage.RAY_GENERATION), false
         );
+        BindingLayoutEntry frameData = new BindingLayoutEntry(
+                new BindingKey(0, 2), BindingType.READ_ONLY_STORAGE_BUFFER, 1,
+                Set.of(ShaderStage.RAY_GENERATION), false
+        );
         ShaderModule raygen = module(70_010L, ShaderStage.RAY_GENERATION, Shaderc.shaderc_raygen_shader,
                 "#version 460\n"
                         + "#extension GL_EXT_ray_tracing : require\n"
                         + "layout(set=0,binding=0,rgba8) uniform image2D outputImage;\n"
                         + "layout(set=0,binding=1) uniform accelerationStructureEXT scene;\n"
+                        + "layout(set=0,binding=2,std430) readonly buffer FrameData { float value; } frameData;\n"
                         + "layout(location=0) rayPayloadEXT vec3 payload;\n"
                         + "void main(){\n"
                         + "  vec2 uv=(vec2(gl_LaunchIDEXT.xy)+vec2(0.5))/vec2(gl_LaunchSizeEXT.xy);\n"
                         + "  vec3 direction=normalize(vec3(uv*2.0-1.0,-1.0));\n"
-                        + "  payload=vec3(0.0);\n"
+                        + "  payload=vec3(0.01*frameData.value);\n"
                         + "  traceRayEXT(scene,gl_RayFlagsOpaqueEXT,0xff,0,0,0,vec3(0.0,0.0,1.0),0.001,direction,100.0,0);\n"
                         + "  imageStore(outputImage,ivec2(gl_LaunchIDEXT.xy),vec4(payload,1.0));\n"
                         + "}\n",
-                List.of(output, scene));
+                List.of(output, scene, frameData));
         ShaderModule miss = module(70_011L, ShaderStage.RAY_MISS, Shaderc.shaderc_miss_shader,
                 "#version 460\n"
                         + "#extension GL_EXT_ray_tracing : require\n"
@@ -220,7 +242,7 @@ public final class VulkanGenericRayTracingNativeSelfTest {
                 List.of());
         ShaderProgram program = new ShaderProgram(
                 new RenderResourceId(70_013L), ResourceVersion.initial(), ShaderProgram.Kind.RAY_TRACING,
-                List.of(raygen, miss, closestHit), new BindingLayout(List.of(output, scene)), 0
+                List.of(raygen, miss, closestHit), new BindingLayout(List.of(output, scene, frameData)), 0
         );
         return new RayTracingPipelineState(program, List.of(
                 RayTracingShaderGroup.general(raygen),

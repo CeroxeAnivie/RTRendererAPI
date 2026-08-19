@@ -192,6 +192,16 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         return record;
     }
 
+    /**
+     * Resolves a resident buffer after command-plan validation has already established its exact
+     * visibility edge. Descriptor updates happen before command submission, so repeating the
+     * global {@code GPU_READY} gate here would reject a legal same-command-buffer upload followed
+     * by a descriptor read. Existence and the complete immutable descriptor are still revalidated.
+     */
+    BufferRecord requirePlannedBuffer(BufferResource descriptor) {
+        return requireBuffer(descriptor);
+    }
+
     TextureRecord requireTexture(TextureResource descriptor) {
         requireOpen();
         TextureResource checked = Objects.requireNonNull(descriptor, "descriptor");
