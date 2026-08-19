@@ -1,8 +1,9 @@
 # Hex Ball Demo
 
 该可选模块是仓库自带的 retained-scene 交互示例与 GPU smoke workload。它只解析 Maven Central 已发布的
-仓库当前构建的 `top.ceroxe.rt:renderer-api:3.1.2` 及其完整传递运行时。Demo 是源树 smoke，
-因此会绑定正在构建的 API；发布后的外部消费者仍只从 Maven Central 解析该坐标。clone 仓库后运行 Demo 不需要
+仓库当前构建的 `top.ceroxe.rt:renderer-api:3.1.2` 及其完整传递运行时。Demo 以 Maven Central 为第一解析源，
+与外部消费者使用相同坐标；仅当该版本尚未出现在 Central 或 Central 暂不可访问时，才自动发布当前 checkout
+到本地 fallback repository。clone 仓库后运行 Demo 不需要
 用于构建 `renderer-nvidia` 的 CMake、Visual Studio C++、Vulkan SDK、NRD、NRI、Streamline
 或 RTXMU 源码工具链。fat JAR 门禁仍会验证打包后的 NVIDIA DLL 清单和 SHA-256。
 

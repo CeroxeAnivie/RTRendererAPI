@@ -22,6 +22,14 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
+        // Demo and published-consumer builds may need an unreleased checkout while retaining
+        // the same coordinates as Central consumers. This repository is deliberately after
+        // Central: a released artifact always wins, and the local publication is only a fallback.
+        maven {
+            name = "localBuildFallback"
+            url = uri(settingsDir.resolve("build/repository"))
+            content { includeGroup("top.ceroxe.rt") }
+        }
     }
 }
 

@@ -261,12 +261,45 @@ tasks.named("check") {
     dependsOn(verifyReleaseVersionConsistency)
 }
 
-tasks.register("publishAllToLocalStagingRepository") {
+val publishAllToLocalStagingRepository = tasks.register("publishAllToLocalStagingRepository") {
     group = "publishing"
     description = "Publishes every RTRendererAPI module into build/repository."
     dependsOn(":renderer-api:publishMavenJavaPublicationToLocalStagingRepository")
     dependsOn(":renderer-core:publishMavenJavaPublicationToLocalStagingRepository")
     dependsOn(":renderer-nvidia:publishMavenJavaPublicationToLocalStagingRepository")
+}
+
+// The demo consumes the published coordinate, not project substitution. Probe the exact API POM
+// while Gradle constructs the execution graph: Central remains the authoritative first choice,
+// and an unavailable coordinate is the only reason to publish this checkout into the local
+// fallback repository before resolving the demo classpath.
+val centralApiPublicationAvailable = providers.provider {
+    val artifact = java.net.URI(
+        "https://repo.maven.apache.org/maven2/${group.toString().replace('.', '/')}/renderer-api/$version/" +
+                "renderer-api-$version.pom"
+    ).toURL()
+    (artifact.openConnection() as java.net.HttpURLConnection).run {
+        connectTimeout = 5_000
+        readTimeout = 5_000
+        requestMethod = "HEAD"
+        instanceFollowRedirects = true
+        try {
+            responseCode in 200..299
+        } catch (_: java.io.IOException) {
+            false
+        } finally {
+            disconnect()
+        }
+    }
+}
+
+project(":demos:hex-ball") {
+    tasks.withType<JavaCompile>().configureEach {
+        dependsOn(providers.provider {
+            if (centralApiPublicationAvailable.get()) emptyList<Any>()
+            else listOf(publishAllToLocalStagingRepository)
+        })
+    }
 }
 
 val verifyPublishedNvidiaRuntimeClosure = tasks.register("verifyPublishedNvidiaRuntimeClosure") {
