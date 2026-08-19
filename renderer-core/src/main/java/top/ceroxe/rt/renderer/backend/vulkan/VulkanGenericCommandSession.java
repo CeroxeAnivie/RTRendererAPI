@@ -63,6 +63,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     private long latestCompletedSequence = -1L;
     private boolean deviceFailed;
     private boolean closed;
+    private RuntimeException closeFailure;
 
     VulkanGenericCommandSession(VulkanDeviceRuntime device, int maximumInFlightTransactions) {
         this.device = Objects.requireNonNull(device, "device");
@@ -1071,27 +1072,53 @@ final class VulkanGenericCommandSession implements AutoCloseable {
 
     @Override
     public void close() {
-        if (closed) return;
+        if (closed && closeFailure == null) return;
         closed = true;
         RuntimeException failure = null;
         for (PendingSubmission submission : pending.values()) {
             try {
                 submission.submission().close();
             } catch (RuntimeException closeFailure) {
-                if (failure == null) failure = closeFailure;
-                else failure.addSuppressed(closeFailure);
-            } finally {
-                closeStaging(submission.staging());
+                failure = mergeCloseFailure(failure, closeFailure);
+            }
+            closeStaging(submission.staging());
+            try {
                 submission.accelerationStructures().discardAfterDeviceFailure();
+            } catch (RuntimeException closeFailure) {
+                failure = mergeCloseFailure(failure, closeFailure);
             }
         }
         pending.clear();
-        computePipelines.close();
-        graphicsPipelines.close();
-        rayTracingPipelines.close();
-        accelerationStructures.close();
-        resources.close();
-        if (failure != null) throw failure;
+        failure = closeCollecting(failure, computePipelines);
+        failure = closeCollecting(failure, graphicsPipelines);
+        failure = closeCollecting(failure, rayTracingPipelines);
+        failure = closeCollecting(failure, accelerationStructures);
+        failure = closeCollecting(failure, resources);
+        closeFailure = failure;
+        if (closeFailure != null) throw closeFailure;
+    }
+
+    private static RuntimeException closeCollecting(RuntimeException failure, AutoCloseable resource) {
+        try {
+            resource.close();
+        } catch (RuntimeException closeFailure) {
+            return mergeCloseFailure(failure, closeFailure);
+        } catch (Exception impossible) {
+            return mergeCloseFailure(
+                    failure,
+                    new IllegalStateException("unexpected checked generic-resource close failure", impossible)
+            );
+        }
+        return failure;
+    }
+
+    private static RuntimeException mergeCloseFailure(
+            RuntimeException failure,
+            RuntimeException closeFailure
+    ) {
+        if (failure == null) return closeFailure;
+        if (failure != closeFailure) failure.addSuppressed(closeFailure);
+        return failure;
     }
 
     private record PendingSubmission(

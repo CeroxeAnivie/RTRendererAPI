@@ -58,6 +58,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     private boolean pipelineClosed;
     private boolean sceneClosed;
     private boolean resourcesClosed;
+    private boolean frameRingClosed;
     private long acceptedSceneRevision = -1L;
     private int acceptedLightSlotUpperBound;
     private long latestCompletedDescriptorEpoch;
@@ -805,15 +806,38 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         return new IllegalStateException("failed to " + operation, failure);
     }
 
-    @Override
-    public synchronized void close() {
+    /**
+     * Retires composition work that may read generic-command textures without destroying the
+     * shared Vulkan device.
+     *
+     * <p>{@link VulkanGenericCommandSession} owns descriptor pools and resource allocations on
+     * {@link VulkanSceneRuntime}'s device, while this session's composition frame ring can borrow
+     * those textures through {@code compositionPins}.  Host shutdown must therefore first wait
+     * for the ring and release every pin, then destroy the generic command session, and only then
+     * destroy the scene/device.  Folding all three actions into {@link #close()} made the host
+     * destroy the device before generic descriptor pools, which is invalid Vulkan lifetime order.
+     */
+    synchronized void quiesceCompositionForGenericShutdown() {
         if (resourcesClosed) return;
         state = State.CLOSED;
+        closeFrameRingAndCompositionPins();
+    }
+
+    private void closeFrameRingAndCompositionPins() {
+        if (frameRingClosed) return;
         frameRing.close();
+        frameRingClosed = true;
         for (VulkanGenericResourceRegistry.CompositionPinLease pinLease : compositionPins.values()) {
             pinLease.close();
         }
         compositionPins.clear();
+    }
+
+    @Override
+    public synchronized void close() {
+        if (resourcesClosed) return;
+        state = State.CLOSED;
+        closeFrameRingAndCompositionPins();
         compositionPipeline.close();
         featureComposition.close();
         if (!pipelineClosed) {

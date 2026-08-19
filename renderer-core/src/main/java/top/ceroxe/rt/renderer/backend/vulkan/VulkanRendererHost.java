@@ -1236,25 +1236,43 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
         if (lifecycle == Lifecycle.CLOSED) externalFrameConsumer.close();
         /*
          * The retained session may still own an in-flight composition submission whose command
-         * buffer reads a generic texture. Retire the frame ring first; closing the generic registry
-         * first would destroy that source image while Vulkan still owns the composition command.
+         * buffer reads a generic texture. Retire the frame ring and its source pins before closing
+         * the generic session, but keep the shared VkDevice alive until both owners are closed.
+         * Generic descriptor pools are children of that device and must never be destroyed after
+         * session.close() has released the device.
          */
+        if (session instanceof VulkanGpuSceneRenderingSession gpuSceneSession) {
+            try {
+                gpuSceneSession.quiesceCompositionForGenericShutdown();
+            } catch (RuntimeException closeFailure) {
+                /*
+                 * The frame ring may still execute commands that read generic resources.  A
+                 * quiesce failure therefore forbids every downstream destruction step; reporting
+                 * a cleanup debt is safer than invalidly freeing a live dependency.
+                 */
+                return closeFailure;
+            }
+        }
+        if (genericCommands != null) {
+            try {
+                genericCommands.close();
+            } catch (RuntimeException closeFailure) {
+                /*
+                 * The generic session owns VkDevice children.  Keep both its owner reference and
+                 * the parent session alive when cleanup fails so a later close cannot destroy the
+                 * device underneath an unretired descriptor pool, pipeline, image, buffer or AS.
+                 */
+                return closeFailure;
+            }
+            genericCommands = null;
+        }
         try {
             session.close();
             sessionClosed = true;
             if (lifecycle == Lifecycle.CLOSED) closeCompletion.complete(null);
         } catch (RuntimeException closeFailure) {
-            failure = closeFailure;
-        }
-        if (sessionClosed && genericCommands != null) {
-            try {
-                genericCommands.close();
-            } catch (RuntimeException closeFailure) {
-                if (failure == null) failure = closeFailure;
-                else failure.addSuppressed(closeFailure);
-            } finally {
-                genericCommands = null;
-            }
+            if (failure == null) failure = closeFailure;
+            else failure.addSuppressed(closeFailure);
         }
         return failure;
     }

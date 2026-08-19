@@ -142,7 +142,7 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
             ), "vkCreateRayTracingPipelinesKHR.generic");
             pipeline = output.get(0);
             sbt = createSbt(state, pipeline);
-            Compiled result = new Compiled(state, pipeline, layout, descriptors, sbt,
+            Compiled result = new Compiled(state, device.device(), pipeline, layout, descriptors, sbt,
                     rayStageFlags(state.program().modules()));
             pipeline = VK10.VK_NULL_HANDLE;
             layout = VK10.VK_NULL_HANDLE;
@@ -331,6 +331,7 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
 
     record Compiled(
             RayTracingPipelineState state,
+            VkDevice device,
             long pipeline,
             long layout,
             VulkanGenericDescriptorSetBank descriptors,
@@ -339,6 +340,7 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
     ) implements AutoCloseable {
         Compiled {
             Objects.requireNonNull(state, "state");
+            Objects.requireNonNull(device, "device");
             Objects.requireNonNull(sbt, "sbt");
             if (pipeline == VK10.VK_NULL_HANDLE || layout == VK10.VK_NULL_HANDLE || shaderStageFlags == 0) {
                 throw new IllegalArgumentException("generic RT pipeline handles must be non-null");
@@ -347,8 +349,29 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
 
         @Override
         public void close() {
-            if (descriptors != null) descriptors.close();
-            sbt.close();
+            RuntimeException failure = null;
+            if (descriptors != null) {
+                try {
+                    descriptors.close();
+                } catch (RuntimeException closeFailure) {
+                    failure = closeFailure;
+                }
+            }
+            try {
+                sbt.close();
+            } catch (RuntimeException closeFailure) {
+                if (failure == null) failure = closeFailure;
+                else failure.addSuppressed(closeFailure);
+            } finally {
+                /*
+                 * These handles are created by compile() and transferred into this record.  They
+                 * are not children of the descriptor bank or SBT and therefore need explicit
+                 * destruction before the shared device owner can close.
+                 */
+                VK10.vkDestroyPipeline(device, pipeline, null);
+                VK10.vkDestroyPipelineLayout(device, layout, null);
+            }
+            if (failure != null) throw failure;
         }
     }
 
