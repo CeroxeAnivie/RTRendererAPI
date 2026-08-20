@@ -68,6 +68,13 @@ final class VulkanFrameSlot implements AutoCloseable {
     private long observedProducerFrameSequence = -1L;
     private long observedProducerDescriptorEpoch = -1L;
     private long pendingCompletionEvidenceSequence = -1L;
+    /*
+     * Composition uses the same bounded slot ownership machinery as an RT producer, but it
+     * never opens a VulkanFeatureSubmissionTransaction.  Keep that distinction explicit so a
+     * composition fence cannot be misreported to an optional-feature ledger as a feature frame.
+     */
+    private boolean currentSubmissionTracksFeatureEvidence;
+    private boolean pendingCompletionTracksFeatureEvidence;
     private boolean currentSubmissionUsesSer;
     private boolean pendingCompletionUsesSer;
     private LongConsumer producerCompletionObserver;
@@ -681,6 +688,7 @@ final class VulkanFrameSlot implements AutoCloseable {
         if (requiresPrivateReconstructionOutput()) reconstructionOutputLayoutInitialized = true;
         if (temporalEnabled) motionLayoutInitialized = true;
         externallyOwned = externallyOwnedAfterSubmission;
+        currentSubmissionTracksFeatureEvidence = true;
         currentSubmissionUsesSer = usesShaderExecutionReordering;
         state = State.SUBMITTED;
         VulkanFrameFlightRecorder.record(
@@ -761,6 +769,7 @@ final class VulkanFrameSlot implements AutoCloseable {
         if (requiresPrivateReconstructionOutput()) reconstructionOutputLayoutInitialized = true;
         if (temporalEnabled) motionLayoutInitialized = true;
         externallyOwned = checked.externallyOwnedAfterSubmission;
+        currentSubmissionTracksFeatureEvidence = false;
         currentSubmissionUsesSer = checked.usesShaderExecutionReordering;
         activeSubmissionReservation = null;
         checked.published = true;
@@ -816,6 +825,8 @@ final class VulkanFrameSlot implements AutoCloseable {
         observedProducerDescriptorEpoch = Math.max(observedProducerDescriptorEpoch, descriptorEpoch);
         if (producerCompletionObserver != null) producerCompletionObserver.accept(frameSequence);
         pendingCompletionEvidenceSequence = frameSequence;
+        pendingCompletionTracksFeatureEvidence = currentSubmissionTracksFeatureEvidence;
+        currentSubmissionTracksFeatureEvidence = false;
         pendingCompletionUsesSer = currentSubmissionUsesSer;
         currentSubmissionUsesSer = false;
         return timing;
@@ -830,7 +841,10 @@ final class VulkanFrameSlot implements AutoCloseable {
             // device ledger, so consume this flag immediately after its own successful commit.
             pendingCompletionUsesSer = false;
         }
-        device.featureSession().observeFrameCompletion(completedSequence);
+        if (pendingCompletionTracksFeatureEvidence) {
+            device.featureSession().observeFrameCompletion(completedSequence);
+        }
+        pendingCompletionTracksFeatureEvidence = false;
         pendingCompletionEvidenceSequence = -1L;
     }
 
@@ -1077,6 +1091,10 @@ final class VulkanFrameSlot implements AutoCloseable {
         descriptorEpoch = -1L;
         readyTimelineSemaphore = 0L;
         readyTimelineValue = 0L;
+        currentSubmissionTracksFeatureEvidence = false;
+        pendingCompletionTracksFeatureEvidence = false;
+        currentSubmissionUsesSer = false;
+        pendingCompletionUsesSer = false;
     }
 
     private void requireState(State required, String operation) {

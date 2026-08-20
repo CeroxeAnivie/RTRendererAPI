@@ -294,11 +294,25 @@ val centralApiPublicationAvailable = providers.provider {
 }
 
 project(":demos:hex-ball") {
+    // Every task that resolves runtimeClasspath must see the same Central-first fallback.  The
+    // previous hook covered JavaCompile only; shadowJar resolves its runtime graph before
+    // compilation and therefore failed immediately when a newly bumped version was not yet on
+    // Central.  Keep the decision lazy so Central remains authoritative once the release exists.
+    val ensurePublishedApiFallback = providers.provider {
+        if (centralApiPublicationAvailable.get()) emptyList<Any>()
+        else listOf(publishAllToLocalStagingRepository)
+    }
     tasks.withType<JavaCompile>().configureEach {
-        dependsOn(providers.provider {
-            if (centralApiPublicationAvailable.get()) emptyList<Any>()
-            else listOf(publishAllToLocalStagingRepository)
-        })
+        dependsOn(ensurePublishedApiFallback)
+    }
+    tasks.withType<org.gradle.api.tasks.bundling.AbstractArchiveTask>().configureEach {
+        dependsOn(ensurePublishedApiFallback)
+    }
+    tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+        dependsOn(ensurePublishedApiFallback)
+    }
+    tasks.withType<JavaExec>().configureEach {
+        dependsOn(ensurePublishedApiFallback)
     }
 }
 
