@@ -92,12 +92,13 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
             Objects.requireNonNull(command, "command");
             List<TriangleInput> checked = List.copyOf(geometries);
             if (checked.isEmpty()) throw new IllegalArgumentException("BLAS build requires resolved geometry");
+            ResolvedBuildDescription description = ResolvedBuildDescription.bottom(checked);
             if (staged.containsKey(command.destination())) {
                 throw new IllegalArgumentException("one command transaction cannot build the same AS destination twice: "
                         + command.destination().id());
             }
-            Record destination = prepareDestination(command.destination(), command.mode(), checked, null, 0L);
-            PreparedBuild build = new PreparedBuild(destination, command.mode(), checked, null, null);
+            Record destination = prepareDestination(command.destination(), command.mode(), description);
+            PreparedBuild build = new PreparedBuild(destination, command.mode(), description, null);
             staged.put(command.destination(), destination);
             builds.add(build);
             return build;
@@ -119,10 +120,9 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
             }
             RtGpuBuffer instanceBuffer = createInstanceBuffer(command.instances(), this);
             try {
-                Record destination = prepareDestination(
-                        command.destination(), command.mode(), null, command.instances(), instanceBuffer.deviceAddress()
-                );
-                PreparedBuild build = new PreparedBuild(destination, command.mode(), null, command.instances(), instanceBuffer);
+                ResolvedBuildDescription description = ResolvedBuildDescription.top(command.instances());
+                Record destination = prepareDestination(command.destination(), command.mode(), description);
+                PreparedBuild build = new PreparedBuild(destination, command.mode(), description, instanceBuffer);
                 instanceBuffer = null;
                 staged.put(command.destination(), destination);
                 builds.add(build);
@@ -200,25 +200,23 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
         private Record prepareDestination(
                 AccelerationStructureResource descriptor,
                 AccelerationStructureBuildMode mode,
-                List<TriangleInput> triangles,
-                List<AccelerationStructureInstance> instances,
-                long buildInputAddress
+                ResolvedBuildDescription description
         ) {
             Record existing = resident.get(descriptor);
             if (mode == AccelerationStructureBuildMode.UPDATE) {
                 if (existing == null) throw new IllegalStateException("AS UPDATE requires a previously built exact destination");
                 existing.requireReadyForMutation();
+                existing.requireCompatible(description.shape());
                 return existing;
             }
             if (existing != null) {
-                existing.requireReadyForMutation();
-                return existing;
+                throw new IllegalStateException("AS BUILD cannot replace an existing resident destination; use a compatible UPDATE or a new resource");
             }
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 VkAccelerationStructureBuildGeometryInfoKHR.Buffer info = buildInfo(
-                        stack, descriptor, mode, triangles, instances, buildInputAddress
+                        stack, descriptor, mode, description, 1L
                 );
-                IntBuffer counts = primitiveCounts(stack, triangles, instances);
+                IntBuffer counts = description.primitiveCounts(stack);
                 VkAccelerationStructureBuildSizesInfoKHR sizes = VkAccelerationStructureBuildSizesInfoKHR.calloc(stack).sType$Default();
                 KHRAccelerationStructure.vkGetAccelerationStructureBuildSizesKHR(
                         device.device(), KHRAccelerationStructure.VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
@@ -227,7 +225,7 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
                 if (sizes.accelerationStructureSize() <= 0L || sizes.buildScratchSize() <= 0L) {
                     throw new IllegalStateException("Vulkan returned invalid AS build sizes");
                 }
-                return Record.create(device, descriptor, sizes.accelerationStructureSize());
+                return Record.create(device, descriptor, sizes.accelerationStructureSize(), description.shape());
             }
         }
 
@@ -267,12 +265,74 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
         }
     }
 
+    /** Immutable topology/capacity identity captured by the initial BUILD. */
+    record BuildShape(AccelerationStructureKind kind, List<Integer> primitiveCounts) {
+        BuildShape {
+            kind = Objects.requireNonNull(kind, "kind");
+            primitiveCounts = List.copyOf(primitiveCounts);
+            if (primitiveCounts.isEmpty() || primitiveCounts.stream().anyMatch(count -> count == null || count <= 0)) {
+                throw new IllegalArgumentException("AS build shape requires positive primitive counts");
+            }
+        }
+
+        boolean compatibleWith(BuildShape other) {
+            return kind == other.kind && primitiveCounts.equals(other.primitiveCounts);
+        }
+    }
+
+    /** Single resolved input used by size queries, scratch allocation, ranges, and command record. */
+    record ResolvedBuildDescription(
+            AccelerationStructureKind kind,
+            List<TriangleInput> triangles,
+            List<AccelerationStructureInstance> instances,
+            BuildShape shape
+    ) {
+        ResolvedBuildDescription {
+            kind = Objects.requireNonNull(kind, "kind");
+            triangles = triangles == null ? null : List.copyOf(triangles);
+            instances = instances == null ? null : List.copyOf(instances);
+            shape = Objects.requireNonNull(shape, "shape");
+            if (kind == AccelerationStructureKind.BOTTOM_LEVEL && (triangles == null || instances != null)) {
+                throw new IllegalArgumentException("BLAS description must contain triangle inputs only");
+            }
+            if (kind == AccelerationStructureKind.TOP_LEVEL && (instances == null || triangles != null)) {
+                throw new IllegalArgumentException("TLAS description must contain instance inputs only");
+            }
+        }
+
+        static ResolvedBuildDescription bottom(List<TriangleInput> triangles) {
+            List<TriangleInput> checked = List.copyOf(triangles);
+            return new ResolvedBuildDescription(
+                    AccelerationStructureKind.BOTTOM_LEVEL, checked, null,
+                    new BuildShape(AccelerationStructureKind.BOTTOM_LEVEL, checked.stream()
+                            .map(input -> input.geometry().indices().isPresent()
+                                    ? input.geometry().indexCount() / 3 : input.geometry().vertexCount() / 3)
+                            .toList())
+            );
+        }
+
+        static ResolvedBuildDescription top(List<AccelerationStructureInstance> instances) {
+            List<AccelerationStructureInstance> checked = List.copyOf(instances);
+            return new ResolvedBuildDescription(
+                    AccelerationStructureKind.TOP_LEVEL, null, checked,
+                    new BuildShape(AccelerationStructureKind.TOP_LEVEL, List.of(checked.size()))
+            );
+        }
+
+        IntBuffer primitiveCounts(MemoryStack stack) {
+            IntBuffer result = stack.mallocInt(shape.primitiveCounts().size());
+            for (int index = 0; index < shape.primitiveCounts().size(); index++) {
+                result.put(index, shape.primitiveCounts().get(index));
+            }
+            return result;
+        }
+    }
+
     /** Prepared native command and fence-bounded temporary allocations for one build. */
     final class PreparedBuild {
         private final Record destination;
         private final AccelerationStructureBuildMode mode;
-        private final List<TriangleInput> triangles;
-        private final List<AccelerationStructureInstance> instances;
+        private final ResolvedBuildDescription description;
         private final RtGpuBuffer scratch;
         private final RtGpuBuffer instanceBuffer;
         private boolean temporaryClosed;
@@ -280,20 +340,18 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
         private PreparedBuild(
                 Record destination,
                 AccelerationStructureBuildMode mode,
-                List<TriangleInput> triangles,
-                List<AccelerationStructureInstance> instances,
+                ResolvedBuildDescription description,
                 RtGpuBuffer preparedInstanceBuffer
         ) {
             this.destination = Objects.requireNonNull(destination, "destination");
             this.mode = Objects.requireNonNull(mode, "mode");
-            this.triangles = triangles == null ? null : List.copyOf(triangles);
-            this.instances = instances == null ? null : List.copyOf(instances);
+            this.description = Objects.requireNonNull(description, "description");
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 VkAccelerationStructureBuildGeometryInfoKHR.Buffer info = buildInfo(
-                        stack, destination.descriptor, mode, this.triangles, this.instances,
+                        stack, destination.descriptor, mode, description,
                         preparedInstanceBuffer == null ? 0L : preparedInstanceBuffer.deviceAddress()
                 );
-                IntBuffer counts = primitiveCounts(stack, this.triangles, this.instances);
+                IntBuffer counts = description.primitiveCounts(stack);
                 VkAccelerationStructureBuildSizesInfoKHR sizes = VkAccelerationStructureBuildSizesInfoKHR.calloc(stack).sType$Default();
                 KHRAccelerationStructure.vkGetAccelerationStructureBuildSizesKHR(
                         device.device(), KHRAccelerationStructure.VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
@@ -306,7 +364,7 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
                         device.device(), device.allocator(), alignedBytes(scratchSize, device.accelerationStructureScratchAlignment()),
                         VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                 );
-                if (this.instances == null) {
+                if (description.instances() == null) {
                     this.instanceBuffer = null;
                 } else {
                     this.instanceBuffer = Objects.requireNonNull(preparedInstanceBuffer, "preparedInstanceBuffer");
@@ -327,14 +385,14 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
              */
             try (MemoryStack buildStack = MemoryStack.stackPush()) {
                 VkAccelerationStructureBuildGeometryInfoKHR.Buffer info = buildInfo(
-                        buildStack, destination.descriptor, mode, triangles, instances,
+                        buildStack, destination.descriptor, mode, description,
                         instanceBuffer == null ? 0L : instanceBuffer.deviceAddress()
                 );
                 info.get(0).dstAccelerationStructure(destination.handle)
                         .scratchData(address -> address.deviceAddress(alignedAddress(scratch,
                                 device.accelerationStructureScratchAlignment())));
                 if (mode == AccelerationStructureBuildMode.UPDATE) info.get(0).srcAccelerationStructure(destination.handle);
-                VkAccelerationStructureBuildRangeInfoKHR.Buffer ranges = ranges(buildStack, triangles, instances);
+                VkAccelerationStructureBuildRangeInfoKHR.Buffer ranges = ranges(buildStack, description);
                 PointerBuffer pointers = buildStack.mallocPointer(ranges.remaining());
                 for (int index = 0; index < ranges.remaining(); index++) pointers.put(index, ranges.get(index).address());
                 KHRAccelerationStructure.vkCmdBuildAccelerationStructuresKHR(commandBuffer, info, pointers);
@@ -366,14 +424,13 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
             MemoryStack stack,
             AccelerationStructureResource destination,
             AccelerationStructureBuildMode mode,
-            List<TriangleInput> triangles,
-            List<AccelerationStructureInstance> instances,
-            long destinationHandle
+            ResolvedBuildDescription description,
+            long instanceBufferHandle
     ) {
-        boolean bottom = destination.kind() == AccelerationStructureKind.BOTTOM_LEVEL;
-        VkAccelerationStructureGeometryKHR.Buffer geometries = bottom
-                ? triangleGeometries(stack, Objects.requireNonNull(triangles, "triangles"))
-                : instanceGeometry(stack, Objects.requireNonNull(instances, "instances"), destinationHandle);
+            boolean bottom = destination.kind() == AccelerationStructureKind.BOTTOM_LEVEL;
+            VkAccelerationStructureGeometryKHR.Buffer geometries = bottom
+                ? triangleGeometries(stack, Objects.requireNonNull(description.triangles(), "triangles"))
+                : instanceGeometry(stack, Objects.requireNonNull(description.instances(), "instances"), instanceBufferHandle);
         int flags = KHRAccelerationStructure.VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
         if (destination.allowUpdate()) flags |= KHRAccelerationStructure.VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
         VkAccelerationStructureBuildGeometryInfoKHR.Buffer result =
@@ -432,30 +489,14 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
         return result;
     }
 
-    private static IntBuffer primitiveCounts(
-            MemoryStack stack, List<TriangleInput> triangles, List<AccelerationStructureInstance> instances
-    ) {
-        if (triangles != null) {
-            IntBuffer result = stack.mallocInt(triangles.size());
-            for (int index = 0; index < triangles.size(); index++) {
-                AccelerationStructureTriangleGeometry geometry = triangles.get(index).geometry();
-                result.put(index, geometry.indices().isPresent() ? geometry.indexCount() / 3 : geometry.vertexCount() / 3);
-            }
-            return result;
-        }
-        return stack.ints(Objects.requireNonNull(instances, "instances").size());
-    }
-
     private static VkAccelerationStructureBuildRangeInfoKHR.Buffer ranges(
-            MemoryStack stack, List<TriangleInput> triangles, List<AccelerationStructureInstance> instances
+            MemoryStack stack, ResolvedBuildDescription description
     ) {
-        int count = triangles == null ? 1 : triangles.size();
+        List<Integer> counts = description.shape().primitiveCounts();
+        int count = counts.size();
         VkAccelerationStructureBuildRangeInfoKHR.Buffer ranges = VkAccelerationStructureBuildRangeInfoKHR.calloc(count, stack);
         for (int index = 0; index < count; index++) {
-            int primitives = triangles == null ? Objects.requireNonNull(instances, "instances").size()
-                    : (triangles.get(index).geometry().indices().isPresent()
-                    ? triangles.get(index).geometry().indexCount() / 3 : triangles.get(index).geometry().vertexCount() / 3);
-            ranges.get(index).primitiveCount(primitives).primitiveOffset(0).firstVertex(0).transformOffset(0);
+            ranges.get(index).primitiveCount(counts.get(index)).primitiveOffset(0).firstVertex(0).transformOffset(0);
         }
         return ranges;
     }
@@ -540,19 +581,23 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
         private final RtGpuBuffer storage;
         private final long handle;
         private final long deviceAddress;
+        private final BuildShape shape;
         private long pendingSequence = -1L;
         private boolean closed;
 
-        private Record(VkDevice device, AccelerationStructureResource descriptor, RtGpuBuffer storage, long handle, long deviceAddress) {
+        private Record(VkDevice device, AccelerationStructureResource descriptor, RtGpuBuffer storage, long handle,
+                       long deviceAddress, BuildShape shape) {
             this.device = Objects.requireNonNull(device, "device");
             this.descriptor = descriptor;
             this.kind = descriptor.kind();
             this.storage = storage;
             this.handle = handle;
             this.deviceAddress = deviceAddress;
+            this.shape = Objects.requireNonNull(shape, "shape");
         }
 
-        static Record create(VulkanDeviceRuntime device, AccelerationStructureResource descriptor, long storageBytes) {
+        static Record create(VulkanDeviceRuntime device, AccelerationStructureResource descriptor, long storageBytes,
+                             BuildShape shape) {
             RtGpuBuffer storage = RtGpuBuffer.createDeviceAddressBuffer(device.device(), device.allocator(), storageBytes,
                     KHRAccelerationStructure.VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR);
             long handle = VK10.VK_NULL_HANDLE;
@@ -570,7 +615,7 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
                         VkAccelerationStructureDeviceAddressInfoKHR.calloc(stack).sType$Default().accelerationStructure(handle);
                 long address = KHRAccelerationStructure.vkGetAccelerationStructureDeviceAddressKHR(device.device(), addressInfo);
                 if (address == 0L) throw new IllegalStateException("generic acceleration structure has no device address");
-                return new Record(device.device(), descriptor, storage, handle, address);
+                return new Record(device.device(), descriptor, storage, handle, address, shape);
             } catch (RuntimeException failure) {
                 if (handle != VK10.VK_NULL_HANDLE) KHRAccelerationStructure.vkDestroyAccelerationStructureKHR(device.device(), handle, null);
                 storage.close();
@@ -581,6 +626,15 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
         void requireReadyForMutation() {
             if (pendingSequence >= 0L) throw new IllegalStateException("AS has unresolved GPU build sequence " + pendingSequence);
             if (closed) throw new IllegalStateException("AS is closed");
+        }
+
+        void requireCompatible(BuildShape requested) {
+            if (!shape.compatibleWith(Objects.requireNonNull(requested, "requested"))) {
+                throw new IllegalArgumentException(
+                        "AS UPDATE shape is incompatible with the initial BUILD: initial=" + shape
+                                + ", requested=" + requested
+                );
+            }
         }
 
         void markPending(long sequence) {
