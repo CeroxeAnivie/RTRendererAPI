@@ -316,19 +316,30 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
             }
         }
 
-        void record(VkCommandBuffer commandBuffer, MemoryStack stack, Compilation scope) {
-            VkAccelerationStructureBuildGeometryInfoKHR.Buffer info = buildInfo(
-                    stack, destination.descriptor, mode, triangles, instances,
-                    instanceBuffer == null ? 0L : instanceBuffer.deviceAddress()
-            );
-            info.get(0).dstAccelerationStructure(destination.handle)
-                    .scratchData(address -> address.deviceAddress(alignedAddress(scratch, device.accelerationStructureScratchAlignment())));
-            if (mode == AccelerationStructureBuildMode.UPDATE) info.get(0).srcAccelerationStructure(destination.handle);
-            VkAccelerationStructureBuildRangeInfoKHR.Buffer ranges = ranges(stack, triangles, instances);
-            PointerBuffer pointers = stack.mallocPointer(ranges.remaining());
-            for (int index = 0; index < ranges.remaining(); index++) pointers.put(index, ranges.get(index).address());
-            KHRAccelerationStructure.vkCmdBuildAccelerationStructuresKHR(commandBuffer, info, pointers);
-            recordBuildBarrier(commandBuffer, stack);
+        void record(VkCommandBuffer commandBuffer, MemoryStack commandStack, Compilation scope) {
+            /*
+             * A command session may contain millions of captured draw builds.  The descriptor
+             * structs are needed only while vkCmdBuildAccelerationStructuresKHR records the
+             * command; retaining them on the session's shared MemoryStack makes native stack
+             * usage grow with the entire frame and eventually raises OutOfMemoryError: Out of
+             * stack space.  Keep this allocation scoped to one build so complete capture frames
+             * remain bounded without changing the public command contract.
+             */
+            try (MemoryStack buildStack = MemoryStack.stackPush()) {
+                VkAccelerationStructureBuildGeometryInfoKHR.Buffer info = buildInfo(
+                        buildStack, destination.descriptor, mode, triangles, instances,
+                        instanceBuffer == null ? 0L : instanceBuffer.deviceAddress()
+                );
+                info.get(0).dstAccelerationStructure(destination.handle)
+                        .scratchData(address -> address.deviceAddress(alignedAddress(scratch,
+                                device.accelerationStructureScratchAlignment())));
+                if (mode == AccelerationStructureBuildMode.UPDATE) info.get(0).srcAccelerationStructure(destination.handle);
+                VkAccelerationStructureBuildRangeInfoKHR.Buffer ranges = ranges(buildStack, triangles, instances);
+                PointerBuffer pointers = buildStack.mallocPointer(ranges.remaining());
+                for (int index = 0; index < ranges.remaining(); index++) pointers.put(index, ranges.get(index).address());
+                KHRAccelerationStructure.vkCmdBuildAccelerationStructuresKHR(commandBuffer, info, pointers);
+                recordBuildBarrier(commandBuffer, buildStack);
+            }
         }
 
         void closeTemporary() {
