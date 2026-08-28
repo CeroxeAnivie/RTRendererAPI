@@ -16,6 +16,7 @@ RTRendererAPI `3.x` 是稳定 API 线。Maven Central 是唯一二进制事实�
 - `3.1.3` 是兼容 patch：host 关闭时先等待 composition frame ring 并释放其 generic-resource pin，再销毁 generic command session 的 descriptor、SBT、pipeline、pipeline layout 与其他 device-child 资源，最后销毁 scene 与共享 Vulkan device。该顺序和 RT pipeline owner 修复 `vkDestroyDevice` 前仍存在子对象的生命周期违规，不改变公共 API/SPI，也不引入宿主、游戏或厂商专属契约。
 - `3.1.6` 是兼容 patch：generic Vulkan BLAS recording 为每个 build 使用独立的临时 native descriptor scope，避免大量合法 acceleration-structure build 在一个 command transaction 中累积到共享 `MemoryStack` 并耗尽 native stack；同时保留 3.1.5 的同事务 upload/visibility/read 顺序验证和 readiness 门禁。公共 API/SPI、资源语义和 command ordering 不变。
 - `3.1.7` 是兼容 patch：generic Vulkan AS build 固化初次 BUILD 的不可变 shape；UPDATE 必须保持 AS 类型、geometry 数量、每个 geometry 的 primitive capacity 或 TLAS instance capacity，重复 BUILD 不得覆盖 resident destination。size query、scratch query、range 与实际 Vulkan record 统一消费同一 resolved description，避免容量漂移触发 validation/device loss。公共 API/SPI、资源语义和 command ordering 不变。
+- `3.1.8` 是兼容 patch：generic Vulkan command recording 按 action 作用域释放 native 临时结构，避免大型合法 command transaction 累积 `MemoryStack` 分配并触发 `OutOfMemoryError: Out of stack space`。公共 API/SPI、资源语义和 command ordering 不变。
 - patch 版本只能提供兼容修复；minor 版本可以增加兼容能力；删除或改变既有公共二进制声明必须升级 major。
 - 每个主版本都提交当前版本的完整 `javap` ABI baseline。`verifyRendererApiAbi` 阻止在同一主版本内未经审查的二进制漂移；跨 major 的移除必须有对应的版本策略记录，不能伪装成兼容变更。
 

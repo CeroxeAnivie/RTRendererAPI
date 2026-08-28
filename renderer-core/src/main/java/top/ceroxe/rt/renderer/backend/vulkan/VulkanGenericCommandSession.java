@@ -354,105 +354,110 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     ) {
         int writeIndex = 0;
         for (VulkanGenericCommandPlan.Action action : plan.actions()) {
-            if (action instanceof VulkanGenericCommandPlan.BeginPass
-                    || action instanceof VulkanGenericCommandPlan.EndPass
-                    || action instanceof VulkanGenericCommandPlan.BindGraphics
-                    || action instanceof VulkanGenericCommandPlan.BindGraphicsBindings
-                    || action instanceof VulkanGenericCommandPlan.GraphicsPushConstants
-                    || action instanceof VulkanGenericCommandPlan.BindVertex
-                    || action instanceof VulkanGenericCommandPlan.BindIndex
-                    || action instanceof VulkanGenericCommandPlan.ViewportAction
-                    || action instanceof VulkanGenericCommandPlan.ScissorAction
-                    || action instanceof VulkanGenericCommandPlan.Draw
-                    || action instanceof VulkanGenericCommandPlan.DrawIndexed
-                    || action instanceof VulkanGenericCommandPlan.MultiDraw
-                    || action instanceof VulkanGenericCommandPlan.MultiDrawIndexed
-                    || action instanceof VulkanGenericCommandPlan.Indirect) {
-                VulkanGenericGraphicsRecorder.record(commandBuffer, stack, List.of(action), textureLayouts);
-                continue;
-            }
-            switch (action) {
-                case VulkanGenericCommandPlan.BindCompute bind -> VK10.vkCmdBindPipeline(
-                        commandBuffer, VK10.VK_PIPELINE_BIND_POINT_COMPUTE, bind.pipeline().pipeline()
-                );
-                case VulkanGenericCommandPlan.BindComputeBindings bind -> recordComputeBindings(
-                        commandBuffer, stack, bind
-                );
-                case VulkanGenericCommandPlan.PushConstants push -> VK10.vkCmdPushConstants(
-                        commandBuffer, push.pipeline().layout(), VK10.VK_SHADER_STAGE_COMPUTE_BIT,
-                        push.command().offsetBytes(), push.command().data().bytes()
-                );
-                case VulkanGenericCommandPlan.Dispatch dispatch -> VK10.vkCmdDispatch(
-                        commandBuffer, dispatch.command().groupsX(), dispatch.command().groupsY(), dispatch.command().groupsZ()
-                );
-                case VulkanGenericCommandPlan.BindRayTracing bind -> VK10.vkCmdBindPipeline(
-                        commandBuffer, KHRRayTracingPipeline.VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-                        bind.pipeline().pipeline()
-                );
-                case VulkanGenericCommandPlan.BindRayTracingBindings bind -> recordRayTracingBindings(
-                        commandBuffer, stack, bind
-                );
-                case VulkanGenericCommandPlan.RayTracingPushConstants push -> VK10.vkCmdPushConstants(
-                        commandBuffer, push.pipeline().layout(), push.pipeline().shaderStageFlags(),
-                        push.command().offsetBytes(), push.command().data().bytes()
-                );
-                case VulkanGenericCommandPlan.BuildAccelerationStructure build ->
-                        plan.accelerationStructures().recordBuild(commandBuffer, stack, build.build());
-                case VulkanGenericCommandPlan.TraceRays trace -> recordTraceRays(
-                        commandBuffer, stack, trace, textureLayouts
-                );
-                case VulkanGenericCommandPlan.Write write -> {
-                    StagingUpload upload = staging.get(writeIndex++);
-                    VkBufferCopy.Buffer region = VkBufferCopy.calloc(1, stack)
-                            .srcOffset(0L)
-                            .dstOffset(write.destinationOffset())
-                            .size(upload.byteCount());
-                    VK10.vkCmdCopyBuffer(commandBuffer, upload.buffer().buffer(), write.destination().buffer().buffer(), region);
+            // Vulkan copies the command data while each vkCmd* call records it. Scoping this
+            // stack per action prevents a large valid transaction from retaining one native
+            // struct for every upload, barrier, descriptor bind, and texture transition.
+            try (MemoryStack actionStack = MemoryStack.stackPush()) {
+                if (action instanceof VulkanGenericCommandPlan.BeginPass
+                        || action instanceof VulkanGenericCommandPlan.EndPass
+                        || action instanceof VulkanGenericCommandPlan.BindGraphics
+                        || action instanceof VulkanGenericCommandPlan.BindGraphicsBindings
+                        || action instanceof VulkanGenericCommandPlan.GraphicsPushConstants
+                        || action instanceof VulkanGenericCommandPlan.BindVertex
+                        || action instanceof VulkanGenericCommandPlan.BindIndex
+                        || action instanceof VulkanGenericCommandPlan.ViewportAction
+                        || action instanceof VulkanGenericCommandPlan.ScissorAction
+                        || action instanceof VulkanGenericCommandPlan.Draw
+                        || action instanceof VulkanGenericCommandPlan.DrawIndexed
+                        || action instanceof VulkanGenericCommandPlan.MultiDraw
+                        || action instanceof VulkanGenericCommandPlan.MultiDrawIndexed
+                        || action instanceof VulkanGenericCommandPlan.Indirect) {
+                    VulkanGenericGraphicsRecorder.record(commandBuffer, actionStack, List.of(action), textureLayouts);
+                    continue;
                 }
-                case VulkanGenericCommandPlan.WriteTexture write -> recordTextureWrite(
-                        commandBuffer, stack, write, staging.get(writeIndex++), textureLayouts
-                );
-                case VulkanGenericCommandPlan.CopyTexture copy -> recordTextureCopy(
-                        commandBuffer, stack, copy, textureLayouts
-                );
-                case VulkanGenericCommandPlan.CopyTextureRegion copy -> recordTextureRegionCopy(
-                        commandBuffer, stack, copy, textureLayouts
-                );
-                case VulkanGenericCommandPlan.CopyBufferToTexture copy -> recordBufferToTextureCopy(
-                        commandBuffer, stack, copy, textureLayouts
-                );
-                case VulkanGenericCommandPlan.CopyTextureToBuffer copy -> recordTextureToBufferCopy(
-                        commandBuffer, stack, copy, textureLayouts
-                );
-                case VulkanGenericCommandPlan.ClearColor clear -> recordColorClear(
-                        commandBuffer, stack, clear, textureLayouts
-                );
-                case VulkanGenericCommandPlan.ClearDepthStencil clear -> recordDepthStencilClear(
-                        commandBuffer, stack, clear, textureLayouts
-                );
-                case VulkanGenericCommandPlan.Copy copy -> {
-                    VkBufferCopy.Buffer region = VkBufferCopy.calloc(1, stack)
-                            .srcOffset(copy.sourceOffset())
-                            .dstOffset(copy.destinationOffset())
-                            .size(copy.byteCount());
-                    VK10.vkCmdCopyBuffer(
-                            commandBuffer, copy.source().buffer().buffer(), copy.destination().buffer().buffer(), region
+                switch (action) {
+                    case VulkanGenericCommandPlan.BindCompute bind -> VK10.vkCmdBindPipeline(
+                            commandBuffer, VK10.VK_PIPELINE_BIND_POINT_COMPUTE, bind.pipeline().pipeline()
                     );
+                    case VulkanGenericCommandPlan.BindComputeBindings bind -> recordComputeBindings(
+                            commandBuffer, actionStack, bind
+                    );
+                    case VulkanGenericCommandPlan.PushConstants push -> VK10.vkCmdPushConstants(
+                            commandBuffer, push.pipeline().layout(), VK10.VK_SHADER_STAGE_COMPUTE_BIT,
+                            push.command().offsetBytes(), push.command().data().bytes()
+                    );
+                    case VulkanGenericCommandPlan.Dispatch dispatch -> VK10.vkCmdDispatch(
+                            commandBuffer, dispatch.command().groupsX(), dispatch.command().groupsY(), dispatch.command().groupsZ()
+                    );
+                    case VulkanGenericCommandPlan.BindRayTracing bind -> VK10.vkCmdBindPipeline(
+                            commandBuffer, KHRRayTracingPipeline.VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                            bind.pipeline().pipeline()
+                    );
+                    case VulkanGenericCommandPlan.BindRayTracingBindings bind -> recordRayTracingBindings(
+                            commandBuffer, actionStack, bind
+                    );
+                    case VulkanGenericCommandPlan.RayTracingPushConstants push -> VK10.vkCmdPushConstants(
+                            commandBuffer, push.pipeline().layout(), push.pipeline().shaderStageFlags(),
+                            push.command().offsetBytes(), push.command().data().bytes()
+                    );
+                    case VulkanGenericCommandPlan.BuildAccelerationStructure build ->
+                            plan.accelerationStructures().recordBuild(commandBuffer, actionStack, build.build());
+                    case VulkanGenericCommandPlan.TraceRays trace -> recordTraceRays(
+                            commandBuffer, actionStack, trace, textureLayouts
+                    );
+                    case VulkanGenericCommandPlan.Write write -> {
+                        StagingUpload upload = staging.get(writeIndex++);
+                        VkBufferCopy.Buffer region = VkBufferCopy.calloc(1, actionStack)
+                                .srcOffset(0L)
+                                .dstOffset(write.destinationOffset())
+                                .size(upload.byteCount());
+                        VK10.vkCmdCopyBuffer(commandBuffer, upload.buffer().buffer(), write.destination().buffer().buffer(), region);
+                    }
+                    case VulkanGenericCommandPlan.WriteTexture write -> recordTextureWrite(
+                            commandBuffer, actionStack, write, staging.get(writeIndex++), textureLayouts
+                    );
+                    case VulkanGenericCommandPlan.CopyTexture copy -> recordTextureCopy(
+                            commandBuffer, actionStack, copy, textureLayouts
+                    );
+                    case VulkanGenericCommandPlan.CopyTextureRegion copy -> recordTextureRegionCopy(
+                            commandBuffer, actionStack, copy, textureLayouts
+                    );
+                    case VulkanGenericCommandPlan.CopyBufferToTexture copy -> recordBufferToTextureCopy(
+                            commandBuffer, actionStack, copy, textureLayouts
+                    );
+                    case VulkanGenericCommandPlan.CopyTextureToBuffer copy -> recordTextureToBufferCopy(
+                            commandBuffer, actionStack, copy, textureLayouts
+                    );
+                    case VulkanGenericCommandPlan.ClearColor clear -> recordColorClear(
+                            commandBuffer, actionStack, clear, textureLayouts
+                    );
+                    case VulkanGenericCommandPlan.ClearDepthStencil clear -> recordDepthStencilClear(
+                            commandBuffer, actionStack, clear, textureLayouts
+                    );
+                    case VulkanGenericCommandPlan.Copy copy -> {
+                        VkBufferCopy.Buffer region = VkBufferCopy.calloc(1, actionStack)
+                                .srcOffset(copy.sourceOffset())
+                                .dstOffset(copy.destinationOffset())
+                                .size(copy.byteCount());
+                        VK10.vkCmdCopyBuffer(
+                                commandBuffer, copy.source().buffer().buffer(), copy.destination().buffer().buffer(), region
+                        );
+                    }
+                    case VulkanGenericCommandPlan.AutoBufferVisibility visibility -> recordAutomaticBufferVisibility(
+                            commandBuffer, actionStack, visibility.resource()
+                    );
+                    case VulkanGenericCommandPlan.AutoAccelerationStructureInputVisibility visibility ->
+                            recordAutomaticAccelerationStructureInputVisibility(commandBuffer, actionStack, visibility.resource());
+                    case VulkanGenericCommandPlan.AutoTextureVisibility visibility -> recordAutomaticTextureVisibility(
+                            commandBuffer, actionStack, visibility, textureLayouts
+                    );
+                    case VulkanGenericCommandPlan.Barrier barrier -> {
+                        recordBarriers(commandBuffer, actionStack, barrier.buffers());
+                        recordTextureBarriers(commandBuffer, actionStack, barrier.textures(), textureLayouts);
+                    }
+                    default -> throw new IllegalStateException("unhandled generic Vulkan command action: "
+                            + action.getClass().getSimpleName());
                 }
-                case VulkanGenericCommandPlan.AutoBufferVisibility visibility -> recordAutomaticBufferVisibility(
-                        commandBuffer, stack, visibility.resource()
-                );
-                case VulkanGenericCommandPlan.AutoAccelerationStructureInputVisibility visibility ->
-                        recordAutomaticAccelerationStructureInputVisibility(commandBuffer, stack, visibility.resource());
-                case VulkanGenericCommandPlan.AutoTextureVisibility visibility -> recordAutomaticTextureVisibility(
-                        commandBuffer, stack, visibility, textureLayouts
-                );
-                case VulkanGenericCommandPlan.Barrier barrier -> {
-                    recordBarriers(commandBuffer, stack, barrier.buffers());
-                    recordTextureBarriers(commandBuffer, stack, barrier.textures(), textureLayouts);
-                }
-                default -> throw new IllegalStateException("unhandled generic Vulkan command action: "
-                        + action.getClass().getSimpleName());
             }
         }
     }
@@ -934,15 +939,24 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             MemoryStack stack,
             VulkanGenericResourceRegistry.BufferRecord record
     ) {
-        VkBufferMemoryBarrier.Buffer barrier = VkBufferMemoryBarrier.calloc(1, stack);
-        barrier.sType$Default()
-                .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
-                .dstAccessMask(VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT)
-                .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
-                .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
-                .buffer(record.buffer().buffer()).offset(0L).size(record.descriptor().byteSize());
-        VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, null, barrier, null);
+        /*
+         * This barrier is consumed synchronously by vkCmdPipelineBarrier. Keeping one native
+         * struct per automatic visibility edge on the command-recording stack made large,
+         * otherwise valid generic transactions exhaust MemoryStack before submission. A nested
+         * scope retains the same Vulkan ordering while bounding native temporary memory by one
+         * barrier.
+         */
+        try (MemoryStack barrierStack = MemoryStack.stackPush()) {
+            VkBufferMemoryBarrier.Buffer barrier = VkBufferMemoryBarrier.calloc(1, barrierStack);
+            barrier.sType$Default()
+                    .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                    .dstAccessMask(VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT)
+                    .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                    .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                    .buffer(record.buffer().buffer()).offset(0L).size(record.descriptor().byteSize());
+            VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, null, barrier, null);
+        }
     }
 
     private static void recordAutomaticAccelerationStructureInputVisibility(
@@ -950,15 +964,17 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             MemoryStack stack,
             VulkanGenericResourceRegistry.BufferRecord record
     ) {
-        VkBufferMemoryBarrier.Buffer barrier = VkBufferMemoryBarrier.calloc(1, stack);
-        barrier.get(0).sType$Default().srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
-                .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT)
-                .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
-                .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
-                .buffer(record.buffer().buffer()).offset(0L).size(VK10.VK_WHOLE_SIZE);
-        VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
-                org.lwjgl.vulkan.KHRAccelerationStructure.VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-                0, null, barrier, null);
+        try (MemoryStack barrierStack = MemoryStack.stackPush()) {
+            VkBufferMemoryBarrier.Buffer barrier = VkBufferMemoryBarrier.calloc(1, barrierStack);
+            barrier.get(0).sType$Default().srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                    .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT)
+                    .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                    .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                    .buffer(record.buffer().buffer()).offset(0L).size(VK10.VK_WHOLE_SIZE);
+            VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    org.lwjgl.vulkan.KHRAccelerationStructure.VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                    0, null, barrier, null);
+        }
     }
 
     private static void recordAutomaticTextureVisibility(
@@ -973,9 +989,12 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 : VK10.VK_ACCESS_SHADER_READ_BIT;
         forEachSubresource(visibility.range(), (aspect, mip, layer) -> {
             int oldLayout = textureLayouts.layout(visibility.resource(), aspect, mip, layer);
-            recordTextureBarrier(commandBuffer, stack, visibility.resource(), aspect, mip, layer, oldLayout, newLayout,
-                    VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK10.VK_ACCESS_MEMORY_WRITE_BIT,
-                    VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, destinationAccess);
+            try (MemoryStack barrierStack = MemoryStack.stackPush()) {
+                recordTextureBarrier(commandBuffer, barrierStack, visibility.resource(), aspect, mip, layer,
+                        oldLayout, newLayout, VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                        VK10.VK_ACCESS_MEMORY_WRITE_BIT, VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                        destinationAccess);
+            }
         });
         textureLayouts.set(visibility.resource(), visibility.range(), newLayout);
     }
