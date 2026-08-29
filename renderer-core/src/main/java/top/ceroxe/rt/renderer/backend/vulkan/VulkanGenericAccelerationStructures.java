@@ -81,6 +81,8 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
         private final List<PreparedBuild> builds = new ArrayList<>();
         private final java.util.Set<Record> used = new LinkedHashSet<>();
         private final java.util.Set<Record> destroyed = new LinkedHashSet<>();
+        private long maximumScratchBytes;
+        private RtGpuBuffer sharedScratch;
         private boolean committed;
         private boolean closed;
 
@@ -98,7 +100,7 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
                         + command.destination().id());
             }
             Record destination = prepareDestination(command.destination(), command.mode(), description);
-            PreparedBuild build = new PreparedBuild(destination, command.mode(), description, null);
+            PreparedBuild build = new PreparedBuild(this, destination, command.mode(), description, null);
             staged.put(command.destination(), destination);
             builds.add(build);
             return build;
@@ -122,7 +124,7 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
             try {
                 ResolvedBuildDescription description = ResolvedBuildDescription.top(command.instances());
                 Record destination = prepareDestination(command.destination(), command.mode(), description);
-                PreparedBuild build = new PreparedBuild(destination, command.mode(), description, instanceBuffer);
+                PreparedBuild build = new PreparedBuild(this, destination, command.mode(), description, instanceBuffer);
                 instanceBuffer = null;
                 staged.put(command.destination(), destination);
                 builds.add(build);
@@ -179,13 +181,41 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
             java.util.Set<Record> inFlight = new LinkedHashSet<>(used);
             for (PreparedBuild build : builds) inFlight.add(build.destination);
             for (Record record : inFlight) record.markComplete(submissionSequence);
+            RuntimeException failure = null;
             for (PreparedBuild build : builds) {
-                build.closeTemporary();
+                try {
+                    build.closeTemporary();
+                } catch (RuntimeException closeFailure) {
+                    if (failure == null) failure = closeFailure;
+                    else failure.addSuppressed(closeFailure);
+                }
             }
+            try {
+                closeSharedScratch();
+            } catch (RuntimeException closeFailure) {
+                if (failure == null) failure = closeFailure;
+                else failure.addSuppressed(closeFailure);
+            }
+            if (failure != null) throw failure;
         }
 
         void discardAfterDeviceFailure() {
-            for (PreparedBuild build : builds) build.closeTemporary();
+            RuntimeException failure = null;
+            for (PreparedBuild build : builds) {
+                try {
+                    build.closeTemporary();
+                } catch (RuntimeException closeFailure) {
+                    if (failure == null) failure = closeFailure;
+                    else failure.addSuppressed(closeFailure);
+                }
+            }
+            try {
+                closeSharedScratch();
+            } catch (RuntimeException closeFailure) {
+                if (failure == null) failure = closeFailure;
+                else failure.addSuppressed(closeFailure);
+            }
+            if (failure != null) throw failure;
         }
 
         @Override
@@ -193,8 +223,47 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
             if (closed) return;
             closed = true;
             if (!committed) {
-                for (PreparedBuild build : builds) build.closeForAbort();
+                RuntimeException failure = null;
+                for (PreparedBuild build : builds) {
+                    try {
+                        build.closeForAbort();
+                    } catch (RuntimeException closeFailure) {
+                        if (failure == null) failure = closeFailure;
+                        else failure.addSuppressed(closeFailure);
+                    }
+                }
+                try {
+                    closeSharedScratch();
+                } catch (RuntimeException closeFailure) {
+                    if (failure == null) failure = closeFailure;
+                    else failure.addSuppressed(closeFailure);
+                }
+                if (failure != null) throw failure;
             }
+        }
+
+        private void registerScratchRequirement(long bytes) {
+            if (bytes <= 0L) throw new IllegalArgumentException("AS scratch requirement must be positive");
+            maximumScratchBytes = Math.max(maximumScratchBytes, bytes);
+        }
+
+        private RtGpuBuffer sharedScratch(long requiredBytes) {
+            if (requiredBytes <= 0L || requiredBytes > maximumScratchBytes) {
+                throw new IllegalStateException("AS build requested an unregistered scratch size");
+            }
+            if (sharedScratch == null) {
+                sharedScratch = RtGpuBuffer.createDeviceAddressBuffer(
+                        device.device(), device.allocator(), maximumScratchBytes,
+                        VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                );
+            }
+            return sharedScratch;
+        }
+
+        private void closeSharedScratch() {
+            RtGpuBuffer scratch = sharedScratch;
+            sharedScratch = null;
+            if (scratch != null) scratch.close();
         }
 
         private Record prepareDestination(
@@ -333,16 +402,19 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
         private final Record destination;
         private final AccelerationStructureBuildMode mode;
         private final ResolvedBuildDescription description;
-        private final RtGpuBuffer scratch;
+        private final Compilation compilation;
+        private final long scratchBytes;
         private final RtGpuBuffer instanceBuffer;
         private boolean temporaryClosed;
 
         private PreparedBuild(
+                Compilation compilation,
                 Record destination,
                 AccelerationStructureBuildMode mode,
                 ResolvedBuildDescription description,
                 RtGpuBuffer preparedInstanceBuffer
         ) {
+            this.compilation = Objects.requireNonNull(compilation, "compilation");
             this.destination = Objects.requireNonNull(destination, "destination");
             this.mode = Objects.requireNonNull(mode, "mode");
             this.description = Objects.requireNonNull(description, "description");
@@ -360,10 +432,8 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
                 long scratchSize = mode == AccelerationStructureBuildMode.UPDATE
                         ? sizes.updateScratchSize() : sizes.buildScratchSize();
                 if (scratchSize <= 0L) throw new IllegalStateException("Vulkan returned invalid AS scratch size");
-                this.scratch = RtGpuBuffer.createDeviceAddressBuffer(
-                        device.device(), device.allocator(), alignedBytes(scratchSize, device.accelerationStructureScratchAlignment()),
-                        VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                );
+                this.scratchBytes = alignedBytes(scratchSize, device.accelerationStructureScratchAlignment());
+                compilation.registerScratchRequirement(scratchBytes);
                 if (description.instances() == null) {
                     this.instanceBuffer = null;
                 } else {
@@ -388,6 +458,7 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
                         buildStack, destination.descriptor, mode, description,
                         instanceBuffer == null ? 0L : instanceBuffer.deviceAddress()
                 );
+                RtGpuBuffer scratch = compilation.sharedScratch(scratchBytes);
                 info.get(0).dstAccelerationStructure(destination.handle)
                         .scratchData(address -> address.deviceAddress(alignedAddress(scratch,
                                 device.accelerationStructureScratchAlignment())));
@@ -404,7 +475,6 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
             if (temporaryClosed) return;
             temporaryClosed = true;
             RuntimeException failure = null;
-            try { scratch.close(); } catch (RuntimeException closeFailure) { failure = closeFailure; }
             if (instanceBuffer != null) {
                 try { instanceBuffer.close(); } catch (RuntimeException closeFailure) {
                     if (failure == null) failure = closeFailure;
@@ -562,7 +632,10 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
         var barrier = org.lwjgl.vulkan.VkMemoryBarrier.calloc(1, stack);
         barrier.get(0).sType$Default()
                 .srcAccessMask(KHRAccelerationStructure.VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR)
-                .dstAccessMask(KHRAccelerationStructure.VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR);
+                // The next sequential build may overwrite the shared compilation scratch buffer;
+                // READ covers BLAS/TLAS dependencies while WRITE closes the scratch WAW hazard.
+                .dstAccessMask(KHRAccelerationStructure.VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR
+                        | KHRAccelerationStructure.VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR);
         VK10.vkCmdPipelineBarrier(commandBuffer,
                 KHRAccelerationStructure.VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
                 KHRAccelerationStructure.VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
