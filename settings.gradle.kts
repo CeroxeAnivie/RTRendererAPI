@@ -37,8 +37,14 @@ rootProject.name = "RTRendererAPI"
 
 nmcpSettings {
     centralPortal {
-        username = providers.gradleProperty("centralUsername").getOrElse("")
-        password = providers.gradleProperty("centralPassword").getOrElse("")
+        username = providers.gradleProperty("centralUsername")
+            .orElse(providers.environmentVariable("CENTRAL_USERNAME"))
+            .orElse(providers.systemProperty("centralUsername"))
+            .getOrElse("")
+        password = providers.gradleProperty("centralPassword")
+            .orElse(providers.environmentVariable("CENTRAL_PASSWORD"))
+            .orElse(providers.systemProperty("centralPassword"))
+            .getOrElse("")
         publishingType = "AUTOMATIC"
         publicationName = "RTRendererAPI-${providers.gradleProperty("project_version").get()}"
         validationTimeout = Duration.of(30, ChronoUnit.MINUTES)
