@@ -1,6 +1,6 @@
 # 通用渲染语义参考
 
-本页定义 `3.1.12` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
+本页定义 `3.1.13` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
 实现通用 RT 提交时，先阅读[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)；该指南
 提供由资源发布到 `TraceRaysCommand` 的完整最小流程，本页则说明每一步为什么成立。
 
@@ -46,8 +46,16 @@ backend 会建立 submission-local visibility dependency；AS 输入使用精确
 类型，不能通过拆分 declaration 进入 backend。
 
 `RECORDED` 仅表示 command 被记录，不表示 GPU 已完成。`OUTPUT_PRODUCED` 只会在提交 fence 完成后发布，
-并标识第一个 storage attachment resource。device loss 会将 command lane 置为结构化终态
+并标识第一个 stored color attachment（或 trace output）resource。device loss 会将 command lane 置为结构化终态
 `DEVICE_LOST`，调用方必须按报告的 recovery action 重建 renderer。
+
+Generic command output can also be consumed through the ordinary `Renderer.pollLatestCpuFrame()`
+contract. When CPU readback is enabled, a completed stored RGBA8 2D color output is copied into a
+bounded, immutable `CpuFrame`; `CpuFrame.outputResource()` preserves the exact output resource
+identity and `width`/`height` describe the copied extent. The snapshot owns its bytes and has no
+Vulkan lease. A readback failure is surfaced as renderer failure, while rollback and device loss
+discard the pending snapshot. Retained-scene and generic command frame sequences are tracked
+independently so one lane cannot cause duplicate publication or suppress the other.
 
 `ResourceVersion` 标识 buffer/texture storage shape 与 declared usage，不标识每次内容写入。对 GPU-ready
 generation 的后续写入产生新的 fence-backed mutation evidence。`ResourceMutationKey` 标识该 command sequence

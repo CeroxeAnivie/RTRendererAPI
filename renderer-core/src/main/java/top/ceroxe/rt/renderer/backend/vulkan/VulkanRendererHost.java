@@ -89,6 +89,8 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     private long latestSessionCompletedFrameSequence = -1L;
     private long latestAcquiredFrameSequence = -1L;
     private long latestCpuFrameSequence = -1L;
+    private long latestRetainedCpuFrameSequence = -1L;
+    private long latestGenericCpuFrameSequence = -1L;
     private boolean deviceRecoveredSinceLastFrame;
     private RendererDiagnostics.FrameGpuTiming latestGpuTiming = RendererDiagnostics.FrameGpuTiming.unavailable();
     private FrameGenerationEvidence latestFrameGenerationEvidence = FrameGenerationEvidence.unavailable();
@@ -976,28 +978,50 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
                     "managed CPU frame readback is disabled; consume VulkanFrameInterop leases instead"
             );
         }
-        CpuFrame frame;
+        CpuFrame retainedFrame;
         try {
-            frame = session.captureLatestCpuFrame(latestCpuFrameSequence);
+            retainedFrame = session.captureLatestCpuFrame(latestRetainedCpuFrameSequence);
         } catch (RuntimeException failure) {
             throw fail("capture latest CPU frame", failure);
         }
-        if (frame == null) return Optional.empty();
-        if (frame.frameSequence() <= latestCpuFrameSequence) {
+        CpuFrame genericFrame = null;
+        if (genericCommands != null) {
+            try {
+                genericFrame = genericCommands.captureLatestCpuFrame(latestGenericCpuFrameSequence);
+            } catch (RuntimeException failure) {
+                throw fail("capture latest generic CPU frame", failure);
+            }
+        }
+        if (retainedFrame == null && genericFrame == null) return Optional.empty();
+        boolean chooseGeneric = genericFrame != null
+                && (retainedFrame == null || genericFrame.frameSequence() >= retainedFrame.frameSequence());
+        CpuFrame frame = chooseGeneric ? genericFrame : retainedFrame;
+        long previousSequence = chooseGeneric ? latestGenericCpuFrameSequence : latestRetainedCpuFrameSequence;
+        if (frame.frameSequence() <= previousSequence) {
             throw fail(
                     "validate captured CPU frame",
                     new IllegalStateException(
-                            "session returned a non-new CPU frame: latest=" + latestCpuFrameSequence
+                            "session returned a non-new CPU frame: latest=" + previousSequence
                                     + ", returned=" + frame.frameSequence()
                     )
             );
         }
-        if (frame.frameSequence() > latestSubmittedFrameSequence
-                || frame.renderedSceneRevision() > scene.state().revision()) {
+        if ((!chooseGeneric && frame.frameSequence() > latestSubmittedFrameSequence)
+                || frame.renderedSceneRevision() > scene.state().revision()
+                || (chooseGeneric && frame.outputResource().isEmpty())) {
             throw fail(
                     "validate captured CPU frame",
                     new IllegalStateException("session returned CPU pixels for unaccepted work")
             );
+        }
+        // Consume every candidate observed in this poll. A retained and generic lane may legally
+        // use the same sequence domain; advancing the discarded lane prevents the next poll from
+        // returning the same frame a second time.
+        if (retainedFrame != null) {
+            latestRetainedCpuFrameSequence = Math.max(latestRetainedCpuFrameSequence, retainedFrame.frameSequence());
+        }
+        if (genericFrame != null) {
+            latestGenericCpuFrameSequence = Math.max(latestGenericCpuFrameSequence, genericFrame.frameSequence());
         }
         latestCpuFrameSequence = frame.frameSequence();
         latestCompletedFrameSequence = Math.max(latestCompletedFrameSequence, frame.frameSequence());
@@ -1320,6 +1344,8 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
             sessionClosed = false;
             latestSessionCompletedFrameSequence = -1L;
             latestCpuFrameSequence = -1L;
+            latestRetainedCpuFrameSequence = -1L;
+            latestGenericCpuFrameSequence = -1L;
             latestGpuTiming = RendererDiagnostics.FrameGpuTiming.unavailable();
             latestFrameGenerationEvidence = FrameGenerationEvidence.unavailable();
             latestTechnologyExecutionEvidence = TechnologyExecutionEvidence.disabled();

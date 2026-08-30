@@ -1676,6 +1676,11 @@ public final class RendererApiContractSelfTest {
       pixels[0] = 99;
       require(frame.frameSequence() == 4L && frame.renderedSceneRevision() == 3L && frame.width() == 1 && frame.height() == 1 && frame.byteCount() == 4, "CPU frame metadata changed");
       require(frame.pixelsRgba8().get(0) == 1, "CPU frame retained caller-owned pixels");
+      CpuFrame generic = CpuFrame.builder().frameSequence(5L).renderedSceneRevision(0L)
+              .outputResource(new RenderResourceId(99L)).extent(1, 1).pixelsRgba8(new byte[]{5, 6, 7, 8}).build();
+      require(generic.outputResource().orElseThrow().value() == 99L
+              && generic.toBuilder().build().outputResource().orElseThrow().value() == 99L,
+              "CPU frame lost generic output identity");
       expect(ReadOnlyBufferException.class, () -> frame.pixelsRgba8().put(0, (byte)9));
       ByteBuffer destination = ByteBuffer.allocate(6);
       destination.position(1);

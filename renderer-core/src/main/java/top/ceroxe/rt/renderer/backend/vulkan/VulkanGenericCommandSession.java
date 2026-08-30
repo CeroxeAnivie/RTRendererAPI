@@ -14,6 +14,7 @@ import org.lwjgl.vulkan.VkImageMemoryBarrier;
 import top.ceroxe.rt.renderer.api.BufferBarrier;
 import top.ceroxe.rt.renderer.api.BeginRenderPassCommand;
 import top.ceroxe.rt.renderer.api.CommandExecutionEvidence;
+import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.RenderCommandTransaction;
 import top.ceroxe.rt.renderer.api.RenderPipelineStage;
 import top.ceroxe.rt.renderer.api.RenderResourceAccess;
@@ -59,6 +60,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     private final VulkanGenericRayTracingPipelines rayTracingPipelines;
     private final Map<Long, CommandExecutionEvidence> commandEvidence = new LinkedHashMap<>();
     private final Map<Long, PendingSubmission> pending = new LinkedHashMap<>();
+    private final Map<Long, CpuFrame> completedCpuFrames = new LinkedHashMap<>();
+    private final Map<Long, RuntimeException> cpuFrameFailures = new LinkedHashMap<>();
     private long latestCommandSequence = -1L;
     private long latestCompletedSequence = -1L;
     private boolean deviceFailed;
@@ -231,7 +234,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             commandEvidence.put(checked.sequence(), evidence);
             pending.put(checked.sequence(), new PendingSubmission(
                     checked.sequence(), submission, immutableStaging, plan.writes(), plan.textureWrites(), plan.outputResource(),
-                    plan.accelerationStructures()));
+                    plan.outputRecord().orElse(null), plan.accelerationStructures()));
             submissionOwnedByPending = true;
             submission = null;
             staging = null;
@@ -260,6 +263,23 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         requireOpen();
         pump();
         return Optional.ofNullable(commandEvidence.get(sequence));
+    }
+
+    /** Returns the newest completed generic output snapshot after the caller's sequence. */
+    CpuFrame captureLatestCpuFrame(long afterFrameSequence) {
+        if (afterFrameSequence < -1L) {
+            throw new IllegalArgumentException("frame sequence must not be below -1");
+        }
+        requireOpen();
+        pump();
+        for (Map.Entry<Long, RuntimeException> failure : cpuFrameFailures.entrySet()) {
+            if (failure.getKey() > afterFrameSequence) throw failure.getValue();
+        }
+        CpuFrame result = null;
+        for (Map.Entry<Long, CpuFrame> entry : completedCpuFrames.entrySet()) {
+            if (entry.getKey() > afterFrameSequence) result = entry.getValue();
+        }
+        return result;
     }
 
     VulkanGenericCompositionSource requireCompositionSource(top.ceroxe.rt.renderer.api.ResourceMutationKey mutation) {
@@ -328,6 +348,28 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 current.accelerationStructures().complete(current.sequence());
                 latestCompletedSequence = Math.max(latestCompletedSequence, current.sequence());
                 boolean output = current.outputResource().isPresent();
+                if (output && current.outputRecord() != null) {
+                    try {
+                        VulkanGenericResourceRegistry.TextureRecord outputRecord = current.outputRecord();
+                        byte[] pixels = VulkanGenericCpuFrameReadback.capture(device, outputRecord);
+                        CpuFrame frame = CpuFrame.builder()
+                                .frameSequence(current.sequence())
+                                .renderedSceneRevision(0L)
+                                .outputResource(current.outputResource().orElseThrow())
+                                .extent(outputRecord.descriptor().width(), outputRecord.descriptor().height())
+                                .pixelsRgba8(pixels)
+                                .build();
+                        completedCpuFrames.put(current.sequence(), frame);
+                        while (completedCpuFrames.size() > maximumInFlightTransactions) {
+                            completedCpuFrames.remove(completedCpuFrames.keySet().iterator().next());
+                        }
+                    } catch (RuntimeException readbackFailure) {
+                        cpuFrameFailures.put(current.sequence(), readbackFailure);
+                        while (cpuFrameFailures.size() > maximumInFlightTransactions) {
+                            cpuFrameFailures.remove(cpuFrameFailures.keySet().iterator().next());
+                        }
+                    }
+                }
                 commandEvidence.put(current.sequence(), new CommandExecutionEvidence(
                         current.sequence(), output
                                 ? CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED
@@ -1151,6 +1193,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             List<VulkanGenericResourceRegistry.BufferRecord> writes,
             List<VulkanGenericResourceRegistry.TextureRecord> textureWrites,
             java.util.Optional<top.ceroxe.rt.renderer.api.RenderResourceId> outputResource,
+            VulkanGenericResourceRegistry.TextureRecord outputRecord,
             VulkanGenericAccelerationStructures.Compilation accelerationStructures
     ) { }
 

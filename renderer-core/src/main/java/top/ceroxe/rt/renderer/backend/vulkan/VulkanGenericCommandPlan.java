@@ -57,6 +57,7 @@ final class VulkanGenericCommandPlan {
     private final List<VulkanGenericResourceRegistry.TextureRecord> textureWrites;
     private final List<VulkanGenericResourceRegistry.TextureRecord> textureReads;
     private final Optional<top.ceroxe.rt.renderer.api.RenderResourceId> outputResource;
+    private final Optional<VulkanGenericResourceRegistry.TextureRecord> outputRecord;
     private final VulkanGenericAccelerationStructures.Compilation accelerationStructures;
 
     private VulkanGenericCommandPlan(
@@ -66,6 +67,7 @@ final class VulkanGenericCommandPlan {
             List<VulkanGenericResourceRegistry.TextureRecord> textureWrites,
             List<VulkanGenericResourceRegistry.TextureRecord> textureReads,
             Optional<top.ceroxe.rt.renderer.api.RenderResourceId> outputResource,
+            Optional<VulkanGenericResourceRegistry.TextureRecord> outputRecord,
             VulkanGenericAccelerationStructures.Compilation accelerationStructures
     ) {
         this.actions = List.copyOf(actions);
@@ -74,6 +76,7 @@ final class VulkanGenericCommandPlan {
         this.textureWrites = distinctTextures(textureWrites);
         this.textureReads = distinctTextures(textureReads);
         this.outputResource = Objects.requireNonNull(outputResource, "outputResource");
+        this.outputRecord = Objects.requireNonNull(outputRecord, "outputRecord");
         this.accelerationStructures = Objects.requireNonNull(accelerationStructures, "accelerationStructures");
     }
 
@@ -99,6 +102,7 @@ final class VulkanGenericCommandPlan {
         ArrayList<VulkanGenericResourceRegistry.TextureRecord> textureReads = new ArrayList<>();
         ArrayList<VulkanGenericResourceRegistry.TextureRecord> locallyReadableTextures = new ArrayList<>();
         top.ceroxe.rt.renderer.api.RenderResourceId outputResource = null;
+        VulkanGenericResourceRegistry.TextureRecord outputRecord = null;
         VulkanGenericComputePipelines.Compiled computePipeline = null;
         VulkanGenericGraphicsPipelines.Compiled graphicsPipeline = null;
         VulkanGenericRayTracingPipelines.Compiled rayTracingPipeline = null;
@@ -119,6 +123,7 @@ final class VulkanGenericCommandPlan {
                         if (resolveRecord != null) textureWrites.add(resolveRecord);
                         if (attachment.storeOperation() == top.ceroxe.rt.renderer.api.StoreOp.STORE && outputResource == null) {
                             outputResource = record.generation().id();
+                            outputRecord = record;
                         }
                     }
                     ResolvedAttachment depth = resolveAttachment(resources, pass.depthAttachment().orElse(null), false);
@@ -338,6 +343,7 @@ final class VulkanGenericCommandPlan {
                     actions.add(new TraceRays(rayTracingPipeline, trace, output));
                     textureWrites.add(output);
                     outputResource = output.generation().id();
+                    outputRecord = output;
                 }
                 case ResourceBarrierCommand barrier -> {
                     ArrayList<ResolvedBufferBarrier> resolved = new ArrayList<>();
@@ -384,7 +390,7 @@ final class VulkanGenericCommandPlan {
             }
         }
         return new VulkanGenericCommandPlan(actions, writes, reads, textureWrites, textureReads,
-                Optional.ofNullable(outputResource), asCompilation);
+                Optional.ofNullable(outputResource), Optional.ofNullable(outputRecord), asCompilation);
         } catch (RuntimeException | Error failure) {
             asCompilation.close();
             throw failure;
@@ -511,6 +517,7 @@ final class VulkanGenericCommandPlan {
     List<VulkanGenericResourceRegistry.TextureRecord> textureWrites() { return textureWrites; }
     List<VulkanGenericResourceRegistry.TextureRecord> textureReads() { return textureReads; }
     Optional<top.ceroxe.rt.renderer.api.RenderResourceId> outputResource() { return outputResource; }
+    Optional<VulkanGenericResourceRegistry.TextureRecord> outputRecord() { return outputRecord; }
     VulkanGenericAccelerationStructures.Compilation accelerationStructures() { return accelerationStructures; }
 
     private static List<VulkanGenericResourceRegistry.BufferRecord> distinct(

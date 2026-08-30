@@ -19,6 +19,7 @@ import top.ceroxe.rt.renderer.api.BufferUsage;
 import top.ceroxe.rt.renderer.api.ByteRange;
 import top.ceroxe.rt.renderer.api.ClearValue;
 import top.ceroxe.rt.renderer.api.CommandExecutionEvidence;
+import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
@@ -195,8 +196,38 @@ public final class VulkanGenericCommandNativeSelfTest {
                     throw new IllegalStateException("generic graphics transaction was not recorded: " + graphics);
                 }
                 CommandExecutionEvidence rendered = await(session, 1L, CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED);
+                CpuFrame firstFrame = session.captureLatestCpuFrame(0L);
+                if (firstFrame == null || firstFrame.outputResource().orElseThrow().value() != color.id().value()
+                        || firstFrame.width() != 64 || firstFrame.height() != 64 || allZero(firstFrame)) {
+                    throw new IllegalStateException("generic graphics CPU readback was empty, black, or misidentified: " + firstFrame);
+                }
+
+                GraphicsPipelineState procedural = proceduralGraphicsPipeline();
+                CommandExecutionEvidence proceduralRecorded = session.submit(new RenderCommandTransaction(2L, List.of(
+                        new BeginRenderPassCommand(pass),
+                        new BindGraphicsPipelineCommand(procedural),
+                        new SetViewportCommand(new Viewport(0.0f, 0.0f, 64.0f, 64.0f, 0.0f, 1.0f)),
+                        new SetScissorCommand(new ScissorRectangle(0, 0, 64, 64)),
+                        new DrawCommand(3, 1, 0, 0),
+                        new EndRenderPassCommand()
+                )));
+                if (proceduralRecorded.outcome() != CommandExecutionEvidence.Outcome.RECORDED) {
+                    throw new IllegalStateException("procedural graphics transaction was not recorded: " + proceduralRecorded);
+                }
+                CommandExecutionEvidence proceduralRendered = await(
+                        session, 2L, CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED
+                );
+                CpuFrame proceduralFrame = session.captureLatestCpuFrame(1L);
+                if (proceduralFrame == null || proceduralFrame.outputResource().orElseThrow().value() != color.id().value()
+                        || proceduralFrame.width() != 64 || proceduralFrame.height() != 64 || allZero(proceduralFrame)) {
+                    throw new IllegalStateException("procedural graphics CPU readback was empty, black, or misidentified: " + proceduralFrame);
+                }
+                if (session.captureLatestCpuFrame(2L) != null) {
+                    throw new IllegalStateException("generic CPU output was returned more than once for a sequence");
+                }
                 System.out.println("VulkanGenericCommandNativeSelfTest passed: transfer=" + completed
-                        + "; graphics=" + rendered);
+                        + "; graphics=" + rendered + "; procedural=" + proceduralRendered
+                        + "; cpuFrames=" + firstFrame.frameSequence() + "," + proceduralFrame.frameSequence());
             } finally {
                 MemoryUtil.memFree(texturePayload);
                 MemoryUtil.memFree(payload);
@@ -258,6 +289,32 @@ public final class VulkanGenericCommandNativeSelfTest {
                 .primitiveAssembly(PrimitiveTopology.TRIANGLE_LIST, false)
                 .colorTargets(List.of(TextureFormat.RGBA8_UNORM), BlendState.replace(1))
                 .build();
+    }
+
+    private static GraphicsPipelineState proceduralGraphicsPipeline() {
+        ShaderModule vertex = module(110L, ShaderStage.VERTEX,
+                "#version 450\n"
+                        + "void main(){ vec2 p[3] = vec2[3](vec2(-1.0,-1.0), vec2(3.0,-1.0), vec2(-1.0,3.0));\n"
+                        + "gl_Position=vec4(p[gl_VertexIndex],0.0,1.0); }\n",
+                List.of(), List.of(), List.of(), Shaderc.shaderc_vertex_shader);
+        ShaderModule fragment = module(111L, ShaderStage.FRAGMENT,
+                "#version 450\n"
+                        + "layout(location=0) out vec4 outputColor;\n"
+                        + "void main(){ outputColor=vec4(0.0,1.0,0.0,1.0); }\n",
+                List.of(), List.of(), List.of(), Shaderc.shaderc_fragment_shader);
+        ShaderProgram program = new ShaderProgram(new RenderResourceId(112L), ResourceVersion.initial(),
+                ShaderProgram.Kind.GRAPHICS, List.of(vertex, fragment), new BindingLayout(List.of()), 0);
+        return GraphicsPipelineState.builder(program)
+                .vertexLayout(VertexLayout.empty())
+                .primitiveAssembly(PrimitiveTopology.TRIANGLE_LIST, false)
+                .colorTargets(List.of(TextureFormat.RGBA8_UNORM), BlendState.replace(1))
+                .build();
+    }
+
+    private static boolean allZero(CpuFrame frame) {
+        ByteBuffer pixels = frame.pixelsRgba8();
+        while (pixels.hasRemaining()) if (pixels.get() != 0) return false;
+        return true;
     }
 
     private static ShaderModule module(long id, ShaderStage stage, String source,

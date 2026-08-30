@@ -109,6 +109,12 @@ final class VulkanGenericTextureImage implements AutoCloseable {
             case COLOR_ATTACHMENT -> VK10.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
             case DEPTH_STENCIL_ATTACHMENT -> VK10.VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         };
+        // Generic OUTPUT_PRODUCED readback is an internal consumer of stored color images. The
+        // public usage contract still gates caller-issued copies; this bit only makes the bounded
+        // CPU snapshot path legal for an otherwise valid color attachment.
+        if (texture.format().supports(top.ceroxe.rt.renderer.api.TextureAspect.COLOR)) {
+            flags |= VK10.VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        }
         return flags;
     }
 

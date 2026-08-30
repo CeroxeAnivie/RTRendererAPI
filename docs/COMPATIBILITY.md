@@ -18,7 +18,7 @@ RTRendererAPI `3.x` 是稳定 API 线。Maven Central 是唯一二进制事实�
 - `3.1.7` 是兼容 patch：generic Vulkan AS build 固化初次 BUILD 的不可变 shape；UPDATE 必须保持 AS 类型、geometry 数量、每个 geometry 的 primitive capacity 或 TLAS instance capacity，重复 BUILD 不得覆盖 resident destination。size query、scratch query、range 与实际 Vulkan record 统一消费同一 resolved description，避免容量漂移触发 validation/device loss。公共 API/SPI、资源语义和 command ordering 不变。
 - `3.1.8` 是兼容 patch：generic Vulkan command recording 按 action 作用域释放 native 临时结构，避免大型合法 command transaction 累积 `MemoryStack` 分配并触发 `OutOfMemoryError: Out of stack space`。公共 API/SPI、资源语义和 command ordering 不变。
 - `3.1.11` 是兼容 patch：延续 3.1.10 的 scratch buffer 复用，并明确 Vulkan AS build 输入同步契约。transfer 写入的 vertex/index/instance 数据在 `VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR` 阶段使用 `VK_ACCESS_SHADER_READ_BIT`；`VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR` 仅用于已构建 AS 对象读取。destination AS、TLAS instance upload、GPU completion 和 abort/device-failure 回收契约不变，公共 API/SPI、资源语义和 command ordering 不变。
-- `3.1.12` 是兼容 patch：generic Vulkan AS registry 持久化 TLAS→BLAS device-address 反向依赖；驻留 TLAS 引用 BLAS 时拒绝 `DestroyAccelerationStructureCommand`，TLAS replacement/retirement 原子更新依赖，rollback 不污染依赖表。公共 API/SPI、资源语义和 command ordering 不变。
+- `3.1.13` 是兼容 patch：generic Vulkan AS registry 持久化 TLAS→BLAS device-address 反向依赖；驻留 TLAS 引用 BLAS 时拒绝 `DestroyAccelerationStructureCommand`，TLAS replacement/retirement 原子更新依赖，rollback 不污染依赖表。公共 API/SPI、资源语义和 command ordering 不变。
 - patch 版本只能提供兼容修复；minor 版本可以增加兼容能力；删除或改变既有公共二进制声明必须升级 major。
 - 每个主版本都提交当前版本的完整 `javap` ABI baseline。`verifyRendererApiAbi` 阻止在同一主版本内未经审查的二进制漂移；跨 major 的移除必须有对应的版本策略记录，不能伪装成兼容变更。
 

@@ -14,6 +14,7 @@ import java.util.Objects;
 public final class CpuFrame {
     private final long frameSequence;
     private final long renderedSceneRevision;
+    private final RenderResourceId outputResource;
     private final int width;
     private final int height;
     private final ByteBuffer pixelsRgba8;
@@ -34,6 +35,7 @@ public final class CpuFrame {
         }
         frameSequence = builder.frameSequence;
         renderedSceneRevision = builder.renderedSceneRevision;
+        outputResource = builder.outputResource;
         width = builder.width;
         height = builder.height;
         this.pixelsRgba8 = ByteBuffer.wrap(copy).asReadOnlyBuffer();
@@ -56,11 +58,13 @@ public final class CpuFrame {
     public Builder toBuilder() {
         byte[] copy = new byte[byteCount()];
         pixelsRgba8().get(copy);
-        return new Builder()
+        Builder builder = new Builder()
                 .frameSequence(frameSequence)
                 .renderedSceneRevision(renderedSceneRevision)
                 .extent(width, height)
                 .pixelsRgba8(copy);
+        if (outputResource != null) builder.outputResource(outputResource);
+        return builder;
     }
 
     /**
@@ -79,6 +83,14 @@ public final class CpuFrame {
      */
     public long renderedSceneRevision() {
         return renderedSceneRevision;
+    }
+
+    /**
+     * Returns the exact generic output resource that produced this frame, when applicable.
+     * Retained-scene frames have no generic resource identity and return empty.
+     */
+    public java.util.Optional<RenderResourceId> outputResource() {
+        return java.util.Optional.ofNullable(outputResource);
     }
 
     /**
@@ -141,6 +153,7 @@ public final class CpuFrame {
     public static final class Builder {
         private long frameSequence = -1L;
         private long renderedSceneRevision = -1L;
+        private RenderResourceId outputResource;
         private int width;
         private int height;
         private byte[] pixelsRgba8;
@@ -167,6 +180,12 @@ public final class CpuFrame {
          */
         public Builder renderedSceneRevision(long value) {
             renderedSceneRevision = value;
+            return this;
+        }
+
+        /** Selects the exact generic output resource for this snapshot. */
+        public Builder outputResource(RenderResourceId value) {
+            outputResource = Objects.requireNonNull(value, "outputResource");
             return this;
         }
 
