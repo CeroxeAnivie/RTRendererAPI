@@ -1,6 +1,6 @@
 # 通用渲染语义参考
 
-本页定义 `3.1.11` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
+本页定义 `3.1.12` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
 实现通用 RT 提交时，先阅读[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)；该指南
 提供由资源发布到 `TraceRaysCommand` 的完整最小流程，本页则说明每一步为什么成立。
 
@@ -73,7 +73,7 @@ command algebra 可表达 BLAS/TLAS declaration/build、显式 RT shader group�
 的 TLAS、再 trace；backend 会加入 AS-build 到 ray-shader 的依赖。缺失资源、不可寻址输入、stale TLAS descriptor、
 不支持的 SPIR-V、无效 SBT layout 或未解决的先前 build 都会使 admission 失败。
 
-`DestroyAccelerationStructureCommand` 仅在所有相关 build/trace use 已完成后回收一个精确 AS generation；它
+`DestroyAccelerationStructureCommand` 仅在所有相关 build/trace use 已完成且没有驻留 TLAS 通过 device address 引用该 BLAS 后回收一个精确 AS generation；它
 不能与同一个 AS 的 build 或 descriptor use 出现在一个 transaction 中。
 
 ## Composition、显示与互操作

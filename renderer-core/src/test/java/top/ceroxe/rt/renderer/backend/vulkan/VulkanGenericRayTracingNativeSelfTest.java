@@ -35,6 +35,7 @@ import top.ceroxe.rt.renderer.api.ClearColorCommand;
 import top.ceroxe.rt.renderer.api.ClearColorValue;
 import top.ceroxe.rt.renderer.api.CommandExecutionEvidence;
 import top.ceroxe.rt.renderer.api.DenoisingOptions;
+import top.ceroxe.rt.renderer.api.DestroyAccelerationStructureCommand;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
@@ -190,8 +191,29 @@ public final class VulkanGenericRayTracingNativeSelfTest {
                 );
                 require(completed.outputResource().orElseThrow().equals(output.id()),
                         "trace output evidence names the wrong resource: " + completed);
+
+                CommandExecutionEvidence blockedDestroy = session.submit(new RenderCommandTransaction(2L, List.of(
+                        new DestroyAccelerationStructureCommand(bottomLevel)
+                )));
+                require(blockedDestroy.outcome() == CommandExecutionEvidence.Outcome.REJECTED,
+                        "BLAS destroy was recorded while a resident TLAS still referenced its device address: "
+                                + blockedDestroy);
+
+                CommandExecutionEvidence destroyTlas = session.submit(new RenderCommandTransaction(3L, List.of(
+                        new DestroyAccelerationStructureCommand(topLevel)
+                )));
+                require(destroyTlas.outcome() == CommandExecutionEvidence.Outcome.RECORDED,
+                        "resident TLAS retirement was not recorded: " + destroyTlas);
+                await(session, 3L, CommandExecutionEvidence.Outcome.GPU_COMPLETED);
+
+                CommandExecutionEvidence destroyBlas = session.submit(new RenderCommandTransaction(4L, List.of(
+                        new DestroyAccelerationStructureCommand(bottomLevel)
+                )));
+                require(destroyBlas.outcome() == CommandExecutionEvidence.Outcome.RECORDED,
+                        "BLAS destroy was not admitted after TLAS retirement: " + destroyBlas);
+                await(session, 4L, CommandExecutionEvidence.Outcome.GPU_COMPLETED);
                 System.out.println("VulkanGenericRayTracingNativeSelfTest passed: build=" + build
-                        + "; trace=" + completed);
+                        + "; trace=" + completed + "; residentDependencyGate=passed");
             } finally {
                 MemoryUtil.memFree(frameValue);
                 MemoryUtil.memFree(triangle);

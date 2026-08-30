@@ -8,6 +8,7 @@ public final class VulkanGenericAccelerationStructuresSelfTest {
     private VulkanGenericAccelerationStructuresSelfTest() { }
 
     public static void main(String[] args) {
+        testResidentTlasDependencies();
         VulkanGenericAccelerationStructures.BuildShape blas =
                 new VulkanGenericAccelerationStructures.BuildShape(
                         AccelerationStructureKind.BOTTOM_LEVEL, List.of(1, 4)
@@ -44,6 +45,27 @@ public final class VulkanGenericAccelerationStructuresSelfTest {
                 AccelerationStructureKind.TOP_LEVEL, List.of(0)
         ));
         System.out.println("VulkanGenericAccelerationStructuresSelfTest passed");
+    }
+
+    private static void testResidentTlasDependencies() {
+        VulkanGenericAccelerationStructures.DependencyGraph<String> graph =
+                new VulkanGenericAccelerationStructures.DependencyGraph<>();
+        graph.replace("tlas", java.util.Set.of("blas-a", "blas-b"));
+        require(graph.referencing("blas-a").equals(java.util.Set.of("tlas")),
+                "resident TLAS reverse dependency was not published");
+        graph.replace("tlas", java.util.Set.of("blas-b"));
+        require(graph.referencing("blas-a").isEmpty(),
+                "TLAS replacement retained a stale BLAS dependency");
+        require(graph.referencing("blas-b").equals(java.util.Set.of("tlas")),
+                "TLAS replacement lost its current BLAS dependency");
+        graph.remove("tlas");
+        graph.remove("tlas");
+        require(graph.referencing("blas-b").isEmpty(),
+                "TLAS retirement did not release its BLAS dependency");
+        graph.replace("tlas-rollback", java.util.Set.of("blas-a"));
+        graph.clear();
+        require(graph.referencing("blas-a").isEmpty(),
+                "dependency rollback/clear left stale reverse references");
     }
 
     private static void expectIllegalArgument(Runnable action) {

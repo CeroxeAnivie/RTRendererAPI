@@ -1,6 +1,6 @@
 # 通用命令与硬件光线追踪指南
 
-本页面向已经拥有自己的资源、着色器和提交顺序的渲染器或引擎集成者。它讲解 `3.1.11` 的
+本页面向已经拥有自己的资源、着色器和提交顺序的渲染器或引擎集成者。它讲解 `3.1.12` 的
 专家 command path：如何在不转换为 `MeshAsset` 或 PBR 材质的前提下，提交通用 Vulkan 资源、图形命令和
 硬件光线追踪命令。
 
@@ -195,7 +195,7 @@ composition/presentation capability 的 backend，并遵守其 consumer contract
 | command outcome 仍为 `RECORDED` | 在应用 deadline 内 pump/poll；不得提前复用依赖的 storage。 |
 | `DEVICE_LOST` | 按报告的 recovery action 重建 renderer。 |
 | 需要释放 buffer/texture generation | 所有已记录 consumer 完成后，以精确 `ResourceGenerationKey` 退役。 |
-| 需要释放 AS generation | 所有已记录 build/trace use 完成后，提交 `DestroyAccelerationStructureCommand`，其 target 必须是精确的 `AccelerationStructureResource`。 |
+| 需要释放 AS generation | 所有已记录 build/trace use 完成且没有任何驻留 TLAS 通过 device address 引用该 BLAS 后，提交 `DestroyAccelerationStructureCommand`；其 target 必须是精确的 `AccelerationStructureResource`。后端必须维护 TLAS→BLAS 反向依赖并在依赖存在时拒绝销毁。 |
 | 需要证明输出可见 | 使用对应 external consumer/presenter evidence；renderer fence 不足以证明显示器已扫描。 |
 
 ## What the included examples prove

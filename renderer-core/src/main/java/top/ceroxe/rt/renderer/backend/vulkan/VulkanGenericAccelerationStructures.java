@@ -36,6 +36,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Native AS ownership for the generic command lane.
@@ -47,6 +48,8 @@ import java.util.Objects;
 final class VulkanGenericAccelerationStructures implements AutoCloseable {
     private final VulkanDeviceRuntime device;
     private final Map<AccelerationStructureResource, Record> resident = new LinkedHashMap<>();
+    /** Persistent TLAS -> BLAS ownership graph across command compilations. */
+    private final DependencyGraph<Record> dependencies = new DependencyGraph<>();
     private boolean closed;
 
     VulkanGenericAccelerationStructures(VulkanDeviceRuntime device) {
@@ -72,6 +75,7 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
             }
         }
         resident.clear();
+        dependencies.clear();
         if (failure != null) throw failure;
     }
 
@@ -81,6 +85,8 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
         private final List<PreparedBuild> builds = new ArrayList<>();
         private final java.util.Set<Record> used = new LinkedHashSet<>();
         private final java.util.Set<Record> destroyed = new LinkedHashSet<>();
+        /** Dependencies for TLAS builds staged by this compilation; published only on commit. */
+        private final Map<Record, Set<Record>> stagedDependencies = new LinkedHashMap<>();
         private long maximumScratchBytes;
         private RtGpuBuffer sharedScratch;
         private boolean committed;
@@ -113,12 +119,14 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
                 throw new IllegalArgumentException("one command transaction cannot build the same AS destination twice: "
                         + command.destination().id());
             }
+            Set<Record> bottoms = new LinkedHashSet<>();
             for (AccelerationStructureInstance instance : command.instances()) {
                 Record bottom = lookup(instance.bottomLevel());
                 if (bottom.kind != AccelerationStructureKind.BOTTOM_LEVEL) {
                     throw new IllegalArgumentException("TLAS instance does not resolve to a bottom-level AS");
                 }
                 used.add(bottom);
+                bottoms.add(bottom);
             }
             RtGpuBuffer instanceBuffer = createInstanceBuffer(command.instances(), this);
             try {
@@ -127,6 +135,7 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
                 PreparedBuild build = new PreparedBuild(this, destination, command.mode(), description, instanceBuffer);
                 instanceBuffer = null;
                 staged.put(command.destination(), destination);
+                stagedDependencies.put(destination, Set.copyOf(bottoms));
                 builds.add(build);
                 return build;
             } finally {
@@ -153,6 +162,17 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
             if (used.contains(record)) {
                 throw new IllegalArgumentException("an AS cannot be used and destroyed in one command transaction");
             }
+            Set<Record> referencingTlases = dependencies.referencing(record);
+            if (!referencingTlases.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "cannot destroy BLAS while resident TLAS references it: " + resource.id());
+            }
+            for (Set<Record> bottoms : stagedDependencies.values()) {
+                if (bottoms.contains(record)) {
+                    throw new IllegalArgumentException(
+                            "cannot destroy BLAS while a staged TLAS references it: " + resource.id());
+                }
+            }
             record.requireReadyForMutation();
             destroyed.add(record);
         }
@@ -168,8 +188,14 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
             java.util.Set<Record> inFlight = new LinkedHashSet<>(used);
             for (PreparedBuild build : builds) inFlight.add(build.destination);
             for (Record record : inFlight) record.markPending(submissionSequence);
+            // Publish TLAS reverse dependencies in the same commit boundary as resident AS
+            // ownership. A rejected compilation never reaches this point and cannot mutate it.
+            for (Map.Entry<Record, Set<Record>> entry : stagedDependencies.entrySet()) {
+                dependencies.replace(entry.getKey(), entry.getValue());
+            }
             resident.putAll(staged);
             for (Record record : destroyed) {
+                dependencies.remove(record);
                 resident.remove(record.descriptor);
                 record.close();
             }
@@ -313,6 +339,50 @@ final class VulkanGenericAccelerationStructures implements AutoCloseable {
 
         private void requireOpen() {
             if (closed) throw new IllegalStateException("AS compilation is closed");
+        }
+    }
+
+    /**
+     * Bounded, transaction-independent reverse dependency ledger for resident acceleration
+     * structures. It is deliberately small and deterministic so lifecycle behavior can be tested
+     * without creating a Vulkan device.
+     */
+    static final class DependencyGraph<T> {
+        private final Map<T, Set<T>> forward = new LinkedHashMap<>();
+        private final Map<T, Set<T>> reverse = new LinkedHashMap<>();
+
+        void replace(T owner, Set<T> dependencies) {
+            Objects.requireNonNull(owner, "owner");
+            Set<T> checked = Set.copyOf(Objects.requireNonNull(dependencies, "dependencies"));
+            Set<T> previous = forward.put(owner, checked);
+            if (previous != null) {
+                for (T dependency : previous) removeReverse(dependency, owner);
+            }
+            for (T dependency : checked) {
+                reverse.computeIfAbsent(dependency, ignored -> new LinkedHashSet<>()).add(owner);
+            }
+        }
+
+        Set<T> referencing(T dependency) {
+            return Set.copyOf(reverse.getOrDefault(dependency, Set.of()));
+        }
+
+        void remove(T owner) {
+            Set<T> previous = forward.remove(owner);
+            if (previous == null) return;
+            for (T dependency : previous) removeReverse(dependency, owner);
+        }
+
+        void clear() {
+            forward.clear();
+            reverse.clear();
+        }
+
+        private void removeReverse(T dependency, T owner) {
+            Set<T> owners = reverse.get(dependency);
+            if (owners == null) return;
+            owners.remove(owner);
+            if (owners.isEmpty()) reverse.remove(dependency);
         }
     }
 
