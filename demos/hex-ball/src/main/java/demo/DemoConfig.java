@@ -41,7 +41,7 @@ record DemoConfig(
     static DemoConfig parse(String[] arguments) {
         Integer width = null;
         Integer height = null;
-        int samples = 2;
+        int samples = 1;
         boolean windowed = true;
         boolean benchmark = false;
         boolean cpuPresentation = false;

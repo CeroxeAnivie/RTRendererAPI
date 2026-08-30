@@ -86,7 +86,7 @@ public final class VulkanImportedSemaphore implements AutoCloseable {
                                 .handle(checkedSignal.handle());
                 VulkanFailures.check(
                         /*
-                         * LWJGL 3.4.2 validates both mutually exclusive Win32 import selectors
+                         * LWJGL 3.4.3 validates both mutually exclusive Win32 import selectors
                          * (handle and name) as mandatory. Vulkan requires exactly the populated
                          * handle here and a null name. Even LWJGL's generated nvk* entry point runs
                          * the same invalid validator, so call the resolved Vulkan function pointer

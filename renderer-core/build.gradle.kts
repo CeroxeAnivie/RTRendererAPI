@@ -27,7 +27,7 @@ val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_
     .toInt()
 val fastutilVersion = rootProject.providers.gradleProperty("fastutil_version").getOrElse("8.5.19")
 val jomlVersion = rootProject.providers.gradleProperty("joml_version").getOrElse("1.10.8")
-val lwjglVersion = rootProject.providers.gradleProperty("lwjgl_version").getOrElse("3.4.2")
+val lwjglVersion = rootProject.providers.gradleProperty("lwjgl_version").getOrElse("3.4.3")
 
 dependencies {
     // Core implements the public contracts but must not publish a reverse dependency back to

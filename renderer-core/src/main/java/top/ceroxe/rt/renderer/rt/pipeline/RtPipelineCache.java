@@ -83,7 +83,9 @@ final class RtPipelineCache implements AutoCloseable {
             }
             return output.get(0);
         } finally {
-            MemoryUtil.nmemFree(MemoryUtil.memAddress0(nativeInitialData));
+            if (nativeInitialData != null) {
+                MemoryUtil.nmemFree(MemoryUtil.memAddress0(nativeInitialData));
+            }
         }
     }
 
