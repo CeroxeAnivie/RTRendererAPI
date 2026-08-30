@@ -966,6 +966,10 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     ) {
         try (MemoryStack barrierStack = MemoryStack.stackPush()) {
             VkBufferMemoryBarrier.Buffer barrier = VkBufferMemoryBarrier.calloc(1, barrierStack);
+            /* Vulkan's vkCmdBuildAccelerationStructuresKHR input-data contract requires
+             * synchronization at the AS build stage with VK_ACCESS_SHADER_READ_BIT. The
+             * VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR access type describes reads from
+             * an already-built acceleration-structure object, not vertex/index build inputs. */
             barrier.get(0).sType$Default().srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
                     .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT)
                     .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
