@@ -1,6 +1,6 @@
 # 通用渲染语义参考
 
-本页定义 `3.1.13` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
+本页定义 `3.1.14` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
 实现通用 RT 提交时，先阅读[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)；该指南
 提供由资源发布到 `TraceRaysCommand` 的完整最小流程，本页则说明每一步为什么成立。
 
@@ -31,6 +31,12 @@ vertex/index binding、direct/indexed/instanced/multi/固定计数 indirect draw
 buffer-image copy、color/depth-stencil clear 与显式 barrier。无法用 Vulkan texel unit 精确表示 row pitch 的
 buffer-image copy 会被拒绝，count-buffer indirect draw 需要对应扩展。未支持的 shader stage、format、
 multisample、layout 与 resource state 同样在 admission 阶段 fail-closed。
+
+顶点接口允许 normalized UINT/SINT storage（例如 `UNORM8X4`）在匹配 component count 且 storage
+宽度不超过 shader 浮点接口宽度时完成规范化转换；未 normalized 的整数和浮点格式仍要求 numeric
+domain 与 component width 严格一致。独立的数值 uniform 使用 `ImmediateUniform` 反射并占用显式
+push-constant 区间；提交 draw/dispatch/trace 前必须以 `SetPushConstantsCommand` 覆盖其声明的
+offset、size 和 stage visibility，越界、重叠、未初始化或 stage 不一致都会被拒绝。
 
 同一 transaction 中，先前 transfer write 被随后 vertex/index/indirect/transfer/AS-build input 读取时，
 backend 会建立 submission-local visibility dependency；AS 输入使用精确的

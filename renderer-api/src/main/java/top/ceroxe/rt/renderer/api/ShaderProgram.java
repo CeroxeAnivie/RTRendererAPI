@@ -76,6 +76,21 @@ public final class ShaderProgram {
     /** @return non-negative four-byte-aligned push-constant extent */
     public int pushConstantByteSize() { return pushConstantByteSize; }
 
+    /** @return standalone numeric uniforms aggregated across the program's shader stages */
+    public List<ImmediateUniform> immediateUniforms() {
+        java.util.LinkedHashMap<String, ImmediateUniform> result = new java.util.LinkedHashMap<>();
+        for (ShaderModule module : modules) {
+            for (ImmediateUniform uniform : module.reflection().immediateUniforms()) {
+                ImmediateUniform previous = result.putIfAbsent(uniform.name(), uniform);
+                if (previous == null) continue;
+                if (!previous.equals(uniform)) {
+                    throw new IllegalStateException("inconsistent immediate uniform declaration: " + uniform.name());
+                }
+            }
+        }
+        return List.copyOf(result.values());
+    }
+
     private void validateUniqueModules() {
         Set<RenderResourceId> identities = new HashSet<>();
         for (ShaderModule module : modules) {
@@ -131,6 +146,7 @@ public final class ShaderProgram {
     }
 
     private void validateInterfaces() {
+        java.util.Map<String, ImmediateUniform> uniforms = new java.util.LinkedHashMap<>();
         for (ShaderModule module : modules) {
             if (module.reflection().pushConstantByteSize() > pushConstantByteSize) {
                 throw new IllegalArgumentException("program push-constant extent is smaller than a module requirement");
@@ -143,6 +159,32 @@ public final class ShaderProgram {
                         || !declared.visibleStages().contains(module.stage())) {
                     throw new IllegalArgumentException("program binding layout does not satisfy module reflection at "
                             + requirement.key());
+                }
+            }
+            for (ImmediateUniform uniform : module.reflection().immediateUniforms()) {
+                if (uniform.endBytes() > pushConstantByteSize) {
+                    throw new IllegalArgumentException("immediate uniform exceeds program push-constant extent: " + uniform.name());
+                }
+                ImmediateUniform previous = uniforms.putIfAbsent(uniform.name(), uniform);
+                if (previous != null && (!previous.type().equals(uniform.type())
+                        || previous.arrayCount() != uniform.arrayCount()
+                        || previous.offsetBytes() != uniform.offsetBytes()
+                        || previous.byteSize() != uniform.byteSize()
+                        || !previous.stages().equals(uniform.stages()))) {
+                    throw new IllegalArgumentException("inconsistent immediate uniform declaration: " + uniform.name());
+                }
+                if (!uniform.stages().contains(module.stage())) {
+                    throw new IllegalArgumentException("immediate uniform visibility does not include module stage: " + uniform.name());
+                }
+            }
+        }
+        List<ImmediateUniform> declared = List.copyOf(uniforms.values());
+        for (int i = 0; i < declared.size(); i++) {
+            ImmediateUniform a = declared.get(i);
+            for (int j = i + 1; j < declared.size(); j++) {
+                ImmediateUniform b = declared.get(j);
+                if (a.offsetBytes() < b.endBytes() && b.offsetBytes() < a.endBytes()) {
+                    throw new IllegalArgumentException("immediate uniform ranges overlap: " + a.name() + " and " + b.name());
                 }
             }
         }

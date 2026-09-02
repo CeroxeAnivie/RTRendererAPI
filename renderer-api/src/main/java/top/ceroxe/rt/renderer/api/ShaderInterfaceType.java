@@ -17,16 +17,29 @@ public record ShaderInterfaceType(NumericType numericType, int componentBitWidth
         }
     }
 
-    /** Returns whether one vertex storage format can feed this interface without numeric-domain coercion. */
+    /**
+     * Returns whether one vertex storage format can feed this interface.
+     *
+     * <p>Normalized integer attributes are converted to floating point by the graphics API before
+     * they reach the shader, so their storage width is intentionally independent from the shader
+     * component width (within the declared portable widths).</p>
+     */
     public boolean accepts(VertexFormat format) {
         java.util.Objects.requireNonNull(format, "format");
+        if (format.componentCount() != componentCount) return false;
+        if (format.normalized()) {
+            return numericType == NumericType.FLOATING_POINT
+                    && (format.numericType() == VertexFormat.NumericType.SIGNED_INTEGER
+                    || format.numericType() == VertexFormat.NumericType.UNSIGNED_INTEGER)
+                    && format.componentBitWidth() > 0
+                    && format.componentBitWidth() <= componentBitWidth;
+        }
         NumericType storage = switch (format.numericType()) {
             case FLOATING_POINT -> NumericType.FLOATING_POINT;
-            case SIGNED_INTEGER -> format.normalized() ? NumericType.FLOATING_POINT : NumericType.SIGNED_INTEGER;
-            case UNSIGNED_INTEGER -> format.normalized() ? NumericType.FLOATING_POINT : NumericType.UNSIGNED_INTEGER;
+            case SIGNED_INTEGER -> NumericType.SIGNED_INTEGER;
+            case UNSIGNED_INTEGER -> NumericType.UNSIGNED_INTEGER;
         };
         return storage == numericType
-                && format.componentCount() == componentCount
-                && format.byteSize() * Byte.SIZE / componentCount == componentBitWidth;
+                && format.componentBitWidth() == componentBitWidth;
     }
 }

@@ -166,6 +166,23 @@ public final class RenderCommandContractSelfTest {
                 new BindComputePipelineCommand(compute),
                 new SetPushConstantsCommand(Set.of(ShaderStage.VERTEX), 0, data(4))
         )));
+
+        ImmediateUniform value = new ImmediateUniform("value",
+                new ShaderInterfaceType(ShaderInterfaceType.NumericType.SIGNED_INTEGER, 32, 1),
+                1, 0, 8, Set.of(ShaderStage.COMPUTE));
+        ShaderProgram immediateProgram = new ShaderProgram(
+                new RenderResourceId(21L), INITIAL, ShaderProgram.Kind.COMPUTE,
+                List.of(module(new RenderResourceId(22L), ShaderStage.COMPUTE,
+                        new ShaderReflection(List.of(), 8, List.of(), List.of(), List.of(value)))),
+                new BindingLayout(List.of()), 8);
+        ComputePipelineState immediatePipeline = new ComputePipelineState(immediateProgram);
+        expectFailure(() -> new RenderCommandTransaction(23L, List.of(
+                new BindComputePipelineCommand(immediatePipeline), new DispatchCommand(1, 1, 1))));
+        new RenderCommandTransaction(24L, List.of(
+                new BindComputePipelineCommand(immediatePipeline),
+                new SetPushConstantsCommand(Set.of(ShaderStage.COMPUTE), 4, data(4)),
+                new SetPushConstantsCommand(Set.of(ShaderStage.COMPUTE), 0, data(4)),
+                new DispatchCommand(1, 1, 1)));
     }
 
     private static void pipelineAndBindingContract() {

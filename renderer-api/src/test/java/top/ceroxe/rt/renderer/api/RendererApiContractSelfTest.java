@@ -99,6 +99,7 @@ public final class RendererApiContractSelfTest {
       assertTemporalRenderingContract();
       assertGenericRenderingResourceContracts();
       assertGenericPipelineContracts();
+      assertNormalizedVertexAndImmediateUniformContracts();
       assertExternalFrameConsumerContracts();
       assertAssetOwnership();
       assertDirectAssetOwnership();
@@ -593,6 +594,39 @@ public final class RendererApiContractSelfTest {
                       && patchPipeline.patchControlPoints().orElseThrow() == 3
                       && patchPipeline.primitiveRestartEnabled(),
               "patch pipeline lost tessellation assembly state");
+   }
+
+   private static void assertNormalizedVertexAndImmediateUniformContracts() {
+      ShaderInterfaceType float32x4 = new ShaderInterfaceType(
+              ShaderInterfaceType.NumericType.FLOATING_POINT, 32, 4);
+      ShaderInterfaceType uint8x4 = new ShaderInterfaceType(
+              ShaderInterfaceType.NumericType.UNSIGNED_INTEGER, 8, 4);
+      require(float32x4.accepts(VertexFormat.UNORM8X4), "UNORM8X4 must normalize into float32x4");
+      require(float32x4.accepts(VertexFormat.SNORM8X4), "SNORM8X4 must normalize into float32x4");
+      require(float32x4.accepts(VertexFormat.UNORM16X4), "UNORM16X4 must normalize into float32x4");
+      ShaderInterfaceType float32x2 = new ShaderInterfaceType(
+              ShaderInterfaceType.NumericType.FLOATING_POINT, 32, 2);
+      require(float32x2.accepts(VertexFormat.UNORM16X2), "UNORM16X2 must normalize into float32x2");
+      require(!float32x4.accepts(VertexFormat.UINT8X4), "raw UINT8X4 must not feed float32x4");
+      require(uint8x4.accepts(VertexFormat.UINT8X4), "UINT8X4 must feed uint8x4");
+      require(!uint8x4.accepts(VertexFormat.UNORM8X4), "normalized UNORM8X4 must not feed integer shader input");
+      require(!float32x4.accepts(VertexFormat.UNORM8X2), "normalized component-count mismatch must reject");
+      require(!float32x4.accepts(VertexFormat.UNORM10_10_10_2), "packed normalized storage must not claim one width");
+
+      ImmediateUniform tint = new ImmediateUniform("tint",
+              new ShaderInterfaceType(ShaderInterfaceType.NumericType.FLOATING_POINT, 32, 4),
+              1, 0, 16, Set.of(ShaderStage.VERTEX, ShaderStage.FRAGMENT));
+      ImmediateUniform mode = new ImmediateUniform("mode",
+              new ShaderInterfaceType(ShaderInterfaceType.NumericType.SIGNED_INTEGER, 32, 1),
+              1, 16, 4, Set.of(ShaderStage.VERTEX));
+      ShaderReflection reflection = new ShaderReflection(List.of(), 20, List.of(), List.of(), List.of(tint, mode));
+      require(reflection.immediateUniforms().equals(List.of(tint, mode)), "immediate uniform reflection was not retained");
+      expect(IllegalArgumentException.class, () -> new ShaderReflection(
+              List.of(), 20, List.of(), List.of(), List.of(tint, tint)));
+      expect(IllegalArgumentException.class, () -> new ImmediateUniform(
+              "bad", tint.type(), 1, 2, 4, Set.of(ShaderStage.VERTEX)));
+      expect(IllegalArgumentException.class, () -> new ImmediateUniform(
+              "bad", tint.type(), 1, 0, 2, Set.of(ShaderStage.VERTEX)));
    }
 
    private static void assertGenericBufferResourceContract() {

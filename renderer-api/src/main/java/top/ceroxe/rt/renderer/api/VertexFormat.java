@@ -94,4 +94,15 @@ public enum VertexFormat {
 
     /** @return whether integer storage is normalized to a floating-point shader value */
     public boolean normalized() { return normalized; }
+
+    /**
+     * Returns the storage width of each component when all components have the same width.
+     * Packed 10:10:10:2 formats return {@code 0} because they do not have a single component
+     * width and therefore cannot satisfy strict vertex-interface matching.
+     */
+    public int componentBitWidth() {
+        if (this == UINT10_10_10_2 || this == SINT10_10_10_2
+                || this == UNORM10_10_10_2 || this == SNORM10_10_10_2) return 0;
+        return byteSize * Byte.SIZE / componentCount;
+    }
 }

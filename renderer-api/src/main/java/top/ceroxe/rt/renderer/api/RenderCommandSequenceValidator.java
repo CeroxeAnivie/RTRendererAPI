@@ -1,5 +1,6 @@
 package top.ceroxe.rt.renderer.api;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,7 @@ final class RenderCommandSequenceValidator {
     private ScissorRectangle scissor;
     private BindingSet bindingSet;
     private final Map<Integer, ResourceSlice.BufferSlice> vertexBuffers = new HashMap<>();
+    private final List<PushConstantWrite> pushConstantWrites = new ArrayList<>();
     private BindIndexBufferCommand indexBuffer;
 
     private RenderCommandSequenceValidator() { }
@@ -45,6 +47,7 @@ final class RenderCommandSequenceValidator {
                 requirePipelineCompatible(bind.pipeline());
                 pipeline = bind.pipeline();
                 bindingSet = null;
+                pushConstantWrites.clear();
             }
             case BindComputePipelineCommand bind -> {
                 requireOutsidePass("bind compute pipeline");
@@ -53,6 +56,7 @@ final class RenderCommandSequenceValidator {
                 }
                 computePipeline = bind.pipeline();
                 bindingSet = null;
+                pushConstantWrites.clear();
             }
             case BindRayTracingPipelineCommand bind -> {
                 requireOutsidePass("bind ray-tracing pipeline");
@@ -61,6 +65,7 @@ final class RenderCommandSequenceValidator {
                 }
                 rayTracingPipeline = bind.pipeline();
                 bindingSet = null;
+                pushConstantWrites.clear();
             }
             case BindBindingSetCommand bind -> {
                 requireActiveProgram("bind binding set");
@@ -88,28 +93,35 @@ final class RenderCommandSequenceValidator {
             }
             case DrawCommand draw -> {
                 requireDrawState(false);
+                requireImmediateUniforms();
                 requireDirectVertexRanges(draw);
             }
             case DrawIndexedCommand draw -> {
                 requireDrawState(true);
+                requireImmediateUniforms();
                 requireIndexRange(draw);
                 requireInstanceRanges(draw.firstInstance(), draw.instanceCount());
             }
             case MultiDrawCommand multi -> {
                 requireDrawState(false);
+                requireImmediateUniforms();
                 for (DrawCommand draw : multi.draws()) requireDirectVertexRanges(draw);
             }
             case MultiDrawIndexedCommand multi -> {
                 requireDrawState(true);
+                requireImmediateUniforms();
                 for (DrawIndexedCommand draw : multi.draws()) {
                     requireIndexRange(draw);
                     requireInstanceRanges(draw.firstInstance(), draw.instanceCount());
                 }
             }
-            case IndirectDrawCommand indirect -> requireDrawState(indirect.kind().indexed());
-            case DispatchCommand ignored -> requireComputeState("dispatch");
-            case DispatchIndirectCommand ignored -> requireComputeState("dispatch indirect");
-            case TraceRaysCommand ignored -> requireRayTracingState();
+            case IndirectDrawCommand indirect -> {
+                requireDrawState(indirect.kind().indexed());
+                requireImmediateUniforms();
+            }
+            case DispatchCommand ignored -> { requireComputeState("dispatch"); requireImmediateUniforms(); }
+            case DispatchIndirectCommand ignored -> { requireComputeState("dispatch indirect"); requireImmediateUniforms(); }
+            case TraceRaysCommand ignored -> { requireRayTracingState(); requireImmediateUniforms(); }
             case SetPushConstantsCommand set -> requirePushConstants(set);
             case WriteBufferCommand ignored -> requireOutsidePass("write buffer");
             case WriteTextureCommand ignored -> requireOutsidePass("write texture");
@@ -137,6 +149,7 @@ final class RenderCommandSequenceValidator {
         viewport = null;
         scissor = null;
         bindingSet = null;
+        pushConstantWrites.clear();
         vertexBuffers.clear();
         indexBuffer = null;
         computePipeline = null;
@@ -150,6 +163,7 @@ final class RenderCommandSequenceValidator {
         viewport = null;
         scissor = null;
         bindingSet = null;
+        pushConstantWrites.clear();
         vertexBuffers.clear();
         indexBuffer = null;
     }
@@ -274,6 +288,38 @@ final class RenderCommandSequenceValidator {
             if (program.modules().stream().noneMatch(module -> module.stage() == stage)) {
                 throw new IllegalArgumentException("push-constant stage is not present in the active program: " + stage);
             }
+        }
+        pushConstantWrites.add(new PushConstantWrite(command.offsetBytes(), Math.toIntExact(end), command.stages()));
+    }
+
+    private void requireImmediateUniforms() {
+        for (ImmediateUniform uniform : activeProgram().immediateUniforms()) {
+            for (ShaderStage stage : uniform.stages()) {
+                if (!isCovered(uniform.offsetBytes(), uniform.endBytes(), stage)) {
+                    throw new IllegalArgumentException("active immediate uniform has not been initialized: " + uniform.name());
+                }
+            }
+        }
+    }
+
+    private boolean isCovered(int start, int end, ShaderStage stage) {
+        int coveredUntil = start;
+        for (PushConstantWrite write : pushConstantWrites.stream()
+                .filter(value -> value.stages().contains(stage))
+                .sorted(java.util.Comparator.comparingInt(PushConstantWrite::offsetBytes))
+                .toList()) {
+            if (write.endBytes() <= coveredUntil || write.offsetBytes() > coveredUntil) {
+                continue;
+            }
+            coveredUntil = Math.max(coveredUntil, write.endBytes());
+            if (coveredUntil >= end) return true;
+        }
+        return false;
+    }
+
+    private record PushConstantWrite(int offsetBytes, int endBytes, Set<ShaderStage> stages) {
+        private PushConstantWrite {
+            stages = Set.copyOf(stages);
         }
     }
 
