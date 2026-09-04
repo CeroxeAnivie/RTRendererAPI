@@ -46,8 +46,14 @@ subprojects {
         plugins.withId("com.gradleup.nmcp") {
             extensions.configure<NmcpExtension> {
                 publishAllPublicationsToCentralPortal {
-                    username.set(providers.gradleProperty("centralUsername"))
-                    password.set(providers.gradleProperty("centralPassword"))
+                    username.set(
+                        providers.gradleProperty("centralUsername")
+                            .orElse(providers.environmentVariable("CENTRAL_USERNAME"))
+                    )
+                    password.set(
+                        providers.gradleProperty("centralPassword")
+                            .orElse(providers.environmentVariable("CENTRAL_PASSWORD"))
+                    )
                     publishingType.set("AUTOMATIC")
                     publicationName.set("RTRendererAPI-${project.version}")
                 }
