@@ -1,6 +1,6 @@
 # 通用渲染语义参考
 
-本页定义 `3.1.14` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
+本页定义 `4.0.0` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
 实现通用 RT 提交时，先阅读[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)；该指南
 提供由资源发布到 `TraceRaysCommand` 的完整最小流程，本页则说明每一步为什么成立。
 
@@ -92,7 +92,7 @@ command algebra 可表达 BLAS/TLAS declaration/build、显式 RT shader group�
 
 ## Composition、显示与互操作
 
-`FrameCompositionPlan` 与 `FramePresentationEvidence` 保留为兼容的 target-based 表达，但 provider-owned
+`FrameCompositionPlan` 与 `FramePresentationEvidence` 使用 provider-owned target-based 表达，
 external output 必须使用 `FrameCompositionProvider` 的 `FrameCompositionRequest`。它由精确 source
 `ResourceMutationKey`、有序 `REPLACE`/`ALPHA_OVER`/`ADDITIVE` layer、输出 extent/format、frame sequence 与
 scene revision 组成；provider 选择 bounded writable frame slot，并以独立的 `FrameCompositionEvidence` 报告

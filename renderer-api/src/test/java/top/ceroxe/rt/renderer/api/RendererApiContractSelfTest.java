@@ -200,20 +200,24 @@ public final class RendererApiContractSelfTest {
                               FrameCompositionPlan.Operation.ADDITIVE
                       )
               ),
-              1920, 1080, FrameOutputFormat.SDR_RGBA8, 78L, 12L
+              1920, 1080, FrameOutputFormat.SDR_RGBA8, 78L, 12L,
+              FrameCompositionRequest.AlphaEncoding.PREMULTIPLIED
       );
       require(request.layers().size() == 2 && request.frameSequence() == 78L,
               "targetless composition request lost ordered source or output identity");
       expect(IllegalArgumentException.class, () -> new FrameCompositionRequest(
-              List.of(), 1, 1, FrameOutputFormat.SDR_RGBA8, 0L, 0L
+              List.of(), 1, 1, FrameOutputFormat.SDR_RGBA8, 0L, 0L,
+              FrameCompositionRequest.AlphaEncoding.PREMULTIPLIED
       ));
       expect(IllegalArgumentException.class, () -> new FrameCompositionRequest(
               List.of(new FrameCompositionPlan.Layer(source, FrameCompositionPlan.Operation.REPLACE)),
-              1, 1, FrameOutputFormat.SDR_RGBA8, -1L, 0L
+              1, 1, FrameOutputFormat.SDR_RGBA8, -1L, 0L,
+              FrameCompositionRequest.AlphaEncoding.PREMULTIPLIED
       ));
       expect(IllegalArgumentException.class, () -> new FrameCompositionRequest(
               List.of(new FrameCompositionPlan.Layer(source, FrameCompositionPlan.Operation.ALPHA_OVER)),
-              1, 1, FrameOutputFormat.SDR_RGBA8, 1L, 0L
+              1, 1, FrameOutputFormat.SDR_RGBA8, 1L, 0L,
+              FrameCompositionRequest.AlphaEncoding.PREMULTIPLIED
       ));
       FrameCompositionEvidence submitted = new FrameCompositionEvidence(
               78L, 12L, 1920, 1080, FrameOutputFormat.SDR_RGBA8,
@@ -914,19 +918,19 @@ public final class RendererApiContractSelfTest {
               () -> new BindingLayout(java.util.Arrays.asList(uniformEntry, null)));
       expect(NullPointerException.class, () -> new BindingLayout(null));
 
-      ShaderReflection reflection = new ShaderReflection(layout.entries(), 16);
+      ShaderReflection reflection = new ShaderReflection(layout.entries(), 16, List.of(), List.of(), List.of());
       require(reflection.bindings().size() == 4 && reflection.pushConstantByteSize() == 16,
               "shader reflection lost its binding interface or push-constant extent");
       expect(UnsupportedOperationException.class, () -> reflection.bindings().clear());
-      expect(IllegalArgumentException.class, () -> new ShaderReflection(List.of(), -4));
-      expect(IllegalArgumentException.class, () -> new ShaderReflection(List.of(), 2));
-      expect(NullPointerException.class, () -> new ShaderReflection(null, 0));
+      expect(IllegalArgumentException.class, () -> new ShaderReflection(List.of(), -4, List.of(), List.of(), List.of()));
+      expect(IllegalArgumentException.class, () -> new ShaderReflection(List.of(), 2, List.of(), List.of(), List.of()));
+      expect(NullPointerException.class, () -> new ShaderReflection(null, 0, List.of(), List.of(), List.of()));
 
       ByteBuffer spirv = ByteBuffer.allocateDirect(20).order(ByteOrder.nativeOrder());
       spirv.putInt(0x0723_0203).putInt(0x0001_0000).putInt(0).putInt(1).putInt(0).flip();
       ShaderModule module = new ShaderModule(
               new RenderResourceId(20L), new ResourceVersion(4L), ShaderStage.VERTEX,
-              "main", spirv, new ShaderReflection(List.of(uniformEntry, textureEntry, samplerEntry), 16)
+              "main", spirv, new ShaderReflection(List.of(uniformEntry, textureEntry, samplerEntry), 16, List.of(), List.of(), List.of())
       );
       spirv.putInt(0, 0);
       ByteBuffer firstModuleView = module.spirv();
@@ -939,24 +943,24 @@ public final class RendererApiContractSelfTest {
       expect(IllegalArgumentException.class, () -> new ShaderModule(
               new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
               "invalid-entry", ByteBuffer.allocate(20).order(ByteOrder.nativeOrder()),
-              new ShaderReflection(List.of(), 0)
+              new ShaderReflection(List.of(), 0, List.of(), List.of(), List.of())
       ));
       expect(IllegalArgumentException.class, () -> new ShaderModule(
               new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
               "main", ByteBuffer.allocate(16).order(ByteOrder.nativeOrder()),
-              new ShaderReflection(List.of(), 0)
+              new ShaderReflection(List.of(), 0, List.of(), List.of(), List.of())
       ));
       ByteBuffer misalignedSpirv = ByteBuffer.allocate(21).order(ByteOrder.nativeOrder());
       misalignedSpirv.putInt(0, 0x0723_0203);
       expect(IllegalArgumentException.class, () -> new ShaderModule(
               new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
-              "main", misalignedSpirv, new ShaderReflection(List.of(), 0)
+              "main", misalignedSpirv, new ShaderReflection(List.of(), 0, List.of(), List.of(), List.of())
       ));
       ByteBuffer invalidMagicSpirv = ByteBuffer.allocate(20).order(ByteOrder.nativeOrder());
       invalidMagicSpirv.putInt(0, 0x0302_2307);
       expect(IllegalArgumentException.class, () -> new ShaderModule(
               new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
-              "main", invalidMagicSpirv, new ShaderReflection(List.of(), 0)
+              "main", invalidMagicSpirv, new ShaderReflection(List.of(), 0, List.of(), List.of(), List.of())
       ));
       ByteOrder nonNativeOrder = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN
               ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN;
@@ -964,7 +968,7 @@ public final class RendererApiContractSelfTest {
       nonNativeSpirv.putInt(0, 0x0723_0203);
       expect(IllegalArgumentException.class, () -> new ShaderModule(
               new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
-              "main", nonNativeSpirv, new ShaderReflection(List.of(), 0)
+              "main", nonNativeSpirv, new ShaderReflection(List.of(), 0, List.of(), List.of(), List.of())
       ));
       BindingLayoutEntry fragmentOnlyEntry = new BindingLayoutEntry(
               new BindingKey(1, 0), BindingType.SAMPLED_TEXTURE, 1,
@@ -972,7 +976,7 @@ public final class RendererApiContractSelfTest {
       );
       expect(IllegalArgumentException.class, () -> new ShaderModule(
               new RenderResourceId(21L), ResourceVersion.initial(), ShaderStage.VERTEX,
-              "main", secondModuleView, new ShaderReflection(List.of(fragmentOnlyEntry), 0)
+              "main", secondModuleView, new ShaderReflection(List.of(fragmentOnlyEntry), 0, List.of(), List.of(), List.of())
       ));
 
       BufferResource uniformBuffer = new BufferResource(
@@ -2305,7 +2309,7 @@ public final class RendererApiContractSelfTest {
                  new RenderResourceId(Math.addExact(Math.multiplyExact(programId, 16L), index + 1L)),
                  ResourceVersion.initial(), stages[index], "main", spirv,
                  new ShaderReflection(List.of(), 0,
-                         stages[index] == ShaderStage.VERTEX ? vertexInputs : List.of(), List.of())
+                         stages[index] == ShaderStage.VERTEX ? vertexInputs : List.of(), List.of(), List.of())
          ));
       }
       return new ShaderProgram(
@@ -2602,6 +2606,12 @@ public final class RendererApiContractSelfTest {
       }
 
       public Optional<CpuFrame> pollLatestCpuFrame() {
+         return Optional.empty();
+      }
+
+      public Optional<CpuFrame> awaitLatestCpuFrame(Duration timeout) throws InterruptedException {
+         Objects.requireNonNull(timeout, "timeout");
+         if (timeout.isNegative()) throw new IllegalArgumentException("timeout must not be negative");
          return Optional.empty();
       }
 

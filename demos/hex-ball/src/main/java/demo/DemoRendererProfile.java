@@ -31,7 +31,15 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig benchmark() {
-        return baseConfig(8, false);
+        RendererConfig.Builder builder = RendererPreset.MANAGED_GPU_PRESENTATION.configuration()
+                .copyBuilder()
+                .maxFramesInFlight(8)
+                .gpuTimingsEnabled(true)
+                .cpuFrameReadbackEnabled(false)
+                .validationEnabled(false);
+        return generationOnly(builder)
+                .frameGeneration(FrameGenerationOptions.recommended())
+                .build();
     }
 
     static RenderFrameRequest.Builder frame(
@@ -73,15 +81,28 @@ final class DemoRendererProfile {
 
     private static RendererConfig baseConfig(int maxFramesInFlight, boolean cpuReadback) {
         DemoFeatureProfile profile = DemoFeatureProfile.configured();
-        RendererConfig.Builder builder = RendererPreset.CPU_READBACK.configuration().copyBuilder()
+        RendererPreset preset = cpuReadback
+                ? RendererPreset.CPU_READBACK
+                : RendererPreset.MANAGED_GPU_PRESENTATION;
+        RendererConfig.Builder builder = preset.configuration().copyBuilder()
                 .maxFramesInFlight(maxFramesInFlight)
                 .gpuTimingsEnabled(true)
                 .cpuFrameReadbackEnabled(cpuReadback)
                 .validationEnabled(false);
         return (switch (profile) {
+            case RECOMMENDED -> recommended(builder);
             case GENERATION_ONLY -> generationOnly(builder);
             case ALL_EXCEPT_MFG -> allExceptMfg(builder);
         }).build();
+    }
+
+    private static RendererConfig.Builder recommended(RendererConfig.Builder builder) {
+        // The preset owns the default policy. Explicit demo controls remain opt-in overrides.
+        if (System.getProperty(DISABLE_FRAME_GENERATION_PROPERTY) == null
+                && System.getProperty(FRAME_GENERATION_MULTIPLIER_PROPERTY) == null) {
+            return builder;
+        }
+        return builder.frameGeneration(configuredGenerationPolicy());
     }
 
     private static RendererConfig.Builder generationOnly(

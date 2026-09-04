@@ -46,6 +46,8 @@ import java.util.ArrayDeque;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.LongConsumer;
 import java.util.function.Supplier;
 
@@ -969,6 +971,30 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     @Override
     public Optional<CpuFrame> pollLatestCpuFrame() {
         return withLifecycleLock(this::pollLatestCpuFrameLocked);
+    }
+
+    @Override
+    public Optional<CpuFrame> awaitLatestCpuFrame(java.time.Duration timeout) throws InterruptedException {
+        Objects.requireNonNull(timeout, "timeout");
+        if (timeout.isNegative()) throw new IllegalArgumentException("timeout must not be negative");
+        final long timeoutNanos;
+        try {
+            timeoutNanos = timeout.toNanos();
+        } catch (ArithmeticException overflow) {
+            throw new IllegalArgumentException("timeout is too large", overflow);
+        }
+        long started = System.nanoTime();
+        long backoff = 250_000L;
+        while (true) {
+            Optional<CpuFrame> frame = pollLatestCpuFrame();
+            if (frame.isPresent() || timeoutNanos == 0L) return frame;
+            long elapsed = System.nanoTime() - started;
+            if (elapsed >= timeoutNanos) return Optional.empty();
+            if (Thread.interrupted()) throw new InterruptedException(
+                    "interrupted while awaiting a CPU-readable renderer frame");
+            LockSupport.parkNanos(Math.min(timeoutNanos - elapsed, backoff));
+            backoff = Math.min(4_000_000L, backoff << 1);
+        }
     }
 
     private Optional<CpuFrame> pollLatestCpuFrameLocked() {

@@ -389,16 +389,6 @@ public final class AsyncSectionBuildPipeline implements AutoCloseable {
     }
 
     /**
-     * 按结果数量上限排出已完成构建。
-     *
-     * @param maxResults 最多返回的结果数，必须为正数
-     * @return 按完成队列顺序排出的结果
-     */
-    public List<CompletedSectionBuild> drainCompleted(int maxResults) {
-        return drainCompleted(maxResults, Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE);
-    }
-
-    /**
      * 在数量、负载和截止时间预算内排出已完成构建。
      *
      * @param maxResults    最多返回的结果数

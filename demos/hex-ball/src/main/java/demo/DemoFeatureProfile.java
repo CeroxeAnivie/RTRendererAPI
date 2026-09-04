@@ -2,6 +2,7 @@ package demo;
 
 /** Selects one auditable, process-lifetime feature combination for the Demo. */
 enum DemoFeatureProfile {
+    RECOMMENDED("recommended"),
     GENERATION_ONLY("generation-only"),
     ALL_EXCEPT_MFG("all-except-mfg");
 
@@ -14,12 +15,12 @@ enum DemoFeatureProfile {
     }
 
     static DemoFeatureProfile configured() {
-        String configured = System.getProperty(PROPERTY, GENERATION_ONLY.propertyValue).trim();
+        String configured = System.getProperty(PROPERTY, RECOMMENDED.propertyValue).trim();
         for (DemoFeatureProfile profile : values()) {
             if (profile.propertyValue.equals(configured)) return profile;
         }
         throw new IllegalArgumentException(
-                PROPERTY + " must be generation-only or all-except-mfg: " + configured
+                PROPERTY + " must be recommended, generation-only, or all-except-mfg: " + configured
         );
     }
 }

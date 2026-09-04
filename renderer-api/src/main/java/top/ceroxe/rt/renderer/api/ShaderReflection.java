@@ -16,27 +16,7 @@ public final class ShaderReflection {
     private final List<ShaderInterfaceVariable> outputs;
     private final List<ImmediateUniform> immediateUniforms;
 
-    /**
-     * Creates a reflected interface declaration.
-     *
-     * @param bindings possibly empty binding declarations used by this module
-     * @param pushConstantByteSize non-negative byte size required by this module
-     */
-    public ShaderReflection(List<BindingLayoutEntry> bindings, int pushConstantByteSize) {
-        this(bindings, pushConstantByteSize, List.of(), List.of(), List.of());
-    }
-
-    /** Creates reflection including exact user-defined stage inputs and outputs. */
-    public ShaderReflection(
-            List<BindingLayoutEntry> bindings,
-            int pushConstantByteSize,
-            List<ShaderInterfaceVariable> inputs,
-            List<ShaderInterfaceVariable> outputs
-    ) {
-        this(bindings, pushConstantByteSize, inputs, outputs, List.of());
-    }
-
-    /** Creates reflection including stage interfaces and standalone numeric uniforms. */
+    /** Creates the complete reflected interface declaration for one shader module. */
     public ShaderReflection(
             List<BindingLayoutEntry> bindings,
             int pushConstantByteSize,

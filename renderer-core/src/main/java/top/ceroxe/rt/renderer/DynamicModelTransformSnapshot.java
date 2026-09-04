@@ -58,7 +58,7 @@ public final class DynamicModelTransformSnapshot {
     }
 
     /**
-     * Compatibility bootstrap for complete legacy/test membership publications.
+     * Creates a complete transform baseline from the current membership publication.
      */
     static DynamicModelTransformSnapshot fromMembership(
             long revision,

@@ -10,7 +10,7 @@ import java.util.Set;
  *
  * <p>The production renderer stores only fixed-size per-section material
  * ownership summaries. Full encoded voxel palettes remain available through
- * the explicit legacy/test entry points, but the RT frame path must not retain
+ * the explicit snapshot entry points, but the RT frame path must not retain
  * a second copy of terrain already represented by SectionTriangleMesh and the
  * native material table.</p>
  */

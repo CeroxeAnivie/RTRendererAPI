@@ -82,7 +82,8 @@ public final class VulkanFrameCompositionNativeSelfTest {
             ResourceMutationKey mutation = new ResourceMutationKey(ResourceGenerationKey.of(source), 0L);
             FrameCompositionRequest request = new FrameCompositionRequest(
                     List.of(new FrameCompositionPlan.Layer(mutation, FrameCompositionPlan.Operation.REPLACE)),
-                    WIDTH, HEIGHT, FrameOutputFormat.SDR_RGBA8, 0L, 0L
+                    WIDTH, HEIGHT, FrameOutputFormat.SDR_RGBA8, 0L, 0L,
+                    FrameCompositionRequest.AlphaEncoding.PREMULTIPLIED
             );
             var submitted = scene.compose(request, generic);
             require(submitted.outcome() == top.ceroxe.rt.renderer.api.FrameCompositionEvidence.Outcome.SUBMITTED,

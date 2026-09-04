@@ -1,11 +1,10 @@
 # Hex Ball Demo
 
 该可选模块是仓库自带的 retained-scene 交互示例与 GPU smoke workload。它只解析 Maven Central 已发布的
-仓库当前构建的 `top.ceroxe.rt:renderer-api:3.1.14` 及其完整传递运行时。Demo 以 Maven Central 为第一解析源，
-与外部消费者使用相同坐标；仅当该版本尚未出现在 Central 或 Central 暂不可访问时，才自动发布当前 checkout
-到本地 fallback repository。Central 命中时 clone 仓库后运行 Demo 不需要用于构建
-`renderer-nvidia` 的 CMake、Visual Studio C++、Vulkan SDK、NRD、NRI、Streamline 或 RTXMU
-源码工具链；只有在 Central 缺少该版本、必须从 checkout 构建 fallback 时才需要这些工具链。
+仓库当前构建的 `top.ceroxe.rt:renderer-api:4.0.0` 及其完整传递运行时。Demo 只从 Maven Central
+解析已发布坐标；本地 staging 必须由发布任务显式生成，不会作为隐式依赖回退。
+Central 可用时 clone 仓库后运行 Demo 不需要用于构建 `renderer-nvidia` 的 CMake、Visual Studio C++、
+Vulkan SDK、NRD、NRI、Streamline 或 RTXMU 源码工具链。
 fat JAR 门禁仍会验证打包后的 NVIDIA DLL 清单和 SHA-256。
 
 它演示普通场景与官方 GPU presenter，不演示 `submitResources(...)`、`submitCommands(...)` 或
@@ -17,7 +16,7 @@ fat JAR 门禁仍会验证打包后的 NVIDIA DLL 清单和 SHA-256。
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-3.1.14.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.0.jar `
   --width=2560 --height=1440 --spp=2
 ```
 
@@ -27,21 +26,25 @@ java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-3.1.14.jar `
 以下命令定义可复现的 smoke workload，不构成预先通过声明。只有保存了对应提交、硬件、驱动、
 命令输出与结构化证据的实际运行，才能写入版本验收结论。
 
-Demo 默认请求 2x 帧生成。只有技术状态达到 `ACTIVE`，且类型化的
+Demo 默认使用 `RendererPreset.MANAGED_GPU_PRESENTATION` 推荐模式：GPU 直接呈现、2x 帧生成、
+平衡时域重建、降噪、低延迟和 RT 优化均由能力协商决定。只有技术状态达到 `ACTIVE`，且类型化的
 `RendererDiagnostics.frameGenerationEvidence()` 计数器产生对应证据，才能证明生成帧已经到达
 provider presentation path；仅提出配置请求不构成证据。每个进程只运行一种功能模式：
 
+如需复现实验基线，可显式设置 `-Ddemo.feature-profile=generation-only`；`all-except-mfg`
+用于只禁用 MFG 的专项验收，不是默认接入路径。
+
 ```powershell
 ## 原生基线
-java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-3.1.14.jar `
+java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.0.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 
 ## FG 2x
-java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-3.1.14.jar `
+java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.0.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 
 ## MFG 3x
-java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-3.1.14.jar `
+java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.0.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 ```
 

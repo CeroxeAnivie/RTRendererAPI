@@ -46,14 +46,15 @@ public final class RenderCommandContractSelfTest {
         expectFailure(() -> new RenderAttachment(
                 view, LoadOp.LOAD, StoreOp.STORE, Optional.of(new ClearValue.Color(0, 0, 0, 1))
         ));
-        expectFailure(() -> new RenderPassDescriptor(32, 64, 1, List.of(cleared), Optional.empty(), Optional.empty()));
+        expectFailure(() -> new RenderPassDescriptor(32, 64, 1, List.of(cleared),
+                List.of(Optional.empty()), Optional.empty(), Optional.empty()));
 
         TextureResource arrayColor = colorTexture(new RenderResourceId(11L), 32, 16, 1, 1, 2,
                 TextureUsage.COLOR_ATTACHMENT);
         RenderPassDescriptor layered = new RenderPassDescriptor(
                 32, 16, 2,
                 List.of(RenderAttachment.of(colorView(arrayColor, 2), LoadOp.LOAD, StoreOp.DISCARD)),
-                Optional.empty(), Optional.empty()
+                List.of(Optional.empty()), Optional.empty(), Optional.empty()
         );
         require(layered.layerCount() == 2, "layered pass lost its layer count");
 
@@ -103,9 +104,9 @@ public final class RenderCommandContractSelfTest {
                 new RenderResourceId(15L), INITIAL, ShaderProgram.Kind.GRAPHICS,
                 List.of(
                         module(new RenderResourceId(16L), ShaderStage.VERTEX,
-                                new ShaderReflection(List.of(), 0, List.of(), List.of(output))),
+                                new ShaderReflection(List.of(), 0, List.of(), List.of(output), List.of())),
                         module(new RenderResourceId(17L), ShaderStage.FRAGMENT,
-                                new ShaderReflection(List.of(), 0, List.of(input), List.of()))
+                                new ShaderReflection(List.of(), 0, List.of(input), List.of(), List.of()))
                 ), new BindingLayout(List.of()), 0
         );
         ShaderInterfaceVariable wrongInterpolation = new ShaderInterfaceVariable(
@@ -115,9 +116,9 @@ public final class RenderCommandContractSelfTest {
                 new RenderResourceId(18L), INITIAL, ShaderProgram.Kind.GRAPHICS,
                 List.of(
                         module(new RenderResourceId(19L), ShaderStage.VERTEX,
-                                new ShaderReflection(List.of(), 0, List.of(), List.of(output))),
+                                new ShaderReflection(List.of(), 0, List.of(), List.of(output), List.of())),
                         module(new RenderResourceId(20L), ShaderStage.FRAGMENT,
-                                new ShaderReflection(List.of(), 0, List.of(wrongInterpolation), List.of()))
+                                new ShaderReflection(List.of(), 0, List.of(wrongInterpolation), List.of(), List.of()))
                 ), new BindingLayout(List.of()), 0
         ));
     }
@@ -434,7 +435,7 @@ public final class RenderCommandContractSelfTest {
 
     private static void rayTracingCommandContract() {
         ShaderModule rayGeneration = module(new RenderResourceId(420L), ShaderStage.RAY_GENERATION,
-                new ShaderReflection(List.of(), 0));
+                new ShaderReflection(List.of(), 0, List.of(), List.of(), List.of()));
         ShaderProgram program = new ShaderProgram(new RenderResourceId(421L), INITIAL, ShaderProgram.Kind.RAY_TRACING,
                 List.of(rayGeneration), new BindingLayout(List.of()), 0);
         RayTracingPipelineState pipeline = new RayTracingPipelineState(program,
@@ -479,7 +480,7 @@ public final class RenderCommandContractSelfTest {
         expectFailure(() -> new TraceRaysCommand(colorView(output, 1), 9, 4, 1));
 
         ShaderModule miss = module(new RenderResourceId(427L), ShaderStage.RAY_MISS,
-                new ShaderReflection(List.of(), 0));
+                new ShaderReflection(List.of(), 0, List.of(), List.of(), List.of()));
         ShaderProgram completeProgram = new ShaderProgram(new RenderResourceId(428L), INITIAL,
                 ShaderProgram.Kind.RAY_TRACING, List.of(rayGeneration, miss), new BindingLayout(List.of()), 0);
         new RayTracingPipelineState(completeProgram, List.of(
@@ -517,8 +518,8 @@ public final class RenderCommandContractSelfTest {
     }
 
     private static ShaderProgram program(BindingLayout layout, List<ShaderInterfaceVariable> vertexInputs) {
-        ShaderReflection vertexReflection = new ShaderReflection(layout.entries(), 0, vertexInputs, List.of());
-        ShaderReflection fragmentReflection = new ShaderReflection(List.of(), 0);
+        ShaderReflection vertexReflection = new ShaderReflection(layout.entries(), 0, vertexInputs, List.of(), List.of());
+        ShaderReflection fragmentReflection = new ShaderReflection(List.of(), 0, List.of(), List.of(), List.of());
         return new ShaderProgram(
                 new RenderResourceId(600L + layout.entries().size()), INITIAL,
                 ShaderProgram.Kind.GRAPHICS,
@@ -534,7 +535,7 @@ public final class RenderCommandContractSelfTest {
                 new RenderResourceId(610L + pushConstantByteSize), INITIAL,
                 ShaderProgram.Kind.COMPUTE,
                 List.of(module(new RenderResourceId(611L + pushConstantByteSize), ShaderStage.COMPUTE,
-                        new ShaderReflection(List.of(), pushConstantByteSize))),
+                        new ShaderReflection(List.of(), pushConstantByteSize, List.of(), List.of(), List.of()))),
                 new BindingLayout(List.of()), pushConstantByteSize
         );
     }

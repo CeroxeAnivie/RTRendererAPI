@@ -150,8 +150,8 @@ public final class RtTakeoverTimeline {
     }
 
     /**
-     * Converts the legacy string-only call surface into a deterministic
-     * primitive contract. The token code identifies the stable producer stage;
+     * Converts diagnostic labels into a deterministic primitive contract. The token code identifies
+     * the stable producer stage;
      * the fingerprint distinguishes different payloads of that stage without
      * putting a formatted message, object identity, or transient allocation in
      * the recording. Terminal failure dumps remain responsible for expanding
@@ -173,8 +173,8 @@ public final class RtTakeoverTimeline {
     }
 
     /**
-     * A fixed FNV-1a implementation makes legacy call-site labels queryable
-     * as primitive values without depending on JVM-specific String hash salts.
+     * A fixed FNV-1a implementation makes call-site labels queryable as primitive values without
+     * depending on JVM-specific String hash salts.
      *
      * @param token token to fingerprint, or {@code null}
      * @return zero for absent tokens, otherwise the stable 64-bit FNV-1a code

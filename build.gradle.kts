@@ -269,53 +269,6 @@ val publishAllToLocalStagingRepository = tasks.register("publishAllToLocalStagin
     dependsOn(":renderer-nvidia:publishMavenJavaPublicationToLocalStagingRepository")
 }
 
-// The demo consumes the published coordinate, not project substitution. Probe the exact API POM
-// while Gradle constructs the execution graph: Central remains the authoritative first choice,
-// and an unavailable coordinate is the only reason to publish this checkout into the local
-// fallback repository before resolving the demo classpath.
-val centralApiPublicationAvailable = providers.provider {
-    val artifact = java.net.URI(
-        "https://repo.maven.apache.org/maven2/${group.toString().replace('.', '/')}/renderer-api/$version/" +
-                "renderer-api-$version.pom"
-    ).toURL()
-    (artifact.openConnection() as java.net.HttpURLConnection).run {
-        connectTimeout = 5_000
-        readTimeout = 5_000
-        requestMethod = "HEAD"
-        instanceFollowRedirects = true
-        try {
-            responseCode in 200..299
-        } catch (_: java.io.IOException) {
-            false
-        } finally {
-            disconnect()
-        }
-    }
-}
-
-project(":demos:hex-ball") {
-    // Every task that resolves runtimeClasspath must see the same Central-first fallback.  The
-    // previous hook covered JavaCompile only; shadowJar resolves its runtime graph before
-    // compilation and therefore failed immediately when a newly bumped version was not yet on
-    // Central.  Keep the decision lazy so Central remains authoritative once the release exists.
-    val ensurePublishedApiFallback = providers.provider {
-        if (centralApiPublicationAvailable.get()) emptyList<Any>()
-        else listOf(publishAllToLocalStagingRepository)
-    }
-    tasks.withType<JavaCompile>().configureEach {
-        dependsOn(ensurePublishedApiFallback)
-    }
-    tasks.withType<org.gradle.api.tasks.bundling.AbstractArchiveTask>().configureEach {
-        dependsOn(ensurePublishedApiFallback)
-    }
-    tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
-        dependsOn(ensurePublishedApiFallback)
-    }
-    tasks.withType<JavaExec>().configureEach {
-        dependsOn(ensurePublishedApiFallback)
-    }
-}
-
 val verifyPublishedNvidiaRuntimeClosure = tasks.register("verifyPublishedNvidiaRuntimeClosure") {
     group = "verification"
     description = "Verifies the staged renderer-nvidia artifact with the shared runtime closure contract."

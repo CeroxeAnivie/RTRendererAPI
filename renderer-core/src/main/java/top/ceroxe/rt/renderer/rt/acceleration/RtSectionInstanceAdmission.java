@@ -305,20 +305,6 @@ public final class RtSectionInstanceAdmission {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static Set<SectionKey> sectionSet(Collection<SectionKey> sectionKeys) {
-        /*
-         * The revision-aware path supplies immutable Set snapshots. The
-         * compatibility overload may still receive a List, for which we keep
-         * the old defensive copy. Java erases the generic type of Set, while
-         * every public entry point is statically typed to SectionKey.
-         */
-        if (sectionKeys instanceof Set<?>) {
-            return (Set<SectionKey>) sectionKeys;
-        }
-        return PackedSectionMembership.copyOf(sectionKeys);
-    }
-
     /**
      * Freezes one membership generation in the primitive representation shared
      * by admission and native terrain ownership. Reusing the same object keeps
@@ -337,38 +323,6 @@ public final class RtSectionInstanceAdmission {
                 Objects.requireNonNull(sectionKeys, "sectionKeys"),
                 Objects.requireNonNull(previous, "previous")
         );
-    }
-
-    /**
-     * Plans from resident sections, treating all as base-available.
-     *
-     * @param viewState           current renderer view
-     * @param residentSectionKeys resident membership
-     * @return immutable admission
-     */
-    public synchronized Admission plan(RendererViewState viewState, Collection<SectionKey> residentSectionKeys) {
-        return plan(viewState, residentSectionKeys, residentSectionKeys);
-    }
-
-    /**
-     * Plans from explicit resident and base-available memberships.
-     *
-     * @param viewState                current renderer view
-     * @param residentSectionKeys      resident membership
-     * @param baseAvailableSectionKeys exact BLAS availability
-     * @return immutable admission
-     */
-    public synchronized Admission plan(
-            RendererViewState viewState,
-            Collection<SectionKey> residentSectionKeys,
-            Collection<SectionKey> baseAvailableSectionKeys
-    ) {
-        /*
-         * Compatibility entry point for isolated callers and tests that do
-         * not own a membership revision.  It deliberately does not cache:
-         * a mutable Collection can change without any observable token.
-         */
-        return buildPlan(viewState, residentSectionKeys, baseAvailableSectionKeys, false);
     }
 
     /**
@@ -467,8 +421,8 @@ public final class RtSectionInstanceAdmission {
             boolean membershipRelationValidated
     ) {
         planBuilds++;
-        Set<SectionKey> residentSections = sectionSet(residentSectionKeys);
-        Set<SectionKey> baseAvailableSections = sectionSet(baseAvailableSectionKeys);
+        Set<SectionKey> residentSections = Set.copyOf(residentSectionKeys);
+        Set<SectionKey> baseAvailableSections = Set.copyOf(baseAvailableSectionKeys);
         if (!membershipRelationValidated && !residentSections.containsAll(baseAvailableSections)) {
             throw new IllegalArgumentException("Base-available sections must be resident source sections");
         }

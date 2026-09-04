@@ -346,7 +346,7 @@ public final class VulkanGenericCommandNativeSelfTest {
             ByteBuffer code = Shaderc.shaderc_result_get_bytes(result, length)
                     .duplicate().order(ByteOrder.nativeOrder());
             return new ShaderModule(new RenderResourceId(id), ResourceVersion.initial(), stage, "main", code,
-                    new ShaderReflection(bindings, 0, inputs, outputs));
+                    new ShaderReflection(bindings, 0, inputs, outputs, List.of()));
         } finally {
             if (result != 0L) Shaderc.shaderc_result_release(result);
             MemoryUtil.memFree(entryBytes);

@@ -28,7 +28,8 @@ public final class DemoFeatureIntegrationSelfTest {
     }
 
     public static void main(String[] arguments) {
-        requestsFgOnlyAndExactProjection();
+        requestsRecommendedManagedPresentationAndExactProjection();
+        benchmarkUsesExplicitNonPresentingPolicy();
         acceptsExplicitUncappedTargetFps();
         acceptsBoundedDurationAndRejectsAmbiguousRunLimits();
         requestsMfgCadenceFromMultiplier();
@@ -41,21 +42,21 @@ public final class DemoFeatureIntegrationSelfTest {
         System.out.println("DemoFeatureIntegrationSelfTest passed");
     }
 
-    private static void requestsFgOnlyAndExactProjection() {
+    private static void requestsRecommendedManagedPresentationAndExactProjection() {
         DemoConfig config = new DemoConfig(
                 640, 360, 1, true, false, false, 0, 1, Duration.ZERO
         );
         RendererConfig renderer = DemoRendererProfile.interactive(config);
-        require(renderer.temporalRendering().equals(TemporalRenderingOptions.disabled()),
-                "built-in temporal rendering must be disabled in the FG-only profile");
-        require(renderer.frameReconstruction().equals(FrameReconstructionOptions.disabled()),
-                "reconstruction must be disabled in the FG-only profile");
-        require(renderer.denoising().equals(DenoisingOptions.disabled()),
-                "denoising must be disabled in the FG-only profile");
-        require(renderer.lowLatency().equals(LowLatencyOptions.disabled()),
-                "standalone low latency must be disabled in the FG-only profile");
-        require(renderer.rayTracingOptimizations().equals(RayTracingOptimizationOptions.disabled()),
-                "RT optimizations must be disabled in the FG-only profile");
+        require(renderer.temporalRendering().equals(TemporalRenderingOptions.balanced()),
+                "the recommended profile must enable bounded temporal rendering");
+        require(renderer.frameReconstruction().equals(FrameReconstructionOptions.recommended()),
+                "the recommended profile must enable capability-driven reconstruction");
+        require(renderer.denoising().equals(DenoisingOptions.recommended()),
+                "the recommended profile must enable capability-driven denoising");
+        require(renderer.lowLatency().equals(LowLatencyOptions.recommended()),
+                "the recommended profile must enable bounded low-latency policy");
+        require(renderer.rayTracingOptimizations().equals(RayTracingOptimizationOptions.recommended()),
+                "the recommended profile must enable supported RT optimizations");
         require(renderer.frameGeneration().preference() == RendererFeaturePreference.PREFERRED,
                 "FG must use preferred activation with native presentation fallback");
         require(renderer.frameGeneration().mode() == FrameGenerationOptions.Mode.FRAME_GENERATION,
@@ -72,6 +73,16 @@ public final class DemoFeatureIntegrationSelfTest {
         require(frame.depthProjection().equals(DemoRendererProfile.depthProjection()),
                 "every demo frame must carry the exact depth projection");
         require(frame.depthProjection().known(), "the depth projection must not be unknown");
+    }
+
+    private static void benchmarkUsesExplicitNonPresentingPolicy() {
+        RendererConfig benchmark = DemoRendererProfile.benchmark();
+        require(!benchmark.cpuFrameReadbackEnabled(),
+                "the GPU benchmark must not allocate CPU readback frames");
+        require(benchmark.temporalRendering().equals(TemporalRenderingOptions.disabled()),
+                "the non-presenting benchmark must keep temporal reconstruction disabled");
+        require(benchmark.frameGeneration().equals(FrameGenerationOptions.recommended()),
+                "the benchmark must retain the managed preset's 2x generation policy");
     }
 
     private static void acceptsExplicitUncappedTargetFps() {

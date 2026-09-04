@@ -9,9 +9,7 @@ plugins {
 description = "Interactive hex-ball sample and GPU smoke workload for RTRendererAPI."
 
 dependencies {
-    // Resolve exactly as an external consumer does. Repository order is Central first, followed
-    // by the root build/repository fallback configured in settings.gradle.kts. The fallback is
-    // populated before compilation when Central does not contain this version.
+    // Resolve exactly as an external consumer does from Maven Central.
     implementation("${rootProject.group}:renderer-api:${rootProject.version}")
 }
 

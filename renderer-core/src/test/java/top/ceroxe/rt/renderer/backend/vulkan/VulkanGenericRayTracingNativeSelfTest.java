@@ -301,7 +301,7 @@ public final class VulkanGenericRayTracingNativeSelfTest {
             ByteBuffer spirv = Shaderc.shaderc_result_get_bytes(result, Shaderc.shaderc_result_get_length(result))
                     .duplicate().order(ByteOrder.nativeOrder());
             return new ShaderModule(new RenderResourceId(id), ResourceVersion.initial(), stage, "main", spirv,
-                    new ShaderReflection(bindings, 0));
+                    new ShaderReflection(bindings, 0, List.of(), List.of(), List.of()));
         } finally {
             if (result != 0L) Shaderc.shaderc_result_release(result);
             MemoryUtil.memFree(entryBytes);

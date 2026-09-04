@@ -20,19 +20,7 @@ public final class FrameCompositionRequest {
     private final long sceneRevision;
     private final AlphaEncoding alphaEncoding;
 
-    /** Creates an immutable ordered request for one provider-owned output frame. */
-    public FrameCompositionRequest(
-            List<? extends FrameCompositionPlan.Layer> layers,
-            int width,
-            int height,
-            FrameOutputFormat format,
-            long frameSequence,
-            long sceneRevision
-    ) {
-        this(layers, width, height, format, frameSequence, sceneRevision, AlphaEncoding.PREMULTIPLIED);
-    }
-
-    /** Creates a request with an explicit alpha representation for blend operations. */
+    /** Creates an immutable ordered request with an explicit alpha representation. */
     public FrameCompositionRequest(
             List<? extends FrameCompositionPlan.Layer> layers,
             int width,

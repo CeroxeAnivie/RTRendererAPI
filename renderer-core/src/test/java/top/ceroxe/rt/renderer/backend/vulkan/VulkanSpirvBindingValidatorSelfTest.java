@@ -77,7 +77,7 @@ public final class VulkanSpirvBindingValidatorSelfTest {
         words.flip();
         return new ShaderModule(
                 new RenderResourceId(1L), ResourceVersion.initial(), stage, entryPoint, words,
-                new ShaderReflection(bindings, 0)
+                new ShaderReflection(bindings, 0, List.of(), List.of(), List.of())
         );
     }
 
@@ -97,7 +97,7 @@ public final class VulkanSpirvBindingValidatorSelfTest {
         words.flip();
         return new ShaderModule(
                 new RenderResourceId(2L), ResourceVersion.initial(), ShaderStage.RAY_GENERATION, "main", words,
-                new ShaderReflection(List.of(binding), 0)
+                new ShaderReflection(List.of(binding), 0, List.of(), List.of(), List.of())
         );
     }
 

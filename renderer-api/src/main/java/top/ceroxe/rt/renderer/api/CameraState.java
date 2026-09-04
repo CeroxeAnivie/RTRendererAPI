@@ -31,7 +31,7 @@ public final class CameraState {
 
     /** Explicit discriminator for the two camera contracts. */
     public enum ProjectionPath {
-        /** Legacy normalized basis plus FOV tangents. */
+        /** Normalized basis plus FOV tangents. */
         BASIS_FOV,
         /** Exact camera-to-world plus clip-from-view mapping. */
         EXACT_CLIP
@@ -168,7 +168,7 @@ public final class CameraState {
      * Starts an expert builder for a fully explicit orthonormal camera basis.
      *
      * <p>This entry point is intended for hosts that already own validated view matrices. The
-     * final {@link ExplicitBasisBuilder#build()} call still enforces normalization, orthogonality,
+     * final {@link ExplicitBasisBuilder#build()} call enforces normalization, orthogonality,
      * handedness, and finite projection values.</p>
      *
      * @param x world-space camera x coordinate
@@ -181,9 +181,8 @@ public final class CameraState {
     }
 
     /**
-     * Creates an exact camera path from a validated, immutable mapping. The derived basis values
-     * remain available for old consumers, but the exact discriminator makes it impossible for a
-     * provider to silently fall back to FOV math.
+     * Creates an exact camera path from a validated, immutable mapping. The exact discriminator
+     * makes it impossible for a provider to silently substitute FOV math.
      *
      * @param mapping validated exact projection mapping
      * @return immutable camera state selecting the exact projection path
@@ -408,7 +407,7 @@ public final class CameraState {
      * Returns the exact mapping selected by {@link #exactProjection(ExactProjectionState)}.
      *
      * @return immutable exact mapping
-     * @throws IllegalStateException when this camera uses the legacy basis/FOV path
+     * @throws IllegalStateException when this camera uses the basis/FOV path
      */
     public ExactProjectionState exactProjection() {
         if (exactProjection == null) throw new IllegalStateException("camera uses the basis/FOV projection path");

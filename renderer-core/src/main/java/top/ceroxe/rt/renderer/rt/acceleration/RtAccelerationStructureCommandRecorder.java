@@ -32,10 +32,7 @@ final class RtAccelerationStructureCommandRecorder {
         uploadBarrier.get(0)
                 .sType$Default()
                 .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
-                /* Vulkan's AS-build input-data contract requires AS-build stage + SHADER_READ.
-                 * AS_READ describes reads from an already-built acceleration-structure object,
-                 * not instance, vertex, or index input buffers. */
-                .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT);
+                .dstAccessMask(KHRAccelerationStructure.VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR);
         VK10.vkCmdPipelineBarrier(
                 commandBuffer,
                 VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,

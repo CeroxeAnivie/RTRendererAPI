@@ -23,29 +23,6 @@ public final class RenderPassDescriptor {
     private final Optional<RenderAttachment> stencilAttachment;
 
     /**
-     * Creates and validates an exact pass attachment set.
-     *
-     * @param width positive render-area width
-     * @param height positive render-area height
-     * @param layerCount positive rendered layer count
-     * @param colorAttachments ordered color attachment locations
-     * @param depthAttachment optional depth aspect
-     * @param stencilAttachment optional stencil aspect
-     */
-    public RenderPassDescriptor(
-            int width,
-            int height,
-            int layerCount,
-            List<RenderAttachment> colorAttachments,
-            Optional<RenderAttachment> depthAttachment,
-            Optional<RenderAttachment> stencilAttachment
-    ) {
-        this(width, height, layerCount, colorAttachments,
-                emptyResolves(Objects.requireNonNull(colorAttachments, "colorAttachments").size()),
-                depthAttachment, stencilAttachment);
-    }
-
-    /**
      * Creates a pass with optional single-sample resolve targets aligned to color attachment locations.
      * A resolve is explicit rather than inferred from sample count, so a backend can never silently
      * discard multisample results or overwrite an unrelated texture.
@@ -112,7 +89,8 @@ public final class RenderPassDescriptor {
     /** Convenience factory for a color-only, single-layer pass. */
     public static RenderPassDescriptor color(int width, int height, List<RenderAttachment> colorAttachments) {
         return new RenderPassDescriptor(
-                width, height, 1, colorAttachments, Optional.empty(), Optional.empty()
+                width, height, 1, colorAttachments, emptyResolves(colorAttachments.size()),
+                Optional.empty(), Optional.empty()
         );
     }
 

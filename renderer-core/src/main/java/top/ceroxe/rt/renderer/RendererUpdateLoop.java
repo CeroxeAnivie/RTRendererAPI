@@ -1779,22 +1779,4 @@ public final class RendererUpdateLoop implements AutoCloseable {
         }
     }
 
-    @Deprecated
-    static final class PendingSceneWork extends RendererPendingSceneWork {
-        PendingSceneWork() {
-            super();
-        }
-
-        PendingSceneWork(LongSupplier nanoClock) {
-            super(nanoClock);
-        }
-
-        private PendingSceneWork(SceneDatabase sceneDatabase) {
-            super(sceneDatabase);
-        }
-
-        static PendingSceneWork sceneBacked(SceneDatabase sceneDatabase) {
-            return new PendingSceneWork(Objects.requireNonNull(sceneDatabase, "sceneDatabase"));
-        }
-    }
 }
