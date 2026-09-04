@@ -9,7 +9,7 @@ pluginManagement {
 }
 
 plugins {
-    id("com.gradleup.nmcp.settings") version "1.5.0"
+    id("com.gradleup.nmcp.settings") version "1.6.2"
 }
 
 dependencyResolutionManagement {
@@ -22,6 +22,13 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
+        // Central is authoritative for released coordinates; an unreleased checkout may
+        // resolve the freshly staged coordinates from the repository produced by this build.
+        maven {
+            name = "localBuildFallback"
+            url = uri(settingsDir.resolve("build/repository"))
+            content { includeGroup("top.ceroxe.rt") }
+        }
     }
 }
 
@@ -29,14 +36,8 @@ rootProject.name = "RTRendererAPI"
 
 nmcpSettings {
     centralPortal {
-        username = providers.gradleProperty("centralUsername")
-            .orElse(providers.environmentVariable("CENTRAL_USERNAME"))
-            .orElse(providers.systemProperty("centralUsername"))
-            .getOrElse("")
-        password = providers.gradleProperty("centralPassword")
-            .orElse(providers.environmentVariable("CENTRAL_PASSWORD"))
-            .orElse(providers.systemProperty("centralPassword"))
-            .getOrElse("")
+        username = providers.gradleProperty("centralUsername").getOrElse("")
+        password = providers.gradleProperty("centralPassword").getOrElse("")
         publishingType = "AUTOMATIC"
         publicationName = "RTRendererAPI-${providers.gradleProperty("project_version").get()}"
         validationTimeout = Duration.of(30, ChronoUnit.MINUTES)
