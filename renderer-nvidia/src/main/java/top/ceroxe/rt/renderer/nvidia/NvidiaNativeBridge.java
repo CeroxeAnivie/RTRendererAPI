@@ -30,6 +30,14 @@ final class NvidiaNativeBridge {
 
     static long openNrd(VulkanFeatureOpenContext context) {
         Objects.requireNonNull(context, "context");
+        return openNrd(context, context.configuration().maxFramesInFlight());
+    }
+
+    static long openNrd(VulkanFeatureOpenContext context, int queuedFrameNum) {
+        Objects.requireNonNull(context, "context");
+        if (queuedFrameNum <= 0 || queuedFrameNum > 255) {
+            throw new IllegalArgumentException("NRD queued frame count must be in [1, 255]");
+        }
         Probe probe = probe();
         if (!probe.loaded() || !probe.supports(NRD)) {
             throw new IllegalStateException("NVIDIA native bridge cannot open NRD: " + probe.reason());
@@ -38,7 +46,8 @@ final class NvidiaNativeBridge {
                 context.device().instance().address(),
                 context.device().physicalDevice().address(),
                 context.device().device().address(),
-                context.device().queueFamilyIndex()
+                context.device().queueFamilyIndex(),
+                queuedFrameNum
         );
         if (handle == 0L) throw new IllegalStateException("NRD native session returned a null handle");
         return handle;
@@ -119,7 +128,8 @@ final class NvidiaNativeBridge {
             long instance,
             long physicalDevice,
             long device,
-            int queueFamilyIndex
+            int queueFamilyIndex,
+            int queuedFrameNum
     );
 
     static native long nativeOpenRtxmu(long instance, long physicalDevice, long device);

@@ -1241,7 +1241,7 @@ public final class RendererApiContractSelfTest {
       require(RendererPreset.CPU_READBACK.configuration().cpuFrameReadbackEnabled(), "managed CPU readback must remain enabled by default");
       require(RendererPreset.CPU_READBACK.configuration().frameOutputFormat() == FrameOutputFormat.SDR_RGBA8, "default native output must be SDR RGBA8");
       require(RendererPreset.CPU_READBACK.configuration().temporalRendering().equals(TemporalRenderingOptions.balanced()), "production defaults must enable balanced temporal reconstruction");
-      require(RendererPreset.CPU_READBACK.configuration().denoising().equals(DenoisingOptions.recommended()), "ordinary defaults must capability-gate denoising");
+      require(RendererPreset.CPU_READBACK.configuration().denoising().equals(DenoisingOptions.disabled()), "ordinary defaults must keep NRD opt-in");
       require(RendererPreset.CPU_READBACK.configuration().frameReconstruction().equals(FrameReconstructionOptions.recommended()), "ordinary defaults must capability-gate reconstruction");
       require(RendererPreset.CPU_READBACK.configuration().frameGeneration().equals(FrameGenerationOptions.disabled()), "CPU-readable defaults must not arm presentation-time generation");
       require(RendererPreset.CPU_READBACK.configuration().lowLatency().equals(LowLatencyOptions.disabled()), "CPU-readable defaults must not arm display pacing");
@@ -1257,7 +1257,7 @@ public final class RendererApiContractSelfTest {
               .frameReconstruction(FrameReconstructionOptions.recommended())
               .frameGeneration(FrameGenerationOptions.disabled())
               .lowLatency(LowLatencyOptions.disabled())
-              .denoising(DenoisingOptions.recommended())
+              .denoising(DenoisingOptions.disabled())
               .rayTracingOptimizations(RayTracingOptimizationOptions.recommended())
                 .build();
       require(RendererPreset.CPU_READBACK.configuration().equals(explicitProduction),

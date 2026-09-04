@@ -47,7 +47,8 @@ public:
             std::uint64_t instance,
             std::uint64_t physicalDevice,
             std::uint64_t device,
-            std::uint32_t queueFamilyIndex
+            std::uint32_t queueFamilyIndex,
+            std::uint32_t queuedFrameNum
     ) {
         queueFamily_.queueNum = 1;
         queueFamily_.queueType = nri::QueueType::GRAPHICS;
@@ -68,7 +69,10 @@ public:
 
         const char name[] = "RTRenderer";
         std::copy(name, name + sizeof(name) - 1, integrationDescription_.name);
-        integrationDescription_.queuedFrameNum = 3;
+        if (queuedFrameNum == 0 || queuedFrameNum > 255) {
+            throw std::invalid_argument("NRD queued frame count must be in [1, 255]");
+        }
+        integrationDescription_.queuedFrameNum = static_cast<std::uint8_t>(queuedFrameNum);
         // Extent recreation must wait before cached descriptors can outlive frame-slot images.
         integrationDescription_.autoWaitForIdle = true;
         integrationDescription_.resourceWidth = 1;
@@ -206,8 +210,11 @@ NrdSession::NrdSession(
         std::uint64_t instance,
         std::uint64_t physicalDevice,
         std::uint64_t device,
-        std::uint32_t queueFamilyIndex
-) : impl_(std::make_unique<Impl>(instance, physicalDevice, device, queueFamilyIndex)) {
+        std::uint32_t queueFamilyIndex,
+        std::uint32_t queuedFrameNum
+) : impl_(std::make_unique<Impl>(
+        instance, physicalDevice, device, queueFamilyIndex, queuedFrameNum
+)) {
 }
 
 NrdSession::~NrdSession() = default;

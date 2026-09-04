@@ -91,7 +91,10 @@ final class DemoRendererProfile {
                 .validationEnabled(false);
         return (switch (profile) {
             case RECOMMENDED -> recommended(builder);
+            case RECOMMENDED_NO_NRD -> recommendedNoNrd(builder);
             case GENERATION_ONLY -> generationOnly(builder);
+            case GENERATION_AND_SR -> generationAndSr(builder);
+            case GENERATION_SR_NRD -> generationSrNrd(builder);
             case ALL_EXCEPT_MFG -> allExceptMfg(builder);
         }).build();
     }
@@ -105,6 +108,11 @@ final class DemoRendererProfile {
         return builder.frameGeneration(configuredGenerationPolicy());
     }
 
+    private static RendererConfig.Builder recommendedNoNrd(RendererConfig.Builder builder) {
+        RendererConfig.Builder configured = recommended(builder);
+        return configured.denoising(DenoisingOptions.disabled());
+    }
+
     private static RendererConfig.Builder generationOnly(
             RendererConfig.Builder builder
     ) {
@@ -112,6 +120,25 @@ final class DemoRendererProfile {
         return builder.temporalRendering(TemporalRenderingOptions.disabled())
                 .frameReconstruction(FrameReconstructionOptions.disabled())
                 .denoising(DenoisingOptions.disabled())
+                .frameGeneration(configuredGenerationPolicy())
+                .lowLatency(LowLatencyOptions.disabled())
+                .rayTracingOptimizations(RayTracingOptimizationOptions.disabled());
+    }
+
+    private static RendererConfig.Builder generationAndSr(RendererConfig.Builder builder) {
+        // Isolate reconstruction from the other optional technologies for visual regression runs.
+        return builder.temporalRendering(TemporalRenderingOptions.balanced())
+                .frameReconstruction(FrameReconstructionOptions.recommended())
+                .denoising(DenoisingOptions.disabled())
+                .frameGeneration(configuredGenerationPolicy())
+                .lowLatency(LowLatencyOptions.disabled())
+                .rayTracingOptimizations(RayTracingOptimizationOptions.disabled());
+    }
+
+    private static RendererConfig.Builder generationSrNrd(RendererConfig.Builder builder) {
+        return builder.temporalRendering(TemporalRenderingOptions.balanced())
+                .frameReconstruction(FrameReconstructionOptions.recommended())
+                .denoising(DenoisingOptions.recommended())
                 .frameGeneration(configuredGenerationPolicy())
                 .lowLatency(LowLatencyOptions.disabled())
                 .rayTracingOptimizations(RayTracingOptimizationOptions.disabled());

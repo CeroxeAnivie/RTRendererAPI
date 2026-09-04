@@ -18,6 +18,10 @@ final class NvidiaNativeFeatureSessions implements AutoCloseable {
     interface Operations {
         long openNrd();
 
+        default long openNrd(int queuedFrameNum) {
+            return openNrd();
+        }
+
         long openRtxmu();
 
         void closeNrd(long handle);
@@ -57,10 +61,13 @@ final class NvidiaNativeFeatureSessions implements AutoCloseable {
                 probe,
                 nrdPreference,
                 rtxmuPreference,
+                checked.configuration().maxFramesInFlight(),
                 new Operations() {
                     @Override
                     public long openNrd() {
-                        return NvidiaNativeBridge.openNrd(checked);
+                        return NvidiaNativeBridge.openNrd(
+                                checked, checked.configuration().maxFramesInFlight()
+                        );
                     }
 
                     @Override
@@ -88,12 +95,25 @@ final class NvidiaNativeFeatureSessions implements AutoCloseable {
             RendererFeaturePreference rtxmuPreference,
             Operations operations
     ) {
+        return open(probe, nrdPreference, rtxmuPreference, 3, operations);
+    }
+
+    static NvidiaNativeFeatureSessions open(
+            NvidiaNativeBridge.Probe probe,
+            RendererFeaturePreference nrdPreference,
+            RendererFeaturePreference rtxmuPreference,
+            int queuedFrameNum,
+            Operations operations
+    ) {
         NvidiaNativeBridge.Probe checkedProbe = Objects.requireNonNull(probe, "probe");
         RendererFeaturePreference checkedNrdPreference =
                 Objects.requireNonNull(nrdPreference, "nrdPreference");
         RendererFeaturePreference checkedRtxmuPreference =
                 Objects.requireNonNull(rtxmuPreference, "rtxmuPreference");
         Operations checkedOperations = Objects.requireNonNull(operations, "operations");
+        if (queuedFrameNum <= 0 || queuedFrameNum > 255) {
+            throw new IllegalArgumentException("NRD queued frame count must be in [1, 255]");
+        }
         OpenResult nrd = OpenResult.disabled();
         OpenResult rtxmu = OpenResult.disabled();
         try {
@@ -103,6 +123,7 @@ final class NvidiaNativeFeatureSessions implements AutoCloseable {
                         NvidiaNativeBridge.NRD,
                         checkedNrdPreference,
                         "NRD",
+                        queuedFrameNum,
                         checkedOperations
                 );
             }
@@ -112,6 +133,7 @@ final class NvidiaNativeFeatureSessions implements AutoCloseable {
                         NvidiaNativeBridge.RTX_MEMORY_UTILITY,
                         checkedRtxmuPreference,
                         "RTXMU",
+                        queuedFrameNum,
                         checkedOperations
                 );
             }
@@ -133,11 +155,12 @@ final class NvidiaNativeFeatureSessions implements AutoCloseable {
             int capability,
             RendererFeaturePreference preference,
             String feature,
+            int queuedFrameNum,
             Operations operations
     ) {
         try {
             long handle = capability == NvidiaNativeBridge.NRD
-                    ? operations.openNrd()
+                    ? operations.openNrd(queuedFrameNum)
                     : operations.openRtxmu();
             if (handle == 0L) {
                 throw new IllegalStateException(feature + " native session returned a null handle");

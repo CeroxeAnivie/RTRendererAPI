@@ -24,7 +24,7 @@ import java.util.Objects;
 
 /** Owns the small compute stage that publishes NRD radiance into one frame's final output image. */
 public final class VulkanNrdComposePipeline implements AutoCloseable {
-    private static final int IMAGE_BINDING_COUNT = 8;
+    private static final int IMAGE_BINDING_COUNT = 9;
     private static final int WORKGROUP_SIZE = 8;
     private static final String SHADER = "assets/rtrenderer/shaders/gpuscene/gpuscene_nrd_compose.comp";
 
@@ -99,6 +99,8 @@ public final class VulkanNrdComposePipeline implements AutoCloseable {
      * @param traceView original ray-traced color view
      * @param noisyDiffuseView noisy diffuse radiance view
      * @param noisySpecularView noisy specular radiance view
+     * @param denoisingViewZ linear view-space depth guide; values at or above the miss sentinel
+     *                       bypass NRD history and preserve the trace
      * @param denoisedDiffuseView NRD denoised diffuse radiance view
      * @param denoisedSpecularView NRD denoised specular radiance view
      * @param diffuseMaterialFactorView diffuse remodulation factor view
@@ -107,7 +109,8 @@ public final class VulkanNrdComposePipeline implements AutoCloseable {
      */
     public synchronized void record(
             VkCommandBuffer commands, MemoryStack stack, int slot, int width, int height,
-            long traceView, long noisyDiffuseView, long noisySpecularView, long denoisedDiffuseView,
+            long traceView, long noisyDiffuseView, long noisySpecularView, long denoisingViewZ,
+            long denoisedDiffuseView,
             long denoisedSpecularView, long diffuseMaterialFactorView,
             long specularMaterialFactorView, long outputView
     ) {
@@ -117,7 +120,7 @@ public final class VulkanNrdComposePipeline implements AutoCloseable {
         if (width <= 0 || height <= 0) throw new IllegalArgumentException("compose extent must be positive");
         if (slot < 0 || slot >= descriptorSets.length) throw new IndexOutOfBoundsException(slot);
         updateDescriptors(stack, descriptorSets[slot], traceView, noisyDiffuseView, noisySpecularView,
-                denoisedDiffuseView, denoisedSpecularView, diffuseMaterialFactorView,
+                denoisingViewZ, denoisedDiffuseView, denoisedSpecularView, diffuseMaterialFactorView,
                 specularMaterialFactorView, outputView);
         recordMemoryBarrier(stack, commands, VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,

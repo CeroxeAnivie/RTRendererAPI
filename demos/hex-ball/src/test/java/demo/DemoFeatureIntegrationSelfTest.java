@@ -51,8 +51,8 @@ public final class DemoFeatureIntegrationSelfTest {
                 "the recommended profile must enable bounded temporal rendering");
         require(renderer.frameReconstruction().equals(FrameReconstructionOptions.recommended()),
                 "the recommended profile must enable capability-driven reconstruction");
-        require(renderer.denoising().equals(DenoisingOptions.recommended()),
-                "the recommended profile must enable capability-driven denoising");
+        require(renderer.denoising().equals(DenoisingOptions.disabled()),
+                "the recommended profile must keep NRD opt-in");
         require(renderer.lowLatency().equals(LowLatencyOptions.recommended()),
                 "the recommended profile must enable bounded low-latency policy");
         require(renderer.rayTracingOptimizations().equals(RayTracingOptimizationOptions.recommended()),
@@ -189,7 +189,7 @@ public final class DemoFeatureIntegrationSelfTest {
                             FrameReconstructionOptions.recommended()),
                     "all-except-MFG must request SR with its explicit NIS fallback");
             require(renderer.denoising().equals(DenoisingOptions.recommended()),
-                    "all-except-MFG must request production NRD policy");
+                    "all-except-MFG must explicitly request production NRD policy");
             require(renderer.frameGeneration().mode()
                             == FrameGenerationOptions.Mode.FRAME_GENERATION
                             && renderer.frameGeneration().multiplier()

@@ -1,16 +1,16 @@
 # API Contract
 
-RTRendererAPI 4.0.0 is a new contract line. The public API and provider SPI expose one canonical
+RTRendererAPI 4.0.1 is the current contract line. The public API and provider SPI expose one canonical
 entry point for each operation. Removed constructors, overloads, legacy wrappers, and implicit
 repository fallbacks are not part of this release.
 
 ## Versioning
 
-- `4.0.0` establishes the direct graphics, compute, ray-tracing, resource, and frame contracts.
+- `4.0.1` establishes the direct graphics, compute, ray-tracing, resource, and frame contracts.
 - All published modules use the same `MAJOR.MINOR.PATCH` coordinate and the `vMAJOR.MINOR.PATCH`
   source tag.
 - A public signature change is intentional in this major line; consumers must rebuild against the
-  4.0.0 API instead of relying on binary or source compatibility shims.
+  4.0.1 API instead of relying on binary or source compatibility shims.
 - Maven Central is the only artifact source. Local staging is an explicit publishing task and is
   never selected implicitly during dependency resolution.
 

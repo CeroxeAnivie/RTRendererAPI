@@ -294,6 +294,7 @@ final class VulkanGpuSceneFeatureComposition implements AutoCloseable {
                 slot.traceImage().imageView(),
                 views.diffuseRadianceHitDistance(),
                 views.specularRadianceHitDistance(),
+                views.viewZ(),
                 views.denoisedDiffuseRadianceHitDistance(),
                 views.denoisedSpecularRadianceHitDistance(),
                 views.diffuseMaterialFactor(),

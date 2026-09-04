@@ -154,17 +154,23 @@ public final class VulkanGpuSceneShaderSelfTest {
               && raygen.contains("motionRevision > previousRevision && motionRevision <= currentRevision"),
               "instance reprojection payload and per-instance revision gate must be initialized end to end");
       require(raygen.contains("denoisingActive && sampleIndex == 0u")
+              && raygen.contains("denoisingSplit.diffuse += surfaceSplit.diffuse * surfaceWeight")
+              && raygen.contains("denoisingSplit.specular += (surfaceSplit.specular + opaqueReflection) * surfaceWeight")
               && raygen.contains("denoisingSplit.diffuse /= float(sampleCount) * denoisingDiffuseFactor")
               && raygen.contains("denoisingSplit.specular /= float(sampleCount) * denoisingSpecularFactor"),
-              "NRD signal and guide must describe the same primary sample contribution");
+              "NRD signal must average all SPP contributions with one stable material guide");
       require(raygen.contains("gsNrdMaterialFactors")
               && raygen.contains("previousViewZ - viewZ")
+              && raygen.contains("GS_NRD_MISS_VIEW_Z")
+              && raygen.contains("viewZ = denoisingPrimary")
               && !raygen.contains("denoisingHitDistance = max(distance"),
-              "NRD must demodulate materials, provide 2.5D motion, and exclude primary hitT");
+              "NRD must demodulate materials, mark sky outside its range, provide 2.5D motion, and exclude primary hitT");
       require(raygen.contains("if (!denoisingActive && historyValid && reprojected)"),
               "the renderer temporal resolve must not accumulate over NRD temporal history");
       require(compose.contains("vec3 resolved = max(trace + denoised - noisy, vec3(0.0))")
               && compose.contains("uniform readonly image2D traceImage")
+              && compose.contains("uniform readonly image2D denoisingViewZ")
+              && compose.contains("if (!(viewZ < 1.0e6))")
               && compose.contains("uniform readonly image2D diffuseMaterialFactor")
               && compose.contains("uniform readonly image2D specularMaterialFactor")
               && compose.contains("uniform writeonly image2D outputImage"),

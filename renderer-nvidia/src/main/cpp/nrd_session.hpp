@@ -21,14 +21,16 @@ struct NrdFrameConstants {
     bool reset;
 };
 
-/** Owns one NRD/NRI integration and all extent-dependent denoiser state. */
+/** Owns one NRD/NRI integration and all extent-dependent denoiser state.
+ * The queued-frame count must equal the renderer's maximum in-flight submissions. */
 class NrdSession final {
 public:
     NrdSession(
             std::uint64_t instance,
             std::uint64_t physicalDevice,
             std::uint64_t device,
-            std::uint32_t queueFamilyIndex
+            std::uint32_t queueFamilyIndex,
+            std::uint32_t queuedFrameNum
     );
     ~NrdSession();
 

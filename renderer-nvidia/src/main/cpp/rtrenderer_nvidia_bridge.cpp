@@ -46,9 +46,11 @@ Java_top_ceroxe_rt_renderer_nvidia_NvidiaNativeBridge_nativeOpenNrd(
         jlong instance,
         jlong physicalDevice,
         jlong device,
-        jint queueFamilyIndex
+        jint queueFamilyIndex,
+        jint queuedFrameNum
 ) {
-    if (instance == 0 || physicalDevice == 0 || device == 0 || queueFamilyIndex < 0) {
+    if (instance == 0 || physicalDevice == 0 || device == 0 || queueFamilyIndex < 0
+            || queuedFrameNum <= 0 || queuedFrameNum > 255) {
         throwIllegalState(environment, "NRD received an invalid native open request");
         return 0;
     }
@@ -57,7 +59,8 @@ Java_top_ceroxe_rt_renderer_nvidia_NvidiaNativeBridge_nativeOpenNrd(
                 static_cast<std::uint64_t>(instance),
                 static_cast<std::uint64_t>(physicalDevice),
                 static_cast<std::uint64_t>(device),
-                static_cast<std::uint32_t>(queueFamilyIndex)
+                static_cast<std::uint32_t>(queueFamilyIndex),
+                static_cast<std::uint32_t>(queuedFrameNum)
         ));
     } catch (const std::exception& error) {
         throwIllegalState(environment, error.what());

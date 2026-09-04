@@ -60,7 +60,8 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
 
         requireStatus(technologies, Technology.TEMPORAL_SUPER_RESOLUTION, Status.AVAILABLE);
         requireStatus(technologies, Technology.SPATIAL_UPSCALING, Status.AVAILABLE);
-        requireStatus(technologies, Technology.RAY_TRACING_DENOISING, Status.AVAILABLE);
+        require(!technologies.containsKey(Technology.RAY_TRACING_DENOISING),
+                "CPU-readable defaults must not request NRD: " + technologies);
         requireStatus(
                 technologies,
                 Technology.ACCELERATION_STRUCTURE_MEMORY_OPTIMIZATION,

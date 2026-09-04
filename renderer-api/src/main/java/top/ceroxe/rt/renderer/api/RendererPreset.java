@@ -24,7 +24,9 @@ public enum RendererPreset {
     public RendererConfig configuration() {
         RendererConfig.Builder builder = RendererConfig.expertBuilder()
                 .frameReconstruction(FrameReconstructionOptions.recommended())
-                .denoising(DenoisingOptions.recommended())
+                // NRD remains an explicit expert opt-in until its temporal integration passes
+                // the moving-object visual acceptance gate on all supported adapters.
+                .denoising(DenoisingOptions.disabled())
                 .rayTracingOptimizations(RayTracingOptimizationOptions.recommended());
         if (this == MANAGED_GPU_PRESENTATION) {
             builder.cpuFrameReadbackEnabled(false)

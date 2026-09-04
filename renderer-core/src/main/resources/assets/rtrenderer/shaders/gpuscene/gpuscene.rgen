@@ -857,6 +857,10 @@ bool gsDenoisingActive()
         & GPU_SCENE_FEATURE_FLAG_DENOISING_ACTIVE) != 0u;
 }
 
+// NRD treats viewZ values below CommonSettings::denoisingRange as valid surfaces. Keep miss
+// pixels outside that range so NRD and the compose pass cannot reuse stale surface history for sky.
+const float GS_NRD_MISS_VIEW_Z = 1.0e6;
+
 bool gsReconstructionActive()
 {
     return (gsFrame.words[GPU_SCENE_FRAME_FEATURE_FLAGS_WORD]
@@ -1077,6 +1081,14 @@ void main()
                     primary, origin, denoisingDiffuseFactor, denoisingSpecularFactor
                 );
                 denoisingPrimary = true;
+            } else if (denoisingActive && denoisingPrimary) {
+                // Average every SPP contribution using the representative (first-hit) material
+                // factors. NRD is fed one demodulated pixel signal, not only sample zero.
+                float surfaceWeight = opacity * (1.0 - transmission);
+                float opticalWeight = opacity * transmission;
+                denoisingSplit.diffuse += surfaceSplit.diffuse * surfaceWeight;
+                denoisingSplit.specular += (surfaceSplit.specular + opaqueReflection) * surfaceWeight
+                    + optical * opticalWeight;
             }
         }
         accumulated += radiance;
@@ -1111,7 +1123,7 @@ void main()
             : 1.0;
         float viewZ = denoisingPrimary
             ? max(dot(representative.worldPositionAndDistance.xyz - origin, forward), 0.0)
-            : 0.0;
+            : GS_NRD_MISS_VIEW_Z;
         vec2 previousPixelNoJitter;
         vec2 currentPixelNoJitter;
         float ignoredPreviousDepth;
