@@ -54,10 +54,14 @@ subprojects {
                         providers.gradleProperty("centralPassword")
                             .orElse(providers.environmentVariable("CENTRAL_PASSWORD"))
                     )
-                    publishingType.set("AUTOMATIC")
-                    publicationName.set("RTRendererAPI-${project.version}")
-                }
+                publishingType.set("AUTOMATIC")
+                publicationName.set("RTRendererAPI-${project.version}")
+                // Upload is the release boundary; do not block on Central's asynchronous
+                // validation/publication state after the deployment is accepted.
+                validationTimeout.set(java.time.Duration.ZERO)
+                publishingTimeout.set(java.time.Duration.ZERO)
             }
+        }
         }
 
         tasks.withType<AbstractArchiveTask>().configureEach {
