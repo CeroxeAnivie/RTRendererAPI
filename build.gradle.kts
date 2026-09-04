@@ -13,6 +13,7 @@ import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.bundling.Zip
 import org.gradle.api.tasks.compile.JavaCompile
 import org.w3c.dom.Element
+import nmcp.NmcpExtension
 
 plugins {
     base
@@ -32,14 +33,27 @@ subprojects {
         options.release = 21
     }
 
-    apply(plugin = "maven-publish")
-    apply(plugin = "signing")
-
     dependencyLocking {
         lockAllConfigurations()
     }
 
     plugins.withId("java-library") {
+        // Only published renderer modules participate in Maven publication. Demo applications
+        // intentionally have no publication and must not be handed to NMCP as empty projects.
+        apply(plugin = "maven-publish")
+        apply(plugin = "signing")
+
+        plugins.withId("com.gradleup.nmcp") {
+            extensions.configure<NmcpExtension> {
+                publishAllPublicationsToCentralPortal {
+                    username.set(providers.gradleProperty("centralUsername"))
+                    password.set(providers.gradleProperty("centralPassword"))
+                    publishingType.set("AUTOMATIC")
+                    publicationName.set("RTRendererAPI-${project.version}")
+                }
+            }
+        }
+
         tasks.withType<AbstractArchiveTask>().configureEach {
             // Release hashes are meaningful only when identical inputs produce byte-identical
             // archives. ZIP entry timestamps and filesystem traversal order are environmental,
