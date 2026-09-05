@@ -2,12 +2,33 @@
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
 # To regenerate this file, run: ./gradlew :renderer-core:dependencies --write-locks
+com.gradleup.gratatouille:gratatouille-tasks-runtime:0.2.1=nmcpTasks
+com.gradleup.nmcp:nmcp-tasks:1.5.0=nmcpTasks
+com.squareup.okhttp3:okhttp-jvm:5.3.2=nmcpTasks
+com.squareup.okhttp3:okhttp:5.3.2=nmcpTasks
+com.squareup.okio:okio-jvm:3.16.4=nmcpTasks
+com.squareup.okio:okio:3.16.4=nmcpTasks
+io.github.pdvrieze.xmlutil:core-jvmcommon:1.0.0-rc1=nmcpTasks
+io.github.pdvrieze.xmlutil:core:1.0.0-rc1=nmcpTasks
+io.github.pdvrieze.xmlutil:serialization-jvm:1.0.0-rc1=nmcpTasks
+io.github.pdvrieze.xmlutil:serialization:1.0.0-rc1=nmcpTasks
 it.unimi.dsi:fastutil:8.5.19=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.jetbrains.kotlin:kotlin-stdlib-common:1.8.20=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.20=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.20=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.jetbrains.kotlin:kotlin-stdlib:1.8.20=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.jetbrains.kotlin:kotlin-stdlib:2.3.0=nmcpTasks
+org.jetbrains.kotlin:kotlin-test:2.3.0=nmcpTasks
+org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.10.2=nmcpTasks
+org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.2=nmcpTasks
+org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2=nmcpTasks
+org.jetbrains.kotlinx:kotlinx-serialization-bom:1.10.0-RC=nmcpTasks
+org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.10.0-RC=nmcpTasks
+org.jetbrains.kotlinx:kotlinx-serialization-core:1.10.0-RC=nmcpTasks
+org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.10.0-RC=nmcpTasks
+org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0-RC=nmcpTasks
 org.jetbrains:annotations:13.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.jetbrains:annotations:23.0.0=nmcpTasks
 org.joml:joml:1.10.8=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.lwjgl:lwjgl-glfw:3.4.3=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.lwjgl:lwjgl-shaderc:3.4.3=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
