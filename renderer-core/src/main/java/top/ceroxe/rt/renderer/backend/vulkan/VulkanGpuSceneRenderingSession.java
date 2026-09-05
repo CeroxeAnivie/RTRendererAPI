@@ -232,7 +232,11 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         }
         VulkanGenericCompositionSource[] sources = new VulkanGenericCompositionSource[checked.layers().size()];
         for (int index = 0; index < sources.length; index++) {
-            sources[index] = genericCommands.requireCompositionSource(checked.layers().get(index).source());
+            try {
+                sources[index] = genericCommands.requireCompositionSource(checked.layers().get(index).source());
+            } catch (IllegalArgumentException | IllegalStateException invalidSource) {
+                return FrameCompositionEvidence.rejected(checked.format(), invalidSource.getMessage());
+            }
             if (sources[index].width() != checked.width() || sources[index].height() != checked.height()) {
                 return FrameCompositionEvidence.rejected(checked.format(),
                         "composition source extent does not match the requested output extent");

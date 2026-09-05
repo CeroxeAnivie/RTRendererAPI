@@ -10,6 +10,7 @@ public final class ResourceLifecycleContractSelfTest {
 
     /** Runs every resource lifecycle assertion. */
     public static void main(String[] args) {
+        retentionContract();
         BufferResource buffer = new BufferResource(
                 new RenderResourceId(1L), ResourceVersion.initial(), 64L, Set.of(BufferUsage.VERTEX)
         );
@@ -98,6 +99,35 @@ public final class ResourceLifecycleContractSelfTest {
         ResourceRetirementPolicy unknown = new ResourceRetirementPolicy(2, 10L, OptionalLong.empty());
         require(!unknown.mayRetire(0L), "unknown consumer progress permitted retirement");
         expect(IllegalStateException.class, () -> unknown.requireRetirable(0L));
+    }
+
+    private static void retentionContract() {
+        var defaults = EvidenceRetentionPolicy.bounded();
+        require(defaults.commandCapacity() == 256 && defaults.retiredResourceCapacity() == 256,
+                "default historical budgets changed");
+        expect(IllegalArgumentException.class, () -> new EvidenceRetentionPolicy(0, 1, 1, 1));
+        expect(IllegalArgumentException.class, () -> new EvidenceRetentionPolicy(1, -1, 1, 1));
+        expect(IllegalArgumentException.class, () -> new EvidenceRetentionPolicy(1, 1, 0, 1));
+        expect(IllegalArgumentException.class, () -> new EvidenceRetentionPolicy(1, 1, 1, 0));
+        var tiny = new EvidenceRetentionPolicy(2, 3, 4, 5);
+        var configuration = RendererConfig.expertBuilder().evidenceRetention(tiny).build();
+        require(configuration.copyBuilder().build().equals(configuration)
+                && configuration.evidenceRetention().equals(tiny), "configuration copy lost retention policy");
+        require(!configuration.equals(RendererConfig.expertBuilder().build()), "config equality ignored evidence policy");
+        expect(NullPointerException.class, () -> RendererConfig.expertBuilder().evidenceRetention(null));
+        require(EvidenceQuery.available("snapshot").evidence().orElseThrow().equals("snapshot"), "query lost evidence");
+        for (var status : EvidenceQuery.Status.values()) {
+            if (status != EvidenceQuery.Status.AVAILABLE) {
+                require(EvidenceQuery.absent(status).evidence().isEmpty(), "absence fabricated evidence");
+                expect(IllegalArgumentException.class, () -> new EvidenceQuery<>(status, java.util.Optional.of("snapshot")));
+            }
+        }
+        expect(IllegalArgumentException.class, () -> EvidenceQuery.absent(EvidenceQuery.Status.AVAILABLE));
+        expect(NullPointerException.class, () -> EvidenceQuery.available(null));
+        expect(IllegalArgumentException.class, () -> new EvidenceRetentionStatistics(
+                tiny, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+        expect(IllegalArgumentException.class, () -> new EvidenceRetentionStatistics(
+                tiny, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
     }
 
     private static ResourceResidencyEvidence evidence(

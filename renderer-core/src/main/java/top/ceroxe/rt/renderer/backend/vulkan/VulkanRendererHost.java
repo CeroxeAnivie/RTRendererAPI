@@ -59,7 +59,8 @@ import java.util.function.Supplier;
  * material adapter supplies a real {@link VulkanRenderingSession}, no service registration can
  * accidentally expose a renderer that acknowledges work without dispatching it.</p>
  */
-final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFramePresenterFactory {
+final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFramePresenterFactory,
+        top.ceroxe.rt.renderer.api.RendererEvidenceAccess {
     private static final int MAX_AUTOMATIC_DEVICE_RECOVERIES = 1;
 
     private final RendererConfig configuration;
@@ -265,7 +266,8 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
         if (!(session instanceof VulkanGenericCommandRuntimeProvider provider)) {
             return null;
         }
-        return new VulkanGenericCommandSession(provider.genericCommandRuntime(), configuration.maxFramesInFlight());
+        return new VulkanGenericCommandSession(provider.genericCommandRuntime(), configuration.maxFramesInFlight(),
+                configuration.evidenceRetention(), configuration.cpuFrameReadbackEnabled());
     }
 
     @Override
@@ -787,6 +789,46 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
         return withLifecycleLock(() -> {
             requireReady("query general render-command evidence");
             return genericCommands == null ? Optional.empty() : genericCommands.commandEvidence(transactionSequence);
+        });
+    }
+
+    @Override
+    public top.ceroxe.rt.renderer.api.EvidenceQuery<CommandExecutionEvidence> queryCommandExecutionEvidence(long sequence) {
+        if (sequence < 0) throw new IllegalArgumentException("command sequence must not be negative");
+        return withLifecycleLock(() -> {
+            requireReady("query command retention");
+            return genericCommands == null ? top.ceroxe.rt.renderer.api.EvidenceQuery.absent(
+                    top.ceroxe.rt.renderer.api.EvidenceQuery.Status.UNSUPPORTED) : genericCommands.queryCommandEvidence(sequence);
+        });
+    }
+
+    @Override
+    public top.ceroxe.rt.renderer.api.EvidenceQuery<ResourceResidencyEvidence> queryResourceResidencyEvidence(
+            ResourceGenerationKey generation) {
+        Objects.requireNonNull(generation, "generation");
+        return withLifecycleLock(() -> {
+            requireReady("query resource retention");
+            return genericCommands == null ? top.ceroxe.rt.renderer.api.EvidenceQuery.absent(
+                    top.ceroxe.rt.renderer.api.EvidenceQuery.Status.UNSUPPORTED) : genericCommands.queryResourceEvidence(generation);
+        });
+    }
+
+    @Override
+    public top.ceroxe.rt.renderer.api.EvidenceLease retainCommandEvidence(long sequence) {
+        return withLifecycleLock(() -> {
+            requireReady("retain command evidence");
+            if (genericCommands == null) throw new UnsupportedOperationException("generic command execution is unavailable");
+            top.ceroxe.rt.renderer.api.EvidenceLease lease = genericCommands.retainCommandEvidence(sequence);
+            return () -> withLifecycleLock(lease::close);
+        });
+    }
+
+    @Override
+    public top.ceroxe.rt.renderer.api.EvidenceRetentionStatistics evidenceRetentionStatistics() {
+        return withLifecycleLock(() -> {
+            requireReady("query evidence retention statistics");
+            if (genericCommands == null) throw new UnsupportedOperationException("generic command execution is unavailable");
+            return genericCommands.retentionStatistics();
         });
     }
 

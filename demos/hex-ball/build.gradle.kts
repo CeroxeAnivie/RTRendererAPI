@@ -37,6 +37,17 @@ application {
     ) + listOfNotNull(unsafeAccessJvmArg)
 }
 
+/*
+ * Dependency resolution remains Central-first in settings.gradle.kts. When the current
+ * version is not published there yet, these task edges materialize the exact same coordinates
+ * in build/repository before Gradle resolves the demo runtime. The localBuildFallback repository
+ * then supplies only the missing coordinate; it is a release bootstrap path, not a second API
+ * or a replacement for Central.
+ */
+tasks.named("run") {
+    dependsOn(rootProject.tasks.named("publishAllToLocalStagingRepository"))
+}
+
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
     options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
@@ -87,6 +98,8 @@ tasks.jar {
 val shadowJar = tasks.register<Jar>("shadowJar") {
     group = "build"
     description = "Builds the self-contained executable hex-ball demo from the released runtime."
+    // Keep the same Central-first/local-build-fallback contract as the interactive run task.
+    dependsOn(rootProject.tasks.named("publishAllToLocalStagingRepository"))
     dependsOn(tasks.classes, configurations.runtimeClasspath)
     archiveBaseName.set("RTRendererAPI-HexBallDemo")
     archiveClassifier.set("")

@@ -121,9 +121,16 @@ final class VulkanGenericCommandPlan {
                         colors.add(new ResolvedAttachment(record, attachment, resolve.orElse(null), resolveRecord));
                         textureWrites.add(record);
                         if (resolveRecord != null) textureWrites.add(resolveRecord);
-                        if (attachment.storeOperation() == top.ceroxe.rt.renderer.api.StoreOp.STORE && outputResource == null) {
-                            outputResource = record.generation().id();
-                            outputRecord = record;
+                        if (outputResource == null) {
+                            // A resolve target is the single-sample stored result of an MSAA
+                            // attachment and is therefore the only valid CPU-frame source.
+                            if (resolveRecord != null) {
+                                outputResource = resolveRecord.generation().id();
+                                outputRecord = resolveRecord;
+                            } else if (attachment.storeOperation() == top.ceroxe.rt.renderer.api.StoreOp.STORE) {
+                                outputResource = record.generation().id();
+                                outputRecord = record;
+                            }
                         }
                     }
                     ResolvedAttachment depth = resolveAttachment(resources, pass.depthAttachment().orElse(null), false);

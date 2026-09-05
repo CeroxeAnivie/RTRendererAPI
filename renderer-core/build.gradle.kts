@@ -1,4 +1,5 @@
 import java.nio.charset.StandardCharsets
+import groovy.json.JsonSlurper
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
 import org.gradle.api.tasks.JavaExec
@@ -173,6 +174,7 @@ val registerCoreSelfTest =
     }
 
 val contractSelfTests = linkedMapOf(
+    "vulkanCommandEvidenceHistorySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanCommandEvidenceHistorySelfTest",
     "vulkanGenericAccelerationStructuresSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericAccelerationStructuresSelfTest",
     "vulkanGenericTextureLayoutUpdatesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericTextureLayoutUpdatesSelfTest",
     "vulkanFrameCompositionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameCompositionNativeSelfTest",
@@ -307,6 +309,7 @@ tasks.named("check") {
 }
 
 val nativeSelfTests = linkedMapOf(
+    "vulkanEvidenceRetentionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanEvidenceRetentionNativeSelfTest",
     "vulkanGenericCommandNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericCommandNativeSelfTest",
     "vulkanGenericRayTracingNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericRayTracingNativeSelfTest",
     "vulkanGpuSceneNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneNativeSelfTest",
@@ -335,6 +338,33 @@ nativeSelfTests.forEach { (taskName, mainClassName) ->
         mainClassName,
         "Runs the independent hardware Vulkan RT check $mainClassName."
     )
+}
+
+tasks.named<JavaExec>("vulkanEvidenceRetentionNativeSelfTest").configure {
+    minHeapSize = "256m"
+    maxHeapSize = "256m"
+}
+
+listOf("vulkanEvidenceRetentionNativeSelfTest", "vulkanGenericCommandNativeSelfTest",
+    "vulkanGenericRayTracingNativeSelfTest", "vulkanGenericAccelerationNativeSelfTest",
+    "vulkanFrameCompositionNativeSelfTest").forEach { taskName ->
+    tasks.named<JavaExec>(taskName).configure {
+        val validationLog = layout.buildDirectory.file("reports/vulkan-validation/$taskName.jsonl")
+        systemProperty("top.ceroxe.rt.validation.enabled", "true")
+        systemProperty("top.ceroxe.rt.validation.logPath", validationLog.get().asFile.absolutePath)
+        doFirst {
+            val log = validationLog.get().asFile
+            log.parentFile.mkdirs()
+            log.writeText("", StandardCharsets.UTF_8)
+        }
+        doLast {
+            val events = validationLog.get().asFile.readLines(StandardCharsets.UTF_8)
+                .filter(String::isNotBlank).map { JsonSlurper().parseText(it) as Map<*, *> }
+            check(events.any { it["event"] == "validation" }) { "Native gate produced no validation diagnostics" }
+            val failures = events.filter { it["severity"] == "ERROR" || it["event"] == "dropSummary" }
+            check(failures.isEmpty()) { "Native Vulkan validation failed: $failures" }
+        }
+    }
 }
 
 registerCoreSelfTest(

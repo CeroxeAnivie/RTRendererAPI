@@ -553,6 +553,8 @@ tasks.register("verifyRuntimeSupplyChainMetadata") {
 
 tasks.named("check") {
     dependsOn(tasks.named("rendererApiContractSelfTest"))
+    dependsOn(tasks.named("resourceLifecycleContractSelfTest"))
+    dependsOn(tasks.named("renderCommandContractSelfTest"))
     dependsOn(tasks.named("verifyRendererApiBoundary"))
     dependsOn(tasks.named("verifyRendererApiAbi"))
     dependsOn(tasks.named("verifyRuntimeSupplyChainMetadata"))

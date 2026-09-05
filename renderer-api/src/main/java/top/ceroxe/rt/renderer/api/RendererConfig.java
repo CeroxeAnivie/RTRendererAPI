@@ -20,6 +20,7 @@ public final class RendererConfig {
     public static final int MAX_MAX_FRAMES_IN_FLIGHT = 16;
 
     private final int maxFramesInFlight;
+    private final EvidenceRetentionPolicy evidenceRetention;
     private final boolean validationEnabled;
     private final boolean gpuTimingsEnabled;
     private final boolean cpuFrameReadbackEnabled;
@@ -41,6 +42,7 @@ public final class RendererConfig {
             );
         }
         maxFramesInFlight = builder.maxFramesInFlight;
+        evidenceRetention = Objects.requireNonNull(builder.evidenceRetention, "evidenceRetention");
         validationEnabled = builder.validationEnabled;
         gpuTimingsEnabled = builder.gpuTimingsEnabled;
         cpuFrameReadbackEnabled = builder.cpuFrameReadbackEnabled;
@@ -98,6 +100,11 @@ public final class RendererConfig {
      */
     public int maxFramesInFlight() {
         return maxFramesInFlight;
+    }
+
+    /** Returns generic evidence, identity and resident-generation budgets. */
+    public EvidenceRetentionPolicy evidenceRetention() {
+        return evidenceRetention;
     }
 
     /**
@@ -209,6 +216,7 @@ public final class RendererConfig {
         if (this == other) return true;
         if (!(other instanceof RendererConfig config)) return false;
         return maxFramesInFlight == config.maxFramesInFlight
+                && evidenceRetention.equals(config.evidenceRetention)
                 && validationEnabled == config.validationEnabled
                 && gpuTimingsEnabled == config.gpuTimingsEnabled
                 && cpuFrameReadbackEnabled == config.cpuFrameReadbackEnabled
@@ -225,7 +233,7 @@ public final class RendererConfig {
     @Override
     public int hashCode() {
         return Objects.hash(
-                maxFramesInFlight, validationEnabled, gpuTimingsEnabled, cpuFrameReadbackEnabled,
+                maxFramesInFlight, evidenceRetention, validationEnabled, gpuTimingsEnabled, cpuFrameReadbackEnabled,
                 gpuDevice, frameOutputFormat, temporalRendering, frameReconstruction, denoising,
                 frameGeneration, lowLatency, rayTracingOptimizations
         );
@@ -234,6 +242,7 @@ public final class RendererConfig {
     @Override
     public String toString() {
         return "RendererConfig[maxFramesInFlight=" + maxFramesInFlight
+                + ", evidenceRetention=" + evidenceRetention
                 + ", validationEnabled=" + validationEnabled
                 + ", gpuTimingsEnabled=" + gpuTimingsEnabled
                 + ", cpuFrameReadbackEnabled=" + cpuFrameReadbackEnabled
@@ -252,6 +261,7 @@ public final class RendererConfig {
      */
     public static final class Builder {
         private int maxFramesInFlight = DEFAULT_MAX_FRAMES_IN_FLIGHT;
+        private EvidenceRetentionPolicy evidenceRetention = EvidenceRetentionPolicy.bounded();
         private boolean validationEnabled;
         private boolean gpuTimingsEnabled = true;
         private boolean cpuFrameReadbackEnabled = true;
@@ -270,6 +280,7 @@ public final class RendererConfig {
 
         private Builder(RendererConfig source) {
             maxFramesInFlight = source.maxFramesInFlight;
+            evidenceRetention = source.evidenceRetention;
             validationEnabled = source.validationEnabled;
             gpuTimingsEnabled = source.gpuTimingsEnabled;
             cpuFrameReadbackEnabled = source.cpuFrameReadbackEnabled;
@@ -292,6 +303,12 @@ public final class RendererConfig {
          */
         public Builder maxFramesInFlight(int value) {
             maxFramesInFlight = value;
+            return this;
+        }
+
+        /** Selects fixed generic evidence budgets for this renderer lifetime. */
+        public Builder evidenceRetention(EvidenceRetentionPolicy value) {
+            evidenceRetention = Objects.requireNonNull(value, "evidenceRetention");
             return this;
         }
 

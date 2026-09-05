@@ -13,6 +13,8 @@ import top.ceroxe.rt.renderer.api.ResourceMutationKey;
 import top.ceroxe.rt.renderer.api.ResourceResidencyEvidence;
 import top.ceroxe.rt.renderer.api.ResourceTransactionEvidence;
 import top.ceroxe.rt.renderer.api.ResourceVersion;
+import top.ceroxe.rt.renderer.api.EvidenceQuery;
+import top.ceroxe.rt.renderer.api.EvidenceRetentionPolicy;
 import top.ceroxe.rt.renderer.api.TextureResource;
 import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
@@ -36,9 +38,13 @@ import java.util.OptionalLong;
 final class VulkanGenericResourceRegistry implements AutoCloseable {
     private final VulkanDeviceRuntime device;
     private final VulkanGenericSamplerCache samplers;
+    private final EvidenceRetentionPolicy retention;
     private final Map<ResourceGenerationKey, BufferRecord> buffers = new LinkedHashMap<>();
     private final Map<ResourceGenerationKey, TextureRecord> textures = new LinkedHashMap<>();
     private final Map<ResourceGenerationKey, ResourceResidencyEvidence> evidence = new HashMap<>();
+    private final Map<ResourceGenerationKey, ResourceResidencyEvidence> retiredEvidence = new LinkedHashMap<>();
+    private long evictedEvidence;
+    private long budgetRejections;
     /*
      * A residency outcome describes the most recently completed contents.  It is deliberately
      * not sufficient to represent an earlier recorded write: an application may ask to mutate
@@ -54,7 +60,12 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
     private boolean closed;
 
     VulkanGenericResourceRegistry(VulkanDeviceRuntime device) {
+        this(device, EvidenceRetentionPolicy.bounded());
+    }
+
+    VulkanGenericResourceRegistry(VulkanDeviceRuntime device, EvidenceRetentionPolicy retention) {
         this.device = Objects.requireNonNull(device, "device");
+        this.retention = Objects.requireNonNull(retention, "retention");
         this.samplers = new VulkanGenericSamplerCache(
                 device.device(), device.samplerAnisotropyEnabled(), device.maxSamplerAnisotropy()
         );
@@ -89,6 +100,17 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
                 throw failure;
             }
 
+            // Complete native retirement before publishing any map/evidence mutation. A failed
+            // retirement therefore leaves the logical transaction wholly unapplied.
+            try {
+                for (BufferRecord record : retirement) record.buffer().close();
+                for (TextureRecord record : textureRetirement) record.close();
+            } catch (RuntimeException failure) {
+                closeAll(created);
+                closeTextures(createdTextures);
+                throw new RetirementCommitFailure(failure);
+            }
+
             ArrayList<ResourceResidencyEvidence> changed = new ArrayList<>(
                     created.size() + createdTextures.size() + retirement.size() + textureRetirement.size());
             for (BufferRecord record : created) {
@@ -114,8 +136,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
                     );
                     record.evidence().requireNext(released);
                     buffers.remove(record.generation());
-                    evidence.put(record.generation(), released);
-                    record.buffer().close();
+                    retainRetired(released);
                     changed.add(released);
                     continue;
                 }
@@ -132,8 +153,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
                 );
                 pending.requireNext(retired);
                 buffers.remove(record.generation());
-                evidence.put(record.generation(), retired);
-                record.buffer().close();
+                retainRetired(retired);
                 changed.add(retired);
             }
             for (TextureRecord record : textureRetirement) {
@@ -146,8 +166,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
                     );
                     current.requireNext(released);
                     textures.remove(record.generation());
-                    evidence.put(record.generation(), released);
-                    record.close();
+                    retainRetired(released);
                     changed.add(released);
                     continue;
                 }
@@ -164,8 +183,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
                 );
                 pending.requireNext(retired);
                 textures.remove(record.generation());
-                evidence.put(record.generation(), retired);
-                record.close();
+                retainRetired(retired);
                 changed.add(retired);
             }
             latestTransactionRevision = checked.revision();
@@ -174,6 +192,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
                     "generic Vulkan buffer resource transaction accepted"
             );
         } catch (RuntimeException failure) {
+            if (failure instanceof RetirementCommitFailure) throw failure;
             if (failure instanceof RendererDeviceException) {
                 throw failure;
             }
@@ -244,6 +263,10 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         if (record.evidence().outcome() != ResourceResidencyEvidence.Outcome.GPU_READY) {
             throw new IllegalStateException("composition source is not GPU-ready: " + checked);
         }
+        if (!record.evidence().mutationKey().orElseThrow().equals(checked)
+                || record.outputMutationSequence != checked.commandSequence()) {
+            throw new IllegalArgumentException("composition source is not the current completed output mutation: " + checked);
+        }
         TextureResource descriptor = record.descriptor();
         if (descriptor.dimension() != top.ceroxe.rt.renderer.api.TextureDimension.TEXTURE_2D
                 || descriptor.sampleCount() != 1 || descriptor.mipLevelCount() != 1
@@ -283,6 +306,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
     ) {
         requireOpen();
         ResourceMutationKey checked = Objects.requireNonNull(mutation, "mutation");
+        requireCompositionSource(checked);
         VulkanGenericTextureLayoutUpdates checkedUpdates =
                 Objects.requireNonNull(layoutUpdates, "layoutUpdates");
         TextureRecord record = textures.get(checked.generation());
@@ -311,6 +335,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         LinkedHashMap<ResourceGenerationKey, Integer> acquired = new LinkedHashMap<>();
         try {
             for (VulkanGenericCompositionSource source : sources) {
+                requireCompositionSource(Objects.requireNonNull(source, "source").mutation());
                 ResourceGenerationKey generation = Objects.requireNonNull(source, "sources contains null")
                         .mutation().generation();
                 if (!textures.containsKey(generation)) {
@@ -329,6 +354,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
     }
 
     private void releaseCompositionPins(Map<ResourceGenerationKey, Integer> releases) {
+        if (closed) return;
         for (Map.Entry<ResourceGenerationKey, Integer> entry : releases.entrySet()) {
             ResourceGenerationKey generation = entry.getKey();
             int amount = entry.getValue();
@@ -379,6 +405,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
 
     void requireWritable(TextureRecord record) {
         requireNoInFlightMutation(record.generation());
+        requireNoCompositionPins(record.generation());
         if (record.evidence().outcome() != ResourceResidencyEvidence.Outcome.ACCEPTED
                 && record.evidence().outcome() != ResourceResidencyEvidence.Outcome.GPU_READY) {
             throw new IllegalStateException("texture generation is not writable: " + record.generation()
@@ -387,6 +414,8 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
     }
 
     void requireAttachmentWritable(TextureRecord record, top.ceroxe.rt.renderer.api.LoadOp loadOperation) {
+        requireNoInFlightMutation(record.generation());
+        requireNoCompositionPins(record.generation());
         ResourceResidencyEvidence.Outcome outcome = record.evidence().outcome();
         if (loadOperation == top.ceroxe.rt.renderer.api.LoadOp.LOAD) {
             if (outcome != ResourceResidencyEvidence.Outcome.GPU_READY) {
@@ -408,7 +437,6 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
 
     void markRecorded(List<BufferRecord> writes, long submissionSequence) {
         for (BufferRecord record : distinct(writes)) {
-            registerMutation(record.generation(), submissionSequence);
             ResourceResidencyEvidence current = evidence(record.generation());
             ResourceResidencyEvidence next = new ResourceResidencyEvidence(
                     record.generation(), ResourceResidencyEvidence.Outcome.UPLOAD_RECORDED,
@@ -416,6 +444,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
                     "Vulkan generic command submission recorded a write"
             );
             current.requireNext(next);
+            registerMutation(record.generation(), submissionSequence);
             record.evidence(next);
             evidence.put(record.generation(), next);
             record.lastUseSubmissionSequence(submissionSequence);
@@ -439,7 +468,6 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
 
     void markTextureRecorded(List<TextureRecord> writes, long submissionSequence) {
         for (TextureRecord record : distinctTextures(writes)) {
-            registerMutation(record.generation(), submissionSequence);
             ResourceResidencyEvidence current = evidence(record.generation());
             ResourceResidencyEvidence next = new ResourceResidencyEvidence(
                     record.generation(), ResourceResidencyEvidence.Outcome.UPLOAD_RECORDED,
@@ -447,6 +475,8 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
                     "Vulkan generic command submission recorded a texture write"
             );
             current.requireNext(next);
+            registerMutation(record.generation(), submissionSequence);
+            record.outputMutationSequence = -1L;
             record.evidence(next);
             evidence.put(record.generation(), next);
             record.lastUseSubmissionSequence(submissionSequence);
@@ -484,7 +514,68 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         return evidence.get(Objects.requireNonNull(generation, "generation"));
     }
 
+    EvidenceQuery<ResourceResidencyEvidence> queryEvidence(ResourceGenerationKey generation) {
+        requireOpen();
+        ResourceResidencyEvidence retained = evidence(generation);
+        if (retained != null) return EvidenceQuery.available(retained);
+        Long highest = highestVersionById.get(generation.id());
+        return EvidenceQuery.absent(highest != null && generation.version().value() <= highest
+                ? EvidenceQuery.Status.OUTSIDE_RETENTION_WINDOW : EvidenceQuery.Status.UNKNOWN);
+    }
+
+    void markOutputCompleted(TextureRecord record, long sequence) {
+        if (textures.get(record.generation()) != record
+                || !record.evidence().mutationKey().orElseThrow().equals(new ResourceMutationKey(record.generation(), sequence))
+                || record.evidence().outcome() != ResourceResidencyEvidence.Outcome.GPU_READY) {
+            throw new IllegalStateException("output completion does not match its resident mutation");
+        }
+        record.outputMutationSequence = sequence;
+    }
+
+    private void retainRetired(ResourceResidencyEvidence retired) {
+        evidence.put(retired.generation(), retired);
+        retiredEvidence.put(retired.generation(), retired);
+        while (retiredEvidence.size() > retention.retiredResourceCapacity()) {
+            ResourceGenerationKey oldest = retiredEvidence.keySet().iterator().next();
+            retiredEvidence.remove(oldest);
+            evidence.remove(oldest);
+            evictedEvidence++;
+        }
+    }
+
+    void failMutations(String detail) {
+        for (ResourceGenerationKey key : inFlightMutations.keySet()) {
+            ResourceResidencyEvidence current = evidence.get(key);
+            ResourceResidencyEvidence failed = ResourceResidencyEvidence.rejected(key, current.transactionRevision(), detail);
+            current.requireNext(failed);
+            evidence.put(key, failed);
+            if (buffers.containsKey(key)) buffers.get(key).evidence(failed);
+            if (textures.containsKey(key)) textures.get(key).evidence(failed);
+        }
+        inFlightMutations.clear();
+    }
+
+    int residentCount() { return buffers.size() + textures.size(); }
+    int retiredCount() { return retiredEvidence.size(); }
+    int identityCount() { return highestVersionById.size(); }
+    int mutationCount() { return inFlightMutations.size(); }
+    int compositionPins() { return compositionPinCounts.values().stream().mapToInt(Integer::intValue).sum(); }
+    long evictions() { return evictedEvidence; }
+    long budgetRejections() { return budgetRejections; }
+
     private void validateUpserts(RenderResourceTransaction transaction) {
+        long newIdentities = transaction.upsertGenerationKeys().stream().map(ResourceGenerationKey::id)
+                .distinct().filter(id -> !highestVersionById.containsKey(id)).count();
+        long nextResidents = (long) residentCount() + transaction.upsertGenerationKeys().size()
+                - transaction.retiredGenerations().size();
+        if (newIdentities + highestVersionById.size() > retention.resourceIdentityCapacity()) {
+            budgetRejections++;
+            throw new IllegalStateException("RESOURCE_IDENTITY_BUDGET_EXHAUSTED capacity=" + retention.resourceIdentityCapacity());
+        }
+        if (nextResidents > retention.residentGenerationCapacity()) {
+            budgetRejections++;
+            throw new IllegalStateException("RESIDENT_GENERATION_BUDGET_EXHAUSTED capacity=" + retention.residentGenerationCapacity());
+        }
         for (BufferResource descriptor : transaction.buffers()) {
             ResourceGenerationKey generation = ResourceGenerationKey.of(descriptor);
             requireResourceKind(generation.id(), ResourceKind.BUFFER);
@@ -594,17 +685,24 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
 
     private void completeMutation(ResourceGenerationKey generation, long submissionSequence) {
         ResourceMutationKey expected = new ResourceMutationKey(generation, submissionSequence);
-        ResourceMutationKey recorded = inFlightMutations.remove(generation);
+        ResourceMutationKey recorded = inFlightMutations.get(generation);
         if (!expected.equals(recorded)) {
             throw new IllegalStateException("completed resource mutation does not match the recorded submission: expected="
                     + expected + ", actual=" + recorded);
         }
+        inFlightMutations.remove(generation);
     }
 
     private void requireNoInFlightMutation(ResourceGenerationKey generation) {
         ResourceMutationKey mutation = inFlightMutations.get(generation);
         if (mutation != null) {
             throw new IllegalStateException("resource generation has an unresolved mutation: " + mutation);
+        }
+    }
+
+    private void requireNoCompositionPins(ResourceGenerationKey generation) {
+        if (compositionPinCounts.containsKey(generation)) {
+            throw new IllegalStateException("texture mutation is pinned by an unfinished composition: " + generation);
         }
     }
 
@@ -701,6 +799,12 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         }
     }
 
+    private static final class RetirementCommitFailure extends RuntimeException {
+        private RetirementCommitFailure(RuntimeException cause) {
+            super("native resource retirement failed before transaction commit", cause);
+        }
+    }
+
 
     private void requireOpen() {
         if (closed) throw new IllegalStateException("generic resource registry is closed");
@@ -717,6 +821,10 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         buffers.clear();
         for (TextureRecord record : textures.values()) record.close();
         textures.clear();
+        evidence.clear();
+        retiredEvidence.clear();
+        highestVersionById.clear();
+        resourceKinds.clear();
     }
 
     static final class BufferRecord {
@@ -756,6 +864,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
         private ResourceResidencyEvidence evidence;
         private final VulkanGenericTextureLayoutState layouts = new VulkanGenericTextureLayoutState();
         private long lastUseSubmissionSequence = -1L;
+        private long outputMutationSequence = -1L;
 
         private TextureRecord(VkDevice device, TextureResource descriptor, VulkanGenericTextureImage image,
                               long publicationRevision, ResourceResidencyEvidence evidence) {

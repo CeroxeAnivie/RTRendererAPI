@@ -1,6 +1,6 @@
 # 通用命令与硬件光线追踪指南
 
-本页面向已经拥有自己的资源、着色器和提交顺序的渲染器或引擎集成者。它讲解 `4.0.1` 的
+本页面向已经拥有自己的资源、着色器和提交顺序的渲染器或引擎集成者。它讲解 `4.0.2` 的
 专家 command path：如何在不转换为 `MeshAsset` 或 PBR 材质的前提下，提交通用 Vulkan 资源、图形命令和
 硬件光线追踪命令。
 
@@ -188,6 +188,10 @@ CommandExecutionEvidence trace = renderer.submitCommands(
 composition/presentation capability 的 backend，并遵守其 consumer contract。
 
 ## 失败处理与回收
+
+命令和退休资源证据的容量、过期查询、延迟读者 lease 与身份预算见
+[Evidence Retention](Evidence-Retention.md)。每个已接纳命令都应查询到终态；尚未观察的终态占用
+保留预算。组合来源按当前 exact mutation 校验，历史查询过期不影响仍有效的来源。
 
 | 情形 | 正确操作 |
 | --- | --- |

@@ -53,6 +53,7 @@ public final class VulkanRendererHostSelfTest {
    }
 
    public static void main(String[] args) {
+      exposesUnavailableEvidenceAndClosedLifecycle();
       rejectsAndClosesInvalidInitialSession();
       publishesLiveFeatureCapabilities();
       advancesOnlyAfterBackendAdmission();
@@ -77,6 +78,23 @@ public final class VulkanRendererHostSelfTest {
       defersDeviceRecoveryUntilExternalLeaseCompletion();
       publishesDeviceRecoveryHistoryInvalidationOnFirstRecoveredFrame();
       System.out.println("VulkanRendererHostSelfTest passed");
+   }
+
+   private static void exposesUnavailableEvidenceAndClosedLifecycle() {
+      VulkanRendererHost renderer = renderer(new TrackingSession());
+      var evidence = renderer.extension(top.ceroxe.rt.renderer.api.RendererEvidenceAccess.class).orElseThrow();
+      require(evidence.queryCommandExecutionEvidence(0).status()
+                      == top.ceroxe.rt.renderer.api.EvidenceQuery.Status.UNSUPPORTED,
+              "non-generic provider fabricated a command history");
+      require(evidence.queryResourceResidencyEvidence(new top.ceroxe.rt.renderer.api.ResourceGenerationKey(
+                      new top.ceroxe.rt.renderer.api.RenderResourceId(0), top.ceroxe.rt.renderer.api.ResourceVersion.initial())).status()
+                      == top.ceroxe.rt.renderer.api.EvidenceQuery.Status.UNSUPPORTED,
+              "non-generic provider fabricated residency history");
+      expect(IllegalArgumentException.class, () -> evidence.queryCommandExecutionEvidence(-1));
+      expect(UnsupportedOperationException.class, () -> evidence.retainCommandEvidence(0));
+      expect(UnsupportedOperationException.class, evidence::evidenceRetentionStatistics);
+      renderer.close();
+      expect(RendererStateException.class, () -> evidence.queryCommandExecutionEvidence(0));
    }
 
    private static void publishesDeviceRecoveryHistoryInvalidationOnFirstRecoveredFrame() {

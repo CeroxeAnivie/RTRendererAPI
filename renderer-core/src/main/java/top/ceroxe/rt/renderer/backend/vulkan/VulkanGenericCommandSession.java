@@ -15,6 +15,10 @@ import top.ceroxe.rt.renderer.api.BufferBarrier;
 import top.ceroxe.rt.renderer.api.BeginRenderPassCommand;
 import top.ceroxe.rt.renderer.api.CommandExecutionEvidence;
 import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.EvidenceLease;
+import top.ceroxe.rt.renderer.api.EvidenceQuery;
+import top.ceroxe.rt.renderer.api.EvidenceRetentionPolicy;
+import top.ceroxe.rt.renderer.api.EvidenceRetentionStatistics;
 import top.ceroxe.rt.renderer.api.RenderCommandTransaction;
 import top.ceroxe.rt.renderer.api.RenderPipelineStage;
 import top.ceroxe.rt.renderer.api.RenderResourceAccess;
@@ -58,23 +62,41 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     private final VulkanGenericGraphicsPipelines graphicsPipelines;
     private final VulkanGenericAccelerationStructures accelerationStructures;
     private final VulkanGenericRayTracingPipelines rayTracingPipelines;
-    private final Map<Long, CommandExecutionEvidence> commandEvidence = new LinkedHashMap<>();
+    private final VulkanCommandEvidenceHistory commandEvidence;
+    private final EvidenceRetentionPolicy retention;
+    private final boolean cpuFrameReadbackEnabled;
+    private final VulkanGenericCpuFrameReadbackPool readbackPool;
     private final Map<Long, PendingSubmission> pending = new LinkedHashMap<>();
     private final Map<Long, CpuFrame> completedCpuFrames = new LinkedHashMap<>();
     private final Map<Long, RuntimeException> cpuFrameFailures = new LinkedHashMap<>();
     private long latestCommandSequence = -1L;
     private long latestCompletedSequence = -1L;
-    private boolean deviceFailed;
+    private CommandExecutionEvidence.Reason terminalReason;
+    private String terminalDetail;
     private boolean closed;
     private RuntimeException closeFailure;
 
     VulkanGenericCommandSession(VulkanDeviceRuntime device, int maximumInFlightTransactions) {
+        this(device, maximumInFlightTransactions, EvidenceRetentionPolicy.bounded(), true);
+    }
+
+    VulkanGenericCommandSession(VulkanDeviceRuntime device, int maximumInFlightTransactions,
+                                EvidenceRetentionPolicy retention) {
+        this(device, maximumInFlightTransactions, retention, true);
+    }
+
+    VulkanGenericCommandSession(VulkanDeviceRuntime device, int maximumInFlightTransactions,
+                                EvidenceRetentionPolicy retention, boolean cpuFrameReadbackEnabled) {
         this.device = Objects.requireNonNull(device, "device");
+        this.retention = Objects.requireNonNull(retention, "retention");
+        this.cpuFrameReadbackEnabled = cpuFrameReadbackEnabled;
+        this.commandEvidence = new VulkanCommandEvidenceHistory(retention.commandCapacity());
         if (maximumInFlightTransactions <= 0) {
             throw new IllegalArgumentException("maximumInFlightTransactions must be positive");
         }
         this.maximumInFlightTransactions = maximumInFlightTransactions;
-        this.resources = new VulkanGenericResourceRegistry(device);
+        this.readbackPool = new VulkanGenericCpuFrameReadbackPool(device, maximumInFlightTransactions);
+        this.resources = new VulkanGenericResourceRegistry(device, retention);
         this.computePipelines = new VulkanGenericComputePipelines(device, resources);
         this.graphicsPipelines = new VulkanGenericGraphicsPipelines(
                 device.device(), resources, device.maxBoundDescriptorSets()
@@ -147,21 +169,25 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     ResourceTransactionEvidence submitResources(RenderResourceTransaction transaction) {
         requireOpen();
         pump();
+        if (terminalReason != null) {
+            return new ResourceTransactionEvidence(transaction.revision(), ResourceTransactionEvidence.Outcome.REJECTED,
+                    transaction.upsertGenerationKeys().stream().map(key -> ResourceResidencyEvidence.rejected(
+                            key, transaction.revision(), terminalDetail)).toList(), terminalDetail);
+        }
         return resources.apply(transaction, latestCompletedSequence);
     }
 
     Optional<ResourceResidencyEvidence> resourceEvidence(ResourceGenerationKey generation) {
         requireOpen();
         pump();
-        return Optional.ofNullable(resources.evidence(generation));
+        return resources.queryEvidence(generation).evidence();
     }
 
     CommandExecutionEvidence submit(RenderCommandTransaction transaction) {
         requireOpen();
         RenderCommandTransaction checked = Objects.requireNonNull(transaction, "transaction");
-        if (deviceFailed) {
-            return rejected(checked.sequence(), CommandExecutionEvidence.Reason.DEVICE_LOST,
-                    "generic Vulkan command lane is terminal after a device failure; recreate the renderer");
+        if (terminalReason != null) {
+            return rejected(checked.sequence(), terminalReason, terminalDetail);
         }
         if (!device.dynamicRenderingEnabled()
                 && checked.commands().stream().anyMatch(command -> command instanceof BeginRenderPassCommand)) {
@@ -169,12 +195,19 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                     "Vulkan dynamic rendering was not enabled on this device");
         }
         pump();
-        if (checked.sequence() <= latestCommandSequence || commandEvidence.containsKey(checked.sequence())) {
+        if (terminalReason != null) {
+            return rejected(checked.sequence(), terminalReason, terminalDetail);
+        }
+        if (checked.sequence() <= latestCommandSequence) {
             return rejected(checked.sequence(), CommandExecutionEvidence.Reason.COMMAND_VALIDATION_FAILED,
                     "command transaction sequence must strictly advance: latest=" + latestCommandSequence);
         }
         if (pending.size() >= maximumInFlightTransactions) {
             return blocked(checked.sequence(), "generic command frame ring is full");
+        }
+        if (!commandEvidence.admit()) {
+            return blocked(checked.sequence(), "COMMAND_EVIDENCE_BUDGET_EXHAUSTED capacity=" + retention.commandCapacity()
+                    + "; observe terminal evidence or release command evidence leases");
         }
         final VulkanGenericCommandPlan plan;
         try {
@@ -193,6 +226,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
 
         ArrayList<StagingUpload> staging = new ArrayList<>();
         RtCommandContext.AsyncSubmission submission = null;
+        RtGpuBuffer cpuReadback = null;
         boolean submitted = false;
         boolean submissionOwnedByPending = false;
         VulkanGenericTextureLayoutUpdates textureLayouts = new VulkanGenericTextureLayoutUpdates();
@@ -212,45 +246,57 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                     );
                 }
             }
+            if (cpuFrameReadbackEnabled && plan.outputRecord().isPresent()) {
+                cpuReadback = readbackPool.acquire(plan.outputRecord().orElseThrow());
+            }
             List<StagingUpload> immutableStaging = List.copyOf(staging);
+            RtGpuBuffer immutableCpuReadback = cpuReadback;
             submission = device.frameCommands().submitTimedOneTimeAsync(
                     TIMING_LABEL, (commandBuffer, stack) -> record(
-                            commandBuffer, stack, plan, immutableStaging, textureLayouts
+                            commandBuffer, stack, plan, immutableStaging, textureLayouts, immutableCpuReadback
                     )
             );
             submitted = true;
-            plan.accelerationStructures().commit(checked.sequence());
-            resources.markRecorded(plan.writes(), checked.sequence());
-            resources.markTextureRecorded(plan.textureWrites(), checked.sequence());
-            resources.noteReadUse(plan.reads(), checked.sequence());
-            resources.noteTextureReadUse(plan.textureReads(), checked.sequence());
-            textureLayouts.commit();
             latestCommandSequence = checked.sequence();
             CommandExecutionEvidence evidence = new CommandExecutionEvidence(
                     checked.sequence(), CommandExecutionEvidence.Outcome.RECORDED,
                     CommandExecutionEvidence.Reason.NONE, OptionalLong.of(checked.sequence()), Optional.empty(), 0L,
                     "generic Vulkan buffer commands recorded and submitted"
             );
-            commandEvidence.put(checked.sequence(), evidence);
             pending.put(checked.sequence(), new PendingSubmission(
                     checked.sequence(), submission, immutableStaging, plan.writes(), plan.textureWrites(), plan.outputResource(),
-                    plan.outputRecord().orElse(null), plan.accelerationStructures()));
+                    plan.outputRecord().orElse(null), immutableCpuReadback, plan.accelerationStructures()));
             submissionOwnedByPending = true;
             submission = null;
             staging = null;
+            commandEvidence.recorded(evidence);
+            plan.accelerationStructures().commit(checked.sequence());
+            resources.markRecorded(plan.writes(), checked.sequence());
+            resources.markTextureRecorded(plan.textureWrites(), checked.sequence());
+            resources.noteReadUse(plan.reads(), checked.sequence());
+            resources.noteTextureReadUse(plan.textureReads(), checked.sequence());
+            textureLayouts.commit();
             return evidence;
         } catch (RuntimeException failure) {
             if (failure instanceof RendererDeviceException deviceFailure) {
-                deviceFailed = true;
-                return rejected(checked.sequence(), CommandExecutionEvidence.Reason.DEVICE_LOST,
+                failTerminal(CommandExecutionEvidence.Reason.DEVICE_LOST,
                         deviceFailure.operation() + " failed with native result " + deviceFailure.nativeResult()
                                 + "; recovery=" + deviceFailure.recoveryAction());
+                return rejected(checked.sequence(), CommandExecutionEvidence.Reason.DEVICE_LOST,
+                        terminalDetail);
+            }
+            if (submitted) failTerminal(CommandExecutionEvidence.Reason.SYNCHRONIZATION_FAILED,
+                    message(failure, "generic submission commit failed"));
+            if (!submitted && failure instanceof IllegalArgumentException) {
+                return rejected(checked.sequence(), CommandExecutionEvidence.Reason.COMMAND_VALIDATION_FAILED,
+                        message(failure, "generic command output/readback contract failed"));
             }
             return rejected(checked.sequence(), CommandExecutionEvidence.Reason.SYNCHRONIZATION_FAILED,
                     message(failure, "Vulkan generic command submission failed"));
         } finally {
             if (submission != null) submission.close();
             if (staging != null) closeStaging(staging);
+            if (cpuReadback != null && !submissionOwnedByPending) releaseReadback(cpuReadback);
             if (!submissionOwnedByPending) {
                 if (submitted) plan.accelerationStructures().discardAfterDeviceFailure();
                 else plan.accelerationStructures().close();
@@ -259,10 +305,35 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     }
 
     Optional<CommandExecutionEvidence> commandEvidence(long sequence) {
+        return queryCommandEvidence(sequence).evidence();
+    }
+
+    EvidenceQuery<CommandExecutionEvidence> queryCommandEvidence(long sequence) {
         if (sequence < 0L) throw new IllegalArgumentException("command sequence must not be negative");
         requireOpen();
         pump();
-        return Optional.ofNullable(commandEvidence.get(sequence));
+        return commandEvidence.query(sequence);
+    }
+
+    EvidenceQuery<ResourceResidencyEvidence> queryResourceEvidence(ResourceGenerationKey generation) {
+        requireOpen();
+        pump();
+        return resources.queryEvidence(generation);
+    }
+
+    EvidenceLease retainCommandEvidence(long sequence) {
+        requireOpen();
+        return commandEvidence.retain(sequence);
+    }
+
+    EvidenceRetentionStatistics retentionStatistics() {
+        requireOpen();
+        pump();
+        return new EvidenceRetentionStatistics(retention, commandEvidence.size(), commandEvidence.pending(),
+                commandEvidence.unobserved(), commandEvidence.leases(), commandEvidence.evictable(),
+                resources.residentCount(), resources.retiredCount(), resources.identityCount(),
+                resources.mutationCount(), resources.compositionPins(), commandEvidence.evictions(),
+                resources.evictions(), commandEvidence.budgetRejections(), resources.budgetRejections());
     }
 
     /** Returns the newest completed generic output snapshot after the caller's sequence. */
@@ -286,12 +357,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         requireOpen();
         top.ceroxe.rt.renderer.api.ResourceMutationKey checked = Objects.requireNonNull(mutation, "mutation");
         pump();
-        CommandExecutionEvidence evidence = commandEvidence.get(checked.commandSequence());
-        if (evidence == null || !evidence.outcome().outputProduced()
-                || evidence.outputResource().isEmpty()
-                || !evidence.outputResource().get().equals(checked.generation().id())) {
-            throw new IllegalStateException("composition source command has no completed exact output: " + checked);
-        }
+        if (terminalReason != null) throw new IllegalStateException(terminalDetail);
         return resources.requireCompositionSource(checked);
     }
 
@@ -325,6 +391,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
 
     void pump() {
         requireOpen();
+        if (terminalReason != null) return;
         Iterator<PendingSubmission> iterator = pending.values().iterator();
         while (iterator.hasNext()) {
             PendingSubmission current = iterator.next();
@@ -332,14 +399,10 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             try {
                 complete = current.submission().pollComplete();
             } catch (RendererDeviceException deviceFailure) {
-                deviceFailed = true;
-                commandEvidence.put(current.sequence(), rejected(current.sequence(), CommandExecutionEvidence.Reason.DEVICE_LOST,
+                failTerminal(CommandExecutionEvidence.Reason.DEVICE_LOST,
                         deviceFailure.operation() + " failed with native result " + deviceFailure.nativeResult()
-                                + "; recovery=" + deviceFailure.recoveryAction()));
-                closeStaging(current.staging());
-                current.accelerationStructures().discardAfterDeviceFailure();
-                iterator.remove();
-                continue;
+                                + "; recovery=" + deviceFailure.recoveryAction());
+                return;
             }
             if (!complete) continue;
             try {
@@ -349,9 +412,15 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 latestCompletedSequence = Math.max(latestCompletedSequence, current.sequence());
                 boolean output = current.outputResource().isPresent();
                 if (output && current.outputRecord() != null) {
+                    resources.markOutputCompleted(current.outputRecord(), current.sequence());
+                }
+                if (output && current.outputRecord() != null && cpuFrameReadbackEnabled) {
                     try {
                         VulkanGenericResourceRegistry.TextureRecord outputRecord = current.outputRecord();
-                        byte[] pixels = VulkanGenericCpuFrameReadback.capture(device, outputRecord);
+                        if (current.readback() == null) {
+                            throw new IllegalStateException("generic output readback was not admitted");
+                        }
+                        byte[] pixels = current.readback().readBytes(VulkanGenericCpuFrameReadback.byteCount(outputRecord));
                         CpuFrame frame = CpuFrame.builder()
                                 .frameSequence(current.sequence())
                                 .renderedSceneRevision(0L)
@@ -364,13 +433,18 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                             completedCpuFrames.remove(completedCpuFrames.keySet().iterator().next());
                         }
                     } catch (RuntimeException readbackFailure) {
+                        if (readbackFailure instanceof RendererDeviceException) {
+                            failTerminal(CommandExecutionEvidence.Reason.DEVICE_LOST,
+                                    message(readbackFailure, "generic output readback device failure"));
+                            throw readbackFailure;
+                        }
                         cpuFrameFailures.put(current.sequence(), readbackFailure);
                         while (cpuFrameFailures.size() > maximumInFlightTransactions) {
                             cpuFrameFailures.remove(cpuFrameFailures.keySet().iterator().next());
                         }
                     }
                 }
-                commandEvidence.put(current.sequence(), new CommandExecutionEvidence(
+                commandEvidence.completed(new CommandExecutionEvidence(
                         current.sequence(), output
                                 ? CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED
                                 : CommandExecutionEvidence.Outcome.GPU_COMPLETED,
@@ -379,12 +453,33 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                         output ? "generic Vulkan render pass fence completed and a stored attachment is available"
                                 : "generic Vulkan command fence completed"
                 ));
+            } catch (RuntimeException completionFailure) {
+                failTerminal(completionFailure instanceof RendererDeviceException
+                        ? CommandExecutionEvidence.Reason.DEVICE_LOST : CommandExecutionEvidence.Reason.SYNCHRONIZATION_FAILED,
+                        message(completionFailure, "generic completion failed"));
+                return;
             } finally {
                 closeStaging(current.staging());
-                current.accelerationStructures().close();
+                releaseReadback(current.readback());
                 iterator.remove();
+                try {
+                    current.accelerationStructures().close();
+                } catch (RuntimeException cleanupFailure) {
+                    failTerminal(CommandExecutionEvidence.Reason.SYNCHRONIZATION_FAILED,
+                            message(cleanupFailure, "generic acceleration-structure cleanup failed"));
+                }
             }
         }
+    }
+
+    private void failTerminal(CommandExecutionEvidence.Reason reason, String detail) {
+        if (terminalReason != null) return;
+        terminalReason = reason;
+        terminalDetail = reason + ": " + detail + "; recreate the renderer";
+        commandEvidence.failPending(reason, terminalDetail);
+        resources.failMutations(terminalDetail);
+        // Pending native allocations remain owned until close has waited for their submissions.
+        // A failed fence is not proof that device memory is safe to reuse.
     }
 
     private void record(
@@ -392,7 +487,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             MemoryStack stack,
             VulkanGenericCommandPlan plan,
             List<StagingUpload> staging,
-            VulkanGenericTextureLayoutUpdates textureLayouts
+            VulkanGenericTextureLayoutUpdates textureLayouts,
+            RtGpuBuffer cpuReadback
     ) {
         int writeIndex = 0;
         for (VulkanGenericCommandPlan.Action action : plan.actions()) {
@@ -501,6 +597,11 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                             + action.getClass().getSimpleName());
                 }
             }
+        }
+        if (cpuReadback != null) {
+            VulkanGenericResourceRegistry.TextureRecord output = plan.outputRecord().orElseThrow();
+            int oldLayout = textureLayouts.layout(output, top.ceroxe.rt.renderer.api.TextureAspect.COLOR, 0, 0);
+            VulkanGenericCpuFrameReadback.record(commandBuffer, stack, output, cpuReadback, oldLayout);
         }
     }
 
@@ -1009,7 +1110,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         try (MemoryStack barrierStack = MemoryStack.stackPush()) {
             VkBufferMemoryBarrier.Buffer barrier = VkBufferMemoryBarrier.calloc(1, barrierStack);
             barrier.get(0).sType$Default().srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
-                    .dstAccessMask(org.lwjgl.vulkan.KHRAccelerationStructure.VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR)
+                    // vkCmdBuildAccelerationStructuresKHR specifies SHADER_READ for geometry inputs.
+                    .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT)
                     .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
                     .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
                     .buffer(record.buffer().buffer()).offset(0L).size(VK10.VK_WHOLE_SIZE);
@@ -1127,6 +1229,15 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         }
     }
 
+    private void releaseReadback(RtGpuBuffer readback) {
+        if (readback == null) return;
+        try {
+            readbackPool.release(readback);
+        } catch (RuntimeException ignored) {
+            // A pool release failure is handled by renderer shutdown; ownership remains isolated.
+        }
+    }
+
     private void requireOpen() {
         if (closed) throw new IllegalStateException("generic Vulkan command session is closed");
     }
@@ -1136,23 +1247,36 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         if (closed && closeFailure == null) return;
         closed = true;
         RuntimeException failure = null;
-        for (PendingSubmission submission : pending.values()) {
+        Iterator<PendingSubmission> remaining = pending.values().iterator();
+        while (remaining.hasNext()) {
+            PendingSubmission submission = remaining.next();
             try {
                 submission.submission().close();
             } catch (RuntimeException closeFailure) {
                 failure = mergeCloseFailure(failure, closeFailure);
+                if (!(closeFailure instanceof RendererDeviceException deviceFailure)
+                        || deviceFailure.nativeResult() != VK10.VK_ERROR_DEVICE_LOST) continue;
             }
             closeStaging(submission.staging());
+            releaseReadback(submission.readback());
             try {
                 submission.accelerationStructures().discardAfterDeviceFailure();
             } catch (RuntimeException closeFailure) {
                 failure = mergeCloseFailure(failure, closeFailure);
             }
+            remaining.remove();
         }
-        pending.clear();
+        if (!pending.isEmpty()) {
+            closeFailure = failure;
+            throw closeFailure;
+        }
+        commandEvidence.close();
+        completedCpuFrames.clear();
+        cpuFrameFailures.clear();
         failure = closeCollecting(failure, computePipelines);
         failure = closeCollecting(failure, graphicsPipelines);
         failure = closeCollecting(failure, rayTracingPipelines);
+        failure = closeCollecting(failure, readbackPool);
         failure = closeCollecting(failure, accelerationStructures);
         failure = closeCollecting(failure, resources);
         closeFailure = failure;
@@ -1190,6 +1314,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             List<VulkanGenericResourceRegistry.TextureRecord> textureWrites,
             java.util.Optional<top.ceroxe.rt.renderer.api.RenderResourceId> outputResource,
             VulkanGenericResourceRegistry.TextureRecord outputRecord,
+            RtGpuBuffer readback,
             VulkanGenericAccelerationStructures.Compilation accelerationStructures
     ) { }
 

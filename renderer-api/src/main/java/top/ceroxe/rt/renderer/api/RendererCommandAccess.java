@@ -30,11 +30,20 @@ public interface RendererCommandAccess {
 
     ResourceTransactionEvidence submitResources(RenderResourceTransaction transaction);
 
+    /**
+     * Queries resident or retained retired evidence. Empty does not prove retirement.
+     * Use {@link RendererEvidenceAccess} to distinguish unknown, expired and unsupported queries.
+     */
     Optional<ResourceResidencyEvidence> resourceResidencyEvidence(ResourceGenerationKey generation);
 
     RenderingSemanticCapabilities renderingSemanticCapabilities();
 
     CommandExecutionEvidence submitCommands(RenderCommandTransaction transaction);
 
+    /**
+     * Observes command progress. A first terminal observation permits bounded history eviction;
+     * use {@link RendererEvidenceAccess} leases for additional delayed readers. Empty does not
+     * prove failure or completion; the extension distinguishes missing-history states.
+     */
     Optional<CommandExecutionEvidence> commandExecutionEvidence(long transactionSequence);
 }

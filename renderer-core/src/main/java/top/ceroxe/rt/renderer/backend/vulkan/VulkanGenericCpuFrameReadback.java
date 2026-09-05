@@ -13,12 +13,11 @@ import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
 import java.util.Objects;
 
-/** Bounded synchronous readback for completed generic RGBA8 color outputs. */
+/** Records bounded RGBA8 output readback into the owning generic submission. */
 final class VulkanGenericCpuFrameReadback {
     private VulkanGenericCpuFrameReadback() { }
 
-    static byte[] capture(VulkanDeviceRuntime device, VulkanGenericResourceRegistry.TextureRecord record) {
-        VulkanDeviceRuntime checkedDevice = Objects.requireNonNull(device, "device");
+    static long byteCount(VulkanGenericResourceRegistry.TextureRecord record) {
         VulkanGenericResourceRegistry.TextureRecord checked = Objects.requireNonNull(record, "record");
         var descriptor = checked.descriptor();
         if (descriptor.dimension() != top.ceroxe.rt.renderer.api.TextureDimension.TEXTURE_2D
@@ -30,19 +29,18 @@ final class VulkanGenericCpuFrameReadback {
                 && descriptor.format() != TextureFormat.RGBA8_SRGB) {
             throw new IllegalArgumentException("generic CPU output requires an RGBA8 texture format");
         }
-        long byteCount = Math.multiplyExact(Math.multiplyExact((long) descriptor.width(), descriptor.height()), 4L);
-        int oldLayout = checked.layouts().layout(TextureAspect.COLOR, 0, 0);
-        try (RtGpuBuffer readback = RtGpuBuffer.createHostVisibleBuffer(
-                checkedDevice.device(), checkedDevice.allocator(), byteCount,
-                VK10.VK_BUFFER_USAGE_TRANSFER_DST_BIT, checkedDevice.frameCommands().stallTelemetry())) {
-            checkedDevice.frameCommands().submitOneTime((commandBuffer, stack) -> record(
-                    commandBuffer, stack, checked, readback, oldLayout
-            ));
-            return readback.readBytes(byteCount);
-        }
+        return Math.multiplyExact(Math.multiplyExact((long) descriptor.width(), descriptor.height()), 4L);
     }
 
-    private static void record(
+    static RtGpuBuffer createBuffer(VulkanDeviceRuntime device, VulkanGenericResourceRegistry.TextureRecord record) {
+        VulkanDeviceRuntime checkedDevice = Objects.requireNonNull(device, "device");
+        long bytes = byteCount(record);
+        return RtGpuBuffer.createHostVisibleBuffer(
+                checkedDevice.device(), checkedDevice.allocator(), bytes,
+                VK10.VK_BUFFER_USAGE_TRANSFER_DST_BIT, checkedDevice.frameCommands().stallTelemetry());
+    }
+
+    static void record(
             VkCommandBuffer commandBuffer, MemoryStack stack,
             VulkanGenericResourceRegistry.TextureRecord record, RtGpuBuffer readback, int oldLayout
     ) {
