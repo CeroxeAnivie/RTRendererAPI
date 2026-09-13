@@ -1,7 +1,7 @@
 # Generic Evidence Retention
 
-Version 4.0.2 bounds provider-owned execution history. It fixes the command and retired-generation
-retention found in the published 4.0.1 implementation. Existing query method descriptors remain
+Version 4.0.3 bounds provider-owned execution history. It retains the command and retired-generation
+retention fixes from the published 4.0.2 implementation. Existing query method descriptors remain
 unchanged. The optional `RendererEvidenceAccess` extension adds explicit missing-history results,
 command evidence leases and immutable retention statistics.
 
@@ -103,7 +103,7 @@ and close. `vulkanEvidenceRetentionNativeSelfTest` uses a 256 MiB heap and tiny 
 mutation rejection, pin protection, rollback, sparse IDs and replay rejection after eviction.
 
 The 4.0.1 consumer diagnostic intentionally asserts growth; its failure against a fixed candidate
-does not indicate a regression. Consumer validation must use the separately identified 4.0.2
+does not indicate a regression. Consumer validation must use the separately identified 4.0.3
 artifact, preserve original reports and run the unchanged 600-second acceptance thresholds.
 Provider-local tests alone do not establish downstream integration acceptance.
 

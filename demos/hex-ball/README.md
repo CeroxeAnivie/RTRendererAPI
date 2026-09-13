@@ -1,7 +1,7 @@
 # Hex Ball Demo
 
 该可选模块是仓库自带的 retained-scene 交互示例与 GPU smoke workload。它优先解析 Maven Central
-中的 `top.ceroxe.rt:renderer-api:4.0.2` 及其完整传递运行时；当当前版本尚未进入 Central 时，
+中的 `top.ceroxe.rt:renderer-api:4.0.3` 及其完整传递运行时；当当前版本尚未进入 Central 时，
 `run` 与 `shadowJar` 会先生成同坐标的本地 staging，并由 `localBuildFallback` 自动补齐解析。
 这条 fallback 只用于未发布版本的构建启动，不改变 Central 的发布事实源。
 Central 可用时 clone 仓库后运行 Demo 不需要用于构建 `renderer-nvidia` 的 CMake、Visual Studio C++、
@@ -17,7 +17,7 @@ fat JAR 门禁仍会验证打包后的 NVIDIA DLL 清单和 SHA-256。
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.2.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.3.jar `
   --width=2560 --height=1440 --spp=2
 ```
 
@@ -40,15 +40,15 @@ provider presentation path；仅提出配置请求不构成证据。每个进程
 
 ```powershell
 ## 原生基线
-java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.2.jar `
+java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.3.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 
 ## FG 2x
-java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.2.jar `
+java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.3.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 
 ## MFG 3x
-java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.2.jar `
+java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.3.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 ```
 

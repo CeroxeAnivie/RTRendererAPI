@@ -99,7 +99,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         this.resources = new VulkanGenericResourceRegistry(device, retention);
         this.computePipelines = new VulkanGenericComputePipelines(device, resources);
         this.graphicsPipelines = new VulkanGenericGraphicsPipelines(
-                device.device(), resources, device.maxBoundDescriptorSets()
+                device.device(), resources, device.maxBoundDescriptorSets(),
+                device.logicOpEnabled(), device.geometryShaderEnabled(), device.vertexPipelineStoresAndAtomicsEnabled()
         );
         this.accelerationStructures = new VulkanGenericAccelerationStructures(device);
         this.rayTracingPipelines = new VulkanGenericRayTracingPipelines(device, resources);
@@ -163,6 +164,16 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 "generic RT SPIR-V programs compile with explicit shader groups and aligned shader-binding tables");
         executable(result, RenderingSemanticCapabilities.Feature.RAY_TRACING_DISPATCH,
                 "trace-rays commands bind generic RT descriptors and dispatch into explicit storage textures");
+        if (device.logicOpEnabled()) {
+            executable(result, RenderingSemanticCapabilities.Feature.LOGIC_OPERATIONS,
+                    "Vulkan logic operations are enabled and validated before graphics pipeline creation");
+        }
+        if (device.geometryShaderEnabled()) {
+            executable(result, RenderingSemanticCapabilities.Feature.GEOMETRY_SHADERS,
+                    "Vulkan geometry shader feature and geometry-stage barriers are enabled");
+        }
+        executable(result, RenderingSemanticCapabilities.Feature.RAY_TRACING_PIPELINE_RETIREMENT,
+                "RT pipelines and SBT buffers retire only after the owning submission sequence completes");
         return result.build();
     }
 
@@ -214,6 +225,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             plan = VulkanGenericCommandPlan.compile(
                     resources, computePipelines, graphicsPipelines, rayTracingPipelines, accelerationStructures, checked
             );
+        } catch (VulkanGenericPipelineLifecycleException lifecycle) {
+            return rejected(checked.sequence(), lifecycle.reason(), lifecycle.getMessage());
         } catch (UnsupportedOperationException unsupported) {
             return rejected(checked.sequence(), CommandExecutionEvidence.Reason.UNSUPPORTED_FEATURE, unsupported.getMessage());
         } catch (VulkanGenericPipelineCompilationException pipelineFailure) {
@@ -261,11 +274,14 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             CommandExecutionEvidence evidence = new CommandExecutionEvidence(
                     checked.sequence(), CommandExecutionEvidence.Outcome.RECORDED,
                     CommandExecutionEvidence.Reason.NONE, OptionalLong.of(checked.sequence()), Optional.empty(), 0L,
-                    "generic Vulkan buffer commands recorded and submitted"
+                    "generic Vulkan commands recorded and submitted",
+                    plan.pipelineHandles(rayTracingPipelines), retirementEvidence(plan.retirements(), checked.sequence(), false),
+                    Optional.of(rayTracingPipelines.statistics())
             );
             pending.put(checked.sequence(), new PendingSubmission(
                     checked.sequence(), submission, immutableStaging, plan.writes(), plan.textureWrites(), plan.outputResource(),
-                    plan.outputRecord().orElse(null), immutableCpuReadback, plan.accelerationStructures()));
+                    plan.outputRecord().orElse(null), immutableCpuReadback, plan.accelerationStructures(),
+                    plan.pipelineHandles(rayTracingPipelines), plan.retirements()));
             submissionOwnedByPending = true;
             submission = null;
             staging = null;
@@ -276,6 +292,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             resources.noteReadUse(plan.reads(), checked.sequence());
             resources.noteTextureReadUse(plan.textureReads(), checked.sequence());
             textureLayouts.commit();
+            rayTracingPipelines.noteSubmitted(plan.pipelineHandles(rayTracingPipelines), checked.sequence());
+            rayTracingPipelines.scheduleRetirement(plan.retirements(), checked.sequence());
             return evidence;
         } catch (RuntimeException failure) {
             if (failure instanceof RendererDeviceException deviceFailure) {
@@ -410,6 +428,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 resources.markTextureCompleted(current.textureWrites(), current.sequence());
                 current.accelerationStructures().complete(current.sequence());
                 latestCompletedSequence = Math.max(latestCompletedSequence, current.sequence());
+                rayTracingPipelines.retireCompletedThrough(latestCompletedSequence);
                 boolean output = current.outputResource().isPresent();
                 if (output && current.outputRecord() != null) {
                     resources.markOutputCompleted(current.outputRecord(), current.sequence());
@@ -451,7 +470,9 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                         CommandExecutionEvidence.Reason.NONE, OptionalLong.of(current.sequence()),
                         current.outputResource(), 0L,
                         output ? "generic Vulkan render pass fence completed and a stored attachment is available"
-                                : "generic Vulkan command fence completed"
+                                : "generic Vulkan command fence completed",
+                        current.pipelineHandles(), retirementEvidence(current.retirements(), current.sequence(), true),
+                        Optional.of(rayTracingPipelines.statistics())
                 ));
             } catch (RuntimeException completionFailure) {
                 failTerminal(completionFailure instanceof RendererDeviceException
@@ -1092,12 +1113,12 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         try (MemoryStack barrierStack = MemoryStack.stackPush()) {
             VkBufferMemoryBarrier.Buffer barrier = VkBufferMemoryBarrier.calloc(1, barrierStack);
             barrier.sType$Default()
-                    .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                    .srcAccessMask(VK10.VK_ACCESS_MEMORY_WRITE_BIT)
                     .dstAccessMask(VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT)
                     .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
                     .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
                     .buffer(record.buffer().buffer()).offset(0L).size(record.descriptor().byteSize());
-            VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                     VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, null, barrier, null);
         }
     }
@@ -1143,7 +1164,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         textureLayouts.set(visibility.resource(), visibility.range(), newLayout);
     }
 
-    private static int stageMask(java.util.Set<RenderPipelineStage> stages) {
+    static int stageMask(java.util.Set<RenderPipelineStage> stages) {
         int result = 0;
         for (RenderPipelineStage stage : stages) {
             result |= switch (stage) {
@@ -1159,6 +1180,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 case COMPUTE_SHADER -> VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
                 case RAY_TRACING_SHADER -> org.lwjgl.vulkan.KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
                 case PRESENT -> throw new UnsupportedOperationException("presentation barriers are not owned by this session");
+                case GEOMETRY_SHADER -> VK10.VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
             };
         }
         return result;
@@ -1306,6 +1328,14 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         return failure;
     }
 
+    private static List<top.ceroxe.rt.renderer.api.RayTracingPipelineRetirementEvidence> retirementEvidence(
+            List<top.ceroxe.rt.renderer.api.RayTracingPipelineHandle> handles, long sequence, boolean completed) {
+        return handles.stream().map(handle -> new top.ceroxe.rt.renderer.api.RayTracingPipelineRetirementEvidence(
+                handle, sequence, completed
+                        ? top.ceroxe.rt.renderer.api.RayTracingPipelineRetirementEvidence.Outcome.RETIRED
+                        : top.ceroxe.rt.renderer.api.RayTracingPipelineRetirementEvidence.Outcome.PENDING)).toList();
+    }
+
     private record PendingSubmission(
             long sequence,
             RtCommandContext.AsyncSubmission submission,
@@ -1315,7 +1345,9 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             java.util.Optional<top.ceroxe.rt.renderer.api.RenderResourceId> outputResource,
             VulkanGenericResourceRegistry.TextureRecord outputRecord,
             RtGpuBuffer readback,
-            VulkanGenericAccelerationStructures.Compilation accelerationStructures
+            VulkanGenericAccelerationStructures.Compilation accelerationStructures,
+            List<top.ceroxe.rt.renderer.api.RayTracingPipelineHandle> pipelineHandles,
+            List<top.ceroxe.rt.renderer.api.RayTracingPipelineHandle> retirements
     ) { }
 
     private static final class StagingUpload implements AutoCloseable {

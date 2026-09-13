@@ -1,8 +1,13 @@
 # 通用命令与硬件光线追踪指南
 
-本页面向已经拥有自己的资源、着色器和提交顺序的渲染器或引擎集成者。它讲解 `4.0.2` 的
+本页面向已经拥有自己的资源、着色器和提交顺序的渲染器或引擎集成者。它讲解 `4.0.3` 的
 专家 command path：如何在不转换为 `MeshAsset` 或 PBR 材质的前提下，提交通用 Vulkan 资源、图形命令和
 硬件光线追踪命令。
+
+图形 pipeline 的 logic operation 会逐项映射到 Vulkan 枚举，并在设备未启用 `logicOp` 时 fail-closed。
+Geometry shader 资源同步使用独立的 `GEOMETRY_SHADER` barrier stage；它不会借用 vertex 或 fragment
+阶段。频繁替换 RT shader/SBT 时，提交 `RetireRayTracingPipelineCommand`，后端会等到对应有序提交的
+fence 完成后再释放 pipeline、layout、descriptor bank 和 SBT buffer。
 
 普通应用不需要阅读本页。它们应使用 [Java 开发指南](Java.md) 中的 retained-scene 路径，由
 `Renderer` 管理场景、帧节奏与输出。

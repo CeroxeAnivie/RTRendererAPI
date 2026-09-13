@@ -24,7 +24,11 @@ import top.ceroxe.rt.renderer.rt.pipeline.RtRayTracingPipelineProperties;
 import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
+import java.util.HashMap;
+import top.ceroxe.rt.renderer.api.RayTracingPipelineHandle;
+import top.ceroxe.rt.renderer.api.RayTracingPipelineStatistics;
+import top.ceroxe.rt.renderer.api.CommandExecutionEvidence;
+import java.util.UUID;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,13 +43,29 @@ import java.util.Objects;
 final class VulkanGenericRayTracingPipelines implements AutoCloseable {
     private final VulkanDeviceRuntime device;
     private final VulkanGenericResourceRegistry resources;
-    private final Map<RayTracingPipelineState, Compiled> cache = new IdentityHashMap<>();
+    private final Map<String, Compiled> cache = new LinkedHashMap<>();
+    private final Map<String, PendingRetirement> pendingRetirements = new LinkedHashMap<>();
+    private final UUID sessionId = UUID.randomUUID();
+    private final Map<String, RayTracingPipelineHandle> handles = new HashMap<>();
+    private final Map<String, Long> lastUses = new HashMap<>();
+    private long nextGeneration;
+    private long created;
+    private long retired;
+    private long failedReleases;
+    private long completedSequence = -1;
     private final RtRayTracingPipelineProperties properties;
+    private final java.util.function.Consumer<Compiled> release;
     private boolean closed;
 
     VulkanGenericRayTracingPipelines(VulkanDeviceRuntime device, VulkanGenericResourceRegistry resources) {
+        this(device, resources, Compiled::close);
+    }
+
+    VulkanGenericRayTracingPipelines(VulkanDeviceRuntime device, VulkanGenericResourceRegistry resources,
+                                    java.util.function.Consumer<Compiled> release) {
         this.device = Objects.requireNonNull(device, "device");
         this.resources = Objects.requireNonNull(resources, "resources");
+        this.release = Objects.requireNonNull(release, "release");
         try (MemoryStack stack = MemoryStack.stackPush()) {
             this.properties = RtRayTracingPipelineProperties.query(stack, device.physicalDevice());
         }
@@ -53,8 +73,22 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
 
     Compiled require(RayTracingPipelineState state) {
         requireOpen();
+        RayTracingPipelineState checked = Objects.requireNonNull(state, "state");
+        String identity = checked.identityDigest();
+        if (pendingRetirements.containsKey(identity)) {
+            throw new VulkanGenericPipelineLifecycleException(CommandExecutionEvidence.Reason.PIPELINE_IN_USE,
+                    "ray-tracing pipeline is pending retirement: " + identity);
+        }
         try {
-            return cache.computeIfAbsent(Objects.requireNonNull(state, "state"), this::compile);
+            Compiled existing = cache.get(identity);
+            if (existing != null) return existing;
+            long generation = Math.incrementExact(nextGeneration);
+            Compiled compiled = compile(checked);
+            cache.put(identity, compiled);
+            handles.put(identity, new RayTracingPipelineHandle(sessionId, generation, identity));
+            nextGeneration = generation;
+            created++;
+            return compiled;
         } catch (UnsupportedOperationException | VulkanGenericPipelineCompilationException failure) {
             throw failure;
         } catch (RuntimeException failure) {
@@ -62,6 +96,66 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
                     "generic ray-tracing pipeline compilation failed for " + state.program().id(), failure
             );
         }
+    }
+
+    RayTracingPipelineHandle handle(Compiled compiled) {
+        return Objects.requireNonNull(handles.get(compiled.state().identityDigest()), "resident pipeline handle");
+    }
+
+    void validateRetirement(RayTracingPipelineHandle handle) {
+        requireOpen();
+        if (!handle.equals(handles.get(handle.identityDigest()))) {
+            throw new VulkanGenericPipelineLifecycleException(
+                    CommandExecutionEvidence.Reason.PIPELINE_GENERATION_MISMATCH,
+                    "pipeline generation is foreign, stale, unknown, or already retired: " + handle);
+        }
+        if (pendingRetirements.containsKey(handle.identityDigest())
+                || lastUses.getOrDefault(handle.identityDigest(), -1L) > completedSequence) {
+            throw new VulkanGenericPipelineLifecycleException(CommandExecutionEvidence.Reason.PIPELINE_IN_USE,
+                    "pipeline generation has an incomplete consumer or retirement: " + handle);
+        }
+    }
+
+    void noteSubmitted(List<RayTracingPipelineHandle> used, long sequence) {
+        for (RayTracingPipelineHandle handle : used) lastUses.put(handle.identityDigest(), sequence);
+    }
+
+    void scheduleRetirement(List<RayTracingPipelineHandle> states, long safeAfterSequence) {
+        requireOpen();
+        for (RayTracingPipelineHandle handle : states) {
+            pendingRetirements.put(handle.identityDigest(), new PendingRetirement(handle, safeAfterSequence));
+        }
+    }
+
+    /** No tombstones: generation tokens never repeat, and unknown tokens have a stable rejection. */
+    void retireCompletedThrough(long sequence) {
+        requireOpen();
+        completedSequence = Math.max(completedSequence, sequence);
+        var iterator = pendingRetirements.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            if (entry.getValue().safeAfterSequence() > completedSequence) continue;
+            String identity = entry.getKey();
+            Compiled compiled = Objects.requireNonNull(cache.get(identity), "pending native pipeline");
+            try {
+                release.accept(compiled);
+            } catch (RuntimeException failure) {
+                failedReleases++;
+                throw failure;
+            }
+            cache.remove(identity);
+            handles.remove(identity);
+            lastUses.remove(identity);
+            iterator.remove();
+            retired++;
+        }
+    }
+
+    RayTracingPipelineStatistics statistics() {
+        return new RayTracingPipelineStatistics(cache.size(), pendingRetirements.size(),
+                (int) lastUses.values().stream().filter(sequence -> sequence > completedSequence).count(),
+                cache.values().stream().mapToLong(value -> value.sbt().buffer().sizeBytes()).sum(),
+                created, retired, failedReleases, completedSequence);
     }
 
     void updateBindings(
@@ -93,6 +187,9 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
             }
         }
         cache.clear();
+        pendingRetirements.clear();
+        handles.clear();
+        lastUses.clear();
         if (failure != null) throw failure;
     }
 
@@ -107,7 +204,7 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
         VulkanGenericDescriptorSetBank descriptors = null;
         Sbt sbt = null;
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            Map<ShaderModule, Integer> stageIndexes = new IdentityHashMap<>();
+            Map<top.ceroxe.rt.renderer.api.RenderResourceId, Integer> stageIndexes = new HashMap<>();
             VkPipelineShaderStageCreateInfo.Buffer stages = VkPipelineShaderStageCreateInfo.calloc(
                     state.program().modules().size(), stack
             );
@@ -116,7 +213,7 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
                 VulkanSpirvBindingValidator.requireDeclaredInterface(module);
                 long nativeModule = createShaderModule(stack, module);
                 shaderModules.add(nativeModule);
-                stageIndexes.put(module, index);
+                stageIndexes.put(module.id(), index);
                 stages.get(index).sType$Default().stage(stageFlag(module.stage())).module(nativeModule)
                         .pName(stack.UTF8(module.entryPoint()));
             }
@@ -254,7 +351,7 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
     private static void writeGroup(
             VkRayTracingShaderGroupCreateInfoKHR target,
             RayTracingShaderGroup group,
-            Map<ShaderModule, Integer> stageIndexes
+            Map<top.ceroxe.rt.renderer.api.RenderResourceId, Integer> stageIndexes
     ) {
         target.sType$Default().generalShader(KHRRayTracingPipeline.VK_SHADER_UNUSED_KHR)
                 .closestHitShader(KHRRayTracingPipeline.VK_SHADER_UNUSED_KHR)
@@ -277,8 +374,8 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
         }
     }
 
-    private static int index(Map<ShaderModule, Integer> values, ShaderModule module) {
-        Integer index = values.get(module);
+    private static int index(Map<top.ceroxe.rt.renderer.api.RenderResourceId, Integer> values, ShaderModule module) {
+        Integer index = values.get(module.id());
         if (index == null) throw new IllegalArgumentException("RT group module is absent from the pipeline program");
         return index;
     }
@@ -329,49 +426,49 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
         if (closed) throw new IllegalStateException("generic RT pipeline owner is closed");
     }
 
-    record Compiled(
-            RayTracingPipelineState state,
-            VkDevice device,
-            long pipeline,
-            long layout,
-            VulkanGenericDescriptorSetBank descriptors,
-            Sbt sbt,
-            int shaderStageFlags
-    ) implements AutoCloseable {
-        Compiled {
-            Objects.requireNonNull(state, "state");
-            Objects.requireNonNull(device, "device");
-            Objects.requireNonNull(sbt, "sbt");
+    static final class Compiled implements AutoCloseable {
+        private final RayTracingPipelineState state;
+        private final VkDevice device;
+        private long pipeline;
+        private long layout;
+        private final VulkanGenericDescriptorSetBank descriptors;
+        private final Sbt sbt;
+        private final int shaderStageFlags;
+
+        Compiled(RayTracingPipelineState state, VkDevice device, long pipeline, long layout,
+                 VulkanGenericDescriptorSetBank descriptors, Sbt sbt, int shaderStageFlags) {
+            this.state = Objects.requireNonNull(state, "state");
+            this.device = Objects.requireNonNull(device, "device");
+            this.sbt = Objects.requireNonNull(sbt, "sbt");
+            this.descriptors = descriptors;
+            this.pipeline = pipeline;
+            this.layout = layout;
+            this.shaderStageFlags = shaderStageFlags;
             if (pipeline == VK10.VK_NULL_HANDLE || layout == VK10.VK_NULL_HANDLE || shaderStageFlags == 0) {
                 throw new IllegalArgumentException("generic RT pipeline handles must be non-null");
             }
         }
 
-        @Override
-        public void close() {
-            RuntimeException failure = null;
-            if (descriptors != null) {
-                try {
-                    descriptors.close();
-                } catch (RuntimeException closeFailure) {
-                    failure = closeFailure;
-                }
-            }
-            try {
-                sbt.close();
-            } catch (RuntimeException closeFailure) {
-                if (failure == null) failure = closeFailure;
-                else failure.addSuppressed(closeFailure);
-            } finally {
-                /*
-                 * These handles are created by compile() and transferred into this record.  They
-                 * are not children of the descriptor bank or SBT and therefore need explicit
-                 * destruction before the shared device owner can close.
-                 */
+        RayTracingPipelineState state() { return state; }
+        long pipeline() { return pipeline; }
+        long layout() { return layout; }
+        VulkanGenericDescriptorSetBank descriptors() { return descriptors; }
+        Sbt sbt() { return sbt; }
+        int shaderStageFlags() { return shaderStageFlags; }
+
+        @Override public void close() {
+            // Stop on failure and retain ownership for a subsequent close. Child owners are
+            // idempotent; zero native handles only after their destruction actually returns.
+            if (descriptors != null) descriptors.close();
+            sbt.close();
+            if (pipeline != VK10.VK_NULL_HANDLE) {
                 VK10.vkDestroyPipeline(device, pipeline, null);
-                VK10.vkDestroyPipelineLayout(device, layout, null);
+                pipeline = VK10.VK_NULL_HANDLE;
             }
-            if (failure != null) throw failure;
+            if (layout != VK10.VK_NULL_HANDLE) {
+                VK10.vkDestroyPipelineLayout(device, layout, null);
+                layout = VK10.VK_NULL_HANDLE;
+            }
         }
     }
 
@@ -382,5 +479,12 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
     record Sbt(RtGpuBuffer buffer, int baseOffset, Region raygen, Region miss, Region hit, Region callable)
             implements AutoCloseable {
         @Override public void close() { buffer.close(); }
+    }
+
+    private record PendingRetirement(RayTracingPipelineHandle state, long safeAfterSequence) {
+        private PendingRetirement {
+            Objects.requireNonNull(state, "state");
+            if (safeAfterSequence < 0L) throw new IllegalArgumentException("safeAfterSequence must not be negative");
+        }
     }
 }

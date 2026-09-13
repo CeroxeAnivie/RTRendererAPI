@@ -235,7 +235,7 @@ public final class VulkanGenericCommandNativeSelfTest {
         }
     }
 
-    private static CommandExecutionEvidence await(
+    static CommandExecutionEvidence await(
             VulkanGenericCommandSession session, long sequence, CommandExecutionEvidence.Outcome expected
     ) throws InterruptedException {
         long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
@@ -317,7 +317,7 @@ public final class VulkanGenericCommandNativeSelfTest {
         return true;
     }
 
-    private static ShaderModule module(long id, ShaderStage stage, String source,
+    static ShaderModule module(long id, ShaderStage stage, String source,
                                        List<ShaderInterfaceVariable> inputs,
                                        List<ShaderInterfaceVariable> outputs,
                                        List<BindingLayoutEntry> bindings, int kind) {

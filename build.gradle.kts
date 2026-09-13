@@ -228,7 +228,12 @@ tasks.named("check") {
 val releaseVersionDocuments = files(
     // README is maintained by the calling project and is intentionally outside the
     // published-version gate. Release-owned docs and metadata remain authoritative.
-    fileTree("docs") { include("**/*.md") },
+    fileTree("docs") {
+        include("**/*.md")
+        // Versioned quality reports are immutable evidence for their historical candidate;
+        // they must not be rewritten or treated as the current release's version facts.
+        exclude("quality/**")
+    },
     fileTree("demos/hex-ball") {
         include("**/*.md", "src/**/*.java", "*.gradle.kts")
         exclude("build/**")

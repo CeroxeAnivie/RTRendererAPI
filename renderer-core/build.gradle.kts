@@ -174,6 +174,7 @@ val registerCoreSelfTest =
     }
 
 val contractSelfTests = linkedMapOf(
+    "vulkanGenericGraphicsPipelinesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericGraphicsPipelinesSelfTest",
     "vulkanCommandEvidenceHistorySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanCommandEvidenceHistorySelfTest",
     "vulkanGenericAccelerationStructuresSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericAccelerationStructuresSelfTest",
     "vulkanGenericTextureLayoutUpdatesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericTextureLayoutUpdatesSelfTest",
@@ -309,6 +310,9 @@ tasks.named("check") {
 }
 
 val nativeSelfTests = linkedMapOf(
+    "vulkanGenericPipelineRetirementNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericPipelineRetirementNativeSelfTest",
+    "vulkanGenericGeometryBarrierNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericGeometryBarrierNativeSelfTest",
+    "vulkanGenericLogicOperationNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericLogicOperationNativeSelfTest",
     "vulkanEvidenceRetentionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanEvidenceRetentionNativeSelfTest",
     "vulkanGenericCommandNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericCommandNativeSelfTest",
     "vulkanGenericRayTracingNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericRayTracingNativeSelfTest",
@@ -345,7 +349,7 @@ tasks.named<JavaExec>("vulkanEvidenceRetentionNativeSelfTest").configure {
     maxHeapSize = "256m"
 }
 
-listOf("vulkanEvidenceRetentionNativeSelfTest", "vulkanGenericCommandNativeSelfTest",
+listOf("vulkanGenericPipelineRetirementNativeSelfTest", "vulkanGenericGeometryBarrierNativeSelfTest", "vulkanGenericLogicOperationNativeSelfTest", "vulkanEvidenceRetentionNativeSelfTest", "vulkanGenericCommandNativeSelfTest",
     "vulkanGenericRayTracingNativeSelfTest", "vulkanGenericAccelerationNativeSelfTest",
     "vulkanFrameCompositionNativeSelfTest").forEach { taskName ->
     tasks.named<JavaExec>(taskName).configure {

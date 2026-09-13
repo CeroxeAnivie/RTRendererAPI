@@ -495,6 +495,24 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
         return bootstrap.dynamicRenderingEnabled();
     }
 
+    /** Returns whether the Vulkan logicOp core feature was enabled for this device.\n     * @return true when enabled\n     */
+    public synchronized boolean logicOpEnabled() {
+        requireOpen();
+        return bootstrap.logicOpEnabled();
+    }
+
+    /** Returns whether vertex/geometry storage writes and atomics were enabled.\n     * @return true when enabled\n     */
+    public synchronized boolean vertexPipelineStoresAndAtomicsEnabled() {
+        requireOpen();
+        return bootstrap.vertexPipelineStoresAndAtomicsEnabled();
+    }
+
+    /** Returns whether the Vulkan geometryShader core feature was enabled for this device.\n     * @return true when enabled\n     */
+    public synchronized boolean geometryShaderEnabled() {
+        requireOpen();
+        return bootstrap.geometryShaderEnabled();
+    }
+
     /**
      * Returns the enabled logical-device extensions.
      *
@@ -753,3 +771,4 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
         }
     }
 }
+

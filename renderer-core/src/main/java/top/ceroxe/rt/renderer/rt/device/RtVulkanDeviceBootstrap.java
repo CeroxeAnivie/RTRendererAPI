@@ -47,6 +47,9 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
     private final boolean memoryBudgetEnabled;
     private final boolean shaderExecutionReorderingEnabled;
     private final boolean samplerAnisotropyEnabled;
+    private final boolean logicOpEnabled;
+    private final boolean geometryShaderEnabled;
+    private final boolean vertexPipelineStoresAndAtomicsEnabled;
     private final boolean dynamicRenderingEnabled;
     private final Map<String, top.ceroxe.rt.renderer.feature.VulkanFeatureQueueAllocation> featureQueues;
 
@@ -64,6 +67,9 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
             boolean memoryBudgetEnabled,
             boolean shaderExecutionReorderingEnabled,
             boolean samplerAnisotropyEnabled,
+            boolean logicOpEnabled,
+            boolean geometryShaderEnabled,
+            boolean vertexPipelineStoresAndAtomicsEnabled,
             boolean dynamicRenderingEnabled,
             Map<String, top.ceroxe.rt.renderer.feature.VulkanFeatureQueueAllocation> featureQueues
     ) {
@@ -87,6 +93,9 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         this.memoryBudgetEnabled = memoryBudgetEnabled;
         this.shaderExecutionReorderingEnabled = shaderExecutionReorderingEnabled;
         this.samplerAnisotropyEnabled = samplerAnisotropyEnabled;
+        this.logicOpEnabled = logicOpEnabled;
+        this.geometryShaderEnabled = geometryShaderEnabled;
+        this.vertexPipelineStoresAndAtomicsEnabled = vertexPipelineStoresAndAtomicsEnabled;
         this.dynamicRenderingEnabled = dynamicRenderingEnabled;
         this.featureQueues = Map.copyOf(featureQueues);
     }
@@ -209,6 +218,9 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                     requestedQueueCount, timelineSemaphoreEnabled, scratchAlignment, memoryBudgetEnabled,
                     featureSelection.shaderExecutionReordering(),
                     featureSelection.samplerAnisotropy(),
+                    featureSelection.logicOp(),
+                    featureSelection.geometryShader(),
+                    featureSelection.vertexPipelineStoresAndAtomics(),
                     featureSelection.vulkan13Features().contains(Vulkan13Feature.DYNAMIC_RENDERING),
                     queueTopology.featureQueues());
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
@@ -223,6 +235,18 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
 
     boolean dynamicRenderingEnabled() {
         return dynamicRenderingEnabled;
+    }
+
+    boolean logicOpEnabled() {
+        return logicOpEnabled;
+    }
+
+    boolean vertexPipelineStoresAndAtomicsEnabled() {
+        return vertexPipelineStoresAndAtomicsEnabled;
+    }
+
+    boolean geometryShaderEnabled() {
+        return geometryShaderEnabled;
     }
 
     private static VulkanInstanceHandle createInstance(
@@ -365,6 +389,9 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         VkPhysicalDeviceFeatures2 features = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
         features.features().shaderInt64(true);
         features.features().samplerAnisotropy(featureSelection.samplerAnisotropy());
+        features.features().logicOp(featureSelection.logicOp());
+        features.features().geometryShader(featureSelection.geometryShader());
+        features.features().vertexPipelineStoresAndAtomics(featureSelection.vertexPipelineStoresAndAtomics());
         features.pNext(acceleration.address());
         acceleration.pNext(rayTracing.address());
         long featureChainTail = rayTracing.address();
@@ -442,7 +469,10 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
             Set<Vulkan13Feature> vulkan13Features,
             boolean computeDerivativeGroupQuads,
             boolean shaderExecutionReordering,
-            boolean samplerAnisotropy
+            boolean samplerAnisotropy,
+            boolean logicOp,
+            boolean geometryShader,
+            boolean vertexPipelineStoresAndAtomics
     ) {
         private DeviceFeatureSelection {
             vulkan12Features = Set.copyOf(vulkan12Features);
@@ -535,7 +565,10 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
             VK11.vkGetPhysicalDeviceFeatures2(physicalDevice, coreFeatures);
             return new DeviceFeatureSelection(
                     enabled12, enabled13, computeDerivativeGroupQuads, serEnabled,
-                    coreFeatures.features().samplerAnisotropy()
+                    coreFeatures.features().samplerAnisotropy(),
+                    coreFeatures.features().logicOp(),
+                    coreFeatures.features().geometryShader(),
+                    coreFeatures.features().vertexPipelineStoresAndAtomics()
             );
         }
 

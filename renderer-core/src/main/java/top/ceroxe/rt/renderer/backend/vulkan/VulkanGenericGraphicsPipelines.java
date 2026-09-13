@@ -51,15 +51,24 @@ final class VulkanGenericGraphicsPipelines implements AutoCloseable {
     private final VkDevice device;
     private final VulkanGenericResourceRegistry resources;
     private final int maximumBoundDescriptorSets;
+    private final boolean logicOpEnabled;
+    private final boolean geometryShaderEnabled;
+    private final boolean vertexPipelineStoresAndAtomicsEnabled;
     private final Map<GraphicsPipelineState, Compiled> cache = new LinkedHashMap<>();
     private boolean closed;
 
     VulkanGenericGraphicsPipelines(VkDevice device, VulkanGenericResourceRegistry resources,
-                                   int maximumBoundDescriptorSets) {
+                                   int maximumBoundDescriptorSets,
+                                   boolean logicOpEnabled,
+                                   boolean geometryShaderEnabled,
+                                   boolean vertexPipelineStoresAndAtomicsEnabled) {
         this.device = Objects.requireNonNull(device, "device");
         this.resources = Objects.requireNonNull(resources, "resources");
         if (maximumBoundDescriptorSets <= 0) throw new IllegalArgumentException("maximumBoundDescriptorSets must be positive");
         this.maximumBoundDescriptorSets = maximumBoundDescriptorSets;
+        this.logicOpEnabled = logicOpEnabled;
+        this.geometryShaderEnabled = geometryShaderEnabled;
+        this.vertexPipelineStoresAndAtomicsEnabled = vertexPipelineStoresAndAtomicsEnabled;
     }
 
     Compiled require(GraphicsPipelineState state) {
@@ -94,7 +103,43 @@ final class VulkanGenericGraphicsPipelines implements AutoCloseable {
         if (failure != null) throw failure;
     }
 
+    void validateStages(java.util.Set<top.ceroxe.rt.renderer.api.RenderPipelineStage> source,
+                        java.util.Set<top.ceroxe.rt.renderer.api.RenderPipelineStage> destination) {
+        if (!geometryShaderEnabled && (source.contains(top.ceroxe.rt.renderer.api.RenderPipelineStage.GEOMETRY_SHADER)
+                || destination.contains(top.ceroxe.rt.renderer.api.RenderPipelineStage.GEOMETRY_SHADER))) {
+            throw new UnsupportedOperationException("geometry barrier requires enabled geometryShader device feature");
+        }
+    }
+
+    static void validateFeatures(GraphicsPipelineState state, boolean logicOpEnabled, boolean geometryShaderEnabled) {
+        if (state.blendState().logicOperation().isPresent() && !logicOpEnabled) {
+            throw new UnsupportedOperationException(
+                    "Vulkan logic operation pipeline rejected: device feature logicOp is unavailable"
+            );
+        }
+        if (state.program().modules().stream().anyMatch(module -> module.stage() == ShaderStage.GEOMETRY)
+                && !geometryShaderEnabled) {
+            throw new UnsupportedOperationException(
+                    "Vulkan graphics pipeline rejected: device feature geometryShader is unavailable"
+            );
+        }
+        if (state.blendState().logicOperation().isPresent()
+                && (state.colorTargetFormats().isEmpty() || state.colorTargetFormats().stream().anyMatch(format ->
+                        format != top.ceroxe.rt.renderer.api.TextureFormat.R8_UNORM
+                        && format != top.ceroxe.rt.renderer.api.TextureFormat.RG8_UNORM
+                        && format != top.ceroxe.rt.renderer.api.TextureFormat.RGBA8_UNORM))) {
+            throw new UnsupportedOperationException("logic operations require normalized integer color attachments; floating-point and sRGB targets are unsupported");
+        }
+    }
+
     private Compiled compile(GraphicsPipelineState state) {
+        validateFeatures(state, logicOpEnabled, geometryShaderEnabled);
+        if (!vertexPipelineStoresAndAtomicsEnabled && state.program().bindingLayout().entries().stream().anyMatch(entry ->
+                (entry.visibleStages().contains(ShaderStage.GEOMETRY) || entry.visibleStages().contains(ShaderStage.VERTEX))
+                && (entry.type() == top.ceroxe.rt.renderer.api.BindingType.READ_WRITE_STORAGE_BUFFER
+                || entry.type() == top.ceroxe.rt.renderer.api.BindingType.READ_WRITE_STORAGE_TEXTURE))) {
+            throw new UnsupportedOperationException("vertex/geometry storage writes require vertexPipelineStoresAndAtomics");
+        }
         long pipeline = VK10.VK_NULL_HANDLE;
         long layout = VK10.VK_NULL_HANDLE;
         VulkanGenericDescriptorSetBank descriptors = null;
@@ -369,7 +414,26 @@ final class VulkanGenericGraphicsPipelines implements AutoCloseable {
         if (value.contains(top.ceroxe.rt.renderer.api.ColorWriteMask.Component.ALPHA)) result |= VK10.VK_COLOR_COMPONENT_A_BIT;
         return result;
     }
-    private static int logicOp(LogicOperation value) { return VK10.VK_LOGIC_OP_COPY + value.ordinal(); }
+    static int logicOp(LogicOperation value) {
+        return switch (value) {
+            case CLEAR -> VK10.VK_LOGIC_OP_CLEAR;
+            case AND -> VK10.VK_LOGIC_OP_AND;
+            case AND_REVERSE -> VK10.VK_LOGIC_OP_AND_REVERSE;
+            case COPY -> VK10.VK_LOGIC_OP_COPY;
+            case AND_INVERTED -> VK10.VK_LOGIC_OP_AND_INVERTED;
+            case NO_OP -> VK10.VK_LOGIC_OP_NO_OP;
+            case XOR -> VK10.VK_LOGIC_OP_XOR;
+            case OR -> VK10.VK_LOGIC_OP_OR;
+            case NOR -> VK10.VK_LOGIC_OP_NOR;
+            case EQUIVALENT -> VK10.VK_LOGIC_OP_EQUIVALENT;
+            case INVERT -> VK10.VK_LOGIC_OP_INVERT;
+            case OR_REVERSE -> VK10.VK_LOGIC_OP_OR_REVERSE;
+            case COPY_INVERTED -> VK10.VK_LOGIC_OP_COPY_INVERTED;
+            case OR_INVERTED -> VK10.VK_LOGIC_OP_OR_INVERTED;
+            case NAND -> VK10.VK_LOGIC_OP_NAND;
+            case SET -> VK10.VK_LOGIC_OP_SET;
+        };
+    }
     private static int stencilOp(top.ceroxe.rt.renderer.api.StencilOperation value) { return switch (value) {
         case KEEP -> VK10.VK_STENCIL_OP_KEEP; case ZERO -> VK10.VK_STENCIL_OP_ZERO; case REPLACE -> VK10.VK_STENCIL_OP_REPLACE;
         case INCREMENT_AND_CLAMP -> VK10.VK_STENCIL_OP_INCREMENT_AND_CLAMP; case DECREMENT_AND_CLAMP -> VK10.VK_STENCIL_OP_DECREMENT_AND_CLAMP;

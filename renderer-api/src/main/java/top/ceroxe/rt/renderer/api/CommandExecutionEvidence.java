@@ -3,6 +3,7 @@ package top.ceroxe.rt.renderer.api;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.List;
 
 /**
  * Immutable, monotonic evidence for one general render-command transaction.
@@ -24,7 +25,9 @@ public final class CommandExecutionEvidence {
         DEVICE_LOST,
         SYNCHRONIZATION_FAILED,
         EXTERNAL_CONSUMER_FAILED,
-        FALLBACK_SELECTED
+        FALLBACK_SELECTED,
+        PIPELINE_GENERATION_MISMATCH,
+        PIPELINE_IN_USE
     }
 
     /** Strongest observed transaction milestone. */
@@ -69,6 +72,9 @@ public final class CommandExecutionEvidence {
     private final Optional<RenderResourceId> outputResource;
     private final long resetEpoch;
     private final String detail;
+    private final List<RayTracingPipelineHandle> rayTracingPipelines;
+    private final List<RayTracingPipelineRetirementEvidence> rayTracingRetirements;
+    private final Optional<RayTracingPipelineStatistics> rayTracingPipelineStatistics;
 
     /**
      * Creates a validated evidence snapshot.
@@ -90,6 +96,27 @@ public final class CommandExecutionEvidence {
             long resetEpoch,
             String detail
     ) {
+        this(transactionSequence, outcome, reason, frameSequence, outputResource, resetEpoch, detail,
+                List.of(), List.of(), Optional.empty());
+    }
+
+    /** Creates execution evidence with exact pipeline generations and fence-backed retirement facts. */
+    public CommandExecutionEvidence(
+            long transactionSequence, Outcome outcome, Reason reason, OptionalLong frameSequence,
+            Optional<RenderResourceId> outputResource, long resetEpoch, String detail,
+            List<RayTracingPipelineHandle> rayTracingPipelines,
+            List<RayTracingPipelineRetirementEvidence> rayTracingRetirements,
+            Optional<RayTracingPipelineStatistics> rayTracingPipelineStatistics
+    ) {
+        this.rayTracingPipelines = List.copyOf(rayTracingPipelines);
+        this.rayTracingRetirements = List.copyOf(rayTracingRetirements);
+        this.rayTracingPipelineStatistics = Objects.requireNonNull(rayTracingPipelineStatistics, "rayTracingPipelineStatistics");
+        for (RayTracingPipelineRetirementEvidence retirement : this.rayTracingRetirements) {
+            if (retirement.transactionSequence() != transactionSequence || !outcome.recorded()
+                    || (retirement.outcome() == RayTracingPipelineRetirementEvidence.Outcome.RETIRED) != outcome.gpuCompleted()) {
+                throw new IllegalArgumentException("retirement milestone must match command completion");
+            }
+        }
         if (transactionSequence < 0L || resetEpoch < 0L) {
             throw new IllegalArgumentException("transaction sequence and reset epoch must not be negative");
         }
@@ -140,4 +167,13 @@ public final class CommandExecutionEvidence {
 
     /** @return non-blank diagnostic context */
     public String detail() { return detail; }
+
+    /** @return exact native generations bound by this transaction, without retaining shader payloads */
+    public List<RayTracingPipelineHandle> rayTracingPipelines() { return rayTracingPipelines; }
+
+    /** @return retirement milestones for this transaction */
+    public List<RayTracingPipelineRetirementEvidence> rayTracingRetirements() { return rayTracingRetirements; }
+
+    /** @return backend allocation accounting at this milestone, when available */
+    public Optional<RayTracingPipelineStatistics> rayTracingPipelineStatistics() { return rayTracingPipelineStatistics; }
 }

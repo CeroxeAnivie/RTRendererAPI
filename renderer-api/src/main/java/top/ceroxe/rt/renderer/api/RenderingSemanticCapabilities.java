@@ -46,7 +46,10 @@ public final class RenderingSemanticCapabilities {
         RESOURCE_COPY,
         EXPLICIT_BARRIERS,
         EXTERNAL_FRAME_CONSUMER,
-        COMBINED_WORKLOADS
+        COMBINED_WORKLOADS,
+        LOGIC_OPERATIONS,
+        GEOMETRY_SHADERS,
+        RAY_TRACING_PIPELINE_RETIREMENT
     }
 
     /** Whether a semantic feature has a complete executable backend path. */

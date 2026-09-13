@@ -37,6 +37,7 @@ public sealed interface RenderCommand permits
         BuildTopLevelAccelerationStructureCommand,
         DestroyAccelerationStructureCommand,
         BindRayTracingPipelineCommand,
+        RetireRayTracingPipelineCommand,
         TraceRaysCommand,
         ResourceBarrierCommand {
 }

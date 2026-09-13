@@ -135,6 +135,13 @@ final class RenderCommandSequenceValidator {
             case BuildBottomLevelAccelerationStructureCommand ignored -> requireOutsidePass("build bottom-level AS");
             case BuildTopLevelAccelerationStructureCommand ignored -> requireOutsidePass("build top-level AS");
             case DestroyAccelerationStructureCommand ignored -> requireOutsidePass("destroy acceleration structure");
+            case RetireRayTracingPipelineCommand retire -> {
+                requireOutsidePass("retire ray-tracing pipeline");
+                if (rayTracingPipeline != null
+                        && rayTracingPipeline.identityDigest().equals(retire.handle().identityDigest())) {
+                    throw new IllegalArgumentException("cannot retire a bound ray-tracing pipeline");
+                }
+            }
             case ResourceBarrierCommand ignored -> requireOutsidePass("apply resource barrier");
         }
     }

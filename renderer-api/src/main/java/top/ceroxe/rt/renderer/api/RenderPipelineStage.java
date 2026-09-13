@@ -13,5 +13,7 @@ public enum RenderPipelineStage {
     COLOR_ATTACHMENT_OUTPUT,
     COMPUTE_SHADER,
     RAY_TRACING_SHADER,
-    PRESENT
+    PRESENT,
+    /** Geometry shader execution and its resource visibility scope. */
+    GEOMETRY_SHADER
 }

@@ -15,6 +15,7 @@ import top.ceroxe.rt.renderer.api.BuildBottomLevelAccelerationStructureCommand;
 import top.ceroxe.rt.renderer.api.BuildTopLevelAccelerationStructureCommand;
 import top.ceroxe.rt.renderer.api.DispatchCommand;
 import top.ceroxe.rt.renderer.api.DestroyAccelerationStructureCommand;
+import top.ceroxe.rt.renderer.api.RetireRayTracingPipelineCommand;
 import top.ceroxe.rt.renderer.api.SetPushConstantsCommand;
 import top.ceroxe.rt.renderer.api.RenderCommand;
 import top.ceroxe.rt.renderer.api.RenderCommandTransaction;
@@ -59,6 +60,7 @@ final class VulkanGenericCommandPlan {
     private final Optional<top.ceroxe.rt.renderer.api.RenderResourceId> outputResource;
     private final Optional<VulkanGenericResourceRegistry.TextureRecord> outputRecord;
     private final VulkanGenericAccelerationStructures.Compilation accelerationStructures;
+    private final List<top.ceroxe.rt.renderer.api.RayTracingPipelineHandle> retirements;
 
     private VulkanGenericCommandPlan(
             List<Action> actions,
@@ -68,7 +70,8 @@ final class VulkanGenericCommandPlan {
             List<VulkanGenericResourceRegistry.TextureRecord> textureReads,
             Optional<top.ceroxe.rt.renderer.api.RenderResourceId> outputResource,
             Optional<VulkanGenericResourceRegistry.TextureRecord> outputRecord,
-            VulkanGenericAccelerationStructures.Compilation accelerationStructures
+            VulkanGenericAccelerationStructures.Compilation accelerationStructures,
+            List<top.ceroxe.rt.renderer.api.RayTracingPipelineHandle> retirements
     ) {
         this.actions = List.copyOf(actions);
         this.writes = distinct(writes);
@@ -78,6 +81,7 @@ final class VulkanGenericCommandPlan {
         this.outputResource = Objects.requireNonNull(outputResource, "outputResource");
         this.outputRecord = Objects.requireNonNull(outputRecord, "outputRecord");
         this.accelerationStructures = Objects.requireNonNull(accelerationStructures, "accelerationStructures");
+        this.retirements = List.copyOf(Objects.requireNonNull(retirements, "retirements"));
     }
 
     static VulkanGenericCommandPlan compile(
@@ -101,11 +105,13 @@ final class VulkanGenericCommandPlan {
         ArrayList<VulkanGenericResourceRegistry.TextureRecord> textureWrites = new ArrayList<>();
         ArrayList<VulkanGenericResourceRegistry.TextureRecord> textureReads = new ArrayList<>();
         ArrayList<VulkanGenericResourceRegistry.TextureRecord> locallyReadableTextures = new ArrayList<>();
+        ArrayList<top.ceroxe.rt.renderer.api.RayTracingPipelineHandle> retirements = new ArrayList<>();
         top.ceroxe.rt.renderer.api.RenderResourceId outputResource = null;
         VulkanGenericResourceRegistry.TextureRecord outputRecord = null;
         VulkanGenericComputePipelines.Compiled computePipeline = null;
         VulkanGenericGraphicsPipelines.Compiled graphicsPipeline = null;
         VulkanGenericRayTracingPipelines.Compiled rayTracingPipeline = null;
+        BindingSet activeBindings = null;
         for (RenderCommand command : transaction.commands()) {
             switch (command) {
                 case BeginRenderPassCommand begin -> {
@@ -145,21 +151,46 @@ final class VulkanGenericCommandPlan {
                     graphicsPipeline = null;
                 }
                 case BindGraphicsPipelineCommand bind -> {
+                    activeBindings = null;
+                    computePipeline = null;
+                    rayTracingPipeline = null;
                     graphicsPipeline = graphicsPipelines.require(bind.pipeline());
                     actions.add(new BindGraphics(graphicsPipeline));
                 }
                 case BindComputePipelineCommand bind -> {
+                    activeBindings = null;
                     computePipeline = pipelines.require(bind.pipeline());
                     actions.add(new BindCompute(computePipeline));
                 }
                 case BindRayTracingPipelineCommand bind -> {
+                    activeBindings = null;
+                    if (retirements.stream().anyMatch(state ->
+                            state.identityDigest().equals(bind.pipeline().identityDigest()))) {
+                        throw new IllegalArgumentException(
+                                "ray-tracing pipeline cannot be bound after retirement in one transaction"
+                        );
+                    }
+                    computePipeline = null;
+                    graphicsPipeline = null;
                     rayTracingPipeline = rayTracingPipelines.require(bind.pipeline());
                     actions.add(new BindRayTracing(rayTracingPipeline));
+                }
+                case RetireRayTracingPipelineCommand retire -> {
+                    rayTracingPipelines.validateRetirement(retire.handle());
+                    if (actions.stream().filter(BindRayTracing.class::isInstance)
+                            .map(BindRayTracing.class::cast).anyMatch(action ->
+                                    rayTracingPipelines.handle(action.pipeline()).equals(retire.handle()))) {
+                        throw new VulkanGenericPipelineLifecycleException(
+                                top.ceroxe.rt.renderer.api.CommandExecutionEvidence.Reason.PIPELINE_IN_USE,
+                                "retired pipeline is still referenced by this transaction");
+                    }
+                    if (!retirements.contains(retire.handle())) retirements.add(retire.handle());
                 }
                 case BindBindingSetCommand bind -> {
                     if (computePipeline == null && graphicsPipeline == null && rayTracingPipeline == null) {
                         throw new IllegalArgumentException("binding set has no active pipeline in generic backend");
                     }
+                    activeBindings = bind.bindingSet();
                     validateBindingResources(resources, bind.bindingSet(), reads, textureReads, writes, textureWrites,
                             locallyReadableBuffers, locallyReadableTextures, actions, asCompilation);
                     for (long offset : bind.dynamicOffsets()) {
@@ -180,6 +211,8 @@ final class VulkanGenericCommandPlan {
                     else actions.add(new RayTracingPushConstants(rayTracingPipeline, push));
                 }
                 case DispatchCommand dispatch -> {
+                    noteShaderWrites(resources, activeBindings, writes, textureWrites,
+                            locallyReadableBuffers, locallyReadableTextures);
                     if (computePipeline == null) {
                         throw new IllegalArgumentException("dispatch has no active compute pipeline in generic backend");
                     }
@@ -202,18 +235,26 @@ final class VulkanGenericCommandPlan {
                 case SetViewportCommand set -> actions.add(new ViewportAction(set.viewport()));
                 case SetScissorCommand set -> actions.add(new ScissorAction(set.scissor()));
                 case DrawCommand draw -> {
+                    noteShaderWrites(resources, activeBindings, writes, textureWrites,
+                            locallyReadableBuffers, locallyReadableTextures);
                     if (graphicsPipeline == null) throw new IllegalArgumentException("draw has no active graphics pipeline");
                     actions.add(new Draw(graphicsPipeline, draw));
                 }
                 case DrawIndexedCommand draw -> {
+                    noteShaderWrites(resources, activeBindings, writes, textureWrites,
+                            locallyReadableBuffers, locallyReadableTextures);
                     if (graphicsPipeline == null) throw new IllegalArgumentException("indexed draw has no active graphics pipeline");
                     actions.add(new DrawIndexed(graphicsPipeline, draw));
                 }
                 case MultiDrawCommand multi -> {
+                    noteShaderWrites(resources, activeBindings, writes, textureWrites,
+                            locallyReadableBuffers, locallyReadableTextures);
                     if (graphicsPipeline == null) throw new IllegalArgumentException("multi-draw has no active graphics pipeline");
                     actions.add(new MultiDraw(graphicsPipeline, multi));
                 }
                 case MultiDrawIndexedCommand multi -> {
+                    noteShaderWrites(resources, activeBindings, writes, textureWrites,
+                            locallyReadableBuffers, locallyReadableTextures);
                     if (graphicsPipeline == null) throw new IllegalArgumentException("indexed multi-draw has no active graphics pipeline");
                     actions.add(new MultiDrawIndexed(graphicsPipeline, multi));
                 }
@@ -342,6 +383,8 @@ final class VulkanGenericCommandPlan {
                         actions.add(new BuildAccelerationStructure(asCompilation.prepareTop(build)));
                 case DestroyAccelerationStructureCommand destroy -> asCompilation.destroy(destroy.target());
                 case TraceRaysCommand trace -> {
+                    noteShaderWrites(resources, activeBindings, writes, textureWrites,
+                            locallyReadableBuffers, locallyReadableTextures);
                     if (rayTracingPipeline == null) {
                         throw new IllegalArgumentException("trace rays has no active generic ray-tracing pipeline");
                     }
@@ -361,6 +404,7 @@ final class VulkanGenericCommandPlan {
                                     "generic Vulkan command path does not own presentation queue-family transfers"
                             );
                         }
+                        graphicsPipelines.validateStages(source.sourceStages(), source.destinationStages());
                         VulkanGenericResourceRegistry.BufferRecord record = resources.requireBuffer(
                                 source.slice().resource()
                         );
@@ -377,6 +421,7 @@ final class VulkanGenericCommandPlan {
                                     "generic Vulkan command path does not own presentation queue-family transfers"
                             );
                         }
+                        graphicsPipelines.validateStages(source.sourceStages(), source.destinationStages());
                         VulkanGenericResourceRegistry.TextureRecord record = resources.requireTexture(
                                 source.slice().resource());
                         // A barrier may be the exact transition from an earlier write in this
@@ -397,10 +442,36 @@ final class VulkanGenericCommandPlan {
             }
         }
         return new VulkanGenericCommandPlan(actions, writes, reads, textureWrites, textureReads,
-                Optional.ofNullable(outputResource), Optional.ofNullable(outputRecord), asCompilation);
+                Optional.ofNullable(outputResource), Optional.ofNullable(outputRecord), asCompilation, retirements);
         } catch (RuntimeException | Error failure) {
             asCompilation.close();
             throw failure;
+        }
+    }
+
+    private static void noteShaderWrites(
+            VulkanGenericResourceRegistry resources, BindingSet bindings,
+            List<VulkanGenericResourceRegistry.BufferRecord> writes,
+            List<VulkanGenericResourceRegistry.TextureRecord> textureWrites,
+            List<VulkanGenericResourceRegistry.BufferRecord> locallyReadable,
+            List<VulkanGenericResourceRegistry.TextureRecord> locallyReadableTextures) {
+        if (bindings == null) return;
+        for (List<BindingSet.Value> values : bindings.values().values()) {
+            for (BindingSet.Value value : values) {
+                if (value instanceof BindingSet.BufferValue buffer
+                        && buffer.type() == top.ceroxe.rt.renderer.api.BindingType.READ_WRITE_STORAGE_BUFFER) {
+                    var record = resources.requireBuffer(buffer.buffer());
+                    resources.requireWritable(record);
+                    writes.add(record);
+                    locallyReadable.remove(record);
+                } else if (value instanceof BindingSet.TextureValue texture
+                        && texture.type() == top.ceroxe.rt.renderer.api.BindingType.READ_WRITE_STORAGE_TEXTURE) {
+                    var record = resources.requireTexture(texture.view().texture());
+                    resources.requireWritable(record);
+                    textureWrites.add(record);
+                    locallyReadableTextures.remove(record);
+                }
+            }
         }
     }
 
@@ -445,6 +516,25 @@ final class VulkanGenericCommandPlan {
         }
     }
 
+    private static void addVisibility(List<Action> actions, Action visibility) {
+        // Vulkan forbids buffer/image barriers inside dynamic rendering. For the first draw,
+        // place transfer visibility before BeginPass. Later draw-to-draw dependencies require
+        // the caller to end the pass and issue an explicit barrier.
+        for (int index = actions.size() - 1; index >= 0; index--) {
+            Action previous = actions.get(index);
+            if (previous instanceof EndPass) break;
+            if (previous instanceof Draw || previous instanceof DrawIndexed
+                    || previous instanceof MultiDraw || previous instanceof MultiDrawIndexed) {
+                throw new UnsupportedOperationException("shader resource hazard requires an explicit barrier between render passes");
+            }
+            if (previous instanceof BeginPass) {
+                actions.add(index, visibility);
+                return;
+            }
+        }
+        actions.add(visibility);
+    }
+
     private static void requireReadable(
             VulkanGenericResourceRegistry resources,
             VulkanGenericResourceRegistry.BufferRecord record,
@@ -459,7 +549,7 @@ final class VulkanGenericCommandPlan {
         }
         // A transfer write earlier in this one command buffer is ordered only after a matching
         // memory dependency. This is internal planning, not fabricated cross-submission readiness.
-        actions.add(new AutoBufferVisibility(record));
+        addVisibility(actions, new AutoBufferVisibility(record));
         locallyReadable.add(record);
     }
 
@@ -506,7 +596,7 @@ final class VulkanGenericCommandPlan {
             resources.requireReadable(record);
             return;
         }
-        actions.add(new AutoTextureVisibility(record, range, writable));
+        addVisibility(actions, new AutoTextureVisibility(record, range, writable));
         locallyReadable.add(record);
     }
 
@@ -618,6 +708,13 @@ final class VulkanGenericCommandPlan {
             RayTracingPushConstants, BuildAccelerationStructure, TraceRays, Write, WriteTexture, Copy, CopyTexture,
             CopyTextureRegion, CopyBufferToTexture, CopyTextureToBuffer, ClearColor, ClearDepthStencil,
             AutoBufferVisibility, AutoAccelerationStructureInputVisibility, AutoTextureVisibility, Barrier { }
+
+    List<top.ceroxe.rt.renderer.api.RayTracingPipelineHandle> retirements() { return retirements; }
+
+    List<top.ceroxe.rt.renderer.api.RayTracingPipelineHandle> pipelineHandles(VulkanGenericRayTracingPipelines owner) {
+        return actions.stream().filter(BindRayTracing.class::isInstance).map(BindRayTracing.class::cast)
+                .map(action -> owner.handle(action.pipeline())).distinct().toList();
+    }
 
     record BeginPass(RenderPassDescriptor descriptor, List<ResolvedAttachment> colors,
                      ResolvedAttachment depth, ResolvedAttachment stencil) implements Action { }
