@@ -16,7 +16,7 @@
 > **简介**
 >
 > RTRendererAPI 为 Java 桌面应用与引擎进程提供厂商中立、宿主无关的通用渲染语义契约。公共
-> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段；4.0.3 同时保留 retained RT 场景快速路径，
+> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段；4.1.0 同时保留 retained RT 场景快速路径，
 > 并提供显式资源、shader、binding、pipeline、render-pass、barrier、draw 和 external-frame 语义。
 > 应用只需依赖 `renderer-api`，即可获得后端发现、场景提交、通用 command transaction、异步 CPU 帧、
 > 官方 GPU presenter 与显式 Vulkan 专家互操作。Windows Vulkan 后端、LWJGL、对应 Windows natives
@@ -28,7 +28,7 @@
 
 ### ✨ 核心亮点
 
-- 🚀 **硬件光线追踪**：基于 Vulkan RT 的 BLAS/TLAS、GPUScene 与预编译 SPIR-V 管线。
+- 🚀 **硬件光线追踪**：基于 Vulkan RT 的三角形与 procedural/AABB BLAS、TLAS、GPUScene 与预编译 SPIR-V 管线。
 - ☕ **现代 Java API**：以 Java 21 为基线，提供不可变模型、Builder、类型化异常和确定性生命周期。
 - 🖼️ **两类托管输出**：支持异步 display-ready RGBA8 `CpuFrame` 与无 CPU 回读的官方 GPU presenter。
 - 🔗 **专家级 Vulkan 互操作**：支持 Win32 external memory lease，并可选 linear HDR RGBA16F。
@@ -53,7 +53,7 @@
 | GPU 显示 | 官方 Vulkan swapchain presenter，无 CPU 图像回读 |
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
-> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `4.0.3` 当前后端实现范围。
+> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `4.1.0` 当前后端实现范围。
 > 兼容目标不是跨硬件验收结论；未执行的长时稳定性、跨硬件矩阵和特定宿主集成不在本版本声明为已通过。
 
 ---
@@ -68,7 +68,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>4.0.3</version>
+    <version>4.1.0</version>
 </dependency>
 ```
 
@@ -76,7 +76,7 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:4.0.3")
+    implementation("top.ceroxe.rt:renderer-api:4.1.0")
 }
 ```
 
@@ -261,7 +261,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.0.3.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.1.0.jar `
   --width=2560 --height=1440 --spp=2
 ```
 
@@ -293,6 +293,8 @@ Streamline 与 RTXMU SDK。RTXMU 必须为官方 `v1.4` checkout 的固定 commi
 
 - [Java 开发指南](docs/Java.md)：完整场景、配置、背压、诊断与各 RTX 能力示例。
 - [通用命令与硬件光追](docs/Generic-Commands-and-Ray-Tracing.md)：资源 generation、通用 command transaction、BLAS/TLAS、SPIR-V、SBT、trace、完成证据与回收。
+- [Procedural/AABB 光追](docs/Procedural-Geometry.md)：4.1.0 新增的包围盒布局、intersection/any-hit、BUILD/UPDATE 与生命周期。
+- [4.1.0 验证记录](docs/quality/4.1.0-procedural-validation.md)：公开 ABI、真实 RTX 像素对照、签名与 Central 发布事实。
 - [Java API 参考](docs/Java-API-Reference.md)：公共类型与稳定契约。
 - [Vulkan 专家互操作](docs/Vulkan-Interop.md)：external memory、semaphore 与 queue ownership。
 - [兼容性与版本策略](docs/COMPATIBILITY.md)：SemVer、公共 API/SPI 边界、弃用与发布事实。
@@ -317,7 +319,7 @@ A：不一定。它是非阻塞轮询，空值通常表示当前没有可呈现�
 
 **Q：AMD、Intel 或 Linux 能运行吗？**
 
-A：不能把它们视为 `4.0.3` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
+A：不能把它们视为 `4.1.0` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
 
 ---
 

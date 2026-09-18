@@ -1,6 +1,6 @@
 # 通用命令与硬件光线追踪指南
 
-本页面向已经拥有自己的资源、着色器和提交顺序的渲染器或引擎集成者。它讲解 `4.0.3` 的
+本页面向已经拥有自己的资源、着色器和提交顺序的渲染器或引擎集成者。它讲解 `4.1.0` 的
 专家 command path：如何在不转换为 `MeshAsset` 或 PBR 材质的前提下，提交通用 Vulkan 资源、图形命令和
 硬件光线追踪命令。
 
@@ -125,6 +125,11 @@ CommandExecutionEvidence build = renderer.submitCommands(
 同一 transaction 中 BLAS build、引用该 BLAS 的 TLAS build 与之后的 trace 可以按书写顺序执行；backend
 会加入 `ACCELERATION_STRUCTURE_BUILD -> RAY_TRACING_SHADER` 依赖。`UPDATE` 只允许更新同一个、
 已 fence-idle 的 AS generation。
+
+4.1.0 还提供 `AccelerationStructureAabbGeometry` 与
+`BuildProceduralBottomLevelAccelerationStructureCommand`，将六个 float32 的包围盒输入构建为
+procedural BLAS，并由显式 intersection shader 决定实际命中。三角形与 AABB 分别构建 BLAS，
+可以被同一 TLAS 引用。布局、UPDATE 限制与完整构建片段见 [Procedural geometry](Procedural-Geometry.md)。
 
 ## 3. 描述 SPIR-V 接口并构建 RT pipeline
 

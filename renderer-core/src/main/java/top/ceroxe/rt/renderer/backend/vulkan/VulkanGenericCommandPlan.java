@@ -12,6 +12,7 @@ import top.ceroxe.rt.renderer.api.BindBindingSetCommand;
 import top.ceroxe.rt.renderer.api.BindComputePipelineCommand;
 import top.ceroxe.rt.renderer.api.BindRayTracingPipelineCommand;
 import top.ceroxe.rt.renderer.api.BuildBottomLevelAccelerationStructureCommand;
+import top.ceroxe.rt.renderer.api.BuildProceduralBottomLevelAccelerationStructureCommand;
 import top.ceroxe.rt.renderer.api.BuildTopLevelAccelerationStructureCommand;
 import top.ceroxe.rt.renderer.api.DispatchCommand;
 import top.ceroxe.rt.renderer.api.DestroyAccelerationStructureCommand;
@@ -378,6 +379,17 @@ final class VulkanGenericCommandPlan {
                         inputs.add(new VulkanGenericAccelerationStructures.TriangleInput(geometry, vertices, indices));
                     }
                     actions.add(new BuildAccelerationStructure(asCompilation.prepareBottom(build, inputs)));
+                }
+                case BuildProceduralBottomLevelAccelerationStructureCommand build -> {
+                    ArrayList<VulkanGenericAccelerationStructures.AabbInput> inputs = new ArrayList<>();
+                    for (var geometry : build.geometries()) {
+                        var bounds = resources.requireBuffer(geometry.bounds().resource());
+                        requireAccelerationStructureInputReadable(
+                                resources, bounds, writes, locallyReadableBuffers, actions);
+                        reads.add(bounds);
+                        inputs.add(new VulkanGenericAccelerationStructures.AabbInput(geometry, bounds));
+                    }
+                    actions.add(new BuildAccelerationStructure(asCompilation.prepareProcedural(build, inputs)));
                 }
                 case BuildTopLevelAccelerationStructureCommand build ->
                         actions.add(new BuildAccelerationStructure(asCompilation.prepareTop(build)));

@@ -34,6 +34,7 @@ public sealed interface RenderCommand permits
         ClearColorCommand,
         ClearDepthStencilCommand,
         BuildBottomLevelAccelerationStructureCommand,
+        BuildProceduralBottomLevelAccelerationStructureCommand,
         BuildTopLevelAccelerationStructureCommand,
         DestroyAccelerationStructureCommand,
         BindRayTracingPipelineCommand,

@@ -103,6 +103,17 @@ retirement 与 command output 都是不同的类型化 evidence，不能由构�
 `TraceRaysCommand`、完成轮询和精确 retirement。后端不把 graphics shader 猜测性转换成 PBR 或
 RT hit shader；不能精确执行的 shader、格式或同步要求会在 admission 阶段拒绝。
 
+4.1.0 新增以下公共类型；原三角形构造与访问方法保持不变。
+
+| 类型 | 契约 |
+| --- | --- |
+| `AccelerationStructureAabbGeometry(BufferSlice, long, int, boolean)` | 精确 bounds slice、字节 stride、primitive 数量和 opaque flag；offset/stride 八字节对齐，每条 bounds 为六个 float32 |
+| `BuildProceduralBottomLevelAccelerationStructureCommand(AccelerationStructureResource, AccelerationStructureBuildMode, List<AccelerationStructureAabbGeometry>)` | render pass 外执行，非空 AABB geometry 集合；UPDATE 要求已有可更新 BLAS，且类型、数量、primitive 数量和 flags 不变 |
+
+使用既有 `RayTracingShaderGroup.procedural(closestHit, anyHit, intersection)` 关联命中组；intersection
+shader 必须存在。详见 [Procedural geometry](Procedural-Geometry.md) 与
+[版本兼容策略](COMPATIBILITY.md)。
+
 ## Renderer
 
 ```java

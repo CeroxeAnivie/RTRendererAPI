@@ -133,6 +133,7 @@ final class RenderCommandSequenceValidator {
             case ClearColorCommand ignored -> requireOutsidePass("clear color");
             case ClearDepthStencilCommand ignored -> requireOutsidePass("clear depth/stencil");
             case BuildBottomLevelAccelerationStructureCommand ignored -> requireOutsidePass("build bottom-level AS");
+            case BuildProceduralBottomLevelAccelerationStructureCommand ignored -> requireOutsidePass("build procedural bottom-level AS");
             case BuildTopLevelAccelerationStructureCommand ignored -> requireOutsidePass("build top-level AS");
             case DestroyAccelerationStructureCommand ignored -> requireOutsidePass("destroy acceleration structure");
             case RetireRayTracingPipelineCommand retire -> {

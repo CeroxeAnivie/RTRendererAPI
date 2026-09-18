@@ -273,7 +273,7 @@ public final class VulkanGenericRayTracingNativeSelfTest {
         ), 1);
     }
 
-    private static ShaderModule module(
+    static ShaderModule module(
             long id, ShaderStage stage, int shadercKind, String source, List<BindingLayoutEntry> bindings
     ) {
         long compiler = Shaderc.shaderc_compiler_initialize();
@@ -312,7 +312,7 @@ public final class VulkanGenericRayTracingNativeSelfTest {
         }
     }
 
-    private static CommandExecutionEvidence await(
+    static CommandExecutionEvidence await(
             VulkanGenericCommandSession session, long sequence, CommandExecutionEvidence.Outcome expected
     ) throws InterruptedException {
         long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();

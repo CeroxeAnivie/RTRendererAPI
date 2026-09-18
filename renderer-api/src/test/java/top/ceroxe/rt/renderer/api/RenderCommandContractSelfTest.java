@@ -31,6 +31,52 @@ public final class RenderCommandContractSelfTest {
         copyAndBarrierContract();
         transferAndClearContract();
         rayTracingCommandContract();
+        proceduralGeometryContract();
+    }
+
+    private static void proceduralGeometryContract() {
+        BufferResource buffer = new BufferResource(new RenderResourceId(9090), INITIAL, 128,
+                Set.of(BufferUsage.ACCELERATION_STRUCTURE_BUILD_INPUT));
+        var slice = new ResourceSlice.BufferSlice(buffer, new ByteRange(8, 56));
+        var geometry = new AccelerationStructureAabbGeometry(slice, 32, 2, false);
+        require(geometry.primitiveCount() == 2 && !geometry.opaque(), "AABB geometry lost its declaration");
+        expectFailure(() -> new AccelerationStructureAabbGeometry(slice, 24, 0, false));
+        expectFailure(() -> new AccelerationStructureAabbGeometry(slice, 28, 1, false));
+        expectFailure(() -> new AccelerationStructureAabbGeometry(slice, 16, 1, false));
+        expectFailure(() -> new AccelerationStructureAabbGeometry(slice, 0x1_0000_0000L, 1, false));
+        expectFailure(() -> new AccelerationStructureAabbGeometry(slice, 32, 3, false));
+        expectFailure(() -> new AccelerationStructureAabbGeometry(
+                new ResourceSlice.BufferSlice(buffer, new ByteRange(4, 24)), 24, 1, false));
+        BufferResource wrongUsage = new BufferResource(new RenderResourceId(9091), INITIAL, 24,
+                Set.of(BufferUsage.STORAGE_READ));
+        expectFailure(() -> new AccelerationStructureAabbGeometry(
+                new ResourceSlice.BufferSlice(wrongUsage, new ByteRange(0, 24)), 24, 1, false));
+        var destination = new AccelerationStructureResource(new RenderResourceId(9092), INITIAL,
+                AccelerationStructureKind.BOTTOM_LEVEL, true);
+        var mutable = new java.util.ArrayList<>(List.of(geometry));
+        var build = new BuildProceduralBottomLevelAccelerationStructureCommand(destination,
+                AccelerationStructureBuildMode.BUILD, mutable);
+        mutable.clear();
+        require(build.geometries().size() == 1, "procedural command did not snapshot its geometry list");
+        new RenderCommandTransaction(0, List.of(build));
+        new BuildProceduralBottomLevelAccelerationStructureCommand(destination,
+                AccelerationStructureBuildMode.UPDATE, List.of(geometry));
+        expectFailure(() -> new BuildProceduralBottomLevelAccelerationStructureCommand(destination,
+                AccelerationStructureBuildMode.BUILD, List.of()));
+        expectFailure(() -> new BuildProceduralBottomLevelAccelerationStructureCommand(
+                new AccelerationStructureResource(new RenderResourceId(9093), INITIAL,
+                        AccelerationStructureKind.TOP_LEVEL, true),
+                AccelerationStructureBuildMode.BUILD, List.of(geometry)));
+        expectFailure(() -> new BuildProceduralBottomLevelAccelerationStructureCommand(
+                new AccelerationStructureResource(new RenderResourceId(9094), INITIAL,
+                        AccelerationStructureKind.BOTTOM_LEVEL, false),
+                AccelerationStructureBuildMode.UPDATE, List.of(geometry)));
+        TextureResource color = colorTexture(new RenderResourceId(9095), 4, 4, 1, 1, 1,
+                TextureUsage.COLOR_ATTACHMENT);
+        var pass = RenderPassDescriptor.color(4, 4, List.of(RenderAttachment.of(
+                colorView(color, 1), LoadOp.LOAD, StoreOp.STORE)));
+        expectFailure(() -> new RenderCommandTransaction(1, List.of(
+                new BeginRenderPassCommand(pass), build, new EndRenderPassCommand())));
     }
 
     private static void passAttachmentContract() {

@@ -9,6 +9,17 @@ public final class VulkanGenericAccelerationStructuresSelfTest {
 
     public static void main(String[] args) {
         testResidentTlasDependencies();
+        var aabbLayout = new VulkanGenericAccelerationStructures.GeometryLayout(true, false, 0, 0, null);
+        var opaqueLayout = new VulkanGenericAccelerationStructures.GeometryLayout(true, true, 0, 0, null);
+        var triangleLayout = new VulkanGenericAccelerationStructures.GeometryLayout(false, false, 6, 12, null);
+        var aabbs = new VulkanGenericAccelerationStructures.BuildShape(
+                AccelerationStructureKind.BOTTOM_LEVEL, List.of(2), List.of(aabbLayout));
+        require(aabbs.compatibleWith(new VulkanGenericAccelerationStructures.BuildShape(
+                AccelerationStructureKind.BOTTOM_LEVEL, List.of(2), List.of(aabbLayout))), "identical AABB update was rejected");
+        require(!aabbs.compatibleWith(new VulkanGenericAccelerationStructures.BuildShape(
+                AccelerationStructureKind.BOTTOM_LEVEL, List.of(2), List.of(opaqueLayout))), "AABB update changed flags");
+        require(!aabbs.compatibleWith(new VulkanGenericAccelerationStructures.BuildShape(
+                AccelerationStructureKind.BOTTOM_LEVEL, List.of(2), List.of(triangleLayout))), "AABB update changed geometry kind at equal capacity");
         VulkanGenericAccelerationStructures.BuildShape blas =
                 new VulkanGenericAccelerationStructures.BuildShape(
                         AccelerationStructureKind.BOTTOM_LEVEL, List.of(1, 4)

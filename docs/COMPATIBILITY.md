@@ -1,23 +1,30 @@
 # API Contract
 
-RTRendererAPI 4.0.3 is the current contract line. The public API and provider SPI expose one canonical
-entry point for each operation. Removed constructors, overloads, legacy wrappers, and implicit
-repository fallbacks are not part of this release.
+RTRendererAPI 4.1.0 is the current contract line. The public API and provider SPI expose one canonical
+entry point for each operation. The additive 4.1.0 update preserves the published 4.0.3 API method
+descriptors; the new command extends the sealed command hierarchy.
 
 ## Versioning
+
+- `4.1.0` adds `AccelerationStructureAabbGeometry` and
+  `BuildProceduralBottomLevelAccelerationStructureCommand` with Vulkan BUILD/UPDATE execution.
+  Existing 4.0.3 public binary descriptors remain unchanged. Consumers with exhaustive switches
+  over the sealed `RenderCommand` hierarchy must handle the new command when recompiling, and
+  must not send it to an older provider. The original triangle command remains unchanged.
 
 - `4.0.3` fixes Vulkan logic-operation mapping, reports logic/geometry device capabilities, adds
   geometry-stage barrier visibility, and adds explicit fence-ordered RT pipeline/SBT retirement.
   Existing public method descriptors remain available; bounded history and explicit query/lease
   semantics are documented in [Evidence Retention](Evidence-Retention.md).
 
-- `4.0.3` continues the direct graphics, compute, ray-tracing, resource, and frame contracts.
+- `4.1.0` continues the direct graphics, compute, ray-tracing, resource, and frame contracts.
 - All published modules use the same `MAJOR.MINOR.PATCH` coordinate and the `vMAJOR.MINOR.PATCH`
   source tag.
-- A public signature change is intentional in this major line; consumers must rebuild against the
-  4.0.3 API instead of relying on binary or source compatibility shims.
-- Maven Central is the only artifact source. Local staging is an explicit publishing task and is
-  never selected implicitly during dependency resolution.
+- New consumers should compile against 4.1.0; rollback to 4.0.3 requires removing procedural
+  build commands. Published coordinates are immutable; rollback never overwrites an artifact.
+- Maven Central is the release artifact authority. This source checkout also configures a local
+  build repository after Central so the demo can consume a staged, unreleased version. That
+  maintenance fallback is not distributed as a consumer repository requirement.
 
 ## Contract Shape
 

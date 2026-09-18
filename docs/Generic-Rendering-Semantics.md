@@ -1,6 +1,6 @@
 # 通用渲染语义参考
 
-本页定义 `4.0.3` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
+本页定义 `4.1.0` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
 实现通用 RT 提交时，先阅读[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)；该指南
 提供由资源发布到 `TraceRaysCommand` 的完整最小流程，本页则说明每一步为什么成立。
 
@@ -85,6 +85,13 @@ command algebra 可表达 BLAS/TLAS declaration/build、显式 RT shader group�
 - 验证并创建提交的 SPIR-V pipeline，将显式 group 以对齐 SBT 记录；
 - 写入精确 TLAS descriptor，录制 `vkCmdTraceRaysKHR`；
 - 只在 trace submission fence 完成后发布 `OUTPUT_PRODUCED`。
+
+4.1.0 的 `BuildProceduralBottomLevelAccelerationStructureCommand` 支持 AABB BLAS 的 BUILD/UPDATE。
+每个 bounds slice 必须具有 AS build input usage，offset/stride 按八字节对齐；每个 primitive 的
+min/max 坐标占六个 float32。geometry 顺序对应 SBT 的 geometry index，procedural hit group 必须
+声明 intersection shader。UPDATE 保持 geometry 类型、数量、primitive 数量与 opaque flags；输入
+buffer 和坐标可变化。GPU 生成的坐标有效性由应用保证，不会通过隐藏回读修复。完整契约见
+[Procedural geometry](Procedural-Geometry.md)。
 
 `UPDATE` 必须引用同一且 fence-idle 的 AS generation。一个 transaction 可以依次 build BLAS、build 引用它
 的 TLAS、再 trace；backend 会加入 AS-build 到 ray-shader 的依赖。缺失资源、不可寻址输入、stale TLAS descriptor、

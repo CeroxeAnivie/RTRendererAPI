@@ -310,6 +310,7 @@ tasks.named("check") {
 }
 
 val nativeSelfTests = linkedMapOf(
+    "vulkanGenericProceduralRayTracingNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericProceduralRayTracingNativeSelfTest",
     "vulkanGenericPipelineRetirementNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericPipelineRetirementNativeSelfTest",
     "vulkanGenericGeometryBarrierNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericGeometryBarrierNativeSelfTest",
     "vulkanGenericLogicOperationNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericLogicOperationNativeSelfTest",
@@ -349,7 +350,7 @@ tasks.named<JavaExec>("vulkanEvidenceRetentionNativeSelfTest").configure {
     maxHeapSize = "256m"
 }
 
-listOf("vulkanGenericPipelineRetirementNativeSelfTest", "vulkanGenericGeometryBarrierNativeSelfTest", "vulkanGenericLogicOperationNativeSelfTest", "vulkanEvidenceRetentionNativeSelfTest", "vulkanGenericCommandNativeSelfTest",
+listOf("vulkanGenericProceduralRayTracingNativeSelfTest", "vulkanGenericPipelineRetirementNativeSelfTest", "vulkanGenericGeometryBarrierNativeSelfTest", "vulkanGenericLogicOperationNativeSelfTest", "vulkanEvidenceRetentionNativeSelfTest", "vulkanGenericCommandNativeSelfTest",
     "vulkanGenericRayTracingNativeSelfTest", "vulkanGenericAccelerationNativeSelfTest",
     "vulkanFrameCompositionNativeSelfTest").forEach { taskName ->
     tasks.named<JavaExec>(taskName).configure {
@@ -425,6 +426,7 @@ tasks.register("rendererCoreNativeGate") {
 }
 
 val gpuSceneNativeSelfTests = listOf(
+    "vulkanGenericProceduralRayTracingNativeSelfTest",
     "vulkanGpuSceneNativeSelfTest",
     "vulkanGenericAccelerationNativeSelfTest",
     "vulkanSceneAccelerationNativeSelfTest",
