@@ -68,7 +68,8 @@ FrameCompositionRequest request = new FrameCompositionRequest(
         List.of(new FrameCompositionPlan.Layer(
                 new ResourceMutationKey(outputGeneration, commandSequence),
                 FrameCompositionPlan.Operation.REPLACE)),
-        2560, 1440, FrameOutputFormat.SDR_RGBA8, nextFrameSequence, sceneRevision);
+        2560, 1440, FrameOutputFormat.SDR_RGBA8, nextFrameSequence, sceneRevision,
+        FrameCompositionRequest.AlphaEncoding.PREMULTIPLIED);
 FrameCompositionEvidence evidence = composition.compose(request);
 if (evidence.outcome() == FrameCompositionEvidence.Outcome.REJECTED) {
     throw new IllegalStateException(evidence.detail());
