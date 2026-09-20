@@ -44,6 +44,7 @@ public final class GraphicsPipelineState {
         if (blendState.targets().size() != colorTargetFormats.size()) {
             throw new IllegalArgumentException("blend target count must equal color attachment count");
         }
+        validateColorInterface();
         depthStencilFormat = builder.depthStencilFormat;
         depthStencilState = builder.depthStencilState;
         validateDepthStencilPair();
@@ -89,6 +90,30 @@ public final class GraphicsPipelineState {
         }
         if (depthStencilState.stencilTestEnabled() && !depthStencilFormat.supports(TextureAspect.STENCIL)) {
             throw new IllegalArgumentException("stencil testing requires a format with a stencil aspect");
+        }
+    }
+
+    private void validateColorInterface() {
+        for (int index = 0; index < colorTargetFormats.size(); index++) {
+            TextureFormat.NumericClass numeric = colorTargetFormats.get(index).numericClass();
+            if ((numeric == TextureFormat.NumericClass.SIGNED_INTEGER || numeric == TextureFormat.NumericClass.UNSIGNED_INTEGER)
+                    && blendState.targets().get(index).blendEnabled()) {
+                throw new IllegalArgumentException("integer color attachments cannot enable blending at location " + index);
+            }
+        }
+        for (ShaderModule module : program.modules()) {
+            if (module.stage() != ShaderStage.FRAGMENT) continue;
+            for (ShaderInterfaceVariable output : module.reflection().outputs()) {
+                if (output.location() >= colorTargetFormats.size()) continue;
+                TextureFormat.NumericClass expected = switch (output.type().numericType()) {
+                    case FLOATING_POINT -> TextureFormat.NumericClass.FLOATING_POINT;
+                    case SIGNED_INTEGER -> TextureFormat.NumericClass.SIGNED_INTEGER;
+                    case UNSIGNED_INTEGER -> TextureFormat.NumericClass.UNSIGNED_INTEGER;
+                };
+                if (expected != colorTargetFormats.get(output.location()).numericClass()) {
+                    throw new IllegalArgumentException("fragment output numeric class does not match color attachment at location " + output.location());
+                }
+            }
         }
     }
 

@@ -144,7 +144,11 @@ final class VulkanGenericGraphicsRecorder {
                 .imageLayout(layout).loadOp(loadOp(declaration.loadOperation())).storeOp(storeOp(declaration.storeOperation()));
         declaration.clearValue().ifPresent(value -> setClear(info.clearValue(), value));
         if (resolved.resolveView() != null) {
-            info.resolveMode(org.lwjgl.vulkan.VK12.VK_RESOLVE_MODE_AVERAGE_BIT)
+            var numeric = resolved.record().descriptor().format().numericClass();
+            boolean integer = numeric == top.ceroxe.rt.renderer.api.TextureFormat.NumericClass.SIGNED_INTEGER
+                    || numeric == top.ceroxe.rt.renderer.api.TextureFormat.NumericClass.UNSIGNED_INTEGER;
+            info.resolveMode(integer ? org.lwjgl.vulkan.VK12.VK_RESOLVE_MODE_SAMPLE_ZERO_BIT
+                            : org.lwjgl.vulkan.VK12.VK_RESOLVE_MODE_AVERAGE_BIT)
                     .resolveImageView(resolved.resolveRecord().views().require(resolved.resolveView()))
                     .resolveImageLayout(VK10.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         }
@@ -155,6 +159,10 @@ final class VulkanGenericGraphicsRecorder {
         switch (value) {
             case ClearValue.Color color -> target.color(c -> c.float32(0, color.red()).float32(1, color.green())
                     .float32(2, color.blue()).float32(3, color.alpha()));
+            case ClearValue.SignedColor color -> target.color(c -> c.int32(0, color.red()).int32(1, color.green())
+                    .int32(2, color.blue()).int32(3, color.alpha()));
+            case ClearValue.UnsignedColor color -> target.color(c -> c.uint32(0, color.red()).uint32(1, color.green())
+                    .uint32(2, color.blue()).uint32(3, color.alpha()));
             case ClearValue.Depth depth -> target.depthStencil(d -> d.depth(depth.value()).stencil(0));
             case ClearValue.Stencil stencil -> target.depthStencil(d -> d.depth(1.0f).stencil(stencil.value()));
         }

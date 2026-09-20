@@ -40,6 +40,15 @@ public record RenderAttachment(
             if (value.aspect() != aspect) {
                 throw new IllegalArgumentException("clear value aspect does not match attachment view aspect");
             }
+            if (aspect == TextureAspect.COLOR) {
+                boolean matches = switch (view.texture().format().numericClass()) {
+                    case FLOATING_POINT -> value instanceof ClearValue.Color;
+                    case SIGNED_INTEGER -> value instanceof ClearValue.SignedColor;
+                    case UNSIGNED_INTEGER -> value instanceof ClearValue.UnsignedColor;
+                    case DEPTH_STENCIL -> false;
+                };
+                if (!matches) throw new IllegalArgumentException("clear value numeric class does not match attachment format");
+            }
         } else if (clearValue.isPresent()) {
             throw new IllegalArgumentException("clear value is valid only for the clear load operation");
         }

@@ -1,6 +1,6 @@
 # 通用渲染语义参考
 
-本页定义 `4.1.0` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
+本页定义 `4.2.0` command path 的精确契约、当前 Vulkan backend 的支持边界和不可推断的事实。首次
 实现通用 RT 提交时，先阅读[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)；该指南
 提供由资源发布到 `TraceRaysCommand` 的完整最小流程，本页则说明每一步为什么成立。
 
@@ -51,6 +51,10 @@ backend 会建立 submission-local visibility dependency；AS 输入使用精确
 别名。SPIR-V validator 会核对 descriptor shape；使用 `OpTypeSampledImage` 的模块只能使用这一精确 binding
 类型，不能通过拆分 declaration 进入 backend。
 
+4.2.0 在 binding admission 中继续核对 SPIR-V 图像数值类型、维度、数组及采样数。
+整数格式使用精确的 signed/unsigned 上传、清除和 shader 输出；组合采样只接受 nearest 过滤，
+具体约束见[整数纹理](Integer-Textures.md)。3D 上传的非零 z 偏移只作用于 depth slice，不再误加到 array layer。
+
 `RECORDED` 仅表示 command 被记录，不表示 GPU 已完成。`OUTPUT_PRODUCED` 只会在提交 fence 完成后发布，
 并标识第一个 stored color attachment（或其 resolve target、trace output）resource。device loss 会将 command lane 置为结构化终态
 `DEVICE_LOST`，调用方必须按报告的 recovery action 重建 renderer。
@@ -65,6 +69,10 @@ polling only maps completed storage and never submits a second synchronous copy.
 its bytes and has no Vulkan lease. A readback failure is surfaced as renderer failure, while rollback
 and device loss discard the pending snapshot. Retained-scene and generic command frame sequences are
 tracked independently so one lane cannot cause duplicate publication or suppress the other.
+
+Non-RGBA8 GPU outputs retain completion evidence without implicit conversion. Requesting a
+`CpuFrame` for those outputs throws `UnsupportedOperationException`; an explicit conversion pass
+into RGBA8 is required for display readback.
 
 `ResourceVersion` 标识 buffer/texture storage shape 与 declared usage，不标识每次内容写入。对 GPU-ready
 generation 的后续写入产生新的 fence-backed mutation evidence。`ResourceMutationKey` 标识该 command sequence

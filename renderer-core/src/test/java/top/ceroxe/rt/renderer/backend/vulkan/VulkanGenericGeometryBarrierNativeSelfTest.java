@@ -89,7 +89,7 @@ public final class VulkanGenericGeometryBarrierNativeSelfTest {
                 if (frame > 0) {
                     // Explicit read-to-write hazards for the same allocation on the next frame.
                     commands.add(new ResourceBarrierCommand(List.of(new BufferBarrier(slice(uniform),
-                            Set.of(RenderPipelineStage.GEOMETRY_SHADER), Set.of(RenderResourceAccess.SHADER_READ),
+                            Set.of(RenderPipelineStage.GEOMETRY_SHADER), Set.of(RenderResourceAccess.UNIFORM_READ),
                             Set.of(RenderPipelineStage.COPY), Set.of(RenderResourceAccess.COPY_WRITE))),
                             List.of(new TextureBarrier(slice(sampled), Set.of(RenderPipelineStage.GEOMETRY_SHADER),
                                     Set.of(RenderResourceAccess.SHADER_READ), Set.of(RenderPipelineStage.COPY), Set.of(RenderResourceAccess.COPY_WRITE)))));
@@ -104,7 +104,7 @@ public final class VulkanGenericGeometryBarrierNativeSelfTest {
                         Set.of(RenderPipelineStage.COPY), Set.of(RenderResourceAccess.COPY_READ)))));
                 commands.add(new CopyTextureCommand(slice(source), slice(sampled)));
                 commands.add(new ResourceBarrierCommand(List.of(
-                        barrier(uniform, RenderPipelineStage.COPY, RenderResourceAccess.COPY_WRITE, RenderPipelineStage.GEOMETRY_SHADER, RenderResourceAccess.SHADER_READ),
+                        barrier(uniform, RenderPipelineStage.COPY, RenderResourceAccess.COPY_WRITE, RenderPipelineStage.GEOMETRY_SHADER, RenderResourceAccess.UNIFORM_READ),
                         barrier(storage, RenderPipelineStage.COPY, RenderResourceAccess.COPY_WRITE, RenderPipelineStage.GEOMETRY_SHADER, RenderResourceAccess.SHADER_WRITE)),
                         List.of(new TextureBarrier(slice(sampled), Set.of(RenderPipelineStage.COPY), Set.of(RenderResourceAccess.COPY_WRITE),
                                 Set.of(RenderPipelineStage.GEOMETRY_SHADER), Set.of(RenderResourceAccess.SHADER_READ)))));

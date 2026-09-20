@@ -3,6 +3,9 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 import top.ceroxe.rt.renderer.api.BindingKey;
 import top.ceroxe.rt.renderer.api.BindingLayoutEntry;
 import top.ceroxe.rt.renderer.api.BindingType;
+import top.ceroxe.rt.renderer.api.BindingSet;
+import top.ceroxe.rt.renderer.api.TextureFormat;
+import top.ceroxe.rt.renderer.api.TextureView;
 import top.ceroxe.rt.renderer.api.ShaderModule;
 import top.ceroxe.rt.renderer.api.ShaderStage;
 
@@ -29,6 +32,7 @@ final class VulkanSpirvBindingValidator {
     private static final int OP_ENTRY_POINT = 15;
     private static final int OP_DECORATE = 71;
     private static final int OP_TYPE_INT = 21;
+    private static final int OP_TYPE_FLOAT = 22;
     private static final int OP_TYPE_IMAGE = 25;
     private static final int OP_TYPE_SAMPLER = 26;
     private static final int OP_TYPE_SAMPLED_IMAGE = 27;
@@ -99,6 +103,60 @@ final class VulkanSpirvBindingValidator {
         }
     }
 
+    static void requireBoundImages(Iterable<ShaderModule> modules, BindingSet bindings) {
+        for (ShaderModule module : modules) {
+            ParsedModule parsed = parse(module.spirv());
+            for (var entry : parsed.variables().entrySet()) {
+                Integer set = parsed.descriptorSets().get(entry.getKey());
+                Integer binding = parsed.bindings().get(entry.getKey());
+                if (set == null || binding == null) continue;
+                ReflectedBinding reflected = resolve(entry.getValue(), entry.getKey(), parsed, module);
+                if (reflected.image() == null) continue;
+                BindingKey key = new BindingKey(set, binding);
+                var values = bindings.values().get(key);
+                if (values == null || values.size() != reflected.arrayCount()) {
+                    throw unsupported("image binding is missing or has an incorrect array count at " + key, module);
+                }
+                for (BindingSet.Value value : values) {
+                    TextureView view;
+                    if (value instanceof BindingSet.TextureValue texture) view = texture.view();
+                    else if (value instanceof BindingSet.CombinedImageSamplerValue combined) view = combined.view();
+                    else throw unsupported("image descriptor has a non-image resource at " + key, module);
+                    ImageType image = reflected.image();
+                    Type scalar = parsed.types().get(image.scalarType());
+                    if (!(scalar instanceof ScalarType numeric) || numeric.width() != 32) {
+                        throw unsupported("image sampled scalar must be a 32-bit numeric type at " + key, module);
+                    }
+                    TextureFormat.NumericClass actual = view.texture().format().numericClass();
+                    if (actual == TextureFormat.NumericClass.DEPTH_STENCIL) {
+                        actual = view.range().aspect() == top.ceroxe.rt.renderer.api.TextureAspect.STENCIL
+                                ? TextureFormat.NumericClass.UNSIGNED_INTEGER : TextureFormat.NumericClass.FLOATING_POINT;
+                    }
+                    if (numeric.numericClass() != actual) {
+                        throw unsupported("image numeric class does not match texture format at " + key, module);
+                    }
+                    int dimension = switch (view.dimension()) {
+                        case TEXTURE_1D, TEXTURE_1D_ARRAY -> 0;
+                        case TEXTURE_2D, TEXTURE_2D_ARRAY, TEXTURE_2D_MULTISAMPLED, TEXTURE_2D_MULTISAMPLED_ARRAY -> 1;
+                        case TEXTURE_3D -> 2;
+                        case CUBE, CUBE_ARRAY -> 3;
+                    };
+                    boolean arrayed = switch (view.dimension()) {
+                        case TEXTURE_1D_ARRAY, TEXTURE_2D_ARRAY, TEXTURE_2D_MULTISAMPLED_ARRAY, CUBE_ARRAY -> true;
+                        default -> false;
+                    };
+                    if (image.dimension() != dimension || image.arrayed() != (arrayed ? 1 : 0)
+                            || image.multisampled() != (view.texture().sampleCount() > 1 ? 1 : 0)) {
+                        throw unsupported("image shape does not match texture view at " + key, module);
+                    }
+                    if (image.depth() == 1 && view.range().aspect() != top.ceroxe.rt.renderer.api.TextureAspect.DEPTH) {
+                        throw unsupported("depth image requires a depth view at " + key, module);
+                    }
+                }
+            }
+        }
+    }
+
     private static ParsedModule parse(ByteBuffer bytes) {
         ByteBuffer source = Objects.requireNonNull(bytes, "bytes");
         // ByteBuffer.duplicate() does not promise to retain byte order. ShaderModule has already
@@ -143,11 +201,21 @@ final class VulkanSpirvBindingValidator {
                 }
                 case OP_TYPE_INT -> {
                     requireWords(wordCount, 4, "OpTypeInt");
-                    types.put(word(code, offset, 1), new ScalarType());
+                    int signedness = word(code, offset, 3);
+                    if (signedness != 0 && signedness != 1) {
+                        throw new VulkanGenericPipelineCompilationException("invalid OpTypeInt signedness");
+                    }
+                    types.put(word(code, offset, 1), new ScalarType(word(code, offset, 2), signedness == 1
+                            ? TextureFormat.NumericClass.SIGNED_INTEGER : TextureFormat.NumericClass.UNSIGNED_INTEGER));
+                }
+                case OP_TYPE_FLOAT -> {
+                    requireWords(wordCount, 3, "OpTypeFloat");
+                    types.put(word(code, offset, 1), new ScalarType(word(code, offset, 2), TextureFormat.NumericClass.FLOATING_POINT));
                 }
                 case OP_TYPE_IMAGE -> {
                     requireWords(wordCount, 9, "OpTypeImage");
-                    types.put(word(code, offset, 1), new ImageType(word(code, offset, 7)));
+                    types.put(word(code, offset, 1), new ImageType(word(code, offset, 2), word(code, offset, 3),
+                            word(code, offset, 4), word(code, offset, 5), word(code, offset, 6), word(code, offset, 7)));
                 }
                 case OP_TYPE_SAMPLER -> {
                     requireWords(wordCount, 2, "OpTypeSampler");
@@ -155,7 +223,7 @@ final class VulkanSpirvBindingValidator {
                 }
                 case OP_TYPE_SAMPLED_IMAGE -> {
                     requireWords(wordCount, 3, "OpTypeSampledImage");
-                    types.put(word(code, offset, 1), new SampledImageType());
+                    types.put(word(code, offset, 1), new SampledImageType(word(code, offset, 2)));
                 }
                 case OP_TYPE_ARRAY -> {
                     requireWords(wordCount, 4, "OpTypeArray");
@@ -206,7 +274,9 @@ final class VulkanSpirvBindingValidator {
         }
         long arrayCount = 1L;
         int typeId = typedPointer.pointeeType();
+        Set<Integer> visited = new HashSet<>();
         while (true) {
+            if (!visited.add(typeId)) throw unsupported("cyclic descriptor array type", module);
             Type type = parsed.types().get(typeId);
             if (type instanceof ArrayType array) {
                 Long length = parsed.constants().get(array.lengthId());
@@ -227,9 +297,17 @@ final class VulkanSpirvBindingValidator {
             if (arrayCount > Integer.MAX_VALUE) {
                 throw unsupported("descriptor array count exceeds the public binding limit", module);
             }
+            ImageType image = type instanceof ImageType direct ? direct : null;
+            if (type instanceof SampledImageType sampled) {
+                Type underlying = parsed.types().get(sampled.imageType());
+                if (!(underlying instanceof ImageType resolved) || resolved.sampled() != IMAGE_SAMPLED) {
+                    throw unsupported("combined sampler has no sampled image type", module);
+                }
+                image = resolved;
+            }
             return new ReflectedBinding(
                     descriptorType(variable.storageClass(), type, parsed.nonWritable().contains(variableId), module),
-                    (int) arrayCount
+                    (int) arrayCount, image
             );
         }
     }
@@ -325,16 +403,16 @@ final class VulkanSpirvBindingValidator {
             ArrayType, RuntimeArrayType, StructType, PointerType {
     }
 
-    private record ScalarType() implements Type {
+    private record ScalarType(int width, TextureFormat.NumericClass numericClass) implements Type {
     }
 
-    private record ImageType(int sampled) implements Type {
+    private record ImageType(int scalarType, int dimension, int depth, int arrayed, int multisampled, int sampled) implements Type {
     }
 
     private record SamplerType() implements Type {
     }
 
-    private record SampledImageType() implements Type {
+    private record SampledImageType(int imageType) implements Type {
     }
 
     private record AccelerationStructureType() implements Type {
@@ -355,7 +433,7 @@ final class VulkanSpirvBindingValidator {
     private record Variable(int pointerType, int storageClass) {
     }
 
-    private record ReflectedBinding(BindingType type, int arrayCount) {
+    private record ReflectedBinding(BindingType type, int arrayCount, ImageType image) {
     }
 
     private record EntryPoint(String name, int executionModel) {

@@ -127,8 +127,10 @@ final class VulkanGenericGraphicsPipelines implements AutoCloseable {
                 && (state.colorTargetFormats().isEmpty() || state.colorTargetFormats().stream().anyMatch(format ->
                         format != top.ceroxe.rt.renderer.api.TextureFormat.R8_UNORM
                         && format != top.ceroxe.rt.renderer.api.TextureFormat.RG8_UNORM
-                        && format != top.ceroxe.rt.renderer.api.TextureFormat.RGBA8_UNORM))) {
-            throw new UnsupportedOperationException("logic operations require normalized integer color attachments; floating-point and sRGB targets are unsupported");
+                        && format != top.ceroxe.rt.renderer.api.TextureFormat.RGBA8_UNORM
+                        && format.numericClass() != TextureFormat.NumericClass.SIGNED_INTEGER
+                        && format.numericClass() != TextureFormat.NumericClass.UNSIGNED_INTEGER))) {
+            throw new UnsupportedOperationException("logic operations require integer or normalized integer color attachments; floating-point and sRGB targets are unsupported");
         }
     }
 

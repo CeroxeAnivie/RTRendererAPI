@@ -192,6 +192,9 @@ final class VulkanGenericCommandPlan {
                         throw new IllegalArgumentException("binding set has no active pipeline in generic backend");
                     }
                     activeBindings = bind.bindingSet();
+                    var boundProgram = computePipeline != null ? computePipeline.state().program()
+                            : graphicsPipeline != null ? graphicsPipeline.state().program() : rayTracingPipeline.state().program();
+                    VulkanSpirvBindingValidator.requireBoundImages(boundProgram.modules(), activeBindings);
                     validateBindingResources(resources, bind.bindingSet(), reads, textureReads, writes, textureWrites,
                             locallyReadableBuffers, locallyReadableTextures, actions, asCompilation);
                     for (long offset : bind.dynamicOffsets()) {
@@ -705,13 +708,7 @@ final class VulkanGenericCommandPlan {
     }
 
     private static int bytesPerTexel(top.ceroxe.rt.renderer.api.TextureFormat format) {
-        return switch (format) {
-            case R8_UNORM -> 1;
-            case RG8_UNORM, R16_FLOAT -> 2;
-            case RGBA8_UNORM, RGBA8_SRGB, R32_FLOAT, D32_FLOAT, D24_UNORM_S8_UINT, RG16_FLOAT -> 4;
-            case RGBA16_FLOAT, RG32_FLOAT -> 8;
-            case RGBA32_FLOAT -> 16;
-        };
+        return format.bytesPerTexel();
     }
 
     sealed interface Action permits BeginPass, EndPass, BindGraphics, BindGraphicsBindings, GraphicsPushConstants,

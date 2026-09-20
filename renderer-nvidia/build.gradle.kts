@@ -706,8 +706,8 @@ tasks.register<JavaExec>("nvidiaNrdDlssFrameGenerationGpuSceneNativeSelfTest") {
 /*
  * Production Streamline starts process-external NGX updater work from slInit. Keep only tasks
  * that own a Streamline lifecycle on one lane so concurrent Gradle workers cannot create an OTA
- * process storm or race the driver's shared cache. NRD-only, RTXMU, and renderer-core tasks retain
- * normal Gradle parallelism.
+ * process storm or race the driver's shared cache. The root hardware gate also serializes native
+ * GPU work across modules; compilation and CPU-only tasks retain normal Gradle parallelism.
  */
 val nvidiaStreamlineNativeGateLock = gradle.sharedServices.registerIfAbsent(
     "nvidiaStreamlineNativeGateLock",

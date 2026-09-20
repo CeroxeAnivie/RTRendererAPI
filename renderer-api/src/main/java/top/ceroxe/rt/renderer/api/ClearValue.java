@@ -7,7 +7,8 @@ package top.ceroxe.rt.renderer.api;
  * data by a backend. Every floating-point component must be finite; infinities and NaN fail at
  * the public boundary rather than reaching a driver.</p>
  */
-public sealed interface ClearValue permits ClearValue.Color, ClearValue.Depth, ClearValue.Stencil {
+public sealed interface ClearValue permits ClearValue.Color, ClearValue.SignedColor,
+        ClearValue.UnsignedColor, ClearValue.Depth, ClearValue.Stencil {
     /** @return the one texture aspect cleared by this value */
     TextureAspect aspect();
 
@@ -25,6 +26,16 @@ public sealed interface ClearValue permits ClearValue.Color, ClearValue.Depth, C
         public TextureAspect aspect() {
             return TextureAspect.COLOR;
         }
+    }
+
+    /** Exact signed integer components, converted to the attachment's integer width by Vulkan. */
+    record SignedColor(int red, int green, int blue, int alpha) implements ClearValue {
+        @Override public TextureAspect aspect() { return TextureAspect.COLOR; }
+    }
+
+    /** Unsigned integer components represented by their exact uint32 bit patterns. */
+    record UnsignedColor(int red, int green, int blue, int alpha) implements ClearValue {
+        @Override public TextureAspect aspect() { return TextureAspect.COLOR; }
     }
 
     /** Normalized depth clear in the portable zero-to-one depth interval. */

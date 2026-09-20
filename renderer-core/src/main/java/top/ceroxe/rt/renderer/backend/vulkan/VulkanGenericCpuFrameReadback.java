@@ -17,6 +17,14 @@ import java.util.Objects;
 final class VulkanGenericCpuFrameReadback {
     private VulkanGenericCpuFrameReadback() { }
 
+    static boolean supports(VulkanGenericResourceRegistry.TextureRecord record) {
+        var descriptor = Objects.requireNonNull(record, "record").descriptor();
+        return descriptor.dimension() == top.ceroxe.rt.renderer.api.TextureDimension.TEXTURE_2D
+                && descriptor.sampleCount() == 1 && descriptor.mipLevelCount() == 1
+                && descriptor.arrayLayerCount() == 1
+                && (descriptor.format() == TextureFormat.RGBA8_UNORM || descriptor.format() == TextureFormat.RGBA8_SRGB);
+    }
+
     static long byteCount(VulkanGenericResourceRegistry.TextureRecord record) {
         VulkanGenericResourceRegistry.TextureRecord checked = Objects.requireNonNull(record, "record");
         var descriptor = checked.descriptor();

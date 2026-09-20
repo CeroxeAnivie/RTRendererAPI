@@ -132,6 +132,24 @@ final class VulkanGenericTextureImage implements AutoCloseable {
             case RGBA32_FLOAT -> VK10.VK_FORMAT_R32G32B32A32_SFLOAT;
             case D32_FLOAT -> VK10.VK_FORMAT_D32_SFLOAT;
             case D24_UNORM_S8_UINT -> VK10.VK_FORMAT_D24_UNORM_S8_UINT;
+            case R8_SINT -> VK10.VK_FORMAT_R8_SINT;
+            case R8_UINT -> VK10.VK_FORMAT_R8_UINT;
+            case RG8_SINT -> VK10.VK_FORMAT_R8G8_SINT;
+            case RG8_UINT -> VK10.VK_FORMAT_R8G8_UINT;
+            case RGBA8_SINT -> VK10.VK_FORMAT_R8G8B8A8_SINT;
+            case RGBA8_UINT -> VK10.VK_FORMAT_R8G8B8A8_UINT;
+            case R16_SINT -> VK10.VK_FORMAT_R16_SINT;
+            case R16_UINT -> VK10.VK_FORMAT_R16_UINT;
+            case RG16_SINT -> VK10.VK_FORMAT_R16G16_SINT;
+            case RG16_UINT -> VK10.VK_FORMAT_R16G16_UINT;
+            case RGBA16_SINT -> VK10.VK_FORMAT_R16G16B16A16_SINT;
+            case RGBA16_UINT -> VK10.VK_FORMAT_R16G16B16A16_UINT;
+            case R32_SINT -> VK10.VK_FORMAT_R32_SINT;
+            case R32_UINT -> VK10.VK_FORMAT_R32_UINT;
+            case RG32_SINT -> VK10.VK_FORMAT_R32G32_SINT;
+            case RG32_UINT -> VK10.VK_FORMAT_R32G32_UINT;
+            case RGBA32_SINT -> VK10.VK_FORMAT_R32G32B32A32_SINT;
+            case RGBA32_UINT -> VK10.VK_FORMAT_R32G32B32A32_UINT;
         };
     }
 }

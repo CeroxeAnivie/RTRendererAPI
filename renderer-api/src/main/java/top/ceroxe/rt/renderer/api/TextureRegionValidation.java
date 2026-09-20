@@ -28,18 +28,7 @@ final class TextureRegionValidation {
     }
 
     static int bytesPerTexel(TextureFormat format) {
-        return switch (format) {
-            case R8_UNORM -> 1;
-            case RG8_UNORM -> 2;
-            case RGBA8_UNORM, RGBA8_SRGB, R32_FLOAT -> 4;
-            case R16_FLOAT -> 2;
-            case RG16_FLOAT -> 4;
-            case RG32_FLOAT -> 8;
-            case D32_FLOAT -> 4;
-            case RGBA16_FLOAT -> 8;
-            case RGBA32_FLOAT -> 16;
-            case D24_UNORM_S8_UINT -> 4;
-        };
+        return format.bytesPerTexel();
     }
 
     static long requiredBytes(TextureFormat format, TextureExtent extent, TextureDataLayout layout) {

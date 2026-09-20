@@ -14,9 +14,24 @@ import org.gradle.api.tasks.bundling.Zip
 import org.gradle.api.tasks.compile.JavaCompile
 import org.w3c.dom.Element
 import nmcp.NmcpExtension
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
 
 plugins {
     base
+}
+
+abstract class RendererHardwareGateLock : BuildService<BuildServiceParameters.None>
+
+// Native graphics gates share the physical adapter even when they belong to different modules.
+val rendererHardwareGateLock = gradle.sharedServices.registerIfAbsent(
+    "rendererHardwareGateLock", RendererHardwareGateLock::class
+) { maxParallelUsages.set(1) }
+
+subprojects {
+    tasks.withType<JavaExec>().configureEach {
+        if (name.contains("Native")) usesService(rendererHardwareGateLock)
+    }
 }
 
 group = providers.gradleProperty("project_group").get()

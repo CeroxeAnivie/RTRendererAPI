@@ -1,10 +1,14 @@
 # API Contract
 
-RTRendererAPI 4.1.0 is the current contract line. The public API and provider SPI expose one canonical
-entry point for each operation. The additive 4.1.0 update preserves the published 4.0.3 API method
-descriptors; the new command extends the sealed command hierarchy.
+RTRendererAPI 4.2.0 is the current contract line. The public API and provider SPI expose one canonical
+entry point for each operation. Existing public method descriptors remain available; new texture
+formats and clear variants extend the enum and sealed interface respectively.
 
 ## Versioning
+
+- `4.2.0` adds 18 integer texture formats, typed signed/unsigned clears, shader image numeric/shape
+  admission checks, and a nonzero-z 3D upload correction. See [Integer Textures](Integer-Textures.md)
+  for sampling, output, and exhaustive-switch compatibility. Integer GPU output is not an RGBA8 CPU frame.
 
 - `4.1.0` adds `AccelerationStructureAabbGeometry` and
   `BuildProceduralBottomLevelAccelerationStructureCommand` with Vulkan BUILD/UPDATE execution.
@@ -20,8 +24,9 @@ descriptors; the new command extends the sealed command hierarchy.
 - `4.1.0` continues the direct graphics, compute, ray-tracing, resource, and frame contracts.
 - All published modules use the same `MAJOR.MINOR.PATCH` coordinate and the `vMAJOR.MINOR.PATCH`
   source tag.
-- New consumers should compile against 4.1.0; rollback to 4.0.3 requires removing procedural
-  build commands. Published coordinates are immutable; rollback never overwrites an artifact.
+- New consumers should compile against 4.2.0; rollback to 4.1.0 requires removing integer formats
+  and typed integer clears and using complete-volume uploads for nonzero-z 3D updates. Rollback to
+  4.0.3 also requires removing procedural build commands. Published coordinates are immutable.
 - Maven Central is the release artifact authority. This source checkout also configures a local
   build repository after Central so the demo can consume a staged, unreleased version. That
   maintenance fallback is not distributed as a consumer repository requirement.

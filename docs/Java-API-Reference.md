@@ -95,6 +95,10 @@ completion 后推进到 `CONSUMER_ACCEPTED`。该 provider 不拥有显示系统
 
 ### 通用命令与硬件光追
 
+4.2.0 新增 18 种整数纹理格式、`TextureFormat.numericClass()`、`bytesPerTexel()`，以及
+`ClearValue.SignedColor` / `UnsignedColor`。整数采样与清除必须匹配精确的有符号／无符号类型；
+整数附件关闭 blending。GPU 输出完成不隐含 RGBA8 CPU 回读可用，详见[整数纹理契约](Integer-Textures.md)。
+
 专家入口先使用 `renderingSemanticCapabilities()` 确认必需语义为 `EXECUTABLE`，再依次调用
 `submitResources(...)` 与 `submitCommands(...)`。资源的 accepted、写入 recorded、GPU ready、
 retirement 与 command output 都是不同的类型化 evidence，不能由构造成功或日志推断。

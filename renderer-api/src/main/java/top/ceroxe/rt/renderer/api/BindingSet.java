@@ -90,6 +90,19 @@ public final class BindingSet {
             if (!view.texture().usage().contains(TextureUsage.SAMPLED)) {
                 throw new IllegalArgumentException("combined image sampler view requires SAMPLED texture usage");
             }
+            TextureFormat.NumericClass numeric = view.texture().format().numericClass();
+            if (numeric == TextureFormat.NumericClass.SIGNED_INTEGER
+                    || numeric == TextureFormat.NumericClass.UNSIGNED_INTEGER) {
+                if (sampler.minFilter() != SamplerState.Filter.NEAREST
+                        || sampler.magFilter() != SamplerState.Filter.NEAREST
+                        || sampler.mipFilter() != SamplerState.MipFilter.NEAREST
+                        || sampler.maximumAnisotropy() != 1.0f || sampler.compareOperation() != null) {
+                    throw new IllegalArgumentException("integer sampled textures require nearest non-comparison sampling without anisotropy");
+                }
+            }
+            if (sampler.compareOperation() != null && view.range().aspect() != TextureAspect.DEPTH) {
+                throw new IllegalArgumentException("comparison sampling requires a depth texture view");
+            }
         }
 
         /** @return the one exact descriptor category represented by this pair */

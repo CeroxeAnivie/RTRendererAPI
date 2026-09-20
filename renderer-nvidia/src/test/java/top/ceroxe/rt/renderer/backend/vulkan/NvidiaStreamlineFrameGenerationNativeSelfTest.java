@@ -15,6 +15,7 @@ import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Technology;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
 import top.ceroxe.rt.renderer.nvidia.NvidiaStreamlineDiagnostics;
+import top.ceroxe.rt.renderer.nvidia.StreamlineNativeTestDiagnostics;
 import top.ceroxe.rt.renderer.nvidia.WindowsChildProcessIsolation;
 
 import java.util.Optional;
@@ -220,10 +221,12 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                     NvidiaGpuSceneNativeTestSupport.require(
                             stats.active(),
                             featureName + " produced no authoritative generated-frame presentation: " + stats
+                                    + "; native diagnostics: " + StreamlineNativeTestDiagnostics.warnings()
                     );
                     NvidiaGpuSceneNativeTestSupport.require(
                             consecutiveGeneratedSamples >= MINIMUM_PRESENT_COUNT,
                             featureName + " did not sustain the requested generated-frame cadence: " + stats
+                                    + "; native diagnostics: " + StreamlineNativeTestDiagnostics.warnings()
                     );
                     NvidiaGpuSceneNativeTestSupport.require(
                             stats.maxGeneratedFramesInSample() >= (composed

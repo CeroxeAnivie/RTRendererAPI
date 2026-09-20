@@ -87,6 +87,7 @@ final class RenderBarrierValidator {
     private static boolean isShader(RenderPipelineStage stage) {
         return stage == RenderPipelineStage.VERTEX_SHADER
                 || stage == RenderPipelineStage.FRAGMENT_SHADER
+                || stage == RenderPipelineStage.GEOMETRY_SHADER
                 || stage == RenderPipelineStage.COMPUTE_SHADER
                 || stage == RenderPipelineStage.RAY_TRACING_SHADER;
     }

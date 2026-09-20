@@ -435,6 +435,14 @@ public final class RenderCommandContractSelfTest {
                 Set.of(RenderPipelineStage.COPY), Set.of(RenderResourceAccess.COPY_WRITE)
         );
         require(validBarrier.slice().range().lengthBytes() == 32, "barrier range was not retained");
+        BufferResource geometryUniform = buffer(407L, 32, BufferUsage.COPY_DESTINATION, BufferUsage.UNIFORM);
+        var geometryUniformSlice = new ResourceSlice.BufferSlice(geometryUniform, new ByteRange(0, 32));
+        new BufferBarrier(geometryUniformSlice, Set.of(RenderPipelineStage.COPY), Set.of(RenderResourceAccess.COPY_WRITE),
+                Set.of(RenderPipelineStage.GEOMETRY_SHADER), Set.of(RenderResourceAccess.UNIFORM_READ));
+        new BufferBarrier(geometryUniformSlice, Set.of(RenderPipelineStage.GEOMETRY_SHADER), Set.of(RenderResourceAccess.UNIFORM_READ),
+                Set.of(RenderPipelineStage.COPY), Set.of(RenderResourceAccess.COPY_WRITE));
+        expectFailure(() -> new BufferBarrier(geometryUniformSlice, Set.of(RenderPipelineStage.COPY), Set.of(RenderResourceAccess.COPY_WRITE),
+                Set.of(RenderPipelineStage.GEOMETRY_SHADER), Set.of(RenderResourceAccess.SHADER_READ)));
         expectFailure(() -> new BufferBarrier(
                 new ResourceSlice.BufferSlice(same, new ByteRange(0, 32)),
                 Set.of(RenderPipelineStage.VERTEX_INPUT), Set.of(RenderResourceAccess.SHADER_WRITE),

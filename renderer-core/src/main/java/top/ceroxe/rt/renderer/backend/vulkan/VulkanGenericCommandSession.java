@@ -259,7 +259,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                     );
                 }
             }
-            if (cpuFrameReadbackEnabled && plan.outputRecord().isPresent()) {
+            if (cpuFrameReadbackEnabled && plan.outputRecord().filter(VulkanGenericCpuFrameReadback::supports).isPresent()) {
                 cpuReadback = readbackPool.acquire(plan.outputRecord().orElseThrow());
             }
             List<StagingUpload> immutableStaging = List.copyOf(staging);
@@ -436,6 +436,9 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 if (output && current.outputRecord() != null && cpuFrameReadbackEnabled) {
                     try {
                         VulkanGenericResourceRegistry.TextureRecord outputRecord = current.outputRecord();
+                        if (!VulkanGenericCpuFrameReadback.supports(outputRecord)) {
+                            throw new UnsupportedOperationException("GPU output completed; CpuFrame RGBA8 cannot represent this output texture format or shape");
+                        }
                         if (current.readback() == null) {
                             throw new IllegalStateException("generic output readback was not admitted");
                         }
@@ -716,7 +719,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 .bufferImageHeight(0);
         region.imageSubresource().aspectMask(VulkanGenericTextureMappings.aspectMask(command.destination().range().aspect()))
                 .mipLevel(command.destination().range().baseMipLevel())
-                .baseArrayLayer(command.destination().range().baseArrayLayer() + command.origin().z())
+                .baseArrayLayer(baseArrayLayer(record, command.destination().range().baseArrayLayer(), command.origin().z()))
                 .layerCount(record.descriptor().dimension() == TextureDimension.TEXTURE_3D ? 1 : command.extent().depth());
         region.imageOffset().set(command.origin().x(), command.origin().y(),
                 record.descriptor().dimension() == TextureDimension.TEXTURE_3D ? command.origin().z() : 0);
@@ -912,15 +915,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     }
 
     private static int bytesPerTexel(top.ceroxe.rt.renderer.api.TextureFormat format) {
-        return switch (format) {
-            case R8_UNORM -> 1;
-            case RG8_UNORM, R16_FLOAT -> 2;
-            case RGBA8_UNORM, RGBA8_SRGB, R32_FLOAT, D32_FLOAT, D24_UNORM_S8_UINT -> 4;
-            case RG16_FLOAT -> 4;
-            case RGBA16_FLOAT -> 8;
-            case RG32_FLOAT -> 8;
-            case RGBA32_FLOAT -> 16;
-        };
+        return format.bytesPerTexel();
     }
 
     private static TextureSubresourceRange uploadRange(
