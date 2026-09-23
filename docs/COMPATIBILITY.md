@@ -10,6 +10,9 @@ formats and clear variants extend the enum and sealed interface respectively.
   Explicit shader or partial-range barriers no longer suppress AS-build dependencies, and subsequent
   writes invalidate prior visibility. Public API descriptors remain unchanged from 4.2.0. The Vulkan
   backend conservatively adds full-buffer dependencies when explicit scopes cannot prove readiness.
+  The NVIDIA bridge also initializes the centered camera pinhole offset explicitly instead of
+  passing the Streamline invalid-value sentinel. Native constant regression and FG/MFG hardware
+  acceptance cover this correction; public API and serialized frame contracts are unchanged.
   Rollback to 4.2.0 restores the mixed-use buffer synchronization defect.
 
 - `4.2.0` adds 18 integer texture formats, typed signed/unsigned clears, shader image numeric/shape

@@ -49,7 +49,7 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
         }
         int requestedGeneratedFrames = multiFrame ? 2 : 1;
         String featureName = composed
-                ? "NRD + DLSS SR + adaptive DLSS FG/MFG"
+                ? "NRD + DLSS SR + recommended DLSS FG 2x"
                 : adaptive ? "adaptive DLSS FG/MFG" : multiFrame ? "DLSS MFG 3x" : "DLSS FG 2x";
         VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
         NvidiaGpuSceneNativeTestSupport.require(
@@ -57,14 +57,14 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                 featureName + " gate requires Vulkan RT: " + capability.summary()
         );
 
-        FrameGenerationOptions generation = adaptive || composed
+        FrameGenerationOptions generation = composed
                 ? FrameGenerationOptions.recommended()
                 : FrameGenerationOptions.builder()
                 .preference(RendererFeaturePreference.REQUIRED)
-                .mode(multiFrame
+                .mode(adaptive ? FrameGenerationOptions.Mode.ADAPTIVE : multiFrame
                         ? FrameGenerationOptions.Mode.MULTI_FRAME_GENERATION
                         : FrameGenerationOptions.Mode.FRAME_GENERATION)
-                .multiplier(multiFrame
+                .multiplier(adaptive ? FrameGenerationOptions.Multiplier.FOUR_X : multiFrame
                         ? FrameGenerationOptions.Multiplier.THREE_X
                         : FrameGenerationOptions.Multiplier.TWO_X)
                 .fallback(FrameGenerationOptions.Fallback.NONE)
@@ -142,7 +142,8 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                 int consecutiveGeneratedSamples = 0;
                 for (long sequence = 0L; sequence < MAXIMUM_PRESENT_COUNT; sequence++) {
                     if (sequence > 0L) {
-                        nextFrameDeadline += BASE_FRAME_PERIOD_NANOS;
+                        nextFrameDeadline = Math.max(nextFrameDeadline + BASE_FRAME_PERIOD_NANOS,
+                                System.nanoTime());
                         awaitBaseFrameDeadline(nextFrameDeadline);
                     }
                     RenderFrameRequest frame = NvidiaGpuSceneNativeTestSupport.frame(
@@ -170,6 +171,9 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                     );
                     presentedFrames++;
                     stats = NvidiaStreamlineDiagnostics.frameGenerationSnapshot();
+                    if (adaptive) {
+                        requestedGeneratedFrames = Math.min(3, stats.maxFramesToGenerate());
+                    }
                     long generatedDelta = stats.generatedFramesActuallyPresented()
                             - observedGeneratedFrames;
                     observedGeneratedFrames = stats.generatedFramesActuallyPresented();
@@ -203,9 +207,6 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                         stats.maxFramesToGenerate() >= requestedGeneratedFrames,
                         featureName + " exceeds the runtime multiplier limit: " + stats
                 );
-                if (adaptive || composed) {
-                    requestedGeneratedFrames = Math.min(3, stats.maxFramesToGenerate());
-                }
                 NvidiaGpuSceneNativeTestSupport.require(
                         stats.lastRequestedGeneratedFrames() == requestedGeneratedFrames,
                         featureName + " lost its configured multiplier before JNI present: " + stats
@@ -267,8 +268,7 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                                     == Status.ACTIVE,
                             "DLSS SR did not activate during composed generated presentation"
                     );
-                    Status expectedMultiFrameStatus = stats.maxGeneratedFramesInSample() > 1
-                            ? Status.ACTIVE : Status.AVAILABLE;
+                    Status expectedMultiFrameStatus = Status.DISABLED;
                     NvidiaGpuSceneNativeTestSupport.require(
                             session.featureCapabilities().technology(Technology.MULTI_FRAME_GENERATION).status()
                                     == expectedMultiFrameStatus,

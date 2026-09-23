@@ -687,7 +687,7 @@ tasks.register<JavaExec>("nvidiaNrdDlssGpuSceneNativeSelfTest") {
 
 tasks.register<JavaExec>("nvidiaNrdDlssFrameGenerationGpuSceneNativeSelfTest") {
     group = "verification"
-    description = "Runs ordered NRD, DLSS SR, and adaptive DLSS-G/MFG through a real swapchain."
+    description = "Runs ordered NRD, DLSS SR, and recommended DLSS-G 2x through a real swapchain."
     dependsOn(tasks.named("compileNvidiaBridge"), tasks.named("testClasses"))
     val cmake = cmakeExecutableProperty
     val nrdSdkRoot = nrdSdkRootProperty
@@ -734,7 +734,28 @@ listOf(
     }
 }
 
+val compileStreamlineFrameSupportTest = tasks.register<Exec>("compileStreamlineFrameSupportTest") {
+    group = "verification"
+    dependsOn(configureNvidiaBridge)
+    mustRunAfter(tasks.named("compileNvidiaBridge"))
+    doFirst {
+        executable(cmakeExecutableProperty.get())
+        args("--build", nativeBridgeBuildDirectory.get().asFile.absolutePath,
+            "--config", "Release", "--target", "streamline_frame_support_test", "--parallel", "1")
+    }
+}
+
+tasks.register<Exec>("nvidiaStreamlineFrameSupportNativeSelfTest") {
+    group = "verification"
+    description = "Checks native Streamline constants and SDK failures without loading the GPU runtime."
+    dependsOn(compileStreamlineFrameSupportTest)
+    doFirst {
+        executable(nativeBridgeBuildDirectory.get().file("Release/streamline_frame_support_test.exe").asFile)
+    }
+}
+
 val nvidiaAcceptanceTaskNames = listOf(
+    "nvidiaStreamlineFrameSupportNativeSelfTest",
     "verifyPackagedNvidiaRuntime",
     // DLSS-G/MFG owns the process-global Streamline present path. Run it before any test that
     // performs Streamline preflight so a previous SDK lifecycle cannot poison generation.
@@ -751,7 +772,8 @@ val nvidiaAcceptanceTaskNames = listOf(
     "nvidiaNrdGpuSceneNativeSelfTest",
     "nvidiaNrdDlaaGpuSceneNativeSelfTest",
     "nvidiaNrdDlssGpuSceneNativeSelfTest",
-    "nvidiaRtxmuGpuSceneNativeSelfTest"
+    "nvidiaRtxmuGpuSceneNativeSelfTest",
+    "nvidiaNrdDlssFrameGenerationGpuSceneNativeSelfTest"
 )
 
 /**

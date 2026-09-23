@@ -115,6 +115,11 @@ public:
         preferences.projectId = kProjectId;
         preferences.renderAPI = sl::RenderAPI::eVulkan;
         preferences.logMessageCallback = captureStreamlineDiagnostic;
+        const std::wstring diagnosticDirectory = environmentValue(L"RTRENDERER_STREAMLINE_LOG_DIR");
+        if (!diagnosticDirectory.empty()) {
+            preferences.pathToLogsAndData = diagnosticDirectory.c_str();
+            preferences.logLevel = sl::LogLevel::eVerbose;
+        }
         // OTA plugins would make a signed deployment nondeterministically bind a cached version.
         preferences.flags = sl::PreferenceFlags::eDisableCLStateTracking
                 | sl::PreferenceFlags::eDisableDebugText

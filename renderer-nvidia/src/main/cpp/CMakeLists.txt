@@ -115,6 +115,15 @@ add_library(rtrenderer_nvidia SHARED
     streamline_sdk.cpp
 )
 target_compile_features(rtrenderer_nvidia PRIVATE cxx_std_20)
+add_executable(streamline_frame_support_test
+    ../../test/cpp/streamline_frame_support_test.cpp
+    streamline_frame_support.cpp
+    streamline_diagnostics.cpp
+)
+target_compile_features(streamline_frame_support_test PRIVATE cxx_std_20)
+target_include_directories(streamline_frame_support_test PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}" "${STREAMLINE_ROOT}/include" "${VULKAN_HEADERS_DIR}"
+)
 target_compile_definitions(rtrenderer_nvidia PRIVATE
     WIN32_LEAN_AND_MEAN
     NOMINMAX

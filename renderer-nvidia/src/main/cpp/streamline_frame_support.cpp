@@ -77,6 +77,7 @@ void setConstantsForFrame(
     // the inverse offset that de-jitters the input image.
     constants.jitterOffset = {-frame.jitterX, -frame.jitterY};
     constants.mvecScale = {frame.motionScaleX, frame.motionScaleY};
+    constants.cameraPinholeOffset = {0.0F, 0.0F};
     constants.cameraPos = {frame.position[0], frame.position[1], frame.position[2]};
     constants.cameraUp = {frame.up[0], frame.up[1], frame.up[2]};
     constants.cameraRight = {frame.right[0], frame.right[1], frame.right[2]};
