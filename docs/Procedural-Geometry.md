@@ -64,6 +64,6 @@ covers padded strides and nonzero offsets, multiple geometries, intersection att
 any-hit rejection, exact RGBA pixels before and after UPDATE, incompatible UPDATE rejection,
 and TLAS/BLAS retirement with Vulkan validation enabled.
 
-Published coordinates are `top.ceroxe.rt:renderer-api:4.2.0`; the runtime core and NVIDIA modules
+Published coordinates are `top.ceroxe.rt:renderer-api:4.2.1`; the runtime core and NVIDIA modules
 resolve transitively at the same version. The [release validation record](quality/4.1.0-procedural-validation.md)
 identifies the actual device, acceptance commands, signed bundle and Central publication checks.

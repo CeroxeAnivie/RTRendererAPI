@@ -26,8 +26,9 @@ public final class VulkanGenericProceduralRayTracingNativeSelfTest {
                 .rayTracingOptimizations(RayTracingOptimizationOptions.disabled()).build();
         try (var device = VulkanDeviceRuntime.open(capability, RendererRtDiagnostics.noop(), true, true, config);
              var session = new VulkanGenericCommandSession(device, 2)) {
+            VulkanGenericBufferVisibilityNativeSelfTest.verifyPlans(device);
             var input = new BufferResource(new RenderResourceId(81001), ResourceVersion.initial(), 64,
-                    Set.of(BufferUsage.COPY_DESTINATION, BufferUsage.ACCELERATION_STRUCTURE_BUILD_INPUT));
+                    Set.of(BufferUsage.COPY_DESTINATION, BufferUsage.STORAGE_READ, BufferUsage.ACCELERATION_STRUCTURE_BUILD_INPUT));
             var output = new TextureResource(new RenderResourceId(81002), ResourceVersion.initial(),
                     TextureDimension.TEXTURE_2D, 4, 1, 1, 1, 1, 1, TextureFormat.RGBA8_UNORM,
                     Set.of(TextureUsage.STORAGE_READ_WRITE, TextureUsage.COPY_SOURCE, TextureUsage.COPY_DESTINATION));
@@ -42,6 +43,7 @@ public final class VulkanGenericProceduralRayTracingNativeSelfTest {
             var instances = List.of(new AccelerationStructureInstance(blas, AffineTransform3x4.identity(),
                     0, 255, 0, false, false));
             submit(session, 0, List.of(new WriteBufferCommand(slice, bounds(false)),
+                    shaderBarrier(new ResourceSlice.BufferSlice(input, new ByteRange(8, 24))),
                     new ClearColorCommand(new ResourceSlice.TextureSlice(output,
                             new TextureSubresourceRange(TextureAspect.COLOR, 0, 1, 0, 1)),
                             new ClearColorValue(0, 0, 0, 1)),
@@ -75,6 +77,7 @@ public final class VulkanGenericProceduralRayTracingNativeSelfTest {
                     .outcome() == CommandExecutionEvidence.Outcome.REJECTED, "UPDATE changed geometry kind");
 
             submit(session, 4, List.of(new WriteBufferCommand(slice, bounds(true)),
+                    shaderBarrier(slice),
                     new BuildProceduralBottomLevelAccelerationStructureCommand(blas, AccelerationStructureBuildMode.UPDATE,
                             List.of(geometry, geometry)),
                     new BuildTopLevelAccelerationStructureCommand(tlas, AccelerationStructureBuildMode.UPDATE, instances)),
@@ -87,6 +90,12 @@ public final class VulkanGenericProceduralRayTracingNativeSelfTest {
             submit(session, 8, List.of(new DestroyAccelerationStructureCommand(blas)), CommandExecutionEvidence.Outcome.GPU_COMPLETED);
         }
         System.out.println("VulkanGenericProceduralRayTracingNativeSelfTest passed: exact build/update pixels and retirement");
+    }
+
+    private static ResourceBarrierCommand shaderBarrier(ResourceSlice.BufferSlice slice) {
+        return new ResourceBarrierCommand(List.of(new BufferBarrier(slice,
+                Set.of(RenderPipelineStage.COPY), Set.of(RenderResourceAccess.COPY_WRITE),
+                Set.of(RenderPipelineStage.RAY_TRACING_SHADER), Set.of(RenderResourceAccess.SHADER_READ))), List.of());
     }
 
     private static ResourceData bounds(boolean moved) {

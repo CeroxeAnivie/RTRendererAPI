@@ -100,19 +100,21 @@ public final class VulkanGenericRayTracingNativeSelfTest {
 
             BufferResource positions = new BufferResource(
                     new RenderResourceId(70_001L), ResourceVersion.initial(), 36L,
-                    EnumSet.of(BufferUsage.COPY_DESTINATION, BufferUsage.ACCELERATION_STRUCTURE_BUILD_INPUT)
+                    EnumSet.of(BufferUsage.COPY_DESTINATION, BufferUsage.STORAGE_READ, BufferUsage.ACCELERATION_STRUCTURE_BUILD_INPUT)
             );
             BufferResource frameData = new BufferResource(
                     new RenderResourceId(70_005L), ResourceVersion.initial(), Float.BYTES,
                     EnumSet.of(BufferUsage.COPY_DESTINATION, BufferUsage.STORAGE_READ)
             );
+            BufferResource indices = new BufferResource(new RenderResourceId(70_006L), ResourceVersion.initial(), 12L,
+                    EnumSet.of(BufferUsage.COPY_DESTINATION, BufferUsage.STORAGE_READ, BufferUsage.ACCELERATION_STRUCTURE_BUILD_INPUT));
             TextureResource output = new TextureResource(
                     new RenderResourceId(70_002L), ResourceVersion.initial(), TextureDimension.TEXTURE_2D,
                     OUTPUT_WIDTH, OUTPUT_HEIGHT, 1, 1, 1, 1, TextureFormat.RGBA8_UNORM,
                     EnumSet.of(TextureUsage.COPY_DESTINATION, TextureUsage.STORAGE_READ_WRITE)
             );
             requireAccepted(session.submitResources(new RenderResourceTransaction(
-                    0L, List.of(positions, frameData), List.of(output), List.of()
+                    0L, List.of(positions, frameData, indices), List.of(output), List.of()
             )));
 
             AccelerationStructureResource bottomLevel = new AccelerationStructureResource(
@@ -143,10 +145,25 @@ public final class VulkanGenericRayTracingNativeSelfTest {
                         output, TextureViewDimension.TEXTURE_2D, outputRange
                 );
                 AccelerationStructureTriangleGeometry geometry = new AccelerationStructureTriangleGeometry(
-                        positionSlice, 12, 3, null, null, 0
+                        positionSlice, 12, 3, new ResourceSlice.BufferSlice(indices, new ByteRange(0, 12)),
+                        top.ceroxe.rt.renderer.api.AccelerationStructureIndexFormat.UINT32, 3
                 );
                 CommandExecutionEvidence build = session.submit(new RenderCommandTransaction(0L, List.of(
                         new WriteBufferCommand(positionSlice, new ResourceData(triangle)),
+                        new WriteBufferCommand(new ResourceSlice.BufferSlice(indices, new ByteRange(0, 12)),
+                                new ResourceData(ByteBuffer.allocate(12).order(ByteOrder.nativeOrder()).putInt(0).putInt(1).putInt(2).flip())),
+                        new top.ceroxe.rt.renderer.api.ResourceBarrierCommand(List.of(
+                                new top.ceroxe.rt.renderer.api.BufferBarrier(new ResourceSlice.BufferSlice(indices, new ByteRange(0, 4)),
+                                        Set.of(top.ceroxe.rt.renderer.api.RenderPipelineStage.COPY),
+                                        Set.of(top.ceroxe.rt.renderer.api.RenderResourceAccess.COPY_WRITE),
+                                        Set.of(top.ceroxe.rt.renderer.api.RenderPipelineStage.RAY_TRACING_SHADER),
+                                        Set.of(top.ceroxe.rt.renderer.api.RenderResourceAccess.SHADER_READ))), List.of()),
+                        new top.ceroxe.rt.renderer.api.ResourceBarrierCommand(List.of(
+                                new top.ceroxe.rt.renderer.api.BufferBarrier(positionSlice,
+                                        Set.of(top.ceroxe.rt.renderer.api.RenderPipelineStage.COPY),
+                                        Set.of(top.ceroxe.rt.renderer.api.RenderResourceAccess.COPY_WRITE),
+                                        Set.of(top.ceroxe.rt.renderer.api.RenderPipelineStage.RAY_TRACING_SHADER),
+                                        Set.of(top.ceroxe.rt.renderer.api.RenderResourceAccess.SHADER_READ))), List.of()),
                         new ClearColorCommand(
                                 new ResourceSlice.TextureSlice(output, outputRange),
                                 new ClearColorValue(0.0F, 0.0F, 0.0F, 1.0F)

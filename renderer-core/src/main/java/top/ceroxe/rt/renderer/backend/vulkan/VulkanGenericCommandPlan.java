@@ -102,7 +102,7 @@ final class VulkanGenericCommandPlan {
         ArrayList<Action> actions = new ArrayList<>();
         ArrayList<VulkanGenericResourceRegistry.BufferRecord> writes = new ArrayList<>();
         ArrayList<VulkanGenericResourceRegistry.BufferRecord> reads = new ArrayList<>();
-        ArrayList<VulkanGenericResourceRegistry.BufferRecord> locallyReadableBuffers = new ArrayList<>();
+        VulkanGenericBufferVisibility locallyReadableBuffers = new VulkanGenericBufferVisibility();
         ArrayList<VulkanGenericResourceRegistry.TextureRecord> textureWrites = new ArrayList<>();
         ArrayList<VulkanGenericResourceRegistry.TextureRecord> textureReads = new ArrayList<>();
         ArrayList<VulkanGenericResourceRegistry.TextureRecord> locallyReadableTextures = new ArrayList<>();
@@ -283,6 +283,7 @@ final class VulkanGenericCommandPlan {
                     resources.requireWritable(destination);
                     actions.add(new Write(destination, write.destination().range().offsetBytes(), write.data().bytes()));
                     writes.add(destination);
+                    locallyReadableBuffers.written(destination.generation());
                 }
                 case CopyBufferCommand copy -> {
                     VulkanGenericResourceRegistry.BufferRecord source = resources.requireBuffer(copy.source().resource());
@@ -297,6 +298,7 @@ final class VulkanGenericCommandPlan {
                     ));
                     reads.add(source);
                     writes.add(destination);
+                    locallyReadableBuffers.written(destination.generation());
                 }
                 case WriteTextureCommand write -> {
                     VulkanGenericResourceRegistry.TextureRecord destination = resources.requireTexture(
@@ -348,6 +350,7 @@ final class VulkanGenericCommandPlan {
                     actions.add(new CopyTextureToBuffer(source, destination, copy));
                     textureReads.add(source);
                     writes.add(destination);
+                    locallyReadableBuffers.written(destination.generation());
                 }
                 case ClearColorCommand clear -> {
                     VulkanGenericResourceRegistry.TextureRecord destination = resources.requireTexture(
@@ -423,8 +426,7 @@ final class VulkanGenericCommandPlan {
                         VulkanGenericResourceRegistry.BufferRecord record = resources.requireBuffer(
                                 source.slice().resource()
                         );
-                        if (wasWrittenEarlier(record, writes)) locallyReadableBuffers.add(record);
-                        else resources.requireReadable(record);
+                        if (!wasWrittenEarlier(record, writes)) resources.requireReadable(record);
                         resolved.add(new ResolvedBufferBarrier(record, source));
                         reads.add(record);
                     }
@@ -468,7 +470,7 @@ final class VulkanGenericCommandPlan {
             VulkanGenericResourceRegistry resources, BindingSet bindings,
             List<VulkanGenericResourceRegistry.BufferRecord> writes,
             List<VulkanGenericResourceRegistry.TextureRecord> textureWrites,
-            List<VulkanGenericResourceRegistry.BufferRecord> locallyReadable,
+            VulkanGenericBufferVisibility locallyReadable,
             List<VulkanGenericResourceRegistry.TextureRecord> locallyReadableTextures) {
         if (bindings == null) return;
         for (List<BindingSet.Value> values : bindings.values().values()) {
@@ -478,7 +480,7 @@ final class VulkanGenericCommandPlan {
                     var record = resources.requireBuffer(buffer.buffer());
                     resources.requireWritable(record);
                     writes.add(record);
-                    locallyReadable.remove(record);
+                    locallyReadable.written(record.generation());
                 } else if (value instanceof BindingSet.TextureValue texture
                         && texture.type() == top.ceroxe.rt.renderer.api.BindingType.READ_WRITE_STORAGE_TEXTURE) {
                     var record = resources.requireTexture(texture.view().texture());
@@ -497,7 +499,7 @@ final class VulkanGenericCommandPlan {
             List<VulkanGenericResourceRegistry.TextureRecord> textureReads,
             List<VulkanGenericResourceRegistry.BufferRecord> priorBufferWrites,
             List<VulkanGenericResourceRegistry.TextureRecord> priorTextureWrites,
-            List<VulkanGenericResourceRegistry.BufferRecord> locallyReadableBuffers,
+            VulkanGenericBufferVisibility locallyReadableBuffers,
             List<VulkanGenericResourceRegistry.TextureRecord> locallyReadableTextures,
             List<Action> actions,
             VulkanGenericAccelerationStructures.Compilation accelerationStructures
@@ -554,10 +556,10 @@ final class VulkanGenericCommandPlan {
             VulkanGenericResourceRegistry resources,
             VulkanGenericResourceRegistry.BufferRecord record,
             List<VulkanGenericResourceRegistry.BufferRecord> priorWrites,
-            List<VulkanGenericResourceRegistry.BufferRecord> locallyReadable,
+            VulkanGenericBufferVisibility locallyReadable,
             List<Action> actions
     ) {
-        if (wasWrittenEarlier(record, locallyReadable)) return;
+        if (locallyReadable.readable(record.generation())) return;
         if (!wasWrittenEarlier(record, priorWrites)) {
             resources.requireReadable(record);
             return;
@@ -565,36 +567,23 @@ final class VulkanGenericCommandPlan {
         // A transfer write earlier in this one command buffer is ordered only after a matching
         // memory dependency. This is internal planning, not fabricated cross-submission readiness.
         addVisibility(actions, new AutoBufferVisibility(record));
-        locallyReadable.add(record);
+        locallyReadable.allConsumersVisible(record.generation());
     }
 
-    /**
-     * Uses the exact Vulkan AS-build consumer stage for a same-submission transfer upload.
-     * Other producer classes remain explicit because this plan does not invent shader-write
-     * visibility from a descriptor declaration.
-     */
     private static void requireAccelerationStructureInputReadable(
             VulkanGenericResourceRegistry resources,
             VulkanGenericResourceRegistry.BufferRecord record,
             List<VulkanGenericResourceRegistry.BufferRecord> priorWrites,
-            List<VulkanGenericResourceRegistry.BufferRecord> locallyReadable,
+            VulkanGenericBufferVisibility locallyReadable,
             List<Action> actions
     ) {
-        if (wasWrittenEarlier(record, locallyReadable)) return;
+        if (locallyReadable.accelerationInputReadable(record.generation())) return;
         if (!wasWrittenEarlier(record, priorWrites)) {
             resources.requireReadable(record);
             return;
         }
         actions.add(new AutoAccelerationStructureInputVisibility(record));
-        locallyReadable.add(record);
-    }
-
-    private static void requireReadable(
-            VulkanGenericResourceRegistry resources,
-            VulkanGenericResourceRegistry.BufferRecord record,
-            List<VulkanGenericResourceRegistry.BufferRecord> locallyReadable
-    ) {
-        if (!wasWrittenEarlier(record, locallyReadable)) resources.requireReadable(record);
+        locallyReadable.accelerationInputVisible(record.generation());
     }
 
     private static void requireReadable(
