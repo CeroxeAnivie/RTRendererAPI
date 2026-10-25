@@ -1,10 +1,13 @@
 # API Contract
 
-RTRendererAPI 4.2.1 is the current contract line. The public API and provider SPI expose one canonical
+RTRendererAPI 4.2.2 is the current contract line. The public API and provider SPI expose one canonical
 entry point for each operation. Existing public method descriptors remain available; new texture
 formats and clear variants extend the enum and sealed interface respectively.
 
 ## Versioning
+
+- `4.2.2` fixes exact-camera camera-to-world uniform packing to preserve the four-word row stride
+  consumed by the Vulkan shader. Public API descriptors remain unchanged from 4.2.1.
 
 - `4.2.1` fixes same-submission buffer visibility for triangle/index and procedural AABB builds.
   Explicit shader or partial-range barriers no longer suppress AS-build dependencies, and subsequent
@@ -33,7 +36,7 @@ formats and clear variants extend the enum and sealed interface respectively.
 - `4.1.0` continues the direct graphics, compute, ray-tracing, resource, and frame contracts.
 - All published modules use the same `MAJOR.MINOR.PATCH` coordinate and the `vMAJOR.MINOR.PATCH`
   source tag.
-- New consumers should compile against 4.2.1; rollback to 4.1.0 requires removing integer formats
+- New consumers should compile against 4.2.2; rollback to 4.1.0 requires removing integer formats
   and typed integer clears and using complete-volume uploads for nonzero-z 3D updates. Rollback to
   4.0.3 also requires removing procedural build commands. Published coordinates are immutable.
 - Maven Central is the release artifact authority. This source checkout also configures a local

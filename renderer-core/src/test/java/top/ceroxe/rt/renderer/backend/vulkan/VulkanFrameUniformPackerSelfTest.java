@@ -121,7 +121,105 @@ public final class VulkanFrameUniformPackerSelfTest {
       expect(IllegalArgumentException.class, () -> VulkanFrameUniformPacker.pack(frame, 0, 6L, temporal, TemporalRenderingOptions.balanced(), false));
       expect(IllegalArgumentException.class, () -> VulkanFrameUniformPacker.temporalJitter(-1L, true));
       verifiesVendorProvenanceWithoutBuiltInHistory();
+      verifiesExactCameraToWorldShaderLayout();
       System.out.println("VulkanFrameUniformPackerSelfTest passed");
+   }
+
+   private static void verifiesExactCameraToWorldShaderLayout() {
+      verifyExactCameraToWorldShaderLayout("identity", new double[]{
+            1, 0, 0, 3,
+            0, 1, 0, 4,
+            0, 0, 1, 5,
+            0, 0, 0, 1
+      });
+      // Quaternion (1, 2, 3, 4) / sqrt(30) gives a proper, non-symmetric rotation.
+      verifyExactCameraToWorldShaderLayout("rotated", new double[]{
+            2.0 / 15.0, -2.0 / 3.0, 11.0 / 15.0, 3,
+            14.0 / 15.0, 1.0 / 3.0, 2.0 / 15.0, 4,
+            -1.0 / 3.0, 2.0 / 3.0, 2.0 / 3.0, 5,
+            0, 0, 0, 1
+      });
+   }
+
+   private static void verifyExactCameraToWorldShaderLayout(String label, double[] cameraToWorld) {
+      int width = 129;
+      int height = 97;
+      ExactProjectionState exact = ExactProjectionState.builder(width, height)
+            .matrixLayout(ExactProjectionState.MatrixLayout.ROW_MAJOR)
+            .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+            .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+            .cameraToWorld(cameraToWorld)
+            // Finite near/far planes keep both shader unprojection endpoints valid.
+            .clipFromView(new double[]{
+                  1.25, 0, 0, 0,
+                  0, 1.75, 0, 0,
+                  0, 0, -9.0 / 8.0, -9.0 / 8.0,
+                  0, 0, -1, 0
+            }).build();
+      RenderFrameRequest frame = RenderFrameRequest.builder(
+            1L, width, height, CameraState.exactProjection(exact)
+      ).build();
+      TemporalRenderingOptions options = TemporalRenderingOptions.disabled();
+      TemporalHistoryTracker tracker = new TemporalHistoryTracker(options);
+      long sceneRevision = 7L;
+      ByteBuffer words = ByteBuffer.wrap(VulkanFrameUniformPacker.pack(
+            frame, 0, sceneRevision, tracker.prepare(frame, sceneRevision), options, false
+      )).order(ByteOrder.LITTLE_ENDIAN);
+
+      int base = VulkanGpuSceneAbi.FRAME_EXACT_CAMERA_TO_WORLD_WORD;
+      for (int row = 0; row < 4; row++) {
+         for (int column = 0; column < 4; column++) {
+            double expected = row < 3 && column < 3 ? cameraToWorld[row * 4 + column]
+                  : row == 3 && column == 3 ? 1.0 : 0.0;
+            require(Math.abs(real32(words, base + row * 4 + column) - expected) < 1.0e-6,
+                  label + " exact camera matrix did not preserve shader row stride at " + row + "," + column);
+         }
+      }
+      for (int axis = 0; axis < 3; axis++) {
+         require(real64(words, VulkanGpuSceneAbi.FRAME_CAMERA_POSITION_WORD + axis * 2)
+                     == cameraToWorld[axis * 4 + 3],
+               label + " exact camera translation was not retained in the double position words");
+      }
+
+      for (int[] pixel : new int[][]{{64, 48}, {0, 0}, {128, 96}, {17, 71}}) {
+         ExactProjectionState.Ray expected = exact.rayForPixel(pixel[0], pixel[1]);
+         double[] actual = exactDirectionFromShaderAbi(words, width, height, pixel[0], pixel[1]);
+         require(Math.abs(actual[0] - expected.directionX()) < 1.0e-6
+                     && Math.abs(actual[1] - expected.directionY()) < 1.0e-6
+                     && Math.abs(actual[2] - expected.directionZ()) < 1.0e-6,
+               label + " packed shader ray disagreed with the public CPU ray at " + pixel[0] + "," + pixel[1]);
+      }
+   }
+
+   private static double[] exactDirectionFromShaderAbi(ByteBuffer words, int width, int height, int x, int y) {
+      double ndcX = (x + 0.5) / width * 2.0 - 1.0;
+      double ndcY = 1.0 - (y + 0.5) / height * 2.0;
+      int inverseBase = VulkanGpuSceneAbi.FRAME_EXACT_INVERSE_CLIP_FROM_VIEW_WORD;
+      int rotationBase = VulkanGpuSceneAbi.FRAME_EXACT_CAMERA_TO_WORLD_WORD;
+      double[][] world = new double[2][3];
+      // Decode the published shader ABI, using its four-word row stride for both matrices.
+      for (int plane = 0; plane < 2; plane++) {
+         double[] clip = {ndcX, ndcY, plane, 1.0};
+         double[] view = new double[4];
+         for (int row = 0; row < 4; row++) {
+            for (int column = 0; column < 4; column++) {
+               view[row] += real32(words, inverseBase + row * 4 + column) * clip[column];
+            }
+         }
+         require(Math.abs(view[3]) > 1.0e-7, "shader ray fixture had an invalid unprojection endpoint");
+         for (int row = 0; row < 3; row++) {
+            world[plane][row] = real64(words, VulkanGpuSceneAbi.FRAME_CAMERA_POSITION_WORD + row * 2);
+            for (int column = 0; column < 3; column++) {
+               world[plane][row] += real32(words, rotationBase + row * 4 + column) * view[column] / view[3];
+            }
+         }
+      }
+      double dx = world[1][0] - world[0][0];
+      double dy = world[1][1] - world[0][1];
+      double dz = world[1][2] - world[0][2];
+      double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      require(Double.isFinite(length) && length > 1.0e-12, "packed shader camera produced a degenerate ray");
+      return new double[]{dx / length, dy / length, dz / length};
    }
 
    private static void verifiesVendorProvenanceWithoutBuiltInHistory() {

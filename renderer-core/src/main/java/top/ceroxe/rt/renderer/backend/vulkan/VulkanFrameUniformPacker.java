@@ -271,11 +271,15 @@ final class VulkanFrameUniformPacker {
         /* Translation stays in the existing lossless double camera-position words. */
         double[] transform = exact.cameraToWorld();
         int base = VulkanGpuSceneAbi.FRAME_EXACT_CAMERA_TO_WORLD_WORD;
-        int[] rotation = {0, 1, 2, 4, 5, 6, 8, 9, 10};
-        for (int index = 0; index < rotation.length; index++) {
-            putFloat(target, base + index, exactFloat(transform[rotation[index]], "camera rotation"));
+        // gsExactWorldPoint reads three rows with a four-word stride, not a packed mat3.
+        for (int row = 0; row < 3; row++) {
+            for (int column = 0; column < 3; column++) {
+                int index = row * 4 + column;
+                putFloat(target, base + index, exactFloat(transform[index], "camera rotation"));
+            }
+            putFloat(target, base + row * 4 + 3, 0.0F);
         }
-        for (int index = 9; index < 15; index++) putFloat(target, base + index, 0.0F);
+        for (int index = 12; index < 15; index++) putFloat(target, base + index, 0.0F);
         putFloat(target, base + 15, 1.0F);
     }
 
