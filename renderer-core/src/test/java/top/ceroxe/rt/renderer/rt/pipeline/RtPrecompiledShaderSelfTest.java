@@ -17,10 +17,10 @@ public final class RtPrecompiledShaderSelfTest {
    }
 
    public static void main(String[] arguments) throws IOException {
-      if (arguments.length == 1) {
-         generate(Path.of(arguments[0]));
+      if (arguments.length >= 1 && arguments.length <= 3) {
+         generate(Path.of(arguments[0]), arguments.length>1?arguments[1]:null, arguments.length>2?arguments[2]:null);
       } else if (arguments.length != 0) {
-         throw new IllegalArgumentException("expected no arguments or one SPIR-V output directory");
+         throw new IllegalArgumentException("expected no arguments or output directory [stage [variant]]");
       } else {
          verify();
       }
@@ -52,24 +52,30 @@ public final class RtPrecompiledShaderSelfTest {
               + ", spirvBytes=" + verifiedBytes);
    }
 
-   private static void generate(Path outputRoot) throws IOException {
+   private static void generate(Path outputRoot,String selectedStage,String selectedVariant) throws IOException {
       Path root = outputRoot.toAbsolutePath().normalize();
+      int generated=0;
 
       for(Map.Entry<String, Integer> stage : STAGES.entrySet()) {
+         if(selectedStage!=null && !selectedStage.equals(stage.getKey())) continue;
          for(boolean gbuffer : new boolean[]{false, true}) {
             for(boolean hdr : hdrVariants((String)stage.getKey())) {
                for(boolean ser : serVariants((String)stage.getKey())) {
+                  if(selectedVariant!=null && !selectedVariant.equals(variant(gbuffer,hdr,ser))) continue;
                   byte[] spirv = RtShaderModuleCompiler.compileForVerification("assets/rtrenderer/shaders/" + (String)stage.getKey(), (Integer)stage.getValue(), gbuffer, hdr, ser);
                   Path variant = root.resolve(variant(gbuffer, hdr, ser));
                   Files.createDirectories(variant);
                   String details10001 = (String)stage.getKey();
                   Files.write(variant.resolve(details10001.replace('/', '_') + ".spv"), spirv, new OpenOption[0]);
+                  generated++;
+                  System.out.println("Generated " + stage.getKey() + " " + variant(gbuffer,hdr,ser) + " bytes=" + spirv.length);
                }
             }
          }
       }
 
-      System.out.println("Generated pinned RT SPIR-V resources under " + String.valueOf(root));
+      if(generated==0) throw new IllegalArgumentException("no shader matched stage="+selectedStage+", variant="+selectedVariant);
+      System.out.println("Generated " + generated + " pinned RT SPIR-V variants under " + String.valueOf(root));
    }
 
    private static Map<String, Integer> stages() {
@@ -82,6 +88,7 @@ public final class RtPrecompiledShaderSelfTest {
       stages.put("gpuscene/gpuscene.rmiss", 17);
       stages.put("gpuscene/gpuscene.rchit", 16);
       stages.put("gpuscene/gpuscene.rahit", 15);
+      stages.put("gpuscene/gpuscene_shadow.rmiss", Shaderc.shaderc_miss_shader);
       stages.put("gpuscene/gpuscene_nrd_compose.comp", Shaderc.shaderc_compute_shader);
       stages.put("gpuscene/gpuscene_reconstruction_publish.comp", Shaderc.shaderc_compute_shader);
       stages.put("gpuscene/generic_frame_composition.comp", Shaderc.shaderc_compute_shader);

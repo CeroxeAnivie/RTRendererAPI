@@ -17,6 +17,7 @@ public final class FramePrimitiveBatch {
 
     private static final FramePrimitiveBatch EMPTY = new FramePrimitiveBatch(List.of());
     private final List<PrimitiveInstance> primitives;
+    private final List<Integer> mediumBoundaryIndices;
 
     private FramePrimitiveBatch(List<PrimitiveInstance> primitives) {
         List<PrimitiveInstance> checked = Objects.requireNonNull(primitives, "primitives");
@@ -26,6 +27,11 @@ public final class FramePrimitiveBatch {
             throw new IllegalArgumentException("frame primitive count exceeds " + MAX_PRIMITIVES);
         }
         this.primitives = List.copyOf(checked);
+        var boundaries = new ArrayList<Integer>();
+        for (int index = 0; index < this.primitives.size(); index++) {
+            if (this.primitives.get(index).mediumBoundary().isPresent()) boundaries.add(index);
+        }
+        mediumBoundaryIndices = List.copyOf(boundaries);
     }
 
     /**
@@ -63,6 +69,15 @@ public final class FramePrimitiveBatch {
      */
     public List<PrimitiveInstance> primitives() {
         return primitives;
+    }
+
+    /**
+     * Returns immutable indices of participating-medium boundaries in {@link #primitives()} order.
+     * The index is built once with the batch; providers need not rescan unrelated primitives each frame.
+     * @return immutable, ascending primitive indices, empty for ordinary surface-only batches
+     */
+    public List<Integer> mediumBoundaryIndices() {
+        return mediumBoundaryIndices;
     }
 
     /**

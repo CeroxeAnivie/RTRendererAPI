@@ -27,7 +27,7 @@ public final class VulkanFrameUniformPackerSelfTest {
       TemporalHistoryTracker tracker = new TemporalHistoryTracker(TemporalRenderingOptions.balanced());
       TemporalHistoryTracker.PreparedFrame temporal = tracker.prepare(frame, sceneRevision);
       byte[] encoded = VulkanFrameUniformPacker.pack(frame, 37, sceneRevision, temporal, TemporalRenderingOptions.balanced(), false);
-      require(encoded.length == 1616, "frame ABI byte count changed");
+      require(encoded.length == VulkanGpuSceneAbi.FRAME_UNIFORM_WORDS * Integer.BYTES, "frame ABI byte count changed");
       ByteBuffer words = ByteBuffer.wrap(encoded).order(ByteOrder.LITTLE_ENDIAN);
       require(longInteger(words, VulkanGpuSceneAbi.FRAME_TIME_NANOS_WORD) == frame.clock().timeNanos()
                       && longInteger(words, VulkanGpuSceneAbi.FRAME_DELTA_NANOS_WORD) == 16666667,

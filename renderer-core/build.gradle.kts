@@ -175,6 +175,7 @@ val registerCoreSelfTest =
     }
 
 val contractSelfTests = linkedMapOf(
+    "coreMediumTransportSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumTransportSelfTest",
     "vulkanGenericBufferVisibilitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericBufferVisibilitySelfTest",
     "vulkanGenericGraphicsPipelinesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericGraphicsPipelinesSelfTest",
     "vulkanCommandEvidenceHistorySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanCommandEvidenceHistorySelfTest",
@@ -286,6 +287,10 @@ tasks.register<JavaExec>("generateRtPrecompiledShaders") {
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.rt.pipeline.RtPrecompiledShaderSelfTest")
     args(layout.projectDirectory.dir("src/main/resources/assets/rtrenderer/shaders/spv").asFile.absolutePath)
+    providers.gradleProperty("shaderStage").orNull?.let { stage ->
+        args(stage)
+        providers.gradleProperty("shaderVariant").orNull?.let { args(it) }
+    }
 }
 
 tasks.named<JavaExec>("coreVulkanGpuSceneHeavySceneBenchmark").configure {
@@ -326,6 +331,7 @@ val nativeSelfTests = linkedMapOf(
     "vulkanSceneRuntimeNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSceneRuntimeNativeSelfTest",
     "gpuSceneRayTracingPipelineNativeSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipelineNativeSelfTest",
     "vulkanGpuSceneRenderingSessionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneRenderingSessionNativeSelfTest",
+    "mediumTransportNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumTransportNativeSelfTest",
     "vulkanFrameSlotExternalCompletionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameSlotExternalCompletionNativeSelfTest",
     "vulkanGpuSceneThroughputNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneThroughputNativeSelfTest",
     "rtNativeMicroSceneSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeMicroSceneSelfTest",
@@ -346,6 +352,10 @@ nativeSelfTests.forEach { (taskName, mainClassName) ->
         mainClassName,
         "Runs the independent hardware Vulkan RT check $mainClassName."
     )
+}
+
+tasks.named<JavaExec>("mediumTransportNativeSelfTest").configure {
+    if (providers.gradleProperty("mediumProfile").isPresent) args("--profile")
 }
 
 tasks.named<JavaExec>("vulkanEvidenceRetentionNativeSelfTest").configure {

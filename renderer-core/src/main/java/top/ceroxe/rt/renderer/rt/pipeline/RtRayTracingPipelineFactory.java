@@ -187,8 +187,17 @@ final class RtRayTracingPipelineFactory {
             long anyHitModule,
             long pipelineCache
     ) {
+        return createPipeline(stack, device, pipelineLayout, raygenModule, missModule,
+                closestHitModule, anyHitModule, pipelineCache, VK10.VK_NULL_HANDLE);
+    }
+
+    static long createPipeline(MemoryStack stack, VkDevice device, long pipelineLayout,
+            long raygenModule, long missModule, long closestHitModule, long anyHitModule,
+            long pipelineCache, long shadowMissModule) {
+        boolean shadowService = shadowMissModule != VK10.VK_NULL_HANDLE;
+        int groupCount = GROUP_COUNT + (shadowService ? 1 : 0);
         ByteBuffer main = stack.UTF8("main");
-        VkPipelineShaderStageCreateInfo.Buffer stages = VkPipelineShaderStageCreateInfo.calloc(4, stack);
+        VkPipelineShaderStageCreateInfo.Buffer stages = VkPipelineShaderStageCreateInfo.calloc(shadowService ? 5 : 4, stack);
         shaderStage(stages.get(RAYGEN_STAGE), KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR,
                 raygenModule, main);
         shaderStage(stages.get(MISS_STAGE), KHRRayTracingPipeline.VK_SHADER_STAGE_MISS_BIT_KHR,
@@ -197,17 +206,20 @@ final class RtRayTracingPipelineFactory {
                 closestHitModule, main);
         shaderStage(stages.get(ANY_HIT_STAGE), KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
                 anyHitModule, main);
+        if (shadowService) shaderStage(stages.get(4), KHRRayTracingPipeline.VK_SHADER_STAGE_MISS_BIT_KHR,
+                shadowMissModule, main);
 
         VkRayTracingShaderGroupCreateInfoKHR.Buffer groups =
-                VkRayTracingShaderGroupCreateInfoKHR.calloc(GROUP_COUNT, stack);
+                VkRayTracingShaderGroupCreateInfoKHR.calloc(groupCount, stack);
         generalShaderGroup(groups.get(0), RAYGEN_STAGE);
         generalShaderGroup(groups.get(1), MISS_STAGE);
-        trianglesHitGroup(groups.get(2), CLOSEST_HIT_STAGE, ANY_HIT_STAGE);
+        if (shadowService) generalShaderGroup(groups.get(2), 4);
+        trianglesHitGroup(groups.get(shadowService ? 3 : 2), CLOSEST_HIT_STAGE, ANY_HIT_STAGE);
         VkRayTracingPipelineCreateInfoKHR.Buffer createInfo = VkRayTracingPipelineCreateInfoKHR.calloc(1, stack);
         createInfo.get(0).sType$Default()
                 .pStages(stages)
                 .pGroups(groups)
-                .maxPipelineRayRecursionDepth(1)
+                .maxPipelineRayRecursionDepth(shadowService ? 2 : 1)
                 .layout(pipelineLayout)
                 .basePipelineHandle(VK10.VK_NULL_HANDLE)
                 .basePipelineIndex(-1);
@@ -223,11 +235,16 @@ final class RtRayTracingPipelineFactory {
             VkDevice device,
             long pipeline
     ) {
-        int handleBytes = Math.multiplyExact(properties.shaderGroupHandleSize(), GROUP_COUNT);
+        return queryShaderGroupHandles(properties, device, pipeline, GROUP_COUNT);
+    }
+
+    static byte[] queryShaderGroupHandles(RtRayTracingPipelineProperties properties,
+            VkDevice device, long pipeline, int groupCount) {
+        int handleBytes = Math.multiplyExact(properties.shaderGroupHandleSize(), groupCount);
         ByteBuffer handles = MemoryUtil.memAlloc(handleBytes);
         try {
             checkVk(KHRRayTracingPipeline.vkGetRayTracingShaderGroupHandlesKHR(
-                    device, pipeline, 0, GROUP_COUNT, handles
+                    device, pipeline, 0, groupCount, handles
             ), "vkGetRayTracingShaderGroupHandlesKHR");
             byte[] copy = new byte[handleBytes];
             handles.get(0, copy);

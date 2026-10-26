@@ -35,6 +35,10 @@ public final class HexBallDemo {
     }
 
     public static void main(String[] arguments) throws Exception {
+        if (java.util.Arrays.asList(arguments).contains("--media")) {
+            MediumTransportDemo.main(java.util.Arrays.stream(arguments).filter(arg -> !arg.equals("--media")).toArray(String[]::new));
+            return;
+        }
         if (arguments.length == 0 || java.util.Arrays.asList(arguments).contains("--controls")) {
             DemoApiControls.openWorkbench();
             return;

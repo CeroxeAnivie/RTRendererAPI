@@ -140,10 +140,12 @@ final class DemoApiControls {
             JTextArea output = new JTextArea(8, 80); output.setEditable(false);
             JButton launch = new JButton("Apply and launch hex-ball");
             JButton programmable = new JButton("Open programmable scene");
+            JButton media = new JButton("Open medium transport laboratory");
             JTextField extent = new JTextField("1280x720", 12);
             JPanel actions = new JPanel(); actions.add(new JLabel("Output extent")); actions.add(extent);
-            actions.add(launch); actions.add(programmable);
+            actions.add(launch); actions.add(programmable); actions.add(media);
             List<Process> children = new ArrayList<>();
+            media.addActionListener(event -> spawn(List.of("--media"), output, children));
             Runnable start = () -> {
                 try {
                     var args = new ArrayList<String>();

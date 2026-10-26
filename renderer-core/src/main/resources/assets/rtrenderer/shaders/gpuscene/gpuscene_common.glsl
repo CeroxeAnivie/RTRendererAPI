@@ -1,5 +1,6 @@
 #ifndef GS_GPU_SCENE_COMMON_GLSL
 #define GS_GPU_SCENE_COMMON_GLSL
+#extension GL_EXT_control_flow_attributes : require
 
 #include "gpuscene_abi.glsl"
 
@@ -60,7 +61,43 @@ struct GpuScenePayload {
     // Launch pixel and extent survive closest/any-hit traversal so the hit shader can reconstruct
     // the rasterizer's screen-space UV footprint without relying on derivative instructions.
     uvec4 launchInfo;
+    uvec4 mediumBoundary;
 };
+
+const uint GS_MEDIUM_PATH_CAPACITY = 32u;
+struct GsMediumPath { uint slots[32]; uint depth; uint mediumSlot; };
+uint gsInstanceWord(uint instanceIndex, uint offset);
+uint gsMediumPathGet(GsMediumPath path, uint index) { return path.slots[index]; }
+void gsMediumPathSet(inout GsMediumPath path, uint index, uint value) { path.slots[index] = value; }
+uint gsSelectMediumInstance(GsMediumPath path);
+GsMediumPath gsEmptyMediumPath() {
+    GsMediumPath path; path.depth = 0u; path.mediumSlot=GS_INVALID_SLOT;
+    [[dont_unroll]] for (uint i=0u;i<GS_MEDIUM_PATH_CAPACITY;++i) path.slots[i]=0u;
+    return path;
+}
+GsMediumPath gsCameraMediumPath() {
+    GsMediumPath path=gsEmptyMediumPath();
+    path.depth=min(gsFrame.words[GPU_SCENE_FRAME_CAMERA_MEDIUM_COUNT_WORD],GS_MEDIUM_PATH_CAPACITY);
+    [[dont_unroll]] for(uint i=0u;i<path.depth;++i) gsMediumPathSet(path,i,gsFrame.words[GPU_SCENE_FRAME_CAMERA_MEDIUM_SLOTS_WORD+i]);
+    path.mediumSlot=gsSelectMediumInstance(path);
+    return path;
+}
+int gsMediumPathFind(GsMediumPath path, uint instanceIndex) {
+    [[dont_unroll]] for (uint i = 0u; i < min(path.depth, GS_MEDIUM_PATH_CAPACITY); ++i)
+        if (gsMediumPathGet(path, i) == instanceIndex) return int(i);
+    return -1;
+}
+uint gsCurrentMediumInstance(GsMediumPath path) { return path.mediumSlot; }
+uint gsSelectMediumInstance(GsMediumPath path) {
+    uint best = GS_INVALID_SLOT;
+    int bestPriority = int(0x80000000u);
+    [[dont_unroll]] for (uint i = 0u; i < min(path.depth, GS_MEDIUM_PATH_CAPACITY); ++i) {
+        uint candidate = gsMediumPathGet(path, i);
+        int priority = int(gsInstanceWord(candidate, GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD));
+        if (priority >= bestPriority) { bestPriority = priority; best = candidate; }
+    }
+    return best;
+}
 
 uint64_t gsU64(uint lowWord, uint highWord)
 {

@@ -17,7 +17,7 @@ import java.util.Objects;
  * Use the explicit command API for arbitrary stage groups, procedural geometry and recursion.</p>
  *
  * <p>Application data binding i is a read-only std430 storage buffer at set 0, binding
- * {@code SceneShaderBindings.APPLICATION_DATA + i}, visible in all four scene stages. Each
+ * {@code SceneShaderBindings.APPLICATION_DATA + i}, visible in all scene stages. Each
  * frame must supply exactly {@link #dataBindingCount()} immutable {@link ResourceData} values.
  * The payload uses ordinary storage buffers, with no prescribed application schema.</p>
  */

@@ -20,6 +20,7 @@ public final class SceneInstance {
     private final float surfaceVisibility;
     private final int packedLight;
     private final InstanceRenderState renderState;
+    private final MediumBoundaryState mediumBoundary;
 
     /**
      * Validates and creates an immutable scene instance.
@@ -42,7 +43,8 @@ public final class SceneInstance {
             boolean castsShadow,
             float surfaceVisibility,
             int packedLight,
-            InstanceRenderState renderState
+            InstanceRenderState renderState,
+            MediumBoundaryState mediumBoundary
     ) {
         MaterialAsset.requireId(id, "id");
         MaterialAsset.requireId(meshAssetId, "meshAssetId");
@@ -62,6 +64,7 @@ public final class SceneInstance {
         this.surfaceVisibility = surfaceVisibility;
         this.packedLight = requireValidPackedLight(packedLight);
         this.renderState = java.util.Objects.requireNonNull(renderState, "renderState");
+        this.mediumBoundary = mediumBoundary;
     }
 
     /**
@@ -160,6 +163,11 @@ public final class SceneInstance {
         return renderState;
     }
 
+    /** Returns the optional closed-volume medium boundary. */
+    public java.util.Optional<MediumBoundaryState> mediumBoundary() {
+        return java.util.Optional.ofNullable(mediumBoundary);
+    }
+
     /**
      * Starts an independent builder initialized from this complete instance generation.
      *
@@ -179,6 +187,7 @@ public final class SceneInstance {
                 && castsShadow == instance.castsShadow
                 && Float.compare(surfaceVisibility, instance.surfaceVisibility) == 0
                 && packedLight == instance.packedLight
+                && java.util.Objects.equals(mediumBoundary, instance.mediumBoundary)
                 && transform.equals(instance.transform)
                 && mobility == instance.mobility
                 && renderState.equals(instance.renderState);
@@ -188,7 +197,7 @@ public final class SceneInstance {
     public int hashCode() {
         return java.util.Objects.hash(
                 id, meshAssetId, transform, mobility,
-                visibilityMask, castsShadow, surfaceVisibility, packedLight, renderState
+                visibilityMask, castsShadow, surfaceVisibility, packedLight, renderState, mediumBoundary
         );
     }
 
@@ -204,6 +213,7 @@ public final class SceneInstance {
                 + ", surfaceVisibility=" + surfaceVisibility
                 + ", packedLight=" + packedLight
                 + ", renderState=" + renderState
+                + ", mediumBoundary=" + mediumBoundary
                 + ']';
     }
 
@@ -234,6 +244,7 @@ public final class SceneInstance {
         private float surfaceVisibility = 1.0F;
         private int packedLight = FULL_BRIGHT_PACKED_LIGHT;
         private InstanceRenderState renderState = InstanceRenderState.defaults();
+        private MediumBoundaryState mediumBoundary;
 
         private Builder(long id, long meshAssetId) {
             MaterialAsset.requireId(id, "id");
@@ -252,6 +263,7 @@ public final class SceneInstance {
             surfaceVisibility = source.surfaceVisibility;
             packedLight = source.packedLight;
             renderState = source.renderState;
+            mediumBoundary = source.mediumBoundary;
         }
 
         /**
@@ -349,6 +361,15 @@ public final class SceneInstance {
             return this;
         }
 
+        /** Declares a closed-volume interface with independent participating-medium coefficients. */
+        public Builder mediumBoundary(MediumBoundaryState value) {
+            mediumBoundary = java.util.Objects.requireNonNull(value, "mediumBoundary");
+            return this;
+        }
+
+        /** Removes this instance's volume-boundary role. */
+        public Builder clearMediumBoundary() { mediumBoundary = null; return this; }
+
         /**
          * Validates and returns an immutable instance generation.
          *
@@ -357,7 +378,7 @@ public final class SceneInstance {
         public SceneInstance build() {
             return new SceneInstance(
                     id, meshAssetId, transform, mobility,
-                    visibilityMask, castsShadow, surfaceVisibility, packedLight, renderState
+                    visibilityMask, castsShadow, surfaceVisibility, packedLight, renderState, mediumBoundary
             );
         }
     }

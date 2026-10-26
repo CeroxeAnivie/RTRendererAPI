@@ -49,7 +49,9 @@ public final class DemoFeatureIntegrationSelfTest {
                     "--api.frameGeneration.preference=REQUIRED", "--api.frameGeneration.mode=MULTI_FRAME_GENERATION",
                     "--api.frameGeneration.multiplier=THREE_X", "--api.frameGeneration.fallback=NONE",
                     "--api.temporalRendering.mode=ACCUMULATING", "--api.temporalRendering.maxHistoryFrames=16",
-                    "--frame.environment.sunRadiance=0.2,0.4,0.6", "--frame.fog.opacity=0.5"});
+                    "--frame.environment.sunRadiance=0.2,0.4,0.6", "--frame.fog.opacity=0.5",
+                    "--frame.mediumTransport.scatteringSteps=16", "--frame.mediumTransport.maxInterfaceEvents=20",
+                    "--frame.environment.cameraMedium.phaseAnisotropy=0.6", "--frame.environment.cameraMedium.emission=0.1,0.2,0.3"});
             require(java.util.Arrays.equals(remaining, new String[]{"--width=640"}), "controls consumed ordinary arguments");
             var config = DemoApiControls.configure(RendererConfig.presentation());
             require(config.frameGeneration().multiplier() == FrameGenerationOptions.Multiplier.THREE_X
@@ -59,6 +61,10 @@ public final class DemoFeatureIntegrationSelfTest {
             var frame = DemoApiControls.frame(DemoRendererProfile.frame(0, 640, 360,
                     DemoRendererProfile.camera(640, 360, 15.4)).build());
             require(frame.fog().opacity() == 0.5f, "frame policy was not applied");
+            require(frame.mediumTransport().scatteringSteps()==16 && frame.mediumTransport().maxInterfaceEvents()==20,
+                    "new transport options must be independently editable");
+            require(frame.environment().cameraMedium().phaseAnisotropy()==.6f
+                    && frame.environment().cameraMedium().emissionBlue()==.3f,"medium controls must reach real frame values");
             DemoApiControls.parse(new String[]{"--api.frameGeneration.preference=REQUIRED"});
             try { DemoApiControls.configure(RendererConfig.presentation()); throw new AssertionError("invalid fallback hidden"); }
             catch (IllegalArgumentException expected) { }

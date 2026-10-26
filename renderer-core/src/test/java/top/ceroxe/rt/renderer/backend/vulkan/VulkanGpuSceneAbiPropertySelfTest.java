@@ -147,7 +147,7 @@ public final class VulkanGpuSceneAbiPropertySelfTest {
                : stateBuilder.cardinalLighting(cardinalLighting)).build();
          SceneInstance instance = SceneInstance.builder((long)trial, (long)trial + 1L).transform(new AffineTransform(transform)).mobility(random.nextBoolean() ? Mobility.STATIC : Mobility.DYNAMIC).visibilityMask(random.nextInt(1, 256)).castsShadow(random.nextBoolean()).surfaceVisibility(visibility).lightmapCoordinates(firstLightCoordinate, secondLightCoordinate).renderState(state).build();
          int[] words = VulkanGpuSceneAbi.packInstance(instance, (ignored) -> meshSlot);
-         require(words.length == 57 && words[0] == meshSlot, trial, "instance slot or record stride changed");
+         require(words.length == VulkanGpuSceneAbi.INSTANCE_RECORD_WORDS && words[0] == meshSlot, trial, "instance slot or record stride changed");
 
          for(int element = 0; element < transform.length; ++element) {
             require(words[3 + element] == Float.floatToRawIntBits(transform[element]), trial, "instance transform lost exact float bits at element " + element);

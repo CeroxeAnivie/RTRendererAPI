@@ -149,6 +149,14 @@ final class VulkanFrameUniformPacker {
                 medium.scatteringRed(), medium.scatteringGreen(), medium.scatteringBlue());
         putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_DENSITY_WORD, medium.density());
         putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_IOR_WORD, medium.indexOfRefraction());
+        putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_PHASE_ANISOTROPY_WORD, medium.phaseAnisotropy());
+        putVec3(words, VulkanGpuSceneAbi.FRAME_MEDIUM_EMISSION_WORD,
+                medium.emissionRed(), medium.emissionGreen(), medium.emissionBlue());
+        var transport = frame.mediumTransport();
+        putInt(words, VulkanGpuSceneAbi.FRAME_OPTICAL_MAX_EVENTS_WORD, transport.maxInterfaceEvents());
+        putInt(words, VulkanGpuSceneAbi.FRAME_OPTICAL_SAMPLES_WORD, transport.opticalSamples());
+        putInt(words, VulkanGpuSceneAbi.FRAME_SCATTERING_STEPS_WORD, transport.scatteringSteps());
+        putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_MAX_DISTANCE_WORD, transport.maximumDistance());
         putInt(words, VulkanGpuSceneAbi.FRAME_LIGHT_SLOT_UPPER_BOUND_WORD, lightSlotUpperBound);
         putLong(words, VulkanGpuSceneAbi.FRAME_SCENE_REVISION_WORD, activeSceneRevision);
         DistanceFogState fog = frame.fog();

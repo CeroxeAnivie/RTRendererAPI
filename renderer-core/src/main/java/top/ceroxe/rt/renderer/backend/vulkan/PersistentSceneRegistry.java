@@ -229,6 +229,17 @@ final class PersistentSceneRegistry {
         transaction.upserts().materials().forEach(material -> validateMaterial(material, transaction, pending));
         transaction.upserts().meshes().forEach(mesh -> validateMesh(mesh, transaction, pending));
         transaction.upserts().instances().forEach(instance -> validateInstance(instance, transaction, pending));
+        // A mesh can be replaced while a retained boundary instance keeps its stable identity.
+        if (!transaction.reset()) for (MeshAsset mesh : transaction.upserts().meshes()) {
+            var dependents = meshInstances.dependents(mesh.id());
+            if (dependents == null) continue;
+            for (long id : dependents) {
+                if (pending.instanceUpserts.contains(id) || pending.instanceRemovals.contains(id)) continue;
+                SceneInstance instance = instances.get(id);
+                if (instance.mediumBoundary().isPresent() && !mesh.isClosedManifold())
+                    throw new SceneValidationException("mesh " + mesh.id() + " replacement opens retained medium boundary " + id);
+            }
+        }
     }
 
     private static void requireNoRetainedDependents(
@@ -302,6 +313,19 @@ final class PersistentSceneRegistry {
                     "instance " + instance.id() + " mesh references missing id " + instance.meshAssetId()
             );
         }
+        if (instance.mediumBoundary().isPresent()) {
+            MeshAsset boundaryMesh = findAsset(instance.meshAssetId(), transaction.upserts().meshes(), meshes);
+            if (boundaryMesh == null || !boundaryMesh.isClosedManifold()) {
+                throw new SceneValidationException(
+                        "instance " + instance.id() + " medium boundary requires a closed, consistently wound manifold mesh"
+                );
+            }
+        }
+    }
+
+    private static MeshAsset findAsset(long id, List<MeshAsset> upserts, Long2ObjectOpenHashMap<MeshAsset> current) {
+        for (MeshAsset mesh : upserts) if (mesh.id() == id) return mesh;
+        return current.get(id);
     }
 
     private ReferenceDelta prepareReferenceDelta(SceneTransaction transaction, PendingIds pending) {

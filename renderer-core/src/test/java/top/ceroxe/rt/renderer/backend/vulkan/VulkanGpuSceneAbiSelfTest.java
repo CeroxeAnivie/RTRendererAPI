@@ -89,7 +89,7 @@ public final class VulkanGpuSceneAbiSelfTest {
       require(meshRecord[2] == -1 && meshRecord[3] == -1, "absent geometry stream did not retain the canonical 64-bit sentinel");
       SceneInstance instance = SceneInstance.builder(40L, 30L).mobility(Mobility.DYNAMIC).visibilityMask(127).surfaceVisibility(0.375F).lightmapCoordinates(32, 176).build();
       int[] instanceRecord = VulkanGpuSceneAbi.packInstance(instance, (id) -> id == 30L ? 9 : -1);
-      require(instanceRecord.length == 57 && instanceRecord[0] == 9 && instanceRecord[2] == 127, "instance descriptor lost mesh slot or visibility mask");
+      require(instanceRecord.length == VulkanGpuSceneAbi.INSTANCE_RECORD_WORDS && instanceRecord[0] == 9 && instanceRecord[2] == 127, "instance descriptor lost mesh slot or visibility mask");
       require(Float.intBitsToFloat(instanceRecord[3]) == 1.0F && Float.intBitsToFloat(instanceRecord[8]) == 1.0F, "instance affine transform changed during packing");
       require(Float.intBitsToFloat(instanceRecord[15]) == 0.375F, "instance surface visibility did not occupy the reserved ABI word");
       require(instanceRecord[16] == 0x00b0_0020, "instance lightmap coordinates did not occupy the final ABI word");
@@ -147,7 +147,7 @@ public final class VulkanGpuSceneAbiSelfTest {
             .surfaceVisibility(0.5F)
             .build();
       int[] primitiveRecord = VulkanGpuSceneAbi.packPrimitive(primitive, id -> id == 30L ? 9 : -1);
-      require(primitiveRecord.length == 57 && primitiveRecord[0] == 9
+      require(primitiveRecord.length == VulkanGpuSceneAbi.INSTANCE_RECORD_WORDS && primitiveRecord[0] == 9
                   && primitiveRecord[1] == (VulkanGpuSceneAbi.FLAG_ACTIVE
                   | VulkanGpuSceneAbi.FLAG_CASTS_SHADOW | VulkanGpuSceneAbi.FLAG_DYNAMIC
                   | VulkanGpuSceneAbi.FLAG_FRAME_LOCAL

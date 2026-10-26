@@ -18,7 +18,8 @@ void main()
         ignoreIntersectionEXT;
         return;
     }
-    if ((flags & GPU_SCENE_FLAG_DOUBLE_SIDED) == 0u && gl_HitKindEXT == 0xffu) {
+    bool mediumBoundary = gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD) != 0u;
+    if (!mediumBoundary && (flags & GPU_SCENE_FLAG_DOUBLE_SIDED) == 0u && gl_HitKindEXT == 0xffu) {
         ignoreIntersectionEXT;
         return;
     }
@@ -67,7 +68,7 @@ void main()
             gl_InstanceCustomIndexEXT
         ).a;
     }
-    if (blendMode == GPU_SCENE_BLEND_MASKED) {
+    if (!mediumBoundary && blendMode == GPU_SCENE_BLEND_MASKED) {
         float cutoff = uintBitsToFloat(gsMaterials.words[
             materialBase + GPU_SCENE_MATERIAL_ALPHA_CUTOFF_WORD
         ]);
@@ -77,6 +78,10 @@ void main()
         }
     }
     if (payload.state.y == GS_PAYLOAD_SHADOW_QUERY) {
+        if ((gsInstanceFlags(gl_InstanceCustomIndexEXT) & GPU_SCENE_FLAG_CASTS_SHADOW) == 0u) {
+            ignoreIntersectionEXT;
+            return;
+        }
         if (overlayMode != 0u) {
             ignoreIntersectionEXT;
             return;

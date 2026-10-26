@@ -388,7 +388,8 @@ public final class EnvironmentState {
         private static final Medium VACUUM = new Medium(
                 0.0F, 0.0F, 0.0F,
                 0.0F, 0.0F, 0.0F,
-                0.0F, 1.0F
+                0.0F, 1.0F, 0.0F,
+                0.0F, 0.0F, 0.0F
         );
 
         private final float extinctionRed;
@@ -399,6 +400,10 @@ public final class EnvironmentState {
         private final float scatteringBlue;
         private final float density;
         private final float indexOfRefraction;
+        private final float phaseAnisotropy;
+        private final float emissionRed;
+        private final float emissionGreen;
+        private final float emissionBlue;
 
         private Medium(
                 float extinctionRed,
@@ -408,7 +413,11 @@ public final class EnvironmentState {
                 float scatteringGreen,
                 float scatteringBlue,
                 float density,
-                float indexOfRefraction
+                float indexOfRefraction,
+                float phaseAnisotropy,
+                float emissionRed,
+                float emissionGreen,
+                float emissionBlue
         ) {
             requireNonNegativeFinite(extinctionRed, "extinctionRed");
             requireNonNegativeFinite(extinctionGreen, "extinctionGreen");
@@ -420,6 +429,12 @@ public final class EnvironmentState {
             if (!Float.isFinite(indexOfRefraction) || indexOfRefraction < 1.0F) {
                 throw new IllegalArgumentException("indexOfRefraction must be finite and at least 1");
             }
+            if (!Float.isFinite(phaseAnisotropy) || phaseAnisotropy <= -1.0F || phaseAnisotropy >= 1.0F) {
+                throw new IllegalArgumentException("phaseAnisotropy must be finite and within (-1, 1)");
+            }
+            requireNonNegativeFinite(emissionRed, "emissionRed");
+            requireNonNegativeFinite(emissionGreen, "emissionGreen");
+            requireNonNegativeFinite(emissionBlue, "emissionBlue");
             this.extinctionRed = extinctionRed;
             this.extinctionGreen = extinctionGreen;
             this.extinctionBlue = extinctionBlue;
@@ -428,6 +443,10 @@ public final class EnvironmentState {
             this.scatteringBlue = scatteringBlue;
             this.density = density;
             this.indexOfRefraction = indexOfRefraction;
+            this.phaseAnisotropy = phaseAnisotropy;
+            this.emissionRed = emissionRed;
+            this.emissionGreen = emissionGreen;
+            this.emissionBlue = emissionBlue;
         }
 
         /**
@@ -502,6 +521,13 @@ public final class EnvironmentState {
             return scatteringBlue;
         }
 
+        /** Returns non-negative absorption, the difference between total extinction and scattering. */
+        public float absorptionRed() { return Math.max(0, extinctionRed - scatteringRed); }
+        /** Returns the green absorption coefficient. */
+        public float absorptionGreen() { return Math.max(0, extinctionGreen - scatteringGreen); }
+        /** Returns the blue absorption coefficient. */
+        public float absorptionBlue() { return Math.max(0, extinctionBlue - scatteringBlue); }
+
         /**
          * Returns the density multiplier.
          *
@@ -519,6 +545,18 @@ public final class EnvironmentState {
         public float indexOfRefraction() {
             return indexOfRefraction;
         }
+
+        /** Returns the Henyey-Greenstein phase anisotropy in {@code (-1, 1)}. */
+        public float phaseAnisotropy() { return phaseAnisotropy; }
+
+        /** Returns the linear red volumetric-emission coefficient. */
+        public float emissionRed() { return emissionRed; }
+
+        /** Returns the linear green volumetric-emission coefficient. */
+        public float emissionGreen() { return emissionGreen; }
+
+        /** Returns the linear blue volumetric-emission coefficient. */
+        public float emissionBlue() { return emissionBlue; }
 
         /**
          * Starts an independent builder initialized from this complete medium.
@@ -540,7 +578,11 @@ public final class EnvironmentState {
                     && Float.compare(scatteringGreen, medium.scatteringGreen) == 0
                     && Float.compare(scatteringBlue, medium.scatteringBlue) == 0
                     && Float.compare(density, medium.density) == 0
-                    && Float.compare(indexOfRefraction, medium.indexOfRefraction) == 0;
+                    && Float.compare(indexOfRefraction, medium.indexOfRefraction) == 0
+                    && Float.compare(phaseAnisotropy, medium.phaseAnisotropy) == 0
+                    && Float.compare(emissionRed, medium.emissionRed) == 0
+                    && Float.compare(emissionGreen, medium.emissionGreen) == 0
+                    && Float.compare(emissionBlue, medium.emissionBlue) == 0;
         }
 
         @Override
@@ -548,7 +590,8 @@ public final class EnvironmentState {
             return Objects.hash(
                     extinctionRed, extinctionGreen, extinctionBlue,
                     scatteringRed, scatteringGreen, scatteringBlue,
-                    density, indexOfRefraction
+                    density, indexOfRefraction, phaseAnisotropy,
+                    emissionRed, emissionGreen, emissionBlue
             );
         }
 
@@ -563,6 +606,10 @@ public final class EnvironmentState {
                     + ", scatteringBlue=" + scatteringBlue
                     + ", density=" + density
                     + ", indexOfRefraction=" + indexOfRefraction
+                    + ", phaseAnisotropy=" + phaseAnisotropy
+                    + ", emissionRed=" + emissionRed
+                    + ", emissionGreen=" + emissionGreen
+                    + ", emissionBlue=" + emissionBlue
                     + ']';
         }
 
@@ -578,6 +625,11 @@ public final class EnvironmentState {
             private float scatteringBlue;
             private float density;
             private float indexOfRefraction = 1.0F;
+            private float phaseAnisotropy;
+            private float emissionRed;
+            private float emissionGreen;
+            private float emissionBlue;
+            private float[] absorption;
 
             private Builder() {
             }
@@ -591,6 +643,10 @@ public final class EnvironmentState {
                 scatteringBlue = source.scatteringBlue;
                 density = source.density;
                 indexOfRefraction = source.indexOfRefraction;
+                phaseAnisotropy = source.phaseAnisotropy;
+                emissionRed = source.emissionRed;
+                emissionGreen = source.emissionGreen;
+                emissionBlue = source.emissionBlue;
             }
 
             /**
@@ -602,9 +658,22 @@ public final class EnvironmentState {
              * @return this builder
              */
             public Builder extinction(float red, float green, float blue) {
+                absorption = null;
                 extinctionRed = red;
                 extinctionGreen = green;
                 extinctionBlue = blue;
+                return this;
+            }
+
+            /**
+             * Selects absorption instead of total extinction. At build time total extinction is
+             * absorption plus the final scattering coefficients, independent of setter order.
+             */
+            public Builder absorption(float red, float green, float blue) {
+                requireNonNegativeFinite(red, "absorptionRed");
+                requireNonNegativeFinite(green, "absorptionGreen");
+                requireNonNegativeFinite(blue, "absorptionBlue");
+                absorption = new float[]{red, green, blue};
                 return this;
             }
 
@@ -645,6 +714,17 @@ public final class EnvironmentState {
                 return this;
             }
 
+            /** Selects the Henyey-Greenstein phase anisotropy in {@code (-1, 1)}. */
+            public Builder phaseAnisotropy(float value) { phaseAnisotropy = value; return this; }
+
+            /** Selects linear volumetric emission per unit distance. */
+            public Builder emission(float red, float green, float blue) {
+                emissionRed = red;
+                emissionGreen = green;
+                emissionBlue = blue;
+                return this;
+            }
+
             /**
              * Validates and returns immutable homogeneous-medium parameters.
              *
@@ -653,9 +733,12 @@ public final class EnvironmentState {
              */
             public Medium build() {
                 return new Medium(
-                        extinctionRed, extinctionGreen, extinctionBlue,
+                        absorption == null ? extinctionRed : absorption[0] + scatteringRed,
+                        absorption == null ? extinctionGreen : absorption[1] + scatteringGreen,
+                        absorption == null ? extinctionBlue : absorption[2] + scatteringBlue,
                         scatteringRed, scatteringGreen, scatteringBlue,
-                        density, indexOfRefraction
+                        density, indexOfRefraction, phaseAnisotropy,
+                        emissionRed, emissionGreen, emissionBlue
                 );
             }
         }

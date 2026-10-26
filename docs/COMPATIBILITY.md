@@ -1,8 +1,14 @@
 # API Contract
 
-RTRendererAPI 5.1.1 preserves the Java and GPU ABI of 5.1.0 and the Java 25 major-5 contract.
-Use matching API and backend modules. This patch is delivered through GitHub source and local
-Maven artifacts after independent consumer checks; 5.1.0 remains the Central release.
+RTRendererAPI 5.2.0 adds general closed-volume transport while preserving the Java 25 major-5
+binary API. Use matching API/backend modules. Existing descriptor binding numbers and the first
+57 instance words / first 404 frame words remain unchanged. Instance records now contain 72 words;
+frame uniforms contain 447 words. Custom retained-scene GLSL must include the matching
+`gpuscene_abi.glsl` rather than embed old record strides. The explicit command API is unchanged.
+
+This version is delivered through GitHub source and local Maven artifacts only. It is not published
+to Maven Central. The published Central release remains 5.1.0. See [5.2.0](5.2.0.md) for the new
+medium contract, bounded transport policies, checks, and implementation limits.
 
 ## Migration from 4.x
 
@@ -22,8 +28,11 @@ its renderer. Native views and all derived buffers expire even when the callback
 `FrameSnapshot` when retention or sharing is needed. Consumer exceptions retire the frame and
 propagate without failing the renderer; device/provenance failures fail closed.
 
-All four retained-scene stages can be replaced. The retained scene ABI has one raygen, one miss
-and one triangle hit group at depth one. Arbitrary shader groups, callable/procedural RT, recursion,
+All four public retained-scene stages can be replaced. The retained scene ABI has one raygen,
+one public miss and one triangle hit group. An internal second miss entry performs bounded medium
+integration and ordered shadows through a mask-zero service dispatch, using ray recursion depth two.
+Custom raygen/miss/hit replacements retain their original group indices within their SBT regions.
+Arbitrary shader groups, callable/procedural RT, recursion,
 graphics, compute, descriptor sets, textures and samplers remain available through the explicit
 command API. Those capabilities use the same versioned resources, ownership and evidence model.
 

@@ -17,6 +17,7 @@ public final class VulkanGpuSceneShaderSelfTest {
       stages.put("gpuscene.rmiss", 17);
       stages.put("gpuscene.rchit", 16);
       stages.put("gpuscene.rahit", 15);
+      stages.put("gpuscene_shadow.rmiss", org.lwjgl.util.shaderc.Shaderc.shaderc_miss_shader);
       long totalBytes = 0L;
 
       for(Map.Entry<String, Integer> stage : stages.entrySet()) {
@@ -62,7 +63,7 @@ public final class VulkanGpuSceneShaderSelfTest {
       String raygen = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rgen");
       require(raygen.contains("RTRENDERER_LINEAR_HDR_OUTPUT") && raygen.contains("rgba16f") && raygen.contains("accumulated += radiance"), "HDR output must retain untonemapped linear radiance in RGBA16F");
       require(raygen.contains("GPU_SCENE_FRAME_SAMPLE_COUNT_WORD") && raygen.contains("gsSubpixelOffset") && raygen.contains("sampleIndex < 8u"), "deterministic bounded anti-aliasing loop is missing");
-      require(raygen.contains("else if (lightmapModulated)"), "forward parity must have an explicit ray-generation branch");
+      require(raygen.contains("else if (lightmapModulated && primary.transmissionIor.x<=0.0"), "forward parity must have an explicit ray-generation branch");
       require(raygen.contains("gsApplyDistanceFog(") && raygen.indexOf("else if (lightmapModulated)") < raygen.indexOf("gsEvaluatePbrSurface(primary, origin)"), "forward parity must bypass the renderer-owned PBR branch");
       require(raygen.contains("lightmapSampleCount") && raygen.contains("lightmapCoverage") && raygen.contains("gsLinearToSrgb(resolvedColor)") && raygen.contains("gsToneMap(resolvedColor)"), "forward parity coverage must blend display transforms after linear resolve");
    }
@@ -96,17 +97,21 @@ public final class VulkanGpuSceneShaderSelfTest {
    }
 
    private static void verifyTransmissionOpticsContract() {
-      String raygen = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rgen");
+      String raygen = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rgen")
+              + read("assets/rtrenderer/shaders/gpuscene/gpuscene_medium.glsl");
       String closestHit = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rchit");
       require(raygen.contains("GPU_SCENE_FRAME_MEDIUM_IOR_WORD") && raygen.contains("surfaceSample.transmissionIor.y"), "material and camera-medium IOR must both drive transmission");
-      require(raygen.contains("refract(incidentDirection, normal, eta)") && raygen.contains("gsDielectricFresnel") && raygen.contains("return reflected;"), "transmission must implement Snell refraction, Fresnel, and total internal reflection");
-      require(raygen.contains("GpuScenePayload reflectedSample = gsTraceRadiance") && raygen.contains("GpuScenePayload refractedSample = gsTraceRadiance"), "transmission must evaluate bounded reflected and refracted hardware rays");
+      require(raygen.contains("refract(incidentDirection,interfaceNormal,eta)") && raygen.contains("gsDielectricFresnel") && raygen.contains("totalReflection?1.0:fresnel") && raygen.contains("totalReflection?0.0:1.0-fresnel"), "transmission must implement Snell refraction, Fresnel, and total internal reflection");
+      require(raygen.contains("reflection?reflectedDirection:refractedDirection") && raygen.contains("reflection?incidentPath:transmittedPath") && raygen.contains("gsOpticalContinuation(position+outgoing"), "transmission must evaluate reflected and refracted hardware rays with the correct medium path");
       require(closestHit.contains("backFace ? GS_PAYLOAD_BACK_FACE") && raygen.contains("surfaceSample.state.y == GS_PAYLOAD_BACK_FACE"), "closest-hit orientation must reach the IOR transition calculation");
+      require(raygen.contains("traceRayEXT(sceneTlas,gl_RayFlagsNoneEXT,0,0,0,1")
+              && read("assets/rtrenderer/shaders/gpuscene/gpuscene_shadow.rmiss").contains("gsShadowRemaining=remaining"),
+              "ordered medium shadows must use the shared miss service and bounded ray intervals");
    }
 
    private static void verifyOpaqueMetallicReflectionContract() {
       String raygen = read("assets/rtrenderer/shaders/gpuscene/gpuscene.rgen");
-      require(raygen.contains("gsEvaluateOpaqueMetallicReflection") && raygen.contains("GpuScenePayload reflectedSample = gsTraceRadiance"), "opaque metallic shading must issue a bounded hardware reflection ray");
+      require(raygen.contains("gsOpaqueMetallicReflectionWeight") && raygen.contains("gsEvaluateSecondaryTransport") && raygen.contains("gsOpticalContinuation(position+outgoing") && raygen.contains("GpuScenePayload hit=gsTraceRadiance"), "opaque metallic shading must issue a bounded hardware reflection ray through the shared continuation");
       require(raygen.contains("gsSampleGgxHalfVector") && raygen.contains("roughness * roughness") && raygen.contains("gsReflectionSample(sampleIndex, sampleCount, launchInfo)"), "opaque reflection direction must use deterministic roughness-aware GGX sampling");
       require(raygen.contains("f * N.L / pdf") && raygen.contains("gsFresnelSchlick(viewHalf") && raygen.contains("gsGeometrySmith(normalView, normalLight, roughness)"), "opaque reflection contribution must retain Fresnel and GGX visibility energy terms");
       require(raygen.contains("transmission <= 1.0e-4 && opacity >= 0.999") && raygen.contains("surface + opaqueReflection"), "metallic reflection must be isolated to opaque non-transmissive material evaluation");

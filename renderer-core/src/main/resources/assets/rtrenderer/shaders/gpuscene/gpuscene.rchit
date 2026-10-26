@@ -174,4 +174,21 @@ void main()
             & GPU_SCENE_OVERLAY_DEPTH_MODE_MASK),
         0.0
     );
+    payload.mediumBoundary = uvec4(
+        gl_InstanceCustomIndexEXT,
+        gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD),
+        gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_ORIENTATION_WORD),
+        gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD)
+    );
+    if (payload.mediumBoundary.w != 0u) {
+        // Volume interfaces must use the geometric boundary normal, never a normal-map perturbation.
+        payload.worldNormalAndRoughness.xyz = backFace ? -geometricNormal : geometricNormal;
+        bool boundaryBackFace=backFace!=(determinant(objectToWorld)<0.0);
+        payload.state.y=boundaryBackFace?GS_PAYLOAD_BACK_FACE:GS_PAYLOAD_RADIANCE_QUERY;
+        if ((payload.mediumBoundary.w & 2u) != 0u) {
+            payload.transmissionIor.x = 1.0;
+            payload.baseColorAndOpacity = vec4(1.0);
+            payload.worldNormalAndRoughness.w = 0.0;
+        }
+    }
 }

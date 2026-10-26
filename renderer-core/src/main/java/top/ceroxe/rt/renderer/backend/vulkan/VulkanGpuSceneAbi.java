@@ -68,7 +68,7 @@ final class VulkanGpuSceneAbi {
     static final int MATERIAL_RECORD_WORDS = 16;
     static final int MESH_RECORD_WORDS = 18;
     /** Current shading state, previous-frame transform, and its committed motion revision. */
-    static final int INSTANCE_RECORD_WORDS = 57;
+    static final int INSTANCE_RECORD_WORDS = 72;
     static final int LIGHT_RECORD_WORDS = 24;
 
     static final int FRAME_FOG_COLOR_WORD = 44;
@@ -112,7 +112,17 @@ final class VulkanGpuSceneAbi {
     // Additive clock tail preserves every word in the 5.0 frame ABI.
     static final int FRAME_TIME_NANOS_WORD = 400;
     static final int FRAME_DELTA_NANOS_WORD = 402;
-    static final int FRAME_UNIFORM_WORDS = 404;
+    static final int FRAME_MEDIUM_PHASE_ANISOTROPY_WORD = 404;
+static final int FRAME_MEDIUM_EMISSION_WORD = 405;
+static final int FRAME_OPTICAL_MAX_EVENTS_WORD = 408;
+static final int FRAME_OPTICAL_SAMPLES_WORD = 409;
+static final int FRAME_SCATTERING_STEPS_WORD = 410;
+static final int FRAME_MEDIUM_MAX_DISTANCE_WORD = 411;
+static final int FRAME_CAMERA_MEDIUM_COUNT_WORD = 412;
+static final int FRAME_CAMERA_MEDIUM_SLOTS_WORD = 413;
+static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
+    static final int FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD = 446;
+    static final int FRAME_UNIFORM_WORDS = 447;
 
     static final int PROJECTION_PATH_BASIS_FOV = 0;
     static final int PROJECTION_PATH_EXACT_CLIP = 1;
@@ -180,6 +190,15 @@ final class VulkanGpuSceneAbi {
     static final int INSTANCE_DIRECTIONAL_DIFFUSE_AMBIENT_WORD = 54;
     static final int INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_INTENSITY_WORD = 55;
     static final int INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_INTENSITY_WORD = 56;
+    static final int INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD = 57;
+    static final int INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD = 58;
+    static final int INSTANCE_MEDIUM_BOUNDARY_ORIENTATION_WORD = 59;
+    static final int INSTANCE_MEDIUM_EXTINCTION_WORD = 60;
+    static final int INSTANCE_MEDIUM_SCATTERING_WORD = 63;
+    static final int INSTANCE_MEDIUM_DENSITY_WORD = 66;
+    static final int INSTANCE_MEDIUM_IOR_WORD = 67;
+    static final int INSTANCE_MEDIUM_PHASE_ANISOTROPY_WORD = 68;
+    static final int INSTANCE_MEDIUM_EMISSION_WORD = 69;
 
     static final int LIGHT_FLAGS_WORD = 0;
     static final int LIGHT_POSITION_X_WORD = 1;
@@ -322,6 +341,17 @@ final class VulkanGpuSceneAbi {
         values.put("GPU_SCENE_INSTANCE_RECORD_WORDS", INSTANCE_RECORD_WORDS);
         values.put("GPU_SCENE_LIGHT_RECORD_WORDS", LIGHT_RECORD_WORDS);
         values.put("GPU_SCENE_FRAME_UNIFORM_WORDS", FRAME_UNIFORM_WORDS);
+        values.put("GPU_SCENE_FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD", FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD);
+        values.put("GPU_SCENE_FRAME_MEDIUM_PHASE_ANISOTROPY_WORD", FRAME_MEDIUM_PHASE_ANISOTROPY_WORD);
+        values.put("GPU_SCENE_FRAME_MEDIUM_EMISSION_WORD", FRAME_MEDIUM_EMISSION_WORD);
+        values.put("GPU_SCENE_FRAME_OPTICAL_MAX_EVENTS_WORD", FRAME_OPTICAL_MAX_EVENTS_WORD);
+        values.put("GPU_SCENE_FRAME_OPTICAL_SAMPLES_WORD", FRAME_OPTICAL_SAMPLES_WORD);
+        values.put("GPU_SCENE_FRAME_SCATTERING_STEPS_WORD", FRAME_SCATTERING_STEPS_WORD);
+        values.put("GPU_SCENE_FRAME_MEDIUM_MAX_DISTANCE_WORD", FRAME_MEDIUM_MAX_DISTANCE_WORD);
+        values.put("GPU_SCENE_FRAME_CAMERA_MEDIUM_COUNT_WORD", FRAME_CAMERA_MEDIUM_COUNT_WORD);
+        values.put("GPU_SCENE_FRAME_CAMERA_MEDIUM_SLOTS_WORD", FRAME_CAMERA_MEDIUM_SLOTS_WORD);
+        values.put("GPU_SCENE_FRAME_MEDIUM_BOUNDARY_COUNT_WORD", FRAME_MEDIUM_BOUNDARY_COUNT_WORD);
+
         values.put("GPU_SCENE_FRAME_TIME_NANOS_WORD", FRAME_TIME_NANOS_WORD);
         values.put("GPU_SCENE_FRAME_DELTA_NANOS_WORD", FRAME_DELTA_NANOS_WORD);
         values.put("GPU_SCENE_TEXTURE_FLAGS_WORD", TEXTURE_FLAGS_WORD);
@@ -384,6 +414,15 @@ final class VulkanGpuSceneAbi {
                 INSTANCE_DIRECTIONAL_DIFFUSE_FIRST_INTENSITY_WORD);
         values.put("GPU_SCENE_INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_INTENSITY_WORD",
                 INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_INTENSITY_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD", INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD", INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_ORIENTATION_WORD", INSTANCE_MEDIUM_BOUNDARY_ORIENTATION_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_EXTINCTION_WORD", INSTANCE_MEDIUM_EXTINCTION_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_SCATTERING_WORD", INSTANCE_MEDIUM_SCATTERING_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_DENSITY_WORD", INSTANCE_MEDIUM_DENSITY_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_IOR_WORD", INSTANCE_MEDIUM_IOR_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_PHASE_ANISOTROPY_WORD", INSTANCE_MEDIUM_PHASE_ANISOTROPY_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_EMISSION_WORD", INSTANCE_MEDIUM_EMISSION_WORD);
         values.put("GPU_SCENE_LIGHT_FLAGS_WORD", LIGHT_FLAGS_WORD);
         values.put("GPU_SCENE_LIGHT_POSITION_X_WORD", LIGHT_POSITION_X_WORD);
         values.put("GPU_SCENE_LIGHT_POSITION_Y_WORD", LIGHT_POSITION_Y_WORD);
@@ -603,7 +642,8 @@ final class VulkanGpuSceneAbi {
         return packInstanceRecord(
                 value.meshAssetId(), value.transform(), value.visibilityMask(), value.castsShadow(),
                 value.mobility() == SceneInstance.Mobility.DYNAMIC, value.surfaceVisibility(),
-                value.packedLight(), value.renderState(), previousTransform, motionRevision, 0, meshSlots
+                value.packedLight(), value.renderState(), previousTransform, motionRevision,
+                0, meshSlots, value.mediumBoundary().orElse(null)
         );
     }
 
@@ -612,7 +652,7 @@ final class VulkanGpuSceneAbi {
         return packInstanceRecord(
                 value.meshAssetId(), value.transform(), value.visibilityMask(), value.castsShadow(),
                 true, value.surfaceVisibility(), value.packedLight(), value.renderState(),
-                value.previousTransform(), 0L, FLAG_FRAME_LOCAL, meshSlots
+                value.previousTransform(), 0L, FLAG_FRAME_LOCAL, meshSlots, value.mediumBoundary().orElse(null)
         );
     }
 
@@ -628,7 +668,8 @@ final class VulkanGpuSceneAbi {
             top.ceroxe.rt.renderer.api.AffineTransform previousTransform,
             long motionRevision,
             int additionalFlags,
-            SlotResolver meshSlots
+            SlotResolver meshSlots,
+            top.ceroxe.rt.renderer.api.MediumBoundaryState mediumBoundary
     ) {
         if (motionRevision < 0L) throw new IllegalArgumentException("motionRevision must be non-negative");
         int[] words = new int[INSTANCE_RECORD_WORDS];
@@ -701,6 +742,24 @@ final class VulkanGpuSceneAbi {
                     Float.floatToRawIntBits(directionalDiffuse.firstIntensity());
             words[INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_INTENSITY_WORD] =
                     Float.floatToRawIntBits(directionalDiffuse.secondIntensity());
+        }
+        if (mediumBoundary != null) {
+            var medium = mediumBoundary.medium();
+            words[INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD] = 1 | (mediumBoundary.surfaceInteraction() ? 0 : 2);
+            words[INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD] = mediumBoundary.priority();
+            words[INSTANCE_MEDIUM_BOUNDARY_ORIENTATION_WORD] = mediumBoundary.orientation().ordinal();
+            words[INSTANCE_MEDIUM_EXTINCTION_WORD] = Float.floatToRawIntBits(medium.extinctionRed());
+            words[INSTANCE_MEDIUM_EXTINCTION_WORD + 1] = Float.floatToRawIntBits(medium.extinctionGreen());
+            words[INSTANCE_MEDIUM_EXTINCTION_WORD + 2] = Float.floatToRawIntBits(medium.extinctionBlue());
+            words[INSTANCE_MEDIUM_SCATTERING_WORD] = Float.floatToRawIntBits(medium.scatteringRed());
+            words[INSTANCE_MEDIUM_SCATTERING_WORD + 1] = Float.floatToRawIntBits(medium.scatteringGreen());
+            words[INSTANCE_MEDIUM_SCATTERING_WORD + 2] = Float.floatToRawIntBits(medium.scatteringBlue());
+            words[INSTANCE_MEDIUM_DENSITY_WORD] = Float.floatToRawIntBits(medium.density());
+            words[INSTANCE_MEDIUM_IOR_WORD] = Float.floatToRawIntBits(medium.indexOfRefraction());
+            words[INSTANCE_MEDIUM_PHASE_ANISOTROPY_WORD] = Float.floatToRawIntBits(medium.phaseAnisotropy());
+            words[INSTANCE_MEDIUM_EMISSION_WORD] = Float.floatToRawIntBits(medium.emissionRed());
+            words[INSTANCE_MEDIUM_EMISSION_WORD + 1] = Float.floatToRawIntBits(medium.emissionGreen());
+            words[INSTANCE_MEDIUM_EMISSION_WORD + 2] = Float.floatToRawIntBits(medium.emissionBlue());
         }
         return words;
     }

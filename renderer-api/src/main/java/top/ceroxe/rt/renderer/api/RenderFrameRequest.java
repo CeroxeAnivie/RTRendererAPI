@@ -17,6 +17,7 @@ public final class RenderFrameRequest {
     private final int height;
     private final CameraState camera;
     private final EnvironmentState environment;
+    private final MediumTransportOptions mediumTransport;
     private final LightmapState lightmap;
     private final DistanceFogState fog;
     private final TextureSamplingState textureSampling;
@@ -44,6 +45,7 @@ public final class RenderFrameRequest {
         height = builder.height;
         camera = Objects.requireNonNull(builder.camera, "camera");
         environment = Objects.requireNonNull(builder.environment, "environment");
+        mediumTransport = Objects.requireNonNull(builder.mediumTransport, "mediumTransport");
         lightmap = Objects.requireNonNull(builder.lightmap, "lightmap");
         fog = Objects.requireNonNull(builder.fog, "fog");
         textureSampling = Objects.requireNonNull(builder.textureSampling, "textureSampling");
@@ -149,6 +151,9 @@ public final class RenderFrameRequest {
         return environment;
     }
 
+    /** Returns frame-local bounded optical transport quality. */
+    public MediumTransportOptions mediumTransport() { return mediumTransport; }
+
     /**
      * Returns the frame lightmap policy.
      *
@@ -223,6 +228,7 @@ public final class RenderFrameRequest {
                 && clock.equals(request.clock)
                 && camera.equals(request.camera)
                 && environment.equals(request.environment)
+                && mediumTransport.equals(request.mediumTransport)
                 && lightmap.equals(request.lightmap)
                 && fog.equals(request.fog)
                 && textureSampling.equals(request.textureSampling)
@@ -236,7 +242,7 @@ public final class RenderFrameRequest {
     @Override
     public int hashCode() {
         return Objects.hash(
-                sequence, minimumSceneRevision, width, height, clock, camera, environment,
+                sequence, minimumSceneRevision, width, height, clock, camera, environment, mediumTransport,
                 lightmap, fog, textureSampling, antiAliasing, depthProjection, primitiveBatch,
                 temporalHistoryResets, shaderData
         );
@@ -275,6 +281,7 @@ public final class RenderFrameRequest {
         private long minimumSceneRevision;
         private FrameClock clock = FrameClock.of(0, 0);
         private EnvironmentState environment = EnvironmentState.neutral();
+        private MediumTransportOptions mediumTransport = MediumTransportOptions.balanced();
         private LightmapState lightmap = LightmapState.fullIntensity();
         private DistanceFogState fog = DistanceFogState.disabled();
         private TextureSamplingState textureSampling = TextureSamplingState.pixelStable();
@@ -298,6 +305,7 @@ public final class RenderFrameRequest {
             minimumSceneRevision = source.minimumSceneRevision;
             clock = source.clock;
             environment = source.environment;
+            mediumTransport = source.mediumTransport;
             lightmap = source.lightmap;
             fog = source.fog;
             textureSampling = source.textureSampling;
@@ -343,6 +351,12 @@ public final class RenderFrameRequest {
          */
         public Builder environment(EnvironmentState value) {
             environment = Objects.requireNonNull(value, "environment");
+            return this;
+        }
+
+        /** Selects bounded optical/volume integration quality for the next frame. */
+        public Builder mediumTransport(MediumTransportOptions value) {
+            mediumTransport = Objects.requireNonNull(value, "mediumTransport");
             return this;
         }
 

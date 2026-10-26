@@ -25,7 +25,11 @@ public final class FrameValidationException extends RendererException {
         /** The requested output exceeds the selected device's two-dimensional image limit. */
         OUTPUT_EXTENT_EXCEEDS_DEVICE_LIMIT,
         /** The negotiated internal extent exceeds the selected device's ray-dispatch limit. */
-        RAY_DISPATCH_EXCEEDS_DEVICE_LIMIT
+        RAY_DISPATCH_EXCEEDS_DEVICE_LIMIT,
+        /** Camera containment exceeds the documented bounded medium-path capacity. */
+        MEDIUM_NESTING_EXCEEDS_LIMIT,
+        /** A frame-local medium boundary references missing or non-closed geometry. */
+        INVALID_MEDIUM_BOUNDARY
     }
 
     /**

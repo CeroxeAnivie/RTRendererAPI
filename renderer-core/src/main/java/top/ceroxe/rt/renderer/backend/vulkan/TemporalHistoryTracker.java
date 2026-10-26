@@ -17,6 +17,7 @@ final class TemporalHistoryTracker {
     private final EnumSet<HistoryInvalidationReason> pendingSceneInvalidations =
             EnumSet.noneOf(HistoryInvalidationReason.class);
     private final Map<Long, SceneInstance.Mobility> instanceMobility = new HashMap<>();
+    private final Set<Long> mediumBoundaryInstances = new HashSet<>();
 
     private RenderFrameRequest sourceFrame;
     private long sourceSceneRevision = -1L;
@@ -44,10 +45,27 @@ final class TemporalHistoryTracker {
 
     private static boolean sameShadingState(RenderFrameRequest first, RenderFrameRequest second) {
         return first.environment().equals(second.environment())
+                && first.mediumTransport().equals(second.mediumTransport())
                 && first.lightmap().revision() == second.lightmap().revision()
                 && first.fog().equals(second.fog())
                 && first.textureSampling().equals(second.textureSampling())
-                && first.antiAliasing().equals(second.antiAliasing());
+                && first.antiAliasing().equals(second.antiAliasing())
+                && sameFrameMedia(first, second);
+    }
+
+    private static boolean sameFrameMedia(RenderFrameRequest first, RenderFrameRequest second) {
+        var before = first.primitiveBatch();
+        var after = second.primitiveBatch();
+        // Boundary motion changes indirect light and volume shadows beyond its own pixels.
+        // Ordinary frame-local geometry keeps the established per-pixel history contract.
+        if (before == after) return true;
+        var beforeIndices = before.mediumBoundaryIndices();
+        var afterIndices = after.mediumBoundaryIndices();
+        if (!beforeIndices.equals(afterIndices)) return false;
+        for (int index : beforeIndices) {
+            if (!before.primitives().get(index).equals(after.primitives().get(index))) return false;
+        }
+        return true;
     }
 
     private static Set<HistoryInvalidationReason> immutableCopy(
@@ -152,9 +170,12 @@ final class TemporalHistoryTracker {
             staticHistoryChanged = !instanceMobility.isEmpty()
                     || changes.instances().statistics().writes() != 0;
             instanceMobility.clear();
+            mediumBoundaryInstances.clear();
         } else {
             for (long removedId : changes.instances().removedIdentities()) {
                 SceneInstance.Mobility removed = instanceMobility.remove(removedId);
+                if (mediumBoundaryInstances.remove(removedId))
+                    pendingSceneInvalidations.add(HistoryInvalidationReason.SCENE_CONTENT_CHANGED);
                 if (removed != SceneInstance.Mobility.DYNAMIC) staticHistoryChanged = true;
             }
             if (changes.instances().statistics().clears()
@@ -163,6 +184,11 @@ final class TemporalHistoryTracker {
             }
         }
         for (StableIdentitySlots.SlotWrite<SceneInstance> write : changes.instances().writes()) {
+            boolean wasBoundary = mediumBoundaryInstances.remove(write.id());
+            boolean isBoundary = write.value().mediumBoundary().isPresent();
+            if (isBoundary) mediumBoundaryInstances.add(write.id());
+            if (wasBoundary || isBoundary)
+                pendingSceneInvalidations.add(HistoryInvalidationReason.SCENE_CONTENT_CHANGED);
             SceneInstance.Mobility previous = instanceMobility.put(write.id(), write.value().mobility());
             if (write.value().mobility() == SceneInstance.Mobility.STATIC
                     || previous == SceneInstance.Mobility.STATIC) {

@@ -17,6 +17,7 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
     private final RendererConfig configuration;
     private final TemporalHistoryTracker sourceHistory;
     private final VulkanTemporalHistory gpuHistory;
+    private final VulkanMediumBoundaryIndex mediumBoundaries = new VulkanMediumBoundaryIndex();
 
     VulkanGpuSceneTemporalCoordinator(VulkanDeviceRuntime device, RendererConfig configuration) {
         this.configuration = Objects.requireNonNull(configuration, "configuration");
@@ -30,6 +31,7 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
 
     void sceneApplied(VulkanSceneResidency.SceneChangeSet changes) {
         sourceHistory.sceneApplied(changes);
+        mediumBoundaries.sceneApplied(changes);
     }
 
     long requiredGrowthBytes(int width, int height) {
@@ -79,6 +81,13 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
                 streamlineResourcesActive,
                 jitterActive
         );
+        var mediumUniforms = java.nio.ByteBuffer.wrap(uniforms).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        int[] containingMedia = mediumBoundaries.containing(checkedRequest);
+        mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD * 4, mediumBoundaries.transmissiveCount());
+        mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_CAMERA_MEDIUM_COUNT_WORD * 4, containingMedia.length);
+        mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_MEDIUM_BOUNDARY_COUNT_WORD * 4, mediumBoundaries.frameBoundaryCount(checkedRequest.primitiveBatch()));
+        for (int i = 0; i < containingMedia.length; i++)
+            mediumUniforms.putInt((VulkanGpuSceneAbi.FRAME_CAMERA_MEDIUM_SLOTS_WORD + i) * 4, containingMedia[i]);
         VulkanTemporalHistory.PreparedFrame gpu = gpuHistory.prepareFrame(
                 configuration.temporalRendering().enabled() ? checkedSlot.motionImage() : null,
                 configuration.temporalRendering().enabled() && checkedSlot.motionLayoutInitialized()
@@ -135,7 +144,7 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
 
     @Override
     public void close() {
-        gpuHistory.close();
+        try { gpuHistory.close(); } finally { mediumBoundaries.clear(); }
     }
 
     record Prepared(
