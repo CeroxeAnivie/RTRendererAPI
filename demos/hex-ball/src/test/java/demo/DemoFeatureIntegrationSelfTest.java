@@ -39,7 +39,33 @@ public final class DemoFeatureIntegrationSelfTest {
         mapsTechnologyStatusesWithoutHardwareInference();
         countsActiveMfgFramesInVisibleFps();
         boundsBlockedReasonsAndHandlesMissingCapabilityExtension();
+        independentPublicApiControls();
         System.out.println("DemoFeatureIntegrationSelfTest passed");
+    }
+
+    private static void independentPublicApiControls() {
+        try {
+            var remaining = DemoApiControls.parse(new String[]{"--width=640",
+                    "--api.frameGeneration.preference=REQUIRED", "--api.frameGeneration.mode=MULTI_FRAME_GENERATION",
+                    "--api.frameGeneration.multiplier=THREE_X", "--api.frameGeneration.fallback=NONE",
+                    "--api.temporalRendering.mode=ACCUMULATING", "--api.temporalRendering.maxHistoryFrames=16",
+                    "--frame.environment.sunRadiance=0.2,0.4,0.6", "--frame.fog.opacity=0.5"});
+            require(java.util.Arrays.equals(remaining, new String[]{"--width=640"}), "controls consumed ordinary arguments");
+            var config = DemoApiControls.configure(RendererConfig.presentation());
+            require(config.frameGeneration().multiplier() == FrameGenerationOptions.Multiplier.THREE_X
+                    && config.frameGeneration().preference() == RendererFeaturePreference.REQUIRED,
+                    "independent MFG controls lost policy");
+            require(config.temporalRendering().maxHistoryFrames() == 16, "temporal history control lost");
+            var frame = DemoApiControls.frame(DemoRendererProfile.frame(0, 640, 360,
+                    DemoRendererProfile.camera(640, 360, 15.4)).build());
+            require(frame.fog().opacity() == 0.5f, "frame policy was not applied");
+            DemoApiControls.parse(new String[]{"--api.frameGeneration.preference=REQUIRED"});
+            try { DemoApiControls.configure(RendererConfig.presentation()); throw new AssertionError("invalid fallback hidden"); }
+            catch (IllegalArgumentException expected) { }
+            DemoApiControls.parse(new String[]{"--api.validationEnabled=maybe"});
+            try { DemoApiControls.configure(RendererConfig.presentation()); throw new AssertionError("malformed bool accepted"); }
+            catch (IllegalArgumentException expected) { }
+        } finally { DemoApiControls.parse(new String[0]); }
     }
 
     private static void requestsRecommendedManagedPresentationAndExactProjection() {

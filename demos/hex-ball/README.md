@@ -12,11 +12,11 @@
 在仓库根目录执行：
 
 ```powershell
-.\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
+.\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=1"
 .\gradlew.bat :demos:hex-ball:shadowJar
 .\gradlew.bat :demos:hex-ball:programmableSceneDemo
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.0.0.jar `
-  --width=2560 --height=1440 --spp=2
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.0.jar `
+  --width=2560 --height=1440 --spp=1
 ```
 
 使用 `--duration-seconds=90` 可执行有界验收；进程会通过 presenter 与 renderer 的正常关闭路径
@@ -38,16 +38,16 @@ provider presentation path；仅提出配置请求不构成证据。每个进程
 
 ```powershell
 ## 原生基线
-java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.0.0.jar `
-  --width=2560 --height=1440 --spp=2 --duration-seconds=90
+java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.0.jar `
+  --width=2560 --height=1440 --spp=1 --duration-seconds=90
 
 ## FG 2x
-java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.0.0.jar `
-  --width=2560 --height=1440 --spp=2 --duration-seconds=90
+java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.0.jar `
+  --width=2560 --height=1440 --spp=1 --duration-seconds=90
 
 ## MFG 3x
-java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.0.0.jar `
-  --width=2560 --height=1440 --spp=2 --duration-seconds=90
+java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.0.jar `
+  --width=2560 --height=1440 --spp=1 --duration-seconds=90
 ```
 
 验收记录必须包含：启动 framebuffer 与 SPP、制品 SHA-256、请求/配置的 presentation
@@ -67,3 +67,24 @@ Windows 验收需保持测试窗口处于真实前台。GLFW 的 focus 通知不
 可执行 JAR 会重新启动自身并启用 native access。`:demos:hex-ball:run` 会直接应用同一 native
 access 策略。确定性合同检查分别由 `:demos:hex-ball:physicsSelfTest` 与
 `:demos:hex-ball:featureIntegrationSelfTest` 提供。
+# Feature workbench
+
+Run the executable JAR without arguments, or pass `--controls`, to edit independent renderer
+and frame policies. Recommended spatial sampling is **1 SPP**; 2/4/8 remain explicit alternatives.
+Policy dropdowns expose all public enum values, including required/preferred availability,
+reconstruction quality/fallback, FG/MFG mode/multiplier/fallback, denoising, low latency, SER
+and memory optimization. Invalid combinations report the API's validation error.
+
+`--api.<policy>.<field>=value` reproduces a renderer override; `--frame.<policy>.<field>=value`
+reproduces a frame override. Vector values are comma separated. For example:
+
+```text
+--spp=1 --api.frameGeneration.multiplier=THREE_X --api.frameGeneration.mode=MULTI_FRAME_GENERATION
+--api.denoising.preference=PREFERRED --api.denoising.builtInTemporalFallback=true
+--frame.environment.sunRadiance=1,0.9,0.7
+```
+
+`--programmable` opens editable ray-generation/miss/closest-hit/any-hit GLSL, HDR preview,
+timeline pause/seek/rate, and byte-offset float updates to immutable application storage data.
+The preview tone maps explicitly; renderer readback remains native RGBA16F.
+`:demos:hex-ball:programmableSceneDemo` retains the deterministic native HDR acceptance example.

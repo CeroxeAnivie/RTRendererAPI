@@ -21,13 +21,17 @@ public final class VulkanFrameUniformPackerSelfTest {
    }
 
    public static void main(String[] arguments) {
-      RenderFrameRequest frame = fixture();
+      RenderFrameRequest frame = fixture().toBuilder()
+              .clock(top.ceroxe.rt.renderer.api.FrameClock.of(-123456789012345L, 16666667)).build();
       long sceneRevision = 4294967301L;
       TemporalHistoryTracker tracker = new TemporalHistoryTracker(TemporalRenderingOptions.balanced());
       TemporalHistoryTracker.PreparedFrame temporal = tracker.prepare(frame, sceneRevision);
       byte[] encoded = VulkanFrameUniformPacker.pack(frame, 37, sceneRevision, temporal, TemporalRenderingOptions.balanced(), false);
-      require(encoded.length == 1600, "frame ABI byte count changed");
+      require(encoded.length == 1616, "frame ABI byte count changed");
       ByteBuffer words = ByteBuffer.wrap(encoded).order(ByteOrder.LITTLE_ENDIAN);
+      require(longInteger(words, VulkanGpuSceneAbi.FRAME_TIME_NANOS_WORD) == frame.clock().timeNanos()
+                      && longInteger(words, VulkanGpuSceneAbi.FRAME_DELTA_NANOS_WORD) == 16666667,
+              "frame timeline lost nanosecond precision");
       require(integer(words, 0) == 1920 && integer(words, 1) == 1080, "frame extent was not encoded exactly");
       require(longInteger(words, 2) == 8589934595L, "64-bit frame sequence was truncated");
       require(real64(words, 4) == 3.0000000125E7 && real64(words, 6) == -2000000.5, "camera world position lost double precision");

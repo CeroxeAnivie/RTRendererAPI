@@ -109,7 +109,10 @@ final class VulkanGpuSceneAbi {
     static final int FRAME_EXACT_COORDINATE_SYSTEM_WORD = 359;
     static final int FRAME_EXACT_INVERSE_CLIP_FROM_VIEW_WORD = 360;
     static final int FRAME_EXACT_CAMERA_TO_WORLD_WORD = 376;
-    static final int FRAME_UNIFORM_WORDS = 400;
+    // Additive clock tail preserves every word in the 5.0 frame ABI.
+    static final int FRAME_TIME_NANOS_WORD = 400;
+    static final int FRAME_DELTA_NANOS_WORD = 402;
+    static final int FRAME_UNIFORM_WORDS = 404;
 
     static final int PROJECTION_PATH_BASIS_FOV = 0;
     static final int PROJECTION_PATH_EXACT_CLIP = 1;
@@ -319,6 +322,8 @@ final class VulkanGpuSceneAbi {
         values.put("GPU_SCENE_INSTANCE_RECORD_WORDS", INSTANCE_RECORD_WORDS);
         values.put("GPU_SCENE_LIGHT_RECORD_WORDS", LIGHT_RECORD_WORDS);
         values.put("GPU_SCENE_FRAME_UNIFORM_WORDS", FRAME_UNIFORM_WORDS);
+        values.put("GPU_SCENE_FRAME_TIME_NANOS_WORD", FRAME_TIME_NANOS_WORD);
+        values.put("GPU_SCENE_FRAME_DELTA_NANOS_WORD", FRAME_DELTA_NANOS_WORD);
         values.put("GPU_SCENE_TEXTURE_FLAGS_WORD", TEXTURE_FLAGS_WORD);
         values.put("GPU_SCENE_TEXTURE_PIXEL_OFFSET_WORD", TEXTURE_PIXEL_OFFSET_WORD);
         values.put("GPU_SCENE_TEXTURE_WIDTH_WORD", TEXTURE_WIDTH_WORD);

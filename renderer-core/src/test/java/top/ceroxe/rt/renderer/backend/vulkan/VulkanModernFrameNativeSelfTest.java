@@ -21,9 +21,61 @@ public final class VulkanModernFrameNativeSelfTest {
         require(capability.hardwareRayTracingReady(), capability.summary());
         verifyProgrammableScene(capability);
         verifyMappedHdr(capability);
+        verifyTimelineAndPartialUpdates(capability);
         verifyNativeColorFormats(capability);
         verifyShaderInterfaceRejections();
         System.out.println("VulkanModernFrameNativeSelfTest passed: device=" + capability.preferredDevice().name());
+    }
+
+    private static void verifyTimelineAndPartialUpdates(VulkanRtCapabilityProbe.Result capability) throws Exception {
+        String raygen = """
+                #version 460
+                #extension GL_EXT_ray_tracing : require
+                #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+                #extension GL_GOOGLE_include_directive : require
+                #include "gpuscene_common.glsl"
+                layout(set=0,binding=1,rgba16f) uniform writeonly image2D outputImage;
+                layout(set=0,binding=33,std430) readonly buffer Data { float values[]; } data;
+                void main() {
+                    uint64_t start = uint64_t(0xfffffff0u) | (uint64_t(0xffffffffu) << 32);
+                    imageStore(outputImage, ivec2(gl_LaunchIDEXT.xy), vec4(
+                        gsFrameSecondsSince(start), gsFrameDeltaSeconds(),
+                        data.values[0] + data.values[4096] + data.values[8192], 1));
+                }
+                """;
+        var config = configuration().frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F)
+                .sceneShaders(SceneShaderProgram.builder().shader(ShaderStage.RAY_GENERATION, raygen)
+                        .dataBindingCount(1).build()).build();
+        var session = VulkanGpuSceneRenderingSession.open(capability, config, RendererRtDiagnostics.noop());
+        try (var renderer = new VulkanRendererHost(config, session)) {
+            renderer.apply(VulkanGpuSceneRenderingSessionNativeSelfTest.complexScene());
+            var base = new ResourceData(ByteBuffer.allocate(3 * 16384).order(ByteOrder.LITTLE_ENDIAN));
+            var one = base.withUpdates(List.of(new ResourceData.Update(0, floats(1))));
+            var two = one.withUpdates(List.of(new ResourceData.Update(16384, floats(2))));
+            var three = two.withUpdates(List.of(new ResourceData.Update(32768, floats(4))));
+            ResourceData[] snapshots = {base, one, three, two, base, three, one, three};
+            float[] sums = {0, 1, 7, 3, 0, 7, 1, 7};
+            for (int i = 0; i < snapshots.length; i++) {
+                // Signed origins, pause, rewind, skipped generations and both frame slots.
+                long now = i == 0 ? -32 : i == 1 ? -16 : i == 2 ? 499999984L : 999999984L;
+                var frame = request(i, 8, 8, List.of(snapshots[i])).toBuilder()
+                        .clock(FrameClock.of(now, 250000000)).build();
+                submit(renderer, frame);
+                int index = i;
+                read(renderer, view -> {
+                    ByteBuffer pixels = view.pixels();
+                    short expectedTime = index < 2 ? 0 : index == 2 ? (short) 0x3800 : (short) 0x3c00;
+                    require(pixels.getShort(0) == expectedTime && pixels.getShort(2) == (short) 0x3400,
+                            "shader timeline mismatch at " + index);
+                    float sum = sums[index];
+                    short expectedSum = switch ((int) sum) {
+                        case 0 -> 0; case 1 -> (short) 0x3c00; case 3 -> (short) 0x4200; case 7 -> (short) 0x4700;
+                        default -> throw new AssertionError("bad fixture");
+                    };
+                    require(pixels.getShort(4) == expectedSum, "partial data/slot generation mismatch at " + index);
+                });
+            }
+        }
     }
 
     private static RendererConfig.Builder configuration() {

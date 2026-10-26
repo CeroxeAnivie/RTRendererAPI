@@ -12,6 +12,7 @@ public final class RenderFrameRequest {
     private final java.util.List<ResourceData> shaderData;
     private final long sequence;
     private final long minimumSceneRevision;
+    private final FrameClock clock;
     private final int width;
     private final int height;
     private final CameraState camera;
@@ -38,6 +39,7 @@ public final class RenderFrameRequest {
         shaderData = java.util.List.copyOf(builder.shaderData);
         sequence = builder.sequence;
         minimumSceneRevision = builder.minimumSceneRevision;
+        clock = Objects.requireNonNull(builder.clock, "clock");
         width = builder.width;
         height = builder.height;
         camera = Objects.requireNonNull(builder.camera, "camera");
@@ -101,6 +103,14 @@ public final class RenderFrameRequest {
      */
     public long minimumSceneRevision() {
         return minimumSceneRevision;
+    }
+
+    /**
+     * Returns the application timeline copied into the standard GPU frame ABI.
+     * @return immutable timeline, zero unless explicitly supplied
+     */
+    public FrameClock clock() {
+        return clock;
     }
 
     /**
@@ -210,6 +220,7 @@ public final class RenderFrameRequest {
                 && minimumSceneRevision == request.minimumSceneRevision
                 && width == request.width
                 && height == request.height
+                && clock.equals(request.clock)
                 && camera.equals(request.camera)
                 && environment.equals(request.environment)
                 && lightmap.equals(request.lightmap)
@@ -225,7 +236,7 @@ public final class RenderFrameRequest {
     @Override
     public int hashCode() {
         return Objects.hash(
-                sequence, minimumSceneRevision, width, height, camera, environment,
+                sequence, minimumSceneRevision, width, height, clock, camera, environment,
                 lightmap, fog, textureSampling, antiAliasing, depthProjection, primitiveBatch,
                 temporalHistoryResets, shaderData
         );
@@ -235,6 +246,7 @@ public final class RenderFrameRequest {
     public String toString() {
         return "RenderFrameRequest[sequence=" + sequence
                 + ", minimumSceneRevision=" + minimumSceneRevision
+                + ", clock=" + clock
                 + ", width=" + width
                 + ", height=" + height
                 + ", camera=" + camera
@@ -261,6 +273,7 @@ public final class RenderFrameRequest {
         private final EnumSet<HistoryResetReason> temporalHistoryResets =
                 EnumSet.noneOf(HistoryResetReason.class);
         private long minimumSceneRevision;
+        private FrameClock clock = FrameClock.of(0, 0);
         private EnvironmentState environment = EnvironmentState.neutral();
         private LightmapState lightmap = LightmapState.fullIntensity();
         private DistanceFogState fog = DistanceFogState.disabled();
@@ -283,6 +296,7 @@ public final class RenderFrameRequest {
             height = source.height;
             camera = source.camera;
             minimumSceneRevision = source.minimumSceneRevision;
+            clock = source.clock;
             environment = source.environment;
             lightmap = source.lightmap;
             fog = source.fog;
@@ -312,6 +326,12 @@ public final class RenderFrameRequest {
          */
         public Builder minimumSceneRevision(long value) {
             minimumSceneRevision = value;
+            return this;
+        }
+
+        /** Sets the monotonic application timeline copied into the GPU frame ABI. */
+        public Builder clock(FrameClock value) {
+            clock = Objects.requireNonNull(value, "clock");
             return this;
         }
 

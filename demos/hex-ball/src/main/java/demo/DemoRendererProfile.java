@@ -27,7 +27,7 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig interactive(DemoConfig config) {
-        return baseConfig(config.cpuPresentation() ? 4 : 3, config.cpuPresentation());
+        return DemoApiControls.configure(baseConfig(config.cpuPresentation() ? 4 : 3, config.cpuPresentation()));
     }
 
     static RendererConfig benchmark() {
@@ -49,6 +49,7 @@ final class DemoRendererProfile {
             CameraState camera
     ) {
         return RenderFrameRequest.builder(sequence, width, height, camera)
+                .clock(top.ceroxe.rt.renderer.api.FrameClock.system())
                 .depthProjection(DEPTH_PROJECTION);
     }
 

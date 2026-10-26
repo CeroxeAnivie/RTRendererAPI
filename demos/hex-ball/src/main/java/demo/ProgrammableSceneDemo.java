@@ -11,6 +11,10 @@ public final class ProgrammableSceneDemo {
     private ProgrammableSceneDemo() { }
 
     public static void main(String[] arguments) throws Exception {
+        if (!java.util.Arrays.asList(arguments).contains("--verify")) {
+            ProgrammableSceneWorkbench.open();
+            return;
+        }
         String raygen = """
                 #version 460
                 #extension GL_EXT_ray_tracing : require

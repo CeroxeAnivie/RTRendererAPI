@@ -70,7 +70,10 @@ final class GpuSceneShaderDataBuffers implements AutoCloseable {
                     uploaded[slot][i] = null;
                 }
                 if (uploaded[slot][i] != data) {
-                    buffer.writeBytes(data.bytes());
+                    ResourceData previous = uploaded[slot][i];
+                    uploaded[slot][i] = null; // A partial failure cannot authorize skipped ranges on retry.
+                    RtGpuBuffer target = buffer;
+                    data.forEachChangedRange(previous, (offset, bytes) -> target.writeBytesAt(offset, bytes));
                     uploaded[slot][i] = data;
                 }
                 infos.get(i).buffer(buffer.buffer()).offset(0).range(data.byteSize());

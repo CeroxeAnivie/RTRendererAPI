@@ -35,6 +35,15 @@ public final class HexBallDemo {
     }
 
     public static void main(String[] arguments) throws Exception {
+        if (arguments.length == 0 || java.util.Arrays.asList(arguments).contains("--controls")) {
+            DemoApiControls.openWorkbench();
+            return;
+        }
+        if (java.util.Arrays.asList(arguments).contains("--programmable")) {
+            ProgrammableSceneDemo.main(java.util.Arrays.stream(arguments).filter(arg -> !arg.equals("--programmable")).toArray(String[]::new));
+            return;
+        }
+        arguments = DemoApiControls.parse(arguments);
         try {
             run(arguments);
             // AWT's event queue may remain alive after the last JFrame is disposed. This is a
@@ -289,6 +298,7 @@ public final class HexBallDemo {
                         .environment(environment)
                         .antiAliasing(antiAliasing)
                         .build();
+                request = DemoApiControls.frame(request);
                 Renderer.FrameSubmissionAttempt attempt = renderer.trySubmit(request);
                 if (attempt instanceof Renderer.FrameSubmitted) {
                     previousBatch = pendingBatch;
@@ -447,6 +457,7 @@ public final class HexBallDemo {
                     .environment(environment)
                     .antiAliasing(antiAliasing)
                     .build();
+            request = DemoApiControls.frame(request);
             try {
                 renderer.submit(request);
                 previousBatch = pendingBatch;

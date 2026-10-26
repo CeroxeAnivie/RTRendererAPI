@@ -29,9 +29,75 @@ public final class RenderCommandContractSelfTest {
         drawAndIndirectContract();
         zeroStepVertexRangeContract();
         copyAndBarrierContract();
+        resourceSnapshotUpdates();
+        frameClockContract();
         transferAndClearContract();
         rayTracingCommandContract();
         proceduralGeometryContract();
+    }
+
+    private static void frameClockContract() {
+        var clock = FrameClock.of(-123456789012345L, 16666667);
+        require(clock.deltaSeconds() == 0.016666667, "clock lost delta precision");
+        require(FrameClock.of(Long.MIN_VALUE + 5, 0)
+                .fromPrevious(FrameClock.of(Long.MAX_VALUE - 4, 0)).deltaNanos() == 10,
+                "monotonic clock wrap was rejected");
+        expectFailure(() -> FrameClock.of(0, -1));
+        expectFailure(() -> FrameClock.of(5, 0).fromPrevious(FrameClock.of(6, 0)));
+        var camera = CameraState.lookAt(0, 0, 5, 0, 0, 0).build();
+        var frame = RenderFrameRequest.builder(0, 16, 16, camera).clock(clock).build();
+        require(frame.toBuilder().build().equals(frame)
+                && frame.toBuilder().build().hashCode() == frame.hashCode(), "request copy lost timeline");
+        require(!frame.equals(frame.toBuilder().clock(FrameClock.of(1, 0)).build()), "clock excluded from identity");
+        require(RenderFrameRequest.builder(0, 16, 16, camera).build().equals(
+                RenderFrameRequest.builder(0, 16, 16, camera).build()), "default requests became nondeterministic");
+        try { frame.toBuilder().clock(null).build(); throw new AssertionError("null clock accepted"); }
+        catch (NullPointerException expected) { }
+    }
+
+    private static void resourceSnapshotUpdates() {
+        int page = 16384;
+        ByteBuffer input = ByteBuffer.allocate(page * 3 + 7).order(ByteOrder.LITTLE_ENDIAN);
+        for (int i = 0; i < input.capacity(); i++) input.put(i, (byte) (i * 31));
+        var original = new ResourceData(input);
+        input.put(0, (byte) 99);
+        var replacement = new ResourceData(ByteBuffer.wrap(new byte[]{11, 12, 13, 14}));
+        var changed = original.withUpdates(List.of(new ResourceData.Update(page - 2, replacement),
+                new ResourceData.Update(page, new ResourceData(ByteBuffer.wrap(new byte[]{21})))));
+        require(changed.byteOrder() == ByteOrder.LITTLE_ENDIAN && changed.bytes().isReadOnly(), "snapshot ownership/order lost");
+        require(original.bytes().get(0) == 0 && original.bytes().get(page) == (byte) (page * 31), "old snapshot was mutated");
+        require(changed.bytes().get(page - 2) == 11 && changed.bytes().get(page - 1) == 12
+                && changed.bytes().get(page) == 21 && changed.bytes().get(page + 1) == 14, "overlap/cross-page update lost bytes");
+        var offsets = new java.util.ArrayList<Integer>();
+        changed.forEachChangedRange(original, (offset, bytes) -> {
+            offsets.add(offset); require(bytes.isReadOnly() && bytes.position() == 0, "changed view is unsafe");
+            bytes.position(bytes.limit());
+        });
+        require(offsets.equals(List.of(0, page)), "unchanged pages were uploaded: " + offsets);
+        var next = changed.withUpdates(List.of(new ResourceData.Update(page * 2, replacement)));
+        offsets.clear();
+        next.forEachChangedRange(original, (offset, bytes) -> offsets.add(offset));
+        require(offsets.equals(List.of(0, page, page * 2)), "skipped generation lost updates");
+        offsets.clear();
+        original.forEachChangedRange(next, (offset, bytes) -> offsets.add(offset));
+        require(offsets.equals(List.of(0, page, page * 2)), "old snapshot reuse lost reverse updates");
+        next.forEachChangedRange(next, (offset, bytes) -> { throw new AssertionError("same snapshot uploaded"); });
+        require(original.withUpdates(List.of()) == original, "empty update should reuse snapshot");
+        expectFailure(() -> new ResourceData.Update(-1, replacement));
+        expectFailure(() -> new ResourceData.Update(0, new ResourceData(ByteBuffer.allocate(0))));
+        expectFailure(() -> original.withUpdates(List.of(new ResourceData.Update(Integer.MAX_VALUE, replacement))));
+        expectFailure(() -> original.withUpdates(List.of(new ResourceData.Update(original.byteSize() - 1, replacement))));
+        var empty = new ResourceData(ByteBuffer.allocate(0));
+        require(empty.bytes().remaining() == 0, "empty snapshot changed size");
+        java.util.concurrent.CompletableFuture<?>[] readers = new java.util.concurrent.CompletableFuture<?>[4];
+        var lazy = changed.withUpdates(List.of(new ResourceData.Update(0, replacement)));
+        for (int i = 0; i < readers.length; i++) readers[i] = java.util.concurrent.CompletableFuture.runAsync(() -> {
+            ByteBuffer bytes = lazy.bytes();
+            require(bytes.get(0) == 11 && bytes.get(page) == 21, "concurrent snapshot read corrupted");
+            bytes.position(bytes.limit());
+        });
+        java.util.concurrent.CompletableFuture.allOf(readers).join();
+        require(lazy.bytes().position() == 0, "reader changed shared cursor");
     }
 
     private static void proceduralGeometryContract() {

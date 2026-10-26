@@ -122,6 +122,7 @@ tasks.register<JavaExec>("programmableSceneDemo") {
     dependsOn(tasks.classes)
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass.set("demo.ProgrammableSceneDemo")
+    args("--verify")
 }
 
 val featureIntegrationSelfTest = tasks.register<JavaExec>("featureIntegrationSelfTest") {

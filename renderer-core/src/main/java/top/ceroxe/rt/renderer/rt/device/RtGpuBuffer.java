@@ -402,16 +402,21 @@ public final class RtGpuBuffer implements AutoCloseable {
      * @param source remaining bytes, without modifying the source cursor
      */
     public synchronized void writeBytes(ByteBuffer source) {
+        writeBytesAt(0L, source);
+    }
+
+    /** Writes an owned buffer view at a byte offset without changing its cursor. */
+    public synchronized void writeBytesAt(long byteOffset, ByteBuffer source) {
         Objects.requireNonNull(source, "source");
         if (closed || !hostVisible) throw new IllegalStateException("buffer is not writable host storage");
         int count = source.remaining();
-        if (count <= 0 || count > sizeBytes) throw new IllegalArgumentException("payload does not fit buffer");
+        if (count <= 0 || byteOffset < 0 || byteOffset > sizeBytes - count) throw new IllegalArgumentException("payload does not fit buffer");
         try (MemoryStack stack = MemoryStack.stackPush()) {
             PointerBuffer mapped = stack.mallocPointer(1);
             checkVk(Vma.vmaMapMemory(allocator, allocation, mapped), "vmaMapMemory.writeBytes");
             try {
-                MemoryUtil.memByteBuffer(mapped.get(0), count).put(source.duplicate());
-                Vma.vmaFlushAllocation(allocator, allocation, 0, count);
+                MemoryUtil.memByteBuffer(mapped.get(0) + byteOffset, count).put(source.duplicate());
+                Vma.vmaFlushAllocation(allocator, allocation, byteOffset, count);
             } finally { Vma.vmaUnmapMemory(allocator, allocation); }
         }
     }

@@ -124,6 +124,26 @@ vec3 gsFrameVec3(uint word)
     );
 }
 
+// Signed timestamp bits; subtract in integer space before converting to floating point.
+uint64_t gsFrameTimeNanos()
+{
+    uint word = GPU_SCENE_FRAME_TIME_NANOS_WORD;
+    return gsU64(gsFrame.words[word], gsFrame.words[word + 1u]);
+}
+
+float gsFrameDeltaSeconds()
+{
+    uint word = GPU_SCENE_FRAME_DELTA_NANOS_WORD;
+    return float(gsU64(gsFrame.words[word], gsFrame.words[word + 1u])) * 1.0e-9;
+}
+
+float gsFrameSecondsSince(uint64_t timestamp)
+{
+    uint64_t elapsed = gsFrameTimeNanos() - timestamp;
+    // A future timestamp clamps to zero; intervals follow the signed 64-bit CPU clock contract.
+    return (elapsed >> 63u) != 0ul ? 0.0 : float(elapsed) * 1.0e-9;
+}
+
 vec3 gsFrameCameraPosition()
 {
     uint word = GPU_SCENE_FRAME_CAMERA_POSITION_WORD;

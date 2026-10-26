@@ -189,6 +189,29 @@ tasks.register<JavaExec>("resourceLifecycleContractSelfTest") {
 // breaks 1.x compatibility, so a 1.x consumer fixture would be misleading rather than protective.
 val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-${project.version}.abi")
 val rendererApiAbiSnapshot = layout.buildDirectory.file("abi/renderer-api-${project.version}.abi")
+
+// Minor releases must preserve the major-5 binary surface as well as owning a new snapshot.
+val verifyRendererApiMajorCompatibility = tasks.register("verifyRendererApiMajorCompatibility") {
+    group = "verification"
+    dependsOn("generateRendererApiAbi")
+    val previous = layout.projectDirectory.file("abi/renderer-api-5.0.0.abi")
+    inputs.file(previous)
+    doLast {
+        fun declarations(text: String): Set<String> = text.split(Regex("(?=Compiled from )"))
+            .flatMap { block ->
+                val lines = block.lines().map(String::trim)
+                val owner = lines.firstOrNull { it.startsWith("public ") && it.endsWith("{") }
+                    ?: return@flatMap emptyList()
+                lines.filter { it.startsWith("public ") || it.startsWith("descriptor:") }
+                    .map { "$owner|$it" }
+            }.toSet()
+        val removed = declarations(previous.asFile.readText(StandardCharsets.UTF_8)) -
+            declarations(rendererApiAbiSnapshot.get().asFile.readText(StandardCharsets.UTF_8))
+        if (removed.isNotEmpty()) throw GradleException("Major-5 ABI removed or changed:\n" + removed.joinToString("\n"))
+    }
+}
+
+tasks.named("check") { dependsOn(verifyRendererApiMajorCompatibility) }
 tasks.register("generateRendererApiAbi") {
     group = "verification"
     description = "Generates a deterministic javap snapshot of every public renderer-api binary type."

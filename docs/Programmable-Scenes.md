@@ -1,6 +1,6 @@
 # Programmable retained scenes
 
-5.0.0 exposes retained-scene shader replacement through `SceneShaderProgram`. Ordinary callers
+5.1.0 exposes retained-scene shader replacement through `SceneShaderProgram`. Ordinary callers
 continue to use `Renderer.open()` and the built-in shaders. Applications can replace ray generation,
 miss, closest-hit and any-hit independently; omitted stages retain the built-in implementation.
 
@@ -21,6 +21,18 @@ Reuse the same `ResourceData` instance while its bytes remain unchanged. Each fr
 its own allocation and skips an upload when that slot already contains the same immutable object.
 Growth is geometric and participates in memory admission. Updating one slot cannot overwrite
 application bytes still used by another in-flight frame.
+
+In 5.1.0, `data.withUpdates(List.of(new ResourceData.Update(byteOffset, replacement)))`
+creates a new immutable snapshot while sharing unchanged 16 KiB pages. The backend compares
+against each frame slot's actual prior snapshot, including skipped versions and older-snapshot
+reuse. Size is fixed; construct a new payload to resize. `bytes()` remains a contiguous readonly
+view and materializes lazily for updated snapshots.
+
+Supply `.clock(FrameClock.system())` for live monotonic time, or an explicit
+`FrameClock.of(timeNanos, deltaNanos)` for pause, seek and deterministic playback. The default
+clock is zero. In GLSL, `gsFrameTimeNanos()` retains the 64-bit timestamp bits;
+`gsFrameSecondsSince(start)` subtracts before float conversion and clamps future starts to zero.
+`gsFrameDeltaSeconds()` exposes the explicit delta. Request retries preserve the clock snapshot.
 
 ```java
 var program = SceneShaderProgram.builder()

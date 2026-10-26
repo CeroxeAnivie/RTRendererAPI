@@ -1,7 +1,8 @@
 # API Contract
 
-RTRendererAPI 5.0.0 is a breaking Java 25 contract. Recompile consumers and providers together.
-Release delivery includes GitHub source and signed Maven Central artifacts.
+RTRendererAPI 5.1.0 adds source- and binary-compatible APIs to the Java 25 major-5 contract.
+Use matching 5.1.0 API and backend modules for the extended GPU frame ABI. Delivery includes GitHub
+source and signed Maven Central artifacts after local staging and independent consumer checks.
 
 ## Migration from 4.x
 

@@ -121,6 +121,8 @@ final class VulkanFrameUniformPacker {
         putInt(words, VulkanGpuSceneAbi.FRAME_EXTENT_WORD, frameExtents.renderWidth());
         putInt(words, VulkanGpuSceneAbi.FRAME_EXTENT_WORD + 1, frameExtents.renderHeight());
         putLong(words, VulkanGpuSceneAbi.FRAME_SEQUENCE_WORD, frame.sequence());
+        putLong(words, VulkanGpuSceneAbi.FRAME_TIME_NANOS_WORD, frame.clock().timeNanos());
+        putLong(words, VulkanGpuSceneAbi.FRAME_DELTA_NANOS_WORD, frame.clock().deltaNanos());
 
         CameraState camera = frame.camera();
         putCamera(words, camera,

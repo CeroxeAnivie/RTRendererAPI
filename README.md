@@ -16,7 +16,7 @@
 > **简介**
 >
 > RTRendererAPI 为 Java 桌面应用与引擎进程提供厂商中立、宿主无关的通用渲染语义契约。公共
-> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段；5.0.0 同时保留 retained RT 场景快速路径，
+> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段；5.1.0 同时保留 retained RT 场景快速路径，
 > 并提供显式资源、shader、binding、pipeline、render-pass、barrier、draw 和 external-frame 语义。
 > 应用只需依赖 `renderer-api`，即可获得后端发现、场景提交、通用 command transaction、异步 CPU 帧、
 > 官方 GPU presenter 与显式 Vulkan 专家互操作。Windows Vulkan 后端、LWJGL、对应 Windows natives
@@ -54,7 +54,7 @@
 | GPU 显示 | 官方 Vulkan swapchain presenter，无 CPU 图像回读 |
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
-> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `5.0.0` 当前后端实现范围。
+> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `5.1.0` 当前后端实现范围。
 > 兼容目标不是跨硬件验收结论；未执行的长时稳定性、跨硬件矩阵和特定宿主集成不在本版本声明为已通过。
 
 ---
@@ -69,7 +69,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>5.0.0</version>
+    <version>5.1.0</version>
 </dependency>
 ```
 
@@ -77,11 +77,11 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:5.0.0")
+    implementation("top.ceroxe.rt:renderer-api:5.1.0")
 }
 ```
 
-5.0.0 使用上述 Maven Central 坐标；运行 `publishAllToLocalStagingRepository` 可生成 `build/repository`，
+5.1.0 交付目标是 GitHub 和 Maven Central；Central 实际可用性以部署状态为准。运行 `publishAllToLocalStagingRepository` 可生成 `build/repository`，
 供独立消费方验证使用。同仓库 Demo 直接依赖项目模块，不要求先发布当前版本。
 
 ### ☕ 渲染第一帧
@@ -258,10 +258,10 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 ### 🎮 运行 Hex Ball Demo
 
 ```powershell
-.\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
+.\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=1"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.0.0.jar `
-  --width=2560 --height=1440 --spp=2
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.0.jar `
+  --width=2560 --height=1440 --spp=1
 ```
 
 使用 `--duration-seconds=90` 可执行有界验收并走正常关闭路径。FG/MFG 的通过条件与证据字段见
@@ -319,7 +319,7 @@ A：不一定。它是非阻塞轮询，空值通常表示当前没有可呈现�
 
 **Q：AMD、Intel 或 Linux 能运行吗？**
 
-A：不能把它们视为 `5.0.0` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
+A：不能把它们视为 `5.1.0` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
 
 ---
 
