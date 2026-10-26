@@ -1,47 +1,33 @@
 # API Contract
 
-RTRendererAPI 4.2.2 is the current contract line. The public API and provider SPI expose one canonical
-entry point for each operation. Existing public method descriptors remain available; new texture
-formats and clear variants extend the enum and sealed interface respectively.
+RTRendererAPI 5.0.0 is a breaking Java 25 contract. Recompile consumers and providers together.
+Release delivery includes GitHub source and signed Maven Central artifacts.
 
-## Versioning
+## Migration from 4.x
 
-- `4.2.2` fixes exact-camera camera-to-world uniform packing to preserve the four-word row stride
-  consumed by the Vulkan shader. Public API descriptors remain unchanged from 4.2.1.
+| 4.x surface | 5.0 surface |
+| --- | --- |
+| RendererBootstrap / RendererPreset | Renderer.open(), Renderer.open(config), Renderer.devices() |
+| expertBuilder() | RendererConfig.builder() |
+| preset configuration | RendererConfig.recommended() / presentation() |
+| CpuFrame and CPU-specific poll/wait names | FrameSnapshot, pollFrame(), awaitFrame() |
+| RGBA8-only pixel accessors | pixels(), copyPixelsTo(), format(), rowBytes(), origin() |
+| implicit HDR-to-SDR readback | raw RGBA16_FLOAT; application explicitly chooses display conversion |
+| private retained-scene shader replacement | SceneShaderProgram and the public SceneShaderBindings ABI |
+| application data transported through scene assets | RenderFrameRequest.shaderData(List<ResourceData>) |
 
-- `4.2.1` fixes same-submission buffer visibility for triangle/index and procedural AABB builds.
-  Explicit shader or partial-range barriers no longer suppress AS-build dependencies, and subsequent
-  writes invalidate prior visibility. Public API descriptors remain unchanged from 4.2.0. The Vulkan
-  backend conservatively adds full-buffer dependencies when explicit scopes cannot prove readiness.
-  The NVIDIA bridge also initializes the centered camera pinhole offset explicitly instead of
-  passing the Streamline invalid-value sentinel. Native constant regression and FG/MFG hardware
-  acceptance cover this correction; public API and serialized frame contracts are unchanged.
-  Rollback to 4.2.0 restores the mixed-use buffer synchronization defect.
+`readFrame(FrameConsumer)` provides a confined native pixel view; the callback may not reenter
+its renderer. Native views and all derived buffers expire even when the callback throws. Copy to
+`FrameSnapshot` when retention or sharing is needed. Consumer exceptions retire the frame and
+propagate without failing the renderer; device/provenance failures fail closed.
 
-- `4.2.0` adds 18 integer texture formats, typed signed/unsigned clears, shader image numeric/shape
-  admission checks, and a nonzero-z 3D upload correction. See [Integer Textures](Integer-Textures.md)
-  for sampling, output, and exhaustive-switch compatibility. Integer GPU output is not an RGBA8 CPU frame.
+All four retained-scene stages can be replaced. The retained scene ABI has one raygen, one miss
+and one triangle hit group at depth one. Arbitrary shader groups, callable/procedural RT, recursion,
+graphics, compute, descriptor sets, textures and samplers remain available through the explicit
+command API. Those capabilities use the same versioned resources, ownership and evidence model.
 
-- `4.1.0` adds `AccelerationStructureAabbGeometry` and
-  `BuildProceduralBottomLevelAccelerationStructureCommand` with Vulkan BUILD/UPDATE execution.
-  Existing 4.0.3 public binary descriptors remain unchanged. Consumers with exhaustive switches
-  over the sealed `RenderCommand` hierarchy must handle the new command when recompiling, and
-  must not send it to an older provider. The original triangle command remains unchanged.
-
-- `4.0.3` fixes Vulkan logic-operation mapping, reports logic/geometry device capabilities, adds
-  geometry-stage barrier visibility, and adds explicit fence-ordered RT pipeline/SBT retirement.
-  Existing public method descriptors remain available; bounded history and explicit query/lease
-  semantics are documented in [Evidence Retention](Evidence-Retention.md).
-
-- `4.1.0` continues the direct graphics, compute, ray-tracing, resource, and frame contracts.
-- All published modules use the same `MAJOR.MINOR.PATCH` coordinate and the `vMAJOR.MINOR.PATCH`
-  source tag.
-- New consumers should compile against 4.2.2; rollback to 4.1.0 requires removing integer formats
-  and typed integer clears and using complete-volume uploads for nonzero-z 3D updates. Rollback to
-  4.0.3 also requires removing procedural build commands. Published coordinates are immutable.
-- Maven Central is the release artifact authority. This source checkout also configures a local
-  build repository after Central so the demo can consume a staged, unreleased version. That
-  maintenance fallback is not distributed as a consumer repository requirement.
+The Java API/provider SPI major is 5. The removed entry points and pixel methods have no
+compatibility aliases. Versioned historical quality reports describe their original candidates.
 
 ## Contract Shape
 
@@ -56,7 +42,7 @@ scene admission, and `RendererCommandAccess` for explicit resource and command t
 Consumers should depend on the narrowest contract they actually use.
 
 Graphics pipelines support empty vertex layouts when the shader derives positions from built-in
-vertex indices. Generic output readback publishes bounded RGBA8 `CpuFrame` values with stable
+vertex indices. Generic color output readback publishes native-format `FrameView` and `FrameSnapshot` values with stable
 resource identity and explicit completion/retirement semantics.
 
 ## Support

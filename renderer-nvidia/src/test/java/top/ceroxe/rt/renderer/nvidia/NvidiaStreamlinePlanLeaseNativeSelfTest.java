@@ -16,7 +16,7 @@ public final class NvidiaStreamlinePlanLeaseNativeSelfTest {
 
     public static void main(String[] arguments) {
         WindowsChildProcessIsolation.preventGradlePipeInheritance();
-        RendererConfig configuration = RendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.builder()
                 .frameReconstruction(FrameReconstructionOptions.builder()
                         .preference(RendererFeaturePreference.PREFERRED)
                         .build())

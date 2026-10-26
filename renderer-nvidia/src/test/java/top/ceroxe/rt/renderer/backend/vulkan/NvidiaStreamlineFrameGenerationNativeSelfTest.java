@@ -24,21 +24,26 @@ import java.util.concurrent.locks.LockSupport;
 /** Real swapchain gate for Streamline DLSS Frame Generation and static Multi Frame Generation. */
 public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
     private static final int MINIMUM_PRESENT_COUNT = 12;
-    // A cold driver/Streamline startup can defer generation for roughly two seconds. Six seconds
-    // keeps the gate bounded while leaving enough margin for loaded CI and post-reboot systems.
-    private static final int MAXIMUM_PRESENT_COUNT = 360;
+    // Initialization and display pacing are asynchronous. Measure wall time rather than assuming
+    // a fixed number of presents implies a completed cold-start interval. Zero output still fails.
+    private static final int BASE_FRAME_RATE = Integer.getInteger("rtrenderer.test.baseFps", 60);
+    private static final long OUTPUT_DEADLINE_NANOS = 60_000_000_000L;
     // DLSS-G requires a supported backbuffer size; the 640x360 extent used by reconstruction
     // gates is below the generator's minimum and must not be used for this acceptance test.
     private static final int FRAME_GENERATION_WIDTH = 1280;
     private static final int FRAME_GENERATION_HEIGHT = 720;
     private static final long TIMEOUT_NANOS = 30_000_000_000L;
-    private static final long BASE_FRAME_PERIOD_NANOS = 1_000_000_000L / 60L;
+    private static final long BASE_FRAME_PERIOD_NANOS = 1_000_000_000L / Math.max(1, BASE_FRAME_RATE);
 
     private NvidiaStreamlineFrameGenerationNativeSelfTest() {
     }
 
     public static void main(String[] arguments) throws Exception {
         WindowsChildProcessIsolation.preventGradlePipeInheritance();
+        if (BASE_FRAME_RATE < 10 || BASE_FRAME_RATE > 120) {
+            throw new IllegalArgumentException("test base frame rate must be in [10, 120]");
+        }
+        System.out.println("Frame-generation acceptance base cadence: " + BASE_FRAME_RATE + " FPS");
         boolean multiFrame = arguments.length == 1 && "mfg".equalsIgnoreCase(arguments[0]);
         boolean adaptive = arguments.length == 1 && "adaptive".equalsIgnoreCase(arguments[0]);
         boolean composed = arguments.length == 1 && "composed".equalsIgnoreCase(arguments[0]);
@@ -69,7 +74,7 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                         : FrameGenerationOptions.Multiplier.TWO_X)
                 .fallback(FrameGenerationOptions.Fallback.NONE)
                 .build();
-        RendererConfig configuration = RendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.builder()
                 // The acceptance may need a bounded warm-up while the asynchronous pacer
                 // publishes generated output. Match the presenter lead to the legal renderer
                 // ring maximum so that warm-up measures Streamline latency instead of admission
@@ -140,19 +145,30 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                         NvidiaStreamlineDiagnostics.frameGenerationSnapshot();
                 long observedGeneratedFrames = stats.generatedFramesActuallyPresented();
                 int consecutiveGeneratedSamples = 0;
-                for (long sequence = 0L; sequence < MAXIMUM_PRESENT_COUNT; sequence++) {
+                long firstGeneratedSequence = -1L;
+                long presentationStarted = System.nanoTime();
+                long nextProgress = presentationStarted + 5_000_000_000L;
+                long focusedPresents = 0L;
+                long foregroundPresents = 0L;
+                long firstGeneratedAt = 0L;
+                long foregroundNanos = 0L;
+                long previousObservation = presentationStarted;
+                boolean previouslyForeground = false;
+                boolean sustainedOutputAccepted = false;
+                for (long sequence = 0L; System.nanoTime() - presentationStarted < OUTPUT_DEADLINE_NANOS; sequence++) {
                     if (sequence > 0L) {
                         nextFrameDeadline = Math.max(nextFrameDeadline + BASE_FRAME_PERIOD_NANOS,
                                 System.nanoTime());
                         awaitBaseFrameDeadline(nextFrameDeadline);
                     }
+                    double motionSeconds = (System.nanoTime() - presentationStarted) / 1_000_000_000.0;
                     RenderFrameRequest frame = NvidiaGpuSceneNativeTestSupport.frame(
                             sequence,
                             FRAME_GENERATION_WIDTH,
                             FRAME_GENERATION_HEIGHT,
                             NvidiaGpuSceneNativeTestSupport.camera(
-                                    sequence * 0.025,
-                                    (sequence - 4L) * 0.0025,
+                                    Math.sin(motionSeconds * 0.7) * 0.3,
+                                    Math.sin(motionSeconds * 0.5) * 0.06,
                                     FRAME_GENERATION_WIDTH,
                                     FRAME_GENERATION_HEIGHT
                             )
@@ -170,6 +186,14 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                             featureName + " did not reach the platform presentation queue: " + result
                     );
                     presentedFrames++;
+                    boolean focused = ((VulkanGlfwFramePresenter) presenter).focused();
+                    boolean foreground = ((VulkanGlfwFramePresenter) presenter).foreground();
+                    long foregroundObservedAt = System.nanoTime();
+                    if (foreground && previouslyForeground) foregroundNanos += foregroundObservedAt - previousObservation;
+                    previousObservation = foregroundObservedAt;
+                    previouslyForeground = foreground;
+                    if (focused) focusedPresents++;
+                    if (foreground) foregroundPresents++;
                     stats = NvidiaStreamlineDiagnostics.frameGenerationSnapshot();
                     if (adaptive) {
                         requestedGeneratedFrames = Math.min(3, stats.maxFramesToGenerate());
@@ -177,14 +201,34 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                     long generatedDelta = stats.generatedFramesActuallyPresented()
                             - observedGeneratedFrames;
                     observedGeneratedFrames = stats.generatedFramesActuallyPresented();
-                    consecutiveGeneratedSamples = generatedDelta >= requestedGeneratedFrames
+                    if (generatedDelta > 0L && firstGeneratedSequence < 0L) {
+                        firstGeneratedSequence = sequence;
+                        firstGeneratedAt = System.nanoTime();
+                        System.out.println(featureName + " first generated output: sequence=" + sequence
+                                + ", elapsedMillis=" + (System.nanoTime() - presentationStarted) / 1_000_000L
+                                + ", focused=" + focused + ", foreground=" + foreground);
+                    }
+                    long observedAt = System.nanoTime();
+                    if (observedAt >= nextProgress) {
+                        System.out.println(featureName + " awaiting sustained output: elapsedMillis="
+                                + (observedAt - presentationStarted) / 1_000_000L
+                                + ", actualBaseFps=" + presentedFrames * 1_000_000_000.0 / (observedAt - presentationStarted)
+                                + ", focusedPresents=" + focusedPresents + "/" + presentedFrames
+                                + ", foregroundPresents=" + foregroundPresents + "/" + presentedFrames
+                                + ", generated=" + stats.generatedFramesActuallyPresented()
+                                + ", status=" + stats.status());
+                        nextProgress = observedAt + 5_000_000_000L;
+                    }
+                    consecutiveGeneratedSamples = foreground && generatedDelta >= requestedGeneratedFrames
                             ? consecutiveGeneratedSamples + 1 : 0;
                     // DLSS-G proxy presentation is asynchronous. Keep supplying real game frames
                     // until the pacer publishes a sustained native-to-generated cadence. A single
                     // late output is not enough to certify FG 2x, and the fixed upper bound still
                     // fails a genuinely inactive or severely degraded implementation.
                     if (presentedFrames >= MINIMUM_PRESENT_COUNT
-                            && (multiFrame || consecutiveGeneratedSamples >= MINIMUM_PRESENT_COUNT)) {
+                            && firstGeneratedAt != 0L && System.nanoTime() - firstGeneratedAt >= 5_000_000_000L
+                            && consecutiveGeneratedSamples >= MINIMUM_PRESENT_COUNT) {
+                        sustainedOutputAccepted = true;
                         break;
                     }
                 }
@@ -204,6 +248,10 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                         "DLSS-G state queries never succeeded or reported a failure: " + stats
                 );
                 NvidiaGpuSceneNativeTestSupport.require(
+                        stats.generationRequestMisses() == 0L,
+                        "DLSS-G generation requests missed their tagged input: " + stats
+                );
+                NvidiaGpuSceneNativeTestSupport.require(
                         stats.maxFramesToGenerate() >= requestedGeneratedFrames,
                         featureName + " exceeds the runtime multiplier limit: " + stats
                 );
@@ -215,17 +263,23 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                         stats.configuredGeneratedFrames() == requestedGeneratedFrames,
                         featureName + " did not commit the requested multiplier to Streamline: " + stats
                 );
-                if (!multiFrame) {
-                    // FG 2x is the production baseline and must prove real generated output. MFG
-                    // is separately gated as a non-crashing opt-in because driver pacing may
-                    // legitimately produce zero interpolated frames for a short native sample.
+                if (!sustainedOutputAccepted && foregroundNanos < 5_000_000_000L) {
+                    throw new AssertionError(featureName + " ENVIRONMENT_NOT_FOREGROUND: insufficient real foreground observation; "
+                            + "acceptance is inconclusive, not unsupported and not a pass; foregroundMillis="
+                            + foregroundNanos / 1_000_000L + "; " + stats);
+                }
+                {
+                    // Configuration alone is insufficient for either FG or MFG. Both must
+                    // prove sustained authoritative output at their requested cadence.
                     NvidiaGpuSceneNativeTestSupport.require(
                             stats.active(),
-                            featureName + " produced no authoritative generated-frame presentation: " + stats
+                            featureName + " NO_OUTPUT_WITHIN_DEADLINE; this does not establish unsupported hardware; "
+                                    + "focusedPresents=" + focusedPresents + "/" + presentedFrames + "; " + stats
+                                    + "; foregroundPresents=" + foregroundPresents + "/" + presentedFrames
                                     + "; native diagnostics: " + StreamlineNativeTestDiagnostics.warnings()
                     );
                     NvidiaGpuSceneNativeTestSupport.require(
-                            consecutiveGeneratedSamples >= MINIMUM_PRESENT_COUNT,
+                            sustainedOutputAccepted && consecutiveGeneratedSamples >= MINIMUM_PRESENT_COUNT,
                             featureName + " did not sustain the requested generated-frame cadence: " + stats
                                     + "; native diagnostics: " + StreamlineNativeTestDiagnostics.warnings()
                     );
@@ -238,24 +292,6 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                             session.featureCapabilities().feature(Feature.FRAME_GENERATION).status()
                                     == Status.ACTIVE,
                             featureName + " capability did not activate from actual presentation evidence"
-                    );
-                } else if (stats.active()) {
-                    // Never allow a false ACTIVE MFG state: any observed active state still needs
-                    // authoritative output evidence even though output is not required by this gate.
-                    NvidiaGpuSceneNativeTestSupport.require(
-                            stats.maxGeneratedFramesInSample() >= 1,
-                            featureName + " reported ACTIVE without generated-frame evidence: " + stats
-                    );
-                    NvidiaGpuSceneNativeTestSupport.require(
-                            session.featureCapabilities().feature(Feature.FRAME_GENERATION).status()
-                                    == Status.ACTIVE,
-                            featureName + " reported native evidence without an ACTIVE capability state"
-                    );
-                } else {
-                    NvidiaGpuSceneNativeTestSupport.require(
-                            session.featureCapabilities().feature(Feature.FRAME_GENERATION).status()
-                                    != Status.ACTIVE,
-                            featureName + " reported ACTIVE without generated-frame evidence: " + stats
                     );
                 }
                 if (composed) {
@@ -278,6 +314,10 @@ public final class NvidiaStreamlineFrameGenerationNativeSelfTest {
                 System.out.println("NvidiaStreamlineFrameGenerationNativeSelfTest passed: feature="
                         + featureName + ", device=" + capability.preferredDevice().name()
                         + ", presentedFrames=" + presentedFrames
+                        + ", firstGeneratedSequence=" + firstGeneratedSequence
+                        + ", elapsedMillis=" + (System.nanoTime() - presentationStarted) / 1_000_000L
+                        + ", focusedPresents=" + focusedPresents + "/" + presentedFrames
+                        + ", foregroundPresents=" + foregroundPresents + "/" + presentedFrames
                         + ", consecutiveGeneratedSamples=" + consecutiveGeneratedSamples
                         + ", stats=" + stats);
             }

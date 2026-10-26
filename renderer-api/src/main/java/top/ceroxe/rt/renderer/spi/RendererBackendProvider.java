@@ -14,7 +14,7 @@ public interface RendererBackendProvider {
     /**
      * Major SPI contract version required by {@code renderer-api}.
      */
-    int API_MAJOR = 2;
+    int API_MAJOR = 5;
 
     /** Highest minor SPI contract this host can consume without a provider upgrade. */
     int API_MINOR = 0;

@@ -42,7 +42,7 @@ ray-tracing shader。雾、屏幕空间读取、任意 blend 副作用与宿主�
 专家配置不会默认请求 NVIDIA 图像或帧生成能力。请求的 RT 语义也必须由当前 backend 明确标记为可执行：
 
 ```java
-try (Renderer renderer = RendererBootstrap.open(RendererConfig.expertBuilder().build())) {
+try (Renderer renderer = Renderer.open(RendererConfig.builder().build())) {
     RenderingSemanticCapabilities capabilities = renderer.renderingSemanticCapabilities();
     require(capabilities.feature(
             RenderingSemanticCapabilities.Feature.ACCELERATION_STRUCTURE_BUILDS

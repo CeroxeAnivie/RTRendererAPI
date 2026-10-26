@@ -1,6 +1,5 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
-import top.ceroxe.rt.renderer.api.CpuFrame;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.rt.device.RtGpuImage;
 import top.ceroxe.rt.renderer.rt.device.RtGpuTimestampPool;
@@ -25,16 +24,6 @@ final class VulkanGpuSceneFrameDiagnostics {
         this.features = Objects.requireNonNull(features, "features");
         this.gpuTimingsEnabled = gpuTimingsEnabled;
         this.timingLabel = requireText(timingLabel, "timingLabel");
-    }
-
-    CpuFrame captureCpu(VulkanFrameSlot slot) {
-        VulkanFrameSlot checked = Objects.requireNonNull(slot, "slot");
-        return CpuFrame.builder()
-                .frameSequence(checked.frameSequence())
-                .renderedSceneRevision(checked.renderedSceneRevision())
-                .extent(checked.outputImage().width(), checked.outputImage().height())
-                .pixelsRgba8(checked.captureCpuRgba8())
-                .build();
     }
 
     VulkanGpuSceneRenderingSession.DiagnosticFrame captureOutput(VulkanFrameSlot slot) {

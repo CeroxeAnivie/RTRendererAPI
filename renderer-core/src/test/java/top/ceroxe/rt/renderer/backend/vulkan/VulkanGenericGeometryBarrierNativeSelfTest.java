@@ -21,7 +21,7 @@ public final class VulkanGenericGeometryBarrierNativeSelfTest {
 
     public static void main(String[] args) throws Exception {
         var capability = VulkanRtCapabilityProbe.capture();
-        var config = RendererConfig.expertBuilder().frameReconstruction(FrameReconstructionOptions.disabled())
+        var config = RendererConfig.builder().frameReconstruction(FrameReconstructionOptions.disabled())
                 .frameGeneration(FrameGenerationOptions.disabled()).denoising(DenoisingOptions.disabled())
                 .rayTracingOptimizations(RayTracingOptimizationOptions.disabled()).build();
         try (var device = VulkanDeviceRuntime.open(capability, RendererRtDiagnostics.noop(), true, true, config);
@@ -117,7 +117,7 @@ public final class VulkanGenericGeometryBarrierNativeSelfTest {
                 VulkanGenericCommandNativeSelfTest.await(session, frame, CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED);
                 var cpu = session.captureLatestCpuFrame(frame - 1);
                 require(cpu != null && cpu.frameSequence() == frame && cpu.outputResource().orElseThrow().equals(output.id()), "output evidence mismatch");
-                var actual = cpu.pixelsRgba8();
+                var actual = cpu.pixels();
                 for (int pixel = 0; pixel < SIZE * SIZE; pixel++) {
                     for (int channel = 0; channel < 4; channel++) {
                         int value = Byte.toUnsignedInt(actual.get());

@@ -117,6 +117,8 @@ add_library(rtrenderer_nvidia SHARED
 target_compile_features(rtrenderer_nvidia PRIVATE cxx_std_20)
 add_executable(streamline_frame_support_test
     ../../test/cpp/streamline_frame_support_test.cpp
+    streamline_frame_constants_publisher.cpp
+    streamline_frame_generation_executor.cpp
     streamline_frame_support.cpp
     streamline_diagnostics.cpp
 )

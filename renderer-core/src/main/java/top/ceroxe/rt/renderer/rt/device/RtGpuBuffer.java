@@ -398,6 +398,25 @@ public final class RtGpuBuffer implements AutoCloseable {
     }
 
     /**
+     * Writes a buffer payload directly without an intermediate heap array.
+     * @param source remaining bytes, without modifying the source cursor
+     */
+    public synchronized void writeBytes(ByteBuffer source) {
+        Objects.requireNonNull(source, "source");
+        if (closed || !hostVisible) throw new IllegalStateException("buffer is not writable host storage");
+        int count = source.remaining();
+        if (count <= 0 || count > sizeBytes) throw new IllegalArgumentException("payload does not fit buffer");
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            PointerBuffer mapped = stack.mallocPointer(1);
+            checkVk(Vma.vmaMapMemory(allocator, allocation, mapped), "vmaMapMemory.writeBytes");
+            try {
+                MemoryUtil.memByteBuffer(mapped.get(0), count).put(source.duplicate());
+                Vma.vmaFlushAllocation(allocator, allocation, 0, count);
+            } finally { Vma.vmaUnmapMemory(allocator, allocation); }
+        }
+    }
+
+    /**
      * Writes consecutive native-order chunks from byte offset zero.
      *
      * @param chunks non-null chunks forming a non-empty aggregate payload
@@ -619,6 +638,33 @@ public final class RtGpuBuffer implements AutoCloseable {
             } finally {
                 Vma.vmaUnmapMemory(allocator, allocation);
             }
+        }
+    }
+
+    /**
+     * Scoped access without a pixel ownership copy after the caller has observed GPU completion.
+     * The Java 25 arena invalidates this view and derived views on return, including on failure.
+     * @param requestedBytes positive byte count within this allocation and the ByteBuffer limit
+     * @param consumer synchronous reader, confined to this thread and callback
+     */
+    public synchronized void readMapped(long requestedBytes, java.util.function.Consumer<ByteBuffer> consumer) {
+        java.util.Objects.requireNonNull(consumer, "consumer");
+        if (closed || !hostVisible) throw new IllegalStateException("host-visible buffer is unavailable");
+        if (requestedBytes <= 0 || requestedBytes > sizeBytes || requestedBytes > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("mapped byte count is outside the allocation");
+        }
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            PointerBuffer pointer = stack.mallocPointer(1);
+            checkVk(Vma.vmaMapMemory(allocator, allocation, pointer), "vmaMapMemory.readMapped");
+            try {
+                Vma.vmaInvalidateAllocation(allocator, allocation, 0, requestedBytes);
+                try (var arena = java.lang.foreign.Arena.ofConfined()) {
+                    ByteBuffer view = java.lang.foreign.MemorySegment.ofAddress(pointer.get(0))
+                            .reinterpret(requestedBytes, arena, null).asReadOnly().asByteBuffer()
+                            .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                    consumer.accept(view);
+                }
+            } finally { Vma.vmaUnmapMemory(allocator, allocation); }
         }
     }
 

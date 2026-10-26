@@ -8,7 +8,7 @@
 
 `VulkanFrameInterop` 是显式 opt-in 的零拷贝外部图像接口。它只适合已经能正确实现 Vulkan external memory、external
 semaphore、queue-family ownership transfer 和 Win32 handle 所有权的调用方。普通应用应使用
-`Renderer.pollLatestCpuFrame()`/有界等待，或使用官方 `VulkanFramePresenter` 完成 GPU 窗口显示。
+`Renderer.pollFrame()`/有界等待，或使用官方 `VulkanFramePresenter` 完成 GPU 窗口显示。
 
 ## 官方托管 presenter 与自定义专家 consumer
 

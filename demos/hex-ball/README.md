@@ -1,12 +1,9 @@
 # Hex Ball Demo
 
-该可选模块是仓库自带的 retained-scene 交互示例与 GPU smoke workload。它优先解析 Maven Central
-中的 `top.ceroxe.rt:renderer-api:4.2.2` 及其完整传递运行时；当当前版本尚未进入 Central 时，
-`run` 与 `shadowJar` 会先生成同坐标的本地 staging，并由 `localBuildFallback` 自动补齐解析。
-这条 fallback 只用于未发布版本的构建启动，不改变 Central 的发布事实源。
-Central 可用时 clone 仓库后运行 Demo 不需要用于构建 `renderer-nvidia` 的 CMake、Visual Studio C++、
-Vulkan SDK、NRD、NRI、Streamline 或 RTXMU 源码工具链。
-fat JAR 门禁仍会验证打包后的 NVIDIA DLL 清单和 SHA-256。
+该模块提供 retained-scene 交互示例、可编程场景示例与 GPU smoke workload，直接消费同仓库 API
+及其完整运行时。源码构建需要仓库的 native SDK/toolchain；生成的 fat JAR 自带完整运行时，
+运行时无需安装 SDK。fat JAR 门禁验证打包后的 NVIDIA DLL 清单和 SHA-256。
+独立任务 `verifyPublishedMavenConsumer` 验证本地 Maven 制品，避免与 Demo 自举构建相互依赖。
 
 它演示普通场景与官方 GPU presenter，不演示 `submitResources(...)`、`submitCommands(...)` 或
 通用 BLAS/TLAS/RT pipeline。需要保留既有资源、shader 与命令顺序的宿主应阅读
@@ -17,7 +14,8 @@ fat JAR 门禁仍会验证打包后的 NVIDIA DLL 清单和 SHA-256。
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=2"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.2.2.jar `
+.\gradlew.bat :demos:hex-ball:programmableSceneDemo
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.0.0.jar `
   --width=2560 --height=1440 --spp=2
 ```
 
@@ -27,7 +25,7 @@ java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.2.2.jar `
 以下命令定义可复现的 smoke workload，不构成预先通过声明。只有保存了对应提交、硬件、驱动、
 命令输出与结构化证据的实际运行，才能写入版本验收结论。
 
-Demo 默认使用 `RendererPreset.MANAGED_GPU_PRESENTATION` 推荐模式：GPU 直接呈现、2x 帧生成、
+Demo 默认使用 `RendererConfig.presentation()` 推荐模式：GPU 直接呈现、2x 帧生成、
 平衡时域重建、低延迟和 RT 优化均由能力协商决定；NRD 不在默认推荐路径中，必须显式请求。只有技术状态达到 `ACTIVE`，且类型化的
 `RendererDiagnostics.frameGenerationEvidence()` 计数器产生对应证据，才能证明生成帧已经到达
 provider presentation path；仅提出配置请求不构成证据。每个进程只运行一种功能模式：
@@ -40,15 +38,15 @@ provider presentation path；仅提出配置请求不构成证据。每个进程
 
 ```powershell
 ## 原生基线
-java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.2.2.jar `
+java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.0.0.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 
 ## FG 2x
-java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.2.2.jar `
+java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.0.0.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 
 ## MFG 3x
-java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-4.2.2.jar `
+java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.0.0.jar `
   --width=2560 --height=1440 --spp=2 --duration-seconds=90
 ```
 
@@ -57,9 +55,14 @@ multiplier、proxy present 次数、实际呈现的生成帧数、request miss�
 status、有效倍率、最终 renderer health/obligations，以及进程退出码。
 
 FG 2x 只有在实际生成输出持续存在、技术状态达到 `ACTIVE`、miss/query failure/native status
-保持健康、关闭时 obligations 为空且进程以退出码 `0` 结束时才算通过。当前 MFG 3x 门禁要求：
-请求与配置倍率均为 3x，90 秒运行期间无 device loss、崩溃、未释放 obligation 或非零退出码；
-有效倍率只作为证据记录，不作为性能阈值。
+保持健康、关闭时 obligations 为空且进程以退出码 `0` 结束时才算通过。MFG 3x 同样必须证明每个基础帧
+对应两个实际生成帧，配置倍率和无崩溃不能替代输出证据。原生门禁在首个生成帧后继续观察至少 5 秒，
+并要求末尾连续至少 12 次取得请求倍率的真实输出。
+
+Windows 验收需保持测试窗口处于真实前台。GLFW 的 focus 通知不能替代 `GetForegroundWindow`；
+本次硬件上观察到后台窗口仅呈现基础帧，回到前台后恢复生成。后台零输出标为
+`ENVIRONMENT_NOT_FOREGROUND`，保留非零验收结果，既不算通过，也不判定硬件/API 不支持。
+前台观察充分仍无输出或倍率不稳则维持严格失败。详见 [5.0.0 验证记录](../../docs/5.0.0.md)。
 
 可执行 JAR 会重新启动自身并启用 native access。`:demos:hex-ball:run` 会直接应用同一 native
 access 策略。确定性合同检查分别由 `:demos:hex-ball:physicsSelfTest` 与

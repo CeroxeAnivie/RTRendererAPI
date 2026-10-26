@@ -2,7 +2,7 @@
 
 ## 提交 Pull Request 前
 
-使用 JDK 25、仓库内 Gradle Wrapper 构建 Java 21 公共 ABI。一次改动应保持在一个明确的
+使用 JDK 25、仓库内 Gradle Wrapper 构建 Java 25 公共 ABI。一次改动应保持在一个明确的
 ownership boundary 内；不得通过更新 ABI baseline 掩盖尚未解释的二进制差异。
 
 ```powershell

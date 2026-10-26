@@ -3,7 +3,7 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.RendererConfig;
-import top.ceroxe.rt.renderer.api.RendererPreset;
+
 import top.ceroxe.rt.renderer.api.FramePrimitiveBatch;
 import top.ceroxe.rt.renderer.rt.acceleration.RtAccelerationStructure;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
@@ -56,7 +56,7 @@ final class VulkanSceneRuntime implements AutoCloseable {
                 diagnostics,
                 validationEnabled,
                 gpuTimingsEnabled,
-                RendererPreset.CPU_READBACK.configuration()
+                RendererConfig.recommended()
         );
     }
 

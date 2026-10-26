@@ -1,13 +1,13 @@
-package top.ceroxe.rt.renderer.rt.pipeline;
+package top.ceroxe.rt.renderer.api;
 
 /**
  * Canonical descriptor-set ABI shared by the generic GPUScene shaders and Vulkan pipeline.
  *
- * <p>This type belongs to renderer-core internals; renderer clients consume only renderer-api.
+ * <p>This versioned public ABI is shared by custom shaders and the built-in retained-scene pipeline.
  * Keeping the binding numbers here prevents the scene packer and pipeline factory from evolving
  * independent copies of the same native contract.</p>
  */
-public final class GpuSceneShaderBindings {
+public final class SceneShaderBindings {
     /**
      * 顶层加速结构绑定。
      */
@@ -122,8 +122,11 @@ public final class GpuSceneShaderBindings {
     /** Streamline reconstruction one-texel exposure input. */
     public static final int RECONSTRUCTION_EXPOSURE = 32;
     /**
-     * 描述符集合总绑定数。
+     * First application-defined readonly storage-buffer binding.
      */
+    public static final int APPLICATION_DATA = 33;
+
+    /** Number of built-in bindings, before application-defined storage buffers. */
     public static final int COUNT = 33;
     /**
      * 存储缓冲区类型绑定数。
@@ -134,6 +137,6 @@ public final class GpuSceneShaderBindings {
      */
     public static final int STORAGE_IMAGE_COUNT = 16;
 
-    private GpuSceneShaderBindings() {
+    private SceneShaderBindings() {
     }
 }

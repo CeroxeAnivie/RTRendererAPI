@@ -13,13 +13,12 @@ import javax.swing.JOptionPane;
 
 import top.ceroxe.rt.renderer.api.AntiAliasingState;
 import top.ceroxe.rt.renderer.api.CameraState;
-import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.FramePrimitiveBatch;
 import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
-import top.ceroxe.rt.renderer.api.RendererBootstrap;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.api.RendererHealth;
 import top.ceroxe.rt.renderer.api.SubmissionRejectedException;
@@ -75,13 +74,13 @@ public final class HexBallDemo {
 
         if (config.cpuPresentation()) {
             try (RenderWindow window = RenderWindow.open(config, running, stats);
-                 Renderer renderer = RendererBootstrap.open(rendererConfig)) {
+                 Renderer renderer = Renderer.open(rendererConfig)) {
                 runRenderer(config, running, stats, window, renderer);
                 presentTotalFps = DemoTechnologyHud.presentTotalFps(renderer, stats);
                 requireHealthyRenderer(renderer);
             }
         } else {
-            try (Renderer renderer = RendererBootstrap.open(rendererConfig)) {
+            try (Renderer renderer = Renderer.open(rendererConfig)) {
                 try (VulkanFramePresenter presenter = VulkanFramePresenter.open(
                         renderer,
                         VulkanFramePresenterConfig.builder()
@@ -492,9 +491,8 @@ public final class HexBallDemo {
         long nextHudRefresh = 0L;
         try {
             while (running.get() && !Thread.currentThread().isInterrupted()) {
-                Optional<CpuFrame> frame = renderer.pollLatestCpuFrame();
-                if (frame.isPresent()) {
-                    window.publish(frame.orElseThrow());
+                boolean available = renderer.readFrame(window::publish);
+                if (available) {
                     RendererDiagnostics.FrameGpuTiming timing = renderer.diagnostics().frameGpuTiming();
                     stats.observeGpuTiming(timing);
                     stats.framePresented();

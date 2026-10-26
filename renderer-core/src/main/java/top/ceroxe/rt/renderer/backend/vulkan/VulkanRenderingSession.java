@@ -1,6 +1,6 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
-import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
@@ -97,7 +97,10 @@ interface VulkanRenderingSession extends AutoCloseable {
     /**
      * Returns an owned CPU snapshot newer than the supplied sequence, or {@code null}.
      */
-    CpuFrame captureLatestCpuFrame(long afterFrameSequence);
+    FrameSnapshot captureLatestCpuFrame(long afterFrameSequence);
+    long latestCpuFrameSequence();
+    void discardCpuFramesThrough(long sequence);
+    boolean consumeLatestCpuFrame(long afterFrameSequence, top.ceroxe.rt.renderer.api.FrameConsumer consumer);
 
     Telemetry telemetry();
 

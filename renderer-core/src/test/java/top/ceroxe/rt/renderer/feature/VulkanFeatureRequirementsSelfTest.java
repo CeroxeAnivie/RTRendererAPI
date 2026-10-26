@@ -47,7 +47,7 @@ public final class VulkanFeatureRequirementsSelfTest {
     }
 
     private static RendererConfig configuration(RendererFeaturePreference preference) {
-        return RendererConfig.expertBuilder()
+        return RendererConfig.builder()
                 .frameReconstruction(FrameReconstructionOptions.disabled())
                 .frameGeneration(FrameGenerationOptions.disabled())
                 .denoising(DenoisingOptions.disabled())

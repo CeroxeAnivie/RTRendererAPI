@@ -22,10 +22,7 @@ abstract class RendererCoreHardwareGateLock : BuildService<BuildServiceParameter
 group = rootProject.group
 version = rootProject.version
 
-val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version")
-    .orElse(JavaVersion.current().majorVersion)
-    .get()
-    .toInt()
+val toolchainJavaVersion = 25
 val fastutilVersion = rootProject.providers.gradleProperty("fastutil_version").getOrElse("8.5.19")
 val jomlVersion = rootProject.providers.gradleProperty("joml_version").getOrElse("1.10.8")
 val lwjglVersion = rootProject.providers.gradleProperty("lwjgl_version").getOrElse("3.4.3")
@@ -166,9 +163,13 @@ val registerCoreSelfTest =
             // putting that ServiceLoader provider in every forked core JVM would silently turn
             // dozens of core tests into duplicate Streamline initializations. NVIDIA behavior has
             // its own real-device acceptance gate, so keep this execution boundary provider-free.
-            classpath = sourceSets.test.get().runtimeClasspath.filter { file ->
-                !file.name.startsWith("renderer-nvidia-")
-            }
+            classpath = files(sourceSets.test.get().output,
+                configurations.testRuntimeClasspath.get().incoming.artifactView {
+                    componentFilter { component ->
+                        component !is org.gradle.api.artifacts.component.ProjectComponentIdentifier ||
+                            component.projectPath != ":renderer-nvidia"
+                    }
+                }.files)
             mainClass.set(mainClassName)
         }
     }
@@ -181,7 +182,6 @@ val contractSelfTests = linkedMapOf(
     "vulkanGenericTextureLayoutUpdatesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericTextureLayoutUpdatesSelfTest",
     "vulkanFrameCompositionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameCompositionNativeSelfTest",
     "coreVulkanBlasBuildCoordinatorSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanBlasBuildCoordinatorSelfTest",
-    "coreVulkanRendererRuntimeLifecycleSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererRuntimeLifecycleSelfTest",
     "coreRtActiveSectionContentStateSelfTest" to "top.ceroxe.rt.renderer.rt.acceleration.RtActiveSectionContentStateSelfTest",
     "coreRtCommittedFrontPolicySelfTest" to "top.ceroxe.rt.renderer.rt.device.RtCommittedFrontPolicySelfTest",
     "coreRtDeferredEmptySectionStateSelfTest" to "top.ceroxe.rt.renderer.rt.acceleration.RtDeferredEmptySectionStateSelfTest",
@@ -311,6 +311,7 @@ tasks.named("check") {
 }
 
 val nativeSelfTests = linkedMapOf(
+    "vulkanModernFrameNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanModernFrameNativeSelfTest",
     "vulkanGenericIntegerTextureNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericIntegerTextureNativeSelfTest",
     "vulkanGenericProceduralRayTracingNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericProceduralRayTracingNativeSelfTest",
     "vulkanGenericPipelineRetirementNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericPipelineRetirementNativeSelfTest",
@@ -352,7 +353,7 @@ tasks.named<JavaExec>("vulkanEvidenceRetentionNativeSelfTest").configure {
     maxHeapSize = "256m"
 }
 
-listOf("vulkanGenericIntegerTextureNativeSelfTest", "vulkanGenericProceduralRayTracingNativeSelfTest", "vulkanGenericPipelineRetirementNativeSelfTest", "vulkanGenericGeometryBarrierNativeSelfTest", "vulkanGenericLogicOperationNativeSelfTest", "vulkanEvidenceRetentionNativeSelfTest", "vulkanGenericCommandNativeSelfTest",
+listOf("vulkanModernFrameNativeSelfTest", "vulkanGenericIntegerTextureNativeSelfTest", "vulkanGenericProceduralRayTracingNativeSelfTest", "vulkanGenericPipelineRetirementNativeSelfTest", "vulkanGenericGeometryBarrierNativeSelfTest", "vulkanGenericLogicOperationNativeSelfTest", "vulkanEvidenceRetentionNativeSelfTest", "vulkanGenericCommandNativeSelfTest",
     "vulkanGenericRayTracingNativeSelfTest", "vulkanGenericAccelerationNativeSelfTest",
     "vulkanFrameCompositionNativeSelfTest").forEach { taskName ->
     tasks.named<JavaExec>(taskName).configure {

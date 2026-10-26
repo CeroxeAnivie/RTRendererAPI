@@ -5,10 +5,7 @@ plugins {
 }
 
 val rendererVersion = providers.gradleProperty("rendererVersion")
-val toolchainJavaVersion = providers.gradleProperty("java_toolchain_version")
-    .orElse(JavaVersion.current().majorVersion)
-    .get()
-    .toInt()
+val toolchainJavaVersion = 25
 
 dependencies {
     implementation("top.ceroxe.rt:renderer-api:${rendererVersion.get()}")
@@ -22,9 +19,9 @@ java {
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
-    // This isolated consumer is part of the Java 21 compatibility gate. Project properties must
+    // This isolated consumer is part of the Java 25 compatibility gate. Project properties must
     // never be able to relax or raise the bytecode/API baseline under test.
-    options.release = 21
+    options.release = 25
     options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
 }
 

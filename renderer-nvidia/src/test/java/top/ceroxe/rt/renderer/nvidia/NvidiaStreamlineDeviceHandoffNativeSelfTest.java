@@ -20,7 +20,7 @@ public final class NvidiaStreamlineDeviceHandoffNativeSelfTest {
         WindowsChildProcessIsolation.preventGradlePipeInheritance();
         VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
         require(capability.hardwareRayTracingReady(), "Streamline device gate requires RT hardware: " + capability.summary());
-        RendererConfig configuration = RendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.builder()
                 .frameReconstruction(FrameReconstructionOptions.builder()
                         .preference(RendererFeaturePreference.PREFERRED)
                         .mode(FrameReconstructionOptions.Mode.SUPER_RESOLUTION)

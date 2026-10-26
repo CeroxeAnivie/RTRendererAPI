@@ -6,7 +6,7 @@ import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
-import top.ceroxe.rt.renderer.api.RendererPreset;
+
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Status;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Technology;
@@ -47,7 +47,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
 
     private static void productionDefaultsDoNotRequestPresentationOwnership() {
         Map<Technology, RenderingFeatureCapabilities.Entry> technologies = requirements(
-                RendererPreset.CPU_READBACK.configuration(),
+                RendererConfig.recommended(),
                 new NvidiaNativeBridge.Probe(true, ALL_NATIVE_CAPABILITIES, "native SDKs loaded"),
                 readyPreflight(
                         NvidiaStreamlineRuntime.Feature.DLSS,
@@ -118,7 +118,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
     }
 
     private static void nativeLoadAndCapabilityFailuresRemainDistinct() {
-        RendererConfig requested = RendererPreset.CPU_READBACK.configuration().copyBuilder()
+        RendererConfig requested = RendererConfig.recommended().copyBuilder()
                 .denoising(DenoisingOptions.recommended())
                 .rayTracingOptimizations(RayTracingOptimizationOptions.builder()
                         .memoryOptimization(RendererFeaturePreference.PREFERRED)
@@ -220,7 +220,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
                 .multiplier(FrameGenerationOptions.Multiplier.TWO_X)
                 .fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES)
                 .build();
-        RendererConfig configuration = RendererPreset.CPU_READBACK.configuration().copyBuilder()
+        RendererConfig configuration = RendererConfig.recommended().copyBuilder()
                 .frameGeneration(twoTimes)
                 .build();
         RenderingFeatureCapabilities.Builder target = RenderingFeatureCapabilities.builder();
@@ -474,7 +474,7 @@ public final class NvidiaTechnologyCapabilitiesSelfTest {
     }
 
     private static RendererConfig generatedMultiFramePresentationConfiguration() {
-        return RendererPreset.CPU_READBACK.configuration().copyBuilder()
+        return RendererConfig.recommended().copyBuilder()
                 .frameReconstruction(FrameReconstructionOptions.recommended())
                 .frameGeneration(multiFrameGenerationOptions())
                 .build();

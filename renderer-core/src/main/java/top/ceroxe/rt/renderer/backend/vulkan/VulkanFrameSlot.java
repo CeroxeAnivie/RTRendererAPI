@@ -597,14 +597,13 @@ final class VulkanFrameSlot implements AutoCloseable {
         return cpuReadback;
     }
 
-    synchronized byte[] captureCpuRgba8() {
-        requireState(State.COMPLETED, "capture managed CPU frame");
-        byte[] nativePixels = cpuReadback().readBytes(frameOutput.byteCount(
-                outputImage.width(), outputImage.height()
-        ));
-        return frameOutput.linearHdr()
-                ? VulkanFramePixelCodec.convertLinearHdrRgba16fToSdrRgba8(nativePixels)
-                : nativePixels;
+    synchronized void consumeCpuFrame(top.ceroxe.rt.renderer.api.FrameConsumer consumer) {
+        requireState(State.COMPLETED, "consume managed CPU frame");
+        var format = frameOutput.linearHdr() ? top.ceroxe.rt.renderer.api.TextureFormat.RGBA16_FLOAT
+                : top.ceroxe.rt.renderer.api.TextureFormat.RGBA8_UNORM;
+        cpuReadback().readMapped(frameOutput.byteCount(outputImage.width(), outputImage.height()), pixels ->
+                consumer.accept(new VulkanCpuFrameView(frameSequence, sceneRevision, java.util.Optional.empty(),
+                        outputImage.width(), outputImage.height(), format, pixels)));
     }
 
     synchronized RtGpuImage motionImage() {

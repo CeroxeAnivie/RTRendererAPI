@@ -7,23 +7,8 @@ import java.util.*;
 /**
  * Deterministic provider discovery without a compile-time dependency on renderer-core.
  */
-public final class RendererBootstrap {
-    private RendererBootstrap() {
-    }
-
-    /**
-     * Opens the highest-priority compatible provider using default policy.
-     *
-     * @param preset simple-mode renderer preset
-     * @return newly owned renderer instance
-     */
-    public static Renderer open(RendererPreset preset) {
-        RendererPreset checkedPreset = Objects.requireNonNull(preset, "preset");
-        return openCandidates(
-                null,
-                checkedPreset.configuration(),
-                discover(Thread.currentThread().getContextClassLoader())
-        );
+final class RendererDiscovery {
+    private RendererDiscovery() {
     }
 
     /**
@@ -177,7 +162,7 @@ public final class RendererBootstrap {
     }
 
     static List<Candidate> discover(ClassLoader classLoader) {
-        ClassLoader loader = classLoader == null ? RendererBootstrap.class.getClassLoader() : classLoader;
+        ClassLoader loader = classLoader == null ? RendererDiscovery.class.getClassLoader() : classLoader;
         List<RendererBackendProvider> providers = new ArrayList<>();
         try {
             ServiceLoader.load(RendererBackendProvider.class, loader).forEach(providers::add);

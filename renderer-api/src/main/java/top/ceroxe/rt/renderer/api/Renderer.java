@@ -14,6 +14,21 @@ package top.ceroxe.rt.renderer.api;
 public interface Renderer extends RendererLifecycle, RendererFrameAccess, RendererSceneAccess,
         RendererCommandAccess {
 
+    /** Opens the recommended CPU-readable renderer using capability-driven optional features. */
+    static Renderer open() { return open(RendererConfig.recommended()); }
+
+    /** Opens one independently owned renderer with an explicit complete configuration. */
+    static Renderer open(RendererConfig configuration) { return RendererDiscovery.open(configuration); }
+
+    /** Opens a specific provider without an implicit provider fallback. */
+    static Renderer open(String providerId, RendererConfig configuration) {
+        return RendererDiscovery.open(providerId, configuration);
+    }
+
+    /** Enumerates currently available hardware RT devices. */
+    static java.util.List<RendererGpuDevice> devices() { return RendererDiscovery.availableGpuDevices(); }
+
+
     /**
      * Discovers an optional, explicitly named expert extension without adding its native concepts
      * to the ordinary renderer lifecycle.

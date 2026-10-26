@@ -36,7 +36,7 @@ public final class NvidiaNativeBridgeSelfTest {
     }
 
     private static void verifiesOfficialStreamlineProviderRequirements() {
-        RendererConfig configuration = RendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.builder()
                 .frameReconstruction(FrameReconstructionOptions.builder()
                         .preference(RendererFeaturePreference.PREFERRED)
                         .mode(FrameReconstructionOptions.Mode.SUPER_RESOLUTION)

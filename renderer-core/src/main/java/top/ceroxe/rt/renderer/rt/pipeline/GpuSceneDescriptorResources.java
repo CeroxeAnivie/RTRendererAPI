@@ -1,5 +1,7 @@
 package top.ceroxe.rt.renderer.rt.pipeline;
 
+import top.ceroxe.rt.renderer.api.SceneShaderBindings;
+
 import java.util.List;
 import java.util.Objects;
 
@@ -11,8 +13,8 @@ import java.util.Objects;
  * a frame slot from observing a mixture of scene generations while buffers are being replaced.</p>
  */
 public final class GpuSceneDescriptorResources {
-    private static final int FIRST_SCENE_BUFFER_BINDING = GpuSceneShaderBindings.TEXTURE_RECORDS;
-    private static final int LAST_SCENE_BUFFER_BINDING = GpuSceneShaderBindings.LIGHT_RECORDS;
+    private static final int FIRST_SCENE_BUFFER_BINDING = SceneShaderBindings.TEXTURE_RECORDS;
+    private static final int LAST_SCENE_BUFFER_BINDING = SceneShaderBindings.LIGHT_RECORDS;
 
     private final long topLevelAccelerationStructure;
     private final long outputImageView;
@@ -25,7 +27,7 @@ public final class GpuSceneDescriptorResources {
     private final ReconstructionImageViews reconstructionImages;
     private final BufferRange frameUniforms;
     private final BufferRange transientInstanceRecords;
-    private final BufferRange[] sceneBuffers = new BufferRange[GpuSceneShaderBindings.COUNT];
+    private final BufferRange[] sceneBuffers = new BufferRange[SceneShaderBindings.COUNT];
 
     /**
      * 创建并完整校验一个 GPUScene 描述符资源代次。

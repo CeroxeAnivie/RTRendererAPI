@@ -20,7 +20,7 @@ public final class VulkanGenericProceduralRayTracingNativeSelfTest {
     public static void main(String[] args) throws Exception {
         var capability = VulkanRtCapabilityProbe.capture();
         require(capability.hardwareRayTracingReady(), "procedural gate requires hardware RT");
-        var config = RendererConfig.expertBuilder()
+        var config = RendererConfig.builder()
                 .frameReconstruction(FrameReconstructionOptions.disabled())
                 .frameGeneration(FrameGenerationOptions.disabled()).denoising(DenoisingOptions.disabled())
                 .rayTracingOptimizations(RayTracingOptimizationOptions.disabled()).build();
@@ -152,9 +152,9 @@ public final class VulkanGenericProceduralRayTracingNativeSelfTest {
                 RayTracingShaderGroup.general(miss), hit, hit), 1);
     }
 
-    private static void assertPixels(CpuFrame frame, boolean moved) {
+    private static void assertPixels(FrameSnapshot frame, boolean moved) {
         require(frame != null && frame.width() == 4 && frame.height() == 1, "missing procedural output");
-        var bytes = frame.pixelsRgba8();
+        var bytes = frame.pixels();
         for (int x = 0; x < 4; x++) {
             boolean hit = !moved && x < 2;
             require(Byte.toUnsignedInt(bytes.get()) == (hit ? 255 : 0)

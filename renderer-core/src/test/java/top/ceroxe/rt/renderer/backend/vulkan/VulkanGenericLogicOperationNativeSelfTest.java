@@ -18,7 +18,7 @@ public final class VulkanGenericLogicOperationNativeSelfTest {
 
     public static void main(String[] args) throws Exception {
         var capability = VulkanRtCapabilityProbe.capture();
-        var config = RendererConfig.expertBuilder().frameReconstruction(FrameReconstructionOptions.disabled())
+        var config = RendererConfig.builder().frameReconstruction(FrameReconstructionOptions.disabled())
                 .frameGeneration(FrameGenerationOptions.disabled()).denoising(DenoisingOptions.disabled())
                 .rayTracingOptimizations(RayTracingOptimizationOptions.disabled()).build();
         try (var device = VulkanDeviceRuntime.open(capability, RendererRtDiagnostics.noop(), true, true, config);
@@ -87,7 +87,7 @@ public final class VulkanGenericLogicOperationNativeSelfTest {
                                 var cpu = session.captureLatestCpuFrame(sequence - 1);
                                 require(cpu != null && cpu.frameSequence() == sequence && cpu.outputResource().orElseThrow().equals(output.id()),
                                         "output completion identity mismatch");
-                                var pixels = cpu.pixelsRgba8();
+                                var pixels = cpu.pixels();
                                 for (int pixel = 0; pixel < SIZE * SIZE; pixel++) {
                                     for (int channel = 0; channel < 4; channel++) {
                                         int expected = mask.contains(ColorWriteMask.Component.values()[channel])

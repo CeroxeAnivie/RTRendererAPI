@@ -14,7 +14,7 @@ import org.lwjgl.vulkan.NVRayTracingInvocationReorder;
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.RendererConfig;
-import top.ceroxe.rt.renderer.api.RendererPreset;
+
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
@@ -130,7 +130,7 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
                 diagnostics,
                 validationEnabled,
                 gpuTimingsEnabled,
-                RendererPreset.CPU_READBACK.configuration()
+                RendererConfig.recommended()
         );
     }
 
@@ -495,19 +495,25 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
         return bootstrap.dynamicRenderingEnabled();
     }
 
-    /** Returns whether the Vulkan logicOp core feature was enabled for this device.\n     * @return true when enabled\n     */
+    /** Returns whether the Vulkan logicOp core feature was enabled for this device.
+     * @return true when enabled
+     */
     public synchronized boolean logicOpEnabled() {
         requireOpen();
         return bootstrap.logicOpEnabled();
     }
 
-    /** Returns whether vertex/geometry storage writes and atomics were enabled.\n     * @return true when enabled\n     */
+    /** Returns whether vertex/geometry storage writes and atomics were enabled.
+     * @return true when enabled
+     */
     public synchronized boolean vertexPipelineStoresAndAtomicsEnabled() {
         requireOpen();
         return bootstrap.vertexPipelineStoresAndAtomicsEnabled();
     }
 
-    /** Returns whether the Vulkan geometryShader core feature was enabled for this device.\n     * @return true when enabled\n     */
+    /** Returns whether the Vulkan geometryShader core feature was enabled for this device.
+     * @return true when enabled
+     */
     public synchronized boolean geometryShaderEnabled() {
         requireOpen();
         return bootstrap.geometryShaderEnabled();

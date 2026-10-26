@@ -1237,16 +1237,16 @@ public final class RendererApiContractSelfTest {
    }
 
    private static void assertConfigurationBounds() {
-      require(RendererPreset.CPU_READBACK.configuration().maxFramesInFlight() == 3, "default frame ring changed");
-      require(RendererPreset.CPU_READBACK.configuration().cpuFrameReadbackEnabled(), "managed CPU readback must remain enabled by default");
-      require(RendererPreset.CPU_READBACK.configuration().frameOutputFormat() == FrameOutputFormat.SDR_RGBA8, "default native output must be SDR RGBA8");
-      require(RendererPreset.CPU_READBACK.configuration().temporalRendering().equals(TemporalRenderingOptions.balanced()), "production defaults must enable balanced temporal reconstruction");
-      require(RendererPreset.CPU_READBACK.configuration().denoising().equals(DenoisingOptions.disabled()), "ordinary defaults must keep NRD opt-in");
-      require(RendererPreset.CPU_READBACK.configuration().frameReconstruction().equals(FrameReconstructionOptions.recommended()), "ordinary defaults must capability-gate reconstruction");
-      require(RendererPreset.CPU_READBACK.configuration().frameGeneration().equals(FrameGenerationOptions.disabled()), "CPU-readable defaults must not arm presentation-time generation");
-      require(RendererPreset.CPU_READBACK.configuration().lowLatency().equals(LowLatencyOptions.disabled()), "CPU-readable defaults must not arm display pacing");
-      require(RendererPreset.CPU_READBACK.configuration().rayTracingOptimizations().equals(RayTracingOptimizationOptions.recommended()), "ordinary defaults must capability-gate SER and RTXMU");
-      RendererConfig explicitProduction = RendererConfig.expertBuilder()
+      require(RendererConfig.recommended().maxFramesInFlight() == 3, "default frame ring changed");
+      require(RendererConfig.recommended().cpuFrameReadbackEnabled(), "managed CPU readback must remain enabled by default");
+      require(RendererConfig.recommended().frameOutputFormat() == FrameOutputFormat.SDR_RGBA8, "default native output must be SDR RGBA8");
+      require(RendererConfig.recommended().temporalRendering().equals(TemporalRenderingOptions.balanced()), "production defaults must enable balanced temporal reconstruction");
+      require(RendererConfig.recommended().denoising().equals(DenoisingOptions.disabled()), "ordinary defaults must keep NRD opt-in");
+      require(RendererConfig.recommended().frameReconstruction().equals(FrameReconstructionOptions.recommended()), "ordinary defaults must capability-gate reconstruction");
+      require(RendererConfig.recommended().frameGeneration().equals(FrameGenerationOptions.disabled()), "CPU-readable defaults must not arm presentation-time generation");
+      require(RendererConfig.recommended().lowLatency().equals(LowLatencyOptions.disabled()), "CPU-readable defaults must not arm display pacing");
+      require(RendererConfig.recommended().rayTracingOptimizations().equals(RayTracingOptimizationOptions.recommended()), "ordinary defaults must capability-gate SER and RTXMU");
+      RendererConfig explicitProduction = RendererConfig.builder()
               .maxFramesInFlight(RendererConfig.DEFAULT_MAX_FRAMES_IN_FLIGHT)
               .validationEnabled(false)
               .gpuTimingsEnabled(true)
@@ -1260,25 +1260,25 @@ public final class RendererApiContractSelfTest {
               .denoising(DenoisingOptions.disabled())
               .rayTracingOptimizations(RayTracingOptimizationOptions.recommended())
                 .build();
-      require(RendererPreset.CPU_READBACK.configuration().equals(explicitProduction),
+      require(RendererConfig.recommended().equals(explicitProduction),
               "simple production defaults cannot be expressed exactly through expert policies");
-      require(RendererPreset.CPU_READBACK.configuration().equals(
-                      RendererPreset.CPU_READBACK.configuration().copyBuilder().build()),
+      require(RendererConfig.recommended().equals(
+                      RendererConfig.recommended().copyBuilder().build()),
               "ordinary defaults lost policy while crossing the expert builder boundary");
-      RendererConfig gpuPresentation = RendererPreset.MANAGED_GPU_PRESENTATION.configuration();
+      RendererConfig gpuPresentation = RendererConfig.presentation();
       require(!gpuPresentation.cpuFrameReadbackEnabled()
                       && gpuPresentation.frameGeneration().equals(FrameGenerationOptions.recommended())
                       && gpuPresentation.lowLatency().equals(LowLatencyOptions.recommended())
                       && gpuPresentation.frameReconstruction().equals(
-                              RendererPreset.CPU_READBACK.configuration().frameReconstruction())
+                              RendererConfig.recommended().frameReconstruction())
                       && gpuPresentation.denoising().equals(
-                              RendererPreset.CPU_READBACK.configuration().denoising())
+                              RendererConfig.recommended().denoising())
                       && gpuPresentation.rayTracingOptimizations().equals(
-                              RendererPreset.CPU_READBACK.configuration().rayTracingOptimizations()),
+                              RendererConfig.recommended().rayTracingOptimizations()),
               "GPU presentation defaults must add only presentation-safe automatic policies");
       require(gpuPresentation.equals(gpuPresentation.copyBuilder().build()),
               "managed-presentation defaults lost policy while crossing the expert builder boundary");
-      RendererConfig rawInterop = RendererPreset.CPU_READBACK.configuration().copyBuilder()
+      RendererConfig rawInterop = RendererConfig.recommended().copyBuilder()
               .cpuFrameReadbackEnabled(false)
               .build();
       require(!rawInterop.cpuFrameReadbackEnabled()
@@ -1290,7 +1290,7 @@ public final class RendererApiContractSelfTest {
                       && gpuPresentation.frameGeneration().multiplier()
                       == FrameGenerationOptions.Multiplier.TWO_X,
               "ordinary GPU defaults must never auto-select MFG");
-      RendererConfig generationOnly = RendererConfig.expertBuilder()
+      RendererConfig generationOnly = RendererConfig.builder()
               .frameGeneration(FrameGenerationOptions.recommended())
               .build();
       require(generationOnly.frameReconstruction().equals(FrameReconstructionOptions.disabled())
@@ -1299,8 +1299,8 @@ public final class RendererApiContractSelfTest {
                       && generationOnly.rayTracingOptimizations().equals(
                               RayTracingOptimizationOptions.disabled()),
               "one explicit feature option must not enable unrelated optional policies");
-      require(RendererConfig.expertBuilder().build().equals(
-                      RendererConfig.expertBuilder()
+      require(RendererConfig.builder().build().equals(
+                      RendererConfig.builder()
                               .frameReconstruction(FrameReconstructionOptions.disabled())
                               .frameGeneration(FrameGenerationOptions.disabled())
                               .lowLatency(LowLatencyOptions.disabled())
@@ -1308,14 +1308,14 @@ public final class RendererApiContractSelfTest {
                               .rayTracingOptimizations(RayTracingOptimizationOptions.disabled())
                               .build()),
               "expert builder must keep every unrelated optional feature explicit");
-      RendererConfig tuned = RendererPreset.CPU_READBACK.configuration().copyBuilder().maxFramesInFlight(4).validationEnabled(true).gpuTimingsEnabled(false).cpuFrameReadbackEnabled(false).frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.accumulating(16)).build();
+      RendererConfig tuned = RendererConfig.recommended().copyBuilder().maxFramesInFlight(4).validationEnabled(true).gpuTimingsEnabled(false).cpuFrameReadbackEnabled(false).frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.accumulating(16)).build();
       require(tuned.maxFramesInFlight() == 4 && tuned.validationEnabled() && !tuned.gpuTimingsEnabled() && !tuned.cpuFrameReadbackEnabled() && tuned.frameOutputFormat() == FrameOutputFormat.LINEAR_HDR_RGBA16F && tuned.temporalRendering().maxHistoryFrames() == 16, "configuration builder lost an independent policy value");
-      expect(IllegalArgumentException.class, () -> RendererConfig.expertBuilder().maxFramesInFlight(1).build());
-      expect(IllegalArgumentException.class, () -> RendererConfig.expertBuilder().maxFramesInFlight(17).build());
-      expect(NullPointerException.class, () -> RendererConfig.expertBuilder().frameOutputFormat((FrameOutputFormat)null));
-      expect(NullPointerException.class, () -> RendererConfig.expertBuilder().temporalRendering((TemporalRenderingOptions)null));
-      expect(NullPointerException.class, () -> RendererConfig.expertBuilder().frameGeneration((FrameGenerationOptions)null));
-      expect(NullPointerException.class, () -> RendererConfig.expertBuilder().lowLatency((LowLatencyOptions)null));
+      expect(IllegalArgumentException.class, () -> RendererConfig.builder().maxFramesInFlight(1).build());
+      expect(IllegalArgumentException.class, () -> RendererConfig.builder().maxFramesInFlight(17).build());
+      expect(NullPointerException.class, () -> RendererConfig.builder().frameOutputFormat((FrameOutputFormat)null));
+      expect(NullPointerException.class, () -> RendererConfig.builder().temporalRendering((TemporalRenderingOptions)null));
+      expect(NullPointerException.class, () -> RendererConfig.builder().frameGeneration((FrameGenerationOptions)null));
+      expect(NullPointerException.class, () -> RendererConfig.builder().lowLatency((LowLatencyOptions)null));
       require(RendererBackendProvider.Descriptor.class.getConstructors().length == 0, "provider descriptor exposed an ordered public constructor");
       expect(IllegalArgumentException.class, () -> Descriptor.builder(" ").build());
       expect(IllegalArgumentException.class, () -> Descriptor.builder("vulkan").apiMajor(0).build());
@@ -1337,14 +1337,14 @@ public final class RendererApiContractSelfTest {
               .mode(FrameGenerationOptions.Mode.FRAME_GENERATION)
               .fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES)
               .build());
-      expect(IllegalArgumentException.class, () -> RendererConfig.expertBuilder()
+      expect(IllegalArgumentException.class, () -> RendererConfig.builder()
               .temporalRendering(TemporalRenderingOptions.disabled())
               .frameReconstruction(FrameReconstructionOptions.builder()
                       .preference(RendererFeaturePreference.PREFERRED)
                       .fallback(FrameReconstructionOptions.Fallback.BUILT_IN_TEMPORAL)
                       .build())
               .build());
-      expect(IllegalArgumentException.class, () -> RendererConfig.expertBuilder()
+      expect(IllegalArgumentException.class, () -> RendererConfig.builder()
               .temporalRendering(TemporalRenderingOptions.disabled())
               .denoising(DenoisingOptions.builder()
                       .preference(RendererFeaturePreference.PREFERRED)
@@ -1630,12 +1630,12 @@ public final class RendererApiContractSelfTest {
 
    private static void assertGpuDeviceSelectionContract() {
       RendererGpuDevice device = gpuDevice("vulkan", "00112233445566778899aabbccddeeff");
-      RendererConfig selected = RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(device).build();
+      RendererConfig selected = RendererConfig.recommended().copyBuilder().gpuDevice(device).build();
       require(((RendererGpuDevice)selected.gpuDevice().orElseThrow()).equals(device), "configuration lost selected GPU identity");
       require(RendererGpuDevice.class.getConstructors().length == 0, "GPU device exposed an ordered public constructor");
       require(HardwareCapabilities.RayTracingLimits.class.getConstructors().length == 0, "ray-tracing limits exposed an ordered public constructor");
       require(device.equals(device.toBuilder().build()), "GPU device toBuilder changed structural value semantics");
-      expect(NullPointerException.class, () -> RendererConfig.expertBuilder().gpuDevice((RendererGpuDevice)null));
+      expect(NullPointerException.class, () -> RendererConfig.builder().gpuDevice((RendererGpuDevice)null));
       expect(NullPointerException.class, () -> RendererGpuDevice.builder().backendId((String)null));
       expect(IllegalArgumentException.class, () -> device.toBuilder().stableId(" " + device.stableId()));
       expect(IllegalArgumentException.class, () -> device.toBuilder().name("bad\nname"));
@@ -1656,10 +1656,10 @@ public final class RendererApiContractSelfTest {
               .build());
       TrackingProvider wrongBackend = new TrackingProvider("other", 1000, ProbeResult.compatible("ready"), false);
       TrackingProvider selectedBackend = new TrackingProvider("vulkan", 1, ProbeResult.compatible("ready"), false);
-      Renderer renderer = RendererBootstrap.openProviders((String)null, selected, List.of(wrongBackend, selectedBackend));
+      Renderer renderer = RendererDiscovery.openProviders((String)null, selected, List.of(wrongBackend, selectedBackend));
       require(renderer == selectedBackend.renderer, "selected GPU did not route to its owning backend");
       require(wrongBackend.opens.get() == 0, "bootstrap opened a backend that does not own the selected GPU");
-      expect(IllegalArgumentException.class, () -> RendererBootstrap.openProviders("other", selected, List.of(wrongBackend, selectedBackend)));
+      expect(IllegalArgumentException.class, () -> RendererDiscovery.openProviders("other", selected, List.of(wrongBackend, selectedBackend)));
    }
 
    private static void assertHardwareCapabilitiesContract() {
@@ -1709,37 +1709,37 @@ public final class RendererApiContractSelfTest {
 
    private static void assertCpuFrameContract() {
       byte[] pixels = new byte[]{1, 2, 3, 4};
-      CpuFrame frame = CpuFrame.builder().frameSequence(4L).renderedSceneRevision(3L).extent(1, 1).pixelsRgba8(pixels).build();
-      require(CpuFrame.class.getConstructors().length == 0, "CPU frame exposed an ordered public constructor");
+      FrameSnapshot frame = FrameSnapshot.builder().frameSequence(4L).renderedSceneRevision(3L).extent(1, 1).pixels(pixels).build();
+      require(FrameSnapshot.class.getConstructors().length == 0, "CPU frame exposed an ordered public constructor");
       pixels[0] = 99;
       require(frame.frameSequence() == 4L && frame.renderedSceneRevision() == 3L && frame.width() == 1 && frame.height() == 1 && frame.byteCount() == 4, "CPU frame metadata changed");
-      require(frame.pixelsRgba8().get(0) == 1, "CPU frame retained caller-owned pixels");
-      CpuFrame generic = CpuFrame.builder().frameSequence(5L).renderedSceneRevision(0L)
-              .outputResource(new RenderResourceId(99L)).extent(1, 1).pixelsRgba8(new byte[]{5, 6, 7, 8}).build();
+      require(frame.pixels().get(0) == 1, "CPU frame retained caller-owned pixels");
+      FrameSnapshot generic = FrameSnapshot.builder().frameSequence(5L).renderedSceneRevision(0L)
+              .outputResource(new RenderResourceId(99L)).extent(1, 1).pixels(new byte[]{5, 6, 7, 8}).build();
       require(generic.outputResource().orElseThrow().value() == 99L
               && generic.toBuilder().build().outputResource().orElseThrow().value() == 99L,
               "CPU frame lost generic output identity");
-      expect(ReadOnlyBufferException.class, () -> frame.pixelsRgba8().put(0, (byte)9));
+      expect(ReadOnlyBufferException.class, () -> frame.pixels().put(0, (byte)9));
       ByteBuffer destination = ByteBuffer.allocate(6);
       destination.position(1);
-      frame.copyPixelsRgba8To(destination);
+      frame.copyPixelsTo(destination);
       require(destination.position() == 5 && destination.get(1) == 1, "CPU frame copy did not respect destination position");
-      expect(IllegalArgumentException.class, () -> frame.copyPixelsRgba8To(ByteBuffer.allocate(3)));
+      expect(IllegalArgumentException.class, () -> frame.copyPixelsTo(ByteBuffer.allocate(3)));
       expect(IllegalArgumentException.class, () -> frame.toBuilder().extent(1, 2).build());
       TrackingRenderer renderer = new TrackingRenderer();
 
       try {
-         require(renderer.awaitLatestCpuFrame(Duration.ZERO).isEmpty(), "zero-timeout CPU frame poll fabricated a frame");
+         require(renderer.awaitFrame(Duration.ZERO).isEmpty(), "zero-timeout CPU frame poll fabricated a frame");
       } catch (InterruptedException impossible) {
          throw new AssertionError("zero-timeout CPU frame wait was unexpectedly interrupted", impossible);
       }
 
-      expect(IllegalArgumentException.class, () -> renderer.awaitLatestCpuFrame(Duration.ofNanos(-1L)));
-      expect(NullPointerException.class, () -> renderer.awaitLatestCpuFrameAsync(Duration.ZERO, (Executor)null));
+      expect(IllegalArgumentException.class, () -> renderer.awaitFrame(Duration.ofNanos(-1L)));
+      expect(NullPointerException.class, () -> renderer.awaitFrameAsync(Duration.ZERO, (Executor)null));
       ExecutorService executor = Executors.newSingleThreadExecutor();
 
       try {
-         CompletableFuture<Optional<CpuFrame>> cancelled = renderer.awaitLatestCpuFrameAsync(Duration.ofSeconds(1L), executor);
+         CompletableFuture<Optional<FrameSnapshot>> cancelled = renderer.awaitFrameAsync(Duration.ofSeconds(1L), executor);
          require(cancelled.cancel(false), "async frame wait did not accept cancellation");
          Objects.requireNonNull(cancelled);
          expect(CancellationException.class, cancelled::join);
@@ -2280,15 +2280,15 @@ public final class RendererApiContractSelfTest {
    private static void assertProviderSelection() {
       TrackingProvider unsupported = new TrackingProvider("unsupported", 100, ProbeResult.unsupported("missing feature"), false);
       TrackingProvider compatible = new TrackingProvider("vulkan", 10, ProbeResult.compatible("ready"), false);
-      Renderer selected = RendererBootstrap.openProviders((String)null, RendererPreset.CPU_READBACK.configuration(), List.of(compatible, unsupported));
+      Renderer selected = RendererDiscovery.openProviders((String)null, RendererConfig.recommended(), List.of(compatible, unsupported));
       require(selected == compatible.renderer, "bootstrap did not select the compatible provider");
       require(unsupported.opens.get() == 0 && compatible.opens.get() == 1, "bootstrap opened an incompatible provider or opened twice");
-      expect(RendererInitializationException.class, () -> RendererBootstrap.openProviders((String)null, RendererPreset.CPU_READBACK.configuration(), List.of(compatible, new TrackingProvider("vulkan", 1, ProbeResult.compatible("duplicate"), false))));
+      expect(RendererInitializationException.class, () -> RendererDiscovery.openProviders((String)null, RendererConfig.recommended(), List.of(compatible, new TrackingProvider("vulkan", 1, ProbeResult.compatible("duplicate"), false))));
       TrackingProvider broken = new TrackingProvider("broken", 200, ProbeResult.compatible("probe ready"), true);
-      RendererInitializationException initialization = (RendererInitializationException)expect(RendererInitializationException.class, () -> RendererBootstrap.openProviders((String)null, RendererPreset.CPU_READBACK.configuration(), List.of(compatible, broken)));
+      RendererInitializationException initialization = (RendererInitializationException)expect(RendererInitializationException.class, () -> RendererDiscovery.openProviders((String)null, RendererConfig.recommended(), List.of(compatible, broken)));
       require(initialization.providerId().equals("broken"), "initialization failure lost provider identity");
       require(compatible.opens.get() == 1, "bootstrap silently fell back after initialization failure");
-      RendererUnavailableException unavailable = (RendererUnavailableException)expect(RendererUnavailableException.class, () -> RendererBootstrap.openProviders("missing", RendererPreset.CPU_READBACK.configuration(), List.of(compatible)));
+      RendererUnavailableException unavailable = (RendererUnavailableException)expect(RendererUnavailableException.class, () -> RendererDiscovery.openProviders("missing", RendererConfig.recommended(), List.of(compatible)));
       require(unavailable.attempts().isEmpty(), "explicit missing provider fabricated probe attempts");
       RendererUnavailableException.BackendAttempt attempt = BackendAttempt.of("vulkan-rt", Compatibility.UNSUPPORTED, "missing ray tracing support");
       require(RendererUnavailableException.BackendAttempt.class.getConstructors().length == 0 && attempt.compatibility() == Compatibility.UNSUPPORTED, "provider failure evidence exposed a positional or stringly compatibility surface");
@@ -2605,11 +2605,13 @@ public final class RendererApiContractSelfTest {
          throw new UnsupportedOperationException();
       }
 
-      public Optional<CpuFrame> pollLatestCpuFrame() {
+      public boolean readFrame(FrameConsumer consumer) { return false; }
+
+      public Optional<FrameSnapshot> pollFrame() {
          return Optional.empty();
       }
 
-      public Optional<CpuFrame> awaitLatestCpuFrame(Duration timeout) throws InterruptedException {
+      public Optional<FrameSnapshot> awaitFrame(Duration timeout) throws InterruptedException {
          Objects.requireNonNull(timeout, "timeout");
          if (timeout.isNegative()) throw new IllegalArgumentException("timeout must not be negative");
          return Optional.empty();

@@ -30,7 +30,7 @@ public final class VulkanGenericBlasNativeSelfTest {
    public static void main(String[] arguments) throws Exception {
       VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
       require(capability.hardwareRayTracingReady(), "generic BLAS gate requires hardware RT: " + capability.summary());
-      RendererConfig configuration = RendererConfig.expertBuilder()
+      RendererConfig configuration = RendererConfig.builder()
               .frameReconstruction(FrameReconstructionOptions.disabled())
               .frameGeneration(FrameGenerationOptions.disabled())
               .denoising(DenoisingOptions.disabled())

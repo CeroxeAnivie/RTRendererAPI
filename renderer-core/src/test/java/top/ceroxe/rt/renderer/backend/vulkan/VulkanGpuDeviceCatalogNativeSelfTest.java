@@ -4,8 +4,8 @@ import java.util.HashSet;
 import java.util.List;
 import top.ceroxe.rt.renderer.api.RendererGpuDevice;
 import top.ceroxe.rt.renderer.api.RendererConfig;
-import top.ceroxe.rt.renderer.api.RendererBootstrap;
-import top.ceroxe.rt.renderer.api.RendererPreset;
+import top.ceroxe.rt.renderer.api.Renderer;
+
 import top.ceroxe.rt.renderer.api.HardwareCapabilities;
 import top.ceroxe.rt.renderer.spi.RendererBackendProvider.Compatibility;
 
@@ -14,7 +14,7 @@ public final class VulkanGpuDeviceCatalogNativeSelfTest {
    }
 
    public static void main(String[] args) {
-      List<RendererGpuDevice> devices = RendererBootstrap.availableGpuDevices();
+      List<RendererGpuDevice> devices = Renderer.devices();
       if (devices.isEmpty()) {
          throw new AssertionError("no hardware RT GPU was exposed by the public catalog");
       } else {
@@ -34,7 +34,7 @@ public final class VulkanGpuDeviceCatalogNativeSelfTest {
                throw new AssertionError("Vulkan device identity is not a 128-bit UUID: " + device.stableId());
             }
 
-            RendererConfig selected = RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(device).build();
+            RendererConfig selected = RendererConfig.recommended().copyBuilder().gpuDevice(device).build();
             if ((new VulkanRendererBackendProvider()).probe(selected).compatibility() != Compatibility.COMPATIBLE) {
                throw new AssertionError("fresh catalog device could not be selected: " + String.valueOf(device));
             }

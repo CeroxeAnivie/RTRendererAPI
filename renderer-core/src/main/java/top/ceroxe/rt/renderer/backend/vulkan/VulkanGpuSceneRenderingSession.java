@@ -3,7 +3,7 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
-import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
@@ -105,7 +105,8 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             pipeline = GpuSceneRayTracingPipeline.open(
                     device,
                     checkedConfiguration.maxFramesInFlight(),
-                    frameOutput.linearHdr() || featureSelection.denoising() || featureSelection.reconstruction()
+                    frameOutput.linearHdr() || featureSelection.denoising() || featureSelection.reconstruction(),
+                    checkedConfiguration.sceneShaders()
             );
             // The monolithic GPUScene descriptor layout always declares both NRD and
             // reconstruction bindings. These sentinels supply whichever optional feature is
@@ -575,6 +576,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     public synchronized FrameAdmissionAttempt trySubmit(FrameSubmission submission) {
         requireReady("submit frame");
         FrameSubmission checked = Objects.requireNonNull(submission, "submission");
+        pipeline.validateShaderData(checked.request().shaderData());
         try {
             pump();
             // Capability probing and extent negotiation can cross the JNI boundary. A saturated
@@ -700,7 +702,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     }
 
     @Override
-    public synchronized CpuFrame captureLatestCpuFrame(long afterFrameSequence) {
+    public synchronized FrameSnapshot captureLatestCpuFrame(long afterFrameSequence) {
         if (afterFrameSequence < -1L) {
             throw new IllegalArgumentException("afterFrameSequence must be at least -1");
         }
@@ -710,18 +712,34 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                     "managed CPU frame readback is disabled by renderer configuration"
             );
         }
-        try {
-            pump();
-            VulkanFrameSlot latest = frameRing.latestCompletedSlot();
-            if (latest == null || latest.frameSequence() <= afterFrameSequence) return null;
-            CpuFrame frame = frameDiagnostics.captureCpu(latest);
-            // The immutable CPU copy owns its pixels, so no completed GPU output must remain
-            // retained merely to keep the returned frame alive.
-            frameRing.discardAllCompleted();
-            return frame;
-        } catch (RuntimeException failure) {
-            throw fail("capture latest CPU frame", failure);
-        }
+        latestCpuFrameSequence();
+        FrameSnapshot[] result = {null};
+        consumeLatestCpuFrame(afterFrameSequence, view -> result[0] = FrameSnapshot.copyOf(view));
+        return result[0];
+    }
+
+    @Override public synchronized long latestCpuFrameSequence() {
+        requireReady("query latest CPU frame"); pump();
+        VulkanFrameSlot latest = frameRing.latestCompletedSlot();
+        return latest == null ? -1 : latest.frameSequence();
+    }
+
+    @Override public synchronized void discardCpuFramesThrough(long sequence) {
+        requireReady("discard CPU frames");
+        frameRing.discardCompletedThrough(sequence);
+    }
+
+    @Override public synchronized boolean consumeLatestCpuFrame(long afterFrameSequence,
+            top.ceroxe.rt.renderer.api.FrameConsumer consumer) {
+        Objects.requireNonNull(consumer, "consumer");
+        requireReady("consume latest CPU frame");
+        if (!configuration.cpuFrameReadbackEnabled()) throw new UnsupportedOperationException("CPU readback disabled");
+        if (afterFrameSequence < -1) throw new IllegalArgumentException("invalid prior frame sequence");
+        VulkanFrameSlot latest = frameRing.latestCompletedSlot();
+        if (latest == null || latest.frameSequence() <= afterFrameSequence) return false;
+        try { latest.consumeCpuFrame(consumer); }
+        finally { frameRing.discardAllCompleted(); }
+        return true;
     }
 
     @Override

@@ -29,7 +29,7 @@ public final class VulkanGenericIntegerTextureNativeSelfTest {
     public static void main(String[] args) throws Exception {
         var capability = VulkanRtCapabilityProbe.capture();
         require(capability.hardwareRayTracingReady(), "hardware RT device required");
-        var config = RendererConfig.expertBuilder().frameReconstruction(FrameReconstructionOptions.disabled())
+        var config = RendererConfig.builder().frameReconstruction(FrameReconstructionOptions.disabled())
                 .frameGeneration(FrameGenerationOptions.disabled()).denoising(DenoisingOptions.disabled())
                 .rayTracingOptimizations(RayTracingOptimizationOptions.disabled()).build();
         try (var device = VulkanDeviceRuntime.open(capability, RendererRtDiagnostics.noop(), true, true, config);
@@ -54,7 +54,13 @@ public final class VulkanGenericIntegerTextureNativeSelfTest {
                     expect(IllegalArgumentException.class, () -> new BindingSet.CombinedImageSamplerValue(view(source), SamplerState.builder().build()));
                     run(session, List.of(new BeginRenderPassCommand(RenderPassDescriptor.color(1, 1,
                             List.of(RenderAttachment.cleared(view(source), StoreOp.STORE, clear)))), new EndRenderPassCommand()), true);
-                    expect(UnsupportedOperationException.class, () -> session.captureLatestCpuFrame(sequence - 2));
+                    var raw = session.captureLatestCpuFrame(sequence - 2);
+                    require(raw != null && raw.format() == format && raw.byteCount() == format.bytesPerTexel(),
+                            "integer output did not preserve its native format");
+                    ByteBuffer expected = ByteBuffer.allocate(format.bytesPerTexel()).order(ByteOrder.LITTLE_ENDIAN);
+                    for (int component = 0; component < components; component++) put(expected, width, values[component]);
+                    expected.flip();
+                    require(raw.pixels().equals(expected), "raw integer output changed exact values: " + format);
                     sample(session, source, output, components, signed, values, false);
 
                     var integerColor = new ShaderInterfaceVariable(0, new ShaderInterfaceType(signed
@@ -114,7 +120,7 @@ public final class VulkanGenericIntegerTextureNativeSelfTest {
         long rendered = run(session, commands, true);
         var cpu = session.captureLatestCpuFrame(rendered - 1);
         require(cpu != null && cpu.frameSequence() == rendered && cpu.outputResource().orElseThrow().equals(output.id()), "missing output evidence");
-        ByteBuffer bytes = cpu.pixelsRgba8();
+        ByteBuffer bytes = cpu.pixels();
         while (bytes.hasRemaining()) require(Byte.toUnsignedInt(bytes.get()) == 255, "integer GPU mismatch " + source.format() + " volume=" + volume);
     }
 

@@ -8,7 +8,7 @@ command evidence leases and immutable retention statistics.
 
 ## Configuration
 
-`RendererConfig.expertBuilder().evidenceRetention(policy)` selects renderer-lifetime budgets.
+`RendererConfig.builder().evidenceRetention(policy)` selects renderer-lifetime budgets.
 Preset configurations use `EvidenceRetentionPolicy.bounded()`:
 
 | Budget | Default | Exhaustion behavior |

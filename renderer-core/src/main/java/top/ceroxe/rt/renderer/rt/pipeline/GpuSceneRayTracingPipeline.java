@@ -1,5 +1,9 @@
 package top.ceroxe.rt.renderer.rt.pipeline;
 
+import top.ceroxe.rt.renderer.api.*;
+import top.ceroxe.rt.renderer.backend.vulkan.VulkanSpirvBindingValidator;
+import java.util.List;
+
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.shaderc.Shaderc;
 import org.lwjgl.vulkan.*;
@@ -27,6 +31,8 @@ import java.util.Optional;
 public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     private static final String SHADER_ROOT = "assets/rtrenderer/shaders/gpuscene/";
 
+    private final SceneShaderProgram sceneShaders;
+    private final GpuSceneShaderDataBuffers applicationData;
     private final VkDevice device;
     private final GpuSceneDescriptorLayout descriptors;
     private final long pipelineLayout;
@@ -45,8 +51,12 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             RtShaderBindingTable shaderBindingTable,
             RtRayTracingPipelineProperties properties,
             long maxStorageBufferRangeBytes,
-            boolean shaderExecutionReorderingEnabled
+            boolean shaderExecutionReorderingEnabled,
+            SceneShaderProgram sceneShaders,
+            GpuSceneShaderDataBuffers applicationData
     ) {
+        this.sceneShaders = sceneShaders;
+        this.applicationData = applicationData;
         this.device = Objects.requireNonNull(device, "device");
         this.descriptors = Objects.requireNonNull(descriptors, "descriptors");
         if (pipelineLayout == 0L || pipeline == 0L) {
@@ -76,8 +86,23 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             int descriptorSetCount,
             boolean linearHdrOutput
     ) {
+        return open(runtime, descriptorSetCount, linearHdrOutput, SceneShaderProgram.builtIn());
+    }
+
+    /**
+     * Creates a retained-scene pipeline with explicit shader replacements.
+     * @param runtime initialized Vulkan runtime
+     * @param descriptorSetCount positive frame-slot count
+     * @param linearHdrOutput whether the public output is RGBA16F
+     * @param sceneShaders shader sources and application data layout
+     * @return owned pipeline
+     */
+    public static GpuSceneRayTracingPipeline open(VulkanDeviceRuntime runtime, int descriptorSetCount,
+            boolean linearHdrOutput, SceneShaderProgram sceneShaders) {
+        Objects.requireNonNull(sceneShaders, "sceneShaders");
         VulkanDeviceRuntime checkedRuntime = Objects.requireNonNull(runtime, "runtime");
-        boolean shaderExecutionReorderingEnabled = checkedRuntime.shaderExecutionReorderingEnabled();
+        boolean shaderExecutionReorderingEnabled = checkedRuntime.shaderExecutionReorderingEnabled()
+                && !sceneShaders.sources().containsKey(ShaderStage.RAY_GENERATION);
         if (descriptorSetCount <= 0) throw new IllegalArgumentException("descriptorSetCount must be positive");
         VkDevice device = checkedRuntime.device();
         GpuSceneDescriptorLayout descriptors = null;
@@ -100,17 +125,24 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             if (properties.maxRayRecursionDepth() < 1) {
                 throw new IllegalStateException("device cannot execute the depth-one GPUScene pipeline");
             }
-            descriptors = GpuSceneDescriptorLayout.create(stack, device, descriptorSetCount);
+            int storageBindings = SceneShaderBindings.STORAGE_BUFFER_COUNT + sceneShaders.dataBindingCount();
+            if (storageBindings > Integer.toUnsignedLong(physicalDeviceProperties.limits().maxPerStageDescriptorStorageBuffers())
+                    || storageBindings > Integer.toUnsignedLong(physicalDeviceProperties.limits().maxDescriptorSetStorageBuffers())
+                    || storageBindings + SceneShaderBindings.STORAGE_IMAGE_COUNT + 1
+                        > Integer.toUnsignedLong(physicalDeviceProperties.limits().maxPerStageResources())) {
+                throw new IllegalArgumentException("scene shader interface exceeds device descriptor limits");
+            }
+            descriptors = GpuSceneDescriptorLayout.create(stack, device, descriptorSetCount, sceneShaders.dataBindingCount());
             pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout());
             raygenModule = compileModule(
                     stack, device, "gpuscene.rgen", Shaderc.shaderc_raygen_shader,
-                    linearHdrOutput, shaderExecutionReorderingEnabled
+                    linearHdrOutput, shaderExecutionReorderingEnabled, sceneShaders
             );
-            missModule = compileModule(stack, device, "gpuscene.rmiss", Shaderc.shaderc_miss_shader);
+            missModule = compileModule(stack, device, "gpuscene.rmiss", Shaderc.shaderc_miss_shader, false, false, sceneShaders);
             closestHitModule = compileModule(
-                    stack, device, "gpuscene.rchit", Shaderc.shaderc_closesthit_shader
+                    stack, device, "gpuscene.rchit", Shaderc.shaderc_closesthit_shader, false, false, sceneShaders
             );
-            anyHitModule = compileModule(stack, device, "gpuscene.rahit", Shaderc.shaderc_anyhit_shader);
+            anyHitModule = compileModule(stack, device, "gpuscene.rahit", Shaderc.shaderc_anyhit_shader, false, false, sceneShaders);
             try (RtPipelineCache cache = RtPipelineCache.open(
                     device, checkedRuntime.physicalDevice(), "gpuscene")) {
                 pipeline = RtRayTracingPipelineFactory.createPipeline(
@@ -136,7 +168,9 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             );
             GpuSceneRayTracingPipeline result = new GpuSceneRayTracingPipeline(
                     device, descriptors, pipelineLayout, pipeline, shaderBindingTable, properties,
-                    maxStorageBufferRangeBytes, shaderExecutionReorderingEnabled
+                    maxStorageBufferRangeBytes, shaderExecutionReorderingEnabled, sceneShaders,
+                    new GpuSceneShaderDataBuffers(checkedRuntime, descriptorSetCount,
+                            sceneShaders.dataBindingCount(), maxStorageBufferRangeBytes)
             );
             descriptors = null;
             pipelineLayout = 0L;
@@ -457,36 +491,62 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         }
     }
 
-    private static long compileModule(MemoryStack stack, VkDevice device, String file, int kind) {
-        return compileModule(stack, device, file, kind, false);
+    private static long compileModule(MemoryStack stack, VkDevice device, String file, int kind,
+            boolean linearHdrOutput, boolean ser, SceneShaderProgram program) {
+        ShaderStage stage = switch (kind) {
+            case Shaderc.shaderc_raygen_shader -> ShaderStage.RAY_GENERATION;
+            case Shaderc.shaderc_miss_shader -> ShaderStage.RAY_MISS;
+            case Shaderc.shaderc_closesthit_shader -> ShaderStage.RAY_CLOSEST_HIT;
+            case Shaderc.shaderc_anyhit_shader -> ShaderStage.RAY_ANY_HIT;
+            default -> throw new IllegalArgumentException("unsupported scene shader stage");
+        };
+        String source = program.sources().get(stage);
+        byte[] spirv = source == null
+                ? RtShaderModuleCompiler.loadProduction(SHADER_ROOT + file, kind, linearHdrOutput, ser, RtEdgeSink.NOOP)
+                : RtShaderModuleCompiler.compileSceneSource(source, file, kind, linearHdrOutput, ser);
+        if (source != null) VulkanSpirvBindingValidator.requireSceneInterface(spirv, stage, program.dataBindingCount(), linearHdrOutput);
+        return RtShaderModuleCompiler.createModule(stack, device, spirv);
     }
 
-    private static long compileModule(
-            MemoryStack stack,
-            VkDevice device,
-            String file,
-            int kind,
-            boolean linearHdrOutput
-    ) {
-        return compileModule(stack, device, file, kind, linearHdrOutput, false);
+    /**
+     * Validates data before frame admission.
+     *
+     * @param values immutable per-binding payloads
+     */
+    public synchronized void validateShaderData(List<ResourceData> values) {
+        requireOpen();
+        if (values.size() != sceneShaders.dataBindingCount()) {
+            throw new FrameValidationException(FrameValidationException.Reason.INVALID_SHADER_DATA,
+                    "frame shader data count must equal declared dataBindingCount=" + sceneShaders.dataBindingCount());
+        }
+        for (ResourceData value : values) {
+            if (value.byteSize() <= 0 || (value.byteSize() & 3) != 0 || value.byteSize() > maxStorageBufferRangeBytes) {
+                throw new FrameValidationException(FrameValidationException.Reason.INVALID_SHADER_DATA,
+                        "shader data must have a positive, 4-byte-aligned size no greater than device maxStorageBufferRange="
+                                + maxStorageBufferRangeBytes);
+            }
+        }
     }
 
-    private static long compileModule(
-            MemoryStack stack,
-            VkDevice device,
-            String file,
-            int kind,
-            boolean linearHdrOutput,
-            boolean shaderExecutionReorderingEnabled
-    ) {
-        return RtShaderModuleCompiler.createModule(
-                stack,
-                device,
-                RtShaderModuleCompiler.loadProduction(
-                        SHADER_ROOT + file, kind, linearHdrOutput,
-                        shaderExecutionReorderingEnabled, RtEdgeSink.NOOP
-                )
-        );
+    /**
+     * Computes peak additional allocation bytes.
+     * @param slot available frame slot
+     * @param values immutable per-binding payloads
+     * @return additional bytes including temporary overlap
+     */
+    public synchronized long requiredShaderDataGrowth(int slot, List<ResourceData> values) {
+        validateShaderData(values);
+        return applicationData.requiredGrowth(slot, values);
+    }
+
+    /**
+     * Uploads application data and updates the available slot's descriptors.
+     * @param slot available frame slot
+     * @param values immutable per-binding payloads
+     */
+    public synchronized void updateShaderData(int slot, List<ResourceData> values) {
+        validateShaderData(values);
+        applicationData.update(slot, descriptors.set(slot), values);
     }
 
     /**
@@ -1166,6 +1226,10 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             shaderBindingTable.close();
         } catch (RuntimeException closeFailure) {
             failure = closeFailure;
+        }
+        try { applicationData.close(); }
+        catch (RuntimeException closeFailure) {
+            if (failure == null) failure = closeFailure; else failure.addSuppressed(closeFailure);
         }
         VK10.vkDestroyPipeline(device, pipeline, null);
         VK10.vkDestroyPipelineLayout(device, pipelineLayout, null);

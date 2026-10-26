@@ -1,5 +1,7 @@
 package top.ceroxe.rt.renderer.rt.pipeline;
 
+import top.ceroxe.rt.renderer.api.SceneShaderBindings;
+
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
@@ -33,15 +35,15 @@ final class GpuSceneDescriptorLayout implements AutoCloseable {
         for (long set : this.sets) if (set == 0L) throw new IllegalArgumentException("descriptor set is null");
     }
 
-    static GpuSceneDescriptorLayout create(MemoryStack stack, VkDevice device, int setCount) {
+    static GpuSceneDescriptorLayout create(MemoryStack stack, VkDevice device, int setCount, int applicationBindings) {
         Objects.requireNonNull(stack, "stack");
         VkDevice checkedDevice = Objects.requireNonNull(device, "device");
         if (setCount <= 0) throw new IllegalArgumentException("descriptor set count must be positive");
         long layout = 0L;
         long pool = 0L;
         try {
-            layout = createSetLayout(stack, checkedDevice);
-            pool = createPool(stack, checkedDevice, setCount);
+            layout = createSetLayout(stack, checkedDevice, applicationBindings);
+            pool = createPool(stack, checkedDevice, setCount, applicationBindings);
             long[] sets = RtRayTracingPipelineFactory.allocateDescriptorSets(
                     stack, checkedDevice, pool, layout, setCount
             );
@@ -55,62 +57,65 @@ final class GpuSceneDescriptorLayout implements AutoCloseable {
         }
     }
 
-    private static long createSetLayout(MemoryStack stack, VkDevice device) {
+    private static long createSetLayout(MemoryStack stack, VkDevice device, int applicationBindings) {
         VkDescriptorSetLayoutBinding.Buffer bindings = VkDescriptorSetLayoutBinding.calloc(
-                GpuSceneShaderBindings.COUNT, stack
+                SceneShaderBindings.COUNT + applicationBindings, stack
         );
-        bind(bindings, GpuSceneShaderBindings.TLAS,
-                KHRAccelerationStructure.VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.OUTPUT_IMAGE, VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.FRAME_UNIFORMS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
-        bind(bindings, GpuSceneShaderBindings.TEXTURE_RECORDS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.TEXTURE_PIXELS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.MATERIAL_RECORDS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.MESH_RECORDS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.POSITIONS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.NORMALS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, CLOSEST_HIT);
-        bind(bindings, GpuSceneShaderBindings.TANGENTS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, CLOSEST_HIT);
-        bind(bindings, GpuSceneShaderBindings.TEXTURE_COORDINATES, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.COLORS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.LIGHTMAP_COORDINATES,
-                VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.INDICES, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.TRIANGLE_MATERIAL_SLOTS,
-                VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.INSTANCE_RECORDS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.LIGHT_RECORDS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.HISTORY_COLOR_INPUT,
+        bind(bindings, SceneShaderBindings.TLAS,
+                KHRAccelerationStructure.VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.OUTPUT_IMAGE, VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, SceneShaderBindings.FRAME_UNIFORMS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.TEXTURE_RECORDS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.TEXTURE_PIXELS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.MATERIAL_RECORDS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.MESH_RECORDS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.POSITIONS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.NORMALS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.TANGENTS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.TEXTURE_COORDINATES, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.COLORS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.LIGHTMAP_COORDINATES,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.INDICES, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.TRIANGLE_MATERIAL_SLOTS,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.INSTANCE_RECORDS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.LIGHT_RECORDS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.HISTORY_COLOR_INPUT,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.HISTORY_COLOR_OUTPUT,
+        bind(bindings, SceneShaderBindings.HISTORY_COLOR_OUTPUT,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.HISTORY_GEOMETRY_INPUT,
+        bind(bindings, SceneShaderBindings.HISTORY_GEOMETRY_INPUT,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.HISTORY_GEOMETRY_OUTPUT,
+        bind(bindings, SceneShaderBindings.HISTORY_GEOMETRY_OUTPUT,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.MOTION_OUTPUT,
+        bind(bindings, SceneShaderBindings.MOTION_OUTPUT,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.TRANSIENT_INSTANCE_RECORDS,
-                VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, SURFACE_STAGES);
-        bind(bindings, GpuSceneShaderBindings.DENOISING_NORMAL_ROUGHNESS,
+        bind(bindings, SceneShaderBindings.TRANSIENT_INSTANCE_RECORDS,
+                VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        bind(bindings, SceneShaderBindings.DENOISING_NORMAL_ROUGHNESS,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.DENOISING_VIEW_Z,
+        bind(bindings, SceneShaderBindings.DENOISING_VIEW_Z,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.DENOISING_MOTION_VECTORS,
+        bind(bindings, SceneShaderBindings.DENOISING_MOTION_VECTORS,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.DENOISING_DIFFUSE_RADIANCE_HIT_DISTANCE,
+        bind(bindings, SceneShaderBindings.DENOISING_DIFFUSE_RADIANCE_HIT_DISTANCE,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.DENOISING_SPECULAR_RADIANCE_HIT_DISTANCE,
+        bind(bindings, SceneShaderBindings.DENOISING_SPECULAR_RADIANCE_HIT_DISTANCE,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.DENOISING_DIFFUSE_MATERIAL_FACTOR,
+        bind(bindings, SceneShaderBindings.DENOISING_DIFFUSE_MATERIAL_FACTOR,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.DENOISING_SPECULAR_MATERIAL_FACTOR,
+        bind(bindings, SceneShaderBindings.DENOISING_SPECULAR_MATERIAL_FACTOR,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.RECONSTRUCTION_DEPTH,
+        bind(bindings, SceneShaderBindings.RECONSTRUCTION_DEPTH,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.RECONSTRUCTION_MOTION_VECTORS,
+        bind(bindings, SceneShaderBindings.RECONSTRUCTION_MOTION_VECTORS,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
-        bind(bindings, GpuSceneShaderBindings.RECONSTRUCTION_EXPOSURE,
+        bind(bindings, SceneShaderBindings.RECONSTRUCTION_EXPOSURE,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        for (int i = 0; i < applicationBindings; i++) {
+            bind(bindings, SceneShaderBindings.APPLICATION_DATA + i, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
+        }
         VkDescriptorSetLayoutCreateInfo createInfo = VkDescriptorSetLayoutCreateInfo.calloc(stack)
                 .sType$Default().pBindings(bindings);
         LongBuffer handle = stack.longs(0L);
@@ -128,15 +133,15 @@ final class GpuSceneDescriptorLayout implements AutoCloseable {
         bindings.get(binding).binding(binding).descriptorType(descriptorType).descriptorCount(1).stageFlags(stageFlags);
     }
 
-    private static long createPool(MemoryStack stack, VkDevice device, int setCount) {
+    private static long createPool(MemoryStack stack, VkDevice device, int setCount, int applicationBindings) {
         VkDescriptorPoolSize.Buffer sizes = VkDescriptorPoolSize.calloc(3, stack);
         sizes.get(0).type(KHRAccelerationStructure.VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
                 .descriptorCount(setCount);
         sizes.get(1).type(VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE).descriptorCount(
-                Math.multiplyExact(setCount, GpuSceneShaderBindings.STORAGE_IMAGE_COUNT)
+                Math.multiplyExact(setCount, SceneShaderBindings.STORAGE_IMAGE_COUNT)
         );
         sizes.get(2).type(VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
-                .descriptorCount(Math.multiplyExact(setCount, GpuSceneShaderBindings.STORAGE_BUFFER_COUNT));
+                .descriptorCount(Math.multiplyExact(setCount, SceneShaderBindings.STORAGE_BUFFER_COUNT + applicationBindings));
         VkDescriptorPoolCreateInfo createInfo = VkDescriptorPoolCreateInfo.calloc(stack)
                 .sType$Default().maxSets(setCount).pPoolSizes(sizes);
         LongBuffer handle = stack.longs(0L);

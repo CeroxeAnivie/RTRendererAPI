@@ -2,39 +2,41 @@ package top.ceroxe.rt.renderer.api;
 
 import java.time.Duration;
 import java.util.Optional;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Owns completed-frame publication and bounded consumer waiting. */
 public interface RendererFrameAccess {
-    Optional<CpuFrame> pollLatestCpuFrame();
+    /** Consumes the newest completed native-format frame without an ownership copy. */
+    boolean readFrame(FrameConsumer consumer);
+    Optional<FrameSnapshot> pollFrame();
 
-    Optional<CpuFrame> awaitLatestCpuFrame(Duration timeout) throws InterruptedException;
+    Optional<FrameSnapshot> awaitFrame(Duration timeout) throws InterruptedException;
 
-    default CompletableFuture<Optional<CpuFrame>> awaitLatestCpuFrameAsync(
+    default CompletableFuture<Optional<FrameSnapshot>> awaitFrameAsync(
             Duration timeout, Executor executor) {
         java.util.Objects.requireNonNull(timeout, "timeout");
         java.util.Objects.requireNonNull(executor, "executor");
         long timeoutNanos = timeoutNanos(timeout);
-        AtomicBoolean cancelled = new AtomicBoolean();
-        CompletableFuture<Optional<CpuFrame>> result = new CompletableFuture<>() {
-            @Override public boolean cancel(boolean mayInterruptIfRunning) {
-                cancelled.set(true);
-                return super.cancel(false);
-            }
-        };
+        CompletableFuture<Optional<FrameSnapshot>> result = new CompletableFuture<>();
         try {
             executor.execute(() -> {
                 if (result.isDone()) return;
                 try {
-                    result.complete(awaitLatestCpuFrame(timeout));
+                    long started = System.nanoTime();
+                    long backoff = 250_000;
+                    while (!result.isDone()) {
+                        if (Thread.interrupted()) throw new InterruptedException("frame wait interrupted");
+                        Optional<FrameSnapshot> frame = pollFrame();
+                        if (frame.isPresent() || timeoutNanos == 0) { result.complete(frame); break; }
+                        long remaining = timeoutNanos - (System.nanoTime() - started);
+                        if (remaining <= 0) { result.complete(Optional.empty()); break; }
+                        java.util.concurrent.locks.LockSupport.parkNanos(Math.min(remaining, backoff));
+                        backoff = Math.min(4_000_000, backoff * 2);
+                    }
                 } catch (InterruptedException failure) {
                     Thread.currentThread().interrupt();
                     result.completeExceptionally(failure);
-                } catch (CancellationException ignored) {
-                    // Cancellation already completed the future.
                 } catch (RuntimeException failure) {
                     result.completeExceptionally(failure);
                 }

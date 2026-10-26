@@ -58,6 +58,7 @@ public:
 private:
     struct TaggedFrame final {
         std::uint32_t sequence;
+        sl::FrameToken* token;
         std::uint32_t hudlessWidth;
         std::uint32_t hudlessHeight;
         std::uint32_t renderWidth;
@@ -71,7 +72,7 @@ private:
     void configure(std::int32_t generatedFrames, const TaggedFrame& frame);
     void configureOff();
     void disable();
-    void releaseFrameTags(std::uint32_t frameIndex);
+    void releaseFrameTags(const TaggedFrame& frame);
     void retireTaggedFramesThrough(std::uint32_t frameIndex);
     void releaseAllFrameTags();
     void closeOpenFrameMarkers() noexcept;

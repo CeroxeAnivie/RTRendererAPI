@@ -13,7 +13,6 @@ import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
-import top.ceroxe.rt.renderer.api.RendererBootstrap;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.api.SubmissionRejectedException;
 import top.ceroxe.rt.renderer.api.TemporalRenderingOptions;
@@ -43,7 +42,7 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
        * An API-version A/B must measure the base GPUScene pipeline, not whatever optional provider
        * policy happened to become the public default in that release.
        */
-      RendererConfig configuration = RendererConfig.expertBuilder()
+      RendererConfig configuration = RendererConfig.builder()
               .temporalRendering(TemporalRenderingOptions.disabled())
               .frameReconstruction(FrameReconstructionOptions.disabled())
               .denoising(DenoisingOptions.disabled())
@@ -55,7 +54,7 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
               .gpuTimingsEnabled(true)
               .build();
       long coldStartNanos = System.nanoTime();
-      Renderer renderer = RendererBootstrap.open("vulkan-rt", configuration);
+      Renderer renderer = Renderer.open("vulkan-rt", configuration);
 
       try {
          VulkanFrameInterop interop = (VulkanFrameInterop)renderer.extension(VulkanFrameInterop.class).orElseThrow(() -> new AssertionError("Vulkan backend omitted its interop extension"));

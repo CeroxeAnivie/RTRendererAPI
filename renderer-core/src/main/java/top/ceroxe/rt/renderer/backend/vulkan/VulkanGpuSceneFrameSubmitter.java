@@ -113,7 +113,8 @@ final class VulkanGpuSceneFrameSubmitter {
         VulkanFramePrimitiveResources primitiveResources = frameRing.primitives(slot);
         long requestedGrowth = Math.addExact(
                 Math.addExact(
-                        slot.requiredImageGrowthBytes(checkedExtents),
+                        Math.addExact(slot.requiredImageGrowthBytes(checkedExtents),
+                                pipeline.requiredShaderDataGrowth(slot.index(), checked.request().shaderData())),
                         temporal.requiredGrowthBytes(width, height)
                 ),
                 primitiveResources.requiredBufferGrowthBytes(checked.request().primitiveBatch())
@@ -149,6 +150,7 @@ final class VulkanGpuSceneFrameSubmitter {
                     frameFeatures.temporalReconstruction()
             );
             slot.writeUniforms(temporalFrame.uniforms());
+            pipeline.updateShaderData(slot.index(), checked.request().shaderData());
             pipeline.updateDescriptorSet(
                     slot.index(), descriptors.assemble(
                             slot, acceptedSceneRevision, temporalFrame.gpu(), framePrimitives, frameFeatures

@@ -6,7 +6,6 @@
 
 ## 目录
 
-- [RendererBootstrap](#rendererbootstrap)
 - [通用 command path](#通用-command-path)
 - [External frame composition](#external-frame-composition)
 - [Renderer](#renderer)
@@ -19,20 +18,20 @@
 - [Vulkan 专家扩展](#vulkan-专家扩展)
 - [通用命令与硬件光追](#通用命令与硬件光追)
 
-## RendererBootstrap
+## Renderer
 
 ```java
-public final class RendererBootstrap
+public interface Renderer extends AutoCloseable
 ```
 
 后端发现与打开的唯一公共入口。通过 `ServiceLoader` 发现 `RendererBackendProvider`，按 descriptor priority 和兼容性结果选择后端。
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
-| `open(RendererPreset)` | `Renderer` | 简单模式；按明确的 CPU readback 或 managed GPU presentation preset 打开最佳可用后端 |
+| `open()` | `Renderer` | 简单模式；使用推荐 CPU-readable 配置打开最佳可用后端 |
 | `open(RendererConfig)` | `Renderer` | 专家模式；使用完整显式配置打开最佳可用后端 |
 | `open(String, RendererConfig)` | `Renderer` | 专家模式；按 provider id 打开，用于确定性部署或诊断 |
-| `availableGpuDevices()` | `List<RendererGpuDevice>` | 返回通过 provider 探测得到的不可变设备列表 |
+| `devices()` | `List<RendererGpuDevice>` | 返回通过 provider 探测得到的不可变设备列表 |
 
 ## 通用 command path
 
@@ -97,7 +96,7 @@ completion 后推进到 `CONSUMER_ACCEPTED`。该 provider 不拥有显示系统
 
 4.2.0 新增 18 种整数纹理格式、`TextureFormat.numericClass()`、`bytesPerTexel()`，以及
 `ClearValue.SignedColor` / `UnsignedColor`。整数采样与清除必须匹配精确的有符号／无符号类型；
-整数附件关闭 blending。GPU 输出完成不隐含 RGBA8 CPU 回读可用，详见[整数纹理契约](Integer-Textures.md)。
+整数附件关闭 blending。CPU 回读保留整数原始格式，详见[整数纹理契约](Integer-Textures.md)。
 
 专家入口先使用 `renderingSemanticCapabilities()` 确认必需语义为 `EXECUTABLE`，再依次调用
 `submitResources(...)` 与 `submitCommands(...)`。资源的 accepted、写入 recorded、GPU ready、
@@ -133,8 +132,9 @@ public interface Renderer extends AutoCloseable
 | `apply(SceneTransaction)` | `SceneUpdateResult` | 原子应用场景事务并返回 accepted revision |
 | `submit(RenderFrameRequest)` | `FrameSubmissionResult` | 提交一帧；sequence 必须严格递增 |
 | `trySubmit(RenderFrameRequest)` | `FrameSubmissionAttempt` | 容量拒绝返回 deferred，其他契约错误保持 typed exception |
-| `pollLatestCpuFrame()` | `Optional<CpuFrame>` | 非阻塞读取最新托管帧 |
-| `awaitLatestCpuFrame(Duration)` | `Optional<CpuFrame>` | 有界等待托管帧 |
+| `readFrame(FrameConsumer)` | `boolean` | 直接消费作用域原生像素，回调返回后视图失效 |
+| `pollFrame()` | `Optional<FrameSnapshot>` | 非阻塞读取最新托管帧 |
+| `awaitFrame(Duration)` | `Optional<FrameSnapshot>` | 有界等待托管帧 |
 | `diagnostics()` | `RendererDiagnostics` | 当前诊断快照 |
 | `health()` | `RendererHealth` | 结构化失败与资源欠账 |
 | `extension(Class<T>)` | `Optional<T>` | 显式发现可选专家扩展 |
@@ -146,32 +146,29 @@ public interface Renderer extends AutoCloseable
 `SubmissionDeferralReason`，用于重试策略和遥测聚合；`detail()` 仅用于人类诊断。所有 provider
 必须提供类型化分类，API 不从自然语言猜测类别。
 
-## RendererPreset
+## RendererConfig
 
-普通调用方直接把 preset 传给 `RendererBootstrap.open(...)`，不需要接触完整配置：
+普通调用方使用 `Renderer.open()`，或者把完整推荐配置传给 `Renderer.open(config)`：
 
 | 值 | 说明 |
 | --- | --- |
-| `CPU_READBACK` | 托管 CPU frame 路径；优选重建、降噪、SER 与 AS memory optimization，不请求 presentation-time FG/MFG |
-| `MANAGED_GPU_PRESENTATION` | 官方 GPU presenter 路径；关闭 CPU readback，并在支持时额外优选普通 FG 2x 与低延迟 pacing；不自动请求 MFG |
+| `RendererConfig.recommended()` | CPU frame 路径；优选重建、SER 与 AS memory optimization，不请求 FG/MFG；NRD 显式启用 |
+| `RendererConfig.presentation()` | 官方 GPU presenter 路径；关闭 CPU readback，并在支持时额外优选普通 FG 2x 与低延迟 pacing；不自动请求 MFG |
 
-`configuration()` 只供专家检查或复制 preset。派生配置使用 `copyBuilder()`，并通过
-`RendererBootstrap.open(...)` 打开。
-
-## RendererConfig
+派生配置使用 `copyBuilder()`，并通过
+`Renderer.open(...)` 打开。
 
 ```java
 public final class RendererConfig
 ```
 
-只提供显式 expert Builder 与 `copyBuilder()`，不提供有序兼容构造器或隐式默认入口。
+配置使用统一 Builder 与 `copyBuilder()`，不提供旧接口别名或有序兼容构造器。
 
 | 静态入口 | 说明 |
 | --- | --- |
-| `expertBuilder()` | 创建专家显式 Builder；可选 vendor 技术均禁用 |
+| `builder()` | 创建统一 Builder；可选 vendor 技术均禁用 |
 
-已有配置通过 `copyBuilder()` 派生。简单模式配置由 `RendererPreset` 独立表达，避免把 preset 与
-专家配置入口混为一谈。
+已有配置通过 `copyBuilder()` 派生，简单默认值和专家配置使用同一个不可变类型。
 
 `MIN_MAX_FRAMES_IN_FLIGHT`、`DEFAULT_MAX_FRAMES_IN_FLIGHT` 和
 `MAX_MAX_FRAMES_IN_FLIGHT` 分别定义合法下界、默认值和上界。
@@ -181,7 +178,8 @@ public final class RendererConfig
 | `maxFramesInFlight(int)` | 帧环深度 |
 | `validationEnabled(boolean)` | Vulkan validation 策略 |
 | `gpuTimingsEnabled(boolean)` | GPU timing 策略 |
-| `cpuFrameReadbackEnabled(boolean)` | 是否分配并复制异步托管 CPU 帧；默认开启 |
+| `cpuFrameReadbackEnabled(boolean)` | 是否准备异步 CPU 帧；默认开启；`readFrame` 无像素所有权复制，快照方法显式复制 |
+| `sceneShaders(SceneShaderProgram)` | 替换四个 retained-scene GLSL 阶段并声明应用缓冲区绑定数 |
 | `gpuDevice(RendererGpuDevice)` | 绑定枚举所得稳定设备对象 |
 | `automaticGpuSelection()` | 恢复 provider 的自动设备选择 |
 | `frameOutputFormat(FrameOutputFormat)` | SDR RGBA8 或 linear HDR RGBA16F |
@@ -248,9 +246,9 @@ raygen. Singular, non-finite, non-rigid, missing-layout, or viewport-mismatched 
 `MeshAsset.vertexColorsRgba8()` remains raw numeric RGBA8 channel data. It is not sRGB-decoded;
 that gamma meaning is intentionally unchanged.
 
-### CpuFrame
+### FrameSnapshot
 
-托管、display-ready RGBA8 帧。普通调用方使用它完成截图、编码、UI 或 CPU 后处理，不需要管理 native handle。
+原生格式的不可变 CPU 帧副本。`format()` 决定组件编码，`pixels()` 返回只读 little-endian 字节，HDR 和整数不会隐式转成 SDR。高频处理用 `readFrame(FrameConsumer)` 的作用域视图；需要保存时显式 `FrameSnapshot.copyOf(view)`。
 
 ### TemporalRenderingOptions
 

@@ -38,7 +38,7 @@ public final class NvidiaNrdGpuSceneNativeSelfTest {
         NvidiaGpuSceneNativeTestSupport.require(capability.preferredDevice().linearHdrRgba16fOutput(),
                 "NRD frame gate requires exportable RGBA16F output on the selected device");
 
-        RendererConfig configuration = RendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.builder()
                 .maxFramesInFlight(2)
                 .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F)
                 .frameGeneration(FrameGenerationOptions.disabled())

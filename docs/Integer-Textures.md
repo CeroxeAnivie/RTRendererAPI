@@ -1,4 +1,4 @@
-# Integer textures in 4.2.0
+# Integer textures
 
 `TextureFormat` supports signed and unsigned integer storage for R, RG, and RGBA at 8, 16,
 and 32 bits per component. Existing format ordinals remain unchanged. `numericClass()` identifies
@@ -43,16 +43,14 @@ color attachments use average resolve. Device format, usage, and sample-count su
 ## Output and compatibility
 
 Integer attachments can produce fence-backed GPU output evidence and can subsequently be read
-by shaders. `CpuFrame` continues to represent RGBA8 pixels only. When its selected GPU output is
-an integer texture, the command can complete with `OUTPUT_PRODUCED`, while querying a CPU frame
-for that output throws `UnsupportedOperationException`. There is no implicit normalization,
-reinterpretation, or color conversion. Use an explicitly authored conversion pass into an RGBA8
-target when display pixels are needed. The window composition source contract is unchanged.
+by shaders. `readFrame` returns the exact native integer bytes, `TextureFormat`, resource identity,
+row stride and completed sequence. `pollFrame` and `awaitFrame` make an explicit immutable copy
+without conversion. The consumer interprets signedness and component width according to `format()`.
+For display, author a conversion pass into a display format; the API never clamps or tone-maps
+integer values implicitly.
 
-Existing method descriptors remain available. The `ClearValue` sealed hierarchy and
-`TextureFormat` enum gain variants: exhaustive switches must handle them when recompiling, and
-new values must not be sent to a 4.1.0 provider. Rollback requires removing integer formats and
-typed clears and avoiding nonzero-z 3D writes, or using a fully witnessed whole-volume upload.
+5.0.0 is a breaking contract. Recompile exhaustive switches and use an API-major-5 provider.
+See [migration](COMPATIBILITY.md) for removed entry points and the native frame output contract.
 
 The native regression task is `./gradlew :renderer-core:vulkanGenericIntegerTextureNativeSelfTest`.
 It compares integer values in shaders before display conversion, covers all 18 formats, tests
@@ -60,7 +58,8 @@ clear and fragment writes, and preserves the untouched slice during a nonzero-z 
 
 ## 4.2.0 release evidence
 
-The Windows Java 21 release gate completed successfully on an NVIDIA GeForce RTX 5080 Laptop GPU:
+The historical 4.2.0 Windows release gate completed on an NVIDIA GeForce RTX 5080 Laptop GPU.
+It predates the Java 25 baseline and native frame contract in 5.0.0:
 
 ```text
 gradlew.bat --no-daemon --console=plain strictAcceptanceTest assemble :renderer-core:vulkanGenericIntegerTextureNativeSelfTest :renderer-core:vulkanGenericCommandNativeSelfTest :renderer-core:vulkanGenericGeometryBarrierNativeSelfTest :renderer-core:vulkanGenericRayTracingNativeSelfTest

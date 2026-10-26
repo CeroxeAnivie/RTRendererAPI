@@ -7,7 +7,7 @@ import java.util.Optional;
 
 import top.ceroxe.rt.renderer.api.AntiAliasingState;
 import top.ceroxe.rt.renderer.api.CameraState;
-import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.FrameOutputFormat;
 import top.ceroxe.rt.renderer.api.HardwareCapabilities;
 import top.ceroxe.rt.renderer.api.HistoryResetReason;
@@ -16,13 +16,12 @@ import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.RendererGpuDevice;
 import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RendererConfig;
-import top.ceroxe.rt.renderer.api.RendererBootstrap;
 import top.ceroxe.rt.renderer.api.RendererFeatureApplyResult;
 import top.ceroxe.rt.renderer.api.RendererFeatureController;
 import top.ceroxe.rt.renderer.api.RendererFeaturePlan;
 import top.ceroxe.rt.renderer.api.RendererFeatureProfile;
 import top.ceroxe.rt.renderer.api.RendererHealth;
-import top.ceroxe.rt.renderer.api.RendererPreset;
+
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.SceneInstance;
 import top.ceroxe.rt.renderer.api.SceneLight;
@@ -40,7 +39,7 @@ public final class PublishedRendererConsumer {
     }
 
     public static List<RendererGpuDevice> enumerateRayTracingDevices() {
-        return RendererBootstrap.availableGpuDevices();
+        return Renderer.devices();
     }
 
     public static RendererConfig selectDevice(String backendId, String stableId) {
@@ -52,7 +51,7 @@ public final class PublishedRendererConsumer {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Unknown RT GPU: " + backendId + "/" + stableId
                 ));
-        return RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(selected).build();
+        return RendererConfig.recommended().copyBuilder().gpuDevice(selected).build();
     }
 
     public static RendererConfig selectHighestMemoryDiscreteDevice() {
@@ -62,7 +61,7 @@ public final class PublishedRendererConsumer {
                         device -> device.hardwareCapabilities().deviceLocalMemoryBytes()
                 ))
                 .orElseThrow(() -> new IllegalStateException("No discrete hardware RT GPU available"));
-        return RendererPreset.CPU_READBACK.configuration().copyBuilder().gpuDevice(selected).build();
+        return RendererConfig.recommended().copyBuilder().gpuDevice(selected).build();
     }
 
     public static HardwareCapabilities hardwareCapabilities(RendererGpuDevice device) {
@@ -76,7 +75,7 @@ public final class PublishedRendererConsumer {
     }
 
     public static Renderer open(String backendId, String stableId) {
-        return RendererBootstrap.open(selectDevice(backendId, stableId));
+        return Renderer.open(selectDevice(backendId, stableId));
     }
 
     /**
@@ -129,8 +128,8 @@ public final class PublishedRendererConsumer {
                 .build();
     }
 
-    public static Optional<CpuFrame> pollManagedFrame(Renderer renderer) {
-        return Objects.requireNonNull(renderer, "renderer").pollLatestCpuFrame();
+    public static Optional<FrameSnapshot> pollManagedFrame(Renderer renderer) {
+        return Objects.requireNonNull(renderer, "renderer").pollFrame();
     }
 
     public static Optional<VulkanFrameInterop> vulkanInterop(Renderer renderer) {
@@ -178,7 +177,7 @@ public final class PublishedRendererConsumer {
     }
 
     public static RendererConfig accumulatingTemporalHistory(int maxHistoryFrames) {
-        return RendererConfig.expertBuilder()
+        return RendererConfig.builder()
                 .temporalRendering(TemporalRenderingOptions.accumulating(maxHistoryFrames))
                 .build();
     }

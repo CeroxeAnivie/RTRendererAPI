@@ -19,6 +19,7 @@ public final class RendererConfig {
     /** Largest supported bounded frame ring. */
     public static final int MAX_MAX_FRAMES_IN_FLIGHT = 16;
 
+    private final SceneShaderProgram sceneShaders;
     private final int maxFramesInFlight;
     private final EvidenceRetentionPolicy evidenceRetention;
     private final boolean validationEnabled;
@@ -41,6 +42,7 @@ public final class RendererConfig {
                             + MIN_MAX_FRAMES_IN_FLIGHT + ", " + MAX_MAX_FRAMES_IN_FLIGHT + "]"
             );
         }
+        sceneShaders = builder.sceneShaders;
         maxFramesInFlight = builder.maxFramesInFlight;
         evidenceRetention = Objects.requireNonNull(builder.evidenceRetention, "evidenceRetention");
         validationEnabled = builder.validationEnabled;
@@ -70,16 +72,25 @@ public final class RendererConfig {
         }
     }
 
+    /** Recommended CPU-readable policy; optional features are capability-gated. */
+    public static RendererConfig recommended() {
+        return builder().frameReconstruction(FrameReconstructionOptions.recommended())
+                .rayTracingOptimizations(RayTracingOptimizationOptions.recommended()).build();
+    }
+
+    /** Recommended renderer-owned presentation, with optional generated frames and pacing. */
+    public static RendererConfig presentation() {
+        return recommended().copyBuilder().cpuFrameReadbackEnabled(false)
+                .frameGeneration(FrameGenerationOptions.recommended())
+                .lowLatency(LowLatencyOptions.recommended()).build();
+    }
+
     /**
-     * Starts the expert configuration surface with explicit, conservative feature defaults.
-     *
-     * <p>All vendor and advanced optional features begin disabled so setting one expert policy
-     * cannot silently enable unrelated owners. Applications wanting the ordinary capability-driven
-     * policy should use {@link RendererBootstrap#open(RendererPreset)} instead.</p>
-     *
-     * @return new single-thread-confined configuration builder
+     * Creates a configuration builder with optional vendor features disabled.
+     * Use {@link #recommended()} for the capability-driven ordinary policy.
+     * @return new single-thread-confined builder
      */
-    public static Builder expertBuilder() {
+    public static Builder builder() {
         return new Builder();
     }
 
@@ -92,12 +103,10 @@ public final class RendererConfig {
         return new Builder(this);
     }
 
-    /**
-     * Returns the maximum admitted frames, in
-     * {@code [MIN_MAX_FRAMES_IN_FLIGHT, MAX_MAX_FRAMES_IN_FLIGHT]}.
-     *
-     * @return bounded frame concurrency
-     */
+    /** @return retained-scene shader replacements and application data layout */
+    public SceneShaderProgram sceneShaders() { return sceneShaders; }
+
+    /** @return bounded frame concurrency in {@code [MIN_MAX_FRAMES_IN_FLIGHT, MAX_MAX_FRAMES_IN_FLIGHT]} */
     public int maxFramesInFlight() {
         return maxFramesInFlight;
     }
@@ -128,7 +137,7 @@ public final class RendererConfig {
     /**
      * Returns whether every frame slot owns an asynchronous managed CPU-readback target.
      *
-     * <p>Enabled mode keeps {@link Renderer#pollLatestCpuFrame()} allocation-stable on
+     * <p>Enabled mode keeps {@link Renderer#pollFrame()} allocation-stable on
      * the Vulkan side and never waits for the whole queue to become idle. Expert consumers that
      * exclusively import {@code VulkanFrameInterop} images may disable this policy to omit the
      * otherwise unnecessary image-to-buffer copy and host-visible frame ring.</p>
@@ -215,7 +224,8 @@ public final class RendererConfig {
     public boolean equals(Object other) {
         if (this == other) return true;
         if (!(other instanceof RendererConfig config)) return false;
-        return maxFramesInFlight == config.maxFramesInFlight
+        return sceneShaders.equals(config.sceneShaders)
+                && maxFramesInFlight == config.maxFramesInFlight
                 && evidenceRetention.equals(config.evidenceRetention)
                 && validationEnabled == config.validationEnabled
                 && gpuTimingsEnabled == config.gpuTimingsEnabled
@@ -233,7 +243,7 @@ public final class RendererConfig {
     @Override
     public int hashCode() {
         return Objects.hash(
-                maxFramesInFlight, evidenceRetention, validationEnabled, gpuTimingsEnabled, cpuFrameReadbackEnabled,
+                sceneShaders, maxFramesInFlight, evidenceRetention, validationEnabled, gpuTimingsEnabled, cpuFrameReadbackEnabled,
                 gpuDevice, frameOutputFormat, temporalRendering, frameReconstruction, denoising,
                 frameGeneration, lowLatency, rayTracingOptimizations
         );
@@ -260,6 +270,7 @@ public final class RendererConfig {
      * Single-thread-confined builder for one immutable renderer configuration.
      */
     public static final class Builder {
+        private SceneShaderProgram sceneShaders = SceneShaderProgram.builtIn();
         private int maxFramesInFlight = DEFAULT_MAX_FRAMES_IN_FLIGHT;
         private EvidenceRetentionPolicy evidenceRetention = EvidenceRetentionPolicy.bounded();
         private boolean validationEnabled;
@@ -279,6 +290,7 @@ public final class RendererConfig {
         }
 
         private Builder(RendererConfig source) {
+            sceneShaders = source.sceneShaders;
             maxFramesInFlight = source.maxFramesInFlight;
             evidenceRetention = source.evidenceRetention;
             validationEnabled = source.validationEnabled;
@@ -292,6 +304,17 @@ public final class RendererConfig {
             lowLatency = source.lowLatency;
             denoising = source.denoising;
             rayTracingOptimizations = source.rayTracingOptimizations;
+        }
+
+        /**
+         * Selects the retained-scene shader program and application data interface.
+         *
+         * @param value non-null shader program
+         * @return this builder
+         */
+        public Builder sceneShaders(SceneShaderProgram value) {
+            sceneShaders = Objects.requireNonNull(value, "sceneShaders");
+            return this;
         }
 
         /**

@@ -1,5 +1,7 @@
 package top.ceroxe.rt.renderer.rt.pipeline;
 
+import top.ceroxe.rt.renderer.api.SceneShaderBindings;
+
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
@@ -33,7 +35,7 @@ final class GpuSceneDescriptorWriter {
                         .accelerationStructureCount(1)
                         .pAccelerationStructures(stack.longs(checked.topLevelAccelerationStructure()));
         VkDescriptorImageInfo.Buffer images = VkDescriptorImageInfo.calloc(
-                GpuSceneShaderBindings.STORAGE_IMAGE_COUNT, stack
+                SceneShaderBindings.STORAGE_IMAGE_COUNT, stack
         );
         setImageInfo(images.get(0), checked.outputImageView());
         setImageInfo(images.get(1), checked.historyColorInputView());
@@ -55,45 +57,45 @@ final class GpuSceneDescriptorWriter {
         setImageInfo(images.get(15), reconstruction.exposure());
 
         VkDescriptorBufferInfo.Buffer bufferInfos = VkDescriptorBufferInfo.calloc(
-                GpuSceneShaderBindings.STORAGE_BUFFER_COUNT, stack
+                SceneShaderBindings.STORAGE_BUFFER_COUNT, stack
         );
         setBufferInfo(bufferInfos.get(0), checked.frameUniforms(), maxStorageBufferRangeBytes);
-        for (int binding = GpuSceneShaderBindings.TEXTURE_RECORDS;
-             binding <= GpuSceneShaderBindings.LIGHT_RECORDS;
+        for (int binding = SceneShaderBindings.TEXTURE_RECORDS;
+             binding <= SceneShaderBindings.LIGHT_RECORDS;
              binding++) {
             setBufferInfo(
-                    bufferInfos.get(binding - GpuSceneShaderBindings.FRAME_UNIFORMS),
+                    bufferInfos.get(binding - SceneShaderBindings.FRAME_UNIFORMS),
                     checked.sceneBuffer(binding),
                     maxStorageBufferRangeBytes
             );
         }
         setBufferInfo(
-                bufferInfos.get(GpuSceneShaderBindings.STORAGE_BUFFER_COUNT - 1),
+                bufferInfos.get(SceneShaderBindings.STORAGE_BUFFER_COUNT - 1),
                 checked.transientInstanceRecords(),
                 maxStorageBufferRangeBytes
         );
 
-        VkWriteDescriptorSet.Buffer writes = VkWriteDescriptorSet.calloc(GpuSceneShaderBindings.COUNT, stack);
-        writes.get(GpuSceneShaderBindings.TLAS)
+        VkWriteDescriptorSet.Buffer writes = VkWriteDescriptorSet.calloc(SceneShaderBindings.COUNT, stack);
+        writes.get(SceneShaderBindings.TLAS)
                 .sType$Default()
                 .pNext(acceleration.address())
                 .dstSet(descriptorSet)
-                .dstBinding(GpuSceneShaderBindings.TLAS)
+                .dstBinding(SceneShaderBindings.TLAS)
                 .dstArrayElement(0)
                 .descriptorType(KHRAccelerationStructure.VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
                 .descriptorCount(1);
-        writes.get(GpuSceneShaderBindings.OUTPUT_IMAGE)
+        writes.get(SceneShaderBindings.OUTPUT_IMAGE)
                 .sType$Default()
                 .dstSet(descriptorSet)
-                .dstBinding(GpuSceneShaderBindings.OUTPUT_IMAGE)
+                .dstBinding(SceneShaderBindings.OUTPUT_IMAGE)
                 .dstArrayElement(0)
                 .descriptorType(VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
                 .descriptorCount(1)
                 .pImageInfo(VkDescriptorImageInfo.create(images.get(0).address(), 1));
-        for (int binding = GpuSceneShaderBindings.FRAME_UNIFORMS;
-             binding <= GpuSceneShaderBindings.LIGHT_RECORDS;
+        for (int binding = SceneShaderBindings.FRAME_UNIFORMS;
+             binding <= SceneShaderBindings.LIGHT_RECORDS;
              binding++) {
-            VkDescriptorBufferInfo info = bufferInfos.get(binding - GpuSceneShaderBindings.FRAME_UNIFORMS);
+            VkDescriptorBufferInfo info = bufferInfos.get(binding - SceneShaderBindings.FRAME_UNIFORMS);
             writes.get(binding)
                     .sType$Default()
                     .dstSet(descriptorSet)
@@ -104,54 +106,54 @@ final class GpuSceneDescriptorWriter {
                     .pBufferInfo(VkDescriptorBufferInfo.create(info.address(), 1));
         }
         VkDescriptorBufferInfo transientInstances = bufferInfos.get(
-                GpuSceneShaderBindings.STORAGE_BUFFER_COUNT - 1
+                SceneShaderBindings.STORAGE_BUFFER_COUNT - 1
         );
-        writes.get(GpuSceneShaderBindings.TRANSIENT_INSTANCE_RECORDS)
+        writes.get(SceneShaderBindings.TRANSIENT_INSTANCE_RECORDS)
                 .sType$Default()
                 .dstSet(descriptorSet)
-                .dstBinding(GpuSceneShaderBindings.TRANSIENT_INSTANCE_RECORDS)
+                .dstBinding(SceneShaderBindings.TRANSIENT_INSTANCE_RECORDS)
                 .dstArrayElement(0)
                 .descriptorType(VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
                 .descriptorCount(1)
                 .pBufferInfo(VkDescriptorBufferInfo.create(transientInstances.address(), 1));
-        setImageWrite(writes.get(GpuSceneShaderBindings.HISTORY_COLOR_INPUT), descriptorSet,
-                GpuSceneShaderBindings.HISTORY_COLOR_INPUT, images.get(1));
-        setImageWrite(writes.get(GpuSceneShaderBindings.HISTORY_COLOR_OUTPUT), descriptorSet,
-                GpuSceneShaderBindings.HISTORY_COLOR_OUTPUT, images.get(2));
-        setImageWrite(writes.get(GpuSceneShaderBindings.HISTORY_GEOMETRY_INPUT), descriptorSet,
-                GpuSceneShaderBindings.HISTORY_GEOMETRY_INPUT, images.get(3));
-        setImageWrite(writes.get(GpuSceneShaderBindings.HISTORY_GEOMETRY_OUTPUT), descriptorSet,
-                GpuSceneShaderBindings.HISTORY_GEOMETRY_OUTPUT, images.get(4));
-        setImageWrite(writes.get(GpuSceneShaderBindings.MOTION_OUTPUT), descriptorSet,
-                GpuSceneShaderBindings.MOTION_OUTPUT, images.get(5));
-        setImageWrite(writes.get(GpuSceneShaderBindings.DENOISING_NORMAL_ROUGHNESS), descriptorSet,
-                GpuSceneShaderBindings.DENOISING_NORMAL_ROUGHNESS, images.get(6));
-        setImageWrite(writes.get(GpuSceneShaderBindings.DENOISING_VIEW_Z), descriptorSet,
-                GpuSceneShaderBindings.DENOISING_VIEW_Z, images.get(7));
-        setImageWrite(writes.get(GpuSceneShaderBindings.DENOISING_MOTION_VECTORS), descriptorSet,
-                GpuSceneShaderBindings.DENOISING_MOTION_VECTORS, images.get(8));
+        setImageWrite(writes.get(SceneShaderBindings.HISTORY_COLOR_INPUT), descriptorSet,
+                SceneShaderBindings.HISTORY_COLOR_INPUT, images.get(1));
+        setImageWrite(writes.get(SceneShaderBindings.HISTORY_COLOR_OUTPUT), descriptorSet,
+                SceneShaderBindings.HISTORY_COLOR_OUTPUT, images.get(2));
+        setImageWrite(writes.get(SceneShaderBindings.HISTORY_GEOMETRY_INPUT), descriptorSet,
+                SceneShaderBindings.HISTORY_GEOMETRY_INPUT, images.get(3));
+        setImageWrite(writes.get(SceneShaderBindings.HISTORY_GEOMETRY_OUTPUT), descriptorSet,
+                SceneShaderBindings.HISTORY_GEOMETRY_OUTPUT, images.get(4));
+        setImageWrite(writes.get(SceneShaderBindings.MOTION_OUTPUT), descriptorSet,
+                SceneShaderBindings.MOTION_OUTPUT, images.get(5));
+        setImageWrite(writes.get(SceneShaderBindings.DENOISING_NORMAL_ROUGHNESS), descriptorSet,
+                SceneShaderBindings.DENOISING_NORMAL_ROUGHNESS, images.get(6));
+        setImageWrite(writes.get(SceneShaderBindings.DENOISING_VIEW_Z), descriptorSet,
+                SceneShaderBindings.DENOISING_VIEW_Z, images.get(7));
+        setImageWrite(writes.get(SceneShaderBindings.DENOISING_MOTION_VECTORS), descriptorSet,
+                SceneShaderBindings.DENOISING_MOTION_VECTORS, images.get(8));
         setImageWrite(
-                writes.get(GpuSceneShaderBindings.DENOISING_DIFFUSE_RADIANCE_HIT_DISTANCE),
+                writes.get(SceneShaderBindings.DENOISING_DIFFUSE_RADIANCE_HIT_DISTANCE),
                 descriptorSet,
-                GpuSceneShaderBindings.DENOISING_DIFFUSE_RADIANCE_HIT_DISTANCE,
+                SceneShaderBindings.DENOISING_DIFFUSE_RADIANCE_HIT_DISTANCE,
                 images.get(9)
         );
         setImageWrite(
-                writes.get(GpuSceneShaderBindings.DENOISING_SPECULAR_RADIANCE_HIT_DISTANCE),
+                writes.get(SceneShaderBindings.DENOISING_SPECULAR_RADIANCE_HIT_DISTANCE),
                 descriptorSet,
-                GpuSceneShaderBindings.DENOISING_SPECULAR_RADIANCE_HIT_DISTANCE,
+                SceneShaderBindings.DENOISING_SPECULAR_RADIANCE_HIT_DISTANCE,
                 images.get(10)
         );
-        setImageWrite(writes.get(GpuSceneShaderBindings.DENOISING_DIFFUSE_MATERIAL_FACTOR), descriptorSet,
-                GpuSceneShaderBindings.DENOISING_DIFFUSE_MATERIAL_FACTOR, images.get(11));
-        setImageWrite(writes.get(GpuSceneShaderBindings.DENOISING_SPECULAR_MATERIAL_FACTOR), descriptorSet,
-                GpuSceneShaderBindings.DENOISING_SPECULAR_MATERIAL_FACTOR, images.get(12));
-        setImageWrite(writes.get(GpuSceneShaderBindings.RECONSTRUCTION_DEPTH), descriptorSet,
-                GpuSceneShaderBindings.RECONSTRUCTION_DEPTH, images.get(13));
-        setImageWrite(writes.get(GpuSceneShaderBindings.RECONSTRUCTION_MOTION_VECTORS), descriptorSet,
-                GpuSceneShaderBindings.RECONSTRUCTION_MOTION_VECTORS, images.get(14));
-        setImageWrite(writes.get(GpuSceneShaderBindings.RECONSTRUCTION_EXPOSURE), descriptorSet,
-                GpuSceneShaderBindings.RECONSTRUCTION_EXPOSURE, images.get(15));
+        setImageWrite(writes.get(SceneShaderBindings.DENOISING_DIFFUSE_MATERIAL_FACTOR), descriptorSet,
+                SceneShaderBindings.DENOISING_DIFFUSE_MATERIAL_FACTOR, images.get(11));
+        setImageWrite(writes.get(SceneShaderBindings.DENOISING_SPECULAR_MATERIAL_FACTOR), descriptorSet,
+                SceneShaderBindings.DENOISING_SPECULAR_MATERIAL_FACTOR, images.get(12));
+        setImageWrite(writes.get(SceneShaderBindings.RECONSTRUCTION_DEPTH), descriptorSet,
+                SceneShaderBindings.RECONSTRUCTION_DEPTH, images.get(13));
+        setImageWrite(writes.get(SceneShaderBindings.RECONSTRUCTION_MOTION_VECTORS), descriptorSet,
+                SceneShaderBindings.RECONSTRUCTION_MOTION_VECTORS, images.get(14));
+        setImageWrite(writes.get(SceneShaderBindings.RECONSTRUCTION_EXPOSURE), descriptorSet,
+                SceneShaderBindings.RECONSTRUCTION_EXPOSURE, images.get(15));
         VK10.vkUpdateDescriptorSets(device, writes, null);
     }
 

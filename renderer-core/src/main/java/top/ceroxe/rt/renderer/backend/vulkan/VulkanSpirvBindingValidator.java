@@ -27,10 +27,11 @@ import java.util.Set;
  * the descriptor forms expressible by the public API and rejects variable descriptor arrays or
  * unsupported storage classes rather than guessing a layout.</p>
  */
-final class VulkanSpirvBindingValidator {
+public final class VulkanSpirvBindingValidator {
     private static final int HEADER_BYTES = 20;
     private static final int OP_ENTRY_POINT = 15;
     private static final int OP_DECORATE = 71;
+    private static final int OP_MEMBER_DECORATE = 72;
     private static final int OP_TYPE_INT = 21;
     private static final int OP_TYPE_FLOAT = 22;
     private static final int OP_TYPE_IMAGE = 25;
@@ -55,6 +56,74 @@ final class VulkanSpirvBindingValidator {
     private static final int IMAGE_STORAGE = 2;
 
     private VulkanSpirvBindingValidator() {
+    }
+
+    /**
+     * Verifies a custom retained-scene binary against the fixed public scene descriptor ABI.
+     * @param spirv compiled SPIR-V bytes
+     * @param stage declared scene stage
+     * @param applicationBindings number of application storage buffers
+     * @param hdr whether binding one uses linear RGBA16F output
+     */
+    public static void requireSceneInterface(byte[] spirv, ShaderStage stage, int applicationBindings, boolean hdr) {
+        var code = ByteBuffer.wrap(spirv).order(java.nio.ByteOrder.nativeOrder());
+        ShaderModule module = new ShaderModule(new top.ceroxe.rt.renderer.api.RenderResourceId(0),
+                top.ceroxe.rt.renderer.api.ResourceVersion.initial(), stage, "main", code,
+                new top.ceroxe.rt.renderer.api.ShaderReflection(java.util.List.of(), 0,
+                        java.util.List.of(), java.util.List.of(), java.util.List.of()));
+        ParsedModule parsed = parse(code);
+        if (!parsed.entryPoints().contains(new EntryPoint("main", executionModel(stage)))) {
+            throw unsupported("scene shader entry point/stage mismatch", module);
+        }
+        Set<Integer> seen = new HashSet<>();
+        for (var variable : parsed.variables().entrySet()) {
+            int id = variable.getKey();
+            // Retained-scene pipeline layouts have no push constants.
+            if (variable.getValue().storageClass() == 9) throw unsupported("scene shaders have no push constants", module);
+            Integer group = parsed.descriptorSets().get(id);
+            Integer binding = parsed.bindings().get(id);
+            if (group == null && binding == null) continue;
+            if (group == null || group != 0 || binding == null || binding < 0
+                    || binding >= top.ceroxe.rt.renderer.api.SceneShaderBindings.APPLICATION_DATA + applicationBindings
+                    || !seen.add(binding)) {
+                throw unsupported("scene shader declares an unknown descriptor location", module);
+            }
+            ReflectedBinding actual = resolve(variable.getValue(), id, parsed, module);
+            boolean storage = binding >= 2 && binding <= 16 || binding == 22 || binding >= 33;
+            BindingType expected = binding == 0 ? BindingType.ACCELERATION_STRUCTURE
+                    : storage ? BindingType.READ_ONLY_STORAGE_BUFFER : BindingType.READ_WRITE_STORAGE_TEXTURE;
+            boolean compatible = expected == actual.type()
+                    || expected == BindingType.READ_WRITE_STORAGE_TEXTURE && actual.type() == BindingType.READ_ONLY_STORAGE_TEXTURE;
+            if (!compatible || actual.arrayCount() != 1) throw unsupported("scene descriptor type mismatch at binding " + binding, module);
+            if (!storage && binding != 0 && stage != ShaderStage.RAY_GENERATION) {
+                throw unsupported("scene output signals are visible only to ray generation", module);
+            }
+            if (actual.image() != null && (actual.image().dimension() != 1 || actual.image().arrayed() != 0
+                    || actual.image().multisampled() != 0)) {
+                throw unsupported("scene images must be non-array, single-sample 2D images", module);
+            }
+            if (actual.image() != null) {
+                ImageType image = actual.image();
+                if (!(parsed.types().get(image.scalarType()) instanceof ScalarType scalar)
+                        || scalar.width() != 32 || scalar.numericClass() != TextureFormat.NumericClass.FLOATING_POINT
+                        || image.depth() != 0 || image.format() != sceneImageFormat(binding, hdr)) {
+                    throw unsupported("scene image format mismatch at binding " + binding, module);
+                }
+                if ((binding == 17 || binding == 19) && actual.type() != BindingType.READ_ONLY_STORAGE_TEXTURE) {
+                    throw unsupported("scene history inputs must be readonly at binding " + binding, module);
+                }
+            }
+        }
+    }
+
+    private static int sceneImageFormat(int binding, boolean hdr) {
+        // SPIR-V ImageFormat enumerants: Rgba16f=2, R32f=3, Rgba8=4, Rg16f=7.
+        return switch (binding) {
+            case 1 -> hdr ? 2 : 4;
+            case 21, 31 -> 7;
+            case 24, 30, 32 -> 3;
+            default -> 2;
+        };
     }
 
     static void requireDeclaredInterface(ShaderModule module) {
@@ -173,6 +242,7 @@ final class VulkanSpirvBindingValidator {
         Map<Integer, Integer> descriptorSets = new HashMap<>();
         Map<Integer, Integer> bindings = new HashMap<>();
         Set<Integer> nonWritable = new HashSet<>();
+        Map<Integer, Set<Integer>> nonWritableMembers = new HashMap<>();
         Set<EntryPoint> entryPoints = new HashSet<>();
         for (int offset = start + HEADER_BYTES; offset < end;) {
             int instruction = code.getInt(offset);
@@ -199,6 +269,13 @@ final class VulkanSpirvBindingValidator {
                         }
                     }
                 }
+                case OP_MEMBER_DECORATE -> {
+                    requireWords(wordCount, 4, "OpMemberDecorate");
+                    if (word(code, offset, 3) == DECORATION_NON_WRITABLE) {
+                        nonWritableMembers.computeIfAbsent(word(code, offset, 1), ignored -> new HashSet<>())
+                                .add(word(code, offset, 2));
+                    }
+                }
                 case OP_TYPE_INT -> {
                     requireWords(wordCount, 4, "OpTypeInt");
                     int signedness = word(code, offset, 3);
@@ -215,7 +292,8 @@ final class VulkanSpirvBindingValidator {
                 case OP_TYPE_IMAGE -> {
                     requireWords(wordCount, 9, "OpTypeImage");
                     types.put(word(code, offset, 1), new ImageType(word(code, offset, 2), word(code, offset, 3),
-                            word(code, offset, 4), word(code, offset, 5), word(code, offset, 6), word(code, offset, 7)));
+                            word(code, offset, 4), word(code, offset, 5), word(code, offset, 6), word(code, offset, 7),
+                            word(code, offset, 8)));
                 }
                 case OP_TYPE_SAMPLER -> {
                     requireWords(wordCount, 2, "OpTypeSampler");
@@ -235,7 +313,7 @@ final class VulkanSpirvBindingValidator {
                 }
                 case OP_TYPE_STRUCT -> {
                     requireWords(wordCount, 2, "OpTypeStruct");
-                    types.put(word(code, offset, 1), new StructType());
+                    types.put(word(code, offset, 1), new StructType(wordCount - 2));
                 }
                 case OP_TYPE_ACCELERATION_STRUCTURE_KHR -> {
                     requireWords(wordCount, 2, "OpTypeAccelerationStructureKHR");
@@ -258,6 +336,12 @@ final class VulkanSpirvBindingValidator {
                 }
             }
             offset += wordCount * Integer.BYTES;
+        }
+        for (var members : nonWritableMembers.entrySet()) {
+            if (types.get(members.getKey()) instanceof StructType struct
+                    && struct.memberCount() > 0 && members.getValue().size() == struct.memberCount()) {
+                nonWritable.add(members.getKey());
+            }
         }
         return new ParsedModule(types, constants, variables, descriptorSets, bindings, nonWritable, entryPoints);
     }
@@ -306,7 +390,7 @@ final class VulkanSpirvBindingValidator {
                 image = resolved;
             }
             return new ReflectedBinding(
-                    descriptorType(variable.storageClass(), type, parsed.nonWritable().contains(variableId), module),
+                    descriptorType(variable.storageClass(), type, (parsed.nonWritable().contains(variableId) || parsed.nonWritable().contains(typeId)), module),
                     (int) arrayCount, image
             );
         }
@@ -406,7 +490,7 @@ final class VulkanSpirvBindingValidator {
     private record ScalarType(int width, TextureFormat.NumericClass numericClass) implements Type {
     }
 
-    private record ImageType(int scalarType, int dimension, int depth, int arrayed, int multisampled, int sampled) implements Type {
+    private record ImageType(int scalarType, int dimension, int depth, int arrayed, int multisampled, int sampled, int format) implements Type {
     }
 
     private record SamplerType() implements Type {
@@ -424,7 +508,7 @@ final class VulkanSpirvBindingValidator {
     private record RuntimeArrayType() implements Type {
     }
 
-    private record StructType() implements Type {
+    private record StructType(int memberCount) implements Type {
     }
 
     private record PointerType(int storageClass, int pointeeType) implements Type {

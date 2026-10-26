@@ -307,6 +307,7 @@ void StreamlineFrameGenerationExecutor::record(
     auto* nativeCommandBuffer = reinterpret_cast<sl::CommandBuffer*>(commandBuffer);
     const TaggedFrame metadata{
             frame.frameIndex,
+            &token,
             static_cast<std::uint32_t>(frame.inputColor.width),
             static_cast<std::uint32_t>(frame.inputColor.height),
             static_cast<std::uint32_t>(frame.depth.width),
@@ -552,13 +553,16 @@ void StreamlineFrameGenerationExecutor::disable() {
     if (optionsFailure != nullptr) std::rethrow_exception(optionsFailure);
 }
 
-void StreamlineFrameGenerationExecutor::releaseFrameTags(std::uint32_t frameIndex) {
-    if (getNewFrameToken_ == nullptr || setTagForFrame_ == nullptr) {
+void StreamlineFrameGenerationExecutor::releaseFrameTags(const TaggedFrame& frame) {
+    if (setTagForFrame_ == nullptr) {
         throw std::runtime_error("cannot release DLSS-G frame tags because Streamline is unavailable");
     }
-    sl::FrameToken* token = nullptr;
-    streamline::requireOk(getNewFrameToken_(token, &frameIndex), "slGetNewFrameToken(tag release)");
-    if (token == nullptr) throw std::runtime_error("tag-release frame token is null");
+    // slGetNewFrameToken is a rolling allocator, not a historical lookup. Re-requesting an
+    // older sequence advances its six-entry ring and can overwrite a live frame token.
+    // Retire using the exact token that originally published these frame-based tags.
+    if (frame.token == nullptr || static_cast<std::uint32_t>(*frame.token) != frame.sequence) {
+        throw std::runtime_error("DLSS-G frame token was recycled before its tags retired");
+    }
     std::array<sl::ResourceTag, 3> nullTags = {
             sl::ResourceTag(nullptr, sl::kBufferTypeHUDLessColor, sl::ResourceLifecycle::eValidUntilPresent),
             sl::ResourceTag(nullptr, sl::kBufferTypeDepth, sl::ResourceLifecycle::eValidUntilPresent),
@@ -566,7 +570,7 @@ void StreamlineFrameGenerationExecutor::releaseFrameTags(std::uint32_t frameInde
     };
     streamline::requireOk(
             setTagForFrame_(
-                    *token,
+                    *frame.token,
                     viewport_,
                     nullTags.data(),
                     static_cast<std::uint32_t>(nullTags.size()),
@@ -583,14 +587,14 @@ void StreamlineFrameGenerationExecutor::retireTaggedFramesThrough(std::uint32_t 
             ++frame;
             continue;
         }
-        releaseFrameTags(frame->sequence);
+        releaseFrameTags(*frame);
         frame = pendingTaggedFrames_.erase(frame);
     }
 }
 
 void StreamlineFrameGenerationExecutor::releaseAllFrameTags() {
     while (!pendingTaggedFrames_.empty()) {
-        releaseFrameTags(pendingTaggedFrames_.front().sequence);
+        releaseFrameTags(pendingTaggedFrames_.front());
         pendingTaggedFrames_.erase(pendingTaggedFrames_.begin());
     }
 }

@@ -178,7 +178,28 @@ final class RtShaderModuleCompiler {
             boolean shaderExecutionReorderingEnabled,
             RtEdgeSink edges
     ) {
-        String source = readExpandedUtf8Resource(resourcePath);
+        return compileSource(readExpandedUtf8Resource(resourcePath), resourcePath, shaderKind,
+                diagnosticGBufferEnabled, linearHdrOutput, shaderExecutionReorderingEnabled, edges);
+    }
+
+    static byte[] compileSceneSource(String source, String file, int kind, boolean hdr, boolean ser) {
+        String path = "assets/rtrenderer/shaders/gpuscene/" + file;
+        Matcher matcher = LOCAL_INCLUDE.matcher(source);
+        StringBuffer expanded = new StringBuffer(source.length());
+        while (matcher.find()) {
+            String included = resolveInclude(path, matcher.group(1));
+            if (!included.startsWith("assets/rtrenderer/shaders/gpuscene/")) {
+                throw new IllegalArgumentException("scene includes must belong to the scene shader library");
+            }
+            matcher.appendReplacement(expanded, Matcher.quoteReplacement(readExpandedUtf8Resource(included)));
+        }
+        matcher.appendTail(expanded);
+        return compileSource(expanded.toString(), path, kind, false, hdr, ser, RtEdgeSink.NOOP);
+    }
+
+    private static byte[] compileSource(String source, String resourcePath, int shaderKind,
+            boolean diagnosticGBufferEnabled, boolean linearHdrOutput,
+            boolean shaderExecutionReorderingEnabled, RtEdgeSink edges) {
         long compiler = Shaderc.shaderc_compiler_initialize();
         if (compiler == 0L) {
             throw new IllegalStateException("shaderc_compiler_initialize returned null");

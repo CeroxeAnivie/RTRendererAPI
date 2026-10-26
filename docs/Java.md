@@ -1,17 +1,17 @@
 # Java 开发指南
 
-RTRendererAPI 适合嵌入 Java 21 或更高版本的桌面或引擎进程。普通调用方只需要理解场景 revision、帧 sequence 和资源生命周期；Vulkan external memory、semaphore、queue-family ownership 等细节被隔离在显式专家扩展中。
+RTRendererAPI 适合嵌入 Java 25 或更高版本的桌面或引擎进程。普通调用方只需要理解场景 revision、帧 sequence 和资源生命周期；Vulkan external memory、semaphore、queue-family ownership 等细节被隔离在显式专家扩展中。
 
 公共模型是厂商中立、宿主无关的渲染契约：场景、相机、exact clip-space projection、资源所有权和能力状态均不包含游戏或引擎专用字段。Windows NVIDIA Vulkan 是当前发布实现，不是公共 API 的身份。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:4.2.2`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。Maven Central 是这些制品的唯一发布事实源；Git tag 只用于定位构建相同制品的源码。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:5.0.0`。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。本次 5.0.0 仅推送 GitHub 源码；从源码构建到本地暂存仓库后可验证上述完整依赖。
 
 ## 最小调用
 
-`RendererBootstrap.open(RendererPreset.CPU_READBACK)` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 21 或更高版本。4.1.0 已在 NVIDIA GeForce RTX 5080 Laptop GPU 上通过发布门与 procedural/triangle RT 验证，详见 [4.1.0 验证记录](quality/4.1.0-procedural-validation.md)。这些结果不代表全部兼容硬件或特定宿主集成都已验收。
+`Renderer.open()` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 25 或更高版本。当前行为、验收证据和已知限制见 [5.0.0 验证记录](5.0.0.md)，历史 procedural/triangle RT 证据见 [4.1.0 验证记录](quality/4.1.0-procedural-validation.md)。这些结果不代表全部兼容硬件或特定宿主集成都已验收。
 
 ```java
-try (Renderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
+try (Renderer renderer = Renderer.open()) {
     long revision = renderer.apply(SceneTransaction.empty(0L))
             .acceptedSceneRevision();
 
@@ -24,7 +24,7 @@ try (Renderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
             .minimumSceneRevision(revision)
             .build());
 
-    CpuFrame frame = renderer.awaitLatestCpuFrame(Duration.ofSeconds(5))
+    FrameSnapshot frame = renderer.awaitFrame(Duration.ofSeconds(5))
             .orElseThrow(() -> new IllegalStateException("frame timed out"));
 }
 ```
@@ -34,23 +34,23 @@ try (Renderer renderer = RendererBootstrap.open(RendererPreset.CPU_READBACK)) {
 - `Renderer` 是 `AutoCloseable`，必须使用 `try-with-resources` 或等价的确定性关闭。
 - 场景 revision 必须严格递增；帧的 `minimumSceneRevision` 防止旧场景被误当成新结果。
 - 帧 sequence 必须严格递增，不可重用。
-- `pollLatestCpuFrame()` 非阻塞；`awaitLatestCpuFrame(Duration)` 是有界等待，超时返回 `Optional.empty()`。
+- `pollFrame()` 非阻塞；`awaitFrame(Duration)` 是有界等待，超时返回 `Optional.empty()`。
 - `close()` 发起确定性关闭；存在外部 GPU lease 时用 `closeAsync()` 或 `awaitClosed(Duration)` 等待 native 资源真实释放。
 - API 不使用 `null` 表示“暂时无帧”，也不会无限等待。
 - 普通路径的 readback 使用 frame-slot 常驻异步 ring，不会逐帧创建 staging buffer 或执行 queue-idle；但把图像送到 CPU 本身仍有带宽成本。
 
 ## 通用命令语义：专家入口
 
-`Renderer` 是 3.0 的唯一公共入口。retained-scene 快速路径与版本化资源、严格有序的
+`Renderer` 是统一公共入口。retained-scene 快速路径与版本化资源、严格有序的
 `RenderCommandTransaction` 共存于同一实例；`RenderWorkload.Mode` 或被直接调用的提交方法明确
-选择语义，两种输入不会相互猜测或转换。普通调用方继续使用 `RendererPreset` 与
+选择语义，两种输入不会相互猜测或转换。普通调用方使用 `Renderer.open()` 与
 `SceneTransaction`。只有需要保留既有图形提交语义的宿主才应使用 command path。完整学习顺序、
 通用 RT 最小事务、SPIR-V/SBT 规则、错误处理和 retirement 边界见
 [通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)。
 
 ```java
-try (Renderer renderer = RendererBootstrap.open(
-        RendererConfig.expertBuilder().build())) {
+try (Renderer renderer = Renderer.open(
+        RendererConfig.builder().build())) {
     RenderingSemanticCapabilities capabilities = renderer.renderingSemanticCapabilities();
     if (!capabilities.feature(RenderingSemanticCapabilities.Feature.BUFFER_UPLOAD).executable()) {
         throw new IllegalStateException("当前后端不能执行所需的通用 buffer 路径");
@@ -77,7 +77,7 @@ try (Renderer renderer = RendererBootstrap.open(
 }
 ```
 
-能力必须逐项查询。`4.2.2` 的 Vulkan 后端真实执行版本化 buffer/texture、view/sampler、staging upload、buffer/texture copy、buffer-image copy、typed clear/barrier、SPIR-V compute/graphics pipeline、render pass、direct/multi/indirect draw，以及在设备支持时执行通用 BLAS/TLAS build、显式 RT shader group/SBT、AS descriptor 和 trace dispatch，并通过 fence evidence 公开完成状态。逻辑操作和 geometry shader 现在分别受设备 feature capability 约束；RT pipeline/SBT 可通过 `RetireRayTracingPipelineCommand` 按完成序列退休。`BindingType.COMBINED_IMAGE_SAMPLER` 必须使用一个 `BindingSet.CombinedImageSamplerValue`，Vulkan 会将同一 view/sampler 对写入一个 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`。接口布局会在 pipeline 创建前与 SPIR-V 逐项核对；错误的 entry point、stage、set/binding、数组长度或拆分 descriptor 声明均 fail-closed。RT 的 `RECORDED` 或 `OUTPUT_PRODUCED` 都不是显示可见证据；能力未标为 executable 的功能不能根据静态类型推断可用。
+能力必须逐项查询。`5.0.0` 的 Vulkan 后端真实执行版本化 buffer/texture、view/sampler、staging upload、buffer/texture copy、buffer-image copy、typed clear/barrier、SPIR-V compute/graphics pipeline、render pass、direct/multi/indirect draw，以及在设备支持时执行通用 BLAS/TLAS build、显式 RT shader group/SBT、AS descriptor 和 trace dispatch，并通过 fence evidence 公开完成状态。逻辑操作和 geometry shader 现在分别受设备 feature capability 约束；RT pipeline/SBT 可通过 `RetireRayTracingPipelineCommand` 按完成序列退休。`BindingType.COMBINED_IMAGE_SAMPLER` 必须使用一个 `BindingSet.CombinedImageSamplerValue`，Vulkan 会将同一 view/sampler 对写入一个 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`。接口布局会在 pipeline 创建前与 SPIR-V 逐项核对；错误的 entry point、stage、set/binding、数组长度或拆分 descriptor 声明均 fail-closed。RT 的 `RECORDED` 或 `OUTPUT_PRODUCED` 都不是显示可见证据；能力未标为 executable 的功能不能根据静态类型推断可用。
 
 ## 发布一个最小场景
 
@@ -258,17 +258,17 @@ MaterialAsset crackMaterial = MaterialAsset.builder(crackMaterialId)
 不要根据设备名称猜测能力。先枚举设备，再按稳定 identity 或显式 capability 选择：
 
 ```java
-List<RendererGpuDevice> devices = RendererBootstrap.availableGpuDevices();
+List<RendererGpuDevice> devices = Renderer.devices();
 RendererGpuDevice selected = devices.stream()
         .filter(device -> device.type() == RendererGpuDevice.Type.DISCRETE)
         .max(Comparator.comparingLong(RendererGpuDevice::deviceLocalMemoryBytes))
         .orElseThrow(() -> new IllegalStateException("No supported RTX GPU"));
 
-RendererConfig config = RendererConfig.expertBuilder()
+RendererConfig config = RendererConfig.builder()
         .gpuDevice(selected)
         .build();
 
-try (Renderer renderer = RendererBootstrap.open(config)) {
+try (Renderer renderer = Renderer.open(config)) {
     // publish scene and submit frames
 }
 ```
@@ -307,30 +307,30 @@ format/handle 的 memory 与 semaphore 方向，不能只检查 Vulkan extension
 | `rayTracingOptimizations(RayTracingOptimizationOptions)` | SER、RTXMU 均禁用 | 显式请求某项优化 |
 | `gpuDevice(RendererGpuDevice)` | 自动选择 | 必须绑定确定 GPU 时修改 |
 
-普通 CPU-readable 路径直接调用 `RendererBootstrap.open(RendererPreset.CPU_READBACK)`：该 preset 以 `PREFERRED`
+普通 CPU-readable 路径直接调用 `Renderer.open()`：该 preset 以 `PREFERRED`
 自动协商 SR、NRD、SER 与 RTXMU，不支持的实现保留各自的 renderer fallback。该路径没有
 swapchain ownership，因此不会请求 FG/MFG 或 display pacing，避免产生无法 retire 的
 presentation-time 输入。
 
 只通过官方 GPU presenter 消费帧时，调用
-`RendererBootstrap.open(RendererPreset.MANAGED_GPU_PRESENTATION)`；该 preset 关闭 CPU readback，并在普通自动质量
+`Renderer.open(RendererConfig.presentation())`；该 preset 关闭 CPU readback，并在普通自动质量
 策略之上请求 FG 2x 与 Reflex/PCL。MFG 永远不由普通 preset 自动开启，只能通过专家 builder
 显式选择 3x/4x。provider 始终检查 Vulkan feature/extension、SDK、驱动、真实 adapter 和
 资源合同，不能由 GPU 型号字符串猜测能力；显式 `REQUIRED` 也不允许被 fallback 吞掉。
 只使用专家 `VulkanFrameInterop`、但没有官方 managed presenter 的应用，应从
-`RendererPreset.CPU_READBACK.configuration().copyBuilder().cpuFrameReadbackEnabled(false)` 开始，
-再交给 `RendererBootstrap.open(...)`；不能错误借用会请求 swapchain frame generation 的
+`RendererConfig.recommended().copyBuilder().cpuFrameReadbackEnabled(false)` 开始，
+再交给 `Renderer.open(...)`；不能错误借用会请求 swapchain frame generation 的
 GPU-presenter preset。
 
-`RendererConfig.expertBuilder()` 是专家显式基线，所有 vendor 技术默认禁用；
-`RendererPreset.CPU_READBACK.configuration().copyBuilder()` 和
-`RendererPreset.MANAGED_GPU_PRESENTATION.configuration().copyBuilder()` 用于专家派生相应 preset。
-派生后的配置必须通过 `RendererBootstrap.open(...)` 打开。两种入口最终进入同一
+`RendererConfig.builder()` 是专家显式基线，所有 vendor 技术默认禁用；
+`RendererConfig.recommended().copyBuilder()` 和
+`RendererConfig.presentation().copyBuilder()` 用于专家派生相应 preset。
+派生后的配置必须通过 `Renderer.open(...)` 打开。两种入口最终进入同一
 capability negotiation 和执行状态机，不存在绕过生命周期约束的隐藏模式开关。下面是普通
 CPU-readable preset 的等价专家配置：
 
 ```java
-RendererConfig explicitProduction = RendererConfig.expertBuilder()
+RendererConfig explicitProduction = RendererConfig.builder()
         .temporalRendering(TemporalRenderingOptions.balanced())
         .frameReconstruction(FrameReconstructionOptions.recommended())
         .denoising(DenoisingOptions.recommended())
@@ -343,12 +343,12 @@ RendererConfig explicitProduction = RendererConfig.expertBuilder()
 ### 完整专家配置
 
 专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
-显式覆盖 4.2.2 中保留的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
+显式覆盖 5.0.0 中保留的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
 NRD 不可用时保留内建时域路径，FG/MFG 不可用时继续发布原生帧。SER 和 RTXMU 独立
 协商，某一项不支持不会阻止其他项启用。
 
 ```java
-RendererConfig expert = RendererConfig.expertBuilder()
+RendererConfig expert = RendererConfig.builder()
         .maxFramesInFlight(3)
         .validationEnabled(false)
         .gpuTimingsEnabled(true)
@@ -417,8 +417,8 @@ session 内完成，只有 `APPLIED` 是提交证据。
 
 ### 各能力的最短配置
 
-以下片段都只需要 `top.ceroxe.rt:renderer-api:4.2.2`。把对应 options 传给
-`RendererConfig.expertBuilder()` 即可；没有任何片段要求额外模块或手工 DLL。
+以下片段都只需要 `top.ceroxe.rt:renderer-api:5.0.0`。把对应 options 传给
+`RendererConfig.builder()` 即可；没有任何片段要求额外模块或手工 DLL。
 
 ```java
 // DLSS Super Resolution；不可用时允许 NIS。
@@ -611,7 +611,7 @@ GPU 名称、配置请求或 implementation 字符串反推状态：`ACTIVE` 需
 需要窗口显示但不想自行实现 Vulkan interop 的应用，使用官方 renderer-bound presenter：
 
 ```java
-try (Renderer renderer = RendererBootstrap.open(RendererPreset.MANAGED_GPU_PRESENTATION);
+try (Renderer renderer = Renderer.open(RendererConfig.presentation());
      VulkanFramePresenter presenter = VulkanFramePresenter.open(
              renderer,
              VulkanFramePresenterConfig.builder()

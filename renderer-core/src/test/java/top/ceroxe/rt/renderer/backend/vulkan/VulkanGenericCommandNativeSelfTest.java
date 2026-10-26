@@ -19,7 +19,7 @@ import top.ceroxe.rt.renderer.api.BufferUsage;
 import top.ceroxe.rt.renderer.api.ByteRange;
 import top.ceroxe.rt.renderer.api.ClearValue;
 import top.ceroxe.rt.renderer.api.CommandExecutionEvidence;
-import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
@@ -89,7 +89,7 @@ public final class VulkanGenericCommandNativeSelfTest {
         if (!capability.hardwareRayTracingReady()) {
             throw new IllegalStateException("generic command acceptance requires hardware RT: " + capability.summary());
         }
-        RendererConfig configuration = RendererConfig.expertBuilder()
+        RendererConfig configuration = RendererConfig.builder()
                 .frameReconstruction(FrameReconstructionOptions.disabled())
                 .frameGeneration(FrameGenerationOptions.disabled())
                 .denoising(DenoisingOptions.disabled())
@@ -196,7 +196,7 @@ public final class VulkanGenericCommandNativeSelfTest {
                     throw new IllegalStateException("generic graphics transaction was not recorded: " + graphics);
                 }
                 CommandExecutionEvidence rendered = await(session, 1L, CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED);
-                CpuFrame firstFrame = session.captureLatestCpuFrame(0L);
+                FrameSnapshot firstFrame = session.captureLatestCpuFrame(0L);
                 if (firstFrame == null || firstFrame.outputResource().orElseThrow().value() != color.id().value()
                         || firstFrame.width() != 64 || firstFrame.height() != 64 || allZero(firstFrame)) {
                     throw new IllegalStateException("generic graphics CPU readback was empty, black, or misidentified: " + firstFrame);
@@ -217,7 +217,7 @@ public final class VulkanGenericCommandNativeSelfTest {
                 CommandExecutionEvidence proceduralRendered = await(
                         session, 2L, CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED
                 );
-                CpuFrame proceduralFrame = session.captureLatestCpuFrame(1L);
+                FrameSnapshot proceduralFrame = session.captureLatestCpuFrame(1L);
                 if (proceduralFrame == null || proceduralFrame.outputResource().orElseThrow().value() != color.id().value()
                         || proceduralFrame.width() != 64 || proceduralFrame.height() != 64 || allZero(proceduralFrame)) {
                     throw new IllegalStateException("procedural graphics CPU readback was empty, black, or misidentified: " + proceduralFrame);
@@ -311,8 +311,8 @@ public final class VulkanGenericCommandNativeSelfTest {
                 .build();
     }
 
-    private static boolean allZero(CpuFrame frame) {
-        ByteBuffer pixels = frame.pixelsRgba8();
+    private static boolean allZero(FrameSnapshot frame) {
+        ByteBuffer pixels = frame.pixels();
         while (pixels.hasRemaining()) if (pixels.get() != 0) return false;
         return true;
     }

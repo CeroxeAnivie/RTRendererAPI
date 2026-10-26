@@ -1,5 +1,6 @@
 * [Home](Home)
 * [Java 开发指南](Java)
+* [可编程场景与原生帧](Programmable-Scenes)
 * [通用命令与硬件光追](Generic-Commands-and-Ray-Tracing)
 * [Java API 参考](Java-API-Reference)
 * [Vulkan 专家互操作](Vulkan-Interop)

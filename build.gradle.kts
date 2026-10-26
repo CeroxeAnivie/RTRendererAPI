@@ -43,9 +43,9 @@ subprojects {
 
     tasks.withType<JavaCompile>().configureEach {
         // JDK 25 runs the compiler, while the repository's immutable runtime contract remains
-        // Java 21. Keeping this literal at the root prevents -P properties from changing the
+        // Java 25. Keeping this literal at the root prevents -P properties from changing the
         // emitted class-file version for any production module, test source set, or demo.
-        options.release = 21
+        options.release = 25
     }
 
     dependencyLocking {
@@ -644,7 +644,7 @@ tasks.register<Exec>("verifyPublishedMavenConsumer") {
         "-PrendererVersion=${project.version}"
     )
     // The consumer is an isolated Gradle invocation and therefore cannot see root properties.
-    // Forward only the compiler toolchain; its own build fixes --release to Java 21.
+    // Forward only the compiler toolchain; its own build fixes --release to Java 25.
     doFirst {
         javaInstallationPaths.orNull?.let { paths ->
             args("-Porg.gradle.java.installations.paths=$paths")

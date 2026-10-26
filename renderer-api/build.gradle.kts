@@ -49,10 +49,7 @@ data class RuntimeModuleInventory(
 group = rootProject.group
 version = rootProject.version
 
-val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version")
-    .orElse(JavaVersion.current().majorVersion)
-    .get()
-    .toInt()
+val toolchainJavaVersion = 25
 dependencies {
     // Consumers declare one coordinate. The API remains compile-time independent from the
     // backend, while the published runtime graph supplies both the Vulkan core and the optional

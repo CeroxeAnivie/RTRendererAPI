@@ -1,5 +1,9 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
+import top.ceroxe.rt.renderer.api.RendererConfig;
+
+import top.ceroxe.rt.renderer.api.Renderer;
+
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.BeginRenderPassCommand;
@@ -15,7 +19,7 @@ import top.ceroxe.rt.renderer.api.RenderCommandTransaction;
 import top.ceroxe.rt.renderer.api.RenderPassDescriptor;
 import top.ceroxe.rt.renderer.api.RenderResourceId;
 import top.ceroxe.rt.renderer.api.RenderResourceTransaction;
-import top.ceroxe.rt.renderer.api.RendererPreset;
+
 import top.ceroxe.rt.renderer.api.ResourceGenerationKey;
 import top.ceroxe.rt.renderer.api.ResourceMutationKey;
 import top.ceroxe.rt.renderer.api.ResourceResidencyEvidence;
@@ -44,7 +48,7 @@ public final class VulkanEvidenceRetentionNativeSelfTest {
         var capability = VulkanRtCapabilityProbe.capture();
         require(capability.hardwareRayTracingReady(), capability.summary());
         var policy = new EvidenceRetentionPolicy(4, 4, 8, 3);
-        var config = RendererPreset.CPU_READBACK.configuration().copyBuilder()
+        var config = RendererConfig.recommended().copyBuilder()
                 .maxFramesInFlight(2).validationEnabled(true).evidenceRetention(policy).build();
         try (var scene = VulkanGpuSceneRenderingSession.open(capability, config, RendererRtDiagnostics.noop());
              var session = new VulkanGenericCommandSession(scene.genericCommandRuntime(), 2, policy)) {
@@ -158,7 +162,7 @@ public final class VulkanEvidenceRetentionNativeSelfTest {
                     + finalCommands + ", resourceLive=" + initialResources + "->" + finalResources
                     + ", statistics=" + session.retentionStatistics());
         }
-        try (var renderer = top.ceroxe.rt.renderer.api.RendererBootstrap.open(config)) {
+        try (var renderer = top.ceroxe.rt.renderer.api.Renderer.open(config)) {
             var access = renderer.extension(top.ceroxe.rt.renderer.api.RendererEvidenceAccess.class).orElseThrow();
             require(access.queryCommandExecutionEvidence(0).status() == EvidenceQuery.Status.UNKNOWN,
                     "new public session inherited command history");
@@ -255,7 +259,7 @@ public final class VulkanEvidenceRetentionNativeSelfTest {
             var frame = session.captureLatestCpuFrame(sequence - 1);
             require(frame != null && frame.frameSequence() == sequence && frame.width() == 8 && frame.height() == 8,
                     "readback identity/extent mismatch");
-            var bytes = frame.pixelsRgba8();
+            var bytes = frame.pixels();
             while (bytes.hasRemaining()) {
                 require(Byte.toUnsignedInt(bytes.get()) == 255 && bytes.get() == 0 && bytes.get() == 0
                         && Byte.toUnsignedInt(bytes.get()) == 255, "CPU output pixel is not red RGBA8");

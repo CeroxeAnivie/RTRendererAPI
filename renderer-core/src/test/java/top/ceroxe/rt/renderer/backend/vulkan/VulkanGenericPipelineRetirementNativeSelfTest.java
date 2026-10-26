@@ -17,7 +17,7 @@ import static top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericLogicOperationN
 public final class VulkanGenericPipelineRetirementNativeSelfTest {
     public static void main(String[] args) throws Exception {
         var capability = VulkanRtCapabilityProbe.capture();
-        var config = RendererConfig.expertBuilder().frameReconstruction(FrameReconstructionOptions.disabled())
+        var config = RendererConfig.builder().frameReconstruction(FrameReconstructionOptions.disabled())
                 .frameGeneration(FrameGenerationOptions.disabled()).denoising(DenoisingOptions.disabled())
                 .rayTracingOptimizations(RayTracingOptimizationOptions.disabled()).build();
         try (var device = VulkanDeviceRuntime.open(capability, RendererRtDiagnostics.noop(), true, true, config);
@@ -50,7 +50,7 @@ public final class VulkanGenericPipelineRetirementNativeSelfTest {
                 require(complete.rayTracingPipelines().equals(List.of(handle)), "completion lost exact handle");
                 var cpu = session.captureLatestCpuFrame(traceSequence - 1);
                 require(cpu != null && cpu.frameSequence() == traceSequence, "trace output missing");
-                ByteBuffer pixels = cpu.pixelsRgba8();
+                ByteBuffer pixels = cpu.pixels();
                 while (pixels.hasRemaining()) {
                     require(Byte.toUnsignedInt(pixels.get()) == 51 && Byte.toUnsignedInt(pixels.get()) == 102
                             && Byte.toUnsignedInt(pixels.get()) == 153 && Byte.toUnsignedInt(pixels.get()) == 255,

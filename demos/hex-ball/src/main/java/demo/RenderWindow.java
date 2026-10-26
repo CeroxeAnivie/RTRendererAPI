@@ -25,7 +25,7 @@ import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
-import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameView;
 
 final class RenderWindow implements AutoCloseable {
     private final JFrame frame;
@@ -87,7 +87,7 @@ final class RenderWindow implements AutoCloseable {
         return result.get();
     }
 
-    void publish(CpuFrame cpuFrame) {
+    void publish(FrameView cpuFrame) {
         panel.publish(cpuFrame);
     }
 
@@ -136,7 +136,7 @@ final class RenderWindow implements AutoCloseable {
             setFocusable(false);
         }
 
-        private void publish(CpuFrame cpuFrame) {
+        private void publish(FrameView cpuFrame) {
             BufferedImage current = latestImage.get();
             BufferedImage painting = paintingImage.get();
             BufferedImage destination = null;
@@ -224,9 +224,12 @@ final class RenderWindow implements AutoCloseable {
             }
         }
 
-        private static void toBufferedImage(CpuFrame frame, BufferedImage image, RenderStats stats) {
+        private static void toBufferedImage(FrameView frame, BufferedImage image, RenderStats stats) {
+            if (frame.format() != top.ceroxe.rt.renderer.api.TextureFormat.RGBA8_UNORM) {
+                throw new IllegalArgumentException("the Swing display requires explicit SDR RGBA8 output");
+            }
             int[] destination = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
-            ByteBuffer source = frame.pixelsRgba8().order(ByteOrder.LITTLE_ENDIAN);
+            ByteBuffer source = frame.pixels().order(ByteOrder.LITTLE_ENDIAN);
             IntBuffer packedPixels = source.asIntBuffer();
             int minimumLuminance = 255;
             int maximumLuminance = 0;

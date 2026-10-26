@@ -13,7 +13,7 @@ import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
 import java.util.Objects;
 
-/** Records bounded RGBA8 output readback into the owning generic submission. */
+/** Records bounded, format-preserving color output readback into the owning generic submission. */
 final class VulkanGenericCpuFrameReadback {
     private VulkanGenericCpuFrameReadback() { }
 
@@ -22,7 +22,7 @@ final class VulkanGenericCpuFrameReadback {
         return descriptor.dimension() == top.ceroxe.rt.renderer.api.TextureDimension.TEXTURE_2D
                 && descriptor.sampleCount() == 1 && descriptor.mipLevelCount() == 1
                 && descriptor.arrayLayerCount() == 1
-                && (descriptor.format() == TextureFormat.RGBA8_UNORM || descriptor.format() == TextureFormat.RGBA8_SRGB);
+                && descriptor.format().supports(TextureAspect.COLOR);
     }
 
     static long byteCount(VulkanGenericResourceRegistry.TextureRecord record) {
@@ -33,11 +33,12 @@ final class VulkanGenericCpuFrameReadback {
                 || descriptor.arrayLayerCount() != 1) {
             throw new IllegalArgumentException("generic CPU output requires a single-sample 2D texture");
         }
-        if (descriptor.format() != TextureFormat.RGBA8_UNORM
-                && descriptor.format() != TextureFormat.RGBA8_SRGB) {
-            throw new IllegalArgumentException("generic CPU output requires an RGBA8 texture format");
-        }
-        return Math.multiplyExact(Math.multiplyExact((long) descriptor.width(), descriptor.height()), 4L);
+        if (!descriptor.format().supports(TextureAspect.COLOR)) throw new IllegalArgumentException("CPU frame requires a color output");
+        return byteCount(descriptor.width(), descriptor.height(), descriptor.format());
+    }
+
+    static long byteCount(int width, int height, TextureFormat format) {
+        return Math.multiplyExact(Math.multiplyExact((long) width, height), format.bytesPerTexel());
     }
 
     static RtGpuBuffer createBuffer(VulkanDeviceRuntime device, VulkanGenericResourceRegistry.TextureRecord record) {

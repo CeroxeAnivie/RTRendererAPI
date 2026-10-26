@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.function.LongConsumer;
 import java.util.function.Supplier;
 import top.ceroxe.rt.renderer.api.CameraState;
-import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.FrameGenerationEvidence;
@@ -19,7 +19,7 @@ import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererDeviceException;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.api.RendererHealth;
-import top.ceroxe.rt.renderer.api.RendererPreset;
+
 import top.ceroxe.rt.renderer.api.RendererStateException;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.SceneInstance;
@@ -101,7 +101,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession initial = new TrackingSession();
       TrackingSession recovered = new TrackingSession();
       int[] opens = new int[]{0};
-      VulkanRendererHost renderer = new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), () ->
+      VulkanRendererHost renderer = new VulkanRendererHost(RendererConfig.recommended(), () ->
             opens[0]++ == 0 ? initial : recovered);
       initial.failNextFrameWith = deviceLost("syntheticRecoveredFrame");
       expect(RendererDeviceException.class, () -> renderer.submit(frame(0L, 0L)));
@@ -224,7 +224,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession session = new TrackingSession();
       TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
       VulkanRendererHost renderer = new VulkanRendererHost(
-              RendererPreset.CPU_READBACK.configuration(), session, presenterOpener
+              RendererConfig.recommended(), session, presenterOpener
       );
       renderer.apply(scene(0L));
       TrackingPresenter presenter = presenterOpener.openedBy(renderer, 2);
@@ -263,7 +263,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession session = new TrackingSession();
       TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
       VulkanRendererHost renderer = new VulkanRendererHost(
-              RendererPreset.CPU_READBACK.configuration(), session, presenterOpener
+              RendererConfig.recommended(), session, presenterOpener
       );
       renderer.apply(scene(0L));
       TrackingPresenter presenter = presenterOpener.openedBy(renderer, 1);
@@ -284,7 +284,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession session = new TrackingSession();
       TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
       VulkanRendererHost renderer = new VulkanRendererHost(
-            RendererPreset.CPU_READBACK.configuration(), session, presenterOpener
+            RendererConfig.recommended(), session, presenterOpener
       );
       renderer.apply(scene(0L));
       renderer.submit(frame(1L, 0L));
@@ -306,7 +306,7 @@ public final class VulkanRendererHostSelfTest {
       session.managedPresentationProducerLeadLimit = 1;
       TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
       VulkanRendererHost renderer = new VulkanRendererHost(
-              RendererPreset.CPU_READBACK.configuration(), session, presenterOpener
+              RendererConfig.recommended(), session, presenterOpener
       );
       renderer.apply(scene(0L));
       TrackingPresenter presenter = presenterOpener.openedBy(renderer, 4);
@@ -385,11 +385,15 @@ public final class VulkanRendererHostSelfTest {
       VulkanRendererHost renderer = renderer(session);
       renderer.apply(scene(0L));
       renderer.submit(frame(2L, 0L));
-      session.nextCpuFrame = CpuFrame.builder().frameSequence(2L).renderedSceneRevision(0L).extent(1, 1).pixelsRgba8(new byte[]{1, 2, 3, 4}).build();
-      CpuFrame frame = (CpuFrame)renderer.pollLatestCpuFrame().orElseThrow();
-      require(frame.frameSequence() == 2L && frame.pixelsRgba8().get(0) == 1, "host changed the managed CPU frame");
-      require(renderer.pollLatestCpuFrame().isEmpty(), "host returned the same CPU frame twice");
-      require(session.cpuFramePolls == 2, "host did not delegate CPU frame polling exactly once per call");
+      session.nextCpuFrame = FrameSnapshot.builder().frameSequence(2L).renderedSceneRevision(0L).extent(1, 1).pixels(new byte[]{1, 2, 3, 4}).build();
+      FrameSnapshot frame = (FrameSnapshot)renderer.pollFrame().orElseThrow();
+      require(frame.frameSequence() == 2L && frame.pixels().get(0) == 1, "host changed the managed CPU frame");
+      require(renderer.pollFrame().isEmpty(), "host returned the same CPU frame twice");
+      require(session.cpuFramePolls == 1, "host captured a frame even though no new completed sequence existed");
+      session.nextCpuFrame = FrameSnapshot.builder().frameSequence(1L).renderedSceneRevision(0L)
+              .extent(1, 1).pixels(new byte[]{9, 9, 9, 9}).build();
+      require(renderer.pollFrame().isEmpty() && session.nextCpuFrame == null,
+              "late completion regressed the retained-scene frame sequence");
       renderer.close();
    }
 
@@ -502,7 +506,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession session = new TrackingSession();
       int[] opens = new int[]{0};
       VulkanRendererHost renderer = new VulkanRendererHost(
-              RendererPreset.CPU_READBACK.configuration(),
+              RendererConfig.recommended(),
               () -> {
                  opens[0]++;
                  return session;
@@ -539,7 +543,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession initial = new TrackingSession();
       TrackingSession recovered = new TrackingSession();
       int[] opens = new int[]{0};
-      VulkanRendererHost renderer = new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), () -> {
+      VulkanRendererHost renderer = new VulkanRendererHost(RendererConfig.recommended(), () -> {
          int value10003 = opens[0];
          int value10000 = opens[0];
          opens[0] = value10003 + 1;
@@ -566,7 +570,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingPresenterOpener presenterOpener = new TrackingPresenterOpener();
       int[] opens = new int[]{0};
       VulkanRendererHost renderer = new VulkanRendererHost(
-              RendererPreset.CPU_READBACK.configuration(),
+              RendererConfig.recommended(),
               () -> opens[0]++ == 0 ? initial : recovered,
               presenterOpener
       );
@@ -597,7 +601,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession recovered = new TrackingSession();
       initial.closeFailuresRemaining = 1;
       int[] opens = new int[]{0};
-      VulkanRendererHost renderer = new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), () -> {
+      VulkanRendererHost renderer = new VulkanRendererHost(RendererConfig.recommended(), () -> {
          int value10003 = opens[0];
          int value10000 = opens[0];
          opens[0] = value10003 + 1;
@@ -616,7 +620,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession initial = new TrackingSession();
       TrackingSession recovered = new TrackingSession();
       int[] opens = new int[]{0};
-      VulkanRendererHost renderer = new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), () -> {
+      VulkanRendererHost renderer = new VulkanRendererHost(RendererConfig.recommended(), () -> {
          int value10003 = opens[0];
          int value10000 = opens[0];
          opens[0] = value10003 + 1;
@@ -634,7 +638,7 @@ public final class VulkanRendererHostSelfTest {
       TrackingSession initial = new TrackingSession();
       TrackingSession recovered = new TrackingSession();
       int[] opens = new int[]{0};
-      VulkanRendererHost renderer = new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), () -> {
+      VulkanRendererHost renderer = new VulkanRendererHost(RendererConfig.recommended(), () -> {
          int value10003 = opens[0];
          int value10000 = opens[0];
          opens[0] = value10003 + 1;
@@ -662,7 +666,7 @@ public final class VulkanRendererHostSelfTest {
    }
 
    private static VulkanRendererHost renderer(TrackingSession session) {
-      return new VulkanRendererHost(RendererPreset.CPU_READBACK.configuration(), session);
+      return new VulkanRendererHost(RendererConfig.recommended(), session);
    }
 
    private static SceneTransaction scene(long revision) {
@@ -719,7 +723,7 @@ public final class VulkanRendererHostSelfTest {
       private RuntimeException failNextFrameWith;
       private boolean returnWrongFrameAdmission;
       private GpuFrameLease nextFrame;
-      private CpuFrame nextCpuFrame;
+      private FrameSnapshot nextCpuFrame;
       private int cpuFramePolls;
       private VulkanSceneResidency.SceneChangeSet lastSceneChangeSet;
       private RenderingFeatureCapabilities featureCapabilities =
@@ -790,9 +794,24 @@ public final class VulkanRendererHostSelfTest {
          return acquired;
       }
 
-      public CpuFrame captureLatestCpuFrame(long afterFrameSequence) {
+      public void discardCpuFramesThrough(long sequence) {
+         if (nextCpuFrame != null && nextCpuFrame.frameSequence() <= sequence) nextCpuFrame = null;
+      }
+
+      public long latestCpuFrameSequence() {
+         return nextCpuFrame == null ? -1 : nextCpuFrame.frameSequence();
+      }
+
+      public boolean consumeLatestCpuFrame(long afterFrameSequence, top.ceroxe.rt.renderer.api.FrameConsumer consumer) {
+         FrameSnapshot frame = captureLatestCpuFrame(afterFrameSequence);
+         if (frame == null) return false;
+         consumer.accept(frame);
+         return true;
+      }
+
+      public FrameSnapshot captureLatestCpuFrame(long afterFrameSequence) {
          ++this.cpuFramePolls;
-         CpuFrame captured = this.nextCpuFrame;
+         FrameSnapshot captured = this.nextCpuFrame;
          if (captured != null && captured.frameSequence() > afterFrameSequence) {
             this.nextCpuFrame = null;
             return captured;

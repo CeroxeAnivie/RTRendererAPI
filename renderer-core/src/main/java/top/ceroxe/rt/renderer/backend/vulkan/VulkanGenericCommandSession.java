@@ -14,7 +14,7 @@ import org.lwjgl.vulkan.VkImageMemoryBarrier;
 import top.ceroxe.rt.renderer.api.BufferBarrier;
 import top.ceroxe.rt.renderer.api.BeginRenderPassCommand;
 import top.ceroxe.rt.renderer.api.CommandExecutionEvidence;
-import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.EvidenceLease;
 import top.ceroxe.rt.renderer.api.EvidenceQuery;
 import top.ceroxe.rt.renderer.api.EvidenceRetentionPolicy;
@@ -67,7 +67,10 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     private final boolean cpuFrameReadbackEnabled;
     private final VulkanGenericCpuFrameReadbackPool readbackPool;
     private final Map<Long, PendingSubmission> pending = new LinkedHashMap<>();
-    private final Map<Long, CpuFrame> completedCpuFrames = new LinkedHashMap<>();
+    private record CompletedCpuFrame(long sequence, top.ceroxe.rt.renderer.api.RenderResourceId output,
+            top.ceroxe.rt.renderer.api.TextureFormat format, int width, int height,
+            top.ceroxe.rt.renderer.rt.device.RtGpuBuffer buffer) {}
+    private CompletedCpuFrame completedCpuFrame;
     private final Map<Long, RuntimeException> cpuFrameFailures = new LinkedHashMap<>();
     private long latestCommandSequence = -1L;
     private long latestCompletedSequence = -1L;
@@ -95,7 +98,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             throw new IllegalArgumentException("maximumInFlightTransactions must be positive");
         }
         this.maximumInFlightTransactions = maximumInFlightTransactions;
-        this.readbackPool = new VulkanGenericCpuFrameReadbackPool(device, maximumInFlightTransactions);
+        this.readbackPool = new VulkanGenericCpuFrameReadbackPool(device, maximumInFlightTransactions + 1);
         this.resources = new VulkanGenericResourceRegistry(device, retention);
         this.computePipelines = new VulkanGenericComputePipelines(device, resources);
         this.graphicsPipelines = new VulkanGenericGraphicsPipelines(
@@ -354,21 +357,41 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 resources.evictions(), commandEvidence.budgetRejections(), resources.budgetRejections());
     }
 
-    /** Returns the newest completed generic output snapshot after the caller's sequence. */
-    CpuFrame captureLatestCpuFrame(long afterFrameSequence) {
-        if (afterFrameSequence < -1L) {
-            throw new IllegalArgumentException("frame sequence must not be below -1");
+    long latestCpuFrameSequence() {
+        requireOpen(); pump();
+        if (terminalReason != null) throw new IllegalStateException(terminalDetail);
+        long sequence = completedCpuFrame == null ? -1 : completedCpuFrame.sequence();
+        for (long failed : cpuFrameFailures.keySet()) sequence = Math.max(sequence, failed);
+        return sequence;
+    }
+
+    FrameSnapshot captureLatestCpuFrame(long afterFrameSequence) {
+        latestCpuFrameSequence();
+        FrameSnapshot[] result = {null};
+        consumeLatestCpuFrame(afterFrameSequence, view -> result[0] = FrameSnapshot.copyOf(view));
+        return result[0];
+    }
+
+    void discardCpuFramesThrough(long sequence) {
+        cpuFrameFailures.keySet().removeIf(failed -> failed <= sequence);
+        if (completedCpuFrame != null && completedCpuFrame.sequence() <= sequence) {
+            releaseReadback(completedCpuFrame.buffer());
+            completedCpuFrame = null;
         }
-        requireOpen();
-        pump();
-        for (Map.Entry<Long, RuntimeException> failure : cpuFrameFailures.entrySet()) {
-            if (failure.getKey() > afterFrameSequence) throw failure.getValue();
-        }
-        CpuFrame result = null;
-        for (Map.Entry<Long, CpuFrame> entry : completedCpuFrames.entrySet()) {
-            if (entry.getKey() > afterFrameSequence) result = entry.getValue();
-        }
-        return result;
+    }
+
+    boolean consumeLatestCpuFrame(long afterFrameSequence, top.ceroxe.rt.renderer.api.FrameConsumer consumer) {
+        Objects.requireNonNull(consumer, "consumer"); requireOpen();
+        if (afterFrameSequence < -1) throw new IllegalArgumentException("invalid prior frame sequence");
+        for (var failure : cpuFrameFailures.entrySet()) if (failure.getKey() > afterFrameSequence) throw failure.getValue();
+        CompletedCpuFrame frame = completedCpuFrame;
+        if (frame == null || frame.sequence() <= afterFrameSequence) return false;
+        try {
+            frame.buffer().readMapped(VulkanGenericCpuFrameReadback.byteCount(frame.width(), frame.height(), frame.format()), pixels ->
+                    consumer.accept(new VulkanCpuFrameView(frame.sequence(), 0, java.util.Optional.of(frame.output()),
+                            frame.width(), frame.height(), frame.format(), pixels)));
+        } finally { completedCpuFrame = null; releaseReadback(frame.buffer()); }
+        return true;
     }
 
     VulkanGenericCompositionSource requireCompositionSource(top.ceroxe.rt.renderer.api.ResourceMutationKey mutation) {
@@ -437,22 +460,15 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                     try {
                         VulkanGenericResourceRegistry.TextureRecord outputRecord = current.outputRecord();
                         if (!VulkanGenericCpuFrameReadback.supports(outputRecord)) {
-                            throw new UnsupportedOperationException("GPU output completed; CpuFrame RGBA8 cannot represent this output texture format or shape");
+                            throw new UnsupportedOperationException("GPU output completed; frame readback requires a color 2D, single-sample, single-mip, single-layer output texture");
                         }
                         if (current.readback() == null) {
                             throw new IllegalStateException("generic output readback was not admitted");
                         }
-                        byte[] pixels = current.readback().readBytes(VulkanGenericCpuFrameReadback.byteCount(outputRecord));
-                        CpuFrame frame = CpuFrame.builder()
-                                .frameSequence(current.sequence())
-                                .renderedSceneRevision(0L)
-                                .outputResource(current.outputResource().orElseThrow())
-                                .extent(outputRecord.descriptor().width(), outputRecord.descriptor().height())
-                                .pixelsRgba8(pixels)
-                                .build();
-                        completedCpuFrames.put(current.sequence(), frame);
-                        while (completedCpuFrames.size() > maximumInFlightTransactions) {
-                            completedCpuFrames.remove(completedCpuFrames.keySet().iterator().next());
+                        if (completedCpuFrame == null || completedCpuFrame.sequence() < current.sequence()) {
+                            if (completedCpuFrame != null) releaseReadback(completedCpuFrame.buffer());
+                            completedCpuFrame = new CompletedCpuFrame(current.sequence(), current.outputResource().orElseThrow(),
+                                    outputRecord.descriptor().format(), outputRecord.descriptor().width(), outputRecord.descriptor().height(), current.readback());
                         }
                     } catch (RuntimeException readbackFailure) {
                         if (readbackFailure instanceof RendererDeviceException) {
@@ -484,7 +500,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 return;
             } finally {
                 closeStaging(current.staging());
-                releaseReadback(current.readback());
+                if (completedCpuFrame == null || completedCpuFrame.buffer() != current.readback()) releaseReadback(current.readback());
                 iterator.remove();
                 try {
                     current.accelerationStructures().close();
@@ -1288,7 +1304,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             throw closeFailure;
         }
         commandEvidence.close();
-        completedCpuFrames.clear();
+        completedCpuFrame = null;
         cpuFrameFailures.clear();
         failure = closeCollecting(failure, computePipelines);
         failure = closeCollecting(failure, graphicsPipelines);

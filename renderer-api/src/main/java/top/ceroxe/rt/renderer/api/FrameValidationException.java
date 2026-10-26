@@ -20,6 +20,8 @@ public final class FrameValidationException extends RendererException {
     public enum Reason {
         /** A REQUIRED temporal feature cannot consume an unknown depth projection. */
         MISSING_DEPTH_PROJECTION,
+        /** Application data does not match the declared scene shader interface or device range. */
+        INVALID_SHADER_DATA,
         /** The requested output exceeds the selected device's two-dimensional image limit. */
         OUTPUT_EXTENT_EXCEEDS_DEVICE_LIMIT,
         /** The negotiated internal extent exceeds the selected device's ray-dispatch limit. */

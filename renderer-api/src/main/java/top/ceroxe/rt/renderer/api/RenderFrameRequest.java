@@ -9,6 +9,7 @@ import java.util.Set;
  * Immutable render request assembled through a stable semantic builder.
  */
 public final class RenderFrameRequest {
+    private final java.util.List<ResourceData> shaderData;
     private final long sequence;
     private final long minimumSceneRevision;
     private final int width;
@@ -34,6 +35,7 @@ public final class RenderFrameRequest {
         if (pixels > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("frame extent exceeds supported pixel address space");
         }
+        shaderData = java.util.List.copyOf(builder.shaderData);
         sequence = builder.sequence;
         minimumSceneRevision = builder.minimumSceneRevision;
         width = builder.width;
@@ -75,6 +77,13 @@ public final class RenderFrameRequest {
     public Builder toBuilder() {
         return new Builder(this);
     }
+
+    /**
+     * Returns the immutable application storage-buffer values in declared binding order.
+     *
+     * @return immutable, possibly empty shader data
+     */
+    public java.util.List<ResourceData> shaderData() { return shaderData; }
 
     /**
      * Returns the exact frame sequence.
@@ -208,6 +217,7 @@ public final class RenderFrameRequest {
                 && textureSampling.equals(request.textureSampling)
                 && antiAliasing.equals(request.antiAliasing)
                 && depthProjection.equals(request.depthProjection)
+                && shaderData.equals(request.shaderData)
                 && primitiveBatch.equals(request.primitiveBatch)
                 && temporalHistoryResets.equals(request.temporalHistoryResets);
     }
@@ -217,7 +227,7 @@ public final class RenderFrameRequest {
         return Objects.hash(
                 sequence, minimumSceneRevision, width, height, camera, environment,
                 lightmap, fog, textureSampling, antiAliasing, depthProjection, primitiveBatch,
-                temporalHistoryResets
+                temporalHistoryResets, shaderData
         );
     }
 
@@ -235,6 +245,7 @@ public final class RenderFrameRequest {
                 + ", antiAliasing=" + antiAliasing
                 + ", depthProjection=" + depthProjection
                 + ", primitiveBatch=" + primitiveBatch
+                + ", shaderData=" + shaderData
                 + ", temporalHistoryResets=" + temporalHistoryResets + ']';
     }
 
@@ -242,6 +253,7 @@ public final class RenderFrameRequest {
      * Single-thread-confined builder for one immutable frame request.
      */
     public static final class Builder {
+        private java.util.List<ResourceData> shaderData = java.util.List.of();
         private final long sequence;
         private final int width;
         private final int height;
@@ -265,6 +277,7 @@ public final class RenderFrameRequest {
         }
 
         private Builder(RenderFrameRequest source) {
+            shaderData = source.shaderData;
             sequence = source.sequence;
             width = source.width;
             height = source.height;
@@ -278,6 +291,17 @@ public final class RenderFrameRequest {
             depthProjection = source.depthProjection;
             primitiveBatch = source.primitiveBatch;
             temporalHistoryResets.addAll(source.temporalHistoryResets);
+        }
+
+        /**
+         * Supplies the exact application storage-buffer values declared by the scene shader program.
+         *
+         * @param values immutable payloads in declared binding order
+         * @return this builder
+         */
+        public Builder shaderData(java.util.List<ResourceData> values) {
+            shaderData = java.util.List.copyOf(Objects.requireNonNull(values, "values"));
+            return this;
         }
 
         /**

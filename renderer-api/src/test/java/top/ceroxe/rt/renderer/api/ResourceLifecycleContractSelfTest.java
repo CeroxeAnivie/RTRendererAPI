@@ -110,11 +110,11 @@ public final class ResourceLifecycleContractSelfTest {
         expect(IllegalArgumentException.class, () -> new EvidenceRetentionPolicy(1, 1, 0, 1));
         expect(IllegalArgumentException.class, () -> new EvidenceRetentionPolicy(1, 1, 1, 0));
         var tiny = new EvidenceRetentionPolicy(2, 3, 4, 5);
-        var configuration = RendererConfig.expertBuilder().evidenceRetention(tiny).build();
+        var configuration = RendererConfig.builder().evidenceRetention(tiny).build();
         require(configuration.copyBuilder().build().equals(configuration)
                 && configuration.evidenceRetention().equals(tiny), "configuration copy lost retention policy");
-        require(!configuration.equals(RendererConfig.expertBuilder().build()), "config equality ignored evidence policy");
-        expect(NullPointerException.class, () -> RendererConfig.expertBuilder().evidenceRetention(null));
+        require(!configuration.equals(RendererConfig.builder().build()), "config equality ignored evidence policy");
+        expect(NullPointerException.class, () -> RendererConfig.builder().evidenceRetention(null));
         require(EvidenceQuery.available("snapshot").evidence().orElseThrow().equals("snapshot"), "query lost evidence");
         for (var status : EvidenceQuery.Status.values()) {
             if (status != EvidenceQuery.Status.AVAILABLE) {

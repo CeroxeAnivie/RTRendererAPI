@@ -5,7 +5,7 @@ import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.BeginRenderPassCommand;
 import top.ceroxe.rt.renderer.api.ClearValue;
 import top.ceroxe.rt.renderer.api.CommandExecutionEvidence;
-import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.FrameCompositionPlan;
 import top.ceroxe.rt.renderer.api.FrameCompositionRequest;
 import top.ceroxe.rt.renderer.api.FrameOutputFormat;
@@ -18,7 +18,7 @@ import top.ceroxe.rt.renderer.api.ResourceGenerationKey;
 import top.ceroxe.rt.renderer.api.ResourceMutationKey;
 import top.ceroxe.rt.renderer.api.ResourceTransactionEvidence;
 import top.ceroxe.rt.renderer.api.RendererConfig;
-import top.ceroxe.rt.renderer.api.RendererPreset;
+
 import top.ceroxe.rt.renderer.api.StoreOp;
 import top.ceroxe.rt.renderer.api.TextureAspect;
 import top.ceroxe.rt.renderer.api.TextureDimension;
@@ -43,7 +43,7 @@ public final class VulkanFrameCompositionNativeSelfTest {
     public static void main(String[] arguments) throws Exception {
         VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
         require(capability.hardwareRayTracingReady(), "composition smoke requires hardware RT: " + capability.summary());
-        RendererConfig configuration = RendererPreset.CPU_READBACK.configuration().copyBuilder()
+        RendererConfig configuration = RendererConfig.recommended().copyBuilder()
                 .maxFramesInFlight(2)
                 .validationEnabled(true)
                 .gpuTimingsEnabled(true)
@@ -92,9 +92,9 @@ public final class VulkanFrameCompositionNativeSelfTest {
             require(completed.outcome() == top.ceroxe.rt.renderer.api.FrameCompositionEvidence.Outcome.GPU_COMPLETED,
                     "composition did not reach GPU_COMPLETED: " + completed);
 
-            CpuFrame frame = awaitCpuFrame(scene);
+            FrameSnapshot frame = awaitCpuFrame(scene);
             byte[] pixels = new byte[frame.byteCount()];
-            frame.pixelsRgba8().get(pixels);
+            frame.pixels().get(pixels);
             int red = Byte.toUnsignedInt(pixels[0]);
             int green = Byte.toUnsignedInt(pixels[1]);
             int blue = Byte.toUnsignedInt(pixels[2]);
@@ -141,10 +141,10 @@ public final class VulkanFrameCompositionNativeSelfTest {
         throw new IllegalStateException("composition timed out");
     }
 
-    private static CpuFrame awaitCpuFrame(VulkanGpuSceneRenderingSession scene) throws Exception {
+    private static FrameSnapshot awaitCpuFrame(VulkanGpuSceneRenderingSession scene) throws Exception {
         long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
         while (System.nanoTime() < deadline) {
-            CpuFrame frame = scene.captureLatestCpuFrame(-1L);
+            FrameSnapshot frame = scene.captureLatestCpuFrame(-1L);
             if (frame != null) return frame;
             Thread.sleep(1L);
         }

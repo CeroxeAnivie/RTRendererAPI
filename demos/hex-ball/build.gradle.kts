@@ -9,14 +9,11 @@ plugins {
 description = "Interactive hex-ball sample and GPU smoke workload for RTRendererAPI."
 
 dependencies {
-    // Resolve exactly as an external consumer does from Maven Central.
-    implementation("${rootProject.group}:renderer-api:${rootProject.version}")
+    implementation(project(":renderer-api"))
+    runtimeOnly(project(":renderer-nvidia"))
 }
 
-val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version")
-    .orElse(JavaVersion.current().majorVersion)
-    .get()
-    .toInt()
+val toolchainJavaVersion = 25
 val unsafeAccessJvmArg = if (toolchainJavaVersion >= 24) {
     "--sun-misc-unsafe-memory-access=allow"
 } else {
@@ -37,16 +34,8 @@ application {
     ) + listOfNotNull(unsafeAccessJvmArg)
 }
 
-/*
- * Dependency resolution remains Central-first in settings.gradle.kts. When the current
- * version is not published there yet, these task edges materialize the exact same coordinates
- * in build/repository before Gradle resolves the demo runtime. The localBuildFallback repository
- * then supplies only the missing coordinate; it is a release bootstrap path, not a second API
- * or a replacement for Central.
- */
-tasks.named("run") {
-    dependsOn(rootProject.tasks.named("publishAllToLocalStagingRepository"))
-}
+// The in-repository demo uses the current modules. verifyPublishedMavenConsumer independently
+// proves the staged Maven graph without making the demo depend on its own publication.
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
@@ -98,8 +87,6 @@ tasks.jar {
 val shadowJar = tasks.register<Jar>("shadowJar") {
     group = "build"
     description = "Builds the self-contained executable hex-ball demo from the released runtime."
-    // Keep the same Central-first/local-build-fallback contract as the interactive run task.
-    dependsOn(rootProject.tasks.named("publishAllToLocalStagingRepository"))
     dependsOn(tasks.classes, configurations.runtimeClasspath)
     archiveBaseName.set("RTRendererAPI-HexBallDemo")
     archiveClassifier.set("")
@@ -127,6 +114,14 @@ val physicsSelfTest = tasks.register<JavaExec>("physicsSelfTest") {
     dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("demo.HexPhysicsSelfTest")
+}
+
+tasks.register<JavaExec>("programmableSceneDemo") {
+    group = "application"
+    description = "Runs the public programmable-scene, application-buffer and native HDR example."
+    dependsOn(tasks.classes)
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("demo.ProgrammableSceneDemo")
 }
 
 val featureIntegrationSelfTest = tasks.register<JavaExec>("featureIntegrationSelfTest") {

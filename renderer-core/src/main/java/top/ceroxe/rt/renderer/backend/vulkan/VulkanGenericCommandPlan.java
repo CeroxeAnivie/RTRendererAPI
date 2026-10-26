@@ -41,7 +41,6 @@ import top.ceroxe.rt.renderer.api.RenderPassDescriptor;
 import top.ceroxe.rt.renderer.api.ScissorRectangle;
 import top.ceroxe.rt.renderer.api.SetScissorCommand;
 import top.ceroxe.rt.renderer.api.SetViewportCommand;
-import top.ceroxe.rt.renderer.api.SetPushConstantsCommand;
 import top.ceroxe.rt.renderer.api.Viewport;
 import top.ceroxe.rt.renderer.api.TraceRaysCommand;
 

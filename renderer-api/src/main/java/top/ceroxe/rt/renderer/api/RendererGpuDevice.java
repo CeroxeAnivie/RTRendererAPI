@@ -7,7 +7,7 @@ import java.util.Objects;
  * hardware ray-tracing admission contract.
  *
  * <p>The pair {@code (backendId, stableId)} is the selection identity. Callers must pass the
- * object returned by {@link RendererBootstrap#availableGpuDevices()} back through
+ * object returned by {@link Renderer#devices()} back through
  * {@link RendererConfig.Builder#gpuDevice(RendererGpuDevice)}; names and enumeration
  * indices are deliberately not selection keys because both can change or collide.</p>
  *

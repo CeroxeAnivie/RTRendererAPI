@@ -423,6 +423,31 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         return Objects.requireNonNull(activePresentMode, "swapchain present mode");
     }
 
+    /** Internal acceptance diagnostics; querying focus never changes window activation. */
+    boolean focused() {
+        requireOwnerAndOpen();
+        return GLFW.glfwGetWindowAttrib(window, GLFW.GLFW_FOCUSED) == GLFW.GLFW_TRUE;
+    }
+
+    /** Windows activation is independent of GLFW's cached focus notifications. */
+    boolean foreground() {
+        requireOwnerAndOpen();
+        try {
+            java.lang.foreign.MemorySegment active = (java.lang.foreign.MemorySegment)
+                    ForegroundWindow.GET.invokeExact();
+            return active.address() == org.lwjgl.glfw.GLFWNativeWin32.glfwGetWin32Window(window);
+        } catch (Throwable failure) {
+            throw new IllegalStateException("cannot query presenter foreground state", failure);
+        }
+    }
+
+    private static final class ForegroundWindow {
+        private static final java.lang.invoke.MethodHandle GET = java.lang.foreign.Linker.nativeLinker()
+                .downcallHandle(java.lang.foreign.SymbolLookup.libraryLookup("user32.dll",
+                        java.lang.foreign.Arena.global()).find("GetForegroundWindow").orElseThrow(),
+                        java.lang.foreign.FunctionDescriptor.of(java.lang.foreign.ValueLayout.ADDRESS));
+    }
+
     @Override
     public PerformanceSnapshot performanceSnapshot() {
         requireOwnerAndOpen();

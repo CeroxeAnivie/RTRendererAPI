@@ -18,10 +18,7 @@ abstract class NvidiaStreamlineNativeGateLock : BuildService<BuildServiceParamet
 group = rootProject.group
 version = rootProject.version
 
-val toolchainJavaVersion = rootProject.providers.gradleProperty("java_toolchain_version")
-    .orElse(JavaVersion.current().majorVersion)
-    .get()
-    .toInt()
+val toolchainJavaVersion = 25
 val unsafeAccessJvmArg = if (toolchainJavaVersion >= 24) {
     "--sun-misc-unsafe-memory-access=allow"
 } else {
@@ -567,7 +564,7 @@ tasks.register<JavaExec>("nvidiaStreamlineFrameGenerationNativeSelfTest") {
 
 tasks.register<JavaExec>("nvidiaStreamlineMultiFrameGenerationNativeSelfTest") {
     group = "verification"
-    description = "Presents real GPUScene frames through Streamline MFG and verifies a true 3x configuration."
+    description = "Requires sustained real Streamline MFG 3x output in a foreground presentation window."
     dependsOn(tasks.named("compileNvidiaBridge"), tasks.named("testClasses"))
     val cmake = cmakeExecutableProperty
     val nrdSdkRoot = nrdSdkRootProperty
@@ -747,7 +744,7 @@ val compileStreamlineFrameSupportTest = tasks.register<Exec>("compileStreamlineF
 
 tasks.register<Exec>("nvidiaStreamlineFrameSupportNativeSelfTest") {
     group = "verification"
-    description = "Checks native Streamline constants and SDK failures without loading the GPU runtime."
+    description = "Checks native constants, SDK failures, and historical frame-token retirement without a GPU."
     dependsOn(compileStreamlineFrameSupportTest)
     doFirst {
         executable(nativeBridgeBuildDirectory.get().file("Release/streamline_frame_support_test.exe").asFile)

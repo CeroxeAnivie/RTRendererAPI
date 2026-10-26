@@ -15,7 +15,7 @@ import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 import top.ceroxe.rt.renderer.api.AffineTransform;
 import top.ceroxe.rt.renderer.api.AntiAliasingState;
 import top.ceroxe.rt.renderer.api.CameraState;
-import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
@@ -26,7 +26,7 @@ import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
-import top.ceroxe.rt.renderer.api.RendererPreset;
+
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Feature;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities.Status;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
@@ -63,7 +63,7 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
    public static void main(String[] arguments) throws Exception {
       VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
       require(capability.hardwareRayTracingReady(), "complex GPUScene gate requires hardware RT: " + capability.summary());
-      RendererConfig configuration = RendererConfig.expertBuilder()
+      RendererConfig configuration = RendererConfig.builder()
               .maxFramesInFlight(3)
               .validationEnabled(true)
               .gpuTimingsEnabled(true)
@@ -100,12 +100,12 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
          ImageStatistics statistics = statistics(diagnostic.rgba8());
          require(statistics.nonBlackPixels() > 86400L, "complex scene did not produce enough visible coverage: " + statistics);
          require(statistics.uniqueSampledColors() >= 24, "complex scene lost material/light variation: " + String.valueOf(statistics));
-         CpuFrame cpuFrame = awaitCpuFrame(renderer);
+         FrameSnapshot cpuFrame = awaitCpuFrame(renderer);
          require(cpuFrame.frameSequence() == 0L && cpuFrame.renderedSceneRevision() == 0L && cpuFrame.width() == 960 && cpuFrame.height() == 540, "managed CPU frame lost rendered generation metadata");
          byte[] cpuPixels = new byte[cpuFrame.byteCount()];
-         cpuFrame.pixelsRgba8().get(cpuPixels);
+         cpuFrame.pixels().get(cpuPixels);
          require(statistics(cpuPixels).equals(statistics), "managed CPU frame pixels diverged from the trusted readback path");
-         require(renderer.pollLatestCpuFrame().isEmpty(), "managed CPU frame path returned the same completed sequence twice");
+         require(renderer.pollFrame().isEmpty(), "managed CPU frame path returned the same completed sequence twice");
          require(renderer.pollLatestFrame() instanceof VulkanFrameInterop.FrameNotReady,
                  "CPU snapshot retained an already-consumed expert GPU lease");
          Path png = Path.of("build", "reports", "gpuscene-complex-scene.png").toAbsolutePath().normalize();
@@ -153,7 +153,7 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
 
    private static void verifyLinearHdrOutput(VulkanRtCapabilityProbe.Result capability) throws Exception {
       require(capability.preferredDevice().linearHdrRgba16fOutput(), "selected target GPU does not expose exportable RGBA16F storage images");
-      RendererConfig configuration = RendererPreset.CPU_READBACK.configuration().copyBuilder().frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).build();
+      RendererConfig configuration = RendererConfig.recommended().copyBuilder().frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).build();
       VulkanGpuSceneRenderingSession session = VulkanGpuSceneRenderingSession.open(capability, configuration, RendererRtDiagnostics.noop());
       VulkanRendererHost renderer = new VulkanRendererHost(configuration, session);
 
@@ -162,8 +162,9 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
          awaitFrameAdmission(renderer, frameRequest(0L, 0L, AntiAliasingState.multisampled(4)));
          VulkanGpuSceneRenderingSession.DiagnosticFrame diagnostic = awaitDiagnostic(session);
          require(statistics(diagnostic.rgba8()).nonBlackPixels() > 86400L, "HDR managed readback lost visible scene coverage");
-         CpuFrame cpuFrame = awaitCpuFrame(renderer);
-         require(cpuFrame.byteCount() == Math.multiplyExact(Math.multiplyExact(960, 540), 4), "HDR renderer did not preserve the managed RGBA8 CpuFrame contract");
+         FrameSnapshot cpuFrame = awaitCpuFrame(renderer);
+         require(cpuFrame.byteCount() == Math.multiplyExact(Math.multiplyExact(960, 540), 8)
+                 && cpuFrame.format() == top.ceroxe.rt.renderer.api.TextureFormat.RGBA16_FLOAT, "HDR readback did not preserve native RGBA16F bytes");
          awaitFrameAdmission(renderer, frameRequest(1L, 0L, AntiAliasingState.multisampled(4)));
          GpuFrameLease lease = awaitLease(renderer);
 
@@ -288,13 +289,13 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
       throw new AssertionError("completed public GPU frame lease was unavailable");
    }
 
-   private static CpuFrame awaitCpuFrame(VulkanRendererHost renderer) throws InterruptedException {
+   private static FrameSnapshot awaitCpuFrame(VulkanRendererHost renderer) throws InterruptedException {
       long deadline = System.nanoTime() + 15000000000L;
 
       do {
-         Optional<CpuFrame> frame = renderer.pollLatestCpuFrame();
+         Optional<FrameSnapshot> frame = renderer.pollFrame();
          if (frame.isPresent()) {
-            return (CpuFrame)frame.orElseThrow();
+            return (FrameSnapshot)frame.orElseThrow();
          }
 
          Thread.sleep(1L);

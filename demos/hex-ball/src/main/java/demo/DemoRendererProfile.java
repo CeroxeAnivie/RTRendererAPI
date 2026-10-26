@@ -12,7 +12,7 @@ import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererFeaturePreference;
-import top.ceroxe.rt.renderer.api.RendererPreset;
+
 import top.ceroxe.rt.renderer.api.TemporalRenderingOptions;
 
 /** Centralizes the demo's production renderer policy and exact camera projection contract. */
@@ -31,7 +31,7 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig benchmark() {
-        RendererConfig.Builder builder = RendererPreset.MANAGED_GPU_PRESENTATION.configuration()
+        RendererConfig.Builder builder = RendererConfig.presentation()
                 .copyBuilder()
                 .maxFramesInFlight(8)
                 .gpuTimingsEnabled(true)
@@ -81,10 +81,8 @@ final class DemoRendererProfile {
 
     private static RendererConfig baseConfig(int maxFramesInFlight, boolean cpuReadback) {
         DemoFeatureProfile profile = DemoFeatureProfile.configured();
-        RendererPreset preset = cpuReadback
-                ? RendererPreset.CPU_READBACK
-                : RendererPreset.MANAGED_GPU_PRESENTATION;
-        RendererConfig.Builder builder = preset.configuration().copyBuilder()
+
+        RendererConfig.Builder builder = (cpuReadback ? RendererConfig.recommended() : RendererConfig.presentation()).copyBuilder()
                 .maxFramesInFlight(maxFramesInFlight)
                 .gpuTimingsEnabled(true)
                 .cpuFrameReadbackEnabled(cpuReadback)

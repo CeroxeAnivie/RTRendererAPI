@@ -1,6 +1,6 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
-import top.ceroxe.rt.renderer.api.CpuFrame;
+import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.HistoryInvalidationReason;
 import top.ceroxe.rt.renderer.api.Renderer;
@@ -13,7 +13,6 @@ import top.ceroxe.rt.renderer.api.TechnologyExecutionEvidence;
 import top.ceroxe.rt.renderer.api.RendererException;
 import top.ceroxe.rt.renderer.api.RendererHealth;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
-import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RenderingSemanticCapabilities;
 import top.ceroxe.rt.renderer.api.FrameCompositionEvidence;
 import top.ceroxe.rt.renderer.api.FrameCompositionProvider;
@@ -117,6 +116,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     private <T> T withLifecycleLock(Supplier<T> action) {
         lifecycleLock.lock();
         try {
+            rejectFrameConsumerReentry();
             return action.get();
         } finally {
             lifecycleLock.unlock();
@@ -126,6 +126,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     private void withLifecycleLock(Runnable action) {
         lifecycleLock.lock();
         try {
+            rejectFrameConsumerReentry();
             action.run();
         } finally {
             lifecycleLock.unlock();
@@ -1011,12 +1012,12 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     }
 
     @Override
-    public Optional<CpuFrame> pollLatestCpuFrame() {
-        return withLifecycleLock(this::pollLatestCpuFrameLocked);
+    public Optional<FrameSnapshot> pollFrame() {
+        return withLifecycleLock(this::pollFrameLocked);
     }
 
     @Override
-    public Optional<CpuFrame> awaitLatestCpuFrame(java.time.Duration timeout) throws InterruptedException {
+    public Optional<FrameSnapshot> awaitFrame(java.time.Duration timeout) throws InterruptedException {
         Objects.requireNonNull(timeout, "timeout");
         if (timeout.isNegative()) throw new IllegalArgumentException("timeout must not be negative");
         final long timeoutNanos;
@@ -1028,7 +1029,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
         long started = System.nanoTime();
         long backoff = 250_000L;
         while (true) {
-            Optional<CpuFrame> frame = pollLatestCpuFrame();
+            Optional<FrameSnapshot> frame = pollFrame();
             if (frame.isPresent() || timeoutNanos == 0L) return frame;
             long elapsed = System.nanoTime() - started;
             if (elapsed >= timeoutNanos) return Optional.empty();
@@ -1039,61 +1040,72 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
         }
     }
 
-    private Optional<CpuFrame> pollLatestCpuFrameLocked() {
-        requireReady("poll latest CPU frame");
-        if (!configuration.cpuFrameReadbackEnabled()) {
-            throw new UnsupportedOperationException(
-                    "managed CPU frame readback is disabled; consume VulkanFrameInterop leases instead"
-            );
-        }
-        CpuFrame retainedFrame;
+    private boolean readingCpuFrame;
+
+    private void rejectFrameConsumerReentry() {
+        if (readingCpuFrame) throw new IllegalStateException("frame consumers must not reenter the renderer");
+    }
+
+    @Override public boolean readFrame(top.ceroxe.rt.renderer.api.FrameConsumer consumer) {
+        Objects.requireNonNull(consumer, "consumer");
+        return withLifecycleLock(() -> readFrameLocked(consumer));
+    }
+
+    private Optional<FrameSnapshot> pollFrameLocked() {
+        FrameSnapshot[] result = {null};
+        readFrameLocked(view -> result[0] = FrameSnapshot.copyOf(view));
+        return Optional.ofNullable(result[0]);
+    }
+
+    private boolean readFrameLocked(top.ceroxe.rt.renderer.api.FrameConsumer consumer) {
+        requireReady("read frame");
+        if (readingCpuFrame) throw new IllegalStateException("frame consumers must not reenter the renderer");
+        if (!configuration.cpuFrameReadbackEnabled()) throw new UnsupportedOperationException("CPU readback is disabled");
+        final long retainedSequence;
+        final long genericSequence;
         try {
-            retainedFrame = session.captureLatestCpuFrame(latestRetainedCpuFrameSequence);
+            long retained = session.latestCpuFrameSequence();
+            long explicit = genericCommands == null ? -1 : genericCommands.latestCpuFrameSequence();
+            session.discardCpuFramesThrough(latestRetainedCpuFrameSequence);
+            if (genericCommands != null) genericCommands.discardCpuFramesThrough(latestGenericCpuFrameSequence);
+            retainedSequence = retained > latestRetainedCpuFrameSequence ? retained : -1;
+            genericSequence = explicit > latestGenericCpuFrameSequence ? explicit : -1;
+        } catch (RuntimeException failure) { throw fail("query completed frame", failure); }
+        if (retainedSequence == -1 && genericSequence == -1) return false;
+        final boolean generic = genericSequence >= retainedSequence;
+        final long sequence = generic ? genericSequence : retainedSequence;
+        long previous = generic ? latestGenericCpuFrameSequence : latestRetainedCpuFrameSequence;
+        boolean[] delivered = {false};
+        readingCpuFrame = true;
+        try {
+            top.ceroxe.rt.renderer.api.FrameConsumer checked = view -> {
+                if (view.frameSequence() != sequence || view.renderedSceneRevision() > scene.state().revision()
+                        || generic && view.outputResource().isEmpty()
+                        || !generic && view.frameSequence() > latestSubmittedFrameSequence) {
+                    throw new IllegalStateException("unaccepted frame provenance");
+                }
+                delivered[0] = true;
+                consumer.accept(view);
+            };
+            boolean consumed = generic ? genericCommands.consumeLatestCpuFrame(previous, checked)
+                    : session.consumeLatestCpuFrame(previous, checked);
+            if (!consumed) throw new IllegalStateException("completed frame disappeared during serialized consumption");
+            return true;
         } catch (RuntimeException failure) {
-            throw fail("capture latest CPU frame", failure);
-        }
-        CpuFrame genericFrame = null;
-        if (genericCommands != null) {
-            try {
-                genericFrame = genericCommands.captureLatestCpuFrame(latestGenericCpuFrameSequence);
-            } catch (RuntimeException failure) {
-                throw fail("capture latest generic CPU frame", failure);
+            if (delivered[0]) throw failure;
+            throw fail("consume completed frame", failure);
+        } finally {
+            readingCpuFrame = false;
+            if (delivered[0]) {
+                latestRetainedCpuFrameSequence = Math.max(latestRetainedCpuFrameSequence, retainedSequence);
+                latestGenericCpuFrameSequence = Math.max(latestGenericCpuFrameSequence, genericSequence);
+                latestCpuFrameSequence = sequence;
+                latestCompletedFrameSequence = Math.max(latestCompletedFrameSequence, sequence);
+                // Retire the unselected lane without mapping it or allocating a discarded snapshot.
+                if (generic) session.discardCpuFramesThrough(retainedSequence);
+                else if (genericCommands != null) genericCommands.discardCpuFramesThrough(genericSequence);
             }
         }
-        if (retainedFrame == null && genericFrame == null) return Optional.empty();
-        boolean chooseGeneric = genericFrame != null
-                && (retainedFrame == null || genericFrame.frameSequence() >= retainedFrame.frameSequence());
-        CpuFrame frame = chooseGeneric ? genericFrame : retainedFrame;
-        long previousSequence = chooseGeneric ? latestGenericCpuFrameSequence : latestRetainedCpuFrameSequence;
-        if (frame.frameSequence() <= previousSequence) {
-            throw fail(
-                    "validate captured CPU frame",
-                    new IllegalStateException(
-                            "session returned a non-new CPU frame: latest=" + previousSequence
-                                    + ", returned=" + frame.frameSequence()
-                    )
-            );
-        }
-        if ((!chooseGeneric && frame.frameSequence() > latestSubmittedFrameSequence)
-                || frame.renderedSceneRevision() > scene.state().revision()
-                || (chooseGeneric && frame.outputResource().isEmpty())) {
-            throw fail(
-                    "validate captured CPU frame",
-                    new IllegalStateException("session returned CPU pixels for unaccepted work")
-            );
-        }
-        // Consume every candidate observed in this poll. A retained and generic lane may legally
-        // use the same sequence domain; advancing the discarded lane prevents the next poll from
-        // returning the same frame a second time.
-        if (retainedFrame != null) {
-            latestRetainedCpuFrameSequence = Math.max(latestRetainedCpuFrameSequence, retainedFrame.frameSequence());
-        }
-        if (genericFrame != null) {
-            latestGenericCpuFrameSequence = Math.max(latestGenericCpuFrameSequence, genericFrame.frameSequence());
-        }
-        latestCpuFrameSequence = frame.frameSequence();
-        latestCompletedFrameSequence = Math.max(latestCompletedFrameSequence, frame.frameSequence());
-        return Optional.of(frame);
     }
 
     @Override
