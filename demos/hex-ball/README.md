@@ -15,7 +15,7 @@
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=1"
 .\gradlew.bat :demos:hex-ball:shadowJar
 .\gradlew.bat :demos:hex-ball:programmableSceneDemo
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.0.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.1.jar `
   --width=2560 --height=1440 --spp=1
 ```
 
@@ -38,15 +38,15 @@ provider presentation path；仅提出配置请求不构成证据。每个进程
 
 ```powershell
 ## 原生基线
-java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.0.jar `
+java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.1.jar `
   --width=2560 --height=1440 --spp=1 --duration-seconds=90
 
 ## FG 2x
-java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.0.jar `
+java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.1.jar `
   --width=2560 --height=1440 --spp=1 --duration-seconds=90
 
 ## MFG 3x
-java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.0.jar `
+java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-5.1.1.jar `
   --width=2560 --height=1440 --spp=1 --duration-seconds=90
 ```
 

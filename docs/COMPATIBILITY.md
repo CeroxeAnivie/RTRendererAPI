@@ -1,8 +1,8 @@
 # API Contract
 
-RTRendererAPI 5.1.0 adds source- and binary-compatible APIs to the Java 25 major-5 contract.
-Use matching 5.1.0 API and backend modules for the extended GPU frame ABI. Delivery includes GitHub
-source and signed Maven Central artifacts after local staging and independent consumer checks.
+RTRendererAPI 5.1.1 preserves the Java and GPU ABI of 5.1.0 and the Java 25 major-5 contract.
+Use matching API and backend modules. This patch is delivered through GitHub source and local
+Maven artifacts after independent consumer checks; 5.1.0 remains the Central release.
 
 ## Migration from 4.x
 

@@ -12,6 +12,8 @@ public final class VulkanRangeArenaSelfTest {
       inPlaceUpdateWritesWithoutRetiringAndGrowthDefersReuse();
       completionReleaseInvalidatesPreparedPlans();
       resetAllocatesASeparateGenerationAndRetiresEveryOldRange();
+      unchangedReadsAndRejectedPlansRetainTheirSnapshot();
+      randomizedSnapshotsMatchAllocationAndRetirementAccounting();
       System.out.println("VulkanRangeArenaSelfTest passed");
    }
 
@@ -59,6 +61,75 @@ public final class VulkanRangeArenaSelfTest {
       require(!overlaps(replacement, oldFirst) && !overlaps(replacement, oldSecond), "reset overlapped a range still visible to the previous GPU generation");
       VulkanRangeArena.State state = arena.commit(reset, 9L);
       require(state.liveAllocations() == 1 && state.retiredRangeCount() == 2 && state.pendingRetiredBytes() == 80L, "reset did not separate live and retired generations");
+   }
+
+   private static void unchangedReadsAndRejectedPlansRetainTheirSnapshot() {
+      VulkanRangeArena<Item> arena = populatedArena();
+      var original = arena.state();
+      for (int i = 0; i < 10000; i++) require(arena.state() == original, "unchanged diagnostic reads allocated a new snapshot");
+      var prepared = arena.prepare(1L, false, List.of(request(3L, 24L, 16L)), LongBuffer.allocate(0));
+      require(arena.state() == original, "uncommitted preparation invalidated observable state");
+      expect(IllegalArgumentException.class, () -> arena.commit(prepared, -1L));
+      require(arena.state() == original, "rejected admission invalidated observable state");
+      var committed = arena.commit(prepared, 1L);
+      require(committed != original && committed.liveAllocations() == 3 && original.liveAllocations() == 2,
+              "commit failed to publish a new independent diagnostic snapshot");
+      require(arena.releaseThrough(0L) == committed, "completion without retired ranges invalidated unchanged state");
+      var removed = arena.commit(arena.prepare(2L, false, List.of(), LongBuffer.wrap(new long[]{1L})), 5L);
+      require(removed.pendingRetiredBytes() == 16L && arena.releaseThrough(4L) == removed,
+              "premature completion changed protected retirement statistics");
+      var released = arena.releaseThrough(5L);
+      require(released != removed && released.pendingRetiredBytes() == 0L && removed.pendingRetiredBytes() == 16L,
+              "retirement completion reused stale statistics or mutated an earlier snapshot");
+      var stale = arena.prepare(3L, false, List.of(), LongBuffer.allocate(0));
+      arena.commit(arena.prepare(3L, false, List.of(), LongBuffer.allocate(0)), 6L);
+      var advanced = arena.state();
+      expect(IllegalStateException.class, () -> arena.commit(stale, 6L));
+      require(arena.state() == advanced, "stale plan rejection changed diagnostic state");
+   }
+
+   private static void randomizedSnapshotsMatchAllocationAndRetirementAccounting() {
+      var random = new java.util.Random(731921);
+      VulkanRangeArena<Item> arena = new VulkanRangeArena<>(Item::id);
+      var live = new java.util.HashMap<Long,VulkanRangeArena.Allocation>();
+      record Pending(VulkanRangeArena.Allocation range, long epoch) {}
+      var pending = new java.util.ArrayList<Pending>();
+      for (long revision = 0; revision < 800; revision++) {
+         boolean reset = revision % 43 == 0;
+         long id = random.nextInt(40), epoch = revision + 7;
+         boolean remove = !reset && live.containsKey(id) && random.nextBoolean();
+         var previous = live.get(id);
+         var requests = remove ? List.<VulkanRangeArena.RangeRequest<Item>>of()
+                 : List.of(request(id, 1 + random.nextInt(1024), 1L << random.nextInt(7)));
+         var old = arena.state();
+         var plan = arena.prepare(revision, reset, requests,
+                 remove ? LongBuffer.wrap(new long[]{id}) : LongBuffer.allocate(0));
+         require(arena.state() == old, "random preparation changed published state");
+         arena.commit(plan, epoch);
+         if (reset) {
+            for (var allocation : live.values()) pending.add(new Pending(allocation, epoch));
+            live.clear();
+         } else if (remove) {
+            pending.add(new Pending(live.remove(id), epoch));
+         }
+         if (!remove) {
+            var current = arena.allocation(id);
+            if (!reset && previous != null && !previous.equals(current)) pending.add(new Pending(previous, epoch));
+            live.put(id, current);
+         }
+         long completed = revision;
+         arena.releaseThrough(completed);
+         pending.removeIf(entry -> entry.epoch() <= completed);
+         var state = arena.state();
+         long liveBytes = live.values().stream().mapToLong(VulkanRangeArena.Allocation::capacityBytes).sum();
+         long retiredBytes = pending.stream().mapToLong(entry -> entry.range().capacityBytes()).sum();
+         require(state.revision() == revision && state.liveAllocations() == live.size()
+                 && state.liveBytes() == liveBytes && state.pendingRetiredBytes() == retiredBytes
+                 && state.retiredRangeCount() == pending.size(), "randomized diagnostic counters diverged from owned ranges");
+         require(state.highWaterBytes() == state.liveBytes() + state.freeBytes() + state.pendingRetiredBytes(),
+                 "arena capacity partition lost bytes during reset, alignment or coalescing");
+         require(arena.state() == state, "randomized stable read discarded its snapshot");
+      }
    }
 
    private static VulkanRangeArena<Item> populatedArena() {

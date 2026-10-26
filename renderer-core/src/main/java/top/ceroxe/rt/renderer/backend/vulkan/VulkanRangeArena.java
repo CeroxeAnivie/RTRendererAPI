@@ -26,6 +26,8 @@ final class VulkanRangeArena<T> {
     private long stateVersion;
     private long highWater;
     private long liveBytes;
+    private State cachedState;
+    private long cachedStateVersion = Long.MIN_VALUE;
 
     VulkanRangeArena(ToLongFunction<T> identityFunction) {
         this.identityFunction = Objects.requireNonNull(identityFunction, "identityFunction");
@@ -250,6 +252,7 @@ final class VulkanRangeArena<T> {
     }
 
     synchronized State state() {
+        if (cachedState != null && cachedStateVersion == stateVersion) return cachedState;
         long freeBytes = 0L;
         for (long bytes : freeRanges.values()) {
             freeBytes = Math.addExact(freeBytes, bytes);
@@ -258,8 +261,10 @@ final class VulkanRangeArena<T> {
         for (RetiredRange retired : retiredRanges) {
             retiredBytes = Math.addExact(retiredBytes, retired.range().capacityBytes());
         }
-        return new State(revision, highWater, liveBytes, freeBytes, retiredBytes,
+        cachedState = new State(revision, highWater, liveBytes, freeBytes, retiredBytes,
                 allocations.size(), freeRanges.size(), retiredRanges.size());
+        cachedStateVersion = stateVersion;
+        return cachedState;
     }
 
     synchronized Allocation allocation(long identity) {
