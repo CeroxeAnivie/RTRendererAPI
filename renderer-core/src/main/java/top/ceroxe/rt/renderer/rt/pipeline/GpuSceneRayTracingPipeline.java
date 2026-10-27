@@ -151,11 +151,13 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             missModule = RtShaderModuleCompiler.createModule(stack, device, missCode);
             closestHitModule = RtShaderModuleCompiler.createModule(stack, device, closestCode);
             anyHitModule = RtShaderModuleCompiler.createModule(stack, device, anyHitCode);
-            if (shadowService) shadowMissModule = RtShaderModuleCompiler.createModule(stack, device,
-                    RtShaderModuleCompiler.loadProduction(SHADER_ROOT + "gpuscene_shadow.rmiss",
-                            Shaderc.shaderc_miss_shader, false, false, RtEdgeSink.NOOP));
+            byte[] shadowMissCode = shadowService ? RtShaderModuleCompiler.loadProduction(SHADER_ROOT + "gpuscene_shadow.rmiss",
+                    Shaderc.shaderc_miss_shader, false, false, RtEdgeSink.NOOP) : new byte[0];
+            if (shadowService) shadowMissModule = RtShaderModuleCompiler.createModule(stack, device, shadowMissCode);
+            String programKey=RtPipelineCacheStore.programKey("gpuscene-layout-1/data="+sceneShaders.dataBindingCount()+"/depth="+(shadowService?2:1),
+                    raygenCode,missCode,closestCode,anyHitCode,shadowMissCode);
             try (RtPipelineCache cache = RtPipelineCache.open(
-                    device, checkedRuntime.physicalDevice(), "gpuscene")) {
+                    device, checkedRuntime.physicalDevice(), "gpuscene",programKey)) {
                 pipeline = RtRayTracingPipelineFactory.createPipeline(
                         stack, device, pipelineLayout,
                         raygenModule, missModule, closestHitModule, anyHitModule,

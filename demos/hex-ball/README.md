@@ -15,7 +15,7 @@
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=1"
 .\gradlew.bat :demos:hex-ball:shadowJar
 .\gradlew.bat :demos:hex-ball:programmableSceneDemo
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.2.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.3.jar `
   --width=2560 --height=1440 --spp=1
 ```
 
@@ -38,15 +38,15 @@ provider presentation path；仅提出配置请求不构成证据。每个进程
 
 ```powershell
 ## 原生基线
-java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.2.jar `
+java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.3.jar `
   --width=2560 --height=1440 --spp=1 --duration-seconds=90
 
 ## FG 2x
-java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.2.jar `
+java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.3.jar `
   --width=2560 --height=1440 --spp=1 --duration-seconds=90
 
 ## MFG 3x
-java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.2.jar `
+java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.3.jar `
   --width=2560 --height=1440 --spp=1 --duration-seconds=90
 ```
 
@@ -95,5 +95,5 @@ with separate SDR/HDR raygen selection, GLSL fallback and the same immutable-buf
 density, IOR, HG anisotropy, surface transmission/roughness, signed overlap priority, nested glass,
 camera-inside mode, inward winding, invisible volume boundaries and persistent/frame-local lanes.
 Interface events, optical samples, scattering intervals and maximum distance apply at the next
-frame boundary. The default is 1 SPP with balanced transport quality. See [6.0.2](../../docs/6.0.2.md)
+frame boundary. The default is 1 SPP with balanced transport quality. See [6.0.3](../../docs/6.0.3.md)
 for physical scope, quality limits and shader ABI details.

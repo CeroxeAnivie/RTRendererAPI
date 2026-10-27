@@ -6,52 +6,45 @@ import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.*;
 import top.ceroxe.rt.renderer.rt.device.VulkanFailures;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.LongBuffer;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.HexFormat;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Best-effort, driver-identity-scoped persistence for one Vulkan RT pipeline cache.
  */
 final class RtPipelineCache implements AutoCloseable {
     private static final int HEADER_BYTES = Integer.BYTES * 4 + VK10.VK_UUID_SIZE;
-    private static final long MAX_CACHE_BYTES = 64L * 1024L * 1024L;
     private static final String CACHE_DIRECTORY_PROPERTY = "top.ceroxe.rt.pipelineCache.directory";
 
     private final VkDevice device;
     private final long handle;
-    private final Path cacheFile;
+    private final RtPipelineCacheStore store;
     private final DeviceIdentity identity;
     private boolean closed;
 
-    private RtPipelineCache(VkDevice device, long handle, Path cacheFile, DeviceIdentity identity) {
+    private RtPipelineCache(VkDevice device, long handle, RtPipelineCacheStore store, DeviceIdentity identity) {
         this.device = Objects.requireNonNull(device, "device");
         if (handle == VK10.VK_NULL_HANDLE) {
             throw new IllegalArgumentException("pipeline cache handle must not be null");
         }
         this.handle = handle;
-        this.cacheFile = Objects.requireNonNull(cacheFile, "cacheFile");
+        this.store = Objects.requireNonNull(store, "store");
         this.identity = Objects.requireNonNull(identity, "identity");
     }
 
-    static RtPipelineCache open(VkDevice device, VkPhysicalDevice physicalDevice, String namespace) {
+    static RtPipelineCache open(VkDevice device, VkPhysicalDevice physicalDevice, String namespace, String programKey) {
         Objects.requireNonNull(device, "device");
         Objects.requireNonNull(physicalDevice, "physicalDevice");
-        String cacheNamespace = requireNamespace(namespace);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             DeviceIdentity identity = identity(stack, physicalDevice);
-            Path cacheFile = cacheDirectory().resolve(cacheNamespace + '-' + identity.fileToken() + ".bin");
-            byte[] initialData = readValidCache(cacheFile, identity);
+            var store = new RtPipelineCacheStore(cacheDirectory(),namespace,identity,programKey,RtPipelineCacheStore.Policy.configured());
+            byte[] initialData = store.read();
             long handle = create(stack, device, initialData);
-            return new RtPipelineCache(device, handle, cacheFile, identity);
+            return new RtPipelineCache(device, handle, store, identity);
         }
     }
 
@@ -86,22 +79,6 @@ final class RtPipelineCache implements AutoCloseable {
             if (nativeInitialData != null) {
                 MemoryUtil.nmemFree(MemoryUtil.memAddress0(nativeInitialData));
             }
-        }
-    }
-
-    private static byte[] readValidCache(Path cacheFile, DeviceIdentity identity) {
-        try {
-            if (!Files.isRegularFile(cacheFile)) {
-                return new byte[0];
-            }
-            long size = Files.size(cacheFile);
-            if (size < HEADER_BYTES || size > MAX_CACHE_BYTES) {
-                return new byte[0];
-            }
-            byte[] data = Files.readAllBytes(cacheFile);
-            return headerMatches(data, identity) ? data : new byte[0];
-        } catch (IOException ignored) {
-            return new byte[0];
         }
     }
 
@@ -147,13 +124,6 @@ final class RtPipelineCache implements AutoCloseable {
                 .toAbsolutePath().normalize();
     }
 
-    private static String requireNamespace(String value) {
-        if (value == null || !value.matches("[a-z0-9-]{1,32}")) {
-            throw new IllegalArgumentException("pipeline cache namespace is invalid");
-        }
-        return value;
-    }
-
     long handle() {
         if (closed) {
             throw new IllegalStateException("pipeline cache is closed");
@@ -174,9 +144,9 @@ final class RtPipelineCache implements AutoCloseable {
         closed = true;
         try {
             byte[] data = queryData();
-            if (data != null && data.length >= HEADER_BYTES && data.length <= MAX_CACHE_BYTES
+            if (data != null && data.length >= HEADER_BYTES && data.length <= store.maxEntryBytes()
                     && headerMatches(data, identity)) {
-                persistAtomically(data);
+                store.write(data);
             }
         } finally {
             VK10.vkDestroyPipelineCache(device, handle, null);
@@ -189,10 +159,12 @@ final class RtPipelineCache implements AutoCloseable {
                 PointerBuffer size = stack.mallocPointer(1);
                 int countResult = VK10.vkGetPipelineCacheData(device, handle, size, null);
                 if (countResult != VK10.VK_SUCCESS) {
+                    RtPipelineCacheStore.warn("Pipeline cache size query failed: {}",countResult);
                     return null;
                 }
                 long requested = size.get(0);
-                if (requested < HEADER_BYTES || requested > MAX_CACHE_BYTES || requested > Integer.MAX_VALUE) {
+                if (requested < HEADER_BYTES || requested > store.maxEntryBytes() || requested > Integer.MAX_VALUE) {
+                    RtPipelineCacheStore.warn("Pipeline cache extraction skipped: {} bytes, entry budget {}",requested,store.maxEntryBytes());
                     return null;
                 }
                 ByteBuffer nativeData = MemoryUtil.memAlloc((int) requested);
@@ -202,10 +174,12 @@ final class RtPipelineCache implements AutoCloseable {
                         continue;
                     }
                     if (result != VK10.VK_SUCCESS) {
+                        RtPipelineCacheStore.warn("Pipeline cache extraction failed: {}",result);
                         return null;
                     }
                     int actual = Math.toIntExact(size.get(0));
                     if (actual < HEADER_BYTES || actual > nativeData.capacity()) {
+                        RtPipelineCacheStore.warn("Pipeline cache extraction returned an invalid size: {}",actual);
                         return null;
                     }
                     byte[] copy = new byte[actual];
@@ -216,37 +190,8 @@ final class RtPipelineCache implements AutoCloseable {
                 }
             }
         }
+        RtPipelineCacheStore.warn("Pipeline cache extraction remained incomplete after three attempts");
         return null;
-    }
-
-    private void persistAtomically(byte[] data) {
-        Path temporary = null;
-        try {
-            Files.createDirectories(cacheFile.getParent());
-            temporary = cacheFile.resolveSibling(cacheFile.getFileName() + "." + UUID.randomUUID() + ".tmp");
-            Files.write(temporary, data);
-            try {
-                Files.move(
-                        temporary,
-                        cacheFile,
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING
-                );
-            } catch (AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, cacheFile, StandardCopyOption.REPLACE_EXISTING);
-            }
-            temporary = null;
-        } catch (IOException ignored) {
-            // Pipeline cache persistence is an optimization and must never fail renderer teardown.
-        } finally {
-            if (temporary != null) {
-                try {
-                    Files.deleteIfExists(temporary);
-                } catch (IOException ignored) {
-                    // Best-effort cleanup after an already ignored cache I/O failure.
-                }
-            }
-        }
     }
 
     record DeviceIdentity(int vendorId, int deviceId, byte[] uuid) {

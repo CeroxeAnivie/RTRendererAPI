@@ -306,7 +306,7 @@ val verifyMajorReleaseContract = tasks.register("verifyMajorReleaseContract") {
     description = "Enforces the 6.x major-release contract and current documentation entrypoint."
     inputs.property("projectVersion", project.version.toString())
     inputs.files(
-        file("docs/6.0.2.md"),
+        file("docs/${project.version}.md"),
         file("docs/COMPATIBILITY.md"),
         file("README.md"),
         file("gradle.properties")
@@ -331,8 +331,8 @@ val verifyMajorReleaseContract = tasks.register("verifyMajorReleaseContract") {
                     stale.joinToString(", ") { rootDir.toPath().relativize(it.toPath()).toString() }
             )
         }
-        if (!file("docs/6.0.2.md").isFile) {
-            throw GradleException("docs/6.0.2.md is required for the current release")
+        if (!file("docs/$expected.md").isFile) {
+            throw GradleException("docs/$expected.md is required for the current release")
         }
     }
 }

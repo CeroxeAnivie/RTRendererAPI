@@ -175,6 +175,7 @@ val registerCoreSelfTest =
     }
 
 val contractSelfTests = linkedMapOf(
+    "coreRtPipelineCacheSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.RtPipelineCacheSelfTest",
     "coreMediumTransportSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumTransportSelfTest",
     "vulkanGenericBufferVisibilitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericBufferVisibilitySelfTest",
     "vulkanGenericGraphicsPipelinesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericGraphicsPipelinesSelfTest",

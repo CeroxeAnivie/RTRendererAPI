@@ -468,30 +468,14 @@ public final class RtRayTracingPipeline implements AutoCloseable {
             RtGpuBuffer frameUniformBuffer = null;
             RtGpuBuffer bootstrapReadbackBuffer = null;
             try {
-                raygenModule = RtShaderModuleCompiler.createModule(
-                        stack,
-                        device,
-                        RtShaderModuleCompiler.loadProduction("assets/rtrenderer/shaders/bootstrap.rgen", Shaderc.shaderc_raygen_shader,
-                                diagnostics.edges())
-                );
-                missModule = RtShaderModuleCompiler.createModule(
-                        stack,
-                        device,
-                        RtShaderModuleCompiler.loadProduction("assets/rtrenderer/shaders/bootstrap.rmiss", Shaderc.shaderc_miss_shader,
-                                diagnostics.edges())
-                );
-                closestHitModule = RtShaderModuleCompiler.createModule(
-                        stack,
-                        device,
-                        RtShaderModuleCompiler.loadProduction("assets/rtrenderer/shaders/bootstrap.rchit", Shaderc.shaderc_closesthit_shader,
-                                diagnostics.edges())
-                );
-                anyHitModule = RtShaderModuleCompiler.createModule(
-                        stack,
-                        device,
-                        RtShaderModuleCompiler.loadProduction("assets/rtrenderer/shaders/bootstrap.rahit", Shaderc.shaderc_anyhit_shader,
-                                diagnostics.edges())
-                );
+                byte[] raygenCode=RtShaderModuleCompiler.loadProduction("assets/rtrenderer/shaders/bootstrap.rgen",Shaderc.shaderc_raygen_shader,diagnostics.edges());
+                byte[] missCode=RtShaderModuleCompiler.loadProduction("assets/rtrenderer/shaders/bootstrap.rmiss",Shaderc.shaderc_miss_shader,diagnostics.edges());
+                byte[] closestCode=RtShaderModuleCompiler.loadProduction("assets/rtrenderer/shaders/bootstrap.rchit",Shaderc.shaderc_closesthit_shader,diagnostics.edges());
+                byte[] anyHitCode=RtShaderModuleCompiler.loadProduction("assets/rtrenderer/shaders/bootstrap.rahit",Shaderc.shaderc_anyhit_shader,diagnostics.edges());
+                raygenModule=RtShaderModuleCompiler.createModule(stack,device,raygenCode);
+                missModule=RtShaderModuleCompiler.createModule(stack,device,missCode);
+                closestHitModule=RtShaderModuleCompiler.createModule(stack,device,closestCode);
+                anyHitModule=RtShaderModuleCompiler.createModule(stack,device,anyHitCode);
                 descriptorSetLayout = RtRayTracingPipelineFactory.createDescriptorSetLayout(
                         stack, device, diagnosticGBufferEnabled
                 );
@@ -582,7 +566,9 @@ public final class RtRayTracingPipeline implements AutoCloseable {
                         diagnostics
                 );
                 pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptorSetLayout);
-                try (RtPipelineCache cache = RtPipelineCache.open(device, physicalDevice, "bootstrap")) {
+                String programKey=RtPipelineCacheStore.programKey("bootstrap-layout-1/diagnostic="+diagnosticGBufferEnabled,
+                        raygenCode,missCode,closestCode,anyHitCode);
+                try (RtPipelineCache cache = RtPipelineCache.open(device, physicalDevice, "bootstrap",programKey)) {
                     pipeline = RtRayTracingPipelineFactory.createPipeline(
                             stack,
                             device,
