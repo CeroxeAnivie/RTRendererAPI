@@ -19,12 +19,64 @@ public final class VulkanModernFrameNativeSelfTest {
     public static void main(String[] arguments) throws Exception {
         var capability = VulkanRtCapabilityProbe.capture();
         require(capability.hardwareRayTracingReady(), capability.summary());
+        verifyPrecompiledScene(capability);
+        if (arguments.length > 0 && "--precompiled-only".equals(arguments[0])) {
+            System.out.println("Precompiled scene native test passed: SDR/HDR pixels, application data, slot reuse, device="
+                    + capability.preferredDevice().name());
+            return;
+        }
         verifyProgrammableScene(capability);
         verifyMappedHdr(capability);
         verifyTimelineAndPartialUpdates(capability);
         verifyNativeColorFormats(capability);
         verifyShaderInterfaceRejections();
         System.out.println("VulkanModernFrameNativeSelfTest passed: device=" + capability.preferredDevice().name());
+    }
+
+    private static void verifyPrecompiledScene(VulkanRtCapabilityProbe.Result capability) throws Exception {
+        for (var format : FrameOutputFormat.values()) {
+            boolean hdr = format == FrameOutputFormat.LINEAR_HDR_RGBA16F;
+            String source = "#version 460\n#extension GL_EXT_ray_tracing : require\n"
+                    + "layout(set=0,binding=1," + (hdr ? "rgba16f" : "rgba8")
+                    + ") uniform writeonly image2D outputImage;\n"
+                    + "layout(set=0,binding=33,std430) readonly buffer Tint { vec4 color; } tint;\n"
+                    + "void main(){imageStore(outputImage,ivec2(gl_LaunchIDEXT.xy),tint.color);}\n";
+            var module = VulkanGenericLogicOperationNativeSelfTest.module(99001, ShaderStage.RAY_GENERATION,
+                    org.lwjgl.util.shaderc.Shaderc.shaderc_raygen_shader, source, List.of(), List.of(), List.of());
+            byte[] binary = new byte[module.spirv().remaining()];
+            module.spirv().get(binary);
+            var config = configuration().frameOutputFormat(format).sceneShaders(SceneShaderProgram.builder()
+                    .dataBindingCount(1).spirv(ShaderStage.RAY_GENERATION, format, binary).build()).build();
+            var session = VulkanGpuSceneRenderingSession.open(capability, config, RendererRtDiagnostics.noop());
+            try (var renderer = new VulkanRendererHost(config, session)) {
+                renderer.apply(VulkanGpuSceneRenderingSessionNativeSelfTest.complexScene());
+                for (int i = 0; i < 4; i++) {
+                    submit(renderer, request(i, 16, 8, List.of(i % 2 == 0
+                            ? floats(hdr ? 4 : 1, 0, 0, 1) : floats(0, hdr ? 2 : 1, 0, 1))));
+                    int sequence = i;
+                    read(renderer, view -> {
+                        ByteBuffer data = view.pixels();
+                        require(view.format() == (hdr ? TextureFormat.RGBA16_FLOAT : TextureFormat.RGBA8_UNORM),
+                                "binary scene output format changed");
+                        for (int p = 0; p < 16 * 8; p++) {
+                            int offset = p * (hdr ? 8 : 4);
+                            if (hdr) {
+                                require(data.getShort(offset) == (sequence % 2 == 0 ? (short) 0x4400 : 0)
+                                        && data.getShort(offset + 2) == (sequence % 2 != 0 ? (short) 0x4000 : 0)
+                                        && data.getShort(offset + 4) == 0 && data.getShort(offset + 6) == (short) 0x3c00,
+                                        "HDR precompiled pixel or application generation mismatch");
+                            } else {
+                                require(Byte.toUnsignedInt(data.get(offset)) == (sequence % 2 == 0 ? 255 : 0)
+                                        && Byte.toUnsignedInt(data.get(offset + 1)) == (sequence % 2 != 0 ? 255 : 0)
+                                        && data.get(offset + 2) == 0 && Byte.toUnsignedInt(data.get(offset + 3)) == 255,
+                                        "SDR precompiled pixel or application generation mismatch");
+                            }
+                        }
+                    });
+                }
+                require(renderer.status() == Renderer.Status.READY, "precompiled renderer lost readiness");
+            }
+        }
     }
 
     private static void verifyTimelineAndPartialUpdates(VulkanRtCapabilityProbe.Result capability) throws Exception {

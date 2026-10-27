@@ -251,6 +251,7 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanFrameReconstructionResourcesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameReconstructionResourcesSelfTest",
     "coreVulkanGpuSceneShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.VulkanGpuSceneShaderSelfTest",
     "coreGpuScenePipelineRequirementsSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuScenePipelineRequirementsSelfTest",
+    "coreGpuScenePrecompiledProgramSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuScenePrecompiledProgramSelfTest",
     "coreRtPrecompiledShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.RtPrecompiledShaderSelfTest",
     "coreVulkanFramePixelCodecSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDiagnosticReadbackSelfTest",
     "coreVulkanRangeArenaSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRangeArenaSelfTest",
@@ -353,6 +354,10 @@ nativeSelfTests.forEach { (taskName, mainClassName) ->
         mainClassName,
         "Runs the independent hardware Vulkan RT check $mainClassName."
     )
+}
+
+tasks.named<JavaExec>("vulkanModernFrameNativeSelfTest").configure {
+    if (providers.gradleProperty("precompiledSceneOnly").isPresent) args("--precompiled-only")
 }
 
 tasks.named<JavaExec>("mediumTransportNativeSelfTest").configure {

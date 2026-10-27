@@ -43,6 +43,24 @@ final class ProgrammableSceneWorkbench {
             JTabbedPane editors = new JTabbedPane();
             editors.addTab("Ray generation", new JScrollPane(raygen)); editors.addTab("Miss", new JScrollPane(miss));
             editors.addTab("Closest hit", new JScrollPane(hit)); editors.addTab("Any hit", new JScrollPane(anyHit));
+            JComboBox<FrameOutputFormat> output = new JComboBox<>(FrameOutputFormat.values());
+            output.setSelectedItem(FrameOutputFormat.LINEAR_HDR_RGBA16F);
+            JTextField[] binaries = {new JTextField(), new JTextField(), new JTextField(), new JTextField()};
+            JPanel binaryInputs = new JPanel(new GridLayout(0, 3, 6, 4));
+            String[] stageNames = {"Ray generation", "Miss", "Closest hit", "Any hit"};
+            for (int i = 0; i < binaries.length; i++) {
+                JTextField path = binaries[i];
+                JButton browse = new JButton("Choose .spv");
+                browse.addActionListener(event -> {
+                    JFileChooser picker = new JFileChooser();
+                    if (picker.showOpenDialog(window) == JFileChooser.APPROVE_OPTION)
+                        path.setText(picker.getSelectedFile().getAbsolutePath());
+                });
+                binaryInputs.add(new JLabel(stageNames[i])); binaryInputs.add(path); binaryInputs.add(browse);
+            }
+            binaryInputs.add(new JLabel("Raygen binary output format")); binaryInputs.add(output);
+            binaryInputs.add(new JLabel("Blank path uses GLSL; apply to reload"));
+            editors.addTab("Precompiled stages", binaryInputs);
             JCheckBox paused = new JCheckBox("Pause");
             JSlider seek = new JSlider(0, 10000, 0);
             JSpinner speed = new JSpinner(new SpinnerNumberModel(1.0, 0.0, 8.0, 0.25));
@@ -58,7 +76,8 @@ final class ProgrammableSceneWorkbench {
             controls.add(new JLabel("Float values, comma separated")); controls.add(values);
             controls.add(patch); controls.add(compile);
             var data = new AtomicReference<>(initialData());
-            var shader = new AtomicReference<>(program(DEFAULT_SHADER, "", "", ""));
+            var shader = new AtomicReference<>(new Selection(program(DEFAULT_SHADER, "", "", ""),
+                    FrameOutputFormat.LINEAR_HDR_RGBA16F));
             var timeline = new AtomicReference<>(new Timeline(false, 1, 0, 0));
             var displayExposure = new AtomicReference<>(1.0);
             AtomicBoolean running = new AtomicBoolean(true);
@@ -78,8 +97,20 @@ final class ProgrammableSceneWorkbench {
                 } catch (RuntimeException failure) { status.setText(failure.toString()); }
             });
             compile.addActionListener(event -> {
-                try { shader.set(program(raygen.getText(), miss.getText(), hit.getText(), anyHit.getText())); }
-                catch (RuntimeException failure) { status.setText(failure.toString()); }
+                try {
+                    FrameOutputFormat format = (FrameOutputFormat) output.getSelectedItem();
+                    var builder = SceneShaderProgram.builder().dataBindingCount(1);
+                    String[] sources = {raygen.getText(), miss.getText(), hit.getText(), anyHit.getText()};
+                    ShaderStage[] stages = {ShaderStage.RAY_GENERATION, ShaderStage.RAY_MISS,
+                            ShaderStage.RAY_CLOSEST_HIT, ShaderStage.RAY_ANY_HIT};
+                    for (int i = 0; i < stages.length; i++) {
+                        if (!sources[i].isBlank()) builder.shader(stages[i], sources[i]);
+                        if (!binaries[i].getText().isBlank()) builder.spirv(stages[i],
+                                i == 0 ? format : FrameOutputFormat.SDR_RGBA8,
+                                java.nio.file.Files.readAllBytes(java.nio.file.Path.of(binaries[i].getText().trim())));
+                    }
+                    shader.set(new Selection(builder.build(), format));
+                } catch (Exception failure) { status.setText(failure.toString()); }
             });
             window.addWindowListener(new java.awt.event.WindowAdapter() {
                 @Override public void windowClosed(java.awt.event.WindowEvent event) { running.set(false); }
@@ -92,6 +123,7 @@ final class ProgrammableSceneWorkbench {
     }
 
     private record Timeline(boolean paused, double speed, long seekNanos, long revision) { }
+    private record Selection(SceneShaderProgram program, FrameOutputFormat format) { }
 
     private static SceneShaderProgram program(String raygen, String miss, String hit, String anyHit) {
         var builder = SceneShaderProgram.builder().dataBindingCount(1).shader(ShaderStage.RAY_GENERATION, raygen);
@@ -107,16 +139,16 @@ final class ProgrammableSceneWorkbench {
         return new ResourceData(bytes);
     }
 
-    private static void render(AtomicBoolean running, AtomicReference<SceneShaderProgram> shaders,
+    private static void render(AtomicBoolean running, AtomicReference<Selection> shaders,
             AtomicReference<ResourceData> data, AtomicReference<Timeline> controls, AtomicReference<Double> exposure,
             JLabel image, JTextArea status) {
         long time = 0, appliedSeek = -1;
-        SceneShaderProgram rejected = null;
+        Selection rejected = null;
         while (running.get()) {
-            SceneShaderProgram selected = shaders.get();
+            Selection selected = shaders.get();
             if (selected == rejected) { java.util.concurrent.locks.LockSupport.parkNanos(20_000_000); continue; }
-            var config = RendererConfig.builder().sceneShaders(selected).temporalRendering(TemporalRenderingOptions.disabled())
-                    .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).build();
+            var config = RendererConfig.builder().sceneShaders(selected.program()).temporalRendering(TemporalRenderingOptions.disabled())
+                    .frameOutputFormat(selected.format()).build();
             try (Renderer renderer = Renderer.open(config)) {
                 long revision = renderer.apply(SceneTransaction.empty(0)).acceptedSceneRevision();
                 var camera = CameraState.lookAt(0, 0, 5, 0, 0, 0).aspectRatio(16.0 / 9).build();
@@ -154,6 +186,10 @@ final class ProgrammableSceneWorkbench {
         for (int y = 0; y < frame.height(); y++) for (int x = 0; x < frame.width(); x++) {
             int color = 0;
             for (int channel = 0; channel < 3; channel++) {
+                if (frame.format() == TextureFormat.RGBA8_UNORM) {
+                    color = (color << 8) | Byte.toUnsignedInt(bytes.get((y * frame.width() + x) * 4 + channel));
+                    continue;
+                }
                 float linear = Float.float16ToFloat(bytes.getShort((y * frame.width() + x) * 8 + channel * 2));
                 double mapped = Math.max(0, linear * exposure); mapped = mapped / (1 + mapped);
                 color = (color << 8) | (int) Math.round(255 * Math.pow(mapped, 1.0 / 2.2));

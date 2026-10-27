@@ -102,7 +102,8 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         Objects.requireNonNull(sceneShaders, "sceneShaders");
         VulkanDeviceRuntime checkedRuntime = Objects.requireNonNull(runtime, "runtime");
         boolean shaderExecutionReorderingEnabled = checkedRuntime.shaderExecutionReorderingEnabled()
-                && !sceneShaders.sources().containsKey(ShaderStage.RAY_GENERATION);
+                && !sceneShaders.sources().containsKey(ShaderStage.RAY_GENERATION)
+                && !sceneShaders.hasSpirv(ShaderStage.RAY_GENERATION);
         if (descriptorSetCount <= 0) throw new IllegalArgumentException("descriptorSetCount must be positive");
         VkDevice device = checkedRuntime.device();
         GpuSceneDescriptorLayout descriptors = null;
@@ -503,7 +504,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         }
     }
 
-    private static byte[] loadStageCode(String file, int kind,
+    static byte[] loadStageCode(String file, int kind,
             boolean linearHdrOutput, boolean ser, SceneShaderProgram program) {
         ShaderStage stage = switch (kind) {
             case Shaderc.shaderc_raygen_shader -> ShaderStage.RAY_GENERATION;
@@ -513,10 +514,31 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             default -> throw new IllegalArgumentException("unsupported scene shader stage");
         };
         String source = program.sources().get(stage);
-        byte[] spirv = source == null
+        /*
+         * A stable application build can ship optimized SPIR-V and avoid shaderc's expensive
+         * first-run optimization pass. Select the exact output encoding; GLSL may supply a
+         * missing binary or an explicitly requested diagnostic compilation variant.
+         */
+        byte[] suppliedBinary = program.spirv(stage,
+                linearHdrOutput ? FrameOutputFormat.LINEAR_HDR_RGBA16F : FrameOutputFormat.SDR_RGBA8);
+        boolean useSuppliedBinary = suppliedBinary != null
+                && !ser
+                && !Boolean.getBoolean("top.ceroxe.rt.shader.surfaceOnly");
+        if (!useSuppliedBinary && source == null && program.hasSpirv(stage)) {
+            throw new IllegalArgumentException("missing precompiled scene shader variant for " + stage
+                    + ": hdr=" + linearHdrOutput + ", ser=" + ser
+                    + "; supply the requested binary or GLSL source");
+        }
+        byte[] spirv = useSuppliedBinary
+                ? suppliedBinary
+                : source == null
                 ? RtShaderModuleCompiler.loadProduction(SHADER_ROOT + file, kind, linearHdrOutput, ser, RtEdgeSink.NOOP)
                 : RtShaderModuleCompiler.compileSceneSource(source, file, kind, linearHdrOutput, ser);
-        if (source != null) VulkanSpirvBindingValidator.requireSceneInterface(spirv, stage, program.dataBindingCount(), linearHdrOutput);
+        if (useSuppliedBinary || source != null) {
+            VulkanSpirvBindingValidator.requireSceneInterface(
+                    spirv, stage, program.dataBindingCount(), linearHdrOutput
+            );
+        }
         return spirv;
     }
 

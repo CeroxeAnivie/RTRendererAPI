@@ -1,13 +1,13 @@
 # API Contract
 
-RTRendererAPI 6.0.0 is a deliberate breaking release with a single Java 25 major-6 binary/API
+RTRendererAPI 6.0.2 is a patch release on the deliberate breaking 6.x line with a single Java 25 major-6 binary/API
 contract. Use matching API/backend modules. Existing descriptor binding numbers and the first
 57 instance words / first 404 frame words remain unchanged. Instance records now contain 72 words;
 frame uniforms contain 447 words. Custom retained-scene GLSL must include the matching
 `gpuscene_abi.glsl` rather than embed old record strides. The explicit command API is unchanged.
 
 This version is delivered through GitHub source and local Maven artifacts only. It is not published
-to Maven Central. The 6.0.0 contract removes legacy aliases and compatibility constructors; callers
+to Maven Central. The 6.0.2 contract removes legacy aliases and compatibility constructors; callers
 must migrate to the typed builder and explicit workload contracts described below.
 
 ## Migration from 4.x

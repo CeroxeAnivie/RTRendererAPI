@@ -14,10 +14,21 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.LongBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayDeque;
 import java.util.HashSet;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,6 +45,15 @@ final class RtShaderModuleCompiler {
             "top.ceroxe.rt.smoke.causality.disableDynamicAnalyticLoop";
     private static final String SURFACE_ONLY_PROPERTY =
             "top.ceroxe.rt.shader.surfaceOnly";
+    private static final String SHADER_CACHE_DIRECTORY_PROPERTY = "top.ceroxe.rt.shaderCache.directory";
+    private static final int SPIRV_MAGIC = 0x07230203;
+    private static final long MAX_CACHED_SPIRV_BYTES = 64L * 1024L * 1024L;
+    private static final long MAX_MEMORY_CACHE_BYTES = 64L * 1024L * 1024L;
+    private static final LinkedHashMap<String, byte[]> SCENE_SHADER_MEMORY_CACHE =
+            new LinkedHashMap<>(16, 0.75f, true);
+    private static long sceneShaderMemoryBytes;
+    private static final ConcurrentMap<String, CompletableFuture<byte[]>> SCENE_SHADER_IN_FLIGHT =
+            new ConcurrentHashMap<>();
 
     private RtShaderModuleCompiler() {
     }
@@ -196,7 +216,159 @@ final class RtShaderModuleCompiler {
             matcher.appendReplacement(expanded, Matcher.quoteReplacement(readExpandedUtf8Resource(included)));
         }
         matcher.appendTail(expanded);
-        return compileSource(expanded.toString(), path, kind, false, hdr, ser, RtEdgeSink.NOOP);
+        boolean surfaceOnly = Boolean.getBoolean(SURFACE_ONLY_PROPERTY);
+        return compileSceneSourceCached(expanded.toString(), path, kind, hdr, ser, surfaceOnly);
+    }
+
+    /**
+     * Compiles one application scene stage once per exact source/options identity.
+     *
+     * <p>The public scene-shader contract accepts source text, so Vulkan's pipeline cache cannot
+     * avoid the CPU shaderc step. This cache is keyed by the fully expanded source and every
+     * compilation option, then validated as SPIR-V before reuse. The in-flight map also prevents
+     * two renderer instances in one JVM from compiling the same stage concurrently.</p>
+     */
+    private static byte[] compileSceneSourceCached(
+            String expandedSource, String path, int kind, boolean hdr, boolean ser, boolean surfaceOnly
+    ) {
+        String key = sceneShaderCacheKey(expandedSource, path, kind, hdr, ser, surfaceOnly);
+        byte[] memory = sceneShaderMemoryGet(key);
+        if (memory != null) return memory.clone();
+
+        CompletableFuture<byte[]> pending = new CompletableFuture<>();
+        CompletableFuture<byte[]> existing = SCENE_SHADER_IN_FLIGHT.putIfAbsent(key, pending);
+        if (existing != null) {
+            try {
+                return existing.join().clone();
+            } catch (java.util.concurrent.CompletionException failure) {
+                Throwable cause = failure.getCause();
+                if (cause instanceof RuntimeException runtime) throw runtime;
+                throw failure;
+            }
+        }
+        try {
+            byte[] cached = readSceneShaderCache(key);
+            byte[] compiled = cached != null
+                    ? cached
+                    : compileSource(expandedSource, path, kind, false, hdr, ser, RtEdgeSink.NOOP);
+            if (cached == null) persistSceneShaderCache(key, compiled);
+            byte[] retained = compiled;
+            sceneShaderMemoryPut(key, retained);
+            pending.complete(retained);
+            return retained.clone();
+        } catch (Throwable failure) {
+            pending.completeExceptionally(failure);
+            if (failure instanceof RuntimeException runtime) throw runtime;
+            if (failure instanceof Error error) throw error;
+            throw new IllegalStateException("scene shader compilation failed", failure);
+        } finally {
+            SCENE_SHADER_IN_FLIGHT.remove(key, pending);
+        }
+    }
+
+    private static synchronized byte[] sceneShaderMemoryGet(String key) {
+        return SCENE_SHADER_MEMORY_CACHE.get(key);
+    }
+
+    private static synchronized void sceneShaderMemoryPut(String key, byte[] binary) {
+        if (binary.length > MAX_MEMORY_CACHE_BYTES) return;
+        byte[] previous = SCENE_SHADER_MEMORY_CACHE.put(key, binary);
+        sceneShaderMemoryBytes += binary.length - (previous == null ? 0 : previous.length);
+        while (sceneShaderMemoryBytes > MAX_MEMORY_CACHE_BYTES) {
+            var oldest = SCENE_SHADER_MEMORY_CACHE.pollFirstEntry();
+            sceneShaderMemoryBytes -= oldest.getValue().length;
+        }
+    }
+
+    private static String sceneShaderCacheKey(
+            String source, String path, int kind, boolean hdr, boolean ser, boolean surfaceOnly
+    ) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update("rtrenderer-scene-spirv-v3-vulkan1.2-performance\0".getBytes(StandardCharsets.UTF_8));
+            digest.update(org.lwjgl.Version.getVersion().getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            digest.update(path.getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            digest.update(Integer.toString(kind).getBytes(StandardCharsets.US_ASCII));
+            digest.update((byte) (hdr ? 1 : 0));
+            digest.update((byte) (ser ? 1 : 0));
+            digest.update((byte) (surfaceOnly ? 1 : 0));
+            digest.update(source.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new AssertionError("SHA-256 is required by the Java runtime", impossible);
+        }
+    }
+
+    private static byte[] readSceneShaderCache(String key) {
+        try {
+            Path file = sceneShaderCacheDirectory().resolve(key + ".bin");
+            if (!Files.isRegularFile(file)) return null;
+            long size = Files.size(file);
+            if (size < 52L || size > MAX_CACHED_SPIRV_BYTES + 32L || (size & 3L) != 0L) return null;
+            byte[] stored = Files.readAllBytes(file);
+            byte[] data = java.util.Arrays.copyOfRange(stored, 32, stored.length);
+            if (!validSpirvHeader(data)
+                    || !MessageDigest.isEqual(java.util.Arrays.copyOf(stored, 32), sha256(data))) return null;
+            return data;
+        } catch (IOException | RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private static void persistSceneShaderCache(String key, byte[] spirv) {
+        if (!validSpirvHeader(spirv) || spirv.length > MAX_CACHED_SPIRV_BYTES) return;
+        Path temporary = null;
+        try {
+            Path directory = sceneShaderCacheDirectory();
+            Files.createDirectories(directory);
+            Path target = directory.resolve(key + ".bin");
+            temporary = directory.resolve(key + "." + UUID.randomUUID() + ".tmp");
+            ByteBuffer stored = ByteBuffer.allocate(32 + spirv.length);
+            stored.put(sha256(spirv)).put(spirv);
+            Files.write(temporary, stored.array(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            temporary = null;
+        } catch (IOException | RuntimeException ignored) {
+            // Shader caching is an optimization. A read-only or full cache directory must never
+            // change renderer correctness; the freshly compiled module remains usable.
+        } finally {
+            if (temporary != null) {
+                try { Files.deleteIfExists(temporary); } catch (IOException ignored) { }
+            }
+        }
+    }
+
+    private static boolean validSpirvHeader(byte[] data) {
+        if (data.length < 20 || (data.length & 3) != 0) return false;
+        ByteBuffer header = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+        return header.getInt(0) == SPIRV_MAGIC && header.getInt(12) > 0 && header.getInt(16) == 0;
+    }
+
+    private static byte[] sha256(byte[] data) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(data);
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new AssertionError("SHA-256 is required by the Java runtime", impossible);
+        }
+    }
+
+    private static Path sceneShaderCacheDirectory() {
+        String override = System.getProperty(SHADER_CACHE_DIRECTORY_PROPERTY);
+        if (override != null && !override.isBlank()) {
+            return Path.of(override.trim()).toAbsolutePath().normalize();
+        }
+        String localAppData = System.getenv("LOCALAPPDATA");
+        if (localAppData != null && !localAppData.isBlank()) {
+            return Path.of(localAppData, "RTRenderer", "shader-cache").toAbsolutePath().normalize();
+        }
+        return Path.of(System.getProperty("user.home"), ".rtrenderer", "shader-cache")
+                .toAbsolutePath().normalize();
     }
 
     private static byte[] compileSource(String source, String resourcePath, int shaderKind,

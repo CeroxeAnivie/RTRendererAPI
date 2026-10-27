@@ -196,7 +196,8 @@ tasks.register<JavaExec>("meshTopologySelfTest") {
 }
 
 // Each major release owns an explicit, immutable public ABI baseline. A new major starts a new
-// baseline; later minor/patch releases compare against that major's .0.0 snapshot.
+// baseline; later releases must preserve its declarations and members. The exact versioned
+// snapshot below separately rejects additions that have not been reviewed for this release.
 val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-${project.version}.abi")
 val rendererApiAbiSnapshot = layout.buildDirectory.file("abi/renderer-api-${project.version}.abi")
 
@@ -219,10 +220,26 @@ val verifyRendererApiMajorRelease = tasks.register("verifyRendererApiMajorReleas
             if (!majorBaseline.asFile.isFile || majorBaseline.asFile.length() == 0L) {
                 throw GradleException("Missing same-major ABI baseline: $majorBaseline")
             }
-            if (!Arrays.equals(majorBaseline.asFile.readBytes(), snapshot.readBytes())) {
+            fun declarations(file: File): Map<String, Set<String>> =
+                file.readText(StandardCharsets.UTF_8).replace("\r\n", "\n")
+                    .split(Regex("(?=Compiled from )")).mapNotNull { block ->
+                        val type = Regex("(?m)^public [^\\n]+").find(block)?.value
+                            ?: return@mapNotNull null
+                        val members = Regex("(?m)^  (?:public|protected) [^\\n]+\\n\\s+descriptor: [^\\n]+")
+                            .findAll(block).map { it.value.trim() }.toSet()
+                        type to members
+                    }.toMap()
+            val oldDeclarations = declarations(majorBaseline.asFile)
+            val newDeclarations = declarations(snapshot)
+            val incompatible = oldDeclarations.filter { (type, members) ->
+                val current = newDeclarations[type]
+                current == null || !current.containsAll(members)
+                    || current.any { it.startsWith("public abstract ") && it !in members }
+            }
+            if (incompatible.isNotEmpty()) {
                 throw GradleException(
-                    "Same-major ABI changed in $expected; update the baseline only after reviewing the public change: " +
-                        majorBaseline.asFile
+                    "Same-major ABI removed or changed declarations in $expected:\n" +
+                        incompatible.keys.joinToString("\n")
                 )
             }
         }
