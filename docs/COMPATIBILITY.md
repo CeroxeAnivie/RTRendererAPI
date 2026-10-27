@@ -1,6 +1,6 @@
 # API Contract
 
-RTRendererAPI 5.2.0 adds general closed-volume transport while preserving the Java 25 major-5
+RTRendererAPI 5.2.1 adds general closed-volume transport while preserving the Java 25 major-5
 binary API. Use matching API/backend modules. Existing descriptor binding numbers and the first
 57 instance words / first 404 frame words remain unchanged. Instance records now contain 72 words;
 frame uniforms contain 447 words. Custom retained-scene GLSL must include the matching

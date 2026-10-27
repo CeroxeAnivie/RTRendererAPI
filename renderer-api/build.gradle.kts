@@ -185,6 +185,16 @@ tasks.register<JavaExec>("resourceLifecycleContractSelfTest") {
     mainClass.set("top.ceroxe.rt.renderer.api.ResourceLifecycleContractSelfTest")
 }
 
+tasks.register<JavaExec>("meshTopologySelfTest") {
+    group = "verification"
+    description = "Verifies closed mesh edge pairing, welded seams, winding and vertex stars."
+    dependsOn(tasks.named("testClasses"))
+    classpath = files(sourceSets.test.get().output.classesDirs, sourceSets.main.get().output.classesDirs,
+        configurations.testCompileClasspath.get())
+    mainClass.set("top.ceroxe.rt.renderer.api.MeshTopologySelfTest")
+    if (providers.gradleProperty("topologyProfile").isPresent) args("--profile")
+}
+
 // Each major release owns an explicit, immutable public ABI baseline. The 2.0 surface deliberately
 // breaks 1.x compatibility, so a 1.x consumer fixture would be misleading rather than protective.
 val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-${project.version}.abi")
@@ -573,6 +583,7 @@ tasks.register("verifyRuntimeSupplyChainMetadata") {
 
 tasks.named("check") {
     dependsOn(tasks.named("rendererApiContractSelfTest"))
+    dependsOn(tasks.named("meshTopologySelfTest"))
     dependsOn(tasks.named("resourceLifecycleContractSelfTest"))
     dependsOn(tasks.named("renderCommandContractSelfTest"))
     dependsOn(tasks.named("verifyRendererApiBoundary"))

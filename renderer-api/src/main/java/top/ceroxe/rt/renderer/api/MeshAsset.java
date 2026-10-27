@@ -5,8 +5,6 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -421,85 +419,8 @@ public final class MeshAsset {
     }
 
     private boolean computeClosedManifold() {
-        FloatBuffer points = positions.duplicate();
-        IntBuffer indices = triangleIndices.duplicate();
-        Map<PositionKey, Integer> vertices = new HashMap<>();
-        Map<EdgeKey, EdgeUse> edges = new HashMap<>();
-        Map<Integer, Map<Integer, java.util.List<Integer>>> links = new HashMap<>();
-        int nextVertex = 0;
-        double signedVolumeTimesSix = 0.0;
-        double scale = 0.0;
-        float minX = Float.POSITIVE_INFINITY, minY = minX, minZ = minX;
-        float maxX = Float.NEGATIVE_INFINITY, maxY = maxX, maxZ = maxX;
-        for (int i = 0; i < points.limit(); i += 3) {
-            minX = Math.min(minX, points.get(i)); maxX = Math.max(maxX, points.get(i));
-            minY = Math.min(minY, points.get(i + 1)); maxY = Math.max(maxY, points.get(i + 1));
-            minZ = Math.min(minZ, points.get(i + 2)); maxZ = Math.max(maxZ, points.get(i + 2));
-        }
-        scale = Math.max(maxX - minX, Math.max(maxY - minY, maxZ - minZ));
-        if (!(scale > 0.0) || !Double.isFinite(scale)) return false;
-        while (indices.hasRemaining()) {
-            int a = indices.get(), b = indices.get(), c = indices.get();
-            PositionKey ka = positionKey(points, a), kb = positionKey(points, b), kc = positionKey(points, c);
-            if (ka.equals(kb) || kb.equals(kc) || kc.equals(ka)) return false;
-            Integer va = vertices.get(ka);
-            if (va == null) { va = nextVertex++; vertices.put(ka, va); }
-            Integer vb = vertices.get(kb);
-            if (vb == null) { vb = nextVertex++; vertices.put(kb, vb); }
-            Integer vc = vertices.get(kc);
-            if (vc == null) { vc = nextVertex++; vertices.put(kc, vc); }
-            if (!addEdge(edges, va, vb) || !addEdge(edges, vb, vc) || !addEdge(edges, vc, va)) return false;
-            addLink(links, va, vb, vc); addLink(links, vb, vc, va); addLink(links, vc, va, vb);
-            double ax = points.get(a * 3), ay = points.get(a * 3 + 1), az = points.get(a * 3 + 2);
-            double bx = points.get(b * 3), by = points.get(b * 3 + 1), bz = points.get(b * 3 + 2);
-            double cx = points.get(c * 3), cy = points.get(c * 3 + 1), cz = points.get(c * 3 + 2);
-            double abx = bx - ax, aby = by - ay, abz = bz - az;
-            double acx = cx - ax, acy = cy - ay, acz = cz - az;
-            double nx = aby * acz - abz * acy, ny = abz * acx - abx * acz, nz = abx * acy - aby * acx;
-            if (!(nx * nx + ny * ny + nz * nz > 0.0)) return false;
-            ax-=minX; ay-=minY; az-=minZ; bx-=minX; by-=minY; bz-=minZ; cx-=minX; cy-=minY; cz-=minZ;
-            signedVolumeTimesSix += ax * (by * cz - bz * cy)
-                    + ay * (bz * cx - bx * cz) + az * (bx * cy - by * cx);
-        }
-        for (EdgeUse edge : edges.values()) if (edge.count != 2 || edge.orientation != 0) return false;
-        for (var link : links.values()) {
-            for (var adjacent : link.values()) if (adjacent.size() != 2) return false;
-            int start=link.keySet().iterator().next(), previous=-1, current=start, count=0;
-            do {
-                var adjacent=link.get(current);
-                int next=adjacent.get(0)==previous?adjacent.get(1):adjacent.get(0);
-                previous=current; current=next;
-                if (++count > link.size()) return false;
-            } while(current!=start);
-            if(count!=link.size()) return false;
-        }
-        return Math.abs(signedVolumeTimesSix) > scale * scale * scale * 1.0e-12;
+        return MeshTopology.closed(positions, triangleIndices);
     }
-
-    private static void addLink(Map<Integer, Map<Integer, java.util.List<Integer>>> links, int center, int a, int b) {
-        var link=links.computeIfAbsent(center, ignored -> new HashMap<>());
-        link.computeIfAbsent(a, ignored -> new java.util.ArrayList<>(2)).add(b);
-        link.computeIfAbsent(b, ignored -> new java.util.ArrayList<>(2)).add(a);
-    }
-
-    private static PositionKey positionKey(FloatBuffer points, int vertex) {
-        int offset = Math.multiplyExact(vertex, 3);
-        return new PositionKey(bits(points.get(offset)), bits(points.get(offset + 1)), bits(points.get(offset + 2)));
-    }
-
-    private static int bits(float value) { return Float.floatToIntBits(value == 0.0F ? 0.0F : value); }
-
-    private static boolean addEdge(Map<EdgeKey, EdgeUse> edges, int from, int to) {
-        int low = Math.min(from, to), high = Math.max(from, to);
-        EdgeUse use = edges.computeIfAbsent(new EdgeKey(low, high), ignored -> new EdgeUse());
-        use.count++;
-        use.orientation += from == low ? 1 : -1;
-        return use.count <= 2;
-    }
-
-    private record PositionKey(int x, int y, int z) {}
-    private record EdgeKey(int low, int high) {}
-    private static final class EdgeUse { int count, orientation; }
 
     @Override
     public boolean equals(Object other) {

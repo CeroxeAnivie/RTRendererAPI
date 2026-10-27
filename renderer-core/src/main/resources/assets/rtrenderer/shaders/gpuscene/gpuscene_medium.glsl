@@ -34,8 +34,12 @@ GsMediumCoefficients gsInstanceMedium(uint instanceIndex) {
 }
 
 GsMediumCoefficients gsCurrentMedium(GsMediumPath path) {
+#ifdef RTRENDERER_SURFACE_ONLY
+    return gsFrameMedium();
+#else
     uint instanceIndex = gsCurrentMediumInstance(path);
     return instanceIndex == GS_INVALID_SLOT ? gsFrameMedium() : gsInstanceMedium(instanceIndex);
+#endif
 }
 
 vec2 gsInterfaceIors(GpuScenePayload surfaceSample,GsMediumPath incidentPath,GsMediumPath transmittedPath) {
@@ -47,6 +51,7 @@ vec2 gsInterfaceIors(GpuScenePayload surfaceSample,GsMediumPath incidentPath,GsM
 }
 
 GsMediumPath gsCrossMediumBoundary(GsMediumPath path, GpuScenePayload surfaceSample) {
+#ifndef RTRENDERER_SURFACE_ONLY
     if (surfaceSample.mediumBoundary.w == 0u) return path;
     uint boundary = surfaceSample.mediumBoundary.x;
     bool backFace = surfaceSample.state.y == GS_PAYLOAD_BACK_FACE;
@@ -65,6 +70,7 @@ GsMediumPath gsCrossMediumBoundary(GsMediumPath path, GpuScenePayload surfaceSam
         path.depth--;
     }
     path.mediumSlot=gsSelectMediumInstance(path);
+#endif
     return path;
 }
 

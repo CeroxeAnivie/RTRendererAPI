@@ -16,6 +16,7 @@ public final class MediumTransportNativeSelfTest {
     private static long frameNanoseconds,maximumFrameNanoseconds;
     private static long lastFrameNanoseconds;
     private static int width=32,height=32;
+    private static MediumTransportOptions transport=new MediumTransportOptions(12,1,8,512);
     private static final CameraState OUTSIDE=CameraState.lookAt(0,0,6,0,0,0).verticalFieldOfViewDegrees(30).build();
     private static EnvironmentState.Medium absorbing(float r,float g,float b) {
         return EnvironmentState.Medium.builder().absorption(r,g,b).density(1).build();
@@ -86,6 +87,20 @@ public final class MediumTransportNativeSelfTest {
             var shadow=render(receiverCamera,sunlight);
             near(shadow[0]/lit[0],Math.exp(-1.6),.008,"ordered volume shadow red transmittance");
             near(shadow[1]/lit[1],Math.exp(-.8),.008,"ordered volume shadow green transmittance");
+            transport=transport.withMaximumDistance(.25f);
+            var distantBlocker=MeshAsset.triangles(9,new float[]{-100,-100,4,100,-100,4,100,100,4,-100,100,4},
+                new int[]{0,1,2,2,3,0},1);
+            apply(SceneTransaction.builder(++revision).upsert(distantBlocker)
+                .upsert(SceneInstance.builder(9,9).build()).build());
+            var blocked=render(receiverCamera,sunlight);
+            MediumTransportSelfTest.require(blocked[0]<.0001 && blocked[1]<.0001,
+                "medium integration distance must not discard a more distant opaque blocker");
+            apply(SceneTransaction.builder(++revision).removeInstance(9)
+                .upsert(MaterialAsset.builder(1).shadingModel(MaterialAsset.ShadingModel.UNLIT)
+                    .baseColorRgba8(0xffffffff).doubleSided(true).build()).build());
+            near(render(OUTSIDE,EnvironmentState.neutral())[2],1,.005,
+                "bounded medium integration must preserve distant real receiver radiance");
+            transport=MediumTransportOptions.balanced();
 
             var scatter=EnvironmentState.Medium.builder().absorption(.05f,.05f,.05f).scattering(.25f,.25f,.25f).density(1).build();
             apply(SceneTransaction.builder(++revision).upsert(MaterialAsset.builder(1).shadingModel(MaterialAsset.ShadingModel.UNLIT).baseColorRgba8(0xff000000).doubleSided(true).build())
@@ -166,7 +181,7 @@ public final class MediumTransportNativeSelfTest {
         long started=System.nanoTime();
         var frame=RenderFrameRequest.builder(++sequence,width,height,camera).minimumSceneRevision(revision).environment(environment)
             .primitiveBatch(primitives)
-            .mediumTransport(new MediumTransportOptions(12,1,8,512)).build();
+            .mediumTransport(transport).build();
         long deadline=System.nanoTime()+Duration.ofSeconds(30).toNanos();
         while(!(renderer.trySubmit(frame) instanceof FrameSubmitted)) {
             if(System.nanoTime()>deadline) throw new AssertionError("frame admission timeout");Thread.sleep(1);

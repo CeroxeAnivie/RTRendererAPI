@@ -324,7 +324,7 @@ final class RtShaderModuleCompiler {
      * directory. Resolving quoted includes here keeps production and self-test compilation
      * identical, rejects traversal, and makes include cycles deterministic diagnostics.</p>
      */
-    private static String readExpandedUtf8Resource(String resourcePath) {
+    static String readExpandedUtf8Resource(String resourcePath) {
         String root = normalizeResourcePath(resourcePath);
         return expandIncludes(root, new ArrayDeque<>(), new HashSet<>());
     }

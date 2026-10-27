@@ -67,19 +67,95 @@ struct GpuScenePayload {
 const uint GS_MEDIUM_PATH_CAPACITY = 32u;
 struct GsMediumPath { uint slots[32]; uint depth; uint mediumSlot; };
 uint gsInstanceWord(uint instanceIndex, uint offset);
-uint gsMediumPathGet(GsMediumPath path, uint index) { return path.slots[index]; }
-void gsMediumPathSet(inout GsMediumPath path, uint index, uint value) { path.slots[index] = value; }
+// Constant member accesses keep the bounded path in SSA registers. Dynamic indexing of
+// a by-value array forces a separate 128-byte local-memory array at every inlined call.
+uint gsMediumPathGet(GsMediumPath path, uint index) {
+    switch(index) {
+        case 0u: return path.slots[0];
+        case 1u: return path.slots[1];
+        case 2u: return path.slots[2];
+        case 3u: return path.slots[3];
+        case 4u: return path.slots[4];
+        case 5u: return path.slots[5];
+        case 6u: return path.slots[6];
+        case 7u: return path.slots[7];
+        case 8u: return path.slots[8];
+        case 9u: return path.slots[9];
+        case 10u: return path.slots[10];
+        case 11u: return path.slots[11];
+        case 12u: return path.slots[12];
+        case 13u: return path.slots[13];
+        case 14u: return path.slots[14];
+        case 15u: return path.slots[15];
+        case 16u: return path.slots[16];
+        case 17u: return path.slots[17];
+        case 18u: return path.slots[18];
+        case 19u: return path.slots[19];
+        case 20u: return path.slots[20];
+        case 21u: return path.slots[21];
+        case 22u: return path.slots[22];
+        case 23u: return path.slots[23];
+        case 24u: return path.slots[24];
+        case 25u: return path.slots[25];
+        case 26u: return path.slots[26];
+        case 27u: return path.slots[27];
+        case 28u: return path.slots[28];
+        case 29u: return path.slots[29];
+        case 30u: return path.slots[30];
+        case 31u: return path.slots[31];
+        default: return GS_INVALID_SLOT;
+    }
+}
+void gsMediumPathSet(inout GsMediumPath path, uint index, uint value) {
+    switch(index) {
+        case 0u: path.slots[0]=value; break;
+        case 1u: path.slots[1]=value; break;
+        case 2u: path.slots[2]=value; break;
+        case 3u: path.slots[3]=value; break;
+        case 4u: path.slots[4]=value; break;
+        case 5u: path.slots[5]=value; break;
+        case 6u: path.slots[6]=value; break;
+        case 7u: path.slots[7]=value; break;
+        case 8u: path.slots[8]=value; break;
+        case 9u: path.slots[9]=value; break;
+        case 10u: path.slots[10]=value; break;
+        case 11u: path.slots[11]=value; break;
+        case 12u: path.slots[12]=value; break;
+        case 13u: path.slots[13]=value; break;
+        case 14u: path.slots[14]=value; break;
+        case 15u: path.slots[15]=value; break;
+        case 16u: path.slots[16]=value; break;
+        case 17u: path.slots[17]=value; break;
+        case 18u: path.slots[18]=value; break;
+        case 19u: path.slots[19]=value; break;
+        case 20u: path.slots[20]=value; break;
+        case 21u: path.slots[21]=value; break;
+        case 22u: path.slots[22]=value; break;
+        case 23u: path.slots[23]=value; break;
+        case 24u: path.slots[24]=value; break;
+        case 25u: path.slots[25]=value; break;
+        case 26u: path.slots[26]=value; break;
+        case 27u: path.slots[27]=value; break;
+        case 28u: path.slots[28]=value; break;
+        case 29u: path.slots[29]=value; break;
+        case 30u: path.slots[30]=value; break;
+        case 31u: path.slots[31]=value; break;
+        default: break;
+    }
+}
 uint gsSelectMediumInstance(GsMediumPath path);
 GsMediumPath gsEmptyMediumPath() {
     GsMediumPath path; path.depth = 0u; path.mediumSlot=GS_INVALID_SLOT;
-    [[dont_unroll]] for (uint i=0u;i<GS_MEDIUM_PATH_CAPACITY;++i) path.slots[i]=0u;
+    path.slots=uint[32](0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u,0u);
     return path;
 }
 GsMediumPath gsCameraMediumPath() {
     GsMediumPath path=gsEmptyMediumPath();
+#ifndef RTRENDERER_SURFACE_ONLY
     path.depth=min(gsFrame.words[GPU_SCENE_FRAME_CAMERA_MEDIUM_COUNT_WORD],GS_MEDIUM_PATH_CAPACITY);
     [[dont_unroll]] for(uint i=0u;i<path.depth;++i) gsMediumPathSet(path,i,gsFrame.words[GPU_SCENE_FRAME_CAMERA_MEDIUM_SLOTS_WORD+i]);
     path.mediumSlot=gsSelectMediumInstance(path);
+#endif
     return path;
 }
 int gsMediumPathFind(GsMediumPath path, uint instanceIndex) {

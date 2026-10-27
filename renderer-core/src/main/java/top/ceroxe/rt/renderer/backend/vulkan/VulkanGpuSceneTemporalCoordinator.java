@@ -157,14 +157,11 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
         Prepared {
             source = Objects.requireNonNull(source, "source");
             gpu = Objects.requireNonNull(gpu, "gpu");
-            uniforms = Objects.requireNonNull(uniforms, "uniforms").clone();
+            // pack() transfers this fresh, private frame array to Prepared. The sole reader
+            // immediately copies it into the frame slot; no public caller can retain/mutate it.
+            uniforms = Objects.requireNonNull(uniforms, "uniforms");
             resources = Objects.requireNonNull(resources, "resources");
             featureInput = Objects.requireNonNull(featureInput, "featureInput");
-        }
-
-        @Override
-        public byte[] uniforms() {
-            return uniforms.clone();
         }
 
         Set<HistoryInvalidationReason> invalidations() {

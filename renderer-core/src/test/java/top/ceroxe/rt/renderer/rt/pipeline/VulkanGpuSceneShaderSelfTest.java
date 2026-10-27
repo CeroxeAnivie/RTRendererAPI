@@ -208,6 +208,9 @@ public final class VulkanGpuSceneShaderSelfTest {
             }
 
             details2 = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            if (path.endsWith("/gpuscene/gpuscene.rgen") && details2.contains("gpuscene_raygen.glsl")) {
+               details2 += read("assets/rtrenderer/shaders/gpuscene/gpuscene_raygen.glsl");
+            }
          } catch (Throwable value5) {
             if (input != null) {
                try {

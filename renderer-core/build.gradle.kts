@@ -250,6 +250,7 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanDenoisingFrameResourcesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanDenoisingFrameResourcesSelfTest",
     "coreVulkanFrameReconstructionResourcesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameReconstructionResourcesSelfTest",
     "coreVulkanGpuSceneShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.VulkanGpuSceneShaderSelfTest",
+    "coreGpuScenePipelineRequirementsSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuScenePipelineRequirementsSelfTest",
     "coreRtPrecompiledShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.RtPrecompiledShaderSelfTest",
     "coreVulkanFramePixelCodecSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDiagnosticReadbackSelfTest",
     "coreVulkanRangeArenaSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanRangeArenaSelfTest",
@@ -357,6 +358,12 @@ nativeSelfTests.forEach { (taskName, mainClassName) ->
 tasks.named<JavaExec>("mediumTransportNativeSelfTest").configure {
     if (providers.gradleProperty("mediumProfile").isPresent) args("--profile")
 }
+
+registerCoreSelfTest(
+    "mediumTransportBenchmark",
+    "top.ceroxe.rt.renderer.backend.vulkan.VulkanMediumTransportBenchmark",
+    "Measures identical opaque, dielectric, nested, emitting and scattering work with GPU timestamps."
+)
 
 tasks.named<JavaExec>("vulkanEvidenceRetentionNativeSelfTest").configure {
     minHeapSize = "256m"

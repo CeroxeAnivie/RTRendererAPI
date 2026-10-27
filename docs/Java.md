@@ -4,11 +4,11 @@ RTRendererAPI 适合嵌入 Java 25 或更高版本的桌面或引擎进程。普
 
 公共模型是厂商中立、宿主无关的渲染契约：场景、相机、exact clip-space projection、资源所有权和能力状态均不包含游戏或引擎专用字段。Windows NVIDIA Vulkan 是当前发布实现，不是公共 API 的身份。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:5.2.0`。本轮从源码构建到本地 Maven 仓库使用，不上传 Central；5.1.0 已发布到 Central。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:5.2.1`。本轮从源码构建到本地 Maven 仓库使用，不上传 Central；5.1.0 已发布到 Central。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。
 
 ## 最小调用
 
-`Renderer.open()` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 25 或更高版本。当前行为、验收证据和已知限制见 [5.2.0 验证记录](5.2.0.md)，历史 procedural/triangle RT 证据见 [4.1.0 验证记录](quality/4.1.0-procedural-validation.md)。这些结果不代表全部兼容硬件或特定宿主集成都已验收。
+`Renderer.open()` 会枚举已安装 provider、执行兼容性探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 25 或更高版本。当前行为、验收证据和已知限制见 [5.2.1 验证记录](5.2.1.md)，历史 procedural/triangle RT 证据见 [4.1.0 验证记录](quality/4.1.0-procedural-validation.md)。这些结果不代表全部兼容硬件或特定宿主集成都已验收。
 
 ```java
 try (Renderer renderer = Renderer.open()) {
@@ -77,7 +77,7 @@ try (Renderer renderer = Renderer.open(
 }
 ```
 
-能力必须逐项查询。`5.2.0` 的 Vulkan 后端真实执行版本化 buffer/texture、view/sampler、staging upload、buffer/texture copy、buffer-image copy、typed clear/barrier、SPIR-V compute/graphics pipeline、render pass、direct/multi/indirect draw，以及在设备支持时执行通用 BLAS/TLAS build、显式 RT shader group/SBT、AS descriptor 和 trace dispatch，并通过 fence evidence 公开完成状态。逻辑操作和 geometry shader 现在分别受设备 feature capability 约束；RT pipeline/SBT 可通过 `RetireRayTracingPipelineCommand` 按完成序列退休。`BindingType.COMBINED_IMAGE_SAMPLER` 必须使用一个 `BindingSet.CombinedImageSamplerValue`，Vulkan 会将同一 view/sampler 对写入一个 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`。接口布局会在 pipeline 创建前与 SPIR-V 逐项核对；错误的 entry point、stage、set/binding、数组长度或拆分 descriptor 声明均 fail-closed。RT 的 `RECORDED` 或 `OUTPUT_PRODUCED` 都不是显示可见证据；能力未标为 executable 的功能不能根据静态类型推断可用。
+能力必须逐项查询。`5.2.1` 的 Vulkan 后端真实执行版本化 buffer/texture、view/sampler、staging upload、buffer/texture copy、buffer-image copy、typed clear/barrier、SPIR-V compute/graphics pipeline、render pass、direct/multi/indirect draw，以及在设备支持时执行通用 BLAS/TLAS build、显式 RT shader group/SBT、AS descriptor 和 trace dispatch，并通过 fence evidence 公开完成状态。逻辑操作和 geometry shader 现在分别受设备 feature capability 约束；RT pipeline/SBT 可通过 `RetireRayTracingPipelineCommand` 按完成序列退休。`BindingType.COMBINED_IMAGE_SAMPLER` 必须使用一个 `BindingSet.CombinedImageSamplerValue`，Vulkan 会将同一 view/sampler 对写入一个 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`。接口布局会在 pipeline 创建前与 SPIR-V 逐项核对；错误的 entry point、stage、set/binding、数组长度或拆分 descriptor 声明均 fail-closed。RT 的 `RECORDED` 或 `OUTPUT_PRODUCED` 都不是显示可见证据；能力未标为 executable 的功能不能根据静态类型推断可用。
 
 ## 发布一个最小场景
 
@@ -343,7 +343,7 @@ RendererConfig explicitProduction = RendererConfig.builder()
 ### 完整专家配置
 
 专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
-显式覆盖 5.2.0 中保留的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
+显式覆盖 5.2.1 中保留的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
 NRD 不可用时保留内建时域路径，FG/MFG 不可用时继续发布原生帧。SER 和 RTXMU 独立
 协商，某一项不支持不会阻止其他项启用。
 
@@ -417,7 +417,7 @@ session 内完成，只有 `APPLIED` 是提交证据。
 
 ### 各能力的最短配置
 
-以下片段都只需要 `top.ceroxe.rt:renderer-api:5.2.0`。把对应 options 传给
+以下片段都只需要 `top.ceroxe.rt:renderer-api:5.2.1`。把对应 options 传给
 `RendererConfig.builder()` 即可；没有任何片段要求额外模块或手工 DLL。
 
 ```java
