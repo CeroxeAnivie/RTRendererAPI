@@ -64,7 +64,10 @@ public final class VulkanGpuSceneShaderSelfTest {
       require(raygen.contains("RTRENDERER_LINEAR_HDR_OUTPUT") && raygen.contains("rgba16f") && raygen.contains("accumulated += radiance"), "HDR output must retain untonemapped linear radiance in RGBA16F");
       require(raygen.contains("GPU_SCENE_FRAME_SAMPLE_COUNT_WORD") && raygen.contains("gsSubpixelOffset") && raygen.contains("sampleIndex < 8u"), "deterministic bounded anti-aliasing loop is missing");
       require(raygen.contains("else if (lightmapModulated && primary.transmissionIor.x<=0.0"), "forward parity must have an explicit ray-generation branch");
-      require(raygen.contains("gsApplyDistanceFog(") && raygen.indexOf("else if (lightmapModulated)") < raygen.indexOf("gsEvaluatePbrSurface(primary, origin)"), "forward parity must bypass the renderer-owned PBR branch");
+      require(raygen.contains("gsApplyDistanceFog(")
+              && raygen.indexOf("else if (lightmapModulated)")
+              < raygen.indexOf("gsEvaluatePbrSurface(primary, origin)"),
+              "forward parity must bypass the renderer-owned PBR branch");
       require(raygen.contains("lightmapSampleCount") && raygen.contains("lightmapCoverage") && raygen.contains("gsLinearToSrgb(resolvedColor)") && raygen.contains("gsToneMap(resolvedColor)"), "forward parity coverage must blend display transforms after linear resolve");
    }
 
@@ -107,6 +110,16 @@ public final class VulkanGpuSceneShaderSelfTest {
       require(raygen.contains("traceRayEXT(sceneTlas,gl_RayFlagsNoneEXT,0,0,0,1")
               && read("assets/rtrenderer/shaders/gpuscene/gpuscene_shadow.rmiss").contains("gsShadowRemaining=remaining"),
               "ordered medium shadows must use the shared miss service and bounded ray intervals");
+      String medium = read("assets/rtrenderer/shaders/gpuscene/gpuscene_medium.glsl");
+      String shadow = read("assets/rtrenderer/shaders/gpuscene/gpuscene_shadow.rmiss");
+      require(medium.contains("GpuScenePayload surfaceSample")
+                      && medium.contains("GsRadianceSplit surfaceRadiance"),
+              "shadow payload must retain the shared surface-lighting service fields");
+      require(shadow.contains("operation==2u") && shadow.contains("if(gsShadowQuery.operation==1u)"),
+              "shadow miss must expose surface, visibility, and medium-integration operations");
+      require(read("assets/rtrenderer/shaders/gpuscene/gpuscene_lighting.glsl")
+                      .contains("inner == outer ? step(outer, cone) : smoothstep(outer, inner, cone)"),
+              "spot lights must define deterministic equal-cone behavior");
    }
 
    private static void verifyOpaqueMetallicReflectionContract() {

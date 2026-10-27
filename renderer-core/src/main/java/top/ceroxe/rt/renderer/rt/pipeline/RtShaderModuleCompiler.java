@@ -32,6 +32,8 @@ final class RtShaderModuleCompiler {
     private static final String DIAGNOSTIC_GBUFFER_ENABLED_PROPERTY = "top.ceroxe.rt.oracleGBuffer.enabled";
     private static final String DISABLE_DYNAMIC_ANALYTIC_LOOP_PROPERTY =
             "top.ceroxe.rt.smoke.causality.disableDynamicAnalyticLoop";
+    private static final String SURFACE_ONLY_PROPERTY =
+            "top.ceroxe.rt.shader.surfaceOnly";
 
     private RtShaderModuleCompiler() {
     }
@@ -242,6 +244,12 @@ final class RtShaderModuleCompiler {
             }
             if (shaderExecutionReorderingEnabled) {
                 Shaderc.shaderc_compile_options_add_macro_definition(options, "RTRENDERER_SER", "1");
+            }
+            if (Boolean.getBoolean(SURFACE_ONLY_PROPERTY)
+                    && resourcePath.startsWith("assets/rtrenderer/shaders/gpuscene/")) {
+                Shaderc.shaderc_compile_options_add_macro_definition(
+                        options, "RTRENDERER_SURFACE_ONLY", "1"
+                );
             }
             /*
              * The CharSequence overload marshals the fully expanded source through LWJGL's

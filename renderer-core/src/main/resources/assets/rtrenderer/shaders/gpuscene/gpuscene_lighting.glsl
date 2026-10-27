@@ -46,6 +46,7 @@ GsRadianceSplit gsEvaluateBrdf(
     return gsRadianceSplit(diffuse * normalLight, specular * normalLight);
 }
 
+#ifndef GS_LIGHTING_NO_DIRECT_SURFACE
 GsRadianceSplit gsDirectContribution(
     vec3 position,
     vec3 normal,
@@ -130,7 +131,7 @@ GsRadianceSplit gsSceneLight(
             float cone = dot(spotDirection, -direction);
             float inner = uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_INNER_CONE_WORD]);
             float outer = uintBitsToFloat(gsLights.words[base + GPU_SCENE_LIGHT_OUTER_CONE_WORD]);
-            attenuation *= smoothstep(outer, inner, cone);
+            attenuation *= inner == outer ? step(outer, cone) : smoothstep(outer, inner, cone);
         }
     }
     bool castsShadow = (flags & GPU_SCENE_FLAG_CASTS_SHADOW) != 0u;
@@ -171,5 +172,6 @@ GsRadianceSplit gsEvaluatePbrSurface(GpuScenePayload surfaceSample, vec3 rayOrig
     gsFinalizeRadianceHitDistances(radiance);
     return radiance;
 }
+#endif
 
 #endif

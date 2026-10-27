@@ -64,7 +64,7 @@ covers padded strides and nonzero offsets, multiple geometries, intersection att
 any-hit rejection, exact RGBA pixels before and after UPDATE, incompatible UPDATE rejection,
 and TLAS/BLAS retirement with Vulkan validation enabled.
 
-Current coordinates are `top.ceroxe.rt:renderer-api:5.2.1`, built into a local Maven repository;
+Current coordinates are `top.ceroxe.rt:renderer-api:6.0.0`, built into a local Maven repository;
 the runtime core and NVIDIA modules resolve transitively at the same version. This patch is
 not uploaded to Central. The [historical validation record](quality/4.1.0-procedural-validation.md)
 identifies the actual device, acceptance commands, signed bundle and Central publication checks.

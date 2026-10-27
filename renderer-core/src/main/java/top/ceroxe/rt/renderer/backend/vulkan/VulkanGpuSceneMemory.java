@@ -33,6 +33,7 @@ final class VulkanGpuSceneMemory {
     private final VulkanRangeArena<MeshAsset> lightmapCoordinates = new VulkanRangeArena<>(MeshAsset::id);
     private final VulkanRangeArena<MeshAsset> indices = new VulkanRangeArena<>(MeshAsset::id);
     private final VulkanRangeArena<MeshAsset> triangleMaterialSlots = new VulkanRangeArena<>(MeshAsset::id);
+    private State cachedState;
 
     private static VulkanRangeArena.Prepared<MeshAsset> optionalMeshArena(
             VulkanRangeArena<MeshAsset> arena,
@@ -264,6 +265,7 @@ final class VulkanGpuSceneMemory {
         lightmapCoordinates.commitValidated(checked.lightmapCoordinates, retireAfterEpoch);
         indices.commitValidated(checked.indices, retireAfterEpoch);
         triangleMaterialSlots.commitValidated(checked.triangleMaterialSlots, retireAfterEpoch);
+        cachedState = null;
         checked.committed = true;
         return state();
     }
@@ -278,15 +280,20 @@ final class VulkanGpuSceneMemory {
         lightmapCoordinates.releaseThrough(completedEpoch);
         indices.releaseThrough(completedEpoch);
         triangleMaterialSlots.releaseThrough(completedEpoch);
+        cachedState = null;
         return state();
     }
 
     synchronized State state() {
-        return new State(
+        if (cachedState != null) {
+            return cachedState;
+        }
+        cachedState = new State(
                 texturePixels.state(), positions.state(), normals.state(), tangents.state(),
                 textureCoordinates.state(), colors.state(), lightmapCoordinates.state(),
                 indices.state(), triangleMaterialSlots.state()
         );
+        return cachedState;
     }
 
     synchronized VulkanGpuSceneAbi.GeometryPlacement geometryPlacement(long meshIdentity) {

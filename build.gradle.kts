@@ -301,8 +301,45 @@ val verifyReleaseVersionConsistency = tasks.register("verifyReleaseVersionConsis
     }
 }
 
+val verifyMajorReleaseContract = tasks.register("verifyMajorReleaseContract") {
+    group = "verification"
+    description = "Enforces the intentional 6.0.0 major-release contract and current documentation entrypoint."
+    inputs.property("projectVersion", project.version.toString())
+    inputs.files(
+        file("docs/6.0.0.md"),
+        file("docs/COMPATIBILITY.md"),
+        file("README.md"),
+        file("gradle.properties")
+    )
+    doLast {
+        val expected = project.version.toString()
+        if (expected != "6.0.0") {
+            throw GradleException("The current release line is a deliberate 6.0.0 major release: $expected")
+        }
+        val currentDocs = listOf(
+            file("README.md"),
+            file("docs/Home.md"),
+            file("docs/Java.md"),
+            file("docs/COMPATIBILITY.md"),
+            file("docs/Procedural-Geometry.md"),
+            file("demos/hex-ball/README.md")
+        )
+        val stale = currentDocs.filter { it.readText(StandardCharsets.UTF_8).contains("5.2.2") }
+        if (stale.isNotEmpty()) {
+            throw GradleException(
+                "Current release documentation still names 5.2.2: " +
+                    stale.joinToString(", ") { rootDir.toPath().relativize(it.toPath()).toString() }
+            )
+        }
+        if (!file("docs/6.0.0.md").isFile) {
+            throw GradleException("docs/6.0.0.md is required for the major release")
+        }
+    }
+}
+
 tasks.named("check") {
     dependsOn(verifyReleaseVersionConsistency)
+    dependsOn(verifyMajorReleaseContract)
 }
 
 val publishAllToLocalStagingRepository = tasks.register("publishAllToLocalStagingRepository") {

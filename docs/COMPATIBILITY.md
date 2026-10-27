@@ -1,18 +1,18 @@
 # API Contract
 
-RTRendererAPI 5.2.1 adds general closed-volume transport while preserving the Java 25 major-5
-binary API. Use matching API/backend modules. Existing descriptor binding numbers and the first
+RTRendererAPI 6.0.0 is a deliberate breaking release with a single Java 25 major-6 binary/API
+contract. Use matching API/backend modules. Existing descriptor binding numbers and the first
 57 instance words / first 404 frame words remain unchanged. Instance records now contain 72 words;
 frame uniforms contain 447 words. Custom retained-scene GLSL must include the matching
 `gpuscene_abi.glsl` rather than embed old record strides. The explicit command API is unchanged.
 
 This version is delivered through GitHub source and local Maven artifacts only. It is not published
-to Maven Central. The published Central release remains 5.1.0. See [5.2.0](5.2.0.md) for the new
-medium contract, bounded transport policies, checks, and implementation limits.
+to Maven Central. The 6.0.0 contract removes legacy aliases and compatibility constructors; callers
+must migrate to the typed builder and explicit workload contracts described below.
 
 ## Migration from 4.x
 
-| 4.x surface | 5.0 surface |
+| 4.x/5.x surface | 6.0 surface |
 | --- | --- |
 | RendererBootstrap / RendererPreset | Renderer.open(), Renderer.open(config), Renderer.devices() |
 | expertBuilder() | RendererConfig.builder() |
@@ -36,7 +36,7 @@ Arbitrary shader groups, callable/procedural RT, recursion,
 graphics, compute, descriptor sets, textures and samplers remain available through the explicit
 command API. Those capabilities use the same versioned resources, ownership and evidence model.
 
-The Java API/provider SPI major is 5. The removed entry points and pixel methods have no
+The Java API/provider SPI major is 6. The removed entry points and pixel methods have no
 compatibility aliases. Versioned historical quality reports describe their original candidates.
 
 ## Contract Shape

@@ -34,6 +34,10 @@ final class PersistentSceneRegistry {
     private final ReverseReferences meshInstances = new ReverseReferences();
 
     private long revision = -1L;
+    /* Scene state and sorted snapshots are immutable for one revision; reuse them across
+       diagnostics, recovery and descriptor preparation instead of rebuilding on every query. */
+    private SceneState cachedState;
+    private Snapshot cachedSnapshot;
 
     private static <T> void requireExisting(Long2ObjectOpenHashMap<T> current, LongBuffer ids, String label) {
         while (ids.hasRemaining()) {
@@ -176,12 +180,17 @@ final class PersistentSceneRegistry {
         putAll(lights, transaction.upserts().lights(), SceneLight::id);
         checked.referenceDelta.commit(textureMaterials, materialMeshes, meshInstances);
         revision = transaction.revision();
+        cachedState = checked.prospectiveState;
+        cachedSnapshot = null;
         checked.committed = true;
         return checked.prospectiveState;
     }
 
     synchronized SceneState state() {
-        return new SceneState(
+        if (cachedState != null) {
+            return cachedState;
+        }
+        cachedState = new SceneState(
                 Math.max(0L, revision),
                 textures.size(),
                 materials.size(),
@@ -189,10 +198,14 @@ final class PersistentSceneRegistry {
                 instances.size(),
                 lights.size()
         );
+        return cachedState;
     }
 
     synchronized Snapshot snapshot() {
-        return new Snapshot(
+        if (cachedSnapshot != null) {
+            return cachedSnapshot;
+        }
+        cachedSnapshot = new Snapshot(
                 revision >= 0L,
                 state(),
                 sortedValues(textures.values(), TextureAsset::id),
@@ -201,6 +214,7 @@ final class PersistentSceneRegistry {
                 sortedValues(instances.values(), SceneInstance::id),
                 sortedValues(lights.values(), SceneLight::id)
         );
+        return cachedSnapshot;
     }
 
     private void requireExistingRemovals(SceneTransaction.Removals removals) {

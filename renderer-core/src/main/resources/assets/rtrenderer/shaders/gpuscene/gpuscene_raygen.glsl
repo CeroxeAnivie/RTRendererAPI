@@ -1,4 +1,5 @@
 #extension GL_EXT_ray_tracing : require
+#extension GL_EXT_ray_flags_primitive_culling : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #ifdef RTRENDERER_SER
 #extension GL_NV_shader_invocation_reorder : require
@@ -143,12 +144,18 @@ vec3 gsShadowTransmittance(vec3 origin, vec3 normal, vec3 direction, float maxim
 #ifndef RTRENDERER_SURFACE_ONLY
 #undef gsEvaluatePbrSurface
 
-// Secondary paths share one lighting service, avoiding duplication of the light and
-// medium loops at every optical continuation/overlay call site in the driver compiler.
-GsRadianceSplit gsEvaluatePbrSurface(GpuScenePayload surfaceSample,vec3 rayOrigin) {
-    gsShadowQuery.operation=2u;gsShadowQuery.path=gsLightingMediumPath;
-    gsShadowQuery.surfaceSample=surfaceSample;gsShadowQuery.origin=rayOrigin;
-    traceRayEXT(sceneTlas,gl_RayFlagsNoneEXT,0,0,0,1,rayOrigin,1.0e-3,vec3(0,0,1),1.0,1);
+// Secondary paths share one lighting service, keeping the full material and
+// medium evaluation out of the ray-generation shader's instruction footprint.
+GsRadianceSplit gsEvaluatePbrSurface(GpuScenePayload surfaceSample, vec3 rayOrigin) {
+    gsShadowQuery.operation = 2u;
+    gsShadowQuery.path = gsLightingMediumPath;
+    gsShadowQuery.surfaceSample = surfaceSample;
+    gsShadowQuery.origin = rayOrigin;
+    // The surface-lighting service is intentionally a miss-only dispatch. The GPUScene
+    // pipeline has no procedural hit group, so skipping triangles avoids a full BVH hit walk
+    // while preserving the service's complete PBR/medium evaluation in gpuscene_shadow.rmiss.
+    traceRayEXT(sceneTlas, gl_RayFlagsSkipTrianglesEXT, 0, 0, 0, 1,
+        rayOrigin, 1.0e-3, vec3(0.0, 0.0, 1.0), 1.0, 1);
     return gsShadowQuery.surfaceRadiance;
 }
 #endif
@@ -377,7 +384,7 @@ vec3 gsOpticalSurface(GpuScenePayload surfaceSample,vec3 origin) {
         surfaceSample.transmissionIor.z,surfaceSample.transmissionIor.w);
     if(gsUnlit(surfaceSample)) return max(surfaceSample.baseColorAndOpacity.rgb,vec3(0.0))
         +max(surfaceSample.emissiveAndMetallic.rgb,vec3(0.0));
-    return gsRadiance(gsEvaluatePbrSurface(surfaceSample,origin));
+    return gsRadiance(gsEvaluatePbrSurface(surfaceSample, origin));
 }
 
 vec3 gsOpticalContinuation(vec3 origin,vec3 direction,uvec4 launchInfo,GsMediumPath path,uint seed,out float firstHitDistance) {

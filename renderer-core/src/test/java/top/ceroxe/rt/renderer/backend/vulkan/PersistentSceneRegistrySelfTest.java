@@ -93,6 +93,8 @@ public final class PersistentSceneRegistrySelfTest {
       registry.commit(registry.prepare(transaction));
       PersistentSceneRegistry.Snapshot snapshot = registry.snapshot();
       require(((MaterialAsset)snapshot.materials().get(0)).id() == 10L && ((MeshAsset)snapshot.meshes().get(0)).id() == 30L && ((SceneInstance)snapshot.instances().get(0)).id() == 50L, "snapshot identities are not sorted");
+      require(snapshot == registry.snapshot(), "unchanged scene snapshot was rebuilt instead of reused");
+      require(snapshot.state() == registry.state(), "unchanged scene state was rebuilt instead of reused");
    }
 
    private static PersistentSceneRegistry populatedRegistry() {

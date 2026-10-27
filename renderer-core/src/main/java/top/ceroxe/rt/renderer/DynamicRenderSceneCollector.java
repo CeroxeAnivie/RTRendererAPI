@@ -53,6 +53,8 @@ public final class DynamicRenderSceneCollector {
             DynamicRenderScene.DynamicModelSlotSnapshot.empty();
     private DynamicModelTransformSnapshot lastModelTransformSnapshot =
             DynamicModelTransformSnapshot.empty();
+    /* Reused while a persistent model lane has no dirty slots for consecutive frames. */
+    private DynamicRenderScene.DynamicModelFrameDelta lastStableModelFrameDelta;
     private DynamicRenderScene.EnvironmentState environmentState = DynamicRenderScene.EnvironmentState.unknown();
     private long nextRevision = 1L;
     private boolean dirty;
@@ -296,7 +298,21 @@ public final class DynamicRenderSceneCollector {
         if (limit <= 0) {
             return List.of();
         }
-        ArrayList<T> candidates = new ArrayList<>();
+        /* Keep the common in-capacity collection path allocation-stable. */
+        if (values instanceof Collection<?> collection) {
+            int size = collection.size();
+            if (size == 0) return List.of();
+            if (size <= limit) {
+                @SuppressWarnings("unchecked")
+                Collection<? extends T> typed = (Collection<? extends T>) collection;
+                return List.copyOf(typed);
+            }
+            if (!frameState.valid()) return firstValues(values, limit);
+        }
+        int initialCapacity = values instanceof Collection<?> collection
+                ? collection.size()
+                : 16;
+        ArrayList<T> candidates = new ArrayList<>(initialCapacity);
         for (T value : values) {
             candidates.add(value);
         }
@@ -948,6 +964,7 @@ public final class DynamicRenderSceneCollector {
         if (!persistentModelOwnership) {
             modelInstances.clear();
         }
+        lastStableModelFrameDelta = null;
         particles.clear();
         beams.clear();
         blockDecals.clear();
@@ -977,6 +994,7 @@ public final class DynamicRenderSceneCollector {
         lastModelMembershipPublication = List.of();
         lastModelSlotSnapshot = DynamicRenderScene.DynamicModelSlotSnapshot.empty();
         lastModelTransformSnapshot = DynamicModelTransformSnapshot.empty();
+        lastStableModelFrameDelta = null;
         modelLaneSummary = ModelLaneSummary.empty();
         resetFrameModelCounters();
         clearPending();
@@ -1064,8 +1082,11 @@ public final class DynamicRenderSceneCollector {
             lastModelMembershipPublication = List.of();
             lastModelSlotSnapshot = DynamicRenderScene.DynamicModelSlotSnapshot.empty();
             lastModelTransformSnapshot = DynamicModelTransformSnapshot.empty();
+            lastStableModelFrameDelta = DynamicRenderScene.DynamicModelFrameDelta.none();
             return DynamicRenderScene.DynamicModelFrameDelta.none();
         }
+        if (updateCount == 0 && lastStableModelFrameDelta != null) return lastStableModelFrameDelta;
+        if (updateCount != 0) lastStableModelFrameDelta = null;
 
         boolean membershipDirty = false;
         boolean topologyDirty = false;
@@ -1148,7 +1169,7 @@ public final class DynamicRenderSceneCollector {
                 masks,
                 packedTransforms
         );
-        return DynamicRenderScene.DynamicModelFrameDelta.takeCollectorOwnership(
+        DynamicRenderScene.DynamicModelFrameDelta delta = DynamicRenderScene.DynamicModelFrameDelta.takeCollectorOwnership(
                 modelMembershipRevision,
                 modelTopologyRevision,
                 modelTransformRevision,
@@ -1163,6 +1184,8 @@ public final class DynamicRenderSceneCollector {
                 publications,
                 packedTransforms
         );
+        if (updateCount == 0) lastStableModelFrameDelta = delta;
+        return delta;
     }
 
     private DynamicRenderScene.DynamicModelSlotSnapshot buildModelSlotSnapshot() {

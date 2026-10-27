@@ -4,7 +4,7 @@ RTRendererAPI 是一个以 JDK 25 构建、以 Java 25 字节码与运行时为�
 `--release 25`。`renderer-api` 保持后端无关，`renderer-core` 提供 Windows Vulkan RT 实现；应用通过
 `Renderer` 发现后端，不直接构造实现类。
 
-5.2.1 本轮交付 GitHub 源码和本地 Maven 制品，不上传 Central；5.1.0 已发布到 Central。`publishAllToLocalStagingRepository` 生成完整本地 Maven 制品，并由独立消费方验证。
+6.0.0 是破坏性主版本，本轮只交付 GitHub 源码和本地 Maven 制品，不上传 Central。`publishAllToLocalStagingRepository` 生成完整本地 Maven 制品，并由独立消费方验证。
 
 ## 阅读路线
 

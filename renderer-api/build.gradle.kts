@@ -195,33 +195,41 @@ tasks.register<JavaExec>("meshTopologySelfTest") {
     if (providers.gradleProperty("topologyProfile").isPresent) args("--profile")
 }
 
-// Each major release owns an explicit, immutable public ABI baseline. The 2.0 surface deliberately
-// breaks 1.x compatibility, so a 1.x consumer fixture would be misleading rather than protective.
+// Each major release owns an explicit, immutable public ABI baseline. A new major starts a new
+// baseline; later minor/patch releases compare against that major's .0.0 snapshot.
 val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-${project.version}.abi")
 val rendererApiAbiSnapshot = layout.buildDirectory.file("abi/renderer-api-${project.version}.abi")
 
-// Minor releases must preserve the major-5 binary surface as well as owning a new snapshot.
-val verifyRendererApiMajorCompatibility = tasks.register("verifyRendererApiMajorCompatibility") {
+val verifyRendererApiMajorRelease = tasks.register("verifyRendererApiMajorRelease") {
     group = "verification"
     dependsOn("generateRendererApiAbi")
-    val previous = layout.projectDirectory.file("abi/renderer-api-5.0.0.abi")
-    inputs.file(previous)
+    val currentVersion = project.version.toString()
+    val major = currentVersion.substringBefore('.').toIntOrNull()
+        ?: throw GradleException("project_version must start with a numeric major: $currentVersion")
+    val majorBaseline = layout.projectDirectory.file("abi/renderer-api-$major.0.0.abi")
+    inputs.property("projectVersion", currentVersion)
+    inputs.file(majorBaseline)
     doLast {
-        fun declarations(text: String): Set<String> = text.split(Regex("(?=Compiled from )"))
-            .flatMap { block ->
-                val lines = block.lines().map(String::trim)
-                val owner = lines.firstOrNull { it.startsWith("public ") && it.endsWith("{") }
-                    ?: return@flatMap emptyList()
-                lines.filter { it.startsWith("public ") || it.startsWith("descriptor:") }
-                    .map { "$owner|$it" }
-            }.toSet()
-        val removed = declarations(previous.asFile.readText(StandardCharsets.UTF_8)) -
-            declarations(rendererApiAbiSnapshot.get().asFile.readText(StandardCharsets.UTF_8))
-        if (removed.isNotEmpty()) throw GradleException("Major-5 ABI removed or changed:\n" + removed.joinToString("\n"))
+        val expected = currentVersion
+        val snapshot = rendererApiAbiSnapshot.get().asFile
+        if (!snapshot.isFile || snapshot.length() == 0L) {
+            throw GradleException("ABI generation produced no public snapshot: $snapshot")
+        }
+        if (expected != "$major.0.0") {
+            if (!majorBaseline.asFile.isFile || majorBaseline.asFile.length() == 0L) {
+                throw GradleException("Missing same-major ABI baseline: $majorBaseline")
+            }
+            if (!Arrays.equals(majorBaseline.asFile.readBytes(), snapshot.readBytes())) {
+                throw GradleException(
+                    "Same-major ABI changed in $expected; update the baseline only after reviewing the public change: " +
+                        majorBaseline.asFile
+                )
+            }
+        }
     }
 }
 
-tasks.named("check") { dependsOn(verifyRendererApiMajorCompatibility) }
+tasks.named("check") { dependsOn(verifyRendererApiMajorRelease) }
 tasks.register("generateRendererApiAbi") {
     group = "verification"
     description = "Generates a deterministic javap snapshot of every public renderer-api binary type."

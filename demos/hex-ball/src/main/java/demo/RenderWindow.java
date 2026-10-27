@@ -8,6 +8,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
@@ -62,11 +63,22 @@ final class RenderWindow implements AutoCloseable {
             frame.setResizable(false);
             graphicsDevice.setFullScreenWindow(frame);
         } else {
+            Rectangle workArea = GraphicsEnvironment.getLocalGraphicsEnvironment()
+                    .getMaximumWindowBounds();
+            int windowWidth = Math.min(config.width(), workArea.width);
+            int windowHeight = Math.min(config.height(), workArea.height);
             frame.setMinimumSize(new Dimension(640, 360));
-            frame.setSize(Math.min(config.width(), 1600), Math.min(config.height(), 900));
-            frame.setLocationRelativeTo(null);
-            frame.setVisible(true);
+            frame.setSize(windowWidth, windowHeight);
+            if (config.width() >= workArea.width || config.height() >= workArea.height) {
+                // The default demo extent follows the monitor mode. Maximize the visible
+                // bootstrap window so pipeline creation never requires manual resizing.
+                frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+            } else {
+                frame.setLocationRelativeTo(null);
+            }
         }
+        frame.setVisible(true);
+        frame.toFront();
         frame.requestFocusInWindow();
     }
 
@@ -93,6 +105,15 @@ final class RenderWindow implements AutoCloseable {
 
     void publishOverlay(DemoTechnologyHud.Snapshot snapshot) {
         panel.publishOverlay(snapshot);
+    }
+
+    /**
+     * Publishes startup progress while the Vulkan renderer is being opened. The renderer can
+     * spend a substantial amount of time creating a cold ray-tracing pipeline; keeping this
+     * status in the already-visible Swing window makes that work observable and cancellable.
+     */
+    void publishStartupStatus(String status) {
+        panel.publishStartupStatus(status);
     }
 
     @Override
@@ -127,6 +148,7 @@ final class RenderWindow implements AutoCloseable {
         private final transient AtomicReference<BufferedImage> paintingImage = new AtomicReference<>();
         private final transient AtomicReference<DemoTechnologyHud.Snapshot> overlay =
                 new AtomicReference<>();
+        private final transient AtomicReference<String> startupStatus = new AtomicReference<>();
         private final transient BufferedImage[] imagePool = new BufferedImage[3];
 
         private FramePanel(DemoConfig config, RenderStats stats) {
@@ -169,6 +191,11 @@ final class RenderWindow implements AutoCloseable {
             repaint();
         }
 
+        private void publishStartupStatus(String status) {
+            startupStatus.set(java.util.Objects.requireNonNull(status, "status"));
+            repaint();
+        }
+
         @Override
         protected void paintComponent(Graphics graphics) {
             super.paintComponent(graphics);
@@ -196,8 +223,33 @@ final class RenderWindow implements AutoCloseable {
                     }
                 }
                 paintOverlay(canvas);
+                paintStartupStatus(canvas);
             } finally {
                 canvas.dispose();
+            }
+        }
+
+        private void paintStartupStatus(Graphics2D canvas) {
+            String status = startupStatus.get();
+            if (status == null || status.isBlank()) return;
+            String[] lines = status.split("\\R", -1);
+            int lineHeight = canvas.getFontMetrics().getHeight();
+            int boxWidth = 0;
+            for (String line : lines) {
+                boxWidth = Math.max(boxWidth, canvas.getFontMetrics().stringWidth(line));
+            }
+            boxWidth = Math.min(Math.max(0, getWidth() - 40), boxWidth + 32);
+            int boxHeight = lineHeight * lines.length + 24;
+            int boxX = Math.max(20, (getWidth() - boxWidth) / 2);
+            int boxY = Math.max(20, (getHeight() - boxHeight) / 2);
+            canvas.setColor(new Color(0, 0, 0, 215));
+            canvas.fillRect(boxX, boxY, boxWidth, boxHeight);
+            canvas.setColor(new Color(255, 255, 255, 235));
+            int baseline = boxY + canvas.getFontMetrics().getAscent() + 12;
+            for (String line : lines) {
+                int lineWidth = canvas.getFontMetrics().stringWidth(line);
+                canvas.drawString(line, boxX + Math.max(16, (boxWidth - lineWidth) / 2), baseline);
+                baseline += lineHeight;
             }
         }
 

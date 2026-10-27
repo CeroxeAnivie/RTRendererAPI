@@ -7,6 +7,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.locks.LockSupport;
 
 import javax.swing.JOptionPane;
@@ -17,6 +19,7 @@ import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.FramePrimitiveBatch;
 import top.ceroxe.rt.renderer.api.Renderer;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RenderingFeatureCapabilities;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
@@ -30,6 +33,8 @@ public final class HexBallDemo {
     private static final double CAMERA_DISTANCE = 15.4;
     /* Must match VulkanFramePresenterConfig.maximumFramesQueuedAhead below. */
     private static final long MAX_PRESENTATION_LEAD = 2L;
+    /* Cold Vulkan ray-tracing pipeline creation is bounded and visible to the user. */
+    private static final Duration RENDERER_OPEN_TIMEOUT = Duration.ofSeconds(120);
 
     private HexBallDemo() {
     }
@@ -93,7 +98,19 @@ public final class HexBallDemo {
                 requireHealthyRenderer(renderer);
             }
         } else {
-            try (Renderer renderer = Renderer.open(rendererConfig)) {
+            Renderer renderer;
+            try (RenderWindow startupWindow = RenderWindow.open(config, running, stats)) {
+                startupWindow.publishStartupStatus(
+                        "Initializing Vulkan ray-tracing renderer...\n"
+                                + "The window is ready; cold pipeline creation may take a while."
+                );
+                renderer = openRendererWithProgress(rendererConfig, startupWindow, running);
+            }
+            if (!running.get()) {
+                renderer.close();
+                return;
+            }
+            try (renderer) {
                 try (VulkanFramePresenter presenter = VulkanFramePresenter.open(
                         renderer,
                         VulkanFramePresenterConfig.builder()
@@ -150,6 +167,65 @@ public final class HexBallDemo {
         }
         running.set(false);
         System.out.println("HexBallDemo: " + stats.summary(presentTotalFps));
+    }
+
+    /**
+     * Opens the renderer without blocking the only thread that can keep a visible startup window
+     * responsive. Vulkan pipeline creation is native work and may take tens of seconds on a cold
+     * driver cache, so the progress window is part of the demo's normal startup contract.
+     */
+    private static Renderer openRendererWithProgress(
+            RendererConfig configuration,
+            RenderWindow startupWindow,
+            AtomicBoolean running
+    ) throws Exception {
+        CompletableFuture<Renderer> opened = new CompletableFuture<>();
+        Thread initializationThread = Thread.ofPlatform()
+                .daemon(true)
+                .name("rtrenderer-initialization")
+                .start(() -> {
+                    try {
+                        opened.complete(Renderer.open(configuration));
+                    } catch (Throwable failure) {
+                        opened.completeExceptionally(failure);
+                    }
+                });
+        long deadline = System.nanoTime() + RENDERER_OPEN_TIMEOUT.toNanos();
+        long nextStatusUpdate = 0L;
+        while (!opened.isDone()) {
+            long now = System.nanoTime();
+            if (now >= deadline) {
+                // If native initialization completes after the bounded wait, close the renderer
+                // on the daemon thread instead of leaking a device/session into the next run.
+                opened.whenComplete((renderer, failure) -> {
+                    if (renderer != null) renderer.close();
+                });
+                initializationThread.interrupt();
+                throw new IllegalStateException(
+                        "renderer initialization exceeded " + RENDERER_OPEN_TIMEOUT.toSeconds()
+                                + " seconds"
+                );
+            }
+            if (now >= nextStatusUpdate) {
+                long elapsedSeconds = (now - (deadline - RENDERER_OPEN_TIMEOUT.toNanos())) / 1_000_000_000L;
+                String status = running.get()
+                        ? "Initializing Vulkan ray-tracing renderer..."
+                        : "Shutdown requested; finishing renderer initialization...";
+                startupWindow.publishStartupStatus(
+                        status + "\nElapsed: " + elapsedSeconds + " s"
+                );
+                nextStatusUpdate = now + 1_000_000_000L;
+            }
+            LockSupport.parkNanos(20_000_000L);
+        }
+        try {
+            return opened.join();
+        } catch (CompletionException failure) {
+            Throwable cause = failure.getCause();
+            if (cause instanceof Exception exception) throw exception;
+            if (cause instanceof Error error) throw error;
+            throw failure;
+        }
     }
 
     private static void runGpuPresented(
