@@ -101,6 +101,7 @@ public final class GpuScenePrecompiledProgramSelfTest {
         for (int i = 0; i < stages.length; i++) builder.spirv(stages[i], stageCode[i]);
         var program = builder.build();
         String[] candidates = {"gpuscene_surface.rgen", "gpuscene_compact.rgen", "gpuscene.rgen",
+                "gpuscene_compact_passive.rgen", "gpuscene_passive.rgen",
                 "gpuscene_compact_volume.rgen", "gpuscene_volume.rgen",
                 "gpuscene_compact_caustics.rgen", "gpuscene_caustics.rgen", "gpuscene_photons.rgen"};
         String[] stageFiles = {"gpuscene.rmiss", "gpuscene.rchit", "gpuscene.rahit"};

@@ -24,6 +24,8 @@ public final class VulkanGpuSceneShaderSelfTest {
       Map<String, Integer> stages = new LinkedHashMap<>();
       stages.put("gpuscene_surface.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_compact.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_compact_passive.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_passive.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_compact_volume.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_volume.rgen", Shaderc.shaderc_raygen_shader);
@@ -48,6 +50,7 @@ public final class VulkanGpuSceneShaderSelfTest {
       }
 
       for (String raygen : new String[]{"gpuscene_surface.rgen", "gpuscene_compact.rgen", "gpuscene.rgen",
+              "gpuscene_compact_passive.rgen", "gpuscene_passive.rgen",
               "gpuscene_compact_volume.rgen", "gpuscene_volume.rgen",
               "gpuscene_compact_caustics.rgen", "gpuscene_caustics.rgen", "gpuscene_photons.rgen"}) {
          byte[] hdr = precompiled ? RtShaderModuleCompiler.loadPrecompiled(ROOT + raygen, false, true)
@@ -67,7 +70,7 @@ public final class VulkanGpuSceneShaderSelfTest {
       verifyOpaqueMetallicReflectionContract();
       verifyNrdSignalContract();
       verifyReconstructionSignalContract();
-      System.out.println("VulkanGpuSceneShaderSelfTest passed: stages=" + stages.size() + ", HDR raygens=8, NRD compose=1, spirvBytes=" + totalBytes);
+      System.out.println("VulkanGpuSceneShaderSelfTest passed: stages=" + stages.size() + ", HDR raygens=10, NRD compose=1, spirvBytes=" + totalBytes);
    }
 
    private static void verifyForwardParityContract() {
@@ -166,6 +169,11 @@ public final class VulkanGpuSceneShaderSelfTest {
               "binary visibility must require the scene's full opacity proof, including alpha coverage");
       require(surface.contains("RTRENDERER_SURFACE_ONLY") && compact.contains("RTRENDERER_COMPACT_MEDIA"),
               "surface and compact entry points must declare explicit compile-time specializations");
+      require(readRaw(ROOT + "gpuscene_compact_passive.rgen").contains("RTRENDERER_PASSIVE_MEDIA")
+                      && readRaw(ROOT + "gpuscene_compact_passive.rgen").contains("RTRENDERER_COMPACT_MEDIA")
+                      && readRaw(ROOT + "gpuscene_passive.rgen").contains("RTRENDERER_PASSIVE_MEDIA")
+                      && runtime.contains("#ifndef RTRENDERER_PASSIVE_MEDIA"),
+              "passive transport must compile scattering work out of both boundary capacities");
       String extended = readRaw(ROOT + "gpuscene_volume.rgen");
       String compactExtended = readRaw(ROOT + "gpuscene_compact_volume.rgen");
       require(extended.contains("RTRENDERER_VOLUME_TRANSPORT")

@@ -6,6 +6,11 @@ import org.lwjgl.vulkan.*;
 
 import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
+import java.util.ArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * Owns the immutable descriptor and shader-group ABI used to create the Vulkan RT pipeline.
@@ -228,10 +233,85 @@ final class RtRayTracingPipelineFactory {
                 .basePipelineHandle(VK10.VK_NULL_HANDLE)
                 .basePipelineIndex(-1);
         LongBuffer handle = stack.longs(0L);
-        checkVk(KHRRayTracingPipeline.vkCreateRayTracingPipelinesKHR(
-                device, VK10.VK_NULL_HANDLE, pipelineCache, createInfo, null, handle
-        ), "vkCreateRayTracingPipelinesKHR");
+        LongBuffer operationHandle = stack.longs(0L);
+        checkVk(KHRDeferredHostOperations.vkCreateDeferredOperationKHR(device, null, operationHandle),
+                "vkCreateDeferredOperationKHR");
+        long operation = operationHandle.get(0);
+        long started = System.nanoTime();
+        try {
+            int result = KHRRayTracingPipeline.vkCreateRayTracingPipelinesKHR(
+                    device, operation, pipelineCache, createInfo, null, handle);
+            if (result == KHRDeferredHostOperations.VK_OPERATION_DEFERRED_KHR) {
+                finishDeferredPipeline(device, operation);
+            } else if (result != KHRDeferredHostOperations.VK_OPERATION_NOT_DEFERRED_KHR) {
+                checkVk(result, "vkCreateRayTracingPipelinesKHR");
+            }
+        } catch (RuntimeException | Error failure) {
+            if (handle.get(0) != VK10.VK_NULL_HANDLE)
+                VK10.vkDestroyPipeline(device, handle.get(0), null);
+            throw failure;
+        } finally {
+            KHRDeferredHostOperations.vkDestroyDeferredOperationKHR(device, operation, null);
+            if (Boolean.getBoolean("top.ceroxe.rt.pipeline.compileDiagnostics"))
+                System.out.printf(java.util.Locale.ROOT, "RT pipeline creation wallMs=%.3f%n",
+                        (System.nanoTime() - started) / 1e6);
+        }
         return handle.get(0);
+    }
+
+    private static void finishDeferredPipeline(VkDevice device, long operation) {
+        long concurrency = Integer.toUnsignedLong(
+                KHRDeferredHostOperations.vkGetDeferredOperationMaxConcurrencyKHR(device, operation));
+        int workers = (int) Math.max(1L, Math.min(concurrency, Runtime.getRuntime().availableProcessors()));
+        if (Boolean.getBoolean("top.ceroxe.rt.pipeline.compileDiagnostics"))
+            System.out.println("RT pipeline deferred compile workers=" + workers + ", driverConcurrency=" + concurrency);
+        // All create-info, module and result storage remains alive until every join has returned.
+        // The caller also retains its pipeline-cache synchronization throughout this method.
+        boolean interrupted = false;
+        Throwable failure = null;
+        try (var executor = Executors.newFixedThreadPool(workers,
+                Thread.ofPlatform().daemon(true).name("rt-pipeline-compile-", 0).factory())) {
+            var joins = new ArrayList<Future<?>>(workers);
+            for (int index = 0; index < workers; index++)
+                joins.add(executor.submit(() -> joinDeferredPipeline(device, operation)));
+            for (Future<?> join : joins) {
+                while (true) {
+                    try {
+                        join.get();
+                        break;
+                    } catch (InterruptedException pending) {
+                        interrupted = true;
+                    } catch (ExecutionException failed) {
+                        failure = failed.getCause();
+                        break;
+                    }
+                }
+            }
+        } finally {
+            try {
+                // Thread creation/submission can fail. Finish outstanding native work on this
+                // caller before the operation, create-info storage or modules can be destroyed.
+                while (KHRDeferredHostOperations.vkGetDeferredOperationResultKHR(device, operation) == VK10.VK_NOT_READY) {
+                    joinDeferredPipeline(device, operation);
+                    LockSupport.parkNanos(100_000L);
+                }
+            } finally {
+                if (interrupted) Thread.currentThread().interrupt();
+            }
+        }
+        int result = KHRDeferredHostOperations.vkGetDeferredOperationResultKHR(device, operation);
+        if (failure != null) throw new IllegalStateException("deferred RT pipeline join failed, result=" + result, failure);
+        checkVk(result, "vkGetDeferredOperationResultKHR");
+    }
+
+    private static void joinDeferredPipeline(VkDevice device, long operation) {
+        while (true) {
+            int result = KHRDeferredHostOperations.vkDeferredOperationJoinKHR(device, operation);
+            if (result == VK10.VK_SUCCESS || result == KHRDeferredHostOperations.VK_THREAD_DONE_KHR) return;
+            if (result != KHRDeferredHostOperations.VK_THREAD_IDLE_KHR)
+                checkVk(result, "vkDeferredOperationJoinKHR");
+            LockSupport.parkNanos(100_000L);
+        }
     }
 
     static byte[] queryShaderGroupHandles(

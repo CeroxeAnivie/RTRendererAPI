@@ -81,6 +81,7 @@ public final class DemoSurfaceNativeSelfTest {
             if (System.nanoTime() >= deadline) throw new AssertionError("admission timeout");
             Thread.sleep(1);
         }
+        deadline = System.nanoTime() + Duration.ofSeconds(90).toNanos();
         while (System.nanoTime() < deadline) {
             var completed = renderer.pollFrame();
             if (completed.isPresent()) {

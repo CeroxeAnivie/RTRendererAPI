@@ -185,6 +185,8 @@ public final class MediumTransportNativeSelfTest {
         while(!(renderer.trySubmit(frame) instanceof FrameSubmitted)) {
             if(System.nanoTime()>deadline) throw new AssertionError("frame admission timeout");Thread.sleep(1);
         }
+        // Lazy driver pipeline creation is host work; measure GPU completion after admission.
+        deadline=System.nanoTime()+Duration.ofSeconds(30).toNanos();
         while(System.nanoTime()<deadline) {
             var ready=renderer.pollFrame();
             if(ready.isPresent()) {

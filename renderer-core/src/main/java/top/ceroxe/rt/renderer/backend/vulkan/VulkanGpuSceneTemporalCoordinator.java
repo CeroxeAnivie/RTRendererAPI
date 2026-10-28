@@ -54,12 +54,16 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
                 && request.environment().cameraMedium().isVacuum())
             return top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.SURFACE;
         var environment = request.environment().cameraMedium();
+        boolean scattering = environment.density() > 0 && !environment.scattering().isZero()
+                || mediumBoundaries.hasScattering(batch);
         boolean volume = MediumDensitySupport.heterogeneous(environment) || mediumBoundaries.hasDensityField(batch)
-                || request.mediumTransport().scatteringBounces() > 0 &&
-                    (environment.density() > 0 && !environment.scattering().isZero() || mediumBoundaries.hasScattering(batch));
+                || request.mediumTransport().scatteringBounces() > 0 && scattering;
         if (volume) return boundaries <= 8
                 ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_VOLUME
                 : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_VOLUME;
+        if (!scattering) return boundaries <= 8
+                ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_PASSIVE
+                : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_PASSIVE;
         return boundaries<=8 ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT
                 : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL;
     }

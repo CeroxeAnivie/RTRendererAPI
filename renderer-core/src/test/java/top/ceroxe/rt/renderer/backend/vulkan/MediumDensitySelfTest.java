@@ -21,6 +21,7 @@ public final class MediumDensitySelfTest {
         verifyUploadPlanning();
         verifySceneValidation();
         verifyFrameValidationAndSpecialization();
+        verifyPassiveSpecializationTransitions();
         verifyHistoryInvalidation();
         System.out.println("MediumDensitySelfTest passed: stable ABI prefix, atlas references/replacement, coordinate composition, frame validation, cached specialization");
     }
@@ -205,6 +206,36 @@ public final class MediumDensitySelfTest {
         expect(FrameValidationException.class,()->index.validateDensityFields(env));
         apply(residency,index,surfaces,SceneTransaction.builder(8).resetScene().upsert(texture(700,1,TextureAsset.ColorSpace.LINEAR)).build());
         require(index.densityTextureSlot(500)==-1 && index.densityTextureSlot(700)==0,"texture identity remapping cannot reuse stale density slots");
+    }
+
+    private static void verifyPassiveSpecializationTransitions() {
+        var residency = new VulkanSceneResidency();
+        var index = new MediumSceneIndex();
+        var surfaces = new VulkanSurfaceSceneIndex();
+        var empty = FramePrimitiveBatch.empty();
+        var absorbing = new Medium(new Rgb(.1f,.2f,.3f),Rgb.ZERO,new Rgb(.01f,0,0),1,1,0);
+        var scattering = GRID.withDensityField(MediumDensityField.uniform());
+        apply(residency,index,surfaces,base(1).upsert(instance(1,absorbing)).build());
+        require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),8,empty),index,surfaces)
+                ==Program.COMPACT_PASSIVE,"unused scattering budget must preserve absorption specialization");
+        require(VulkanGpuSceneTemporalCoordinator.program(request(scattering,0,empty),index,surfaces)
+                ==Program.COMPACT,"environment scattering cannot enter a passive program");
+        var local = FramePrimitiveBatch.builder().add(PrimitiveInstance.from(instance(2,scattering))).build();
+        require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,local),index,surfaces)
+                ==Program.COMPACT,"frame-local scattering must leave the passive program");
+        require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,empty),index,surfaces)
+                ==Program.COMPACT_PASSIVE,"retiring local scattering must restore the passive program");
+        apply(residency,index,surfaces,SceneTransaction.builder(2).upsert(instance(1,scattering)).build());
+        require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,empty),index,surfaces)
+                ==Program.COMPACT,"persistent scattering replacement must invalidate passive classification");
+        apply(residency,index,surfaces,SceneTransaction.builder(3).upsert(instance(1,absorbing)).build());
+        require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,empty),index,surfaces)
+                ==Program.COMPACT_PASSIVE,"persistent absorption replacement must restore passive classification");
+        var crowded = SceneTransaction.builder(4);
+        for(int id=2;id<=9;id++)crowded.upsert(instance(id,absorbing));
+        apply(residency,index,surfaces,crowded.build());
+        require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,empty),index,surfaces)
+                ==Program.GENERAL_PASSIVE,"passive transport must retain all 32 general boundary slots");
     }
 
     private static void verifyHistoryInvalidation() {

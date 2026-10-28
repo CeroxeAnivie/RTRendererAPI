@@ -31,6 +31,7 @@ import java.util.Optional;
 public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     public enum Program {
         SURFACE("gpuscene_surface.rgen"), COMPACT("gpuscene_compact.rgen"), GENERAL("gpuscene.rgen"),
+        COMPACT_PASSIVE("gpuscene_compact_passive.rgen"), GENERAL_PASSIVE("gpuscene_passive.rgen"),
         COMPACT_VOLUME("gpuscene_compact_volume.rgen"), GENERAL_VOLUME("gpuscene_volume.rgen"),
         COMPACT_CAUSTICS("gpuscene_compact_caustics.rgen"), GENERAL_CAUSTICS("gpuscene_caustics.rgen"),
         PHOTONS("gpuscene_photons.rgen");

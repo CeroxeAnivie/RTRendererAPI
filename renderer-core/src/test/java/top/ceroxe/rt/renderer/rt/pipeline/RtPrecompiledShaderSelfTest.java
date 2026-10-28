@@ -21,6 +21,7 @@ public final class RtPrecompiledShaderSelfTest {
    private static final String SHADER_ROOT = "assets/rtrenderer/shaders/";
    private static final List<String> SCENE_RAYGENS = List.of(
            "gpuscene/gpuscene.rgen", "gpuscene/gpuscene_surface.rgen", "gpuscene/gpuscene_compact.rgen",
+           "gpuscene/gpuscene_compact_passive.rgen", "gpuscene/gpuscene_passive.rgen",
            "gpuscene/gpuscene_compact_volume.rgen", "gpuscene/gpuscene_volume.rgen",
            "gpuscene/gpuscene_compact_caustics.rgen", "gpuscene/gpuscene_caustics.rgen", "gpuscene/gpuscene_photons.rgen");
    private static final Map<String, Integer> STAGES = stages();

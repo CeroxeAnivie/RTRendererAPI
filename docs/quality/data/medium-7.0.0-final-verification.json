@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "version": "7.0.0",
+  "evidenceDate": "2026-10-28",
+  "scope": "Closeout audit of existing results and packaged artifacts; no new rendering or performance run.",
+  "baselineJarSha256": "d5c24320a88f80f2d14ac0744a52f0fa9f45b3c81f8e2364854d850025639953",
+  "packaging": {
+    "matchingLiveSpirvVariants": 110,
+    "liveSpirvBytes": 37343520,
+    "changedMainJavaSourcesAndClassesMatched": 3,
+    "changedGlslSourcesMatched": 3,
+    "stagedMavenChecksumsMatched": 60,
+    "artifacts": [
+      {
+        "path": "renderer-core/build/libs/renderer-core-7.0.0.jar",
+        "bytes": 15291270,
+        "sha256": "e6717cc3e59ad4c7179562472cc4b490f9096bb50feaf165e55180891c832cb4"
+      },
+      {
+        "path": "renderer-core/build/libs/renderer-core-7.0.0-sources.jar",
+        "bytes": 13689858,
+        "sha256": "87d4f026829c06ef78c6a7613110f9a008ceb39e55b5c083e835fe90533f9a9f"
+      },
+      {
+        "path": "demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar",
+        "bytes": 113179917,
+        "sha256": "8dc2ad26bffcb576ae8bcb00c3445d91ab5e20047863b5aa74143bf33a15d891"
+      }
+    ]
+  },
+  "csv": [
+    {
+      "file": "medium-6.0.4-baseline.csv",
+      "sha256": "368cfc16ff0b13539e28ad08aa2ce6148371e9080e1f0d936066851ed9f9cd0a",
+      "completeBatches": 9,
+      "scenes": [
+        "absorption",
+        "emission",
+        "opaque-offscreen-boundary"
+      ],
+      "completedNativeFrames": 2160
+    },
+    {
+      "file": "medium-7.0.0-after-fix.csv",
+      "sha256": "f5e8ba777e188ef04ad503718408f04fdd592b541ca4a1ea09b550e66f92a364",
+      "completeBatches": 24,
+      "scenes": [
+        "absorption",
+        "emission",
+        "glass",
+        "nested-water-glass",
+        "opaque-clean",
+        "opaque-offscreen-boundary",
+        "opaque-unused-glass",
+        "scattering"
+      ],
+      "completedNativeFrames": 5760
+    },
+    {
+      "file": "medium-7.0.0-before-fix.csv",
+      "sha256": "401009178a3f12c8696cd7a5eec6f905772356507f0ac02e41b264542593c393",
+      "completeBatches": 15,
+      "scenes": [
+        "absorption",
+        "emission",
+        "opaque-clean",
+        "opaque-offscreen-boundary",
+        "opaque-unused-glass"
+      ],
+      "completedNativeFrames": 3600
+    },
+    {
+      "file": "medium-7.0.0-isolation.csv",
+      "sha256": "0448b3c295593f7ef2e30188d897aec3d75bb850e9ab39dc0d34463bd2c8ae70",
+      "completeBatches": 9,
+      "scenes": [
+        "absorption",
+        "emission",
+        "opaque-offscreen-boundary"
+      ],
+      "completedNativeFrames": 2160
+    }
+  ],
+  "finalHdrImages": [
+    {
+      "scene": "opaque-offscreen-boundary",
+      "width": 160,
+      "height": 90,
+      "format": "little-endian RGBA16F",
+      "bytes": 115200,
+      "channels": 57600,
+      "originalSha256": "6892b12cfe7a882a71ec77012be1861fc42bd54bc04d1c972fdb2771819c20f1",
+      "finalSha256": "6892b12cfe7a882a71ec77012be1861fc42bd54bc04d1c972fdb2771819c20f1",
+      "byteIdentical": true
+    },
+    {
+      "scene": "absorption",
+      "width": 160,
+      "height": 90,
+      "format": "little-endian RGBA16F",
+      "bytes": 115200,
+      "channels": 57600,
+      "originalSha256": "119f54015d4caec396ed92cc02c093e3ff7081713d87ce47c9a1b9b0f6cd0211",
+      "finalSha256": "119f54015d4caec396ed92cc02c093e3ff7081713d87ce47c9a1b9b0f6cd0211",
+      "byteIdentical": true
+    },
+    {
+      "scene": "emission",
+      "width": 160,
+      "height": 90,
+      "format": "little-endian RGBA16F",
+      "bytes": 115200,
+      "channels": 57600,
+      "originalSha256": "530ec2357fd3b6969de500a41c733d3afeb064cfcc27a61d31beb9bf697dbc39",
+      "finalSha256": "530ec2357fd3b6969de500a41c733d3afeb064cfcc27a61d31beb9bf697dbc39",
+      "byteIdentical": true
+    }
+  ],
+  "vulkanValidation": [
+    {
+      "log": "vulkan-validation-20261028-045836.285.jsonl",
+      "eventCount": 135,
+      "validationEventPresent": true,
+      "warningErrorOrDropCount": 0
+    },
+    {
+      "log": "vulkan-validation-20261028-045957.383.jsonl",
+      "eventCount": 135,
+      "validationEventPresent": true,
+      "warningErrorOrDropCount": 0
+    }
+  ],
+  "recordedCorrectness": {
+    "nativeMediumFrames": 25,
+    "sourceLog": "medium-7.0.0-passive-fix-native-final.log",
+    "cpuAndArtifactTaskCount": 86,
+    "cpuAndArtifactLog": "medium-7.0.0-passive-fix-release-validation.log",
+    "independentSpirvRecompilationVariants": 110,
+    "independentSpirvValidationVariants": 110
+  },
+  "uncertified": [
+    "13 remaining performance scenes",
+    "gallery ablations",
+    "full SDR/HDR surface equivalence",
+    "gallery frame-generation presentation",
+    "cold-start resolution",
+    "register/spill/occupancy/instruction-cache attribution"
+  ]
+}

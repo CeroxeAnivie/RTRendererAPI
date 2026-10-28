@@ -157,6 +157,7 @@ vec3 gsIntegrateMedium(vec3 color,inout GsMediumPath path,float distance,vec3 or
     float densityMass=gsDensityMass(path.mediumSlot,origin,direction,distance);
     vec3 integral=gsMediumIntegral(medium.extinction,densityMass);
     vec3 radiance=color*exp(-medium.extinction*densityMass)+medium.emission*integral;
+#ifndef RTRENDERER_PASSIVE_MEDIA
     if(all(equal(medium.scattering,vec3(0.0)))) return radiance;
     GsMediumPath saved=gsLightingMediumPath;gsLightingMediumPath=path;
     vec3 ambient=gsFrameVec3(GPU_SCENE_FRAME_SKY_COLOR_WORD)*uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_AMBIENT_INTENSITY_WORD]);
@@ -233,6 +234,7 @@ vec3 gsIntegrateMedium(vec3 color,inout GsMediumPath path,float distance,vec3 or
         prefixMass+=density*interval;
     }
     gsLightingMediumPath=saved;
+#endif
     return radiance;
 #endif
 }
