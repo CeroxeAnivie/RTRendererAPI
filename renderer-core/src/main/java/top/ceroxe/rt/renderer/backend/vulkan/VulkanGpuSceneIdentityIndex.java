@@ -72,6 +72,10 @@ final class VulkanGpuSceneIdentityIndex {
         return meshes.currentSlot(identity);
     }
 
+    synchronized int textureSlot(long identity) {
+        return textures.currentSlot(identity);
+    }
+
     synchronized int instanceSlot(long identity) {
         return instances.currentSlot(identity);
     }

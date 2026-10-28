@@ -32,6 +32,7 @@ final class PersistentSceneRegistry {
     private final ReverseReferences textureMaterials = new ReverseReferences();
     private final ReverseReferences materialMeshes = new ReverseReferences();
     private final ReverseReferences meshInstances = new ReverseReferences();
+    private final ReverseReferences densityTextureInstances = new ReverseReferences();
 
     private long revision = -1L;
     /* Scene state and sorted snapshots are immutable for one revision; reuse them across
@@ -149,7 +150,7 @@ final class PersistentSceneRegistry {
                             + ", actual=" + revision
             );
         }
-        checked.referenceDelta.validate(textureMaterials, materialMeshes, meshInstances);
+        checked.referenceDelta.validate(textureMaterials, materialMeshes, meshInstances, densityTextureInstances);
     }
 
     synchronized SceneState commit(PreparedMutation mutation) {
@@ -178,7 +179,7 @@ final class PersistentSceneRegistry {
         putAll(meshes, transaction.upserts().meshes(), MeshAsset::id);
         putAll(instances, transaction.upserts().instances(), SceneInstance::id);
         putAll(lights, transaction.upserts().lights(), SceneLight::id);
-        checked.referenceDelta.commit(textureMaterials, materialMeshes, meshInstances);
+        checked.referenceDelta.commit(textureMaterials, materialMeshes, meshInstances, densityTextureInstances);
         revision = transaction.revision();
         cachedState = checked.prospectiveState;
         cachedSnapshot = null;
@@ -232,6 +233,10 @@ final class PersistentSceneRegistry {
                     pending.materialUpserts, pending.materialRemovals, "texture", "material"
             );
             requireNoRetainedDependents(
+                    transaction.removals().textureIds(), densityTextureInstances,
+                    pending.instanceUpserts, pending.instanceRemovals, "density texture", "instance"
+            );
+            requireNoRetainedDependents(
                     transaction.removals().materialIds(), materialMeshes,
                     pending.meshUpserts, pending.meshRemovals, "material", "mesh"
             );
@@ -242,7 +247,19 @@ final class PersistentSceneRegistry {
         }
         transaction.upserts().materials().forEach(material -> validateMaterial(material, transaction, pending));
         transaction.upserts().meshes().forEach(mesh -> validateMesh(mesh, transaction, pending));
-        transaction.upserts().instances().forEach(instance -> validateInstance(instance, transaction, pending));
+        var nextTextures = new Long2ObjectOpenHashMap<TextureAsset>();
+        for (TextureAsset texture : transaction.upserts().textures()) nextTextures.put(texture.id(), texture);
+        transaction.upserts().instances().forEach(instance -> validateInstance(instance, transaction, pending, nextTextures));
+        if (!transaction.reset()) for (TextureAsset texture : transaction.upserts().textures()) {
+            var dependents = densityTextureInstances.dependents(texture.id());
+            if (dependents == null) continue;
+            for (long id : dependents) {
+                if (pending.instanceUpserts.contains(id) || pending.instanceRemovals.contains(id)) continue;
+                var field = instances.get(id).mediumBoundary().orElseThrow().medium().densityField();
+                String error = MediumDensitySupport.invalidTexture(field, texture);
+                if (error != null) throw new SceneValidationException("instance " + id + ": " + error);
+            }
+        }
         // A mesh can be replaced while a retained boundary instance keeps its stable identity.
         if (!transaction.reset()) for (MeshAsset mesh : transaction.upserts().meshes()) {
             var dependents = meshInstances.dependents(mesh.id());
@@ -319,7 +336,8 @@ final class PersistentSceneRegistry {
         }
     }
 
-    private void validateInstance(SceneInstance instance, SceneTransaction transaction, PendingIds pending) {
+    private void validateInstance(SceneInstance instance, SceneTransaction transaction, PendingIds pending,
+            Long2ObjectOpenHashMap<TextureAsset> nextTextures) {
         if (!referenceExists(
                 instance.meshAssetId(), meshes, pending.meshUpserts, pending.meshRemovals, transaction.reset()
         )) {
@@ -328,6 +346,20 @@ final class PersistentSceneRegistry {
             );
         }
         if (instance.mediumBoundary().isPresent()) {
+            var medium = instance.mediumBoundary().orElseThrow().medium();
+            var field = medium.densityField();
+            if (!field.isUniform()) {
+                TextureAsset texture = nextTextures.get(field.textureAssetId());
+                if (texture == null && !transaction.reset() && !pending.textureRemovals.contains(field.textureAssetId()))
+                    texture = textures.get(field.textureAssetId());
+                String error = MediumDensitySupport.invalidTexture(field, texture);
+                if (error != null) throw new SceneValidationException("instance " + instance.id() + ": " + error);
+                if (MediumDensitySupport.heterogeneous(medium)) try {
+                    MediumDensitySupport.worldToDensity(field, instance.transform());
+                } catch (IllegalArgumentException invalid) {
+                    throw new SceneValidationException("instance " + instance.id() + ": " + invalid.getMessage());
+                }
+            }
             MeshAsset boundaryMesh = findAsset(instance.meshAssetId(), transaction.upserts().meshes(), meshes);
             if (boundaryMesh == null || !boundaryMesh.isClosedManifold()) {
                 throw new SceneValidationException(
@@ -347,13 +379,15 @@ final class PersistentSceneRegistry {
             return new ReferenceDelta(
                     materialReferenceChanges(transaction.upserts().materials(), true, pending),
                     meshReferenceChanges(transaction.upserts().meshes(), true, pending),
-                    instanceReferenceChanges(transaction.upserts().instances(), true, pending)
+                    instanceReferenceChanges(transaction.upserts().instances(), true, pending),
+                    densityReferenceChanges(transaction.upserts().instances(), true, pending)
             );
         }
         return new ReferenceDelta(
                 materialReferenceChanges(transaction.upserts().materials(), false, pending),
                 meshReferenceChanges(transaction.upserts().meshes(), false, pending),
-                instanceReferenceChanges(transaction.upserts().instances(), false, pending)
+                instanceReferenceChanges(transaction.upserts().instances(), false, pending),
+                densityReferenceChanges(transaction.upserts().instances(), false, pending)
         );
     }
 
@@ -422,6 +456,21 @@ final class PersistentSceneRegistry {
         }
     }
 
+    private List<ReferenceChange> densityReferenceChanges(Collection<SceneInstance> upserts, boolean reset, PendingIds pending) {
+        var changes = new ArrayList<ReferenceChange>(upserts.size() + pending.instanceRemovals.size());
+        for (SceneInstance instance : upserts) addReferenceChange(changes, instance.id(),
+                densityReferences(reset ? null : instances.get(instance.id())), densityReferences(instance));
+        if (!reset) for (long id : pending.instanceRemovals)
+            addReferenceChange(changes, id, densityReferences(instances.get(id)), new long[0]);
+        return List.copyOf(changes);
+    }
+
+    private static long[] densityReferences(SceneInstance instance) {
+        if (instance == null || instance.mediumBoundary().isEmpty()) return new long[0];
+        var field = instance.mediumBoundary().orElseThrow().medium().densityField();
+        return field.isUniform() ? new long[0] : new long[]{field.textureAssetId()};
+    }
+
     private static long[] textureReferences(MaterialAsset material) {
         if (material == null) return new long[0];
         LongOpenHashSet references = new LongOpenHashSet(4);
@@ -466,6 +515,7 @@ final class PersistentSceneRegistry {
         textureMaterials.clear();
         materialMeshes.clear();
         meshInstances.clear();
+        densityTextureInstances.clear();
     }
 
     static final class PreparedMutation {
@@ -554,33 +604,39 @@ final class PersistentSceneRegistry {
     private record ReferenceDelta(
             List<ReferenceChange> materialTextures,
             List<ReferenceChange> meshMaterials,
-            List<ReferenceChange> instanceMeshes
+            List<ReferenceChange> instanceMeshes,
+            List<ReferenceChange> instanceDensityTextures
     ) {
         private ReferenceDelta {
             materialTextures = List.copyOf(Objects.requireNonNull(materialTextures, "materialTextures"));
             meshMaterials = List.copyOf(Objects.requireNonNull(meshMaterials, "meshMaterials"));
             instanceMeshes = List.copyOf(Objects.requireNonNull(instanceMeshes, "instanceMeshes"));
+            instanceDensityTextures = List.copyOf(Objects.requireNonNull(instanceDensityTextures, "instanceDensityTextures"));
         }
 
         private void commit(
                 ReverseReferences textureMaterials,
                 ReverseReferences materialMeshes,
-                ReverseReferences meshInstances
+                ReverseReferences meshInstances,
+                ReverseReferences densityTextureInstances
         ) {
             materialTextures.forEach(change -> change.commit(textureMaterials));
             meshMaterials.forEach(change -> change.commit(materialMeshes));
             instanceMeshes.forEach(change -> change.commit(meshInstances));
+            instanceDensityTextures.forEach(change -> change.commit(densityTextureInstances));
         }
 
 
         private void validate(
                 ReverseReferences textureMaterials,
                 ReverseReferences materialMeshes,
-                ReverseReferences meshInstances
+                ReverseReferences meshInstances,
+                ReverseReferences densityTextureInstances
         ) {
             materialTextures.forEach(change -> change.validate(textureMaterials));
             meshMaterials.forEach(change -> change.validate(materialMeshes));
             instanceMeshes.forEach(change -> change.validate(meshInstances));
+            instanceDensityTextures.forEach(change -> change.validate(densityTextureInstances));
         }
     }
 

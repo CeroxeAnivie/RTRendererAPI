@@ -16,7 +16,7 @@
 > **简介**
 >
 > RTRendererAPI 为 Java 桌面应用与引擎进程提供厂商中立、宿主无关的通用渲染语义契约。公共
-> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段；6.0.3 以单一 retained RT 主路径为核心，
+> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段；7.0.0 以单一 retained RT 主路径为核心，
 > 并提供显式资源、shader、binding、pipeline、render-pass、barrier、draw 和 external-frame 语义。
 > 应用只需依赖 `renderer-api`，即可获得后端发现、场景提交、通用 command transaction、异步 CPU 帧、
 > 官方 GPU presenter 与显式 Vulkan 专家互操作。Windows Vulkan 后端、LWJGL、对应 Windows natives
@@ -29,12 +29,12 @@
 ### ✨ 核心亮点
 
 - 🚀 **硬件光线追踪**：基于 Vulkan RT 的三角形与 procedural/AABB BLAS、TLAS、GPUScene 与预编译 SPIR-V 管线。
-- 💧 **通用介质传输**：封闭体积、嵌套介质路径、吸收/发光、HG 单次散射与 Fresnel/Snell/全反射；支持逐帧调节质量，详见 [6.0.3](docs/6.0.3.md)。
+- 💧 **介质传输**：直接 record 模型、封闭与嵌套体积、均质/密度网格吸收与发光、HG 散射及可选多次散射、Fresnel/Snell/全反射；支持逐帧预算，详见 [7.0.0](docs/7.0.0.md)。
 - 🧩 **可编程场景**：四个 RT 场景阶段支持 GLSL 或预编译 SPIR-V，raygen 支持独立 SDR/HDR 变体；复用 `ResourceData` 提交应用缓冲区。
 - ☕ **现代 Java API**：以 Java 25 为基线，提供不可变模型、Builder、类型化异常和确定性生命周期。
 - 🖼️ **两类托管输出**：作用域映射 `FrameView` 与显式 `FrameSnapshot` 保留原始 HDR/整数格式；官方 GPU presenter 无需 CPU 回读。
 - 🔗 **专家级 Vulkan 互操作**：支持 Win32 external memory lease，并可选 linear HDR RGBA16F。
-- 🧠 **分层渲染语义**：普通模式保持安全默认值；专家模式可显式提交资源、绑定、pipeline、pass、draw、barrier、BLAS/TLAS、SBT、trace 与外部帧 consumer。
+- 🧠 **分层渲染语义**：普通模式由后端根据实际场景与介质预算自动选择内置程序；专家模式显式控制资源、shader、绑定、pipeline、pass、draw、barrier、BLAS/TLAS、SBT、trace 与外部帧 consumer，自定义阶段不被普通优化覆盖。
 - 🧩 **明确 workload discriminator**：`RenderWorkload` 区分 retained RT、generic raster command 和有序 RT/raster 组合，不根据缺失字段猜测意图。
 - 🧠 **显式 RTX 能力协商**：可独立请求 DLSS SR、DLAA、NIS、NRD、FG/MFG、Reflex/PCL、SER 与 RTXMU。
 - 🔎 **分层能力事实**：物理硬件、格式/handle 互操作、session 协商和真实执行状态互不混淆。
@@ -55,8 +55,8 @@
 | GPU 显示 | 官方 Vulkan swapchain presenter，无 CPU 图像回读 |
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
-> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `6.0.3` 当前后端实现范围。
-> 兼容目标不是跨硬件验收结论；未执行的长时稳定性、跨硬件矩阵和特定宿主集成不在本版本声明为已通过。
+> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `7.0.0` 当前后端实现范围。
+> 兼容目标不是跨硬件验收结论；7.0.0 本轮验证范围见版本说明，GPU 测试留待后续执行。
 
 ---
 
@@ -70,7 +70,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>6.0.3</version>
+    <version>7.0.0</version>
 </dependency>
 ```
 
@@ -78,11 +78,11 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:6.0.3")
+    implementation("top.ceroxe.rt:renderer-api:7.0.0")
 }
 ```
 
-6.0.3 是 6.x 破坏性主版本线的补丁版本，只交付 GitHub 和本地 Maven 制品，不上传 Central。运行
+7.0.0 是重新设计介质模型与执行结构的破坏性主版本，只交付 GitHub 和本地 Maven 制品，不上传 Central。运行
 `publishAllToLocalStagingRepository` 可生成 `build/repository`，供独立消费方验证使用。
 同仓库 Demo 直接依赖项目模块，不要求先发布当前版本。
 
@@ -262,7 +262,7 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=1"
 .\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.3.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
   --width=2560 --height=1440 --spp=1
 ```
 
@@ -321,10 +321,12 @@ A：不一定。它是非阻塞轮询，空值通常表示当前没有可呈现�
 
 **Q：AMD、Intel 或 Linux 能运行吗？**
 
-A：不能把它们视为 `6.0.3` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
+A：不能把它们视为 `7.0.0` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
 
 ---
 
 ## 🔐 许可证
 
 本项目基于 [Apache License 2.0](LICENSE) 开源发布。
+
+7.0.0 新增默认 2560×1440 / 1 spp / 请求 2× FG 的[介质展厅](docs/medium-gallery.md)，覆盖异质密度、有限阶多次散射、嵌套折射与表面光子焦散。GPU 验证等待单独批准。

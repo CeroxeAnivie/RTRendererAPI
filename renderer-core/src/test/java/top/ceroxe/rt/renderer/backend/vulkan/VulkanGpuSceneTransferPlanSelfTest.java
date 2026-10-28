@@ -11,7 +11,7 @@ public final class VulkanGpuSceneTransferPlanSelfTest {
    public static void main(String[] arguments) {
       distinguishesInPlaceGrowthAndFirstAllocation();
       preservesPackedStagingOrderAndOffsets();
-      bootstrapsDescriptorTargetsForAnEmptyInitialScene();
+      leavesDescriptorTargetsUnallocatedForAnEmptyInitialScene();
       acceptsAnEmptySceneGenerationAfterBootstrap();
       System.out.println("VulkanGpuSceneTransferPlanSelfTest passed");
    }
@@ -24,7 +24,8 @@ public final class VulkanGpuSceneTransferPlanSelfTest {
       require(instance.grows() && instance.requiredBytes() == 5064L && instance.capacityBytes() == 8192L && instance.copyPreviousBytes() == 4096L, "grown target did not preserve the previous buffer generation");
       VulkanGpuSceneTransferPlan.TargetCapacity texture = target(transfer, Target.TEXTURE_PIXELS);
       require(texture.grows() && texture.capacityBytes() == 4096L && texture.copyPreviousBytes() == 0L, "first target allocation did not use bounded minimum capacity");
-      require(transfer.allocationGrowthBytes() == 57476L, "allocation budget omitted successor or staging allocations");
+      require(transfer.targets().size() == 3, "unreferenced descriptor targets were allocated");
+      require(transfer.allocationGrowthBytes() == 12420L, "allocation budget omitted successor or staging allocations");
    }
 
    private static void preservesPackedStagingOrderAndOffsets() {
@@ -34,11 +35,12 @@ public final class VulkanGpuSceneTransferPlanSelfTest {
       require(staging.length == 132 && staging[0] == 1 && staging[64] == 2 && staging[128] == 3, "staging payload changed while building copy schedule");
    }
 
-   private static void bootstrapsDescriptorTargetsForAnEmptyInitialScene() {
+   private static void leavesDescriptorTargetsUnallocatedForAnEmptyInitialScene() {
       VulkanGpuSceneUploadPlanner.Plan empty = new VulkanGpuSceneUploadPlanner.Plan(1L, List.of(), 0L, 0);
       VulkanGpuSceneTransferPlan.Plan transfer = VulkanGpuSceneTransferPlan.build(empty, (ignored) -> 0L);
-      require(!transfer.isEmpty() && transfer.targets().size() == Target.values().length && transfer.targets().stream().allMatch((target) -> target.grows() && target.requiredBytes() == 4L && target.capacityBytes() == 4096L) && transfer.copies().isEmpty() && transfer.stagingBytes().length == 0, "empty initial scene did not bootstrap every descriptor target");
-      require(transfer.allocationGrowthBytes() == 4096L * (long)Target.values().length, "empty descriptor bootstrap growth was not charged to the memory budget");
+      require(transfer.isEmpty() && transfer.targets().isEmpty() && transfer.copies().isEmpty()
+            && transfer.stagingBytes().length == 0, "empty initial scene fabricated native buffers");
+      require(transfer.allocationGrowthBytes() == 0, "empty scene consumed native allocation budget");
    }
 
    private static void acceptsAnEmptySceneGenerationAfterBootstrap() {

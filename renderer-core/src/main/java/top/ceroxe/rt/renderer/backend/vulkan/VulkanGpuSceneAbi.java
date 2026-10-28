@@ -68,7 +68,7 @@ final class VulkanGpuSceneAbi {
     static final int MATERIAL_RECORD_WORDS = 16;
     static final int MESH_RECORD_WORDS = 18;
     /** Current shading state, previous-frame transform, and its committed motion revision. */
-    static final int INSTANCE_RECORD_WORDS = 72;
+    static final int INSTANCE_RECORD_WORDS = 86;
     static final int LIGHT_RECORD_WORDS = 24;
 
     static final int FRAME_FOG_COLOR_WORD = 44;
@@ -122,7 +122,19 @@ static final int FRAME_CAMERA_MEDIUM_COUNT_WORD = 412;
 static final int FRAME_CAMERA_MEDIUM_SLOTS_WORD = 413;
 static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
     static final int FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD = 446;
-    static final int FRAME_UNIFORM_WORDS = 447;
+    static final int FRAME_SCATTERING_LIGHT_SAMPLES_WORD = 447;
+    static final int FRAME_TRANSMITTANCE_CUTOFF_WORD = 448;
+    static final int FRAME_MEDIUM_DENSITY_TEXTURE_WORD = 449;
+    static final int FRAME_MEDIUM_DENSITY_SLICES_WORD = 450;
+    static final int FRAME_MEDIUM_DENSITY_TRANSFORM_WORD = 451;
+    static final int FRAME_SCATTERING_BOUNCES_WORD = 463;
+    static final int FRAME_CAUSTIC_PHOTONS_WORD = 464;
+    static final int FRAME_CAUSTIC_MAX_EVENTS_WORD = 465;
+    static final int FRAME_CAUSTIC_GATHER_RADIUS_WORD = 466;
+    static final int FRAME_CAUSTIC_CENTER_WORD = 467;
+    static final int FRAME_CAUSTIC_REGION_RADIUS_WORD = 470;
+    static final int FRAME_CAUSTIC_NORMAL_THRESHOLD_WORD = 471;
+    static final int FRAME_UNIFORM_WORDS = 472;
 
     static final int PROJECTION_PATH_BASIS_FOV = 0;
     static final int PROJECTION_PATH_EXACT_CLIP = 1;
@@ -131,6 +143,7 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
     static final int TEMPORAL_FLAG_HISTORY_VALID = 1 << 1;
     static final int FEATURE_FLAG_DENOISING_ACTIVE = 1;
     static final int FEATURE_FLAG_RECONSTRUCTION_ACTIVE = 2;
+    static final int FEATURE_FLAG_OPAQUE_VISIBILITY = 4;
 
     static final int TEXTURE_FLAGS_WORD = 0;
     static final int TEXTURE_PIXEL_OFFSET_WORD = 1;
@@ -199,6 +212,9 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
     static final int INSTANCE_MEDIUM_IOR_WORD = 67;
     static final int INSTANCE_MEDIUM_PHASE_ANISOTROPY_WORD = 68;
     static final int INSTANCE_MEDIUM_EMISSION_WORD = 69;
+    static final int INSTANCE_MEDIUM_DENSITY_TEXTURE_WORD = 72;
+    static final int INSTANCE_MEDIUM_DENSITY_SLICES_WORD = 73;
+    static final int INSTANCE_MEDIUM_DENSITY_TRANSFORM_WORD = 74;
 
     static final int LIGHT_FLAGS_WORD = 0;
     static final int LIGHT_POSITION_X_WORD = 1;
@@ -320,6 +336,7 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
         values.put("GPU_SCENE_BINDING_INSTANCE_RECORDS", INSTANCE_RECORDS_BINDING);
         values.put("GPU_SCENE_BINDING_LIGHT_RECORDS", LIGHT_RECORDS_BINDING);
         values.put("GPU_SCENE_BINDING_TRANSIENT_INSTANCE_RECORDS", TRANSIENT_INSTANCE_RECORDS_BINDING);
+        values.put("GPU_SCENE_BINDING_CAUSTIC_PHOTONS", SceneShaderBindings.CAUSTIC_PHOTONS);
         values.put("GPU_SCENE_BINDING_HISTORY_COLOR_INPUT", HISTORY_COLOR_INPUT_BINDING);
         values.put("GPU_SCENE_BINDING_HISTORY_COLOR_OUTPUT", HISTORY_COLOR_OUTPUT_BINDING);
         values.put("GPU_SCENE_BINDING_HISTORY_GEOMETRY_INPUT", HISTORY_GEOMETRY_INPUT_BINDING);
@@ -341,6 +358,18 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
         values.put("GPU_SCENE_INSTANCE_RECORD_WORDS", INSTANCE_RECORD_WORDS);
         values.put("GPU_SCENE_LIGHT_RECORD_WORDS", LIGHT_RECORD_WORDS);
         values.put("GPU_SCENE_FRAME_UNIFORM_WORDS", FRAME_UNIFORM_WORDS);
+        values.put("GPU_SCENE_FRAME_SCATTERING_LIGHT_SAMPLES_WORD", FRAME_SCATTERING_LIGHT_SAMPLES_WORD);
+        values.put("GPU_SCENE_FRAME_TRANSMITTANCE_CUTOFF_WORD", FRAME_TRANSMITTANCE_CUTOFF_WORD);
+        values.put("GPU_SCENE_FRAME_MEDIUM_DENSITY_TEXTURE_WORD", FRAME_MEDIUM_DENSITY_TEXTURE_WORD);
+        values.put("GPU_SCENE_FRAME_MEDIUM_DENSITY_SLICES_WORD", FRAME_MEDIUM_DENSITY_SLICES_WORD);
+        values.put("GPU_SCENE_FRAME_MEDIUM_DENSITY_TRANSFORM_WORD", FRAME_MEDIUM_DENSITY_TRANSFORM_WORD);
+        values.put("GPU_SCENE_FRAME_SCATTERING_BOUNCES_WORD", FRAME_SCATTERING_BOUNCES_WORD);
+        values.put("GPU_SCENE_FRAME_CAUSTIC_PHOTONS_WORD", FRAME_CAUSTIC_PHOTONS_WORD);
+        values.put("GPU_SCENE_FRAME_CAUSTIC_MAX_EVENTS_WORD", FRAME_CAUSTIC_MAX_EVENTS_WORD);
+        values.put("GPU_SCENE_FRAME_CAUSTIC_GATHER_RADIUS_WORD", FRAME_CAUSTIC_GATHER_RADIUS_WORD);
+        values.put("GPU_SCENE_FRAME_CAUSTIC_CENTER_WORD", FRAME_CAUSTIC_CENTER_WORD);
+        values.put("GPU_SCENE_FRAME_CAUSTIC_REGION_RADIUS_WORD", FRAME_CAUSTIC_REGION_RADIUS_WORD);
+        values.put("GPU_SCENE_FRAME_CAUSTIC_NORMAL_THRESHOLD_WORD", FRAME_CAUSTIC_NORMAL_THRESHOLD_WORD);
         values.put("GPU_SCENE_FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD", FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD);
         values.put("GPU_SCENE_FRAME_MEDIUM_PHASE_ANISOTROPY_WORD", FRAME_MEDIUM_PHASE_ANISOTROPY_WORD);
         values.put("GPU_SCENE_FRAME_MEDIUM_EMISSION_WORD", FRAME_MEDIUM_EMISSION_WORD);
@@ -423,6 +452,9 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
         values.put("GPU_SCENE_INSTANCE_MEDIUM_IOR_WORD", INSTANCE_MEDIUM_IOR_WORD);
         values.put("GPU_SCENE_INSTANCE_MEDIUM_PHASE_ANISOTROPY_WORD", INSTANCE_MEDIUM_PHASE_ANISOTROPY_WORD);
         values.put("GPU_SCENE_INSTANCE_MEDIUM_EMISSION_WORD", INSTANCE_MEDIUM_EMISSION_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_DENSITY_TEXTURE_WORD", INSTANCE_MEDIUM_DENSITY_TEXTURE_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_DENSITY_SLICES_WORD", INSTANCE_MEDIUM_DENSITY_SLICES_WORD);
+        values.put("GPU_SCENE_INSTANCE_MEDIUM_DENSITY_TRANSFORM_WORD", INSTANCE_MEDIUM_DENSITY_TRANSFORM_WORD);
         values.put("GPU_SCENE_LIGHT_FLAGS_WORD", LIGHT_FLAGS_WORD);
         values.put("GPU_SCENE_LIGHT_POSITION_X_WORD", LIGHT_POSITION_X_WORD);
         values.put("GPU_SCENE_LIGHT_POSITION_Y_WORD", LIGHT_POSITION_Y_WORD);
@@ -493,6 +525,7 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
         values.put("GPU_SCENE_TEMPORAL_FLAG_HISTORY_VALID", TEMPORAL_FLAG_HISTORY_VALID);
         values.put("GPU_SCENE_FEATURE_FLAG_DENOISING_ACTIVE", FEATURE_FLAG_DENOISING_ACTIVE);
         values.put("GPU_SCENE_FEATURE_FLAG_RECONSTRUCTION_ACTIVE", FEATURE_FLAG_RECONSTRUCTION_ACTIVE);
+        values.put("GPU_SCENE_FEATURE_FLAG_OPAQUE_VISIBILITY", FEATURE_FLAG_OPAQUE_VISIBILITY);
         values.put("GPU_SCENE_FLAG_ACTIVE", FLAG_ACTIVE);
         values.put("GPU_SCENE_FLAG_DOUBLE_SIDED", FLAG_DOUBLE_SIDED);
         values.put("GPU_SCENE_FLAG_CASTS_SHADOW", FLAG_CASTS_SHADOW);
@@ -638,21 +671,35 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
             long motionRevision,
             SlotResolver meshSlots
     ) {
+        return packInstance(instance, previousTransform, motionRevision, meshSlots, id -> -1);
+    }
+
+    static int[] packInstance(
+            SceneInstance instance,
+            top.ceroxe.rt.renderer.api.AffineTransform previousTransform,
+            long motionRevision,
+            SlotResolver meshSlots,
+            SlotResolver textureSlots
+    ) {
         SceneInstance value = Objects.requireNonNull(instance, "instance");
         return packInstanceRecord(
                 value.meshAssetId(), value.transform(), value.visibilityMask(), value.castsShadow(),
                 value.mobility() == SceneInstance.Mobility.DYNAMIC, value.surfaceVisibility(),
                 value.packedLight(), value.renderState(), previousTransform, motionRevision,
-                0, meshSlots, value.mediumBoundary().orElse(null)
+                0, meshSlots, textureSlots, value.mediumBoundary().orElse(null)
         );
     }
 
     static int[] packPrimitive(PrimitiveInstance primitive, SlotResolver meshSlots) {
+        return packPrimitive(primitive, meshSlots, id -> -1);
+    }
+
+    static int[] packPrimitive(PrimitiveInstance primitive, SlotResolver meshSlots, SlotResolver textureSlots) {
         PrimitiveInstance value = Objects.requireNonNull(primitive, "primitive");
         return packInstanceRecord(
                 value.meshAssetId(), value.transform(), value.visibilityMask(), value.castsShadow(),
                 true, value.surfaceVisibility(), value.packedLight(), value.renderState(),
-                value.previousTransform(), 0L, FLAG_FRAME_LOCAL, meshSlots, value.mediumBoundary().orElse(null)
+                value.previousTransform(), 0L, FLAG_FRAME_LOCAL, meshSlots, textureSlots, value.mediumBoundary().orElse(null)
         );
     }
 
@@ -669,7 +716,8 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
             long motionRevision,
             int additionalFlags,
             SlotResolver meshSlots,
-            top.ceroxe.rt.renderer.api.MediumBoundaryState mediumBoundary
+            SlotResolver textureSlots,
+            top.ceroxe.rt.renderer.api.MediumBoundary mediumBoundary
     ) {
         if (motionRevision < 0L) throw new IllegalArgumentException("motionRevision must be non-negative");
         int[] words = new int[INSTANCE_RECORD_WORDS];
@@ -748,19 +796,23 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
             words[INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD] = 1 | (mediumBoundary.surfaceInteraction() ? 0 : 2);
             words[INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD] = mediumBoundary.priority();
             words[INSTANCE_MEDIUM_BOUNDARY_ORIENTATION_WORD] = mediumBoundary.orientation().ordinal();
-            words[INSTANCE_MEDIUM_EXTINCTION_WORD] = Float.floatToRawIntBits(medium.extinctionRed());
-            words[INSTANCE_MEDIUM_EXTINCTION_WORD + 1] = Float.floatToRawIntBits(medium.extinctionGreen());
-            words[INSTANCE_MEDIUM_EXTINCTION_WORD + 2] = Float.floatToRawIntBits(medium.extinctionBlue());
-            words[INSTANCE_MEDIUM_SCATTERING_WORD] = Float.floatToRawIntBits(medium.scatteringRed());
-            words[INSTANCE_MEDIUM_SCATTERING_WORD + 1] = Float.floatToRawIntBits(medium.scatteringGreen());
-            words[INSTANCE_MEDIUM_SCATTERING_WORD + 2] = Float.floatToRawIntBits(medium.scatteringBlue());
+            var extinction = medium.extinction();
+            words[INSTANCE_MEDIUM_EXTINCTION_WORD] = Float.floatToRawIntBits(extinction.red());
+            words[INSTANCE_MEDIUM_EXTINCTION_WORD + 1] = Float.floatToRawIntBits(extinction.green());
+            words[INSTANCE_MEDIUM_EXTINCTION_WORD + 2] = Float.floatToRawIntBits(extinction.blue());
+            words[INSTANCE_MEDIUM_SCATTERING_WORD] = Float.floatToRawIntBits(medium.scattering().red());
+            words[INSTANCE_MEDIUM_SCATTERING_WORD + 1] = Float.floatToRawIntBits(medium.scattering().green());
+            words[INSTANCE_MEDIUM_SCATTERING_WORD + 2] = Float.floatToRawIntBits(medium.scattering().blue());
             words[INSTANCE_MEDIUM_DENSITY_WORD] = Float.floatToRawIntBits(medium.density());
             words[INSTANCE_MEDIUM_IOR_WORD] = Float.floatToRawIntBits(medium.indexOfRefraction());
-            words[INSTANCE_MEDIUM_PHASE_ANISOTROPY_WORD] = Float.floatToRawIntBits(medium.phaseAnisotropy());
-            words[INSTANCE_MEDIUM_EMISSION_WORD] = Float.floatToRawIntBits(medium.emissionRed());
-            words[INSTANCE_MEDIUM_EMISSION_WORD + 1] = Float.floatToRawIntBits(medium.emissionGreen());
-            words[INSTANCE_MEDIUM_EMISSION_WORD + 2] = Float.floatToRawIntBits(medium.emissionBlue());
+            words[INSTANCE_MEDIUM_PHASE_ANISOTROPY_WORD] = Float.floatToRawIntBits(medium.anisotropy());
+            words[INSTANCE_MEDIUM_EMISSION_WORD] = Float.floatToRawIntBits(medium.emission().red());
+            words[INSTANCE_MEDIUM_EMISSION_WORD + 1] = Float.floatToRawIntBits(medium.emission().green());
+            words[INSTANCE_MEDIUM_EMISSION_WORD + 2] = Float.floatToRawIntBits(medium.emission().blue());
         }
+        MediumDensitySupport.pack(words, INSTANCE_MEDIUM_DENSITY_TEXTURE_WORD,
+                mediumBoundary == null ? top.ceroxe.rt.renderer.api.Medium.vacuum() : mediumBoundary.medium(),
+                transform, textureSlots);
         return words;
     }
 

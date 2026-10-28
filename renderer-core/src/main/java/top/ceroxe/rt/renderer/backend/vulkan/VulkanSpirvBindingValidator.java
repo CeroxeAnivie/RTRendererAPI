@@ -89,7 +89,10 @@ public final class VulkanSpirvBindingValidator {
                 throw unsupported("scene shader declares an unknown descriptor location", module);
             }
             ReflectedBinding actual = resolve(variable.getValue(), id, parsed, module);
-            boolean storage = binding >= 2 && binding <= 16 || binding == 22 || binding >= 33;
+            int photons = top.ceroxe.rt.renderer.api.SceneShaderBindings.CAUSTIC_PHOTONS;
+            if (binding == photons && stage != ShaderStage.RAY_GENERATION)
+                throw unsupported("scene photon map is visible only to ray generation", module);
+            boolean storage = binding >= 2 && binding <= 16 || binding == 22 || binding >= photons;
             BindingType expected = binding == 0 ? BindingType.ACCELERATION_STRUCTURE
                     : storage ? BindingType.READ_ONLY_STORAGE_BUFFER : BindingType.READ_WRITE_STORAGE_TEXTURE;
             boolean compatible = expected == actual.type()

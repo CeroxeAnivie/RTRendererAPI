@@ -303,7 +303,7 @@ val verifyReleaseVersionConsistency = tasks.register("verifyReleaseVersionConsis
 
 val verifyMajorReleaseContract = tasks.register("verifyMajorReleaseContract") {
     group = "verification"
-    description = "Enforces the 6.x major-release contract and current documentation entrypoint."
+    description = "Enforces the 7.x major-release contract and current documentation entrypoint."
     inputs.property("projectVersion", project.version.toString())
     inputs.files(
         file("docs/${project.version}.md"),
@@ -313,8 +313,8 @@ val verifyMajorReleaseContract = tasks.register("verifyMajorReleaseContract") {
     )
     doLast {
         val expected = project.version.toString()
-        if (!expected.startsWith("6.")) {
-            throw GradleException("The current release line must remain on the deliberate 6.x major line: $expected")
+        if (!expected.startsWith("7.")) {
+            throw GradleException("The current release line must remain on the deliberate 7.x major line: $expected")
         }
         val currentDocs = listOf(
             file("README.md"),

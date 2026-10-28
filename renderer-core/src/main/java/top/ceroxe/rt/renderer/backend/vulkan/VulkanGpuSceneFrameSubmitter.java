@@ -13,7 +13,7 @@ import java.util.Objects;
 /** Records and publishes one GPUScene frame as an atomic submission transaction. */
 final class VulkanGpuSceneFrameSubmitter {
     private final VulkanSceneRuntime scene;
-    private final GpuSceneRayTracingPipeline pipeline;
+    private final VulkanGpuScenePipelines pipelines;
     private final VulkanGpuSceneFrameRing frameRing;
     private final VulkanGpuSceneTemporalCoordinator temporal;
     private final VulkanGpuSceneFeatureComposition features;
@@ -23,7 +23,7 @@ final class VulkanGpuSceneFrameSubmitter {
 
     VulkanGpuSceneFrameSubmitter(
             VulkanSceneRuntime scene,
-            GpuSceneRayTracingPipeline pipeline,
+            VulkanGpuScenePipelines pipelines,
             VulkanGpuSceneFrameRing frameRing,
             VulkanGpuSceneTemporalCoordinator temporal,
             VulkanGpuSceneFeatureComposition features,
@@ -31,7 +31,7 @@ final class VulkanGpuSceneFrameSubmitter {
             String timingLabel
     ) {
         this.scene = Objects.requireNonNull(scene, "scene");
-        this.pipeline = Objects.requireNonNull(pipeline, "pipeline");
+        this.pipelines = Objects.requireNonNull(pipelines, "pipelines");
         this.frameRing = Objects.requireNonNull(frameRing, "frameRing");
         this.temporal = Objects.requireNonNull(temporal, "temporal");
         this.features = Objects.requireNonNull(features, "features");
@@ -97,6 +97,9 @@ final class VulkanGpuSceneFrameSubmitter {
                     "all bounded frame slots are retained or in flight"
             );
         }
+        var photonPlan = temporal.caustics(checked.request());
+        GpuSceneRayTracingPipeline photonPipeline = photonPlan.photons() > 0 ? pipelines.photons() : null;
+        GpuSceneRayTracingPipeline pipeline = pipelines.forFrame(temporal.program(checked.request()));
         // Presentation-time feature work may outlive proxy present. Establish resource ownership
         // before reconfiguration, extent replacement, or any writes to this free slot.
         VulkanFeatureSession.InputCompletion inputCompletion =
@@ -117,7 +120,8 @@ final class VulkanGpuSceneFrameSubmitter {
                                 pipeline.requiredShaderDataGrowth(slot.index(), checked.request().shaderData())),
                         temporal.requiredGrowthBytes(width, height)
                 ),
-                primitiveResources.requiredBufferGrowthBytes(checked.request().primitiveBatch())
+                Math.addExact(primitiveResources.requiredBufferGrowthBytes(checked.request().primitiveBatch()),
+                        slot.requiredCausticGrowth(photonPlan.bytes()))
         );
         requireMemoryHeadroom("resize frame resources", requestedGrowth);
         if (!temporal.extentMatches(width, height) && frameRing.hasProducerPending()) {
@@ -130,6 +134,7 @@ final class VulkanGpuSceneFrameSubmitter {
         // Temporal preparation borrows the slot-owned motion image. Allocate the slot contract
         // before deriving the temporal transaction, then upload the resulting uniforms below.
         slot.ensureResources(checkedExtents);
+        slot.ensureCausticResources(photonPlan.bytes());
 
         VulkanFramePrimitiveResources.Prepared framePrimitives = primitiveResources.prepare(
                 checked.request().primitiveBatch(), acceptedSceneRevision, scene
@@ -149,13 +154,14 @@ final class VulkanGpuSceneFrameSubmitter {
                     frameFeatures.reconstruction() || frameFeatures.frameGeneration(),
                     frameFeatures.temporalReconstruction()
             );
+            java.nio.ByteBuffer.wrap(temporalFrame.uniforms()).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    .putInt(VulkanGpuSceneAbi.FRAME_CAUSTIC_PHOTONS_WORD * 4, photonPlan.photons());
             slot.writeUniforms(temporalFrame.uniforms());
             pipeline.updateShaderData(slot.index(), checked.request().shaderData());
-            pipeline.updateDescriptorSet(
-                    slot.index(), descriptors.assemble(
-                            slot, acceptedSceneRevision, temporalFrame.gpu(), framePrimitives, frameFeatures
-                    )
-            );
+            var frameDescriptors = descriptors.assemble(
+                    slot, acceptedSceneRevision, temporalFrame.gpu(), framePrimitives, frameFeatures);
+            pipeline.updateDescriptorSet(slot.index(), frameDescriptors);
+            if (photonPipeline != null) photonPipeline.updateDescriptorSet(slot.index(), frameDescriptors);
 
             long descriptorEpoch = Math.incrementExact(lastSubmittedDescriptorEpoch);
             int previousLayout = slot.imageLayout();
@@ -169,6 +175,7 @@ final class VulkanGpuSceneFrameSubmitter {
                 if (framePrimitives.buildPlan() != null) {
                     framePrimitives.buildPlan().record(commandBuffer, stack);
                 }
+                photonPlan.record(commandBuffer, stack, slot.causticPhotons(), photonPipeline, slot.index());
                 pipeline.recordFrame(
                         commandBuffer,
                         stack,

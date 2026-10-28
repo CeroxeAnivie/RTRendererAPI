@@ -31,14 +31,17 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig benchmark() {
-        RendererConfig.Builder builder = RendererConfig.presentation()
-                .copyBuilder()
+        return RendererConfig.builder()
                 .maxFramesInFlight(8)
                 .gpuTimingsEnabled(true)
                 .cpuFrameReadbackEnabled(false)
-                .validationEnabled(false);
-        return generationOnly(builder)
-                .frameGeneration(FrameGenerationOptions.recommended())
+                .validationEnabled(false)
+                .temporalRendering(TemporalRenderingOptions.disabled())
+                .denoising(DenoisingOptions.disabled())
+                .frameReconstruction(FrameReconstructionOptions.disabled())
+                .frameGeneration(FrameGenerationOptions.disabled())
+                .lowLatency(LowLatencyOptions.disabled())
+                .rayTracingOptimizations(RayTracingOptimizationOptions.disabled())
                 .build();
     }
 

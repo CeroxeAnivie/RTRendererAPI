@@ -35,7 +35,8 @@ import top.ceroxe.rt.renderer.api.SceneLight;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
 import top.ceroxe.rt.renderer.api.SubmissionRejectedException;
 import top.ceroxe.rt.renderer.api.TextureAsset;
-import top.ceroxe.rt.renderer.api.EnvironmentState.Medium;
+import top.ceroxe.rt.renderer.api.Medium;
+import top.ceroxe.rt.renderer.api.Rgb;
 import top.ceroxe.rt.renderer.api.MaterialAsset.BlendMode;
 import top.ceroxe.rt.renderer.api.MaterialAsset.ShadingModel;
 import top.ceroxe.rt.renderer.api.TextureAsset.AddressMode;
@@ -441,7 +442,8 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
    }
 
    static EnvironmentState environment() {
-      EnvironmentState.Medium medium = Medium.builder().extinction(0.03F, 0.018F, 0.012F).scattering(0.006F, 0.009F, 0.014F).density(0.025F).indexOfRefraction(1.0F).build();
+      Medium medium = new Medium(new Rgb(0.03F, 0.018F, 0.012F), new Rgb(0.006F, 0.009F, 0.014F),
+              Rgb.ZERO, 0.025F, 1.0F, 0.0F);
       return EnvironmentState.builder().skyRadiance(0.08F, 0.14F, 0.24F).ambientIntensity(0.65F).sunDirection(-0.350508F, -0.851234F, -0.390566F).sunRadiance(1.0F, 0.94F, 0.82F).sunIntensity(1.8F).cameraMedium(medium).build();
    }
 

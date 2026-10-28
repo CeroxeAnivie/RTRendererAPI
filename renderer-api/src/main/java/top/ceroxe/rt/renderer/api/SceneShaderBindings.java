@@ -122,16 +122,18 @@ public final class SceneShaderBindings {
     /** Streamline reconstruction one-texel exposure input. */
     public static final int RECONSTRUCTION_EXPOSURE = 32;
     /**
-     * First application-defined readonly storage-buffer binding.
+     * Frame-slot-owned surface photon map for the built-in caustics stages.
      */
-    public static final int APPLICATION_DATA = 33;
+    public static final int CAUSTIC_PHOTONS = 33;
+    /** First application-defined readonly storage-buffer binding. */
+    public static final int APPLICATION_DATA = 34;
 
     /** Number of built-in bindings, before application-defined storage buffers. */
-    public static final int COUNT = 33;
+    public static final int COUNT = 34;
     /**
      * 存储缓冲区类型绑定数。
      */
-    public static final int STORAGE_BUFFER_COUNT = 16;
+    public static final int STORAGE_BUFFER_COUNT = 17;
     /**
      * Storage-image bindings per descriptor set, including the public output.
      */

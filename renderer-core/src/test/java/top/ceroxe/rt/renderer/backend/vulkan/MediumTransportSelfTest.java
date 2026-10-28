@@ -11,17 +11,17 @@ public final class MediumTransportSelfTest {
             new int[]{0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,3,7,6,3,6,2,0,4,7,0,7,3,1,2,6,1,6,5},material);
     }
     public static void main(String[] args) {
-        var medium=EnvironmentState.Medium.builder().absorption(.1f,.2f,.3f).scattering(.03f,.04f,.05f)
-            .density(.8f).indexOfRefraction(1.333f).phaseAnisotropy(.6f).emission(.02f,.01f,0).build();
-        require(Math.abs(medium.extinctionRed()-.13f)<1e-6,"absorption and scattering must compose");
-        require(medium.equals(medium.toBuilder().build()),"medium round trip");
-        expect(IllegalArgumentException.class,()->EnvironmentState.Medium.builder().phaseAnisotropy(1).build());
-        expect(IllegalArgumentException.class,()->EnvironmentState.Medium.builder().emission(-1,0,0).build());
-        expect(IllegalArgumentException.class,()->MediumBoundaryState.builder(EnvironmentState.Medium.builder().scattering(1,0,0).build()).build());
-        expect(IllegalArgumentException.class,()->new MediumTransportOptions(33,1,8,512));
-        expect(IllegalArgumentException.class,()->MediumTransportOptions.balanced().withMaximumDistance(Float.NaN));
-        var boundary=MediumBoundaryState.builder(medium).priority(Integer.MIN_VALUE).surfaceInteraction(false).build();
-        require(boundary.equals(boundary.toBuilder().build()),"boundary round trip");
+        var medium=new Medium(new Rgb(.1f,.2f,.3f), new Rgb(.03f,.04f,.05f), new Rgb(.02f,.01f,0), .8f, 1.333f, .6f);
+        require(Math.abs(medium.extinction().red()-.13f)<1e-6,"absorption and scattering must compose");
+        require(!medium.withDensity(0).participating() && !medium.withDensity(0).isVacuum(),"zero density preserves dielectric IOR");
+        expect(IllegalArgumentException.class,()->new Medium(Rgb.ZERO, Rgb.ZERO, Rgb.ZERO, 0, 1, 1));
+        expect(IllegalArgumentException.class,()->new Medium(Rgb.ZERO, Rgb.ZERO, new Rgb(-1,0,0), 0, 1, 0));
+        expect(IllegalArgumentException.class,()->new Medium(new Rgb(Float.MAX_VALUE,0,0), new Rgb(Float.MAX_VALUE,0,0), Rgb.ZERO, 1, 1, 0));
+        require(new Medium(Rgb.ZERO,new Rgb(1,0,0),Rgb.ZERO,1,1,0).extinction().red()==1,"pure scattering defines its own extinction");
+        expect(IllegalArgumentException.class,()->new MediumTransport(33, 1, 8, 4, 512, 1e-4f));
+        expect(IllegalArgumentException.class,()->MediumTransport.balanced().withMaxDistance(Float.NaN));
+        var boundary=new MediumBoundary(medium, Integer.MIN_VALUE, MediumBoundary.Orientation.OUTWARD, false);
+        require(boundary.withPriority(5).priority()==5 && boundary.priority()==Integer.MIN_VALUE,"boundary modifiers preserve immutability");
         var instance=SceneInstance.builder(1,1).mediumBoundary(boundary).build();
         require(instance.equals(instance.toBuilder().build()),"instance boundary round trip");
         require(instance.toBuilder().clearMediumBoundary().build().mediumBoundary().isEmpty(),"boundary clear");
@@ -37,10 +37,10 @@ public final class MediumTransportSelfTest {
         int swap=badIndices[0];badIndices[0]=badIndices[1];badIndices[1]=swap;
         float[] points=new float[mesh.positions().remaining()];mesh.positions().get(points);
         require(!MeshAsset.triangles(3,points,badIndices,1).isClosedManifold(),"inconsistent winding must be rejected");
-        require(VulkanMediumBoundaryIndex.contains(mesh,AffineTransform.identity(),0,0,0),"camera inside");
-        require(!VulkanMediumBoundaryIndex.contains(mesh,AffineTransform.identity(),3,0,0),"camera outside");
+        require(MediumSceneIndex.contains(mesh,AffineTransform.identity(),0,0,0),"camera inside");
+        require(!MediumSceneIndex.contains(mesh,AffineTransform.identity(),3,0,0),"camera outside");
         var mirror=new AffineTransform(new float[]{-2,0,0,5,0,1,0,0,0,0,1,0});
-        require(VulkanMediumBoundaryIndex.contains(mesh,mirror,5,0,0),"mirrored/scaled boundary containment");
+        require(MediumSceneIndex.contains(mesh,mirror,5,0,0),"mirrored/scaled boundary containment");
         int[] packed=VulkanGpuSceneAbi.packInstance(instance,id->0);
         require(packed[VulkanGpuSceneAbi.INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD]==3,"volume-only flag");
         require(packed[VulkanGpuSceneAbi.INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD]==Integer.MIN_VALUE,"signed priority");
@@ -53,11 +53,11 @@ public final class MediumTransportSelfTest {
         expect(SceneValidationException.class,()->registry.prepare(SceneTransaction.builder(2)
             .upsert(MeshAsset.triangles(1,new float[]{0,0,0,1,0,0,0,1,0},new int[]{0,1,2},1)).build()));
         require(registry.state().revision()==1,"failed volume replacement must stay atomic");
-        var residency=new VulkanSceneResidency();var index=new VulkanMediumBoundaryIndex();
+        var residency=new VulkanSceneResidency();var index=new MediumSceneIndex();
         var transaction=SceneTransaction.builder(1).upsert(MaterialAsset.opaque(1,-1)).upsert(mesh).upsert(instance).build();
         var prepared=residency.prepare(transaction);residency.commit(prepared);index.sceneApplied(prepared.changeSet());
         require(index.containing(CameraState.lookAt(0,0,0,0,0,-1).build()).length==1,"initial containment index");
-        var second=SceneInstance.builder(2,1).mediumBoundary(boundary.toBuilder().priority(5).build()).build();
+        var second=SceneInstance.builder(2,1).mediumBoundary(boundary.withPriority(5)).build();
         prepared=residency.prepare(SceneTransaction.builder(2).upsert(second).build());residency.commit(prepared);index.sceneApplied(prepared.changeSet());
         require(Arrays.equals(new int[]{0,1},index.containing(CameraState.lookAt(0,0,0,0,0,-1).build())),"priority order");
         prepared=residency.prepare(SceneTransaction.builder(3).removeInstances(1,2).build());residency.commit(prepared);index.sceneApplied(prepared.changeSet());
@@ -72,14 +72,14 @@ public final class MediumTransportSelfTest {
             .add(PrimitiveInstance.builder(999).mediumBoundary(boundary).build()).build()).build();
         expect(FrameValidationException.class,()->index.containing(missing));
         var tooMany=FramePrimitiveBatch.builder();
-        for(int i=0;i<=MediumTransportOptions.MAX_NESTED_BOUNDARIES;i++) tooMany.add(primitive);
+        for(int i=0;i<=MediumTransport.MAX_NESTED_BOUNDARIES;i++) tooMany.add(primitive);
         expect(FrameValidationException.class,()->index.containing(localRequest.toBuilder().primitiveBatch(tooMany.build()).build()));
         prepared=residency.prepare(SceneTransaction.builder(4).resetScene().build());residency.commit(prepared);index.sceneApplied(prepared.changeSet());
         require(index.boundaryCount()==0 && index.containing(insideCamera).length==0,"reset clears medium lifecycle");
         expect(FrameValidationException.class,()->index.containing(localRequest));
         var request=RenderFrameRequest.builder(1,32,32,CameraState.lookAt(0,0,4,0,0,0).build())
             .environment(EnvironmentState.builder().cameraMedium(medium).build())
-            .mediumTransport(new MediumTransportOptions(18,4,16,1024)).build();
+            .mediumTransport(new MediumTransport(18, 4, 16, 4, 1024, 1e-4f)).build();
         require(request.equals(request.toBuilder().build()),"frame option round trip");
         var tracker=new TemporalHistoryTracker(TemporalRenderingOptions.disabled());
         var bytes=VulkanFrameUniformPacker.pack(request,0,0,tracker.prepare(request,0),TemporalRenderingOptions.disabled(),false);
@@ -89,6 +89,7 @@ public final class MediumTransportSelfTest {
         require(words.getFloat(VulkanGpuSceneAbi.FRAME_MEDIUM_EMISSION_WORD*4)==.02f,"global emission packed");
         verifyMediumHistoryInvalidation(instance,primitive,mesh);
         verifyAcceleratedContainment();
+        verifySpatialSceneLifecycle();
         System.out.println("MediumTransportSelfTest passed: values, topology, containment, packing, mutation rollback, retirement");
     }
     private static void verifyAcceleratedContainment() {
@@ -110,23 +111,75 @@ public final class MediumTransportSelfTest {
         }
         var dense=MeshAsset.triangles(9,points,indices,1);
         require(dense.isClosedManifold(),"subdivided seam-welded cube topology");
-        var geometry=new VulkanMediumGeometry(dense);var random=new java.util.Random(520);
+        var geometry=new MediumMeshAcceleration(dense);var random=new java.util.Random(520);
         double[][] queries=new double[512][3];
         for(var query:queries) for(int axis=0;axis<3;axis++) query[axis]=random.nextDouble()*2.6-1.3;
         for(var query:queries) {
             boolean expected=Math.abs(query[0])<1 && Math.abs(query[1])<1 && Math.abs(query[2])<1;
             require(geometry.containsLocal(query[0],query[1],query[2])==expected,"BVH containment against analytic cube");
-            require(geometry.windingContains(query[0],query[1],query[2])==expected,"winding reference containment");
         }
-        int accelerated=0,reference=0;long started=System.nanoTime();
+        int accelerated=0;long started=System.nanoTime();
         for(var query:queries) if(geometry.containsLocal(query[0],query[1],query[2]))accelerated++;
-        long bvhNanos=System.nanoTime()-started;started=System.nanoTime();
-        for(var query:queries) if(geometry.windingContains(query[0],query[1],query[2]))reference++;
-        long referenceNanos=System.nanoTime()-started;
-        require(accelerated==reference,"accelerated/generalized-winding agreement");
+        long bvhNanos=System.nanoTime()-started;
+        require(accelerated>0 && accelerated<queries.length,"containment sample covers interior and exterior");
         require(geometry.containsLocal(0,0,0),"shared diagonal/vertex directions must classify interior");
-        System.out.printf(java.util.Locale.ROOT,"Medium containment: triangles=%d queries=%d BVH=%.2f ms winding=%.2f ms (informational, exact results required)%n",
-            triangleCount,queries.length,bvhNanos/1e6,referenceNanos/1e6);
+        var transformed=new AffineTransform(new float[]{-2,.5f,.2f,5,0,3,.4f,-2,0,0,.25f,8});
+        for(var query:queries) {
+            double x=-2*query[0]+.5*query[1]+.2f*query[2]+5;
+            double y=3*query[1]+.4f*query[2]-2,z=.25*query[2]+8;
+            boolean expected=Math.abs(query[0])<1 && Math.abs(query[1])<1 && Math.abs(query[2])<1;
+            require(geometry.contains(transformed,x,y,z)==expected,"mirrored, sheared and nonuniform transform containment");
+        }
+        require(geometry.containsLocal(1,0,0) && geometry.containsLocal(1,1,1),"face and vertex origins belong to closed boundary");
+        verifyHollowContainment();
+        System.out.printf(java.util.Locale.ROOT,"Medium containment: triangles=%d queries=%d BVH=%.2f ms (informational, analytic results required)%n",
+            triangleCount,queries.length,bvhNanos/1e6);
+    }
+    private static void verifyHollowContainment() {
+        var outer=cube(1,1,1);var inner=cube(2,1,.5f);
+        float[] positions=new float[outer.positions().remaining()+inner.positions().remaining()];
+        outer.positions().get(positions,0,24);inner.positions().get(positions,24,24);
+        int[] indices=new int[72];outer.triangleIndices().get(indices,0,36);
+        var innerIndices=inner.triangleIndices();
+        for(int triangle=36;triangle<72;triangle+=3) {
+            int a=innerIndices.get()+8,b=innerIndices.get()+8,c=innerIndices.get()+8;
+            indices[triangle]=a;indices[triangle+1]=c;indices[triangle+2]=b;
+        }
+        var hollow=MeshAsset.triangles(3,positions,indices,1);
+        require(hollow.isClosedManifold(),"oppositely wound inner shell remains closed");
+        var acceleration=new MediumMeshAcceleration(hollow);
+        require(!acceleration.containsLocal(0,0,0),"inner cavity is outside the volume");
+        require(acceleration.containsLocal(.75,0,0),"shell interior is inside the volume");
+        require(!acceleration.containsLocal(1.25,0,0),"hollow mesh exterior is outside");
+    }
+    private static void verifySpatialSceneLifecycle() {
+        var residency=new VulkanSceneResidency();var index=new MediumSceneIndex();
+        var boundary=MediumBoundary.volume(Medium.vacuum());
+        var scene=SceneTransaction.builder(1).upsert(MaterialAsset.opaque(1,-1)).upsert(cube(1,1,1));
+        for(int i=0;i<96;i++) scene.upsert(SceneInstance.builder(100+i,1)
+            .transform(new AffineTransform(new float[]{1,0,0,i*10,0,1,0,0,0,0,1,0})).mediumBoundary(boundary).build());
+        var prepared=residency.prepare(scene.build());residency.commit(prepared);index.sceneApplied(prepared.changeSet());
+        require(index.boundaryCount()==96,"vacuum boundaries participate in overlap selection");
+        for(int i=0;i<96;i++) {
+            var camera=CameraState.lookAt(i*10,0,0,i*10,0,-1).build();
+            require(Arrays.equals(index.containing(camera),new int[]{i}),"world BVH follows moving camera");
+            require(index.containing(CameraState.lookAt(i*10+4,0,0,i*10+4,0,-1).build()).length==0,"world BVH rejects inter-volume gaps");
+        }
+        var camera=CameraState.lookAt(0,0,0,0,0,-1).build();
+        var batch=FramePrimitiveBatch.builder()
+            .add(PrimitiveInstance.builder(1).mediumBoundary(boundary.withPriority(-1)).build())
+            .add(PrimitiveInstance.builder(1).mediumBoundary(boundary).build()).build();
+        var request=RenderFrameRequest.builder(1,32,32,camera).primitiveBatch(batch).build();
+        require(Arrays.equals(index.containing(request),new int[]{VulkanGpuSceneAbi.TRANSIENT_INSTANCE_BIT,0,
+            VulkanGpuSceneAbi.TRANSIENT_INSTANCE_BIT|1}),"priority then persistent identity then frame order");
+        prepared=residency.prepare(SceneTransaction.builder(2).upsert(cube(1,1,.25f)).build());
+        residency.commit(prepared);index.sceneApplied(prepared.changeSet());
+        var offCenter=CameraState.lookAt(.5,0,0,.5,0,-1).build();
+        require(index.containing(RenderFrameRequest.builder(1,32,32,offCenter).primitiveBatch(batch).build()).length==0,"mesh replacement invalidates persistent and frame trees");
+        prepared=residency.prepare(SceneTransaction.builder(3).upsert(SceneInstance.builder(100,1)
+            .transform(new AffineTransform(new float[]{1,0,0,.5f,0,1,0,0,0,0,1,0})).mediumBoundary(boundary).build()).build());
+        residency.commit(prepared);index.sceneApplied(prepared.changeSet());
+        require(Arrays.equals(index.containing(offCenter),new int[]{0}),"instance transform replacement refreshes cached inverse and bounds");
     }
     private static void verifyMediumHistoryInvalidation(SceneInstance instance,PrimitiveInstance primitive,MeshAsset mesh) {
         var residency=new VulkanSceneResidency();
@@ -152,7 +205,7 @@ public final class MediumTransportSelfTest {
         require(frame.invalidations().contains(HistoryInvalidationReason.FRAME_SHADING_CHANGED),"frame-local medium addition invalidates indirect history");tracker.commit(frame);
         frame=tracker.prepare(RenderFrameRequest.builder(6,32,32,camera).build(),4);
         require(frame.invalidations().contains(HistoryInvalidationReason.FRAME_SHADING_CHANGED),"frame-local medium deletion invalidates indirect history");tracker.commit(frame);
-        frame=tracker.prepare(RenderFrameRequest.builder(7,32,32,camera).mediumTransport(MediumTransportOptions.balanced().withOpticalSamples(2)).build(),4);
+        frame=tracker.prepare(RenderFrameRequest.builder(7,32,32,camera).mediumTransport(MediumTransport.balanced().withOpticalSamples(2)).build(),4);
         require(frame.invalidations().contains(HistoryInvalidationReason.FRAME_SHADING_CHANGED),"transport quality invalidates history");
     }
     static void require(boolean condition,String message) { if(!condition) throw new AssertionError(message); }

@@ -47,6 +47,7 @@ final class DemoApiControls {
     private static Object apply(Object source, Map<String, String> values) {
         if (values.isEmpty()) return source;
         try {
+            if (source.getClass().isRecord()) return applyRecord(source, values);
             Method copy = source.getClass().getMethod(source instanceof RendererConfig ? "copyBuilder" : "toBuilder");
             Object builder = copy.invoke(source);
             var nested = new LinkedHashMap<String, Map<String, String>>();
@@ -83,6 +84,28 @@ final class DemoApiControls {
         }
     }
 
+    private static Object applyRecord(Object source, Map<String, String> values) throws ReflectiveOperationException {
+        var components = source.getClass().getRecordComponents();
+        var arguments = new Object[components.length];
+        var types = new Class<?>[components.length];
+        var remaining = new LinkedHashMap<>(values);
+        for (int i = 0; i < components.length; i++) {
+            var component = components[i];
+            String name = component.getName();
+            Object value = component.getAccessor().invoke(source);
+            types[i] = component.getType();
+            String direct = remaining.remove(name);
+            var nested = new LinkedHashMap<String, String>();
+            for (String key : List.copyOf(remaining.keySet())) {
+                if (key.startsWith(name + ".")) nested.put(key.substring(name.length() + 1), remaining.remove(key));
+            }
+            if (direct != null && !nested.isEmpty()) throw new IllegalArgumentException("duplicate record control: " + name);
+            arguments[i] = direct != null ? convert(types[i], name, direct) : apply(value, nested);
+        }
+        if (!remaining.isEmpty()) throw new IllegalArgumentException("unknown record controls: " + remaining.keySet());
+        return source.getClass().getConstructor(types).newInstance(arguments);
+    }
+
     private static void set(Object builder, String key, String value) throws ReflectiveOperationException {
         for (Method method : builder.getClass().getMethods()) {
             if (!method.getName().equals(key) || method.getParameterCount() == 0
@@ -97,19 +120,24 @@ final class DemoApiControls {
     }
 
     private static Object convert(Class<?> type, String key, String value) {
-            Object converted;
-            if (type.isEnum()) converted = Arrays.stream(type.getEnumConstants())
-                    .filter(item -> ((Enum<?>) item).name().equals(value)).findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("invalid " + key + ": " + value));
-            else if (type == boolean.class) {
-                if (!value.equals("true") && !value.equals("false")) throw new IllegalArgumentException("expected true/false: " + key);
-                converted = Boolean.parseBoolean(value);
-            } else if (type == int.class) converted = Integer.parseInt(value);
-            else if (type == long.class) converted = Long.parseLong(value);
-            else if (type == float.class) converted = Float.parseFloat(value);
-            else if (type == double.class) converted = Double.parseDouble(value);
-            else throw new IllegalArgumentException("unsupported control type: " + key);
-            return converted;
+        if (type == Rgb.class) {
+            String[] channels = value.split(",", -1);
+            if (channels.length != 3) throw new IllegalArgumentException(key + " requires three RGB components");
+            return new Rgb(Float.parseFloat(channels[0].trim()), Float.parseFloat(channels[1].trim()),
+                    Float.parseFloat(channels[2].trim()));
+        }
+        if (type.isEnum()) return Arrays.stream(type.getEnumConstants())
+                .filter(item -> ((Enum<?>) item).name().equals(value)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("invalid " + key + ": " + value));
+        if (type == boolean.class) {
+            if (!value.equals("true") && !value.equals("false")) throw new IllegalArgumentException("expected true/false: " + key);
+            return Boolean.parseBoolean(value);
+        }
+        if (type == int.class) return Integer.parseInt(value);
+        if (type == long.class) return Long.parseLong(value);
+        if (type == float.class) return Float.parseFloat(value);
+        if (type == double.class) return Double.parseDouble(value);
+        throw new IllegalArgumentException("unsupported control type: " + key);
     }
 
     static void openWorkbench() {
@@ -204,8 +232,26 @@ final class DemoApiControls {
                         panel.add(new JLabel("temporalRendering.mode")); panel.add(modes); fields.put(key + ".mode", modes);
                         var history = new JTextField(); panel.add(new JLabel("temporalRendering.maxHistoryFrames")); panel.add(history);
                         fields.put(key + ".maxHistoryFrames", history);
-                    } else addEditors(panel, fields, key + ".", child, type.getMethod("toBuilder").invoke(child));
+                    } else if (type.isRecord()) addRecordEditors(panel, fields, key + ".", child);
+                    else addEditors(panel, fields, key + ".", child, type.getMethod("toBuilder").invoke(child));
                 } catch (ReflectiveOperationException ignored) { /* Non-scalar assets have dedicated scene editors. */ }
+            }
+        }
+    }
+
+    private static void addRecordEditors(JPanel panel, Map<String, JComponent> fields, String prefix, Object value)
+            throws ReflectiveOperationException {
+        for (var component : value.getClass().getRecordComponents()) {
+            Object current = component.getAccessor().invoke(value);
+            String key = prefix + component.getName();
+            if (component.getType().isRecord() && component.getType() != Rgb.class) {
+                addRecordEditors(panel, fields, key + ".", current);
+            } else {
+                var field = new JTextField();
+                field.setToolTipText(current instanceof Rgb rgb
+                        ? "RGB components, comma separated. Preset: " + rgb.red() + "," + rgb.green() + "," + rgb.blue()
+                        : "Preset: " + current);
+                panel.add(new JLabel(key.substring(key.indexOf('.') + 1))); panel.add(field); fields.put(key, field);
             }
         }
     }

@@ -13,7 +13,8 @@ import top.ceroxe.rt.renderer.api.LightmapState;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.TemporalRenderingOptions;
 import top.ceroxe.rt.renderer.api.TextureSamplingState;
-import top.ceroxe.rt.renderer.api.EnvironmentState.Medium;
+import top.ceroxe.rt.renderer.api.Medium;
+import top.ceroxe.rt.renderer.api.Rgb;
 import top.ceroxe.rt.renderer.api.TextureSamplingState.MinificationMode;
 
 public final class VulkanFrameUniformPackerSelfTest {
@@ -37,6 +38,11 @@ public final class VulkanFrameUniformPackerSelfTest {
       require(real64(words, 4) == 3.0000000125E7 && real64(words, 6) == -2000000.5, "camera world position lost double precision");
       require(real32(words, 12) == -1.0F && real32(words, 19) == 1.25F, "camera projection basis changed during packing");
       require(real32(words, 38) == 0.4F && real32(words, 39) == 1.333F, "camera medium changed during packing");
+      require(real32(words, 32) == 0.01F + 0.04F && real32(words, 33) == 0.02F + 0.05F
+                      && real32(words, 34) == 0.03F + 0.06F,
+              "packed extinction must equal physical absorption plus scattering");
+      require(real32(words, 35) == 0.04F && real32(words, 36) == 0.05F && real32(words, 37) == 0.06F,
+              "scattering coefficients changed during packing");
       require(integer(words, 40) == 37, "sparse light high-water mark changed during packing");
       require(longInteger(words, 41) == 4294967301L, "64-bit scene revision was truncated");
 
@@ -308,7 +314,8 @@ public final class VulkanFrameUniformPackerSelfTest {
 
    private static RenderFrameRequest fixture() {
       CameraState camera = CameraState.explicitBasis(3.0000000125E7, -2000000.5, 0.25).forward(0.0F, 0.0F, -1.0F).right(1.0F, 0.0F, 0.0F).up(0.0F, 1.0F, 0.0F).projectionTangents(1.25F, 0.75F).build();
-      EnvironmentState.Medium medium = Medium.builder().extinction(0.01F, 0.02F, 0.03F).scattering(0.04F, 0.05F, 0.06F).density(0.4F).indexOfRefraction(1.333F).build();
+      Medium medium = new Medium(new Rgb(0.01F, 0.02F, 0.03F), new Rgb(0.04F, 0.05F, 0.06F),
+              Rgb.ZERO, 0.4F, 1.333F, 0.0F);
       EnvironmentState environment = EnvironmentState.builder().skyRadiance(0.1F, 0.2F, 0.3F).ambientIntensity(0.4F).sunDirection(0.0F, 1.0F, 0.0F).sunRadiance(0.9F, 0.8F, 0.7F).sunIntensity(12.0F).cameraMedium(medium).build();
       return RenderFrameRequest.builder(8589934595L, 1920, 1080, camera).minimumSceneRevision(7L).environment(environment).lightmap(LightmapState.fullIntensity()).fog(DistanceFogState.builder().color(0.2F, 0.3F, 0.4F).opacity(0.75F).sphericalRange(-8.0F, 16.0F).cylindricalRange(64.0F, 96.0F).build()).textureSampling(TextureSamplingState.rotatedGridSupersampling()).antiAliasing(AntiAliasingState.multisampled(8)).build();
    }

@@ -28,6 +28,9 @@ layout(set = 0, binding = 4, std430) readonly buffer FrameUniformBuffer
     uvec2 frameSequence;
     uvec2 reserved;
     vec4 environmentTime;
+    vec4 mediumExtinction;
+    vec4 mediumScattering;
+    vec4 mediumEmission;
 } frame;
 
 layout(set = 0, binding = 7, std430) readonly buffer DynamicSceneBuffer

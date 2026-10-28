@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Comparator;
 
 public final class RtPipelineCacheSelfTest {
@@ -47,6 +48,15 @@ public final class RtPipelineCacheSelfTest {
          require(first.read().length==0,"missing cache must be a miss");
          first.write(data);
          require(Arrays.equals(data,first.read()),"cache round trip lost opaque driver data");
+         BasicFileAttributes before=Files.readAttributes(first.file(),BasicFileAttributes.class);
+         first.write(data);
+         BasicFileAttributes after=Files.readAttributes(first.file(),BasicFileAttributes.class);
+         require(before.lastModifiedTime().equals(after.lastModifiedTime()),"identical warm cache data was rewritten");
+         if(before.fileKey()!=null) require(before.fileKey().equals(after.fileKey()),"identical warm cache data replaced the file");
+         byte[] changed=data.clone();changed[changed.length-1]=7;
+         first.write(changed);
+         require(Arrays.equals(changed,first.read()),"changed cache data was skipped");
+         first.write(data);
          byte[] encoded=Files.readAllBytes(first.file());encoded[encoded.length-1]^=1;
          Files.write(first.file(),encoded);
          require(first.read().length==0,"checksum-corrupt payload reached the driver");

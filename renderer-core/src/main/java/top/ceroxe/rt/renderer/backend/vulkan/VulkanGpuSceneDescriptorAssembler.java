@@ -62,6 +62,8 @@ final class VulkanGpuSceneDescriptorAssembler {
                         primitives.instanceBuffer().buffer(),
                         primitives.instanceBuffer().sizeBytes()
                 ),
+                GpuSceneDescriptorResources.BufferRange.whole(checkedSlot.causticPhotons().buffer(),
+                        checkedSlot.causticPhotons().sizeBytes()),
                 sceneBuffers
         );
     }

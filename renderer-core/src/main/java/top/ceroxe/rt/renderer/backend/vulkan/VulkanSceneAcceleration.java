@@ -317,6 +317,12 @@ final class VulkanSceneAcceleration implements AutoCloseable {
         )];
         for (int index = 0; index < checked.size(); index++) {
             PrimitiveInstance primitive = checked.primitives().get(index);
+            if (primitive.mediumBoundary().isPresent()) {
+                var field = primitive.mediumBoundary().orElseThrow().medium().densityField();
+                String error = MediumDensitySupport.invalidTexture(field, activeTextures.get(field.textureAssetId()));
+                if (error != null) throw new top.ceroxe.rt.renderer.api.FrameValidationException(
+                        top.ceroxe.rt.renderer.api.FrameValidationException.Reason.INVALID_MEDIUM_DENSITY, error);
+            }
             int meshSlot = gpuScene.resolveMeshSlot(primitive.meshAssetId(), requiredSceneRevision);
             RtAccelerationStructure blas = activeMeshes.get(meshSlot);
             if (blas == null) {
@@ -332,7 +338,8 @@ final class VulkanSceneAcceleration implements AutoCloseable {
             ));
             int[] record = VulkanGpuSceneAbi.packPrimitive(
                     primitive,
-                    id -> gpuScene.resolveMeshSlot(id, requiredSceneRevision)
+                    id -> gpuScene.resolveMeshSlot(id, requiredSceneRevision),
+                    id -> gpuScene.resolveTextureSlot(id, requiredSceneRevision)
             );
             System.arraycopy(
                     record, 0, packedWords,

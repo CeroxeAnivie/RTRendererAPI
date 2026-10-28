@@ -50,6 +50,9 @@ layout(set = 0, binding = 4, std430) readonly buffer FrameUniformBuffer
     uvec2 frameSequence;
     uvec2 reserved;
     vec4 environmentTime;
+    vec4 mediumExtinction;
+    vec4 mediumScattering;
+    vec4 mediumEmission;
 } frame;
 
 layout(set = 0, binding = 7, std430) readonly buffer DynamicSceneBuffer
@@ -95,7 +98,6 @@ layout(set = 0, binding = 7, std430) readonly buffer DynamicSceneBuffer
 
 const uint WORLD_MODE = 0u;
 const uint BOOTSTRAP_MODE = 1u;
-const uint CAMERA_MEDIUM_NONE = 0u;
 const uint MAX_DYNAMIC_PRIMITIVES = 64u;
 const uint MAX_DYNAMIC_PARTICLES = 256u;
 const uint MAX_DYNAMIC_BEAMS = 32u;
@@ -165,45 +167,40 @@ vec4 sampleTextureNearest(uint textureId, vec2 uv)
     return vec4(unpackRgba8(packed), unpackAlpha8(packed));
 }
 
-float cameraMediumDensity()
+float homogeneousSourceIntegral(float extinction, float distance, float transmittance)
 {
-    if (frame.frameInfo.w == CAMERA_MEDIUM_NONE) {
-        return 0.0;
+    float opticalDepth = extinction * distance;
+    if (opticalDepth < 1.0e-2) {
+        // Stable limit of (1-exp(-sigma*d))/sigma, including sigma=0.
+        return distance * (1.0 - opticalDepth * (0.5 - opticalDepth
+            * (1.0 / 6.0 - opticalDepth / 24.0)));
     }
-    return max(uintBitsToFloat(frame.reserved.y), 0.0);
+    return (1.0 - transmittance) / extinction;
 }
 
-vec3 cameraMediumColor()
+vec3 integrateCameraMedium(vec3 color, float travelDistance)
 {
-    if (frame.frameInfo.w == CAMERA_MEDIUM_NONE) {
-        return vec3(0.0);
-    }
-    return unpackRgba8(frame.reserved.x);
-}
-
-vec3 applyCameraMediumFog(vec3 color, float travelDistance)
-{
-    float density = cameraMediumDensity();
-    if (density <= 0.0) {
+    if (frame.frameInfo.w == 0u) {
         return color;
     }
-
     /*
-     * Host camera fog is a full-frame medium effect, not a property of the first
-     * surface hit.  Apply it after terrain/dynamic composition so every visible
-     * object inside the fluid volume is absorbed consistently.  Lava-like media
-     * use high density and alpha, collapsing distant detail instead of letting
-     * enclosed rooms stay readable through the fluid.
+     * Bootstrap diagnostic: one homogeneous camera segment with a spatially
+     * uniform incident environment equal to the mean sky radiance. A normalized
+     * phase function integrates to one under uniform illumination, including HG.
+     * GPUScene owns general boundary, refractive and directional volume transport.
+     * Density is already folded into these RGB coefficients by the CPU encoder.
      */
-    vec3 mediumColor = cameraMediumColor();
-    float alpha = unpackAlpha8(frame.reserved.x);
-    float distance = clamp(travelDistance, 0.0, 1024.0);
-    float extinction = exp(-density * distance);
-    float scatter = 1.0 - extinction;
-    vec3 fogColor = mix(mediumColor * 0.55, mediumColor * 1.15, clamp(alpha, 0.0, 1.0));
-    vec3 absorbed = color * extinction + fogColor * scatter;
-    float opacity = clamp(alpha * scatter, 0.0, 1.0);
-    return mix(color, absorbed, opacity);
+    float distance = max(travelDistance, 0.0);
+    vec3 extinction = frame.mediumExtinction.rgb;
+    vec3 transmittance = exp(-extinction * distance);
+    vec3 sourceIntegral = vec3(
+        homogeneousSourceIntegral(extinction.r, distance, transmittance.r),
+        homogeneousSourceIntegral(extinction.g, distance, transmittance.g),
+        homogeneousSourceIntegral(extinction.b, distance, transmittance.b)
+    );
+    vec3 environment = max(mix(dynamicScene.skyHorizon.rgb, dynamicScene.skyZenith.rgb, 0.5), vec3(0.0));
+    vec3 source = frame.mediumEmission.rgb + frame.mediumScattering.rgb * environment;
+    return color * transmittance + source * sourceIntegral;
 }
 
 float linearFogFactor(float distance, float startDistance, float endDistance)
@@ -737,7 +734,8 @@ void main()
             rayTMax,
             0
         );
-        imageStore(outputImage, ivec2(x, y), vec4(payload.colorAlpha.rgb, 1.0));
+        float travelDistance = payload.hit != 0u ? payload.hitT : rayTMax;
+        imageStore(outputImage, ivec2(x, y), vec4(integrateCameraMedium(payload.colorAlpha.rgb, travelDistance), 1.0));
         return;
     }
 
@@ -871,7 +869,7 @@ void main()
         );
     }
     composedColor = applyWorldFog(composedColor, firstHitT);
-    composedColor = applyCameraMediumFog(composedColor, firstHitT);
+    composedColor = integrateCameraMedium(composedColor, firstHitT);
 
     uint overlayCount = 0u;
     if (hasDynamicTlasGeometry) {

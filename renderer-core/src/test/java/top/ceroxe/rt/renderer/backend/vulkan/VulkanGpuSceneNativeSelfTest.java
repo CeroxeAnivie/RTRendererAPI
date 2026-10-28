@@ -39,9 +39,16 @@ public final class VulkanGpuSceneNativeSelfTest {
             residency.commit(prepared);
             VulkanGpuScene.Snapshot active = awaitActive(scene, admission.acceptedRevision());
 
+            long fallback = 0L;
             for(VulkanGpuSceneUploadPlanner.Target target : Target.values()) {
                VulkanGpuSceneTransferQueue.BufferBinding binding = scene.requireBuffer(target, 0L);
-               require(binding.capacityBytes() >= 4096L, "descriptor target did not retain bootstrap capacity: " + String.valueOf(target));
+               if (target == Target.TEXTURE_RECORDS || target == Target.TEXTURE_PIXELS) {
+                  require(binding.capacityBytes() >= 4096L, "referenced texture target lacks capacity: " + target);
+               } else {
+                  require(binding.capacityBytes() == Integer.BYTES, "unused target did not use descriptor fallback: " + target);
+                  if (fallback == 0L) fallback = binding.buffer();
+                  require(binding.buffer() == fallback, "unused targets did not share one fallback allocation");
+               }
             }
 
             VulkanGpuSceneTransferQueue.BufferBinding texturePixels = scene.requireBuffer(Target.TEXTURE_PIXELS, 0L);
@@ -49,7 +56,7 @@ public final class VulkanGpuSceneNativeSelfTest {
             boolean condition10000 = Arrays.equals(uploaded, EXPECTED_PIXEL);
             String details10001 = Arrays.toString(uploaded);
             require(condition10000, "device-local texture upload differs: " + details10001);
-            require(active.transfers().activeBuffers() == Target.values().length, "not every GPUScene descriptor target became active");
+            require(active.transfers().activeBuffers() == 2, "texture-only scene allocated unrelated descriptor targets");
             PrintStream output19 = System.out;
             details10001 = capability.preferredDevice().name();
             output19.println("VulkanGpuSceneNativeSelfTest passed: device=" + details10001 + ", activeRevision=" + active.activeRevision() + ", buffers=" + active.transfers().activeBuffers() + ", bytes=" + active.transfers().activeBytes());

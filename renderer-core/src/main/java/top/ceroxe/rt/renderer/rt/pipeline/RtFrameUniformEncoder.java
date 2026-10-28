@@ -3,6 +3,8 @@ package top.ceroxe.rt.renderer.rt.pipeline;
 import top.ceroxe.rt.renderer.CameraRayMath;
 import top.ceroxe.rt.renderer.RendererFrameEnvironment;
 import top.ceroxe.rt.renderer.RendererFrameState;
+import top.ceroxe.rt.renderer.api.Medium;
+import top.ceroxe.rt.renderer.api.Rgb;
 import top.ceroxe.rt.renderer.rt.acceleration.RtDynamicBlasCache;
 
 import java.nio.ByteBuffer;
@@ -11,9 +13,11 @@ import java.util.Objects;
 
 /**
  * Owns the fixed shader ABI for per-frame camera and environment uniforms.
+ * The final three vec4 records contain density-scaled RGB coefficients for the
+ * bootstrap diagnostic's homogeneous camera segment; their fourth lanes are zero.
  */
 final class RtFrameUniformEncoder {
-    static final int BYTES = 112;
+    static final int BYTES = 160;
     static final int WORLD_MODE = 0;
     static final int BOOTSTRAP_MODE = 1;
 
@@ -43,6 +47,11 @@ final class RtFrameUniformEncoder {
                 || terrainMaterialCount > RtDynamicBlasCache.DYNAMIC_MATERIAL_INDEX_BIT) {
             throw new IllegalArgumentException("terrainMaterialCount overlaps the stable dynamic material namespace");
         }
+        Medium medium = frameState.cameraMedium();
+        if (medium.participating() && !medium.densityField().isUniform()) {
+            throw new IllegalArgumentException(
+                    "bootstrap diagnostic camera medium must use uniform density; density grids require the retained scene texture table");
+        }
 
         float aspect = outputWidth / (float) outputHeight;
         CameraRayMath.RayScale rayScale = CameraRayMath.rayScale(frameState, outputWidth, outputHeight);
@@ -70,10 +79,10 @@ final class RtFrameUniformEncoder {
         uniforms.putInt(outputWidth);
         uniforms.putInt(outputHeight);
         uniforms.putInt(renderMode);
-        uniforms.putInt(frameState.cameraFluidMedium().active() ? 1 : 0);
+        uniforms.putInt(medium.participating() ? 1 : 0);
         uniforms.putLong(frameState.sequence());
-        uniforms.putInt(frameState.cameraFluidMedium().packedRgba());
-        uniforms.putInt(Float.floatToRawIntBits(frameState.cameraFluidMedium().density()));
+        uniforms.putInt(0);
+        uniforms.putInt(0);
         putVec4(
                 uniforms,
                 (float) (frameEnvironment.gameTime() % 2_147_483_647L),
@@ -81,6 +90,9 @@ final class RtFrameUniformEncoder {
                 frameEnvironment.fogAlpha(),
                 (float) terrainMaterialCount
         );
+        putCoefficient(uniforms, medium.extinction(), medium.density());
+        putCoefficient(uniforms, medium.scattering(), medium.density());
+        putCoefficient(uniforms, medium.emission(), medium.density());
         if (uniforms.position() != BYTES) {
             throw new IllegalStateException("frame uniform encoder diverged from its shader ABI");
         }
@@ -92,5 +104,10 @@ final class RtFrameUniformEncoder {
         target.putFloat(y);
         target.putFloat(z);
         target.putFloat(w);
+    }
+
+    private static void putCoefficient(ByteBuffer target, Rgb coefficient, float density) {
+        putVec4(target, coefficient.red() * density, coefficient.green() * density,
+                coefficient.blue() * density, 0.0F);
     }
 }

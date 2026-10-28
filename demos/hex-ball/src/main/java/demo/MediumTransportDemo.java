@@ -19,7 +19,7 @@ import top.ceroxe.rt.renderer.api.Renderer;
 /** Interactive, API-only nested-medium laboratory; every apply publishes a validated immutable state. */
 public final class MediumTransportDemo {
     private MediumTransportDemo() {}
-    private record State(EnvironmentState.Medium medium,MediumTransportOptions quality,float roughness,
+    private record State(Medium medium,MediumTransport quality,float roughness,
             float transmission,int priority,boolean nested,boolean inside,boolean volumeOnly,boolean inward,boolean frameLocal) {}
     public static void main(String[] args) {
         DemoApiControls.parse(args);
@@ -40,7 +40,7 @@ public final class MediumTransportDemo {
         add(form,fields,"Density","1");add(form,fields,"Interior IOR","1.333");add(form,fields,"HG anisotropy","0.2");
         add(form,fields,"Surface roughness","0.04");add(form,fields,"Surface transmission","1");add(form,fields,"Boundary priority","1");
         add(form,fields,"Interface events","12");add(form,fields,"Optical samples","1");add(form,fields,"Scattering intervals","8");
-        add(form,fields,"Maximum distance","512");
+        add(form,fields,"Maximum distance","512");add(form,fields,"Light samples","4");add(form,fields,"Transmittance cutoff","0.0001");
         JCheckBox nested=new JCheckBox("Nested glass volume",true),inside=new JCheckBox("Camera inside volume");
         JCheckBox volumeOnly=new JCheckBox("Invisible volume interface"),inward=new JCheckBox("Inward winding");
         JCheckBox frameLocal=new JCheckBox("Use frame-local volume instances");
@@ -51,11 +51,11 @@ public final class MediumTransportDemo {
         Runnable publish=()->{
             try {
                 float[] absorption=rgb(fields,"Absorption RGB"),scattering=rgb(fields,"Scattering RGB"),emission=rgb(fields,"Emission RGB");
-                var medium=EnvironmentState.Medium.builder().absorption(absorption[0],absorption[1],absorption[2])
-                    .scattering(scattering[0],scattering[1],scattering[2]).emission(emission[0],emission[1],emission[2])
-                    .density(value(fields,"Density")).indexOfRefraction(value(fields,"Interior IOR")).phaseAnisotropy(value(fields,"HG anisotropy")).build();
-                var quality=new MediumTransportOptions(integer(fields,"Interface events"),integer(fields,"Optical samples"),
-                    integer(fields,"Scattering intervals"),value(fields,"Maximum distance"));
+                var medium=new Medium(new Rgb(absorption[0],absorption[1],absorption[2]),
+                    new Rgb(scattering[0],scattering[1],scattering[2]),new Rgb(emission[0],emission[1],emission[2]),
+                    value(fields,"Density"),value(fields,"Interior IOR"),value(fields,"HG anisotropy"));
+                var quality=new MediumTransport(integer(fields,"Interface events"),integer(fields,"Optical samples"),
+                    integer(fields,"Scattering intervals"),integer(fields,"Light samples"),value(fields,"Maximum distance"),value(fields,"Transmittance cutoff"));
                 float roughness=value(fields,"Surface roughness"),transmission=value(fields,"Surface transmission");
                 MaterialAsset.builder(1).roughness(roughness).transmission(transmission).build();
                 state.set(new State(medium,quality,roughness,transmission,integer(fields,"Boundary priority"),
@@ -66,7 +66,7 @@ public final class MediumTransportDemo {
         apply.addActionListener(event->publish.run());form.add(apply);
         JButton reset=new JButton("Balanced defaults");form.add(reset);
         reset.addActionListener(event->{fields.get("Interface events").setText("12");fields.get("Optical samples").setText("1");
-            fields.get("Scattering intervals").setText("8");fields.get("Maximum distance").setText("512");publish.run();});
+            fields.get("Scattering intervals").setText("8");fields.get("Maximum distance").setText("512");fields.get("Light samples").setText("4");fields.get("Transmittance cutoff").setText("0.0001");publish.run();});
         window.add(canvas,BorderLayout.CENTER);window.add(new JScrollPane(form),BorderLayout.EAST);window.add(status,BorderLayout.SOUTH);
         window.pack();window.setLocationRelativeTo(null);window.setVisible(true);publish.run();
         Thread.ofPlatform().name("medium-demo-renderer").start(()->{
@@ -113,13 +113,12 @@ public final class MediumTransportDemo {
         }
         tx.upsert(TextureAsset.builder(1,32,32).pixelsRgba8(pixels).filter(TextureAsset.Filter.NEAREST).colorSpace(TextureAsset.ColorSpace.SRGB).build());
         var box=box(state.inward);tx.upsert(box);
-        var boundary=MediumBoundaryState.builder(state.medium).priority(state.priority).surfaceInteraction(!state.volumeOnly)
-            .orientation(state.inward?MediumBoundaryState.Orientation.INWARD:MediumBoundaryState.Orientation.OUTWARD).build();
+        var boundary=new MediumBoundary(state.medium,state.priority,
+            state.inward?MediumBoundary.Orientation.INWARD:MediumBoundary.Orientation.OUTWARD,!state.volumeOnly);
         if(!state.frameLocal)tx.upsert(SceneInstance.builder(1,1).transform(scale(2.5f)).mediumBoundary(boundary).build());
         if(state.nested && !state.frameLocal)tx.upsert(SceneInstance.builder(2,1).transform(scale(1.25f))
-            .mediumBoundary(MediumBoundaryState.builder(EnvironmentState.Medium.builder().absorption(.005f,.015f,.04f)
-                .indexOfRefraction(1.52f).density(1).build()).priority(state.priority==Integer.MAX_VALUE?state.priority:state.priority+1)
-                .orientation(state.inward?MediumBoundaryState.Orientation.INWARD:MediumBoundaryState.Orientation.OUTWARD).build()).build());
+            .mediumBoundary(new MediumBoundary(innerMedium(),state.priority==Integer.MAX_VALUE?state.priority:state.priority+1,
+                state.inward?MediumBoundary.Orientation.INWARD:MediumBoundary.Orientation.OUTWARD,true)).build());
         tx.upsert(MeshAsset.builder(2,new float[]{-8,-5,-4,8,-5,-4,8,5,-4,-8,5,-4},new int[]{0,1,2,2,3,0},new long[]{2,2})
             .textureCoordinates(new float[]{0,0,1,0,1,1,0,1}).build()).upsert(SceneInstance.builder(3,2).build());
         tx.upsert(SceneLight.point(1,0,2,0).color(1,.6f,.3f).intensity(35).range(15).build());
@@ -128,14 +127,14 @@ public final class MediumTransportDemo {
     }
     private static FramePrimitiveBatch primitiveVolumes(State state) {
         if(!state.frameLocal) return FramePrimitiveBatch.empty();
-        var orientation=state.inward?MediumBoundaryState.Orientation.INWARD:MediumBoundaryState.Orientation.OUTWARD;
+        var orientation=state.inward?MediumBoundary.Orientation.INWARD:MediumBoundary.Orientation.OUTWARD;
         var batch=FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(1).transform(scale(2.5f))
-            .mediumBoundary(MediumBoundaryState.builder(state.medium).priority(state.priority).surfaceInteraction(!state.volumeOnly).orientation(orientation).build()).build());
+            .mediumBoundary(new MediumBoundary(state.medium,state.priority,orientation,!state.volumeOnly)).build());
         if(state.nested)batch.add(PrimitiveInstance.builder(1).transform(scale(1.25f))
-            .mediumBoundary(MediumBoundaryState.builder(EnvironmentState.Medium.builder().absorption(.005f,.015f,.04f)
-                .indexOfRefraction(1.52f).density(1).build()).priority(state.priority==Integer.MAX_VALUE?state.priority:state.priority+1).orientation(orientation).build()).build());
+            .mediumBoundary(new MediumBoundary(innerMedium(),state.priority==Integer.MAX_VALUE?state.priority:state.priority+1,orientation,true)).build());
         return batch.build();
     }
+    private static Medium innerMedium(){return new Medium(new Rgb(.005f,.015f,.04f),Rgb.ZERO,Rgb.ZERO,1,1.52f,0);}
     private static AffineTransform scale(float value){return new AffineTransform(new float[]{value,0,0,0,0,value,0,0,0,0,value,0});}
     private static MeshAsset box(boolean inward){
         int[] indices={0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,3,7,6,3,6,2,0,4,7,0,7,3,1,2,6,1,6,5};

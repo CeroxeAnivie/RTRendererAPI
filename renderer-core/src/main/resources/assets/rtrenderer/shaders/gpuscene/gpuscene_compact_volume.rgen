@@ -1,0 +1,4 @@
+#version 460
+#define RTRENDERER_COMPACT_MEDIA 1
+#define RTRENDERER_VOLUME_TRANSPORT 1
+#include "gpuscene_raygen.glsl"

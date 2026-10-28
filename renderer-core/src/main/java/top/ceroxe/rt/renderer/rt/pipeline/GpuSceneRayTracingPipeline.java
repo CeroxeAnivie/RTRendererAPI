@@ -29,6 +29,14 @@ import java.util.Optional;
  * down in reverse dependency order after frame submissions have completed.</p>
  */
 public final class GpuSceneRayTracingPipeline implements AutoCloseable {
+    public enum Program {
+        SURFACE("gpuscene_surface.rgen"), COMPACT("gpuscene_compact.rgen"), GENERAL("gpuscene.rgen"),
+        COMPACT_VOLUME("gpuscene_compact_volume.rgen"), GENERAL_VOLUME("gpuscene_volume.rgen"),
+        COMPACT_CAUSTICS("gpuscene_compact_caustics.rgen"), GENERAL_CAUSTICS("gpuscene_caustics.rgen"),
+        PHOTONS("gpuscene_photons.rgen");
+        private final String source;
+        Program(String source) { this.source = source; }
+    }
     private static final String SHADER_ROOT = "assets/rtrenderer/shaders/gpuscene/";
 
     private final SceneShaderProgram sceneShaders;
@@ -42,6 +50,9 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     private final long maxStorageBufferRangeBytes;
     private final boolean shaderExecutionReorderingEnabled;
     private boolean closed;
+    private boolean closing;
+    private boolean pipelineDestroyed;
+    private boolean layoutDestroyed;
 
     private GpuSceneRayTracingPipeline(
             VkDevice device,
@@ -99,6 +110,17 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
      */
     public static GpuSceneRayTracingPipeline open(VulkanDeviceRuntime runtime, int descriptorSetCount,
             boolean linearHdrOutput, SceneShaderProgram sceneShaders) {
+        return open(runtime, descriptorSetCount, linearHdrOutput, sceneShaders, Program.GENERAL_VOLUME);
+    }
+
+    /** Built-in specialization is internal policy; expert shader programs never enter this selector. */
+    public static GpuSceneRayTracingPipeline openBuiltIn(VulkanDeviceRuntime runtime,
+            int descriptorSetCount, boolean linearHdrOutput, Program program) {
+        return open(runtime, descriptorSetCount, linearHdrOutput, SceneShaderProgram.builtIn(), program);
+    }
+
+    private static GpuSceneRayTracingPipeline open(VulkanDeviceRuntime runtime, int descriptorSetCount,
+            boolean linearHdrOutput, SceneShaderProgram sceneShaders, Program program) {
         Objects.requireNonNull(sceneShaders, "sceneShaders");
         VulkanDeviceRuntime checkedRuntime = Objects.requireNonNull(runtime, "runtime");
         boolean shaderExecutionReorderingEnabled = checkedRuntime.shaderExecutionReorderingEnabled()
@@ -114,7 +136,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         long missModule = 0L;
         long closestHitModule = 0L;
         long anyHitModule = 0L;
-        long shadowMissModule = 0L;
+        long visibilityMissModule = 0L, visibilityClosestModule = 0L, visibilityAnyModule = 0L;
         try (MemoryStack stack = MemoryStack.stackPush()) {
             RtRayTracingPipelineProperties properties = RtRayTracingPipelineProperties.query(
                     stack, checkedRuntime.physicalDevice()
@@ -134,7 +156,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             descriptors = GpuSceneDescriptorLayout.create(stack, device, descriptorSetCount, sceneShaders.dataBindingCount());
             pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout());
             byte[] raygenCode = loadStageCode(
-                    "gpuscene.rgen", Shaderc.shaderc_raygen_shader,
+                    program.source, Shaderc.shaderc_raygen_shader,
                     linearHdrOutput, shaderExecutionReorderingEnabled, sceneShaders
             );
             byte[] missCode = loadStageCode("gpuscene.rmiss", Shaderc.shaderc_miss_shader, false, false, sceneShaders);
@@ -142,35 +164,42 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     "gpuscene.rchit", Shaderc.shaderc_closesthit_shader, false, false, sceneShaders
             );
             byte[] anyHitCode = loadStageCode("gpuscene.rahit", Shaderc.shaderc_anyhit_shader, false, false, sceneShaders);
-            boolean shadowService = GpuScenePipelineRequirements.shadowServiceRequired(
-                    raygenCode, missCode, closestCode, anyHitCode);
-            if (properties.maxRayRecursionDepth() < (shadowService ? 2 : 1)) {
-                throw new IllegalStateException("device cannot execute the requested GPUScene ray depth");
-            }
+            boolean visibility = program != Program.SURFACE;
+            int recursionDepth = GpuScenePipelineRequirements.recursionDepth(missCode, closestCode, anyHitCode);
+            if (properties.maxRayRecursionDepth() < recursionDepth)
+                throw new IllegalStateException("device cannot execute the declared shader recursion depth");
             raygenModule = RtShaderModuleCompiler.createModule(stack, device, raygenCode);
             missModule = RtShaderModuleCompiler.createModule(stack, device, missCode);
             closestHitModule = RtShaderModuleCompiler.createModule(stack, device, closestCode);
             anyHitModule = RtShaderModuleCompiler.createModule(stack, device, anyHitCode);
-            byte[] shadowMissCode = shadowService ? RtShaderModuleCompiler.loadProduction(SHADER_ROOT + "gpuscene_shadow.rmiss",
+            byte[] visibilityMissCode = visibility ? RtShaderModuleCompiler.loadProduction(SHADER_ROOT + "gpuscene_visibility.rmiss",
                     Shaderc.shaderc_miss_shader, false, false, RtEdgeSink.NOOP) : new byte[0];
-            if (shadowService) shadowMissModule = RtShaderModuleCompiler.createModule(stack, device, shadowMissCode);
-            String programKey=RtPipelineCacheStore.programKey("gpuscene-layout-1/data="+sceneShaders.dataBindingCount()+"/depth="+(shadowService?2:1),
-                    raygenCode,missCode,closestCode,anyHitCode,shadowMissCode);
+            byte[] visibilityClosestCode = visibility ? RtShaderModuleCompiler.loadProduction(SHADER_ROOT + "gpuscene_visibility.rchit",
+                    Shaderc.shaderc_closesthit_shader, false, false, RtEdgeSink.NOOP) : new byte[0];
+            byte[] visibilityAnyCode = visibility ? RtShaderModuleCompiler.loadProduction(SHADER_ROOT + "gpuscene_visibility.rahit",
+                    Shaderc.shaderc_anyhit_shader, false, false, RtEdgeSink.NOOP) : new byte[0];
+            if (visibility) {
+                visibilityMissModule = RtShaderModuleCompiler.createModule(stack, device, visibilityMissCode);
+                visibilityClosestModule = RtShaderModuleCompiler.createModule(stack, device, visibilityClosestCode);
+                visibilityAnyModule = RtShaderModuleCompiler.createModule(stack, device, visibilityAnyCode);
+            }
+            String programKey = RtPipelineCacheStore.programKey("gpuscene-7/program="+program+"/data="+sceneShaders.dataBindingCount()+"/depth="+recursionDepth,
+                    raygenCode,missCode,closestCode,anyHitCode,visibilityMissCode,visibilityClosestCode,visibilityAnyCode);
             try (RtPipelineCache cache = RtPipelineCache.open(
                     device, checkedRuntime.physicalDevice(), "gpuscene",programKey)) {
                 pipeline = RtRayTracingPipelineFactory.createPipeline(
                         stack, device, pipelineLayout,
                         raygenModule, missModule, closestHitModule, anyHitModule,
-                        cache.handle(), shadowMissModule
+                        cache.handle(), visibilityMissModule, visibilityClosestModule, visibilityAnyModule, recursionDepth
                 );
             }
             byte[] groupHandles = RtRayTracingPipelineFactory.queryShaderGroupHandles(properties, device, pipeline,
-                    RtRayTracingPipelineFactory.GROUP_COUNT + (shadowService ? 1 : 0));
+                    RtRayTracingPipelineFactory.GROUP_COUNT + (visibility ? 2 : 0));
             RtRayTracingPipelineProperties.ShaderBindingTableData packed = properties.packShaderGroupHandles(
                     groupHandles,
                     RtRayTracingPipelineFactory.RAYGEN_GROUPS,
-                    RtRayTracingPipelineFactory.MISS_GROUPS + (shadowService ? 1 : 0),
-                    RtRayTracingPipelineFactory.HIT_GROUPS,
+                    RtRayTracingPipelineFactory.MISS_GROUPS + (visibility ? 1 : 0),
+                    RtRayTracingPipelineFactory.HIT_GROUPS + (visibility ? 1 : 0),
                     RtRayTracingPipelineFactory.CALLABLE_GROUPS
             );
             shaderBindingTable = RtShaderBindingTable.create(
@@ -198,7 +227,9 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             closeSuppressing(failure, descriptors);
             throw failure;
         } finally {
-            RtShaderModuleCompiler.destroyModule(device, shadowMissModule);
+            RtShaderModuleCompiler.destroyModule(device, visibilityAnyModule);
+            RtShaderModuleCompiler.destroyModule(device, visibilityClosestModule);
+            RtShaderModuleCompiler.destroyModule(device, visibilityMissModule);
             RtShaderModuleCompiler.destroyModule(device, anyHitModule);
             RtShaderModuleCompiler.destroyModule(device, closestHitModule);
             RtShaderModuleCompiler.destroyModule(device, missModule);
@@ -1256,7 +1287,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     @Override
     public synchronized void close() {
         if (closed) return;
-        closed = true;
+        closing = true;
         RuntimeException failure = null;
         try {
             shaderBindingTable.close();
@@ -1267,8 +1298,14 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         catch (RuntimeException closeFailure) {
             if (failure == null) failure = closeFailure; else failure.addSuppressed(closeFailure);
         }
-        VK10.vkDestroyPipeline(device, pipeline, null);
-        VK10.vkDestroyPipelineLayout(device, pipelineLayout, null);
+        if (!pipelineDestroyed) {
+            VK10.vkDestroyPipeline(device, pipeline, null);
+            pipelineDestroyed = true;
+        }
+        if (!layoutDestroyed) {
+            VK10.vkDestroyPipelineLayout(device, pipelineLayout, null);
+            layoutDestroyed = true;
+        }
         try {
             descriptors.close();
         } catch (RuntimeException closeFailure) {
@@ -1276,10 +1313,11 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             else failure.addSuppressed(closeFailure);
         }
         if (failure != null) throw failure;
+        closed = true;
     }
 
     private void requireOpen() {
-        if (closed) throw new IllegalStateException("GPUScene ray tracing pipeline is closed");
+        if (closed || closing) throw new IllegalStateException("GPUScene ray tracing pipeline is closed");
     }
 
     /**

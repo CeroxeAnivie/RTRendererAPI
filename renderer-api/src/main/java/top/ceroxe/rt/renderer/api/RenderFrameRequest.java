@@ -17,7 +17,8 @@ public final class RenderFrameRequest {
     private final int height;
     private final CameraState camera;
     private final EnvironmentState environment;
-    private final MediumTransportOptions mediumTransport;
+    private final MediumTransport mediumTransport;
+    private final Caustics caustics;
     private final LightmapState lightmap;
     private final DistanceFogState fog;
     private final TextureSamplingState textureSampling;
@@ -46,6 +47,7 @@ public final class RenderFrameRequest {
         camera = Objects.requireNonNull(builder.camera, "camera");
         environment = Objects.requireNonNull(builder.environment, "environment");
         mediumTransport = Objects.requireNonNull(builder.mediumTransport, "mediumTransport");
+        caustics = Objects.requireNonNull(builder.caustics, "caustics");
         lightmap = Objects.requireNonNull(builder.lightmap, "lightmap");
         fog = Objects.requireNonNull(builder.fog, "fog");
         textureSampling = Objects.requireNonNull(builder.textureSampling, "textureSampling");
@@ -152,7 +154,10 @@ public final class RenderFrameRequest {
     }
 
     /** Returns frame-local bounded optical transport quality. */
-    public MediumTransportOptions mediumTransport() { return mediumTransport; }
+    public MediumTransport mediumTransport() { return mediumTransport; }
+
+    /** Returns the optional built-in surface-caustic photon-map policy. */
+    public Caustics caustics() { return caustics; }
 
     /**
      * Returns the frame lightmap policy.
@@ -229,6 +234,7 @@ public final class RenderFrameRequest {
                 && camera.equals(request.camera)
                 && environment.equals(request.environment)
                 && mediumTransport.equals(request.mediumTransport)
+                && caustics.equals(request.caustics)
                 && lightmap.equals(request.lightmap)
                 && fog.equals(request.fog)
                 && textureSampling.equals(request.textureSampling)
@@ -242,7 +248,7 @@ public final class RenderFrameRequest {
     @Override
     public int hashCode() {
         return Objects.hash(
-                sequence, minimumSceneRevision, width, height, clock, camera, environment, mediumTransport,
+                sequence, minimumSceneRevision, width, height, clock, camera, environment, mediumTransport, caustics,
                 lightmap, fog, textureSampling, antiAliasing, depthProjection, primitiveBatch,
                 temporalHistoryResets, shaderData
         );
@@ -281,7 +287,8 @@ public final class RenderFrameRequest {
         private long minimumSceneRevision;
         private FrameClock clock = FrameClock.of(0, 0);
         private EnvironmentState environment = EnvironmentState.neutral();
-        private MediumTransportOptions mediumTransport = MediumTransportOptions.balanced();
+        private MediumTransport mediumTransport = MediumTransport.balanced();
+        private Caustics caustics = Caustics.disabled();
         private LightmapState lightmap = LightmapState.fullIntensity();
         private DistanceFogState fog = DistanceFogState.disabled();
         private TextureSamplingState textureSampling = TextureSamplingState.pixelStable();
@@ -306,6 +313,7 @@ public final class RenderFrameRequest {
             clock = source.clock;
             environment = source.environment;
             mediumTransport = source.mediumTransport;
+            caustics = source.caustics;
             lightmap = source.lightmap;
             fog = source.fog;
             textureSampling = source.textureSampling;
@@ -355,8 +363,14 @@ public final class RenderFrameRequest {
         }
 
         /** Selects bounded optical/volume integration quality for the next frame. */
-        public Builder mediumTransport(MediumTransportOptions value) {
+        public Builder mediumTransport(MediumTransport value) {
             mediumTransport = Objects.requireNonNull(value, "mediumTransport");
+            return this;
+        }
+
+        /** Selects built-in photon-map caustics; disabled by default. */
+        public Builder caustics(Caustics value) {
+            caustics = Objects.requireNonNull(value, "caustics");
             return this;
         }
 
@@ -423,9 +437,7 @@ public final class RenderFrameRequest {
          *
          * <p>The batch does not mutate persistent scene revision state. Mesh dependencies must
          * already be resident at {@link #minimumSceneRevision(long)}.</p>
-         */
-        /**
-         * Replaces frame-scoped primitives for this request.
+         *
          * @param value non-null immutable batch
          * @return this builder
          */

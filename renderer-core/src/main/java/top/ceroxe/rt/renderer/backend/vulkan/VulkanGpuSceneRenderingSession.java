@@ -22,7 +22,6 @@ import top.ceroxe.rt.renderer.feature.VulkanFeatureSession;
 import top.ceroxe.rt.renderer.feature.VulkanFeatureFallbackException;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.RtCommandContext;
-import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents;
 import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameCompositionPipeline;
 import org.lwjgl.system.MemoryStack;
@@ -44,7 +43,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     private final RendererConfig configuration;
     private final String gpuStableId;
     private final VulkanSceneRuntime scene;
-    private final GpuSceneRayTracingPipeline pipeline;
+    private final VulkanGpuScenePipelines pipeline;
     private final VulkanGpuSceneFrameRing frameRing;
     private final VulkanFrameAdmissionLimits frameAdmissionLimits;
     private final VulkanGpuSceneTemporalCoordinator temporalCoordinator;
@@ -52,7 +51,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     private final VulkanGpuSceneDescriptorAssembler descriptorAssembler;
     private final VulkanGpuSceneFrameDiagnostics frameDiagnostics;
     private final VulkanGpuSceneFrameSubmitter frameSubmitter;
-    private final VulkanFrameCompositionPipeline compositionPipeline;
+    private VulkanFrameCompositionPipeline compositionPipeline;
 
     private State state = State.READY;
     private boolean pipelineClosed;
@@ -77,11 +76,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     ) {
         RendererConfig checkedConfiguration = Objects.requireNonNull(configuration, "configuration");
         VulkanSceneRuntime scene = null;
-        GpuSceneRayTracingPipeline pipeline = null;
+        VulkanGpuScenePipelines pipeline = null;
         VulkanGpuSceneTemporalCoordinator temporalCoordinator = null;
         VulkanGpuSceneFrameRing frameRing = null;
         VulkanGpuSceneFeatureComposition featureComposition = null;
-        VulkanFrameCompositionPipeline compositionPipeline = null;
         try {
             scene = VulkanSceneRuntime.open(
                     Objects.requireNonNull(capability, "capability"),
@@ -102,11 +100,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             temporalCoordinator = new VulkanGpuSceneTemporalCoordinator(device, checkedConfiguration);
             VulkanGpuSceneFeatureComposition.Selection featureSelection =
                     VulkanGpuSceneFeatureComposition.select(device.featureCapabilities());
-            pipeline = GpuSceneRayTracingPipeline.open(
+            pipeline = new VulkanGpuScenePipelines(
                     device,
-                    checkedConfiguration.maxFramesInFlight(),
-                    frameOutput.linearHdr() || featureSelection.denoising() || featureSelection.reconstruction(),
-                    checkedConfiguration.sceneShaders()
+                    checkedConfiguration,
+                    frameOutput.linearHdr() || featureSelection.denoising() || featureSelection.reconstruction()
             );
             // The monolithic GPUScene descriptor layout always declares both NRD and
             // reconstruction bindings. These sentinels supply whichever optional feature is
@@ -120,9 +117,6 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             frameRing = VulkanGpuSceneFrameRing.open(
                 device, checkedConfiguration, frameOutput, interop, diagnostics, featureSelection
             );
-            compositionPipeline = VulkanFrameCompositionPipeline.open(
-                    device, checkedConfiguration.maxFramesInFlight(), frameOutput.linearHdr()
-            );
             VulkanFrameAdmissionLimits frameAdmissionLimits = new VulkanFrameAdmissionLimits(
                     device.maxImageDimension2D(),
                     capability.preferredDevice().maxRayDispatchInvocationCount()
@@ -135,7 +129,6 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                     temporalCoordinator,
                     frameRing,
                     featureComposition,
-                    compositionPipeline,
                     frameAdmissionLimits
             );
             scene = null;
@@ -143,12 +136,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             temporalCoordinator = null;
             frameRing = null;
             featureComposition = null;
-            compositionPipeline = null;
             return result;
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
             closeSuppressing(failure, frameRing);
             closeSuppressing(failure, featureComposition);
-            closeSuppressing(failure, compositionPipeline);
             closeSuppressing(failure, pipeline);
             closeSuppressing(failure, temporalCoordinator);
             closeSuppressing(failure, scene);
@@ -160,11 +151,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             RendererConfig configuration,
             String gpuStableId,
             VulkanSceneRuntime scene,
-            GpuSceneRayTracingPipeline pipeline,
+            VulkanGpuScenePipelines pipeline,
             VulkanGpuSceneTemporalCoordinator temporalCoordinator,
             VulkanGpuSceneFrameRing frameRing,
             VulkanGpuSceneFeatureComposition featureComposition,
-            VulkanFrameCompositionPipeline compositionPipeline,
             VulkanFrameAdmissionLimits frameAdmissionLimits
     ) {
         this.configuration = Objects.requireNonNull(configuration, "configuration");
@@ -175,7 +165,6 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         this.temporalCoordinator = Objects.requireNonNull(temporalCoordinator, "temporalCoordinator");
         this.frameRing = Objects.requireNonNull(frameRing, "frameRing");
         this.featureComposition = Objects.requireNonNull(featureComposition, "featureComposition");
-        this.compositionPipeline = Objects.requireNonNull(compositionPipeline, "compositionPipeline");
         descriptorAssembler = new VulkanGpuSceneDescriptorAssembler(scene, featureComposition);
         frameDiagnostics = new VulkanGpuSceneFrameDiagnostics(
                 scene.device(), featureComposition, configuration.gpuTimingsEnabled(), FRAME_TIMING_LABEL
@@ -208,7 +197,15 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
 
     @Override
     public boolean compositionExecutable() {
-        return compositionPipeline != null;
+        return true;
+    }
+
+    private VulkanFrameCompositionPipeline requireCompositionPipeline() {
+        if (compositionPipeline == null) {
+            compositionPipeline = VulkanFrameCompositionPipeline.open(scene.device(),
+                    configuration.maxFramesInFlight(), configuration.frameOutputFormat() == FrameOutputFormat.LINEAR_HDR_RGBA16F);
+        }
+        return compositionPipeline;
     }
 
     @Override
@@ -222,10 +219,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             return FrameCompositionEvidence.rejected(checked.format(),
                     "composition format must equal the renderer frame output format");
         }
-        if (checked.layers().size() > compositionPipeline.MAX_LAYERS) {
+        if (checked.layers().size() > VulkanFrameCompositionPipeline.MAX_LAYERS) {
             return FrameCompositionEvidence.rejected(checked.format(),
                     "composition layer count exceeds the provider capability of "
-                            + compositionPipeline.MAX_LAYERS);
+                            + VulkanFrameCompositionPipeline.MAX_LAYERS);
         }
         if (checked.frameSequence() <= latestCompositionSubmissionSequence) {
             return FrameCompositionEvidence.rejected(checked.format(),
@@ -254,6 +251,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         if (slot == null) {
             return FrameCompositionEvidence.rejected(checked.format(), "all external frame slots are in use");
         }
+        VulkanFrameCompositionPipeline selectedComposition = requireCompositionPipeline();
         slot.ensureResources(VulkanFrameExtents.identity(checked.width(), checked.height()));
         int[] operations = new int[sources.length];
         long[] views = new long[sources.length];
@@ -289,7 +287,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                 recordCompositionBarriers(
                         commandBuffer, stack, sources, sourceLayouts, slot.outputImage(), slot.imageLayout()
                 );
-                compositionPipeline.record(commandBuffer, stack, slot.index(), checked.width(), checked.height(),
+                selectedComposition.record(commandBuffer, stack, slot.index(), checked.width(), checked.height(),
                         views, slot.outputImage().imageView(), operations);
                 if (slot.cpuReadbackOrNull() == null) {
                     VulkanFrameCompositionPipeline.recordCompletionBarrier(commandBuffer, stack);
@@ -860,7 +858,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         if (resourcesClosed) return;
         state = State.CLOSED;
         closeFrameRingAndCompositionPins();
-        compositionPipeline.close();
+        if (compositionPipeline != null) {
+            compositionPipeline.close();
+            compositionPipeline = null;
+        }
         featureComposition.close();
         if (!pipelineClosed) {
             pipeline.close();

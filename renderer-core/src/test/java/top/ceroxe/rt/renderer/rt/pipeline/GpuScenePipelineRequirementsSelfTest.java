@@ -13,22 +13,37 @@ public final class GpuScenePipelineRequirementsSelfTest {
     public static void main(String[] args) {
         byte[] empty = compile("#version 460\n#extension GL_EXT_ray_tracing : require\nvoid main() {}",
                 Shaderc.shaderc_miss_shader);
-        byte[] primary = raygen("0u"), service = raygen("1u"), dynamic = raygen("gl_LaunchIDEXT.x");
-        require(!required(primary,empty,empty,empty), "proven primary-only custom pipeline must omit unused service");
-        require(required(service,empty,empty,empty), "service index must keep service");
-        require(required(dynamic,empty,empty,empty), "dynamic index must conservatively keep service");
+        require(depth(empty,empty,empty)==1, "leaf-only pipelines require depth one");
         byte[] nested = compile(HEADER+"void main() {"+trace("0u")+"}", Shaderc.shaderc_miss_shader);
-        require(required(primary,nested,empty,empty), "nested miss trace must retain depth two");
-        require(required(primary,empty,nested,empty), "nested hit trace must retain depth two");
-        require(required(primary,empty,empty,nested), "nested any-hit trace must retain depth two");
-        byte[] builtin = RtShaderModuleCompiler.compileForVerification(
-                "assets/rtrenderer/shaders/gpuscene/gpuscene.rgen", Shaderc.shaderc_raygen_shader, false);
-        require(required(builtin,empty,empty,empty), "full built-in transport must retain service");
-        System.out.println("GpuScenePipelineRequirementsSelfTest passed: primary, service, dynamic, nested, built-in");
+        require(depth(nested,empty,empty)==2, "nested miss trace must retain depth two");
+        require(depth(empty,nested,empty)==2, "nested hit trace must retain depth two");
+        require(depth(empty,empty,nested)==2, "nested any-hit trace must retain depth two");
+        String root="assets/rtrenderer/shaders/gpuscene/";
+        byte[] miss=builtin(root+"gpuscene.rmiss",Shaderc.shaderc_miss_shader);
+        byte[] closest=builtin(root+"gpuscene.rchit",Shaderc.shaderc_closesthit_shader);
+        byte[] any=builtin(root+"gpuscene.rahit",Shaderc.shaderc_anyhit_shader);
+        require(depth(miss,closest,any)==1, "built-in surface/compact/general share leaf-only shading stages");
+        require(depth(builtin(root+"gpuscene_visibility.rmiss",Shaderc.shaderc_miss_shader),
+                builtin(root+"gpuscene_visibility.rchit",Shaderc.shaderc_closesthit_shader),
+                builtin(root+"gpuscene_visibility.rahit",Shaderc.shaderc_anyhit_shader))==1,
+                "dedicated visibility stages must never dispatch recursive services");
+        expectInvalid(new byte[4]);
+        byte[] invalid=empty.clone(); invalid[0]=0;
+        expectInvalid(invalid);
+        invalid=empty.clone();
+        for(int i=20;i<24;++i) invalid[i]=0;
+        expectInvalid(invalid);
+        System.out.println("GpuScenePipelineRequirementsSelfTest passed: leaf stages, custom nested traces, malformed SPIR-V");
     }
 
-    private static byte[] raygen(String miss) {
-        return compile(HEADER+"void main() {"+trace(miss)+"}", Shaderc.shaderc_raygen_shader);
+    private static byte[] builtin(String path,int stage) {
+        return RtShaderModuleCompiler.compileForVerification(path,stage,false);
+    }
+
+    private static void expectInvalid(byte[] spirv) {
+        try {depth(spirv,spirv,spirv);}
+        catch(IllegalArgumentException expected) {return;}
+        throw new AssertionError("malformed SPIR-V must be rejected");
     }
 
     private static String trace(String miss) {
@@ -39,8 +54,8 @@ public final class GpuScenePipelineRequirementsSelfTest {
         return RtShaderModuleCompiler.compileSceneSource(source,"requirements-test",kind,false,false);
     }
 
-    private static boolean required(byte[] generation, byte[] miss, byte[] closest, byte[] any) {
-        return GpuScenePipelineRequirements.shadowServiceRequired(generation,miss,closest,any);
+    private static int depth(byte[] miss, byte[] closest, byte[] any) {
+        return GpuScenePipelineRequirements.recursionDepth(miss,closest,any);
     }
 
     private static void require(boolean condition, String message) {

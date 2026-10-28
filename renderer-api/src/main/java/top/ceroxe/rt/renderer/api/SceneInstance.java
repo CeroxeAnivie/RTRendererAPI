@@ -20,7 +20,7 @@ public final class SceneInstance {
     private final float surfaceVisibility;
     private final int packedLight;
     private final InstanceRenderState renderState;
-    private final MediumBoundaryState mediumBoundary;
+    private final MediumBoundary mediumBoundary;
 
     /**
      * Validates and creates an immutable scene instance.
@@ -44,7 +44,7 @@ public final class SceneInstance {
             float surfaceVisibility,
             int packedLight,
             InstanceRenderState renderState,
-            MediumBoundaryState mediumBoundary
+            MediumBoundary mediumBoundary
     ) {
         MaterialAsset.requireId(id, "id");
         MaterialAsset.requireId(meshAssetId, "meshAssetId");
@@ -164,7 +164,7 @@ public final class SceneInstance {
     }
 
     /** Returns the optional closed-volume medium boundary. */
-    public java.util.Optional<MediumBoundaryState> mediumBoundary() {
+    public java.util.Optional<MediumBoundary> mediumBoundary() {
         return java.util.Optional.ofNullable(mediumBoundary);
     }
 
@@ -244,7 +244,7 @@ public final class SceneInstance {
         private float surfaceVisibility = 1.0F;
         private int packedLight = FULL_BRIGHT_PACKED_LIGHT;
         private InstanceRenderState renderState = InstanceRenderState.defaults();
-        private MediumBoundaryState mediumBoundary;
+        private MediumBoundary mediumBoundary;
 
         private Builder(long id, long meshAssetId) {
             MaterialAsset.requireId(id, "id");
@@ -362,7 +362,7 @@ public final class SceneInstance {
         }
 
         /** Declares a closed-volume interface with independent participating-medium coefficients. */
-        public Builder mediumBoundary(MediumBoundaryState value) {
+        public Builder mediumBoundary(MediumBoundary value) {
             mediumBoundary = java.util.Objects.requireNonNull(value, "mediumBoundary");
             return this;
         }

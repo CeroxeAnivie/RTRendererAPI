@@ -113,6 +113,7 @@ final class GpuSceneDescriptorLayout implements AutoCloseable {
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
         bind(bindings, SceneShaderBindings.RECONSTRUCTION_EXPOSURE,
                 VK10.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RAYGEN);
+        bind(bindings, SceneShaderBindings.CAUSTIC_PHOTONS, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, RAYGEN);
         for (int i = 0; i < applicationBindings; i++) {
             bind(bindings, SceneShaderBindings.APPLICATION_DATA + i, VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, ALL_STAGES);
         }

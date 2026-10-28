@@ -40,6 +40,10 @@ public final class HexBallDemo {
     }
 
     public static void main(String[] arguments) throws Exception {
+        if (java.util.Arrays.asList(arguments).contains("--medium-gallery")) {
+            MediumGalleryDemo.main(java.util.Arrays.stream(arguments).filter(arg -> !arg.equals("--medium-gallery")).toArray(String[]::new));
+            return;
+        }
         if (java.util.Arrays.asList(arguments).contains("--media")) {
             MediumTransportDemo.main(java.util.Arrays.stream(arguments).filter(arg -> !arg.equals("--media")).toArray(String[]::new));
             return;

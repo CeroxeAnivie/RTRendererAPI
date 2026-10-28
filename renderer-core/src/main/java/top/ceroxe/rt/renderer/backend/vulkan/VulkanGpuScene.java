@@ -236,6 +236,14 @@ final class VulkanGpuScene implements AutoCloseable {
         return slot;
     }
 
+    synchronized int resolveTextureSlot(long textureAssetId, long requiredSceneRevision) {
+        requireExactActiveRevision(requiredSceneRevision);
+        if (textureAssetId < 0L) throw new IllegalArgumentException("textureAssetId must not be negative");
+        int slot = identities.textureSlot(textureAssetId);
+        if (slot < 0) throw new IllegalStateException("texture is not resident in active GPUScene: " + textureAssetId);
+        return slot;
+    }
+
     synchronized Snapshot snapshot() {
         VulkanGpuSceneTransferQueue.TransferState transferState = transfers.state();
         if (transferState.activeRevision() != activeRevision || transferState.pending() != (pending != null)) {

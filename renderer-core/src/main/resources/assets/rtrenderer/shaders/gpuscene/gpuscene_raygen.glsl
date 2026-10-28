@@ -5,7 +5,8 @@
 #extension GL_NV_shader_invocation_reorder : require
 #endif
 
-#include "gpuscene_medium.glsl"
+#include "gpuscene_transport.glsl"
+#include "gpuscene_density.glsl"
 
 layout(set = 0, binding = GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
 #ifdef RTRENDERER_LINEAR_HDR_OUTPUT
@@ -44,10 +45,13 @@ uniform writeonly image2D reconstructionMotionVectors;
 layout(set = 0, binding = GPU_SCENE_BINDING_RECONSTRUCTION_EXPOSURE, r32f)
 uniform writeonly image2D reconstructionExposure;
 layout(location = 0) rayPayloadEXT GpuScenePayload payload;
-layout(location = 1) rayPayloadEXT GsShadowQuery gsShadowQuery;
+
 
 GsMediumPath gsLightingMediumPath;
-GpuScenePayload gsTraceRadiance(vec3 origin, vec3 direction, uvec4 launchInfo, GsMediumPath mediumPath);
+GpuScenePayload gsTraceRadiance(vec3 origin, vec3 direction, uvec4 launchInfo, inout GsMediumPath mediumPath);
+vec3 gsOpticalSurface(GpuScenePayload surfaceSample,vec3 origin);
+vec3 gsDielectricHalfVector(vec3 normal,vec3 incident,float roughness,vec2 samplePoint);
+float gsDielectricBranchWeight(vec3 normal,vec3 incident,vec3 outgoing,float roughness);
 
 
 vec3 gsToneMap(vec3 color)
@@ -114,86 +118,27 @@ bool gsSurfaceOverlay(GpuScenePayload surfaceSample)
             & GPU_SCENE_OVERLAY_DEPTH_MODE_MASK) != 0u;
 }
 
-// An ordinary visibility ray must not route every surface through an extra TLAS miss.
-// Participating/transmissive scenes retain the ordered service and its full medium path.
-vec3 gsShadowTransmittance(vec3 origin, vec3 normal, vec3 direction, float maximumDistance) {
-#ifndef RTRENDERER_SURFACE_ONLY
-    GsMediumCoefficients medium = gsCurrentMedium(gsLightingMediumPath);
-    if (gsFrame.words[GPU_SCENE_FRAME_MEDIUM_BOUNDARY_COUNT_WORD] == 0u
-            && gsFrame.words[GPU_SCENE_FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD] == 0u
-            && all(lessThanEqual(medium.extinction * medium.density, vec3(0.0)))) {
-#endif
-        payload.state = uvec4(0u, GS_PAYLOAD_SHADOW_QUERY, 0u, 0u);
-        traceRayEXT(sceneTlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xff, 0, 0, 0,
-            origin + normal * 1.0e-3, 1.0e-3, direction, maximumDistance, 0);
-        return payload.state.x == 0u ? vec3(1.0) : vec3(0.0);
-#ifndef RTRENDERER_SURFACE_ONLY
-    }
-    gsShadowQuery.operation=0u; gsShadowQuery.path=gsLightingMediumPath;
-    gsShadowQuery.origin=origin; gsShadowQuery.normal=normal;
-    gsShadowQuery.direction=direction; gsShadowQuery.maximumDistance=maximumDistance;
-    traceRayEXT(sceneTlas,gl_RayFlagsNoneEXT,0,0,0,1,origin,1.0e-3,direction,1.0,1);
-    return gsShadowQuery.transmittance;
-#endif
-}
-
-#ifndef RTRENDERER_SURFACE_ONLY
-#define gsEvaluatePbrSurface gsEvaluateDirectPbrSurface
-#endif
-#include "gpuscene_lighting.glsl"
-#ifndef RTRENDERER_SURFACE_ONLY
-#undef gsEvaluatePbrSurface
-
-// Secondary paths share one lighting service, keeping the full material and
-// medium evaluation out of the ray-generation shader's instruction footprint.
-GsRadianceSplit gsEvaluatePbrSurface(GpuScenePayload surfaceSample, vec3 rayOrigin) {
-    gsShadowQuery.operation = 2u;
-    gsShadowQuery.path = gsLightingMediumPath;
-    gsShadowQuery.surfaceSample = surfaceSample;
-    gsShadowQuery.origin = rayOrigin;
-    // The surface-lighting service is intentionally a miss-only dispatch. The GPUScene
-    // pipeline has no procedural hit group, so skipping triangles avoids a full BVH hit walk
-    // while preserving the service's complete PBR/medium evaluation in gpuscene_shadow.rmiss.
-    traceRayEXT(sceneTlas, gl_RayFlagsSkipTrianglesEXT, 0, 0, 0, 1,
-        rayOrigin, 1.0e-3, vec3(0.0, 0.0, 1.0), 1.0, 1);
-    return gsShadowQuery.surfaceRadiance;
-}
-#endif
-
-vec3 gsIntegrateMedium(vec3 color,GsMediumPath path,float distance,vec3 origin,vec3 direction) {
-#ifdef RTRENDERER_SURFACE_ONLY
-    return color;
-#else
-    if(!(distance>0.0)) return color;
-    GsMediumCoefficients medium=gsCurrentMedium(path);
-    vec3 extinction=max(medium.extinction*medium.density,vec3(0.0));
-    vec3 emission=max(medium.emission*medium.density,vec3(0.0));
-    if(all(equal(extinction,vec3(0.0))) && all(equal(emission,vec3(0.0)))) return color;
-    // Homogeneous absorption/emission has an exact integral; no service dispatch is needed.
-    if(all(lessThanEqual(medium.scattering*medium.density,vec3(1.0e-7)))) {
-        distance=min(distance,uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_MAX_DISTANCE_WORD]));
-        vec3 transmittance=exp(-extinction*distance);
-        vec3 integral=vec3(extinction.x>1.0e-7?(1.0-transmittance.x)/extinction.x:distance,
-            extinction.y>1.0e-7?(1.0-transmittance.y)/extinction.y:distance,
-            extinction.z>1.0e-7?(1.0-transmittance.z)/extinction.z:distance);
-        return color*transmittance+emission*integral;
-    }
-    gsShadowQuery.operation=1u;gsShadowQuery.incidentRadiance=color;gsShadowQuery.path=path;
-    gsShadowQuery.origin=origin;gsShadowQuery.direction=direction;gsShadowQuery.maximumDistance=distance;
-    traceRayEXT(sceneTlas,gl_RayFlagsNoneEXT,0,0,0,1,origin,1.0e-3,direction,1.0,1);
-    return gsShadowQuery.transmittance;
-#endif
-}
-
-GpuScenePayload gsTraceRadiance(vec3 origin, vec3 direction, uvec4 launchInfo, GsMediumPath mediumPath)
+#include "gpuscene_caustic_map.glsl"
+#include "gpuscene_transport_runtime.glsl"
+GpuScenePayload gsTraceRadiance(vec3 origin, vec3 direction, uvec4 launchInfo, inout GsMediumPath mediumPath)
 {
     payload.state = uvec4(0u, GS_PAYLOAD_RADIANCE_QUERY, 0u, 0u);
     payload.launchInfo = launchInfo;
     gsLightingMediumPath=mediumPath;
     payload.mediumBoundary = uvec4(0u);
     traceRayEXT(sceneTlas, gl_RayFlagsNoneEXT, 0xff, 0, 0, 0,
-        origin, 1.0e-3, direction, 1.0e20, 0);
+        origin, gsRayEpsilon(origin), direction, 1.0e20, 0);
+#ifdef RTRENDERER_SURFACE_ONLY
+    // Carry the CPU's scene proof across the trace boundary. Otherwise the compiler must
+    // retain optical branches for payload values written by the shared closest-hit stage.
+    GpuScenePayload result = payload;
+    result.mediumBoundary = uvec4(0u);
+    result.transmissionIor.x = 0.0;
+    result.baseColorAndOpacity.a = 1.0;
+    return result;
+#else
     return payload;
+#endif
 }
 
 vec3 gsEvaluateTerminalRadiance(GpuScenePayload surfaceSample, vec3 rayOrigin, vec3 rayDirection)
@@ -222,7 +167,7 @@ vec3 gsResolveSurfaceOverlay(
     vec3 rayOrigin,
     vec3 rayDirection,
     uvec4 launchInfo,
-    GsMediumPath mediumPath
+    inout GsMediumPath mediumPath
 ) {
     vec3 overlayPosition = overlay.worldPositionAndDistance.xyz;
     vec3 receiverOrigin = overlayPosition + rayDirection * 1.0e-3;
@@ -258,7 +203,7 @@ vec3 gsApplyObjectOutline(
     vec3 up,
     vec2 fov,
     uvec4 launchInfo,
-    GsMediumPath mediumPath,
+    inout GsMediumPath mediumPath,
     out bool applied
 ) {
     applied = false;
@@ -387,102 +332,8 @@ vec3 gsOpticalSurface(GpuScenePayload surfaceSample,vec3 origin) {
     return gsRadiance(gsEvaluatePbrSurface(surfaceSample, origin));
 }
 
-vec3 gsOpticalContinuation(vec3 origin,vec3 direction,uvec4 launchInfo,GsMediumPath path,uint seed,out float firstHitDistance) {
-    vec3 radiance=vec3(0.0),throughput=vec3(1.0);
-    firstHitDistance=0.0;
-    uint events=clamp(gsFrame.words[GPU_SCENE_FRAME_OPTICAL_MAX_EVENTS_WORD],1u,32u);
-    float maximumDistance=uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_MAX_DISTANCE_WORD]);
-    [[dont_unroll]] for(uint event=0u;event<events;++event) {
-        GpuScenePayload hit=gsTraceRadiance(origin,direction,launchInfo,path);
-        if(event==0u) firstHitDistance=hit.state.x==0u?65504.0:max(hit.worldPositionAndDistance.w,0.0);
-        float distance=hit.state.x==0u?maximumDistance:min(hit.worldPositionAndDistance.w,maximumDistance);
-        radiance+=throughput*gsIntegrateMedium(vec3(0.0),path,distance,origin,direction);
-        GsMediumCoefficients medium=gsCurrentMedium(path);
-        throughput*=exp(-max(medium.extinction*medium.density,vec3(0.0))*distance);
-        if(hit.state.x==0u) {
-            radiance+=throughput*gsSkyRadiance(direction);break;
-        }
-        bool volumeOnly=(hit.mediumBoundary.w&2u)!=0u;
-        float opacity=hit.mediumBoundary.w!=0u?1.0:clamp(hit.baseColorAndOpacity.a,0.0,1.0);
-        float transmission=volumeOnly?1.0:clamp(hit.transmissionIor.x,0.0,1.0);
-        if(!volumeOnly && opacity*(1.0-transmission)>0.0) {
-            gsLightingMediumPath=path;
-            if(gsSurfaceOverlay(hit)) {radiance+=throughput*gsResolveSurfaceOverlay(hit,origin,direction,launchInfo,path);break;}
-            radiance+=throughput*opacity*(1.0-transmission)*gsOpticalSurface(hit,origin);
-        }
-        float passWeight=1.0-opacity+opacity*transmission;
-        throughput*=passWeight;
-        if(max(throughput.r,max(throughput.g,throughput.b))<1.0e-6) break;
-        GsMediumPath next=gsCrossMediumBoundary(path,hit);
-        if(next.depth>GS_MEDIUM_PATH_CAPACITY) break;
-        vec3 normal=normalize(hit.worldNormalAndRoughness.xyz);
-        if(volumeOnly) path=next;
-        else {
-            vec2 iors=gsInterfaceIors(hit,path,next);
-            float incidentIor=iors.x,transmittedIor=iors.y;
-            float eta=incidentIor/transmittedIor;
-            vec3 refracted=refract(direction,normal,eta);
-            float fresnel=gsDielectricFresnel(incidentIor,transmittedIor,clamp(dot(-direction,normal),0.0,1.0));
-            if(dot(refracted,refracted)<=1.0e-8 || gsOpticalRandom(launchInfo,seed,event)<fresnel) direction=normalize(reflect(direction,normal));
-            else {direction=normalize(refracted);path=next;throughput*=clamp(hit.baseColorAndOpacity.rgb,vec3(0.0),vec3(1.0));}
-        }
-        origin=hit.worldPositionAndDistance.xyz+direction*1.0e-3;
-    }
-    return radiance;
-}
-
-// All secondary transport shares one continuation call site. Keeping its ray/medium/light loops
-// out of separate reflection/refraction branches prevents driver inlining from multiplying them.
-vec3 gsEvaluateSecondaryTransport(GpuScenePayload surfaceSample,vec3 incidentDirection,uvec4 launchInfo,
-        GsMediumPath incidentPath,uint primarySampleIndex,uint primarySampleCount,out float reflectionHitDistance) {
-    reflectionHitDistance=0.0;
-    bool volumeOnly=(surfaceSample.mediumBoundary.w&2u)!=0u;
-    bool optical=volumeOnly || surfaceSample.transmissionIor.x>1.0e-4;
-    if(!optical && surfaceSample.emissiveAndMetallic.a<=1.0e-4) return vec3(0.0);
-    vec3 position=surfaceSample.worldPositionAndDistance.xyz;
-    vec3 normal=normalize(surfaceSample.worldNormalAndRoughness.xyz);
-    GsMediumPath transmittedPath=optical?gsCrossMediumBoundary(incidentPath,surfaceSample):incidentPath;
-    if(transmittedPath.depth>GS_MEDIUM_PATH_CAPACITY) return vec3(0.0);
-    vec2 iors=gsInterfaceIors(surfaceSample,incidentPath,transmittedPath);
-    float incidentIor=iors.x,transmittedIor=iors.y;
-    uint samples=optical && !volumeOnly?clamp(gsFrame.words[GPU_SCENE_FRAME_OPTICAL_SAMPLES_WORD],1u,8u):1u;
-    vec3 total=vec3(0.0);
-    [[dont_unroll]] for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
-        vec3 interfaceNormal=normal;
-        float roughness=clamp(surfaceSample.worldNormalAndRoughness.w,0.0,1.0);
-        if(optical && !volumeOnly && roughness>.05 && dot(-incidentDirection,normal)>.001) {
-            vec3 candidate=gsSampleGgxHalfVector(normal,roughness,gsReflectionSample(sampleIndex,samples,launchInfo));
-            if(dot(-incidentDirection,candidate)>.001) interfaceNormal=candidate;
-        }
-        float eta=incidentIor/transmittedIor;
-        vec3 reflectedDirection=normalize(reflect(incidentDirection,interfaceNormal));
-        vec3 refractedDirection=refract(incidentDirection,interfaceNormal,eta);
-        float fresnel=gsDielectricFresnel(incidentIor,transmittedIor,clamp(dot(-incidentDirection,interfaceNormal),0.0,1.0));
-        bool totalReflection=dot(refractedDirection,refractedDirection)<=1.0e-8;
-        if(!totalReflection) refractedDirection=normalize(refractedDirection);
-        uint branches=optical && !volumeOnly?2u:1u;
-        [[dont_unroll]] for(uint branch=0u;branch<branches;++branch) {
-            bool reflection=branch==0u;
-            float weight=reflection?(totalReflection?1.0:fresnel):(totalReflection?0.0:1.0-fresnel);
-            vec3 outgoing=reflection?reflectedDirection:refractedDirection;
-            GsMediumPath next=reflection?incidentPath:transmittedPath;
-            vec3 tint=reflection?vec3(1.0):clamp(surfaceSample.baseColorAndOpacity.rgb,vec3(0.0),vec3(1.0));
-            if(volumeOnly) {outgoing=incidentDirection;next=transmittedPath;weight=1.0;tint=vec3(1.0);}
-            else if(!optical) {
-                tint=gsOpaqueMetallicReflectionWeight(surfaceSample,incidentDirection,launchInfo,
-                    primarySampleIndex,primarySampleCount,outgoing);
-                weight=1.0;
-            }
-            if(weight<=1.0e-6 || max(tint.r,max(tint.g,tint.b))<=1.0e-6) continue;
-            float firstHitDistance;
-            vec3 transported=gsOpticalContinuation(position+outgoing*.001,outgoing,launchInfo,next,
-                sampleIndex*2u+branch+1u,firstHitDistance);
-            if(!optical) reflectionHitDistance=firstHitDistance;
-            total+=weight*tint*transported;
-        }
-    }
-    return total/float(samples);
-}
+#include "gpuscene_optics.glsl"
+#include "gpuscene_caustic_gather.glsl"
 
 vec2 gsSubpixelOffset(uint sampleIndex, uint sampleCount)
 {
@@ -821,6 +672,7 @@ vec4 gsNrdPackRadianceHitDistance(
     return vec4(ycocg, gsNrdNormalizedHitDistance(hitDistance, viewZ, roughness));
 }
 
+#ifndef RTRENDERER_CAUSTIC_PASS
 void main()
 {
     ivec2 extent = imageSize(outputImage);
@@ -887,7 +739,8 @@ void main()
             radiance = primary.baseColorAndOpacity.rgb;
         } else if (gsSurfaceOverlay(primary)) {
             radiance = gsResolveSurfaceOverlay(primary, origin, rayDirection, launchInfo, primaryMediumPath);
-        } else if (lightmapModulated && primary.transmissionIor.x<=0.0 && primary.mediumBoundary.w==0u) {
+        } else if (lightmapModulated && primary.transmissionIor.x<=0.0 && primary.mediumBoundary.w==0u
+                && primary.baseColorAndOpacity.a>=1.0) {
             // Host-compatible materials already contain texture, vertex tint, AO and lightmap.
             // Running them through the PBR light loop or ACES would light and curve them twice.
             radiance = gsApplyDistanceFog(
@@ -895,10 +748,13 @@ void main()
                 primary.transmissionIor.z,
                 primary.transmissionIor.w
             );
-        } else if (gsUnlit(primary) && primary.transmissionIor.x<=0.0 && primary.mediumBoundary.w==0u) {
+        } else if (gsUnlit(primary) && primary.transmissionIor.x<=0.0 && primary.mediumBoundary.w==0u
+                && primary.baseColorAndOpacity.a>=1.0) {
             radiance = gsEvaluateTerminalRadiance(primary, origin, rayDirection);
         } else {
-            float distance = primary.worldPositionAndDistance.w;
+            float integrationRemaining = max(0.0,
+                uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_MAX_DISTANCE_WORD])
+                - max(primary.worldPositionAndDistance.w, 0.0));
             float opacity = primary.mediumBoundary.w!=0u?1.0:clamp(primary.baseColorAndOpacity.a, 0.0, 1.0);
             float transmission = (primary.mediumBoundary.w&2u)!=0u?1.0:clamp(primary.transmissionIor.x, 0.0, 1.0);
             GsRadianceSplit surfaceSplit = (primary.mediumBoundary.w&2u)!=0u || transmission>=1.0
@@ -906,19 +762,26 @@ void main()
                 :(gsLightmapModulated(primary)||gsUnlit(primary)
                     ?gsRadianceSplit(gsOpticalSurface(primary,origin),vec3(0.0)):gsEvaluatePbrSurface(primary, origin));
             vec3 surface = gsRadiance(surfaceSplit);
-            vec3 background = gsSkyRadiance(rayDirection);
+            vec3 background = vec3(0.0);
+#ifndef RTRENDERER_SURFACE_ONLY
+            if (opacity < 1.0) {
+                float backgroundHitDistance;
+                background = gsOpticalContinuation(
+                    primary.worldPositionAndDistance.xyz
+                        + rayDirection * gsRayEpsilon(primary.worldPositionAndDistance.xyz),
+                    rayDirection, launchInfo, primaryMediumPath, sampleIndex + 1u,
+                    integrationRemaining, backgroundHitDistance);
+            }
+#endif
             float opaqueReflectionHitDistance;
             vec3 secondary = gsEvaluateSecondaryTransport(primary,rayDirection,launchInfo,primaryMediumPath,
-                sampleIndex,sampleCount,opaqueReflectionHitDistance);
-            vec3 opaqueReflection = transmission <= 1.0e-4 && opacity >= 0.999
+                sampleIndex,sampleCount,integrationRemaining,opaqueReflectionHitDistance);
+            vec3 opaqueReflection = transmission == 0.0
                 ? secondary
                 : vec3(0.0);
-            if (!(transmission <= 1.0e-4 && opacity >= 0.999)) {
-                opaqueReflectionHitDistance = 0.0;
-            }
             vec3 optical = transmission > 0.0
                 ? secondary
-                : background;
+                : vec3(0.0);
             vec3 material = mix(surface + opaqueReflection, optical, transmission);
             radiance = mix(background, material, opacity);
             if (denoisingActive && sampleIndex == 0u) {
@@ -928,7 +791,7 @@ void main()
                 denoisingSplit.specular = (surfaceSplit.specular + opaqueReflection) * surfaceWeight
                     + optical * opticalWeight;
                 denoisingDiffuseHitDistance = surfaceSplit.diffuseHitDistance;
-                denoisingSpecularHitDistance = gsLuminance(opaqueReflection) > 1.0e-6
+                denoisingSpecularHitDistance = gsLuminance(opaqueReflection + optical * opticalWeight) > 1.0e-6
                     ? opaqueReflectionHitDistance
                     : surfaceSplit.specularHitDistance;
                 gsNrdMaterialFactors(
@@ -949,11 +812,11 @@ void main()
                 ? uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_MAX_DISTANCE_WORD])
                 : max(primary.worldPositionAndDistance.w, 0.0);
         vec3 unattenuatedRadiance=radiance;
-        radiance = gsIntegrateMedium(radiance, primaryMediumPath, segmentDistance, origin, rayDirection);
+        radiance = gsIntegrateMedium(radiance, primaryMediumPath, segmentDistance, origin, rayDirection,
+            launchInfo,uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_MAX_DISTANCE_WORD]));
         if (denoisingActive && denoisingPrimary) {
-            GsMediumCoefficients cameraMedium=gsCurrentMedium(primaryMediumPath);
-            vec3 mediumTransmittance=exp(-max(cameraMedium.extinction*cameraMedium.density,vec3(0.0))
-                *min(segmentDistance,uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_MAX_DISTANCE_WORD])));
+            vec3 mediumTransmittance=gsSegmentTransmittance(primaryMediumPath.mediumSlot,origin,rayDirection,
+                min(segmentDistance,uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_MAX_DISTANCE_WORD])));
             vec3 mediumSource=max(radiance-unattenuatedRadiance*mediumTransmittance,vec3(0.0));
             denoisingSplit.diffuse=previousDenoisingSplit.diffuse
                 +(denoisingSplit.diffuse-previousDenoisingSplit.diffuse)*mediumTransmittance;
@@ -1075,6 +938,7 @@ void main()
             || gsSurfaceOverlay(representative)
             || representative.mediumBoundary.w!=0u
             || representative.transmissionIor.x>0.0
+            || representative.baseColorAndOpacity.a<0.999
             || outlineApplied;
         if (dynamicSurface) currentGeometry = vec4(0.0);
         vec2 previousPixelPosition;
@@ -1135,3 +999,7 @@ void main()
 #endif
     imageStore(outputImage, pixel, vec4(outputColor, 1.0));
 }
+
+#else
+#include "gpuscene_photon_trace.glsl"
+#endif

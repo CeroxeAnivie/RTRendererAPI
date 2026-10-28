@@ -16,14 +16,14 @@ public final class MediumTransportNativeSelfTest {
     private static long frameNanoseconds,maximumFrameNanoseconds;
     private static long lastFrameNanoseconds;
     private static int width=32,height=32;
-    private static MediumTransportOptions transport=new MediumTransportOptions(12,1,8,512);
+    private static MediumTransport transport=new MediumTransport(12, 1, 8, 4, 512, 1e-4f);
     private static final CameraState OUTSIDE=CameraState.lookAt(0,0,6,0,0,0).verticalFieldOfViewDegrees(30).build();
-    private static EnvironmentState.Medium absorbing(float r,float g,float b) {
-        return EnvironmentState.Medium.builder().absorption(r,g,b).density(1).build();
+    private static Medium absorbing(float r,float g,float b) {
+        return new Medium(new Rgb(r,g,b), Rgb.ZERO, Rgb.ZERO, 1, 1, 0);
     }
-    private static SceneInstance volume(long id,float radius,EnvironmentState.Medium medium,int priority) {
+    private static SceneInstance volume(long id,float radius,Medium medium,int priority) {
         return SceneInstance.builder(id,2).transform(new AffineTransform(new float[]{radius,0,0,0,0,radius,0,0,0,0,radius,0}))
-            .mediumBoundary(MediumBoundaryState.builder(medium).priority(priority).surfaceInteraction(false).build()).build();
+            .mediumBoundary(new MediumBoundary(medium, priority, MediumBoundary.Orientation.OUTWARD, false)).build();
     }
     public static void main(String[] args) throws Exception {
         var capability=VulkanRtCapabilityProbe.capture();
@@ -50,8 +50,7 @@ public final class MediumTransportNativeSelfTest {
             for(int i=0;i<inwardIndices.length;i+=3){int swap=inwardIndices[i];inwardIndices[i]=inwardIndices[i+1];inwardIndices[i+1]=swap;}
             float[] cubePoints=new float[cube.positions().remaining()];cube.positions().get(cubePoints);
             apply(SceneTransaction.builder(++revision).upsert(MeshAsset.triangles(2,cubePoints,inwardIndices,1))
-                .upsert(volume(2,2,absorbing(.4f,.2f,0),1).toBuilder().mediumBoundary(MediumBoundaryState.builder(absorbing(.4f,.2f,0))
-                    .surfaceInteraction(false).priority(1).orientation(MediumBoundaryState.Orientation.INWARD).build()).build()).build());
+                .upsert(volume(2,2,absorbing(.4f,.2f,0),1).toBuilder().mediumBoundary(new MediumBoundary(absorbing(.4f,.2f,0), 1, MediumBoundary.Orientation.INWARD, false)).build()).build());
             near(render(OUTSIDE,EnvironmentState.neutral())[0],Math.exp(-1.6),.007,"inward-oriented boundary crossings");
             apply(SceneTransaction.builder(++revision).upsert(cube).upsert(volume(2,2,absorbing(.4f,.2f,0),1)).build());
             var inside=render(CameraState.lookAt(0,0,0,0,0,-1).build(),EnvironmentState.neutral());
@@ -61,7 +60,7 @@ public final class MediumTransportNativeSelfTest {
             near(nested[0],Math.exp(-.8),.009,"inner medium replaces outer extinction");
             near(nested[1],Math.exp(-1.4),.009,"exit restores enclosing medium");
             apply(SceneTransaction.builder(++revision).removeInstance(3).upsert(volume(2,2,
-                EnvironmentState.Medium.builder().density(1).emission(.2f,0,0).build(),1)).build());
+                new Medium(Rgb.ZERO, Rgb.ZERO, new Rgb(.2f,0,0), 1, 1, 0),1)).build());
             var emission=render(OUTSIDE,EnvironmentState.neutral());
             near(emission[0],1.8,.015,"unabsorbed volume emission integrates distance");
             near(emission[1],1,.005,"volume emission must not leak channels");
@@ -87,7 +86,7 @@ public final class MediumTransportNativeSelfTest {
             var shadow=render(receiverCamera,sunlight);
             near(shadow[0]/lit[0],Math.exp(-1.6),.008,"ordered volume shadow red transmittance");
             near(shadow[1]/lit[1],Math.exp(-.8),.008,"ordered volume shadow green transmittance");
-            transport=transport.withMaximumDistance(.25f);
+            transport=transport.withMaxDistance(.25f);
             var distantBlocker=MeshAsset.triangles(9,new float[]{-100,-100,4,100,-100,4,100,100,4,-100,100,4},
                 new int[]{0,1,2,2,3,0},1);
             apply(SceneTransaction.builder(++revision).upsert(distantBlocker)
@@ -100,9 +99,9 @@ public final class MediumTransportNativeSelfTest {
                     .baseColorRgba8(0xffffffff).doubleSided(true).build()).build());
             near(render(OUTSIDE,EnvironmentState.neutral())[2],1,.005,
                 "bounded medium integration must preserve distant real receiver radiance");
-            transport=MediumTransportOptions.balanced();
+            transport=MediumTransport.balanced();
 
-            var scatter=EnvironmentState.Medium.builder().absorption(.05f,.05f,.05f).scattering(.25f,.25f,.25f).density(1).build();
+            var scatter=new Medium(new Rgb(.05f,.05f,.05f), new Rgb(.25f,.25f,.25f), Rgb.ZERO, 1, 1, 0);
             apply(SceneTransaction.builder(++revision).upsert(MaterialAsset.builder(1).shadingModel(MaterialAsset.ShadingModel.UNLIT).baseColorRgba8(0xff000000).doubleSided(true).build())
                 .upsert(volume(2,2,scatter,1)).upsert(SceneLight.point(1,0,1,0).intensity(30).range(20).build()).build());
             var point=render(OUTSIDE,EnvironmentState.neutral());
@@ -113,7 +112,8 @@ public final class MediumTransportNativeSelfTest {
             apply(SceneTransaction.builder(++revision).removeLight(2).upsert(SceneLight.directional(3,0,0,-1).intensity(2).build()).build());
             var directional=render(OUTSIDE,EnvironmentState.neutral());
             MediumTransportSelfTest.require(directional[0]>.01,"directional light must illuminate participating medium");
-            apply(SceneTransaction.builder(++revision).upsert(volume(2,2,scatter.toBuilder().phaseAnisotropy(.7f).build(),1)).build());
+            apply(SceneTransaction.builder(++revision).upsert(volume(2,2,new Medium(scatter.absorption(),scatter.scattering(),
+                scatter.emission(),scatter.density(),scatter.indexOfRefraction(),.7f),1)).build());
             var anisotropic=render(OUTSIDE,EnvironmentState.neutral());
             MediumTransportSelfTest.require(Math.abs(anisotropic[0]-directional[0])>.005,"phase anisotropy must change scattering");
             apply(SceneTransaction.builder(++revision).removeLight(3).build());
@@ -122,7 +122,7 @@ public final class MediumTransportNativeSelfTest {
 
             // Inside a broad dielectric slab, sixty-degree incidence must totally reflect.
             var glass=MaterialAsset.builder(3).transmission(1).roughness(0).indexOfRefraction(1.5f).doubleSided(true).build();
-            var glassBoundary=MediumBoundaryState.builder(EnvironmentState.Medium.builder().indexOfRefraction(1.5f).build()).build();
+            var glassBoundary=new MediumBoundary(new Medium(Rgb.ZERO, Rgb.ZERO, Rgb.ZERO, 0, 1.5f, 0), 0, MediumBoundary.Orientation.OUTWARD, true);
             var front=MeshAsset.triangles(3,new float[]{-100,-100,3,100,-100,3,100,100,3,-100,100,3},new int[]{0,2,1,0,3,2},1);
             apply(SceneTransaction.builder(++revision).resetScene().upsert(glass)
                 .upsert(MaterialAsset.builder(1).shadingModel(MaterialAsset.ShadingModel.UNLIT).baseColorRgba8(0xff0000ff).doubleSided(true).build())
@@ -132,7 +132,7 @@ public final class MediumTransportNativeSelfTest {
             var tir=render(tilted,EnvironmentState.neutral());
             apply(SceneTransaction.builder(++revision).upsert(SceneInstance.builder(2,2)
                 .transform(new AffineTransform(new float[]{100,0,0,0,0,100,0,0,0,0,1,0}))
-                .mediumBoundary(MediumBoundaryState.builder(EnvironmentState.Medium.vacuum()).build()).build()).build());
+                .mediumBoundary(new MediumBoundary(Medium.vacuum(), 0, MediumBoundary.Orientation.OUTWARD, true)).build()).build());
             var noTir=render(tilted,EnvironmentState.neutral());
             MediumTransportSelfTest.require(tir[0]<.01 && noTir[0]>.9,"Snell critical angle must distinguish TIR from unit-IOR transmission");
             // Existing two-sided material-only interfaces retain their front/back IOR convention.
@@ -160,8 +160,7 @@ public final class MediumTransportNativeSelfTest {
         profileLane("opaque",environment);
         apply(SceneTransaction.builder(++revision).upsert(volume(2,2,absorbing(.4f,.2f,0),1)).build());
         profileLane("absorption",environment);
-        var scattering=EnvironmentState.Medium.builder().absorption(.05f,.05f,.05f).scattering(.15f,.15f,.15f)
-            .density(1).phaseAnisotropy(.2f).build();
+        var scattering=new Medium(new Rgb(.05f,.05f,.05f), new Rgb(.15f,.15f,.15f), Rgb.ZERO, 1, 1, .2f);
         apply(SceneTransaction.builder(++revision).upsert(volume(2,2,scattering,1)).build());
         profileLane("single-scattering",environment);
     }

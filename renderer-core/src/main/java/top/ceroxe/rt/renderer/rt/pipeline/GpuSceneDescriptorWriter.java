@@ -70,10 +70,13 @@ final class GpuSceneDescriptorWriter {
             );
         }
         setBufferInfo(
-                bufferInfos.get(SceneShaderBindings.STORAGE_BUFFER_COUNT - 1),
+                bufferInfos.get(SceneShaderBindings.STORAGE_BUFFER_COUNT - 2),
                 checked.transientInstanceRecords(),
                 maxStorageBufferRangeBytes
         );
+
+        setBufferInfo(bufferInfos.get(SceneShaderBindings.STORAGE_BUFFER_COUNT - 1),
+                checked.causticPhotons(), maxStorageBufferRangeBytes);
 
         VkWriteDescriptorSet.Buffer writes = VkWriteDescriptorSet.calloc(SceneShaderBindings.COUNT, stack);
         writes.get(SceneShaderBindings.TLAS)
@@ -106,7 +109,7 @@ final class GpuSceneDescriptorWriter {
                     .pBufferInfo(VkDescriptorBufferInfo.create(info.address(), 1));
         }
         VkDescriptorBufferInfo transientInstances = bufferInfos.get(
-                SceneShaderBindings.STORAGE_BUFFER_COUNT - 1
+                SceneShaderBindings.STORAGE_BUFFER_COUNT - 2
         );
         writes.get(SceneShaderBindings.TRANSIENT_INSTANCE_RECORDS)
                 .sType$Default()
@@ -116,6 +119,10 @@ final class GpuSceneDescriptorWriter {
                 .descriptorType(VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
                 .descriptorCount(1)
                 .pBufferInfo(VkDescriptorBufferInfo.create(transientInstances.address(), 1));
+        var photons = bufferInfos.get(SceneShaderBindings.STORAGE_BUFFER_COUNT - 1);
+        writes.get(SceneShaderBindings.CAUSTIC_PHOTONS).sType$Default().dstSet(descriptorSet)
+                .dstBinding(SceneShaderBindings.CAUSTIC_PHOTONS).descriptorType(VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                .descriptorCount(1).pBufferInfo(VkDescriptorBufferInfo.create(photons.address(), 1));
         setImageWrite(writes.get(SceneShaderBindings.HISTORY_COLOR_INPUT), descriptorSet,
                 SceneShaderBindings.HISTORY_COLOR_INPUT, images.get(1));
         setImageWrite(writes.get(SceneShaderBindings.HISTORY_COLOR_OUTPUT), descriptorSet,

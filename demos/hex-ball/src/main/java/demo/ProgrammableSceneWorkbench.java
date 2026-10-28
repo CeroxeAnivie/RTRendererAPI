@@ -21,7 +21,7 @@ final class ProgrammableSceneWorkbench {
             #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
             #include "gpuscene_common.glsl"
             layout(set=0,binding=1,rgba16f) uniform writeonly image2D outputImage;
-            layout(set=0,binding=33,std430) readonly buffer Parameters { vec4 radiance; } parameters;
+            layout(set=0,binding=34,std430) readonly buffer Parameters { vec4 radiance; } parameters;
             void main() {
                 vec2 uv = (vec2(gl_LaunchIDEXT.xy) + 0.5) / vec2(gl_LaunchSizeEXT.xy);
                 float pulse = 0.5 + 0.5 * sin(gsFrameSecondsSince(uint64_t(0)) * 3.0);

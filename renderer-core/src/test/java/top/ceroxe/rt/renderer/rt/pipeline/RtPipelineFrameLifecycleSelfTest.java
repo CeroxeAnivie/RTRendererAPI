@@ -1,10 +1,16 @@
 package top.ceroxe.rt.renderer.rt.pipeline;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import top.ceroxe.rt.renderer.CameraMedium;
+import top.ceroxe.rt.renderer.api.AffineTransform;
+import top.ceroxe.rt.renderer.api.Medium;
+import top.ceroxe.rt.renderer.api.MediumDensityField;
+import top.ceroxe.rt.renderer.api.Rgb;
+import top.ceroxe.rt.renderer.RendererFrameEnvironment;
 import top.ceroxe.rt.renderer.RendererFrameState;
 import top.ceroxe.rt.renderer.rt.pipeline.RtFrameSlotStateMachine.Event;
 import top.ceroxe.rt.renderer.rt.pipeline.RtFrameSlotStateMachine.State;
@@ -30,6 +36,9 @@ public final class RtPipelineFrameLifecycleSelfTest {
       disablesPerFrameExternalSemaphoresByDefault();
       resolvesFrameOutputExtentForPresentation();
       allocatesBlockDecalHashSlotsWithLinearProbing();
+      encodesPhysicalCameraMediumInFixedUniformAbi();
+      rejectsParticipatingDensityGridsInBootstrapDiagnostics();
+      requiresExplicitMediumForAvailableFrames();
       System.out.println("RtPipelineFrameLifecycleSelfTest passed");
    }
 
@@ -274,16 +283,92 @@ public final class RtPipelineFrameLifecycleSelfTest {
       require(expectFailure(() -> RtRayTracingPipeline.blockDecalTableSlot(0, 0, 0, new boolean[64])) instanceof IllegalArgumentException, "block decal occupancy must reject capacities that diverge from the shader ABI");
    }
 
+   private static void encodesPhysicalCameraMediumInFixedUniformAbi() {
+      Medium medium = new Medium(new Rgb(0.25F, 0.5F, 0.75F), new Rgb(0.125F, 0.25F, 0.5F),
+              new Rgb(1, 2, 3), 2, 1.5F, 0.4F);
+      RendererFrameState frame = frameState(0x1_0000_0002L, 640, 360, medium);
+      byte[] encoded = RtFrameUniformEncoder.encode(frame, new RendererFrameEnvironment(12345, 0.25F, 0.5F),
+              1280, 720, RtFrameUniformEncoder.WORLD_MODE, 17);
+      require(encoded.length == 160, "bootstrap frame ABI must contain ten 16-byte records");
+      ByteBuffer words = ByteBuffer.wrap(encoded).order(ByteOrder.LITTLE_ENDIAN);
+      require(words.getFloat(0) == 1 && words.getFloat(4) == 2 && words.getFloat(8) == 3
+                      && words.getFloat(24) == -1 && words.getFloat(32) == 1 && words.getFloat(52) == 1,
+              "camera vectors moved while appending physical medium coefficients");
+      require(words.getInt(64) == 1280 && words.getInt(68) == 720 && words.getInt(72) == 0
+                      && words.getInt(76) == 1 && words.getLong(80) == frame.sequence(),
+              "frame extent, participating flag or sequence changed ABI offsets");
+      require(words.getInt(88) == 0 && words.getInt(92) == 0,
+              "obsolete packed tint and density words must remain zero");
+      require(words.getFloat(96) == 12345 && words.getFloat(100) == 0.25F
+                      && words.getFloat(104) == 0.5F && words.getFloat(108) == 17,
+              "environment time fields moved in the bootstrap ABI");
+      require(words.getFloat(112) == 0.75F && words.getFloat(116) == 1.5F && words.getFloat(120) == 2.5F,
+              "bootstrap extinction must equal density times absorption plus scattering");
+      require(words.getFloat(128) == 0.25F && words.getFloat(132) == 0.5F && words.getFloat(136) == 1,
+              "bootstrap scattering must be density-scaled exactly once");
+      require(words.getFloat(144) == 2 && words.getFloat(148) == 4 && words.getFloat(152) == 6,
+              "bootstrap emission must retain linear RGB and density scaling");
+      require(words.getInt(124) == 0 && words.getInt(140) == 0 && words.getInt(156) == 0,
+              "medium vector padding must be deterministic");
+      for (Medium inactive : List.of(Medium.vacuum(), medium.withDensity(0),
+              new Medium(Rgb.ZERO, Rgb.ZERO, Rgb.ZERO, 1, 1.5F, 0))) {
+         ByteBuffer neutral = ByteBuffer.wrap(RtFrameUniformEncoder.encode(frameState(1, 640, 360, inactive),
+                 RendererFrameEnvironment.unknown(), 640, 360, RtFrameUniformEncoder.WORLD_MODE, 0))
+                 .order(ByteOrder.LITTLE_ENDIAN);
+         require(neutral.getInt(76) == 0, "inactive coefficient transport must skip bootstrap medium work");
+         for (int at = 112; at < 160; at += 4)
+            require(neutral.getInt(at) == 0, "inactive medium coefficient was not zero: " + at);
+      }
+      Medium emissionOnly = new Medium(Rgb.ZERO, Rgb.ZERO, Rgb.WHITE, 2, 1, 0);
+      ByteBuffer emissive = ByteBuffer.wrap(RtFrameUniformEncoder.encode(frameState(1, 640, 360, emissionOnly),
+              RendererFrameEnvironment.unknown(), 640, 360, RtFrameUniformEncoder.WORLD_MODE, 0))
+              .order(ByteOrder.LITTLE_ENDIAN);
+      require(emissive.getInt(76) == 1 && emissive.getFloat(112) == 0 && emissive.getFloat(144) == 2,
+              "emission without extinction must remain an active physical medium");
+   }
+
+   private static void requiresExplicitMediumForAvailableFrames() {
+      require(expectFailure(() -> frameState(1, 640, 360, null)) instanceof NullPointerException,
+              "available frames must reject an unspecified camera medium");
+      require(RendererFrameState.unavailable().cameraMedium().equals(Medium.vacuum()),
+              "unavailable frame state must canonicalize its camera medium to vacuum");
+   }
+
+   private static void rejectsParticipatingDensityGridsInBootstrapDiagnostics() {
+      var field = MediumDensityField.grid(7, 4, AffineTransform.identity());
+      var environment = RendererFrameEnvironment.unknown();
+      for (int mode : new int[] { RtFrameUniformEncoder.WORLD_MODE, RtFrameUniformEncoder.BOOTSTRAP_MODE }) {
+         for (Medium participating : List.of(
+                 new Medium(Rgb.WHITE, Rgb.ZERO, Rgb.ZERO, 1, 1, 0, field),
+                 new Medium(Rgb.ZERO, Rgb.WHITE, Rgb.ZERO, 1, 1, 0, field),
+                 new Medium(Rgb.ZERO, Rgb.ZERO, Rgb.WHITE, 1, 1, 0, field))) {
+            RuntimeException failure = expectFailure(() -> RtFrameUniformEncoder.encode(
+                    frameState(1, 640, 360, participating), environment, 640, 360, mode, 0));
+            require(failure instanceof IllegalArgumentException && failure.getMessage().contains("uniform density"),
+                    "bootstrap diagnostics must reject unsupported spatial transport before encoding homogeneous coefficients");
+         }
+         for (Medium inactive : List.of(Medium.vacuum().withDensityField(field),
+                 new Medium(Rgb.WHITE, Rgb.WHITE, Rgb.WHITE, 0, 1.5f, 0, field))) {
+            byte[] encoded = RtFrameUniformEncoder.encode(frameState(1, 640, 360, inactive),
+                    environment, 640, 360, mode, 0);
+            require(Arrays.equals(encoded, RtFrameUniformEncoder.encode(
+                            frameState(1, 640, 360, inactive.withDensityField(MediumDensityField.uniform())),
+                            environment, 640, 360, mode, 0)),
+                    "inactive density grids must preserve the diagnostic fast path");
+         }
+      }
+   }
+
    private static RendererFrameState frameState(long sequence) {
       return frameState(sequence, 640, 360);
    }
 
    private static RendererFrameState frameState(long sequence, int targetWidth, int targetHeight) {
-      return frameState(sequence, targetWidth, targetHeight, CameraMedium.air());
+      return frameState(sequence, targetWidth, targetHeight, Medium.vacuum());
    }
 
-   private static RendererFrameState frameState(long sequence, int targetWidth, int targetHeight, CameraMedium cameraFluidMedium) {
-      return new RendererFrameState(sequence, true, targetWidth, targetHeight, 1.0, 2.0, 3.0, 10.0F, 20.0F, 0.0F, 0.0F, -1.0F, 1.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F, 1.0F, 0.0F, -1.0F, 0.0F, cameraFluidMedium, false, true);
+   private static RendererFrameState frameState(long sequence, int targetWidth, int targetHeight, Medium cameraMedium) {
+      return new RendererFrameState(sequence, true, targetWidth, targetHeight, 1.0, 2.0, 3.0, 10.0F, 20.0F, 0.0F, 0.0F, -1.0F, 1.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F, 1.0F, 0.0F, -1.0F, 0.0F, cameraMedium, false, true);
    }
 
    private static RuntimeException expectFailure(Runnable runnable) {

@@ -14,6 +14,29 @@ void main()
         return;
     }
 
+    uint boundaryFlags=gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
+    if((boundaryFlags&2u)!=0u) {
+        uint mesh=gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT));
+        uvec3 indices=gsTriangleIndices(mesh,gl_PrimitiveID);
+        vec3 a=gsPosition(mesh,indices.x),b=gsPosition(mesh,indices.y),c=gsPosition(mesh,indices.z);
+        vec3 p0=gl_ObjectToWorldEXT*vec4(a,1),p1=gl_ObjectToWorldEXT*vec4(b,1),p2=gl_ObjectToWorldEXT*vec4(c,1);
+        vec3 normal=normalize(cross(p1-p0,p2-p0));
+        bool back=dot(normal,gl_WorldRayDirectionEXT)>0.0;
+        bool boundaryBack=back!=(determinant(mat3(gl_ObjectToWorldEXT))<0.0);
+        payload.worldPositionAndDistance=vec4(gl_WorldRayOriginEXT+gl_WorldRayDirectionEXT*gl_HitTEXT,gl_HitTEXT);
+        vec3 bary=gsBarycentrics(hitAttributes);
+        payload.previousWorldPosition=vec4(gsPreviousInstancePoint(gl_InstanceCustomIndexEXT,a*bary.x+b*bary.y+c*bary.z),1);
+        payload.motionRevision=gsInstanceMotionRevision(gl_InstanceCustomIndexEXT);
+        payload.worldNormalAndRoughness=vec4(back?-normal:normal,0);
+        payload.baseColorAndOpacity=vec4(1);payload.emissiveAndMetallic=vec4(0);
+        payload.transmissionIor=vec4(1,1,0,0);
+        payload.state=uvec4(1u,boundaryBack?GS_PAYLOAD_BACK_FACE:GS_PAYLOAD_RADIANCE_QUERY,0u,gsInstanceFlags(gl_InstanceCustomIndexEXT));
+        payload.surfaceState=uvec4(0);payload.compositeState=vec4(0);
+        payload.mediumBoundary=uvec4(gl_InstanceCustomIndexEXT,
+            gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD),
+            gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_ORIENTATION_WORD),boundaryFlags);
+        return;
+    }
     uint meshSlot = gsInstanceMeshSlot(gl_InstanceCustomIndexEXT);
     uint meshBase = gsMeshBase(meshSlot);
     uvec3 indices = gsTriangleIndices(meshBase, gl_PrimitiveID);
@@ -62,7 +85,7 @@ void main()
         gl_InstanceCustomIndexEXT,
         gsTriangleTexcoord(meshBase, indices, barycentrics)
     );
-    vec4 uvFootprint = gsTriangleTextureFootprint(
+    vec4 uvFootprint = payload.state.y == GS_PAYLOAD_PHOTON_QUERY ? vec4(0.0) : gsTriangleTextureFootprint(
         meshBase, indices, barycentrics, wp0, wp1, wp2, gl_WorldRayOriginEXT,
         payload.launchInfo,
         gl_InstanceCustomIndexEXT
@@ -180,6 +203,9 @@ void main()
         gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_ORIENTATION_WORD),
         gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD)
     );
+    // Only caustic frames consume the spare geometric-normal lane.
+    if (gsFrame.words[GPU_SCENE_FRAME_CAUSTIC_PHOTONS_WORD] != 0u)
+        payload.compositeState.w = gsEncodeGeometricNormal(backFace ? -geometricNormal : geometricNormal);
     if (payload.mediumBoundary.w != 0u) {
         // Volume interfaces must use the geometric boundary normal, never a normal-map perturbation.
         payload.worldNormalAndRoughness.xyz = backFace ? -geometricNormal : geometricNormal;

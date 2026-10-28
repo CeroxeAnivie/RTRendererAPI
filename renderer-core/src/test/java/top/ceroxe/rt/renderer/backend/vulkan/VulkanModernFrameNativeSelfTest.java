@@ -39,7 +39,7 @@ public final class VulkanModernFrameNativeSelfTest {
             String source = "#version 460\n#extension GL_EXT_ray_tracing : require\n"
                     + "layout(set=0,binding=1," + (hdr ? "rgba16f" : "rgba8")
                     + ") uniform writeonly image2D outputImage;\n"
-                    + "layout(set=0,binding=33,std430) readonly buffer Tint { vec4 color; } tint;\n"
+                    + "layout(set=0,binding=34,std430) readonly buffer Tint { vec4 color; } tint;\n"
                     + "void main(){imageStore(outputImage,ivec2(gl_LaunchIDEXT.xy),tint.color);}\n";
             var module = VulkanGenericLogicOperationNativeSelfTest.module(99001, ShaderStage.RAY_GENERATION,
                     org.lwjgl.util.shaderc.Shaderc.shaderc_raygen_shader, source, List.of(), List.of(), List.of());
@@ -87,7 +87,7 @@ public final class VulkanModernFrameNativeSelfTest {
                 #extension GL_GOOGLE_include_directive : require
                 #include "gpuscene_common.glsl"
                 layout(set=0,binding=1,rgba16f) uniform writeonly image2D outputImage;
-                layout(set=0,binding=33,std430) readonly buffer Data { float values[]; } data;
+                layout(set=0,binding=34,std430) readonly buffer Data { float values[]; } data;
                 void main() {
                     uint64_t start = uint64_t(0xfffffff0u) | (uint64_t(0xffffffffu) << 32);
                     imageStore(outputImage, ivec2(gl_LaunchIDEXT.xy), vec4(
@@ -138,7 +138,7 @@ public final class VulkanModernFrameNativeSelfTest {
     private static void verifyProgrammableScene(VulkanRtCapabilityProbe.Result capability) throws Exception {
         String miss = source("rmiss").replace("void main()", "void builtinMain()") + """
 
-                layout(set=0, binding=33, std430) readonly buffer Tint { vec4 color; } tint;
+                layout(set=0, binding=34, std430) readonly buffer Tint { vec4 color; } tint;
                 void main() { builtinMain(); payload.baseColorAndOpacity.rgb *= tint.color.rgb; }
                 """;
         var shaders = SceneShaderProgram.builder().dataBindingCount(1)
@@ -168,7 +168,7 @@ public final class VulkanModernFrameNativeSelfTest {
                 #version 460
                 #extension GL_EXT_ray_tracing : require
                 layout(set=0, binding=1, rgba16f) uniform writeonly image2D outputImage;
-                layout(set=0, binding=33, std430) readonly buffer Data { vec4 colors[]; } data;
+                layout(set=0, binding=34, std430) readonly buffer Data { vec4 colors[]; } data;
                 void main() { imageStore(outputImage, ivec2(gl_LaunchIDEXT.xy), data.colors[0]); }
                 """;
         var config = configuration().frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F)

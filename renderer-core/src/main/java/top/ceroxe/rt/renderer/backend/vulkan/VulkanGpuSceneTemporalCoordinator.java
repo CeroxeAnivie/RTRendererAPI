@@ -17,7 +17,9 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
     private final RendererConfig configuration;
     private final TemporalHistoryTracker sourceHistory;
     private final VulkanTemporalHistory gpuHistory;
-    private final VulkanMediumBoundaryIndex mediumBoundaries = new VulkanMediumBoundaryIndex();
+    private final MediumSceneIndex mediumBoundaries = new MediumSceneIndex();
+    private final VulkanSurfaceSceneIndex surfaceScene = new VulkanSurfaceSceneIndex();
+    private final CausticSceneIndex causticScene = new CausticSceneIndex();
 
     VulkanGpuSceneTemporalCoordinator(VulkanDeviceRuntime device, RendererConfig configuration) {
         this.configuration = Objects.requireNonNull(configuration, "configuration");
@@ -32,7 +34,37 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
     void sceneApplied(VulkanSceneResidency.SceneChangeSet changes) {
         sourceHistory.sceneApplied(changes);
         mediumBoundaries.sceneApplied(changes);
+        surfaceScene.sceneApplied(changes);
+        causticScene.sceneApplied(changes);
     }
+
+    top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program program(RenderFrameRequest request) {
+        mediumBoundaries.validateDensityFields(request);
+        return program(request, mediumBoundaries, surfaceScene);
+    }
+
+    static top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program program(RenderFrameRequest request,
+            MediumSceneIndex mediumBoundaries, VulkanSurfaceSceneIndex surfaceScene) {
+        var batch=request.primitiveBatch();
+        int boundaries=mediumBoundaries.frameBoundaryCount(batch);
+        if (request.caustics().enabled()) return boundaries <= 8
+                ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_CAUSTICS
+                : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_CAUSTICS;
+        if(surfaceScene.opaque(batch) && boundaries==0 && surfaceScene.transmissiveCount(batch)==0
+                && request.environment().cameraMedium().isVacuum())
+            return top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.SURFACE;
+        var environment = request.environment().cameraMedium();
+        boolean volume = MediumDensitySupport.heterogeneous(environment) || mediumBoundaries.hasDensityField(batch)
+                || request.mediumTransport().scatteringBounces() > 0 &&
+                    (environment.density() > 0 && !environment.scattering().isZero() || mediumBoundaries.hasScattering(batch));
+        if (volume) return boundaries <= 8
+                ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_VOLUME
+                : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_VOLUME;
+        return boundaries<=8 ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT
+                : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL;
+    }
+
+    CausticPhotonPlan caustics(RenderFrameRequest request) { return causticScene.plan(request, mediumBoundaries); }
 
     long requiredGrowthBytes(int width, int height) {
         return gpuHistory.requiredGrowthBytes(width, height);
@@ -79,11 +111,15 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
                 configuration.temporalRendering(),
                 denoisingActive,
                 streamlineResourcesActive,
-                jitterActive
+                jitterActive, mediumBoundaries::densityTextureSlot
         );
         var mediumUniforms = java.nio.ByteBuffer.wrap(uniforms).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        if (surfaceScene.opaque(checkedRequest.primitiveBatch())) {
+            int offset = VulkanGpuSceneAbi.FRAME_FEATURE_FLAGS_WORD * Integer.BYTES;
+            mediumUniforms.putInt(offset, mediumUniforms.getInt(offset) | VulkanGpuSceneAbi.FEATURE_FLAG_OPAQUE_VISIBILITY);
+        }
         int[] containingMedia = mediumBoundaries.containing(checkedRequest);
-        mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD * 4, mediumBoundaries.transmissiveCount());
+        mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD * 4, surfaceScene.transmissiveCount(checkedRequest.primitiveBatch()));
         mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_CAMERA_MEDIUM_COUNT_WORD * 4, containingMedia.length);
         mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_MEDIUM_BOUNDARY_COUNT_WORD * 4, mediumBoundaries.frameBoundaryCount(checkedRequest.primitiveBatch()));
         for (int i = 0; i < containingMedia.length; i++)

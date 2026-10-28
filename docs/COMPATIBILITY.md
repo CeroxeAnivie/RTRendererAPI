@@ -1,18 +1,18 @@
 # API Contract
 
-RTRendererAPI 6.0.3 is a patch release on the deliberate breaking 6.x line with a single Java 25 major-6 binary/API
-contract. Use matching API/backend modules. Existing descriptor binding numbers and the first
-57 instance words / first 404 frame words remain unchanged. Instance records now contain 72 words;
-frame uniforms contain 447 words. Custom retained-scene GLSL must include the matching
-`gpuscene_abi.glsl` rather than embed old record strides. The explicit command API is unchanged.
+RTRendererAPI 7.0.0 starts a new Java 25 major-7 binary/API contract. Use matching API,
+backend and NVIDIA modules. Medium data is expressed directly by `Rgb`, `Medium`,
+`MediumBoundary` and `MediumTransport` records. The nested 6.x medium type, medium builders
+and compatibility wrappers are absent. Recompile custom retained-scene shaders against the
+7.0.0 `gpuscene_abi.glsl`; do not embed record strides from an older release.
 
-This version is delivered through GitHub source and local Maven artifacts only. It is not published
-to Maven Central. The 6.0.3 contract removes legacy aliases and compatibility constructors; callers
-must migrate to the typed builder and explicit workload contracts described below.
+This version is delivered through GitHub source and local Maven artifacts. No remote release
+or Maven Central publication is implied by building the sources. See [7.0.0 migration](7.0.0.md)
+for the exact medium API and this iteration's CPU-only verification boundary.
 
 ## Migration from 4.x
 
-| 4.x/5.x surface | 6.0 surface |
+| Historical surface | Current surface |
 | --- | --- |
 | RendererBootstrap / RendererPreset | Renderer.open(), Renderer.open(config), Renderer.devices() |
 | expertBuilder() | RendererConfig.builder() |
@@ -28,16 +28,15 @@ its renderer. Native views and all derived buffers expire even when the callback
 `FrameSnapshot` when retention or sharing is needed. Consumer exceptions retire the frame and
 propagate without failing the renderer; device/provenance failures fail closed.
 
-All four public retained-scene stages can be replaced. The retained scene ABI has one raygen,
-one public miss and one triangle hit group. An internal second miss entry performs bounded medium
-integration and ordered shadows through a mask-zero service dispatch, using ray recursion depth two.
-Custom raygen/miss/hit replacements retain their original group indices within their SBT regions.
-Arbitrary shader groups, callable/procedural RT, recursion,
-graphics, compute, descriptor sets, textures and samplers remain available through the explicit
-command API. Those capabilities use the same versioned resources, ownership and evidence model.
+All four public retained-scene stages can be replaced. Built-in medium transport uses
+ray-generation control and dedicated lightweight visibility hit/miss stages instead of the
+6.x nested miss computation service. Custom scene stages and explicit command pipelines use
+the 7.0.0 shader contracts; no automatic 6.x shader or payload translation is provided.
+Arbitrary shader groups, callable/procedural RT, graphics, compute, descriptor sets, textures
+and samplers remain available through the explicit command API.
 
-The Java API/provider SPI major is 6. The removed entry points and pixel methods have no
-compatibility aliases. Versioned historical quality reports describe their original candidates.
+The Java API/provider SPI major is 7. Historical ABI baselines and quality reports describe
+their original versions and are not compatibility adapters for the current implementation.
 
 ## Contract Shape
 

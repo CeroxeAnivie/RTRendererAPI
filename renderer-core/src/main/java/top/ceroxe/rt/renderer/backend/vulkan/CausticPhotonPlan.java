@@ -1,0 +1,83 @@
+package top.ceroxe.rt.renderer.backend.vulkan;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.List;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.*;
+import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
+import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
+
+/** Immutable CPU publication for one bounded, frame-slot-owned surface photon map. */
+final class CausticPhotonPlan {
+    static final int HEADER_WORDS = 16, EMITTER_WORDS = 36, RECORD_WORDS = 16;
+    static final CausticPhotonPlan DISABLED = new CausticPhotonPlan(0, List.of());
+    record Emitter(int slot, int[] media) {
+        Emitter {
+            media = media.clone();
+            if (media.length > 32) throw new IllegalArgumentException("photon emitter exceeds 32 media");
+        }
+    }
+    private final int photons, hashCapacity, headsWord, recordsWord;
+    private final long bytes;
+    private final byte[] header;
+
+    CausticPhotonPlan(int requestedPhotons, List<Emitter> emitters) {
+        photons = emitters.isEmpty() ? 0 : requestedPhotons;
+        if (photons == 0) {
+            hashCapacity = headsWord = recordsWord = 0; bytes = 0; header = new byte[0]; return;
+        }
+        if (photons < 0 || photons > top.ceroxe.rt.renderer.api.Caustics.MAX_PHOTONS)
+            throw new IllegalArgumentException("invalid photon count");
+        hashCapacity = Integer.highestOneBit(photons * 2 - 1) << 1;
+        headsWord = Math.addExact(HEADER_WORDS, Math.multiplyExact(emitters.size(), EMITTER_WORDS));
+        recordsWord = Math.addExact(headsWord, hashCapacity);
+        bytes = Math.multiplyExact((long) recordsWord + (long) photons * RECORD_WORDS, 4);
+        var data = ByteBuffer.allocate(headsWord * 4).order(ByteOrder.LITTLE_ENDIAN);
+        data.putInt(0, emitters.size()).putInt(4, headsWord).putInt(8, recordsWord)
+                .putInt(12, hashCapacity - 1).putInt(16, photons);
+        for (int i = 0; i < emitters.size(); i++) {
+            Emitter emitter = emitters.get(i);
+            int offset = (HEADER_WORDS + i * EMITTER_WORDS) * 4;
+            data.putInt(offset, emitter.slot).putInt(offset + 4, emitter.media.length);
+            for (int j = 0; j < emitter.media.length; j++) data.putInt(offset + 8 + j * 4, emitter.media[j]);
+        }
+        header = data.array();
+    }
+
+    int photons() { return photons; }
+    long bytes() { return bytes; }
+    int hashCapacity() { return hashCapacity; }
+    int headsWord() { return headsWord; }
+    int recordsWord() { return recordsWord; }
+
+    void record(VkCommandBuffer command, MemoryStack stack, RtGpuBuffer buffer,
+            GpuSceneRayTracingPipeline pipeline, int slot) {
+        if (photons == 0) return;
+        // UpdateBuffer's limit is 64 KiB per command. The emitter table can exceed it.
+        for (int offset = 0; offset < header.length; offset += 16384) {
+            int count = Math.min(16384, header.length - offset);
+            try (var temporary = MemoryStack.stackPush()) {
+                var block = temporary.malloc(count);
+                block.put(header, offset, count).flip();
+                VK10.vkCmdUpdateBuffer(command, buffer.buffer(), offset, block);
+            }
+        }
+        VK10.vkCmdFillBuffer(command, buffer.buffer(), headsWord * 4L, hashCapacity * 4L, -1);
+        barrier(command, stack, VK10.VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK10.VK_ACCESS_SHADER_READ_BIT | VK10.VK_ACCESS_SHADER_WRITE_BIT,
+                VK10.VK_PIPELINE_STAGE_TRANSFER_BIT, KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+        // Keep both launch axes bounded; the shader discards the final row's surplus invocations.
+        pipeline.recordTrace(command, stack, slot, Math.min(photons, 1024), (photons + 1023) / 1024);
+        barrier(command, stack, VK10.VK_ACCESS_SHADER_WRITE_BIT, VK10.VK_ACCESS_SHADER_READ_BIT,
+                KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+    }
+
+    private static void barrier(VkCommandBuffer command, MemoryStack stack, int sourceAccess,
+            int destinationAccess, int sourceStage, int destinationStage) {
+        var memory = VkMemoryBarrier.calloc(1, stack).sType$Default()
+                .srcAccessMask(sourceAccess).dstAccessMask(destinationAccess);
+        VK10.vkCmdPipelineBarrier(command, sourceStage, destinationStage, 0, memory, null, null);
+    }
+}

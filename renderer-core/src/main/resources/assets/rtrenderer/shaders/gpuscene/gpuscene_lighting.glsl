@@ -62,13 +62,14 @@ GsRadianceSplit gsDirectContribution(
     if (dot(normal, lightDirection) <= 0.0 || max(max(radiance.r, radiance.g), radiance.b) <= 0.0) {
         return gsRadianceSplit(vec3(0.0), vec3(0.0));
     }
-    vec3 visibility = castsShadow
-        ? gsShadowTransmittance(position, normal, lightDirection, maximumDistance) : vec3(1.0);
+    GsShadowVisibility visibility = castsShadow
+        ? gsShadowVisibility(position, normal, lightDirection, maximumDistance, true)
+        : GsShadowVisibility(vec3(1.0), vec3(1.0));
     GsRadianceSplit result = gsEvaluateBrdf(
         normal, view, lightDirection, baseColor, roughness, metallic
     );
-    result.diffuse *= radiance * visibility;
-    result.specular *= radiance * visibility;
+    result.diffuse *= radiance * visibility.diffuse;
+    result.specular *= radiance * visibility.approximate;
     // Direct-light NRD hitT is the distance to the selected light. It deliberately excludes the
     // camera-to-primary segment, which is never a valid REBLUR hit distance.
     result.diffuseHitDistance = maximumDistance;
@@ -169,6 +170,9 @@ GsRadianceSplit gsEvaluatePbrSurface(GpuScenePayload surfaceSample, vec3 rayOrig
         );
         gsAccumulateRadianceSplit(radiance, light);
     }
+#ifdef RTRENDERER_CAUSTICS
+    radiance.diffuse += gsGatherCaustics(surfaceSample, view);
+#endif
     gsFinalizeRadianceHitDistances(radiance);
     return radiance;
 }

@@ -54,6 +54,9 @@ final class RtShaderModuleCompiler {
     private static long sceneShaderMemoryBytes;
     private static final ConcurrentMap<String, CompletableFuture<byte[]>> SCENE_SHADER_IN_FLIGHT =
             new ConcurrentHashMap<>();
+    // The set of bundled stage/variant resources is fixed for this class loader. Reopening a
+    // renderer must not decompress and validate the same pinned binary for every pipeline.
+    private static final ConcurrentMap<String, byte[]> PINNED_SPIRV = new ConcurrentHashMap<>();
 
     private RtShaderModuleCompiler() {
     }
@@ -180,16 +183,22 @@ final class RtShaderModuleCompiler {
                 + (shaderExecutionReorderingEnabled ? "-ser" : "");
         String file = normalized.substring(shaderRoot.length()).replace('/', '_') + ".spv";
         String spirvPath = shaderRoot + "spv/" + variant + "/" + file;
-        byte[] spirv = readBinaryResource(spirvPath);
-        if (spirv.length == 0 || (spirv.length & 3) != 0
-                || ByteBuffer.wrap(spirv).order(ByteOrder.LITTLE_ENDIAN).getInt() != 0x07230203) {
-            throw new IllegalStateException("invalid precompiled SPIR-V resource: " + spirvPath);
-        }
-        return spirv;
+        return PINNED_SPIRV.computeIfAbsent(spirvPath, path -> {
+            byte[] spirv = readBinaryResource(path);
+            if (spirv.length == 0 || (spirv.length & 3) != 0
+                    || ByteBuffer.wrap(spirv).order(ByteOrder.LITTLE_ENDIAN).getInt() != SPIRV_MAGIC) {
+                throw new IllegalStateException("invalid precompiled SPIR-V resource: " + path);
+            }
+            return spirv;
+        }).clone();
     }
 
     static byte[] compileForDiagnosticVerification(String resourcePath, int shaderKind) {
         return compile(resourcePath, shaderKind, true, false, false, RtEdgeSink.NOOP);
+    }
+
+    static boolean usesDiagnosticGBuffer(String resourcePath) {
+        return readExpandedUtf8Resource(resourcePath).contains("RTRENDERER_GBUFFER");
     }
 
     private static byte[] compile(
@@ -285,7 +294,7 @@ final class RtShaderModuleCompiler {
     ) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            digest.update("rtrenderer-scene-spirv-v3-vulkan1.2-performance\0".getBytes(StandardCharsets.UTF_8));
+            digest.update("rtrenderer-scene-spirv-v4-vulkan1.2-structured-volume\0".getBytes(StandardCharsets.UTF_8));
             digest.update(org.lwjgl.Version.getVersion().getBytes(StandardCharsets.UTF_8));
             digest.update((byte) 0);
             digest.update(path.getBytes(StandardCharsets.UTF_8));
@@ -394,9 +403,12 @@ final class RtShaderModuleCompiler {
                     Shaderc.shaderc_target_env_vulkan,
                     Shaderc.shaderc_env_version_vulkan_1_2
             );
-            Shaderc.shaderc_compile_options_set_optimization_level(
-                    options, Shaderc.shaderc_optimization_level_performance
-            );
+            // Exhaustive inlining of the extended volume/light call tree exhausts shaderc's
+            // ID/memory budget and can fail in native optimization. Preserve its function
+            // structure for the Vulkan driver's compiler; sampling and transport stay intact.
+            boolean structuredVolume = source.contains("#define RTRENDERER_VOLUME_TRANSPORT");
+            Shaderc.shaderc_compile_options_set_optimization_level(options, structuredVolume
+                    ? Shaderc.shaderc_optimization_level_zero : Shaderc.shaderc_optimization_level_performance);
             boolean disableDynamicAnalyticLoop = "assets/rtrenderer/shaders/bootstrap.rgen".equals(resourcePath)
                     && edges.enabled()
                     && Boolean.getBoolean(DISABLE_DYNAMIC_ANALYTIC_LOOP_PROPERTY);

@@ -20,7 +20,7 @@ public final class PrimitiveInstance {
     private final float surfaceVisibility;
     private final int packedLight;
     private final InstanceRenderState renderState;
-    private final MediumBoundaryState mediumBoundary;
+    private final MediumBoundary mediumBoundary;
 
     private PrimitiveInstance(Builder builder) {
         MaterialAsset.requireId(builder.meshAssetId, "meshAssetId");
@@ -118,7 +118,7 @@ public final class PrimitiveInstance {
     public InstanceRenderState renderState() { return renderState; }
 
     /** Returns the optional frame-local volume boundary. */
-    public java.util.Optional<MediumBoundaryState> mediumBoundary() { return java.util.Optional.ofNullable(mediumBoundary); }
+    public java.util.Optional<MediumBoundary> mediumBoundary() { return java.util.Optional.ofNullable(mediumBoundary); }
 
     /**
      * Copies this primitive into an independent builder.
@@ -170,7 +170,7 @@ public final class PrimitiveInstance {
         private float surfaceVisibility = 1.0F;
         private int packedLight = SceneInstance.FULL_BRIGHT_PACKED_LIGHT;
         private InstanceRenderState renderState = InstanceRenderState.defaults();
-        private MediumBoundaryState mediumBoundary;
+        private MediumBoundary mediumBoundary;
 
         private Builder(long meshAssetId) {
             MaterialAsset.requireId(meshAssetId, "meshAssetId");
@@ -200,7 +200,7 @@ public final class PrimitiveInstance {
         }
 
         /** Selects the medium bounded by this frame-local closed mesh. */
-        public Builder mediumBoundary(MediumBoundaryState value) { mediumBoundary=Objects.requireNonNull(value); return this; }
+        public Builder mediumBoundary(MediumBoundary value) { mediumBoundary=Objects.requireNonNull(value); return this; }
         /** Removes the primitive's boundary role. */
         public Builder clearMediumBoundary() { mediumBoundary=null; return this; }
 

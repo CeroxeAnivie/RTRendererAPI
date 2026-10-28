@@ -46,6 +46,7 @@ final class TemporalHistoryTracker {
     private static boolean sameShadingState(RenderFrameRequest first, RenderFrameRequest second) {
         return first.environment().equals(second.environment())
                 && first.mediumTransport().equals(second.mediumTransport())
+                && first.caustics().equals(second.caustics())
                 && first.lightmap().revision() == second.lightmap().revision()
                 && first.fog().equals(second.fog())
                 && first.textureSampling().equals(second.textureSampling())
@@ -59,6 +60,7 @@ final class TemporalHistoryTracker {
         // Boundary motion changes indirect light and volume shadows beyond its own pixels.
         // Ordinary frame-local geometry keeps the established per-pixel history contract.
         if (before == after) return true;
+        if (first.caustics().enabled() || second.caustics().enabled()) return before.equals(after);
         var beforeIndices = before.mediumBoundaryIndices();
         var afterIndices = after.mediumBoundaryIndices();
         if (!beforeIndices.equals(afterIndices)) return false;
@@ -153,6 +155,8 @@ final class TemporalHistoryTracker {
     void sceneApplied(VulkanSceneResidency.SceneChangeSet changes) {
         VulkanSceneResidency.SceneChangeSet checked = Objects.requireNonNull(changes, "changes");
         if (!enabled) return;
+        if (sourceFrame != null && sourceFrame.caustics().enabled() && changed(checked.instances()))
+            pendingSceneInvalidations.add(HistoryInvalidationReason.SCENE_CONTENT_CHANGED);
         boolean staticInstanceHistoryChanged = updateInstanceMobility(checked);
         if (checked.reset() || changed(checked.meshes()) || staticInstanceHistoryChanged) {
             pendingSceneInvalidations.add(HistoryInvalidationReason.SCENE_TOPOLOGY_CHANGED);

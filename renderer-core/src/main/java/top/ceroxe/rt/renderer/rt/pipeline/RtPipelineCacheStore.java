@@ -21,6 +21,7 @@ final class RtPipelineCacheStore {
     private final Path file;
     private final RtPipelineCache.DeviceIdentity identity;
     private final Policy policy;
+    private volatile PersistedEntry persisted;
 
     record Policy(long maxEntryBytes,long maxDirectoryBytes,int maxEntries) {
         Policy {
@@ -66,6 +67,7 @@ final class RtPipelineCacheStore {
     }
 
     byte[] read() {
+        persisted=null;
         if(!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS)) return new byte[0];
         try(var input=Files.newInputStream(file,LinkOption.NOFOLLOW_LINKS)) {
             byte[] header=input.readNBytes(HEADER_BYTES);
@@ -81,6 +83,7 @@ final class RtPipelineCacheStore {
                 return invalid("checksum or driver identity mismatch");
             try {Files.setLastModifiedTime(file,FileTime.fromMillis(System.currentTimeMillis()));}
             catch(IOException ignored) { /* Read-only caches remain usable. */ }
+            remember(checksum,HEADER_BYTES+(long)data.length);
             RendererLog.debug("Pipeline cache hit: {} bytes from {}",data.length,file);
             return data;
         } catch(IOException failure) {
@@ -103,17 +106,20 @@ final class RtPipelineCacheStore {
             warn("Pipeline cache not persisted: invalid driver header for {}",file);
             return;
         }
+        byte[] checksum=sha256().digest(data);
         synchronized(WRITE_LOCK) {
             Path temporary=null;
             try {
+                if(unchanged(checksum,HEADER_BYTES+(long)data.length)) return;
                 Files.createDirectories(file.getParent());
                 temporary=Files.createTempFile(file.getParent(),file.getFileName()+".",".tmp");
                 byte[] header=ByteBuffer.allocate(HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN)
-                        .putLong(MAGIC).putInt(FORMAT).putInt(data.length).put(sha256().digest(data)).array();
+                        .putLong(MAGIC).putInt(FORMAT).putInt(data.length).put(checksum).array();
                 try(var output=Files.newOutputStream(temporary)) {output.write(header);output.write(data);}
                 try {Files.move(temporary,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
                 catch(AtomicMoveNotSupportedException unsupported) {Files.move(temporary,file,StandardCopyOption.REPLACE_EXISTING);}
                 temporary=null;
+                remember(checksum,HEADER_BYTES+(long)data.length);
                 prune();
                 RendererLog.debug("Pipeline cache persisted: {} bytes to {}",data.length,file);
             } catch(IOException failure) {
@@ -123,6 +129,22 @@ final class RtPipelineCacheStore {
             }
         }
     }
+
+    private boolean unchanged(byte[] checksum,long length) throws IOException {
+        PersistedEntry known=persisted;
+        return known!=null && known.length==length && MessageDigest.isEqual(known.checksum,checksum)
+                && Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS) && Files.size(file)==length
+                && Files.getLastModifiedTime(file,LinkOption.NOFOLLOW_LINKS).equals(known.modified);
+    }
+
+    private void remember(byte[] checksum,long length) {
+        try {
+            persisted=Files.size(file)==length
+                    ?new PersistedEntry(checksum,length,Files.getLastModifiedTime(file,LinkOption.NOFOLLOW_LINKS)):null;
+        } catch(IOException ignored) {persisted=null;}
+    }
+
+    private record PersistedEntry(byte[] checksum,long length,FileTime modified) {}
 
     private void prune() throws IOException {
         var entries=new ArrayList<Entry>();

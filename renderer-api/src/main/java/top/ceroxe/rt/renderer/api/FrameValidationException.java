@@ -29,7 +29,11 @@ public final class FrameValidationException extends RendererException {
         /** Camera containment exceeds the documented bounded medium-path capacity. */
         MEDIUM_NESTING_EXCEEDS_LIMIT,
         /** A frame-local medium boundary references missing or non-closed geometry. */
-        INVALID_MEDIUM_BOUNDARY
+        INVALID_MEDIUM_BOUNDARY,
+        /** The caustic policy is incompatible with the scene or the selected shader program. */
+        INVALID_CAUSTICS,
+        /** A medium density grid references a missing texture or an invalid linear slice atlas. */
+        INVALID_MEDIUM_DENSITY
     }
 
     /**

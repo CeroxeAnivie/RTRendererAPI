@@ -19,7 +19,7 @@ public final class ProgrammableSceneDemo {
                 #version 460
                 #extension GL_EXT_ray_tracing : require
                 layout(set=0,binding=1,rgba16f) uniform writeonly image2D outputImage;
-                layout(set=0,binding=33,std430) readonly buffer Parameters { vec4 radiance; } parameters;
+                layout(set=0,binding=34,std430) readonly buffer Parameters { vec4 radiance; } parameters;
                 void main() { imageStore(outputImage,ivec2(gl_LaunchIDEXT.xy),parameters.radiance); }
                 """;
         var shaders = SceneShaderProgram.builder().shader(ShaderStage.RAY_GENERATION, raygen)

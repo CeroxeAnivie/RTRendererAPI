@@ -12,10 +12,10 @@ import java.util.Objects;
  */
 public interface RendererBackendProvider {
     /**
-     * Major SPI contract version required by {@code renderer-api}.
+     * Major renderer contract required by {@code renderer-api}. Providers must implement
+     * this same breaking-release line.
      */
-    /** Major renderer contract. Providers must implement the same breaking-release line. */
-    int API_MAJOR = 6;
+    int API_MAJOR = 7;
 
     /** Highest minor SPI contract this host can consume without a provider upgrade. */
     int API_MINOR = 0;

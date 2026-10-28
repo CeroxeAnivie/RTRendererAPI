@@ -15,7 +15,7 @@
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=1"
 .\gradlew.bat :demos:hex-ball:shadowJar
 .\gradlew.bat :demos:hex-ball:programmableSceneDemo
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.3.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
   --width=2560 --height=1440 --spp=1
 ```
 
@@ -38,15 +38,15 @@ provider presentation path；仅提出配置请求不构成证据。每个进程
 
 ```powershell
 ## 原生基线
-java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.3.jar `
+java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
   --width=2560 --height=1440 --spp=1 --duration-seconds=90
 
 ## FG 2x
-java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.3.jar `
+java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
   --width=2560 --height=1440 --spp=1 --duration-seconds=90
 
 ## MFG 3x
-java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-6.0.3.jar `
+java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
   --width=2560 --height=1440 --spp=1 --duration-seconds=90
 ```
 
@@ -95,5 +95,9 @@ with separate SDR/HDR raygen selection, GLSL fallback and the same immutable-buf
 density, IOR, HG anisotropy, surface transmission/roughness, signed overlap priority, nested glass,
 camera-inside mode, inward winding, invisible volume boundaries and persistent/frame-local lanes.
 Interface events, optical samples, scattering intervals and maximum distance apply at the next
-frame boundary. The default is 1 SPP with balanced transport quality. See [6.0.3](../../docs/6.0.3.md)
+frame boundary. The default is 1 SPP with balanced transport quality. See [6.0.4](../../docs/6.0.4.md)
 for physical scope, quality limits and shader ABI details.
+
+## 7.0.0 介质展厅
+
+使用可执行包的 `--medium-gallery` 入口，或 Gradle 的 `mediumGalleryDemo` 任务。默认原生 2560×1440、1 spp、请求 2× FG，提供完整单场景和逐项开关；参见[场景与命令](../../docs/medium-gallery.md)。`mediumGallerySceneSelfTest` 仅执行 CPU fixture 检查；`mediumGalleryNativeSelfTest` 会执行 GPU 工作，当前未运行。

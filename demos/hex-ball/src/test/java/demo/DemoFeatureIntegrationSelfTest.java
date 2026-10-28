@@ -50,8 +50,9 @@ public final class DemoFeatureIntegrationSelfTest {
                     "--api.frameGeneration.multiplier=THREE_X", "--api.frameGeneration.fallback=NONE",
                     "--api.temporalRendering.mode=ACCUMULATING", "--api.temporalRendering.maxHistoryFrames=16",
                     "--frame.environment.sunRadiance=0.2,0.4,0.6", "--frame.fog.opacity=0.5",
-                    "--frame.mediumTransport.scatteringSteps=16", "--frame.mediumTransport.maxInterfaceEvents=20",
-                    "--frame.environment.cameraMedium.phaseAnisotropy=0.6", "--frame.environment.cameraMedium.emission=0.1,0.2,0.3"});
+                    "--frame.mediumTransport.scatteringSteps=16", "--frame.mediumTransport.maxEvents=20",
+                    "--frame.environment.cameraMedium.anisotropy=0.6", "--frame.environment.cameraMedium.emission=0.1,0.2,0.3",
+                    "--frame.environment.cameraMedium.scattering.red=0.25"});
             require(java.util.Arrays.equals(remaining, new String[]{"--width=640"}), "controls consumed ordinary arguments");
             var config = DemoApiControls.configure(RendererConfig.presentation());
             require(config.frameGeneration().multiplier() == FrameGenerationOptions.Multiplier.THREE_X
@@ -61,10 +62,19 @@ public final class DemoFeatureIntegrationSelfTest {
             var frame = DemoApiControls.frame(DemoRendererProfile.frame(0, 640, 360,
                     DemoRendererProfile.camera(640, 360, 15.4)).build());
             require(frame.fog().opacity() == 0.5f, "frame policy was not applied");
-            require(frame.mediumTransport().scatteringSteps()==16 && frame.mediumTransport().maxInterfaceEvents()==20,
+            require(frame.mediumTransport().scatteringSteps()==16 && frame.mediumTransport().maxEvents()==20,
                     "new transport options must be independently editable");
-            require(frame.environment().cameraMedium().phaseAnisotropy()==.6f
-                    && frame.environment().cameraMedium().emissionBlue()==.3f,"medium controls must reach real frame values");
+            require(frame.environment().cameraMedium().anisotropy()==.6f
+                    && frame.environment().cameraMedium().emission().blue()==.3f
+                    && frame.environment().cameraMedium().scattering().red()==.25f,
+                    "medium records and nested RGB controls must reach real frame values");
+            DemoApiControls.parse(new String[]{"--frame.environment.cameraMedium.emission=0.1,0.2,0.3",
+                    "--frame.environment.cameraMedium.emission.red=0.5"});
+            try { DemoApiControls.frame(frame); throw new AssertionError("ambiguous RGB overrides accepted"); }
+            catch (IllegalArgumentException expected) { }
+            DemoApiControls.parse(new String[]{"--frame.mediumTransport.unknownBudget=4"});
+            try { DemoApiControls.frame(frame); throw new AssertionError("unknown record control accepted"); }
+            catch (IllegalArgumentException expected) { }
             DemoApiControls.parse(new String[]{"--api.frameGeneration.preference=REQUIRED"});
             try { DemoApiControls.configure(RendererConfig.presentation()); throw new AssertionError("invalid fallback hidden"); }
             catch (IllegalArgumentException expected) { }
@@ -113,8 +123,13 @@ public final class DemoFeatureIntegrationSelfTest {
                 "the GPU benchmark must not allocate CPU readback frames");
         require(benchmark.temporalRendering().equals(TemporalRenderingOptions.disabled()),
                 "the non-presenting benchmark must keep temporal reconstruction disabled");
-        require(benchmark.frameGeneration().equals(FrameGenerationOptions.recommended()),
-                "the benchmark must retain the managed preset's 2x generation policy");
+        require(benchmark.frameGeneration().equals(FrameGenerationOptions.disabled()),
+                "the headless native-frame benchmark must disable generation");
+        require(benchmark.denoising().equals(top.ceroxe.rt.renderer.api.DenoisingOptions.disabled())
+                && benchmark.frameReconstruction().equals(top.ceroxe.rt.renderer.api.FrameReconstructionOptions.disabled())
+                && benchmark.lowLatency().equals(top.ceroxe.rt.renderer.api.LowLatencyOptions.disabled())
+                && benchmark.rayTracingOptimizations().equals(top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions.disabled()),
+                "the benchmark workload must use explicit fixed feature policies");
     }
 
     private static void acceptsExplicitUncappedTargetFps() {

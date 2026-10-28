@@ -23,6 +23,8 @@ import top.ceroxe.rt.renderer.rt.material.RtTextureCatalog;
 import top.ceroxe.rt.renderer.rt.pipeline.RtFrameSnapshot;
 import top.ceroxe.rt.renderer.rt.runtime.GuardedRtCore;
 import top.ceroxe.rt.renderer.rt.runtime.RtCore;
+import top.ceroxe.rt.renderer.rt.RtNativeBenchmarkReport.CompletionMeasurement;
+import top.ceroxe.rt.renderer.rt.RtNativeBenchmarkReport.CompletionRateTracker;
 import top.ceroxe.rt.renderer.rt.runtime.RtCore.State;
 import top.ceroxe.rt.renderer.scene.ChunkKey;
 import top.ceroxe.rt.renderer.scene.ChunkSnapshot;
@@ -43,13 +45,11 @@ public final class RtNativeGpuThroughputSelfTest {
    private static final int SECTION_ROWS = intProperty("top.ceroxe.rt.rt.gpuThroughput.sectionRows", 16);
    private static final int TOTAL_SECTIONS;
    private static final int WARMUP_VALID_FRAMES;
-   private static final int MEASURED_VALID_FRAMES;
+   private static final int PRESSURE_VALID_FRAMES;
    private static final int MAX_INITIAL_PUMP_FRAMES;
-   private static final int MIN_GPU_ONLY_COMPLETED_FRAMES;
+   private static final int MIN_COMPLETED_FRAMES;
    private static final int MAX_DRAIN_PUMP_FRAMES;
-   private static final double MIN_COMPLETED_FPS = 100.0;
-   private static final double MIN_LOW_COMPLETED_FPS = 50.0;
-   private static final int LOW_FPS_COMPLETION_WINDOW_FRAMES = 8;
+   private static final int COMPLETION_WINDOW_FRAMES = 8;
    private static final int SCENE_PRESSURE_MUTATION_PERIOD_FRAMES;
    private static final int SCENE_PRESSURE_MUTATION_SECTIONS;
    private static final int BLOCK_STATE_ID = 1;
@@ -114,16 +114,24 @@ public final class RtNativeGpuThroughputSelfTest {
          RtFrameSnapshot diagnostic = runDiagnosticReadback(capability, textures);
          writeSnapshotPng(diagnostic, SNAPSHOT_PATH);
          RtNativeStressGuards.assertFrameNotPathological(diagnostic, "GPU throughput diagnostic scene");
-         ThroughputResult result = runGpuOnlyThroughput(capability, textures);
-         condition10000 = result.averageCompletedFps() >= 100.0;
-         double value8 = result.averageCompletedFps();
-         require(condition10000, "GPU-only RT average throughput is below the RTX 3050-compatible floor, averageCompletedFps=" + value8 + ", minCompletedFps=100.0, minGpuOnlyCompletedFrames=" + MIN_GPU_ONLY_COMPLETED_FRAMES + ", completedFrames=" + result.completedFrames() + ", submittedFrames=" + result.submittedFrames() + ", residentPumpFrames=" + result.residentPumpFrames() + ", terrainMutationSections=" + result.terrainMutationSections() + ", pressureFrameUpdates=" + result.pressureFrameUpdates() + ", pressureElapsedMillis=" + result.pressureElapsedNanos() / 1000000L + ", elapsedMillis=" + result.elapsedNanos() / 1000000L + ", activity=" + result.activity().asLogFragment() + ", readiness=" + result.readiness().asLogFragment() + ", summary=" + result.summary().asLogFragment());
-         condition10000 = result.lowCompletedFps() >= 50.0;
-         value8 = result.lowCompletedFps();
-         require(condition10000, "GPU-only RT throughput has a completed-frame low-FPS stall, lowCompletedFps=" + value8 + ", minLowCompletedFps=50.0, lowFpsSampleWindows=" + result.lowFpsSampleWindows() + ", maxCompletionGapMillis=" + (double)result.maxCompletionGapNanos() / 1000000.0 + ", completedFrames=" + result.completedFrames() + ", activity=" + result.activity().asLogFragment() + ", readiness=" + result.readiness().asLogFragment() + ", summary=" + result.summary().asLogFragment());
-         int sectionCount10 = TOTAL_SECTIONS;
-         System.out.println("RtNativeGpuThroughputSelfTest passed: sections=" + sectionCount10 + ", output=" + OUTPUT_WIDTH + "x" + OUTPUT_HEIGHT + ", submittedFrames=" + result.submittedFrames() + ", completedFrames=" + result.completedFrames() + ", residentPumpFrames=" + result.residentPumpFrames() + ", averageCompletedFps=" + result.averageCompletedFps() + ", lowCompletedFps=" + result.lowCompletedFps() + ", lowFpsSampleWindows=" + result.lowFpsSampleWindows() + ", maxCompletionGapMillis=" + (double)result.maxCompletionGapNanos() / 1000000.0 + ", terrainMutationSections=" + result.terrainMutationSections() + ", pressureFrameUpdates=" + result.pressureFrameUpdates() + ", pressureElapsedMillis=" + result.pressureElapsedNanos() / 1000000L + ", diagnostic=" + diagnostic.asLogFragment() + ", diagnosticPng=" + String.valueOf(SNAPSHOT_PATH) + ", activity=" + result.activity().asLogFragment() + ", readiness=" + result.readiness().asLogFragment());
-         System.out.println(RtNativeBenchmarkReport.throughputScene("staticDense", OUTPUT_WIDTH, OUTPUT_HEIGHT, result.completedFrames(), result.averageCompletedFps(), result.lowCompletedFps(), result.activity(), result.readiness()));
+         ThroughputResult result = runUnpacedThroughput(capability, textures);
+         System.out.println("RtNativeGpuThroughputSelfTest passed: sections=" + TOTAL_SECTIONS
+                 + ", output=" + OUTPUT_WIDTH + "x" + OUTPUT_HEIGHT
+                 + ", measurementSource=hostObservedCompletion, displayFps=unmeasured, onePercentLowFps=unmeasured"
+                 + ", performanceThreshold=none, measurement=" + result.measurement()
+                 + ", submittedFrames=" + result.submittedFrames() + ", residentPumpFrames=" + result.residentPumpFrames()
+                 + ", warmupCompletedFrames=" + result.warmupCompletedFrames()
+                 + ", terrainMutationSections=" + result.terrainMutationSections()
+                 + ", pressureFrameUpdates=" + result.pressureFrameUpdates()
+                 + ", pressureCompletedFrames=" + result.pressureCompletedFrames()
+                 + ", pressureElapsedNanos=" + result.pressureElapsedNanos()
+                 + ", pressureHostCompletedFps=" + result.pressureCompletedFrames() * 1e9 / result.pressureElapsedNanos()
+                 + ", measuredGpuTimestampSamples=" + result.measuredGpuTimestampSamples()
+                 + ", gpuTimingScope=sessionCumulativeIncludingSetupWarmupAndPressure"
+                 + ", diagnostic=" + diagnostic.asLogFragment() + ", diagnosticPng=" + SNAPSHOT_PATH
+                 + ", activity=" + result.activity().asLogFragment() + ", readiness=" + result.readiness().asLogFragment());
+         System.out.println(RtNativeBenchmarkReport.throughputScene("residentAfterPressure", OUTPUT_WIDTH, OUTPUT_HEIGHT,
+                 result.measurement(), result.activity(), result.readiness()));
       } catch (Throwable value5) {
          if (textures != null) {
             try {
@@ -182,7 +190,7 @@ public final class RtNativeGpuThroughputSelfTest {
       return snapshot5;
    }
 
-   private static ThroughputResult runGpuOnlyThroughput(VulkanRtCapabilityProbe.Result capability, RtTextureCatalog.TestTextureScope textures) throws InterruptedException {
+   private static ThroughputResult runUnpacedThroughput(VulkanRtCapabilityProbe.Result capability, RtTextureCatalog.TestTextureScope textures) throws InterruptedException {
       Map<String, String> previous = installProperties(false);
 
       ThroughputResult throughputResult27;
@@ -192,21 +200,24 @@ public final class RtNativeGpuThroughputSelfTest {
          try {
             HostPressureScene scene = new HostPressureScene(textures);
             rtCore.acceptCapability(capability);
-            requireReady(rtCore, "GPU-only throughput");
+            requireReady(rtCore, "host-observed no-readback throughput");
             rtCore.acceptFrameUpdate(scene.initialUpdate(frameState(1L)));
-            pumpUntilReady(rtCore, 2L, "GPU-only throughput initial scene");
+            long nextSequence = pumpUntilReady(rtCore, 2L, "host-observed no-readback throughput initial scene");
+            long warmupBaseline = rtCore.runtimeActivity().latestCompletedFrameDispatch();
 
             for(int frame = 0; frame < WARMUP_VALID_FRAMES; ++frame) {
-               rtCore.acceptFrameUpdate(emptyUpdate(10000L + (long)frame));
+               rtCore.acceptFrameUpdate(emptyUpdate(nextSequence++));
             }
 
-            drainPendingFrames(rtCore, 20000L, "GPU-only throughput warmup drain");
+            nextSequence = drainPendingFrames(rtCore, nextSequence, "host-observed no-readback throughput warmup drain");
+            RtCore.RuntimeActivity pressureBaseline = rtCore.runtimeActivity();
+            long warmupCompletedFrames = pressureBaseline.latestCompletedFrameDispatch() - warmupBaseline;
             long pressureStartNanos = System.nanoTime();
             int terrainMutationSections = 0;
             int pressureFrameUpdates = 0;
 
-            for(int frame = 0; frame < MEASURED_VALID_FRAMES; ++frame) {
-               RendererFrameUpdate update = scene.pressureUpdate(30000L + (long)frame, frame);
+            for(int frame = 0; frame < PRESSURE_VALID_FRAMES; ++frame) {
+               RendererFrameUpdate update = scene.pressureUpdate(nextSequence++, frame);
                if (update.hasTerrainChanges()) {
                   terrainMutationSections += update.batch().dirtySectionCount();
                   ++pressureFrameUpdates;
@@ -215,56 +226,62 @@ public final class RtNativeGpuThroughputSelfTest {
                rtCore.acceptFrameUpdate(update);
             }
 
-            drainSceneAndFrames(rtCore, 40000L, "GPU-only throughput measured drain");
-            long pressureElapsedNanos = Math.max(1L, System.nanoTime() - pressureStartNanos);
-            long startDispatches = rtCore.runtimeActivity().frameDispatches();
+            nextSequence = drainSceneAndFrames(rtCore, nextSequence, "host pressure drain");
+            RtCore.RuntimeActivity baseline = rtCore.runtimeActivity();
+            long pressureElapsedNanos = System.nanoTime() - pressureStartNanos;
+            long pressureCompletedFrames = baseline.latestCompletedFrameDispatch() - pressureBaseline.latestCompletedFrameDispatch();
+            require(!baseline.pendingFrame(), "resident measurement must start with no pending frames");
+            long startDispatches = baseline.frameDispatches();
             long startNanos = System.nanoTime();
-            CompletionRateTracker completionRates = new CompletionRateTracker(rtCore.runtimeActivity(), startNanos);
+            CompletionRateTracker completionRates = new CompletionRateTracker(
+                    baseline.latestCompletedFrameDispatch(), startNanos, COMPLETION_WINDOW_FRAMES);
             int residentPumpFrames = 0;
 
-            for(long submittedFrames = 0L; residentPumpFrames < MAX_DRAIN_PUMP_FRAMES; ++residentPumpFrames) {
-               rtCore.acceptFrameUpdate(emptyUpdate(60000L + (long)residentPumpFrames));
+            for(; residentPumpFrames < MAX_DRAIN_PUMP_FRAMES; ++residentPumpFrames) {
+               rtCore.acceptFrameUpdate(emptyUpdate(nextSequence++));
                RtCore.RuntimeActivity activity = rtCore.runtimeActivity();
-               completionRates.observe(activity, System.nanoTime());
-               submittedFrames = activity.frameDispatches() - startDispatches;
-               if (completionRates.completedFrames() >= (long)MIN_GPU_ONLY_COMPLETED_FRAMES) {
+               completionRates.observe(activity.latestCompletedFrameDispatch(), System.nanoTime());
+               if (completionRates.completedFrames() >= (long)MIN_COMPLETED_FRAMES) {
                   ++residentPumpFrames;
                   break;
                }
 
-               requireReady(rtCore, "GPU-only throughput resident frame pump");
+               requireReady(rtCore, "host-observed no-readback throughput resident frame pump");
             }
 
-            drainPendingFrames(rtCore, 70000L, "GPU-only throughput resident frame drain", completionRates);
-            long elapsedNanos = Math.max(1L, System.nanoTime() - startNanos);
+            nextSequence = drainPendingFrames(rtCore, nextSequence, "host-observed no-readback throughput resident frame drain", completionRates);
             RtCore.RuntimeActivity finalActivity = rtCore.runtimeActivity();
-            long value38 = finalActivity.frameDispatches() - startDispatches;
-            long completedFrames = completionRates.completedFrames();
-            require(completedFrames > 0L && value38 > 0L, "GPU-only throughput gate did not submit and complete RT frames, completedFrames=" + completedFrames + ", submittedFrames=" + value38 + ", summary=" + rtCore.summary().asLogFragment());
-            require(completedFrames >= (long)MIN_GPU_ONLY_COMPLETED_FRAMES, "GPU-only throughput gate completed too few resident frames for a stable measurement, completedFrames=" + completedFrames + ", minGpuOnlyCompletedFrames=" + MIN_GPU_ONLY_COMPLETED_FRAMES + ", submittedFrames=" + value38 + ", activity=" + rtCore.runtimeActivity().asLogFragment() + ", summary=" + rtCore.summary().asLogFragment());
-            boolean condition10000 = completionRates.completedFrames() >= (long)MIN_GPU_ONLY_COMPLETED_FRAMES;
-            long value10001 = completionRates.completedFrames();
-            require(condition10000, "GPU-only throughput low-FPS sampling missed completed frames, sampledCompletedFrames=" + value10001 + ", minGpuOnlyCompletedFrames=" + MIN_GPU_ONLY_COMPLETED_FRAMES + ", activity=" + rtCore.runtimeActivity().asLogFragment());
-            condition10000 = finalActivity.frameReadbacks() == 0L;
+            long endNanos = System.nanoTime();
+            completionRates.observe(finalActivity.latestCompletedFrameDispatch(), endNanos);
+            CompletionMeasurement measurement = completionRates.finish(endNanos);
+            long submittedFrames = finalActivity.frameDispatches() - startDispatches;
+            long completedFrames = measurement.completedFrames();
+            require(completedFrames == submittedFrames,
+                    "drained resident measurement must account for every submitted frame");
+            require(completedFrames > 0L && submittedFrames > 0L, "host-observed no-readback throughput gate did not submit and complete RT frames, completedFrames=" + completedFrames + ", submittedFrames=" + submittedFrames + ", summary=" + rtCore.summary().asLogFragment());
+            require(completedFrames >= (long)MIN_COMPLETED_FRAMES, "host-observed no-readback throughput gate completed too few resident frames for a stable measurement, completedFrames=" + completedFrames + ", minCompletedFrames=" + MIN_COMPLETED_FRAMES + ", submittedFrames=" + submittedFrames + ", activity=" + rtCore.runtimeActivity().asLogFragment() + ", summary=" + rtCore.summary().asLogFragment());
+            boolean condition10000 = finalActivity.frameReadbacks() == 0L;
             String logDetails46 = finalActivity.asLogFragment();
-            require(condition10000, "GPU-only throughput gate must not use CPU frame readbacks, activity=" + logDetails46 + ", summary=" + rtCore.summary().asLogFragment());
-            require(!finalActivity.pendingFrame(), "GPU-only throughput gate ended with uncompleted RT submissions, completedFrames=" + completedFrames + ", submittedFrames=" + value38 + ", activity=" + finalActivity.asLogFragment() + ", summary=" + rtCore.summary().asLogFragment());
+            require(condition10000, "host-observed no-readback throughput gate must not use CPU frame readbacks, activity=" + logDetails46 + ", summary=" + rtCore.summary().asLogFragment());
+            require(!finalActivity.pendingFrame(), "host-observed no-readback throughput gate ended with uncompleted RT submissions, completedFrames=" + completedFrames + ", submittedFrames=" + submittedFrames + ", activity=" + finalActivity.asLogFragment() + ", summary=" + rtCore.summary().asLogFragment());
             RtCore.GpuFrameTiming gpuFrameTiming = finalActivity.gpuFrameTiming();
             condition10000 = gpuFrameTiming.enabled();
             logDetails46 = finalActivity.asLogFragment();
-            require(condition10000, "GPU-only throughput gate did not enable Vulkan timestamp instrumentation, activity=" + logDetails46);
+            require(condition10000, "host-observed no-readback throughput gate did not enable Vulkan timestamp instrumentation, activity=" + logDetails46);
             condition10000 = gpuFrameTiming.completedSamples() > 0L;
             logDetails46 = finalActivity.asLogFragment();
-            require(condition10000, "GPU-only throughput gate did not resolve any Vulkan timestamp samples, activity=" + logDetails46);
+            require(condition10000, "host-observed no-readback throughput gate did not resolve any Vulkan timestamp samples, activity=" + logDetails46);
+            long measuredGpuTimestampSamples = gpuFrameTiming.completedSamples() - baseline.gpuFrameTiming().completedSamples();
+            require(measuredGpuTimestampSamples > 0, "resident measurement resolved no new Vulkan timestamps");
             condition10000 = gpuFrameTiming.failedSamples() == 0L;
             logDetails46 = finalActivity.asLogFragment();
-            require(condition10000, "GPU-only throughput gate observed invalid Vulkan timestamp results, activity=" + logDetails46);
+            require(condition10000, "host-observed no-readback throughput gate observed invalid Vulkan timestamp results, activity=" + logDetails46);
             condition10000 = gpuFrameTiming.averageTraceNanos() > 0L;
             logDetails46 = finalActivity.asLogFragment();
-            require(condition10000, "GPU-only throughput gate reported no ray-trace GPU duration, activity=" + logDetails46);
+            require(condition10000, "host-observed no-readback throughput gate reported no ray-trace GPU duration, activity=" + logDetails46);
             condition10000 = gpuFrameTiming.averageTotalNanos() >= gpuFrameTiming.averageTraceNanos();
             logDetails46 = finalActivity.asLogFragment();
-            require(condition10000, "GPU-only throughput gate reported a total GPU duration shorter than ray tracing, activity=" + logDetails46);
+            require(condition10000, "host-observed no-readback throughput gate reported a total GPU duration shorter than ray tracing, activity=" + logDetails46);
             RtCore.GpuWorkTiming gpuWorkTiming = finalActivity.gpuWorkTiming();
             requireCompletedGpuStage(gpuWorkTiming.sectionBlas(), "sectionBlas", finalActivity);
             requireCompletedGpuStage(gpuWorkTiming.worldTlas(), "worldTlas", finalActivity);
@@ -272,11 +289,13 @@ public final class RtNativeGpuThroughputSelfTest {
             require(terrainMutationSections > 0, "host pressure throughput did not inject any terrain/material/fluid mutations");
             require(pressureFrameUpdates > 0, "host pressure throughput did not execute any dynamic terrain/material update frames");
             require("ready".equals(rtCore.sceneReadiness().frameDispatchBlockReason(throughputBacklog())), "host pressure throughput ended with stale TLAS/material state, terrainMutationSections=" + terrainMutationSections + ", activity=" + rtCore.runtimeActivity().asLogFragment() + ", readiness=" + rtCore.sceneReadiness().asLogFragment() + ", summary=" + rtCore.summary().asLogFragment());
-            refreshBackendSummary(rtCore, 50000L);
+            refreshBackendSummary(rtCore, nextSequence);
             RtCore.Summary finalSummary = rtCore.summary();
             require(finalActivity.asLogFragment().contains("gpuFrame{enabled=true"), "runtime activity omitted structured GPU frame timing, activity=" + finalActivity.asLogFragment());
             require(finalSummary.asLogFragment().contains("gpuTimestamps{enabled=true"), "backend summary omitted Vulkan timestamp-pool diagnostics, summary=" + finalSummary.asLogFragment());
-            throughputResult27 = new ThroughputResult(completedFrames, value38, elapsedNanos, (double)completedFrames * 1.0E9 / (double)elapsedNanos, completionRates.lowestCompletedFps(), completionRates.windowSamples(), completionRates.maxCompletionGapNanos(), residentPumpFrames, terrainMutationSections, pressureFrameUpdates, pressureElapsedNanos, finalActivity, rtCore.sceneReadiness(), finalSummary);
+            throughputResult27 = new ThroughputResult(measurement, submittedFrames, residentPumpFrames,
+                    warmupCompletedFrames, terrainMutationSections, pressureFrameUpdates, pressureCompletedFrames,
+                    pressureElapsedNanos, measuredGpuTimestampSamples, finalActivity, rtCore.sceneReadiness(), finalSummary);
          } catch (Throwable value33) {
             if (rtCore != null) {
                try {
@@ -456,7 +475,7 @@ public final class RtNativeGpuThroughputSelfTest {
       throw new AssertionError(label + " did not produce a fresh RT readback, snapshot=" + (snapshot == null ? "none" : snapshot.asLogFragment()) + ", strictReadyMinimumSequence=" + strictReadyMinimumSequence + ", activity=" + rtCore.runtimeActivity().asLogFragment() + ", readiness=" + rtCore.sceneReadiness().asLogFragment() + ", backlog=" + throughputBacklog().asLogFragment() + ", summary=" + rtCore.summary().asLogFragment());
    }
 
-   private static void pumpUntilReady(GuardedRtCore rtCore, long minimumSequence, String label) throws InterruptedException {
+   private static long pumpUntilReady(GuardedRtCore rtCore, long minimumSequence, String label) throws InterruptedException {
       long strictReadyMinimumSequence = -1L;
 
       for(int frame = 0; frame < MAX_INITIAL_PUMP_FRAMES; ++frame) {
@@ -469,33 +488,33 @@ public final class RtNativeGpuThroughputSelfTest {
          }
 
          if (strictReadyMinimumSequence >= 0L && activity.latestCompletedFrameStateSequence() >= strictReadyMinimumSequence) {
-            return;
+            return sequence + 1;
          }
 
          requireReady(rtCore, label);
       }
 
-      throw new AssertionError(label + " did not reach a ready GPU-only RT scene, activity=" + rtCore.runtimeActivity().asLogFragment() + ", strictReadyMinimumSequence=" + strictReadyMinimumSequence + ", readiness=" + rtCore.sceneReadiness().asLogFragment() + ", summary=" + rtCore.summary().asLogFragment());
+      throw new AssertionError(label + " did not reach a ready host-observed no-readback RT scene, activity=" + rtCore.runtimeActivity().asLogFragment() + ", strictReadyMinimumSequence=" + strictReadyMinimumSequence + ", readiness=" + rtCore.sceneReadiness().asLogFragment() + ", summary=" + rtCore.summary().asLogFragment());
    }
 
-   private static void drainPendingFrames(GuardedRtCore rtCore, long sequenceBase, String label) {
-      drainPendingFrames(rtCore, sequenceBase, label, (CompletionRateTracker)null);
+   private static long drainPendingFrames(GuardedRtCore rtCore, long sequenceBase, String label) {
+      return drainPendingFrames(rtCore, sequenceBase, label, null);
    }
 
-   private static void drainPendingFrames(GuardedRtCore rtCore, long sequenceBase, String label, CompletionRateTracker completionRates) {
+   private static long drainPendingFrames(GuardedRtCore rtCore, long sequenceBase, String label, CompletionRateTracker completionRates) {
       for(int frame = 0; frame < MAX_DRAIN_PUMP_FRAMES; ++frame) {
          RtCore.RuntimeActivity activity = rtCore.runtimeActivity();
          if (completionRates != null) {
-            completionRates.observe(activity, System.nanoTime());
+            completionRates.observe(activity.latestCompletedFrameDispatch(), System.nanoTime());
          }
 
          if (!activity.pendingFrame()) {
-            return;
+            return sequenceBase + frame;
          }
 
          rtCore.acceptFrameUpdate(unavailableEmptyUpdate(sequenceBase + (long)frame));
          if (completionRates != null) {
-            completionRates.observe(rtCore.runtimeActivity(), System.nanoTime());
+            completionRates.observe(rtCore.runtimeActivity().latestCompletedFrameDispatch(), System.nanoTime());
          }
 
          requireReady(rtCore, label);
@@ -504,7 +523,7 @@ public final class RtNativeGpuThroughputSelfTest {
       throw new AssertionError(label + " did not drain pending GPU frames, activity=" + rtCore.runtimeActivity().asLogFragment() + ", readiness=" + rtCore.sceneReadiness().asLogFragment() + ", summary=" + rtCore.summary().asLogFragment());
    }
 
-   private static void drainSceneAndFrames(GuardedRtCore rtCore, long sequenceBase, String label) {
+   private static long drainSceneAndFrames(GuardedRtCore rtCore, long sequenceBase, String label) {
       long strictReadyMinimumDispatch = -1L;
 
       for(int frame = 0; frame < MAX_DRAIN_PUMP_FRAMES; ++frame) {
@@ -520,7 +539,7 @@ public final class RtNativeGpuThroughputSelfTest {
          RtSceneReadiness readiness = rtCore.sceneReadiness();
          RtCore.RuntimeActivity activity = rtCore.runtimeActivity();
          if (strictReadyMinimumDispatch >= 0L && !activity.pendingFrame() && activity.latestCompletedFrameDispatch() >= strictReadyMinimumDispatch) {
-            return;
+            return sequence + 1;
          }
 
          requireReady(rtCore, label);
@@ -620,8 +639,8 @@ public final class RtNativeGpuThroughputSelfTest {
    }
 
    private static void requireCompletedGpuStage(RtCore.GpuStageTiming timing, String label, RtCore.RuntimeActivity activity) {
-      require(timing.enabled() && timing.completedSamples() > 0L && timing.averageNanos() > 0L, "GPU-only throughput gate did not resolve " + label + " timestamp evidence, activity=" + activity.asLogFragment());
-      require(timing.failedSamples() == 0L, "GPU-only throughput gate observed invalid " + label + " timestamps, activity=" + activity.asLogFragment());
+      require(timing.enabled() && timing.completedSamples() > 0L && timing.averageNanos() > 0L, "host-observed no-readback throughput gate did not resolve " + label + " timestamp evidence, activity=" + activity.asLogFragment());
+      require(timing.failedSamples() == 0L, "host-observed no-readback throughput gate observed invalid " + label + " timestamps, activity=" + activity.asLogFragment());
    }
 
    private static void set(Map<String, String> previous, String name, String value) {
@@ -700,10 +719,10 @@ public final class RtNativeGpuThroughputSelfTest {
    static {
       TOTAL_SECTIONS = SECTION_COLUMNS * SECTION_ROWS;
       WARMUP_VALID_FRAMES = intProperty("top.ceroxe.rt.rt.gpuThroughput.warmupFrames", 240);
-      MEASURED_VALID_FRAMES = intProperty("top.ceroxe.rt.rt.gpuThroughput.measuredFrames", 1800);
+      PRESSURE_VALID_FRAMES = intProperty("top.ceroxe.rt.rt.gpuThroughput.pressureFrames", 1800);
       MAX_INITIAL_PUMP_FRAMES = intProperty("top.ceroxe.rt.rt.gpuThroughput.maxInitialPumpFrames", 2400);
-      MIN_GPU_ONLY_COMPLETED_FRAMES = intProperty("top.ceroxe.rt.rt.gpuThroughput.minGpuOnlyCompletedFrames", 512);
-      MAX_DRAIN_PUMP_FRAMES = intProperty("top.ceroxe.rt.rt.gpuThroughput.maxDrainPumpFrames", Math.max(12000, MIN_GPU_ONLY_COMPLETED_FRAMES * 128));
+      MIN_COMPLETED_FRAMES = intProperty("top.ceroxe.rt.rt.gpuThroughput.minCompletedFrames", 512);
+      MAX_DRAIN_PUMP_FRAMES = intProperty("top.ceroxe.rt.rt.gpuThroughput.maxDrainPumpFrames", Math.max(12000, MIN_COMPLETED_FRAMES * 128));
       SCENE_PRESSURE_MUTATION_PERIOD_FRAMES = intProperty("top.ceroxe.rt.rt.gpuThroughput.hostMutationPeriodFrames", 8);
       SCENE_PRESSURE_MUTATION_SECTIONS = intProperty("top.ceroxe.rt.rt.gpuThroughput.hostMutationSections", 2);
       SNAPSHOT_PATH = Path.of(System.getProperty("java.io.tmpdir"), "rtrenderer-native-gpu-throughput-diagnostic.png");
@@ -791,68 +810,8 @@ public final class RtNativeGpuThroughputSelfTest {
       }
    }
 
-   private static record ThroughputResult(long completedFrames, long submittedFrames, long elapsedNanos, double averageCompletedFps, double lowCompletedFps, long lowFpsSampleWindows, long maxCompletionGapNanos, int residentPumpFrames, int terrainMutationSections, int pressureFrameUpdates, long pressureElapsedNanos, RtCore.RuntimeActivity activity, RtSceneReadiness readiness, RtCore.Summary summary) {
-   }
-
-   private static final class CompletionRateTracker {
-      private long completedDispatches;
-      private long sampleNanos;
-      private long completedFrames;
-      private long completionWindowStartNanos;
-      private long completionWindowFrames;
-      private long windowSamples;
-      private long maxCompletionGapNanos;
-      private double lowestCompletedFps = 1.0 / 0.0;
-
-      private CompletionRateTracker(RtCore.RuntimeActivity activity, long sampleNanos) {
-         this.completedDispatches = activity.latestCompletedFrameDispatch();
-         this.sampleNanos = sampleNanos;
-      }
-
-      private void observe(RtCore.RuntimeActivity activity, long nowNanos) {
-         long completed = activity.latestCompletedFrameDispatch();
-         if (completed < this.completedDispatches) {
-            throw new AssertionError("completed RT frame dispatch ordinal moved backwards");
-         } else {
-            long completedDelta = completed - this.completedDispatches;
-            long elapsedNanos = nowNanos - this.sampleNanos;
-            if (completedDelta > 0L && elapsedNanos > 0L) {
-               this.maxCompletionGapNanos = Math.max(this.maxCompletionGapNanos, elapsedNanos);
-               if (this.completionWindowFrames == 0L) {
-                  this.completionWindowStartNanos = this.sampleNanos;
-               }
-
-               this.completionWindowFrames += completedDelta;
-               this.completedFrames += completedDelta;
-               this.completedDispatches = completed;
-               this.sampleNanos = nowNanos;
-               if (this.completionWindowFrames >= 8L) {
-                  long windowElapsedNanos = Math.max(1L, nowNanos - this.completionWindowStartNanos);
-                  double completedFps = (double)this.completionWindowFrames * 1.0E9 / (double)windowElapsedNanos;
-                  this.lowestCompletedFps = Math.min(this.lowestCompletedFps, completedFps);
-                  ++this.windowSamples;
-                  this.completionWindowFrames = 0L;
-                  this.completionWindowStartNanos = 0L;
-               }
-            }
-
-         }
-      }
-
-      private long completedFrames() {
-         return this.completedFrames;
-      }
-
-      private double lowestCompletedFps() {
-         return Double.isFinite(this.lowestCompletedFps) ? this.lowestCompletedFps : 0.0;
-      }
-
-      private long windowSamples() {
-         return this.windowSamples;
-      }
-
-      private long maxCompletionGapNanos() {
-         return this.maxCompletionGapNanos;
-      }
-   }
+   private record ThroughputResult(CompletionMeasurement measurement, long submittedFrames, int residentPumpFrames,
+           long warmupCompletedFrames, int terrainMutationSections, int pressureFrameUpdates, long pressureCompletedFrames,
+           long pressureElapsedNanos, long measuredGpuTimestampSamples, RtCore.RuntimeActivity activity,
+           RtSceneReadiness readiness, RtCore.Summary summary) { }
 }

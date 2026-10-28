@@ -33,13 +33,9 @@ final class VulkanGpuSceneTransferPlan {
             long current = capacities.applyAsLong(target);
             if (current < 0L) throw new IllegalArgumentException("current target capacity must not be negative");
             long required = requiredByTarget.getOrDefault(target, 0L);
-            if (required == 0L && current > 0L) continue;
-            /*
-             * Vulkan storage-buffer descriptors must always reference a valid resource, including
-             * empty scene domains. Bootstrap one word for every previously absent target; capacity
-             * growth raises it to the same bounded 4 KiB generation used by populated domains.
-             */
-            if (required == 0L) required = Integer.BYTES;
+            // Absent lanes share VulkanGpuSceneBuffers' inert descriptor fallback. A no-op/reset
+            // generation must not allocate fourteen unused native buffers just to advance revision.
+            if (required == 0L) continue;
             boolean grows = required > current;
             targets.add(new TargetCapacity(
                     target, required, grows ? growthCapacity(required) : current,

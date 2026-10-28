@@ -27,6 +27,7 @@ public final class GpuSceneDescriptorResources {
     private final ReconstructionImageViews reconstructionImages;
     private final BufferRange frameUniforms;
     private final BufferRange transientInstanceRecords;
+    private final BufferRange causticPhotons;
     private final BufferRange[] sceneBuffers = new BufferRange[SceneShaderBindings.COUNT];
 
     /**
@@ -43,6 +44,7 @@ public final class GpuSceneDescriptorResources {
      * @param reconstructionImages          格式匹配的重建信号视图或安全占位视图
      * @param frameUniforms                 帧常量缓冲区范围
      * @param transientInstanceRecords      当前帧瞬态实例记录范围
+     * @param causticPhotons                当前帧光子图范围或惰性占位范围
      * @param sceneBuffers                  全部持久场景存储绑定
      */
     public GpuSceneDescriptorResources(
@@ -57,6 +59,7 @@ public final class GpuSceneDescriptorResources {
             ReconstructionImageViews reconstructionImages,
             BufferRange frameUniforms,
             BufferRange transientInstanceRecords,
+            BufferRange causticPhotons,
             List<StorageBinding> sceneBuffers
     ) {
         if (topLevelAccelerationStructure == 0L) {
@@ -84,6 +87,7 @@ public final class GpuSceneDescriptorResources {
         this.denoisingImages = Objects.requireNonNull(denoisingImages, "denoisingImages");
         this.reconstructionImages = Objects.requireNonNull(reconstructionImages, "reconstructionImages");
         this.frameUniforms = Objects.requireNonNull(frameUniforms, "frameUniforms");
+        this.causticPhotons = Objects.requireNonNull(causticPhotons, "causticPhotons");
         this.transientInstanceRecords = Objects.requireNonNull(
                 transientInstanceRecords, "transientInstanceRecords"
         );
@@ -110,7 +114,7 @@ public final class GpuSceneDescriptorResources {
     }
 
     /**
-     * Compatibility constructor for descriptor-only tests and non-transient callers. The frame
+     * Creates an inert publication for descriptor-only tests and non-transient callers. The frame
      * uniform range is a valid fallback because no transient custom index is emitted in this mode.
      *
      * @param topLevelAccelerationStructure non-zero TLAS handle
@@ -148,6 +152,7 @@ public final class GpuSceneDescriptorResources {
                 motionOutputView,
                 denoisingImages,
                 reconstructionImages,
+                frameUniforms,
                 frameUniforms,
                 frameUniforms,
                 sceneBuffers
@@ -195,6 +200,8 @@ public final class GpuSceneDescriptorResources {
     BufferRange frameUniforms() {
         return frameUniforms;
     }
+
+    BufferRange causticPhotons() { return causticPhotons; }
 
     BufferRange transientInstanceRecords() {
         return transientInstanceRecords;

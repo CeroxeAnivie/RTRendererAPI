@@ -1,8 +1,14 @@
 # Programmable retained scenes
 
-5.1.0 exposes retained-scene shader replacement through `SceneShaderProgram`. Ordinary callers
+7.0.0 exposes retained-scene shader replacement through `SceneShaderProgram`. Ordinary callers
 continue to use `Renderer.open()` and the built-in shaders. Applications can replace ray generation,
 miss, closest-hit and any-hit independently; omitted stages retain the built-in implementation.
+
+For the built-in program, the backend chooses surface, compact-medium or general-medium execution
+from the actual retained scene and frame budgets. A custom `SceneShaderProgram` preserves its
+declared replacements and ABI; automatic surface classification does not replace those stages or
+rewrite an explicit command workload. Configuration and submission remain on the same `Renderer`;
+there is no separate compatibility builder for expert mode.
 
 Each replacement is a complete GLSL 460 module with a `main` entry point. Quoted includes resolve
 inside the bundled `assets/rtrenderer/shaders/gpuscene/` library. `gpuscene_common.glsl` defines the
@@ -13,7 +19,7 @@ Compilation and descriptor validation happen when the renderer opens, before fra
 
 Declare application storage buffers with `dataBindingCount(n)` and supply exactly `n` immutable
 `ResourceData` values in `RenderFrameRequest.shaderData(...)`. Buffer `i` is a readonly std430
-storage buffer at descriptor set 0, binding `SceneShaderBindings.APPLICATION_DATA + i` (33 + i).
+storage buffer at descriptor set 0, binding `SceneShaderBindings.APPLICATION_DATA + i` (34 + i).
 It is visible to all four retained-scene stages. The API imposes no application schema. Each payload
 must have a positive size divisible by four and fit the device's `maxStorageBufferRange`.
 
@@ -93,8 +99,11 @@ A replacement ray-generation shader must write every temporal, denoising or reco
 signal it enables. Enabling an optional feature cannot synthesize those signals for custom code.
 The built-in SER permutation is not reported active when ray generation is replaced.
 
-Retained scenes use one ray-generation group, one miss group and one triangle hit group at
-recursion depth one. The explicit command API provides arbitrary groups, procedural intersection,
-callable shaders, device-supported recursion, textures, samplers, graphics and compute. Choose
-that path when the pipeline topology itself needs to change; see
+The four replaceable retained-scene stages are the public programming surface. Built-in medium
+transport additionally uses internal lightweight visibility stages; their groups and payload are
+backend implementation details, not additional `SceneShaderProgram` replacement entries. The
+explicit command API provides arbitrary groups, procedural intersection, callable shaders,
+device-supported recursion, textures, samplers, graphics and compute. Resource versions, bindings,
+synchronization and retirement remain explicit in that path. Choose it when the pipeline topology
+itself needs to change; see
 [generic commands and ray tracing](Generic-Commands-and-Ray-Tracing.md).

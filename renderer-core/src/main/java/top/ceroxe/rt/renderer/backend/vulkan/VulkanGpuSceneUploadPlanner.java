@@ -109,7 +109,7 @@ final class VulkanGpuSceneUploadPlanner {
                             motion.current(),
                             motion.previousTransform(),
                             changes.revision(),
-                            slots::meshSlot
+                            slots::meshSlot, slots::textureSlot
                     )), 1);
         }
         addClears(builder, Target.INSTANCE_RECORDS, changes.instances().clearedSlots(),

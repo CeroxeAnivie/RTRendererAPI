@@ -12,16 +12,19 @@ import org.lwjgl.vulkan.VK10;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Service-provider entry point for the standalone hardware Vulkan ray tracing backend. */
 public final class VulkanRendererBackendProvider implements RendererBackendProvider {
+    private static final long PROBE_HANDOFF_MAX_AGE_NANOS = 1_000_000_000L;
+    private final AtomicReference<ProbedOpen> probedOpen = new AtomicReference<>();
     private static final Descriptor DESCRIPTOR = Descriptor.builder("vulkan-rt")
             .priority(1_000)
             .apiMajor(API_MAJOR)
             .apiMinor(0)
             .build();
 
-    /** Creates the stateless Vulkan RT service provider discovered by {@link java.util.ServiceLoader}. */
+    /** Creates the Vulkan RT provider with a one-use, same-thread probe-to-open handoff. */
     public VulkanRendererBackendProvider() {
     }
 
@@ -38,6 +41,7 @@ public final class VulkanRendererBackendProvider implements RendererBackendProvi
     @Override
     public ProbeResult probe(RendererConfig configuration) {
         Objects.requireNonNull(configuration, "configuration");
+        probedOpen.set(null);
         VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
         capability = selectConfiguredDevice(capability, configuration);
         if (!capability.hardwareRayTracingReady()) {
@@ -50,6 +54,7 @@ public final class VulkanRendererBackendProvider implements RendererBackendProvi
                             + device.name()
             );
         }
+        probedOpen.set(new ProbedOpen(configuration, capability, Thread.currentThread(), System.nanoTime()));
         return ProbeResult.compatible(
                 "hardware Vulkan RT and external frame memory ready on " + device.name()
         );
@@ -58,12 +63,19 @@ public final class VulkanRendererBackendProvider implements RendererBackendProvi
     @Override
     public Renderer open(RendererConfig configuration) {
         RendererConfig checked = Objects.requireNonNull(configuration, "configuration");
-        return new VulkanRendererHost(checked, () -> openSession(checked));
+        ProbedOpen prepared = probedOpen.getAndSet(null);
+        boolean reuse = prepared != null && prepared.configuration == checked
+                && prepared.thread == Thread.currentThread()
+                && System.nanoTime() - prepared.capturedNanos <= PROBE_HANDOFF_MAX_AGE_NANOS;
+        // Device recovery reuses this factory, but must always capture fresh hardware facts.
+        var initial = new AtomicReference<>(reuse ? prepared.capability : null);
+        return new VulkanRendererHost(checked, () -> openSession(checked, initial.getAndSet(null)));
     }
 
-    private static VulkanRenderingSession openSession(RendererConfig configuration) {
+    private static VulkanRenderingSession openSession(RendererConfig configuration,
+            VulkanRtCapabilityProbe.Result initialCapability) {
         VulkanRtCapabilityProbe.Result capability = selectConfiguredDevice(
-                VulkanRtCapabilityProbe.capture(), configuration);
+                initialCapability != null ? initialCapability : VulkanRtCapabilityProbe.capture(), configuration);
         if (!capability.hardwareRayTracingReady()) {
             throw new IllegalStateException("hardware Vulkan RT is unavailable: " + capability.summary());
         }
@@ -74,6 +86,9 @@ public final class VulkanRendererBackendProvider implements RendererBackendProvi
         }
         return VulkanGpuSceneRenderingSession.open(capability, configuration, RendererRtDiagnostics.noop());
     }
+
+    private record ProbedOpen(RendererConfig configuration, VulkanRtCapabilityProbe.Result capability,
+            Thread thread, long capturedNanos) {}
 
     private static VulkanRtCapabilityProbe.Result selectConfiguredDevice(
             VulkanRtCapabilityProbe.Result capability,

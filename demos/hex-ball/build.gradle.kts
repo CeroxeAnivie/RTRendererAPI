@@ -1,6 +1,7 @@
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.compile.JavaCompile
+import groovy.json.JsonSlurper
 
 plugins {
     application
@@ -116,6 +117,36 @@ val physicsSelfTest = tasks.register<JavaExec>("physicsSelfTest") {
     mainClass.set("demo.HexPhysicsSelfTest")
 }
 
+tasks.register<JavaExec>("demoPerformanceNativeBenchmark") {
+    group = "verification"
+    description = "Measures identical frozen demo work, separating startup, warmup and GPU time."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("demo.DemoPerformanceBenchmark")
+}
+
+tasks.register<JavaExec>("surfacePathNativeSelfTest") {
+    group = "verification"
+    description = "Compares demo SDR/HDR pixels and dynamic transport transitions with the full shader."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("demo.DemoSurfaceNativeSelfTest")
+    val validationLog = layout.buildDirectory.file("reports/surface-path-validation.jsonl")
+    systemProperty("top.ceroxe.rt.validation.logPath", validationLog.get().asFile.absolutePath)
+    doFirst {
+        val log = validationLog.get().asFile
+        log.parentFile.mkdirs()
+        log.writeText("", Charsets.UTF_8)
+    }
+    doLast {
+        val events = validationLog.get().asFile.readLines(Charsets.UTF_8)
+                .filter(String::isNotBlank).map { JsonSlurper().parseText(it) as Map<*, *> }
+        check(events.any { it["event"] == "validation" }) { "No Vulkan validation evidence was produced" }
+        check(events.none { it["severity"] == "ERROR" || it["severity"] == "WARNING"
+                || it["event"] == "dropSummary" }) { "Vulkan validation reported warnings, errors or dropped evidence" }
+    }
+}
+
 tasks.register<JavaExec>("programmableSceneDemo") {
     group = "application"
     description = "Runs the public programmable-scene, application-buffer and native HDR example."
@@ -152,4 +183,47 @@ tasks.assemble {
 
 tasks.check {
     dependsOn(physicsSelfTest, featureIntegrationSelfTest, verifyHexBallRuntimeClosure)
+}
+
+// Deliberate GPU launch only: never a dependency of assemble or check.
+tasks.register<JavaExec>("mediumGalleryDemo") {
+    group = "application"
+    description = "Runs the 2K/1-spp/2x-FG optical gallery (executes GPU work)."
+    dependsOn(tasks.classes)
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("demo.MediumGalleryDemo")
+    providers.gradleProperty("galleryArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
+}
+
+val mediumGallerySceneSelfTest = tasks.register<JavaExec>("mediumGallerySceneSelfTest") {
+    group = "verification"
+    description = "Validates the optical gallery fixture and defaults without executing GPU work."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("demo.MediumGallerySceneSelfTest")
+}
+tasks.check { dependsOn(mediumGallerySceneSelfTest) }
+
+// Requires explicit approval to execute; kept outside check/assemble.
+tasks.register<JavaExec>("mediumGalleryNativeSelfTest") {
+    group = "verification"
+    description = "Executes the GPU gallery feature/image and representation parity gate."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("demo.MediumGalleryNativeSelfTest")
+    val validationLog = layout.buildDirectory.file("reports/medium-gallery/validation.jsonl")
+    systemProperty("top.ceroxe.rt.validation.logPath", validationLog.get().asFile.absolutePath)
+    doFirst {
+        val log = validationLog.get().asFile
+        log.parentFile.mkdirs()
+        log.writeText("", Charsets.UTF_8)
+    }
+    doLast {
+        val events = validationLog.get().asFile.readLines(Charsets.UTF_8)
+            .filter(String::isNotBlank).map { JsonSlurper().parseText(it) as Map<*, *> }
+        check(events.any { it["event"] == "validation" }) { "No Vulkan validation evidence was produced" }
+        check(events.none { it["severity"] == "ERROR" || it["severity"] == "WARNING" || it["event"] == "dropSummary" }) {
+            "Vulkan validation reported warnings, errors or dropped evidence"
+        }
+    }
 }

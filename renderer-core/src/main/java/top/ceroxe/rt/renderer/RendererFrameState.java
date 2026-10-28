@@ -1,5 +1,8 @@
 package top.ceroxe.rt.renderer;
 
+import java.util.Objects;
+import top.ceroxe.rt.renderer.api.Medium;
+
 /**
  * Immutable render-thread view state captured at the host level renderer boundary.
  *
@@ -32,7 +35,7 @@ package top.ceroxe.rt.renderer;
  * @param projection23        projection matrix element at row two, column three
  * @param projection32        projection matrix element at row three, column two
  * @param projection33        projection matrix element at row three, column three
- * @param cameraFluidMedium   immutable camera-medium state
+ * @param cameraMedium   immutable camera-medium state
  * @param frameEnvironment    immutable per-frame environment constants
  * @param renderBlockOutline  whether selection outlines are enabled
  * @param renderBlockEntities whether attached scene objects are enabled
@@ -62,7 +65,7 @@ public record RendererFrameState(
         float projection23,
         float projection32,
         float projection33,
-        CameraMedium cameraFluidMedium,
+        Medium cameraMedium,
         RendererFrameEnvironment frameEnvironment,
         boolean renderBlockOutline,
         boolean renderBlockEntities
@@ -92,7 +95,7 @@ public record RendererFrameState(
             0.0F,
             0.0F,
             0.0F,
-            CameraMedium.air(),
+            Medium.vacuum(),
             RendererFrameEnvironment.unknown(),
             false,
             false
@@ -101,7 +104,7 @@ public record RendererFrameState(
     /**
      * Creates a frame state using an unknown frame environment.
      *
-     * <p>This compatibility constructor preserves the explicitly supplied camera medium while
+     * <p>This constructor carries the explicitly supplied camera medium while
      * defaulting environment data that was not available to earlier callers.</p>
      *
      * @param sequence            non-negative frame sequence
@@ -128,9 +131,10 @@ public record RendererFrameState(
      * @param projection23        projection matrix element at row two, column three
      * @param projection32        projection matrix element at row three, column two
      * @param projection33        projection matrix element at row three, column three
-     * @param cameraFluidMedium   immutable camera-medium state; {@code null} selects air
+     * @param cameraMedium       non-null immutable camera-medium state for an available frame
      * @param renderBlockOutline  whether selection outlines are enabled
      * @param renderBlockEntities whether attached scene objects are enabled
+     * @throws NullPointerException if an available frame has a null camera medium
      * @throws IllegalArgumentException if the sequence is negative or an available frame has
      *                                  invalid dimensions, non-finite camera values, or an invalid camera basis
      */
@@ -159,7 +163,7 @@ public record RendererFrameState(
             float projection23,
             float projection32,
             float projection33,
-            CameraMedium cameraFluidMedium,
+            Medium cameraMedium,
             boolean renderBlockOutline,
             boolean renderBlockEntities
     ) {
@@ -188,7 +192,7 @@ public record RendererFrameState(
                 projection23,
                 projection32,
                 projection33,
-                cameraFluidMedium,
+                cameraMedium,
                 RendererFrameEnvironment.unknown(),
                 renderBlockOutline,
                 renderBlockEntities
@@ -283,7 +287,7 @@ public record RendererFrameState(
                 projection23,
                 projection32,
                 projection33,
-                CameraMedium.air(),
+                Medium.vacuum(),
                 RendererFrameEnvironment.unknown(),
                 renderBlockOutline,
                 renderBlockEntities
@@ -294,8 +298,8 @@ public record RendererFrameState(
      * Validates and normalizes a frame-state instance before publication.
      *
      * <p>Unavailable states discard target dimensions and camera-medium information because
-     * downstream renderers must not mistake stale values for usable frame data. Null medium
-     * and environment values are replaced with their neutral representations.</p>
+     * downstream renderers must not mistake stale values for usable frame data. Available
+     * states require an explicit medium; null environments select unknown values.</p>
      *
      * @param sequence            non-negative frame sequence
      * @param valid               whether the frame state is available for rendering
@@ -321,20 +325,21 @@ public record RendererFrameState(
      * @param projection23        projection matrix element at row two, column three
      * @param projection32        projection matrix element at row three, column two
      * @param projection33        projection matrix element at row three, column three
-     * @param cameraFluidMedium   immutable camera-medium state; {@code null} selects air
+     * @param cameraMedium       non-null immutable camera-medium state for an available frame
      * @param frameEnvironment    immutable per-frame environment constants; {@code null} selects unknown values
      * @param renderBlockOutline  whether selection outlines are enabled
      * @param renderBlockEntities whether attached scene objects are enabled
+     * @throws NullPointerException if an available frame has a null camera medium
      * @throws IllegalArgumentException if the sequence is negative or an available frame has
      *                                  invalid dimensions, non-finite camera values, or an invalid camera basis
      */
     public RendererFrameState {
-        cameraFluidMedium = cameraFluidMedium == null ? CameraMedium.air() : cameraFluidMedium;
         frameEnvironment = frameEnvironment == null ? RendererFrameEnvironment.unknown() : frameEnvironment;
         if (sequence < 0L) {
             throw new IllegalArgumentException("sequence must not be negative");
         }
         if (valid) {
+            Objects.requireNonNull(cameraMedium, "cameraMedium");
             requirePositive(targetWidth, "targetWidth");
             requirePositive(targetHeight, "targetHeight");
             requireFinite(cameraX, "cameraX");
@@ -365,7 +370,7 @@ public record RendererFrameState(
         } else {
             targetWidth = 0;
             targetHeight = 0;
-            cameraFluidMedium = CameraMedium.air();
+            cameraMedium = Medium.vacuum();
         }
     }
 
@@ -411,7 +416,7 @@ public record RendererFrameState(
                 0.0F,
                 0.0F,
                 0.0F,
-                CameraMedium.air(),
+                Medium.vacuum(),
                 RendererFrameEnvironment.unknown(),
                 false,
                 false
@@ -505,7 +510,7 @@ public record RendererFrameState(
                 + ", cameraForward=(" + cameraForwardX + ", " + cameraForwardY + ", " + cameraForwardZ + ")"
                 + ", cameraRight=(" + cameraRightX + ", " + cameraRightY + ", " + cameraRightZ + ")"
                 + ", cameraUp=(" + cameraUpX + ", " + cameraUpY + ", " + cameraUpZ + ")"
-                + ", " + cameraFluidMedium.asLogFragment()
+                + ", cameraMedium=" + cameraMedium
                 + ", renderBlockOutline=" + renderBlockOutline
                 + ", renderBlockEntities=" + renderBlockEntities;
     }

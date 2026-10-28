@@ -50,6 +50,7 @@ final class VulkanFrameSlot implements AutoCloseable {
     private VulkanFrameReconstructionResources reconstructionResources;
     private VulkanFrameGenerationResources frameGenerationResources;
     private RtGpuBuffer cpuReadback;
+    private RtGpuBuffer causticPhotons;
     private RtCommandContext.AsyncSubmission producerSubmission;
     private RtCommandContext.AsyncSubmission consumerSubmission;
     private VulkanImportedSemaphore consumerSemaphore;
@@ -578,6 +579,23 @@ final class VulkanFrameSlot implements AutoCloseable {
         }
         return traceImage;
     }
+
+    synchronized long requiredCausticGrowth(long bytes) {
+        return causticPhotons == null || causticPhotons.sizeBytes() < bytes ? bytes : 0;
+    }
+
+    synchronized void ensureCausticResources(long bytes) {
+        requireState(State.FREE, "prepare photon map");
+        if (requiredCausticGrowth(bytes) == 0) return;
+        var replacement = RtGpuBuffer.createDeviceAddressBuffer(device.device(), device.allocator(), bytes,
+                VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK10.VK_BUFFER_USAGE_TRANSFER_DST_BIT, stalls);
+        try {
+            if (causticPhotons != null) causticPhotons.close();
+        } catch (RuntimeException | Error failure) { replacement.close(); throw failure; }
+        causticPhotons = replacement;
+    }
+
+    synchronized RtGpuBuffer causticPhotons() { return causticPhotons == null ? frameUniforms : causticPhotons; }
 
     synchronized RtGpuBuffer frameUniforms() {
         requireOpen();
@@ -1266,6 +1284,10 @@ final class VulkanFrameSlot implements AutoCloseable {
                     failure = accumulate(failure, ex);
                 }
             }
+            if (causticPhotons != null) {
+                try { causticPhotons.close(); causticPhotons = null; }
+                catch (RuntimeException ex) { failure = accumulate(failure, ex); }
+            }
             if (!frameUniformsClosed) {
                 try {
                     frameUniforms.close();
@@ -1286,6 +1308,7 @@ final class VulkanFrameSlot implements AutoCloseable {
                 && denoisingResources == null
                 && reconstructionResources == null
                 && frameGenerationResources == null
+                && causticPhotons == null
                 && frameUniformsClosed;
         if (failure != null) throw failure;
     }

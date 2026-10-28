@@ -1,0 +1,5 @@
+#version 460
+#define RTRENDERER_VOLUME_TRANSPORT 1
+#define RTRENDERER_CAUSTICS 1
+#define RTRENDERER_CAUSTIC_PASS 1
+#include "gpuscene_raygen.glsl"

@@ -69,6 +69,19 @@ tasks.withType<ProcessResources>().configureEach {
     filteringCharset = "UTF-8"
 }
 
+// Package generated shader binaries only when their source stage still exists. Regeneration
+// can replace the live variants without deleting archived generated files from the checkout.
+sourceSets.main {
+    resources.exclude {
+        if (!it.path.startsWith("assets/rtrenderer/shaders/spv/") || !it.name.endsWith(".spv")) false
+        else {
+            val name = it.name.removeSuffix(".spv")
+            val stage = if (name.startsWith("gpuscene_")) "gpuscene/" + name.removePrefix("gpuscene_") else name
+            !file("src/main/resources/assets/rtrenderer/shaders/$stage").isFile
+        }
+    }
+}
+
 /*
  * Core contracts are deterministic JavaExec programs registered below, not JUnit tests. Gradle 9.5
  * otherwise treats the intentionally empty JUnit discovery result as a configuration failure before
@@ -177,6 +190,11 @@ val registerCoreSelfTest =
 val contractSelfTests = linkedMapOf(
     "coreRtPipelineCacheSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.RtPipelineCacheSelfTest",
     "coreMediumTransportSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumTransportSelfTest",
+    "coreMediumOpticsSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumOpticsSelfTest",
+    "coreCausticTransportSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CausticTransportSelfTest",
+    "coreMediumDensitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumDensitySelfTest",
+    "coreMediumBenchmarkStatisticsSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanMediumBenchmarkStatisticsSelfTest",
+    "coreRtNativeBenchmarkReportSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeBenchmarkReportSelfTest",
     "vulkanGenericBufferVisibilitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericBufferVisibilitySelfTest",
     "vulkanGenericGraphicsPipelinesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericGraphicsPipelinesSelfTest",
     "vulkanCommandEvidenceHistorySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanCommandEvidenceHistorySelfTest",
@@ -252,6 +270,7 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanFrameReconstructionResourcesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameReconstructionResourcesSelfTest",
     "coreVulkanGpuSceneShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.VulkanGpuSceneShaderSelfTest",
     "coreGpuScenePipelineRequirementsSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuScenePipelineRequirementsSelfTest",
+    "coreVulkanSurfaceSceneIndexSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSurfaceSceneIndexSelfTest",
     "coreGpuScenePrecompiledProgramSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuScenePrecompiledProgramSelfTest",
     "coreRtPrecompiledShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.RtPrecompiledShaderSelfTest",
     "coreVulkanFramePixelCodecSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDiagnosticReadbackSelfTest",
@@ -287,8 +306,15 @@ tasks.register<JavaExec>("generateRtPrecompiledShaders") {
     group = "build"
     description = "Regenerates pinned RT SPIR-V resources from the current GLSL sources."
     dependsOn(tasks.named("testClasses"))
-    classpath = sourceSets.test.get().runtimeClasspath
+    classpath = files(sourceSets.test.get().output,
+        configurations.testRuntimeClasspath.get().incoming.artifactView {
+            componentFilter { component ->
+                component !is org.gradle.api.artifacts.component.ProjectComponentIdentifier ||
+                    component.projectPath != ":renderer-nvidia"
+            }
+        }.files)
     mainClass.set("top.ceroxe.rt.renderer.rt.pipeline.RtPrecompiledShaderSelfTest")
+    maxHeapSize = "128m"
     args(layout.projectDirectory.dir("src/main/resources/assets/rtrenderer/shaders/spv").asFile.absolutePath)
     providers.gradleProperty("shaderStage").orNull?.let { stage ->
         args(stage)
@@ -368,7 +394,7 @@ tasks.named<JavaExec>("mediumTransportNativeSelfTest").configure {
 registerCoreSelfTest(
     "mediumTransportBenchmark",
     "top.ceroxe.rt.renderer.backend.vulkan.VulkanMediumTransportBenchmark",
-    "Measures identical opaque, dielectric, nested, emitting and scattering work with GPU timestamps."
+    "Runs the configurable medium scene/FPS matrix and exports GPU timestamp and completion evidence to CSV."
 )
 
 tasks.named<JavaExec>("vulkanEvidenceRetentionNativeSelfTest").configure {
@@ -412,6 +438,10 @@ val rendererCoreHardwareGateLock = gradle.sharedServices.registerIfAbsent(
     RendererCoreHardwareGateLock::class
 ) {
     maxParallelUsages.set(1)
+}
+
+tasks.named("mediumTransportBenchmark").configure {
+    usesService(rendererCoreHardwareGateLock)
 }
 
 tasks.named("vulkanSerNativeSelfTest").configure {

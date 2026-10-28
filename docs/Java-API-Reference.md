@@ -29,8 +29,8 @@ public interface Renderer extends AutoCloseable
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
 | `open()` | `Renderer` | 简单模式；使用推荐 CPU-readable 配置打开最佳可用后端 |
-| `open(RendererConfig)` | `Renderer` | 专家模式；使用完整显式配置打开最佳可用后端 |
-| `open(String, RendererConfig)` | `Renderer` | 专家模式；按 provider id 打开，用于确定性部署或诊断 |
+| `open(RendererConfig)` | `Renderer` | 使用显式配置打开最佳可用后端；保留普通场景和专家入口 |
+| `open(String, RendererConfig)` | `Renderer` | 按 provider id 与显式配置打开，用于确定性部署或诊断 |
 | `devices()` | `List<RendererGpuDevice>` | 返回通过 provider 探测得到的不可变设备列表 |
 
 ## 通用 command path
@@ -146,6 +146,8 @@ public interface Renderer extends AutoCloseable
 `SubmissionDeferralReason`，用于重试策略和遥测聚合；`detail()` 仅用于人类诊断。所有 provider
 必须提供类型化分类，API 不从自然语言猜测类别。
 
+普通 retained-scene 模式根据实际场景事实与 `MediumTransport` 预算自动分派内置 surface、小容量或通用介质程序。专家模式由显式资源/命令事务或 `SceneShaderProgram` 阶段替换表达；自定义阶段不会被普通模式优化覆盖，绑定、同步和生命周期继续显式管理。配置入口统一使用 `RendererConfig`，不存在独立的 `expertBuilder`。
+
 ## RendererConfig
 
 普通调用方使用 `Renderer.open()`，或者把完整推荐配置传给 `Renderer.open(config)`：
@@ -220,11 +222,30 @@ RenderFrameRequest.builder(sequence, width, height, camera)
         .fog(fog)
         .textureSampling(sampling)
         .antiAliasing(antiAliasing)
+        .mediumTransport(MediumTransport.balanced())
         .resetTemporalHistory(reason)
         .build();
 ```
 
 `toBuilder()` 用于从已有请求安全派生下一帧。不要复用旧 sequence。
+
+### 介质
+
+7.0.0 使用直接 record，不保留 6.x 介质 Builder 或兼容类：
+
+| 类型 | 契约与入口 |
+| --- | --- |
+| `Rgb(float red, float green, float blue)` | 有限非负线性 RGB；`ZERO`、`WHITE`、`add`、`multiply`、`maxComponent`、`isZero` |
+| `Medium(Rgb absorption, Rgb scattering, Rgb emission, float density, float indexOfRefraction, float anisotropy, MediumDensityField densityField)` | RGB 系数与空间密度；消光由吸收与散射相加；`vacuum()`、`extinction()`、`participating()`、`isVacuum()`、`withDensity`、`withDensityField`；六参数构造默认均匀密度 |
+| `MediumDensityField(long textureAssetId, int slices, AffineTransform transform)` | `uniform()` 或 `grid(...)`；LINEAR RGBA8 基础 mip 红通道的竖直 Z 切片图集；域内体素中心三线性插值，域外为零 |
+| `MediumBoundary(Medium medium, int priority, Orientation orientation, boolean surfaceInteraction)` | 封闭网格内部；`volume`、`surface` 与各字段的 `with...` 方法；`Orientation.OUTWARD/INWARD` |
+| `MediumTransport(int maxEvents, int opticalSamples, int scatteringSteps, int lightSamples, float maxDistance, float transmittanceCutoff, int scatteringBounces)` | 每帧预算；`balanced()` 与各字段的 `with...` 方法；六参数构造默认关闭额外体积散射 |
+
+`MediumTransport` 的事件、光学样本、散射区间与灯光样本范围分别为 1–32、1–8、1–64 与 0–8；额外体积散射次数为 0–8。距离为 `(0, 1_000_000]` 世界单位。灯光样本 0 枚举全部灯光；透射率阈值 0 关闭该截断近似。默认值为 `(12, 1, 8, 4, 512, 1e-4, 0)`。
+
+图集 `W × (H*slices)` 对应 `W × H × slices` 网格；边界介质的变换输入对象局部坐标，环境介质输入世界坐标。普通纹理过滤、寻址与 mip 不影响密度采样。正的 `scatteringBounces` 启用有界额外体积碰撞，并以采样的天空/表面照明替代单次散射的平坦环境近似；有限预算不承诺收敛，透明阴影不等于折射焦散。
+
+使用 `EnvironmentState.Builder.cameraMedium` 定义边界外的基础介质，使用 `SceneInstance.Builder.mediumBoundary` 或 `PrimitiveInstance.Builder.mediumBoundary` 定义封闭体内部。重叠体按优先级选择一个生效介质；同优先级选择最近进入的边界，退出后恢复外层。距离以应用世界单位计，发光按单位路径长度定义。范围与迁移说明见 [7.0.0](7.0.0.md)。
 
 ### FrameSubmissionAttempt
 
