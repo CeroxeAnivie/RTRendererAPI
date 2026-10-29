@@ -10,7 +10,7 @@ __device__ float3 rgb(float4 v){return make_float3(v.x,v.y,v.z);}
 __device__ float peak(float3 v){return fmaxf(v.x,fmaxf(v.y,v.z));}
 __device__ bool finite3(float3 v){return isfinite(v.x)&&isfinite(v.y)&&isfinite(v.z);}
 __device__ State *states(unsigned char *b){return (State *)(b+((unsigned int*)b)[9]);}
-__device__ float *hit(unsigned char *b,int i){return (float *)(b+((unsigned int*)b)[10])+52*i;}
+template<bool Compact> __device__ float *hit(unsigned char *b,int i){return (float *)(b+((unsigned int*)b)[10])+(Compact?24:52)*i;}
 __device__ const Boundary *table(unsigned char *b){return (const Boundary *)(b+384);}
 __device__ float3 sigmaS(unsigned char*b,const rtr_medium::PathVolumeInfo*v){
     const unsigned int selected=v->currentVolumeIndex;return selected==0xffffffffu
@@ -36,7 +36,7 @@ __device__ void finish(unsigned char *b,int i,State *s,unsigned int*statistics,u
     output[at]=make_float4(value.x,value.y,value.z,0.f);increment(b,statistics,3u);
 }
 __device__ bool initialize(unsigned char *b,State *s){
-    unsigned int*h=(unsigned int*)b;if(h[0]!=0x524f5031u||h[1]!=2u||h[8]>32||h[6]<1||h[6]>32)return false;
+    unsigned int*h=(unsigned int*)b;if(h[0]!=0x524f5031u||h[1]!=3u||h[8]>32||h[6]<1||h[6]>32)return false;
     rtr_medium::PathVolumeInfo_Init(&s->volumes);
     for(unsigned int j=0;j<h[8];j++)if(rtr_medium::add(&s->volumes,h[64+j],priorities(b),h[7])!=rtr_medium::OK)return false;
     s->counters.z=1;return true;
@@ -130,7 +130,7 @@ __device__ bool roughGlass(float3 incident,float3 normal,float n1,float n2,float
 }
 }
 extern "C" __global__ void native_optical_reset(unsigned char*b,int count){if(blockIdx.x==0&&threadIdx.x==0){unsigned int*h=(unsigned int*)b;h[28]=h[29]=h[30]=h[31]=0;}}
-__device__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*statistics){
+template<bool Compact> __device__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*statistics){
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;using namespace rtr_optical;
     State*s=states(b)+i;if(s->control.x==0)return;unsigned int*h=(unsigned int*)b;
     if(!s->counters.z&&!initialize(b,s)){finish(b,i,s,statistics,1);return;}
@@ -148,17 +148,17 @@ __device__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*sta
         if(peak(rgb(s->throughput))<=((float*)b)[32]||s->throughput.w<=0.f){finish(b,i,s,statistics);return;}
         increment(b,statistics,0u);return;
     }
-    float*p=hit(b,i);unsigned int*u=(unsigned int*)p;
-    if(u[48]!=s->control.z/h[3]||u[49]!=s->control.z%h[3]||u[51]!=s->control.w){finish(b,i,s,statistics,2);return;}
-    bool found=u[28]!=0;float distance=found?p[3]:s->throughput.w;
+    float*p=hit<Compact>(b,i);unsigned int*u=(unsigned int*)p;
+    if(u[Compact?20:48]!=s->control.z/h[3]||u[Compact?21:49]!=s->control.z%h[3]||u[Compact?23:51]!=s->control.w){finish(b,i,s,statistics,2);return;}
+    bool found=u[Compact?14:28]!=0;float distance=found?p[3]:s->throughput.w;
     bool collision=false;if(!isfinite(distance)||distance<0||!segment(b,s,rgb(s->origin),distance,&collision)){finish(b,i,s,statistics,3);return;}
     if(collision){increment(b,statistics,0u);return;}
     float3 evaluation=rgb(((float4*)(b+h[11]))[i]);
     if(!finite3(evaluation)){finish(b,i,s,statistics,4);return;}
     if(!found){float3 value=rgb(s->radiance)+rgb(s->terminal)*rgb(s->throughput)*evaluation;s->radiance=make_float4(value.x,value.y,value.z,0);finish(b,i,s,statistics);return;}
     ++s->counters.x;
-    unsigned int flags=u[47];bool volumeOnly=(flags&2u)!=0u;
-    float opacity=flags?1.f:fminf(fmaxf(p[19],0.f),1.f),transmission=volumeOnly?1.f:fminf(fmaxf(p[24],0.f),1.f);
+    unsigned int flags=u[Compact?19:47];bool volumeOnly=(flags&2u)!=0u;
+    float opacity=flags?1.f:fminf(fmaxf(p[Compact?11:19],0.f),1.f),transmission=volumeOnly?1.f:fminf(fmaxf(p[Compact?12:24],0.f),1.f);
     float3 local=rgb(s->terminal)*rgb(s->throughput)*evaluation*(opacity*(1.f-transmission));
     s->radiance.x+=local.x;s->radiance.y+=local.y;s->radiance.z+=local.z;
     if(transmission<=0.f&&opacity>=1.f){finish(b,i,s,statistics);return;}
@@ -166,10 +166,10 @@ __device__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*sta
     if(s->counters.x>=h[6]){finish(b,i,s,statistics);return;}
     int compact=-1;bool entering=false;rtr_medium::PathVolumeInfo candidate=s->volumes;
     if(flags){
-        compact=boundaryIndex(b,u[44]);if(compact<0){finish(b,i,s,statistics,6);return;}
+        compact=boundaryIndex(b,u[Compact?16:44]);if(compact<0){finish(b,i,s,statistics,6);return;}
         const Boundary entry=table(b)[compact];
-        if(u[45]!=(unsigned int)entry.priority||u[46]!=entry.orientation||flags!=entry.flags){finish(b,i,s,statistics,7);return;}
-        entering=(u[29]==2u)==(entry.orientation!=0u);
+        if(u[Compact?17:45]!=(unsigned int)entry.priority||u[Compact?18:46]!=entry.orientation||flags!=entry.flags){finish(b,i,s,statistics,7);return;}
+        entering=(u[Compact?15:29]==2u)==(entry.orientation!=0u);
         if(entering)for(unsigned int j=0;j<candidate.volumeIndexListSize;j++)if(candidate.volumeIndexList[j]==(unsigned int)compact){finish(b,i,s,statistics,8);return;}
         const auto status=entering?rtr_medium::add(&candidate,compact,priorities(b),h[7]):rtr_medium::remove(&candidate,compact,priorities(b),h[7]);
         if(status!=rtr_medium::OK){finish(b,i,s,statistics,9);return;}
@@ -178,19 +178,19 @@ __device__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*sta
     if(volumeOnly){s->volumes=candidate;}else{
         float n1,n2;
         if(flags){n1=ior(b,s->volumes.currentVolumeIndex);n2=ior(b,candidate.currentVolumeIndex);}
-        else{float exterior=ior(b,s->volumes.currentVolumeIndex);n1=u[29]==2u?p[25]:exterior;n2=u[29]==2u?exterior:p[25];}
-        float3 normal=normalize(make_float3(p[12],p[13],p[14]));
-        float3 tint=make_float3(fminf(fmaxf(p[16],0),1),fminf(fmaxf(p[17],0),1),fminf(fmaxf(p[18],0),1));
+        else{float exterior=ior(b,s->volumes.currentVolumeIndex);n1=u[Compact?15:29]==2u?p[Compact?13:25]:exterior;n2=u[Compact?15:29]==2u?exterior:p[Compact?13:25];}
+        float3 normal=normalize(make_float3(p[Compact?4:12],p[Compact?5:13],p[Compact?6:14]));
+        float3 tint=make_float3(fminf(fmaxf(p[Compact?8:16],0),1),fminf(fmaxf(p[Compact?9:17],0),1),fminf(fmaxf(p[Compact?10:18],0),1));
         if(dot(normal,-direction)<=0.f){finish(b,i,s,statistics,10);return;}
         unsigned int seed=h[36]^h[34]*0x967a889bu^h[35]*0x02e5be93u;bool reflection;float multiplier=transmission;
         bool firstInterface=!s->counters.y;
         float3 factor,nextDirection;
-        if(p[15]>0.f&&n1!=n2){
+        if(p[Compact?7:15]>0.f&&n1!=n2){
             reflection=firstInterface&&h[37]==0u?h[35]==0u:random(s->control.z,seed,s->counters.x)<.5f;
             unsigned int microfacetSeed=h[36]^h[34]*0x967a889bu;
             float u0=random(s->control.z,microfacetSeed^0xa511e9b3u,s->counters.x);
             float u1=random(s->control.z,microfacetSeed^0x63d83595u,s->counters.x);
-            if(!roughGlass(direction,normal,n1,n2,tint,p[15],u0,u1,reflection,&nextDirection,&factor)){finish(b,i,s,statistics,10);return;}
+            if(!roughGlass(direction,normal,n1,n2,tint,p[Compact?7:15],u0,u1,reflection,&nextDirection,&factor)){finish(b,i,s,statistics,10);return;}
             // The pinned weight already divides by its 1/2 lobe PDF. Deterministic splitting
             // averages two explicit lobes; roulette chooses one with that same probability.
             factor*=multiplier;
@@ -238,8 +238,9 @@ __device__ __forceinline__ void reduceStatistics(unsigned char*b,unsigned int*st
 }
 extern "C" __global__ void native_optical_step(unsigned char*b,int count){
     const int i=blockIdx.x*blockDim.x+threadIdx.x;
-    if(((unsigned int*)b)[46]==0u){if(i<count)rtr_optical_step_impl(b,count,nullptr);return;}
+    const bool compact=((unsigned int*)b)[47]!=0u;
+    if(((unsigned int*)b)[46]==0u){if(i<count){if(compact)rtr_optical_step_impl<true>(b,count,nullptr);else rtr_optical_step_impl<false>(b,count,nullptr);}return;}
     unsigned int statistics[4]={0u,0u,0u,0u};
-    if(i<count)rtr_optical_step_impl(b,count,statistics);
+    if(i<count){if(compact)rtr_optical_step_impl<true>(b,count,statistics);else rtr_optical_step_impl<false>(b,count,statistics);}
     rtr_optical::reduceStatistics(b,statistics);
 }

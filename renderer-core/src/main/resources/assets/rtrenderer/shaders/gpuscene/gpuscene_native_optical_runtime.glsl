@@ -19,6 +19,16 @@ void gsOpticalStoreAt(GsOpticalStorage destination,uint byteOffset,uint item,Gpu
     destination.lanes[base+12u]=identity;
 }
 void gsOpticalStore(uint byteOffset,uint item,GpuScenePayload hit,uvec4 identity) {
+    if(gsOptical.storage.lanes[11u].w!=0u) {
+        uint base=byteOffset/16u+item*6u;
+        gsOptical.storage.lanes[base]=floatBitsToUint(hit.worldPositionAndDistance);
+        gsOptical.storage.lanes[base+1u]=floatBitsToUint(hit.worldNormalAndRoughness);
+        gsOptical.storage.lanes[base+2u]=floatBitsToUint(hit.baseColorAndOpacity);
+        gsOptical.storage.lanes[base+3u]=uvec4(floatBitsToUint(hit.transmissionIor.xy),hit.state.xy);
+        gsOptical.storage.lanes[base+4u]=hit.mediumBoundary;
+        gsOptical.storage.lanes[base+5u]=identity;
+        return;
+    }
     gsOpticalStoreAt(gsOptical.storage,byteOffset,item,hit,identity);
 }
 GpuScenePayload gsOpticalLoadAt(GsOpticalStorage source,uint byteOffset,uint item) {
@@ -88,7 +98,7 @@ void main() {
             gsOptical.storage.lanes[base+6u]=floatBitsToUint(vec4(1,1,1,normalizeWeight));
             if(firstPass) {
                 hit=gsTraceRadiance(origin,direction,launch);
-                if(!directPrimary)gsOpticalStore(primaryOffset,initialItem,hit,uvec4(pixelIndex,sampleIndex,0,0));
+                if(!directPrimary)gsOpticalStoreAt(gsOptical.storage,primaryOffset,initialItem,hit,uvec4(pixelIndex,sampleIndex,0,0));
                 if(gsOptical.primaryAddress!=0ul)
                     gsOpticalStoreAt(GsOpticalStorage(gsOptical.primaryAddress),0u,globalPath,hit,uvec4(pixelIndex,sampleIndex,0,0));
                 gsOptical.storage.lanes[gsOptical.storage.lanes[3u].y/16u+globalPath]=uvec4(0u);

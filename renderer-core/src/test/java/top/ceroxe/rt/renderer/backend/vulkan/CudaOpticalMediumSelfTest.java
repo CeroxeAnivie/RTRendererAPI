@@ -20,7 +20,7 @@ public final class CudaOpticalMediumSelfTest {
         var boundary=new CudaBoundaryMediumAbi.Boundary(Integer.MIN_VALUE|3,MediumBoundary.surface(medium).withPriority(-7));
         var plan=CudaOpticalMediumAbi.plan(137,101,8,1,512L*1024*1024);
         require(plan.paths()==110696&&plan.tilePixels()==plan.pixels(),"all spatial samples fit one ordinary optical tile");
-        require(plan.primaryOffset()>=plan.hitOffset()+plan.tilePaths()*208+plan.tilePaths()*16,"initial primary cache is disjoint from mutable hit/evaluation");
+        require(plan.primaryOffset()>=plan.hitOffset()+plan.tilePaths()*plan.hitBytes()+plan.tilePaths()*16,"initial primary cache is disjoint from mutable hit/evaluation");
         require(plan.transmittanceOffset()==plan.primaryOffset()+plan.cachedPrimaryPaths()*208,"shared initial primary cache matches its declared extent");
         require(plan.primaryBytes()==plan.paths()*208L,"complete Vulkan-owned primary storage remains budgeted");
         require(plan.bytes()==plan.emissionOffset()+plan.paths()*16L,"complete accumulated radiance output");
@@ -107,19 +107,25 @@ public final class CudaOpticalMediumSelfTest {
         require(!cached.sameAssets(new CudaOpticalMediumManager.FrameScene(texturedFrame,plan,prefix,List.of(identityBoundary),replacementDensity)),
                 "same-id optical texture generation replacement invalidates immutable assets");
         long minimum=plan.sceneBytes()+plan.paths()*(plan.externalPrimary()?32L:240L)+65536
-                +8L*(256+208+16+(plan.externalPrimary()&&!plan.directPrimary()?208:0));
-        expectIllegal(()->CudaOpticalMediumAbi.plan(137,101,8,1,density,minimum-1,plan.externalPrimary()));
+                +8L*(256+plan.hitBytes()+16+(plan.externalPrimary()&&!plan.directPrimary()?208:0));
+        expectIllegal(()->CudaOpticalMediumAbi.plan(137,101,8,1,density,minimum-1,plan.externalPrimary(),plan.directPrimary(),plan.compactHits()));
         CudaOpticalMediumProfile.requireSupported(texturedFrame,new MediumSceneIndex.NativeScene(List.of(),new int[0]),true);
     }
     private static void verifyStorageLayouts() {
         long cap=512L*1024*1024;var density=CudaMediumDensityAbi.Scene.empty();
-        var external=CudaOpticalMediumAbi.plan(1920,1080,1,0,density,cap,true,false);
-        var direct=CudaOpticalMediumAbi.plan(1920,1080,1,0,density,cap,true,true);
+        var external=CudaOpticalMediumAbi.plan(1920,1080,1,0,density,cap,true,false,false);
+        var direct=CudaOpticalMediumAbi.plan(1920,1080,1,0,density,cap,true,true,false);
+        var compact=CudaOpticalMediumAbi.plan(1920,1080,1,0,density,cap,true,true,true);
+        require(compact.hitBytes()==96&&direct.hitBytes()==208,"only mutable continuation hits use the compact layout");
+        require((compact.pixels()+compact.tilePixels()-1)/compact.tilePixels()==2,
+                "compact continuation fits the same-budget 1080p frame in two tiles");
+        require(compact.primaryBytes()==direct.primaryBytes()&&compact.cachedPrimaryPaths()==0,
+                "compact hits retain every full original primary sample");
         require(direct.cachedPrimaryPaths()==0&&direct.transmittanceOffset()==direct.primaryOffset(),
                 "direct Vulkan primary reuse reserves no duplicate CUDA hit cache");
         require((direct.pixels()+direct.tilePixels()-1)/direct.tilePixels()==3,
                 "removing duplicate primary storage reduces the same-budget 1080p optical path to three tiles");
-        var legacy=CudaOpticalMediumAbi.plan(1920,1080,1,0,density,cap,false);
+        var legacy=CudaOpticalMediumAbi.plan(1920,1080,1,0,density,cap,false,false,false);
         int externalTiles=(external.pixels()+external.tilePixels()-1)/external.tilePixels();
         int legacyTiles=(legacy.pixels()+legacy.tilePixels()-1)/legacy.tilePixels();
         require(external.externalPrimary()&&!legacy.externalPrimary(),"both same-budget storage paths remain explicit for controlled A/B");
@@ -133,6 +139,23 @@ public final class CudaOpticalMediumSelfTest {
         require(legacy.transmittanceOffset()==legacy.primaryOffset()+legacy.paths()*208,
                 "the baseline retains its original full-frame shared primary layout");
         var frame=RenderFrameRequest.builder(1,1920,1080,CameraState.lookAt(0,0,0,0,0,-1).build()).build();
+        for(boolean compactHits:new boolean[]{false,true})for(int samples:new int[]{1,2,4,8}) {
+            var layout=CudaOpticalMediumAbi.plan(1920,1080,samples,0,density,cap,true,true,compactHits);
+            require(layout.tilePixels()>0&&layout.bytes()+CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE<=cap,
+                    "every SPP/layout keeps the identical CUDA resident cap");
+            require(layout.evaluationOffset()==layout.hitOffset()+(long)layout.tilePaths()*layout.hitBytes(),
+                    "mutable hits cannot overlap terminal evaluation");
+            require(layout.primaryOffset()==layout.evaluationOffset()+(long)layout.tilePaths()*16,
+                    "evaluation cannot overlap complete-frame outputs");
+            var sampledFrame=frame.toBuilder().antiAliasing(samples==1?AntiAliasingState.disabled():AntiAliasingState.multisampled(samples)).build();
+            var header=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(layout,sampledFrame,List.of(),new int[0])).order(ByteOrder.nativeOrder());
+            require(header.getInt(4)==3&&header.getInt(188)==(compactHits?1:0),
+                    "both producers use an explicit versioned hit layout");
+            int first=(layout.pixels()-1)/layout.tilePixels()*layout.tilePixels();
+            CudaOpticalMediumAbi.updateTile(header,layout,first,layout.pixels()-first,0,0);
+            require(header.getInt(188)==(compactHits?1:0)&&header.getInt(8)==(layout.pixels()-first)*samples,
+                    "tail tiles preserve the hit layout and complete sample count");
+        }
         var scene=new CudaOpticalMediumManager.FrameScene(frame,external,
                 CudaOpticalMediumAbi.scenePrefix(external,frame,List.of(),new int[0],density),List.of(),density);
         require(CudaOpticalMediumManager.requiredBytes(scene)==external.bytes()+65536+external.primaryBytes(),

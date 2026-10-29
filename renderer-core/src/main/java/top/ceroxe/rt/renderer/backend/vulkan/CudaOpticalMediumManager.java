@@ -64,11 +64,12 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             int samples=frame.antiAliasing().samplesPerPixel();long limit=residentLimit();
             var base=CudaOpticalMediumAbi.plan(width,height,samples,boundaries.size(),limit);
             long minimum=base.sceneBytes()+(long)base.paths()*((base.externalPrimary()?0:CudaOpticalMediumAbi.HIT_BYTES)+2L*CudaOpticalMediumAbi.COLOR_BYTES)
-                    +(long)samples*(CudaOpticalMediumAbi.STATE_BYTES+CudaOpticalMediumAbi.HIT_BYTES+CudaOpticalMediumAbi.COLOR_BYTES
+                    +(long)samples*(CudaOpticalMediumAbi.STATE_BYTES+base.hitBytes()+CudaOpticalMediumAbi.COLOR_BYTES
                         +(base.externalPrimary()&&!base.directPrimary()?CudaOpticalMediumAbi.HIT_BYTES:0))
                     +CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE;
             var density=densityCache.prepare(frame.environment().cameraMedium(),boundaries,textures,limit-minimum);
-            var plan=CudaOpticalMediumAbi.plan(width,height,samples,boundaries.size(),density,limit,base.externalPrimary());
+            var plan=CudaOpticalMediumAbi.plan(width,height,samples,boundaries.size(),density,limit,
+                    base.externalPrimary(),base.directPrimary(),base.compactHits());
             byte[] metadata=CudaOpticalMediumAbi.scenePrefix(plan,frame,boundaries,scene.containing(),density);
             return new FrameScene(frame,plan,metadata,boundaries,density);
         }catch(ArithmeticException|IllegalArgumentException invalid){throw unsupported(invalid.getMessage());}

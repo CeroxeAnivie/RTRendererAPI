@@ -136,7 +136,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                     plan.externalPrimary(),width,height,opticalSamples,Math.min(cap,CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES),plan.bytes(),
                     plan.externalPrimary()?plan.primaryBytes():0,plan.tilePixels(),tiles,warmup,frames,nativeFrames,queries,interfaces,
                     coldNanos/1e6,elapsed/1e6,frames*1e9/elapsed,median,p95));
-            json.insert(2,String.format(Locale.ROOT,"  \"directPrimary\":%s,\n  \"reducedCounters\":%s,\n",plan.directPrimary(),CudaOpticalMediumAbi.reducedCounters()));
+            json.insert(2,String.format(Locale.ROOT,"  \"directPrimary\":%s,\n  \"compactHits\":%s,\n  \"mutableHitBytes\":%d,\n  \"reducedCounters\":%s,\n",plan.directPrimary(),plan.compactHits(),plan.hitBytes(),CudaOpticalMediumAbi.reducedCounters()));
             for(int frame=0;frame<frames;frame++){if(frame>0)json.append(',');json.append(nanos[frame]);}
             json.append("],\n  \"comparisons\":[").append(String.join(",",RESULTS)).append("]\n}\n");
             Files.writeString(OUTPUT.resolve("benchmark.json"),json);

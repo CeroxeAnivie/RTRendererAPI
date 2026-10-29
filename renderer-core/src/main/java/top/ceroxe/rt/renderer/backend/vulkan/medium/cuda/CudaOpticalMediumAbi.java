@@ -11,20 +11,23 @@ import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 
 /** Independent non-scattering dielectric continuation; original primary samples remain intact. */
 public final class CudaOpticalMediumAbi {
-    public static final int MAGIC=0x524f5031,VERSION=2,HEADER_BYTES=384,BOUNDARY_BYTES=64;
+    public static final int MAGIC=0x524f5031,VERSION=3,HEADER_BYTES=384,BOUNDARY_BYTES=64;
     public static final int STATE_BYTES=256,HIT_BYTES=208,COLOR_BYTES=16,STATISTICS_OFFSET=112,STATISTICS_BYTES=16;
+    public static final int COMPACT_HIT_BYTES=96;
     public static final long DEFAULT_RESIDENT_BYTES=512L*1024*1024,ALLOCATION_ALLOWANCE=65536;
     public static final String EXTERNAL_PRIMARY_PROPERTY="top.ceroxe.rt.medium.cuda.opticalExternalPrimary";
     public static final String DIRECT_PRIMARY_PROPERTY="top.ceroxe.rt.medium.cuda.opticalDirectPrimary";
     public static final String REDUCED_COUNTERS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalReducedCounters";
+    public static final String COMPACT_HITS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalCompactHits";
     private CudaOpticalMediumAbi() { }
     public record Plan(int pixels,int samples,int tilePixels,int boundaryCount,int stateOffset,int hitOffset,
             int evaluationOffset,int primaryOffset,int transmittanceOffset,int emissionOffset,int priorityOffset,
-            int sceneBytes,long bytes,boolean externalPrimary,boolean directPrimary) {
+            int sceneBytes,long bytes,boolean externalPrimary,boolean directPrimary,boolean compactHits) {
         public int paths(){return Math.multiplyExact(pixels,samples);}
         public int tilePaths(){return Math.multiplyExact(tilePixels,samples);}
         public long primaryBytes(){return Math.multiplyExact((long)paths(),HIT_BYTES);}
         public int cachedPrimaryPaths(){return externalPrimary?(directPrimary?0:tilePaths()):paths();}
+        public int hitBytes(){return compactHits?COMPACT_HIT_BYTES:HIT_BYTES;}
     }
     public static Plan plan(int width,int height,int samples,int boundaries,long residentLimit) {
         return plan(width,height,samples,boundaries,CudaMediumDensityAbi.Scene.empty(),residentLimit);
@@ -40,6 +43,11 @@ public final class CudaOpticalMediumAbi {
     }
     public static Plan plan(int width,int height,int samples,int boundaries,CudaMediumDensityAbi.Scene density,long residentLimit,
             boolean externalPrimary,boolean directPrimary) {
+        return plan(width,height,samples,boundaries,density,residentLimit,externalPrimary,directPrimary,
+                Boolean.parseBoolean(System.getProperty(COMPACT_HITS_PROPERTY,"true")));
+    }
+    public static Plan plan(int width,int height,int samples,int boundaries,CudaMediumDensityAbi.Scene density,long residentLimit,
+            boolean externalPrimary,boolean directPrimary,boolean compactHits) {
         directPrimary &= externalPrimary;
         if(width<1||height<1||(samples!=1&&samples!=2&&samples!=4&&samples!=8)||boundaries<0)
             throw new IllegalArgumentException("invalid native optical dimensions or boundary count");
@@ -48,15 +56,16 @@ public final class CudaOpticalMediumAbi {
         int scene=Math.addExact(Math.toIntExact((priority+(long)boundaries*4+15)&~15L),density.bytes());
         long finalBytes=Math.multiplyExact((long)paths,(externalPrimary?0:HIT_BYTES)+2L*COLOR_BYTES);
         long available=Math.min(DEFAULT_RESIDENT_BYTES,residentLimit)-ALLOCATION_ALLOWANCE-scene-finalBytes;
-        int tilePixels=Math.toIntExact(Math.min(pixels,available/((long)samples*(STATE_BYTES+HIT_BYTES+COLOR_BYTES+(externalPrimary&&!directPrimary?HIT_BYTES:0)))));
+        int hitBytes=compactHits?COMPACT_HIT_BYTES:HIT_BYTES;
+        int tilePixels=Math.toIntExact(Math.min(pixels,available/((long)samples*(STATE_BYTES+hitBytes+COLOR_BYTES+(externalPrimary&&!directPrimary?HIT_BYTES:0)))));
         if(tilePixels<1)throw new IllegalArgumentException("complete native optical frame exceeds the CUDA resident cap");
         int hit=Math.toIntExact(scene+(long)tilePixels*samples*STATE_BYTES);
-        int evaluation=Math.toIntExact(hit+(long)tilePixels*samples*HIT_BYTES);
+        int evaluation=Math.toIntExact(hit+(long)tilePixels*samples*hitBytes);
         int primary=Math.toIntExact(evaluation+(long)tilePixels*samples*COLOR_BYTES);
         int attenuation=Math.toIntExact(primary+(long)(externalPrimary?(directPrimary?0:tilePixels*samples):paths)*HIT_BYTES);
         int emission=Math.toIntExact(attenuation+(long)paths*COLOR_BYTES);
         long bytes=Math.addExact(emission,(long)paths*COLOR_BYTES);
-        return new Plan(pixels,samples,tilePixels,boundaries,scene,hit,evaluation,primary,attenuation,emission,priority,scene,bytes,externalPrimary,directPrimary);
+        return new Plan(pixels,samples,tilePixels,boundaries,scene,hit,evaluation,primary,attenuation,emission,priority,scene,bytes,externalPrimary,directPrimary,compactHits);
     }
     public static byte[] scene(Plan plan,RenderFrameRequest frame,List<CudaBoundaryMediumAbi.Boundary> source,int[] containing) {
         return scene(plan,frame,source,containing,CudaMediumDensityAbi.Scene.empty());
@@ -95,7 +104,7 @@ public final class CudaOpticalMediumAbi {
         packed.putFloat(160,environmentScatter.red()).putFloat(164,environmentScatter.green()).putFloat(168,environmentScatter.blue())
                 .putFloat(172,frame.environment().cameraMedium().anisotropy()).putInt(176,frame.mediumTransport().scatteringBounces())
                 .putInt(180,plan.directPrimary()?1:0)
-                .putInt(184,reducedCounters()?1:0);
+                .putInt(184,reducedCounters()?1:0).putInt(188,plan.compactHits()?1:0);
         var boundaries=new ArrayList<>(source);boundaries.sort((a,b)->Integer.compareUnsigned(a.slot(),b.slot()));
         var compact=new HashMap<Integer,Integer>();
         for(int index=0;index<boundaries.size();index++) {
