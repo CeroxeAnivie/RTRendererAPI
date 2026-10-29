@@ -94,6 +94,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             for(int frame=0;frame<warmup;frame++)capture(null,request(camera,1,budget,blueSky()));
             long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
             long queriesBefore=CudaOpticalMediumManager.diagnosticQueries.sum(),interfacesBefore=CudaOpticalMediumManager.diagnosticInterfaces.sum();
+            var roundBefore=OpticalFrameTimings.KERNEL_PHASES?OpticalFrameTimings.roundSnapshot():null;
             long[] profileBefore=OpticalFrameTimings.snapshot();long submitBefore=submitNanos,pollBefore=pollNanos;
             long pollWorkBefore=pollWorkNanos,pollGapBefore=pollGapNanos;
             var gpuBefore=renderer.diagnostics().frameGpuTiming();
@@ -124,6 +125,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                         .append(",\n\"finalGpuSamples\":").append(gpuAfter.completedSamples()-gpuBefore.completedSamples())
                         .append(",\n\"kernelPhaseSamplingEnabled\":").append(OpticalFrameTimings.KERNEL_PHASES).append("\n}\n");
                 Files.writeString(OUTPUT.resolve("frame-components.json"),attribution);
+                if(roundBefore!=null)Files.writeString(OUTPUT.resolve("round-breakdown.json"),OpticalFrameTimings.roundDeltaJson(roundBefore));
             }
             long nativeFrames=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
             long queries=CudaOpticalMediumManager.diagnosticQueries.sum()-queriesBefore,interfaces=CudaOpticalMediumManager.diagnosticInterfaces.sum()-interfacesBefore;
@@ -142,6 +144,9 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                     plan.externalPrimary()?plan.primaryBytes():0,plan.tilePixels(),tiles,warmup,frames,nativeFrames,queries,interfaces,
                     coldNanos/1e6,elapsed/1e6,frames*1e9/elapsed,median,p95));
             json.insert(2,String.format(Locale.ROOT,"  \"directPrimary\":%s,\n  \"compactHits\":%s,\n  \"compactStates\":%s,\n  \"mutableHitBytes\":%d,\n  \"mutableStateBytes\":%d,\n  \"reducedCounters\":%s,\n",plan.directPrimary(),plan.compactHits(),plan.compactStates(),plan.hitBytes(),plan.stateBytes(),CudaOpticalMediumAbi.reducedCounters()));
+            json.insert(2,"  \"minimalStateWrites\":"+CudaOpticalMediumAbi.minimalStateWrites()+",\n");
+            json.insert(2,"  \"transposedHits\":"+plan.transposedHits()+",\n");
+            json.insert(2,"  \"transposedStates\":"+plan.transposedStates()+",\n");
             for(int frame=0;frame<frames;frame++){if(frame>0)json.append(',');json.append(nanos[frame]);}
             json.append("],\n  \"comparisons\":[").append(String.join(",",RESULTS)).append("]\n}\n");
             Files.writeString(OUTPUT.resolve("benchmark.json"),json);

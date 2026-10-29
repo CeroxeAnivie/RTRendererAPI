@@ -20,13 +20,15 @@ void gsOpticalStoreAt(GsOpticalStorage destination,uint byteOffset,uint item,Gpu
 }
 void gsOpticalStore(uint byteOffset,uint item,GpuScenePayload hit,uvec4 identity) {
     if((gsOptical.storage.lanes[11u].w&1u)!=0u) {
-        uint base=byteOffset/16u+item*6u;
+        bool transposed=(gsOptical.storage.lanes[11u].w&8u)!=0u;
+        uint stride=transposed?gsOptical.storage.lanes[0u].z:1u;
+        uint base=byteOffset/16u+item*(transposed?1u:6u);
         gsOptical.storage.lanes[base]=floatBitsToUint(hit.worldPositionAndDistance);
-        gsOptical.storage.lanes[base+1u]=floatBitsToUint(hit.worldNormalAndRoughness);
-        gsOptical.storage.lanes[base+2u]=floatBitsToUint(hit.baseColorAndOpacity);
-        gsOptical.storage.lanes[base+3u]=uvec4(floatBitsToUint(hit.transmissionIor.xy),hit.state.xy);
-        gsOptical.storage.lanes[base+4u]=hit.mediumBoundary;
-        gsOptical.storage.lanes[base+5u]=identity;
+        gsOptical.storage.lanes[base+1u*stride]=floatBitsToUint(hit.worldNormalAndRoughness);
+        gsOptical.storage.lanes[base+2u*stride]=floatBitsToUint(hit.baseColorAndOpacity);
+        gsOptical.storage.lanes[base+3u*stride]=uvec4(floatBitsToUint(hit.transmissionIor.xy),hit.state.xy);
+        gsOptical.storage.lanes[base+4u*stride]=hit.mediumBoundary;
+        gsOptical.storage.lanes[base+5u*stride]=identity;
         return;
     }
     gsOpticalStoreAt(gsOptical.storage,byteOffset,item,hit,identity);
@@ -70,6 +72,25 @@ vec3 gsOpticalScatteringLight(vec3 origin,vec3 direction,uint seed,uvec4 launch)
     }
     return result;
 }
+// State scalar planes use the actual tile path count, including partial final tiles.
+uvec4 gsOpticalStateRead(uint item,uint lane) {
+    uint state=gsOptical.storage.lanes[2u].y/4u;
+    if((gsOptical.storage.lanes[11u].w&16u)!=0u){
+        uint paths=gsOptical.storage.lanes[0u].z,word=state+lane*4u*paths+item;uvec4 value;
+        for(uint c=0u;c<4u;c++){uint at=word+c*paths;value[c]=gsOptical.storage.lanes[at/4u][at%4u];}return value;
+    }
+    uint lanes=(gsOptical.storage.lanes[11u].w&2u)!=0u?7u:16u;
+    return gsOptical.storage.lanes[state/4u+item*lanes+lane];
+}
+void gsOpticalStateWrite(uint item,uint lane,uvec4 value) {
+    uint state=gsOptical.storage.lanes[2u].y/4u;
+    if((gsOptical.storage.lanes[11u].w&16u)!=0u){
+        uint paths=gsOptical.storage.lanes[0u].z,word=state+lane*4u*paths+item;
+        for(uint c=0u;c<4u;c++){uint at=word+c*paths;gsOptical.storage.lanes[at/4u][at%4u]=value[c];}return;
+    }
+    uint lanes=(gsOptical.storage.lanes[11u].w&2u)!=0u?7u:16u;
+    gsOptical.storage.lanes[state/4u+item*lanes+lane]=value;
+}
 void main() {
     if(gl_LaunchIDEXT.x>=gsOptical.pixelCount)return;
     ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
@@ -85,18 +106,23 @@ void main() {
     for(uint sampleIndex=0u;sampleIndex<samples;sampleIndex++) {
         uint item=gl_LaunchIDEXT.x*samples+sampleIndex,globalPath=pixelIndex*samples+sampleIndex;
         uint initialItem=gsOptical.primaryAddress!=0ul?item:globalPath;
-        uint base=stateOffset/16u+item*stateLanes;GpuScenePayload hit;vec3 origin,direction;
+        GpuScenePayload hit;vec3 origin,direction;
         if(gsOptical.initialize!=0ul) {
-            for(uint lane=0u;lane<stateLanes;lane++)gsOptical.storage.lanes[base+lane]=uvec4(0u);
+            if((gsOptical.storage.lanes[11u].w&4u)!=0u) {
+                // The remaining five lanes are assigned below before any consumer reads them.
+                gsOpticalStateWrite(item,4u,uvec4(0u));
+                gsOpticalStateWrite(item,5u,uvec4(0u));
+                for(uint lane=7u;lane<stateLanes;lane++)gsOpticalStateWrite(item,lane,uvec4(0u));
+            } else for(uint lane=0u;lane<stateLanes;lane++)gsOpticalStateWrite(item,lane,uvec4(0u));
             vec2 samplePosition=vec2(pixel)+gsSubpixelOffset(sampleIndex,samples);if(!gsExactProjectionActive())samplePosition+=jitter;
             origin=gsFrameCameraPosition();direction=gsRayDirectionAtSample(samplePosition,extent);
-            gsOptical.storage.lanes[base]=floatBitsToUint(vec4(origin,gsRayEpsilon(origin)));
-            gsOptical.storage.lanes[base+1u]=floatBitsToUint(vec4(direction,0));
-            gsOptical.storage.lanes[base+2u]=uvec4(1u,0u,globalPath,1u);
-            gsOptical.storage.lanes[base+3u]=uvec4(floatBitsToUint(vec3(1)),gsOptical.storage.lanes[6u].w);
+            gsOpticalStateWrite(item,0u,floatBitsToUint(vec4(origin,gsRayEpsilon(origin))));
+            gsOpticalStateWrite(item,1u,floatBitsToUint(vec4(direction,0)));
+            gsOpticalStateWrite(item,2u,uvec4(1u,0u,globalPath,1u));
+            gsOpticalStateWrite(item,3u,uvec4(floatBitsToUint(vec3(1)),gsOptical.storage.lanes[6u].w));
             uint branches=gsOptical.storage.lanes[9u].y==0u?2u:1u;
             float normalizeWeight=1.0/float(gsOptical.storage.lanes[8u].y*branches);
-            gsOptical.storage.lanes[base+6u]=floatBitsToUint(vec4(1,1,1,normalizeWeight));
+            gsOpticalStateWrite(item,6u,floatBitsToUint(vec4(1,1,1,normalizeWeight)));
             if(firstPass) {
                 hit=gsTraceRadiance(origin,direction,launch);
                 if(!directPrimary)gsOpticalStoreAt(gsOptical.storage,primaryOffset,initialItem,hit,uvec4(pixelIndex,sampleIndex,0,0));
@@ -107,16 +133,16 @@ void main() {
             } else hit=directPrimary?gsOpticalLoadAt(GsOpticalStorage(gsOptical.primaryAddress),0u,globalPath)
                 :gsOpticalLoadAt(gsOptical.storage,primaryOffset,initialItem);
         } else {
-            if(gsOptical.storage.lanes[base+2u].x==0u)continue;
-            origin=uintBitsToFloat(gsOptical.storage.lanes[base]).xyz;direction=uintBitsToFloat(gsOptical.storage.lanes[base+1u]).xyz;
-            if(gsOptical.storage.lanes[base+2u].x==2u){
-                uint epoch=gsOptical.storage.lanes[base+2u].w;
+            if(gsOpticalStateRead(item,2u).x==0u)continue;
+            origin=uintBitsToFloat(gsOpticalStateRead(item,0u)).xyz;direction=uintBitsToFloat(gsOpticalStateRead(item,1u)).xyz;
+            if(gsOpticalStateRead(item,2u).x==2u){
+                uint epoch=gsOpticalStateRead(item,2u).w;
                 vec3 light=gsOpticalScatteringLight(origin,direction,globalPath^epoch*0x9e3779b9u^gsOptical.storage.lanes[9u].x,launch);
                 gsOptical.storage.lanes[evaluationOffset/16u+item]=uvec4(floatBitsToUint(light),epoch);continue;
             }
             hit=gsTraceRadiance(origin,direction,launch);
         }
-        uint epoch=gsOptical.storage.lanes[base+2u].w;
+        uint epoch=gsOpticalStateRead(item,2u).w;
         gsOpticalStore(hitOffset,item,hit,uvec4(pixelIndex,sampleIndex,epoch,epoch));
         vec3 value=vec3(0);
         if(hit.state.x==0u)value=gsEvaluateTerminalRadiance(hit,origin,direction);

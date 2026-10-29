@@ -21,6 +21,7 @@ for label, enabled in [('A1', True), ('B1', False), ('B2', False), ('A2', True)]
     directory.mkdir(exist_ok=True)
     command = [launch['executable'], *launch['jvmArgs'], '-D' + args.property + '=' + str(enabled).lower(),
                '-Dtop.ceroxe.rt.medium.opticalFrameProfile=false', '-Dtop.ceroxe.rt.medium.opticalKernelPhaseProfile=false',
+               '-Dtop.ceroxe.rt.medium.opticalFinishPhaseProfile=false', '-Dtop.ceroxe.rt.medium.opticalEntryPhaseProfile=false',
                '-Dtop.ceroxe.rt.medium.opticalBenchmarkWarmup=' + str(args.warmup),
                '-Dtop.ceroxe.rt.medium.opticalBenchmarkFrames=' + str(args.frames),
                '-Dtop.ceroxe.rt.medium.opticalProductionDirectory=' + str(directory),

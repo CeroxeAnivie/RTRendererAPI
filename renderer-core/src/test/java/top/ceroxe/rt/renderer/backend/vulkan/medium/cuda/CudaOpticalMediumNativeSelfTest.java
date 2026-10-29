@@ -18,6 +18,16 @@ public final class CudaOpticalMediumNativeSelfTest {
             bool good=rtr_roughglass::sample(fixed,make_float3(r[7]),r[3],r[0],r[1],r[4],r[5],r[6]!=0,&direction,&weight);
             r[8]=direction.x;r[9]=direction.y;r[10]=direction.z;r[11]=weight.x;r[12]=good;
         }
+        extern "C" __global__ void optical_hit_layout_probe(unsigned char*b,int count){
+            int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
+            unsigned int*h=(unsigned int*)b,*output=(unsigned int*)(b+h[11])+i*24;
+            const unsigned int full[24]={0,1,2,3,12,13,14,15,16,17,18,19,24,25,28,29,44,45,46,47,48,49,50,51};
+            for(unsigned int k=0;k<24;k++){
+                if((h[47]&9u)==9u){rtr_optical::HitView<true,true> view={(const unsigned int*)(b+h[10]),h[2],(unsigned int)i};output[k]=view.u(k);}
+                else if(h[47]&1u){rtr_optical::HitView<true,false> view={(const unsigned int*)(b+h[10]),h[2],(unsigned int)i};output[k]=view.u(k);}
+                else{rtr_optical::HitView<false,false> view={(const unsigned int*)(b+h[10]),h[2],(unsigned int)i};output[k]=view.u(full[k]);}
+            }
+        }
         extern "C" __global__ void optical_counter_probe(unsigned char*b,int count){
             int i=blockIdx.x*blockDim.x+threadIdx.x;
             bool reduced=((unsigned int*)b)[46]!=0u;
@@ -27,6 +37,20 @@ public final class CudaOpticalMediumNativeSelfTest {
                 if(i%3==0)rtr_optical::increment(b,reduced?statistics:nullptr,2u);
             }
             if(reduced)rtr_optical::reduceStatistics(b,statistics);
+        }
+        template<bool Transposed> __device__ void stateLayoutProbe(unsigned char*b,int i,int count){
+            rtr_optical::StateAccess<true,Transposed> access(b,i,count);auto*s=access.operator->();
+            float*output=(float*)(b+((unsigned int*)b)[11])+i*28;
+            float4 vectors[5]={s->origin,s->direction,s->throughput,s->radiance,s->terminal};
+            for(int k=0;k<5;k++){output[k*4]=vectors[k].x;output[k*4+1]=vectors[k].y;output[k*4+2]=vectors[k].z;output[k*4+3]=vectors[k].w;}
+            unsigned int*u=(unsigned int*)output;u[20]=s->control.x;u[21]=s->control.y;u[22]=s->control.z;u[23]=s->control.w;
+            u[24]=s->counters.x;u[25]=s->counters.y;u[26]=s->counters.z;u[27]=s->counters.w;
+            s->origin=make_float4(i+.25f,i+.5f,i+.75f,i+1.f);s->control.w+=7u;s->counters.z=1u;
+            s->throughput.y+=2.f;s->radiance.z+=3.f;s->terminal.x+=4.f;
+        }
+        extern "C" __global__ void optical_state_layout_probe(unsigned char*b,int count){
+            int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
+            if(((unsigned int*)b)[47]&16u)stateLayoutProbe<true>(b,i,count);else stateLayoutProbe<false>(b,i,count);
         }
         """;
     public static void main(String[] args){
@@ -54,8 +78,65 @@ public final class CudaOpticalMediumNativeSelfTest {
             }
             verifyRoughGlass(cuda,arena);
             verifyCounterReduction(cuda,arena);
+            verifyHitLayouts(cuda,arena);
+            verifyStateLayouts(cuda,arena);
         }
         System.out.println("CudaOpticalMediumNativeSelfTest passed: pinned smooth/rough glass, independent double directions/energy, eta squared, black tint and TIR");
+    }
+    private static void verifyStateLayouts(CudaMediumRuntime cuda,Arena arena) {
+        int[] fields={0,1,2,3,4,5,6,7,12,13,14,15,16,17,18,19,24,25,26,27,8,9,10,11,20,21,22,23};
+        try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+PROBE,"optical_state_layout_probe")) {
+            for(int count:new int[]{1,31,32,33,255,256,257,1069})for(boolean transposed:new boolean[]{false,true}) {
+                int output=384+count*112,bytes=output+count*112+16;
+                try(var records=cuda.allocate(bytes)) {
+                    var host=arena.allocate(bytes,16);host.fill((byte)0x5a);
+                    host.set(JAVA_INT,8,count);host.set(JAVA_INT,36,384);host.set(JAVA_INT,44,output);host.set(JAVA_INT,188,transposed?18:2);
+                    for(int i=0;i<count;i++)for(int k=0;k<28;k++)
+                        host.set(JAVA_FLOAT,384+(transposed?k*(long)count+i:i*28L+k)*4,i*32f+k+.125f);
+                    cuda.upload(records.slice(0,bytes),host);cuda.launchBlocking(kernel,records.slice(0,bytes),count,1);
+                    cuda.download(records.slice(0,bytes),host);
+                    for(int i=0;i<count;i++)for(int k=0;k<28;k++) {
+                        float expected=i*32f+fields[k]+.125f;
+                        near(host.get(JAVA_FLOAT,output+(i*28L+k)*4),expected,0,"state read count="+count+" transposed="+transposed+" field="+k);
+                    }
+                    for(int i=0;i<count;i++)for(int k=0;k<28;k++) {
+                        float expected=i*32f+k+.125f;
+                        int bits=Float.floatToRawIntBits(expected);
+                        if(k<4)bits=Float.floatToRawIntBits(i+(k+1)*.25f);
+                        else if(k==11)bits+=7;else if(k==22)bits=1;
+                        else if(k==13)bits=Float.floatToRawIntBits(expected+2);
+                        else if(k==18)bits=Float.floatToRawIntBits(expected+3);
+                        else if(k==24)bits=Float.floatToRawIntBits(expected+4);
+                        long at=384+(transposed?k*(long)count+i:i*28L+k)*4;
+                        if(host.get(JAVA_INT,at)!=bits)throw new AssertionError("state write mismatch count="+count+" field="+k);
+                    }
+                    for(int k=0;k<4;k++)if(host.get(JAVA_INT,bytes-16+k*4L)!=0x5a5a5a5a)throw new AssertionError("state tail guard overwritten");
+                }
+            }
+        }
+    }
+    private static void verifyHitLayouts(CudaMediumRuntime cuda,Arena arena) {
+        int[] full={0,1,2,3,12,13,14,15,16,17,18,19,24,25,28,29,44,45,46,47,48,49,50,51};
+        try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+PROBE,"optical_hit_layout_probe")) {
+            for(int count:new int[]{1,31,32,33,255,256,257,1069})for(int flags:new int[]{0,1,9}) {
+                int hitBytes=flags==0?208:96,output=384+count*hitBytes,bytes=output+count*96+16;
+                try(var records=cuda.allocate(bytes)) {
+                    var host=arena.allocate(bytes,16);host.fill((byte)0x5a);
+                    host.set(JAVA_INT,8,count);host.set(JAVA_INT,40,384);host.set(JAVA_INT,44,output);host.set(JAVA_INT,188,flags);
+                    for(int i=0;i<count;i++)for(int k=0;k<24;k++){
+                        int word=flags==9?(k/4)*count*4+i*4+k%4:i*(hitBytes/4)+(flags==0?full[k]:k);
+                        host.set(JAVA_INT,384+word*4L,0x3f000000+i*64+k);
+                    }
+                    cuda.upload(records.slice(0,bytes),host);cuda.launchBlocking(kernel,records.slice(0,bytes),count,1);
+                    cuda.download(records.slice(0,bytes),host);
+                    for(int i=0;i<count;i++)for(int k=0;k<24;k++)
+                        if(host.get(JAVA_INT,output+(i*24L+k)*4)!=0x3f000000+i*64+k)
+                            throw new AssertionError("hit layout field mismatch count="+count+" flags="+flags+" path="+i+" field="+k);
+                    for(int k=0;k<4;k++)if(host.get(JAVA_INT,bytes-16+k*4L)!=0x5a5a5a5a)
+                        throw new AssertionError("hit layout tail guard overwritten");
+                }
+            }
+        }
     }
     private static void verifyCounterReduction(CudaMediumRuntime cuda,Arena arena) {
         try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+PROBE,"optical_counter_probe")) {

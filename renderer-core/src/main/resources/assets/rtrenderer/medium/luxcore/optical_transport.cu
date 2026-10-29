@@ -12,19 +12,27 @@ struct PhaseSample {
         atomicAdd(((unsigned long long*)(buffer+192))+phase,ended-started);
         phase=value;started=clock64();
     }}
-    __device__ ~PhaseSample(){if(selected)atomicAdd(((unsigned long long*)(buffer+192))+phase,clock64()-started);}
+    __device__ void end(){if(selected){atomicAdd(((unsigned long long*)(buffer+192))+phase,clock64()-started);selected=false;}}
+    __device__ ~PhaseSample(){end();}
 };
+#if !defined(RTR_OPTICAL_FINISH_PROFILE) && !defined(RTR_OPTICAL_ENTRY_PROFILE)
 #define RTR_PHASE_SCOPE(b) rtr_optical::PhaseSample phaseSample(b)
 #define RTR_PHASE_NEXT(p) phaseSample.next(p)
 #else
 #define RTR_PHASE_SCOPE(b)
 #define RTR_PHASE_NEXT(p)
 #endif
+#else
+#define RTR_PHASE_SCOPE(b)
+#define RTR_PHASE_NEXT(p)
+#endif
 template<bool Small> struct State;
 template<> struct __align__(16) State<true> {
+    static constexpr bool SMALL=true;
     float4 origin,direction;uint4 control;float4 throughput,radiance;uint4 counters;float4 terminal;
 };
 template<> struct __align__(16) State<false> {
+    static constexpr bool SMALL=false;
     float4 origin,direction;uint4 control;float4 throughput,radiance;uint4 counters;float4 terminal;
     rtr_medium::PathVolumeInfo volumes;
 };
@@ -36,10 +44,45 @@ __device__ float3 rgb(float4 v){return make_float3(v.x,v.y,v.z);}
 __device__ float peak(float3 v){return fmaxf(v.x,fmaxf(v.y,v.z));}
 __device__ bool finite3(float3 v){return isfinite(v.x)&&isfinite(v.y)&&isfinite(v.z);}
 template<bool Small> __device__ State<Small> *states(unsigned char *b){return (State<Small> *)(b+((unsigned int*)b)[9]);}
-template<bool Small> __device__ unsigned int selectedVolume(const State<Small>*s){
-    if constexpr(Small)return 0xffffffffu;else return s->volumes.currentVolumeIndex;
+// Scalar planes make the same state component contiguous across a warp. References
+// preserve individual writes and early returns without eagerly loading or flushing state.
+template<class T> struct VectorRef {
+    T &x,&y,&z,&w;
+    __device__ __forceinline__ VectorRef(T*base,unsigned int paths):x(base[0]),y(base[paths]),z(base[2u*paths]),w(base[3u*paths]){}
+};
+struct Float4Ref:VectorRef<float> {
+    __device__ __forceinline__ Float4Ref(float*base,unsigned int paths):VectorRef<float>(base,paths){}
+    __device__ __forceinline__ operator float4()const{return make_float4(x,y,z,w);}
+    __device__ __forceinline__ void operator=(float4 v){x=v.x;y=v.y;z=v.z;w=v.w;}
+};
+struct Uint4Ref:VectorRef<unsigned int> {
+    __device__ __forceinline__ Uint4Ref(unsigned int*base,unsigned int paths):VectorRef<unsigned int>(base,paths){}
+};
+template<bool Small,bool Transposed> struct StateAccess {
+    State<Small>*value;
+    __device__ __forceinline__ StateAccess(unsigned char*b,unsigned int item,unsigned int paths):value(states<Small>(b)+item){}
+    __device__ __forceinline__ State<Small>*operator->(){return value;}
+};
+template<> struct StateAccess<true,true> {
+    static constexpr bool SMALL=true;
+    Float4Ref origin,direction;Uint4Ref control;Float4Ref throughput,radiance;Uint4Ref counters;Float4Ref terminal;
+    __device__ __forceinline__ StateAccess(float*base,unsigned int paths):origin(base,paths),direction(base+4u*paths,paths),
+        control((unsigned int*)base+8u*paths,paths),throughput(base+12u*paths,paths),radiance(base+16u*paths,paths),
+        counters((unsigned int*)base+20u*paths,paths),terminal(base+24u*paths,paths){}
+    __device__ __forceinline__ StateAccess(unsigned char*b,unsigned int item,unsigned int paths):
+        StateAccess((float*)(b+((unsigned int*)b)[9])+item,paths){}
+    __device__ __forceinline__ StateAccess*operator->(){return this;}
+};
+
+template<class S> __device__ unsigned int selectedVolume(const S*s){
+    if constexpr(S::SMALL)return 0xffffffffu;else return s->volumes.currentVolumeIndex;
 }
-template<bool Compact> __device__ float *hit(unsigned char *b,int i){return (float *)(b+((unsigned int*)b)[10])+(Compact?24:52)*i;}
+template<bool Compact,bool Transposed> struct HitView {
+    const unsigned int *data;unsigned int paths,item;
+    __device__ unsigned int word(unsigned int n)const{return Transposed?(n/4u)*paths*4u+item*4u+(n&3u):item*(Compact?24u:52u)+n;}
+    __device__ unsigned int u(unsigned int n)const{return data[word(n)];}
+    __device__ float f(unsigned int n)const{return __uint_as_float(u(n));}
+};
 __device__ const Boundary *table(unsigned char *b){return (const Boundary *)(b+384);}
 __device__ float3 sigmaS(unsigned char*b,unsigned int selected){return selected==0xffffffffu
         ?make_float3(((float*)b)[40],((float*)b)[41],((float*)b)[42])
@@ -54,17 +97,31 @@ __device__ float random(unsigned int path,unsigned int seed,unsigned int event){
     v^=v>>16;v*=0x7feb352du;v^=v>>15;return (v>>8)*(1.f/16777216.f);
 }
 __device__ void increment(unsigned char*b,unsigned int*statistics,unsigned int index){if(statistics)++statistics[index];else atomicAdd(((unsigned int*)b)+28+index,1u);}
-template<bool Small> __device__ void finish(unsigned char *b,int i,State<Small> *s,unsigned int*statistics,unsigned int error=0){
+template<class S> __device__ void finish(unsigned char *b,int i,S *s,unsigned int*statistics,unsigned int error=0){
+#ifdef RTR_OPTICAL_FINISH_PROFILE
+    PhaseSample finishSample(b);
+#define RTR_FINISH_NEXT(p) finishSample.next(p)
+#else
+#define RTR_FINISH_NEXT(p)
+#endif
     s->control.x=0;s->control.y=error;unsigned int *h=(unsigned int*)b;
+    RTR_FINISH_NEXT(1u);
     if(error){increment(b,statistics,1u);return;}
     const unsigned int at=global(b,i);float4 *output=(float4 *)(b+h[14]);
+    RTR_FINISH_NEXT(2u);
     float3 value=rgb(output[at])+rgb(s->radiance)*s->terminal.w;
+    RTR_FINISH_NEXT(3u);
     if(!finite3(value)||value.x<0.f||value.y<0.f||value.z<0.f){increment(b,statistics,1u);return;}
-    output[at]=make_float4(value.x,value.y,value.z,0.f);increment(b,statistics,3u);
+    RTR_FINISH_NEXT(4u);
+    output[at]=make_float4(value.x,value.y,value.z,0.f);
+    RTR_FINISH_NEXT(5u);
+    increment(b,statistics,3u);
+    RTR_FINISH_NEXT(6u);
+#undef RTR_FINISH_NEXT
 }
-template<bool Small> __device__ bool initialize(unsigned char *b,State<Small> *s){
+template<class S> __device__ bool initialize(unsigned char *b,S *s){
     unsigned int*h=(unsigned int*)b;if(h[0]!=0x524f5031u||h[1]!=4u||h[8]>32||h[6]<1||h[6]>32)return false;
-    if constexpr(Small){if(h[7]!=0u||h[8]!=0u)return false;}
+    if constexpr(S::SMALL){if(h[7]!=0u||h[8]!=0u)return false;}
     else{
         rtr_medium::PathVolumeInfo_Init(&s->volumes);
         for(unsigned int j=0;j<h[8];j++)if(rtr_medium::add(&s->volumes,h[64+j],priorities(b),h[7])!=rtr_medium::OK)return false;
@@ -72,7 +129,7 @@ template<bool Small> __device__ bool initialize(unsigned char *b,State<Small> *s
     s->counters.z=1;return true;
 }
 __device__ float ior(unsigned char *b,unsigned int selected){return selected==0xffffffffu?((float*)b)[23]:table(b)[selected].absorption.w;}
-template<bool Small> __device__ bool segment(unsigned char*b,State<Small>*s,float3 origin,float distance,bool*collision,bool sample=true){
+template<class S> __device__ bool segment(unsigned char*b,S*s,float3 origin,float distance,bool*collision,bool sample=true){
     *collision=false;
     distance=fminf(fmaxf(distance,0.f),s->throughput.w);if(distance==0.f)return true;
     const unsigned int selected=selectedVolume(s);const float*h=(const float*)b;
@@ -164,11 +221,23 @@ extern "C" __global__ void native_optical_reset(unsigned char*b,int count){if(bl
     for(int j=0;j<8;j++)((unsigned long long*)(b+192))[j]=0ull;
 #endif
 }}
-template<bool Compact,bool Small> __device__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*statistics){
+#ifdef RTR_OPTICAL_ENTRY_PROFILE
+#define RTR_ENTRY_SCOPE(b) rtr_optical::PhaseSample entrySample(b)
+#define RTR_ENTRY_NEXT(p) entrySample.next(p)
+#define RTR_ENTRY_END() entrySample.end()
+#else
+#define RTR_ENTRY_SCOPE(b)
+#define RTR_ENTRY_NEXT(p)
+#define RTR_ENTRY_END()
+#endif
+template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=false> __device__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*statistics){
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;using namespace rtr_optical;
     RTR_PHASE_SCOPE(b);
-    State<Small>*s=states<Small>(b)+i;if(s->control.x==0)return;unsigned int*h=(unsigned int*)b;
+    RTR_ENTRY_SCOPE(b);
+    unsigned int*h=(unsigned int*)b;StateAccess<Small,TransposedState> state(b,i,h[2]);auto*s=state.operator->();if(s->control.x==0)return;
+    RTR_ENTRY_NEXT(1u);
     if(!s->counters.z&&!initialize(b,s)){finish(b,i,s,statistics,1);return;}
+    RTR_ENTRY_NEXT(2u);
     if(s->control.x==2u){
         RTR_PHASE_NEXT(6u);
         const float4 lighting=((float4*)(b+h[11]))[i];
@@ -184,9 +253,13 @@ template<bool Compact,bool Small> __device__ void rtr_optical_step_impl(unsigned
         if(peak(rgb(s->throughput))<=((float*)b)[32]||s->throughput.w<=0.f){finish(b,i,s,statistics);return;}
         increment(b,statistics,0u);return;
     }
-    float*p=hit<Compact>(b,i);unsigned int*u=(unsigned int*)p;
-    if(u[Compact?20:48]!=s->control.z/h[3]||u[Compact?21:49]!=s->control.z%h[3]||u[Compact?23:51]!=s->control.w){finish(b,i,s,statistics,2);return;}
-    bool found=u[Compact?14:28]!=0;float distance=found?p[3]:s->throughput.w;
+    RTR_ENTRY_NEXT(3u);
+    HitView<Compact,Transposed> view={(const unsigned int*)(b+h[10]),h[2],(unsigned int)i};
+    RTR_ENTRY_NEXT(4u);
+    if(view.u(Compact?20:48)!=s->control.z/h[3]||view.u(Compact?21:49)!=s->control.z%h[3]||view.u(Compact?23:51)!=s->control.w){finish(b,i,s,statistics,2);return;}
+    RTR_ENTRY_NEXT(5u);
+    bool found=view.u(Compact?14:28)!=0;float distance=found?view.f(3):s->throughput.w;
+    RTR_ENTRY_END();
     RTR_PHASE_NEXT(1u);
     bool collision=false;if(!isfinite(distance)||distance<0||!segment(b,s,rgb(s->origin),distance,&collision)){finish(b,i,s,statistics,3);return;}
     RTR_PHASE_NEXT(2u);
@@ -195,8 +268,8 @@ template<bool Compact,bool Small> __device__ void rtr_optical_step_impl(unsigned
     if(!finite3(evaluation)){finish(b,i,s,statistics,4);return;}
     if(!found){float3 value=rgb(s->radiance)+rgb(s->terminal)*rgb(s->throughput)*evaluation;s->radiance=make_float4(value.x,value.y,value.z,0);finish(b,i,s,statistics);return;}
     ++s->counters.x;
-    unsigned int flags=u[Compact?19:47];bool volumeOnly=(flags&2u)!=0u;
-    float opacity=flags?1.f:fminf(fmaxf(p[Compact?11:19],0.f),1.f),transmission=volumeOnly?1.f:fminf(fmaxf(p[Compact?12:24],0.f),1.f);
+    unsigned int flags=view.u(Compact?19:47);bool volumeOnly=(flags&2u)!=0u;
+    float opacity=flags?1.f:fminf(fmaxf(view.f(Compact?11:19),0.f),1.f),transmission=volumeOnly?1.f:fminf(fmaxf(view.f(Compact?12:24),0.f),1.f);
     float3 local=rgb(s->terminal)*rgb(s->throughput)*evaluation*(opacity*(1.f-transmission));
     s->radiance.x+=local.x;s->radiance.y+=local.y;s->radiance.z+=local.z;
     if(transmission<=0.f&&opacity>=1.f){finish(b,i,s,statistics);return;}
@@ -207,10 +280,10 @@ template<bool Compact,bool Small> __device__ void rtr_optical_step_impl(unsigned
     if constexpr(!Small)candidate=s->volumes;
     if(flags){
         if constexpr(Small){finish(b,i,s,statistics,6);return;}else{
-        compact=boundaryIndex(b,u[Compact?16:44]);if(compact<0){finish(b,i,s,statistics,6);return;}
+        compact=boundaryIndex(b,view.u(Compact?16:44));if(compact<0){finish(b,i,s,statistics,6);return;}
         const Boundary entry=table(b)[compact];
-        if(u[Compact?17:45]!=(unsigned int)entry.priority||u[Compact?18:46]!=entry.orientation||flags!=entry.flags){finish(b,i,s,statistics,7);return;}
-        entering=(u[Compact?15:29]==2u)==(entry.orientation!=0u);
+        if(view.u(Compact?17:45)!=(unsigned int)entry.priority||view.u(Compact?18:46)!=entry.orientation||flags!=entry.flags){finish(b,i,s,statistics,7);return;}
+        entering=(view.u(Compact?15:29)==2u)==(entry.orientation!=0u);
         if(entering)for(unsigned int j=0;j<candidate.volumeIndexListSize;j++)if(candidate.volumeIndexList[j]==(unsigned int)compact){finish(b,i,s,statistics,8);return;}
         const auto status=entering?rtr_medium::add(&candidate,compact,priorities(b),h[7]):rtr_medium::remove(&candidate,compact,priorities(b),h[7]);
         if(status!=rtr_medium::OK){finish(b,i,s,statistics,9);return;}
@@ -219,21 +292,21 @@ template<bool Compact,bool Small> __device__ void rtr_optical_step_impl(unsigned
     float3 direction=rgb(s->direction);
     if(volumeOnly){if constexpr(!Small)s->volumes=candidate;}else{
         float exterior=ior(b,selectedVolume(s));
-        float n1=u[Compact?15:29]==2u?p[Compact?13:25]:exterior,n2=u[Compact?15:29]==2u?exterior:p[Compact?13:25];
+        float n1=view.u(Compact?15:29)==2u?view.f(Compact?13:25):exterior,n2=view.u(Compact?15:29)==2u?exterior:view.f(Compact?13:25);
         if constexpr(!Small)if(flags){n1=ior(b,s->volumes.currentVolumeIndex);n2=ior(b,candidate.currentVolumeIndex);}
-        float3 normal=normalize(make_float3(p[Compact?4:12],p[Compact?5:13],p[Compact?6:14]));
-        float3 tint=make_float3(fminf(fmaxf(p[Compact?8:16],0),1),fminf(fmaxf(p[Compact?9:17],0),1),fminf(fmaxf(p[Compact?10:18],0),1));
+        float3 normal=normalize(make_float3(view.f(Compact?4:12),view.f(Compact?5:13),view.f(Compact?6:14)));
+        float3 tint=make_float3(fminf(fmaxf(view.f(Compact?8:16),0),1),fminf(fmaxf(view.f(Compact?9:17),0),1),fminf(fmaxf(view.f(Compact?10:18),0),1));
         if(dot(normal,-direction)<=0.f){finish(b,i,s,statistics,10);return;}
         unsigned int seed=h[36]^h[34]*0x967a889bu^h[35]*0x02e5be93u;bool reflection;float multiplier=transmission;
         bool firstInterface=!s->counters.y;
         float3 factor,nextDirection;
-        if(p[Compact?7:15]>0.f&&n1!=n2){
+        if(view.f(Compact?7:15)>0.f&&n1!=n2){
             RTR_PHASE_NEXT(5u);
             reflection=firstInterface&&h[37]==0u?h[35]==0u:random(s->control.z,seed,s->counters.x)<.5f;
             unsigned int microfacetSeed=h[36]^h[34]*0x967a889bu;
             float u0=random(s->control.z,microfacetSeed^0xa511e9b3u,s->counters.x);
             float u1=random(s->control.z,microfacetSeed^0x63d83595u,s->counters.x);
-            if(!roughGlass(direction,normal,n1,n2,tint,p[Compact?7:15],u0,u1,reflection,&nextDirection,&factor)){finish(b,i,s,statistics,10);return;}
+            if(!roughGlass(direction,normal,n1,n2,tint,view.f(Compact?7:15),u0,u1,reflection,&nextDirection,&factor)){finish(b,i,s,statistics,10);return;}
             // The pinned weight already divides by its 1/2 lobe PDF. Deterministic splitting
             // averages two explicit lobes; roulette chooses one with that same probability.
             factor*=multiplier;
@@ -258,7 +331,7 @@ template<bool Compact,bool Small> __device__ void rtr_optical_step_impl(unsigned
         increment(b,statistics,2u);
     }
     RTR_PHASE_NEXT(6u);
-    float3 point=make_float3(p[0],p[1],p[2]);
+    float3 point=make_float3(view.f(0),view.f(1),view.f(2));
     float epsilon=fmaxf(1.e-5f,fmaxf(fabsf(point.x),fmaxf(fabsf(point.y),fabsf(point.z)))*2.e-7f);
     if(!finite3(point)||!finite3(direction)){finish(b,i,s,statistics,12);return;}
     s->direction=make_float4(direction.x,direction.y,direction.z,0);
@@ -286,6 +359,12 @@ __device__ __forceinline__ void reduceStatistics(unsigned char*b,unsigned int*st
 }
 __device__ void rtr_optical_dispatch(unsigned char*b,int count,unsigned int*statistics){
     const unsigned int layout=((unsigned int*)b)[47];
+    if((layout&18u)==18u){
+        if((layout&9u)==9u)rtr_optical_step_impl<true,true,true,true>(b,count,statistics);
+        else if(layout&1u)rtr_optical_step_impl<true,true,false,true>(b,count,statistics);
+        else rtr_optical_step_impl<false,true,false,true>(b,count,statistics);return;
+    }
+    if((layout&9u)==9u){if(layout&2u)rtr_optical_step_impl<true,true,true>(b,count,statistics);else rtr_optical_step_impl<true,false,true>(b,count,statistics);return;}
     if(layout&2u){if(layout&1u)rtr_optical_step_impl<true,true>(b,count,statistics);else rtr_optical_step_impl<false,true>(b,count,statistics);}
     else{if(layout&1u)rtr_optical_step_impl<true,false>(b,count,statistics);else rtr_optical_step_impl<false,false>(b,count,statistics);}
 }
@@ -297,14 +376,20 @@ extern "C" __global__ void native_optical_step(unsigned char*b,int count){
     rtr_optical::reduceStatistics(b,statistics);
 }
 // Independent entry points keep each layout's compiled resources separate.
-template<bool Compact,bool Small> __device__ __forceinline__ void rtr_optical_fixed(unsigned char*b,int count){
+template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=false> __device__ __forceinline__ void rtr_optical_fixed(unsigned char*b,int count){
     const int i=blockIdx.x*blockDim.x+threadIdx.x;
-    if(((unsigned int*)b)[46]==0u){if(i<count)rtr_optical_step_impl<Compact,Small>(b,count,nullptr);return;}
+    if(((unsigned int*)b)[46]==0u){if(i<count)rtr_optical_step_impl<Compact,Small,Transposed,TransposedState>(b,count,nullptr);return;}
     unsigned int statistics[4]={0u,0u,0u,0u};
-    if(i<count)rtr_optical_step_impl<Compact,Small>(b,count,statistics);
+    if(i<count)rtr_optical_step_impl<Compact,Small,Transposed,TransposedState>(b,count,statistics);
     rtr_optical::reduceStatistics(b,statistics);
 }
 extern "C" __global__ void native_optical_step_0(unsigned char*b,int count){rtr_optical_fixed<false,false>(b,count);}
 extern "C" __global__ void native_optical_step_1(unsigned char*b,int count){rtr_optical_fixed<true,false>(b,count);}
 extern "C" __global__ void native_optical_step_2(unsigned char*b,int count){rtr_optical_fixed<false,true>(b,count);}
 extern "C" __global__ void native_optical_step_3(unsigned char*b,int count){rtr_optical_fixed<true,true>(b,count);}
+extern "C" __global__ void native_optical_step_4(unsigned char*b,int count){rtr_optical_fixed<true,false,true>(b,count);}
+extern "C" __global__ void native_optical_step_5(unsigned char*b,int count){rtr_optical_fixed<true,true,true>(b,count);}
+
+extern "C" __global__ void native_optical_step_6(unsigned char*b,int count){rtr_optical_fixed<false,true,false,true>(b,count);}
+extern "C" __global__ void native_optical_step_7(unsigned char*b,int count){rtr_optical_fixed<true,true,false,true>(b,count);}
+extern "C" __global__ void native_optical_step_8(unsigned char*b,int count){rtr_optical_fixed<true,true,true,true>(b,count);}

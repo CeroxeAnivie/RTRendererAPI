@@ -50,7 +50,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         NativeState initialized;
         try{initialized=onNative(()->{var opened=CudaMediumRuntime.open(Integer.getInteger("top.ceroxe.rt.medium.cuda.deviceOrdinal",0));
             try{String source=CudaOpticalMediumSource.source();
-                var variants=new CudaMediumRuntime.BatchKernel[4];
+                var variants=new CudaMediumRuntime.BatchKernel[9];
                 for(int layout=0;layout<variants.length;layout++)variants[layout]=opened.compileBatchKernel(source,"native_optical_step_"+layout);
                 return new NativeState(opened,opened.compileBatchKernel(source,"native_optical_reset"),variants);}
             catch(RuntimeException|Error failure){try{opened.close();}catch(RuntimeException cleanup){failure.addSuppressed(cleanup);}throw failure;}
@@ -72,7 +72,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                     +CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE;
             var density=densityCache.prepare(frame.environment().cameraMedium(),boundaries,textures,limit-minimum);
             var plan=CudaOpticalMediumAbi.plan(width,height,samples,boundaries.size(),density,limit,
-                    base.externalPrimary(),base.directPrimary(),base.compactHits(),base.compactStates());
+                    base.externalPrimary(),base.directPrimary(),base.compactHits(),base.compactStates(),base.transposedHits(),base.transposedStates());
             byte[] metadata=CudaOpticalMediumAbi.scenePrefix(plan,frame,boundaries,scene.containing(),density);
             return new FrameScene(frame,plan,metadata,boundaries,density);
         }catch(ArithmeticException|IllegalArgumentException invalid){throw unsupported(invalid.getMessage());}
@@ -95,7 +95,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     }
     private CudaCameraMediumManager.Prepared prepareOnNative(FrameScene scene,GpuSceneRayTracingPipeline tracer,int slot,RtTlasBuildPlan buildPlan){
         var frame=scene.frame();var plan=scene.plan();ensureCapacity(plan);long address=storage.deviceAddress();
-        var step=steps[(plan.compactHits()?1:0)|(plan.compactStates()?2:0)];
+        var step=steps[plan.transposedStates()?6+(plan.transposedHits()?2:plan.compactHits()?1:0):plan.transposedHits()?4+(plan.compactStates()?1:0):((plan.compactHits()?1:0)|(plan.compactStates()?2:0))];
         long primaryAddress=plan.externalPrimary()?primary.deviceAddress():0;
         int opticalSamples=frame.mediumTransport().opticalSamples();
         int branches=frame.mediumTransport().firstInterfaceSampling()==top.ceroxe.rt.renderer.api.MediumTransport.FirstInterfaceSampling.DETERMINISTIC_SPLIT?2:1;
@@ -113,6 +113,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                     CudaOpticalMediumAbi.updateTile(metadata.asByteBuffer().order(ByteOrder.nativeOrder()),plan,first,pixels,opticalSample,branch);
                     boolean recordBuild=buildPending,uploadScene=first==0&&opticalSample==0&&branch==0;
                     int[] statistics={paths,0,0,0};
+                    int sampleIndex=opticalSample,branchIndex=branch;int[] roundIndex=OpticalFrameTimings.KERNEL_PHASES?new int[]{0}:null;
                     java.util.function.Consumer<CudaMediumRuntime.Slice> resolve=input->{
                         long resolveStarted=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
                         int queries=statistics[0];cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
@@ -121,7 +122,9 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                         for(int j=0;j<4;j++)statistics[j]=counters.get(ValueLayout.JAVA_INT,j*4L);
                         if(phaseCycles!=null){
                             cuda.download(input.slice(192,64),phaseCycles);
-                            for(int j=0;j<8;j++)OpticalFrameTimings.kernelPhases[j].add(phaseCycles.get(ValueLayout.JAVA_LONG,j*8L));
+                            long[] phases=new long[8];
+                            for(int j=0;j<8;j++){phases[j]=phaseCycles.get(ValueLayout.JAVA_LONG,j*8L);OpticalFrameTimings.kernelPhases[j].add(phases[j]);}
+                            OpticalFrameTimings.recordRound(sampleIndex,branchIndex,roundIndex[0]++,queries,statistics,phases);
                         }
                         diagnosticQueries.add(queries);diagnosticInterfaces.add(statistics[2]);
                         if(OpticalFrameTimings.ENABLED)OpticalFrameTimings.resolve.add(System.nanoTime()-resolveStarted);

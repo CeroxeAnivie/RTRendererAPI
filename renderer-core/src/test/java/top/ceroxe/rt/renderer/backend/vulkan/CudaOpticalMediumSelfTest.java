@@ -120,7 +120,7 @@ public final class CudaOpticalMediumSelfTest {
         require(compactState.stateBytes()==112&&compact.stateBytes()==256&&compactState.tilePixels()==compactState.pixels(),
                 "boundary-free compact state fits the complete 1080p frame within the identical cap");
         var boundaryState=CudaOpticalMediumAbi.plan(1920,1080,1,1,density,cap,true,true,true,true);
-        require(!boundaryState.compactStates()&&boundaryState.stateBytes()==256,
+        require(!boundaryState.transposedStates()&&!boundaryState.compactStates()&&boundaryState.stateBytes()==256,
                 "any explicit volume boundary preserves the complete 32-entry stack");
         require(compact.hitBytes()==96&&direct.hitBytes()==208,"only mutable continuation hits use the compact layout");
         require((compact.pixels()+compact.tilePixels()-1)/compact.tilePixels()==2,
@@ -145,8 +145,8 @@ public final class CudaOpticalMediumSelfTest {
         require(legacy.transmittanceOffset()==legacy.primaryOffset()+legacy.paths()*208,
                 "the baseline retains its original full-frame shared primary layout");
         var frame=RenderFrameRequest.builder(1,1920,1080,CameraState.lookAt(0,0,0,0,0,-1).build()).build();
-        for(boolean compactHits:new boolean[]{false,true})for(boolean compactStates:new boolean[]{false,true})for(int samples:new int[]{1,2,4,8}) {
-            var layout=CudaOpticalMediumAbi.plan(1920,1080,samples,0,density,cap,true,true,compactHits,compactStates);
+        for(boolean transposedState:new boolean[]{false,true})for(boolean transposed:new boolean[]{false,true})for(boolean compactHits:new boolean[]{false,true})for(boolean compactStates:new boolean[]{false,true})for(int samples:new int[]{1,2,4,8}) {
+            var layout=CudaOpticalMediumAbi.plan(1920,1080,samples,0,density,cap,true,true,compactHits,compactStates,transposed,transposedState);
             require(layout.tilePixels()>0&&layout.bytes()+CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE<=cap,
                     "every SPP/layout keeps the identical CUDA resident cap");
             require(layout.evaluationOffset()==layout.hitOffset()+(long)layout.tilePaths()*layout.hitBytes(),
@@ -158,11 +158,14 @@ public final class CudaOpticalMediumSelfTest {
             var sampledFrame=frame.toBuilder().antiAliasing(samples==1?AntiAliasingState.disabled():AntiAliasingState.multisampled(samples)).build();
             var header=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(layout,sampledFrame,List.of(),new int[0])).order(ByteOrder.nativeOrder());
             int layoutFlags=(compactHits?1:0)|(compactStates?2:0);
-            require(header.getInt(4)==4&&header.getInt(188)==layoutFlags,
+            require(layout.transposedStates()==(transposedState&&compactStates)&&((header.getInt(188)&16)!=0)==layout.transposedStates(),"scalar state layout is immutable and limited to boundary-free storage");
+            require(layout.transposedHits()==(transposed&&compactHits)&&((header.getInt(188)&8)!=0)==layout.transposedHits(),"transposed storage is explicit and limited to compact hits");
+            require(header.getInt(4)==4&&(header.getInt(188)&3)==layoutFlags,
                     "both producers use an explicit versioned hit layout");
             int first=(layout.pixels()-1)/layout.tilePixels()*layout.tilePixels();
             CudaOpticalMediumAbi.updateTile(header,layout,first,layout.pixels()-first,0,0);
-            require(header.getInt(188)==layoutFlags&&header.getInt(8)==(layout.pixels()-first)*samples,
+            require(((header.getInt(188)&8)!=0)==layout.transposedHits(),"tail tiles preserve transposed producer/consumer layout");
+            require((header.getInt(188)&3)==layoutFlags&&header.getInt(8)==(layout.pixels()-first)*samples,
                     "tail tiles preserve the hit layout and complete sample count");
         }
         var scene=new CudaOpticalMediumManager.FrameScene(frame,external,

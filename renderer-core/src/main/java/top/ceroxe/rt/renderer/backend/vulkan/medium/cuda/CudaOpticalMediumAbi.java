@@ -21,10 +21,13 @@ public final class CudaOpticalMediumAbi {
     public static final String REDUCED_COUNTERS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalReducedCounters";
     public static final String COMPACT_HITS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalCompactHits";
     public static final String COMPACT_STATES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalCompactStates";
+    public static final String TRANSPOSED_STATES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalTransposedStates";
+    public static final String TRANSPOSED_HITS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalTransposedHits";
+    public static final String MINIMAL_STATE_WRITES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalMinimalStateWrites";
     private CudaOpticalMediumAbi() { }
     public record Plan(int pixels,int samples,int tilePixels,int boundaryCount,int stateOffset,int hitOffset,
             int evaluationOffset,int primaryOffset,int transmittanceOffset,int emissionOffset,int priorityOffset,
-            int sceneBytes,long bytes,boolean externalPrimary,boolean directPrimary,boolean compactHits,boolean compactStates) {
+            int sceneBytes,long bytes,boolean externalPrimary,boolean directPrimary,boolean compactHits,boolean compactStates,boolean transposedHits,boolean transposedStates) {
         public int paths(){return Math.multiplyExact(pixels,samples);}
         public int tilePaths(){return Math.multiplyExact(tilePixels,samples);}
         public long primaryBytes(){return Math.multiplyExact((long)paths(),HIT_BYTES);}
@@ -56,8 +59,20 @@ public final class CudaOpticalMediumAbi {
     }
     public static Plan plan(int width,int height,int samples,int boundaries,CudaMediumDensityAbi.Scene density,long residentLimit,
             boolean externalPrimary,boolean directPrimary,boolean compactHits,boolean compactStates) {
+        return plan(width,height,samples,boundaries,density,residentLimit,externalPrimary,directPrimary,compactHits,compactStates,
+                Boolean.parseBoolean(System.getProperty(TRANSPOSED_HITS_PROPERTY,"true")));
+    }
+    public static Plan plan(int width,int height,int samples,int boundaries,CudaMediumDensityAbi.Scene density,long residentLimit,
+            boolean externalPrimary,boolean directPrimary,boolean compactHits,boolean compactStates,boolean transposedHits) {
+        return plan(width,height,samples,boundaries,density,residentLimit,externalPrimary,directPrimary,compactHits,compactStates,transposedHits,
+                Boolean.parseBoolean(System.getProperty(TRANSPOSED_STATES_PROPERTY,"true")));
+    }
+    public static Plan plan(int width,int height,int samples,int boundaries,CudaMediumDensityAbi.Scene density,long residentLimit,
+            boolean externalPrimary,boolean directPrimary,boolean compactHits,boolean compactStates,boolean transposedHits,boolean transposedStates) {
+        transposedHits &= compactHits;
         directPrimary &= externalPrimary;
         compactStates &= boundaries==0;
+        transposedStates &= compactStates;
         if(width<1||height<1||(samples!=1&&samples!=2&&samples!=4&&samples!=8)||boundaries<0)
             throw new IllegalArgumentException("invalid native optical dimensions or boundary count");
         int pixels=Math.toIntExact((long)width*height),paths=Math.multiplyExact(pixels,samples);
@@ -75,7 +90,7 @@ public final class CudaOpticalMediumAbi {
         int attenuation=Math.toIntExact(primary+(long)(externalPrimary?(directPrimary?0:tilePixels*samples):paths)*HIT_BYTES);
         int emission=Math.toIntExact(attenuation+(long)paths*COLOR_BYTES);
         long bytes=Math.addExact(emission,(long)paths*COLOR_BYTES);
-        return new Plan(pixels,samples,tilePixels,boundaries,scene,hit,evaluation,primary,attenuation,emission,priority,scene,bytes,externalPrimary,directPrimary,compactHits,compactStates);
+        return new Plan(pixels,samples,tilePixels,boundaries,scene,hit,evaluation,primary,attenuation,emission,priority,scene,bytes,externalPrimary,directPrimary,compactHits,compactStates,transposedHits,transposedStates);
     }
     public static byte[] scene(Plan plan,RenderFrameRequest frame,List<CudaBoundaryMediumAbi.Boundary> source,int[] containing) {
         return scene(plan,frame,source,containing,CudaMediumDensityAbi.Scene.empty());
@@ -114,7 +129,7 @@ public final class CudaOpticalMediumAbi {
         packed.putFloat(160,environmentScatter.red()).putFloat(164,environmentScatter.green()).putFloat(168,environmentScatter.blue())
                 .putFloat(172,frame.environment().cameraMedium().anisotropy()).putInt(176,frame.mediumTransport().scatteringBounces())
                 .putInt(180,plan.directPrimary()?1:0)
-                .putInt(184,reducedCounters()?1:0).putInt(188,(plan.compactHits()?1:0)|(plan.compactStates()?2:0));
+                .putInt(184,reducedCounters()?1:0).putInt(188,(plan.compactHits()?1:0)|(plan.compactStates()?2:0)|(minimalStateWrites()?4:0)|(plan.transposedHits()?8:0)|(plan.transposedStates()?16:0));
         var boundaries=new ArrayList<>(source);boundaries.sort((a,b)->Integer.compareUnsigned(a.slot(),b.slot()));
         var compact=new HashMap<Integer,Integer>();
         for(int index=0;index<boundaries.size();index++) {
@@ -147,6 +162,7 @@ public final class CudaOpticalMediumAbi {
                 .putInt(136,opticalSample).putInt(140,branch);
         for(int offset=STATISTICS_OFFSET;offset<STATISTICS_OFFSET+STATISTICS_BYTES;offset+=4)data.putInt(offset,0);
     }
+    public static boolean minimalStateWrites(){return Boolean.parseBoolean(System.getProperty(MINIMAL_STATE_WRITES_PROPERTY,"true"));}
     public static boolean reducedCounters() {
         return Boolean.parseBoolean(System.getProperty(REDUCED_COUNTERS_PROPERTY,"true"));
     }
