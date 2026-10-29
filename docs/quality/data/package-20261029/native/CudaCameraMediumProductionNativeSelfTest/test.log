@@ -1,0 +1,19 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+Oct 29, 2026 4:25:21 PM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=D:\Engineering\code\APIs\RTRendererAPI\build\luxcore-api-package-20261029\native-sealed\CudaCameraMediumProductionNativeSelfTest\validation.jsonl
+Native public HDR comparison=odd-hit-miss extent=67x49 hits=441 misses=2842 maxAbsolute=0.000290951361
+Native public HDR comparison=multitile-resize extent=319x233 hits=10609 misses=63718 maxAbsolute=0.000310408489
+Native public HDR comparison=bounded-medium-distant-receiver extent=67x49 hits=441 misses=2842 maxAbsolute=0.000291000246
+Native public HDR comparison=resize-small extent=37x29 hits=169 misses=904 maxAbsolute=0.000303915428
+Native public HDR comparison=sample-resolved-spp2 extent=67x49 hits=6566 misses=0 maxAbsolute=0.000309953320
+Native public HDR comparison=sample-resolved-spp8 extent=137x101 hits=110696 misses=0 maxAbsolute=0.000310329878
+Native public HDR comparison=exact-jitter-primary extent=71x53 hits=552 misses=3211 maxAbsolute=0.000310641226
+Native public HDR comparison=frame-local-ephemeral-TLAS extent=67x49 hits=441 misses=2842 maxAbsolute=0.000290951361
+Native production explicitly rejected=scattering-with-refractive-IOR reason=UNSUPPORTED_MEDIUM_TRANSPORT
+Native production explicitly rejected=scattering-surface-boundary reason=UNSUPPORTED_MEDIUM_TRANSPORT
+Native production explicitly rejected=lit-material reason=UNSUPPORTED_MEDIUM_TRANSPORT
+Native public HDR comparison=rejection-recovery extent=37x29 hits=169 misses=904 maxAbsolute=0.000303915428
+Native public HDR comparison=wait-cancellation-recovery extent=37x29 hits=169 misses=904 maxAbsolute=0.000303915428
+Native public HDR comparison=other-submission-thread extent=37x29 hits=169 misses=904 maxAbsolute=0.000303915428
+Native public HDR comparison=three-inflight-drained extent=37x29 hits=169 misses=904 maxAbsolute=0.000303915428
+CudaCameraMediumProductionNativeSelfTest passed: comparisons=12 accepted=23 rejected=3 publicProvider=vulkan-rt pendingClose=true; correctness only, not performance evidence

@@ -45,7 +45,7 @@ void main()
         vec3 p2 = gl_ObjectToWorldEXT * vec4(gsPosition(meshBase, indices.z), 1.0);
         vec4 uvFootprint = gsTriangleTextureFootprint(
             meshBase, indices, barycentrics, p0, p1, p2, gl_WorldRayOriginEXT,
-            uvec4(gl_LaunchIDEXT.xy,gl_LaunchSizeEXT.xy),
+            visibility.launchInfo,
             gl_InstanceCustomIndexEXT
         );
         vec4 vertexColor = shadingModel == GPU_SCENE_SHADING_LIGHTMAP_MODULATED

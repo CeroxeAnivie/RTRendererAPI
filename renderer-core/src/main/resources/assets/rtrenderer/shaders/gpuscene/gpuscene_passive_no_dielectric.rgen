@@ -1,0 +1,4 @@
+#version 460
+#define RTRENDERER_PASSIVE_MEDIA 1
+#define RTRENDERER_NO_DIELECTRIC 1
+#include "gpuscene_raygen.glsl"

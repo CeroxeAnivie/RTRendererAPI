@@ -1,0 +1,8 @@
+#version 460
+#define RTRENDERER_PASSIVE_MEDIA 1
+#define RTRENDERER_NO_DIELECTRIC 1
+#define RTRENDERER_PRIMARY_SHADE 1
+// Keep the 32-slot transport call graph structured instead of flattening every
+// lighting/continuation caller into the queue consumer entry point.
+#define RTRENDERER_STRUCTURED_PRIMARY_SHADE 1
+#include "gpuscene_raygen.glsl"

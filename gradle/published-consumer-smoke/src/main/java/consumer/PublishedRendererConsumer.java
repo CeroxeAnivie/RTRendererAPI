@@ -7,17 +7,18 @@ import java.util.Optional;
 
 import top.ceroxe.rt.renderer.api.AntiAliasingState;
 import top.ceroxe.rt.renderer.api.CameraState;
-import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.FramePrimitiveBatch;
-import top.ceroxe.rt.renderer.api.MediumBoundaryState;
-import top.ceroxe.rt.renderer.api.MediumTransportOptions;
-import top.ceroxe.rt.renderer.api.PrimitiveInstance;
 import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.FrameOutputFormat;
 import top.ceroxe.rt.renderer.api.HardwareCapabilities;
 import top.ceroxe.rt.renderer.api.HistoryResetReason;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
+import top.ceroxe.rt.renderer.api.Medium;
+import top.ceroxe.rt.renderer.api.MediumBoundary;
+import top.ceroxe.rt.renderer.api.MediumTransport;
 import top.ceroxe.rt.renderer.api.MeshAsset;
+import top.ceroxe.rt.renderer.api.PrimitiveInstance;
+import top.ceroxe.rt.renderer.api.Rgb;
 import top.ceroxe.rt.renderer.api.RendererGpuDevice;
 import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RendererConfig;
@@ -138,16 +139,29 @@ public final class PublishedRendererConsumer {
     }
 
     /** Compile-only proof that the published minor version exposes the complete medium contract. */
-    public static RenderFrameRequest withFrameMedium(RenderFrameRequest frame,MeshAsset closedMesh) {
-        if(!closedMesh.isClosedManifold()) throw new IllegalArgumentException("closed medium mesh required");
-        var medium=EnvironmentState.Medium.builder().absorption(.04f,.015f,.008f)
-                .scattering(.015f,.015f,.015f).emission(0,0,0).density(1)
-                .indexOfRefraction(1.333f).phaseAnisotropy(.2f).build();
-        var boundary=MediumBoundaryState.builder(medium).priority(1)
-                .orientation(MediumBoundaryState.Orientation.OUTWARD).surfaceInteraction(true).build();
-        var primitive=PrimitiveInstance.builder(closedMesh.id()).mediumBoundary(boundary).build();
-        return frame.toBuilder().mediumTransport(MediumTransportOptions.balanced().withOpticalSamples(2))
-                .primitiveBatch(FramePrimitiveBatch.builder().add(primitive).build()).build();
+    public static RenderFrameRequest withFrameMedium(RenderFrameRequest frame, MeshAsset closedMesh) {
+        Objects.requireNonNull(frame, "frame");
+        Objects.requireNonNull(closedMesh, "closedMesh");
+        if (!closedMesh.isClosedManifold()) {
+            throw new IllegalArgumentException("closed medium mesh required");
+        }
+        Medium medium = new Medium(
+                new Rgb(0.04F, 0.015F, 0.008F),
+                new Rgb(0.015F, 0.015F, 0.015F),
+                Rgb.ZERO,
+                1.0F,
+                1.333F,
+                0.2F
+        );
+        MediumBoundary boundary = new MediumBoundary(medium, 1,
+                MediumBoundary.Orientation.OUTWARD, true);
+        PrimitiveInstance primitive = PrimitiveInstance.builder(closedMesh.id())
+                .mediumBoundary(boundary)
+                .build();
+        return frame.toBuilder()
+                .mediumTransport(MediumTransport.balanced().withOpticalSamples(2))
+                .primitiveBatch(FramePrimitiveBatch.builder().add(primitive).build())
+                .build();
     }
 
     public static Optional<VulkanFrameInterop> vulkanInterop(Renderer renderer) {

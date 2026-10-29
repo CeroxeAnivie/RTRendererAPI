@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.Arrays
 import java.util.HexFormat
+import java.util.zip.ZipFile
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.tasks.JavaExec
@@ -455,7 +456,31 @@ tasks.register("generateRuntimeSupplyChainMetadata") {
             throw GradleException("Runtime license policy is missing: $unknownLicenses")
         }
 
-        val inventory = groupedArtifacts.map { (coordinate, moduleArtifacts) ->
+        val nvrtcArtifacts = ZipFile(rootProject.file("renderer-core/build/libs/renderer-core-$publishedApiVersion.jar")).use { archive ->
+            val resourceRoot = CudaNvrtcRuntime.RESOURCE_ROOT
+            val manifest = archive.getEntry(resourceRoot + "runtime-files.sha256")
+                ?: throw GradleException("renderer-core omits the packaged NVRTC runtime manifest")
+            archive.getInputStream(manifest).bufferedReader(StandardCharsets.UTF_8).use { it.readLines() }
+                .filter(String::isNotBlank).map { line ->
+                    val fields = line.split('\t')
+                    if (fields.size != 2 || !Regex("[0-9a-f]{64}").matches(fields[0]) ||
+                        !Regex("[A-Za-z0-9._-]+").matches(fields[1])) throw GradleException("Invalid NVRTC runtime manifest")
+                    val entry = archive.getEntry(resourceRoot + fields[1])
+                        ?: throw GradleException("renderer-core omits NVRTC resource ${fields[1]}")
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    archive.getInputStream(entry).use { input ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            digest.update(buffer, 0, count)
+                        }
+                    }
+                    if (HexFormat.of().formatHex(digest.digest()) != fields[0]) throw GradleException("NVRTC resource hash mismatch")
+                    RuntimeArtifactInventory(fields[1], "embedded-windows-x86_64", fields[0])
+                }
+        }
+        val inventory = (groupedArtifacts.map { (coordinate, moduleArtifacts) ->
             val moduleKey = coordinate.substringBeforeLast(':')
             val policy = checkNotNull(runtimeLicensePolicy[moduleKey])
             RuntimeModuleInventory(
@@ -469,7 +494,11 @@ tasks.register("generateRuntimeSupplyChainMetadata") {
                     )
                 }.sortedBy(RuntimeArtifactInventory::file)
             )
-        }.sortedBy(RuntimeModuleInventory::coordinate)
+        } + RuntimeModuleInventory(
+            "com.nvidia.cuda:nvrtc:${CudaNvrtcRuntime.VERSION}",
+            RuntimeLicensePolicy("LicenseRef-NVIDIA-CUDA-Toolkit", "NVIDIA CUDA Toolkit License"),
+            nvrtcArtifacts
+        )).sortedBy(RuntimeModuleInventory::coordinate)
 
         val components = inventory.map { module ->
             val parts = module.coordinate.split(':', limit = 3)
@@ -483,7 +512,9 @@ tasks.register("generateRuntimeSupplyChainMetadata") {
                 "version" to parts[2],
                 "purl" to "pkg:maven/${parts[0]}/${parts[1]}@${parts[2]}",
                 "licenses" to listOf(
-                    mapOf("license" to mapOf("id" to module.license.id, "name" to module.license.name))
+                    mapOf("license" to if (module.license.id.startsWith("LicenseRef-"))
+                        mapOf("name" to module.license.name, "url" to "https://docs.nvidia.com/cuda/eula/")
+                    else mapOf("id" to module.license.id, "name" to module.license.name))
                 ),
                 "hashes" to listOf(
                     mapOf("alg" to "SHA-256", "content" to primaryArtifact.sha256)

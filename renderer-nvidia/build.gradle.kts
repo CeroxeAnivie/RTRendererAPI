@@ -84,7 +84,11 @@ tasks.withType<JavaExec>().configureEach {
 }
 
 val nativeBridgeOutput = layout.buildDirectory.file("native/rtrenderer_nvidia.dll")
-val nativeBridgeBuildDirectory = layout.buildDirectory.dir("cmake/nvidia")
+// MSBuild/ShaderMake still create MAX_PATH-limited tracking files in nested dependency builds.
+// Allow a short, caller-owned CMake directory without moving source or packaging local paths.
+val nativeBridgeBuildDirectory = layout.dir(
+    providers.gradleProperty("nvidiaBridgeBuildDirectory").map { file(it) }
+).orElse(layout.buildDirectory.dir("cmake/nvidia"))
 val cmakeExecutableProperty = discoveredPath(
     "cmakeExecutable", "CMAKE_EXECUTABLE", listOf("D:/CMake/bin/cmake.exe")
 ) { it.isFile && it.name.equals("cmake.exe", ignoreCase = true) }

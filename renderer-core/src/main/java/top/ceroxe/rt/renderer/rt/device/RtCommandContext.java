@@ -560,12 +560,30 @@ public final class RtCommandContext implements AutoCloseable {
             long timelineSignalValue,
             CommandRecorder recorder
     ) {
+        return submitTimedExternalSynchronizedOneTimeAsync(timingLabel, 0L,
+                timelineWaitSemaphore, timelineWaitValue, timelineSignalSemaphore, timelineSignalValue, recorder);
+    }
+
+    /** One final frame submission may wait for CUDA's binary handoff and feature timelines. */
+    public AsyncSubmission submitTimedExternalSynchronizedOneTimeAsync(
+            String timingLabel, long binaryWaitSemaphore, long timelineWaitSemaphore, long timelineWaitValue,
+            long timelineSignalSemaphore, long timelineSignalValue, CommandRecorder recorder) {
+        return submitTimedExternalSynchronizedOneTimeAsync(timingLabel, binaryWaitSemaphore, 0L,
+                timelineWaitSemaphore, timelineWaitValue, timelineSignalSemaphore, timelineSignalValue, recorder);
+    }
+
+    /** Combines external binary delivery with CUDA waits and optional feature timelines. */
+    public AsyncSubmission submitTimedExternalSynchronizedOneTimeAsync(
+            String timingLabel, long binaryWaitSemaphore, long binarySignalSemaphore,
+            long timelineWaitSemaphore, long timelineWaitValue,
+            long timelineSignalSemaphore, long timelineSignalValue, CommandRecorder recorder) {
         Objects.requireNonNull(recorder, "recorder");
         if (timingLabel == null || timingLabel.isBlank()) {
             throw new IllegalArgumentException("GPU timing label must not be blank");
         }
-        if (timelineWaitSemaphore == 0L || timelineWaitValue <= 0L) {
-            throw new IllegalArgumentException("timeline wait handle and value must be positive");
+        if ((timelineWaitSemaphore == 0L) != (timelineWaitValue == 0L) || timelineWaitValue < 0L
+                ) {
+            throw new IllegalArgumentException("a binary or consistent timeline wait is required");
         }
         if ((timelineSignalSemaphore == 0L) != (timelineSignalValue == 0L)
                 || timelineSignalValue < 0L) {
@@ -583,8 +601,8 @@ public final class RtCommandContext implements AutoCloseable {
             };
             AsyncSubmission submission = submitOneTimeAsync(
                     timedRecorder,
-                    0L,
-                    0L,
+                    binaryWaitSemaphore,
+                    binarySignalSemaphore,
                     timelineWaitSemaphore,
                     timelineWaitValue,
                     timelineSignalSemaphore,

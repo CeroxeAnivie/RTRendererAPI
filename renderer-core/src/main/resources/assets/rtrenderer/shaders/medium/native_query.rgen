@@ -1,0 +1,19 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+struct RayRecord { vec4 originMin; vec4 directionMax; uvec4 control; vec4 hit; uvec4 ids; vec4 state0; vec4 state1; vec4 state2; };
+layout(set=0,binding=0) uniform accelerationStructureEXT scene;
+layout(std430,set=0,binding=1) buffer Rays { RayRecord rays[]; };
+struct HitPayload { vec4 hit; uvec4 ids; };
+layout(location=0) rayPayloadEXT HitPayload payload;
+void main() {
+    uint i=gl_LaunchIDEXT.x;
+    if (rays[i].control.x==0u) return;
+    payload.hit=vec4(-1.0,0.0,0.0,0.0);
+    payload.ids=uvec4(0xffffffffu);
+    uint flags=gl_RayFlagsOpaqueEXT;
+    if (rays[i].control.y==1u) flags|=gl_RayFlagsTerminateOnFirstHitEXT;
+    traceRayEXT(scene,flags,255,0,0,0,rays[i].originMin.xyz,rays[i].originMin.w,
+        rays[i].directionMax.xyz,rays[i].directionMax.w,0);
+    rays[i].hit=payload.hit;
+    rays[i].ids=uvec4(payload.ids.xyz,rays[i].control.w);
+}

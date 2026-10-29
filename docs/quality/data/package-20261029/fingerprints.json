@@ -1,0 +1,97 @@
+[
+  {
+    "Name": "annotations-13.0.jar",
+    "Bytes": 17536,
+    "Sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+  },
+  {
+    "Name": "fastutil-8.5.19.jar",
+    "Bytes": 23977871,
+    "Sha256": "c767a6bdcb7cb52fe1315ca1f4891389a75e63b2a15a6629865d7740dd3a8cf2"
+  },
+  {
+    "Name": "joml-1.10.8.jar",
+    "Bytes": 778846,
+    "Sha256": "bf19510145178df82cd3bd37edd514c13f411531ec5545299fd3abcbc98fe7c2"
+  },
+  {
+    "Name": "kotlin-stdlib-1.8.20.jar",
+    "Bytes": 1670469,
+    "Sha256": "4395647b1961d9fb730a34e8dbe56c293157bc0759004cca63d9b5ee6653e5c7"
+  },
+  {
+    "Name": "kotlin-stdlib-common-1.8.20.jar",
+    "Bytes": 221491,
+    "Sha256": "fa20188abaa8ecf1d0035e93a969b071f10e45a1c8378c314521eade73f75fd5"
+  },
+  {
+    "Name": "kotlin-stdlib-jdk7-1.8.20.jar",
+    "Bytes": 963,
+    "Sha256": "af1ec40c3b951afdcc0c2a0173c7b81763c5281c2d5bafbf0a8544a24c5dcc0c"
+  },
+  {
+    "Name": "kotlin-stdlib-jdk8-1.8.20.jar",
+    "Bytes": 969,
+    "Sha256": "e398b67977622718bf18ff99b739c7d9da060f33fb458a2e25203221c16af010"
+  },
+  {
+    "Name": "lwjgl-3.4.3-natives-windows.jar",
+    "Bytes": 178848,
+    "Sha256": "19949bca7b780f55e5d2db12ac061a7657a4c1b7c860c30607f5406e7017aa2b"
+  },
+  {
+    "Name": "lwjgl-3.4.3.jar",
+    "Bytes": 1255440,
+    "Sha256": "46eeca5471833c3cf5da3c1da015b41e3bb3eb16dd3da03f366886da10096751"
+  },
+  {
+    "Name": "lwjgl-glfw-3.4.3-natives-windows.jar",
+    "Bytes": 173421,
+    "Sha256": "de2826d6bc8e73127b42250a282cbfcf91b3c3435edf7f9fd16afcabc25e88ec"
+  },
+  {
+    "Name": "lwjgl-glfw-3.4.3.jar",
+    "Bytes": 152633,
+    "Sha256": "2a60dbe93711632129a2ce6aa7e073aa58fa5450a88cde48a6af0a4dfeed606d"
+  },
+  {
+    "Name": "lwjgl-shaderc-3.4.3-natives-windows.jar",
+    "Bytes": 2541979,
+    "Sha256": "e8e631d007b36edf1440cb4d42654a9b5c03bcb91b9c333c6a81ec6a3911f8bc"
+  },
+  {
+    "Name": "lwjgl-shaderc-3.4.3.jar",
+    "Bytes": 153441,
+    "Sha256": "82c7b5270d2c78458f5720c639459710c8f086ca050eea9ab0c44256fee7a626"
+  },
+  {
+    "Name": "lwjgl-vma-3.4.3-natives-windows.jar",
+    "Bytes": 129345,
+    "Sha256": "e57995e6d7c2c6f6a3451aa626085aa344ffd161d2c6bd406de92c9df7260cff"
+  },
+  {
+    "Name": "lwjgl-vma-3.4.3.jar",
+    "Bytes": 110265,
+    "Sha256": "254162ef94bd213663a417368902ea916d51e0e0fa3054d07ea0ce9a8b7ac9e6"
+  },
+  {
+    "Name": "lwjgl-vulkan-3.4.3.jar",
+    "Bytes": 8866042,
+    "Sha256": "acdb40767775ed1223dc3b2a8c9d3ce740c9e3c4af074444ce2dfe2ea9ba62e0"
+  },
+  {
+    "Name": "renderer-api-7.0.0.jar",
+    "Bytes": 684838,
+    "Sha256": "9e55cc06147599c021f07cbf190eb32958c946f23843b138fd47803b099ebb15"
+  },
+  {
+    "Name": "renderer-core-7.0.0.jar",
+    "Bytes": 54010634,
+    "Sha256": "50c6407c69ef499787e7e39f28c9d38c1867a6864217e9f6c95ef15946f2f235"
+  },
+  {
+    "Name": "renderer-nvidia-7.0.0.jar",
+    "Bytes": 56518660,
+    "Sha256": "df4133b2cf9ec15503599568dc10819438fd1abac0104cba4b4b0a8ae5f5a2ee"
+  }
+]

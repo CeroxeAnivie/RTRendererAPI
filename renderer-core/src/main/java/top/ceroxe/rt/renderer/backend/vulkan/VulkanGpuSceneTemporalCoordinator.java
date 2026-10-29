@@ -38,9 +38,17 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
         causticScene.sceneApplied(changes);
     }
 
-    top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program program(RenderFrameRequest request) {
-        mediumBoundaries.validateDensityFields(request);
-        return program(request, mediumBoundaries, surfaceScene);
+    CudaMediumFrameProfile.Selection selectTransport(RenderFrameRequest request) {
+        return CudaMediumFrameProfile.select(request, mediumBoundaries, surfaceScene,
+                builtInMediumTransport(), CudaCameraMediumProfile.requested());
+    }
+
+    top.ceroxe.rt.renderer.api.TextureAsset nativeDensityTexture(long identity) {
+        return mediumBoundaries.densityTexture(identity);
+    }
+
+    private boolean builtInMediumTransport() {
+        return configuration.sceneShaders().equals(top.ceroxe.rt.renderer.api.SceneShaderProgram.builtIn());
     }
 
     static top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program program(RenderFrameRequest request,
@@ -61,6 +69,10 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
         if (volume) return boundaries <= 8
                 ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_VOLUME
                 : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_VOLUME;
+        if (!scattering && !mediumBoundaries.hasSurfaceInteraction(batch) && surfaceScene.transmissiveCount(batch) == 0
+                && !Boolean.getBoolean("top.ceroxe.rt.shader.disablePassiveNoDielectric")) return boundaries <= 8
+                ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_PASSIVE_NO_DIELECTRIC
+                : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_PASSIVE_NO_DIELECTRIC;
         if (!scattering) return boundaries <= 8
                 ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_PASSIVE
                 : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_PASSIVE;
@@ -69,6 +81,18 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
     }
 
     CausticPhotonPlan caustics(RenderFrameRequest request) { return causticScene.plan(request, mediumBoundaries); }
+
+    /** Queue adoption is experimental; the ordinary selector remains the conservative scene proof. */
+    static top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program primaryQueueProgram(
+            top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program serial, boolean enabled) {
+        if (!enabled) return serial;
+        return switch (serial) {
+            case SURFACE -> top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.SURFACE_PRIMARY_SHADE;
+            case COMPACT_PASSIVE_NO_DIELECTRIC -> top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_PRIMARY_SHADE;
+            case GENERAL_PASSIVE_NO_DIELECTRIC -> top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_PRIMARY_SHADE;
+            default -> serial; // Glass, scattering, density grids, caustics and expert work retain serial transport.
+        };
+    }
 
     long requiredGrowthBytes(int width, int height) {
         return gpuHistory.requiredGrowthBytes(width, height);

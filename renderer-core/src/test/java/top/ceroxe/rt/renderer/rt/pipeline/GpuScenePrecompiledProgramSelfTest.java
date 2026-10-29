@@ -102,6 +102,12 @@ public final class GpuScenePrecompiledProgramSelfTest {
         var program = builder.build();
         String[] candidates = {"gpuscene_surface.rgen", "gpuscene_compact.rgen", "gpuscene.rgen",
                 "gpuscene_compact_passive.rgen", "gpuscene_passive.rgen",
+                "gpuscene_compact_passive_no_dielectric.rgen", "gpuscene_passive_no_dielectric.rgen",
+                "gpuscene_primary_trace.rgen", "gpuscene_native_medium_trace.rgen",
+                "gpuscene_native_scattering_lights.rgen", "gpuscene_native_multiple_scattering.rgen",
+                "gpuscene_native_density_scattering_lights.rgen", "gpuscene_native_optical_trace.rgen",
+                "gpuscene_native_boundary_packet.rgen", "gpuscene_surface_primary_shade.rgen",
+                "gpuscene_compact_primary_shade.rgen", "gpuscene_primary_shade.rgen",
                 "gpuscene_compact_volume.rgen", "gpuscene_volume.rgen",
                 "gpuscene_compact_caustics.rgen", "gpuscene_caustics.rgen", "gpuscene_photons.rgen"};
         String[] stageFiles = {"gpuscene.rmiss", "gpuscene.rchit", "gpuscene.rahit"};

@@ -1,4 +1,6 @@
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.util.HexFormat
 import groovy.json.JsonSlurper
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
@@ -60,6 +62,53 @@ java {
     withJavadocJar()
 }
 
+// Build-time fetch only: consumers load the verified compiler/builtins from the core JAR.
+// Proxy selection belongs to the invoking process, never to published project configuration.
+val cudaNvrtcResources = layout.buildDirectory.dir("generated/cuda-nvrtc-resources")
+val cudaNvrtcArchive = providers.gradleProperty("cudaNvrtcArchive").map(::file).orElse(
+    rootProject.layout.buildDirectory.file("downloads/${CudaNvrtcRuntime.ARCHIVE}").map { it.asFile }
+)
+val prepareCudaNvrtcRuntime = tasks.register("prepareCudaNvrtcRuntime") {
+    group = "build"
+    description = "Verifies and packages the pinned NVIDIA NVRTC redistributable and license."
+    inputs.property("archiveSha256", CudaNvrtcRuntime.SHA256)
+    // A file collection permits the first online build to fetch a missing archive.
+    inputs.files(cudaNvrtcArchive)
+    outputs.dir(cudaNvrtcResources)
+    doLast {
+        CudaNvrtcRuntime.prepare(cudaNvrtcArchive.get(), cudaNvrtcResources.get().asFile, gradle.startParameter.isOffline)
+    }
+}
+sourceSets.main { resources.srcDir(prepareCudaNvrtcRuntime) }
+
+val verifyLuxCoreSourceManifest = tasks.register("verifyLuxCoreSourceManifest") {
+    group = "verification"
+    description = "Verifies the complete pinned LuxCore/adaptor source inventory and exact bytes."
+    val sourceDirectory = layout.projectDirectory.dir("src/main/resources/assets/rtrenderer/medium/luxcore")
+    inputs.dir(sourceDirectory)
+    doLast {
+        val root = sourceDirectory.asFile
+        val manifest = JsonSlurper().parse(root.resolve("source-manifest.json")) as Map<*, *>
+        if (manifest["commit"] != "b872186d2fe995a762f73708c606847eed55843e")
+            throw GradleException("LuxCore source commit differs from the pinned revision")
+        val names = mutableSetOf<String>()
+        (manifest["files"] as List<*>).forEach { raw ->
+            val entry = raw as Map<*, *>
+            val name = entry["name"].toString()
+            if (!Regex("[A-Za-z0-9._-]+").matches(name) || !names.add(name))
+                throw GradleException("Invalid or duplicate LuxCore source manifest entry: $name")
+            val source = root.resolve(name)
+            if (!source.isFile || source.length() != (entry["bytes"] as Number).toLong())
+                throw GradleException("LuxCore source missing or length differs: $name")
+            val hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source.readBytes()))
+            if (hash != entry["sha256"]) throw GradleException("LuxCore source hash differs: $name")
+        }
+        val actual = root.listFiles()!!.filter { it.isFile && it.name != "source-manifest.json" }.map { it.name }.toSet()
+        if (names != actual) throw GradleException("LuxCore source inventory differs: missing=${actual - names}, stale=${names - actual}")
+    }
+}
+tasks.named("check") { dependsOn(verifyLuxCoreSourceManifest) }
+
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
     options.compilerArgs.addAll(listOf("-Xlint:deprecation", "-Xlint:unchecked"))
@@ -69,6 +118,18 @@ tasks.withType<ProcessResources>().configureEach {
     filteringCharset = "UTF-8"
 }
 
+// Exclude retired executors from archives even when an incremental build directory still
+// contains their former copies. The source retirement does not clean historical build evidence.
+val retiredMediumExecutors = listOf(
+    "assets/rtrenderer/shaders/gpuscene/gpuscene_transport.glsl",
+    "assets/rtrenderer/shaders/gpuscene/gpuscene_transport_runtime.glsl",
+    "assets/rtrenderer/shaders/gpuscene/gpuscene_density.glsl",
+    "assets/rtrenderer/shaders/gpuscene/gpuscene_multiscatter.glsl"
+)
+tasks.withType<org.gradle.jvm.tasks.Jar>().configureEach {
+    exclude(retiredMediumExecutors)
+}
+
 // Package generated shader binaries only when their source stage still exists. Regeneration
 // can replace the live variants without deleting archived generated files from the checkout.
 sourceSets.main {
@@ -76,7 +137,11 @@ sourceSets.main {
         if (!it.path.startsWith("assets/rtrenderer/shaders/spv/") || !it.name.endsWith(".spv")) false
         else {
             val name = it.name.removeSuffix(".spv")
-            val stage = if (name.startsWith("gpuscene_")) "gpuscene/" + name.removePrefix("gpuscene_") else name
+            val stage = when {
+                name.startsWith("gpuscene_") -> "gpuscene/" + name.removePrefix("gpuscene_")
+                name.startsWith("medium_") -> "medium/" + name.removePrefix("medium_")
+                else -> name
+            }
             !file("src/main/resources/assets/rtrenderer/shaders/$stage").isFile
         }
     }
@@ -188,11 +253,29 @@ val registerCoreSelfTest =
     }
 
 val contractSelfTests = linkedMapOf(
+    "coreCudaMediumContractSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumContractSelfTest",
+    "coreCudaNvrtcLibraryLoaderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNvrtcLibraryLoaderSelfTest",
+    "coreCudaCameraMediumSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraMediumSelfTest",
+    "coreCudaBoundaryMediumSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaBoundaryMediumSelfTest",
+    "coreCudaCameraScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraScatteringSelfTest",
+    "coreCudaMultipleScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaMultipleScatteringSelfTest",
+    "coreCudaHeterogeneousMultipleScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaHeterogeneousMultipleScatteringSelfTest",
+    "coreCudaDensityScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaDensityScatteringSelfTest",
+    "coreCudaOpticalMediumSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaOpticalMediumSelfTest",
+    "coreCudaPbrMediumAbiSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaPbrMediumAbiSelfTest",
+    "coreCudaBoundaryScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaBoundaryScatteringSelfTest",
+    "corePacketCapacitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.PacketCapacitySelfTest",
+    "coreCudaMediumDensitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensitySelfTest",
+    "coreCudaPrimaryMediumSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryMediumSelfTest",
+    "coreCudaPrimaryEmissionSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryEmissionSelfTest",
+    "coreCudaMediumTransportSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumTransportSelfTest",
+    "coreMediumRayQueryAbiSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.MediumRayQueryAbiSelfTest",
     "coreRtPipelineCacheSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.RtPipelineCacheSelfTest",
     "coreMediumTransportSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumTransportSelfTest",
     "coreMediumOpticsSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumOpticsSelfTest",
     "coreCausticTransportSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CausticTransportSelfTest",
     "coreMediumDensitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumDensitySelfTest",
+    "coreGpuScenePrimaryQueueSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuScenePrimaryQueueSelfTest",
     "coreMediumBenchmarkStatisticsSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanMediumBenchmarkStatisticsSelfTest",
     "coreRtNativeBenchmarkReportSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeBenchmarkReportSelfTest",
     "vulkanGenericBufferVisibilitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericBufferVisibilitySelfTest",
@@ -345,6 +428,27 @@ tasks.named("check") {
 }
 
 val nativeSelfTests = linkedMapOf(
+    "cudaMediumRuntimeNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntimeNativeSelfTest",
+    "cudaCameraMediumNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraMediumNativeSelfTest",
+    "cudaPrimaryMediumNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryMediumNativeSelfTest",
+    "cudaPrimaryEmissionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryEmissionNativeSelfTest",
+    "cudaMediumTransportNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumTransportNativeSelfTest",
+    "cudaCameraMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraMediumProductionNativeSelfTest",
+    "cudaCameraEmissionProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraEmissionProductionNativeSelfTest",
+    "cudaBoundaryMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaBoundaryMediumProductionNativeSelfTest",
+    "cudaCameraScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraScatteringProductionNativeSelfTest",
+    "cudaCameraScatteringNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaCameraScatteringNativeSelfTest",
+    "cudaMultipleScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaMultipleScatteringProductionNativeSelfTest",
+    "cudaHeterogeneousMultipleScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaHeterogeneousMultipleScatteringProductionNativeSelfTest",
+    "cudaPbrMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaPbrMediumProductionNativeSelfTest",
+    "cudaPbrMediumCausticsProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaPbrMediumProductionNativeSelfTest",
+    "cudaOpticalMediumNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumNativeSelfTest",
+    "cudaDensityScatteringNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaDensityScatteringNativeSelfTest",
+    "cudaDensityScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaDensityScatteringProductionNativeSelfTest",
+    "cudaOpticalMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaOpticalMediumProductionNativeSelfTest",
+    "cudaMediumDensityNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensityNativeSelfTest",
+    "cudaDensityProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaDensityProductionNativeSelfTest",
+    "cudaSharedMediumRayNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaSharedMediumRayNativeSelfTest",
     "vulkanModernFrameNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanModernFrameNativeSelfTest",
     "vulkanGenericIntegerTextureNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericIntegerTextureNativeSelfTest",
     "vulkanGenericProceduralRayTracingNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericProceduralRayTracingNativeSelfTest",
@@ -361,6 +465,8 @@ val nativeSelfTests = linkedMapOf(
     "gpuSceneRayTracingPipelineNativeSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipelineNativeSelfTest",
     "vulkanGpuSceneRenderingSessionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneRenderingSessionNativeSelfTest",
     "mediumTransportNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumTransportNativeSelfTest",
+    "primaryQueueNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.PrimaryQueueNativeSelfTest",
+    "vulkanQueuedFrameSlotNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanQueuedFrameSlotNativeSelfTest",
     "vulkanFrameSlotExternalCompletionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameSlotExternalCompletionNativeSelfTest",
     "vulkanGpuSceneThroughputNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneThroughputNativeSelfTest",
     "rtNativeMicroSceneSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeMicroSceneSelfTest",
@@ -383,12 +489,33 @@ nativeSelfTests.forEach { (taskName, mainClassName) ->
     )
 }
 
+tasks.named<JavaExec>("cudaMediumRuntimeNativeSelfTest").configure {
+    maxHeapSize = "256m"
+}
+
+tasks.named<JavaExec>("cudaPbrMediumCausticsProductionNativeSelfTest").configure {
+    args("--caustics")
+}
+
+tasks.named<JavaExec>("cudaOpticalMediumProductionNativeSelfTest").configure {
+    if (providers.gradleProperty("opticalBenchmark").isPresent) args("--benchmark")
+}
+
 tasks.named<JavaExec>("vulkanModernFrameNativeSelfTest").configure {
     if (providers.gradleProperty("precompiledSceneOnly").isPresent) args("--precompiled-only")
 }
 
 tasks.named<JavaExec>("mediumTransportNativeSelfTest").configure {
     if (providers.gradleProperty("mediumProfile").isPresent) args("--profile")
+}
+
+tasks.named<JavaExec>("cudaCameraMediumProductionNativeSelfTest").configure {
+    if (providers.gradleProperty("productionBenchmark").isPresent) args("--benchmark")
+    if (providers.gradleProperty("productionControl").isPresent) args("--control")
+    providers.gradleProperty("productionControlJar").orNull?.let { controlJar ->
+        // A preserved, fingerprinted old core runs the same public-API test code without rebuilding it.
+        classpath = files(file(controlJar), classpath.filter { !it.name.startsWith("renderer-core-") })
+    }
 }
 
 registerCoreSelfTest(
@@ -479,6 +606,59 @@ tasks.register("rendererCoreNativeGate") {
     group = "verification"
     description = "Runs the complete host-independent hardware Vulkan RT correctness and throughput gate."
     dependsOn(nativeSelfTests.keys)
+}
+
+val nativeMediumTests = listOf("cudaMediumRuntimeNativeSelfTest", "cudaCameraMediumProductionNativeSelfTest",
+    "cudaCameraEmissionProductionNativeSelfTest", "cudaBoundaryMediumProductionNativeSelfTest",
+    "cudaDensityProductionNativeSelfTest", "cudaCameraScatteringProductionNativeSelfTest",
+    "cudaMultipleScatteringProductionNativeSelfTest", "cudaDensityScatteringProductionNativeSelfTest",
+    "cudaHeterogeneousMultipleScatteringProductionNativeSelfTest", "cudaPbrMediumProductionNativeSelfTest",
+    "cudaPbrMediumCausticsProductionNativeSelfTest",
+    "cudaOpticalMediumProductionNativeSelfTest", "vulkanQueuedFrameSlotNativeSelfTest")
+
+val unifiedApiNativeTests = listOf("vulkanModernFrameNativeSelfTest", "vulkanGenericIntegerTextureNativeSelfTest",
+    "vulkanGenericProceduralRayTracingNativeSelfTest", "vulkanGenericPipelineRetirementNativeSelfTest",
+    "vulkanGenericGeometryBarrierNativeSelfTest", "vulkanGenericLogicOperationNativeSelfTest",
+    "vulkanEvidenceRetentionNativeSelfTest", "vulkanGenericCommandNativeSelfTest",
+    "vulkanGenericRayTracingNativeSelfTest", "vulkanGenericAccelerationNativeSelfTest",
+    "vulkanSceneAccelerationNativeSelfTest", "vulkanSceneRuntimeNativeSelfTest",
+    "vulkanFrameSlotExternalCompletionNativeSelfTest", "vulkanQueuedFrameSlotNativeSelfTest")
+
+(nativeMediumTests + unifiedApiNativeTests).distinct().filter { it != "cudaMediumRuntimeNativeSelfTest" }.forEach { taskName ->
+    tasks.named<JavaExec>(taskName).configure {
+        val validationLog = layout.buildDirectory.file("reports/vulkan-validation/$taskName.jsonl")
+        systemProperty("top.ceroxe.rt.validation.enabled", "true")
+        systemProperty("top.ceroxe.rt.validation.logPath", validationLog.get().asFile.absolutePath)
+        doFirst {
+            val log = validationLog.get().asFile
+            log.parentFile.mkdirs()
+            log.writeText("", StandardCharsets.UTF_8)
+        }
+        doLast {
+            val events = validationLog.get().asFile.readLines(StandardCharsets.UTF_8)
+                .filter(String::isNotBlank).map { JsonSlurper().parseText(it) as Map<*, *> }
+            val opened = events.count { it["event"] == "opened" }
+            val closed = events.count { it["event"] == "closed" }
+            check(opened > 0 && opened == closed && events.last()["event"] == "closed") {
+                "Native validation log has unclosed sessions: opened=$opened closed=$closed"
+            }
+            val failures = events.filter { it["severity"] in listOf("ERROR", "WARNING")
+                    || it["event"] == "dropSummary" || (it["droppedMessages"] as? Number)?.toLong()?.let { n -> n > 0 } == true }
+            check(failures.isEmpty()) { "Native Vulkan validation failed: $failures" }
+        }
+    }
+}
+
+tasks.register("rendererCoreMediumNativeGate") {
+    group = "verification"
+    description = "Runs supported medium HDR, ownership and queued-frame hardware checks with strict Vulkan validation."
+    dependsOn(nativeMediumTests)
+}
+
+tasks.register("rendererCoreUnifiedApiNativeGate") {
+    group = "verification"
+    description = "Runs unified scene, command/resource, ray tracing and interop hardware contracts with strict Vulkan validation."
+    dependsOn(unifiedApiNativeTests)
 }
 
 val gpuSceneNativeSelfTests = listOf(

@@ -276,7 +276,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                 sourceLayouts[index] = genericCommands.stageCompositionRead(sources[index], layoutUpdates);
             }
             slotReservation = slot.reserveSubmission(
-                    checked.frameSequence(), checked.sceneRevision(), 0L, false, readySignal, false
+                    checked.frameSequence(), checked.sceneRevision(), 0L, slot.readyBinarySemaphore() != 0L, readySignal, false
             );
             pinLease = genericCommands.pinComposition(sources);
             if (compositionPins.putIfAbsent(checked.frameSequence(), pinLease) != null) {
@@ -297,10 +297,14 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                     );
                 }
             };
-            submission = readySignal.enabled()
-                    ? device.frameCommands().submitTimedOneTimeAsync(
-                    "genericFrameComposition", readySignal.semaphore(), readySignal.value(), recorder)
-                    : device.frameCommands().submitTimedOneTimeAsync("genericFrameComposition", recorder);
+            RtCommandContext.CommandRecorder compositionRecorder = recorder;
+            if (slot.readyBinarySemaphore() != 0L) compositionRecorder = (commandBuffer, stack) -> {
+                recorder.record(commandBuffer, stack);
+                slot.recordExternalOwnershipRelease(commandBuffer, stack);
+            };
+            submission = device.frameCommands().submitTimedExternalSynchronizedOneTimeAsync(
+                    "genericFrameComposition", 0L, slot.readyBinarySemaphore(), 0L, 0L,
+                    readySignal.semaphore(), readySignal.value(), compositionRecorder);
             /*
              * The overlay is deliberately committed before slot publication. Its inputs were
              * validated while recording, and commit only applies those already-valid scalar
@@ -342,7 +346,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                     pinRegistered = false;
                 }
             }
-            if (submission != null) submission.close();
+            if (submission != null) { submission.close(); slot.drainAbortedBinarySubmission(); }
             if (pinLease != null) {
                 if (pinRegistered) compositionPins.remove(checked.frameSequence(), pinLease);
                 pinLease.close();
@@ -659,6 +663,24 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                 configuration.denoising(),
                 configuration.rayTracingOptimizations()
         );
+    }
+
+    @Override public synchronized void enableBinarySemaphoreDelivery() {
+        requireReady("enable queued frame delivery");
+        var interop = scene.device().externalFrameInterop(VulkanFrameOutput.from(configuration.frameOutputFormat()).vkFormat());
+        if (!interop.semaphoreExportReady() || !interop.semaphoreImportReady())
+            throw new UnsupportedOperationException("binary semaphore export/import is unavailable");
+        frameRing.enableBinarySemaphoreDelivery();
+    }
+
+    @Override public synchronized GpuFrameLease acquireSubmittedFrame(long sequence) {
+        requireReady("acquire submitted frame");
+        // Do not pump: publication, rather than a CPU-observed fence, is the admission boundary.
+        VulkanFrameSlot slot = frameRing.findQueuedSlot(sequence);
+        if (slot == null) return null;
+        GpuFrameLease lease = slot.acquireQueued();
+        latestAcquiredFrameSequence = Math.max(latestAcquiredFrameSequence, sequence);
+        return lease;
     }
 
     @Override

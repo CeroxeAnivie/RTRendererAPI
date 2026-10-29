@@ -24,6 +24,9 @@
 >
 > **推荐场景**：Java 桌面渲染器、离屏光追、实时 RTX 预览、已有 Vulkan 管线的 GPU 帧集成。
 
+> **7.0.0 候选状态**：介质功能仍在闭环和验收中。当前支持矩阵、明确拒绝的组合和真实制品验收以
+> [版本说明](docs/7.0.0.md)及[验收记录](docs/quality/verification-report.md#7-0-0-package-validation-20261029)为准。
+
 ---
 
 ### ✨ 核心亮点
@@ -56,7 +59,7 @@
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
 > AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `7.0.0` 当前后端实现范围。
-> 兼容目标不是跨硬件验收结论；7.0.0 本轮验证范围见版本说明，GPU 测试留待后续执行。
+> 兼容目标不是跨硬件验收结论；本轮真实 GPU 测试范围见版本说明与验收记录。
 
 ---
 
@@ -292,11 +295,12 @@ Streamline 与 RTXMU SDK。RTXMU 必须为官方 `v1.4` checkout 的固定 commi
 
 ## 📚 文档
 
+- [完整文档清单](docs/documentation-inventory.md)：全部源码文档、许可证、来源清单、质量证据与生成 Javadoc 的分类索引。
 - [Java 开发指南](docs/Java.md)：完整场景、配置、背压、诊断与各 RTX 能力示例。
 - [通用命令与硬件光追](docs/Generic-Commands-and-Ray-Tracing.md)：资源 generation、通用 command transaction、BLAS/TLAS、SPIR-V、SBT、trace、完成证据与回收。
 - [Procedural/AABB 光追](docs/Procedural-Geometry.md)：4.1.0 新增的包围盒布局、intersection/any-hit、BUILD/UPDATE 与生命周期。
 - [整数纹理](docs/Integer-Textures.md)：4.2.0 的 18 种整数格式、类型化清除、shader 图像类型校验与 3D 上传修复。
-- [4.1.0 验证记录](docs/quality/4.1.0-procedural-validation.md)：公开 ABI、真实 RTX 像素对照、签名与 Central 发布事实。
+- [质量验证与性能报告](docs/quality/verification-report.md#41-0-procedural-validation)：历史程序化几何验证、当前介质范围与性能证据索引。
 - [Java API 参考](docs/Java-API-Reference.md)：公共类型与稳定契约。
 - [Vulkan 专家互操作](docs/Vulkan-Interop.md)：external memory、semaphore 与 queue ownership。
 - [兼容性与版本策略](docs/COMPATIBILITY.md)：SemVer、公共 API/SPI 边界、弃用与发布事实。
@@ -329,4 +333,4 @@ A：不能把它们视为 `7.0.0` 的受支持目标。当前兼容范围只包�
 
 本项目基于 [Apache License 2.0](LICENSE) 开源发布。
 
-7.0.0 新增默认 2560×1440 / 1 spp / 请求 2× FG 的[介质展厅](docs/medium-gallery.md)，覆盖异质密度、有限阶多次散射、嵌套折射与表面光子焦散。GPU 验证等待单独批准。
+7.0.0 的[介质展厅](docs/medium-gallery.md)包含异质密度、有限阶多次散射、嵌套折射与表面光子焦散的组合场景。部分组合仍处于实现和验收中；请以版本说明和验收记录列出的支持范围为准。

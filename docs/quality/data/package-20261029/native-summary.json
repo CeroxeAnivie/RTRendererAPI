@@ -1,0 +1,371 @@
+{
+  "passed": true,
+  "scope": "supported-medium-and-unified-api-contracts",
+  "completeLuxCoreMigration": false,
+  "tests": [
+    {
+      "test": "CudaBoundaryMediumProductionNativeSelfTest",
+      "passed": true,
+      "success": [
+        "CudaBoundaryMediumProductionNativeSelfTest passed: analytic public HDR comparisons=21 nativeFrames=21 fusedFrames=21 recoverableRejections=2"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "e12f3f277d4d60dd1d958056ef78898faf4ebfffdcaabff3aa02cb448364da99",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "e7eb42cce0992d24cc49eb7fafc08e063acdf9d2367b477cb276b4ba497bf723"
+    },
+    {
+      "test": "CudaCameraEmissionProductionNativeSelfTest",
+      "passed": true,
+      "success": [
+        "CudaCameraEmissionProductionNativeSelfTest passed: public HDR analytic emission comparisons=6"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "173b503d4a20d47441634ee89843e0aea866cb9f2fe004ed3ca9ff76680f2119",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "edbe60261dd2996c1ce676ccc4fb597c8f66d7a1541e7b6f8b3707d0d8970a13"
+    },
+    {
+      "test": "CudaCameraMediumProductionNativeSelfTest",
+      "passed": true,
+      "success": [
+        "CudaCameraMediumProductionNativeSelfTest passed: comparisons=12 accepted=23 rejected=3 publicProvider=vulkan-rt pendingClose=true; correctness only, not performance evidence"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "4f02cbbe45c88fb1bbcf45ea520039bbcce714694e2ea588677b121ad16e137b",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "9fcd2599b27be8e45463aa344bafb8b5bec7ae859bfe8b94819e08569834852b"
+    },
+    {
+      "test": "CudaCameraScatteringProductionNativeSelfTest",
+      "passed": true,
+      "success": [
+        "CudaCameraScatteringProductionNativeSelfTest passed: independent public HDR comparisons=12"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "f121e720c83a50598085b29ce9672b3e59f00d6581da945137516a65a6b41a91",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "5fea04634939539066601e90c3df78c92a5d9d13482d47693d7dde69ff6df2c1"
+    },
+    {
+      "test": "CudaDensityProductionNativeSelfTest",
+      "passed": true,
+      "success": [
+        "CudaDensityProductionNativeSelfTest passed: comparisons=15 actualNativeDensityFrames=14 recoverableRejections=1"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "b7bb333cabc6100efb4bf183cd9858d4b5964ab5d5e3e70f6535780eedb72018",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "4ab85aa8c2c5ae5c4fd01434d68456908dc93e4d3fe490bf5f3512d382a35a5f"
+    },
+    {
+      "test": "CudaDensityScatteringProductionNativeSelfTest",
+      "passed": true,
+      "success": [
+        "CudaDensityScatteringProductionNativeSelfTest passed: comparisons=12"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "c22ea5da03b18e74ee0b6e00b2dde73215714b39025515361cf3e3a48ab71a4a",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "e449a8c8f7c8218ddc20acde6be79cd4cb11e7f5532f8ff6231f6c6e795d8209"
+    },
+    {
+      "test": "CudaMultipleScatteringProductionNativeSelfTest",
+      "passed": true,
+      "success": [
+        "CudaMultipleScatteringProductionNativeSelfTest passed: finite-order analytic HDR, SPP 1/2/8, bounce budgets 1/2/8, actual native collisions, resize and close"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "9bf07145c2641b03ba33009693838cf8f64e3b4159f6587f8ec06e4b46e8432d",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "0b93de9d5540eda3853227faccf6575d255f115f1f060604b09922e5c42dd0c3"
+    },
+    {
+      "test": "CudaOpticalMediumProductionNativeSelfTest",
+      "passed": true,
+      "success": [
+        "CudaOpticalMediumProductionNativeSelfTest passed: comparisons=24 actualNativeFrames=87 recoverableRejections=1"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "ec0f7a676b2a2a55014db5216d72774e4d81d99429d4384c84da810db975f848",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "6adaab3b6c5befe29156c09be26367218ba05aaf85e389165bb08cc3866209ab"
+    },
+    {
+      "test": "medium.cuda.CudaMediumRuntimeNativeSelfTest",
+      "passed": true,
+      "success": [
+        "CudaMediumRuntimeNativeSelfTest passed; outputChannels=5376"
+      ],
+      "validation": null,
+      "logSha256": "5df594a2295e6036ee1ab02f8d2db1e2bdeedf00e8b47784b920987944808d9d"
+    },
+    {
+      "test": "VulkanEvidenceRetentionNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanEvidenceRetentionNativeSelfTest passed: commandLive=4->4, resourceLive=6->6, statistics=EvidenceRetentionStatistics[policy=EvidenceRetentionPolicy[commandCapacity=4, retiredResourceCapacity=4, resourceIdentityCapacity=8, residentGenerationCapacity=3], commandEntries=4, pendingCommands=0, unobservedCompletedCommands=0, commandLeases=0, evictableCommands=4, residentGenerations=1, retiredResourceHistory=4, resourceIdentities=8, inFlightMutations=0, compositionPins=0, evictedCommands=4033, evictedResources=2012, commandBudgetRejections=1, resourceBudgetRejections=2001]"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 2,
+        "sha256": "9a184dff3bc3709f5f746e49c0d9a9c107e9730cb1691f6d5eafd59070bee09f",
+        "closed": 2,
+        "dropped": 0
+      },
+      "logSha256": "c9d5336479c6f0b7b3b4584c9cdc45dcb9bc7877a2f038bcf23ecb8c9872234c"
+    },
+    {
+      "test": "VulkanFrameSlotExternalCompletionNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanFrameSlotExternalCompletionNativeSelfTest passed"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 2,
+        "sha256": "18526b6c1318ddeebab67603c6d9023b73588b4ded86f8b32d5f90a7097880f8",
+        "closed": 2,
+        "dropped": 0
+      },
+      "logSha256": "3945e6162b260d6bfc417c5b312e0782d52fe0ed37df3210d121639b8b5b64ae"
+    },
+    {
+      "test": "VulkanGenericBlasNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanGenericBlasNativeSelfTest passed: device=NVIDIA GeForce RTX 5080 Laptop GPU, blas=0x1a000000001a, blasAddress=0x9476c00, compacted=true, storageBytes=2816->1152, tlas=0x1d000000001d, tlasAddress=0x9477100"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "b7ba148ade4a447555d7cc54009c53f7fa58b884ecea507dd89be3dfe097f4da",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "16bd869e6f9a4b5a7ed1112fd54b4d114258fbb032f0dd4d62fe4dc43fc21aac"
+    },
+    {
+      "test": "VulkanGenericCommandNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanGenericCommandNativeSelfTest passed: transfer=top.ceroxe.rt.renderer.api.CommandExecutionEvidence@4a3631f8; graphics=top.ceroxe.rt.renderer.api.CommandExecutionEvidence@6b58b9e9; procedural=top.ceroxe.rt.renderer.api.CommandExecutionEvidence@f14a7d4; cpuFrames=1,2"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "62b6eebf4c98c417fdf99f0b0971e27ea7af0d568d0f60f45258b10efe4e8a9c",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "7f95f46f4066479a3480e9cea9034adc08bc3ed4d6ffba551b400e03c673546d"
+    },
+    {
+      "test": "VulkanGenericGeometryBarrierNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanGenericGeometryBarrierNativeSelfTest passed: exactFrames=24 transfer/geometry/vertex hazards"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "97c6a8d63bda889ec0b00b0a18740cd3ba11fbb0a142a22da0fded998f792d5b",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "eb58f1f56bb1dbe23c9b06b3341d1420118a5365005a4a72f16ccd2726ded169"
+    },
+    {
+      "test": "VulkanGenericIntegerTextureNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanGenericIntegerTextureNativeSelfTest passed: formats=18 exactFrames=54 nonzeroZ=18"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "73353d0234c81f258f39402f53436920ed246ca471788ab029b5f79a75b9bf9d",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "59d143147aaca93b393f5f2ce76a5ce42baba2c93f3607cb0a928aa2a194b38c"
+    },
+    {
+      "test": "VulkanGenericLogicOperationNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanGenericLogicOperationNativeSelfTest passed: operations=16 exactFrames=384"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "3dd0db4fab04c6ec6c6ed909f651e4f96a16dfeb6f73d01f2f8780ee3fa09cd7",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "74cbbd063433c62cb4fb201b57176fcf6bd3b5d67af6232b0b4dbfe2b3c8b74e"
+    },
+    {
+      "test": "VulkanGenericPipelineRetirementNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanGenericPipelineRetirementNativeSelfTest passed: cycles=2000 live=0 sbtBytes=0 elapsedMs=9805"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "184ae6f447d2dd530d8e2b6b94ac371cd68c96500eca4c1063d761e52950087f",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "4dc6727a159eb65178856ac8efb7015229a97eb3c308531cd226ddad601985dc"
+    },
+    {
+      "test": "VulkanGenericProceduralRayTracingNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanGenericBufferVisibilityNativeSelfTest passed: 20 command plans, partial/full barriers, repeated writes, indexed/AABB builds",
+        "VulkanGenericProceduralRayTracingNativeSelfTest passed: exact build/update pixels and retirement"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "f6c9c1daf9e17fe7de6d08d08cb478b47f1b72b0623a4ab084b9c83718ba9758",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "57c323a3daff4d647fb91d9d29a8bb6df677be537f10724bab99480e4ae4cee1"
+    },
+    {
+      "test": "VulkanGenericRayTracingNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanGenericRayTracingNativeSelfTest passed: build=top.ceroxe.rt.renderer.api.CommandExecutionEvidence@273444fe; trace=top.ceroxe.rt.renderer.api.CommandExecutionEvidence@72ade7e3; residentDependencyGate=passed"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "27d787aba72ac53c404621719984fc1d0fbc54d8cbc7659fc48064b0e0dbcf5e",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "2aff813f4561b2f4d3e626a9b223a8198157f1b2a6e0b11d812350a675f6bca8"
+    },
+    {
+      "test": "VulkanModernFrameNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanModernFrameNativeSelfTest passed: device=NVIDIA GeForce RTX 5080 Laptop GPU"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 6,
+        "sha256": "62edb04218fcfdf4cd6af2b2eb31c2002381826fe7dc82300b4f2aa8884d1bf2",
+        "closed": 6,
+        "dropped": 0
+      },
+      "logSha256": "776bcab7049396f9847e9359633622bd2793f1686179e931ce252551a85f9788"
+    },
+    {
+      "test": "VulkanQueuedFrameSlotNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanQueuedFrameSlotNativeSelfTest passed: 20 exact claims, binary reuse, unused leases, imported-handle close, resize and slot close"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "acc86c63ac0e1ab24cc1afaa5dacf928b34a16eb0d3ad028b090d9a4f11b9c3a",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "59aa32de1c1926a6be0dc13becdbfbdd2f8737cead6fba6f8255f71b0b2ae335"
+    },
+    {
+      "test": "VulkanSceneAccelerationNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanSceneAccelerationNativeSelfTest passed: device=NVIDIA GeForce RTX 5080 Laptop GPU, activeRevision=2, meshes=1, instances=1, appearanceOnlyTlasReused=true"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "ca54a70c3094b303f03a1e0bd210b7abb6fb75d1fdaeb31c2890404387cbe639",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "6fdc2938cfd96618d6ae8aeff1dc294833bfb316f95949b5066b36185fc631ac"
+    },
+    {
+      "test": "VulkanSceneRuntimeNativeSelfTest",
+      "passed": true,
+      "success": [
+        "VulkanSceneRuntimeNativeSelfTest passed: device=NVIDIA GeForce RTX 5080 Laptop GPU, accepted=1, active=1"
+      ],
+      "validation": {
+        "warnings": 0,
+        "errors": 0,
+        "opened": 1,
+        "sha256": "8c936eb6bdf66039e59a763d56f3cfaf85eb668c589a102794f39498dd016548",
+        "closed": 1,
+        "dropped": 0
+      },
+      "logSha256": "cf6ec2be47a432a34a7f53d1cbfc6ce855e7ee7e3f225542e061afcd8320ce01"
+    }
+  ],
+  "wallSeconds": 288.654,
+  "peakProcessTreeCommitGB": 2.523
+}

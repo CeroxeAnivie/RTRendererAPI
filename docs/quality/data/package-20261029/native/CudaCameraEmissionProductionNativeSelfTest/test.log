@@ -1,0 +1,10 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+Oct 29, 2026 4:25:24 PM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=D:\Engineering\code\APIs\RTRendererAPI\build\luxcore-api-package-20261029\native-sealed\CudaCameraEmissionProductionNativeSelfTest\validation.jsonl
+Native emission public HDR comparison=pure-emission-hit SPP=1 hit=true maxAbsolute=0.00388862750
+Native emission public HDR comparison=mixed-emission-hit SPP=1 hit=true maxAbsolute=0.00388948311
+Native emission public HDR comparison=tiny-extinction-clamped-two-SPP SPP=2 hit=true maxAbsolute=0.000871063173
+Native emission public HDR comparison=mixed-eight-SPP SPP=8 hit=true maxAbsolute=0.00389737543
+Native emission public HDR comparison=pure-emission-miss SPP=1 hit=false maxAbsolute=0.00194826722
+Native emission public HDR comparison=frame-local-mixed-two-SPP SPP=2 hit=true maxAbsolute=0.00388889024
+CudaCameraEmissionProductionNativeSelfTest passed: public HDR analytic emission comparisons=6

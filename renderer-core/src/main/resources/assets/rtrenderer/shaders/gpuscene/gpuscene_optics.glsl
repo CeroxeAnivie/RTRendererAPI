@@ -1,5 +1,6 @@
 #ifndef GS_OPTICS_GLSL
 #define GS_OPTICS_GLSL
+#ifndef RTRENDERER_NO_DIELECTRIC
 vec2 gsDielectricSamplePoint(uvec4 launchInfo,uint sampleIndex,uint sampleCount,uint seed) {
     uint sequence=gsFrame.words[GPU_SCENE_FRAME_SEQUENCE_WORD];
     float x=gsOpticalRandom(launchInfo,seed^sequence^0x1b56c4e9u,0u);
@@ -35,7 +36,8 @@ vec3 gsDielectricHalfVector(vec3 normal,vec3 incident,float roughness,vec2 sampl
 float gsDielectricBranchWeight(vec3 normal,vec3 incident,vec3 outgoing,float roughness) {
     return roughness<=.001?1.0:gsDielectricMaskWeight(dot(normal,-incident),abs(dot(normal,outgoing)),roughness*roughness);
 }
-vec3 gsOpticalContinuation(vec3 origin,vec3 direction,uvec4 launchInfo,GsMediumPath path,uint seed,
+#endif
+vec3 gsOpticalContinuation(vec3 origin,vec3 direction,uvec4 launchInfo,uint seed,
         float integrationRemaining,out float firstHitDistance) {
     vec3 radiance=vec3(0.0),throughput=vec3(1.0);
     firstHitDistance=0.0;
@@ -44,19 +46,19 @@ vec3 gsOpticalContinuation(vec3 origin,vec3 direction,uvec4 launchInfo,GsMediumP
     float cutoff=uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_TRANSMITTANCE_CUTOFF_WORD]);
     integrationRemaining=max(integrationRemaining,0.0);
     [[dont_unroll]] for(uint event=0u;event<limit;++event) {
-        GpuScenePayload hit=gsTraceRadiance(origin,direction,launchInfo,path);
+        GpuScenePayload hit=gsTraceRadiance(origin,direction,launchInfo);
         if(event==0u) firstHitDistance=hit.state.x==0u?65504.0:max(hit.worldPositionAndDistance.w,0.0);
         float distance=hit.state.x==0u?integrationRemaining:min(hit.worldPositionAndDistance.w,integrationRemaining);
-        radiance+=throughput*gsIntegrateMedium(vec3(0.0),path,distance,origin,direction,launchInfo,integrationRemaining);
-        throughput*=gsSegmentTransmittance(path.mediumSlot,origin,direction,distance);
         integrationRemaining=max(integrationRemaining-distance,0.0);
         if(hit.state.x==0u) {radiance+=throughput*gsSkyRadiance(direction);return radiance;}
-        bool volume=(hit.mediumBoundary.w&2u)!=0u;
-        float opacity=hit.mediumBoundary.w!=0u?1.0:clamp(hit.baseColorAndOpacity.a,0.0,1.0);
-        float transmission=volume?1.0:clamp(hit.transmissionIor.x,0.0,1.0);
-        if(!volume && opacity*(1.0-transmission)>0.0) {
-            gsLightingMediumPath=path;
-            if(gsSurfaceOverlay(hit)) {radiance+=throughput*gsResolveSurfaceOverlay(hit,origin,direction,launchInfo,path);return radiance;}
+        float opacity=clamp(hit.baseColorAndOpacity.a,0.0,1.0);
+#ifdef RTRENDERER_NO_DIELECTRIC
+        float transmission=0.0;
+#else
+        float transmission=clamp(hit.transmissionIor.x,0.0,1.0);
+#endif
+        if(opacity*(1.0-transmission)>0.0) {
+            if(gsSurfaceOverlay(hit)) {radiance+=throughput*gsResolveSurfaceOverlay(hit,origin,direction,launchInfo);return radiance;}
             radiance+=throughput*opacity*(1.0-transmission)*gsOpticalSurface(hit,origin);
         }
         float hole=1.0-opacity,dielectric=opacity*transmission,total=hole+dielectric;
@@ -66,15 +68,11 @@ vec3 gsOpticalContinuation(vec3 origin,vec3 direction,uvec4 launchInfo,GsMediumP
         bool uncovered=hole>0.0 && (dielectric==0.0
             || gsOpticalRandom(launchInfo,seed^0x68bc21ebu,event)<hole/total);
         if(!uncovered) {
-            GsMediumPath next=path;
-            gsCrossMediumBoundary(next,hit);
-            if(next.depth>GS_MEDIUM_PATH_CAPACITY) return radiance;
-            if(volume) path=next;
-            else {
-                vec2 ior=gsInterfaceIors(hit,path.mediumSlot,next.mediumSlot);
+#ifndef RTRENDERER_NO_DIELECTRIC
+            {
+                vec2 ior=gsInterfaceIors(hit);
                 vec3 normal=normalize(hit.worldNormalAndRoughness.xyz);
                 float roughness=clamp(hit.worldNormalAndRoughness.w,0.0,1.0);
-                // Boundary normals are geometric; retaining their hemisphere preserves the medium set.
                 if(dot(normal,-direction)<=0.0) return radiance;
                 vec2 samplePoint=gsDielectricSamplePoint(launchInfo,0u,1u,seed^(event+1u)*0x02e5be93u);
                 vec3 halfVector=ior.x==ior.y?normal:gsDielectricHalfVector(normal,direction,roughness,samplePoint);
@@ -91,10 +89,10 @@ vec3 gsOpticalContinuation(vec3 origin,vec3 direction,uvec4 launchInfo,GsMediumP
                 if(!reflection) {
                     float eta=ior.x/ior.y;
                     throughput*=clamp(hit.baseColorAndOpacity.rgb,vec3(0.0),vec3(1.0))*(eta*eta);
-                    path=next;
                 }
                 direction=outgoing;
             }
+#endif
         }
         if(max(throughput.x,max(throughput.y,throughput.z))<=cutoff) return radiance;
         origin=hit.worldPositionAndDistance.xyz+direction*gsRayEpsilon(hit.worldPositionAndDistance.xyz);
@@ -102,7 +100,7 @@ vec3 gsOpticalContinuation(vec3 origin,vec3 direction,uvec4 launchInfo,GsMediumP
     return radiance;
 }
 vec3 gsEvaluateSecondaryTransport(GpuScenePayload hit,vec3 incident,uvec4 launchInfo,
-        inout GsMediumPath incidentPath,uint primaryIndex,uint primaryCount,float integrationRemaining,out float reflectionHitDistance) {
+        uint primaryIndex,uint primaryCount,float integrationRemaining,out float reflectionHitDistance) {
     reflectionHitDistance=0.0;
 #ifdef RTRENDERER_SURFACE_ONLY
     if(gsFrame.words[GPU_SCENE_FRAME_OPTICAL_MAX_EVENTS_WORD]<=1u) return vec3(0.0);
@@ -110,25 +108,31 @@ vec3 gsEvaluateSecondaryTransport(GpuScenePayload hit,vec3 incident,uvec4 launch
     vec3 weight=gsOpaqueMetallicReflectionWeight(hit,incident,launchInfo,primaryIndex,primaryCount,outgoing);
     if(max(weight.x,max(weight.y,weight.z))<=0.0) return vec3(0.0);
     vec3 origin=hit.worldPositionAndDistance.xyz+outgoing*gsRayEpsilon(hit.worldPositionAndDistance.xyz);
-    GpuScenePayload receiver=gsTraceRadiance(origin,outgoing,launchInfo,incidentPath);
+    GpuScenePayload receiver=gsTraceRadiance(origin,outgoing,launchInfo);
     reflectionHitDistance=receiver.state.x==0u?65504.0:max(receiver.worldPositionAndDistance.w,0.0);
     return weight*(receiver.state.x==0u?gsSkyRadiance(outgoing):gsOpticalSurface(receiver,origin));
 #else
-    bool volume=(hit.mediumBoundary.w&2u)!=0u;
-    bool optical=volume || hit.transmissionIor.x>0.0;
+#ifdef RTRENDERER_NO_DIELECTRIC
+    bool optical=false;
+#else
+    bool optical=hit.transmissionIor.x>0.0;
+#endif
     if(!optical && hit.emissiveAndMetallic.a<=0.0) return vec3(0.0);
     vec3 opaqueDirection=incident,opaqueWeight=vec3(1.0);
     if(!optical) {
         opaqueWeight=gsOpaqueMetallicReflectionWeight(hit,incident,launchInfo,primaryIndex,primaryCount,opaqueDirection);
         if(max(opaqueWeight.x,max(opaqueWeight.y,opaqueWeight.z))<=0.0) return vec3(0.0);
     }
-    GsMediumPath transmittedPath=incidentPath;
-    if(optical) {
-        gsCrossMediumBoundary(transmittedPath,hit);
-        if(transmittedPath.depth>GS_MEDIUM_PATH_CAPACITY) return vec3(0.0);
-    }
-    bool split=optical && !volume;
-    vec2 ior=split?gsInterfaceIors(hit,incidentPath.mediumSlot,transmittedPath.mediumSlot):vec2(1.0);
+#ifdef RTRENDERER_NO_DIELECTRIC
+    vec3 direction=opaqueDirection;
+    float firstDistance;
+    vec3 contribution=gsOpticalContinuation(hit.worldPositionAndDistance.xyz+direction*gsRayEpsilon(hit.worldPositionAndDistance.xyz),
+        direction,launchInfo,primaryIndex+1u,integrationRemaining,firstDistance);
+    reflectionHitDistance=firstDistance;
+    return opaqueWeight*contribution;
+#else
+    bool split=optical;
+    vec2 ior=split?gsInterfaceIors(hit):vec2(1.0);
     uint samples=split?gsFrame.words[GPU_SCENE_FRAME_OPTICAL_SAMPLES_WORD]:1u;
     vec3 total=vec3(0.0);float distanceSum=0.0,distanceWeight=0.0;
     [[dont_unroll]] for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
@@ -144,30 +148,38 @@ vec3 gsEvaluateSecondaryTransport(GpuScenePayload hit,vec3 incident,uvec4 launch
             fresnel=canTransmit?gsDielectricFresnel(ior.x,ior.y,max(dot(-incident,halfVector),0.0)):1.0;
         }
         // Exact first-interface split avoids noisy disappearing reflections at one SPP.
-        uint branches=split?2u:1u;
+        bool stochastic=split && (gsFrame.words[GPU_SCENE_FRAME_FEATURE_FLAGS_WORD]
+            &GPU_SCENE_FEATURE_FLAG_STOCHASTIC_DIELECTRIC)!=0u;
+        uint chosenBranch=0u;
+        if(stochastic) {
+            uint frameSeed=gsFrame.words[GPU_SCENE_FRAME_SEQUENCE_WORD]*0x9e3779b9u;
+            chosenBranch=gsOpticalRandom(launchInfo,frameSeed^primaryIndex*0x967a889bu^0x31415927u,sampleIndex)<fresnel?0u:1u;
+        }
+        uint branches=split && !stochastic?2u:1u;
         [[dont_unroll]] for(uint branch=0u;branch<branches;++branch) {
             vec3 direction=opaqueDirection,branchWeight=opaqueWeight;
-            GsMediumPath continuationPath=incidentPath;
             uint continuationSeed=primaryIndex+1u;
-            if(volume) continuationPath=transmittedPath;
             if(split) {
-                bool reflection=branch==0u;
+                uint dielectricBranch=stochastic?chosenBranch:branch;
+                bool reflection=dielectricBranch==0u;
                 float weight=reflection?fresnel:1.0-fresnel;
                 if(weight<=0.0) continue;
+                // Sample with probability F or 1-F; division cancels that factor exactly.
+                if(stochastic) weight=1.0;
                 direction=reflection?normalize(reflect(incident,halfVector)):transmitted;
                 float cosine=dot(normal,direction);
                 if(reflection?cosine<=0.0:cosine>=0.0) continue;
                 // G2/G1 is f*cos/pdf under visible-normal sampling for both dielectric branches.
                 weight*=ior.x==ior.y?1.0:gsDielectricBranchWeight(normal,incident,direction,roughness);
-                if(!reflection) {float eta=ior.x/ior.y;weight*=eta*eta;continuationPath=transmittedPath;}
+                if(!reflection) {float eta=ior.x/ior.y;weight*=eta*eta;}
                 branchWeight=weight*(reflection?vec3(1.0):clamp(hit.baseColorAndOpacity.rgb,vec3(0.0),vec3(1.0)));
-                continuationSeed=sampleIndex*2u+branch+1u;
+                continuationSeed=sampleIndex*2u+dielectricBranch+1u;
             }
             // One continuation call site avoids cloning the entire volume/light call tree
             // separately for metallic, invisible-volume and dielectric primary events.
             float firstDistance;
             vec3 contribution=gsOpticalContinuation(hit.worldPositionAndDistance.xyz+direction*gsRayEpsilon(hit.worldPositionAndDistance.xyz),
-                direction,launchInfo,continuationPath,continuationSeed,integrationRemaining,firstDistance);
+                direction,launchInfo,continuationSeed,integrationRemaining,firstDistance);
             if(!split) {reflectionHitDistance=firstDistance;return branchWeight*contribution;}
             total+=branchWeight*contribution;
             float luminance=gsLuminance(branchWeight*contribution);
@@ -176,6 +188,7 @@ vec3 gsEvaluateSecondaryTransport(GpuScenePayload hit,vec3 incident,uvec4 launch
     }
     reflectionHitDistance=distanceWeight>0.0?distanceSum/distanceWeight:0.0;
     return total/float(samples);
+#endif
 #endif
 }
 #endif

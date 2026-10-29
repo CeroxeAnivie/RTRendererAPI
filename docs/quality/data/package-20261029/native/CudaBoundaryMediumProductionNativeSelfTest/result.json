@@ -1,0 +1,30 @@
+{
+  "passed":true,
+  "scope":"public-vulkan-final-HDR-closed-boundaries",
+  "nativeFrames":21,
+  "fusedFrames":21,
+  "rejections":2,
+  "comparisons":[
+    {"name":"outside-single","samples":1,"volumes":1,"maximumAbsoluteError":0.000968233464739},
+    {"name":"inside-single","samples":1,"volumes":1,"maximumAbsoluteError":0.000975545130693},
+    {"name":"nested-priority","samples":2,"volumes":2,"maximumAbsoluteError":0.000487370922831},
+    {"name":"overlap-tie-latest-entry","samples":1,"volumes":2,"maximumAbsoluteError":0.000975108637451},
+    {"name":"overlap-priority-restoration","samples":1,"volumes":2,"maximumAbsoluteError":0.000488130581269},
+    {"name":"frame-local-eight-SPP","samples":8,"volumes":1,"maximumAbsoluteError":0.000968110832310},
+    {"name":"exact-projection-jitter","samples":2,"volumes":1,"maximumAbsoluteError":0.000967941540815},
+    {"name":"distance-clamped-before-exit","samples":1,"volumes":1,"maximumAbsoluteError":0.000476518743485},
+    {"name":"event-budget-preserves-emission","samples":1,"volumes":1,"maximumAbsoluteError":3.04610478909e-05},
+    {"name":"cutoff-preserves-emission","samples":1,"volumes":1,"maximumAbsoluteError":0.000121585741129},
+    {"name":"32-initial-volumes-terminal-before-exit","samples":1,"volumes":32,"maximumAbsoluteError":0.000243336163204},
+    {"name":"overflow-recovery","samples":1,"volumes":1,"maximumAbsoluteError":0.000968233464739},
+    {"name":"surface-rejection-recovery","samples":1,"volumes":1,"maximumAbsoluteError":0.000968233464739},
+    {"name":"environment-density-short-domain-one-step","samples":1,"volumes":0,"maximumAbsoluteError":0.000964127858059},
+    {"name":"scaled-translated-boundary-density","samples":2,"volumes":1,"maximumAbsoluteError":0.000976512535125},
+    {"name":"mode-switch-camera-before-boundary","samples":1,"volumes":0,"maximumAbsoluteError":0.000407840935404},
+    {"name":"mode-switch-back-to-boundary","samples":1,"volumes":1,"maximumAbsoluteError":0.000968233464739},
+    {"name":"mode-switch-camera-after-boundary","samples":1,"volumes":0,"maximumAbsoluteError":0.000485115411402},
+    {"name":"resize-eight-SPP-complete-frame","samples":8,"volumes":1,"maximumAbsoluteError":0.000968223354560},
+    {"name":"full-HD-bounded-continuation-tiles","samples":1,"volumes":1,"maximumAbsoluteError":0.000968233156518},
+    {"name":"resize-down-after-full-HD","samples":2,"volumes":1,"maximumAbsoluteError":0.000968139940154}
+  ]
+}

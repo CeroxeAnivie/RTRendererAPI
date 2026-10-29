@@ -158,9 +158,16 @@ final class RtRayTracingPipelineFactory {
     }
 
     static long createPipelineLayout(MemoryStack stack, VkDevice device, long descriptorSetLayout) {
+        return createPipelineLayout(stack, device, descriptorSetLayout, 0);
+    }
+
+    static long createPipelineLayout(MemoryStack stack, VkDevice device, long descriptorSetLayout, int pushBytes) {
         VkPipelineLayoutCreateInfo createInfo = VkPipelineLayoutCreateInfo.calloc(stack)
                 .sType$Default()
                 .pSetLayouts(stack.longs(descriptorSetLayout));
+        if (pushBytes > 0) createInfo.pPushConstantRanges(VkPushConstantRange.calloc(1, stack)
+                .stageFlags(KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR
+                        | KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR).offset(0).size(pushBytes));
         LongBuffer handle = stack.longs(0L);
         checkVk(VK10.vkCreatePipelineLayout(device, createInfo, null, handle), "vkCreatePipelineLayout");
         return handle.get(0);

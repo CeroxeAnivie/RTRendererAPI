@@ -9,6 +9,7 @@ import top.ceroxe.rt.renderer.api.*;
 
 /** Accepted-scene boundary index with an instance BVH and lazily shared triangle BVHs. */
 final class MediumSceneIndex {
+    static final String CONVEX_PACKET_PROPERTY="top.ceroxe.rt.medium.cuda.convexPacketBounds";
     private static final int[] EMPTY = new int[0];
     private static final Comparator<Volume> PRIORITY = Comparator.comparingInt(Volume::priority)
             .thenComparing(Volume::frameLocal).thenComparingLong(Volume::identity);
@@ -18,7 +19,8 @@ final class MediumSceneIndex {
     private final Map<Long, DensityTexture> densityTextures = new HashMap<>();
     private long textureGeneration, validatedTextureGeneration = -1;
     private FramePrimitiveBatch validatedDensityBatch, classifiedBatch;
-    private int densityBoundaries, scatteringBoundaries, batchDensityBoundaries, batchScatteringBoundaries;
+    private int densityBoundaries, scatteringBoundaries, surfaceBoundaries;
+    private int batchDensityBoundaries, batchScatteringBoundaries, batchSurfaceBoundaries;
     private long generation, persistentGeneration;
     private long treeGeneration = -1, batchGeneration = -1, cachedGeneration = -1;
     private VolumeTree persistentTree = VolumeTree.EMPTY, frameTree = VolumeTree.EMPTY;
@@ -39,7 +41,7 @@ final class MediumSceneIndex {
                 && changes.instances().statistics().removals() == 0) return;
         boolean changed = changes.reset();
         if (changes.reset()) {
-            meshes.clear(); boundaries.clear(); meshBoundaryReferences.clear(); densityBoundaries = scatteringBoundaries = 0;
+            meshes.clear(); boundaries.clear(); meshBoundaryReferences.clear(); densityBoundaries = scatteringBoundaries = surfaceBoundaries = 0;
         }
         for (long identity : changes.meshes().removedIdentities()) {
             meshes.remove(identity); changed |= meshBoundaryReferences.containsKey(identity);
@@ -53,8 +55,8 @@ final class MediumSceneIndex {
             Boundary previous = boundaries.get(write.id());
             if (instance.mediumBoundary().isEmpty()) changed |= removeBoundary(write.id());
             else if (previous == null || previous.slot != write.slot() || !previous.instance.equals(instance)) {
-                if (previous != null) classify(previous.instance.mediumBoundary().orElseThrow().medium(), -1);
-                classify(instance.mediumBoundary().orElseThrow().medium(), 1);
+                if (previous != null) classify(previous.instance.mediumBoundary().orElseThrow(), -1);
+                classify(instance.mediumBoundary().orElseThrow(), 1);
                 if (previous == null || previous.instance.meshAssetId() != instance.meshAssetId()) {
                     if (previous != null) removeMeshReference(previous.instance.meshAssetId());
                     meshBoundaryReferences.merge(instance.meshAssetId(), 1, Math::addExact);
@@ -71,7 +73,8 @@ final class MediumSceneIndex {
     void clear() {
         meshes.clear(); boundaries.clear(); meshBoundaryReferences.clear(); generation++; persistentGeneration++;
         densityTextures.clear(); textureGeneration++; validatedDensityBatch = classifiedBatch = null;
-        densityBoundaries = scatteringBoundaries = batchDensityBoundaries = batchScatteringBoundaries = 0;
+        densityBoundaries = scatteringBoundaries = surfaceBoundaries = 0;
+        batchDensityBoundaries = batchScatteringBoundaries = batchSurfaceBoundaries = 0;
         persistentTree = frameTree = VolumeTree.EMPTY;
         cached = EMPTY; cachedBatch = treeBatch = null;
     }
@@ -82,25 +85,30 @@ final class MediumSceneIndex {
         Boundary previous = boundaries.remove(identity);
         if (previous == null) return false;
         removeMeshReference(previous.instance.meshAssetId());
-        classify(previous.instance.mediumBoundary().orElseThrow().medium(), -1);
+        classify(previous.instance.mediumBoundary().orElseThrow(), -1);
         return true;
     }
 
     boolean hasDensityField(FramePrimitiveBatch batch) { classify(batch); return densityBoundaries + batchDensityBoundaries != 0; }
     boolean hasScattering(FramePrimitiveBatch batch) { classify(batch); return scatteringBoundaries + batchScatteringBoundaries != 0; }
+    boolean hasSurfaceInteraction(FramePrimitiveBatch batch) { classify(batch); return surfaceBoundaries + batchSurfaceBoundaries != 0; }
 
-    private void classify(Medium medium, int delta) {
+    private void classify(MediumBoundary boundary, int delta) {
+        var medium = boundary.medium();
         if (MediumDensitySupport.heterogeneous(medium)) densityBoundaries += delta;
         if (medium.density() > 0 && !medium.scattering().isZero()) scatteringBoundaries += delta;
+        if (boundary.surfaceInteraction()) surfaceBoundaries += delta;
     }
 
     private void classify(FramePrimitiveBatch batch) {
         if (classifiedBatch == batch) return;
-        batchDensityBoundaries = batchScatteringBoundaries = 0;
+        batchDensityBoundaries = batchScatteringBoundaries = batchSurfaceBoundaries = 0;
         for (int index : batch.mediumBoundaryIndices()) {
-            var medium = batch.primitives().get(index).mediumBoundary().orElseThrow().medium();
+            var boundary = batch.primitives().get(index).mediumBoundary().orElseThrow();
+            var medium = boundary.medium();
             if (MediumDensitySupport.heterogeneous(medium)) batchDensityBoundaries++;
             if (medium.density() > 0 && !medium.scattering().isZero()) batchScatteringBoundaries++;
+            if (boundary.surfaceInteraction()) batchSurfaceBoundaries++;
         }
         classifiedBatch = batch;
     }
@@ -108,6 +116,12 @@ final class MediumSceneIndex {
     int densityTextureSlot(long identity) {
         var texture = densityTextures.get(identity);
         return texture == null ? -1 : texture.slot;
+    }
+
+    /** Immutable asset upload source; the native executor caches it by accepted scene state. */
+    TextureAsset densityTexture(long identity) {
+        var texture = densityTextures.get(identity);
+        return texture == null ? null : texture.asset;
     }
 
     void validateDensityFields(RenderFrameRequest request) {
@@ -145,6 +159,49 @@ final class MediumSceneIndex {
     int[] containing(CameraState camera) { return containing(camera, FramePrimitiveBatch.empty()); }
 
     int[] containing(RenderFrameRequest request) { return containing(request.camera(), request.primitiveBatch()); }
+
+    /** Immutable accepted-frame metadata; coefficients never travel through the host per ray. */
+    NativeScene nativeScene(RenderFrameRequest request) {
+        var batch = request.primitiveBatch();
+        ensureTrees(batch);
+        var entries = new ArrayList<NativeBoundary>(frameBoundaryCount(batch));
+        long triangleCount=0, eventUpperBound=0;
+        for (Boundary indexed : boundaries.values()) {
+            var instance = indexed.instance;
+            MeshEntry mesh=meshes.get(instance.meshAssetId());
+            triangleCount=Math.addExact(triangleCount,mesh.mesh.triangleCount());
+            eventUpperBound=Math.addExact(eventUpperBound,mesh.eventUpperBound());
+            entries.add(new NativeBoundary(indexed.slot, instance.mediumBoundary().orElseThrow(), instance.transform()));
+        }
+        for (int index : batch.mediumBoundaryIndices()) {
+            var primitive = batch.primitives().get(index);
+            MeshEntry mesh=meshes.get(primitive.meshAssetId());
+            triangleCount=Math.addExact(triangleCount,mesh.mesh.triangleCount());
+            eventUpperBound=Math.addExact(eventUpperBound,mesh.eventUpperBound());
+            entries.add(new NativeBoundary(VulkanGpuSceneAbi.TRANSIENT_INSTANCE_BIT | index,
+                    primitive.mediumBoundary().orElseThrow(), primitive.transform()));
+        }
+        entries.sort((left, right) -> Integer.compareUnsigned(left.slot(), right.slot()));
+        return new NativeScene(entries, containing(request),triangleCount,eventUpperBound);
+    }
+
+    record NativeBoundary(int slot, MediumBoundary boundary, AffineTransform objectToWorld) { }
+
+    record NativeScene(List<NativeBoundary> boundaries, int[] containing, long boundaryTriangleCount, long boundaryEventUpperBound) {
+        NativeScene(List<NativeBoundary> boundaries,int[] containing) {this(boundaries,containing,Long.MAX_VALUE,Long.MAX_VALUE);}
+        NativeScene(List<NativeBoundary> boundaries,int[] containing,long boundaryTriangleCount) {this(boundaries,containing,boundaryTriangleCount,boundaryTriangleCount);}
+        /** A straight ray hits each instanced triangle at most once; unknown geometry retains 32 events. */
+        int packetCapacity(int maxEvents) {
+            return Math.max(1,(int)Math.min(Math.min(32,maxEvents),boundaryEventUpperBound));
+        }
+        NativeScene {
+            if(boundaryTriangleCount<0||boundaryEventUpperBound<0)throw new IllegalArgumentException("negative medium event bound");
+            boundaries = List.copyOf(boundaries);
+            containing = containing.clone();
+        }
+
+        @Override public int[] containing() { return containing.clone(); }
+    }
 
     private int[] containing(CameraState camera, FramePrimitiveBatch batch) {
         if (cachedGeneration == generation && cachedBatch == batch && cameraX == camera.x()
@@ -244,8 +301,13 @@ final class MediumSceneIndex {
         private double[] bounds;
         private MediumMeshAcceleration acceleration;
         private Boolean closed;
+        private Boolean convex;
         private MeshEntry(MeshAsset mesh) { this.mesh = mesh; }
         private boolean closed() { if (closed == null) closed = mesh.isClosedManifold(); return closed; }
+        private int eventUpperBound() {
+            if (convex == null) convex = MediumConvexMeshBound.convexClosed(mesh);
+            return Boolean.parseBoolean(System.getProperty(CONVEX_PACKET_PROPERTY,"true")) && convex ? 2 : mesh.triangleCount();
+        }
         private double[] bounds() { if (bounds == null) bounds = MediumMeshAcceleration.bounds(mesh); return bounds; }
         private boolean contains(double[] inverse, double x, double y, double z) {
             if (acceleration == null) acceleration = new MediumMeshAcceleration(mesh);

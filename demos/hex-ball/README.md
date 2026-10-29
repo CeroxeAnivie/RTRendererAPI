@@ -95,9 +95,28 @@ with separate SDR/HDR raygen selection, GLSL fallback and the same immutable-buf
 density, IOR, HG anisotropy, surface transmission/roughness, signed overlap priority, nested glass,
 camera-inside mode, inward winding, invisible volume boundaries and persistent/frame-local lanes.
 Interface events, optical samples, scattering intervals and maximum distance apply at the next
-frame boundary. The default is 1 SPP with balanced transport quality. See [6.0.4](../../docs/6.0.4.md)
+frame boundary. The default is 1 SPP with balanced transport quality. See [7.0.0 medium verification](../../docs/quality/verification-report.md#7-0-0-medium-design)
 for physical scope, quality limits and shader ABI details.
 
 ## 7.0.0 介质展厅
 
 使用可执行包的 `--medium-gallery` 入口，或 Gradle 的 `mediumGalleryDemo` 任务。默认原生 2560×1440、1 spp、请求 2× FG，提供完整单场景和逐项开关；参见[场景与命令](../../docs/medium-gallery.md)。`mediumGallerySceneSelfTest` 仅执行 CPU fixture 检查；`mediumGalleryNativeSelfTest` 会执行 GPU 工作，当前未运行。
+
+## 7.0.0 介质路由认证
+
+介质认证台为每条已实现路由提供独立场景，切换时重建场景并平滑过渡相机；未接入的组合会单独列为待办，不会混入通过场景。GUI 提供场景选择、GPU 完成帧率和整帧 GPU 时间。FG 与时域重建关闭，避免把生成/重建帧混入原生渲染 FPS。启动需要可用的 Vulkan/CUDA GPU。
+
+```powershell
+## GPU 认证台
+.\gradlew.bat :demos:hex-ball:mediumCertificationDemo `
+  -PcertificationArgs="--width=1280 --height=720 --spp=1 --preset=CAMERA_ABSORPTION"
+
+## 已打包的完整运行时
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
+  --medium-certification --width=1280 --height=720 --spp=1 --preset=CAMERA_ABSORPTION
+
+## CPU-only scene / CLI 合同检查，不打开 GPU 或窗口
+.\gradlew.bat :demos:hex-ball:mediumCertificationSceneSelfTest
+```
+
+可选参数：`--width=1280`、`--height=720`、`--spp=1|2|4|8`、`--preset=<名称>`。预设为 `CAMERA_ABSORPTION`、`BOUNDARY_DENSITY`、`CAMERA_SINGLE_SCATTER`、`CAMERA_MULTIPLE_SCATTER`、`HETEROGENEOUS_SINGLE_SCATTER`、`HETEROGENEOUS_MULTIPLE_SCATTER`、`BOUNDARY_SCATTER`、`PBR_SINGLE_SIDED`、`PBR_DOUBLE_SIDED`、`OPTICAL_SMOOTH_NESTED`、`OPTICAL_ROUGH_NESTED`、`SCATTER_GLASS_CAUSTICS`。数字键 `1`-`9`、`0`、`Q`、`W` 直接选择，`←`/`→` 或控制台按钮轮播。`W` 把非零散射介质、IOR-changing 折射玻璃和表面焦散配置到同一帧，供原生 GPU 集成验收；加入场景 fixture 和 CPU 合同测试不代表 GPU 图像验收已通过。

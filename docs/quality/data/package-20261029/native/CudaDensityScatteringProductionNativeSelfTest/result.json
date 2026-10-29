@@ -1,0 +1,21 @@
+{
+  "passed":true,
+  "scope":"public-final-HDR-heterogeneous-direct-scattering",
+  "reference":"independent double trilinear, clipped midpoint, seeded interval sampling and per-light density shadows",
+  "nativeFrames":12,
+  "recoverableRejections":1,
+  "comparisons":[
+    {"name":"density-ambient-emission-one-step","steps":1,"samples":1,"lightSamples":0,"maximumAbsoluteError":0.000239415052644,"maximumToleranceRatio":0.294693016044},
+    {"name":"density-unshadowed-HG-eight-SPP","steps":13,"samples":8,"lightSamples":0,"maximumAbsoluteError":0.000239770880223,"maximumToleranceRatio":0.295130999794},
+    {"name":"density-directional-shadow-two-SPP","steps":17,"samples":2,"lightSamples":0,"maximumAbsoluteError":0.000239867903874,"maximumToleranceRatio":0.295250425001},
+    {"name":"density-frame-local-opaque-shadow","steps":19,"samples":2,"lightSamples":0,"maximumAbsoluteError":0.000238770477281,"maximumToleranceRatio":0.293899616232},
+    {"name":"density-point-spot-directional-sun-enumerated","steps":23,"samples":2,"lightSamples":0,"maximumAbsoluteError":0.000239826434887,"maximumToleranceRatio":0.295199381340},
+    {"name":"density-small-light-set-sampled-enumerates","steps":23,"samples":2,"lightSamples":4,"maximumAbsoluteError":0.000239061715186,"maximumToleranceRatio":0.294258097354},
+    {"name":"density-all-29-lights-through-bounded-chunks","steps":7,"samples":1,"lightSamples":0,"maximumAbsoluteError":0.000239890128112,"maximumToleranceRatio":0.295277780539},
+    {"name":"density-29-light-one-sample-reservoir","steps":7,"samples":2,"lightSamples":1,"maximumAbsoluteError":0.000238491510729,"maximumToleranceRatio":0.293326985446},
+    {"name":"density-29-light-eight-sample-reservoir","steps":7,"samples":8,"lightSamples":8,"maximumAbsoluteError":0.000238993003862,"maximumToleranceRatio":0.294173521438},
+    {"name":"density-narrow-domain-one-step-eight-SPP","steps":1,"samples":8,"lightSamples":0,"maximumAbsoluteError":0.000268549302714,"maximumToleranceRatio":0.292533869344},
+    {"name":"density-domain-miss-is-vacuum","steps":13,"samples":2,"lightSamples":0,"maximumAbsoluteError":0.00000000000,"maximumToleranceRatio":0.00000000000},
+    {"name":"density-resize-and-rejection-recovery","steps":11,"samples":8,"lightSamples":0,"maximumAbsoluteError":0.000240088284985,"maximumToleranceRatio":0.295521689375}
+  ]
+}

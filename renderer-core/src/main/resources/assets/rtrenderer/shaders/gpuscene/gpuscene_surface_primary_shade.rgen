@@ -1,0 +1,5 @@
+#version 460
+#define RTRENDERER_SURFACE_ONLY 1
+#define RTRENDERER_COMPACT_MEDIA 1
+#define RTRENDERER_PRIMARY_SHADE 1
+#include "gpuscene_raygen.glsl"

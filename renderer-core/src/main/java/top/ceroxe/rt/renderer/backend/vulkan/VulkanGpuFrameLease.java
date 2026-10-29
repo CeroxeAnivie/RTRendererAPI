@@ -16,6 +16,9 @@ final class VulkanGpuFrameLease implements GpuFrameLease, VulkanManagedFrameLeas
     private final Consumer<ConsumerCompletion> completionObserver;
     private final NativeFrame managedNativeFrame;
 
+    private final Optional<AcquireSignal> acquireSignal;
+    private final Runnable closeObserver;
+
     private LeaseState state = LeaseState.ACTIVE;
 
     VulkanGpuFrameLease(
@@ -42,6 +45,14 @@ final class VulkanGpuFrameLease implements GpuFrameLease, VulkanManagedFrameLeas
             Consumer<ConsumerCompletion> completionObserver,
             NativeFrame managedNativeFrame
     ) {
+        this(descriptor, memoryHandle, completionCapabilities, completionObserver, managedNativeFrame, Optional.empty(), () -> {});
+    }
+
+    VulkanGpuFrameLease(FrameDescriptor descriptor, ExportedNativeHandle<VulkanMemoryHandleType> memoryHandle,
+            ConsumerCompletionCapabilities completionCapabilities, Consumer<ConsumerCompletion> completionObserver,
+            NativeFrame managedNativeFrame, Optional<AcquireSignal> acquireSignal, Runnable closeObserver) {
+        this.acquireSignal = Objects.requireNonNull(acquireSignal, "acquireSignal");
+        this.closeObserver = Objects.requireNonNull(closeObserver, "closeObserver");
         this.descriptor = Objects.requireNonNull(descriptor, "descriptor");
         this.memoryHandle = Objects.requireNonNull(memoryHandle, "memoryHandle");
         this.completionCapabilities = Objects.requireNonNull(completionCapabilities, "completionCapabilities");
@@ -66,8 +77,7 @@ final class VulkanGpuFrameLease implements GpuFrameLease, VulkanManagedFrameLeas
 
     @Override
     public Optional<AcquireSignal> acquireSignal() {
-        // The lease is created only after the producer fence has completed on the CPU.
-        return Optional.empty();
+        return acquireSignal;
     }
 
     @Override
@@ -144,10 +154,17 @@ final class VulkanGpuFrameLease implements GpuFrameLease, VulkanManagedFrameLeas
         state = LeaseState.RELEASED;
     }
 
+    private boolean acquireWasImported() {
+        if (acquireSignal.isEmpty()) return false;
+        var handle = acquireSignal.orElseThrow().handle();
+        return handle instanceof VulkanSlotReadyHandle ready ? ready.importedEver() : handle.state() == HandleState.IMPORTED;
+    }
+
     @Override
     public synchronized void close() {
         if (state == LeaseState.CLOSED) return;
-        if (state == LeaseState.ACTIVE && memoryHandle.state() == HandleState.IMPORTED) {
+        if (state == LeaseState.ACTIVE && (memoryHandle.state() == HandleState.IMPORTED
+                || acquireSignal.isPresent() && acquireWasImported())) {
             throw new IllegalStateException(
                     "an imported frame lease must publish consumer completion before close"
             );
@@ -171,6 +188,8 @@ final class VulkanGpuFrameLease implements GpuFrameLease, VulkanManagedFrameLeas
             }
         }
         if (failure != null) throw failure;
+        acquireSignal.ifPresent(signal -> signal.handle().close());
+        closeObserver.run();
         state = LeaseState.CLOSED;
     }
 }

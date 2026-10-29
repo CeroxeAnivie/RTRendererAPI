@@ -84,7 +84,108 @@ public final class VulkanSurfaceSceneIndexSelfTest {
         apply(residency, index, SceneTransaction.builder(++revision).resetScene().build());
         require(index.opaque() && index.transmissiveCount()==0,"reset must retire all obsolete opacity facts");
         require(!index.opaque(glassBatch),"stale frame mesh reference cannot prove opacity after reset");
+        cameraAbsorptionAdmission();
+        pbrMediumAdmission();
         System.out.println("VulkanSurfaceSceneIndexSelfTest passed");
+    }
+
+    private static void cameraAbsorptionAdmission() {
+        var residency = new VulkanSceneResidency();
+        var index = new VulkanSurfaceSceneIndex();
+        var empty = FramePrimitiveBatch.empty();
+        require(index.cameraAbsorptionOnly(empty), "empty scene needs no secondary medium segments");
+        var unlit = MaterialAsset.builder(51).doubleSided(true)
+                .shadingModel(MaterialAsset.ShadingModel.UNLIT).build();
+        var mesh = MeshAsset.triangles(51, new float[]{0,0,0,1,0,0,0,1,0}, new int[]{0,1,2}, 51);
+        var instance = SceneInstance.builder(51,51).build();
+        var batch = FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(51).build()).build();
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(unlit).upsert(mesh).upsert(instance).build());
+        require(index.cameraAbsorptionOnly(empty) && index.cameraAbsorptionOnly(batch),
+                "referenced double-sided unlit surfaces terminate camera paths");
+        apply(residency,index,SceneTransaction.builder(++revision)
+                .upsert(MaterialAsset.builder(52).build()).build());
+        require(index.cameraAbsorptionOnly(empty), "unused PBR asset must not reject an admitted scene");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(unlit.toBuilder()
+                .shadingModel(MaterialAsset.ShadingModel.PHYSICALLY_BASED).emissive(0xffffffff,3).build()).build());
+        require(!index.cameraAbsorptionOnly(empty) && !index.cameraAbsorptionOnly(batch),
+                "emissive PBR still needs lighting and reflection segments; cached batches must update");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(unlit.toBuilder().doubleSided(false).build()).build());
+        require(!index.cameraAbsorptionOnly(empty), "single-sided surfaces do not satisfy admission");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(unlit.toBuilder()
+                .baseColorTextureId(51).build()).upsert(TextureAsset.color(51,1,1,new byte[]{-1,-1,-1,-1})).build());
+        require(index.cameraAbsorptionOnly(batch), "opaque unlit texture is admitted");
+        apply(residency,index,SceneTransaction.builder(++revision)
+                .upsert(TextureAsset.color(51,1,1,new byte[]{-1,-1,-1,100})).build());
+        require(!index.cameraAbsorptionOnly(batch), "texture alpha update invalidates terminal proof");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(unlit).build());
+        apply(residency,index,SceneTransaction.builder(++revision)
+                .upsert(instance.toBuilder().surfaceVisibility(.5f).build()).build());
+        require(!index.cameraAbsorptionOnly(empty), "fractional instance visibility needs continuation");
+        apply(residency,index,SceneTransaction.builder(++revision).removeInstance(51).build());
+        require(index.cameraAbsorptionOnly(batch), "retired instance does not invalidate admitted frame-local geometry");
+        apply(residency,index,SceneTransaction.builder(++revision).resetScene().build());
+        require(index.cameraAbsorptionOnly(empty) && !index.cameraAbsorptionOnly(batch),
+                "reset clears counters while stale mesh references cannot prove admission");
+    }
+
+    private static void pbrMediumAdmission() {
+        var residency = new VulkanSceneResidency();
+        var index = new VulkanSurfaceSceneIndex();
+        var empty = FramePrimitiveBatch.empty();
+        var material = MaterialAsset.builder(61).doubleSided(true).metallic(0).baseColorTextureId(61).build();
+        var mesh = MeshAsset.triangles(61, new float[]{0,0,0,1,0,0,0,1,0}, new int[]{0,1,2}, 61);
+        var instance = SceneInstance.builder(61,61).build();
+        var batch = FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(61).build()).build();
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(material).upsert(mesh).upsert(instance)
+                .upsert(TextureAsset.color(61,1,1,new byte[]{-1,-1,-1,-1})).build());
+        require(index.opaquePbrMediumOnly(empty) && index.opaquePbrMediumOnly(batch),
+                "opaque double-sided dielectric PBR admits native light connections");
+        require(!index.cameraAbsorptionOnly(empty), "PBR must retain its lighting path");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(MaterialAsset.builder(62).metallic(1).build()).build());
+        require(index.opaquePbrMediumOnly(batch), "unused metallic resources do not invalidate admission");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(material.toBuilder().metallic(.1f).build()).build());
+        require(!index.opaquePbrMediumOnly(empty) && !index.opaquePbrMediumOnly(batch),
+                "referenced metal requires secondary reflection segments and invalidates the cached batch");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(material).build());
+        require(index.opaquePbrMediumOnly(batch), "material replacement restores the proof");
+        apply(residency,index,SceneTransaction.builder(++revision)
+                .upsert(TextureAsset.color(61,1,1,new byte[]{-1,-1,-1,100})).build());
+        require(!index.opaquePbrMediumOnly(empty) && !index.opaquePbrMediumOnly(batch),
+                "texture updates invalidate persistent and frame-local coverage proofs");
+        apply(residency,index,SceneTransaction.builder(++revision)
+                .upsert(TextureAsset.color(61,1,1,new byte[]{-1,-1,-1,-1})).build());
+        require(index.opaquePbrMediumOnly(batch), "restored texture alpha restores admission");
+        var singleSided = material.toBuilder().doubleSided(false).build();
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(singleSided).build());
+        require(index.opaquePbrMediumOnly(empty) && index.opaquePbrMediumOnly(batch),
+                "single-sided PBR preserves public camera and light-query backface rejection");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(singleSided.toBuilder()
+                .shadingModel(MaterialAsset.ShadingModel.UNLIT).build()).build());
+        require(index.opaquePbrMediumOnly(empty) && index.opaquePbrMediumOnly(batch)
+                && !index.cameraAbsorptionOnly(empty), "single-sided unlit uses complete native camera packets");
+        for (var unsupported : new MaterialAsset[]{
+                singleSided.toBuilder().metallic(.1f).build(),
+                singleSided.toBuilder().blendMode(MaterialAsset.BlendMode.TRANSLUCENT).transmission(.5f).build(),
+                material.toBuilder().blendMode(MaterialAsset.BlendMode.TRANSLUCENT).transmission(.5f).build(),
+                material.toBuilder().surfaceOverlay(SurfaceOverlayState.depthEqual(.001f)).build(),
+                material.toBuilder().shadingModel(MaterialAsset.ShadingModel.LIGHTMAP_MODULATED).build()}) {
+            apply(residency,index,SceneTransaction.builder(++revision).upsert(unsupported).build());
+            require(!index.opaquePbrMediumOnly(batch), "surface continuation cannot omit medium segments");
+        }
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(material).upsert(instance.toBuilder()
+                .surfaceVisibility(.5f).build()).build());
+        require(!index.opaquePbrMediumOnly(empty), "fractional instance visibility requires continuation");
+        apply(residency,index,SceneTransaction.builder(++revision).removeInstance(61).build());
+        require(index.opaquePbrMediumOnly(batch), "retired persistent instances do not reject frame-local geometry");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(mesh.toBuilder()
+                .vertexColorsRgba8(new int[]{-1,0x80ffffff,-1}).build()).build());
+        require(!index.opaquePbrMediumOnly(batch), "vertex alpha invalidates the frame-local proof");
+        var volume = FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(61).surfaceVisibility(.5f)
+                .mediumBoundary(MediumBoundary.volume(Medium.vacuum())).build()).build();
+        require(index.opaquePbrMediumOnly(volume), "volume-only geometry has no surface lighting obligation");
+        apply(residency,index,SceneTransaction.builder(++revision).resetScene().build());
+        require(index.opaquePbrMediumOnly(empty) && !index.opaquePbrMediumOnly(batch),
+                "reset clears counts and invalidates cached references");
     }
 
     private static void apply(VulkanSceneResidency residency, VulkanSurfaceSceneIndex index, SceneTransaction change) {

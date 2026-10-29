@@ -81,8 +81,10 @@ public final class RendererApiContractSelfTest {
    }
 
    public static void main(String[] args) {
+      SnapshotPixelPoolSelfTest.main(args);
       assertConfigurationBounds();
       assertFeatureOptionContracts();
+      assertFeatureControlDiagnosticsContract();
       assertTechnologyCapabilityContract();
       assertTechnologyExecutionEvidenceContract();
       assertFrameGenerationContract();
@@ -98,6 +100,7 @@ public final class RendererApiContractSelfTest {
       assertAntiAliasingContract();
       assertTemporalRenderingContract();
       assertGenericRenderingResourceContracts();
+      assertSceneShaderBindingsContract();
       assertGenericPipelineContracts();
       assertNormalizedVertexAndImmediateUniformContracts();
       assertExternalFrameConsumerContracts();
@@ -123,6 +126,86 @@ public final class RendererApiContractSelfTest {
       assertGenericTextureResourceContract();
       assertGenericSamplerStateContract();
       assertGenericShaderBindingContract();
+   }
+
+   private static void assertSceneShaderBindingsContract() {
+      int[] bindings = {
+              SceneShaderBindings.TLAS, SceneShaderBindings.OUTPUT_IMAGE,
+              SceneShaderBindings.FRAME_UNIFORMS, SceneShaderBindings.TEXTURE_RECORDS,
+              SceneShaderBindings.TEXTURE_PIXELS, SceneShaderBindings.MATERIAL_RECORDS,
+              SceneShaderBindings.MESH_RECORDS, SceneShaderBindings.POSITIONS,
+              SceneShaderBindings.NORMALS, SceneShaderBindings.TANGENTS,
+              SceneShaderBindings.TEXTURE_COORDINATES, SceneShaderBindings.COLORS,
+              SceneShaderBindings.LIGHTMAP_COORDINATES, SceneShaderBindings.INDICES,
+              SceneShaderBindings.TRIANGLE_MATERIAL_SLOTS, SceneShaderBindings.INSTANCE_RECORDS,
+              SceneShaderBindings.LIGHT_RECORDS, SceneShaderBindings.HISTORY_COLOR_INPUT,
+              SceneShaderBindings.HISTORY_COLOR_OUTPUT, SceneShaderBindings.HISTORY_GEOMETRY_INPUT,
+              SceneShaderBindings.HISTORY_GEOMETRY_OUTPUT, SceneShaderBindings.MOTION_OUTPUT,
+              SceneShaderBindings.TRANSIENT_INSTANCE_RECORDS, SceneShaderBindings.DENOISING_NORMAL_ROUGHNESS,
+              SceneShaderBindings.DENOISING_VIEW_Z, SceneShaderBindings.DENOISING_MOTION_VECTORS,
+              SceneShaderBindings.DENOISING_DIFFUSE_RADIANCE_HIT_DISTANCE,
+              SceneShaderBindings.DENOISING_SPECULAR_RADIANCE_HIT_DISTANCE,
+              SceneShaderBindings.DENOISING_DIFFUSE_MATERIAL_FACTOR,
+              SceneShaderBindings.DENOISING_SPECULAR_MATERIAL_FACTOR,
+              SceneShaderBindings.RECONSTRUCTION_DEPTH, SceneShaderBindings.RECONSTRUCTION_MOTION_VECTORS,
+              SceneShaderBindings.RECONSTRUCTION_EXPOSURE, SceneShaderBindings.CAUSTIC_PHOTONS,
+              SceneShaderBindings.APPLICATION_DATA
+      };
+      require(bindings.length == SceneShaderBindings.COUNT + 1
+                      && SceneShaderBindings.APPLICATION_DATA == SceneShaderBindings.COUNT,
+              "application shader data must start immediately after all built-in descriptor bindings");
+      for (int binding = 0; binding < bindings.length; binding++) {
+         require(bindings[binding] == binding,
+                 "public scene descriptor binding moved: index=" + binding + ", value=" + bindings[binding]);
+      }
+      require(SceneShaderBindings.STORAGE_BUFFER_COUNT == 17
+                      && SceneShaderBindings.STORAGE_IMAGE_COUNT == 16,
+              "public scene descriptor pool counts changed");
+   }
+
+   private static void assertFeatureControlDiagnosticsContract() {
+      RendererFeatureProfile source = RendererFeatureProfile.disabled();
+      RendererFeatureProfile target = source.toBuilder()
+              .denoising(DenoisingOptions.recommended()).build();
+      RendererFeaturePlan plan = new RendererFeaturePlan(7L, 3L, source, target,
+              RendererFeaturePlan.Disposition.APPLICABLE,
+              RendererFeaturePlan.Boundary.FRAME_DRAIN, "apply after frame drain");
+      RendererFeatureApplyResult result = new RendererFeatureApplyResult(7L, 4L,
+              RendererFeatureApplyResult.Outcome.APPLIED, target, "profile committed");
+      RendererFeatureControlDiagnostics initial = new RendererFeatureControlDiagnostics(
+              0L, source, 0L, 0L, 0L, Optional.empty(), Optional.empty());
+      RendererFeatureControlDiagnostics completed = new RendererFeatureControlDiagnostics(
+              4L, target, 1L, 1L, 0L, Optional.of(plan), Optional.of(result));
+      require(initial.latestPlan().isEmpty() && initial.latestResult().isEmpty()
+                      && completed.latestPlan().orElseThrow() == plan
+                      && completed.latestResult().orElseThrow() == result
+                      && completed.effectiveProfile().equals(target),
+              "feature diagnostics lost the latest transition or effective profile");
+      require(completed.equals(new RendererFeatureControlDiagnostics(4L, target, 1L, 1L, 0L,
+                      Optional.of(plan), Optional.of(result))),
+              "feature diagnostics lost immutable value semantics");
+      expect(IllegalArgumentException.class, () -> new RendererFeatureControlDiagnostics(
+              -1L, source, 0L, 0L, 0L, Optional.empty(), Optional.empty()));
+      expect(IllegalArgumentException.class, () -> new RendererFeatureControlDiagnostics(
+              0L, source, -1L, 0L, 0L, Optional.empty(), Optional.empty()));
+      expect(IllegalArgumentException.class, () -> new RendererFeatureControlDiagnostics(
+              0L, source, 0L, -1L, 0L, Optional.empty(), Optional.empty()));
+      expect(IllegalArgumentException.class, () -> new RendererFeatureControlDiagnostics(
+              0L, source, 0L, 0L, -1L, Optional.empty(), Optional.empty()));
+      expect(IllegalArgumentException.class, () -> new RendererFeatureControlDiagnostics(
+              0L, source, 0L, 1L, 0L, Optional.empty(), Optional.empty()));
+      expect(NullPointerException.class, () -> new RendererFeatureControlDiagnostics(
+              0L, null, 0L, 0L, 0L, Optional.empty(), Optional.empty()));
+      expect(NullPointerException.class, () -> new RendererFeatureControlDiagnostics(
+              0L, source, 0L, 0L, 0L, null, Optional.empty()));
+      expect(NullPointerException.class, () -> new RendererFeatureControlDiagnostics(
+              0L, source, 0L, 0L, 0L, Optional.empty(), null));
+      expect(IllegalArgumentException.class, () -> new RendererFeatureControlDiagnostics(
+              4L, target, 1L, 1L, 0L, Optional.of(plan),
+              Optional.of(new RendererFeatureApplyResult(8L, 4L,
+                      RendererFeatureApplyResult.Outcome.APPLIED, target, "other plan"))));
+      expect(IllegalArgumentException.class, () -> new RendererFeatureControlDiagnostics(
+              4L, source, 1L, 1L, 0L, Optional.of(plan), Optional.of(result)));
    }
 
    private static void assertWorkloadExecutionEvidenceContract() {

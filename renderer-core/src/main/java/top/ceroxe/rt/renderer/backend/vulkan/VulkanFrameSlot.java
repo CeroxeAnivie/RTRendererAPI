@@ -51,6 +51,7 @@ final class VulkanFrameSlot implements AutoCloseable {
     private VulkanFrameGenerationResources frameGenerationResources;
     private RtGpuBuffer cpuReadback;
     private RtGpuBuffer causticPhotons;
+    private RtGpuBuffer primaryQueue;
     private RtCommandContext.AsyncSubmission producerSubmission;
     private RtCommandContext.AsyncSubmission consumerSubmission;
     private VulkanImportedSemaphore consumerSemaphore;
@@ -80,6 +81,31 @@ final class VulkanFrameSlot implements AutoCloseable {
     private boolean pendingCompletionUsesSer;
     private LongConsumer producerCompletionObserver;
     private SubmissionReservation activeSubmissionReservation;
+    private top.ceroxe.rt.renderer.rt.device.interop.VulkanWin32ExternalSemaphoreProbe.ExportedSemaphore readyBinary;
+    private boolean readyBinaryPending;
+    private boolean queuedLeaseOutstanding;
+    private boolean consumerReturned;
+    private VulkanSlotReadyHandle queuedReadyHandle;
+
+    synchronized void enableBinarySemaphoreDelivery() {
+        requireState(State.FREE, "enable queued delivery");
+        if (readyBinary == null) readyBinary = top.ceroxe.rt.renderer.rt.device.interop.VulkanWin32ExternalSemaphoreProbe.exportSemaphore(device.device());
+    }
+
+    synchronized long readyBinarySemaphore() { return readyBinary == null ? 0L : readyBinary.semaphore(); }
+    synchronized void drainAbortedBinarySubmission() {
+        if (readyBinary == null) return;
+        var drain = device.frameCommands().submitSemaphoreWaitAsync(readyBinary.semaphore());
+        drain.close();
+    }
+    synchronized boolean queuedPresentable(long sequence) {
+        return frameSequence == sequence && readyBinaryPending && (state == State.SUBMITTED || state == State.COMPLETED);
+    }
+    synchronized GpuFrameLease acquireQueued() {
+        if (!queuedPresentable(frameSequence)) throw new IllegalStateException("queued frame is unavailable");
+        return acquirePreparedFrame(true);
+    }
+
     private boolean closed;
 
     VulkanFrameSlot(
@@ -597,6 +623,29 @@ final class VulkanFrameSlot implements AutoCloseable {
 
     synchronized RtGpuBuffer causticPhotons() { return causticPhotons == null ? frameUniforms : causticPhotons; }
 
+    synchronized long requiredPrimaryQueueGrowth(long bytes) {
+        return bytes > 0 && (primaryQueue == null || primaryQueue.sizeBytes() < bytes) ? bytes : 0;
+    }
+
+    synchronized void ensurePrimaryQueue(long bytes) {
+        requireState(State.FREE, "prepare primary hit queue");
+        if (requiredPrimaryQueueGrowth(bytes) == 0) return;
+        long limit = (long) top.ceroxe.rt.renderer.rt.pipeline.GpuScenePrimaryQueue.MAX_ITEMS
+                * top.ceroxe.rt.renderer.rt.pipeline.GpuScenePrimaryQueue.ITEM_BYTES;
+        if (bytes > limit) throw new IllegalArgumentException("primary hit queue exceeds slot budget");
+        var replacement = RtGpuBuffer.createDeviceAddressBuffer(device.device(), device.allocator(), bytes,
+                VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, stalls);
+        try { if (primaryQueue != null) primaryQueue.close(); }
+        catch (RuntimeException | Error failure) { replacement.close(); throw failure; }
+        primaryQueue = replacement;
+    }
+
+    synchronized RtGpuBuffer primaryQueue() {
+        requireOpen();
+        if (primaryQueue == null) throw new IllegalStateException("frame slot has no primary hit queue");
+        return primaryQueue;
+    }
+
     synchronized RtGpuBuffer frameUniforms() {
         requireOpen();
         return frameUniforms;
@@ -707,6 +756,8 @@ final class VulkanFrameSlot implements AutoCloseable {
         externallyOwned = externallyOwnedAfterSubmission;
         currentSubmissionTracksFeatureEvidence = true;
         currentSubmissionUsesSer = usesShaderExecutionReordering;
+        readyBinaryPending = readyBinary != null;
+        consumerReturned = false;
         state = State.SUBMITTED;
         VulkanFrameFlightRecorder.record(
                 VulkanFrameFlightRecorder.PHASE_ADMITTED,
@@ -790,6 +841,8 @@ final class VulkanFrameSlot implements AutoCloseable {
         currentSubmissionUsesSer = checked.usesShaderExecutionReordering;
         activeSubmissionReservation = null;
         checked.published = true;
+        readyBinaryPending = readyBinary != null;
+        consumerReturned = false;
         state = State.SUBMITTED;
         VulkanFrameFlightRecorder.record(
                 VulkanFrameFlightRecorder.PHASE_ADMITTED,
@@ -816,23 +869,42 @@ final class VulkanFrameSlot implements AutoCloseable {
     synchronized boolean pollProducer() {
         requireOpen();
         publishPendingCompletionEvidence();
-        if (state == State.CONSUMER_PENDING) {
-            if (!consumerSubmission.pollComplete()) return false;
-            consumerSubmission = null;
-            consumerSemaphore.close();
-            consumerSemaphore = null;
-            recordConsumerCompleted();
-            resetIdentity();
-            state = State.FREE;
-            return false;
+        // Producer retirement remains independent from a lease and an external consumer wait.
+        if (producerSubmission != null && producerSubmission.pollComplete()) {
+            recordProducerCompleted(finishProducerCompletion());
+            if (state == State.SUBMITTED) state = State.COMPLETED;
+            publishPendingCompletionEvidence();
         }
-        if (state != State.SUBMITTED) return state == State.COMPLETED || state == State.LEASED;
-        if (!producerSubmission.pollComplete()) return false;
-        RtCommandContext.Timing timing = finishProducerCompletion();
-        state = State.COMPLETED;
-        recordProducerCompleted(timing);
+        if (consumerSubmission != null && consumerSubmission.pollComplete()) {
+            consumerSubmission = null;
+            if (consumerSemaphore != null) { consumerSemaphore.close(); consumerSemaphore = null; }
+            readyBinaryPending = false;
+            consumerReturned = true;
+        }
+        retireReturnedFrame();
+        return state == State.COMPLETED;
+    }
+
+    private void retireReturnedFrame() {
+        if (!consumerReturned || queuedLeaseOutstanding || producerSubmission != null || consumerSubmission != null) return;
         publishPendingCompletionEvidence();
-        return true;
+        recordConsumerCompleted();
+        resetIdentity();
+        state = State.FREE;
+    }
+
+    private void drainUnconsumedReady() {
+        if (!readyBinaryPending) return;
+        // A binary signal must be consumed even when no external consumer imports the frame.
+        consumerSubmission = device.frameCommands().submitSemaphoreWaitAsync(readyBinary.semaphore());
+        readyBinaryPending = false;
+    }
+
+    private synchronized void queuedLeaseClosed(long sequence) {
+        if (!queuedLeaseOutstanding || frameSequence != sequence) throw new IllegalStateException("queued lease identity changed");
+        queuedLeaseOutstanding = false;
+        queuedReadyHandle = null;
+        retireReturnedFrame();
     }
 
     private RtCommandContext.Timing finishProducerCompletion() {
@@ -922,12 +994,19 @@ final class VulkanFrameSlot implements AutoCloseable {
 
     synchronized void discardCompleted() {
         requireState(State.COMPLETED, "discard completed frame");
-        resetIdentity();
-        state = State.FREE;
+        drainUnconsumedReady();
+        consumerReturned = true;
+        if (consumerSubmission != null) state = State.CONSUMER_PENDING;
+        retireReturnedFrame();
     }
 
     synchronized GpuFrameLease acquire() {
         requireState(State.COMPLETED, "acquire completed frame");
+        if (readyBinaryPending) {
+            var wait = device.frameCommands().submitSemaphoreWaitAsync(readyBinary.semaphore());
+            wait.close();
+            readyBinaryPending = false;
+        }
         return acquirePreparedFrame();
     }
 
@@ -939,7 +1018,9 @@ final class VulkanFrameSlot implements AutoCloseable {
         return acquirePreparedFrame();
     }
 
-    private GpuFrameLease acquirePreparedFrame() {
+    private GpuFrameLease acquirePreparedFrame() { return acquirePreparedFrame(false); }
+
+    private GpuFrameLease acquirePreparedFrame(boolean queued) {
         VulkanExportedMemoryHandle memoryHandle = new VulkanExportedMemoryHandle(
                 this::exportSharedMemoryHandle
         );
@@ -967,6 +1048,7 @@ final class VulkanFrameSlot implements AutoCloseable {
                     .dedicatedAllocation(outputImage.dedicatedAllocation())
                     .build();
             long leasedSequence = frameSequence;
+            VulkanSlotReadyHandle acquireHandle = queued ? new VulkanSlotReadyHandle(readyBinary.win32Handle()) : null;
             VulkanGpuFrameLease lease = new VulkanGpuFrameLease(
                     descriptor,
                     memoryHandle,
@@ -981,8 +1063,12 @@ final class VulkanFrameSlot implements AutoCloseable {
                             externallyOwned,
                             readyTimelineSemaphore,
                             readyTimelineValue
-                    )
+                    ),
+                    queued ? java.util.Optional.of(new GpuFrameLease.AcquireSignal(acquireHandle, GpuFrameLease.SemaphoreKind.BINARY, 0L)) : java.util.Optional.empty(),
+                    queued ? () -> queuedLeaseClosed(leasedSequence) : () -> {}
             );
+            queuedReadyHandle = acquireHandle;
+            queuedLeaseOutstanding = queued;
             state = State.LEASED;
             VulkanFrameFlightRecorder.record(
                     VulkanFrameFlightRecorder.PHASE_LEASE_ACQUIRED,
@@ -1019,13 +1105,13 @@ final class VulkanFrameSlot implements AutoCloseable {
         return outputImage.exportSharedWin32MemoryHandle();
     }
 
-    private void recordExternalOwnershipRelease(
+    void recordExternalOwnershipRelease(
             VkCommandBuffer commandBuffer,
             MemoryStack stack
     ) {
         VkImageMemoryBarrier.Buffer barrier = VkImageMemoryBarrier.calloc(1, stack)
                 .sType$Default()
-                .srcAccessMask(VK10.VK_ACCESS_SHADER_WRITE_BIT)
+                .srcAccessMask(VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT)
                 .dstAccessMask(0)
                 .oldLayout(VK10.VK_IMAGE_LAYOUT_GENERAL)
                 .newLayout(VK10.VK_IMAGE_LAYOUT_GENERAL)
@@ -1040,7 +1126,7 @@ final class VulkanFrameSlot implements AutoCloseable {
                 .layerCount(1);
         VK10.vkCmdPipelineBarrier(
                 commandBuffer,
-                KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                 0,
                 null,
@@ -1058,6 +1144,8 @@ final class VulkanFrameSlot implements AutoCloseable {
             throw new IllegalStateException("frame slot identity changed while externally leased");
         }
         if (completion instanceof GpuFrameLease.ExternalSemaphoreSignal signal) {
+            if (queuedLeaseOutstanding && !queuedReadyHandle.importedEver())
+                throw new IllegalStateException("external completion requires importing and consuming the ready signal");
             if (!externalSemaphoreCompletionEnabled) {
                 throw new UnsupportedOperationException("external semaphore completion is unavailable");
             }
@@ -1068,6 +1156,8 @@ final class VulkanFrameSlot implements AutoCloseable {
                         device.frameCommands().submitSemaphoreWaitAsync(imported.semaphore());
                 consumerSemaphore = imported;
                 consumerSubmission = wait;
+                readyBinaryPending = false; // done is ordered after the consumer's ready wait.
+                consumerReturned = true;
                 state = State.CONSUMER_PENDING;
                 transferred = true;
                 return;
@@ -1075,17 +1165,23 @@ final class VulkanFrameSlot implements AutoCloseable {
                 if (!transferred) imported.close();
             }
         }
+        if (queuedLeaseOutstanding) {
+            if (queuedReadyHandle.importedEver()) {
+                // Explicit CpuCompleted is proof that the consumer waited ready and finished.
+                readyBinaryPending = false;
+            } else drainUnconsumedReady();
+            consumerReturned = true;
+            state = State.CONSUMER_PENDING;
+            retireReturnedFrame();
+            return;
+        }
         if (producerSubmission != null) {
             producerSubmission.close();
             recordProducerCompleted(finishProducerCompletion());
         }
-        // Publish before releasing the lease identity. If a provider violates the retry-safe
-        // callback contract, the public lease remains ACTIVE and its next release retries the
-        // same completion evidence instead of observing an already-free slot.
         publishPendingCompletionEvidence();
-        recordConsumerCompleted();
-        resetIdentity();
-        state = State.FREE;
+        consumerReturned = true;
+        retireReturnedFrame();
     }
 
     private void recordConsumerCompleted() {
@@ -1103,6 +1199,8 @@ final class VulkanFrameSlot implements AutoCloseable {
     }
 
     private void resetIdentity() {
+        readyBinaryPending = false;
+        consumerReturned = false;
         frameSequence = -1L;
         sceneRevision = -1L;
         descriptorEpoch = -1L;
@@ -1183,9 +1281,10 @@ final class VulkanFrameSlot implements AutoCloseable {
         if (state == State.RESERVED) {
             throw new IllegalStateException("cannot close a frame slot with an active submission reservation");
         }
-        if (state == State.LEASED) {
+        if (state == State.LEASED || queuedLeaseOutstanding) {
             throw new IllegalStateException("cannot close a frame slot retained by an external consumer");
         }
+        if (readyBinaryPending) drainUnconsumedReady();
         RuntimeException failure = null;
         if (consumerSubmission != null) {
             try {
@@ -1288,6 +1387,11 @@ final class VulkanFrameSlot implements AutoCloseable {
                 try { causticPhotons.close(); causticPhotons = null; }
                 catch (RuntimeException ex) { failure = accumulate(failure, ex); }
             }
+            if (primaryQueue != null) {
+                try { primaryQueue.close(); primaryQueue = null; }
+                catch (RuntimeException ex) { failure = accumulate(failure, ex); }
+            }
+            if (readyBinary != null) { readyBinary.close(); readyBinary = null; }
             if (!frameUniformsClosed) {
                 try {
                     frameUniforms.close();
@@ -1309,6 +1413,7 @@ final class VulkanFrameSlot implements AutoCloseable {
                 && reconstructionResources == null
                 && frameGenerationResources == null
                 && causticPhotons == null
+                && primaryQueue == null
                 && frameUniformsClosed;
         if (failure != null) throw failure;
     }

@@ -8,5 +8,7 @@ struct GsVisibilityPayload {
     vec2 transmissionIor;
     uvec4 boundary;
     uint backFace;
+    // Original pixel/full output extent, independent of a tiled or compacted dispatch.
+    uvec4 launchInfo;
 };
 #endif

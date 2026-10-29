@@ -22,6 +22,8 @@ public final class MediumDensitySelfTest {
         verifySceneValidation();
         verifyFrameValidationAndSpecialization();
         verifyPassiveSpecializationTransitions();
+        verifyNativeSelection();
+        verifyPrimaryQueueSelection();
         verifyHistoryInvalidation();
         System.out.println("MediumDensitySelfTest passed: stable ABI prefix, atlas references/replacement, coordinate composition, frame validation, cached specialization");
     }
@@ -30,6 +32,21 @@ public final class MediumDensitySelfTest {
         byte[] pixels = new byte[2*height*4];
         Arrays.fill(pixels,(byte)255);
         return TextureAsset.builder(id,2,height).colorSpace(colorSpace).pixelsRgba8(pixels).build();
+    }
+
+    private static void verifyPrimaryQueueSelection() {
+        for (var program : Program.values()) {
+            require(VulkanGpuSceneTemporalCoordinator.primaryQueueProgram(program,false)==program,
+                    "queue control must preserve the serial scene program");
+            var queued=VulkanGpuSceneTemporalCoordinator.primaryQueueProgram(program,true);
+            var expected=switch(program) {
+                case SURFACE -> Program.SURFACE_PRIMARY_SHADE;
+                case COMPACT_PASSIVE_NO_DIELECTRIC -> Program.COMPACT_PRIMARY_SHADE;
+                case GENERAL_PASSIVE_NO_DIELECTRIC -> Program.GENERAL_PRIMARY_SHADE;
+                default -> program;
+            };
+            require(queued==expected,"only proven homogeneous no-dielectric work enters the queue");
+        }
     }
 
     private static SceneInstance instance(long id,Medium medium) {
@@ -167,6 +184,51 @@ public final class MediumDensitySelfTest {
                 .mediumTransport(MediumTransport.balanced().withScatteringBounces(bounces)).build();
     }
 
+    private static void verifyNativeSelection() {
+        var residency = new VulkanSceneResidency();
+        var media = new MediumSceneIndex();
+        var surfaces = new VulkanSurfaceSceneIndex();
+        var empty = FramePrimitiveBatch.empty();
+        var absorption = new Medium(new Rgb(.1f,.2f,.3f),Rgb.ZERO,Rgb.ZERO,1,1,0);
+        var scattering = new Medium(Rgb.ZERO,new Rgb(.1f,.2f,.3f),Rgb.ZERO,1,1,0);
+        apply(residency,media,surfaces,SceneTransaction.builder(1)
+                .upsert(texture(500,4,TextureAsset.ColorSpace.LINEAR)).build());
+        record RouteCase(Medium medium,int bounces,CudaMediumFrameProfile.Route expected) { }
+        for (var test : new RouteCase[] {
+                new RouteCase(Medium.vacuum(),0,CudaMediumFrameProfile.Route.NONE),
+                new RouteCase(absorption,0,CudaMediumFrameProfile.Route.CAMERA),
+                new RouteCase(absorption.withDensityField(FIELD),0,CudaMediumFrameProfile.Route.BOUNDARY),
+                new RouteCase(scattering,0,CudaMediumFrameProfile.Route.CAMERA_SCATTERING),
+                new RouteCase(scattering,2,CudaMediumFrameProfile.Route.MULTIPLE_SCATTERING),
+                new RouteCase(GRID,0,CudaMediumFrameProfile.Route.DENSITY_SCATTERING),
+                new RouteCase(GRID,2,CudaMediumFrameProfile.Route.MULTIPLE_SCATTERING)}) {
+            var frame = request(test.medium(),test.bounces(),empty);
+            var selected = CudaMediumFrameProfile.select(frame,media,surfaces,true,true);
+            require(selected.route()==test.expected(),"native route must match the complete frame requirements");
+            require(selected.program()==Program.SURFACE,"native executor supplies all participating-medium radiance");
+        }
+        apply(residency,media,surfaces,SceneTransaction.builder(2)
+                .upsert(MaterialAsset.builder(1).doubleSided(true).shadingModel(MaterialAsset.ShadingModel.UNLIT).build())
+                .upsert(MediumTransportSelfTest.cube(1,1,1)).upsert(instance(1,absorption)).build());
+        var boundary = CudaMediumFrameProfile.select(request(absorption,0,empty),media,surfaces,true,true);
+        require(boundary.route()==CudaMediumFrameProfile.Route.BOUNDARY && boundary.boundaries().boundaries().size()==1,
+                "boundary admission retains the scene snapshot for execution");
+        require(CudaMediumFrameProfile.select(request(scattering,2,empty),media,surfaces,true,true).route()
+                ==CudaMediumFrameProfile.Route.BOUNDARY_SCATTERING,"explicit scattering boundaries precede camera-only profiles");
+        apply(residency,media,surfaces,SceneTransaction.builder(3)
+                .upsert(instance(1,absorption).toBuilder().mediumBoundary(MediumBoundary.surface(absorption)).build())
+                .upsert(MaterialAsset.builder(1).doubleSided(true).transmission(1).roughness(.4f).build()).build());
+        require(CudaMediumFrameProfile.select(request(absorption,0,empty),media,surfaces,true,true).route()
+                ==CudaMediumFrameProfile.Route.OPTICAL,"surface-interacting boundaries must reach the optical executor");
+        var rejected = request(scattering,2,empty);
+        var expert = CudaMediumFrameProfile.select(rejected,media,surfaces,false,true);
+        require(expert.route()==CudaMediumFrameProfile.Route.NONE && expert.program()==Program.SURFACE,
+                "application scene programs retain ownership of their transport");
+        expect(FrameValidationException.class,()->CudaMediumFrameProfile.select(rejected,media,surfaces,true,false));
+        require(CudaMediumFrameProfile.select(request(absorption,0,empty),media,surfaces,true,true).route()
+                ==CudaMediumFrameProfile.Route.OPTICAL,"a rejected request must not poison later admission");
+    }
+
     private static void verifyFrameValidationAndSpecialization() {
         var residency = new VulkanSceneResidency();var index = new MediumSceneIndex();var surfaces = new VulkanSurfaceSceneIndex();
         apply(residency,index,surfaces,base(1).upsert(texture(500,4,TextureAsset.ColorSpace.LINEAR)).build());
@@ -217,25 +279,64 @@ public final class MediumDensitySelfTest {
         var scattering = GRID.withDensityField(MediumDensityField.uniform());
         apply(residency,index,surfaces,base(1).upsert(instance(1,absorbing)).build());
         require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),8,empty),index,surfaces)
-                ==Program.COMPACT_PASSIVE,"unused scattering budget must preserve absorption specialization");
+                ==Program.COMPACT_PASSIVE_NO_DIELECTRIC,"unused scattering budget must preserve absorption specialization");
         require(VulkanGpuSceneTemporalCoordinator.program(request(scattering,0,empty),index,surfaces)
                 ==Program.COMPACT,"environment scattering cannot enter a passive program");
         var local = FramePrimitiveBatch.builder().add(PrimitiveInstance.from(instance(2,scattering))).build();
         require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,local),index,surfaces)
                 ==Program.COMPACT,"frame-local scattering must leave the passive program");
         require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,empty),index,surfaces)
-                ==Program.COMPACT_PASSIVE,"retiring local scattering must restore the passive program");
+                ==Program.COMPACT_PASSIVE_NO_DIELECTRIC,"retiring local scattering must restore the passive program");
         apply(residency,index,surfaces,SceneTransaction.builder(2).upsert(instance(1,scattering)).build());
         require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,empty),index,surfaces)
                 ==Program.COMPACT,"persistent scattering replacement must invalidate passive classification");
         apply(residency,index,surfaces,SceneTransaction.builder(3).upsert(instance(1,absorbing)).build());
         require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,empty),index,surfaces)
-                ==Program.COMPACT_PASSIVE,"persistent absorption replacement must restore passive classification");
+                ==Program.COMPACT_PASSIVE_NO_DIELECTRIC,"persistent absorption replacement must restore passive classification");
         var crowded = SceneTransaction.builder(4);
         for(int id=2;id<=9;id++)crowded.upsert(instance(id,absorbing));
         apply(residency,index,surfaces,crowded.build());
         require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,empty),index,surfaces)
-                ==Program.GENERAL_PASSIVE,"passive transport must retain all 32 general boundary slots");
+                ==Program.GENERAL_PASSIVE_NO_DIELECTRIC,"passive transport must retain all 32 general boundary slots");
+        var surfaceBoundary=SceneInstance.builder(10,1).mediumBoundary(MediumBoundary.surface(absorbing)).build();
+        apply(residency,index,surfaces,SceneTransaction.builder(5).upsert(surfaceBoundary).build());
+        require(index.hasSurfaceInteraction(empty) && VulkanGpuSceneTemporalCoordinator.program(
+                request(Medium.vacuum(),0,empty),index,surfaces)==Program.GENERAL_PASSIVE,
+                "a reachable dielectric surface boundary must retain Fresnel and refraction code");
+        apply(residency,index,surfaces,SceneTransaction.builder(6).removeInstance(10).build());
+        require(!index.hasSurfaceInteraction(empty),"retiring a dielectric surface boundary restores no-dielectric eligibility");
+        var localSurface=FramePrimitiveBatch.builder().add(PrimitiveInstance.from(surfaceBoundary)).build();
+        require(index.hasSurfaceInteraction(localSurface) && VulkanGpuSceneTemporalCoordinator.program(
+                request(Medium.vacuum(),0,localSurface),index,surfaces)==Program.GENERAL_PASSIVE,
+                "frame-local surface boundaries need optics even with an opaque mesh material");
+        require(!index.hasSurfaceInteraction(empty) && VulkanGpuSceneTemporalCoordinator.program(
+                request(Medium.vacuum(),0,empty),index,surfaces)==Program.GENERAL_PASSIVE_NO_DIELECTRIC,
+                "retiring frame-local surface boundaries must invalidate their cached classification");
+        apply(residency,index,surfaces,SceneTransaction.builder(7)
+                .upsert(MaterialAsset.builder(2).transmission(1).build())
+                .upsert(MediumTransportSelfTest.cube(2,2,1)).build());
+        require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,empty),index,surfaces)
+                ==Program.GENERAL_PASSIVE_NO_DIELECTRIC,"unused transmissive assets do not require optics");
+        var localGlass=FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(2).build()).build();
+        require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,localGlass),index,surfaces)
+                ==Program.GENERAL_PASSIVE,"referenced frame-local glass must disable no-dielectric specialization");
+        apply(residency,index,surfaces,SceneTransaction.builder(8)
+                .upsert(MaterialAsset.opaque(2,-1).toBuilder().baseColorRgba8(0x80ffffff).build()).build());
+        require(!surfaces.opaque(localGlass) && VulkanGpuSceneTemporalCoordinator.program(
+                request(Medium.vacuum(),0,localGlass),index,surfaces)==Program.GENERAL_PASSIVE_NO_DIELECTRIC,
+                "alpha coverage remains legal without dielectric transport");
+        String previous=System.getProperty("top.ceroxe.rt.shader.disablePassiveNoDielectric");
+        try {
+            System.setProperty("top.ceroxe.rt.shader.disablePassiveNoDielectric","true");
+            require(VulkanGpuSceneTemporalCoordinator.program(request(Medium.vacuum(),0,empty),index,surfaces)
+                    ==Program.GENERAL_PASSIVE,"control selector preserves the established passive program");
+        } finally {
+            if(previous==null) System.clearProperty("top.ceroxe.rt.shader.disablePassiveNoDielectric");
+            else System.setProperty("top.ceroxe.rt.shader.disablePassiveNoDielectric",previous);
+        }
+        apply(residency,index,surfaces,base(9).resetScene().build());
+        require(!index.hasSurfaceInteraction(empty) && index.boundaryCount()==0,
+                "scene reset retires every persistent boundary classification");
     }
 
     private static void verifyHistoryInvalidation() {

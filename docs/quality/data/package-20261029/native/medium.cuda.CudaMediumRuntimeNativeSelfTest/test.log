@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+NVRTC first entry ms=19.951 reused entry ms=7.375 compiles=1
+session=0 device=NVIDIA GeForce RTX 5080 Laptop GPU compute=12.0 scatter=64 escape=192
+NVRTC first entry ms=17.695 reused entry ms=1.808 compiles=1
+session=1 device=NVIDIA GeForce RTX 5080 Laptop GPU compute=12.0 scatter=64 escape=192
+NVRTC first entry ms=17.394 reused entry ms=1.488 compiles=1
+session=2 device=NVIDIA GeForce RTX 5080 Laptop GPU compute=12.0 scatter=64 escape=192
+CudaMediumRuntimeNativeSelfTest passed; outputChannels=5376

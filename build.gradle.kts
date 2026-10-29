@@ -639,6 +639,177 @@ tasks.register("verifyReleaseChecksums") {
 
 val publishedConsumerDirectory = layout.buildDirectory.dir("published-consumer-smoke")
 
+// The portable ZIP includes the resolved runtime graph, Maven metadata and its source/docs.
+// It is a candidate distribution; feature coverage is documented explicitly in docs/7.0.0.md.
+val runtimeDistributionContents = tasks.register<Sync>("prepareRuntimeDistribution") {
+    group = "distribution"
+    description = "Stages the complete Windows runtime dependency graph, source artifacts, documentation and hashes."
+    dependsOn(publishAllToLocalStagingRepository, tasks.named("verifyReleaseChecksums"))
+    dependsOn(":renderer-api:verifyRuntimeSupplyChainMetadata")
+    into(layout.buildDirectory.dir("distribution/rtrenderer-api-$publishedVersion-windows-x86_64"))
+    from(provider { project(":renderer-api").configurations.getByName("runtimeClasspath") }) { into("lib") }
+    from(project(":renderer-api").layout.buildDirectory.file("libs/renderer-api-$publishedVersion.jar")) { into("lib") }
+    from(publishedRepository) {
+        include("top/ceroxe/rt/renderer-api/$publishedVersion/**", "top/ceroxe/rt/renderer-core/$publishedVersion/**",
+            "top/ceroxe/rt/renderer-nvidia/$publishedVersion/**")
+        into("maven")
+    }
+    from(layout.projectDirectory.dir("docs")) { into("docs") }
+    from(layout.projectDirectory) {
+        include("build.gradle.kts", "settings.gradle.kts", "gradle.properties", "gradlew", "gradlew.bat",
+            "LICENSE", "README.md", "docs/**", "gradle/wrapper/**", "gradle/verification-metadata.xml",
+            "gradle/published-consumer-smoke/**", "buildSrc/build.gradle.kts", "buildSrc/src/**",
+            "renderer-api/build.gradle.kts", "renderer-api/abi/**", "renderer-api/src/**",
+            "renderer-core/build.gradle.kts", "renderer-core/gradle.lockfile", "renderer-core/src/**",
+            "renderer-nvidia/build.gradle.kts", "renderer-nvidia/src/**", "tools/**",
+            "demos/hex-ball/build.gradle.kts", "demos/hex-ball/src/**")
+        into("source")
+    }
+    from(layout.projectDirectory.file("LICENSE"))
+    from(layout.projectDirectory.file("docs/runtime-distribution.md")) { rename { "README.md" } }
+    from(layout.buildDirectory.file("release/renderer-runtime.cdx.json"))
+    from(layout.buildDirectory.file("release/runtime-licenses.json"))
+    from(releaseChecksumsFile) { into("maven") }
+    doLast {
+        val directory = destinationDir.toPath()
+        val mavenDirectory = destinationDir.resolve("maven")
+        val mavenRoot = mavenDirectory.toPath()
+        val mavenArtifacts = fileTree(mavenDirectory) {
+            include("**/*.jar", "**/*.module", "**/*.pom")
+        }.files.sortedBy { mavenRoot.relativize(it.toPath()).toString().replace('\\', '/') }
+        if (mavenArtifacts.isEmpty()) throw GradleException("Runtime distribution has no current-version Maven artifacts")
+        val mavenSums = mavenArtifacts.map { artifact ->
+            val digest = MessageDigest.getInstance("SHA-256")
+            artifact.inputStream().use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    if (count > 0) digest.update(buffer, 0, count)
+                }
+            }
+            val relative = mavenRoot.relativize(artifact.toPath()).toString().replace('\\', '/')
+            "${HexFormat.of().formatHex(digest.digest())}  $relative"
+        }
+        mavenDirectory.resolve("SHA256SUMS").writeText(
+            mavenSums.joinToString("\n", postfix = "\n"), StandardCharsets.UTF_8
+        )
+        val sums = fileTree(destinationDir).files.filter { it.toPath() != directory.resolve("SHA256SUMS") }
+            .sortedBy { directory.relativize(it.toPath()).toString() }.map { artifact ->
+                val digest = MessageDigest.getInstance("SHA-256")
+                artifact.inputStream().use { input ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        digest.update(buffer, 0, count)
+                    }
+                }
+                HexFormat.of().formatHex(digest.digest()) + "  " + directory.relativize(artifact.toPath()).toString().replace('\\', '/')
+            }
+        destinationDir.resolve("SHA256SUMS").writeText(sums.joinToString("\n", postfix = "\n"), StandardCharsets.UTF_8)
+    }
+}
+tasks.register<Zip>("runtimeDistribution") {
+    group = "distribution"
+    description = "Builds the Windows runtime candidate ZIP with all resolved dependencies."
+    dependsOn(runtimeDistributionContents)
+    from(runtimeDistributionContents.map { it.destinationDir })
+    archiveFileName.set("rtrenderer-api-$publishedVersion-windows-x86_64-candidate.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("release"))
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}
+
+tasks.register("verifyRuntimeDistribution") {
+    group = "verification"
+    description = "Verifies ZIP completeness and every embedded SHA-256, then writes the archive checksum."
+    val archive = tasks.named<Zip>("runtimeDistribution").flatMap { it.archiveFile }
+    dependsOn(archive)
+    inputs.file(archive)
+    val checksum = layout.buildDirectory.file("release/rtrenderer-api-$publishedVersion-windows-x86_64-candidate.zip.sha256")
+    outputs.file(checksum)
+    doLast {
+        val artifact = archive.get().asFile
+        ZipFile(artifact).use { zip ->
+            val entries = zip.entries().asSequence().filter { !it.isDirectory }.toList()
+            val names = entries.map { it.name }
+            check(names.size == names.toSet().size) { "Duplicate distribution entries" }
+            check(names.all { name -> !name.startsWith('/') && !name.contains('\\')
+                    && name.split('/').none { it == ".." || it == "." || it.isEmpty() } }) {
+                "Unsafe distribution entry path"
+            }
+            val sums = zip.getEntry("SHA256SUMS") ?: error("Missing distribution SHA256SUMS")
+            val expected = linkedMapOf<String, String>()
+            zip.getInputStream(sums).bufferedReader(StandardCharsets.UTF_8).useLines { lines ->
+                lines.filter { it.isNotBlank() }.forEach { line ->
+                    val match = Regex("([a-f0-9]{64})  (.+)").matchEntire(line)
+                        ?: error("Malformed distribution checksum")
+                    check(expected.put(match.groupValues[2], match.groupValues[1]) == null) { "Duplicate distribution checksum" }
+                }
+            }
+            check(expected.keys == names.filter { it != "SHA256SUMS" }.toSet()) { "Distribution checksum coverage is incomplete" }
+            for (entry in entries) {
+                if (entry.name == "SHA256SUMS") continue
+                val digest = MessageDigest.getInstance("SHA-256")
+                zip.getInputStream(entry).use { input ->
+                    val buffer = ByteArray(65536)
+                    while (true) { val size = input.read(buffer); if (size < 0) break; digest.update(buffer, 0, size) }
+                }
+                check(HexFormat.of().formatHex(digest.digest()) == expected[entry.name]) { "Distribution hash mismatch: ${entry.name}" }
+            }
+            val required = listOf("LICENSE", "README.md", "renderer-runtime.cdx.json", "runtime-licenses.json",
+                "maven/SHA256SUMS", "source/LICENSE", "source/settings.gradle.kts", "source/gradle/wrapper/gradle-wrapper.jar",
+                "source/gradle/verification-metadata.xml", "source/renderer-core/gradle.lockfile",
+                "source/gradle/published-consumer-smoke/build.gradle.kts", "source/demos/hex-ball/build.gradle.kts")
+            check(names.containsAll(required)) { "Distribution lacks required runtime/source metadata: ${required - names.toSet()}" }
+            val mavenSums = zip.getEntry("maven/SHA256SUMS") ?: error("Missing Maven SHA256SUMS")
+            val mavenExpected = linkedMapOf<String, String>()
+            zip.getInputStream(mavenSums).bufferedReader(StandardCharsets.UTF_8).useLines { lines ->
+                lines.filter { it.isNotBlank() }.forEach { line ->
+                    val match = Regex("([a-f0-9]{64})  (.+)").matchEntire(line)
+                        ?: error("Malformed Maven checksum")
+                    val relative = match.groupValues[2]
+                    check(!relative.startsWith('/') && !relative.contains('\\')
+                            && relative.split('/').none { it == ".." || it == "." || it.isEmpty() }) {
+                        "Unsafe Maven checksum path: $relative"
+                    }
+                    check(mavenExpected.put(relative, match.groupValues[1]) == null) { "Duplicate Maven checksum: $relative" }
+                }
+            }
+            val mavenArtifacts = names.filter { name ->
+                name.startsWith("maven/") && name.substringAfterLast('.').let { it == "jar" || it == "module" || it == "pom" }
+            }.map { it.removePrefix("maven/") }.sorted()
+            check(mavenExpected.keys.toList() == mavenArtifacts) {
+                "Maven SHA256SUMS artifact inventory differs: manifest=${mavenExpected.keys}, archive=$mavenArtifacts"
+            }
+            mavenExpected.forEach { (relative, expectedHash) ->
+                val entry = zip.getEntry("maven/$relative") ?: error("Missing Maven artifact: $relative")
+                val digest = MessageDigest.getInstance("SHA-256")
+                zip.getInputStream(entry).use { input ->
+                    val buffer = ByteArray(65536)
+                    while (true) { val size = input.read(buffer); if (size < 0) break; digest.update(buffer, 0, size) }
+                }
+                check(HexFormat.of().formatHex(digest.digest()) == expectedHash) { "Maven hash mismatch: $relative" }
+            }
+            for (module in listOf("renderer-api", "renderer-core", "renderer-nvidia")) {
+                check(names.contains("lib/$module-$publishedVersion.jar")) { "Missing runtime module: $module" }
+                val prefix = "maven/top/ceroxe/rt/$module/$publishedVersion/$module-$publishedVersion"
+                check(names.containsAll(listOf("$prefix.jar", "$prefix-sources.jar", "$prefix-javadoc.jar", "$prefix.pom", "$prefix.module"))) {
+                    "Missing published artifacts: $module"
+                }
+            }
+            logger.lifecycle("Distribution verified: {} files, every SHA-256 and runtime/source publication closure", entries.size)
+        }
+        val digest = MessageDigest.getInstance("SHA-256")
+        artifact.inputStream().use { input ->
+            val buffer = ByteArray(65536)
+            while (true) { val size = input.read(buffer); if (size < 0) break; digest.update(buffer, 0, size) }
+        }
+        checksum.get().asFile.writeText(HexFormat.of().formatHex(digest.digest()) + "  " + artifact.name + "\n", StandardCharsets.UTF_8)
+    }
+}
+
 tasks.register<Sync>("preparePublishedMavenConsumer") {
     group = "verification"
     description = "Prepares an isolated consumer that resolves only published Maven metadata."

@@ -20,12 +20,31 @@ public final class VulkanGpuSceneShaderSelfTest {
 
    public static void main(String[] arguments) {
       boolean precompiled = arguments.length == 1 && arguments[0].equals("--precompiled");
-      if (arguments.length != 0 && !precompiled) throw new IllegalArgumentException("expected [--precompiled]");
+      boolean contractsOnly = arguments.length == 1 && arguments[0].equals("--contracts-only");
+      if (arguments.length != 0 && !precompiled && !contractsOnly)
+         throw new IllegalArgumentException("expected [--precompiled | --contracts-only]");
+      if (contractsOnly) {
+         verifySourceContracts();
+         System.out.println("VulkanGpuSceneShaderSelfTest source contracts passed; shader compilation was not requested");
+         return;
+      }
       Map<String, Integer> stages = new LinkedHashMap<>();
       stages.put("gpuscene_surface.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_compact.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_compact_passive.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_passive.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_compact_passive_no_dielectric.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_passive_no_dielectric.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_primary_trace.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_native_medium_trace.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_native_scattering_lights.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_native_multiple_scattering.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_native_density_scattering_lights.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_native_optical_trace.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_native_boundary_packet.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_surface_primary_shade.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_compact_primary_shade.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_primary_shade.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_compact_volume.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_volume.rgen", Shaderc.shaderc_raygen_shader);
@@ -38,6 +57,7 @@ public final class VulkanGpuSceneShaderSelfTest {
       stages.put("gpuscene_visibility.rmiss", Shaderc.shaderc_miss_shader);
       stages.put("gpuscene_visibility.rchit", Shaderc.shaderc_closesthit_shader);
       stages.put("gpuscene_visibility.rahit", Shaderc.shaderc_anyhit_shader);
+      stages.put("gpuscene_native_boundary_packet.rahit", Shaderc.shaderc_anyhit_shader);
       long totalBytes = 0L;
 
       for(Map.Entry<String, Integer> stage : stages.entrySet()) {
@@ -51,6 +71,12 @@ public final class VulkanGpuSceneShaderSelfTest {
 
       for (String raygen : new String[]{"gpuscene_surface.rgen", "gpuscene_compact.rgen", "gpuscene.rgen",
               "gpuscene_compact_passive.rgen", "gpuscene_passive.rgen",
+              "gpuscene_compact_passive_no_dielectric.rgen", "gpuscene_passive_no_dielectric.rgen",
+              "gpuscene_primary_trace.rgen", "gpuscene_native_medium_trace.rgen",
+              "gpuscene_native_scattering_lights.rgen", "gpuscene_native_multiple_scattering.rgen",
+              "gpuscene_native_density_scattering_lights.rgen", "gpuscene_native_optical_trace.rgen",
+              "gpuscene_native_boundary_packet.rgen", "gpuscene_surface_primary_shade.rgen",
+              "gpuscene_compact_primary_shade.rgen", "gpuscene_primary_shade.rgen",
               "gpuscene_compact_volume.rgen", "gpuscene_volume.rgen",
               "gpuscene_compact_caustics.rgen", "gpuscene_caustics.rgen", "gpuscene_photons.rgen"}) {
          byte[] hdr = precompiled ? RtShaderModuleCompiler.loadPrecompiled(ROOT + raygen, false, true)
@@ -62,15 +88,32 @@ public final class VulkanGpuSceneShaderSelfTest {
               : RtShaderModuleCompiler.compileForVerification(ROOT + "gpuscene_nrd_compose.comp", Shaderc.shaderc_compute_shader, false, true);
       verifySpirv("gpuscene_nrd_compose.comp", compose);
       totalBytes += compose.length;
+      verifySourceContracts();
+      System.out.println("VulkanGpuSceneShaderSelfTest passed: stages=" + stages.size() + ", HDR raygens=17, NRD compose=1, spirvBytes=" + totalBytes);
+   }
+
+   private static void verifySourceContracts() {
       verifyForwardParityContract();
       verifyDirectionalDiffuseContract();
       verifyTemporalReconstructionContract();
       verifyTransmissionOpticsContract();
       verifyTransportLayeringContract();
+      verifyNativePbrMediumCausticContract();
       verifyOpaqueMetallicReflectionContract();
       verifyNrdSignalContract();
       verifyReconstructionSignalContract();
-      System.out.println("VulkanGpuSceneShaderSelfTest passed: stages=" + stages.size() + ", HDR raygens=10, NRD compose=1, spirvBytes=" + totalBytes);
+   }
+
+   private static void verifyNativePbrMediumCausticContract() {
+      String lights = read("assets/rtrenderer/shaders/gpuscene/gpuscene_native_pbr_medium_lights.rgen");
+      String photons = read("assets/rtrenderer/shaders/gpuscene/gpuscene_photon_trace.glsl");
+      require(lights.contains("#define RTRENDERER_CAUSTICS 1")
+              && lights.contains("gsGatherCaustics(receiver")
+              && lights.contains("receiver.mediumBoundary=primary.lanes[source+11u]"),
+              "native PBR light resolve must gather the published photon map from the primary payload");
+      require(photons.contains("GPU_SCENE_FRAME_MEDIUM_EXTINCTION_WORD")
+              && photons.contains("flux*=exp(-extinction*distance)"),
+              "surface photon transport must apply the accepted global absorber medium");
    }
 
    private static void verifyForwardParityContract() {
@@ -132,28 +175,29 @@ public final class VulkanGpuSceneShaderSelfTest {
    }
 
    private static void verifyTransmissionOpticsContract() {
-      String transport = compact(read(ROOT + "gpuscene_transport.glsl"));
+      String transport = compact(readRaw(ROOT + "gpuscene_surface_transport.glsl"));
       String optics = compact(read(ROOT + "gpuscene_optics.glsl"));
-      String runtime = compact(read(ROOT + "gpuscene_transport_runtime.glsl"));
+      String runtime = compact(read(ROOT + "gpuscene_surface_lighting_runtime.glsl"));
       String closestHit = read(ROOT + "gpuscene.rchit");
-      require(transport.contains("GPU_SCENE_FRAME_MEDIUM_IOR_WORD")
-                      && transport.contains("gsInterfaceIors(") && transport.contains(".transmissionIor.y"),
-              "material and camera-medium IOR must both drive transmission");
+      require(transport.contains("gsInterfaceIors(") && transport.contains(".transmissionIor.y")
+                      && !transport.contains("GPU_SCENE_FRAME_MEDIUM_IOR_WORD"),
+              "surface IOR helpers must retain material transmission without executing the retired medium path");
       require(optics.contains("gsRefractDirection(") && transport.contains("boolgsRefractDirection(")
                       && optics.contains("reflect(") && optics.contains("gsDielectricFresnel("),
               "transmission must use Snell refraction and dielectric Fresnel reflection");
       require(optics.contains("gsOpticalContinuation(") && optics.contains("gsTraceRadiance(")
-                      && optics.contains("GsMediumPathcontinuationPath=incidentPath")
-                      && optics.contains("continuationPath=transmittedPath")
-                      && optics.contains("if(!reflection)") && optics.contains("uintbranches=split?2u:1u"),
-              "reflected and refracted continuations must retain their respective medium paths");
+                      && optics.contains("if(!reflection)")
+                      && optics.contains("uintbranches=split&&!stochastic?2u:1u")
+                      && optics.contains("throughput*=clamp(") && optics.contains("*(eta*eta)"),
+              "surface reflection/refraction must retain deterministic splitting and radiance eta weighting");
       require(closestHit.contains("backFace ? GS_PAYLOAD_BACK_FACE")
-                      && transport.contains("GS_PAYLOAD_BACK_FACE") && transport.contains("gsCrossBoundary("),
-              "closest-hit orientation must reach boundary and material IOR transitions");
+                      && transport.contains("GS_PAYLOAD_BACK_FACE"),
+              "closest-hit orientation must reach material IOR transitions");
       require(runtime.contains("rayPayloadEXTGsVisibilityPayload")
                       && runtime.contains("GsVisibilityPayloadhit=visibility")
-                      && runtime.contains("traceRayEXT(") && runtime.contains("integrationRemaining"),
-              "ordered shadows must trace compact visibility events with a bounded integration budget");
+                      && runtime.contains("traceRayEXT(") && runtime.contains("event<events")
+                      && runtime.contains("remaining=max(remaining-distance-epsilon,0.0)"),
+              "ordered surface shadows must trace compact visibility events within event and distance budgets");
       require(read(ROOT + "gpuscene_lighting.glsl")
                       .contains("inner == outer ? step(outer, cone) : smoothstep(outer, inner, cone)"),
               "spot lights must define deterministic equal-cone behavior");
@@ -162,34 +206,37 @@ public final class VulkanGpuSceneShaderSelfTest {
    private static void verifyTransportLayeringContract() {
       String surface = readRaw(ROOT + "gpuscene_surface.rgen");
       String compact = readRaw(ROOT + "gpuscene_compact.rgen");
-      String transport = readRaw(ROOT + "gpuscene_transport.glsl");
+      String transport = readRaw(ROOT + "gpuscene_surface_transport.glsl");
       String visibility = readRaw(ROOT + "gpuscene_visibility.glsl");
-      String runtime = readRaw(ROOT + "gpuscene_transport_runtime.glsl");
+      String runtime = readRaw(ROOT + "gpuscene_surface_lighting_runtime.glsl");
       require(runtime.contains("GPU_SCENE_FEATURE_FLAG_OPAQUE_VISIBILITY"),
               "binary visibility must require the scene's full opacity proof, including alpha coverage");
       require(surface.contains("RTRENDERER_SURFACE_ONLY") && compact.contains("RTRENDERER_COMPACT_MEDIA"),
               "surface and compact entry points must declare explicit compile-time specializations");
-      require(readRaw(ROOT + "gpuscene_compact_passive.rgen").contains("RTRENDERER_PASSIVE_MEDIA")
-                      && readRaw(ROOT + "gpuscene_compact_passive.rgen").contains("RTRENDERER_COMPACT_MEDIA")
-                      && readRaw(ROOT + "gpuscene_passive.rgen").contains("RTRENDERER_PASSIVE_MEDIA")
-                      && runtime.contains("#ifndef RTRENDERER_PASSIVE_MEDIA"),
-              "passive transport must compile scattering work out of both boundary capacities");
-      String extended = readRaw(ROOT + "gpuscene_volume.rgen");
-      String compactExtended = readRaw(ROOT + "gpuscene_compact_volume.rgen");
-      require(extended.contains("RTRENDERER_VOLUME_TRANSPORT")
-                      && compactExtended.contains("RTRENDERER_VOLUME_TRANSPORT")
-                      && compactExtended.contains("RTRENDERER_COMPACT_MEDIA")
-                      && !surface.contains("RTRENDERER_VOLUME_TRANSPORT")
-                      && !compact.contains("RTRENDERER_VOLUME_TRANSPORT"),
-              "heterogeneous/multiple-scattering programs must be isolated from ordinary specializations");
-      String multiple = readRaw(ROOT + "gpuscene_multiscatter.glsl");
-      require(multiple.contains("RTRENDERER_VOLUME_TRANSPORT")
-                      && !multiple.contains("gsIntegrateMedium(")
-                      && multiple.contains("gsDensityFlight(") && multiple.contains("gsSamplePhaseHg("),
-              "multiple scattering must sample volume collisions without recursive integration");
-      require(transport.contains("GS_MEDIUM_PATH_CAPACITY") && transport.contains("RTRENDERER_COMPACT_MEDIA")
-                      && transport.contains("RTRENDERER_SURFACE_ONLY"),
-              "medium state must specialize its capacity and disappear from the ordinary surface path");
+      String noDielectricCompact = readRaw(ROOT + "gpuscene_compact_passive_no_dielectric.rgen");
+      String noDielectricGeneral = readRaw(ROOT + "gpuscene_passive_no_dielectric.rgen");
+      String optics = readRaw(ROOT + "gpuscene_optics.glsl");
+      require(noDielectricCompact.contains("RTRENDERER_PASSIVE_MEDIA")
+                      && noDielectricCompact.contains("RTRENDERER_COMPACT_MEDIA")
+                      && noDielectricCompact.contains("RTRENDERER_NO_DIELECTRIC")
+                      && noDielectricGeneral.contains("RTRENDERER_NO_DIELECTRIC")
+                      && optics.contains("#ifndef RTRENDERER_NO_DIELECTRIC")
+                      && runtime.contains("#ifdef RTRENDERER_NO_DIELECTRIC"),
+              "no-dielectric programs omit Fresnel/Snell only behind scene eligibility");
+      String raygen = read(ROOT + "gpuscene.rgen");
+      for (String retired : new String[]{"GsMediumPath", "GsMediumIntegration", "gsIntegrateMedium(",
+              "gsDensityMass(", "gsDensityFlight(", "gsSamplePhaseHg(", "gsMultipleScatterIncoming(",
+              "gpuscene_transport.glsl", "gpuscene_transport_runtime.glsl", "gpuscene_density.glsl",
+              "gpuscene_multiscatter.glsl"}) {
+         require(!raygen.contains(retired) && !transport.contains(retired) && !runtime.contains(retired),
+                 "retired GLSL medium executor must not be reachable: " + retired);
+      }
+      require(readRaw(ROOT + "gpuscene_raygen.glsl").contains("gpuscene_surface_transport.glsl")
+                      && readRaw(ROOT + "gpuscene_raygen.glsl").contains("gpuscene_surface_lighting_runtime.glsl"),
+              "ordinary ray generation must retain surface math and lighting after medium retirement");
+      require(readRaw("assets/rtrenderer/medium/luxcore/camera_absorption.cu")
+                      .contains("HomogeneousVolume_SegmentScatter"),
+              "the new native medium path must remain available after legacy retirement");
       require(visibility.contains("struct GsVisibilityPayload")
                       && !visibility.contains("GpuScenePayload") && !visibility.contains("GsMediumPath")
                       && !visibility.contains("GsRadianceSplit") && !visibility.contains("gpuscene_lighting.glsl"),
@@ -197,7 +244,7 @@ public final class VulkanGpuSceneShaderSelfTest {
       for (String stage : new String[]{"gpuscene.rmiss", "gpuscene.rchit", "gpuscene.rahit",
               "gpuscene_visibility.rmiss", "gpuscene_visibility.rchit", "gpuscene_visibility.rahit"}) {
          String code = readRaw(ROOT + stage);
-         require(!code.contains("gpuscene_transport_runtime.glsl") && !code.contains("gpuscene_optics.glsl"),
+         require(!code.contains("gpuscene_surface_lighting_runtime.glsl") && !code.contains("gpuscene_optics.glsl"),
                  stage + " must remain a leaf hit/miss stage");
       }
    }
@@ -257,7 +304,8 @@ public final class VulkanGpuSceneShaderSelfTest {
               "instance reprojection payload and per-instance revision gate must be initialized end to end");
       require(raygen.contains("denoisingActive && sampleIndex == 0u")
               && raygen.contains("denoisingSplit.diffuse += surfaceSplit.diffuse * surfaceWeight")
-              && raygen.contains("denoisingSplit.specular += (surfaceSplit.specular + opaqueReflection) * surfaceWeight")
+              && raygen.contains("denoisingSplit.specular += ((surfaceSplit.specular + opaqueReflection) * surfaceWeight")
+              && raygen.contains("+ optical * opticalWeight) * primaryTransmittance;")
               && raygen.contains("denoisingSplit.diffuse /= float(sampleCount) * denoisingDiffuseFactor")
               && raygen.contains("denoisingSplit.specular /= float(sampleCount) * denoisingSpecularFactor"),
               "NRD signal must average all SPP contributions with one stable material guide");
@@ -348,7 +396,10 @@ public final class VulkanGpuSceneShaderSelfTest {
       require(entryPoints == 1, stage + " must expose exactly one stage entry point");
       if (stage.endsWith(".rgen")) {
          require(traces > 0, stage + " must issue real hardware rays");
-         int expectedPayloads = stage.equals("gpuscene_surface.rgen") ? 1 : 2;
+         int expectedPayloads = stage.equals("gpuscene_surface.rgen")
+                 || stage.equals("gpuscene_primary_trace.rgen") || stage.equals("gpuscene_native_medium_trace.rgen")
+                 || stage.equals("gpuscene_native_boundary_packet.rgen")
+                 || stage.equals("gpuscene_surface_primary_shade.rgen") ? 1 : 2;
          require(payloadVariables == expectedPayloads,
                  stage + " has unexpected payload coupling: " + payloadVariables + " instead of " + expectedPayloads);
       } else {

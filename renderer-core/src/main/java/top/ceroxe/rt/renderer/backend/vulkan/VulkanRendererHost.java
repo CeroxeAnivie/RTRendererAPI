@@ -58,7 +58,7 @@ import java.util.function.Supplier;
  * material adapter supplies a real {@link VulkanRenderingSession}, no service registration can
  * accidentally expose a renderer that acknowledges work without dispatching it.</p>
  */
-final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFramePresenterFactory,
+final class VulkanRendererHost implements Renderer, VulkanFrameInterop, top.ceroxe.rt.renderer.api.interop.vulkan.VulkanQueuedFrameInterop, VulkanFramePresenterFactory,
         top.ceroxe.rt.renderer.api.RendererEvidenceAccess {
     private static final int MAX_AUTOMATIC_DEVICE_RECOVERIES = 1;
 
@@ -107,6 +107,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     private int failedDeviceRecoveries;
     private boolean recoveryPending;
     private boolean managedPresenterOpen;
+    private boolean binarySemaphoreDelivery;
     private boolean managedPresenterRetainsSession;
     private int managedPresenterBacklogLimit;
     private FrameSubmissionDeferred managedPresenterBackpressure;
@@ -500,6 +501,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     private VulkanFramePresenter openPresenterLocked(
             VulkanFramePresenterConfig presenterConfiguration
     ) {
+        if (binarySemaphoreDelivery) throw new IllegalStateException("queued external delivery owns frame synchronization");
         requireReady("open Vulkan frame presenter");
         if (managedPresenterOpen) {
             throw new RendererStateException(
@@ -861,6 +863,16 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
 
         VulkanRenderingSession.FrameAdmission admission;
         try {
+            // The public initial scene is empty revision zero. Publish that generation through
+            // the ordinary transactional lane before its first frame so GPUScene and TLAS own
+            // the same revision as the host, including after device recovery.
+            if (!scene.snapshot().initialized()) {
+                try {
+                    applyLocked(SceneTransaction.builder(0L).resetScene().build());
+                } catch (top.ceroxe.rt.renderer.api.SubmissionRejectedException deferred) {
+                    return new FrameSubmissionDeferred(deferred.deferralReason(), deferred.getMessage());
+                }
+            }
             VulkanRenderingSession.FrameAdmissionAttempt attempt = Objects.requireNonNull(
                     session.trySubmit(new VulkanRenderingSession.FrameSubmission(checked, acceptedSceneRevision)),
                     "session frame admission attempt"
@@ -911,6 +923,29 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
         ));
     }
 
+    @Override public void enableBinarySemaphoreDelivery() {
+        withLifecycleLock(() -> {
+            requireReady("enable queued frame delivery");
+            if (latestSubmittedFrameSequence >= 0L || managedPresenterOpen)
+                throw new IllegalStateException("queued delivery must be enabled before submission and without a presenter");
+            session.enableBinarySemaphoreDelivery();
+            binarySemaphoreDelivery = true;
+        });
+    }
+
+    @Override public Optional<GpuFrameLease> tryAcquireSubmittedFrame(long frameSequence) {
+        if (frameSequence < 0L) throw new IllegalArgumentException("frame sequence must not be negative");
+        return withLifecycleLock(() -> {
+            requireReady("acquire submitted GPU frame");
+            if (!binarySemaphoreDelivery) throw new IllegalStateException("enable queued delivery before submitting frames");
+            if (managedPresenterOpen) throw new IllegalStateException("managed presenter owns frame delivery");
+            if (frameSequence > latestSubmittedFrameSequence)
+                return Optional.empty();
+            GpuFrameLease lease = session.acquireSubmittedFrame(frameSequence);
+            return lease == null ? Optional.empty() : Optional.of(trackAcquiredFrame(lease, false, false));
+        });
+    }
+
     @Override
     public VulkanFrameInterop.FramePollResult pollLatestFrame() {
         return withLifecycleLock(this::pollLatestFrameLocked);
@@ -955,6 +990,9 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
     }
 
     private GpuFrameLease trackAcquiredFrame(GpuFrameLease lease, boolean producerCompletedOnCpu) {
+        return trackAcquiredFrame(lease, producerCompletedOnCpu, true);
+    }
+    private GpuFrameLease trackAcquiredFrame(GpuFrameLease lease, boolean producerCompletedOnCpu, boolean requireNewer) {
         try {
             GpuFrameLease.FrameDescriptor descriptor = Objects.requireNonNull(
                     lease.descriptor(), "lease descriptor"
@@ -970,7 +1008,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
                     != GpuFrameLease.HandleState.EXPORTED) {
                 throw new IllegalStateException("session returned a non-exported acquire semaphore handle");
             }
-            if (descriptor.frameSequence() <= latestAcquiredFrameSequence) {
+            if (requireNewer && descriptor.frameSequence() <= latestAcquiredFrameSequence) {
                 throw new IllegalStateException(
                         "session returned a non-new frame: latest=" + latestAcquiredFrameSequence
                                 + ", returned=" + descriptor.frameSequence()
@@ -988,7 +1026,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
                                 + descriptor.renderedSceneRevision()
                 );
             }
-            latestAcquiredFrameSequence = descriptor.frameSequence();
+            latestAcquiredFrameSequence = Math.max(latestAcquiredFrameSequence, descriptor.frameSequence());
             if (producerCompletedOnCpu) {
                 latestCompletedFrameSequence = Math.max(
                         latestCompletedFrameSequence, descriptor.frameSequence()
@@ -1405,6 +1443,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, VulkanFr
             VulkanRenderingSession candidate = null;
         try {
             candidate = Objects.requireNonNull(sessionFactory.open(), "recovered Vulkan session");
+            if (binarySemaphoreDelivery) candidate.enableBinarySemaphoreDelivery();
             if (candidate.state() != VulkanRenderingSession.State.READY) {
                 throw new IllegalStateException("recovered Vulkan session is not READY: " + candidate.state());
             }

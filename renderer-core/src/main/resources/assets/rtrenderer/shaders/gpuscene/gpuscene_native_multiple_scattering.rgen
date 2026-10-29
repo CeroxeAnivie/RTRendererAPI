@@ -1,0 +1,91 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference : require
+#define RTRENDERER_NO_DIELECTRIC 1
+#define GS_LIGHTING_NO_DIRECT_SURFACE 1
+#include "gpuscene_surface_transport.glsl"
+layout(set=0,binding=GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
+layout(location=0) rayPayloadEXT GpuScenePayload payload;
+#include "gpuscene_surface_lighting_runtime.glsl"
+#include "gpuscene_native_scattering_common.glsl"
+layout(buffer_reference,std430,buffer_reference_align=16) buffer GsMultipleStorage {uvec4 lanes[];};
+layout(push_constant) uniform GsMultipleDispatch {
+    GsMultipleStorage storage;uint firstPixel;uint pixelCount;uint stateOffset;uint primaryOffset;uint64_t mode;
+} dispatch;
+
+vec3 gsMultipleDirect(vec3 position,vec3 direction,float g,vec3 sigma,float maximum,uint seed) {
+    vec3 sunDirection=-normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
+    vec3 sun=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)*uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
+    vec3 source=vec3(0);
+    if(max(sun.x,max(sun.y,sun.z))>0.0)source+=sun*gsScatteringPhase(dot(direction,sunDirection),g)
+        *gsScatteringShadow(position,sunDirection,1e20,sigma,maximum);
+    uint upper=gsFrame.words[GPU_SCENE_FRAME_LIGHT_SLOT_UPPER_BOUND_WORD],count=gsFrame.words[GPU_SCENE_FRAME_SCATTERING_LIGHT_SAMPLES_WORD];
+    uint selected[8],first[8],candidates=0u;float total=0.0;
+    [[dont_unroll]] for(uint slot=0u;slot<upper;++slot) {
+        float weight=gsScatteringLightWeight(slot,position,direction,0.0);if(weight<=0.0)continue;
+        if(count==0u){source+=gsScatteringLight(slot,position,direction,g,sigma,maximum);continue;}
+        if(candidates<8u)first[candidates]=slot;++candidates;total+=weight;
+        [[dont_unroll]] for(uint j=0u;j<count;++j)
+            if(gsTransportRandom(seed^slot*0x85ebca6bu^j*0xc2b2ae35u)<weight/total)selected[j]=slot;
+    }
+    if(count>0u&&candidates>0u) {
+        bool exhaustive=candidates<=count;uint samples=exhaustive?candidates:count;
+        [[dont_unroll]] for(uint j=0u;j<samples;++j) {
+            uint slot=exhaustive?first[j]:selected[j];
+            float factor=exhaustive?1.0:total/(float(count)*gsScatteringLightWeight(slot,position,direction,0.0));
+            source+=factor*gsScatteringLight(slot,position,direction,g,sigma,maximum);
+        }
+    }
+    return source;
+}
+#include "gpuscene_native_heterogeneous_multiple.glsl"
+void main() {
+    if(dispatch.storage.lanes[0u].x==0x52484d31u){gsHeterogeneousMultipleMain();return;}
+    if(gl_LaunchIDEXT.x>=dispatch.pixelCount)return;
+    uint pixelIndex=dispatch.firstPixel+gl_LaunchIDEXT.x;
+    ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
+    ivec2 pixel=ivec2(pixelIndex%uint(extent.x),pixelIndex/uint(extent.x));
+    uint samples=dispatch.storage.lanes[1u].z,steps=dispatch.storage.lanes[0u].w;
+    vec4 optical=uintBitsToFloat(dispatch.storage.lanes[3u]);
+    float g=uintBitsToFloat(dispatch.storage.lanes[4u]).w;
+    uint sourceOffset=dispatch.storage.lanes[2u].w/16u;
+    for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex)for(uint j=0u;j<steps;++j) {
+        uint item=gl_LaunchIDEXT.x*samples+sampleIndex,secondary=item*steps+j;
+        uint base=dispatch.stateOffset/16u+secondary*9u;
+        if(dispatch.mode==0ul) {
+            for(uint k=0u;k<9u;++k)dispatch.storage.lanes[base+k]=uvec4(0);
+            uint primary=dispatch.primaryOffset/16u+(pixelIndex*samples+sampleIndex)*13u;
+            float hitDistance=uintBitsToFloat(dispatch.storage.lanes[primary]).w;
+            bool hit=dispatch.storage.lanes[primary+7u].x!=0u;
+            float distance=hit?min(max(hitDistance,0.0),optical.w):optical.w;
+            float interval=distance/float(steps),local=uintBitsToFloat(dispatch.storage.lanes[sourceOffset+secondary]).w;
+            vec2 position=vec2(pixel)+gsScatteringSampleOffset(sampleIndex,samples);
+            if(!gsExactProjectionActive())position+=vec2(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD]),
+                uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD+1u]));
+            vec3 direction=gsRayDirectionAtSample(position,extent),origin=gsFrameCameraPosition()+direction*(float(j)*interval+local);
+            dispatch.storage.lanes[base]=floatBitsToUint(vec4(origin,max(optical.w-float(j)*interval-local,0.0)));
+            dispatch.storage.lanes[base+1u]=floatBitsToUint(vec4(direction,0));
+            dispatch.storage.lanes[base+7u]=uvec4(1u,pixelIndex*samples+sampleIndex,1u,0u);
+            uint seed=gsTransportHash(pixelIndex^gsFrame.words[GPU_SCENE_FRAME_SEQUENCE_WORD]*0x9e3779b9u)^(j+1u)*0x165667b1u;
+            dispatch.storage.lanes[base+8u]=uvec4(seed,0,0,0);
+            continue;
+        }
+        uvec4 control=dispatch.storage.lanes[base+7u];if(control.x==0u)continue;
+        vec4 origin=uintBitsToFloat(dispatch.storage.lanes[base]),direction=uintBitsToFloat(dispatch.storage.lanes[base+1u]);
+        payload.worldPositionAndDistance=vec4(0,0,0,-1);payload.state=uvec4(0,GS_PAYLOAD_RADIANCE_QUERY,0,0);
+        payload.baseColorAndOpacity=vec4(0,0,0,1);payload.emissiveAndMetallic=vec4(0);payload.launchInfo=uvec4(pixel,extent);
+        payload.mediumBoundary=uvec4(0);
+        traceRayEXT(sceneTlas,gl_RayFlagsNoneEXT,255,0,0,0,origin.xyz,gsRayEpsilon(origin.xyz),direction.xyz,1e20,0);
+        float distance=payload.state.x==0u?-1.0:payload.worldPositionAndDistance.w;
+        vec3 terminal=payload.state.x==0u?gsFrameVec3(GPU_SCENE_FRAME_SKY_COLOR_WORD)
+            *max(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_AMBIENT_INTENSITY_WORD]),.05)
+            *(.35+.65*clamp(direction.y*.5+.5,0.0,1.0))
+            :max(payload.baseColorAndOpacity.rgb,vec3(0))+max(payload.emissiveAndMetallic.rgb,vec3(0));
+        vec3 incoming=vec3(0);float end=distance<0.0?origin.w:min(max(distance,0.0),origin.w);
+        if(direction.w<end)incoming=gsMultipleDirect(origin.xyz+direction.xyz*direction.w,direction.xyz,g,optical.xyz,optical.w,
+            dispatch.storage.lanes[base+8u].z^0xc2b2ae35u);
+        dispatch.storage.lanes[base+5u]=floatBitsToUint(vec4(terminal,distance));
+        dispatch.storage.lanes[base+6u]=uvec4(floatBitsToUint(incoming),control.z);
+    }
+}

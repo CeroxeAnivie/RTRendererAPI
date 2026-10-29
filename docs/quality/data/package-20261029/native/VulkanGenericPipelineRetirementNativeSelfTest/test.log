@@ -1,0 +1,4 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+Oct 29, 2026 4:26:06 PM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=D:\Engineering\code\APIs\RTRendererAPI\build\luxcore-api-package-20261029\native-sealed\VulkanGenericPipelineRetirementNativeSelfTest\validation.jsonl
+VulkanGenericPipelineRetirementNativeSelfTest passed: cycles=2000 live=0 sbtBytes=0 elapsedMs=9805

@@ -106,7 +106,7 @@ mutation rejection, pin protection, rollback, sparse IDs and replay rejection af
 The 4.0.1 consumer diagnostic intentionally asserts growth; its failure against a fixed candidate
 does not indicate a regression. Consumer validation must identify its exact published candidate
 artifact, preserve original reports and run the unchanged 600-second acceptance thresholds.
-The historical retention report and the current [4.1.0 release results](quality/4.1.0-procedural-validation.md)
+The historical retention report and the current [4.1.0 release results](quality/verification-report.md#4-1-0-procedural-validation)
 remain separate evidence.
 Provider-local tests alone do not establish downstream integration acceptance.
 

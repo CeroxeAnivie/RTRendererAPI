@@ -257,6 +257,9 @@ final class VulkanFrameUniformPacker {
         putDouble(words, VulkanGpuSceneAbi.FRAME_CAMERA_DELTA_WORD + 4,
                 frame.camera().z() - previousCamera.z());
         int featureFlags = denoisingActive ? VulkanGpuSceneAbi.FEATURE_FLAG_DENOISING_ACTIVE : 0;
+        if (frame.mediumTransport().firstInterfaceSampling()
+                == top.ceroxe.rt.renderer.api.MediumTransport.FirstInterfaceSampling.STOCHASTIC_SINGLE_BRANCH)
+            featureFlags |= VulkanGpuSceneAbi.FEATURE_FLAG_STOCHASTIC_DIELECTRIC;
         if (reconstructionActive && !exactProjection) {
             featureFlags |= VulkanGpuSceneAbi.FEATURE_FLAG_RECONSTRUCTION_ACTIVE;
         }

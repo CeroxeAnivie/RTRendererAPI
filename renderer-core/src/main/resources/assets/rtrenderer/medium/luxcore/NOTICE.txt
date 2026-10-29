@@ -1,0 +1,107 @@
+LuxCoreRender portions
+Copyright 1998-2020 by authors (see upstream AUTHORS.txt)
+Licensed under the Apache License, Version 2.0; included as LICENSE.txt.
+Upstream: https://github.com/LuxCoreRender/LuxCore
+Pinned commit: b872186d2fe995a762f73708c606847eed55843e
+
+Unmodified complete upstream files:
+include/luxrays/devices/cudadevice_oclemul_types.cl
+include/luxrays/devices/cudadevice_math.cl
+include/luxrays/devices/cudadevice_oclemul_funcs.cl
+include/luxrays/core/color/color_funcs.cl (distributed as color_funcs.cl)
+
+Unmodified function excerpt, without surrounding unrelated functions:
+include/slg/volumes/volume_funcs.cl : HomogeneousVolume_SegmentScatter
+distributed as upstream-segment-function.cl.
+
+segment_helpers.cl contains unchanged Spectrum_IsEqual, Spectrum_IsBlack,
+Spectrum_Filter and Spectrum_Exp excerpts from color_funcs.cl, preceded by
+BLACK/WHITE macro definitions required by the standalone assembly.
+
+segment_batch.cu, camera_absorption.cu, primary_absorption.cu and Java code are RTRendererAPI adapters. No upstream volume
+sampling, transmittance, or emission calculation has been changed.
+This segment module is not a full LuxCore integrator or a claim of physical
+equivalence with RTRendererAPI's existing HG/multi-scattering contracts.
+
+Unmodified contiguous function excerpt (Init, StartVolume, AddVolume, RemoveVolume,
+SimulateAddVolume and SimulateRemoveVolume):
+include/slg/utils/pathvolumeinfo_funcs.cl, distributed as upstream-pathvolumeinfo-functions.cl.
+medium_transport_types.cu supplies a 32-entry aligned wire type, a minimal priority
+material projection and namespace. medium_transport.cu adds explicit bounds/missing-remove
+status wrappers and the public API's exact Henyey-Greenstein phase adapter; HG is
+RTRendererAPI compatibility code, not LuxCore Schlick sampling or an unchanged upstream function.
+The original priority-function excerpt and homogeneous segment excerpt remain unchanged.
+
+api_emission.cu and primary_emission.cu are RTRendererAPI compatibility adapters.
+The pinned homogeneous segment function still supplies transmittance unchanged; its
+emission argument is zero for this adapter. The Java API instead requires the analytic
+integral E * (1 - exp(-sigmaA * distance)) / sigmaA, including the zero-extinction limit.
+The separate stable expm1/series adapter supplies that emitted radiance. This is a
+public-semantics adaptation, not an unchanged LuxCore emission estimator or full integrator.
+
+Unmodified complete upstream density-grid source for provenance:
+include/slg/textures/texture_densitygrid_funcs.cl, distributed as
+upstream-densitygrid-functions.cl. api_density.cu adapts its clamped texel fetch and
+eight-corner trilinear interpolation to the API's scalar base-level float-red atlas,
+texel-centered coordinates, zero outside the inclusive unit cube, and explicit
+descriptor storage. The API clips each segment to that cube before applying its
+scatteringSteps midpoint budget. Descriptor matrices compose the API field mapping
+with inverse object transforms; texture address/filter/mip state is ignored.
+boundary_transport.cu is RTRendererAPI production continuation glue around the pinned
+segment and priority functions and these separate emission/density adapters. It
+retains real Vulkan hit payloads and full final primary/T/E outputs. No upstream
+segment or priority excerpt is modified by density integration.
+
+camera_scattering.cu is an RTRendererAPI direct-single-scattering adapter. Vulkan
+supplies the real light-connection radiance; the adapter preserves the public
+interval/light work budgets and analytic camera-medium emission. It invokes the
+unchanged pinned homogeneous segment function for RGB transmittance. Phase
+evaluation in the retained Vulkan source stage follows the public Henyey-Greenstein
+contract. This is not an unchanged LuxCore integrator or a claim of complete
+multi-scattering/boundary support.
+
+density_scattering.cu is a separate RTRendererAPI heterogeneous direct-scattering
+adapter. It clips the camera segment to the density domain, retains the public
+piecewise-constant midpoint density distribution and importance-sampled physical
+positions, and passes those GPU states to Vulkan for real light connections and
+surface visibility. Each returned connection is attenuated with the shared
+LuxCore-derived density-grid sampler before native radiance accumulation. The
+unchanged pinned segment implementation supplies RGB transmittance. Explicit
+boundaries and additional volume bounces are not provided by this adapter.
+
+Unmodified glass function excerpts from include/slg/materials/materialdefs_funcs_generic.cl
+and materialdefs_funcs_glass.cl are distributed as upstream-glass-functions.cl.
+api_glass_helpers.cu supplies the standalone HitPoint projection and math constants.
+optical_transport.cu adapts those Fresnel/reflection/transmission functions, the pinned
+segment integrator and volume-priority functions to the public optical-interface
+budgets, nesting and deterministic/stochastic first-interface policies. Scattering optical
+paths require additional integration. Density optical
+segments use the same clipped, texel-centered midpoint mass integrator, including the
+newly selected medium during ray-origin displacement; IOR remains independent of density.
+
+multiple_scattering.cu is RTRendererAPI finite-order homogeneous transport glue. It
+uses the pinned exponential segment sampler and the public HG phase adapter, with
+Vulkan supplying actual scene/light intersections. Its bounded state tracks RGB
+mixture collision/survival probabilities and the public cumulative-distance budget.
+Explicit boundaries and general material shading are not provided by this adapter.
+boundary_packet.cu supplies bounded sorted-boundary packet processing and optional
+terminal-radiance accumulation around the same pinned priority/segment functions.
+
+Unmodified rough-glass sampler and Schlick microfacet function excerpts from
+include/slg/materials/materialdefs_funcs_roughglass.cl and
+include/slg/materials/materialdefs_funcs_generic.cl are distributed as
+upstream-roughglass-sample.cl and upstream-microfacet-functions.cl.
+include/slg/utils/evalstack_funcs.cl is distributed unchanged as
+upstream-evalstack-functions.cl. api_roughglass_helpers.cu and
+api_roughglass_sampling.cu project constant texture/material inputs onto that
+eval stack and apply the public radiance eta-squared convention outside the
+unchanged upstream sampler. The optical controller preserves its public sample,
+event, distance, density and priority budgets; it does not replace LuxCore's full integrator.
+
+pbr_transport.cu integrates ordered camera and direct-light boundary packets with
+the same segment, density and priority components. Vulkan retains the public
+surface BRDF and real geometry queries. This adapter currently admits opaque
+double-sided metallic-zero PBR/UNLIT and non-scattering IOR-one media.
+heterogeneous_multiple_scattering.cu extends the finite-order camera scattering
+adapter to density-grid optical mass and real light/geometry connections. It uses
+the pinned segment sampler and the separate public HG compatibility adapter.

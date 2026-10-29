@@ -1,0 +1,141 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference : require
+
+#include "gpuscene_common.glsl"
+
+// Arbitrary-origin scattering geometry/connection queries retain the proven ordered
+// packet event contract. Medium priority and density transport remain native CUDA work.
+
+layout(location = 0) rayPayloadInEXT GpuScenePayload payload;
+hitAttributeEXT vec2 hitAttributes;
+
+layout(buffer_reference,std430,buffer_reference_align=16) buffer GsPacketStorage { uvec4 lanes[]; };
+layout(push_constant) uniform GsPacketDispatch {
+    GsPacketStorage storage; uint firstPixel; uint pixelCount;
+    uint64_t payloadAddress; uint64_t offsets;
+} dispatch;
+uvec2 gsPacketEvent(uint base,uint index) {
+    uvec4 pair=dispatch.storage.lanes[base+1u+index/2u];
+    return (index&1u)==0u?pair.xy:pair.zw;
+}
+void gsPacketPut(uint base,uint index,uvec2 value) {
+    uint lane=base+1u+index/2u;uvec4 pair=dispatch.storage.lanes[lane];
+    if((index&1u)==0u)pair.xy=value;else pair.zw=value;dispatch.storage.lanes[lane]=pair;
+}
+void gsCollectBoundary() {
+    uint slot=gl_InstanceCustomIndexEXT,low=0u,high=dispatch.storage.lanes[1u].w;
+    uint table=dispatch.storage.lanes[3u].y/16u;
+    while(low<high) {uint m=low+(high-low)/2u;if(dispatch.storage.lanes[table+m*4u].x<slot)low=m+1u;else high=m;}
+    if(low>=dispatch.storage.lanes[1u].w||dispatch.storage.lanes[table+low*4u].x!=slot)return;
+    uint orientation=dispatch.storage.lanes[table+low*4u].z;
+    bool back=(gl_HitKindEXT==0xffu)!=(determinant(mat3(gl_ObjectToWorldEXT))<0.0);
+    uint code=low|((back==(orientation!=0u))?0x80000000u:0u);
+    uint base=dispatch.storage.lanes[2u].y/16u+payload.mediumBoundary.x*(2u+((dispatch.storage.lanes[6u].w&255u)+1u)/2u);
+    uint count=dispatch.storage.lanes[base].w,capacity=min(dispatch.storage.lanes[1u].z,dispatch.storage.lanes[6u].w&255u);
+    float distance=gl_HitTEXT;
+    float epsilon=max(1e-5,max(abs(gl_WorldRayOriginEXT.x),max(abs(gl_WorldRayOriginEXT.y),abs(gl_WorldRayOriginEXT.z)))*2e-7);
+    uint at=count;
+    for(uint i=0u;i<count;++i) {
+        uvec2 old=gsPacketEvent(base,i);float d=uintBitsToFloat(old.x);
+        if((old.y&0x7fffffffu)==low&&abs(d-distance)<=epsilon)return;
+        if(distance<d||(distance==d&&code<old.y)){at=i;break;}
+    }
+    if(at>=capacity)return;
+    uint next=min(count+1u,capacity);
+    for(uint i=next-1u;i>at;--i)gsPacketPut(base,i,gsPacketEvent(base,i-1u));
+    gsPacketPut(base,at,uvec2(floatBitsToUint(distance),code));dispatch.storage.lanes[base].w=next;
+}
+
+void main()
+{
+    if((gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD)&2u)!=0u) { gsCollectBoundary();ignoreIntersectionEXT;return; }
+    uint meshSlot = gsInstanceMeshSlot(gl_InstanceCustomIndexEXT);
+    uint meshBase = gsMeshBase(meshSlot);
+    uint materialSlot = gsTriangleMaterialSlot(meshBase, gl_PrimitiveID);
+    uint materialBase = materialSlot * GPU_SCENE_MATERIAL_RECORD_WORDS;
+    uint flags = gsMaterials.words[materialBase + GPU_SCENE_MATERIAL_FLAGS_WORD];
+    if ((flags & GPU_SCENE_FLAG_ACTIVE) == 0u) {
+        ignoreIntersectionEXT;
+        return;
+    }
+    bool mediumBoundary = gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD) != 0u;
+    if (!mediumBoundary && (flags & GPU_SCENE_FLAG_DOUBLE_SIDED) == 0u && gl_HitKindEXT == 0xffu) {
+        ignoreIntersectionEXT;
+        return;
+    }
+
+    uint blendMode = (flags >> 1u) & 0x7u;
+    uint shadingModel = (flags >> GPU_SCENE_SHADING_MODEL_SHIFT)
+        & GPU_SCENE_SHADING_MODEL_MASK;
+    uint overlayMode = (flags >> GPU_SCENE_OVERLAY_DEPTH_MODE_SHIFT)
+        & GPU_SCENE_OVERLAY_DEPTH_MODE_MASK;
+    float opacity = gsUnpackRgba8(gsMaterials.words[
+        materialBase + GPU_SCENE_MATERIAL_BASE_COLOR_WORD
+    ]).a;
+    if (blendMode != GPU_SCENE_BLEND_OPAQUE) {
+        uvec3 indices = gsTriangleIndices(meshBase, gl_PrimitiveID);
+        vec3 barycentrics = gsBarycentrics(hitAttributes);
+        vec2 uv = gsInstanceUv(
+            gl_InstanceCustomIndexEXT,
+            gsTriangleTexcoord(meshBase, indices, barycentrics)
+        );
+        vec3 p0 = gl_ObjectToWorldEXT * vec4(gsPosition(meshBase, indices.x), 1.0);
+        vec3 p1 = gl_ObjectToWorldEXT * vec4(gsPosition(meshBase, indices.y), 1.0);
+        vec3 p2 = gl_ObjectToWorldEXT * vec4(gsPosition(meshBase, indices.z), 1.0);
+        vec4 uvFootprint = payload.state.y == GS_PAYLOAD_PHOTON_QUERY ? vec4(0.0) : gsTriangleTextureFootprint(
+            meshBase, indices, barycentrics, p0, p1, p2, gl_WorldRayOriginEXT,
+            payload.launchInfo,
+            gl_InstanceCustomIndexEXT
+        );
+        vec4 vertexColor = shadingModel == GPU_SCENE_SHADING_LIGHTMAP_MODULATED
+            ? gsTriangleLightmapModulatedColor(
+                meshBase, indices, barycentrics, gl_InstanceCustomIndexEXT
+            )
+            : gsTriangleColor(meshBase, indices, barycentrics);
+        opacity *= vertexColor.a;
+        uint baseTexture = gsMaterials.words[
+            materialBase + GPU_SCENE_MATERIAL_BASE_COLOR_TEXTURE_WORD
+        ];
+        if (baseTexture != GS_INVALID_SLOT) {
+            opacity *= gsSampleTextureFootprint(
+                baseTexture, uv, uvFootprint.xy, uvFootprint.zw
+            ).a;
+        }
+    }
+    if (shadingModel == GPU_SCENE_SHADING_LIGHTMAP_MODULATED) {
+        opacity = gsApplySurfaceVisibility(
+            vec4(0.0, 0.0, 0.0, opacity),
+            gl_InstanceCustomIndexEXT
+        ).a;
+    }
+    if (!mediumBoundary && blendMode == GPU_SCENE_BLEND_MASKED) {
+        float cutoff = uintBitsToFloat(gsMaterials.words[
+            materialBase + GPU_SCENE_MATERIAL_ALPHA_CUTOFF_WORD
+        ]);
+        if (opacity < cutoff) {
+            ignoreIntersectionEXT;
+            return;
+        }
+    }
+    if (payload.state.y == GS_PAYLOAD_SHADOW_QUERY) {
+        if ((gsInstanceFlags(gl_InstanceCustomIndexEXT) & GPU_SCENE_FLAG_CASTS_SHADOW) == 0u) {
+            ignoreIntersectionEXT;
+            return;
+        }
+        if (overlayMode != 0u) {
+            ignoreIntersectionEXT;
+            return;
+        }
+        float transmission = uintBitsToFloat(gsMaterials.words[
+            materialBase + GPU_SCENE_MATERIAL_TRANSMISSION_WORD
+        ]);
+        if (blendMode == GPU_SCENE_BLEND_TRANSLUCENT && opacity * (1.0 - transmission) < 0.5) {
+            ignoreIntersectionEXT;
+            return;
+        }
+        payload.state.x = 1u;
+        terminateRayEXT;
+    }
+}

@@ -1,0 +1,166 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference : require
+#define RTRENDERER_NO_DIELECTRIC 1
+#include "gpuscene_surface_transport.glsl"
+
+// Geometry and raw light queries only. Native CUDA owns volume stacks, density,
+// segment transport, collision sampling and the phase function.
+layout(set=0,binding=GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
+layout(location=0) rayPayloadEXT GpuScenePayload payload;
+layout(buffer_reference,std430,buffer_reference_align=16) buffer GsBoundaryScatterStorage {uvec4 lanes[];};
+layout(push_constant) uniform GsBoundaryScatterDispatch {
+    GsBoundaryScatterStorage storage;uint firstQuery;uint queryCount;uint64_t reserved0;uint64_t reserved1;
+} dispatch;
+
+vec2 gsBoundaryScatterSampleOffset(uint sampleIndex,uint samples) {
+    if(samples<=1u)return vec2(.5);
+    if(samples==2u)return sampleIndex==0u?vec2(.25):vec2(.75);
+    if(samples==4u){const vec2 offsets[4]=vec2[](vec2(.375,.125),vec2(.875,.375),vec2(.125,.625),vec2(.625,.875));return offsets[sampleIndex];}
+    const vec2 offsets[8]=vec2[](vec2(.5,.3333),vec2(.25,.6667),vec2(.75,.1111),vec2(.125,.4444),
+        vec2(.625,.7778),vec2(.375,.2222),vec2(.875,.5556),vec2(.0625,.8889));return offsets[sampleIndex];
+}
+void gsBoundaryScatterResetPayload(uint query,uvec4 launch,bool shadow) {
+    payload.worldPositionAndDistance=vec4(0,0,0,-1);
+    payload.previousWorldPosition=vec4(0);payload.motionRevision=uvec2(0);
+    payload.worldNormalAndRoughness=vec4(0,1,0,1);payload.baseColorAndOpacity=vec4(0,0,0,1);
+    payload.emissiveAndMetallic=vec4(0);payload.transmissionIor=vec4(0,1,0,0);
+    payload.state=uvec4(0u,shadow?GS_PAYLOAD_SHADOW_QUERY:GS_PAYLOAD_RADIANCE_QUERY,0u,0u);
+    payload.surfaceState=uvec4(0);payload.compositeState=vec4(0);payload.launchInfo=launch;
+    payload.mediumBoundary=uvec4(query,0,0,0);
+}
+void gsBoundaryScatterStorePrimary(uint item,uint pixel,uint sampleIndex) {
+    uint destination=dispatch.storage.lanes[2u].z/16u+item*13u;
+    dispatch.storage.lanes[destination]=floatBitsToUint(payload.worldPositionAndDistance);
+    dispatch.storage.lanes[destination+1u]=floatBitsToUint(payload.previousWorldPosition);
+    dispatch.storage.lanes[destination+2u]=uvec4(payload.motionRevision,0,0);
+    dispatch.storage.lanes[destination+3u]=floatBitsToUint(payload.worldNormalAndRoughness);
+    dispatch.storage.lanes[destination+4u]=floatBitsToUint(payload.baseColorAndOpacity);
+    dispatch.storage.lanes[destination+5u]=floatBitsToUint(payload.emissiveAndMetallic);
+    dispatch.storage.lanes[destination+6u]=floatBitsToUint(payload.transmissionIor);
+    dispatch.storage.lanes[destination+7u]=payload.state;
+    dispatch.storage.lanes[destination+8u]=payload.surfaceState;
+    dispatch.storage.lanes[destination+9u]=floatBitsToUint(payload.compositeState);
+    dispatch.storage.lanes[destination+10u]=payload.launchInfo;
+    dispatch.storage.lanes[destination+11u]=payload.mediumBoundary;
+    dispatch.storage.lanes[destination+12u]=uvec4(pixel,sampleIndex,1u,1u);
+}
+float gsBoundaryScatterLightWeight(uint slot,vec3 position) {
+    uint base=slot*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[base+GPU_SCENE_LIGHT_FLAGS_WORD];
+    if((flags&GPU_SCENE_FLAG_ACTIVE)==0u)return 0.0;
+    if(((flags>>1u)&7u)!=GPU_SCENE_LIGHT_DIRECTIONAL) {
+        vec3 point=vec3(gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD+1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD+1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD+1u]));
+        if(length(point-position)>=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_RANGE_WORD]))return 0.0;
+    }
+    vec3 color=vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+1u]),
+        uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+2u]));
+    return gsLuminance(color)*uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_INTENSITY_WORD]);
+}
+bool gsBoundaryScatterLight(uint ordinal,vec3 position,uint seed,out vec3 direction,out vec3 radiance,
+        out float distance,out bool shadow) {
+    float factor=1.0;uint slot=0u;distance=uintBitsToFloat(dispatch.storage.lanes[4u].w);
+    if(ordinal==0u) {
+        direction=-normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
+        radiance=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)*uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);shadow=true;
+        return max(max(radiance.x,radiance.y),radiance.z)>0.0;
+    }
+    uint choice=ordinal-1u,upper=dispatch.storage.lanes[11u].x,lightSamples=dispatch.storage.lanes[11u].y;
+    if(lightSamples==0u) {
+        if(choice>=upper)return false;slot=choice;if(gsBoundaryScatterLightWeight(slot,position)<=0.0)return false;
+    }else {
+        uint selected[8],small[8],candidates=0u;float total=0.0;
+        for(uint candidate=0u;candidate<upper;++candidate) {
+            float weight=gsBoundaryScatterLightWeight(candidate,position);if(weight<=0.0)continue;
+            if(candidates<8u)small[candidates]=candidate;++candidates;total+=weight;
+            for(uint j=0u;j<lightSamples;++j)
+                if(gsTransportRandom(seed^candidate*0x85ebca6bu^j*0xc2b2ae35u)<weight/total)selected[j]=candidate;
+        }
+        bool exhaustive=candidates<=lightSamples;uint count=exhaustive?candidates:lightSamples;
+        if(choice>=count)return false;slot=exhaustive?small[choice]:selected[choice];
+        if(!exhaustive)factor=total/(float(lightSamples)*gsBoundaryScatterLightWeight(slot,position));
+    }
+    uint base=slot*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[base+GPU_SCENE_LIGHT_FLAGS_WORD],type=(flags>>1u)&7u;
+    vec3 color=vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+1u]),
+        uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+2u]));
+    float intensity=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_INTENSITY_WORD]),attenuation=1.0;
+    shadow=(flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u;
+    if(type==GPU_SCENE_LIGHT_DIRECTIONAL)direction=-normalize(vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD]),
+        uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+2u])));
+    else {
+        vec3 point=vec3(gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD+1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD+1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD+1u]));
+        vec3 delta=point-position;distance=length(delta);if(distance<=1e-8)return false;direction=delta/distance;
+        float range=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_RANGE_WORD]),fade=max(1.0-distance/range,0.0);
+        attenuation=fade*fade/max(distance*distance,1.0);
+        if(type==GPU_SCENE_LIGHT_SPOT) {
+            vec3 axis=normalize(vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD]),
+                uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+2u])));
+            float inner=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_INNER_CONE_WORD]),outer=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_OUTER_CONE_WORD]);
+            attenuation*=inner==outer?step(outer,dot(axis,-direction)):smoothstep(outer,inner,dot(axis,-direction));
+        }
+    }
+    radiance=color*(intensity*attenuation*factor);return max(max(radiance.x,radiance.y),radiance.z)>0.0;
+}
+void main() {
+    uint query=dispatch.firstQuery+gl_LaunchIDEXT.x;
+    if(gl_LaunchIDEXT.x>=dispatch.queryCount||query>=dispatch.storage.lanes[16u].y)return;
+    uint mode=dispatch.storage.lanes[13u].y,samples=dispatch.storage.lanes[0u].w;
+    uint capacity=dispatch.storage.lanes[6u].w&255u,stride=2u+(capacity+1u)/2u;
+    uint packet=dispatch.storage.lanes[2u].y/16u+query*stride,record=dispatch.storage.lanes[16u].x/16u+query*4u;
+    dispatch.storage.lanes[packet]=uvec4(0);dispatch.storage.lanes[packet+stride-1u]=uvec4(floatBitsToUint(-1.0),0,0,0);
+    dispatch.storage.lanes[record]=uvec4(0);dispatch.storage.lanes[record+1u]=uvec4(0);
+    dispatch.storage.lanes[record+2u]=uvec4(floatBitsToUint(vec3(0)),floatBitsToUint(-1.0));
+    uint stateIndex=mode==32u?query/dispatch.storage.lanes[10u].z:query;
+    uint pixelIndex,sampleIndex,epoch=1u;vec3 origin,direction;float distance=uintBitsToFloat(dispatch.storage.lanes[4u].w);bool shadow=false;
+    vec3 source=vec3(0);bool queryActive=true;
+    ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
+    if(mode==0u) {
+        sampleIndex=query%samples;pixelIndex=dispatch.storage.lanes[1u].x+query/samples;
+        vec2 location=vec2(pixelIndex%uint(extent.x),pixelIndex/uint(extent.x))+gsBoundaryScatterSampleOffset(sampleIndex,samples);
+        if(!gsExactProjectionActive())location+=vec2(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD]),uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD+1u]));
+        origin=gsFrameCameraPosition();direction=gsRayDirectionAtSample(location,extent);
+    }else {
+        uint state=dispatch.storage.lanes[6u].z/16u+stateIndex*9u;uvec4 control=dispatch.storage.lanes[state+7u];
+        epoch=control.z;pixelIndex=control.y/samples;sampleIndex=control.y%samples;
+        vec4 rayOrigin=uintBitsToFloat(dispatch.storage.lanes[state]);origin=rayOrigin.xyz;distance=rayOrigin.w;
+        direction=uintBitsToFloat(dispatch.storage.lanes[state+1u]).xyz;
+        queryActive=control.x==(mode==32u?2u:1u);
+        if(queryActive&&mode==32u) {
+            uint ordinal=dispatch.storage.lanes[10u].w+query%dispatch.storage.lanes[10u].z;
+            uint seed=dispatch.storage.lanes[state+8u].x^control.z*0xc2b2ae35u;
+            queryActive=gsBoundaryScatterLight(ordinal,origin,seed,direction,source,distance,shadow);
+        }
+    }
+    uint connectionOrdinal=mode==32u?dispatch.storage.lanes[10u].w+query%dispatch.storage.lanes[10u].z:0u;
+    dispatch.storage.lanes[record+3u]=uvec4(epoch,stateIndex,connectionOrdinal,mode);
+    if(!queryActive)return;
+    uvec4 launch=uvec4(pixelIndex%uint(extent.x),pixelIndex/uint(extent.x),extent);
+    float epsilon=gsRayEpsilon(origin);
+    if(mode==32u&&shadow){distance=min(distance,uintBitsToFloat(dispatch.storage.lanes[4u].w));
+        origin+=direction*epsilon;distance=max(distance-2.0*epsilon,epsilon);}
+    dispatch.storage.lanes[packet]=uvec4(floatBitsToUint(direction),0u);
+    gsBoundaryScatterResetPayload(query,launch,mode==32u);
+    if(mode!=32u||shadow)traceRayEXT(sceneTlas,gl_RayFlagsNoOpaqueEXT,0xff,0,0,0,origin,epsilon,direction,max(distance-epsilon,epsilon),0);
+    float terminalDistance;
+    if(mode==32u) {
+        dispatch.storage.lanes[record]=floatBitsToUint(vec4(origin,distance));
+        dispatch.storage.lanes[record+1u]=uvec4(floatBitsToUint(direction),1u|(shadow?2u:0u));
+        dispatch.storage.lanes[record+2u]=floatBitsToUint(vec4(source,0));
+        dispatch.storage.lanes[record+2u].w=floatBitsToUint((!shadow||payload.state.x==0u)?1.0:0.0);
+        terminalDistance=shadow?distance:-1.0;
+    }else {
+        terminalDistance=payload.state.x==0u?-1.0:payload.worldPositionAndDistance.w;
+        source=payload.state.x==0u?payload.baseColorAndOpacity.rgb:max(payload.baseColorAndOpacity.rgb,vec3(0))+max(payload.emissiveAndMetallic.rgb,vec3(0));
+        if(mode==0u)gsBoundaryScatterStorePrimary(pixelIndex*samples+sampleIndex,pixelIndex,sampleIndex);
+    }
+    dispatch.storage.lanes[packet+stride-1u]=uvec4(floatBitsToUint(terminalDistance),floatBitsToUint(origin));
+    dispatch.storage.lanes[record]=floatBitsToUint(vec4(origin,distance));
+    if(mode!=32u) {
+        dispatch.storage.lanes[record+1u]=uvec4(floatBitsToUint(direction),1u);
+        dispatch.storage.lanes[record+2u]=floatBitsToUint(vec4(source,terminalDistance));
+    }
+}

@@ -1,0 +1,93 @@
+{
+  "title": "Optical external-primary layout ABBA",
+  "date": "2026-10-29",
+  "device": "NVIDIA GeForce RTX 5080 Laptop GPU",
+  "java": 25,
+  "frozenCoreJarSha256": "85bf4fe64fa7bc5ad61fe39cf53217e83fc03bc8970460ce425d34ee9e8f566e",
+  "order": ["old", "new", "new", "old"],
+  "workload": {
+    "width": 1920,
+    "height": 1080,
+    "samplesPerPixel": 1,
+    "opticalSamples": 1,
+    "firstInterfaceSampling": "DETERMINISTIC_SPLIT",
+    "maxEvents": 16,
+    "maxDistance": 30,
+    "transmittanceCutoff": 0,
+    "warmupFramesPerArm": 12,
+    "completedFramesPerArm": 40,
+    "temporal": false,
+    "output": "immutable CPU RGBA16F FrameSnapshot",
+    "cudaResidentLimitBytes": 536870912,
+    "vulkanValidation": "enabled; each arm opened=1, closed=1, zero warning/error/drop"
+  },
+  "arms": [
+    {
+      "layout": "old",
+      "externalPrimary": false,
+      "run": "integrated-v3-perf-old-1",
+      "tiles": 26,
+      "tilePixels": 81543,
+      "completedFramesPerSecond": 15.245664,
+      "medianEndToEndMs": 65.07855,
+      "p95EndToEndMs": 71.442,
+      "coldFirstFrameMs": 503.0029,
+      "queryPaths": 331776000,
+      "opticalInterfaces": 165888000,
+      "maximumAnalyticHdrError": 0.000152994792
+    },
+    {
+      "layout": "new",
+      "externalPrimary": true,
+      "run": "integrated-v3-perf-new-1",
+      "tiles": 4,
+      "tilePixels": 529200,
+      "completedFramesPerSecond": 27.946017,
+      "medianEndToEndMs": 33.02955,
+      "p95EndToEndMs": 47.2451,
+      "coldFirstFrameMs": 485.13,
+      "queryPaths": 331776000,
+      "opticalInterfaces": 165888000,
+      "maximumAnalyticHdrError": 0.000152994792
+    },
+    {
+      "layout": "new",
+      "externalPrimary": true,
+      "run": "integrated-v3-perf-new-2",
+      "tiles": 4,
+      "tilePixels": 529200,
+      "completedFramesPerSecond": 27.921919,
+      "medianEndToEndMs": 33.6117,
+      "p95EndToEndMs": 50.9897,
+      "coldFirstFrameMs": 446.4477,
+      "queryPaths": 331776000,
+      "opticalInterfaces": 165888000,
+      "maximumAnalyticHdrError": 0.000152994792
+    },
+    {
+      "layout": "old",
+      "externalPrimary": false,
+      "run": "integrated-v3-perf-old-2",
+      "tiles": 26,
+      "tilePixels": 81543,
+      "completedFramesPerSecond": 15.259563,
+      "medianEndToEndMs": 65.3689,
+      "p95EndToEndMs": 71.0234,
+      "coldFirstFrameMs": 505.1006,
+      "queryPaths": 331776000,
+      "opticalInterfaces": 165888000,
+      "maximumAnalyticHdrError": 0.000152994792
+    }
+  ],
+  "aggregate": {
+    "oldMeanCompletedFramesPerSecond": 15.2526135,
+    "newMeanCompletedFramesPerSecond": 27.933968,
+    "throughputIncreasePercent": 83.144,
+    "oldMeanMedianEndToEndMs": 65.223725,
+    "newMeanMedianEndToEndMs": 33.320625,
+    "medianLatencyReductionPercent": 48.91,
+    "oldMeanP95EndToEndMs": 71.2327,
+    "newMeanP95EndToEndMs": 49.1174
+  },
+  "scope": "This fixed optical slab workload only. The new layout moved the retained full primary payload to Vulkan-owned storage, retained complete final T/E outputs and tile-local hit cache, and preserved the CUDA residency cap and every query/event budget. No result is claimed for other workloads or devices."
+}

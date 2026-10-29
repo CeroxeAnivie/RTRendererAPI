@@ -1,0 +1,26 @@
+{
+  "passed":true,
+  "scope":"public-final-RGBA16F-density",
+  "reference":"independent double affine solve, box clipping, texel-centered trilinear, clipped midpoint, analytic Beer/emission",
+  "tolerance":"2 output half ULP + 1 baseline half ULP + 3e-5 absolute; no sample reductions",
+  "nativeDensityFrames":14,
+  "cameraFrames":1,
+  "recoverableRejections":1,
+  "comparisons":[
+    {"name":"world-nonconstant-trilinear","width":47,"height":35,"samples":1,"steps":13,"maximumAbsoluteError":0.000486590875105,"maximumToleranceRatio":0.245365710737},
+    {"name":"unchanged-texture-generation-cache-hit","width":47,"height":35,"samples":1,"steps":13,"maximumAbsoluteError":0.000486590875105,"maximumToleranceRatio":0.245365710737},
+    {"name":"filter-address-mips-ignored","width":47,"height":35,"samples":1,"steps":13,"maximumAbsoluteError":0.000486590875105,"maximumToleranceRatio":0.245365710737},
+    {"name":"same-id-new-texel-generation","width":47,"height":35,"samples":1,"steps":13,"maximumAbsoluteError":0.000486630522171,"maximumToleranceRatio":0.245385702954},
+    {"name":"deleted-texture-restored-session-recovery","width":47,"height":35,"samples":1,"steps":13,"maximumAbsoluteError":0.000486590875105,"maximumToleranceRatio":0.245365710737},
+    {"name":"world-narrow-domain-one-step-two-SPP","width":47,"height":35,"samples":2,"steps":1,"maximumAbsoluteError":0.000976153598110,"maximumToleranceRatio":0.329816441131},
+    {"name":"outside-density-domain-eight-SPP","width":47,"height":35,"samples":8,"steps":7,"maximumAbsoluteError":0.00000000000,"maximumToleranceRatio":0.00000000000},
+    {"name":"rotated-nonuniform-object-boundary-two-SPP","width":47,"height":35,"samples":2,"steps":19,"maximumAbsoluteError":0.000976216609210,"maximumToleranceRatio":0.329837730913},
+    {"name":"sheared-object-and-local-field-frame-local-eight-SPP","width":47,"height":35,"samples":8,"steps":23,"maximumAbsoluteError":0.000971890633964,"maximumToleranceRatio":0.328376098478},
+    {"name":"camera-inside-sheared-density-boundary","width":47,"height":35,"samples":2,"steps":17,"maximumAbsoluteError":0.000975962092894,"maximumToleranceRatio":0.329751736592},
+    {"name":"world-grid-restored-after-local-priority","width":47,"height":35,"samples":2,"steps":11,"maximumAbsoluteError":0.000487048371867,"maximumToleranceRatio":0.245596405606},
+    {"name":"mode-switch-uniform-camera","width":47,"height":35,"samples":2,"steps":8,"maximumAbsoluteError":0.000140154357453,"maximumToleranceRatio":0.0966556102949},
+    {"name":"mode-switch-back-to-world-density","width":47,"height":35,"samples":1,"steps":13,"maximumAbsoluteError":0.000486590875105,"maximumToleranceRatio":0.245365710737},
+    {"name":"resize-frame-local-eight-SPP","width":73,"height":41,"samples":8,"steps":29,"maximumAbsoluteError":0.000487771493164,"maximumToleranceRatio":0.245961042882},
+    {"name":"resize-down-density-cache-recovery","width":31,"height":23,"samples":1,"steps":13,"maximumAbsoluteError":0.000487690926776,"maximumToleranceRatio":0.245920416906}
+  ]
+}

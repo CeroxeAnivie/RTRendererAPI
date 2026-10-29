@@ -195,6 +195,24 @@ tasks.register<JavaExec>("mediumGalleryDemo") {
     providers.gradleProperty("galleryArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
 }
 
+tasks.register<JavaExec>("mediumCertificationDemo") {
+    group = "application"
+    description = "Runs the selectable 7.0.0 medium route certification lab (executes GPU work)."
+    dependsOn(tasks.classes)
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("demo.MediumCertificationDemo")
+    providers.gradleProperty("certificationArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
+}
+
+val mediumCertificationSceneSelfTest = tasks.register<JavaExec>("mediumCertificationSceneSelfTest") {
+    group = "verification"
+    description = "Validates all isolated medium certification fixtures and hotkey mappings without GPU work."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("demo.MediumCertificationSceneSelfTest")
+}
+tasks.check { dependsOn(mediumCertificationSceneSelfTest) }
+
 val mediumGallerySceneSelfTest = tasks.register<JavaExec>("mediumGallerySceneSelfTest") {
     group = "verification"
     description = "Validates the optical gallery fixture and defaults without executing GPU work."

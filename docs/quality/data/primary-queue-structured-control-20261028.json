@@ -1,0 +1,187 @@
+{
+  "date": "2026-10-28",
+  "case": "nine-nested-boundaries",
+  "width": 160,
+  "height": 90,
+  "spp": 1,
+  "sequence": 8,
+  "configuration": {
+    "program": "GENERAL_PASSIVE_NO_DIELECTRIC",
+    "queue": false,
+    "optimization": "zero",
+    "structuredQueryPath": false,
+    "overlayOnly": true,
+    "maxBoundaryCapacity": 32,
+    "renderedCases": 1
+  },
+  "compile": {
+    "exit": 0,
+    "spirvValidation": "passed",
+    "wallSeconds": 0.849,
+    "peakProcessTreeCommitGB": 0.516
+  },
+  "native": {
+    "exit": 0,
+    "wallSeconds": 105.704,
+    "pipelineCreationWallMs": 103241.317,
+    "peakProcessTreeCommitGB": 3.569,
+    "treeCpuSeconds": 114.594,
+    "memoryLimitGB": 10,
+    "timingKind": "host pipeline creation; not GPU timing"
+  },
+  "validation": {
+    "messages": 133,
+    "warningErrors": 0,
+    "closed": 1,
+    "droppedMessages": [
+      0
+    ]
+  },
+  "comparisons": [
+    {
+      "a": "structuredSerial",
+      "b": "originalSerial",
+      "comparison": {
+        "channels": 57600,
+        "differingChannels": 1,
+        "alphaDifferences": 0,
+        "nonFiniteChannels": 0,
+        "maxHalfUlp": 1,
+        "maxAbsolute": 0.00012207031,
+        "differences": [
+          {
+            "channelIndex": 7540,
+            "pixelIndex": 1885,
+            "component": 0,
+            "aBits": 13239,
+            "bBits": 13240,
+            "aValue": 0.24108887,
+            "bValue": 0.24121094
+          }
+        ]
+      }
+    },
+    {
+      "a": "structuredSerial",
+      "b": "queued",
+      "comparison": {
+        "channels": 57600,
+        "differingChannels": 0,
+        "alphaDifferences": 0,
+        "nonFiniteChannels": 0,
+        "maxHalfUlp": 0,
+        "maxAbsolute": 0.0,
+        "differences": []
+      }
+    },
+    {
+      "a": "originalSerial",
+      "b": "queued",
+      "comparison": {
+        "channels": 57600,
+        "differingChannels": 1,
+        "alphaDifferences": 0,
+        "nonFiniteChannels": 0,
+        "maxHalfUlp": 1,
+        "maxAbsolute": 0.00012207031,
+        "differences": [
+          {
+            "channelIndex": 7540,
+            "pixelIndex": 1885,
+            "component": 0,
+            "aBits": 13240,
+            "bBits": 13239,
+            "aValue": 0.24121094,
+            "bValue": 0.24108887
+          }
+        ]
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\primary-queue-general32-fix-20261028\\images\\serial\\nine-nested-boundaries.rgba16f",
+      "bytes": 115200,
+      "sha256": "8134eca7fb550420f38e5c7ecad31ada385babfad6433c1ac733a4188bb779a9"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\structured-serial-control-20261028\\images\\serial\\nine-nested-boundaries.rgba16f",
+      "bytes": 115200,
+      "sha256": "d82adf1deaa2b2078b5a7f5ec3bb6d5d69baa5659f509b6c9a9775baa547f273"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\primary-queue-general32-fix-20261028\\images\\queued\\nine-nested-boundaries.rgba16f",
+      "bytes": 115200,
+      "sha256": "d82adf1deaa2b2078b5a7f5ec3bb6d5d69baa5659f509b6c9a9775baa547f273"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\structured-serial-control-20261028\\overlay\\assets\\rtrenderer\\shaders\\gpuscene\\gpuscene_passive_no_dielectric.rgen",
+      "bytes": 278,
+      "sha256": "1d5e2ae89860180719428a46379f3fed4f2fa9945f9c1934d2fbc3dbddc79f9a"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\structured-serial-control-20261028\\overlay\\assets\\rtrenderer\\shaders\\spv\\base-hdr\\gpuscene_gpuscene_passive_no_dielectric.rgen.spv",
+      "bytes": 149312,
+      "sha256": "485db5091ac5f3779df2be63d2f8f984e76a2159f0c6e2b806f4584639bb1b6d"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\renderer-core\\src\\main\\resources\\assets\\rtrenderer\\shaders\\spv\\base-hdr\\gpuscene_gpuscene_passive_no_dielectric.rgen.spv",
+      "bytes": 610684,
+      "sha256": "9609c699e6704b7654843b1dc8280a89f098a15389be68058becb2c672beb81b"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\renderer-core\\src\\main\\resources\\assets\\rtrenderer\\shaders\\spv\\base-hdr\\gpuscene_gpuscene_primary_shade.rgen.spv",
+      "bytes": 152444,
+      "sha256": "edda732932a6855a38a26c7e206b44c78ae132e895f335caec8735e8cd3a44cd"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\renderer-core\\src\\test\\java\\top\\ceroxe\\rt\\renderer\\backend\\vulkan\\PrimaryQueueNativeSelfTest.java",
+      "bytes": 12066,
+      "sha256": "5f60af93fde08aa0c7a9b30e3de1e2e21233d56f4b10e8d59759136197a65f45"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\renderer-core\\build\\classes\\java\\test\\top\\ceroxe\\rt\\renderer\\backend\\vulkan\\PrimaryQueueNativeSelfTest.class",
+      "bytes": 21482,
+      "sha256": "3b4b2bf237cc6523e7d1c7341fce8d93926963fc30a33061acd33e8220ed8240"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\renderer-core\\build\\libs\\renderer-core-7.0.0.jar",
+      "bytes": 16133319,
+      "sha256": "65e4a23a8c37e91d437543cc283c73588446f726958d44c64708e91a13134a96"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\structured-serial-control-20261028\\native.ps1",
+      "bytes": 1169,
+      "sha256": "6d32feedf6dee2d2e94aab65911b649585c6303d021b157e25ed721bbeff49be"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\structured-serial-control-20261028\\compile.ps1",
+      "bytes": 827,
+      "sha256": "1a8c0bebc278bc42324fdd92c6203833b56ea3d37ca12c2e421ec703999ae2d1"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\structured-serial-control-20261028\\classpath.txt",
+      "bytes": 2675,
+      "sha256": "ff53c18409cd4f5db56de8083c62990698db4d2e08fdf49fb62cad704f956e41"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\structured-serial-control-20261028\\native.log",
+      "bytes": 454,
+      "sha256": "adfbf39cc6076a45e0d110fd32232a5ba108cee649d61d9b52cc72f168efc325"
+    },
+    {
+      "path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\structured-serial-control-20261028\\validation.jsonl",
+      "bytes": 45379,
+      "sha256": "5e90d4856e0fb8f7d0e1308e79beba2f584b25d9d36c548253c5e9aacb73b52e"
+    }
+  ],
+  "command": "./tools/Invoke-BoundedBuild.ps1 -FilePath pwsh.exe -ArgumentList @('-NoProfile','-File','build/structured-serial-control-20261028/native.ps1') -MemoryLimitGB 10",
+  "limitation": "Only this scene was rendered. Entry point and data flow still differ from queued shading. This is not performance, full correctness, release, or driver-internal attribution evidence.",
+  "retainedQueuedProvenance": {
+    "binary": "build/primary-queue-general32-fix-20261028/general32.structured-before-query.spv",
+    "sha256": "dcdd3409da7b57eabdf97a0c56b425478d9cf68ac15b8437438be47792cc82e2",
+    "laterCurrentQueuedShaderSha256": "edda732932a6855a38a26c7e206b44c78ae132e895f335caec8735e8cd3a44cd",
+    "laterCurrentQueuedShaderExecutedByThisControl": false,
+    "skippedPrecedingFrameSubmissions": true
+  }
+}

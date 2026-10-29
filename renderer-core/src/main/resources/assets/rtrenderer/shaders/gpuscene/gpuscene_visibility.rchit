@@ -32,7 +32,7 @@ void main() {
     if(texture!=GS_INVALID_SLOT) {
         vec2 uv=gsInstanceUv(instance,gsTriangleTexcoord(mesh,indices,bary));
         vec4 footprint=gsTriangleTextureFootprint(mesh,indices,bary,p0,p1,p2,gl_WorldRayOriginEXT,
-            uvec4(gl_LaunchIDEXT.xy,gl_LaunchSizeEXT.xy),instance);
+            visibility.launchInfo,instance);
         color*=gsSampleTextureFootprint(texture,uv,footprint.xy,footprint.zw);
     }
     if(model==GPU_SCENE_SHADING_LIGHTMAP_MODULATED) color=gsApplySurfaceVisibility(color,instance);

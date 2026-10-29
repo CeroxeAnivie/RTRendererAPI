@@ -1,0 +1,87 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference : require
+#include "gpuscene_common.glsl"
+
+layout(set=0,binding=GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
+layout(location=0) rayPayloadEXT GpuScenePayload payload;
+layout(buffer_reference,std430,buffer_reference_align=16) buffer GsNativeBoundaryStorage { uvec4 lanes[]; };
+layout(push_constant) uniform GsNativeBoundaryDispatch {
+    GsNativeBoundaryStorage storage;
+    uint firstPixel;
+    uint pixelCount;
+    uint stateOffset;
+    uint payloadOffset;
+    uint64_t reserved;
+} dispatch;
+
+// This is the same deterministic sample pattern used by the ordinary production raygen.
+vec2 gsNativeSubpixelOffset(uint sampleIndex,uint samples) {
+    if(samples<=1u) return vec2(.5);
+    if(samples==2u) return sampleIndex==0u?vec2(.25,.25):vec2(.75,.75);
+    if(samples==4u) { const vec2 offsets[4]=vec2[](vec2(.375,.125),vec2(.875,.375),vec2(.125,.625),vec2(.625,.875));
+        return offsets[sampleIndex]; }
+    const vec2 offsets[8]=vec2[](vec2(.5000,.3333),vec2(.2500,.6667),vec2(.7500,.1111),vec2(.1250,.4444),
+        vec2(.6250,.7778),vec2(.3750,.2222),vec2(.8750,.5556),vec2(.0625,.8889));
+    return offsets[sampleIndex];
+}
+
+void gsNativeStorePayload(uint item,uvec4 identity) {
+    uint base=dispatch.payloadOffset/16u+item*13u;
+    dispatch.storage.lanes[base]=floatBitsToUint(payload.worldPositionAndDistance);
+    dispatch.storage.lanes[base+1u]=floatBitsToUint(payload.previousWorldPosition);
+    dispatch.storage.lanes[base+2u]=uvec4(payload.motionRevision,0u,0u);
+    dispatch.storage.lanes[base+3u]=floatBitsToUint(payload.worldNormalAndRoughness);
+    dispatch.storage.lanes[base+4u]=floatBitsToUint(payload.baseColorAndOpacity);
+    dispatch.storage.lanes[base+5u]=floatBitsToUint(payload.emissiveAndMetallic);
+    dispatch.storage.lanes[base+6u]=floatBitsToUint(payload.transmissionIor);
+    dispatch.storage.lanes[base+7u]=payload.state;
+    dispatch.storage.lanes[base+8u]=payload.surfaceState;
+    dispatch.storage.lanes[base+9u]=floatBitsToUint(payload.compositeState);
+    dispatch.storage.lanes[base+10u]=payload.launchInfo;
+    dispatch.storage.lanes[base+11u]=payload.mediumBoundary;
+    dispatch.storage.lanes[base+12u]=identity;
+}
+
+void main() {
+    if(gl_LaunchIDEXT.x>=dispatch.pixelCount) return;
+    ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
+    uint pixelIndex=dispatch.firstPixel+gl_LaunchIDEXT.x;
+    ivec2 pixel=ivec2(pixelIndex%uint(extent.x),pixelIndex/uint(extent.x));
+    uvec4 launch=uvec4(pixel,extent);
+    uint samples=clamp(gsFrame.words[GPU_SCENE_FRAME_SAMPLE_COUNT_WORD],1u,8u);
+    bool initialize=(dispatch.stateOffset&0x80000000u)!=0u;
+    uint stateBase=(dispatch.stateOffset&0x7fffffffu)/16u;
+    vec2 jitter=vec2(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD]),
+        uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD+1u]));
+    for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
+        uint item=gl_LaunchIDEXT.x*samples+sampleIndex,base=stateBase+item*17u;
+        if(initialize) {
+            for(uint lane=0u;lane<17u;++lane) dispatch.storage.lanes[base+lane]=uvec4(0u);
+            vec2 samplePosition=vec2(pixel)+gsNativeSubpixelOffset(sampleIndex,samples);
+            if(!gsExactProjectionActive()) samplePosition+=jitter;
+            vec3 origin=gsFrameCameraPosition(),direction=gsRayDirectionAtSample(samplePosition,extent);
+            float epsilon=max(1e-5,max(abs(origin.x),max(abs(origin.y),abs(origin.z)))*2e-7);
+            dispatch.storage.lanes[base]=floatBitsToUint(vec4(origin,epsilon));
+            dispatch.storage.lanes[base+1u]=floatBitsToUint(vec4(direction,1e20));
+            dispatch.storage.lanes[base+2u]=uvec4(2u,0u,pixelIndex*samples+sampleIndex,1u);
+            dispatch.storage.lanes[base+3u]=uvec4(floatBitsToUint(vec3(1.0)),dispatch.storage.lanes[4u].w);
+            dispatch.storage.lanes[base+6u]=floatBitsToUint(vec4(origin,1.0));
+        }
+        uvec4 control=dispatch.storage.lanes[base+2u];
+        if(control.x==0u) continue;
+        vec4 rayOrigin=uintBitsToFloat(dispatch.storage.lanes[base]);
+        vec4 rayDirection=uintBitsToFloat(dispatch.storage.lanes[base+1u]);
+        payload.worldPositionAndDistance=vec4(0,0,0,-1);
+        payload.previousWorldPosition=vec4(0); payload.motionRevision=uvec2(0);
+        payload.worldNormalAndRoughness=vec4(0,1,0,1);
+        payload.baseColorAndOpacity=vec4(0,0,0,1); payload.emissiveAndMetallic=vec4(0);
+        payload.transmissionIor=vec4(0,1,0,0); payload.state=uvec4(0u,GS_PAYLOAD_RADIANCE_QUERY,0u,0u);
+        payload.surfaceState=uvec4(0u); payload.compositeState=vec4(0); payload.launchInfo=launch;
+        payload.mediumBoundary=uvec4(0u);
+        traceRayEXT(sceneTlas,gl_RayFlagsNoneEXT,0xff,0,0,0,rayOrigin.xyz,rayOrigin.w,
+            rayDirection.xyz,rayDirection.w,0);
+        gsNativeStorePayload(item,uvec4(pixelIndex,sampleIndex,control.w,control.w));
+    }
+}

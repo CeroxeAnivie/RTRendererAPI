@@ -1,0 +1,73 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference : require
+#define RTRENDERER_NO_DIELECTRIC 1
+#define GS_LIGHTING_NO_DIRECT_SURFACE 1
+#include "gpuscene_surface_transport.glsl"
+layout(set=0,binding=GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
+layout(location=0) rayPayloadEXT GpuScenePayload payload;
+#include "gpuscene_surface_lighting_runtime.glsl"
+layout(buffer_reference,std430,buffer_reference_align=16) buffer GsScatteringStorage {uvec4 lanes[];};
+layout(push_constant) uniform GsScatteringDispatch {
+    GsScatteringStorage storage; uint firstPixel; uint pixelCount;
+    uint sourceOffset; uint primaryOffset; uint64_t reserved;
+} dispatch;
+
+#include "gpuscene_native_scattering_common.glsl"
+void main() {
+    if(gl_LaunchIDEXT.x>=dispatch.pixelCount)return;
+    ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
+    uint pixelIndex=dispatch.firstPixel+gl_LaunchIDEXT.x;ivec2 pixel=ivec2(pixelIndex%uint(extent.x),pixelIndex/uint(extent.x));
+    uint samples=clamp(gsFrame.words[GPU_SCENE_FRAME_SAMPLE_COUNT_WORD],1u,8u),steps=dispatch.storage.lanes[0u].w;
+    vec4 constants=uintBitsToFloat(dispatch.storage.lanes[3u]);vec3 sigma=constants.xyz;float maximum=constants.w;
+    float g=uintBitsToFloat(dispatch.storage.lanes[4u]).w,cutoff=uintBitsToFloat(dispatch.storage.lanes[5u]).w;
+    vec3 origin=gsFrameCameraPosition();
+    vec2 jitter=vec2(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD]),uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD+1u]));
+    uint seed=gsTransportHash(pixelIndex^gsFrame.words[GPU_SCENE_FRAME_SEQUENCE_WORD]*0x9e3779b9u);
+    for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
+        uint item=pixelIndex*samples+sampleIndex,base=dispatch.primaryOffset/16u+item*13u;
+        vec4 hit=uintBitsToFloat(dispatch.storage.lanes[base]);bool present=dispatch.storage.lanes[base+7u].x!=0u;
+        float distance=present?min(max(hit.w,0.0),maximum):maximum;
+        vec2 location=vec2(pixel)+gsScatteringSampleOffset(sampleIndex,samples);if(!gsExactProjectionActive())location+=jitter;
+        vec3 direction=gsRayDirectionAtSample(location,extent);
+        payload.launchInfo=uvec4(pixel,extent);
+        uint upper=gsFrame.words[GPU_SCENE_FRAME_LIGHT_SLOT_UPPER_BOUND_WORD],sampleCount=gsFrame.words[GPU_SCENE_FRAME_SCATTERING_LIGHT_SAMPLES_WORD];
+        uint selected[8],firstCandidates[8],candidates=0u;float total=0.0;
+        if(sampleCount>0u) {
+            [[dont_unroll]] for(uint slot=0u;slot<upper;++slot) {
+                float weight=gsScatteringLightWeight(slot,origin,direction,distance);if(weight<=0.0)continue;
+                if(candidates<8u)firstCandidates[candidates]=slot;++candidates;total+=weight;
+                [[dont_unroll]] for(uint j=0u;j<sampleCount;++j)
+                    if(gsTransportRandom(seed^slot*0x85ebca6bu^j*0xc2b2ae35u)<weight/total)selected[j]=slot;
+            }
+        }
+        vec3 sunDirection=-normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
+        vec3 sun=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)*uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
+        float interval=distance/float(steps),reference=min(sigma.x,min(sigma.y,sigma.z));
+        for(uint j=0u;j<steps;++j) {
+            float start=float(j)*interval,local=0.0;vec3 source=vec3(0);
+            vec3 prefix=exp(-sigma*start);
+            if(interval>0.0&&max(prefix.x,max(prefix.y,prefix.z))>=cutoff) {
+                float u=gsTransportRandom(seed^(j+1u)*0x27d4eb2du),tau=reference*interval;
+                local=tau<1e-3?u*interval:-log(max(1.0-u*(1.0-exp(-tau)),1e-30))/reference;
+                vec3 position=origin+direction*(start+local);
+                if(max(sun.x,max(sun.y,sun.z))>0.0)source+=sun*gsScatteringPhase(dot(direction,sunDirection),g)
+                    *gsScatteringShadow(position,sunDirection,1e20,sigma,maximum);
+                if(sampleCount==0u) {
+                    [[dont_unroll]] for(uint slot=0u;slot<upper;++slot)if(gsScatteringLightWeight(slot,origin,direction,distance)>0.0)
+                        source+=gsScatteringLight(slot,position,direction,g,sigma,maximum);
+                }else {
+                    bool exhaustive=candidates<=sampleCount;uint count=exhaustive?candidates:sampleCount;
+                    [[dont_unroll]] for(uint k=0u;k<count;++k) {
+                        uint slot=exhaustive?firstCandidates[k]:selected[k];
+                        float factor=exhaustive?1.0:total/(float(sampleCount)*gsScatteringLightWeight(slot,origin,direction,distance));
+                        source+=gsScatteringLight(slot,position,direction,g,sigma,maximum)*factor;
+                    }
+                }
+            }
+            uint outLane=dispatch.sourceOffset/16u+(gl_LaunchIDEXT.x*samples+sampleIndex)*steps+j;
+            dispatch.storage.lanes[outLane]=floatBitsToUint(vec4(source,local));
+        }
+    }
+}

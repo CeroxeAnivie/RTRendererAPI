@@ -43,10 +43,6 @@ void main() {
     float scale=float(emitters)/float(count),range=0.0;
     vec2 samplePoint=vec2(gsTransportRandom(seed^0x68bc21ebu),gsTransportRandom(seed^0x02e5be93u));
     vec3 origin,direction,flux;
-    GsMediumPath path=gsEmptyMediumPath();
-    path.depth=gsCaustics.words[row+1u];
-    [[dont_unroll]] for(uint i=0u;i<path.depth;++i) gsMediumPathSet(path,i,gsCaustics.words[row+2u+i]);
-    path.mediumSlot=gsSelectMediumInstance(path);
     uint type=GPU_SCENE_LIGHT_DIRECTIONAL;
     vec3 lightDirection=normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
     flux=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)*uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
@@ -96,38 +92,44 @@ void main() {
         float distance=hit.worldPositionAndDistance.w;
         traveled+=distance;
         if(distance>remaining || (range>0.0 && traveled>=range)) return;
-        flux*=gsSegmentTransmittance(path.mediumSlot,origin,direction,distance);
         remaining-=distance;
+        // Photon transport shares the native PBR camera medium.  This is intentionally
+        // Beer-Lambert only: scattering media need collision sampling and a phase-function
+        // continuation, which this surface photon map does not provide.
+        vec3 extinction=gsFrameVec3(GPU_SCENE_FRAME_MEDIUM_EXTINCTION_WORD)
+            *uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_DENSITY_WORD]);
+        flux*=exp(-extinction*distance);
         if(any(isnan(flux)) || any(isinf(flux)) || max(flux.x,max(flux.y,flux.z))<=0.0) return;
-        bool volume=(hit.mediumBoundary.w&2u)!=0u;
-        GsMediumPath next=path;
-        gsCrossMediumBoundary(next,hit);
-        if(next.depth>GS_MEDIUM_PATH_CAPACITY) return;
-        float opacity=hit.mediumBoundary.w!=0u?1.0:clamp(hit.baseColorAndOpacity.a,0.0,1.0);
+        float opacity=clamp(hit.baseColorAndOpacity.a,0.0,1.0);
         float transmission=clamp(hit.transmissionIor.x,0.0,1.0),metallic=clamp(hit.emissiveAndMetallic.a,0.0,1.0);
+        vec3 normal=normalize(hit.worldNormalAndRoughness.xyz);
+        // Opaque dielectrics also carry a specular lobe. Sampling only the metallic
+        // branch made an otherwise valid nonmetal PBR scene emit no reflected photons.
+        float dielectricProbability=gsFresnelSchlick(max(dot(-direction,normal),0.0),vec3(.04)).x;
+        float diffuseProbability=opacity*(1.0-transmission)*(1.0-metallic)*(1.0-dielectricProbability);
         float choice=gsTransportRandom(seed^(event+1u)*0x27d4eb2du);
-        if(volume) path=next;
-        else if(choice>=opacity) { /* coverage hole: straight, no medium transition */ }
-        else if(choice<opacity*(1.0-transmission)*(1.0-metallic)) {
+        if(choice>=opacity) { /* surface coverage hole */ }
+        else if(choice<diffuseProbability) {
             if(specular && gsCausticRegion(hit.worldPositionAndDistance.xyz) && !gsUnlit(hit) && !gsLightmapModulated(hit)) {
                 float localPolicy=range>0.0?pow(max(1.0-traveled/range,0.0),2.0)*min(traveled*traveled,1.0):1.0;
                 // Receiver BRDF includes this lobe's weight; cancel its discrete selection probability.
-                gsStorePhoton(index,hit,-direction,flux*(localPolicy/(opacity*(1.0-transmission)*(1.0-metallic))));
+                gsStorePhoton(index,hit,-direction,flux*(localPolicy/diffuseProbability));
             }
             return;
         } else {
             bool specularEvent=true;
-            vec3 normal=normalize(hit.worldNormalAndRoughness.xyz);
             float roughness=clamp(hit.worldNormalAndRoughness.w,0.0,1.0);
             vec2 point=vec2(gsTransportRandom(seed^(event+1u)*0x165667b1u),gsTransportRandom(seed^(event+1u)*0xd3a2646cu));
             vec3 halfVector=gsDielectricHalfVector(normal,direction,roughness,point),outgoing;
             if(choice<opacity*(1.0-transmission)) {
                 outgoing=normalize(reflect(direction,halfVector));
-                flux*=gsFresnelSchlick(max(dot(-direction,halfVector),0.0),clamp(hit.baseColorAndOpacity.rgb,vec3(0),vec3(1)))
-                    *gsDielectricBranchWeight(normal,direction,outgoing,roughness);
+                float probability=metallic+(1.0-metallic)*dielectricProbability;
+                vec3 reflectance=mix(vec3(.04),clamp(hit.baseColorAndOpacity.rgb,vec3(0),vec3(1)),metallic);
+                flux*=gsFresnelSchlick(max(dot(-direction,halfVector),0.0),reflectance)
+                    *(gsDielectricBranchWeight(normal,direction,outgoing,roughness)/max(probability,1e-8));
                 if(dot(normal,outgoing)<=0.0) return;
             } else {
-                vec2 ior=gsInterfaceIors(hit,path.mediumSlot,next.mediumSlot);
+                vec2 ior=gsInterfaceIors(hit);
                 specularEvent=ior.x!=ior.y;
                 if(ior.x==ior.y) halfVector=normal;
                 vec3 refracted;
@@ -137,7 +139,7 @@ void main() {
                 outgoing=reflection?normalize(reflect(direction,halfVector)):refracted;
                 if(reflection?dot(normal,outgoing)<=0.0:dot(normal,outgoing)>=0.0) return;
                 flux*=ior.x==ior.y?1.0:gsDielectricBranchWeight(normal,direction,outgoing,roughness);
-                if(!reflection) { flux*=clamp(hit.baseColorAndOpacity.rgb,vec3(0),vec3(1));path=next; }
+                if(!reflection) { flux*=clamp(hit.baseColorAndOpacity.rgb,vec3(0),vec3(1)); }
                 // Flux/importance transport has no radiance eta^2 factor.
             }
             direction=outgoing;specular=specular || specularEvent;

@@ -1,0 +1,119 @@
+{
+  "artifact": "fingerprints.json",
+  "order": [
+    "primary-1",
+    "terminal-1",
+    "terminal-2",
+    "primary-2"
+  ],
+  "sameArtifact": true,
+  "samplesPerPixel": 1,
+  "volumes": 2,
+  "maxEvents": 32,
+  "maxDistance": 30,
+  "cutoff": 0,
+  "warmup": 64,
+  "completedPerArm": 240,
+  "output": "complete immutable CPU RGBA16F",
+  "measurements": [
+    {
+      "extent": "640x360",
+      "arms": [
+        {
+          "mode": "primary-1",
+          "fps": 701.728122,
+          "medianMs": 1.3664,
+          "p95Ms": 1.7575,
+          "hdrSha256": "95dbf5493280b5086533b9e6eeadd43ad2fb5af9c20d97ad789720b60400a8e2"
+        },
+        {
+          "mode": "terminal-1",
+          "fps": 726.350482,
+          "medianMs": 1.2493,
+          "p95Ms": 1.8889,
+          "hdrSha256": "06f0859761f256ab46f307adf7d3ee032f75205052eaa2d865eff5babf63c286"
+        },
+        {
+          "mode": "terminal-2",
+          "fps": 699.151376,
+          "medianMs": 1.2471,
+          "p95Ms": 2.002,
+          "hdrSha256": "06f0859761f256ab46f307adf7d3ee032f75205052eaa2d865eff5babf63c286"
+        },
+        {
+          "mode": "primary-2",
+          "fps": 650.586517,
+          "medianMs": 1.4289,
+          "p95Ms": 2.0169,
+          "hdrSha256": "95dbf5493280b5086533b9e6eeadd43ad2fb5af9c20d97ad789720b60400a8e2"
+        }
+      ],
+      "primaryMeanFps": 676.1573195,
+      "terminalMeanFps": 712.750929,
+      "gainPercent": 5.411996357158433,
+      "hdrComparison": [
+        {
+          "run": 1,
+          "result": "channels=921600 changed=84 maxAbsolute=0.000488281250000 meanAbsolute=4.45048014323e-08 rmse=4.66163705948e-06",
+          "alphaEqual": true
+        },
+        {
+          "run": 2,
+          "result": "channels=921600 changed=84 maxAbsolute=0.000488281250000 meanAbsolute=4.45048014323e-08 rmse=4.66163705948e-06",
+          "alphaEqual": true
+        }
+      ]
+    },
+    {
+      "extent": "1920x1080",
+      "arms": [
+        {
+          "mode": "primary-1",
+          "fps": 114.576892,
+          "medianMs": 8.2732,
+          "p95Ms": 11.3802,
+          "hdrSha256": "7765e85c0d651ed7bec8ec2ed2f992e5e660aeec6c8ecd6cbc69edfe4323717f"
+        },
+        {
+          "mode": "terminal-1",
+          "fps": 153.485257,
+          "medianMs": 6.3163,
+          "p95Ms": 8.31,
+          "hdrSha256": "a1ef4c927217a2cbaba6d03ec3790647e846f7c41a8f59b5ac5d2005fabc25f3"
+        },
+        {
+          "mode": "terminal-2",
+          "fps": 152.896685,
+          "medianMs": 6.2858,
+          "p95Ms": 8.3122,
+          "hdrSha256": "a1ef4c927217a2cbaba6d03ec3790647e846f7c41a8f59b5ac5d2005fabc25f3"
+        },
+        {
+          "mode": "primary-2",
+          "fps": 114.112633,
+          "medianMs": 8.3466,
+          "p95Ms": 11.4146,
+          "hdrSha256": "7765e85c0d651ed7bec8ec2ed2f992e5e660aeec6c8ecd6cbc69edfe4323717f"
+        }
+      ],
+      "primaryMeanFps": 114.3447625,
+      "terminalMeanFps": 153.190971,
+      "gainPercent": 33.972879606094764,
+      "hdrComparison": [
+        {
+          "run": 1,
+          "result": "channels=8294400 changed=524 maxAbsolute=0.000488281250000 meanAbsolute=3.08472433208e-08 rmse=3.88099607417e-06",
+          "alphaEqual": true
+        },
+        {
+          "run": 2,
+          "result": "channels=8294400 changed=524 maxAbsolute=0.000488281250000 meanAbsolute=3.08472433208e-08 rmse=3.88099607417e-06",
+          "alphaEqual": true
+        }
+      ]
+    }
+  ],
+  "wallSeconds": 35.386,
+  "peakProcessTreeCommitGB": 2.168,
+  "completeLuxCoreMigration": false
+}

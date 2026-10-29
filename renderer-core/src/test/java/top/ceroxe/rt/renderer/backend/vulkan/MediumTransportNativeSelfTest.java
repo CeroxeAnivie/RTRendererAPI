@@ -15,7 +15,8 @@ public final class MediumTransportNativeSelfTest {
     private static FramePrimitiveBatch primitives=FramePrimitiveBatch.empty();
     private static long frameNanoseconds,maximumFrameNanoseconds;
     private static long lastFrameNanoseconds;
-    private static int width=32,height=32;
+    private static int width=Integer.getInteger("top.ceroxe.rt.medium.nativeWidth",32);
+    private static int height=Integer.getInteger("top.ceroxe.rt.medium.nativeHeight",32);
     private static MediumTransport transport=new MediumTransport(12, 1, 8, 4, 512, 1e-4f);
     private static final CameraState OUTSIDE=CameraState.lookAt(0,0,6,0,0,0).verticalFieldOfViewDegrees(30).build();
     private static Medium absorbing(float r,float g,float b) {
@@ -143,8 +144,8 @@ public final class MediumTransportNativeSelfTest {
             MediumTransportSelfTest.require(render(tilted,EnvironmentState.neutral())[0]>.9,"legacy unit-IOR plane transmission");
             System.out.printf(Locale.ROOT,"MediumTransportNativeSelfTest passed: absorption=%.4f/%.4f/%.4f, nested=%.4f/%.4f, emission=%.4f, scatter point/spot/directional/sun=%.4f/%.4f/%.4f/%.4f, TIR=%.4f vs %.4f%n",
                 white[0],white[1],white[2],nested[0],nested[1],emission[0],point[0],spot[0],directional[0],sun[0],tir[0],noTir[0]);
-            System.out.printf(Locale.ROOT,"Transport correctness frames=%d, admission-to-readback mean=%.2f ms, max=%.2f ms (32x32 HDR, validation enabled; not a display-FPS benchmark)%n",
-                sequence,frameNanoseconds/1_000_000.0/sequence,maximumFrameNanoseconds/1_000_000.0);
+            System.out.printf(Locale.ROOT,"Transport correctness frames=%d, admission-to-readback mean=%.2f ms, max=%.2f ms (%dx%d HDR, validation enabled; not a display-FPS benchmark)%n",
+                sequence,frameNanoseconds/1_000_000.0/sequence,maximumFrameNanoseconds/1_000_000.0,width,height);
             if(java.util.Arrays.asList(args).contains("--profile")) profile();
         }
     }
@@ -191,6 +192,13 @@ public final class MediumTransportNativeSelfTest {
             var ready=renderer.pollFrame();
             if(ready.isPresent()) {
                 var snapshot=ready.orElseThrow();var bytes=snapshot.pixels().order(ByteOrder.LITTLE_ENDIAN);
+                String imageDirectory=System.getProperty("top.ceroxe.rt.medium.nativeImageDirectory");
+                if(imageDirectory!=null && !imageDirectory.isBlank()) {
+                    var directory=java.nio.file.Path.of(imageDirectory);
+                    java.nio.file.Files.createDirectories(directory);
+                    var image=bytes.duplicate();byte[] pixels=new byte[image.remaining()];image.get(pixels);
+                    java.nio.file.Files.write(directory.resolve(String.format(Locale.ROOT,"frame-%03d.rgba16f",sequence)),pixels);
+                }
                 long elapsed=System.nanoTime()-started;frameNanoseconds+=elapsed;maximumFrameNanoseconds=Math.max(maximumFrameNanoseconds,elapsed);
                 lastFrameNanoseconds=elapsed;
                 int offset=(height/2)*snapshot.rowBytes()+(width/2)*8;

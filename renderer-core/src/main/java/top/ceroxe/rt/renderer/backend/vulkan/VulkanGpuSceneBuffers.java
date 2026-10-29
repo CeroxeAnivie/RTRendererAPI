@@ -332,21 +332,25 @@ final class VulkanGpuSceneBuffers implements VulkanGpuSceneTransferQueue {
             RtGpuBuffer staging,
             EnumMap<VulkanGpuSceneUploadPlanner.Target, RtGpuBuffer> targets
     ) {
-        if (hasInPlaceWrites(transfer)) {
+        boolean copiesPrevious = transfer.targets().stream().anyMatch(capacity ->
+                capacity.grows() && capacity.copyPreviousBytes() != 0L);
+        if (hasInPlaceWrites(transfer) || copiesPrevious) {
             /*
              * Capacity-stable targets are descriptor-stable and therefore may still have reads
              * queued by the previous scene generation. Queue submission order alone is not a
-             * memory dependency: make those reads complete before transfer writes overwrite the
-             * same storage. Grown targets are fresh allocations and need no write-after-read gate.
+             * memory dependency: cover both earlier reads and an earlier upload whose scene
+             * was replaced before any shader consumed it. Grown targets are fresh allocations.
              */
             VkMemoryBarrier.Buffer readToTransfer = VkMemoryBarrier.calloc(1, stack);
             readToTransfer.get(0).sType$Default()
-                    .srcAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT
+                    .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT | VK10.VK_ACCESS_TRANSFER_READ_BIT
+                            | VK10.VK_ACCESS_SHADER_READ_BIT
                             | KHRAccelerationStructure.VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR)
-                    .dstAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT);
+                    .dstAccessMask(VK10.VK_ACCESS_TRANSFER_READ_BIT | VK10.VK_ACCESS_TRANSFER_WRITE_BIT);
             VK10.vkCmdPipelineBarrier(
                     commandBuffer,
-                    KHRAccelerationStructure.VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+                    VK10.VK_PIPELINE_STAGE_TRANSFER_BIT
+                            | KHRAccelerationStructure.VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
                             | KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
                     VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
                     0, readToTransfer, null, null
@@ -358,6 +362,15 @@ final class VulkanGpuSceneBuffers implements VulkanGpuSceneTransferQueue {
             RtGpuBuffer successor = targets.get(capacity.target());
             recordSingleCopy(commandBuffer, previous.buffer(), successor.buffer(), 0L, 0L,
                     capacity.copyPreviousBytes(), stack);
+        }
+        if (copiesPrevious && !transfer.copies().isEmpty()) {
+            // Sparse updates may overwrite the prefix just copied into a grown successor.
+            // Both writes occur in this command buffer and require a transfer dependency.
+            var copiedPrefix = VkMemoryBarrier.calloc(1, stack).sType$Default()
+                    .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                    .dstAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT);
+            VK10.vkCmdPipelineBarrier(commandBuffer, VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK10.VK_PIPELINE_STAGE_TRANSFER_BIT, 0, copiedPrefix, null, null);
         }
         for (VulkanGpuSceneUploadPlanner.Target target : VulkanGpuSceneUploadPlanner.Target.values()) {
             List<VulkanGpuSceneTransferPlan.StagedCopy> copies = transfer.copies().stream()

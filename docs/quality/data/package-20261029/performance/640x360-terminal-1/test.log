@@ -1,0 +1,4 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+Native boundary public HDR comparison=benchmark-analytic-reference SPP=1 volumes=2 maxAbsolute=0.000488285870
+Boundary benchmark mode=native pipeline=false extent=640x360 completed=240 framesPerSecond=726.350482
+Boundary benchmark plan residentLimitBytes=536870912 storageBytes=58982800 tilePixels=230400 tiles=1

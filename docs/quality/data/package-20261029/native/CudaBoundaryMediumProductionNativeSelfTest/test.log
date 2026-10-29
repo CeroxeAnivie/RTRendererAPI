@@ -1,0 +1,25 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+Oct 29, 2026 4:25:27 PM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=D:\Engineering\code\APIs\RTRendererAPI\build\luxcore-api-package-20261029\native-sealed\CudaBoundaryMediumProductionNativeSelfTest\validation.jsonl
+Native boundary public HDR comparison=outside-single SPP=1 volumes=1 maxAbsolute=0.000968233465
+Native boundary public HDR comparison=inside-single SPP=1 volumes=1 maxAbsolute=0.000975545131
+Native boundary public HDR comparison=nested-priority SPP=2 volumes=2 maxAbsolute=0.000487370923
+Native boundary public HDR comparison=overlap-tie-latest-entry SPP=1 volumes=2 maxAbsolute=0.000975108637
+Native boundary public HDR comparison=overlap-priority-restoration SPP=1 volumes=2 maxAbsolute=0.000488130581
+Native boundary public HDR comparison=frame-local-eight-SPP SPP=8 volumes=1 maxAbsolute=0.000968110832
+Native boundary public HDR comparison=exact-projection-jitter SPP=2 volumes=1 maxAbsolute=0.000967941541
+Native boundary public HDR comparison=distance-clamped-before-exit SPP=1 volumes=1 maxAbsolute=0.000476518743
+Native boundary public HDR comparison=event-budget-preserves-emission SPP=1 volumes=1 maxAbsolute=3.04610479e-05
+Native boundary public HDR comparison=cutoff-preserves-emission SPP=1 volumes=1 maxAbsolute=0.000121585741
+Native boundary public HDR comparison=32-initial-volumes-terminal-before-exit SPP=1 volumes=32 maxAbsolute=0.000243336163
+Native boundary public HDR comparison=overflow-recovery SPP=1 volumes=1 maxAbsolute=0.000968233465
+Native boundary public HDR comparison=surface-rejection-recovery SPP=1 volumes=1 maxAbsolute=0.000968233465
+Native boundary public HDR comparison=environment-density-short-domain-one-step SPP=1 volumes=0 maxAbsolute=0.000964127858
+Native boundary public HDR comparison=scaled-translated-boundary-density SPP=2 volumes=1 maxAbsolute=0.000976512535
+Native boundary public HDR comparison=mode-switch-camera-before-boundary SPP=1 volumes=0 maxAbsolute=0.000407840935
+Native boundary public HDR comparison=mode-switch-back-to-boundary SPP=1 volumes=1 maxAbsolute=0.000968233465
+Native boundary public HDR comparison=mode-switch-camera-after-boundary SPP=1 volumes=0 maxAbsolute=0.000485115411
+Native boundary public HDR comparison=resize-eight-SPP-complete-frame SPP=8 volumes=1 maxAbsolute=0.000968223355
+Native boundary public HDR comparison=full-HD-bounded-continuation-tiles SPP=1 volumes=1 maxAbsolute=0.000968233157
+Native boundary public HDR comparison=resize-down-after-full-HD SPP=2 volumes=1 maxAbsolute=0.000968139940
+CudaBoundaryMediumProductionNativeSelfTest passed: analytic public HDR comparisons=21 nativeFrames=21 fusedFrames=21 recoverableRejections=2

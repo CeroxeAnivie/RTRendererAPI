@@ -3340,6 +3340,8 @@ public final class top.ceroxe.rt.renderer.api.FrameValidationException$Reason ex
     descriptor: Ltop/ceroxe/rt/renderer/api/FrameValidationException$Reason;
   public static final top.ceroxe.rt.renderer.api.FrameValidationException$Reason INVALID_MEDIUM_DENSITY;
     descriptor: Ltop/ceroxe/rt/renderer/api/FrameValidationException$Reason;
+  public static final top.ceroxe.rt.renderer.api.FrameValidationException$Reason UNSUPPORTED_MEDIUM_TRANSPORT;
+    descriptor: Ltop/ceroxe/rt/renderer/api/FrameValidationException$Reason;
   public static top.ceroxe.rt.renderer.api.FrameValidationException$Reason[] values();
     descriptor: ()[Ltop/ceroxe/rt/renderer/api/FrameValidationException$Reason;
 
@@ -4425,6 +4427,9 @@ public final class top.ceroxe.rt.renderer.api.MediumTransport extends java.lang.
     descriptor: I
   public static final int MAX_NESTED_BOUNDARIES = 32;
     descriptor: I
+  public top.ceroxe.rt.renderer.api.MediumTransport(int, int, int, int, float, float, int, top.ceroxe.rt.renderer.api.MediumTransport$FirstInterfaceSampling);
+    descriptor: (IIIIFFILtop/ceroxe/rt/renderer/api/MediumTransport$FirstInterfaceSampling;)V
+
   public top.ceroxe.rt.renderer.api.MediumTransport(int, int, int, int, float, float, int);
     descriptor: (IIIIFFI)V
 
@@ -4432,6 +4437,12 @@ public final class top.ceroxe.rt.renderer.api.MediumTransport extends java.lang.
     descriptor: (IIIIFF)V
 
   public static top.ceroxe.rt.renderer.api.MediumTransport balanced();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/MediumTransport;
+
+  public static top.ceroxe.rt.renderer.api.MediumTransport realtime();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/MediumTransport;
+
+  public static top.ceroxe.rt.renderer.api.MediumTransport highQuality();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/MediumTransport;
 
   public top.ceroxe.rt.renderer.api.MediumTransport withMaxEvents(int);
@@ -4454,6 +4465,9 @@ public final class top.ceroxe.rt.renderer.api.MediumTransport extends java.lang.
 
   public top.ceroxe.rt.renderer.api.MediumTransport withScatteringBounces(int);
     descriptor: (I)Ltop/ceroxe/rt/renderer/api/MediumTransport;
+
+  public top.ceroxe.rt.renderer.api.MediumTransport withFirstInterfaceSampling(top.ceroxe.rt.renderer.api.MediumTransport$FirstInterfaceSampling);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/MediumTransport$FirstInterfaceSampling;)Ltop/ceroxe/rt/renderer/api/MediumTransport;
 
   public final java.lang.String toString();
     descriptor: ()Ljava/lang/String;
@@ -4484,6 +4498,22 @@ public final class top.ceroxe.rt.renderer.api.MediumTransport extends java.lang.
 
   public int scatteringBounces();
     descriptor: ()I
+
+  public top.ceroxe.rt.renderer.api.MediumTransport$FirstInterfaceSampling firstInterfaceSampling();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/MediumTransport$FirstInterfaceSampling;
+}
+
+Compiled from "MediumTransport.java"
+public final class top.ceroxe.rt.renderer.api.MediumTransport$FirstInterfaceSampling extends java.lang.Enum<top.ceroxe.rt.renderer.api.MediumTransport$FirstInterfaceSampling> {
+  public static final top.ceroxe.rt.renderer.api.MediumTransport$FirstInterfaceSampling DETERMINISTIC_SPLIT;
+    descriptor: Ltop/ceroxe/rt/renderer/api/MediumTransport$FirstInterfaceSampling;
+  public static final top.ceroxe.rt.renderer.api.MediumTransport$FirstInterfaceSampling STOCHASTIC_SINGLE_BRANCH;
+    descriptor: Ltop/ceroxe/rt/renderer/api/MediumTransport$FirstInterfaceSampling;
+  public static top.ceroxe.rt.renderer.api.MediumTransport$FirstInterfaceSampling[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/MediumTransport$FirstInterfaceSampling;
+
+  public static top.ceroxe.rt.renderer.api.MediumTransport$FirstInterfaceSampling valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/MediumTransport$FirstInterfaceSampling;
 }
 
 Compiled from "MeshAsset.java"
@@ -11218,6 +11248,15 @@ Compiled from "VulkanFramePresenterFactory.java"
 public interface top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterFactory {
   public abstract top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter openPresenter(top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig);
     descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenter;
+}
+
+Compiled from "VulkanQueuedFrameInterop.java"
+public interface top.ceroxe.rt.renderer.api.interop.vulkan.VulkanQueuedFrameInterop {
+  public abstract void enableBinarySemaphoreDelivery();
+    descriptor: ()V
+
+  public abstract java.util.Optional<top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease> tryAcquireSubmittedFrame(long);
+    descriptor: (J)Ljava/util/Optional;
 }
 
 Compiled from "RendererBackendProvider.java"

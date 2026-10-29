@@ -1,0 +1,16 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+Oct 29, 2026 4:25:38 PM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=D:\Engineering\code\APIs\RTRendererAPI\build\luxcore-api-package-20261029\native-sealed\CudaDensityScatteringProductionNativeSelfTest\validation.jsonl
+Native density scattering HDR comparison=density-ambient-emission-one-step SPP=1 steps=1 maxAbsolute=0.000239415053 toleranceRatio=0.294693016
+Native density scattering HDR comparison=density-unshadowed-HG-eight-SPP SPP=8 steps=13 maxAbsolute=0.000239770880 toleranceRatio=0.295131000
+Native density scattering HDR comparison=density-directional-shadow-two-SPP SPP=2 steps=17 maxAbsolute=0.000239867904 toleranceRatio=0.295250425
+Native density scattering HDR comparison=density-frame-local-opaque-shadow SPP=2 steps=19 maxAbsolute=0.000238770477 toleranceRatio=0.293899616
+Native density scattering HDR comparison=density-point-spot-directional-sun-enumerated SPP=2 steps=23 maxAbsolute=0.000239826435 toleranceRatio=0.295199381
+Native density scattering HDR comparison=density-small-light-set-sampled-enumerates SPP=2 steps=23 maxAbsolute=0.000239061715 toleranceRatio=0.294258097
+Native density scattering HDR comparison=density-all-29-lights-through-bounded-chunks SPP=1 steps=7 maxAbsolute=0.000239890128 toleranceRatio=0.295277781
+Native density scattering HDR comparison=density-29-light-one-sample-reservoir SPP=2 steps=7 maxAbsolute=0.000238491511 toleranceRatio=0.293326985
+Native density scattering HDR comparison=density-29-light-eight-sample-reservoir SPP=8 steps=7 maxAbsolute=0.000238993004 toleranceRatio=0.294173521
+Native density scattering HDR comparison=density-narrow-domain-one-step-eight-SPP SPP=8 steps=1 maxAbsolute=0.000268549303 toleranceRatio=0.292533869
+Native density scattering HDR comparison=density-domain-miss-is-vacuum SPP=2 steps=13 maxAbsolute=0.00000000 toleranceRatio=0.00000000
+Native density scattering HDR comparison=density-resize-and-rejection-recovery SPP=8 steps=11 maxAbsolute=0.000240088285 toleranceRatio=0.295521689
+CudaDensityScatteringProductionNativeSelfTest passed: comparisons=12

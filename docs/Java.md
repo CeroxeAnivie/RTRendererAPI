@@ -31,7 +31,7 @@ core 中的 `gpuscene_common.glsl`/ABI 头文件。自定义 raygen 的既有 SE
 
 ## 最小调用
 
-`Renderer.open()` 会枚举已安装 provider、执行能力探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 25 或更高版本。当前行为、验收证据和已知限制见 [7.0.0 版本与验证范围](7.0.0.md)，历史 procedural/triangle RT 证据见 [4.1.0 验证记录](quality/4.1.0-procedural-validation.md)。这些结果不代表全部兼容硬件或特定宿主集成都已验收。
+`Renderer.open()` 会枚举已安装 provider、执行能力探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 25 或更高版本。当前行为、验收证据和已知限制见 [7.0.0 版本与验证范围](7.0.0.md)，历史 procedural/triangle RT 证据见 [4.1.0 验证记录](quality/verification-report.md#4-1-0-procedural-validation)。这些结果不代表全部兼容硬件或特定宿主集成都已验收。
 
 ```java
 try (Renderer renderer = Renderer.open()) {

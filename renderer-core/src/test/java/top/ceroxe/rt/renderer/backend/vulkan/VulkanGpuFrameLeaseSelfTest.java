@@ -16,6 +16,7 @@ public final class VulkanGpuFrameLeaseSelfTest {
    }
 
    public static void main(String[] arguments) {
+      assertQueuedReadyHandleLifecycle();
       assertCompletionObserverFailureIsRetryable();
       assertHandleCloseFailureIsRetryable();
       assertUnsupportedCompletionHasNoSideEffects();
@@ -24,6 +25,37 @@ public final class VulkanGpuFrameLeaseSelfTest {
       assertTrackingObserverFailureIsRetryable();
       assertUnusedLazyMemoryHandleDoesNotExport();
       System.out.println("VulkanGpuFrameLeaseSelfTest passed");
+   }
+
+   private static void assertQueuedReadyHandleLifecycle() {
+      for (boolean closeHandleBeforeRelease : new boolean[]{false, true}) {
+         var ready = new VulkanSlotReadyHandle(123L);
+         var next = new VulkanSlotReadyHandle(123L);
+         AtomicInteger completed = new AtomicInteger(), closed = new AtomicInteger();
+         var lease = new VulkanGpuFrameLease(descriptor(), new TrackingHandle(),
+                 ConsumerCompletionCapabilities.cpuAndBinarySemaphore(), ignored -> completed.incrementAndGet(), null,
+                 java.util.Optional.of(new GpuFrameLease.AcquireSignal(ready, SemaphoreKind.BINARY, 0)), closed::incrementAndGet);
+         require(ready.markImported(), "first ready import not recorded");
+         require(!ready.markImported(), "ready imported twice");
+         if (closeHandleBeforeRelease) ready.close();
+         require(ready.importedEver(), "close erased irreversible ready import evidence");
+         expect(IllegalStateException.class, lease::close);
+         require(completed.get() == 0 && lease.state() == LeaseState.ACTIVE,
+                 "closing an imported ready-only lease manufactured CPU completion");
+         lease.release(new GpuFrameLease.CpuCompleted());
+         lease.close(); lease.close();
+         require(completed.get() == 1 && closed.get() == 1 && lease.state() == LeaseState.CLOSED,
+                 "queued completion/close was not exactly once");
+         require(next.state() == HandleState.EXPORTED && !next.importedEver() && next.value() == 123L,
+                 "a prior lease closed or imported the slot's next ready-handle view");
+      }
+      var unused = new VulkanSlotReadyHandle(123L);
+      AtomicInteger completions = new AtomicInteger(), closes = new AtomicInteger();
+      var lease = new VulkanGpuFrameLease(descriptor(), new TrackingHandle(),
+              ConsumerCompletionCapabilities.cpuAndBinarySemaphore(), ignored -> completions.incrementAndGet(), null,
+              java.util.Optional.of(new GpuFrameLease.AcquireSignal(unused, SemaphoreKind.BINARY, 0)), closes::incrementAndGet);
+      unused.close(); lease.close();
+      require(completions.get() == 1 && closes.get() == 1, "unused ready close failed provider-drain handoff");
    }
 
    private static void assertCompletionObserverFailureIsRetryable() {

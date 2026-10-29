@@ -1,0 +1,446 @@
+{
+  "schemaVersion": 1,
+  "scope": "Shader identity-state remediation and small native image correctness; no GPU performance measurement",
+  "queueEnabledByDefault": false,
+  "surfaceMatchesPreviouslySuccessfulEntrySnapshot": true,
+  "successfulEntrySnapshot": "build/medium-execution-audit-20261028/entry-snapshot.zip!renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base-hdr/gpuscene_gpuscene_surface.rgen.spv",
+  "surfaceSha256": "510aeeb7476e1a4f4b1e79b32546f068b1fa2b390ea560413f32c71c8c1df5a1",
+  "nativeImagePairs": 0,
+  "images": [],
+  "serialImages": [
+    {
+      "path": "build/primary-queue-native-repair-20261028/images/serial/absorption-resize-tiles.rgba16f",
+      "bytes": 614400,
+      "sha256": "128f9ba03c7f63b18607c771111099a3a4839836908a517bbd4eb24d56ab6177",
+      "nonFiniteChannels": 0
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/images/serial/absorption-spp8-tiles.rgba16f",
+      "bytes": 115200,
+      "sha256": "a11ec34b41e8bc8b47778f22aa1dfe15275bf625c18ade28e8d93d0c493c43e2",
+      "nonFiniteChannels": 0
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/images/serial/absorption.rgba16f",
+      "bytes": 115200,
+      "sha256": "119f54015d4caec396ed92cc02c093e3ff7081713d87ce47c9a1b9b0f6cd0211",
+      "nonFiniteChannels": 0
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/images/serial/coverage-footprint-tiles.rgba16f",
+      "bytes": 614400,
+      "sha256": "0e24d4e4ba4c22f0d5f3cfb0d1be544855e38214d9c11b6b91f89affe0aa4523",
+      "nonFiniteChannels": 0
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/images/serial/emission.rgba16f",
+      "bytes": 115200,
+      "sha256": "530ec2357fd3b6969de500a41c733d3afeb064cfcc27a61d31beb9bf697dbc39",
+      "nonFiniteChannels": 0
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/images/serial/frame-local.rgba16f",
+      "bytes": 115200,
+      "sha256": "119f54015d4caec396ed92cc02c093e3ff7081713d87ce47c9a1b9b0f6cd0211",
+      "nonFiniteChannels": 0
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/images/serial/masked-footprint-tiles.rgba16f",
+      "bytes": 614400,
+      "sha256": "62c381998f28be8653767959f8905ad29bd63973a76a676020c110187dc182d0",
+      "nonFiniteChannels": 0
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/images/serial/nine-nested-boundaries.rgba16f",
+      "bytes": 115200,
+      "sha256": "8134eca7fb550420f38e5c7ecad31ada385babfad6433c1ac733a4188bb779a9",
+      "nonFiniteChannels": 0
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/images/serial/opaque-clean.rgba16f",
+      "bytes": 115200,
+      "sha256": "6892b12cfe7a882a71ec77012be1861fc42bd54bc04d1c972fdb2771819c20f1",
+      "nonFiniteChannels": 0
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/images/serial/opaque-metallic.rgba16f",
+      "bytes": 115200,
+      "sha256": "6eba757cfe1e326b49859b91fd0528d9f6a7611aeb950eb1d4ff480aba91f5bc",
+      "nonFiniteChannels": 0
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/images/serial/opaque-offscreen-boundary.rgba16f",
+      "bytes": 115200,
+      "sha256": "6892b12cfe7a882a71ec77012be1861fc42bd54bc04d1c972fdb2771819c20f1",
+      "nonFiniteChannels": 0
+    }
+  ],
+  "serialCompletedImages": 11,
+  "queuedCompletedImages": 0,
+  "nativeTestPassed": false,
+  "queueSubmissions": [],
+  "queueProgramCounts": {},
+  "hostPipelineCreationWallMs": [
+    26.518,
+    25.222,
+    24.983
+  ],
+  "validation": {
+    "events": 229,
+    "validationMessages": 226,
+    "warningErrorCount": 0,
+    "invalidJsonLines": 1,
+    "completedSerialSessionMessages": 133,
+    "completedSerialSessionWarningErrorCount": 0,
+    "dropEvents": 0,
+    "scope": "Final run serial session closed normally, queue session truncated by host compiler crash; not a completed queue validation gate"
+  },
+  "blockingFailure": {
+    "program": "SURFACE_PRIMARY_SHADE",
+    "queueSubmissions": 0,
+    "module": "nvgpucomp64.dll",
+    "offset": "0x16b6ac1",
+    "operation": "vkDeferredOperationJoinKHR",
+    "log": "hs_err_pid32908.log"
+  },
+  "boundedRuns": {
+    "shaderRegeneration": {
+      "wallSeconds": 20.799,
+      "peakCommitGB": 1.092
+    },
+    "testCompileAndJar": {
+      "wallSeconds": 8.067,
+      "peakCommitGB": 1.267
+    },
+    "firstRepairedNative": {
+      "wallSeconds": 187.41,
+      "peakCommitGB": 6.662
+    },
+    "finalNative": {
+      "wallSeconds": 3.382,
+      "peakCommitGB": 2.954
+    }
+  },
+  "artifacts": [
+    {
+      "path": "renderer-core/build/libs/renderer-core-7.0.0.jar",
+      "bytes": 16132628,
+      "sha256": "d8ea0749520d44422e5eb6d63ec96c716eda742abd8921e1300213d3b966e73b"
+    },
+    {
+      "path": "renderer-api/build/libs/renderer-api-7.0.0.jar",
+      "bytes": 680972,
+      "sha256": "30c2eeb3babdff32f4770b6d7efc23214a996aba211b41dc81f5338847e6c012"
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/compile-hdr.ps1",
+      "bytes": 1305,
+      "sha256": "1048342a97d9052df6bf254559908e5086697adc70cf36f26b50017283615dd2"
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/native-smoke.ps1",
+      "bytes": 1032,
+      "sha256": "933c7a9096022b1e1b5eb96a60fa93e00e16e0b8f597f7448981196b1938c590"
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/native.log",
+      "bytes": 2486,
+      "sha256": "e5ad984fc57f20af551ccbac9e9320bbed2bb1eb021855d259e12945279a00e6"
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/validation-final.jsonl",
+      "bytes": 78377,
+      "sha256": "993b21f6eaf94f8b498f253e1bacbef70c92748e0aceeb0c7ba8c8d35b094262"
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/native-first-repaired.log",
+      "bytes": 2277,
+      "sha256": "0a1ea7385deb4d6c1dcec1f0bb7d01f2d763a728daa43276629743333e071ec6"
+    },
+    {
+      "path": "build/primary-queue-native-repair-20261028/validation-first-repaired.jsonl",
+      "bytes": 45429,
+      "sha256": "4ad7f9dfe45b028639b4c47f39b6049c063d805c8e004b5fcee6d8c7dc9f615e"
+    },
+    {
+      "path": "renderer-core/src/test/java/top/ceroxe/rt/renderer/backend/vulkan/PrimaryQueueNativeSelfTest.java",
+      "bytes": 10099,
+      "sha256": "ff3d37ec03b176a44347f38c4af7ba01970426c8a5430fbe12f497b2d404f0a3"
+    },
+    {
+      "path": "renderer-core/build/classes/java/test/top/ceroxe/rt/renderer/backend/vulkan/PrimaryQueueNativeSelfTest.class",
+      "bytes": 22304,
+      "sha256": "5fdc82fbcddc05c794a27797ecb44d52f9fad5bb29504ce23f79af4d05e84335"
+    },
+    {
+      "path": "hs_err_pid32908.log",
+      "bytes": 155401,
+      "sha256": "c2aaa670971d490086c22c29d7636f2994c78102c5667ee881af29fc46179fe2"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/generic_frame_composition.comp",
+      "bytes": 2005,
+      "sha256": "c04f785a7af151af1d6b5b32d99e43d1ff8baf13e94e19e0eca93233c6fe80f2"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene.rahit",
+      "bytes": 4244,
+      "sha256": "9e29a2484cb3547a2b4057a74f4d9b4116ba4f224e6eff325a0e1866d8652d9c"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene.rchit",
+      "bytes": 11630,
+      "sha256": "ef5cd88d642c24daeb9e30651587528e4b8f9c9ceb03659e5af3aa5643250f18"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene.rgen",
+      "bytes": 45,
+      "sha256": "c712fcf8c43ea82a5a9d8a2f8cca9446bfc3f43b1b1ac02d46538ebd3bc8241c"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene.rmiss",
+      "bytes": 684,
+      "sha256": "87cc3ae87a82da1f452ea6647db4fe99e8f222ebf2cfa327b2d13c62f52fdafa"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_abi.glsl",
+      "bytes": 11865,
+      "sha256": "205ab3ed0ef40f39d47da6406505e352064c474145b043bc7b4f77190e849958"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_caustics.rgen",
+      "bytes": 117,
+      "sha256": "212477f22ca16b4120dd0dc125d27f34f10d978bc41e2f2fcc3fe09ed2083eba"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_caustic_gather.glsl",
+      "bytes": 2538,
+      "sha256": "eda6bcc1399749eb031afd00f6e35fe5e6e037eca4853f0758589a571ae9c262"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_caustic_map.glsl",
+      "bytes": 1167,
+      "sha256": "94fe7b0083eeac97a89eab4d43dc925d698ffebc7880dd551064908ebb30df88"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_common.glsl",
+      "bytes": 35728,
+      "sha256": "122db57466171b25dca5707c8590964456c8d7c2150e6edb5053196d4dd35a35"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_compact.rgen",
+      "bytes": 83,
+      "sha256": "8352f369c97bd5f8ecaaccb104c065da69dda2670e3a74af9dc69fcddceffdce"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_compact_caustics.rgen",
+      "bytes": 153,
+      "sha256": "7b26f79a5133e5233ccb638d2aafd026aeb00282e0c89370dee987652f616ef0"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_compact_passive.rgen",
+      "bytes": 115,
+      "sha256": "236681824f524b129088941895aa7436ca0cf61a4c478253c733aab24cf5c1c2"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_compact_passive_no_dielectric.rgen",
+      "bytes": 150,
+      "sha256": "de9693c826d3afbdf930315816059c1aaf20975dfac30644930b7793ed73e071"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_compact_primary_shade.rgen",
+      "bytes": 185,
+      "sha256": "959622daa28028fb1a4dfe5b8aac9896ae901bbee189e1512a23d5482455446d"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_compact_volume.rgen",
+      "bytes": 118,
+      "sha256": "a411d943fd6bd045dd335e97e4d9b233788ceaf0828150a0a08c73f57d9250e9"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_density.glsl",
+      "bytes": 5561,
+      "sha256": "f3a9b03e5ffe856036503c474b8f365bf0632ca43609445e81aa0bb49650e209"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_lighting.glsl",
+      "bytes": 8167,
+      "sha256": "41904289596260099eb26f29aea042ec23e2873faffa7e9adda37b7a1697fc1e"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_multiscatter.glsl",
+      "bytes": 8371,
+      "sha256": "b108444937042f000dc5a8a9c4337533c9bfc5d4dc1feedfb51a47e68eed351b"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_nrd_compose.comp",
+      "bytes": 2346,
+      "sha256": "735a022a9b479fe41eeb8683f34da7a61e95b4aef88b8277ec2428a7c56ea2d3"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_optics.glsl",
+      "bytes": 13284,
+      "sha256": "718c789897405a3c7c29a9e8af1ce6737e68f7b750d008d69d23d8f94c237f11"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_passive.rgen",
+      "bytes": 80,
+      "sha256": "120fd84456f855bfb52cdcd33516aeb22853f8d1bad6dcd36a2ac174f671e433"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_passive_no_dielectric.rgen",
+      "bytes": 115,
+      "sha256": "3701c78d6bc28394983d0b97a048a1ac61ad433fe3d0e6f40ef6eda5106f8bed"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_photons.rgen",
+      "bytes": 152,
+      "sha256": "0d6b635e05c522fbe0d2b562a030cbef625c9c1da3fcccca3451660baa72f9b9"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_photon_trace.glsl",
+      "bytes": 9931,
+      "sha256": "ad3fcd711021577a947b19e50834cf7d40b261c9a52f1264d38b1b64e98aa2cb"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_primary_queue.glsl",
+      "bytes": 820,
+      "sha256": "0341c521fc63687a4a17fd17120fbb71fa715453f5486cd4e38dbc347203b476"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_primary_shade.rgen",
+      "bytes": 150,
+      "sha256": "429af64c659b8b825a2190d4effc9920e090d8ffc42075b5d2c0a75190ab2801"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_primary_trace.rgen",
+      "bytes": 185,
+      "sha256": "c1072e91e9574e4f9dadffa106c245492d5fc1cf6dca1f1fe0ccdc4b774ebfb7"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_radiance.glsl",
+      "bytes": 1297,
+      "sha256": "6c19d69ce3f392ad58a9e018d0423ae8ab5d53b8b70589e85103d2f34e3b734b"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_raygen.glsl",
+      "bytes": 47717,
+      "sha256": "ccea83a6ac043a2d8b61f5571a8573720c756e886b9b63c29a18ea85088dd6df"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_reconstruction_publish.comp",
+      "bytes": 677,
+      "sha256": "a9ab45a418cbf0564b3a3cdd039ad256d42f1e38f41eacfae389a5bcce76fa55"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_surface.rgen",
+      "bytes": 173,
+      "sha256": "7611f42c02342b76e422109e8a5914bc7b56367d087e2b8dbb7075517c3de2e5"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_surface_primary_shade.rgen",
+      "bytes": 149,
+      "sha256": "b3a15c3f1715356e932325553b7eaa266d078b6ce4f9fcab0d8eb73c6d1f48f3"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_transport.glsl",
+      "bytes": 7629,
+      "sha256": "a10c7cbd077493d904dd1811feb0804a6bae66d31323ee7f2867c4c0e1a89333"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_transport_runtime.glsl",
+      "bytes": 15434,
+      "sha256": "4fdcaf44e351d3ee1e87b75f18cf9c32245c371793c749509ff1ceb5fbe8ac35"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_visibility.glsl",
+      "bytes": 458,
+      "sha256": "963c01292d4da939b02054132ae29b7eba0d9cdbd5d5f4da6642f9d2ea92b3eb"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_visibility.rahit",
+      "bytes": 3686,
+      "sha256": "9a682bdd130b88a3244e61999457578b18d0b161684bbae19c90d2dc4e2c3aac"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_visibility.rchit",
+      "bytes": 2844,
+      "sha256": "9046207b4caec5e39d96454e5bf2a158991d57f2c8362a942ddf8ef0b4728647"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_visibility.rmiss",
+      "bytes": 279,
+      "sha256": "40f73fee58fe0f282cb42583849a8b349c7cf40c0f03dacb74b150b3aedb9d11"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_volume.rgen",
+      "bytes": 83,
+      "sha256": "a165fb81f1d4c0014035c9983dd10dd3a43c0f4d40110bffe9dc1ebb4e240d0a"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base-hdr/gpuscene_gpuscene_surface.rgen.spv",
+      "bytes": 166548,
+      "sha256": "510aeeb7476e1a4f4b1e79b32546f068b1fa2b390ea560413f32c71c8c1df5a1"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base-hdr/gpuscene_gpuscene_primary_trace.rgen.spv",
+      "bytes": 17140,
+      "sha256": "e41cda0351b7cc0e335f6d1e31f0b38c8616fa9698d996d0de1e5c5720be5c58"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base-hdr/gpuscene_gpuscene_surface_primary_shade.rgen.spv",
+      "bytes": 167876,
+      "sha256": "a205d5526093b2e8dbf6358b2f79f188557fc0bab3f7090c6fea60f6b82cf776"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base-hdr/gpuscene_gpuscene_compact_primary_shade.rgen.spv",
+      "bytes": 564128,
+      "sha256": "3cc1dfedb7d0f22eb7596f6619e982a85b1bc84c5c592b24905b8d317975c852"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base-hdr/gpuscene_gpuscene_primary_shade.rgen.spv",
+      "bytes": 612800,
+      "sha256": "1980b172a8d13ae65d9c8bd36275a09d533f2ac38cd9afb6517306debf7d3b5b"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base-hdr/gpuscene_gpuscene_compact_passive_no_dielectric.rgen.spv",
+      "bytes": 562012,
+      "sha256": "a0fd1d02d86980ef4345973132ec1cf6d646b192246c31511aabfa8f56022bf5"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base-hdr/gpuscene_gpuscene_passive_no_dielectric.rgen.spv",
+      "bytes": 610684,
+      "sha256": "9609c699e6704b7654843b1dc8280a89f098a15389be68058becb2c672beb81b"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base/gpuscene_gpuscene.rmiss.spv",
+      "bytes": 2796,
+      "sha256": "b98a695d2162443148f661d274b4aa6bbecaade26416d7ab637c284cac8391b8"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base/gpuscene_gpuscene.rchit.spv",
+      "bytes": 454440,
+      "sha256": "a551a89066dab640fbaa1a179c534902929176b0f28453436c980ec29341caf4"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base/gpuscene_gpuscene.rahit.spv",
+      "bytes": 115972,
+      "sha256": "22ec96330d0efe5310b110988494bb44e092f72ea8b0a62c32d9d89c85861d99"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base/gpuscene_gpuscene_visibility.rmiss.spv",
+      "bytes": 424,
+      "sha256": "7c59a503bc5cfc5fca2968cc7922063c7c881c7282a66379aec3ecf3d1b7c069"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base/gpuscene_gpuscene_visibility.rchit.spv",
+      "bytes": 142040,
+      "sha256": "5af8edb1386d474f16379aa4f5d07cdeee54c96ac8c4fe7b5228eae7aaf632a7"
+    },
+    {
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/spv/base/gpuscene_gpuscene_visibility.rahit.spv",
+      "bytes": 115400,
+      "sha256": "d9eb5c9b64149cb03c484dd36458944c8f4add9732816da352d91d089823019b"
+    }
+  ]
+}

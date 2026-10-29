@@ -1,0 +1,20 @@
+{
+  "passed":true,
+  "scope":"public-final-HDR-uniform-direct-scattering",
+  "nativeFrames":12,
+  "recoverableRejections":1,
+  "comparisons":[
+    {"name":"analytic-ambient-mixed-RGB","steps":1,"samples":1,"maximumAbsoluteError":6.03806361194e-05,"referenceSourceEnergy":131.901113991},
+    {"name":"analytic-HG-isotropic","steps":8,"samples":1,"maximumAbsoluteError":6.03885614782e-05,"referenceSourceEnergy":87.0219321629},
+    {"name":"analytic-HG-forward-eight-SPP","steps":64,"samples":8,"maximumAbsoluteError":0.000243467859421,"referenceSourceEnergy":420.883615032},
+    {"name":"analytic-HG-backward-two-SPP","steps":2,"samples":2,"maximumAbsoluteError":0.000117329989114,"referenceSourceEnergy":38.6691582128},
+    {"name":"directional-medium-shadow","steps":8,"samples":1,"maximumAbsoluteError":6.03506556214e-05,"referenceSourceEnergy":53.8559892099},
+    {"name":"opaque-wall-shadow","steps":8,"samples":2,"maximumAbsoluteError":6.07152275671e-05,"referenceSourceEnergy":49.5124379963},
+    {"name":"point-spot-directional-sun-enumerated","steps":64,"samples":2,"maximumAbsoluteError":6.07352258677e-05,"referenceSourceEnergy":137.754074609},
+    {"name":"point-spot-opaque-shadow","steps":64,"samples":1,"maximumAbsoluteError":6.06410653193e-05,"referenceSourceEnergy":131.950743246},
+    {"name":"small-light-set-importance-enumerates","steps":64,"samples":1,"maximumAbsoluteError":6.07101719221e-05,"referenceSourceEnergy":137.754046709},
+    {"name":"nine-light-one-sample-reservoir","steps":8,"samples":1,"maximumAbsoluteError":0.000242437877565,"referenceSourceEnergy":304.989722049},
+    {"name":"nine-light-eight-sample-reservoir","steps":8,"samples":2,"maximumAbsoluteError":6.03826903241e-05,"referenceSourceEnergy":89.4824026513},
+    {"name":"resize-and-rejection-recovery","steps":8,"samples":2,"maximumAbsoluteError":5.87014082141e-05,"referenceSourceEnergy":24.4117381458}
+  ]
+}

@@ -1,8 +1,10 @@
 package top.ceroxe.rt.renderer.rt.pipeline;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -22,6 +24,15 @@ public final class RtPrecompiledShaderSelfTest {
    private static final List<String> SCENE_RAYGENS = List.of(
            "gpuscene/gpuscene.rgen", "gpuscene/gpuscene_surface.rgen", "gpuscene/gpuscene_compact.rgen",
            "gpuscene/gpuscene_compact_passive.rgen", "gpuscene/gpuscene_passive.rgen",
+           "gpuscene/gpuscene_compact_passive_no_dielectric.rgen", "gpuscene/gpuscene_passive_no_dielectric.rgen",
+           "gpuscene/gpuscene_primary_trace.rgen", "gpuscene/gpuscene_native_medium_trace.rgen",
+           "gpuscene/gpuscene_native_scattering_lights.rgen",
+           "gpuscene/gpuscene_native_multiple_scattering.rgen", "gpuscene/gpuscene_native_density_scattering_lights.rgen",
+           "gpuscene/gpuscene_native_optical_trace.rgen", "gpuscene/gpuscene_native_boundary_packet.rgen",
+           "gpuscene/gpuscene_native_boundary_scattering.rgen",
+           "gpuscene/gpuscene_native_pbr_medium_lights.rgen",
+           "gpuscene/gpuscene_surface_primary_shade.rgen",
+           "gpuscene/gpuscene_compact_primary_shade.rgen", "gpuscene/gpuscene_primary_shade.rgen",
            "gpuscene/gpuscene_compact_volume.rgen", "gpuscene/gpuscene_volume.rgen",
            "gpuscene/gpuscene_compact_caustics.rgen", "gpuscene/gpuscene_caustics.rgen", "gpuscene/gpuscene_photons.rgen");
    private static final Map<String, Integer> STAGES = stages();
@@ -78,7 +89,7 @@ public final class RtPrecompiledShaderSelfTest {
          Path directory = root.resolve(shader.name());
          try {
             Files.createDirectories(directory);
-            Files.write(directory.resolve(shader.stage().replace('/', '_') + ".spv"), compiled.spirv());
+            writeGeneratedShader(directory.resolve(shader.stage().replace('/', '_') + ".spv"), compiled.spirv());
          } catch (IOException failure) {
             throw new java.io.UncheckedIOException("cannot save " + shader.stage() + " " + shader.name(), failure);
          }
@@ -86,6 +97,22 @@ public final class RtPrecompiledShaderSelfTest {
       });
 
       System.out.println("Generated " + shaders.size() + " pinned RT SPIR-V variants under " + root);
+   }
+
+   private static void writeGeneratedShader(Path target, byte[] spirv) throws IOException {
+      // Leave identical files untouched: Windows may have their contents memory-mapped.
+      if (Files.isRegularFile(target) && Arrays.equals(Files.readAllBytes(target), spirv)) return;
+      Path temporary = Files.createTempFile(target.getParent(), ".rtrenderer-shader-", ".tmp");
+      try {
+         Files.write(temporary, spirv);
+         try {
+            Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+         } catch (AtomicMoveNotSupportedException unsupported) {
+            Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+         }
+      } finally {
+         Files.deleteIfExists(temporary);
+      }
    }
 
    private record ShaderVariant(String stage, int kind, boolean gbuffer, boolean hdr, boolean ser) {
@@ -227,6 +254,8 @@ public final class RtPrecompiledShaderSelfTest {
       stages.put("gpuscene/gpuscene_visibility.rmiss", Shaderc.shaderc_miss_shader);
       stages.put("gpuscene/gpuscene_visibility.rchit", Shaderc.shaderc_closesthit_shader);
       stages.put("gpuscene/gpuscene_visibility.rahit", Shaderc.shaderc_anyhit_shader);
+      stages.put("gpuscene/gpuscene_native_boundary_packet.rahit", Shaderc.shaderc_anyhit_shader);
+      stages.put("gpuscene/gpuscene_native_boundary_scattering.rahit", Shaderc.shaderc_anyhit_shader);
       stages.put("gpuscene/gpuscene_nrd_compose.comp", Shaderc.shaderc_compute_shader);
       stages.put("gpuscene/gpuscene_reconstruction_publish.comp", Shaderc.shaderc_compute_shader);
       stages.put("gpuscene/generic_frame_composition.comp", Shaderc.shaderc_compute_shader);

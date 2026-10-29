@@ -1,0 +1,10 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+Oct 29, 2026 4:25:17 PM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=D:\Engineering\code\APIs\RTRendererAPI\build\luxcore-api-package-20261029\native-sealed\CudaMultipleScatteringProductionNativeSelfTest\validation.jsonl
+Multiple scattering HDR order=2 SPP=1 g=0.00 meanRGB=0.26038255,0.16274170,0.08137085
+Multiple scattering HDR order=3 SPP=2 g=0.00 meanRGB=0.27594467,0.17247657,0.08623828
+Multiple scattering HDR order=9 SPP=8 g=0.00 meanRGB=0.28077652,0.17549855,0.08774927
+Multiple scattering HDR order=2 SPP=1 g=0.60 meanRGB=0.28202264,0.13928180,0.05404079
+Multiple scattering HDR order=3 SPP=2 g=0.60 meanRGB=0.29856271,0.14284116,0.05437750
+Multiple scattering HDR order=9 SPP=8 g=0.60 meanRGB=0.30341136,0.14349179,0.05439551
+CudaMultipleScatteringProductionNativeSelfTest passed: finite-order analytic HDR, SPP 1/2/8, bounce budgets 1/2/8, actual native collisions, resize and close

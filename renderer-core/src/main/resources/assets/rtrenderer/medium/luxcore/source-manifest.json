@@ -1,0 +1,182 @@
+{
+  "upstream": "LuxCoreRender/LuxCore",
+  "commit": "b872186d2fe995a762f73708c606847eed55843e",
+  "scope": "Pinned LuxCore segment, priority, smooth/rough glass, density and microfacet provenance with RTRendererAPI absorption/emission, density, single/multiple scattering, boundary packet/scattering, PBR medium and optical transport adapters; not the full upstream integrator",
+  "files": [
+    {
+      "name": "api_density.cu",
+      "bytes": 3964,
+      "sha256": "3fddbe9cf2a2ef809064e6cc038f6761aebfedf623b1565de92f7759040be24b"
+    },
+    {
+      "name": "api_emission.cu",
+      "bytes": 785,
+      "sha256": "404e04921ab3ae265f944170002e38d65b66ee6167743690b344ca9569032aec"
+    },
+    {
+      "name": "api_glass_helpers.cu",
+      "bytes": 408,
+      "sha256": "ef827ffb87f46fc3431809a9b073b5bbddb4a9b9ea59aef02f9e045d544f0b43"
+    },
+    {
+      "name": "api_roughglass_helpers.cu",
+      "bytes": 1596,
+      "sha256": "e84afbc4327485950be8e68cf1a344b66da9ec9d3e5e260c5f409ebd4ac2c6af"
+    },
+    {
+      "name": "api_roughglass_sampling.cu",
+      "bytes": 2313,
+      "sha256": "5b389ec025b1a1ff32310d10b801aa97bdc95a8bb50c6fd95e031940aeeed332"
+    },
+    {
+      "name": "AUTHORS.txt",
+      "bytes": 1127,
+      "sha256": "4f71b573a9a1f0a9679d639f47ff1623e9d8a14f201da6ddef881fb8ca890f0b"
+    },
+    {
+      "name": "boundary_packet.cu",
+      "bytes": 5702,
+      "sha256": "c9b3ab74076aa0bcfaf8243e757e816a7e3c254c5051f7936c2a83fe4f2967fa"
+    },
+    {
+      "name": "boundary_scattering.cu",
+      "bytes": 21294,
+      "sha256": "a216bfe27b7cf623046c4a0cfc4112e03f0fb56cfb074244a303e0f46041057a"
+    },
+    {
+      "name": "boundary_transport.cu",
+      "bytes": 9079,
+      "sha256": "4c75398063a165dfacd34692b655a9d1dd5321752cfad8f15988a53b765a2dfb"
+    },
+    {
+      "name": "camera_absorption.cu",
+      "bytes": 1872,
+      "sha256": "00286e6d33ad40898375db99562483ebc1ea2fc3bb9f50659797a70de8f915fe"
+    },
+    {
+      "name": "camera_scattering.cu",
+      "bytes": 3275,
+      "sha256": "ee988d0328df0c7c0f2382a5a57215686a538b2c06ac26221f97dbd7f8bb856d"
+    },
+    {
+      "name": "color_funcs.cl",
+      "bytes": 2945,
+      "sha256": "17f53c5845a4ddbcf868a0d3dde1782cf4e3315570617e7ef430ddeade77eb06"
+    },
+    {
+      "name": "cudadevice_math.cl",
+      "bytes": 37873,
+      "sha256": "296cb142d5dbb12394411df3ef0bf6e16e6850e75eff82fb9e947c6d6d130b51"
+    },
+    {
+      "name": "cudadevice_oclemul_funcs.cl",
+      "bytes": 15367,
+      "sha256": "760973f30fea8668f5c8dbe2e0dda57f5b2e3a43408e7cc62d1651398e35b870"
+    },
+    {
+      "name": "cudadevice_oclemul_types.cl",
+      "bytes": 1908,
+      "sha256": "c672ea705d395781d49e861c6dd29b73f51664af819f3313466c4b904878bafe"
+    },
+    {
+      "name": "density_scattering.cu",
+      "bytes": 7126,
+      "sha256": "feaf766e69765f9f4c45f7c199a2e2bc401f1f6b18ed48b6894d5a603487927d"
+    },
+    {
+      "name": "heterogeneous_multiple_scattering.cu",
+      "bytes": 14584,
+      "sha256": "dc32d2e5450269a43323a092c630b2a888cbc9ae679fb7d519d3f760b92656b4"
+    },
+    {
+      "name": "LICENSE.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "name": "medium_transport_types.cu",
+      "bytes": 672,
+      "sha256": "554957e85208b1495d5acf4219300aaad19af70466a2e361976d12f527664f16"
+    },
+    {
+      "name": "medium_transport.cu",
+      "bytes": 4456,
+      "sha256": "e07c36245baf6c6191b44ded9845ebac064dce45249d0ca5ffdf2856f304e607"
+    },
+    {
+      "name": "multiple_scattering.cu",
+      "bytes": 8904,
+      "sha256": "348450b7111696aaa83facd523630abc11174bd89b5a378ec461deeaee9f6383"
+    },
+    {
+      "name": "NOTICE.txt",
+      "bytes": 7131,
+      "sha256": "72f3f10537745a405139b21a054d1cd60448956385dbf1323a5f757244ce28a8"
+    },
+    {
+      "name": "optical_transport.cu",
+      "bytes": 18017,
+      "sha256": "3130276a8d396e015fe1a41e4c04ff0910179df2947209f58d0caf9e0b63d08a"
+    },
+    {
+      "name": "pbr_transport.cu",
+      "bytes": 6201,
+      "sha256": "031e3f0736b13c469f7f77b0bcff7eb8eeff1d93ac19e8592379a3d3863071a3"
+    },
+    {
+      "name": "primary_absorption.cu",
+      "bytes": 1043,
+      "sha256": "e9cd18a5a97c36008f78be3b366ee4b79456f0a9a94c70a6b3594d039d776c09"
+    },
+    {
+      "name": "primary_emission.cu",
+      "bytes": 1774,
+      "sha256": "db700adc0cb11cf9e7e71f945cb671ee5c5b79d6a3f475b0d5a1ebb820da051e"
+    },
+    {
+      "name": "segment_batch.cu",
+      "bytes": 996,
+      "sha256": "6f93c7461796e1d239c45df6727e80d1e27f6681b9f4e5ecf5fd5bcf46852070"
+    },
+    {
+      "name": "segment_helpers.cl",
+      "bytes": 501,
+      "sha256": "e2da8ed36be79fe2126f843870b7e34ab07f66e3c243ae8f2fa3ffb0536e64b3"
+    },
+    {
+      "name": "upstream-densitygrid-functions.cl",
+      "bytes": 4990,
+      "sha256": "2eb8a8c1c837f69528bba26bbcbb78019cf8f61927f44d276564d4ea5b98379d"
+    },
+    {
+      "name": "upstream-evalstack-functions.cl",
+      "bytes": 3192,
+      "sha256": "fdf5ecb7acd4ca9222c4fc33715077d50b8b98dfa5903ff97331b0477834ca76"
+    },
+    {
+      "name": "upstream-glass-functions.cl",
+      "bytes": 5677,
+      "sha256": "986d4fead01e9d3f4625ea86ca747a617354007a96406b4331207c2d0609b76d"
+    },
+    {
+      "name": "upstream-microfacet-functions.cl",
+      "bytes": 2928,
+      "sha256": "9cc14f931794a981e92e7eb31f67aabf107c29a54e05a654d1e35dea134023f3"
+    },
+    {
+      "name": "upstream-pathvolumeinfo-functions.cl",
+      "bytes": 5159,
+      "sha256": "19dcb0a1de4e4ae058b6c4f1b593e856d7b9921175fc5b14c57ed0f03100097d"
+    },
+    {
+      "name": "upstream-roughglass-sample.cl",
+      "bytes": 4959,
+      "sha256": "73797bcca99dd609c55e666272629fe311e8a2ab31e239a10067bb97f528357d"
+    },
+    {
+      "name": "upstream-segment-function.cl",
+      "bytes": 2064,
+      "sha256": "40593200c7db1913e33aa4b416ffcbec00e4b68bdfa6c2e3e98868e24d09570a"
+    }
+  ]
+}

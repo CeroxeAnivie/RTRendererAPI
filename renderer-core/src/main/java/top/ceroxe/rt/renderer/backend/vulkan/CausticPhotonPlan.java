@@ -10,6 +10,7 @@ import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 
 /** Immutable CPU publication for one bounded, frame-slot-owned surface photon map. */
 final class CausticPhotonPlan {
+    static final java.util.concurrent.atomic.LongAdder diagnosticPhotonDispatches = new java.util.concurrent.atomic.LongAdder();
     static final int HEADER_WORDS = 16, EMITTER_WORDS = 36, RECORD_WORDS = 16;
     static final CausticPhotonPlan DISABLED = new CausticPhotonPlan(0, List.of());
     record Emitter(int slot, int[] media) {
@@ -69,6 +70,7 @@ final class CausticPhotonPlan {
                 VK10.VK_PIPELINE_STAGE_TRANSFER_BIT, KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
         // Keep both launch axes bounded; the shader discards the final row's surplus invocations.
         pipeline.recordTrace(command, stack, slot, Math.min(photons, 1024), (photons + 1023) / 1024);
+        diagnosticPhotonDispatches.increment();
         barrier(command, stack, VK10.VK_ACCESS_SHADER_WRITE_BIT, VK10.VK_ACCESS_SHADER_READ_BIT,
                 KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
                 KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);

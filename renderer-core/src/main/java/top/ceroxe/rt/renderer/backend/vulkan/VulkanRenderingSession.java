@@ -85,6 +85,14 @@ interface VulkanRenderingSession extends AutoCloseable {
      */
     GpuFrameLease acquireLatestFrame();
 
+    default void enableBinarySemaphoreDelivery() {
+        throw new UnsupportedOperationException("queued binary frame delivery is unavailable");
+    }
+
+    default GpuFrameLease acquireSubmittedFrame(long frameSequence) {
+        throw new UnsupportedOperationException("queued binary frame delivery is unavailable");
+    }
+
     /**
      * Returns a managed-presenter lease as soon as GPU timeline synchronization can describe it.
      * Expert consumers keep using {@link #acquireLatestFrame()} and therefore never observe a

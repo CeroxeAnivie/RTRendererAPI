@@ -1,0 +1,65 @@
+#ifndef GS_NATIVE_SCATTERING_COMMON_GLSL
+#define GS_NATIVE_SCATTERING_COMMON_GLSL
+// Light geometry and surface visibility use the retained production scene. This stage
+// does not integrate camera radiance; pinned LuxCore CUDA consumes the source samples.
+float gsScatteringPhase(float cosine,float g) {
+    float c=clamp(cosine,-1.0,1.0),edge=g>=0.0?1.0-g:1.0+g;
+    float d=edge*edge+(g>=0.0?2.0*g*(1.0-c):-2.0*g*(1.0+c));
+    return ((1.0-g)*(1.0+g))/(4.0*GS_PI*d*sqrt(d));
+}
+vec3 gsScatteringShadow(vec3 position,vec3 direction,float distance,vec3 sigma,float integrationLimit) {
+    vec3 surface=gsShadowTransmittance(position,direction,direction,distance);
+    // The strict admission proves a single uniform medium and opaque terminal surfaces.
+    // A homogeneous Beer factor is the only medium-shadow compatibility operation here.
+    return surface*exp(-sigma*min(distance,integrationLimit));
+}
+float gsScatteringLightWeight(uint slot,vec3 origin,vec3 direction,float distance) {
+    uint base=slot*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[base+GPU_SCENE_LIGHT_FLAGS_WORD];
+    if((flags&GPU_SCENE_FLAG_ACTIVE)==0u)return 0.0;
+    if(((flags>>1u)&7u)!=GPU_SCENE_LIGHT_DIRECTIONAL) {
+        vec3 point=vec3(gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD+1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD+1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD+1u]));
+        vec3 nearest=origin+direction*clamp(dot(point-origin,direction),0.0,distance);
+        if(length(point-nearest)>=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_RANGE_WORD]))return 0.0;
+    }
+    vec3 color=vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD]),
+        uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+2u]));
+    return gsLuminance(color)*uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_INTENSITY_WORD]);
+}
+vec3 gsScatteringLight(uint slot,vec3 position,vec3 rayDirection,float g,vec3 sigma,float integrationLimit) {
+    uint base=slot*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[base+GPU_SCENE_LIGHT_FLAGS_WORD],type=(flags>>1u)&7u;
+    vec3 color=vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD]),
+        uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+2u]));
+    float intensity=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_INTENSITY_WORD]),distance=1e20,attenuation=1.0;
+    vec3 direction;
+    if(type==GPU_SCENE_LIGHT_DIRECTIONAL) {
+        direction=-normalize(vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD]),
+            uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+2u])));
+    }else {
+        vec3 point=vec3(gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD+1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD+1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD+1u]));
+        vec3 delta=point-position;distance=length(delta);if(distance<=1e-8)return vec3(0);direction=delta/distance;
+        float range=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_RANGE_WORD]),fade=max(1.0-distance/range,0.0);
+        attenuation=fade*fade/max(distance*distance,1.0);
+        if(type==GPU_SCENE_LIGHT_SPOT) {
+            vec3 axis=normalize(vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD]),
+                uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+2u])));
+            float inner=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_INNER_CONE_WORD]),outer=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_OUTER_CONE_WORD]);
+            float cone=dot(axis,-direction);attenuation*=inner==outer?step(outer,cone):smoothstep(outer,inner,cone);
+        }
+    }
+    if(attenuation<=0.0||intensity<=0.0)return vec3(0);
+    vec3 visibility=(flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u
+        ?gsScatteringShadow(position,direction,max(distance-2.0*gsRayEpsilon(position),gsRayEpsilon(position)),sigma,integrationLimit):vec3(1);
+    return color*intensity*attenuation*visibility*gsScatteringPhase(dot(rayDirection,direction),g);
+}
+vec2 gsScatteringSampleOffset(uint sampleIndex,uint samples) {
+    if(samples<=1u)return vec2(.5);
+    if(samples==2u)return sampleIndex==0u?vec2(.25):vec2(.75);
+    if(samples==4u){const vec2 offsets[4]=vec2[](vec2(.375,.125),vec2(.875,.375),vec2(.125,.625),vec2(.625,.875));return offsets[sampleIndex];}
+    const vec2 offsets[8]=vec2[](vec2(.5000,.3333),vec2(.2500,.6667),vec2(.7500,.1111),vec2(.1250,.4444),
+        vec2(.6250,.7778),vec2(.3750,.2222),vec2(.8750,.5556),vec2(.0625,.8889));return offsets[sampleIndex];
+}
+#endif

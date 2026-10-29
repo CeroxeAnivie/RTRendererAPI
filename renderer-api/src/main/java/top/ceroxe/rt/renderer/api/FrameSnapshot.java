@@ -63,18 +63,17 @@ public final class FrameSnapshot implements FrameView {
                 || expected != view.byteCount() || view.pixels().remaining() != expected) {
             throw new IllegalArgumentException("invalid frame metadata or pixel extent");
         }
-        byte[] copy = new byte[view.byteCount()];
-        view.pixels().get(copy);
+        ByteBuffer copy = SnapshotPixelPool.SHARED.copy(view.pixels(), view.byteCount());
         Builder builder = builder().frameSequence(view.frameSequence()).renderedSceneRevision(view.renderedSceneRevision())
-                .extent(view.width(), view.height()).format(view.format()).pixels(copy);
+                .extent(view.width(), view.height()).format(view.format());
         view.outputResource().ifPresent(builder::outputResource);
         return new FrameSnapshot(builder, copy);
     }
 
-    private FrameSnapshot(Builder builder, byte[] ownedPixels) {
+    private FrameSnapshot(Builder builder, ByteBuffer ownedPixels) {
         frameSequence = builder.frameSequence; renderedSceneRevision = builder.renderedSceneRevision;
         outputResource = builder.outputResource; width = builder.width; height = builder.height;
-        format = builder.format; pixels = ByteBuffer.wrap(ownedPixels).asReadOnlyBuffer();
+        format = builder.format; pixels = ownedPixels.asReadOnlyBuffer();
     }
 
     @Override public TextureFormat format() { return format; }

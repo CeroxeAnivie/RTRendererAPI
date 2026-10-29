@@ -27,7 +27,8 @@ public final class VulkanGpuSceneNativeSelfTest {
    public static void main(String[] arguments) throws Exception {
       VulkanRtCapabilityProbe.Result capability = VulkanRtCapabilityProbe.capture();
       require(capability.hardwareRayTracingReady(), "native GPUScene gate requires hardware RT: " + capability.summary());
-      VulkanDeviceRuntime device = VulkanDeviceRuntime.open(capability);
+      VulkanDeviceRuntime device = VulkanDeviceRuntime.open(capability,
+              top.ceroxe.rt.renderer.RendererRtDiagnostics.noop(), true);
 
       try {
          VulkanGpuScene scene = new VulkanGpuScene(new VulkanGpuSceneBuffers(device.device(), device.allocator(), device.buildCommands()));
@@ -57,6 +58,32 @@ public final class VulkanGpuSceneNativeSelfTest {
             String details10001 = Arrays.toString(uploaded);
             require(condition10000, "device-local texture upload differs: " + details10001);
             require(active.transfers().activeBuffers() == 2, "texture-only scene allocated unrelated descriptor targets");
+            // Consecutive accepted generations can replace uploads before a shader reads them.
+            // Exercise in-place WAW, then prefix-copy growth followed by an overlapping update.
+            for (int revision = 1; revision <= 3; revision++) {
+               int extent = revision == 3 ? 64 : 1;
+               byte[] pixels = new byte[extent * extent * 4];
+               Arrays.fill(pixels, (byte)(revision * 17));
+               var texture = TextureAsset.builder(10L, extent, extent).colorSpace(ColorSpace.SRGB)
+                       .pixelsRgba8(pixels).build();
+               var update = residency.prepare(SceneTransaction.builder(revision).upsert(texture).build());
+               scene.submit(update.changeSet(), 0L);
+               residency.commit(update);
+               awaitActive(scene, revision);
+               if (revision == 3) {
+                  var binding = scene.requireBuffer(Target.TEXTURE_PIXELS, 0L);
+                  var records = scene.requireBuffer(Target.TEXTURE_RECORDS, 0L);
+                  int slot = scene.resolveTextureSlot(10L, revision);
+                  int recordBytes = (slot + 1) * VulkanGpuSceneAbi.TEXTURE_RECORD_WORDS * 4;
+                  var packed = java.nio.ByteBuffer.wrap(readDeviceBytes(device, records.buffer(), recordBytes))
+                          .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                  int pixelOffset = Math.toIntExact(packed.getLong((slot * VulkanGpuSceneAbi.TEXTURE_RECORD_WORDS
+                          + VulkanGpuSceneAbi.TEXTURE_PIXEL_OFFSET_WORD) * 4));
+                  byte[] storage = readDeviceBytes(device, binding.buffer(), pixelOffset + pixels.length);
+                  require(Arrays.equals(Arrays.copyOfRange(storage, pixelOffset, storage.length), pixels),
+                          "growth prefix copy overwrote the new texture generation");
+               }
+            }
             PrintStream output19 = System.out;
             details10001 = capability.preferredDevice().name();
             output19.println("VulkanGpuSceneNativeSelfTest passed: device=" + details10001 + ", activeRevision=" + active.activeRevision() + ", buffers=" + active.transfers().activeBuffers() + ", bytes=" + active.transfers().activeBytes());

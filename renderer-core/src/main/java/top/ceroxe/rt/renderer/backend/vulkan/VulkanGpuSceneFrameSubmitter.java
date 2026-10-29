@@ -5,6 +5,7 @@ import top.ceroxe.rt.renderer.rt.device.RtCommandContext;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.VulkanMemoryBudgetPolicy;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
+import top.ceroxe.rt.renderer.rt.pipeline.GpuScenePrimaryQueue;
 import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents;
 import top.ceroxe.rt.renderer.feature.VulkanFeatureSession;
 
@@ -12,6 +13,19 @@ import java.util.Objects;
 
 /** Records and publishes one GPUScene frame as an atomic submission transaction. */
 final class VulkanGpuSceneFrameSubmitter {
+    // Test-only scheduling evidence, deliberately not presented as GPU ray/work counters.
+    static final java.util.concurrent.atomic.LongAdder diagnosticQueuedSubmissions = new java.util.concurrent.atomic.LongAdder();
+    static final java.util.concurrent.atomic.LongAdder diagnosticNativeCameraSubmissions = new java.util.concurrent.atomic.LongAdder();
+    static final java.util.concurrent.atomic.LongAdder diagnosticNativeBoundarySubmissions = new java.util.concurrent.atomic.LongAdder();
+    static final java.util.concurrent.atomic.LongAdder diagnosticNativeScatteringSubmissions = new java.util.concurrent.atomic.LongAdder();
+    static final java.util.concurrent.atomic.LongAdder diagnosticNativeMultipleScatteringSubmissions = new java.util.concurrent.atomic.LongAdder();
+    static final java.util.concurrent.atomic.LongAdder diagnosticNativeDensityScatteringSubmissions = new java.util.concurrent.atomic.LongAdder();
+    static final java.util.concurrent.atomic.LongAdder diagnosticNativeOpticalSubmissions = new java.util.concurrent.atomic.LongAdder();
+    static final java.util.concurrent.atomic.LongAdder diagnosticNativePbrSubmissions = new java.util.concurrent.atomic.LongAdder();
+    static final java.util.concurrent.atomic.LongAdder diagnosticNativeBoundaryFusedSubmissions = new java.util.concurrent.atomic.LongAdder();
+    static final java.util.concurrent.atomic.LongAdder diagnosticNativeBoundaryScatteringSubmissions = new java.util.concurrent.atomic.LongAdder();
+    private final top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensityAbi.Cache nativeDensityCache =
+            new top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensityAbi.Cache();
     private final VulkanSceneRuntime scene;
     private final VulkanGpuScenePipelines pipelines;
     private final VulkanGpuSceneFrameRing frameRing;
@@ -99,7 +113,73 @@ final class VulkanGpuSceneFrameSubmitter {
         }
         var photonPlan = temporal.caustics(checked.request());
         GpuSceneRayTracingPipeline photonPipeline = photonPlan.photons() > 0 ? pipelines.photons() : null;
-        GpuSceneRayTracingPipeline pipeline = pipelines.forFrame(temporal.program(checked.request()));
+        var transport = temporal.selectTransport(checked.request());
+        var serialProgram = transport.program();
+        var route = transport.route();
+        boolean nativeOpticalFrame = route == CudaMediumFrameProfile.Route.OPTICAL;
+        boolean nativeBoundaryScatteringFrame = route == CudaMediumFrameProfile.Route.BOUNDARY_SCATTERING;
+        boolean nativeMultipleFrame = route == CudaMediumFrameProfile.Route.MULTIPLE_SCATTERING;
+        boolean nativeDensityScatteringFrame = route == CudaMediumFrameProfile.Route.DENSITY_SCATTERING;
+        boolean nativeScatteringFrame = route == CudaMediumFrameProfile.Route.CAMERA_SCATTERING;
+        boolean nativePbrFrame = route == CudaMediumFrameProfile.Route.PBR;
+        boolean nativeBoundaryFrame = route == CudaMediumFrameProfile.Route.BOUNDARY;
+        boolean nativeCameraFrame = route == CudaMediumFrameProfile.Route.CAMERA;
+        boolean nativeMediumFrame = route != CudaMediumFrameProfile.Route.NONE;
+        boolean nativeHeterogeneousMultipleFrame = nativeMultipleFrame && !checked.request().environment().cameraMedium().densityField().isUniform();
+        var nativeBoundaryScene = transport.boundaries();
+        if (nativeMediumFrame && !pipelines.supportsPrimaryQueue())
+            throw new top.ceroxe.rt.renderer.api.FrameValidationException(
+                    top.ceroxe.rt.renderer.api.FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
+                    "native medium transport requires built-in non-SER scene shaders");
+        var selectedProgram = nativeMediumFrame ? GpuSceneRayTracingPipeline.Program.SURFACE_PRIMARY_SHADE
+                : VulkanGpuSceneTemporalCoordinator.primaryQueueProgram(serialProgram,
+                pipelines.supportsPrimaryQueue() && Boolean.getBoolean("top.ceroxe.rt.medium.primaryQueue"));
+        int width = checkedExtents.renderWidth();
+        int height = checkedExtents.renderHeight();
+        var nativeBoundaryData = nativeBoundaryFrame ? CudaBoundaryMediumManager.scene(checked.request(),
+                width, height, nativeBoundaryScene, temporal::nativeDensityTexture, nativeDensityCache) : null;
+        var nativeBoundaryScatteringData = nativeBoundaryScatteringFrame ? CudaMultipleScatteringManager.boundaryScatteringScene(
+                checked.request(),width,height,acceptedLightSlotUpperBound,nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache) : null;
+        var nativeBoundaryManager = nativeBoundaryFrame ? pipelines.nativeBoundaryMedium() : null;
+        boolean fusedBoundaryFrame = nativeBoundaryFrame && nativeBoundaryManager.canFuseConsumer(nativeBoundaryData);
+        var nativeDensityScatteringData = nativeDensityScatteringFrame ? CudaDensityScatteringManager.scene(checked.request(),
+                width,height,acceptedLightSlotUpperBound,temporal::nativeDensityTexture,nativeDensityCache) : null;
+        var nativeOpticalData = nativeOpticalFrame ? CudaOpticalMediumManager.scene(checked.request(),width,height,
+                nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache) : null;
+        var nativePbrData = nativePbrFrame ? CudaPbrMediumManager.scene(checked.request(),width,height,
+                acceptedLightSlotUpperBound,nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache) : null;
+        var nativeHeterogeneousMultipleData = nativeHeterogeneousMultipleFrame ? CudaMultipleScatteringManager.scene(
+                checked.request(),width,height,acceptedLightSlotUpperBound,temporal::nativeDensityTexture,nativeDensityCache) : null;
+        GpuScenePrimaryQueue.Plan selectedQueue = !nativeMediumFrame && selectedProgram.primaryQueue()
+                ? GpuScenePrimaryQueue.plan(width, height, checked.request().antiAliasing().samplesPerPixel()) : null;
+        if (selectedQueue != null) {
+            try { requireMemoryHeadroom("prepare primary hit queue", slot.requiredPrimaryQueueGrowth(selectedQueue.bytes())); }
+            catch (VulkanRenderingSession.SubmissionRejectedException unavailable) {
+                selectedProgram = serialProgram;
+                selectedQueue = null; // Memory-pressure fallback never truncates a tile or drops a path.
+            }
+        }
+        GpuScenePrimaryQueue.Plan primaryQueue = selectedQueue;
+        GpuSceneRayTracingPipeline pipeline = pipelines.forFrame(selectedProgram);
+        GpuSceneRayTracingPipeline primaryProducer = nativePbrFrame
+                ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_PBR_MEDIUM_TRACE)
+                : nativeBoundaryFrame
+                ? pipelines.forFrame(Boolean.parseBoolean(System.getProperty("top.ceroxe.rt.medium.cuda.boundaryPacket","true"))
+                    ? GpuSceneRayTracingPipeline.Program.NATIVE_BOUNDARY_PACKET : GpuSceneRayTracingPipeline.Program.NATIVE_MEDIUM_TRACE)
+                : primaryQueue != null || nativeCameraFrame || nativeScatteringFrame || nativeMultipleFrame || nativeDensityScatteringFrame || nativeOpticalFrame
+                    ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.PRIMARY_TRACE) : null;
+        GpuSceneRayTracingPipeline scatteringLights = nativePbrFrame
+                ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_PBR_MEDIUM_LIGHTS)
+                : nativeDensityScatteringFrame
+                ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_DENSITY_SCATTERING_LIGHTS)
+                : nativeScatteringFrame || nativeMultipleFrame && !nativeHeterogeneousMultipleFrame
+                    ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS) : null;
+        GpuSceneRayTracingPipeline multipleTracer = nativeMultipleFrame
+                ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_MULTIPLE_SCATTERING) : null;
+        GpuSceneRayTracingPipeline boundaryScatteringQuery = nativeBoundaryScatteringFrame
+                ? pipelines.nativeBoundaryScattering() : null;
+        GpuSceneRayTracingPipeline opticalTracer = nativeOpticalFrame
+                ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_OPTICAL_TRACE) : null;
         // Presentation-time feature work may outlive proxy present. Establish resource ownership
         // before reconfiguration, extent replacement, or any writes to this free slot.
         VulkanFeatureSession.InputCompletion inputCompletion =
@@ -111,8 +191,6 @@ final class VulkanGpuSceneFrameSubmitter {
         // retain their original resource family until their producer has completed.
         features.reconfigure(slot, frameFeatures);
 
-        int width = checkedExtents.renderWidth();
-        int height = checkedExtents.renderHeight();
         VulkanFramePrimitiveResources primitiveResources = frameRing.primitives(slot);
         long requestedGrowth = Math.addExact(
                 Math.addExact(
@@ -123,7 +201,20 @@ final class VulkanGpuSceneFrameSubmitter {
                 Math.addExact(primitiveResources.requiredBufferGrowthBytes(checked.request().primitiveBatch()),
                         slot.requiredCausticGrowth(photonPlan.bytes()))
         );
-        requireMemoryHeadroom("resize frame resources", requestedGrowth);
+        requireMemoryHeadroom("resize frame resources", Math.addExact(requestedGrowth,
+                Math.addExact(primaryQueue == null ? 0 : slot.requiredPrimaryQueueGrowth(primaryQueue.bytes()),
+                        nativeOpticalFrame ? pipelines.requiredNativeOpticalGrowth(nativeOpticalData)
+                                : nativePbrFrame ? pipelines.requiredNativePbrGrowth(nativePbrData)
+                                : nativeHeterogeneousMultipleFrame ? pipelines.requiredNativeMultipleScatteringGrowth(nativeHeterogeneousMultipleData)
+                                : nativeMultipleFrame ? pipelines.requiredNativeMultipleScatteringGrowth(width,height,
+                                    checked.request().antiAliasing().samplesPerPixel(),checked.request().mediumTransport().scatteringSteps())
+                                : nativeBoundaryScatteringFrame ? pipelines.requiredNativeBoundaryScatteringGrowth(nativeBoundaryScatteringData)
+                                : nativeDensityScatteringFrame ? pipelines.requiredNativeDensityScatteringGrowth(nativeDensityScatteringData)
+                                : nativeScatteringFrame ? pipelines.requiredNativeScatteringGrowth(width, height,
+                                    checked.request().antiAliasing().samplesPerPixel(), checked.request().mediumTransport().scatteringSteps())
+                                : nativeBoundaryFrame ? pipelines.requiredNativeBoundaryGrowth(nativeBoundaryData)
+                                : nativeCameraFrame ? pipelines.requiredNativeCameraGrowth(width, height,
+                                    checked.request().antiAliasing().samplesPerPixel()) : 0)));
         if (!temporal.extentMatches(width, height) && frameRing.hasProducerPending()) {
             throw new VulkanRenderingSession.SubmissionRejectedException(
                     SubmissionDeferralReason.FRAME_RESOURCES_BUSY,
@@ -135,6 +226,7 @@ final class VulkanGpuSceneFrameSubmitter {
         // before deriving the temporal transaction, then upload the resulting uniforms below.
         slot.ensureResources(checkedExtents);
         slot.ensureCausticResources(photonPlan.bytes());
+        if (primaryQueue != null) slot.ensurePrimaryQueue(primaryQueue.bytes());
 
         VulkanFramePrimitiveResources.Prepared framePrimitives = primitiveResources.prepare(
                 checked.request().primitiveBatch(), acceptedSceneRevision, scene
@@ -162,6 +254,34 @@ final class VulkanGpuSceneFrameSubmitter {
                     slot, acceptedSceneRevision, temporalFrame.gpu(), framePrimitives, frameFeatures);
             pipeline.updateDescriptorSet(slot.index(), frameDescriptors);
             if (photonPipeline != null) photonPipeline.updateDescriptorSet(slot.index(), frameDescriptors);
+            if (primaryProducer != null) primaryProducer.updateDescriptorSet(slot.index(), frameDescriptors);
+            if (scatteringLights != null) scatteringLights.updateDescriptorSet(slot.index(), frameDescriptors);
+            if (multipleTracer != null) multipleTracer.updateDescriptorSet(slot.index(),frameDescriptors);
+            if (boundaryScatteringQuery != null) boundaryScatteringQuery.updateDescriptorSet(slot.index(),frameDescriptors);
+            if (opticalTracer != null) opticalTracer.updateDescriptorSet(slot.index(),frameDescriptors);
+
+            // Boundary continuations still finish their internal blocking rounds here. The
+            // camera route instead acquires CUDA ownership in the final frame submission.
+            CudaCameraMediumManager.Prepared nativeCamera = nativeOpticalFrame
+                    ? pipelines.nativeOpticalMedium().prepare(nativeOpticalData,primaryProducer,opticalTracer,slot.index(),framePrimitives.buildPlan())
+                    : nativePbrFrame
+                    ? pipelines.nativePbrMedium().prepare(nativePbrData,primaryProducer,scatteringLights,slot.index(),framePrimitives.buildPlan(),
+                            photonPlan,photonPipeline,slot.causticPhotons())
+                    : nativeHeterogeneousMultipleFrame
+                    ? pipelines.nativeMultipleScattering().prepare(nativeHeterogeneousMultipleData,primaryProducer,multipleTracer,slot.index(),framePrimitives.buildPlan())
+                    : nativeMultipleFrame
+                    ? pipelines.nativeMultipleScattering().prepare(checked.request(),width,height,primaryProducer,scatteringLights,multipleTracer,slot.index(),framePrimitives.buildPlan())
+                    : nativeBoundaryScatteringFrame
+                    ? pipelines.nativeMultipleScattering().prepareBoundaryScattering(nativeBoundaryScatteringData,boundaryScatteringQuery,slot.index(),framePrimitives.buildPlan())
+                    : nativeDensityScatteringFrame
+                    ? pipelines.nativeDensityScattering().prepare(nativeDensityScatteringData,primaryProducer,scatteringLights,slot.index(),framePrimitives.buildPlan())
+                    : nativeScatteringFrame
+                    ? pipelines.nativeCameraScattering().prepare(checked.request(), width, height,
+                            primaryProducer, scatteringLights, slot.index(), framePrimitives.buildPlan())
+                    : nativeBoundaryFrame && !fusedBoundaryFrame
+                    ? pipelines.nativeBoundaryMedium().prepare(nativeBoundaryData,
+                            primaryProducer, slot.index(), framePrimitives.buildPlan())
+                    : null;
 
             long descriptorEpoch = Math.incrementExact(lastSubmittedDescriptorEpoch);
             int previousLayout = slot.imageLayout();
@@ -171,11 +291,18 @@ final class VulkanGpuSceneFrameSubmitter {
             VulkanDeviceRuntime.ManagedPresentationSignal readySignal = releaseExternalOwnership
                     ? VulkanDeviceRuntime.ManagedPresentationSignal.disabled()
                     : scene.device().reserveManagedPresentationSignal();
-            RtCommandContext.CommandRecorder recorder = (commandBuffer, stack) -> {
-                if (framePrimitives.buildPlan() != null) {
+            java.util.function.BiFunction<CudaCameraMediumManager.Prepared,
+                    java.util.function.Consumer<org.lwjgl.vulkan.VkCommandBuffer>,
+                    RtCommandContext.CommandRecorder> recorder = (preparedCamera, acquireNative) -> (commandBuffer, stack) -> {
+                if (acquireNative != null) acquireNative.accept(commandBuffer);
+                if (framePrimitives.buildPlan() != null && preparedCamera == null) {
                     framePrimitives.buildPlan().record(commandBuffer, stack);
                 }
-                photonPlan.record(commandBuffer, stack, slot.causticPhotons(), photonPipeline, slot.index());
+                // Native PBR resolves in CUDA after its producer handoff. Its photon map is
+                // recorded inside that handoff so CUDA observes completed photon writes; all
+                // other paths retain the ordinary final-command photon stage.
+                if (!nativePbrFrame)
+                    photonPlan.record(commandBuffer, stack, slot.causticPhotons(), photonPipeline, slot.index());
                 pipeline.recordFrame(
                         commandBuffer,
                         stack,
@@ -206,12 +333,24 @@ final class VulkanGpuSceneFrameSubmitter {
                         () -> features.recordNrdComposition(
                                 commandBuffer, stack, slot, width, height, frameFeatures
                         ),
-                        () -> features.recordPublication(commandBuffer, stack, slot, frameFeatures)
+                        () -> features.recordPublication(commandBuffer, stack, slot, frameFeatures),
+                        preparedCamera != null ? () -> preparedCamera.recordConsumer(commandBuffer, stack,
+                                pipeline, slot.index())
+                        : primaryQueue == null ? null : () -> GpuScenePrimaryQueue.record(commandBuffer, stack,
+                                primaryProducer, pipeline, slot.index(), slot.primaryQueue(), primaryQueue)
                 );
             };
-            nativeSubmission = submitNative(
-                    frameSequence, inputCompletion, readySignal, recorder
-            );
+            nativeSubmission = nativeCameraFrame
+                    ? pipelines.nativeCameraMedium().submitBlocking(checked.request(), width, height,
+                            primaryProducer, slot.index(), framePrimitives.buildPlan(),
+                            (prepared, semaphore, acquire) -> submitNative(frameSequence, inputCompletion,
+                                    readySignal, semaphore, slot, recorder.apply(prepared, acquire)))
+                    : fusedBoundaryFrame
+                    ? nativeBoundaryManager.submitBlocking(nativeBoundaryData, primaryProducer, slot.index(),
+                            framePrimitives.buildPlan(), (prepared, semaphore, acquire) -> submitNative(
+                                    frameSequence, inputCompletion, readySignal, semaphore, slot,
+                                    recorder.apply(prepared, acquire)))
+                    : submitNative(frameSequence, inputCompletion, readySignal, 0L, slot, recorder.apply(nativeCamera, null));
             featureSubmission.commit();
             slot.submitted(
                     nativeSubmission,
@@ -223,6 +362,21 @@ final class VulkanGpuSceneFrameSubmitter {
                     pipeline.shaderExecutionReorderingEnabled()
             );
             slotPublished = true;
+            if (nativeCameraFrame) diagnosticNativeCameraSubmissions.increment();
+            if (nativeBoundaryFrame) diagnosticNativeBoundarySubmissions.increment();
+            if (nativeBoundaryScatteringFrame) diagnosticNativeBoundaryScatteringSubmissions.increment();
+            if (fusedBoundaryFrame) diagnosticNativeBoundaryFusedSubmissions.increment();
+            if (nativeScatteringFrame) diagnosticNativeScatteringSubmissions.increment();
+            if (nativeMultipleFrame) diagnosticNativeMultipleScatteringSubmissions.increment();
+            if (nativeDensityScatteringFrame) diagnosticNativeDensityScatteringSubmissions.increment();
+            if (nativeOpticalFrame) diagnosticNativeOpticalSubmissions.increment();
+            if (nativePbrFrame) diagnosticNativePbrSubmissions.increment();
+            if (primaryQueue != null && Boolean.getBoolean("top.ceroxe.rt.medium.queueDiagnostics")) {
+                diagnosticQueuedSubmissions.increment();
+                System.out.println("PrimaryQueue submitted frame="+frameSequence+" program="+selectedProgram
+                        +" scheduledPrimaryPaths="+primaryQueue.primaryPaths()+" dispatchPairs="+primaryQueue.dispatchPairs()
+                        +" scratchBytes="+primaryQueue.bytes());
+            }
             primitiveResources.commit(framePrimitives);
             features.markLayoutsInitialized(slot, frameFeatures);
             lastSubmittedDescriptorEpoch = descriptorEpoch;
@@ -236,6 +390,7 @@ final class VulkanGpuSceneFrameSubmitter {
                     try {
                         // Submission close observes its fence before the build destination is freed.
                         nativeSubmission.close();
+                        slot.drainAbortedBinarySubmission();
                     } catch (RuntimeException closeFailure) {
                         failure.addSuppressed(closeFailure);
                     }
@@ -254,23 +409,17 @@ final class VulkanGpuSceneFrameSubmitter {
             long frameSequence,
             VulkanFeatureSession.InputCompletion inputCompletion,
             VulkanDeviceRuntime.ManagedPresentationSignal readySignal,
+            long nativeWaitSemaphore,
+            VulkanFrameSlot deliverySlot,
             RtCommandContext.CommandRecorder recorder
     ) {
         scene.device().featureSession().beginFrameSubmission(frameSequence);
         RtCommandContext.AsyncSubmission nativeSubmission;
         try {
-            nativeSubmission = inputCompletion.enabled()
-                    ? scene.device().frameCommands().submitTimedTimelineSynchronizedOneTimeAsync(
-                            timingLabel,
-                            inputCompletion.semaphore(), inputCompletion.value(),
-                            readySignal.semaphore(), readySignal.value(),
-                            recorder
-                    )
-                    : readySignal.enabled()
-                    ? scene.device().frameCommands().submitTimedOneTimeAsync(
-                    timingLabel, readySignal.semaphore(), readySignal.value(), recorder
-            )
-                    : scene.device().frameCommands().submitTimedOneTimeAsync(timingLabel, recorder);
+            nativeSubmission = scene.device().frameCommands().submitTimedExternalSynchronizedOneTimeAsync(
+                    timingLabel, nativeWaitSemaphore, deliverySlot.readyBinarySemaphore(),
+                    inputCompletion.semaphore(), inputCompletion.value(),
+                    readySignal.semaphore(), readySignal.value(), recorder);
             scene.device().featureSession().commitFrameInputReuse(frameSequence);
         } catch (RuntimeException | Error submissionFailure) {
             try {
@@ -285,6 +434,7 @@ final class VulkanGpuSceneFrameSubmitter {
             return nativeSubmission;
         } catch (RuntimeException | Error markerFailure) {
             nativeSubmission.close();
+            deliverySlot.drainAbortedBinarySubmission();
             throw markerFailure;
         }
     }

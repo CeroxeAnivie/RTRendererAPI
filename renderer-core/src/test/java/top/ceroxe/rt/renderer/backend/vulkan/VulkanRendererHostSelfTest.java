@@ -53,6 +53,7 @@ public final class VulkanRendererHostSelfTest {
    }
 
    public static void main(String[] args) {
+      queuedDeliveryRequiresOptInAndClaimsExactFrames();
       exposesUnavailableEvidenceAndClosedLifecycle();
       rejectsAndClosesInvalidInitialSession();
       publishesLiveFeatureCapabilities();
@@ -74,10 +75,34 @@ public final class VulkanRendererHostSelfTest {
       recreatesDeviceAndReplaysCommittedSceneOnce();
       deviceRecoveryClearsDiscardedPresenterBacklog();
       doesNotRecoverBeforeLostSessionCloses();
+      rendersInitialEmptySceneTransactionally();
       recoveryBeforeFirstScenePreservesRevisionZero();
       defersDeviceRecoveryUntilExternalLeaseCompletion();
       publishesDeviceRecoveryHistoryInvalidationOnFirstRecoveredFrame();
       System.out.println("VulkanRendererHostSelfTest passed");
+   }
+
+   private static void queuedDeliveryRequiresOptInAndClaimsExactFrames() {
+      TrackingSession session = new TrackingSession();
+      var renderer = renderer(session);
+      var queued = renderer.extension(top.ceroxe.rt.renderer.api.interop.vulkan.VulkanQueuedFrameInterop.class).orElseThrow();
+      expect(IllegalStateException.class, () -> queued.tryAcquireSubmittedFrame(0));
+      queued.enableBinarySemaphoreDelivery(); queued.enableBinarySemaphoreDelivery();
+      require(session.queuedEnables == 2, "queued negotiation not delegated");
+      renderer.apply(scene(0)); renderer.submit(frame(2,0)); renderer.submit(frame(3,0));
+      session.queuedFrames.put(2L,new TrackingFrameLease(2,0));
+      session.queuedFrames.put(3L,new TrackingFrameLease(3,0));
+      require(queued.tryAcquireSubmittedFrame(4).isEmpty(),"unsubmitted exact sequence exposed");
+      var third=queued.tryAcquireSubmittedFrame(3).orElseThrow();
+      var second=queued.tryAcquireSubmittedFrame(2).orElseThrow();
+      require(third.descriptor().frameSequence()==3 && second.descriptor().frameSequence()==2,
+              "queued delivery substituted latest or rejected older exact claim");
+      require(queued.tryAcquireSubmittedFrame(2).isEmpty(),"claimed exact frame duplicated");
+      require(session.completedPolls==0,"queued acquire fell back to completed polling");
+      expect(IllegalStateException.class, queued::enableBinarySemaphoreDelivery);
+      renderer.close(); require(session.closes==0,"renderer destroyed outstanding queued leases");
+      third.close(); require(session.closes==0,"one remaining queued lease ignored");
+      second.close(); require(session.closes==1,"last queued lease did not complete deferred close");
    }
 
    private static void exposesUnavailableEvidenceAndClosedLifecycle() {
@@ -616,6 +641,24 @@ public final class VulkanRendererHostSelfTest {
       require(initial.closes == 2 && opens[0] == 1, "explicit cleanup either failed to retry or created a replacement after close");
    }
 
+   private static void rendersInitialEmptySceneTransactionally() {
+      TrackingSession session = new TrackingSession();
+      VulkanRendererHost renderer = renderer(session);
+      session.rejectNextScene = true;
+      require(renderer.trySubmit(frame(0L, 0L)) instanceof Renderer.FrameSubmissionDeferred,
+              "initial scene backpressure did not defer the frame");
+      require(session.frameSubmissions == 0, "frame dispatched before initial scene admission");
+      renderer.submit(frame(0L, 0L));
+      require(session.lastSceneChangeSet.revision() == 0L && session.lastSceneChangeSet.reset(),
+              "initial empty scene was not published as revision zero");
+      int sceneSubmissions = session.sceneSubmissions;
+      renderer.submit(frame(1L, 0L));
+      require(session.sceneSubmissions == sceneSubmissions, "initial scene republished per frame");
+      expect(SceneRevisionException.class, () -> renderer.apply(scene(0L)));
+      require(renderer.apply(scene(1L)).acceptedSceneRevision() == 1L, "first explicit scene could not advance");
+      renderer.close();
+   }
+
    private static void recoveryBeforeFirstScenePreservesRevisionZero() {
       TrackingSession initial = new TrackingSession();
       TrackingSession recovered = new TrackingSession();
@@ -629,8 +672,11 @@ public final class VulkanRendererHostSelfTest {
       initial.failNextFrameWith = deviceLost("syntheticInitialFrameSubmit");
       RendererDeviceException recoveredFailure = (RendererDeviceException)expect(RendererDeviceException.class, () -> renderer.submit(frame(0L, 0L)));
       require(recoveredFailure.recoveryAction() == RecoveryAction.RETRY_OPERATION, "empty-scene device recreation did not publish retry semantics");
-      require(recovered.lastSceneChangeSet == null, "empty CPU authority was replayed as an initialized revision");
-      require(renderer.apply(scene(0L)).acceptedSceneRevision() == 0L, "empty-scene recovery consumed the caller's first revision");
+      require(recovered.lastSceneChangeSet != null && recovered.lastSceneChangeSet.revision() == 0L,
+              "admitted initial empty scene was not replayed after device recovery");
+      renderer.submit(frame(0L, 0L));
+      require(renderer.apply(scene(1L)).acceptedSceneRevision() == 1L,
+              "explicit scene could not advance after initial empty-scene recovery");
       renderer.close();
    }
 
@@ -723,6 +769,10 @@ public final class VulkanRendererHostSelfTest {
       private RuntimeException failNextFrameWith;
       private boolean returnWrongFrameAdmission;
       private GpuFrameLease nextFrame;
+      private int queuedEnables, completedPolls;
+      private final java.util.Map<Long,GpuFrameLease> queuedFrames=new java.util.HashMap<>();
+      public void enableBinarySemaphoreDelivery(){queuedEnables++;}
+      public GpuFrameLease acquireSubmittedFrame(long sequence){return queuedFrames.remove(sequence);}
       private FrameSnapshot nextCpuFrame;
       private int cpuFramePolls;
       private VulkanSceneResidency.SceneChangeSet lastSceneChangeSet;
@@ -789,6 +839,7 @@ public final class VulkanRendererHostSelfTest {
       }
 
       public GpuFrameLease acquireLatestFrame() {
+         completedPolls++;
          GpuFrameLease acquired = this.nextFrame;
          this.nextFrame = null;
          return acquired;

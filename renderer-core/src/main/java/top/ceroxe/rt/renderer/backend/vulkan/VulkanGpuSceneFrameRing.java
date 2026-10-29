@@ -140,6 +140,13 @@ final class VulkanGpuSceneFrameRing implements AutoCloseable {
         return true;
     }
 
+    void enableBinarySemaphoreDelivery() { for (VulkanFrameSlot slot : slots) slot.enableBinarySemaphoreDelivery(); }
+
+    VulkanFrameSlot findQueuedSlot(long sequence) {
+        for (VulkanFrameSlot slot : slots) if (slot.queuedPresentable(sequence)) return slot;
+        return null;
+    }
+
     VulkanFrameSlot latestCompletedSlot() {
         VulkanFrameSlot latest = null;
         for (VulkanFrameSlot slot : slots) {

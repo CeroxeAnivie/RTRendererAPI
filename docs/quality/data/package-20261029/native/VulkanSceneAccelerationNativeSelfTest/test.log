@@ -1,0 +1,15 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+Oct 29, 2026 4:27:56 PM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=D:\Engineering\code\APIs\RTRendererAPI\build\luxcore-api-package-20261029\native-sealed\VulkanSceneAccelerationNativeSelfTest\validation.jsonl
+VulkanSceneAccelerationNativeSelfTest passed: device=NVIDIA GeForce RTX 5080 Laptop GPU, activeRevision=2, meshes=1, instances=1, appearanceOnlyTlasReused=true
+File 'C:\Temp\rtrenderer-nvidia\9a3bc4a81a46ae8ac9bf6edfa5e392c36c159f0c9013fc1bf243290c07125d86/sl.common.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\9a3bc4a81a46ae8ac9bf6edfa5e392c36c159f0c9013fc1bf243290c07125d86/sl.deepdvc.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\9a3bc4a81a46ae8ac9bf6edfa5e392c36c159f0c9013fc1bf243290c07125d86/sl.directsr.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\9a3bc4a81a46ae8ac9bf6edfa5e392c36c159f0c9013fc1bf243290c07125d86/sl.dlss.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\9a3bc4a81a46ae8ac9bf6edfa5e392c36c159f0c9013fc1bf243290c07125d86/sl.dlss_d.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\9a3bc4a81a46ae8ac9bf6edfa5e392c36c159f0c9013fc1bf243290c07125d86/sl.dlss_g.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\9a3bc4a81a46ae8ac9bf6edfa5e392c36c159f0c9013fc1bf243290c07125d86/sl.nis.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\9a3bc4a81a46ae8ac9bf6edfa5e392c36c159f0c9013fc1bf243290c07125d86/sl.nvperf.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\9a3bc4a81a46ae8ac9bf6edfa5e392c36c159f0c9013fc1bf243290c07125d86/sl.pcl.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\9a3bc4a81a46ae8ac9bf6edfa5e392c36c159f0c9013fc1bf243290c07125d86/sl.reflex.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\9a3bc4a81a46ae8ac9bf6edfa5e392c36c159f0c9013fc1bf243290c07125d86/NvLowLatencyVk.dll' is signed by NVIDIA and the signature was verified.

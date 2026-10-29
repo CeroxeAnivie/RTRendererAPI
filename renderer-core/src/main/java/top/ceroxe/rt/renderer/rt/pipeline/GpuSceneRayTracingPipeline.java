@@ -32,11 +32,32 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     public enum Program {
         SURFACE("gpuscene_surface.rgen"), COMPACT("gpuscene_compact.rgen"), GENERAL("gpuscene.rgen"),
         COMPACT_PASSIVE("gpuscene_compact_passive.rgen"), GENERAL_PASSIVE("gpuscene_passive.rgen"),
+        COMPACT_PASSIVE_NO_DIELECTRIC("gpuscene_compact_passive_no_dielectric.rgen"),
+        GENERAL_PASSIVE_NO_DIELECTRIC("gpuscene_passive_no_dielectric.rgen"),
+        PRIMARY_TRACE("gpuscene_primary_trace.rgen"),
+        NATIVE_MEDIUM_TRACE("gpuscene_native_medium_trace.rgen"),
+        NATIVE_BOUNDARY_PACKET("gpuscene_native_boundary_packet.rgen"),
+        NATIVE_PBR_MEDIUM_TRACE("gpuscene_native_boundary_packet.rgen"),
+        NATIVE_PBR_MEDIUM_LIGHTS("gpuscene_native_pbr_medium_lights.rgen"),
+        NATIVE_BOUNDARY_SCATTERING("gpuscene_native_boundary_scattering.rgen"),
+        NATIVE_SCATTERING_LIGHTS("gpuscene_native_scattering_lights.rgen"),
+        NATIVE_MULTIPLE_SCATTERING("gpuscene_native_multiple_scattering.rgen"),
+        NATIVE_DENSITY_SCATTERING_LIGHTS("gpuscene_native_density_scattering_lights.rgen"),
+        NATIVE_OPTICAL_TRACE("gpuscene_native_optical_trace.rgen"),
+        SURFACE_PRIMARY_SHADE("gpuscene_surface_primary_shade.rgen"),
+        COMPACT_PRIMARY_SHADE("gpuscene_compact_primary_shade.rgen"),
+        GENERAL_PRIMARY_SHADE("gpuscene_primary_shade.rgen"),
         COMPACT_VOLUME("gpuscene_compact_volume.rgen"), GENERAL_VOLUME("gpuscene_volume.rgen"),
         COMPACT_CAUSTICS("gpuscene_compact_caustics.rgen"), GENERAL_CAUSTICS("gpuscene_caustics.rgen"),
         PHOTONS("gpuscene_photons.rgen");
         private final String source;
         Program(String source) { this.source = source; }
+        public boolean primaryQueue() { return this == PRIMARY_TRACE || this == NATIVE_MEDIUM_TRACE || this == NATIVE_BOUNDARY_PACKET
+                || this == NATIVE_PBR_MEDIUM_TRACE || this == NATIVE_PBR_MEDIUM_LIGHTS
+                || this == NATIVE_BOUNDARY_SCATTERING
+                || this == NATIVE_SCATTERING_LIGHTS || this == NATIVE_MULTIPLE_SCATTERING
+                || this == NATIVE_DENSITY_SCATTERING_LIGHTS || this == NATIVE_OPTICAL_TRACE || this == SURFACE_PRIMARY_SHADE
+                || this == COMPACT_PRIMARY_SHADE || this == GENERAL_PRIMARY_SHADE; }
     }
     private static final String SHADER_ROOT = "assets/rtrenderer/shaders/gpuscene/";
 
@@ -155,7 +176,8 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 throw new IllegalArgumentException("scene shader interface exceeds device descriptor limits");
             }
             descriptors = GpuSceneDescriptorLayout.create(stack, device, descriptorSetCount, sceneShaders.dataBindingCount());
-            pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout());
+            pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout(),
+                    program.primaryQueue() ? GpuScenePrimaryQueue.PUSH_BYTES : 0);
             byte[] raygenCode = loadStageCode(
                     program.source, Shaderc.shaderc_raygen_shader,
                     linearHdrOutput, shaderExecutionReorderingEnabled, sceneShaders
@@ -164,8 +186,15 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             byte[] closestCode = loadStageCode(
                     "gpuscene.rchit", Shaderc.shaderc_closesthit_shader, false, false, sceneShaders
             );
-            byte[] anyHitCode = loadStageCode("gpuscene.rahit", Shaderc.shaderc_anyhit_shader, false, false, sceneShaders);
-            boolean visibility = program != Program.SURFACE;
+            byte[] anyHitCode = loadStageCode(program == Program.NATIVE_BOUNDARY_PACKET
+                    || program == Program.NATIVE_PBR_MEDIUM_TRACE || program == Program.NATIVE_PBR_MEDIUM_LIGHTS
+                    || program == Program.NATIVE_BOUNDARY_SCATTERING
+                    ? program==Program.NATIVE_BOUNDARY_SCATTERING?"gpuscene_native_boundary_scattering.rahit":"gpuscene_native_boundary_packet.rahit" : "gpuscene.rahit",
+                    Shaderc.shaderc_anyhit_shader, false, false, sceneShaders);
+            boolean visibility = program != Program.SURFACE && program != Program.SURFACE_PRIMARY_SHADE
+                    && program != Program.PRIMARY_TRACE && program != Program.NATIVE_MEDIUM_TRACE
+                    && program != Program.NATIVE_BOUNDARY_PACKET && program != Program.NATIVE_PBR_MEDIUM_TRACE
+                    && program != Program.NATIVE_PBR_MEDIUM_LIGHTS && program != Program.NATIVE_BOUNDARY_SCATTERING;
             int recursionDepth = GpuScenePipelineRequirements.recursionDepth(missCode, closestCode, anyHitCode);
             if (properties.maxRayRecursionDepth() < recursionDepth)
                 throw new IllegalStateException("device cannot execute the declared shader recursion depth");
@@ -715,6 +744,84 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         );
     }
 
+    /** Internal direct dispatch over one bounded tile, with original pixel identity in push data. */
+    public synchronized void recordPrimaryQueueTrace(VkCommandBuffer commandBuffer, MemoryStack stack, int slot,
+            long address, int firstPixel, int count) {
+        recordPrimaryQueueTrace(commandBuffer, stack, slot, address, firstPixel, count, 0);
+    }
+
+    /** Records a tile whose primary hits and optional native attenuation already belong to Vulkan. */
+    public synchronized void recordPrimaryQueueTrace(VkCommandBuffer commandBuffer, MemoryStack stack, int slot,
+            long address, int firstPixel, int count, long transmittanceAddress) {
+        recordPrimaryQueueTrace(commandBuffer, stack, slot, address, firstPixel, count, transmittanceAddress, 0);
+    }
+
+    /** Records native transmittance and separately integrated camera-medium emission for this tile. */
+    public synchronized void recordPrimaryQueueTrace(VkCommandBuffer commandBuffer, MemoryStack stack, int slot,
+            long address, int firstPixel, int count, long transmittanceAddress, long emissionAddress) {
+        requireOpen();
+        // Bit 1 is the internal native terminal-radiance layout tag; storage addresses remain 16-byte aligned.
+        if (address == 0 || (address & 15) != 0 || (transmittanceAddress & 9) != 0 || (emissionAddress & 15) != 0
+                || firstPixel < 0 || count < 1 || (long) firstPixel + count > Integer.MAX_VALUE)
+            throw new IllegalArgumentException("invalid primary tile extent or aligned device address");
+        var push = stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        push.putLong(address).putInt(firstPixel).putInt(count).putLong(transmittanceAddress).putLong(emissionAddress).flip();
+        VK10.vkCmdPushConstants(commandBuffer, pipelineLayout,
+                KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR
+                        | KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR, 0, push);
+        recordTrace(commandBuffer, stack, slot, count, 1);
+    }
+
+    /** Records the legacy shared-primary optical tile. */
+    public synchronized void recordNativeOpticalTrace(VkCommandBuffer commandBuffer, MemoryStack stack, int slot,
+            long storageAddress, int firstPixel, int count, boolean initialize) {
+        recordNativeOpticalTrace(commandBuffer,stack,slot,storageAddress,0L,firstPixel,count,initialize);
+    }
+
+    /** Records an optical tile with an optional Vulkan-owned full primary and a tile-local initial-hit cache. */
+    public synchronized void recordNativeOpticalTrace(VkCommandBuffer commandBuffer,MemoryStack stack,int slot,
+            long storageAddress,long primaryAddress,int firstPixel,int count,boolean initialize) {
+        requireOpen();
+        if (storageAddress == 0 || (storageAddress & 15) != 0
+                || (primaryAddress & 15) != 0
+                || firstPixel < 0 || count < 1 || (long) firstPixel + count > Integer.MAX_VALUE)
+            throw new IllegalArgumentException("invalid native optical tile extent or aligned storage address");
+        var push = stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        push.putLong(storageAddress).putInt(firstPixel).putInt(count).putLong(initialize ? 1L : 0L).putLong(primaryAddress).flip();
+        VK10.vkCmdPushConstants(commandBuffer, pipelineLayout,
+                KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR
+                        | KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR, 0, push);
+        recordTrace(commandBuffer, stack, slot, count, 1);
+    }
+
+    /** Packet boundary producer writes compact continuation state to shared memory and full hits to Vulkan storage. */
+    public synchronized void recordBoundaryPacketTrace(VkCommandBuffer commandBuffer,MemoryStack stack,int slot,
+            long sharedAddress,long primaryAddress,int firstPixel,int count,long offsets) {
+        requireOpen();
+        if(sharedAddress==0||(sharedAddress&15)!=0||primaryAddress==0||(primaryAddress&15)!=0
+                ||firstPixel<0||count<1||(long)firstPixel+count>Integer.MAX_VALUE||offsets<0||(offsets&15)!=0)
+            throw new IllegalArgumentException("invalid native boundary packet dispatch");
+        var push=stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        push.putLong(sharedAddress).putInt(firstPixel).putInt(count).putLong(primaryAddress).putLong(offsets).flip();
+        VK10.vkCmdPushConstants(commandBuffer,pipelineLayout,
+                KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR
+                        | KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR,0,push);
+        recordTrace(commandBuffer,stack,slot,count,1);
+    }
+
+    /** Arbitrary-origin scatter rays write ordered volume packets consumed entirely by native CUDA. */
+    public synchronized void recordNativeBoundaryScattering(VkCommandBuffer commandBuffer,MemoryStack stack,int slot,
+            long storageAddress,int firstQuery,int count) {
+        requireOpen();
+        if(storageAddress==0||(storageAddress&15)!=0||firstQuery<0||count<1||(long)firstQuery+count>Integer.MAX_VALUE)
+            throw new IllegalArgumentException("invalid native boundary scattering query extent or storage address");
+        var push=stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        push.putLong(storageAddress).putInt(firstQuery).putInt(count).putLong(0).putLong(0).flip();
+        VK10.vkCmdPushConstants(commandBuffer,pipelineLayout,
+                KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR|KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR,0,push);
+        recordTrace(commandBuffer,stack,slot,count,1);
+    }
+
     /**
      * Records the output-image dependency and the ray dispatch as one auditable command unit.
      *
@@ -928,6 +1035,46 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             Runnable postTraceComposition,
             Runnable outputPublication
     ) {
+        recordFrame(commandBuffer, stack, descriptorSetIndex, outputImage, reconstructionOutputImage,
+                publishedOutputImage, cpuReadback, temporalImages, previousImageLayout, traceLayoutInitialized,
+                acquireExternalOwnership, releaseExternalOwnership, producerQueueFamilyIndex, extents, featureSession,
+                denoisingResources, denoisingLayoutsInitialized, reconstructionResources, reconstructionLayoutsInitialized,
+                reconstructionOutputLayoutInitialized, frameGenerationResources, frameGenerationLayoutsInitialized,
+                temporalInput, frameSequence, sceneRevision, historyReset, postTraceComposition, outputPublication, null);
+    }
+
+    /** Same frame ownership/layout transaction with an internal multi-stage trace implementation. */
+    public synchronized void recordFrame(
+            VkCommandBuffer commandBuffer,
+            MemoryStack stack,
+            int descriptorSetIndex,
+            RtGpuImage outputImage,
+            RtGpuImage reconstructionOutputImage,
+            RtGpuImage publishedOutputImage,
+            RtGpuBuffer cpuReadback,
+            GpuSceneTemporalFrameResources temporalImages,
+            int previousImageLayout,
+            boolean traceLayoutInitialized,
+            boolean acquireExternalOwnership,
+            boolean releaseExternalOwnership,
+            int producerQueueFamilyIndex,
+            VulkanFrameExtents extents,
+            VulkanFeatureSession featureSession,
+            Optional<VulkanDenoisingResourceContract> denoisingResources,
+            boolean denoisingLayoutsInitialized,
+            Optional<VulkanFrameReconstructionResourceContract> reconstructionResources,
+            boolean reconstructionLayoutsInitialized,
+            boolean reconstructionOutputLayoutInitialized,
+            Optional<VulkanFrameGenerationResourceContract> frameGenerationResources,
+            boolean frameGenerationLayoutsInitialized,
+            Optional<VulkanTemporalFrameInput> temporalInput,
+            long frameSequence,
+            long sceneRevision,
+            boolean historyReset,
+            Runnable postTraceComposition,
+            Runnable outputPublication,
+            Runnable traceCommands
+    ) {
         requireOpen();
         Objects.requireNonNull(commandBuffer, "commandBuffer");
         Objects.requireNonNull(stack, "stack");
@@ -1111,7 +1258,8 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         checkedFrameGenerationResources.ifPresent(resources -> prepareFrameGenerationResources(
                 commandBuffer, stack, resources, frameGenerationLayoutsInitialized
         ));
-        recordTrace(commandBuffer, stack, descriptorSetIndex, renderWidth, renderHeight);
+        if (traceCommands == null) recordTrace(commandBuffer, stack, descriptorSetIndex, renderWidth, renderHeight);
+        else traceCommands.run();
         checkedDenoisingResources.ifPresent(resources -> makeDenoisingSignalsAvailable(
                 commandBuffer, stack, resources
         ));

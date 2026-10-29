@@ -1,0 +1,19 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+Oct 29, 2026 4:25:32 PM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=D:\Engineering\code\APIs\RTRendererAPI\build\luxcore-api-package-20261029\native-sealed\CudaDensityProductionNativeSelfTest\validation.jsonl
+Native density HDR comparison=world-nonconstant-trilinear SPP=1 steps=13 maxAbsolute=0.000486590875 toleranceRatio=0.245365711
+Native density HDR comparison=unchanged-texture-generation-cache-hit SPP=1 steps=13 maxAbsolute=0.000486590875 toleranceRatio=0.245365711
+Native density HDR comparison=filter-address-mips-ignored SPP=1 steps=13 maxAbsolute=0.000486590875 toleranceRatio=0.245365711
+Native density HDR comparison=same-id-new-texel-generation SPP=1 steps=13 maxAbsolute=0.000486630522 toleranceRatio=0.245385703
+Native density HDR comparison=deleted-texture-restored-session-recovery SPP=1 steps=13 maxAbsolute=0.000486590875 toleranceRatio=0.245365711
+Native density HDR comparison=world-narrow-domain-one-step-two-SPP SPP=2 steps=1 maxAbsolute=0.000976153598 toleranceRatio=0.329816441
+Native density HDR comparison=outside-density-domain-eight-SPP SPP=8 steps=7 maxAbsolute=0.00000000 toleranceRatio=0.00000000
+Native density HDR comparison=rotated-nonuniform-object-boundary-two-SPP SPP=2 steps=19 maxAbsolute=0.000976216609 toleranceRatio=0.329837731
+Native density HDR comparison=sheared-object-and-local-field-frame-local-eight-SPP SPP=8 steps=23 maxAbsolute=0.000971890634 toleranceRatio=0.328376098
+Native density HDR comparison=camera-inside-sheared-density-boundary SPP=2 steps=17 maxAbsolute=0.000975962093 toleranceRatio=0.329751737
+Native density HDR comparison=world-grid-restored-after-local-priority SPP=2 steps=11 maxAbsolute=0.000487048372 toleranceRatio=0.245596406
+Native density HDR comparison=mode-switch-uniform-camera SPP=2 steps=8 maxAbsolute=0.000140154357 toleranceRatio=0.0966556103
+Native density HDR comparison=mode-switch-back-to-world-density SPP=1 steps=13 maxAbsolute=0.000486590875 toleranceRatio=0.245365711
+Native density HDR comparison=resize-frame-local-eight-SPP SPP=8 steps=29 maxAbsolute=0.000487771493 toleranceRatio=0.245961043
+Native density HDR comparison=resize-down-density-cache-recovery SPP=1 steps=13 maxAbsolute=0.000487690927 toleranceRatio=0.245920417
+CudaDensityProductionNativeSelfTest passed: comparisons=15 actualNativeDensityFrames=14 recoverableRejections=1

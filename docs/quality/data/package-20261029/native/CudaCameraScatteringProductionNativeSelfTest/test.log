@@ -1,0 +1,16 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+Oct 29, 2026 4:25:35 PM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=D:\Engineering\code\APIs\RTRendererAPI\build\luxcore-api-package-20261029\native-sealed\CudaCameraScatteringProductionNativeSelfTest\validation.jsonl
+Native scattering public HDR comparison=analytic-ambient-mixed-RGB SPP=1 steps=1 maxAbsolute=6.03806361e-05
+Native scattering public HDR comparison=analytic-HG-isotropic SPP=1 steps=8 maxAbsolute=6.03885615e-05
+Native scattering public HDR comparison=analytic-HG-forward-eight-SPP SPP=8 steps=64 maxAbsolute=0.000243467859
+Native scattering public HDR comparison=analytic-HG-backward-two-SPP SPP=2 steps=2 maxAbsolute=0.000117329989
+Native scattering public HDR comparison=directional-medium-shadow SPP=1 steps=8 maxAbsolute=6.03506556e-05
+Native scattering public HDR comparison=opaque-wall-shadow SPP=2 steps=8 maxAbsolute=6.07152276e-05
+Native scattering public HDR comparison=point-spot-directional-sun-enumerated SPP=2 steps=64 maxAbsolute=6.07352259e-05
+Native scattering public HDR comparison=point-spot-opaque-shadow SPP=1 steps=64 maxAbsolute=6.06410653e-05
+Native scattering public HDR comparison=small-light-set-importance-enumerates SPP=1 steps=64 maxAbsolute=6.07101719e-05
+Native scattering public HDR comparison=nine-light-one-sample-reservoir SPP=1 steps=8 maxAbsolute=0.000242437878
+Native scattering public HDR comparison=nine-light-eight-sample-reservoir SPP=2 steps=8 maxAbsolute=6.03826903e-05
+Native scattering public HDR comparison=resize-and-rejection-recovery SPP=2 steps=8 maxAbsolute=5.87014082e-05
+CudaCameraScatteringProductionNativeSelfTest passed: independent public HDR comparisons=12

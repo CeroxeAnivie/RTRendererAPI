@@ -1,0 +1,4 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8
+Oct 29, 2026 4:27:54 PM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=D:\Engineering\code\APIs\RTRendererAPI\build\luxcore-api-package-20261029\native-sealed\VulkanGenericBlasNativeSelfTest\validation.jsonl
+VulkanGenericBlasNativeSelfTest passed: device=NVIDIA GeForce RTX 5080 Laptop GPU, blas=0x1a000000001a, blasAddress=0x9476c00, compacted=true, storageBytes=2816->1152, tlas=0x1d000000001d, tlasAddress=0x9477100

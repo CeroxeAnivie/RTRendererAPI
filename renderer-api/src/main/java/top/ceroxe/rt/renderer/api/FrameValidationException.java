@@ -33,7 +33,9 @@ public final class FrameValidationException extends RendererException {
         /** The caustic policy is incompatible with the scene or the selected shader program. */
         INVALID_CAUSTICS,
         /** A medium density grid references a missing texture or an invalid linear slice atlas. */
-        INVALID_MEDIUM_DENSITY
+        INVALID_MEDIUM_DENSITY,
+        /** The native medium executor cannot preserve the requested frame's transport semantics. */
+        UNSUPPORTED_MEDIUM_TRANSPORT
     }
 
     /**

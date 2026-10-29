@@ -121,6 +121,7 @@ public final class VulkanFrameSlotExternalCompletionNativeSelfTest {
       try {
          submission = producerDevice.frameCommands().submitOneTimeAsync((commandBuffer, stack) -> {
          });
+         producerDevice.featureSession().commitFrameSubmission(sequence);
          reservation.publish(submission);
          submission = null;
       } finally {
