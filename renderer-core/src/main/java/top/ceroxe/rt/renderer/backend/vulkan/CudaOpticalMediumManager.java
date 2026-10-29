@@ -22,6 +22,7 @@ import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensityAbi;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumSource;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
 import top.ceroxe.rt.renderer.rt.acceleration.RtTlasBuildPlan;
 import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
@@ -82,10 +83,11 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     synchronized CudaCameraMediumManager.Prepared prepare(FrameScene scene,GpuSceneRayTracingPipeline primaryProducer,
             GpuSceneRayTracingPipeline opticalTracer,int slot,RtTlasBuildPlan buildPlan){
         checkOpen();Objects.requireNonNull(opticalTracer,"opticalTracer");
-        return onNative(()->{
+        long started=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
+        try{return onNative(()->{
             try{return prepareOnNative(scene,opticalTracer,slot,buildPlan);}
             catch(RuntimeException|Error failure){uploadedAssets=null;throw failure;}
-        });
+        });}finally{if(OpticalFrameTimings.ENABLED)OpticalFrameTimings.prepare.add(System.nanoTime()-started);}
     }
     private CudaCameraMediumManager.Prepared prepareOnNative(FrameScene scene,GpuSceneRayTracingPipeline tracer,int slot,RtTlasBuildPlan buildPlan){
         var frame=scene.frame();var plan=scene.plan();ensureCapacity(plan);long address=storage.deviceAddress();
@@ -106,11 +108,13 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                     boolean recordBuild=buildPending,uploadScene=first==0&&opticalSample==0&&branch==0;
                     int[] statistics={paths,0,0,0};
                     java.util.function.Consumer<CudaMediumRuntime.Slice> resolve=input->{
+                        long resolveStarted=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
                         int queries=statistics[0];cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
                         cuda.launchBlocking(step,input,paths,1);
                         cuda.download(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),counters);
                         for(int j=0;j<4;j++)statistics[j]=counters.get(ValueLayout.JAVA_INT,j*4L);
                         diagnosticQueries.add(queries);diagnosticInterfaces.add(statistics[2]);
+                        if(OpticalFrameTimings.ENABLED)OpticalFrameTimings.resolve.add(System.nanoTime()-resolveStarted);
                     };
                     java.util.function.Consumer<org.lwjgl.vulkan.VkCommandBuffer> continuation=command->{
                         if(statistics[1]==0&&statistics[0]>0)try(MemoryStack stack=MemoryStack.stackPush()){

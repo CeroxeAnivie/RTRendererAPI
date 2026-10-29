@@ -159,7 +159,13 @@ public final class CudaSharedRayFrame implements AutoCloseable {
         checkOpen(); Objects.requireNonNull(nativeStep); Objects.requireNonNull(vulkanStep);
         if (busy) throw new IllegalStateException("native ray slot is already in an exchange");
         busy = true;
-        try (MemoryStack s = MemoryStack.stackPush()) {
+        final boolean profile=OpticalFrameTimings.ENABLED;
+        final long exchangeStarted=profile?System.nanoTime():0L;
+        try (var producerTiming=profile&&producer!=null?runtime.frameCommands().acquireGpuTimestampCapture(
+                    "opticalPrimary",new String[]{"start","end"}):null;
+             var consumerTiming=profile&&finalConsumer==null?runtime.frameCommands().acquireGpuTimestampCapture(
+                    "opticalContinuation",new String[]{"start","end"}):null;
+             MemoryStack s = MemoryStack.stackPush()) {
             check(vkResetFences(device(), fence), "reset native ray fence");
             check(vkResetCommandBuffer(release, 0), "reset native ray release");
             check(vkBeginCommandBuffer(release, VkCommandBufferBeginInfo.calloc(s).sType$Default()), "begin native ray release");
@@ -168,7 +174,9 @@ public final class CudaSharedRayFrame implements AutoCloseable {
                         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
                         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, s);
+                if(producerTiming!=null)producerTiming.begin(release,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
                 producer.accept(release);
+                if(producerTiming!=null)producerTiming.write(release,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
             }
             barrier(release, runtime.queueFamilyIndex(), VK11.VK_QUEUE_FAMILY_EXTERNAL,
                     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 0,
@@ -176,7 +184,9 @@ public final class CudaSharedRayFrame implements AutoCloseable {
             check(vkEndCommandBuffer(release), "end native ray release");
             check(VulkanQueueHostSync.submit(runtime.frameQueue(), VkSubmitInfo.calloc(1, s).sType$Default()
                     .pCommandBuffers(s.pointers(release.address())).pSignalSemaphores(s.longs(toCuda)), VK_NULL_HANDLE), "release to CUDA");
+            if(profile)OpticalFrameTimings.release.add(System.nanoTime()-exchangeStarted);
             Runnable completeConsumer = () -> {
+                final long consumerStarted=profile?System.nanoTime():0L;
                 if (finalConsumer != null) {
                     finalConsumer.submitAndWait(toVulkan, command -> barrier(command,
                             VK11.VK_QUEUE_FAMILY_EXTERNAL, runtime.queueFamilyIndex(), 0,
@@ -189,27 +199,39 @@ public final class CudaSharedRayFrame implements AutoCloseable {
                 barrier(acquire, VK11.VK_QUEUE_FAMILY_EXTERNAL, runtime.queueFamilyIndex(), 0,
                         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, s);
+                if(consumerTiming!=null)consumerTiming.begin(acquire,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
                 vulkanStep.accept(acquire);
+                if(consumerTiming!=null)consumerTiming.write(acquire,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
                 check(vkEndCommandBuffer(acquire), "end acquire");
                 check(VulkanQueueHostSync.submit(runtime.frameQueue(), VkSubmitInfo.calloc(1, s).sType$Default()
                         .pWaitSemaphores(s.longs(toVulkan)).pWaitDstStageMask(s.ints(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT))
                         .pCommandBuffers(s.pointers(acquire.address())), fence), "acquire from CUDA");
                 submitted = true;
+                long waitStarted=profile?System.nanoTime():0L;
+                if(profile)OpticalFrameTimings.consumerRecord.add(waitStarted-consumerStarted);
                 check(vkWaitForFences(device(), fence, true, 10_000_000_000L), "native ray completion");
+                if(profile)OpticalFrameTimings.consumerWait.add(System.nanoTime()-waitStarted);
                 submitted = false;
             };
+            final long cudaStarted=profile?System.nanoTime():0L;
             if (finalConsumer == null) {
                 // General continuations may nest exchanges and read host counters. Preserve
                 // their established blocking CUDA boundary before the next Vulkan query.
                 cuda.exchangeExternalBlocking(importedToCuda, importedToVulkan,
                         () -> nativeStep.accept(imported.slice(0, bytes)));
+                if(profile)OpticalFrameTimings.cudaStage.add(System.nanoTime()-cudaStarted);
                 completeConsumer.run();
             } else {
                 cuda.exchangeExternalWithCompletionBlocking(importedToCuda, importedToVulkan,
-                        () -> nativeStep.accept(imported.slice(0, bytes)), completeConsumer);
+                        () -> nativeStep.accept(imported.slice(0, bytes)), ()->{
+                            if(profile)OpticalFrameTimings.cudaStage.add(System.nanoTime()-cudaStarted);
+                            completeConsumer.run();
+                        });
             }
+            if(producerTiming!=null&&producerTiming.resolve())OpticalFrameTimings.producerGpu.add(producerTiming.totalNanos());
+            if(consumerTiming!=null&&consumerTiming.resolve())OpticalFrameTimings.consumerGpu.add(consumerTiming.totalNanos());
         } catch (RuntimeException | Error failure) { broken = true; throw failure; }
-        finally { busy = false; }
+        finally { busy = false;if(profile){OpticalFrameTimings.exchange.add(System.nanoTime()-exchangeStarted);OpticalFrameTimings.rounds.increment();} }
     }
     public void nativeOnlyBlocking(Consumer<CudaMediumRuntime.Slice> nativeStep) { exchangeBlocking(nativeStep, command -> { }); }
 

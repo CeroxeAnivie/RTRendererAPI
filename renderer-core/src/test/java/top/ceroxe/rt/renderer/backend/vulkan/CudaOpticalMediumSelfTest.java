@@ -34,6 +34,7 @@ public final class CudaOpticalMediumSelfTest {
         CudaOpticalMediumProfile.requireSupported(frame,nativeScene,true);
         expectUnsupported(()->CudaOpticalMediumProfile.requireSupported(frame,nativeScene,false));
         verifyStorageLayouts();
+        verifyCounterModes(plan,frame,boundary);
         expectIllegal(()->CudaOpticalMediumAbi.requireMedium(new Medium(Rgb.ZERO,new Rgb(.1f,0,0),Rgb.ZERO,1,1,0)
                 .withDensityField(MediumDensityField.grid(50,1,AffineTransform.identity()))));
         verifyDensity(frame,medium,boundary);
@@ -43,6 +44,24 @@ public final class CudaOpticalMediumSelfTest {
                 &&source.contains("RoughGlassMaterial_Sample")&&source.contains("SchlickDistribution_SampleH"),"pinned glass, microfacet, segment and priority functions remain assembled");
         verifySurfaceProof();
         System.out.println("CudaOpticalMediumSelfTest passed: primary lifetime, all SPP/branches/budgets, priority, smooth/rough admission");
+    }
+    private static void verifyCounterModes(CudaOpticalMediumAbi.Plan plan,RenderFrameRequest frame,
+            CudaBoundaryMediumAbi.Boundary boundary) {
+        String previous=System.getProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY);
+        try {
+            for(boolean reduced:new boolean[]{false,true}) {
+                System.setProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY,Boolean.toString(reduced));
+                var data=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(plan,frame,List.of(boundary),new int[0])).order(ByteOrder.nativeOrder());
+                require(data.getInt(184)==(reduced?1:0),"counter mode is explicit in the optical header");
+                CudaOpticalMediumAbi.updateTile(data,plan,0,plan.pixels(),0,0);
+                require(data.getInt(184)==(reduced?1:0),"tile update preserves counter mode");
+            }
+            System.clearProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY);
+            require(CudaOpticalMediumAbi.reducedCounters(),"block-reduced counters are enabled by default");
+        } finally {
+            if(previous==null)System.clearProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY);
+            else System.setProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY,previous);
+        }
     }
     private static void verifyDensity(RenderFrameRequest frame,Medium medium,CudaBoundaryMediumAbi.Boundary boundary) {
         var field=MediumDensityField.grid(50,1,AffineTransform.identity());

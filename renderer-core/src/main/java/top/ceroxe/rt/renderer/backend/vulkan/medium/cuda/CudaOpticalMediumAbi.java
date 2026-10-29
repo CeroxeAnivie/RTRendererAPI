@@ -16,6 +16,7 @@ public final class CudaOpticalMediumAbi {
     public static final long DEFAULT_RESIDENT_BYTES=512L*1024*1024,ALLOCATION_ALLOWANCE=65536;
     public static final String EXTERNAL_PRIMARY_PROPERTY="top.ceroxe.rt.medium.cuda.opticalExternalPrimary";
     public static final String DIRECT_PRIMARY_PROPERTY="top.ceroxe.rt.medium.cuda.opticalDirectPrimary";
+    public static final String REDUCED_COUNTERS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalReducedCounters";
     private CudaOpticalMediumAbi() { }
     public record Plan(int pixels,int samples,int tilePixels,int boundaryCount,int stateOffset,int hitOffset,
             int evaluationOffset,int primaryOffset,int transmittanceOffset,int emissionOffset,int priorityOffset,
@@ -93,7 +94,8 @@ public final class CudaOpticalMediumAbi {
         var environmentScatter=frame.environment().cameraMedium().scattering().multiply(frame.environment().cameraMedium().density());
         packed.putFloat(160,environmentScatter.red()).putFloat(164,environmentScatter.green()).putFloat(168,environmentScatter.blue())
                 .putFloat(172,frame.environment().cameraMedium().anisotropy()).putInt(176,frame.mediumTransport().scatteringBounces())
-                .putInt(180,plan.directPrimary()?1:0);
+                .putInt(180,plan.directPrimary()?1:0)
+                .putInt(184,reducedCounters()?1:0);
         var boundaries=new ArrayList<>(source);boundaries.sort((a,b)->Integer.compareUnsigned(a.slot(),b.slot()));
         var compact=new HashMap<Integer,Integer>();
         for(int index=0;index<boundaries.size();index++) {
@@ -125,6 +127,9 @@ public final class CudaOpticalMediumAbi {
         data.putInt(8,pixels*plan.samples()).putInt(16,firstPixel).putInt(20,pixels)
                 .putInt(136,opticalSample).putInt(140,branch);
         for(int offset=STATISTICS_OFFSET;offset<STATISTICS_OFFSET+STATISTICS_BYTES;offset+=4)data.putInt(offset,0);
+    }
+    public static boolean reducedCounters() {
+        return Boolean.parseBoolean(System.getProperty(REDUCED_COUNTERS_PROPERTY,"true"));
     }
     private static void putMedium(ByteBuffer target,int base,Medium medium) {
         var a=medium.absorption().multiply(medium.density());var e=medium.emission().multiply(medium.density());

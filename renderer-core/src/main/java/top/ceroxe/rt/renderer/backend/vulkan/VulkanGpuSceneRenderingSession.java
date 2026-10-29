@@ -734,7 +734,12 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
         }
         latestCpuFrameSequence();
         FrameSnapshot[] result = {null};
-        consumeLatestCpuFrame(afterFrameSequence, view -> result[0] = FrameSnapshot.copyOf(view));
+        consumeLatestCpuFrame(afterFrameSequence, view -> {
+            long started=top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings.ENABLED?System.nanoTime():0L;
+            result[0] = FrameSnapshot.copyOf(view);
+            if(top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings.ENABLED)
+                top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings.snapshotCopy.add(System.nanoTime()-started);
+        });
         return result[0];
     }
 

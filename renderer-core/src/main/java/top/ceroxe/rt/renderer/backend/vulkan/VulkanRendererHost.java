@@ -1091,7 +1091,12 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, top.cero
 
     private Optional<FrameSnapshot> pollFrameLocked() {
         FrameSnapshot[] result = {null};
-        readFrameLocked(view -> result[0] = FrameSnapshot.copyOf(view));
+        readFrameLocked(view -> {
+            long started=top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings.ENABLED?System.nanoTime():0L;
+            result[0] = FrameSnapshot.copyOf(view);
+            if(top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings.ENABLED)
+                top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings.snapshotCopy.add(System.nanoTime()-started);
+        });
         return Optional.ofNullable(result[0]);
     }
 

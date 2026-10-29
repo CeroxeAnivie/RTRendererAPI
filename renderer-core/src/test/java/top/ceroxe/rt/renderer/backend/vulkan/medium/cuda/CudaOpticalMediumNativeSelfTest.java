@@ -18,6 +18,16 @@ public final class CudaOpticalMediumNativeSelfTest {
             bool good=rtr_roughglass::sample(fixed,make_float3(r[7]),r[3],r[0],r[1],r[4],r[5],r[6]!=0,&direction,&weight);
             r[8]=direction.x;r[9]=direction.y;r[10]=direction.z;r[11]=weight.x;r[12]=good;
         }
+        extern "C" __global__ void optical_counter_probe(unsigned char*b,int count){
+            int i=blockIdx.x*blockDim.x+threadIdx.x;
+            bool reduced=((unsigned int*)b)[46]!=0u;
+            unsigned int statistics[4]={0u,0u,0u,0u};
+            if(i<count&&(i&7)!=0){
+                rtr_optical::increment(b,reduced?statistics:nullptr,i&3);
+                if(i%3==0)rtr_optical::increment(b,reduced?statistics:nullptr,2u);
+            }
+            if(reduced)rtr_optical::reduceStatistics(b,statistics);
+        }
         """;
     public static void main(String[] args){
         float[][] cases={{1,1.5f,1},{1.5f,1,1},{1.5f,1,.5f},{1,1,1},{1,1,.1f},{1,1.33f,.3f},{1.7f,1.2f,.9f},{1,1.5f,.000001f}};
@@ -43,8 +53,28 @@ public final class CudaOpticalMediumNativeSelfTest {
                 }
             }
             verifyRoughGlass(cuda,arena);
+            verifyCounterReduction(cuda,arena);
         }
         System.out.println("CudaOpticalMediumNativeSelfTest passed: pinned smooth/rough glass, independent double directions/energy, eta squared, black tint and TIR");
+    }
+    private static void verifyCounterReduction(CudaMediumRuntime cuda,Arena arena) {
+        try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+PROBE,"optical_counter_probe")) {
+            for(int count:new int[]{1,31,32,33,255,256,257,1069}) {
+                int bytes=Math.max(384,count);int[] expected=new int[4];
+                for(int i=0;i<count;i++)if((i&7)!=0){expected[i&3]++;if(i%3==0)expected[2]++;}
+                try(var records=cuda.allocate(bytes)) {
+                    var host=arena.allocate(bytes,16);
+                    for(boolean reduced:new boolean[]{false,true}) {
+                        host.fill((byte)0);host.set(JAVA_INT,184,reduced?1:0);
+                        cuda.upload(records.slice(0,bytes),host);
+                        cuda.launchBlocking(kernel,records.slice(0,bytes),count,1);
+                        cuda.download(records.slice(0,bytes),host);
+                        for(int k=0;k<4;k++)if(host.get(JAVA_INT,112+k*4L)!=expected[k])
+                            throw new AssertionError("optical counters: count="+count+" reduced="+reduced+" counter="+k);
+                    }
+                }
+            }
+        }
     }
     private static void verifyRoughGlass(CudaMediumRuntime cuda,Arena arena) {
         var cases=new java.util.ArrayList<float[]>();

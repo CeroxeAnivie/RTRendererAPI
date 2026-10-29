@@ -10,6 +10,7 @@ import java.util.Locale;
 import top.ceroxe.rt.renderer.api.*;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensityAbi;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
 
 /** Public optical HDR with independent smooth/rough dielectric references and closed-boundary controls. */
 public final class CudaOpticalMediumProductionNativeSelfTest {
@@ -19,6 +20,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
     private static Renderer renderer;private static long sequence,revision;private static int width=37,height=29;
     private static int accepted,rejected;
     private static boolean benchmarkPolling;
+    private static long submitNanos,pollNanos,pollWorkNanos,pollGapNanos;
     public static void main(String[] args)throws Exception{
         if(java.util.Arrays.asList(args).contains("--benchmark")){benchmark();return;}
         Files.createDirectories(OUTPUT);String previous=System.getProperty(CudaCameraMediumProfile.ENABLE_PROPERTY);
@@ -92,11 +94,32 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             for(int frame=0;frame<warmup;frame++)capture(null,request(camera,1,budget,blueSky()));
             long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
             long queriesBefore=CudaOpticalMediumManager.diagnosticQueries.sum(),interfacesBefore=CudaOpticalMediumManager.diagnosticInterfaces.sum();
+            long[] profileBefore=OpticalFrameTimings.snapshot();long submitBefore=submitNanos,pollBefore=pollNanos;
+            long pollWorkBefore=pollWorkNanos,pollGapBefore=pollGapNanos;
+            var gpuBefore=renderer.diagnostics().frameGpuTiming();
             long[] nanos=new long[frames];FrameSnapshot last=null;long started=System.nanoTime();
             for(int frame=0;frame<frames;frame++) {
                 long frameStarted=System.nanoTime();last=capture(null,request(camera,1,budget,blueSky()));nanos[frame]=System.nanoTime()-frameStarted;
             }
             long elapsed=System.nanoTime()-started;
+            var gpuAfter=renderer.diagnostics().frameGpuTiming();
+            if(OpticalFrameTimings.ENABLED) {
+                long[] profileAfter=OpticalFrameTimings.snapshot();
+                String[] names={"nativePrepareWallNanos","exchangeWallNanos","vulkanReleaseRecordSubmitWallNanos","cudaStageWallNanos",
+                        "cudaResolveWallNanos","vulkanContinuationRecordSubmitWallNanos","vulkanContinuationFenceWaitWallNanos",
+                        "vulkanPrimaryGpuNanos","vulkanContinuationGpuNanos","snapshotCpuCopyWallNanos","exchangeRounds"};
+                var attribution=new StringBuilder("{\n\"scope\":\"same timed full completion window; GPU metrics overlap wall metrics\",\n\"frames\":")
+                        .append(frames).append(",\n\"fullCompletionWallNanos\":").append(elapsed)
+                        .append(",\n\"publicSubmitWallNanos\":").append(submitNanos-submitBefore)
+                        .append(",\n\"postSubmitPollTotalWallNanos\":").append(pollNanos-pollBefore)
+                        .append(",\n\"postSubmitPollWorkWallNanos\":").append(pollWorkNanos-pollWorkBefore)
+                        .append(",\n\"postSubmitSpinWaitWallNanos\":").append(pollGapNanos-pollGapBefore);
+                for(int i=0;i<names.length;i++)attribution.append(",\n\"").append(names[i]).append("\":").append(profileAfter[i]-profileBefore[i]);
+                long gpuTotal=gpuAfter.averageTotalNanos()*gpuAfter.completedSamples()-gpuBefore.averageTotalNanos()*gpuBefore.completedSamples();
+                attribution.append(",\n\"finalShadeAndGpuReadbackNanos\":").append(gpuTotal)
+                        .append(",\n\"finalGpuSamples\":").append(gpuAfter.completedSamples()-gpuBefore.completedSamples()).append("\n}\n");
+                Files.writeString(OUTPUT.resolve("frame-components.json"),attribution);
+            }
             long nativeFrames=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
             long queries=CudaOpticalMediumManager.diagnosticQueries.sum()-queriesBefore,interfaces=CudaOpticalMediumManager.diagnosticInterfaces.sum()-interfacesBefore;
             long pathBudget=Math.multiplyExact((long)width*height,Math.multiplyExact((long)frames,opticalSamples));
@@ -113,6 +136,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                     plan.externalPrimary(),width,height,opticalSamples,Math.min(cap,CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES),plan.bytes(),
                     plan.externalPrimary()?plan.primaryBytes():0,plan.tilePixels(),tiles,warmup,frames,nativeFrames,queries,interfaces,
                     coldNanos/1e6,elapsed/1e6,frames*1e9/elapsed,median,p95));
+            json.insert(2,String.format(Locale.ROOT,"  \"directPrimary\":%s,\n  \"reducedCounters\":%s,\n",plan.directPrimary(),CudaOpticalMediumAbi.reducedCounters()));
             for(int frame=0;frame<frames;frame++){if(frame>0)json.append(',');json.append(nanos[frame]);}
             json.append("],\n  \"comparisons\":[").append(String.join(",",RESULTS)).append("]\n}\n");
             Files.writeString(OUTPUT.resolve("benchmark.json"),json);
@@ -392,10 +416,17 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
     private static void apply(SceneTransaction transaction)throws Exception{long deadline=System.nanoTime()+TIMEOUT.toNanos();for(;;)try{renderer.apply(transaction);return;}
         catch(SubmissionRejectedException pending){require(System.nanoTime()<deadline,"optical scene apply timeout");Thread.sleep(1);}}
     private static FrameSnapshot capture(String name,RenderFrameRequest request)throws Exception{long deadline=System.nanoTime()+TIMEOUT.toNanos();
+        long captureStarted=benchmarkPolling?System.nanoTime():0L;
         while(!(renderer.trySubmit(request) instanceof Renderer.FrameSubmitted)){require(System.nanoTime()<deadline,"optical admission timeout");pollPause();}accepted++;
-        while(System.nanoTime()<deadline){var ready=renderer.pollFrame();if(ready.isPresent()&&ready.orElseThrow().frameSequence()==request.sequence()){var frame=ready.orElseThrow();
+        long submitted=benchmarkPolling?System.nanoTime():0L;
+        if(benchmarkPolling)submitNanos+=submitted-captureStarted;
+        while(System.nanoTime()<deadline){long pollStarted=benchmarkPolling?System.nanoTime():0L;var ready=renderer.pollFrame();
+            if(benchmarkPolling)pollWorkNanos+=System.nanoTime()-pollStarted;
+            if(ready.isPresent()&&ready.orElseThrow().frameSequence()==request.sequence()){var frame=ready.orElseThrow();
             require(frame.renderedSceneRevision()==revision&&frame.format()==TextureFormat.RGBA16_FLOAT,"optical final HDR provenance");
-            if(name!=null){byte[] bytes=new byte[frame.byteCount()];frame.pixels().get(bytes);Files.write(OUTPUT.resolve(name+".rgba16f"),bytes);}return frame;}pollPause();}
+            if(name!=null){byte[] bytes=new byte[frame.byteCount()];frame.pixels().get(bytes);Files.write(OUTPUT.resolve(name+".rgba16f"),bytes);}
+            if(benchmarkPolling)pollNanos+=System.nanoTime()-submitted;return frame;}
+            long gapStarted=benchmarkPolling?System.nanoTime():0L;pollPause();if(benchmarkPolling)pollGapNanos+=System.nanoTime()-gapStarted;}
         throw new AssertionError("optical final HDR timeout");}
     private static void pollPause()throws InterruptedException{if(benchmarkPolling)Thread.onSpinWait();else Thread.sleep(1);}
     private static void expectRejected(RenderFrameRequest frame)throws Exception{long deadline=System.nanoTime()+TIMEOUT.toNanos();for(;;){try{

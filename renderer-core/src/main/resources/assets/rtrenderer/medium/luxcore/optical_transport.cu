@@ -222,12 +222,10 @@ __device__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*sta
     if(peak(rgb(s->throughput))<=((float*)b)[32]){finish(b,i,s,statistics);return;}increment(b,statistics,0u);
 }
 
-extern "C" __global__ void native_optical_step(unsigned char*b,int count){
-    const int i=blockIdx.x*blockDim.x+threadIdx.x;
-    if(((unsigned int*)b)[46]==0u){if(i<count)rtr_optical_step_impl(b,count,nullptr);return;}
-    // All lanes reach the reduction, including the final partial block's inactive lanes.
-    unsigned int statistics[4]={0u,0u,0u,0u};
-    if(i<count)rtr_optical_step_impl(b,count,statistics);
+namespace rtr_optical {
+// CudaMediumRuntime launches 256 threads per block. Every lane, including tail lanes,
+// must call this helper; counters are exact integers and do not affect radiance ordering.
+__device__ __forceinline__ void reduceStatistics(unsigned char*b,unsigned int*statistics){
     const unsigned int lane=threadIdx.x&31u,warp=threadIdx.x>>5u;
     for(unsigned int offset=16u;offset>0u;offset>>=1u)
         for(unsigned int k=0u;k<4u;++k)statistics[k]+=__shfl_down_sync(0xffffffffu,statistics[k],offset);
@@ -236,4 +234,12 @@ extern "C" __global__ void native_optical_step(unsigned char*b,int count){
     __syncthreads();
     if(threadIdx.x<4u){unsigned int sum=0u;for(unsigned int w=0u;w<(blockDim.x+31u)/32u;++w)sum+=totals[w*4u+threadIdx.x];
         if(sum)atomicAdd(((unsigned int*)b)+28+threadIdx.x,sum);}
+}
+}
+extern "C" __global__ void native_optical_step(unsigned char*b,int count){
+    const int i=blockIdx.x*blockDim.x+threadIdx.x;
+    if(((unsigned int*)b)[46]==0u){if(i<count)rtr_optical_step_impl(b,count,nullptr);return;}
+    unsigned int statistics[4]={0u,0u,0u,0u};
+    if(i<count)rtr_optical_step_impl(b,count,statistics);
+    rtr_optical::reduceStatistics(b,statistics);
 }

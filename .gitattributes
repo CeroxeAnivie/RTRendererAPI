@@ -4,3 +4,6 @@
 *.cmd text eol=crlf
 *.jar binary
 *.png binary
+
+# Pinned source manifests validate exact bytes, including upstream line endings.
+renderer-core/src/main/resources/assets/rtrenderer/medium/luxcore/* -text

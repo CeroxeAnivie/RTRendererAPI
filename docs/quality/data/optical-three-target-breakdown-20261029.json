@@ -1,0 +1,70 @@
+{
+  "frames": 256,
+  "rounds": 3072,
+  "method": "Nsight API sequence matched by kernel correlation IDs, same last 3072 timed rounds; first wait includes actual Vulkan producer and CUDA work",
+  "cudaStageMeanMs": 18.201645703125,
+  "components": [
+    {
+      "component": "externalWaitEnqueue",
+      "totalNanos": 108356584,
+      "meanMsPerFrame": 0.42326790625,
+      "percentOfFullFrame": 1.1125878041294983
+    },
+    {
+      "component": "resetKernelLaunch",
+      "totalNanos": 156908465,
+      "meanMsPerFrame": 0.61292369140625,
+      "percentOfFullFrame": 1.6111106319453579
+    },
+    {
+      "component": "opticalKernelLaunch",
+      "totalNanos": 50403903,
+      "meanMsPerFrame": 0.19689024609375,
+      "percentOfFullFrame": 0.5175390888875404
+    },
+    {
+      "component": "waitForProducerAndOpticalKernel",
+      "totalNanos": 3643070957,
+      "meanMsPerFrame": 14.23074592578125,
+      "percentOfFullFrame": 37.40646084170188
+    },
+    {
+      "component": "counterReadbackApi",
+      "totalNanos": 252389026,
+      "meanMsPerFrame": 0.9858946328125,
+      "percentOfFullFrame": 2.5914895233659534
+    },
+    {
+      "component": "externalSignalEnqueue",
+      "totalNanos": 129259883,
+      "meanMsPerFrame": 0.50492141796875,
+      "percentOfFullFrame": 1.3272194829342892
+    },
+    {
+      "component": "waitAfterSignal",
+      "totalNanos": 9409436,
+      "meanMsPerFrame": 0.036755609375,
+      "percentOfFullFrame": 0.09661456047135124
+    },
+    {
+      "component": "remainingJavaFFMContextAndSchedulingWithinStage",
+      "totalNanos": 309823046,
+      "meanMsPerFrame": 1.2102462734375,
+      "percentOfFullFrame": 3.1812127117061255
+    }
+  ],
+  "gpuKernelMeanMsByRound": {
+    "0": 1.249375625,
+    "1": 0.4978421484375,
+    "2": 1.22558933984375,
+    "3": 0.624851578125,
+    "4": 1.19445240625,
+    "5": 0.4743345703125,
+    "6": 1.20067787890625,
+    "7": 0.60666046875,
+    "8": 0.1738745625,
+    "9": 0.05869853515625,
+    "10": 0.17537490625,
+    "11": 0.07369691015625
+  }
+}
