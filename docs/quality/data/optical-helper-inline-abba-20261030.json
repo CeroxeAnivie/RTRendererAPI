@@ -1,0 +1,15 @@
+{
+  "rawEvidenceDirectory": "renderer-core\\build\\optical-helper-inline-abba-20261030-0355",
+  "rawSummarySha256": "88e71044a93b66f7145b15cfb602ff73092d77d7bf0778298da4b6a240cf3f89",
+  "decision": "retained: positive complete-frame ABBA, exact HDR equality",
+  "method": "Two artifact ABBA, 64 warmup and 256 complete CPU HDR frames per run; profiling disabled",
+  "beforeMs": 13.5824107421875,
+  "afterMs": 13.120321484375001,
+  "beforeFps": 73.62463254729595,
+  "afterFps": 76.2176446050427,
+  "fpsGainPercent": 3.5219354827761062,
+  "frameReductionPercent": 3.402115181049792,
+  "allHdrHashesEqual": true,
+  "beforeArtifactSha256": "e7b9cb3414e2c91d3342968fc3433bbf27076a7d0bdc133c679c7014c590401e",
+  "afterArtifactSha256": "b6bb7f38119cdfd06493b353821ca02e31ec5f62a334a80caae58abde3a63535"
+}

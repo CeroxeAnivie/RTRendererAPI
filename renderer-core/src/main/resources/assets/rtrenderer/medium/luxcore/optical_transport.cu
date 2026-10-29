@@ -97,7 +97,7 @@ __device__ float random(unsigned int path,unsigned int seed,unsigned int event){
     v^=v>>16;v*=0x7feb352du;v^=v>>15;return (v>>8)*(1.f/16777216.f);
 }
 __device__ void increment(unsigned char*b,unsigned int*statistics,unsigned int index){if(statistics)++statistics[index];else atomicAdd(((unsigned int*)b)+28+index,1u);}
-template<class S> __device__ void finish(unsigned char *b,int i,S *s,unsigned int*statistics,unsigned int error=0){
+template<class S> __device__ __forceinline__ void finish(unsigned char *b,int i,S *s,unsigned int*statistics,unsigned int error=0){
 #ifdef RTR_OPTICAL_FINISH_PROFILE
     PhaseSample finishSample(b);
 #define RTR_FINISH_NEXT(p) finishSample.next(p)
@@ -119,7 +119,7 @@ template<class S> __device__ void finish(unsigned char *b,int i,S *s,unsigned in
     RTR_FINISH_NEXT(6u);
 #undef RTR_FINISH_NEXT
 }
-template<class S> __device__ bool initialize(unsigned char *b,S *s){
+template<class S> __device__ __forceinline__ bool initialize(unsigned char *b,S *s){
     unsigned int*h=(unsigned int*)b;if(h[0]!=0x524f5031u||h[1]!=4u||h[8]>32||h[6]<1||h[6]>32)return false;
     if constexpr(S::SMALL){if(h[7]!=0u||h[8]!=0u)return false;}
     else{
@@ -129,7 +129,7 @@ template<class S> __device__ bool initialize(unsigned char *b,S *s){
     s->counters.z=1;return true;
 }
 __device__ float ior(unsigned char *b,unsigned int selected){return selected==0xffffffffu?((float*)b)[23]:table(b)[selected].absorption.w;}
-template<class S> __device__ bool segment(unsigned char*b,S*s,float3 origin,float distance,bool*collision,bool sample=true){
+template<class S> __device__ __forceinline__ bool segment(unsigned char*b,S*s,float3 origin,float distance,bool*collision,bool sample=true){
     *collision=false;
     distance=fminf(fmaxf(distance,0.f),s->throughput.w);if(distance==0.f)return true;
     const unsigned int selected=selectedVolume(s);const float*h=(const float*)b;
@@ -230,7 +230,7 @@ extern "C" __global__ void native_optical_reset(unsigned char*b,int count){if(bl
 #define RTR_ENTRY_NEXT(p)
 #define RTR_ENTRY_END()
 #endif
-template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=false> __device__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*statistics){
+template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=false> __device__ __forceinline__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*statistics){
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;using namespace rtr_optical;
     RTR_PHASE_SCOPE(b);
     RTR_ENTRY_SCOPE(b);

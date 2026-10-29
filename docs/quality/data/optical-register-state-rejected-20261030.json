@@ -1,0 +1,17 @@
+{
+  "rawEvidenceDirectory": "renderer-core\\build\\optical-register-state-abba-20261030-0342",
+  "rawSummarySha256": "7139b6db66df6ab5d09cad57bd88c658ae1ccb78ef333106f111560b39e3d12e",
+  "decision": "reverted: repeated complete-frame regression",
+  "method": "ABBA; A=enabled, B=disabled; same artifact; full immutable CPU HDR completion; profiling disabled",
+  "property": "top.ceroxe.rt.medium.cuda.opticalRegisterState",
+  "warmupFrames": 64,
+  "timedFramesPerRun": 256,
+  "beforeMeanMs": 13.4018888671875,
+  "afterMeanMs": 16.161797265624998,
+  "beforeFps": 74.61634773351605,
+  "afterFps": 61.87430664824199,
+  "fpsGainPercent": -17.07674185659801,
+  "frameTimeReductionPercent": -20.593428477046373,
+  "allFinalImageHashesEqual": true,
+  "artifactSha256": "e6551e1e5effddad0a2805aa0f2053dd8c07c8e8715a85b15c8fc34b427f3503"
+}

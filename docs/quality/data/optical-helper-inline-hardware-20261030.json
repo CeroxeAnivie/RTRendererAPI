@@ -1,0 +1,528 @@
+{
+  "scope": "NCU 内核重放硬件定位；不代表完整帧性能或整帧占比；未锁定时钟及缓存",
+  "directory": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\renderer-core\\build\\optical-helper-inline-hardware-20261030-0408",
+  "exportedSourceSections": 8,
+  "actualKernels": 4,
+  "rounds": [
+    {
+      "kernelId": 0,
+      "kernel": "native_optical_step_8",
+      "metrics": {
+        "gpu__time_duration.sum": 775424.0,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 74.43,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 28.52,
+        "dram__bytes.sum.per_second": 666316606140.64,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 32.33,
+        "launch__registers_per_thread": 104.0,
+        "launch__stack_size": 1024.0
+      },
+      "theoreticalSectors": {
+        "L2 Theoretical Sectors Global": 54634500.0,
+        "L2 Theoretical Sectors Global Excessive": 15552000.0,
+        "L2 Theoretical Sectors Global Ideal": 39082500.0,
+        "L2 Theoretical Sectors Local": 0.0
+      },
+      "excessiveFraction": 0.28465530022238694,
+      "largestExcessiveInstructions": [
+        {
+          "Address": "0x110e670020",
+          "Source": "      LDG.E R0, desc[UR8][R26.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e670170",
+          "Source": "      LDG.E R23, desc[UR8][R26.64+0x4]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6701c0",
+          "Source": "      LDG.E R45, desc[UR8][R26.64+0xc]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6702a0",
+          "Source": "      LDG.E R23, desc[UR8][R22.64+0x8]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6702d0",
+          "Source": "@P0   LDG.E R0, desc[UR8][R10.64+0xc]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e674b70",
+          "Source": "      LDG.E R18, desc[UR8][R18.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e674c30",
+          "Source": "@!P0  LDG.E R22, desc[UR8][R56.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e674c40",
+          "Source": "@!P1  LDG.E R2, desc[UR8][R58.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6754c0",
+          "Source": "      LDG.E R0, desc[UR8][R56.64+0xc]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6754f0",
+          "Source": "      LDG.E R27, desc[UR8][R62.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e675500",
+          "Source": "      LDG.E R26, desc[UR8][R62.64+0x4]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e675510",
+          "Source": "      LDG.E R50, desc[UR8][R62.64+0x8]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        }
+      ]
+    },
+    {
+      "kernelId": 1,
+      "kernel": "native_optical_step_8",
+      "metrics": {
+        "gpu__time_duration.sum": 820288.0,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 90.69,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 12.09,
+        "dram__bytes.sum.per_second": 521938987282.52,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 32.48,
+        "launch__registers_per_thread": 104.0,
+        "launch__stack_size": 1024.0
+      },
+      "theoreticalSectors": {
+        "L2 Theoretical Sectors Global": 21392100.0,
+        "L2 Theoretical Sectors Global Excessive": 3110400.0,
+        "L2 Theoretical Sectors Global Ideal": 18281700.0,
+        "L2 Theoretical Sectors Local": 0.0
+      },
+      "excessiveFraction": 0.145399469897766,
+      "largestExcessiveInstructions": [
+        {
+          "Address": "0x110e670020",
+          "Source": "      LDG.E R0, desc[UR8][R26.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e670170",
+          "Source": "      LDG.E R23, desc[UR8][R26.64+0x4]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6701c0",
+          "Source": "      LDG.E R45, desc[UR8][R26.64+0xc]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6702a0",
+          "Source": "      LDG.E R23, desc[UR8][R22.64+0x8]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658400",
+          "Source": "      LDC R1, c[0x0][0x37c]",
+          "Address Space": "-",
+          "L2 Theoretical Sectors Global": "0",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "0",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658410",
+          "Source": "      LDCU.64 UR8, c[0x0][0x358]",
+          "Address Space": "-",
+          "L2 Theoretical Sectors Global": "0",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "0",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658420",
+          "Source": "      LDC.64 R12, c[0x0][0x380]",
+          "Address Space": "-",
+          "L2 Theoretical Sectors Global": "0",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "0",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658430",
+          "Source": "      S2R R7, SR_TID.X",
+          "Address Space": "-",
+          "L2 Theoretical Sectors Global": "0",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "0",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658440",
+          "Source": "      S2UR UR4, SR_CTAID.X",
+          "Address Space": "-",
+          "L2 Theoretical Sectors Global": "0",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "0",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658450",
+          "Source": "      IADD R1, R1, -0x48",
+          "Address Space": "-",
+          "L2 Theoretical Sectors Global": "0",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "0",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658460",
+          "Source": "      LDC R0, c[0x0][0x360]",
+          "Address Space": "-",
+          "L2 Theoretical Sectors Global": "0",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "0",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658470",
+          "Source": "      LDG.E R2, desc[UR8][R12.64+0xb8]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "64800",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "64800",
+          "L2 Theoretical Sectors Local": "0"
+        }
+      ]
+    },
+    {
+      "kernelId": 2,
+      "kernel": "native_optical_step_8",
+      "metrics": {
+        "gpu__time_duration.sum": 1015168.0,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 88.53,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 19.59,
+        "dram__bytes.sum.per_second": 509529189257.34,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 33.42,
+        "launch__registers_per_thread": 104.0,
+        "launch__stack_size": 1024.0
+      },
+      "theoreticalSectors": {
+        "L2 Theoretical Sectors Global": 54634500.0,
+        "L2 Theoretical Sectors Global Excessive": 15552000.0,
+        "L2 Theoretical Sectors Global Ideal": 39082500.0,
+        "L2 Theoretical Sectors Local": 0.0
+      },
+      "excessiveFraction": 0.28465530022238694,
+      "largestExcessiveInstructions": [
+        {
+          "Address": "0x110e670020",
+          "Source": "      LDG.E R0, desc[UR8][R26.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e670170",
+          "Source": "      LDG.E R23, desc[UR8][R26.64+0x4]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6701c0",
+          "Source": "      LDG.E R45, desc[UR8][R26.64+0xc]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6702a0",
+          "Source": "      LDG.E R23, desc[UR8][R22.64+0x8]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6702d0",
+          "Source": "@P0   LDG.E R0, desc[UR8][R10.64+0xc]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e674b70",
+          "Source": "      LDG.E R18, desc[UR8][R18.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e674c30",
+          "Source": "@!P0  LDG.E R22, desc[UR8][R56.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e674c40",
+          "Source": "@!P1  LDG.E R2, desc[UR8][R58.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6754c0",
+          "Source": "      LDG.E R0, desc[UR8][R56.64+0xc]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6754f0",
+          "Source": "      LDG.E R27, desc[UR8][R62.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e675500",
+          "Source": "      LDG.E R26, desc[UR8][R62.64+0x4]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e675510",
+          "Source": "      LDG.E R50, desc[UR8][R62.64+0x8]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        }
+      ]
+    },
+    {
+      "kernelId": 3,
+      "kernel": "native_optical_step_8",
+      "metrics": {
+        "gpu__time_duration.sum": 735072.0,
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed": 82.95,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 15.76,
+        "dram__bytes.sum.per_second": 742525793391.67,
+        "sm__warps_active.avg.pct_of_peak_sustained_active": 32.38,
+        "launch__registers_per_thread": 104.0,
+        "launch__stack_size": 1024.0
+      },
+      "theoreticalSectors": {
+        "L2 Theoretical Sectors Global": 25539300.0,
+        "L2 Theoretical Sectors Global Excessive": 6220800.0,
+        "L2 Theoretical Sectors Global Ideal": 19318500.0,
+        "L2 Theoretical Sectors Local": 0.0
+      },
+      "excessiveFraction": 0.24357754519505234,
+      "largestExcessiveInstructions": [
+        {
+          "Address": "0x110e670020",
+          "Source": "      LDG.E R0, desc[UR8][R26.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e670170",
+          "Source": "      LDG.E R23, desc[UR8][R26.64+0x4]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6701c0",
+          "Source": "      LDG.E R45, desc[UR8][R26.64+0xc]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6702a0",
+          "Source": "      LDG.E R23, desc[UR8][R22.64+0x8]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e6702d0",
+          "Source": "@P0   LDG.E R0, desc[UR8][R10.64+0xc]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e674b70",
+          "Source": "      LDG.E R18, desc[UR8][R18.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e674c30",
+          "Source": "@!P0  LDG.E R22, desc[UR8][R56.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e674c40",
+          "Source": "@!P1  LDG.E R2, desc[UR8][R58.64]",
+          "Address Space": "Global",
+          "L2 Theoretical Sectors Global": "1036800",
+          "L2 Theoretical Sectors Global Excessive": "777600",
+          "L2 Theoretical Sectors Global Ideal": "259200",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658400",
+          "Source": "      LDC R1, c[0x0][0x37c]",
+          "Address Space": "-",
+          "L2 Theoretical Sectors Global": "0",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "0",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658410",
+          "Source": "      LDCU.64 UR8, c[0x0][0x358]",
+          "Address Space": "-",
+          "L2 Theoretical Sectors Global": "0",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "0",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658420",
+          "Source": "      LDC.64 R12, c[0x0][0x380]",
+          "Address Space": "-",
+          "L2 Theoretical Sectors Global": "0",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "0",
+          "L2 Theoretical Sectors Local": "0"
+        },
+        {
+          "Address": "0x110e658430",
+          "Source": "      S2R R7, SR_TID.X",
+          "Address Space": "-",
+          "L2 Theoretical Sectors Global": "0",
+          "L2 Theoretical Sectors Global Excessive": "0",
+          "L2 Theoretical Sectors Global Ideal": "0",
+          "L2 Theoretical Sectors Local": "0"
+        }
+      ]
+    }
+  ]
+}
