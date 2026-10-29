@@ -48,19 +48,27 @@ public final class CudaOpticalMediumSelfTest {
     private static void verifyCounterModes(CudaOpticalMediumAbi.Plan plan,RenderFrameRequest frame,
             CudaBoundaryMediumAbi.Boundary boundary) {
         String previous=System.getProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY);
+        String previousFused=System.getProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY);
         try {
-            for(boolean reduced:new boolean[]{false,true}) {
+            for(boolean reduced:new boolean[]{false,true})for(boolean fused:new boolean[]{false,true}) {
                 System.setProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY,Boolean.toString(reduced));
+                System.setProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY,Boolean.toString(fused));
                 var data=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(plan,frame,List.of(boundary),new int[0])).order(ByteOrder.nativeOrder());
                 require(data.getInt(184)==(reduced?1:0),"counter mode is explicit in the optical header");
+                require(((data.getInt(188)&128)!=0)==fused,"fused initialization mode is explicit in the optical header");
                 CudaOpticalMediumAbi.updateTile(data,plan,0,plan.pixels(),0,0);
-                require(data.getInt(184)==(reduced?1:0),"tile update preserves counter mode");
+                require(data.getInt(184)==(reduced?1:0)&&((data.getInt(188)&128)!=0)==fused,
+                        "tile update preserves counter and fused initialization modes");
             }
             System.clearProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY);
             require(CudaOpticalMediumAbi.reducedCounters(),"block-reduced counters are enabled by default");
+            System.clearProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY);
+            require(CudaOpticalMediumAbi.fusedInitialization(),"fused initialization is enabled by default");
         } finally {
             if(previous==null)System.clearProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY);
             else System.setProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY,previous);
+            if(previousFused==null)System.clearProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY);
+            else System.setProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY,previousFused);
         }
     }
     private static void verifyDensity(RenderFrameRequest frame,Medium medium,CudaBoundaryMediumAbi.Boundary boundary) {
@@ -145,8 +153,8 @@ public final class CudaOpticalMediumSelfTest {
         require(legacy.transmittanceOffset()==legacy.primaryOffset()+legacy.paths()*208,
                 "the baseline retains its original full-frame shared primary layout");
         var frame=RenderFrameRequest.builder(1,1920,1080,CameraState.lookAt(0,0,0,0,0,-1).build()).build();
-        for(boolean transposedState:new boolean[]{false,true})for(boolean transposed:new boolean[]{false,true})for(boolean compactHits:new boolean[]{false,true})for(boolean compactStates:new boolean[]{false,true})for(int samples:new int[]{1,2,4,8}) {
-            var layout=CudaOpticalMediumAbi.plan(1920,1080,samples,0,density,cap,true,true,compactHits,compactStates,transposed,transposedState);
+        for(boolean transposedPrimary:new boolean[]{false,true})for(boolean transposedState:new boolean[]{false,true})for(boolean transposed:new boolean[]{false,true})for(boolean compactHits:new boolean[]{false,true})for(boolean compactStates:new boolean[]{false,true})for(int samples:new int[]{1,2,4,8}) {
+            var layout=CudaOpticalMediumAbi.plan(1920,1080,samples,0,density,cap,true,true,compactHits,compactStates,transposed,transposedState,transposedPrimary);
             require(layout.tilePixels()>0&&layout.bytes()+CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE<=cap,
                     "every SPP/layout keeps the identical CUDA resident cap");
             require(layout.evaluationOffset()==layout.hitOffset()+(long)layout.tilePaths()*layout.hitBytes(),
@@ -158,6 +166,7 @@ public final class CudaOpticalMediumSelfTest {
             var sampledFrame=frame.toBuilder().antiAliasing(samples==1?AntiAliasingState.disabled():AntiAliasingState.multisampled(samples)).build();
             var header=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(layout,sampledFrame,List.of(),new int[0])).order(ByteOrder.nativeOrder());
             int layoutFlags=(compactHits?1:0)|(compactStates?2:0);
+            require(layout.transposedPrimary()==transposedPrimary&&((header.getInt(188)&32)!=0)==transposedPrimary,"full primary field layout is explicit and immutable");
             require(layout.transposedStates()==(transposedState&&compactStates)&&((header.getInt(188)&16)!=0)==layout.transposedStates(),"scalar state layout is immutable and limited to boundary-free storage");
             require(layout.transposedHits()==(transposed&&compactHits)&&((header.getInt(188)&8)!=0)==layout.transposedHits(),"transposed storage is explicit and limited to compact hits");
             require(header.getInt(4)==4&&(header.getInt(188)&3)==layoutFlags,

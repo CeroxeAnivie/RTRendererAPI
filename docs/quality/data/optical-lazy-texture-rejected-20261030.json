@@ -1,0 +1,41 @@
+{
+  "method": "Two artifact ABBA, 64 warmup and 256 complete CPU HDR frames per run; profiling disabled",
+  "beforeMs": 16.1466591796875,
+  "afterMs": 16.349865429687497,
+  "beforeFps": 61.93231608294551,
+  "afterFps": 61.16258291546767,
+  "fpsGainPercent": -1.2428619114566053,
+  "frameReductionPercent": -1.2585033705029947,
+  "allHdrHashesEqual": true,
+  "runs": [
+    {
+      "label": "A1",
+      "enabled": true,
+      "meanMs": 16.148791796875,
+      "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"
+    },
+    {
+      "label": "B1",
+      "enabled": false,
+      "meanMs": 16.095191796875,
+      "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"
+    },
+    {
+      "label": "B2",
+      "enabled": false,
+      "meanMs": 16.1981265625,
+      "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"
+    },
+    {
+      "label": "A2",
+      "enabled": true,
+      "meanMs": 16.5509390625,
+      "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"
+    }
+  ],
+  "beforeArtifactSha256": "4346f4c597b8b2eab9e17040f0b5db6878cc1850530f675499f745f4e97e7e1e",
+  "afterArtifactSha256": "8835f86844fec84a04019c7bc3407a0d7ae23a8148439f4570f54d7072a7923b",
+  "rawEvidenceDirectory": "renderer-core/build/optical-lazy-texture-abba-20261030-0207",
+  "rawSummarySha256": "6d0b25998679d451cae5b7df896e4a2f028c2b9ee81199efa1c4ee9698581895",
+  "decision": "reverted; full-frame regression, exact cause not established"
+}

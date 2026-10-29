@@ -11,6 +11,7 @@ import top.ceroxe.rt.renderer.api.*;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensityAbi;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
+import top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile;
 
 /** Public optical HDR with independent smooth/rough dielectric references and closed-boundary controls. */
 public final class CudaOpticalMediumProductionNativeSelfTest {
@@ -55,6 +56,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             verifyDensityOptics(camera,budget.withScatteringSteps(64));
             verifyRoughOptics(budget);
             verifyScatteringOptics(camera,budget);
+            verifyUnlitTerminalProof(camera,budget);
             setupThin(1.5f);apply(SceneTransaction.builder(++revision).upsert(glass(1.5f).toBuilder().transmission(.5f).build()).build());
             expectRejected(request(camera,1,budget,blueSky()));
             setupThin(1.5f);compareThin("partial-PBR-rejection-recovery",capture("recovery",request(camera,1,budget,blueSky())),camera,1,1.5);
@@ -95,6 +97,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
             long queriesBefore=CudaOpticalMediumManager.diagnosticQueries.sum(),interfacesBefore=CudaOpticalMediumManager.diagnosticInterfaces.sum();
             var roundBefore=OpticalFrameTimings.KERNEL_PHASES?OpticalFrameTimings.roundSnapshot():null;
+            var detailedBefore=OpticalDetailedProfile.snapshot();
             long[] profileBefore=OpticalFrameTimings.snapshot();long submitBefore=submitNanos,pollBefore=pollNanos;
             long pollWorkBefore=pollWorkNanos,pollGapBefore=pollGapNanos;
             var gpuBefore=renderer.diagnostics().frameGpuTiming();
@@ -127,6 +130,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                 Files.writeString(OUTPUT.resolve("frame-components.json"),attribution);
                 if(roundBefore!=null)Files.writeString(OUTPUT.resolve("round-breakdown.json"),OpticalFrameTimings.roundDeltaJson(roundBefore));
             }
+            if(OpticalDetailedProfile.ENABLED)Files.writeString(OUTPUT.resolve("detailed-profile.json"),OpticalDetailedProfile.deltaJson(detailedBefore));
             long nativeFrames=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
             long queries=CudaOpticalMediumManager.diagnosticQueries.sum()-queriesBefore,interfaces=CudaOpticalMediumManager.diagnosticInterfaces.sum()-interfacesBefore;
             long pathBudget=Math.multiplyExact((long)width*height,Math.multiplyExact((long)frames,opticalSamples));
@@ -157,6 +161,18 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         }
     }
     private static MaterialAsset glass(float ior){return MaterialAsset.builder(2).transmission(1).roughness(0).indexOfRefraction(ior).doubleSided(true).build();}
+    private static void verifyUnlitTerminalProof(CameraState camera,MediumTransport budget)throws Exception {
+        setupThin(1);
+        apply(SceneTransaction.builder(++revision).upsert(glass(1).toBuilder().transmission(.5f)
+                .shadingModel(MaterialAsset.ShadingModel.UNLIT).emissive(0xffff0000,.25f).build())
+                .upsert(SceneLight.directional(31,0,0,-1).color(1,1,1).intensity(100).castsShadow(true).build()).build());
+        var lit=capture("partial-unlit-terminal-proof",request(camera,8,budget,blackSky()));
+        checkConstant("partial-unlit-terminal-color-and-emission",lit,1,.5,.625);
+        apply(SceneTransaction.builder(++revision).removeLight(31).build());
+        var dark=capture("partial-unlit-terminal-light-independence",request(camera,8,budget,blackSky()));
+        require(lit.pixels().equals(dark.pixels()),"UNLIT terminal proof must preserve independence from scene lights");
+        RESULTS.add("{\"name\":\"partial-unlit-emission-light-independence\"}");
+    }
     private static void verifyScatteringOptics(CameraState camera,MediumTransport budget)throws Exception {
         var direct=budget.withOpticalSamples(8).withScatteringBounces(0);
         var absorber=new Rgb(.12f,.16f,.20f);var scatter=new Rgb(.1f,.1f,.1f);

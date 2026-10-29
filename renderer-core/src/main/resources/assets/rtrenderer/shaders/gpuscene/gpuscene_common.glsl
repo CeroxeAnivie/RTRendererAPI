@@ -3,6 +3,7 @@
 #extension GL_EXT_control_flow_attributes : require
 
 #include "gpuscene_abi.glsl"
+#include "gpuscene_optical_diagnostics.glsl"
 
 const uint GS_INVALID_SLOT = 0xffffffffu;
 const uint GS_PAYLOAD_RADIANCE_QUERY = 0u;
@@ -63,6 +64,9 @@ struct GpuScenePayload {
     // the rasterizer's screen-space UV footprint without relying on derivative instructions.
     uvec4 launchInfo;
     uvec4 mediumBoundary;
+#ifdef RTRENDERER_OPTICAL_PROFILE
+    uint64_t diagnosticAddress;uint diagnosticRecord;
+#endif
 };
 
 

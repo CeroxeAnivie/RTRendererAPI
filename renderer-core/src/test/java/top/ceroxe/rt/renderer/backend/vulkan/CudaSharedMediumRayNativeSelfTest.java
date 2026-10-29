@@ -32,6 +32,19 @@ public final class CudaSharedMediumRayNativeSelfTest {
                     var firstQuery=new MediumRayQueryPipeline(device,scene.tlas(),first);
                     var secondQuery=new MediumRayQueryPipeline(device,scene.tlas(),second)) {
                     CudaSharedRayFrame[] frames={first,second};MediumRayQueryPipeline[] queries={firstQuery,secondQuery};
+                    try(var pairHost=cuda.allocateHost(first.byteSize())) {
+                        for(int pair=0;pair<64;pair++) {
+                            first.produceThenExchangePairBlocking(command->{},records->cuda.launchBlocking(init,records,4096,128),
+                                    command->firstQuery.record(command,4096),records->{
+                                        cuda.launchBlocking(advance,records,4096,128);cuda.downloadAsync(records,pairHost);
+                                    });
+                            for(int path=0;path<4096;path++){
+                                int hits=pairHost.getInt(path*128L+96),errors=pairHost.getInt(path*128L+100);
+                                if(errors!=0||Float.intBitsToFloat(hits)!=(path%4==0?0:1))
+                                    throw new AssertionError("queued RT epoch pair="+pair+" path="+path+" hits="+Float.intBitsToFloat(hits)+" errors="+errors);
+                            }
+                        }
+                    }
                     for(int pass=0;pass<3;pass++) {
                         for(int slot=0;slot<2;slot++){final int index=slot;frames[slot].exchangeBlocking(records->cuda.launchBlocking(init,records,4096,128),cmd->queries[index].record(cmd,4096));}
                         for(int round=1;round<5;round++)for(int slot=0;slot<2;slot++){final int index=slot;frames[slot].exchangeBlocking(records->cuda.launchBlocking(advance,records,4096,128),cmd->queries[index].record(cmd,4096));}
@@ -52,6 +65,21 @@ public final class CudaSharedMediumRayNativeSelfTest {
             var frame=CudaSharedRayFrame.storage(device,cuda,128,1L<<20);
             var nested=CudaSharedRayFrame.storage(device,cuda,128,1L<<20)) {
             var host=arena.allocate(128,16);
+            try(var firstHost=cuda.allocateHost(128);var secondHost=cuda.allocateHost(128)) {
+                for(int pair=0;pair<32;pair++) {
+                    frame.produceThenExchangePairBlocking(command->org.lwjgl.vulkan.VK10.vkCmdFillBuffer(
+                            command,frame.buffer(),0,128,0),storage->{
+                                cuda.launchBlocking(kernel,storage,32,4);cuda.downloadAsync(storage,firstHost);
+                            },command->org.lwjgl.vulkan.VK10.vkCmdFillBuffer(command,frame.buffer(),0,128,0x24681357),
+                            storage->cuda.downloadAsync(storage,secondHost));
+                    for(int word=0;word<32;word++) {
+                        if(firstHost.getInt(word*4L)!=0x34567890||secondHost.getInt(word*4L)!=0x24681357)
+                            throw new AssertionError("queued pair ordering pair="+pair+" word="+word
+                                    +" first="+Integer.toHexString(firstHost.getInt(word*4L))
+                                    +" second="+Integer.toHexString(secondHost.getInt(word*4L)));
+                    }
+                }
+            }
             for(int round=0;round<16;round++) {
                 frame.produceThenExchangeBlocking(command->org.lwjgl.vulkan.VK10.vkCmdFillBuffer(
                         command,frame.buffer(),0,128,0),storage->cuda.launchBlocking(kernel,storage,32,4),
@@ -65,6 +93,22 @@ public final class CudaSharedMediumRayNativeSelfTest {
                 nested.exchangeBlocking(other->cuda.launchBlocking(kernel,other,32,4),command->{});
                 cuda.download(storage,host);requireFilled(host);
             },command->{});
+            for(int stage=0;stage<4;stage++) {
+                final int failureStage=stage;
+                RuntimeException injected=new IllegalStateException("paired exchange callback failure stage="+stage);
+                try(var failed=CudaSharedRayFrame.storage(device,cuda,128,1L<<20)) {
+                    try {
+                        failed.produceThenExchangePairBlocking(command->{if(failureStage==0)throw injected;},
+                                storage->{cuda.launchBlocking(kernel,storage,32,4);if(failureStage==1)throw injected;},
+                                command->{if(failureStage==2)throw injected;},
+                                storage->{cuda.launchBlocking(kernel,storage,32,4);if(failureStage==3)throw injected;});
+                        throw new AssertionError("paired exchange lost callback failure");
+                    } catch(RuntimeException failure) {if(failure!=injected)throw failure;}
+                }
+                frame.nativeOnlyBlocking(storage->{
+                    cuda.launchBlocking(kernel,storage,32,4);cuda.download(storage,host);requireFilled(host);
+                });
+            }
             for(boolean consumerFailure:new boolean[]{false,true}) {
                 RuntimeException injected=new IllegalStateException("queued exchange callback failure");
                 try(var failed=CudaSharedRayFrame.storage(device,cuda,128,1L<<20)) {

@@ -86,6 +86,7 @@ public final class VulkanSurfaceSceneIndexSelfTest {
         require(!index.opaque(glassBatch),"stale frame mesh reference cannot prove opacity after reset");
         cameraAbsorptionAdmission();
         pbrMediumAdmission();
+        opticalOpaqueRayAdmission();
         System.out.println("VulkanSurfaceSceneIndexSelfTest passed");
     }
 
@@ -186,6 +187,48 @@ public final class VulkanSurfaceSceneIndexSelfTest {
         apply(residency,index,SceneTransaction.builder(++revision).resetScene().build());
         require(index.opaquePbrMediumOnly(empty) && !index.opaquePbrMediumOnly(batch),
                 "reset clears counts and invalidates cached references");
+    }
+
+    private static void opticalOpaqueRayAdmission() {
+        var residency = new VulkanSceneResidency();
+        var index = new VulkanSurfaceSceneIndex();
+        var empty = FramePrimitiveBatch.empty();
+        var glass = MaterialAsset.builder(71).transmission(1).doubleSided(true).build();
+        var mesh = MeshAsset.triangles(71, new float[]{0,0,0,1,0,0,0,1,0}, new int[]{0,1,2}, 71);
+        var instance = SceneInstance.builder(71,71).build();
+        var batch = FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(71).build()).build();
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(glass).upsert(mesh).upsert(instance).build());
+        require(index.opticalOpaqueRayOnly(empty) && index.opticalOpaqueRayOnly(batch),
+                "full double-sided glass may bypass radiance any-hit while retaining closest-hit optics");
+        for (var material : new MaterialAsset[]{
+                glass.toBuilder().blendMode(MaterialAsset.BlendMode.MASKED).alphaCutoff(1).build(),
+                glass.toBuilder().doubleSided(false).build(),
+                glass.toBuilder().baseColorRgba8(0x80ffffff).build(),
+                glass.toBuilder().surfaceOverlay(SurfaceOverlayState.depthEqual(.001f)).build(),
+                glass.toBuilder().shadingModel(MaterialAsset.ShadingModel.LIGHTMAP_MODULATED).build()}) {
+            apply(residency,index,SceneTransaction.builder(++revision).upsert(material).build());
+            require(!index.opticalOpaqueRayOnly(empty) && !index.opticalOpaqueRayOnly(batch),
+                    "coverage or sidedness decisions must keep radiance any-hit and invalidate cached batches");
+        }
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(glass.toBuilder().baseColorTextureId(71).build())
+                .upsert(TextureAsset.color(71,1,1,new byte[]{-1,-1,-1,-1})).build());
+        require(index.opticalOpaqueRayOnly(batch), "opaque texture restores the proof");
+        byte[] mip = new byte[20]; java.util.Arrays.fill(mip,(byte)255); mip[19]=100;
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(TextureAsset.colorMipChain(71,2,2,2,mip)).build());
+        require(!index.opticalOpaqueRayOnly(empty) && !index.opticalOpaqueRayOnly(batch), "all mip levels must preserve coverage");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(glass).upsert(instance.toBuilder().surfaceVisibility(.5f).build()).build());
+        require(!index.opticalOpaqueRayOnly(empty) && !index.opticalOpaqueRayOnly(batch), "fractional persistent visibility invalidates scene proof");
+        apply(residency,index,SceneTransaction.builder(++revision).removeInstance(71).build());
+        require(index.opticalOpaqueRayOnly(batch), "fully visible frame-local glass independently restores proof");
+        var fractional = FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(71).surfaceVisibility(.5f).build()).build();
+        require(!index.opticalOpaqueRayOnly(fractional), "fractional frame-local visibility retains any-hit");
+        var volume = FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(71).surfaceVisibility(.5f)
+                .mediumBoundary(MediumBoundary.volume(Medium.vacuum())).build()).build();
+        require(index.opticalOpaqueRayOnly(volume), "volume-only boundaries already bypass any-hit material decisions");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(mesh.toBuilder().vertexColorsRgba8(new int[]{-1,0x80ffffff,-1}).build()).build());
+        require(!index.opticalOpaqueRayOnly(batch), "vertex alpha update invalidates cached proof");
+        apply(residency,index,SceneTransaction.builder(++revision).resetScene().build());
+        require(index.opticalOpaqueRayOnly(empty) && !index.opticalOpaqueRayOnly(batch), "reset clears counters and rejects stale mesh references");
     }
 
     private static void apply(VulkanSceneResidency residency, VulkanSurfaceSceneIndex index, SceneTransaction change) {

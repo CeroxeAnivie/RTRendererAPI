@@ -190,10 +190,16 @@ public final class CudaMediumRuntime implements AutoCloseable {
         }
     }
     public ExternalSemaphore importWin32Semaphore(long handle) {
+        return importWin32Semaphore(handle,false);
+    }
+    public ExternalSemaphore importWin32TimelineSemaphore(long handle) {
+        return importWin32Semaphore(handle,true);
+    }
+    private ExternalSemaphore importWin32Semaphore(long handle,boolean timeline) {
         checkOpen(); if (handle == 0) throw new IllegalArgumentException("external semaphore handle must be nonzero");
         try (Arena scratch = Arena.ofConfined()) {
             MemorySegment desc = scratch.allocate(96, 8), output = scratch.allocate(ADDRESS);
-            desc.set(JAVA_INT, 0, 2); desc.set(JAVA_LONG, 8, handle);
+            desc.set(JAVA_INT, 0, timeline?10:2); desc.set(JAVA_LONG, 8, handle);
             inContext(() -> api.checked("cuImportExternalSemaphore", args(ADDRESS, ADDRESS), output, desc));
             return own(new ExternalSemaphore(output.get(ADDRESS, 0)));
         }
@@ -242,12 +248,42 @@ public final class CudaMediumRuntime implements AutoCloseable {
         }
     }
     private void synchronizeStream() { api.checked("cuStreamSynchronize", args(ADDRESS), stream); }
+    /** Two ownership cycles without an intermediate host counter decision or Vulkan fence. */
+    void exchangeExternalPairWithCompletionBlocking(ExternalSemaphore wait, ExternalSemaphore signal,
+            long firstValue,long secondValue,
+            Runnable firstStep, Runnable submitMiddle, Runnable secondStep, Runnable completeConsumer) {
+        checkOpen();requireOwned(wait);requireOwned(signal);wait.checkAlive();signal.checkAlive();
+        if(firstValue<1||secondValue<=firstValue)throw new IllegalArgumentException("ordered timeline values required");
+        Objects.requireNonNull(firstStep);Objects.requireNonNull(submitMiddle);
+        Objects.requireNonNull(secondStep);Objects.requireNonNull(completeConsumer);
+        if(externalBatch)throw new IllegalStateException("queued ownership pairs cannot nest");
+        externalBatch=true;
+        try {
+            external(wait,false,firstValue);firstStep.run();external(signal,true,firstValue);
+            // Native RT epoch tests require completion before the Vulkan continuation is
+            // submitted on this interop path. Keep that proven boundary; batch the host
+            // statistics and eliminate the intervening Vulkan completion submission.
+            inContext(this::synchronizeStream);
+            submitMiddle.run();
+            external(wait,false,secondValue);secondStep.run();external(signal,true,secondValue);
+            completeConsumer.run();
+            // Complete pinned host transfers before reading batch statistics.
+            inContext(this::synchronizeStream);
+        }catch(RuntimeException|Error failure){
+            try{inContext(this::synchronizeStream);}catch(RuntimeException|Error drain){failure.addSuppressed(drain);}
+            throw failure;
+        }finally{externalBatch=false;}
+    }
     private void synchronizeUnlessBatched() { if (!externalBatch) synchronizeStream(); }
     private void external(ExternalSemaphore semaphore, boolean signal) {
+        external(semaphore,signal,0L);
+    }
+    private void external(ExternalSemaphore semaphore, boolean signal,long value) {
         checkOpen(); requireOwned(semaphore); semaphore.checkAlive();
         try (Arena scratch = Arena.ofConfined()) {
             MemorySegment handles = scratch.allocateFrom(ADDRESS, semaphore.handle);
             MemorySegment params = scratch.allocate(144, 8);
+            params.set(JAVA_LONG,0,value);
             inContext(() -> {
                 api.checked(signal ? "cuSignalExternalSemaphoresAsync" : "cuWaitExternalSemaphoresAsync",
                         args(ADDRESS, ADDRESS, JAVA_INT, ADDRESS), handles, params, 1, stream);

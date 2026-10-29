@@ -20,7 +20,7 @@ bool gsPrimaryNativeLighting() {
     return (gsPrimaryDispatch.transmittanceAddress&uint64_t(4u))!=uint64_t(0u);
 }
 vec4 gsPrimaryNativeDiffuse(uint item) {
-    return GsPrimaryTransmittance(gsPrimaryDispatch.transmittanceAddress&~uint64_t(6u)).values[item];
+    return GsPrimaryTransmittance(gsPrimaryDispatch.transmittanceAddress&~uint64_t(14u)).values[item];
 }
 vec4 gsPrimaryNativeSpecular(uint item) {
     return GsPrimaryTransmittance(gsPrimaryDispatch.emissionAddress).values[item];
@@ -34,7 +34,7 @@ vec3 gsPrimaryTransmittance(uint item) {
     if(gsPrimaryNativeLighting())return vec3(1.0);
     if(gsPrimaryTerminal(item))return vec3(1.0);
     if (gsPrimaryDispatch.transmittanceAddress == 0ul) return vec3(1.0);
-    GsPrimaryTransmittance attenuation = GsPrimaryTransmittance(gsPrimaryDispatch.transmittanceAddress&~uint64_t(6u));
+    GsPrimaryTransmittance attenuation = GsPrimaryTransmittance(gsPrimaryDispatch.transmittanceAddress&~uint64_t(14u));
     return attenuation.values[item].rgb;
 }
 
@@ -73,20 +73,21 @@ GpuScenePayload gsLoadPrimary(uint item) {
         direct.state=uvec4(0);direct.surfaceState=uvec4(0);direct.compositeState=vec4(0);
         direct.launchInfo=uvec4(0);direct.mediumBoundary=uvec4(0);return direct;
     }
-    uint base=item*GS_PRIMARY_WORK_LANES;
+    uint stride=(gsPrimaryDispatch.transmittanceAddress&8ul)!=0ul?gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD]*gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]*gsFrame.words[GPU_SCENE_FRAME_SAMPLE_COUNT_WORD]:1u;
+    uint base=item*(stride==1u?GS_PRIMARY_WORK_LANES:1u);
     GpuScenePayload hit;
     hit.worldPositionAndDistance=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base]);
-    hit.previousWorldPosition=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+1u]);
-    hit.motionRevision=gsPrimaryDispatch.queue.lanes[base+2u].xy;
-    hit.worldNormalAndRoughness=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+3u]);
-    hit.baseColorAndOpacity=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+4u]);
-    hit.emissiveAndMetallic=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+5u]);
-    hit.transmissionIor=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+6u]);
-    hit.state=gsPrimaryDispatch.queue.lanes[base+7u];
-    hit.surfaceState=gsPrimaryDispatch.queue.lanes[base+8u];
-    hit.compositeState=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+9u]);
-    hit.launchInfo=gsPrimaryDispatch.queue.lanes[base+10u];
-    hit.mediumBoundary=gsPrimaryDispatch.queue.lanes[base+11u];
+    hit.previousWorldPosition=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+1u*stride]);
+    hit.motionRevision=gsPrimaryDispatch.queue.lanes[base+2u*stride].xy;
+    hit.worldNormalAndRoughness=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+3u*stride]);
+    hit.baseColorAndOpacity=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+4u*stride]);
+    hit.emissiveAndMetallic=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+5u*stride]);
+    hit.transmissionIor=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+6u*stride]);
+    hit.state=gsPrimaryDispatch.queue.lanes[base+7u*stride];
+    hit.surfaceState=gsPrimaryDispatch.queue.lanes[base+8u*stride];
+    hit.compositeState=uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+9u*stride]);
+    hit.launchInfo=gsPrimaryDispatch.queue.lanes[base+10u*stride];
+    hit.mediumBoundary=gsPrimaryDispatch.queue.lanes[base+11u*stride];
     return hit;
 }
 

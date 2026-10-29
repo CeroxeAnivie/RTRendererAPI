@@ -127,6 +127,15 @@ final class RtShaderModuleCompiler {
         );
     }
 
+    /** Separate opt-in shader; never replaces or changes bundled production SPIR-V. */
+    static byte[] compileOpticalDiagnostic(String path,int kind,boolean hdr,boolean ser,int group) {
+        if(group<0||group>7)throw new IllegalArgumentException("optical shader diagnostic group must be 0..7");
+        String source=readExpandedUtf8Resource(path);
+        int end=source.indexOf('\n');
+        source=source.substring(0,end+1)+"#define RTRENDERER_OPTICAL_PROFILE 1\n#define RTRENDERER_OPTICAL_PROFILE_GROUP "+group+"\n"+source.substring(end+1);
+        return compileSource(source,path,kind,false,hdr,ser,RtEdgeSink.NOOP);
+    }
+
     static byte[] compileForVerification(String resourcePath, int shaderKind, boolean diagnosticGBufferEnabled) {
         return compile(resourcePath, shaderKind, diagnosticGBufferEnabled, false, false, RtEdgeSink.NOOP);
     }

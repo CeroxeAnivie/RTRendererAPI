@@ -272,6 +272,9 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
         requireOpen();
         return bootstrap.queueFamilyIndex();
     }
+    public synchronized boolean timelineSemaphoreEnabled() {
+        requireOpen();return bootstrap.timelineSemaphoreEnabled();
+    }
 
     /**
      * Returns the queue roles reserved during logical-device creation for one optional provider.

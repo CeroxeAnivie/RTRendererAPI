@@ -178,15 +178,16 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             descriptors = GpuSceneDescriptorLayout.create(stack, device, descriptorSetCount, sceneShaders.dataBindingCount());
             pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout(),
                     program.primaryQueue() ? GpuScenePrimaryQueue.PUSH_BYTES : 0);
-            byte[] raygenCode = loadStageCode(
+            boolean opticalDiagnostic=program==Program.NATIVE_OPTICAL_TRACE&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS;
+            byte[] raygenCode = opticalDiagnostic?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+program.source,Shaderc.shaderc_raygen_shader,linearHdrOutput,shaderExecutionReorderingEnabled,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode(
                     program.source, Shaderc.shaderc_raygen_shader,
                     linearHdrOutput, shaderExecutionReorderingEnabled, sceneShaders
             );
-            byte[] missCode = loadStageCode("gpuscene.rmiss", Shaderc.shaderc_miss_shader, false, false, sceneShaders);
-            byte[] closestCode = loadStageCode(
+            byte[] missCode = opticalDiagnostic?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+"gpuscene.rmiss",Shaderc.shaderc_miss_shader,false,false,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode("gpuscene.rmiss", Shaderc.shaderc_miss_shader, false, false, sceneShaders);
+            byte[] closestCode = opticalDiagnostic?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+"gpuscene.rchit",Shaderc.shaderc_closesthit_shader,false,false,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode(
                     "gpuscene.rchit", Shaderc.shaderc_closesthit_shader, false, false, sceneShaders
             );
-            byte[] anyHitCode = loadStageCode(program == Program.NATIVE_BOUNDARY_PACKET
+            byte[] anyHitCode = opticalDiagnostic?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+"gpuscene.rahit",Shaderc.shaderc_anyhit_shader,false,false,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode(program == Program.NATIVE_BOUNDARY_PACKET
                     || program == Program.NATIVE_PBR_MEDIUM_TRACE || program == Program.NATIVE_PBR_MEDIUM_LIGHTS
                     || program == Program.NATIVE_BOUNDARY_SCATTERING
                     ? program==Program.NATIVE_BOUNDARY_SCATTERING?"gpuscene_native_boundary_scattering.rahit":"gpuscene_native_boundary_packet.rahit" : "gpuscene.rahit",
@@ -761,7 +762,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             long address, int firstPixel, int count, long transmittanceAddress, long emissionAddress) {
         requireOpen();
         // Bit 1 is the internal native terminal-radiance layout tag; storage addresses remain 16-byte aligned.
-        if (address == 0 || (address & 15) != 0 || (transmittanceAddress & 9) != 0 || (emissionAddress & 15) != 0
+        if (address == 0 || (address & 15) != 0 || (transmittanceAddress & 1) != 0 || (emissionAddress & 15) != 0
                 || firstPixel < 0 || count < 1 || (long) firstPixel + count > Integer.MAX_VALUE)
             throw new IllegalArgumentException("invalid primary tile extent or aligned device address");
         var push = stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);

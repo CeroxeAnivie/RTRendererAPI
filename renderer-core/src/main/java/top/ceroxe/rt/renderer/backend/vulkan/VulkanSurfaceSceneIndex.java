@@ -9,7 +9,7 @@ import top.ceroxe.rt.renderer.api.*;
 /** Cached opacity proof for resources actually reachable from submitted instances. */
 final class VulkanSurfaceSceneIndex {
     private static final int OPAQUE = 1, TRANSMISSIVE = 2, CAMERA_ABSORPTION_ONLY = 4,
-            OPTICAL_UNLIT = 8, PBR_MEDIUM = 16;
+            OPTICAL_UNLIT = 8, PBR_MEDIUM = 16, OPTICAL_OPAQUE_RAY = 32;
     private final Map<Long, MaterialAsset> materials = new HashMap<>();
     private final Map<Long, Boolean> opaqueTextures = new HashMap<>();
     private final Map<Long, MeshFact> meshes = new HashMap<>();
@@ -17,6 +17,7 @@ final class VulkanSurfaceSceneIndex {
     private final Map<Long, Integer> meshFlags = new HashMap<>(), instanceFlags = new HashMap<>();
     private final Map<Long, Set<Long>> textureMaterials = new HashMap<>(), materialMeshes = new HashMap<>(), meshInstances = new HashMap<>();
     private int generalInstances, transmissiveInstances, nonTerminalInstances, nonOpticalInstances, nonPbrMediumInstances;
+    private int nonOpticalOpaqueRayInstances, batchNonOpticalOpaqueRay;
     private long generation, batchGeneration = -1;
     private FramePrimitiveBatch cachedBatch;
     private int batchGeneral, batchTransmissive, batchNonTerminal, batchNonOptical, batchNonPbrMedium;
@@ -26,6 +27,7 @@ final class VulkanSurfaceSceneIndex {
             materials.clear(); opaqueTextures.clear(); meshes.clear(); instances.clear();
             meshFlags.clear(); instanceFlags.clear(); textureMaterials.clear(); materialMeshes.clear(); meshInstances.clear();
             generalInstances = transmissiveInstances = nonTerminalInstances = nonOpticalInstances = nonPbrMediumInstances = 0;
+            nonOpticalOpaqueRayInstances = 0;
         }
         if (!changes.reset() && unchanged(changes.materials()) && unchanged(changes.textures())
                 && unchanged(changes.meshes()) && unchanged(changes.instances())) return;
@@ -88,6 +90,7 @@ final class VulkanSurfaceSceneIndex {
                 if ((previous & CAMERA_ABSORPTION_ONLY) == 0) nonTerminalInstances--;
                 if ((previous & OPTICAL_UNLIT) == 0) nonOpticalInstances--;
                 if ((previous & PBR_MEDIUM) == 0) nonPbrMediumInstances--;
+                if ((previous & OPTICAL_OPAQUE_RAY) == 0) nonOpticalOpaqueRayInstances--;
             }
             InstanceFact fact = instances.get(id);
             if (fact != null) {
@@ -98,6 +101,7 @@ final class VulkanSurfaceSceneIndex {
                 if ((flags & CAMERA_ABSORPTION_ONLY) == 0) nonTerminalInstances++;
                 if ((flags & OPTICAL_UNLIT) == 0) nonOpticalInstances++;
                 if ((flags & PBR_MEDIUM) == 0) nonPbrMediumInstances++;
+                if ((flags & OPTICAL_OPAQUE_RAY) == 0) nonOpticalOpaqueRayInstances++;
             }
         }
         generation++;
@@ -119,6 +123,12 @@ final class VulkanSurfaceSceneIndex {
         prepare(batch);return nonOpticalInstances==0&&batchNonOptical==0;
     }
 
+    /** Only radiance queries may use this proof; shadow queries retain any-hit semantics. */
+    boolean opticalOpaqueRayOnly(FramePrimitiveBatch batch) {
+        prepare(batch);
+        return nonOpticalOpaqueRayInstances == 0 && batchNonOpticalOpaqueRay == 0;
+    }
+
     /** Every shaded surface admits direct lighting without secondary surface reflections. */
     boolean opaquePbrMediumOnly(FramePrimitiveBatch batch) {
         prepare(batch);
@@ -128,6 +138,7 @@ final class VulkanSurfaceSceneIndex {
     private void prepare(FramePrimitiveBatch batch) {
         if (cachedBatch == batch && batchGeneration == generation) return;
         batchGeneral = batchTransmissive = batchNonTerminal = batchNonOptical = batchNonPbrMedium = 0;
+        batchNonOpticalOpaqueRay = 0;
         for (PrimitiveInstance primitive : batch.primitives()) {
             int flags = flags(new InstanceFact(primitive.meshAssetId(), primitive.surfaceVisibility() == 1,
                     primitive.mediumBoundary().map(boundary -> !boundary.surfaceInteraction()).orElse(false)));
@@ -136,14 +147,15 @@ final class VulkanSurfaceSceneIndex {
             if ((flags & CAMERA_ABSORPTION_ONLY) == 0) batchNonTerminal++;
             if ((flags & OPTICAL_UNLIT) == 0) batchNonOptical++;
             if ((flags & PBR_MEDIUM) == 0) batchNonPbrMedium++;
+            if ((flags & OPTICAL_OPAQUE_RAY) == 0) batchNonOpticalOpaqueRay++;
         }
         cachedBatch = batch; batchGeneration = generation;
     }
 
     private int flags(InstanceFact instance) {
-        if (instance.volumeOnly) return OPAQUE | CAMERA_ABSORPTION_ONLY | OPTICAL_UNLIT | PBR_MEDIUM;
+        if (instance.volumeOnly) return OPAQUE | CAMERA_ABSORPTION_ONLY | OPTICAL_UNLIT | PBR_MEDIUM | OPTICAL_OPAQUE_RAY;
         int flags = meshFlags.getOrDefault(instance.mesh, 0);
-        return instance.fullyVisible ? flags : flags & ~(OPAQUE | CAMERA_ABSORPTION_ONLY | OPTICAL_UNLIT | PBR_MEDIUM);
+        return instance.fullyVisible ? flags : flags & ~(OPAQUE | CAMERA_ABSORPTION_ONLY | OPTICAL_UNLIT | PBR_MEDIUM | OPTICAL_OPAQUE_RAY);
     }
 
     private int flags(MeshFact mesh) {
@@ -151,10 +163,13 @@ final class VulkanSurfaceSceneIndex {
         boolean transmissive = false;
         boolean terminal = true;
         boolean optical = mesh.vertexOpaque;
+        boolean masked = false;
         boolean pbrMedium = true;
         for (long id : mesh.materials) {
             MaterialAsset material = materials.get(id);
             if (material == null) { opaque = terminal = optical = pbrMedium = false; continue; }
+            // Even full alpha can round below a cutoff of one after barycentric interpolation.
+            masked |= material.blendMode() == MaterialAsset.BlendMode.MASKED;
             terminal &= material.doubleSided() && material.shadingModel() == MaterialAsset.ShadingModel.UNLIT;
             // Native PBR camera and shadow packets preserve the public any-hit sidedness rules.
             pbrMedium &= (material.shadingModel() == MaterialAsset.ShadingModel.UNLIT
@@ -174,7 +189,8 @@ final class VulkanSurfaceSceneIndex {
         }
         return (opaque ? OPAQUE : 0) | (transmissive ? TRANSMISSIVE : 0)
                 | (opaque && terminal ? CAMERA_ABSORPTION_ONLY : 0) | (optical?OPTICAL_UNLIT:0)
-                | (opaque && pbrMedium ? PBR_MEDIUM : 0);
+                | (opaque && pbrMedium ? PBR_MEDIUM : 0)
+                | (optical && !masked ? OPTICAL_OPAQUE_RAY : 0);
     }
 
     private static MeshFact mesh(MeshAsset mesh) {

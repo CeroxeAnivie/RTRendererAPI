@@ -234,7 +234,19 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;using namespace rtr_optical;
     RTR_PHASE_SCOPE(b);
     RTR_ENTRY_SCOPE(b);
-    unsigned int*h=(unsigned int*)b;StateAccess<Small,TransposedState> state(b,i,h[2]);auto*s=state.operator->();if(s->control.x==0)return;
+    unsigned int*h=(unsigned int*)b;StateAccess<Small,TransposedState> state(b,i,h[2]);auto*s=state.operator->();
+    if((h[47]&128u)!=0u&&h[17]!=0u){
+        // Camera origin/direction retain the exact Vulkan projection. Construct
+        // all deterministic fields here instead of writing and reloading them
+        // across the producer/consumer boundary.
+        s->control.x=1u;s->control.y=0u;s->control.z=global(b,i);s->control.w=1u;
+        s->throughput=make_float4(1.f,1.f,1.f,((float*)b)[27]);
+        s->radiance=make_float4(0.f);
+        s->counters.x=0u;s->counters.y=0u;s->counters.z=0u;s->counters.w=0u;
+        const unsigned int branches=h[37]==0u?2u:1u;
+        s->terminal=make_float4(1.f,1.f,1.f,1.f/(float)(h[33]*branches));
+    }
+    if(s->control.x==0)return;
     RTR_ENTRY_NEXT(1u);
     if(!s->counters.z&&!initialize(b,s)){finish(b,i,s,statistics,1);return;}
     RTR_ENTRY_NEXT(2u);

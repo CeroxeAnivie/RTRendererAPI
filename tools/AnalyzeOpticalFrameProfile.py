@@ -46,10 +46,16 @@ def analyze(directory):
                     'cuStreamSynchronize', 'cuMemcpyDtoH_v2', 'cuSignalExternalSemaphoresAsync', 'cuStreamSynchronize')
         names = ('externalWaitEnqueue', 'resetKernelLaunch', 'opticalKernelLaunch',
                  'waitForProducerAndOpticalKernel', 'counterReadbackApi', 'externalSignalEnqueue', 'waitAfterSignal')
+        paired = api[indices[kernels[0][2]] + 1][4] == 'cuMemcpyDtoHAsync_v2'
+        if paired:
+            expected = ('cuWaitExternalSemaphoresAsync', 'cuLaunchKernel', 'cuLaunchKernel',
+                        'cuMemcpyDtoHAsync_v2', 'cuSignalExternalSemaphoresAsync', 'cuStreamSynchronize')
+            names = ('externalWaitEnqueue', 'resetKernelLaunch', 'opticalKernelLaunch',
+                     'counterReadbackAsyncEnqueue', 'externalSignalEnqueue', 'streamCompletionWait')
         durations = [0] * len(names)
         for kernel in kernels:
             index = indices[kernel[2]]
-            sequence = api[index - 2:index + 5]
+            sequence = api[index - 2:index + (4 if paired else 5)]
             assert tuple(row[4] for row in sequence) == expected
             assert len({row[3] for row in sequence}) == 1 and all(row[5] == 0 for row in sequence)
             for i, row in enumerate(sequence):
@@ -71,10 +77,22 @@ def analyze(directory):
                      for i in range(rounds // frames)]
     finally:
         database.close()
+    detailed_gpu = []
+    detail_path = directory / 'detailed-profile.json'
+    if detail_path.exists():
+        values = json.loads(detail_path.read_text(encoding='utf-8'))['values']
+        detailed_gpu = [dict(component=name, meanMs=value / frames / 1e6)
+                        for name, value in values.items()
+                        if name.endswith('/producerGpu/totalNanos') or name.endswith('/continuationGpu/totalNanos')]
+        detailed_gpu.append(dict(component='finalShadeAndGpuReadback',
+                                 meanMs=timing['finalShadeAndGpuReadbackNanos'] / frames / 1e6))
+        detailed_gpu.extend(dict(component='CUDA/round' + str(i), meanMs=value)
+                            for i, value in enumerate(per_round))
+        detailed_gpu.sort(key=lambda row: row['meanMs'], reverse=True)
     return dict(method='完整计时窗口；末尾内核与API关联ID逐轮匹配；含采样开销，不能替代无采样ABBA收益',
                 directory=str(directory.resolve()), fullMeanMs=total / frames / 1e6, frames=frames, rounds=rounds,
                 roundsPerFrame=rounds // frames, wallRanking=ranked, cudaStageApiBreakdown=api_breakdown,
-                overlappingGpuEvidence=gpu, opticalKernelMeanMsByRound=per_round,
+                overlappingGpuEvidence=gpu, overlappingGpuRanking=detailed_gpu, opticalKernelMeanMsByRound=per_round,
                 originalThreeRanks={name: next(row['rank'] for row in ranked if row['component'] == name)
                                     for name in ('CUDA交接', 'Vulkan后续栅栏等待', 'Vulkan录制与提交')},
                 finalHdrSha256=hashlib.sha256((directory / 'benchmark-final.rgba16f').read_bytes()).hexdigest(),
