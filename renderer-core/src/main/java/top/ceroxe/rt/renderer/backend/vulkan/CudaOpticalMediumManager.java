@@ -214,7 +214,10 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             }
         }
         if(uploadAssets){uploadedAssets=scene.assets;diagnosticAssetUploads.increment();}
-        return new CudaCameraMediumManager.Prepared(plan.externalPrimary()?primaryAddress:address+plan.primaryOffset(),(address+plan.transmittanceOffset())|(plan.transposedPrimary()?8L:0L),
+        // Publish this proof only after every declared path/branch completed without rejection.
+        // The consumer retains its geometry-dependent feature and outline fallback.
+        return new CudaCameraMediumManager.Prepared(plan.externalPrimary()?primaryAddress:address+plan.primaryOffset(),(address+plan.transmittanceOffset())|(plan.transposedPrimary()?8L:0L)
+                |(CudaOpticalMediumAbi.resolvedPublication()?CudaOpticalMediumAbi.RESOLVED_RADIANCE_FLAG:0L),
                 address+plan.emissionOffset(),plan.pixels(),plan.samples(),plan.externalPrimary());
     }
     private void exchangePair(java.util.function.Consumer<org.lwjgl.vulkan.VkCommandBuffer> producer,

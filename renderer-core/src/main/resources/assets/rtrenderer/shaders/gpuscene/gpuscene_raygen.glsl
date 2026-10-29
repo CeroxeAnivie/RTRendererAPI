@@ -726,6 +726,28 @@ void main()
 #endif
     if (any(greaterThanEqual(pixel, extent))) return;
 #ifdef RTRENDERER_PRIMARY_SHADE
+    // Native optical continuation already produced the complete sample radiance.
+    // Geometry consumers still execute the ordinary path, with its original full payload.
+    if((gsPrimaryDispatch.transmittanceAddress&1ul)!=0ul
+            && !gsDenoisingActive() && !gsReconstructionActive()
+            && (gsFrame.words[GPU_SCENE_FRAME_TEMPORAL_FLAGS_WORD]&GPU_SCENE_TEMPORAL_FLAG_ENABLED)==0u) {
+        uint samples=clamp(gsFrame.words[GPU_SCENE_FRAME_SAMPLE_COUNT_WORD],1u,8u);
+        uint item=gl_LaunchIDEXT.x*samples;
+        uint stride=(gsPrimaryDispatch.transmittanceAddress&8ul)!=0ul?uint(extent.x)*uint(extent.y)*samples:1u;
+        uint base=item*(stride==1u?GS_PRIMARY_WORK_LANES:1u);
+        bool outlined=gsPrimaryDispatch.queue.lanes[base+8u*stride].z!=0u
+                && uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+9u*stride].x)>0.0;
+        if(!outlined) {
+            vec3 total=vec3(0.0);
+            for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex)
+                total+=GsPrimaryTransmittance(gsPrimaryDispatch.emissionAddress).values[item+sampleIndex].rgb;
+            vec3 color=total/float(samples);
+#ifndef RTRENDERER_LINEAR_HDR_OUTPUT
+            color=gsToneMap(color);
+#endif
+            imageStore(outputImage,pixel,vec4(color,1.0));return;
+        }
+    }
     if((gsPrimaryDispatch.transmittanceAddress&uint64_t(2u))!=uint64_t(0u)) {
         uint samples=clamp(gsFrame.words[GPU_SCENE_FRAME_SAMPLE_COUNT_WORD],1u,8u);
         vec3 total=vec3(0);bool allTerminal=true;

@@ -26,6 +26,8 @@ public final class CudaOpticalMediumAbi {
     public static final String TRANSPOSED_HITS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalTransposedHits";
     public static final String MINIMAL_STATE_WRITES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalMinimalStateWrites";
     public static final String FUSED_INITIALIZATION_PROPERTY="top.ceroxe.rt.medium.cuda.opticalFusedInitialization";
+    public static final String RESOLVED_PUBLICATION_PROPERTY="top.ceroxe.rt.medium.cuda.opticalResolvedPublication";
+    public static final long RESOLVED_RADIANCE_FLAG=1L;
     private CudaOpticalMediumAbi() { }
     public record Plan(int pixels,int samples,int tilePixels,int boundaryCount,int stateOffset,int hitOffset,
             int evaluationOffset,int primaryOffset,int transmittanceOffset,int emissionOffset,int priorityOffset,
@@ -172,6 +174,7 @@ public final class CudaOpticalMediumAbi {
     }
     public static boolean minimalStateWrites(){return Boolean.parseBoolean(System.getProperty(MINIMAL_STATE_WRITES_PROPERTY,"true"));}
     public static boolean fusedInitialization(){return Boolean.parseBoolean(System.getProperty(FUSED_INITIALIZATION_PROPERTY,"true"));}
+    public static boolean resolvedPublication(){return Boolean.parseBoolean(System.getProperty(RESOLVED_PUBLICATION_PROPERTY,"true"));}
     public static boolean reducedCounters() {
         return Boolean.parseBoolean(System.getProperty(REDUCED_COUNTERS_PROPERTY,"true"));
     }

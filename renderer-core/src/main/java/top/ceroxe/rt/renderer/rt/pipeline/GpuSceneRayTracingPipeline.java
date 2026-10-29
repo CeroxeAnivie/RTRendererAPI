@@ -761,8 +761,9 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     public synchronized void recordPrimaryQueueTrace(VkCommandBuffer commandBuffer, MemoryStack stack, int slot,
             long address, int firstPixel, int count, long transmittanceAddress, long emissionAddress) {
         requireOpen();
-        // Bit 1 is the internal native terminal-radiance layout tag; storage addresses remain 16-byte aligned.
-        if (address == 0 || (address & 15) != 0 || (transmittanceAddress & 1) != 0 || (emissionAddress & 15) != 0
+        // The low four attenuation bits are internal layout/publication tags. Actual
+        // storage addresses and the independent emission address remain 16-byte aligned.
+        if (address == 0 || (address & 15) != 0 || (emissionAddress & 15) != 0
                 || firstPixel < 0 || count < 1 || (long) firstPixel + count > Integer.MAX_VALUE)
             throw new IllegalArgumentException("invalid primary tile extent or aligned device address");
         var push = stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);

@@ -1,0 +1,43 @@
+{
+  "rawEvidenceDirectory": "renderer-core\\build\\optical-resolved-publication-abba-20261030-0312",
+  "rawSummarySha256": "44516fb7bbb3cace42084277b3f085bed2f19f6365fdee796218d35e03964c3f",
+  "decision": "retained: repeated full-frame benefit with exact HDR equality",
+  "method": "ABBA; A=enabled, B=disabled; same artifact; full immutable CPU HDR completion; profiling disabled",
+  "property": "top.ceroxe.rt.medium.cuda.opticalResolvedPublication",
+  "warmupFrames": 64,
+  "timedFramesPerRun": 256,
+  "beforeMeanMs": 15.479516015625,
+  "afterMeanMs": 14.4699767578125,
+  "beforeFps": 64.60150297920177,
+  "afterFps": 69.10861135005548,
+  "fpsGainPercent": 6.9767856210787516,
+  "frameTimeReductionPercent": 6.521775337119539,
+  "allFinalImageHashesEqual": true,
+  "artifactSha256": "cdde43ec75b88dd417566aa89f4aa3a3f7b59e319fc8c2747b5d46173b1afea0",
+  "runs": [
+    {
+      "label": "A1",
+      "enabled": true,
+      "meanMs": 14.349796484375,
+      "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"
+    },
+    {
+      "label": "B1",
+      "enabled": false,
+      "meanMs": 15.449937890625,
+      "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"
+    },
+    {
+      "label": "B2",
+      "enabled": false,
+      "meanMs": 15.509094140625,
+      "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"
+    },
+    {
+      "label": "A2",
+      "enabled": true,
+      "meanMs": 14.59015703125,
+      "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"
+    }
+  ]
+}

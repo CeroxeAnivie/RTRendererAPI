@@ -57,6 +57,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             verifyRoughOptics(budget);
             verifyScatteringOptics(camera,budget);
             verifyUnlitTerminalProof(camera,budget);
+            verifyResolvedPublication(camera,budget);
             setupThin(1.5f);apply(SceneTransaction.builder(++revision).upsert(glass(1.5f).toBuilder().transmission(.5f).build()).build());
             expectRejected(request(camera,1,budget,blueSky()));
             setupThin(1.5f);compareThin("partial-PBR-rejection-recovery",capture("recovery",request(camera,1,budget,blueSky())),camera,1,1.5);
@@ -68,6 +69,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             compareThin("shrink-after-full-HD",capture("shrink",request(camera,1,budget,blueSky())),camera,1,1.5);
             require(renderer.health().activeFailure().isEmpty(),"optical session unhealthy");
         }finally{if(previous==null)System.clearProperty(CudaCameraMediumProfile.ENABLE_PROPERTY);else System.setProperty(CudaCameraMediumProfile.ENABLE_PROPERTY,previous);}
+        verifyResolvedTemporal();
         long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
         require(routes==accepted,"public optical frame bypassed native route: "+routes+" / "+accepted);
         Files.writeString(OUTPUT.resolve("result.json"),"{\n\"passed\":true,\n\"nativeFrames\":"+routes+",\n\"recoverableRejections\":"+rejected+",\n\"comparisons\":["+String.join(",\n",RESULTS)+"]\n}\n");
@@ -161,6 +163,58 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         }
     }
     private static MaterialAsset glass(float ior){return MaterialAsset.builder(2).transmission(1).roughness(0).indexOfRefraction(ior).doubleSided(true).build();}
+    private static void verifyResolvedPublication(CameraState camera,MediumTransport budget)throws Exception {
+        String previous=System.getProperty(CudaOpticalMediumAbi.RESOLVED_PUBLICATION_PROPERTY);
+        try {
+            setupThin(1.5f);
+            // A small outlined dielectric and a large unlit receiver exercise mixed
+            // fast/fallback pixels, sample edges, background and actual outline rays.
+            apply(SceneTransaction.builder(++revision).upsert(MeshAsset.triangles(2,
+                    new float[]{-.12f,-.12f,0,.12f,-.12f,0,.12f,.12f,0,-.12f,.12f,0},
+                    new int[]{0,1,2,2,3,0},2)).upsert(SceneInstance.builder(2,2)
+                    .renderState(InstanceRenderState.builder().objectMask(9).outline(OutlineStyle.of(0xff00ff00,2)).build()).build()).build());
+            for(int samples:new int[]{1,2,8}) {
+                var request=request(camera,samples,budget,blueSky());
+                System.setProperty(CudaOpticalMediumAbi.RESOLVED_PUBLICATION_PROPERTY,"false");
+                var legacy=capture("resolved-outline-off-"+samples,request);
+                System.setProperty(CudaOpticalMediumAbi.RESOLVED_PUBLICATION_PROPERTY,"true");
+                var resolved=capture("resolved-outline-on-"+samples,request(camera,samples,budget,blueSky()));
+                require(legacy.pixels().equals(resolved.pixels()),"resolved publication changed outlined multi-sample HDR: "+samples);
+                boolean green=false;var pixels=resolved.pixels().order(ByteOrder.LITTLE_ENDIAN);
+                for(int pixel=0;pixel<width*height;pixel++)green|=Float.float16ToFloat(pixels.getShort(pixel*8+2))>.9f;
+                require(green,"outlined publication test did not exercise an actual green outline");
+                RESULTS.add("{\"name\":\"resolved-publication-outline-SPP"+samples+"\"}");
+            }
+        } finally {
+            if(previous==null)System.clearProperty(CudaOpticalMediumAbi.RESOLVED_PUBLICATION_PROPERTY);
+            else System.setProperty(CudaOpticalMediumAbi.RESOLVED_PUBLICATION_PROPERTY,previous);
+        }
+    }
+    private static void verifyResolvedTemporal()throws Exception {
+        String previous=System.getProperty(CudaOpticalMediumAbi.RESOLVED_PUBLICATION_PROPERTY);
+        long firstSequence=sequence;var reference=new ArrayList<FrameSnapshot>();
+        try {
+            for(boolean resolved:new boolean[]{false,true}) {
+                sequence=firstSequence;
+                System.setProperty(CudaOpticalMediumAbi.RESOLVED_PUBLICATION_PROPERTY,Boolean.toString(resolved));
+                try(Renderer owned=Renderer.open("vulkan-rt",RendererConfig.builder().validationEnabled(true).maxFramesInFlight(3)
+                        .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.balanced()).build())) {
+                    renderer=owned;setupThin(1.5f);
+                    var camera=CameraState.lookAt(0,0,6,0,0,-1).verticalFieldOfViewDegrees(5).aspectRatio((double)width/height).build();
+                    for(int frame=0;frame<3;frame++) {
+                        var snapshot=capture("resolved-temporal-"+resolved+"-"+frame,request(camera,2,MediumTransport.balanced().withOpticalSamples(2),blueSky()));
+                        if(!resolved)reference.add(snapshot);
+                        else require(reference.get(frame).pixels().equals(snapshot.pixels()),"resolved publication changed temporal geometry/history at frame "+frame);
+                    }
+                    require(renderer.health().activeFailure().isEmpty(),"resolved temporal session unhealthy");
+                }
+            }
+            RESULTS.add("{\"name\":\"resolved-publication-temporal-history-three-frames\"}");
+        } finally {
+            if(previous==null)System.clearProperty(CudaOpticalMediumAbi.RESOLVED_PUBLICATION_PROPERTY);
+            else System.setProperty(CudaOpticalMediumAbi.RESOLVED_PUBLICATION_PROPERTY,previous);
+        }
+    }
     private static void verifyUnlitTerminalProof(CameraState camera,MediumTransport budget)throws Exception {
         setupThin(1);
         apply(SceneTransaction.builder(++revision).upsert(glass(1).toBuilder().transmission(.5f)

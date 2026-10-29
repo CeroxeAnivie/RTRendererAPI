@@ -20,7 +20,7 @@ bool gsPrimaryNativeLighting() {
     return (gsPrimaryDispatch.transmittanceAddress&uint64_t(4u))!=uint64_t(0u);
 }
 vec4 gsPrimaryNativeDiffuse(uint item) {
-    return GsPrimaryTransmittance(gsPrimaryDispatch.transmittanceAddress&~uint64_t(14u)).values[item];
+    return GsPrimaryTransmittance(gsPrimaryDispatch.transmittanceAddress&~uint64_t(15u)).values[item];
 }
 vec4 gsPrimaryNativeSpecular(uint item) {
     return GsPrimaryTransmittance(gsPrimaryDispatch.emissionAddress).values[item];
@@ -34,7 +34,7 @@ vec3 gsPrimaryTransmittance(uint item) {
     if(gsPrimaryNativeLighting())return vec3(1.0);
     if(gsPrimaryTerminal(item))return vec3(1.0);
     if (gsPrimaryDispatch.transmittanceAddress == 0ul) return vec3(1.0);
-    GsPrimaryTransmittance attenuation = GsPrimaryTransmittance(gsPrimaryDispatch.transmittanceAddress&~uint64_t(14u));
+    GsPrimaryTransmittance attenuation = GsPrimaryTransmittance(gsPrimaryDispatch.transmittanceAddress&~uint64_t(15u));
     return attenuation.values[item].rgb;
 }
 
