@@ -107,7 +107,11 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                 long[] profileAfter=OpticalFrameTimings.snapshot();
                 String[] names={"nativePrepareWallNanos","exchangeWallNanos","vulkanReleaseRecordSubmitWallNanos","cudaStageWallNanos",
                         "cudaResolveWallNanos","vulkanContinuationRecordSubmitWallNanos","vulkanContinuationFenceWaitWallNanos",
-                        "vulkanPrimaryGpuNanos","vulkanContinuationGpuNanos","snapshotCpuCopyWallNanos","exchangeRounds"};
+                        "vulkanPrimaryGpuNanos","vulkanContinuationGpuNanos","snapshotCpuCopyWallNanos","exchangeRounds",
+                        "vulkanReleaseCommandsWallNanos","vulkanReleaseQueueSubmitWallNanos",
+                        "vulkanContinuationCommandsWallNanos","vulkanContinuationQueueSubmitWallNanos",
+                        "cudaPhaseDispatchCycles","cudaPhaseSegmentCycles","cudaPhaseTerminalCycles","cudaPhaseBoundaryCycles",
+                        "cudaPhaseSmoothGlassCycles","cudaPhaseRoughGlassCycles","cudaPhaseContinuationCycles","cudaPhaseSamples"};
                 var attribution=new StringBuilder("{\n\"scope\":\"same timed full completion window; GPU metrics overlap wall metrics\",\n\"frames\":")
                         .append(frames).append(",\n\"fullCompletionWallNanos\":").append(elapsed)
                         .append(",\n\"publicSubmitWallNanos\":").append(submitNanos-submitBefore)
@@ -117,7 +121,8 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                 for(int i=0;i<names.length;i++)attribution.append(",\n\"").append(names[i]).append("\":").append(profileAfter[i]-profileBefore[i]);
                 long gpuTotal=gpuAfter.averageTotalNanos()*gpuAfter.completedSamples()-gpuBefore.averageTotalNanos()*gpuBefore.completedSamples();
                 attribution.append(",\n\"finalShadeAndGpuReadbackNanos\":").append(gpuTotal)
-                        .append(",\n\"finalGpuSamples\":").append(gpuAfter.completedSamples()-gpuBefore.completedSamples()).append("\n}\n");
+                        .append(",\n\"finalGpuSamples\":").append(gpuAfter.completedSamples()-gpuBefore.completedSamples())
+                        .append(",\n\"kernelPhaseSamplingEnabled\":").append(OpticalFrameTimings.KERNEL_PHASES).append("\n}\n");
                 Files.writeString(OUTPUT.resolve("frame-components.json"),attribution);
             }
             long nativeFrames=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
@@ -136,7 +141,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                     plan.externalPrimary(),width,height,opticalSamples,Math.min(cap,CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES),plan.bytes(),
                     plan.externalPrimary()?plan.primaryBytes():0,plan.tilePixels(),tiles,warmup,frames,nativeFrames,queries,interfaces,
                     coldNanos/1e6,elapsed/1e6,frames*1e9/elapsed,median,p95));
-            json.insert(2,String.format(Locale.ROOT,"  \"directPrimary\":%s,\n  \"compactHits\":%s,\n  \"mutableHitBytes\":%d,\n  \"reducedCounters\":%s,\n",plan.directPrimary(),plan.compactHits(),plan.hitBytes(),CudaOpticalMediumAbi.reducedCounters()));
+            json.insert(2,String.format(Locale.ROOT,"  \"directPrimary\":%s,\n  \"compactHits\":%s,\n  \"compactStates\":%s,\n  \"mutableHitBytes\":%d,\n  \"mutableStateBytes\":%d,\n  \"reducedCounters\":%s,\n",plan.directPrimary(),plan.compactHits(),plan.compactStates(),plan.hitBytes(),plan.stateBytes(),CudaOpticalMediumAbi.reducedCounters()));
             for(int frame=0;frame<frames;frame++){if(frame>0)json.append(',');json.append(nanos[frame]);}
             json.append("],\n  \"comparisons\":[").append(String.join(",",RESULTS)).append("]\n}\n");
             Files.writeString(OUTPUT.resolve("benchmark.json"),json);

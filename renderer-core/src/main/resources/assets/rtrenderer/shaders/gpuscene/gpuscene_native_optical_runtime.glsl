@@ -19,7 +19,7 @@ void gsOpticalStoreAt(GsOpticalStorage destination,uint byteOffset,uint item,Gpu
     destination.lanes[base+12u]=identity;
 }
 void gsOpticalStore(uint byteOffset,uint item,GpuScenePayload hit,uvec4 identity) {
-    if(gsOptical.storage.lanes[11u].w!=0u) {
+    if((gsOptical.storage.lanes[11u].w&1u)!=0u) {
         uint base=byteOffset/16u+item*6u;
         gsOptical.storage.lanes[base]=floatBitsToUint(hit.worldPositionAndDistance);
         gsOptical.storage.lanes[base+1u]=floatBitsToUint(hit.worldNormalAndRoughness);
@@ -79,14 +79,15 @@ void main() {
     uint evaluationOffset=gsOptical.storage.lanes[2u].w,primaryOffset=gsOptical.storage.lanes[3u].x;
     bool firstPass=gsOptical.storage.lanes[8u].z==0u&&gsOptical.storage.lanes[8u].w==0u;
     bool directPrimary=gsOptical.storage.lanes[11u].y!=0u;
+    uint stateLanes=(gsOptical.storage.lanes[11u].w&2u)!=0u?7u:16u;
     vec2 jitter=vec2(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD]),
         uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD+1u]));
     for(uint sampleIndex=0u;sampleIndex<samples;sampleIndex++) {
         uint item=gl_LaunchIDEXT.x*samples+sampleIndex,globalPath=pixelIndex*samples+sampleIndex;
         uint initialItem=gsOptical.primaryAddress!=0ul?item:globalPath;
-        uint base=stateOffset/16u+item*16u;GpuScenePayload hit;vec3 origin,direction;
+        uint base=stateOffset/16u+item*stateLanes;GpuScenePayload hit;vec3 origin,direction;
         if(gsOptical.initialize!=0ul) {
-            for(uint lane=0u;lane<16u;lane++)gsOptical.storage.lanes[base+lane]=uvec4(0u);
+            for(uint lane=0u;lane<stateLanes;lane++)gsOptical.storage.lanes[base+lane]=uvec4(0u);
             vec2 samplePosition=vec2(pixel)+gsSubpixelOffset(sampleIndex,samples);if(!gsExactProjectionActive())samplePosition+=jitter;
             origin=gsFrameCameraPosition();direction=gsRayDirectionAtSample(samplePosition,extent);
             gsOptical.storage.lanes[base]=floatBitsToUint(vec4(origin,gsRayEpsilon(origin)));

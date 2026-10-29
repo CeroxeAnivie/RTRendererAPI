@@ -33,7 +33,7 @@ def analyze(directory):
         kernels = database.execute(
             'SELECT k.start,k.end,k.correlationId,k.registersPerThread,k.localMemoryPerThread '
             'FROM CUPTI_ACTIVITY_KIND_KERNEL k JOIN StringIds s ON k.demangledName=s.id '
-            "WHERE s.value='native_optical_step' ORDER BY k.start DESC LIMIT ?", [rounds]).fetchall()[::-1]
+            "WHERE s.value='native_optical_step' OR s.value GLOB 'native_optical_step_[0-3]' ORDER BY k.start DESC LIMIT ?", [rounds]).fetchall()[::-1]
         resets = database.execute(
             'SELECT k.start,k.end FROM CUPTI_ACTIVITY_KIND_KERNEL k JOIN StringIds s ON k.demangledName=s.id '
             "WHERE s.value='native_optical_reset' ORDER BY k.start DESC LIMIT ?", [rounds]).fetchall()[::-1]

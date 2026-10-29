@@ -39,7 +39,8 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     });
     private final VulkanDeviceRuntime device;
     private final CudaMediumRuntime cuda;
-    private final CudaMediumRuntime.BatchKernel reset,step;
+    private final CudaMediumRuntime.BatchKernel reset;
+    private final CudaMediumRuntime.BatchKernel[] steps;
     private CudaSharedRayFrame storage;
     private RtGpuBuffer primary;
     private FrameAssets uploadedAssets;
@@ -48,11 +49,13 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         this.device=Objects.requireNonNull(device,"device");
         NativeState initialized;
         try{initialized=onNative(()->{var opened=CudaMediumRuntime.open(Integer.getInteger("top.ceroxe.rt.medium.cuda.deviceOrdinal",0));
-            try{String source=CudaOpticalMediumSource.source();return new NativeState(opened,
-                    opened.compileBatchKernel(source,"native_optical_reset"),opened.compileBatchKernel(source,"native_optical_step"));}
+            try{String source=CudaOpticalMediumSource.source();
+                var variants=new CudaMediumRuntime.BatchKernel[4];
+                for(int layout=0;layout<variants.length;layout++)variants[layout]=opened.compileBatchKernel(source,"native_optical_step_"+layout);
+                return new NativeState(opened,opened.compileBatchKernel(source,"native_optical_reset"),variants);}
             catch(RuntimeException|Error failure){try{opened.close();}catch(RuntimeException cleanup){failure.addSuppressed(cleanup);}throw failure;}
         });}catch(RuntimeException|Error failure){nativeThread.shutdown();throw failure;}
-        cuda=initialized.cuda();reset=initialized.reset();step=initialized.step();
+        cuda=initialized.cuda();reset=initialized.reset();steps=initialized.steps();
     }
     static FrameScene scene(RenderFrameRequest frame,int width,int height,MediumSceneIndex.NativeScene scene) {
         return scene(frame,width,height,scene,id->null,new CudaMediumDensityAbi.Cache());
@@ -64,12 +67,12 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             int samples=frame.antiAliasing().samplesPerPixel();long limit=residentLimit();
             var base=CudaOpticalMediumAbi.plan(width,height,samples,boundaries.size(),limit);
             long minimum=base.sceneBytes()+(long)base.paths()*((base.externalPrimary()?0:CudaOpticalMediumAbi.HIT_BYTES)+2L*CudaOpticalMediumAbi.COLOR_BYTES)
-                    +(long)samples*(CudaOpticalMediumAbi.STATE_BYTES+base.hitBytes()+CudaOpticalMediumAbi.COLOR_BYTES
+                    +(long)samples*(base.stateBytes()+base.hitBytes()+CudaOpticalMediumAbi.COLOR_BYTES
                         +(base.externalPrimary()&&!base.directPrimary()?CudaOpticalMediumAbi.HIT_BYTES:0))
                     +CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE;
             var density=densityCache.prepare(frame.environment().cameraMedium(),boundaries,textures,limit-minimum);
             var plan=CudaOpticalMediumAbi.plan(width,height,samples,boundaries.size(),density,limit,
-                    base.externalPrimary(),base.directPrimary(),base.compactHits());
+                    base.externalPrimary(),base.directPrimary(),base.compactHits(),base.compactStates());
             byte[] metadata=CudaOpticalMediumAbi.scenePrefix(plan,frame,boundaries,scene.containing(),density);
             return new FrameScene(frame,plan,metadata,boundaries,density);
         }catch(ArithmeticException|IllegalArgumentException invalid){throw unsupported(invalid.getMessage());}
@@ -92,6 +95,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     }
     private CudaCameraMediumManager.Prepared prepareOnNative(FrameScene scene,GpuSceneRayTracingPipeline tracer,int slot,RtTlasBuildPlan buildPlan){
         var frame=scene.frame();var plan=scene.plan();ensureCapacity(plan);long address=storage.deviceAddress();
+        var step=steps[(plan.compactHits()?1:0)|(plan.compactStates()?2:0)];
         long primaryAddress=plan.externalPrimary()?primary.deviceAddress():0;
         int opticalSamples=frame.mediumTransport().opticalSamples();
         int branches=frame.mediumTransport().firstInterfaceSampling()==top.ceroxe.rt.renderer.api.MediumTransport.FirstInterfaceSampling.DETERMINISTIC_SPLIT?2:1;
@@ -101,7 +105,8 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             var metadata=arena.allocate(firstUploadBytes,16);
             metadata.asByteBuffer().put(scene.metadata,0,uploadAssets?scene.metadata.length:CudaOpticalMediumAbi.HEADER_BYTES);
             if(uploadAssets)scene.assets.density.write(metadata.asByteBuffer().order(ByteOrder.nativeOrder()),scene.metadata.length);
-            var counters=arena.allocate(CudaOpticalMediumAbi.STATISTICS_BYTES,16);boolean buildPending=buildPlan!=null;
+            var counters=arena.allocate(CudaOpticalMediumAbi.STATISTICS_BYTES,16);
+            var phaseCycles=OpticalFrameTimings.KERNEL_PHASES?arena.allocate(64,16):null;boolean buildPending=buildPlan!=null;
             for(int first=0;first<plan.pixels();){
                 int tileFirst=first,pixels=Math.min(plan.tilePixels(),plan.pixels()-first),paths=pixels*plan.samples();
                 for(int opticalSample=0;opticalSample<opticalSamples;opticalSample++)for(int branch=0;branch<branches;branch++){
@@ -114,6 +119,10 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                         cuda.launchBlocking(step,input,paths,1);
                         cuda.download(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),counters);
                         for(int j=0;j<4;j++)statistics[j]=counters.get(ValueLayout.JAVA_INT,j*4L);
+                        if(phaseCycles!=null){
+                            cuda.download(input.slice(192,64),phaseCycles);
+                            for(int j=0;j<8;j++)OpticalFrameTimings.kernelPhases[j].add(phaseCycles.get(ValueLayout.JAVA_LONG,j*8L));
+                        }
                         diagnosticQueries.add(queries);diagnosticInterfaces.add(statistics[2]);
                         if(OpticalFrameTimings.ENABLED)OpticalFrameTimings.resolve.add(System.nanoTime()-resolveStarted);
                     };
@@ -198,7 +207,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         try{cuda.close();}catch(RuntimeException|Error exception){if(failure==null)failure=exception;else failure.addSuppressed(exception);}
         if(failure instanceof RuntimeException runtime)throw runtime;if(failure instanceof Error error)throw error;return null;
     });}finally{uploadedAssets=null;closed=true;nativeThread.shutdown();}}
-    private record NativeState(CudaMediumRuntime cuda,CudaMediumRuntime.BatchKernel reset,CudaMediumRuntime.BatchKernel step){}
+    private record NativeState(CudaMediumRuntime cuda,CudaMediumRuntime.BatchKernel reset,CudaMediumRuntime.BatchKernel[] steps){}
     private record FrameAssets(java.util.List<CudaBoundaryMediumAbi.Boundary> boundaries,CudaMediumDensityAbi.Scene density,int sceneBytes){}
     static final class FrameScene {
         private final RenderFrameRequest frame;private final CudaOpticalMediumAbi.Plan plan;private final byte[] metadata;private final FrameAssets assets;
