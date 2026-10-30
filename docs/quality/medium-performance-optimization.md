@@ -888,3 +888,9 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | **互斥墙钟求和** | **9.046272** | **1000.000** | **100.000%** | **2.12%** |
 
 正确性：1080p 连续 8 帧共 66,355,200 个 RGBA16F 通道中 592 个各差一个相邻半精度值，alpha 相同，未称为全字节一致；ray-query / 无 ray-query 两套 33 帧灯光矩阵均全字节一致。原生 PBR 31 项/43 帧、组合 15 项、camera 17 项独立参考、多次散射解析回归通过，未放宽阈值；7 份 validation 零 warning/error/drop，全部会话关闭。原完整 API 门禁仍绑定其既有源码，不冒称已随每个候选完整重跑。[完整证据](data/pbr-opaque-specialization-20261031.json)、[新完整排名](data/pbr-opaque-specialization-ranked-20261031.json)。
+
+### 撤回：PBR 均匀 kernel 的 block 统计汇总
+
+对照 NVIDIA cuda-samples `5443602d89ed99aede2e4b7bf329daddeadb320e`（BSD-3-Clause）的 `cpp/2_Concepts_and_Techniques/reduction/reduction_kernel.cu` / `reduce7`，以及本仓库 optical block 统计，独立将均匀 PBR 的失败/完成整数计数从每 warp 更新全局改成每 block 汇总；所有尾线程参加 barrier，输运与浮点累计不改。1080p 8 帧 HDR 全字节一致，PBR ABI 与源文件清单通过。
+
+正序 kernel 0.807241→0.797066 ms（下降 1.26%），关闭诊断 111.768264→112.883543 FPS（+1.00%）；反序 kernel 0.805046→0.793753 ms（下降 1.40%），关闭诊断 113.000539→112.040968 FPS（−0.85%）。没有稳定端到端收益，CUDA 源码和 manifest 两个文件均精确恢复；不继续为已拒绝候选追加完整 GPU 回归。[冻结制品与正反序数据](data/pbr-statistics-block-rejected-20261031.json)。
