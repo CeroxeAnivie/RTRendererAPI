@@ -28,6 +28,12 @@ __device__ bool walk(unsigned char *buffer,const unsigned int *packet,UniformSta
     const unsigned int *h=(const unsigned int *)buffer;
     const bool endpoint=(h[27]&1024u)!=0u;
     const unsigned int capacity=h[27]&255u,terminal=endpoint?0u:4u+4u*((capacity+1u)/2u);
+    if(packet==nullptr) {
+        // The producer validates origins before publishing color-carried endpoints.
+        // With no interfaces or density grid, the shared segment only uses distance.
+        if(!endpoint||capacity!=0u||(h[67]&2u)==0u||!isfinite(geometryEnd)||geometryEnd<0.f)return false;
+        return segment(buffer,s,make_float3(0.f),fmaxf(fminf(geometryEnd,((float *)buffer)[19]),0.f));
+    }
     if(capacity>32u||(endpoint?capacity!=0u:packet[3]!=0u))return false;
     float3 origin=make_float3(__uint_as_float(packet[terminal+1]),__uint_as_float(packet[terminal+2]),__uint_as_float(packet[terminal+3]));
     // Uniform coefficients do not depend on ray direction; no density grid or interface can inspect it.
@@ -42,7 +48,7 @@ __device__ bool walk(unsigned char *buffer,const unsigned int *packet,rtr_bounda
         float geometryEnd,bool receiver,unsigned int &crossed) {
     using namespace rtr_boundary;
     unsigned int *h=(unsigned int *)buffer;const unsigned int capacity=h[27]&255u,terminal=4u+4u*((capacity+1u)/2u);
-    if(capacity>32u||(capacity==0u&&h[7]!=0u)||packet[3]>capacity||packet[3]>h[6])return false;
+    if(packet==nullptr||capacity>32u||(capacity==0u&&h[7]!=0u)||packet[3]>capacity||packet[3]>h[6])return false;
     float3 origin=make_float3(__uint_as_float(packet[terminal+1]),__uint_as_float(packet[terminal+2]),__uint_as_float(packet[terminal+3]));
     s->direction=make_float4(__uint_as_float(packet[0]),__uint_as_float(packet[1]),__uint_as_float(packet[2]),0.f);
     if(!finite3(origin)||!finite3(rgb(s->direction))||!isfinite(geometryEnd)||geometryEnd<0.f)return false;
@@ -76,12 +82,17 @@ template<class StateType>
 __device__ bool resolve(unsigned char *buffer,int i,unsigned int &crossed) {
     using namespace rtr_boundary;
     unsigned int *h=(unsigned int *)buffer;const unsigned int capacity=h[27]&255u,stride=(h[27]&1024u)!=0u?4u:8u+4u*((capacity+1u)/2u),terminal=stride-4u;
-    const unsigned int *packets=(const unsigned int *)(buffer+h[9]);const unsigned int *camera=packets+(unsigned int)i*stride;
+    const bool colorEndpoints=(h[67]&2u)!=0u;
+    if(colorEndpoints&&((h[67]&1u)==0u||(h[27]&1024u)==0u||capacity!=0u
+            ||h[7]!=0u||h[8]!=0u||((const int *)buffer)[24]>=0))return false;
+    float4 *colors=(float4 *)(buffer+h[65]);
+    const unsigned int *packets=(const unsigned int *)(buffer+h[9]);
+    const unsigned int *camera=colorEndpoints?nullptr:packets+(unsigned int)i*stride;
     StateType receiver;clear(&receiver);receiver.transport=make_float4(1.f,1.f,1.f,((float *)buffer)[19]);
     if(!initializeVolumes(buffer,&receiver))return false;
-    float hit=__uint_as_float(camera[terminal]),end=hit>=0.f?hit:((float *)buffer)[19];
+    float hit=colorEndpoints?colors[(unsigned int)i*2u].w:__uint_as_float(camera[terminal]);
+    float end=hit>=0.f?hit:((float *)buffer)[19];
     if(!walk(buffer,camera,&receiver,end,true,crossed))return false;
-    float4 *colors=(float4 *)(buffer+h[65]);
     float3 diffuse=rgb(colors[(unsigned int)i*2u]),specular=rgb(colors[(unsigned int)i*2u+1u]);
     float3 additionalRadiance=make_float3(0.f);
     const unsigned long long additionalOffset=((const unsigned long long *)(buffer+272))[0];
@@ -95,8 +106,8 @@ __device__ bool resolve(unsigned char *buffer,int i,unsigned int &crossed) {
         const unsigned int index=paths+(unsigned int)i*count+light;
         float4 d=colors[index*2u],s=colors[index*2u+1u];
         if(peak(rgb(d))+peak(rgb(s))<=0.f)continue;
-        const unsigned int *packet=packets+index*stride;
-        float distance=__uint_as_float(packet[terminal]);float3 transmission=make_float3(1.f);
+        const unsigned int *packet=colorEndpoints?nullptr:packets+index*stride;
+        float distance=colorEndpoints?s.w:__uint_as_float(packet[terminal]);float3 transmission=make_float3(1.f);
         // A negative connection distance is the existing castsShadow=false surface contract.
         if(distance>=0.f) {
             StateType connection;clear(&connection);connection.volumes=receiver.volumes;
@@ -106,7 +117,7 @@ __device__ bool resolve(unsigned char *buffer,int i,unsigned int &crossed) {
         }
         float3 dc=rgb(d)*transmission,sc=rgb(s)*transmission;diffuse+=dc;specular+=sc;
         float dw=.2126f*dc.x+.7152f*dc.y+.0722f*dc.z,sw=.2126f*sc.x+.7152f*sc.y+.0722f*sc.z;
-        diffuseDistance+=dw*d.w;diffuseWeight+=dw;specularDistance+=sw*s.w;specularWeight+=sw;
+        diffuseDistance+=dw*d.w;diffuseWeight+=dw;specularDistance+=sw*(colorEndpoints?d.w:s.w);specularWeight+=sw;
     }
     // The existing density/multiple integrator owns all volume emission, including
     // secondary-path emission. Do not integrate camera emission twice on composition.

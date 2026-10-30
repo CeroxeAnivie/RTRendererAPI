@@ -32,16 +32,19 @@ void main() {
     uint localPixel=gl_LaunchIDEXT.x/connections,light=gl_LaunchIDEXT.x%connections;
     uint paths=dispatch.storage.lanes[16].z,pixel=dispatch.firstPixel+localPixel;
     bool endpointPacket=(dispatch.storage.lanes[6].w&1024u)!=0u;
+    bool colorEndpoints=(dispatch.storage.lanes[16].w&2u)!=0u;
     uint capacity=dispatch.storage.lanes[6].w&255u,stride=endpointPacket?1u:2u+(capacity+1u)/2u;
     uint packetOffset=dispatch.storage.lanes[2].y/16u,colorOffset=dispatch.storage.lanes[16].y/16u;
     GsPbrStorage primary=GsPbrStorage(dispatch.primaryAddress);
     ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
-    uint primaryStride=dispatch.storage.lanes[16].w!=0u?uint(extent.x)*uint(extent.y)*samples:1u;
+    uint primaryStride=(dispatch.storage.lanes[16].w&1u)!=0u?uint(extent.x)*uint(extent.y)*samples:1u;
     for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
         uint local=localPixel*samples+sampleIndex,source=(pixel*samples+sampleIndex)*(primaryStride==1u?13u:1u),index=paths+local*connections+light;
         uint packet=packetOffset+index*stride,outLane=colorOffset+index*2u;
-        if(!endpointPacket)dispatch.storage.lanes[packet]=uvec4(0);
-        dispatch.storage.lanes[packet+stride-1u]=uvec4(0);
+        if(!colorEndpoints) {
+            if(!endpointPacket)dispatch.storage.lanes[packet]=uvec4(0);
+            dispatch.storage.lanes[packet+stride-1u]=uvec4(0);
+        }
 #ifdef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
         vec4 resultDiffuse=vec4(0),resultSpecular=vec4(0);
         // Keep failed/occluded connections zero, but publish every result once.
@@ -73,7 +76,11 @@ void main() {
                 receiver.mediumBoundary=primary.lanes[source+11u*primaryStride];
                 localColor+=gsGatherCaustics(receiver,normalize(gsFrameCameraPosition()-position.xyz));
             }
-            dispatch.storage.lanes[colorOffset+local*2u]=floatBitsToUint(vec4(localColor,0));
+            // Uniform integration needs the camera distance, not a second endpoint packet.
+            // Preserve the origin validation formerly performed by the CUDA packet walk.
+            if(colorEndpoints&&(any(isnan(gsFrameCameraPosition()))||any(isinf(gsFrameCameraPosition()))))
+                atomicAdd(dispatch.storage.lanes[7].y,1u);
+            dispatch.storage.lanes[colorOffset+local*2u]=floatBitsToUint(vec4(localColor,colorEndpoints?position.w:0.0));
             dispatch.storage.lanes[colorOffset+local*2u+1u]=uvec4(0);
         }
         if(state.x==0u||shading==GPU_SCENE_SHADING_UNLIT)GS_PBR_SKIP_CONNECTION;
@@ -109,8 +116,10 @@ void main() {
         GsRadianceSplit brdf=gsEvaluateBrdf(normal,normalize(gsFrameCameraPosition()-position.xyz),direction,
             max(base.rgb,vec3(0)),clamp(normalRoughness.w,.025,1.0),clamp(emissive.a,0.0,1.0));
         float epsilon=gsRayEpsilon(position.xyz);vec3 origin=position.xyz+normal*epsilon;
-        if(!endpointPacket)dispatch.storage.lanes[packet]=uvec4(floatBitsToUint(direction),0u);
-        dispatch.storage.lanes[packet+stride-1u]=uvec4(floatBitsToUint(shadow?distance:-1.0),floatBitsToUint(origin));
+        if(!colorEndpoints) {
+            if(!endpointPacket)dispatch.storage.lanes[packet]=uvec4(floatBitsToUint(direction),0u);
+            dispatch.storage.lanes[packet+stride-1u]=uvec4(floatBitsToUint(shadow?distance:-1.0),floatBitsToUint(origin));
+        }
         if(shadow) {
 #ifdef RTRENDERER_PBR_LIGHT_RAY_QUERY
 #ifndef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
@@ -140,15 +149,17 @@ void main() {
             }
 #endif
         }
+        if(colorEndpoints&&shadow&&(any(isnan(origin))||any(isinf(origin))))
+            atomicAdd(dispatch.storage.lanes[7].y,1u);
 #ifdef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
         resultDiffuse=vec4(brdf.diffuse*radiance,distance);
-        resultSpecular=vec4(brdf.specular*radiance,distance);
+        resultSpecular=vec4(brdf.specular*radiance,colorEndpoints?(shadow?distance:-1.0):distance);
         } while(false);
         dispatch.storage.lanes[outLane]=floatBitsToUint(resultDiffuse);
         dispatch.storage.lanes[outLane+1u]=floatBitsToUint(resultSpecular);
 #else
         dispatch.storage.lanes[outLane]=floatBitsToUint(vec4(brdf.diffuse*radiance,distance));
-        dispatch.storage.lanes[outLane+1u]=floatBitsToUint(vec4(brdf.specular*radiance,distance));
+        dispatch.storage.lanes[outLane+1u]=floatBitsToUint(vec4(brdf.specular*radiance,colorEndpoints?(shadow?distance:-1.0):distance));
 #endif
     }
 }

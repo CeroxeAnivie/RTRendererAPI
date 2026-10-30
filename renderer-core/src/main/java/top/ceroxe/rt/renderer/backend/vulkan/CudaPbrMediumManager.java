@@ -149,6 +149,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                 ||scene.transportPlan.kind()!=CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM||plan.boundaryCount()!=0))
             throw new IllegalArgumentException("cached PBR primary does not belong to the current uniform frame allocation");
         boolean planarPrimary=additionalRadiance!=null&&additionalRadiance.primaryAddress()!=0;
+        boolean colorEndpoints=planarPrimary&&plan.endpointPackets()&&scene.assets.density.environmentOffset()<0;
         var selectedResolve=plan.boundaryCount()==0&&scene.assets.density.environmentOffset()<0?uniformResolve:resolve;
         if(statistics==null)statistics=cuda.allocateHost(CudaPbrMediumAbi.STATISTICS_BYTES);
         if(additionalRadiance!=null&&additionalRadiance.bytes()!=Math.multiplyExact((long)plan.paths(),16))
@@ -162,11 +163,11 @@ final class CudaPbrMediumManager implements AutoCloseable {
                 CudaPbrMediumAbi.updateTile(metadata.asByteBuffer().order(ByteOrder.nativeOrder()),plan,first,pixels,
                         additionalRadiance==null?0L:Math.addExact(plan.emissionOffset(),Math.multiplyExact((long)first*plan.samples(),16)),
                         additionalRadiance!=null&&additionalRadiance.includesCameraEmission());
-                // Shared cached primaries use the field planes already supported by
-                // the final shading consumer. Ordinary packet producers retain AoS.
-                metadata.asByteBuffer().order(ByteOrder.nativeOrder()).putInt(268,planarPrimary?1:0);
+                // Bit 0 selects primary field planes. Bit 1 reuses color.w endpoints
+                // only for the proven uniform, interface-free cached-primary path.
+                metadata.asByteBuffer().order(ByteOrder.nativeOrder()).putInt(268,(planarPrimary?1:0)|(colorEndpoints?2:0));
                 int bytes=initial?uploadBytes:CudaPbrMediumAbi.HEADER_BYTES;
-                RtGpuTimestampPool.Capture primaryTiming=OpticalFrameTimings.ENABLED
+                RtGpuTimestampPool.Capture primaryTiming=OpticalFrameTimings.ENABLED&&!colorEndpoints
                         ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumPrimaryPackets",new String[]{"start","end"}):null;
                 RtGpuTimestampPool.Capture lightsTiming=OpticalFrameTimings.ENABLED
                         ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumLightPackets",new String[]{"start","end"}):null;
@@ -181,10 +182,12 @@ final class CudaPbrMediumManager implements AutoCloseable {
                             throw new IllegalArgumentException("native PBR caustics require a photon pipeline and map buffer");
                         photonPlan.record(command, stack, photonBuffer, photonPipeline, slot);
                     }
-                    if(primaryTiming!=null)primaryTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
-                    primaryProducer.recordBoundaryPacketTrace(command,stack,slot,address,primary.deviceAddress(),tileFirst,pixels,plan.stateOffset());
-                    if(primaryTiming!=null)primaryTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
-                    barrier(command,stack);
+                    if(!colorEndpoints) {
+                        if(primaryTiming!=null)primaryTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+                        primaryProducer.recordBoundaryPacketTrace(command,stack,slot,address,primary.deviceAddress(),tileFirst,pixels,plan.stateOffset());
+                        if(primaryTiming!=null)primaryTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+                        barrier(command,stack);
+                    }
                     if(lightsTiming!=null)lightsTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                     lightProducer.recordBoundaryPacketTrace(command,stack,slot,address,primary.deviceAddress(),tileFirst,
                             Math.multiplyExact(pixels,plan.connections()),plan.stateOffset());
