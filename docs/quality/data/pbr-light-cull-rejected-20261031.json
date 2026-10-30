@@ -1,0 +1,608 @@
+{
+  "decision": "rejected; source and all 16 SPIR-V restored to a75ba68",
+  "reason": "Target PBR light-packet GPU time increased in both orders; positive first-order FPS was not a reliable net gain",
+  "lightGpuIncreasePercent": [
+    1.78,
+    2.61
+  ],
+  "rounds": [
+    {
+      "label": "first-analysis.json",
+      "sha256": "630d4a06d46363f2b5996def429f429c386b734e88499333b0f79ecbe9c8d90b",
+      "beforeFps": 99.90345995652868,
+      "afterFps": 101.09618594419288,
+      "gain": {
+        "stages": {
+          "pbrLightPacketsGpuMsPerFrame": {
+            "before": 1.3408316666666666,
+            "after": 1.3646436666666666,
+            "roundReductionPct": [
+              -3.3705436996692706,
+              -2.5073360687361657,
+              0.6220968434598295
+            ],
+            "reductionPct": -1.7759127108921247
+          },
+          "pbrMediumKernelGpuMsPerFrame": {
+            "before": 0.8148093333333334,
+            "after": 0.799882,
+            "roundReductionPct": [
+              -0.4378814621198934,
+              0.9564681977710876,
+              4.974587810237674
+            ],
+            "reductionPct": 1.8320032334763092
+          },
+          "pbrContributionRestoreGpuMsPerFrame": {
+            "before": 0.15038333333333334,
+            "after": 0.14861233333333335,
+            "roundReductionPct": [
+              -0.996603970741905,
+              0.06743358459575521,
+              4.544933323440336
+            ],
+            "reductionPct": 1.177657098525986
+          },
+          "pbrPrimaryPacketsGpuMsPerFrame": {
+            "before": 0.127797,
+            "after": 0.12851066666666666,
+            "roundReductionPct": [
+              -1.397509556442622,
+              -0.7511597058154074,
+              0.5024966063617797
+            ],
+            "reductionPct": -0.5584377306718125
+          }
+        },
+        "pbrPrepareReductionPct": 0.5265016186672078,
+        "diagnosticsOffFpsGainPct": 1.1938785585436262,
+        "observationOverheadPct": -0.5992729162306754
+      },
+      "correctness": {
+        "byteIdenticalHdrFrames": 8,
+        "validation": [
+          {
+            "file": "first-candidate-image\\validation.jsonl",
+            "warnings": 0,
+            "errors": 0
+          },
+          {
+            "file": "native-pbr\\validation.jsonl",
+            "warnings": 0,
+            "errors": 0
+          },
+          {
+            "file": "native-pbr-scattering\\validation.jsonl",
+            "warnings": 0,
+            "errors": 0
+          }
+        ],
+        "native": {
+          "pbr": {
+            "passed": true,
+            "scope": "public-linear-HDR-PBR-nonscattering-native-medium",
+            "nativeFrames": 43,
+            "comparisons": [
+              {
+                "name": "sun-boundary",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "sun-boundary-interface-free-IOR-1.3",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "sun-nested-priority",
+                "maxAbsoluteError": 9.540945844754845e-05
+              },
+              {
+                "name": "eight-SPP-light-connections",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "receiver-containing-set",
+                "maxAbsoluteError": 7.526671485336145e-05
+              },
+              {
+                "name": "frame-local-shadow",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "frame-local-removal",
+                "exact": true
+              },
+              {
+                "name": "boundary-density",
+                "maxAbsoluteError": 4.218416534371161e-05
+              },
+              {
+                "name": "density-asset-replacement",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "point-boundary",
+                "maxAbsoluteError": 3.750910834574017e-05
+              },
+              {
+                "name": "spot-boundary",
+                "maxAbsoluteError": 3.750910834574017e-05
+              },
+              {
+                "name": "environment-camera-emission-and-shadow",
+                "maxAbsoluteError": 3.635286015640782e-05
+              },
+              {
+                "name": "single-sided-front-matches-double-sided",
+                "exact": true
+              },
+              {
+                "name": "single-sided-front-boundary",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "single-sided-backface-does-not-shadow",
+                "exact": true
+              },
+              {
+                "name": "double-sided-camera-backface-shades",
+                "exact": true
+              },
+              {
+                "name": "single-sided-frame-local-front",
+                "exact": true
+              },
+              {
+                "name": "single-sided-camera-and-shadow-front-back-faces",
+                "passed": true
+              },
+              {
+                "name": "PBR-single-scattering-composition",
+                "maxAbsoluteError": 5.384586520285062e-05,
+                "fullHdCompleted": true
+              },
+              {
+                "name": "PBR-uniform-bounces-0",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1434326171875
+              },
+              {
+                "name": "PBR-density-bounces-0",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1434326171875
+              },
+              {
+                "name": "PBR-uniform-bounces-1",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.15285634258853437
+              },
+              {
+                "name": "PBR-density-bounces-1",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.15302361144591514
+              },
+              {
+                "name": "PBR-uniform-bounces-3",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1532525146826788
+              },
+              {
+                "name": "PBR-density-bounces-3",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.15337749550753857
+              },
+              {
+                "name": "PBR-zero-density-bounces-0",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-bounces-1",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-bounces-3",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-and-generation-replacement",
+                "passed": true
+              },
+              {
+                "name": "short-medium-budget",
+                "maxAbsoluteError": 0.0
+              },
+              {
+                "name": "resize-recovery",
+                "exact": true
+              }
+            ]
+          },
+          "pbr-scattering": {
+            "passed": true,
+            "comparisons": [
+              {
+                "name": "PBR-single-scattering-composition",
+                "maxAbsoluteError": 5.384586520285062e-05,
+                "fullHdCompleted": true
+              },
+              {
+                "name": "PBR-uniform-bounces-0",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1434326171875
+              },
+              {
+                "name": "PBR-density-bounces-0",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1434326171875
+              },
+              {
+                "name": "PBR-uniform-bounces-1",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1528647317123948
+              },
+              {
+                "name": "PBR-density-bounces-1",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1530140238757889
+              },
+              {
+                "name": "PBR-uniform-bounces-3",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.15314482572536817
+              },
+              {
+                "name": "PBR-density-bounces-3",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.15332972886351684
+              },
+              {
+                "name": "PBR-zero-density-bounces-0",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-bounces-1",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-bounces-3",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-and-generation-replacement",
+                "passed": true
+              },
+              {
+                "name": "PBR-tiled-uniform-bounces-0",
+                "residentLimitBytes": 524288,
+                "passed": true
+              },
+              {
+                "name": "PBR-tiled-density-bounces-0",
+                "residentLimitBytes": 524288,
+                "passed": true
+              },
+              {
+                "name": "PBR-tiled-uniform-bounces-1",
+                "residentLimitBytes": 524288,
+                "passed": true
+              },
+              {
+                "name": "PBR-tiled-density-bounces-1",
+                "residentLimitBytes": 524288,
+                "passed": true
+              }
+            ],
+            "nativeContributionRoutes": {
+              "directUniform": 7,
+              "directDensity": 6,
+              "multiple": 14,
+              "pbrFrames": 27
+            }
+          }
+        }
+      },
+      "artifacts": {
+        "control": "8c1278a90f3e3f3166ccc5103fd922e2b18613bc23510cc7ec74d0f3f491229c",
+        "candidate": "df22f3b54ae236825bae9b42810061a53fe8a62e57f5845d0a6427e7889ad854"
+      }
+    },
+    {
+      "label": "repeat-analysis.json",
+      "sha256": "4d178b287ca494a254490717258a2a7c19cb7a7a81b2d4a27dacebf51643c771",
+      "beforeFps": 100.49150955610054,
+      "afterFps": 100.31323644022095,
+      "gain": {
+        "stages": {
+          "pbrLightPacketsGpuMsPerFrame": {
+            "before": 1.3747346666666667,
+            "after": 1.4106319999999999,
+            "roundReductionPct": [
+              -4.308650678329418,
+              -1.1851923931576858,
+              -2.31939617435597
+            ],
+            "reductionPct": -2.611219037661572
+          },
+          "pbrMediumKernelGpuMsPerFrame": {
+            "before": 0.8208300000000001,
+            "after": 0.824859,
+            "roundReductionPct": [
+              -1.1822565185685585,
+              -0.14484145338053978,
+              -0.14643179104840698
+            ],
+            "reductionPct": -0.49084463287158986
+          },
+          "pbrContributionRestoreGpuMsPerFrame": {
+            "before": 0.15374566666666667,
+            "after": 0.15439966666666666,
+            "roundReductionPct": [
+              -1.8638260600752243,
+              0.7997143877186752,
+              -0.19748535316965743
+            ],
+            "reductionPct": -0.42537784262752787
+          },
+          "pbrPrimaryPacketsGpuMsPerFrame": {
+            "before": 0.130474,
+            "after": 0.13190033333333334,
+            "roundReductionPct": [
+              -3.1132695372391606,
+              0.19945227337235805,
+              -0.3240999813467704
+            ],
+            "reductionPct": -1.0931935353659217
+          }
+        },
+        "pbrPrepareReductionPct": -1.7504715290132422,
+        "diagnosticsOffFpsGainPct": -0.17740117216575868,
+        "observationOverheadPct": 0.45675960325779474
+      },
+      "correctness": {
+        "byteIdenticalHdrFrames": 8,
+        "validation": [
+          {
+            "file": "first-candidate-image\\validation.jsonl",
+            "warnings": 0,
+            "errors": 0
+          },
+          {
+            "file": "native-pbr\\validation.jsonl",
+            "warnings": 0,
+            "errors": 0
+          },
+          {
+            "file": "native-pbr-scattering\\validation.jsonl",
+            "warnings": 0,
+            "errors": 0
+          }
+        ],
+        "native": {
+          "pbr": {
+            "passed": true,
+            "scope": "public-linear-HDR-PBR-nonscattering-native-medium",
+            "nativeFrames": 43,
+            "comparisons": [
+              {
+                "name": "sun-boundary",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "sun-boundary-interface-free-IOR-1.3",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "sun-nested-priority",
+                "maxAbsoluteError": 9.540945844754845e-05
+              },
+              {
+                "name": "eight-SPP-light-connections",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "receiver-containing-set",
+                "maxAbsoluteError": 7.526671485336145e-05
+              },
+              {
+                "name": "frame-local-shadow",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "frame-local-removal",
+                "exact": true
+              },
+              {
+                "name": "boundary-density",
+                "maxAbsoluteError": 4.218416534371161e-05
+              },
+              {
+                "name": "density-asset-replacement",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "point-boundary",
+                "maxAbsoluteError": 3.750910834574017e-05
+              },
+              {
+                "name": "spot-boundary",
+                "maxAbsoluteError": 3.750910834574017e-05
+              },
+              {
+                "name": "environment-camera-emission-and-shadow",
+                "maxAbsoluteError": 3.635286015640782e-05
+              },
+              {
+                "name": "single-sided-front-matches-double-sided",
+                "exact": true
+              },
+              {
+                "name": "single-sided-front-boundary",
+                "maxAbsoluteError": 5.260421415070882e-05
+              },
+              {
+                "name": "single-sided-backface-does-not-shadow",
+                "exact": true
+              },
+              {
+                "name": "double-sided-camera-backface-shades",
+                "exact": true
+              },
+              {
+                "name": "single-sided-frame-local-front",
+                "exact": true
+              },
+              {
+                "name": "single-sided-camera-and-shadow-front-back-faces",
+                "passed": true
+              },
+              {
+                "name": "PBR-single-scattering-composition",
+                "maxAbsoluteError": 5.384586520285062e-05,
+                "fullHdCompleted": true
+              },
+              {
+                "name": "PBR-uniform-bounces-0",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1434326171875
+              },
+              {
+                "name": "PBR-density-bounces-0",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1434326171875
+              },
+              {
+                "name": "PBR-uniform-bounces-1",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.15285634258853437
+              },
+              {
+                "name": "PBR-density-bounces-1",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.15302361144591514
+              },
+              {
+                "name": "PBR-uniform-bounces-3",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1532525146826788
+              },
+              {
+                "name": "PBR-density-bounces-3",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.15337749550753857
+              },
+              {
+                "name": "PBR-zero-density-bounces-0",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-bounces-1",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-bounces-3",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-and-generation-replacement",
+                "passed": true
+              },
+              {
+                "name": "short-medium-budget",
+                "maxAbsoluteError": 0.0
+              },
+              {
+                "name": "resize-recovery",
+                "exact": true
+              }
+            ]
+          },
+          "pbr-scattering": {
+            "passed": true,
+            "comparisons": [
+              {
+                "name": "PBR-single-scattering-composition",
+                "maxAbsoluteError": 5.384586520285062e-05,
+                "fullHdCompleted": true
+              },
+              {
+                "name": "PBR-uniform-bounces-0",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1434326171875
+              },
+              {
+                "name": "PBR-density-bounces-0",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1434326171875
+              },
+              {
+                "name": "PBR-uniform-bounces-1",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1528647317123948
+              },
+              {
+                "name": "PBR-density-bounces-1",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.1530140238757889
+              },
+              {
+                "name": "PBR-uniform-bounces-3",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.15314482572536817
+              },
+              {
+                "name": "PBR-density-bounces-3",
+                "darkBelowTolerance": 0.0001,
+                "meanLitRadiance": 0.15332972886351684
+              },
+              {
+                "name": "PBR-zero-density-bounces-0",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-bounces-1",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-bounces-3",
+                "exact": true
+              },
+              {
+                "name": "PBR-zero-density-and-generation-replacement",
+                "passed": true
+              },
+              {
+                "name": "PBR-tiled-uniform-bounces-0",
+                "residentLimitBytes": 524288,
+                "passed": true
+              },
+              {
+                "name": "PBR-tiled-density-bounces-0",
+                "residentLimitBytes": 524288,
+                "passed": true
+              },
+              {
+                "name": "PBR-tiled-uniform-bounces-1",
+                "residentLimitBytes": 524288,
+                "passed": true
+              },
+              {
+                "name": "PBR-tiled-density-bounces-1",
+                "residentLimitBytes": 524288,
+                "passed": true
+              }
+            ],
+            "nativeContributionRoutes": {
+              "directUniform": 7,
+              "directDensity": 6,
+              "multiple": 14,
+              "pbrFrames": 27
+            }
+          }
+        }
+      },
+      "artifacts": {
+        "control": "8c1278a90f3e3f3166ccc5103fd922e2b18613bc23510cc7ec74d0f3f491229c",
+        "candidate": "df22f3b54ae236825bae9b42810061a53fe8a62e57f5845d0a6427e7889ad854"
+      }
+    }
+  ]
+}

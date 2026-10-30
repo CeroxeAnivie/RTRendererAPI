@@ -65,6 +65,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     private long commandPool;
     private FrameContext[] frameContexts;
     private int nextFrameContext;
+    private VulkanFrameDisplayTransform displayTransform;
 
     private long swapchain;
     private long[] swapchainImages = new long[0];
@@ -293,15 +294,16 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         VkQueueFamilyProperties.Buffer properties = VkQueueFamilyProperties.malloc(count.get(0), stack);
         VK10.vkGetPhysicalDeviceQueueFamilyProperties(candidate, count, properties);
         for (int index = 0; index < properties.limit(); index++) {
-            boolean transfer = (properties.get(index).queueFlags() & VK10.VK_QUEUE_TRANSFER_BIT) != 0;
+            int required = VK10.VK_QUEUE_TRANSFER_BIT | VK10.VK_QUEUE_COMPUTE_BIT;
+            boolean transferAndCompute = (properties.get(index).queueFlags() & required) == required;
             IntBuffer supported = stack.ints(VK10.VK_FALSE);
             checkVk(
                     KHRSurface.vkGetPhysicalDeviceSurfaceSupportKHR(candidate, index, surface, supported),
                     "vkGetPhysicalDeviceSurfaceSupportKHR"
             );
-            if (transfer && supported.get(0) == VK10.VK_TRUE) return index;
+            if (transferAndCompute && supported.get(0) == VK10.VK_TRUE) return index;
         }
-        throw new UnsupportedOperationException("renderer GPU has no transfer-and-present queue family");
+        throw new UnsupportedOperationException("renderer GPU has no transfer/compute/present queue family");
     }
 
     private void createLogicalDevice(MemoryStack stack) {
@@ -356,11 +358,11 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         );
         frameContexts = new FrameContext[FRAME_CONTEXT_COUNT];
         for (int index = 0; index < frameContexts.length; index++) {
-            frameContexts[index] = createFrameContext(stack, commandBuffers.get(index));
+            frameContexts[index] = createFrameContext(stack, commandBuffers.get(index), index);
         }
     }
 
-    private FrameContext createFrameContext(MemoryStack stack, long commandBufferAddress) {
+    private FrameContext createFrameContext(MemoryStack stack, long commandBufferAddress, int slot) {
         long acquireSemaphore = 0L;
         long proxyPresentSemaphore = 0L;
         long fence = 0L;
@@ -373,6 +375,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             fence = createFence(stack, true);
             overlayUpload = VulkanTextOverlayUpload.create(physicalDevice, device);
             return new FrameContext(
+                    slot,
                     new VkCommandBuffer(commandBufferAddress, device),
                     acquireSemaphore,
                     proxyPresentSemaphore,
@@ -1116,7 +1119,22 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     VK10.VK_QUEUE_FAMILY_IGNORED,
                     VK10.VK_QUEUE_FAMILY_IGNORED
             );
-            if (sourceFormat == swapchainFormat
+            long displayImage = sourceImage;
+            int displayFormat = sourceFormat;
+            if (sourceFormat == VK10.VK_FORMAT_R16G16B16A16_SFLOAT) {
+                if (displayTransform == null) {
+                    displayTransform = VulkanFrameDisplayTransform.open(
+                            instance, physicalDevice, device,
+                            sharedDeviceFastPath ? sharedRuntime.allocator() : 0L,
+                            FRAME_CONTEXT_COUNT
+                    );
+                }
+                displayImage = displayTransform.record(
+                        commandBuffer, stack, context.slot, sourceImage, sourceWidth, sourceHeight
+                );
+                displayFormat = VK10.VK_FORMAT_R8G8B8A8_UNORM;
+            }
+            if (displayFormat == swapchainFormat
                     && sourceWidth == swapchainWidth
                     && sourceHeight == swapchainHeight) {
                 VkImageCopy.Buffer region = VkImageCopy.calloc(1, stack);
@@ -1133,7 +1151,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 region.extent().set(sourceWidth, sourceHeight, 1);
                 VK10.vkCmdCopyImage(
                         commandBuffer,
-                        sourceImage,
+                        displayImage,
                         VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                         destinationImage,
                         VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -1157,7 +1175,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 region.dstOffsets(1).set(swapchainWidth, swapchainHeight, 1);
                 VK10.vkCmdBlitImage(
                         commandBuffer,
-                        sourceImage,
+                        displayImage,
                         VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                         destinationImage,
                         VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -1749,6 +1767,10 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         // Never destroy their device/session below after one of those proofs failed.
         if (failure != null) throw failure;
         destroySwapchain();
+        if (displayTransform != null) {
+            displayTransform.close();
+            displayTransform = null;
+        }
         if (managedPresentationRegistered) {
             sharedRuntime.endManagedPresentation();
             managedPresentationRegistered = false;
@@ -1949,6 +1971,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     }
 
     private static final class FrameContext {
+        private final int slot;
         private final VkCommandBuffer commandBuffer;
         private final long acquireSemaphore;
         private final long proxyPresentSemaphore;
@@ -1968,12 +1991,14 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         private List<VulkanTextOverlayRasterizer.CopySpan> overlaySpans = List.of();
 
         private FrameContext(
+                int slot,
                 VkCommandBuffer commandBuffer,
                 long acquireSemaphore,
                 long proxyPresentSemaphore,
                 long fence,
                 VulkanTextOverlayUpload overlayUpload
         ) {
+            this.slot = slot;
             this.commandBuffer = commandBuffer;
             this.acquireSemaphore = acquireSemaphore;
             this.proxyPresentSemaphore = proxyPresentSemaphore;

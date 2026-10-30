@@ -694,3 +694,14 @@ producer 和 CUDA 同步改用 light-major，连接求和顺序未改；8 帧 HD
 | | **互斥墙钟求和** | **10.205621** | **1000.000** | **100.000%** | **2.09%** |
 
 更大的 tile 将散射等待重新分配到完成同步与最后一次统计读回，不能把第二项单独的下降当作收益。散射 lights GPU 在反序窗口增加约 15.06%，已完整计入整帧结果；本轮保留依据是 PBR 必要工作减少和两种顺序均有正吞吐收益。展厅 8 帧 HDR 全字节一致，31 项 PBR、15 项介质组合、14 项相机散射独立参考检查通过，全部正式 validation 零 warning/error；CPU ABI 最小分配、密度回退、组合 tile、manifest 检查通过。证据：[pbr-endpoint-packets-20261031.json](data/pbr-endpoint-packets-20261031.json)、[完整排名](data/pbr-endpoint-packets-ranked-20261031.csv)。
+
+
+### 到达 100 FPS 窗口后的画质插入项
+
+PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 与 15 项组合通过，但正序、反序的目标灯光 packet GPU 时间分别增加 1.78%、2.61%；源文件及 16 个 SPIR-V 均已撤回。反序保留版本关闭诊断对照合计 100.491510 FPS，逐轮约 96.06/99.84/106.08，不称为每轮稳定 100+。依用户约定，先处理未开降噪的画质，再继续总榜前三各自内部前三。证据：[撤回候选](data/pbr-light-cull-rejected-20261031.json)。
+
+已修复 GLFW 显示链的确定性错误：线性 RGBA16F 原来直接 blit 成 UNORM SDR，没有色调映射或 gamma；现在窗口复用既有 publication compute 的 ACES-fit + gamma2.2。转换与截图口径一致，不更改线性 HDR 原图、不作邻域滤波或锐化。共享设备和外部导入均经同一转换；每帧槽资源有界，完成后复用，尺寸变化时替换。公开 lease 只保证 TRANSFER_SRC，所以先拷贝到私有 HDR storage，不擅自为借用图创建 storage view。转换增加了必要的显示工作，未宣称是帧率优化；无窗口 benchmark 不经过 presenter。
+
+参考 Falcor commit `759aad033ff610fb0d82c74f7e0a508d0096d5f2`（BSD-3-Clause）`Source/RenderPasses/ToneMapper/ToneMapping.ps.slang` 的显示变换分层和 ACES 曲线，复用本项目已有公式，没有复制外部代码。真实 GPU 12 项覆盖全部 31,744 个非负有限半精度亮度值、单像素黑白边缘、源图不变、帧槽复用、尺寸变化和共享/独立 allocator；RGB 相对独立 double CPU oracle 允许 1 个 SDR 编码刻度，边缘通道和 alpha 完全一致。转换测试、真实 121 帧窗口测试 validation 均为零 warning/error、零丢样，CPU 全半精度显示 oracle 通过。
+
+随后真实可视化运行 FG/降噪/重建/时域均关闭。用户截图窗口为 1920×1080、1 SPP、101.9 FPS、9.81 ms/帧；完整日志还包括启动、窗口尺寸变化和较慢窗口，全部保留，不能把单个 101.9 FPS 当成全程稳定值。用户指出左墙及光束颗粒逐帧闪动，尚未解决；显示修复不能冒充采样噪声已经消失。后续同样保持场景、SPP 和 16 段积分，不通过减雾、冻结随机数或暗开降噪交差。展示保持 controls=true，保留全部场景切换，不设自动退出上限；用户要求不使用 computer use。证据：[显示链及真实 demo 数据](data/medium-hdr-presentation-20261031.json)。

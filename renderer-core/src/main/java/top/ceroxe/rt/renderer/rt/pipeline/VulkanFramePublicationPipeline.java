@@ -23,7 +23,7 @@ import top.ceroxe.rt.renderer.RtEdgeSink;
 import top.ceroxe.rt.renderer.rt.device.RtGpuImage;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 
-/** Publishes a private linear-HDR reconstruction result into the public SDR output image. */
+/** Converts a linear-HDR image into the renderer's display-encoded SDR output. */
 public final class VulkanFramePublicationPipeline implements AutoCloseable {
     private static final String SHADER =
             "assets/rtrenderer/shaders/gpuscene/gpuscene_reconstruction_publish.comp";
@@ -63,8 +63,19 @@ public final class VulkanFramePublicationPipeline implements AutoCloseable {
      */
     public static VulkanFramePublicationPipeline open(VulkanDeviceRuntime runtime, int frameCount) {
         Objects.requireNonNull(runtime, "runtime");
+        return open(runtime.device(), frameCount);
+    }
+
+    /**
+     * Creates the same display transform on a presenter-owned logical device.
+     *
+     * @param device device owning the images and command buffers
+     * @param frameCount maximum number of independently recorded frame slots
+     * @return an open publication pipeline
+     */
+    public static VulkanFramePublicationPipeline open(VkDevice device, int frameCount) {
+        Objects.requireNonNull(device, "device");
         if (frameCount <= 0) throw new IllegalArgumentException("frameCount must be positive");
-        VkDevice device = runtime.device();
         long pool = 0L;
         long layout = 0L;
         long pipelineLayout = 0L;

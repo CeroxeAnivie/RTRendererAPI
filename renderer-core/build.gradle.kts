@@ -429,6 +429,7 @@ tasks.named("check") {
 }
 
 val nativeSelfTests = linkedMapOf(
+    "vulkanFrameDisplayTransformNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDisplayTransformNativeSelfTest",
     "cudaMediumRuntimeNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntimeNativeSelfTest",
     "cudaCameraMediumNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraMediumNativeSelfTest",
     "cudaPrimaryMediumNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryMediumNativeSelfTest",

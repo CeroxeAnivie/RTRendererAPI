@@ -1,0 +1,557 @@
+{
+  "scene": "pbr-direct-uniform",
+  "extent": [
+    1920,
+    1080
+  ],
+  "spp": 1,
+  "fg": false,
+  "denoise": false,
+  "reconstruction": false,
+  "temporal": false,
+  "change": "Presenter reuses existing ACES-fit + gamma2.2 publication for linear HDR; transfer-only lease contract preserved; no spatial filtering",
+  "gpuOracle": {
+    "cases": 12,
+    "nonnegativeFiniteHalfValues": 31744,
+    "maxAllowedRgbDelta": 1,
+    "edgeAndAlphaExact": true,
+    "sourceUnmodified": true,
+    "slotReuseAndResize": true,
+    "sharedAndOwnedAllocator": true
+  },
+  "validation": {
+    "transform-validation.jsonl": {
+      "sha256": "bba56fa2c2ffa3ee8e3b453fb7610a9cf9a4125aeddf4ad5b24f4acd94a03545",
+      "warnings": 0,
+      "errors": 0,
+      "droppedMessages": 0
+    },
+    "window-validation.jsonl": {
+      "sha256": "47fde06adb835bf5e2edb213234f12746d0312ce1425256da96447f78b4822b8",
+      "warnings": 0,
+      "errors": 0,
+      "droppedMessages": 0
+    }
+  },
+  "reference": {
+    "project": "Falcor",
+    "commit": "759aad033ff610fb0d82c74f7e0a508d0096d5f2",
+    "license": "BSD-3-Clause",
+    "path": "Source/RenderPasses/ToneMapper/ToneMapping.ps.slang",
+    "sha256": "5f729ebb4c3821d0128171028469c63751370deda5c50c21c8a88544ae59e3b7",
+    "application": "Reuse own publication curve; reference establishes display transform separation, no external code copied"
+  },
+  "artifacts": {
+    "candidate-core.jar": "61ea1a5bad43177bf5bb41900c85bc9a3598eae774ee01e786f3b6e71d7b41c7",
+    "demo-stdout.log": "148c35048cf628a18fc1c28d93caed717ff10e8c36091aa8851fb279cf6d98b3",
+    "test.log": "1a750706677753fce595fd43d4edd2e2777ceac1a4185af635bb31544d531583",
+    "codec.log": "6c2b77670f413f5491fd5cebedf63f2725403c4c3272f1cb751a9788eed5bc5b",
+    "window-check.log": "01f049e10a9c6e9b8a4aafea3e9fa239c4ed9bdaff30ba802d039f0365b1ba70"
+  },
+  "interactive": {
+    "samples": [
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 0.0,
+        "frameMs": NaN
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 44.6,
+        "frameMs": 22.45
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 70.9,
+        "frameMs": 14.1
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 63.2,
+        "frameMs": 15.82
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 65.9,
+        "frameMs": 15.16
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 65.0,
+        "frameMs": 15.39
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 96.0,
+        "frameMs": 10.42
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 99.9,
+        "frameMs": 10.01
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 100.0,
+        "frameMs": 10.0
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 101.0,
+        "frameMs": 9.9
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 101.9,
+        "frameMs": 9.82
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 102.9,
+        "frameMs": 9.72
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 101.9,
+        "frameMs": 9.81
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 99.8,
+        "frameMs": 10.02
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 93.9,
+        "frameMs": 10.65
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 95.9,
+        "frameMs": 10.43
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 101.9,
+        "frameMs": 9.81
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 102.9,
+        "frameMs": 9.72
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 99.9,
+        "frameMs": 10.01
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 94.7,
+        "frameMs": 10.56
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 76.5,
+        "frameMs": 13.08
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 61.0,
+        "frameMs": 16.4
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 54.0,
+        "frameMs": 18.52
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 61.6,
+        "frameMs": 16.24
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 60.3,
+        "frameMs": 16.6
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 54.5,
+        "frameMs": 18.36
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 48.7,
+        "frameMs": 20.55
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 52.7,
+        "frameMs": 18.97
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 53.8,
+        "frameMs": 18.58
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 55.4,
+        "frameMs": 18.03
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 54.1,
+        "frameMs": 18.48
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 57.3,
+        "frameMs": 17.46
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 54.0,
+        "frameMs": 18.52
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 52.7,
+        "frameMs": 18.96
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 54.7,
+        "frameMs": 18.27
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 55.3,
+        "frameMs": 18.07
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 54.4,
+        "frameMs": 18.39
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 53.7,
+        "frameMs": 18.61
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 58.9,
+        "frameMs": 16.97
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 52.8,
+        "frameMs": 18.92
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 55.5,
+        "frameMs": 18.01
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 54.8,
+        "frameMs": 18.24
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 69.0,
+        "frameMs": 14.49
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 70.6,
+        "frameMs": 14.17
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 59.6,
+        "frameMs": 16.77
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 59.5,
+        "frameMs": 16.81
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 60.9,
+        "frameMs": 16.42
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 59.9,
+        "frameMs": 16.69
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 78.0,
+        "frameMs": 12.82
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 76.9,
+        "frameMs": 13.01
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 97.0,
+        "frameMs": 10.31
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 100.0,
+        "frameMs": 10.0
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 96.0,
+        "frameMs": 10.42
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 96.9,
+        "frameMs": 10.32
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 101.9,
+        "frameMs": 9.82
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 101.8,
+        "frameMs": 9.82
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 102.9,
+        "frameMs": 9.72
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 101.9,
+        "frameMs": 9.81
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 101.9,
+        "frameMs": 9.81
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 98.8,
+        "frameMs": 10.12
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 100.0,
+        "frameMs": 10.0
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 95.9,
+        "frameMs": 10.42
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 93.0,
+        "frameMs": 10.76
+      },
+      {
+        "width": 2560,
+        "height": 1494,
+        "spp": 1,
+        "fps": 96.9,
+        "frameMs": 10.32
+      },
+      {
+        "width": 2560,
+        "height": 1494,
+        "spp": 1,
+        "fps": 69.9,
+        "frameMs": 14.31
+      },
+      {
+        "width": 2560,
+        "height": 1494,
+        "spp": 1,
+        "fps": 53.0,
+        "frameMs": 18.88
+      },
+      {
+        "width": 2560,
+        "height": 1494,
+        "spp": 1,
+        "fps": 59.0,
+        "frameMs": 16.96
+      },
+      {
+        "width": 2560,
+        "height": 1494,
+        "spp": 1,
+        "fps": 56.0,
+        "frameMs": 17.87
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 49.1,
+        "frameMs": 20.36
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 29.0,
+        "frameMs": 34.52
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "spp": 1,
+        "fps": 96.0,
+        "frameMs": 10.42
+      }
+    ],
+    "userScreenshot": {
+      "fps": 101.9,
+      "frameMs": 9.81
+    },
+    "note": "Full interactive log retained including startup, resizes and slow windows. Screenshot 101.9 FPS is one window, not a stable aggregate claim. Flicker remains under investigation; display correction does not remove Monte Carlo noise."
+  }
+}
