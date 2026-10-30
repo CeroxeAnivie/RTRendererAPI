@@ -41,8 +41,11 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         NATIVE_PBR_MEDIUM_CACHED("gpuscene_native_pbr_primary_cached.rgen"),
         NATIVE_PBR_MEDIUM_LIGHTS("gpuscene_native_pbr_medium_lights.rgen"),
         NATIVE_BOUNDARY_SCATTERING("gpuscene_native_boundary_scattering.rgen"),
+        NATIVE_SCATTERING_PRIMARY("gpuscene_native_scattering_primary.rgen"),
         NATIVE_SCATTERING_LIGHTS("gpuscene_native_scattering_lights.rgen"),
         NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC("gpuscene_native_scattering_lights.rgen"),
+        NATIVE_SCATTERING_LIGHTS_CACHED("gpuscene_native_scattering_cached_lights.rgen"),
+        NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC("gpuscene_native_scattering_cached_lights.rgen"),
         NATIVE_MULTIPLE_SCATTERING("gpuscene_native_multiple_scattering.rgen"),
         NATIVE_DENSITY_SCATTERING_LIGHTS("gpuscene_native_density_scattering_lights.rgen"),
         NATIVE_OPTICAL_TRACE("gpuscene_native_optical_trace.rgen"),
@@ -56,8 +59,9 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         Program(String source) { this.source = source; }
         public boolean primaryQueue() { return this == PRIMARY_TRACE || this == NATIVE_MEDIUM_TRACE || this == NATIVE_BOUNDARY_PACKET
                 || this == NATIVE_PBR_MEDIUM_TRACE || this == NATIVE_PBR_MEDIUM_CACHED || this == NATIVE_PBR_MEDIUM_LIGHTS
-                || this == NATIVE_BOUNDARY_SCATTERING
+                || this == NATIVE_BOUNDARY_SCATTERING || this == NATIVE_SCATTERING_PRIMARY
                 || this == NATIVE_SCATTERING_LIGHTS || this == NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC || this == NATIVE_MULTIPLE_SCATTERING
+                || this == NATIVE_SCATTERING_LIGHTS_CACHED || this == NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC
                 || this == NATIVE_DENSITY_SCATTERING_LIGHTS || this == NATIVE_OPTICAL_TRACE || this == SURFACE_PRIMARY_SHADE
                 || this == COMPACT_PRIMARY_SHADE || this == GENERAL_PRIMARY_SHADE; }
     }
@@ -192,13 +196,16 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout(),
                     program.primaryQueue() ? GpuScenePrimaryQueue.PUSH_BYTES : 0);
             boolean opticalDiagnostic=program==Program.NATIVE_OPTICAL_TRACE&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS;
-            boolean scatteringDiagnostic=program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC
+            boolean scatteringDiagnostic=(program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC
+                    ||program==Program.NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC)
                     &&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS;
+            boolean cachedScattering=program==Program.NATIVE_SCATTERING_LIGHTS_CACHED
+                    ||program==Program.NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC;
             boolean inlineScatteringQuery=checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
-                    &&(program==Program.NATIVE_SCATTERING_LIGHTS||program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC);
+                    &&(program==Program.NATIVE_SCATTERING_LIGHTS||program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC||cachedScattering);
             boolean inlinePbrLightQuery=checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
                     &&program==Program.NATIVE_PBR_MEDIUM_LIGHTS;
-            String raygenSource=inlineScatteringQuery?"gpuscene_native_scattering_query.rgen"
+            String raygenSource=inlineScatteringQuery?cachedScattering?"gpuscene_native_scattering_cached_query.rgen":"gpuscene_native_scattering_query.rgen"
                     :inlinePbrLightQuery?"gpuscene_native_pbr_medium_query.rgen":program.source;
             byte[] raygenCode = scatteringDiagnostic?RtShaderModuleCompiler.compileCameraScatteringDiagnostic(SHADER_ROOT+raygenSource,
                     Shaderc.shaderc_raygen_shader,linearHdrOutput,shaderExecutionReorderingEnabled):opticalDiagnostic
@@ -221,7 +228,8 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             boolean visibility = program != Program.SURFACE && program != Program.SURFACE_PRIMARY_SHADE
                     && program != Program.PRIMARY_TRACE && program != Program.NATIVE_MEDIUM_TRACE
                     && program != Program.NATIVE_BOUNDARY_PACKET && program != Program.NATIVE_PBR_MEDIUM_TRACE && program != Program.NATIVE_PBR_MEDIUM_CACHED
-                    && program != Program.NATIVE_PBR_MEDIUM_LIGHTS && program != Program.NATIVE_BOUNDARY_SCATTERING;
+                    && program != Program.NATIVE_PBR_MEDIUM_LIGHTS && program != Program.NATIVE_BOUNDARY_SCATTERING
+                    && program != Program.NATIVE_SCATTERING_PRIMARY;
             int recursionDepth = GpuScenePipelineRequirements.recursionDepth(missCode, closestCode, anyHitCode);
             if (properties.maxRayRecursionDepth() < recursionDepth)
                 throw new IllegalStateException("device cannot execute the declared shader recursion depth");

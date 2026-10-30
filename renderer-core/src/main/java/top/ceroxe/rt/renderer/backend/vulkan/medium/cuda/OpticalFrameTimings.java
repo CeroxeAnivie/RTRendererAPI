@@ -18,6 +18,8 @@ public final class OpticalFrameTimings {
     public static final LongAdder cameraScatteringKernelCount=new LongAdder(),pbrMediumKernelCount=new LongAdder();
     public static final LongAdder cameraScatteringTlasGpu=new LongAdder(),cameraScatteringTlasCount=new LongAdder();
     public static final LongAdder cameraScatteringLightsGpu=new LongAdder(),cameraScatteringLightsCount=new LongAdder();
+    /** Nested in cameraScatteringLightsGpu; never add it again to the enclosing producer. */
+    public static final LongAdder cameraScatteringPrimaryGpu=new LongAdder(),cameraScatteringPrimaryCount=new LongAdder();
     public static final LongAdder pbrPrimaryPacketsGpu=new LongAdder(),pbrPrimaryPacketsCount=new LongAdder();
     public static final LongAdder pbrLightPacketsGpu=new LongAdder(),pbrLightPacketsCount=new LongAdder();
     public static final LongAdder pbrContributionRestoreGpu=new LongAdder(),pbrContributionRestoreCount=new LongAdder();
@@ -38,6 +40,7 @@ public final class OpticalFrameTimings {
         switch(stage) {
             case "cameraScattering.tlas" -> {cameraScatteringTlasGpu.add(nanos);cameraScatteringTlasCount.increment();}
             case "cameraScattering.lights" -> {cameraScatteringLightsGpu.add(nanos);cameraScatteringLightsCount.increment();}
+            case "cameraScattering.primary" -> {cameraScatteringPrimaryGpu.add(nanos);cameraScatteringPrimaryCount.increment();}
             case "pbrMedium.primaryPackets" -> {pbrPrimaryPacketsGpu.add(nanos);pbrPrimaryPacketsCount.increment();}
             case "pbrMedium.lightPackets" -> {pbrLightPacketsGpu.add(nanos);pbrLightPacketsCount.increment();}
             case "pbrMedium.contributionRestore" -> {pbrContributionRestoreGpu.add(nanos);pbrContributionRestoreCount.increment();}
@@ -83,6 +86,6 @@ public final class OpticalFrameTimings {
                 cameraScatteringTlasGpu.sum(),cameraScatteringTlasCount.sum(),cameraScatteringLightsGpu.sum(),
                 cameraScatteringLightsCount.sum(),pbrPrimaryPacketsGpu.sum(),pbrPrimaryPacketsCount.sum(),
                 pbrLightPacketsGpu.sum(),pbrLightPacketsCount.sum(),pbrContributionRestoreGpu.sum(),
-                pbrContributionRestoreCount.sum()};
+                pbrContributionRestoreCount.sum(),cameraScatteringPrimaryGpu.sum(),cameraScatteringPrimaryCount.sum()};
     }
 }

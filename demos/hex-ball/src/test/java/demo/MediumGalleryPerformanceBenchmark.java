@@ -29,7 +29,7 @@ public final class MediumGalleryPerformanceBenchmark {
             "cameraScatteringTlasGpu", "cameraScatteringTlasCount", "cameraScatteringLightsGpu",
             "cameraScatteringLightsCount", "pbrPrimaryPacketsGpu", "pbrPrimaryPacketsCount",
             "pbrLightPacketsGpu", "pbrLightPacketsCount", "pbrContributionRestoreGpu",
-            "pbrContributionRestoreCount"
+            "pbrContributionRestoreCount", "cameraScatteringPrimaryGpu", "cameraScatteringPrimaryCount"
     };
 
     private MediumGalleryPerformanceBenchmark() { }
@@ -212,7 +212,7 @@ public final class MediumGalleryPerformanceBenchmark {
         for (int i = 0; i < values.length; i++) {
             if (i > 0) json.append(',');
             boolean count = i == 10 || i == 27 || i == 28 || i == 30 || i == 32 || i == 34
-                    || i == 36 || i == 38;
+                    || i == 36 || i == 38 || i == 40;
             double perFrame = values[i] / (double) frames;
             String unit = count ? "PerFrame" : "MsPerFrame";
             json.append('"').append(PROFILE_NAMES[i]).append(unit).append("\":")

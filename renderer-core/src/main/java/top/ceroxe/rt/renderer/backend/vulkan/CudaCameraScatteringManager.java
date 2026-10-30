@@ -89,14 +89,14 @@ final class CudaCameraScatteringManager implements AutoCloseable {
         checkOpen();return onNative(()->prepareOnNative(frame,width,height,primaryProducer,lightProducer,diagnosticProducer,slot,buildPlan,true));
     }
     synchronized RadianceContribution prepareRadianceContribution(RenderFrameRequest frame,
-            CudaCameraScatteringAbi.Plan plan,GpuSceneRayTracingPipeline lightProducer,
+            CudaCameraScatteringAbi.Plan plan,GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,
             GpuSceneRayTracingPipeline diagnosticProducer,int slot,RtTlasBuildPlan buildPlan,RtGpuBuffer primaryTarget) {
         if(!plan.compactContribution())throw new IllegalArgumentException("compact contribution plan required");
         checkOpen();long started=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
         try{return onNative(()->{
                 if(primaryTarget!=null&&primaryTarget.sizeBytes()<Math.multiplyExact((long)plan.paths(),208))
                     throw new IllegalArgumentException("scattering primary target does not cover every frame path");
-                prepareOnNative(frame,plan,null,lightProducer,diagnosticProducer,slot,buildPlan,false,primaryTarget);
+                prepareOnNative(frame,plan,primaryProducer,lightProducer,diagnosticProducer,slot,buildPlan,false,primaryTarget);
                 return new RadianceContribution(storage.buffer(),plan.emissionOffset(),Math.multiplyExact((long)plan.paths(),16),
                         primaryTarget==null?0:primaryTarget.deviceAddress());
             });
@@ -132,11 +132,14 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                 boolean profileTile=diagnosticProducer!=null&&profileTile(plan,tileFirst,pixels,frame.sequence());
                 boolean initial=first==0,last=first+pixels==plan.pixels();
                 byte[] header=CudaCameraScatteringAbi.header(plan,frame,first,pixels,includeMediumEmission);
+                boolean splitPrimary=plan.compactContribution()&&primaryTarget!=null&&primaryProducer!=null;
                 RtGpuTimestampPool.Capture tlasTiming=OpticalFrameTimings.ENABLED&&initial&&buildPlan!=null
                         ?device.frameCommands().acquireGpuTimestampCapture("cameraScatteringTlas",new String[]{"start","end"}):null;
                 RtGpuTimestampPool.Capture lightsTiming=OpticalFrameTimings.ENABLED
                         ?device.frameCommands().acquireGpuTimestampCapture("cameraScatteringLights",new String[]{"start","end"}):null;
-                try(tlasTiming;lightsTiming) {
+                RtGpuTimestampPool.Capture primaryTiming=OpticalFrameTimings.ENABLED&&splitPrimary
+                        ?device.frameCommands().acquireGpuTimestampCapture("cameraScatteringPrimary",new String[]{"start","end"}):null;
+                try(tlasTiming;lightsTiming;primaryTiming) {
                 storage.produceThenExchangeBlocking(command->{
                     try(MemoryStack stack=MemoryStack.stackPush()) {
                         // Leave the failure counter intact across tiles, resetting it once per frame.
@@ -170,6 +173,17 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                                 KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,barrier,null);
                         long offsets=Integer.toUnsignedLong(plan.sourceOffset())|Integer.toUnsignedLong(plan.primaryOffset())<<32;
                         if(lightsTiming!=null)lightsTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+                        if(splitPrimary) {
+                            if(primaryTiming!=null)primaryTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+                            primaryProducer.recordNativeScatteringLights(command,stack,slot,address,tileFirst,pixels,offsets,0);
+                            if(primaryTiming!=null)primaryTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+                            // The compact tile contains only hit distance/presence. The full
+                            // planar PBR payload stays in its existing Vulkan allocation.
+                            barrier.srcAccessMask(VK10.VK_ACCESS_SHADER_WRITE_BIT)
+                                    .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT);
+                            VK10.vkCmdPipelineBarrier(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                                    KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,barrier,null);
+                        }
                         if(initial&&diagnosticBytes!=0){
                             VK10.vkCmdFillBuffer(command,storage.buffer(),plan.bytes(),diagnosticBytes,0);
                             var diagnosticBarrier=VkBufferMemoryBarrier.calloc(1,stack).sType$Default()
@@ -195,6 +209,7 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                 },ignored->{});
                 if(tlasTiming!=null&&tlasTiming.resolve())OpticalFrameTimings.recordGpuStage("cameraScattering.tlas",tlasTiming.totalNanos());
                 if(lightsTiming!=null&&lightsTiming.resolve())OpticalFrameTimings.recordGpuStage("cameraScattering.lights",lightsTiming.totalNanos());
+                if(primaryTiming!=null&&primaryTiming.resolve())OpticalFrameTimings.recordGpuStage("cameraScattering.primary",primaryTiming.totalNanos());
                 }
                 first+=pixels;
             }

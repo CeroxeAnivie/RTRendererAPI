@@ -5,7 +5,8 @@
     1080
   ],
   "spp": 1,
-  "scatteringSteps": 16,
+  "scatteringSteps": 8,
+  "parameterRecordCorrection": "The unchanged MediumGalleryScene.frame uses maxEvents=16 and scatteringSteps=8. Earlier metadata confused these two fields; raw image and performance measurements are unchanged.",
   "denoising": false,
   "temporal": false,
   "frameGeneration": false,
@@ -27,7 +28,7 @@
     ],
     "framesPerVariant": 32,
     "spp": 1,
-    "scatteringSteps": 16,
+    "scatteringSteps": 8,
     "regions": {
       "whole": {
         "rectangle": [

@@ -93,6 +93,13 @@ void main() {
         vec3 direction=gsRayDirectionAtSample(location,extent);
         payload.launchInfo=uvec4(pixel,extent);
         vec4 hit;bool present;
+#ifdef RTRENDERER_SCATTERING_CACHED_PRIMARY
+        {
+            uint cached=dispatch.primaryOffset/16u+gl_LaunchIDEXT.x*samples+sampleIndex;
+            uvec4 record=dispatch.storage.lanes[cached];
+            hit=vec4(0,0,0,uintBitsToFloat(record.x));present=record.y!=0u;
+        }
+#else
         if(dispatch.storage.lanes[0u].x==0x52534331u && dispatch.storage.lanes[1u].w!=0u) {
             uint64_t primarySink=uint64_t(dispatch.storage.lanes[7u].z)|(uint64_t(dispatch.storage.lanes[7u].w)<<32u);
             if(primarySink!=0ul) {
@@ -141,6 +148,13 @@ void main() {
             uint compact=dispatch.primaryOffset/16u+gl_LaunchIDEXT.x*samples+sampleIndex;
             dispatch.storage.lanes[compact]=uvec4(floatBitsToUint(hit.w),present?1u:0u,0u,0u);
         } else {hit=uintBitsToFloat(dispatch.storage.lanes[base]);present=dispatch.storage.lanes[base+7u].x!=0u;}
+#endif
+#ifdef RTRENDERER_SCATTERING_PRIMARY_PASS
+        // This specialization terminates before all reservoir/integration state.
+        // It preserves exactly the original primary trace and planar payload.
+        GS_SCATTER_DETAIL_END();
+        continue;
+#endif
         float distance=present?min(max(hit.w,0.0),maximum):maximum;
         GS_SCATTER_DETAIL_NEXT(1u);
         uint upper=gsFrame.words[GPU_SCENE_FRAME_LIGHT_SLOT_UPPER_BOUND_WORD],sampleCount=gsFrame.words[GPU_SCENE_FRAME_SCATTERING_LIGHT_SAMPLES_WORD];

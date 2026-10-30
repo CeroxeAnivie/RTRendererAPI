@@ -53,16 +53,20 @@ def main():
     parser.add_argument("--width", type=int, required=True)
     parser.add_argument("--height", type=int, required=True)
     parser.add_argument("--frames", type=int, required=True)
+    parser.add_argument("--scattering-steps", type=int, required=True,
+                        help="Actual RenderFrameRequest scatteringSteps used by both captures")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if min(args.width, args.height) < 1 or args.frames < 2:
         parser.error("positive extent and at least two frames required")
+    if not 1 <= args.scattering_steps <= 64:
+        parser.error("scattering steps must be in [1, 64]")
     # Regions selected from the reported screenshot, fixed before comparing the candidate.
     regions = {"whole": (0, 0, 1, 1), "left_wall": (0, 0, 58 / 320, 110 / 180),
                "blue_beam": (205 / 320, 20 / 180, 260 / 320, 70 / 180),
                "foreground": (70 / 320, 140 / 180, 160 / 320, 175 / 180)}
     result = {"extent": [args.width, args.height], "framesPerVariant": args.frames,
-              "spp": 1, "scatteringSteps": 16, "regions": {}}
+              "spp": 1, "scatteringSteps": args.scattering_steps, "regions": {}}
     for name, uv in regions.items():
         rect = [int(uv[i] * (args.width if i % 2 == 0 else args.height)) for i in range(4)]
         before = measure(args.control, args.width, args.height, args.frames, rect)
