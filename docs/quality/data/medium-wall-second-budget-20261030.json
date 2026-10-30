@@ -1,0 +1,205 @@
+{
+  "scene": "pbr-direct-uniform",
+  "extent": [
+    1920,
+    1080
+  ],
+  "spp": 1,
+  "sourceCommit": "60e4aaf",
+  "presentation": "Normalize measured completed-frame windows to 1000 ms of wall time; not a newly sampled literal one-second window.",
+  "formulas": {
+    "msPerWallSecond": "stageTotalMs / measuredWallMs * 1000",
+    "shareOfWallSecondPct": "stageTotalMs / measuredWallMs * 100",
+    "msPerFrame": "stageTotalMs / completedFrames"
+  },
+  "accounting": [
+    "Use totals from the same measured frames and wall window; never multiply profile-stage times by another run FPS.",
+    "Only the selected GPU leaf intervals are included; parent host waits and preparation timings are not added.",
+    "Current direct-uniform route uses blocking producer/CUDA exchanges and sequential final Vulkan work; these selected GPU work intervals do not double-count parent intervals.",
+    "A future parallel route must use the union of intervals to report wall-time share; overlapping work cannot be added as exclusive wall time.",
+    "The arithmetic difference is explicitly unassigned; do not report it as measured GPU idle or CPU compute.",
+    "Sampled shader path shares remain internal and are never used to allocate per-second wall time."
+  ],
+  "control": {
+    "sourceCsv": "build/scattering-light-cache/first-control-timings/pbr-direct-uniform-1080p-profiled.csv",
+    "frames": 360,
+    "wallMs": 6497.1121,
+    "fps": 55.40923328073715,
+    "msPerFrame": 18.04753361111111,
+    "shaderClockProfile": false,
+    "frameGpuTimestamps": true,
+    "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 11.48 W, 210 MHz, 62",
+    "stages": [
+      {
+        "rank": 1,
+        "stage": "相机散射灯光与可见性",
+        "key": "cameraScatteringLightsGpuMsPerFrame",
+        "measuredTotalMs": 2077.7568,
+        "msPerFrame": 5.771546666666667,
+        "msPerWallSecond": 319.7969756439942,
+        "shareOfWallSecondPct": 31.97969756439942
+      },
+      {
+        "rank": 2,
+        "stage": "PBR 灯光 packet 查询",
+        "key": "pbrLightPacketsGpuMsPerFrame",
+        "measuredTotalMs": 940.88424,
+        "msPerFrame": 2.613567333333333,
+        "msPerWallSecond": 144.81576206758078,
+        "shareOfWallSecondPct": 14.481576206758076
+      },
+      {
+        "rank": 3,
+        "stage": "CUDA PBR 解析",
+        "key": "pbrMediumKernelGpuMsPerFrame",
+        "measuredTotalMs": 830.42124,
+        "msPerFrame": 2.3067256666666665,
+        "msPerWallSecond": 127.81390057899725,
+        "shareOfWallSecondPct": 12.781390057899724
+      },
+      {
+        "rank": 4,
+        "stage": "PBR 主射线 packet 查询",
+        "key": "pbrPrimaryPacketsGpuMsPerFrame",
+        "measuredTotalMs": 636.60024,
+        "msPerFrame": 1.768334,
+        "msPerWallSecond": 97.98203112425904,
+        "shareOfWallSecondPct": 9.798203112425904
+      },
+      {
+        "rank": 5,
+        "stage": "最终帧 GPU 输出",
+        "key": "finalFrameGpu",
+        "measuredTotalMs": 401.16006,
+        "msPerFrame": 1.1143335,
+        "msPerWallSecond": 61.744364854040306,
+        "shareOfWallSecondPct": 6.174436485404031
+      },
+      {
+        "rank": 6,
+        "stage": "CUDA 相机散射积分",
+        "key": "cameraScatteringKernelGpuMsPerFrame",
+        "measuredTotalMs": 257.98224,
+        "msPerFrame": 0.7166173333333333,
+        "msPerWallSecond": 39.70721699568644,
+        "shareOfWallSecondPct": 3.9707216995686436
+      },
+      {
+        "rank": 7,
+        "stage": "PBR radiance 恢复拷贝",
+        "key": "pbrContributionRestoreGpuMsPerFrame",
+        "measuredTotalMs": 59.37336,
+        "msPerFrame": 0.164926,
+        "msPerWallSecond": 9.138423208058855,
+        "shareOfWallSecondPct": 0.9138423208058855
+      }
+    ],
+    "selectedGpuStages": {
+      "msPerFrame": 14.4560505,
+      "msPerWallSecond": 800.9986744726168,
+      "shareOfWallSecondPct": 80.09986744726169
+    },
+    "unattributedArithmeticDifference": {
+      "msPerFrame": 3.591483111111111,
+      "msPerWallSecond": 199.00132552738316,
+      "shareOfWallSecondPct": 19.900132552738317,
+      "meaning": "Calculated wall minus selected GPU work; not an independently timed stage, CPU calculation, or measured GPU idle interval."
+    },
+    "wallTotal": {
+      "msPerFrame": 18.04753361111111,
+      "msPerWallSecond": 1000.0,
+      "shareOfWallSecondPct": 100.0
+    }
+  },
+  "candidate": {
+    "sourceCsv": "build/scattering-light-cache/first-candidate-timings/pbr-direct-uniform-1080p-profiled.csv",
+    "frames": 360,
+    "wallMs": 6350.4642,
+    "fps": 56.68876930288025,
+    "msPerFrame": 17.640178333333335,
+    "shaderClockProfile": false,
+    "frameGpuTimestamps": true,
+    "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 22.52 W, 195 MHz, 64",
+    "stages": [
+      {
+        "rank": 1,
+        "stage": "相机散射灯光与可见性",
+        "key": "cameraScatteringLightsGpuMsPerFrame",
+        "measuredTotalMs": 1858.55208,
+        "msPerFrame": 5.162644666666667,
+        "msPerWallSecond": 292.66397250141176,
+        "shareOfWallSecondPct": 29.26639725014118
+      },
+      {
+        "rank": 2,
+        "stage": "PBR 灯光 packet 查询",
+        "key": "pbrLightPacketsGpuMsPerFrame",
+        "measuredTotalMs": 968.1192,
+        "msPerFrame": 2.68922,
+        "msPerWallSecond": 152.44857218469164,
+        "shareOfWallSecondPct": 15.244857218469162
+      },
+      {
+        "rank": 3,
+        "stage": "CUDA PBR 解析",
+        "key": "pbrMediumKernelGpuMsPerFrame",
+        "measuredTotalMs": 850.44456,
+        "msPerFrame": 2.362346,
+        "msPerWallSecond": 133.91848740758195,
+        "shareOfWallSecondPct": 13.391848740758196
+      },
+      {
+        "rank": 4,
+        "stage": "PBR 主射线 packet 查询",
+        "key": "pbrPrimaryPacketsGpuMsPerFrame",
+        "measuredTotalMs": 653.62608,
+        "msPerFrame": 1.815628,
+        "msPerWallSecond": 102.92571683184987,
+        "shareOfWallSecondPct": 10.292571683184986
+      },
+      {
+        "rank": 5,
+        "stage": "最终帧 GPU 输出",
+        "key": "finalFrameGpu",
+        "measuredTotalMs": 427.98924,
+        "msPerFrame": 1.188859,
+        "msPerWallSecond": 67.39495358465291,
+        "shareOfWallSecondPct": 6.739495358465291
+      },
+      {
+        "rank": 6,
+        "stage": "CUDA 相机散射积分",
+        "key": "cameraScatteringKernelGpuMsPerFrame",
+        "measuredTotalMs": 262.2228,
+        "msPerFrame": 0.7283966666666667,
+        "msPerWallSecond": 41.29191059765363,
+        "shareOfWallSecondPct": 4.129191059765363
+      },
+      {
+        "rank": 7,
+        "stage": "PBR radiance 恢复拷贝",
+        "key": "pbrContributionRestoreGpuMsPerFrame",
+        "measuredTotalMs": 61.72716,
+        "msPerFrame": 0.17146433333333333,
+        "msPerWallSecond": 9.720102036005494,
+        "shareOfWallSecondPct": 0.9720102036005493
+      }
+    ],
+    "selectedGpuStages": {
+      "msPerFrame": 14.118558666666667,
+      "msPerWallSecond": 800.3637151438472,
+      "shareOfWallSecondPct": 80.03637151438473
+    },
+    "unattributedArithmeticDifference": {
+      "msPerFrame": 3.5216196666666666,
+      "msPerWallSecond": 199.6362848561527,
+      "shareOfWallSecondPct": 19.96362848561527,
+      "meaning": "Calculated wall minus selected GPU work; not an independently timed stage, CPU calculation, or measured GPU idle interval."
+    },
+    "wallTotal": {
+      "msPerFrame": 17.640178333333335,
+      "msPerWallSecond": 1000.0,
+      "shareOfWallSecondPct": 100.0
+    }
+  }
+}
