@@ -814,3 +814,9 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | **互斥墙钟求和** | **9.763782** | **1000.000** | **100.000%** | — |
 
 1080p 连续 8 帧共 66,355,200 个原始 RGBA16F 通道中，23 个通道相差 1 个相邻半精度值，其余完全相同，alpha 完全相同；显示映射后 1 个 RGB 通道差 1 个 SDR 编码刻度。没有称为全字节一致，也未放宽独立测试阈值。PBR 31 项/43 帧、散射组合 15 项、camera 17 项独立参考、多次散射解析回归全部通过；两组 128 帧近灯均值相对 RMS 误差为 0.634%/0.841%，六份正式 validation 零 warning/error/drop、会话全部关闭。[完整收益、量化差异和回归证据](data/scattering-opaque-specialization-20261031.json)、[新完整排名](data/scattering-opaque-specialization-ranked-20261031.json)。
+
+### 撤回：PBR 遮挡后再算 BRDF
+
+仅把 BRDF 求值移动到现有 shadow query 之后，保留原材质读取、packet 写入、判断及所有数学公式；与本项目普通 `gsDirectContribution` 的求值顺序对齐。也核对固定 PBRT wavefront 实现：其 BRDF-first 后入 shadow queue 的数据寿命不同，不声称该项目直接采用了本候选。1080p 8 帧总共 592 个通道各差一个相邻半精度值，alpha 相同。
+
+正序 PBR light packet GPU 下降 0.68%，关闭诊断 104.962881→104.291611 FPS（−0.64%）；反序 packet 下降 1.14%，关闭诊断 102.863053→102.630426 FPS（−0.23%）。没有稳定端到端收益，GLSL 及 16 份 SPIR-V 已全部恢复；不把单个子阶段的小幅下降作为保留依据。[原始窗口与制品证据](data/pbr-brdf-after-visibility-rejected-20261031.json)。
