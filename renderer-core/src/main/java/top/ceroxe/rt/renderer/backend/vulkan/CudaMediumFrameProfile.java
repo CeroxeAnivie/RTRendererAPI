@@ -80,13 +80,4 @@ final class CudaMediumFrameProfile {
         return new Selection(Program.SURFACE, route, scene);
     }
 
-    static void validateShaderData(RenderFrameRequest request, Selection selection, boolean builtIn) {
-        if (!builtIn || request.shaderData().isEmpty()) return;
-        if (selection.route() != Route.NONE) {
-            throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                    "built-in medium transport is not integrated with application shader data");
-        }
-        throw new FrameValidationException(FrameValidationException.Reason.INVALID_SHADER_DATA,
-                "built-in scene shaders declare no application data bindings");
-    }
 }

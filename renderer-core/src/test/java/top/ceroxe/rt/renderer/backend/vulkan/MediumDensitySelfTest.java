@@ -207,6 +207,10 @@ public final class MediumDensitySelfTest {
             require(selected.route()==test.expected(),"native route: expected="+test.expected()
                     +", actual="+selected.route()+", medium="+test.medium()+", bounces="+test.bounces());
             require(selected.program()==Program.SURFACE,"native executor supplies all participating-medium radiance");
+            var withData = frame.toBuilder().shaderData(java.util.List.of(
+                    new ResourceData(java.nio.ByteBuffer.allocateDirect(16)))).build();
+            require(CudaMediumFrameProfile.select(withData,media,surfaces,true,true).route()==selected.route(),
+                    "application data layouts cannot disable native medium execution");
         }
         apply(residency,media,surfaces,SceneTransaction.builder(2)
                 .upsert(MaterialAsset.builder(1).doubleSided(true).shadingModel(MaterialAsset.ShadingModel.UNLIT).build())

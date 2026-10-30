@@ -55,7 +55,7 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
     }
 
     private boolean builtInMediumTransport() {
-        return configuration.sceneShaders().equals(top.ceroxe.rt.renderer.api.SceneShaderProgram.builtIn());
+        return SceneShaderTransportPolicy.usesBuiltInStages(configuration.sceneShaders());
     }
 
     static top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program program(RenderFrameRequest request,

@@ -147,29 +147,30 @@ public final class VulkanSurfaceSceneIndexSelfTest {
 
     private static void shaderDataAdmissionClassification() {
         var data = java.util.List.of(new ResourceData(java.nio.ByteBuffer.allocateDirect(16)));
-        var request = RenderFrameRequest.builder(1, 1, 1,
-                CameraState.lookAt(0, 0, 1, 0, 0, 0).build()).shaderData(data).build();
-        var cameraTransport = new CudaMediumFrameProfile.Selection(
-                top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.SURFACE,
-                CudaMediumFrameProfile.Route.CAMERA, null);
-        try {
-            CudaMediumFrameProfile.validateShaderData(request, cameraTransport, true);
-            throw new AssertionError("built-in medium plus application shader data must be rejected");
-        } catch (FrameValidationException expected) {
-            require(expected.reason() == FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                    "medium plus shader data must report unsupported transport");
+        var layout = SceneShaderProgram.builder().dataBindingCount(1).build();
+        require(SceneShaderTransportPolicy.usesBuiltInStages(layout),
+                "declaring application buffers must preserve built-in medium transport");
+        SceneShaderTransportPolicy.validateDataCount(layout, data);
+        var raygen = SceneShaderProgram.builder().dataBindingCount(1)
+                .shader(ShaderStage.RAY_GENERATION, "void main() {} ").build();
+        require(!SceneShaderTransportPolicy.usesBuiltInStages(raygen), "an application raygen owns transport");
+        var hit = SceneShaderProgram.builder().shader(ShaderStage.RAY_CLOSEST_HIT, "void main() {} ").build();
+        require(!SceneShaderTransportPolicy.usesBuiltInStages(hit), "a replaced hit stage owns transport");
+        byte[] binary = java.nio.ByteBuffer.allocate(20).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                .putInt(0x07230203).putInt(0x00010500).putInt(0).putInt(1).putInt(0).array();
+        var hdr = SceneShaderProgram.builder().spirv(ShaderStage.RAY_GENERATION,
+                FrameOutputFormat.LINEAR_HDR_RGBA16F, binary).build();
+        require(!SceneShaderTransportPolicy.usesBuiltInStages(hdr), "HDR-only binary is an executable override");
+        for (var program : new SceneShaderProgram[]{SceneShaderProgram.builtIn(),
+                SceneShaderProgram.builder().dataBindingCount(2).build()}) {
+            try {
+                SceneShaderTransportPolicy.validateDataCount(program, data);
+                throw new AssertionError("undeclared or missing application bindings must reject data");
+            } catch (FrameValidationException expected) {
+                require(expected.reason() == FrameValidationException.Reason.INVALID_SHADER_DATA,
+                        "binding errors retain their category with or without participating media");
+            }
         }
-        var ordinary = new CudaMediumFrameProfile.Selection(
-                top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.SURFACE,
-                CudaMediumFrameProfile.Route.NONE, null);
-        try {
-            CudaMediumFrameProfile.validateShaderData(request, ordinary, true);
-            throw new AssertionError("built-in shaders without application bindings must reject shader data");
-        } catch (FrameValidationException expected) {
-            require(expected.reason() == FrameValidationException.Reason.INVALID_SHADER_DATA,
-                    "shader data without a medium must retain the invalid-binding category");
-        }
-        CudaMediumFrameProfile.validateShaderData(request, ordinary, false);
     }
 
     private static void cameraAbsorptionAdmission() {

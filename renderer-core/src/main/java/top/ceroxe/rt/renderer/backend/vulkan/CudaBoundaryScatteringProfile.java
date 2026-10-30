@@ -10,8 +10,8 @@ final class CudaBoundaryScatteringProfile {
     static void requireSupported(RenderFrameRequest request,MediumSceneIndex.NativeScene scene,
                                  boolean terminalSurfaces) {
         if(!terminalSurfaces)unsupported("all material surfaces must be opaque double-sided UNLIT terminals");
-        if(request.caustics().enabled()||!request.shaderData().isEmpty())
-            unsupported("caustics and expert shader data require a later native transport integration");
+        if(request.caustics().enabled())
+            unsupported("caustics require a photon-capable transport route");
         if(scene.boundaries().isEmpty()||scene.boundaries().size()>32)
             unsupported("one to 32 explicit boundaries are required");
         boolean scattering=!request.environment().cameraMedium().scattering().isZero();

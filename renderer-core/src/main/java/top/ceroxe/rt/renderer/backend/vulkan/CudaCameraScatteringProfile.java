@@ -12,14 +12,14 @@ final class CudaCameraScatteringProfile {
         if(!medium.densityField().isUniform()||medium.scattering().isZero())
             unsupported("uniform scattering camera medium is required");
         if(frame.mediumTransport().scatteringBounces()!=0)unsupported("additional volume bounces require the next continuation integration");
-        if(frame.caustics().enabled()||!frame.shaderData().isEmpty())unsupported("caustics and expert shader data require separate integration");
+        if(frame.caustics().enabled())unsupported("caustics require a photon-capable transport route");
     }
     static void requireRadianceContributionSupported(RenderFrameRequest frame,int boundaryCount) {
         var medium=frame.environment().cameraMedium();
         if(boundaryCount!=0||!medium.densityField().isUniform()
                 ||medium.scattering().isZero())unsupported("PBR scattering requires one uniform camera medium without explicit boundaries");
         if(frame.mediumTransport().scatteringBounces()!=0)unsupported("PBR scattering currently supports direct single scattering only");
-        if(frame.caustics().enabled()||!frame.shaderData().isEmpty())unsupported("caustics and expert shader data require separate integration");
+        if(frame.caustics().enabled())unsupported("caustics require a photon-capable transport route");
     }
     private static void unsupported(String reason) {
         throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,

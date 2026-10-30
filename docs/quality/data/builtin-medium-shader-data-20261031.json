@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-31",
+  "baseCommit": "ca99612",
+  "hardware": "NVIDIA RTX 5080 Laptop GPU",
+  "nativeTask": ":renderer-core:cudaBuiltinShaderDataNativeSelfTest",
+  "passed": true,
+  "hdrComparisons": 12,
+  "frames": 24,
+  "nativeMediumFrames": 22,
+  "comparison": "complete linear HDR byte equality with versus without a declared application buffer",
+  "cases": ["vacuum", "camera absorption/emission", "density absorption/emission", "PBR camera", "PBR density", "PBR boundary", "uniform scattering", "density scattering", "multiple scattering", "boundary absorption", "boundary scattering", "glass density"],
+  "bindingRejectionCasesPerScene": ["missing", "extra", "three-byte unaligned"],
+  "lifecycle": ["same sequence recovery", "data generations", "resize", "slot reuse", "snapshot retained after close"],
+  "cpuContractsPassed": ["coreVulkanSurfaceSceneIndexSelfTest", "coreMediumDensitySelfTest", "coreCudaCameraMediumSelfTest", "coreCudaBoundaryMediumSelfTest", "coreCudaCameraScatteringSelfTest", "coreCudaMultipleScatteringSelfTest", "coreCudaBoundaryScatteringSelfTest", "coreCudaOpticalMediumSelfTest"],
+  "nativeValidationErrors": 0,
+  "scope": "data-layout-only programs preserve built-in transport; actual stage replacements own their transport",
+  "remaining": ["metallic reflection validation", "full combination gates", "final packaged consumer and distribution gates"],
+  "performanceClaim": false
+}

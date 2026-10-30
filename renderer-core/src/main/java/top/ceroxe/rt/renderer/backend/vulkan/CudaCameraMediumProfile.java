@@ -19,8 +19,8 @@ final class CudaCameraMediumProfile {
         if (!medium.densityField().isUniform() || !medium.scattering().isZero())
             unsupported("the camera medium must be homogeneous and non-scattering");
         if (!medium.participating()) unsupported("a participating camera absorption or emission medium is required");
-        if (request.caustics().enabled() || !request.shaderData().isEmpty())
-            unsupported("caustics and application shader data are not supported by this integration slice");
+        if (request.caustics().enabled())
+            unsupported("caustics require a photon-capable transport route");
     }
 
     private static void unsupported(String reason) {

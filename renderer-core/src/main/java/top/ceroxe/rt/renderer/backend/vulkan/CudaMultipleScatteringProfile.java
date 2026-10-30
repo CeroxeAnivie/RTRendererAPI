@@ -12,7 +12,7 @@ final class CudaMultipleScatteringProfile {
         if(medium.scattering().isZero())
             unsupported("a scattering camera medium is required");
         if(frame.mediumTransport().scatteringBounces()<1)unsupported("additional scattering bounces must be requested");
-        if(frame.caustics().enabled()||!frame.shaderData().isEmpty())unsupported("caustics and expert shader data require separate integration");
+        if(frame.caustics().enabled())unsupported("caustics require a photon-capable transport route");
     }
     private static void unsupported(String reason){throw new FrameValidationException(
             FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,"native multiple-scattering candidate does not support this frame: "+reason);}

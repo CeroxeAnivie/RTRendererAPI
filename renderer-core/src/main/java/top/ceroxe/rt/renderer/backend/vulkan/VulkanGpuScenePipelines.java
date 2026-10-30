@@ -5,7 +5,6 @@ import java.util.List;
 import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.ResourceData;
 import top.ceroxe.rt.renderer.api.RendererConfig;
-import top.ceroxe.rt.renderer.api.SceneShaderProgram;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program;
@@ -30,7 +29,7 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
         this.device = device;
         this.configuration = configuration;
         this.linearHdr = linearHdr;
-        if (configuration.sceneShaders().equals(SceneShaderProgram.builtIn())) {
+        if (SceneShaderTransportPolicy.usesBuiltInStages(configuration.sceneShaders())) {
             expert = null;
         } else {
             expert = GpuSceneRayTracingPipeline.open(device, configuration.maxFramesInFlight(),
@@ -39,20 +38,21 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
     }
 
     private GpuSceneRayTracingPipeline create(Program program) {
-        return GpuSceneRayTracingPipeline.openBuiltIn(device, configuration.maxFramesInFlight(), linearHdr, program);
+        return GpuSceneRayTracingPipeline.openBuiltIn(device, configuration.maxFramesInFlight(), linearHdr,
+                configuration.sceneShaders(), program);
     }
 
     void validateShaderData(List<ResourceData> values) {
+        SceneShaderTransportPolicy.validateDataCount(configuration.sceneShaders(), values);
         if (expert != null) {
             expert.validateShaderData(values);
         } else if (!values.isEmpty()) {
-            throw new FrameValidationException(FrameValidationException.Reason.INVALID_SHADER_DATA,
-                    "built-in scene shaders declare no application data bindings");
+            forFrame(Program.SURFACE).validateShaderData(values);
         }
     }
 
     void validateShaderDataBeforeTransport(List<ResourceData> values) {
-        if (expert != null || values.isEmpty()) validateShaderData(values);
+        validateShaderData(values);
     }
 
     boolean usesBuiltInSceneShaders() { return expert == null; }

@@ -12,7 +12,7 @@ final class CudaDensityScatteringProfile {
         if(medium.densityField().isUniform()||medium.scattering().isZero())
             unsupported("a heterogeneous scattering camera medium is required");
         if(frame.mediumTransport().scatteringBounces()!=0)unsupported("additional density scattering bounces require separate continuation integration");
-        if(frame.caustics().enabled()||!frame.shaderData().isEmpty())unsupported("caustics and expert shader data require separate integration");
+        if(frame.caustics().enabled())unsupported("caustics require a photon-capable transport route");
     }
     private static void unsupported(String message) {throw new FrameValidationException(
             FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,"native density-scattering candidate: "+message);}

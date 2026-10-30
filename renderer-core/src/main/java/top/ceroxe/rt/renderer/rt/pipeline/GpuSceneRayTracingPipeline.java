@@ -143,6 +143,17 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         return open(runtime, descriptorSetCount, linearHdrOutput, SceneShaderProgram.builtIn(), program);
     }
 
+    /** Built-in stage specialization with the application's declared readonly data layout. */
+    public static GpuSceneRayTracingPipeline openBuiltIn(VulkanDeviceRuntime runtime,
+            int descriptorSetCount, boolean linearHdrOutput, SceneShaderProgram sceneShaders, Program program) {
+        if (!sceneShaders.sources().isEmpty() || sceneShaders.hasSpirv(ShaderStage.RAY_GENERATION)
+                || sceneShaders.hasSpirv(ShaderStage.RAY_MISS) || sceneShaders.hasSpirv(ShaderStage.RAY_CLOSEST_HIT)
+                || sceneShaders.hasSpirv(ShaderStage.RAY_ANY_HIT)) {
+            throw new IllegalArgumentException("built-in specialization cannot replace application shader stages");
+        }
+        return open(runtime, descriptorSetCount, linearHdrOutput, sceneShaders, program);
+    }
+
     private static GpuSceneRayTracingPipeline open(VulkanDeviceRuntime runtime, int descriptorSetCount,
             boolean linearHdrOutput, SceneShaderProgram sceneShaders, Program program) {
         Objects.requireNonNull(sceneShaders, "sceneShaders");

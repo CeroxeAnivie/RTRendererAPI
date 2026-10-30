@@ -1,5 +1,11 @@
 # 质量验证与性能报告
 
+## 2026-10-31 内置介质与应用数据布局
+
+仅声明 `dataBindingCount` 曾被当成自定义 shader 程序，因而绕开内置介质执行。现在按实际替换的 GLSL/SPIR-V 阶段判断传输归属，内置特化管线保留应用声明的 descriptor 布局；各介质准入不再把合法应用数据当作未知传输功能拒绝。绑定数量、大小和对齐仍在接纳帧前检查。
+
+`cudaBuiltinShaderDataNativeSelfTest` 在 RTX 5080 Laptop GPU 通过 12 组完整线性 HDR 逐字节对照，共 24 帧，其中 22 帧执行原生介质。组合覆盖吸收/发光、密度、PBR、显式边界、单次与多次散射和玻璃。每组缺失、多余及三字节未对齐绑定均明确拒绝，随后同一序号的有效帧成功；快照跨尺寸变更、slot 复用与 renderer 关闭保持不变。8 个受影响 CPU 合同通过。机器可读记录见 [builtin-medium-shader-data-20261031.json](data/builtin-medium-shader-data-20261031.json)。本项不代表金属、所有交叉组合或最终制品门禁已经闭合。
+
 <a id="api-closure-20261030"></a>
 ## 2026-10-30 当前 API 闭合验收
 

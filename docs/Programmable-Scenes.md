@@ -23,6 +23,11 @@ storage buffer at descriptor set 0, binding `SceneShaderBindings.APPLICATION_DAT
 It is visible to all four retained-scene stages. The API imposes no application schema. Each payload
 must have a positive size divisible by four and fit the device's `maxStorageBufferRange`.
 
+Declaring only `dataBindingCount(n)` keeps the built-in scene stages and their native medium
+transport. The layout alone does not define how built-in shaders interpret application bytes.
+Replacing any executable scene stage transfers transport ownership to that application program.
+Missing, extra, empty or misaligned buffers fail with `INVALID_SHADER_DATA` before frame admission.
+
 Reuse the same `ResourceData` instance while its bytes remain unchanged. Each frame slot retains
 its own allocation and skips an upload when that slot already contains the same immutable object.
 Growth is geometric and participates in memory admission. Updating one slot cannot overwrite

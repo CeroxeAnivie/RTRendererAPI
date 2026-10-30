@@ -13,8 +13,6 @@ final class CudaPbrMediumProfile {
             unsupported("PBR scattering requires a scattering camera medium without explicit boundaries");
         if(frame.caustics().enabled() && (!medium.densityField().isUniform() || medium.indexOfRefraction()!=1))
             unsupported("PBR scattering caustics require a homogeneous global IOR-one medium");
-        if(!frame.shaderData().isEmpty())
-            unsupported("expert shader data requires separate PBR scattering integration");
     }
     static void requireSupported(RenderFrameRequest frame,MediumSceneIndex.NativeScene scene,boolean pbrSurfaces) {
         requireSupported(frame,scene,pbrSurfaces,false);
@@ -22,8 +20,6 @@ final class CudaPbrMediumProfile {
     static void requireSupported(RenderFrameRequest frame,MediumSceneIndex.NativeScene scene,boolean pbrSurfaces,
             boolean scatteringCamera) {
         if(!pbrSurfaces)unsupported("surfaces must be opaque PBR with metallic zero or UNLIT");
-        if (!frame.shaderData().isEmpty())
-            unsupported("expert shader overrides require a separate native integration");
         if (frame.caustics().enabled()) {
             var camera = frame.environment().cameraMedium();
             if (!scene.boundaries().isEmpty())

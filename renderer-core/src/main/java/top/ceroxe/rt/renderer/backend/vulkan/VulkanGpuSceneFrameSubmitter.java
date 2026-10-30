@@ -125,8 +125,6 @@ final class VulkanGpuSceneFrameSubmitter {
                     "complete surface and volume photon map exceeds device maxStorageBufferRange="
                             +photonPipeline.maxStorageBufferRangeBytes()+" bytes; reduce photon or event budget");
         var transport = temporal.selectTransport(checked.request());
-        CudaMediumFrameProfile.validateShaderData(
-                checked.request(), transport, pipelines.usesBuiltInSceneShaders());
         pipelines.validateShaderData(checked.request().shaderData());
         var serialProgram = transport.program();
         var route = transport.route();

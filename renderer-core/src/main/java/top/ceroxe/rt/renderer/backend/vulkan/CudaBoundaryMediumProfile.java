@@ -10,8 +10,8 @@ final class CudaBoundaryMediumProfile {
     static void requireSupported(RenderFrameRequest request, MediumSceneIndex.NativeScene scene,
                                  boolean terminalSurfaces) {
         if(!terminalSurfaces) unsupported("all material-shaded surfaces must be opaque, double-sided and UNLIT");
-        if(request.caustics().enabled() || !request.shaderData().isEmpty())
-            unsupported("caustics and expert shader data require a later native transport integration");
+        if(request.caustics().enabled())
+            unsupported("caustics require a photon-capable transport route");
         try {
             CudaBoundaryMediumAbi.requireMedium(request.environment().cameraMedium());
             for(var entry:scene.boundaries()) {
