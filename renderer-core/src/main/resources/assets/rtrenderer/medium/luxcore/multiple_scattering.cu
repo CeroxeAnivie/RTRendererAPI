@@ -41,7 +41,8 @@ extern "C" __global__ void camera_multiple_init(unsigned char *buffer,int count)
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
     using namespace rtr_multiple;const unsigned int *u=(const unsigned int *)buffer;const float *h=(const float *)buffer;
     const unsigned int global=u[4]*u[6]+i,steps=u[3];
-    const float *p=(const float *)(buffer+u[8])+global*52u;
+    const unsigned int primaryItem=u[8]>u[10]?(unsigned int)i:global;
+    const float *p=(const float *)(buffer+u[8])+primaryItem*52u;
     const bool hit=((const unsigned int *)p)[28]!=0u;
     const float distance=hit?fminf(fmaxf(p[3],0.f),h[15]):h[15];
     const float interval=distance/(float)steps,reference=fminf(h[12],fminf(h[13],h[14]));
@@ -116,7 +117,8 @@ extern "C" __global__ void camera_multiple_reduce(unsigned char *buffer,int coun
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
     using namespace rtr_multiple;const unsigned int *u=(const unsigned int *)buffer;
     const unsigned int global=u[4]*u[6]+i;
-    const float *primary=(const float *)(buffer+u[8])+global*52u;
+    const unsigned int primaryItem=u[8]>u[10]?(unsigned int)i:global;
+    const float *primary=(const float *)(buffer+u[8])+primaryItem*52u;
     const float4 *source=(const float4 *)(buffer+u[11])+(unsigned int)i*u[3];
     float4 tr,em;
     if(!rtr_camera_scattering::resolve(primary,source,u[3],(const float *)buffer,&tr,&em)){atomicAdd((unsigned int *)buffer+29,1u);return;}

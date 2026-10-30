@@ -18,7 +18,8 @@ public interface RendererCommandAccess {
                 }
                 Renderer.FrameSubmissionDeferred deferred = (Renderer.FrameSubmissionDeferred) attempt;
                 yield WorkloadExecutionEvidence.sceneDeferred(
-                        checked.sceneFrame().orElseThrow().sequence(), deferred.detail());
+                        checked.sceneFrame().orElseThrow().sequence(),
+                        deferred.deferralReason(), deferred.detail());
             }
             case GRAPHICS_COMMANDS -> WorkloadExecutionEvidence.graphics(
                     submitCommands(checked.graphicsCommands().orElseThrow()));

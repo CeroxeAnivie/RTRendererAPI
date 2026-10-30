@@ -54,6 +54,9 @@ final class VulkanGenericGraphicsPipelines implements AutoCloseable {
     private final boolean logicOpEnabled;
     private final boolean geometryShaderEnabled;
     private final boolean vertexPipelineStoresAndAtomicsEnabled;
+    private final boolean drawIndirectCountEnabled;
+    private final boolean multiDrawIndirectEnabled;
+    private final long maximumDrawIndirectCount;
     private final Map<GraphicsPipelineState, Compiled> cache = new LinkedHashMap<>();
     private boolean closed;
 
@@ -61,7 +64,10 @@ final class VulkanGenericGraphicsPipelines implements AutoCloseable {
                                    int maximumBoundDescriptorSets,
                                    boolean logicOpEnabled,
                                    boolean geometryShaderEnabled,
-                                   boolean vertexPipelineStoresAndAtomicsEnabled) {
+                                   boolean vertexPipelineStoresAndAtomicsEnabled,
+                                   boolean drawIndirectCountEnabled,
+                                   boolean multiDrawIndirectEnabled,
+                                   long maximumDrawIndirectCount) {
         this.device = Objects.requireNonNull(device, "device");
         this.resources = Objects.requireNonNull(resources, "resources");
         if (maximumBoundDescriptorSets <= 0) throw new IllegalArgumentException("maximumBoundDescriptorSets must be positive");
@@ -69,7 +75,25 @@ final class VulkanGenericGraphicsPipelines implements AutoCloseable {
         this.logicOpEnabled = logicOpEnabled;
         this.geometryShaderEnabled = geometryShaderEnabled;
         this.vertexPipelineStoresAndAtomicsEnabled = vertexPipelineStoresAndAtomicsEnabled;
+        this.drawIndirectCountEnabled = drawIndirectCountEnabled;
+        this.multiDrawIndirectEnabled = multiDrawIndirectEnabled;
+        if (maximumDrawIndirectCount <= 0) throw new IllegalArgumentException("maximumDrawIndirectCount must be positive");
+        this.maximumDrawIndirectCount = maximumDrawIndirectCount;
     }
+
+    void validateIndirect(top.ceroxe.rt.renderer.api.IndirectDrawCommand command) {
+        if (command.count().isPresent() && !drawIndirectCountEnabled) {
+            throw new UnsupportedOperationException("GPU count-buffer draws require enabled Vulkan drawIndirectCount");
+        }
+        if (command.maximumDrawCount() > maximumDrawIndirectCount) {
+            throw new IllegalArgumentException("indirect draw count exceeds maxDrawIndirectCount=" + maximumDrawIndirectCount);
+        }
+        if (command.count().isPresent() && command.maximumDrawCount() > 1 && !multiDrawIndirectEnabled) {
+            throw new UnsupportedOperationException("GPU counted multi-draw requires enabled Vulkan multiDrawIndirect");
+        }
+    }
+
+    boolean multiDrawIndirectEnabled() { return multiDrawIndirectEnabled; }
 
     Compiled require(GraphicsPipelineState state) {
         requireOpen();
@@ -77,10 +101,11 @@ final class VulkanGenericGraphicsPipelines implements AutoCloseable {
         return cache.computeIfAbsent(state, this::compile);
     }
 
-    void updateBindings(Compiled pipeline, BindingSet bindings) {
+    VulkanGenericDescriptorSetBank.Snapshot snapshotBindings(Compiled pipeline, BindingSet bindings) {
         if (pipeline.descriptors() != null) {
-            pipeline.descriptors().update(bindings, resources, resources.samplers());
+            return pipeline.descriptors().snapshot(bindings, resources, resources.samplers(), null);
         }
+        return null;
     }
 
     @Override

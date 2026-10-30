@@ -48,6 +48,12 @@ __device__ bool resolve(unsigned char *buffer,int i,unsigned int &crossed) {
     if(!walk(buffer,camera,&receiver,end,true,crossed))return false;
     float4 *colors=(float4 *)(buffer+h[65]);
     float3 diffuse=rgb(colors[(unsigned int)i*2u]),specular=rgb(colors[(unsigned int)i*2u+1u]);
+    float3 additionalRadiance=make_float3(0.f);
+    const unsigned long long additionalOffset=((const unsigned long long *)(buffer+272))[0];
+    if(additionalOffset!=0ull) {
+        const float4 *additional=(const float4 *)(buffer+additionalOffset);
+        additionalRadiance=rgb(additional[(unsigned int)i]);
+    }
     float diffuseDistance=0.f,specularDistance=0.f,diffuseWeight=0.f,specularWeight=0.f;
     const unsigned int count=h[64],paths=h[66];
     if(peak(rgb(receiver.transport))>0.f)for(unsigned int light=0u;light<count;++light) {
@@ -67,7 +73,11 @@ __device__ bool resolve(unsigned char *buffer,int i,unsigned int &crossed) {
         float dw=.2126f*dc.x+.7152f*dc.y+.0722f*dc.z,sw=.2126f*sc.x+.7152f*sc.y+.0722f*sc.z;
         diffuseDistance+=dw*d.w;diffuseWeight+=dw;specularDistance+=sw*s.w;specularWeight+=sw;
     }
-    diffuse=diffuse*rgb(receiver.transport)+rgb(receiver.emission);specular=specular*rgb(receiver.transport);
+    // The existing density/multiple integrator owns all volume emission, including
+    // secondary-path emission. Do not integrate camera emission twice on composition.
+    const float3 cameraEmission=h[70]!=0u?make_float3(0.f):rgb(receiver.emission);
+    diffuse=diffuse*rgb(receiver.transport)+cameraEmission+additionalRadiance;
+    specular=specular*rgb(receiver.transport);
     if(!finite3(diffuse)||!finite3(specular))return false;
     ((float4 *)(buffer+h[11]))[i]=make_float4(diffuse.x,diffuse.y,diffuse.z,diffuseWeight>0.f?diffuseDistance/diffuseWeight:0.f);
     ((float4 *)(buffer+h[12]))[i]=make_float4(specular.x,specular.y,specular.z,specularWeight>0.f?specularDistance/specularWeight:0.f);

@@ -5,10 +5,9 @@ __device__ float3 rgb(float4 v) {return make_float3(v.x,v.y,v.z);}
 __device__ float integral(float sigma,float distance) {
     return rtrApiIntegratedEmission(sigma,1.f,distance);
 }
-__device__ bool resolve(const float *primary,const float4 *source,int steps,const float *h,
+__device__ bool resolve(bool hit,float hitDistance,const float4 *source,int steps,const float *h,
         float4 *attenuation,float4 *radiance) {
-    const bool hit=((const unsigned int *)primary)[28]!=0u;
-    const float distance=hit?fminf(fmaxf(primary[3],0.f),h[15]):h[15];
+    const float distance=hit?fminf(fmaxf(hitDistance,0.f),h[15]):h[15];
     const float3 sigma=make_float3(h[12],h[13],h[14]),zero=make_float3(0.f);
     const float3 scatter=make_float3(h[16],h[17],h[18]);
     float3 tr,ignored;
@@ -36,6 +35,10 @@ __device__ bool resolve(const float *primary,const float4 *source,int steps,cons
     *radiance=make_float4(output.x,output.y,output.z,0.f);
     return isfinite(output.x)&&isfinite(output.y)&&isfinite(output.z);
 }
+__device__ bool resolve(const float *primary,const float4 *source,int steps,const float *h,
+        float4 *attenuation,float4 *radiance) {
+    return resolve(((const unsigned int*)primary)[28]!=0u,primary[3],source,steps,h,attenuation,radiance);
+}
 }
 extern "C" __global__ void camera_scattering_resolve(unsigned char *buffer,int count) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
@@ -44,8 +47,12 @@ extern "C" __global__ void camera_scattering_resolve(unsigned char *buffer,int c
         atomicAdd((unsigned int *)buffer+28,1u);return;
     }
     const unsigned int item=u[4]*u[6]+(unsigned int)i;
-    const float *primary=(const float *)(buffer+u[8])+item*52u;
+    bool hit;float distance;
+    if(u[7]!=0u) {
+        const unsigned int *compact=(const unsigned int *)(buffer+u[8])+(unsigned int)i*4u;
+        distance=__uint_as_float(compact[0]);hit=compact[1]!=0u;
+    } else {const float *primary=(const float *)(buffer+u[8])+item*52u;distance=primary[3];hit=((const unsigned int*)primary)[28]!=0u;}
     const float4 *source=(const float4 *)(buffer+u[11])+(unsigned int)i*u[3];
-    if(!rtr_camera_scattering::resolve(primary,source,u[3],h,(float4 *)(buffer+u[9])+item,(float4 *)(buffer+u[10])+item))
+    if(!rtr_camera_scattering::resolve(hit,distance,source,u[3],h,(float4 *)(buffer+u[9])+item,(float4 *)(buffer+u[10])+item))
         atomicAdd((unsigned int *)buffer+28,1u);
 }

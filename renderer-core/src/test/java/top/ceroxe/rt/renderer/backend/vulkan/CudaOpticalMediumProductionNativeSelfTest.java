@@ -27,13 +27,48 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         Files.createDirectories(OUTPUT);String previous=System.getProperty(CudaCameraMediumProfile.ENABLE_PROPERTY);
         System.setProperty(CudaCameraMediumProfile.ENABLE_PROPERTY,"true");
         long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
+        String onlyThinCase=System.getProperty("top.ceroxe.rt.medium.opticalOnlyThinCase");
+        boolean thinCaseMatched=false;
         try(Renderer owned=Renderer.open("vulkan-rt",RendererConfig.builder().validationEnabled(true).maxFramesInFlight(3)
                 .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.disabled()).build())){
             renderer=owned;var camera=CameraState.lookAt(0,0,6,0,0,-1).verticalFieldOfViewDegrees(5).aspectRatio((double)width/height).build();
             var budget=MediumTransport.balanced().withMaxEvents(16).withMaxDistance(30).withTransmittanceCutoff(0);
+            if(java.util.Arrays.asList(args).contains("--volume-caustics")) {
+                verifySpatialPbrOptics(camera,budget);
+                verifyDensityBoundaryCaustics(camera,budget);
+                long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
+                require(accepted==16&&routes==accepted,"density/boundary caustics bypassed native optical transport");
+                require(renderer.health().activeFailure().isEmpty(),"density/boundary caustic renderer unhealthy");
+                System.out.println("CudaOpticalMediumProductionNativeSelfTest density/boundary caustics passed");return;
+            }
+            if(java.util.Arrays.asList(args).contains("--caustics")) {
+                verifyScatteringGlassCaustics(camera,budget);
+                long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
+                require(accepted==4&&routes==accepted,"glass/scattering caustic frames bypassed native optical transport");
+                require(renderer.health().activeFailure().isEmpty(),"glass/scattering caustic renderer unhealthy");
+                System.out.println("CudaOpticalMediumProductionNativeSelfTest glass/scattering caustics passed");return;
+            }
+            if(Boolean.getBoolean("top.ceroxe.rt.medium.opticalOnlyExplicitScattering")) {
+                verifyExplicitBoundaryScattering(camera,budget);
+                long opticalRoutes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
+                require(accepted==5&&opticalRoutes==accepted,
+                        "explicit-IOR scattering cross cases bypassed native optical transport: accepted="+accepted+", optical="+opticalRoutes);
+                require(renderer.health().activeFailure().isEmpty(),"explicit-IOR scattering renderer unhealthy");
+                System.out.println("CudaOpticalMediumProductionNativeSelfTest isolated explicit-boundary scattering passed");return;
+            }
             for(int optical:new int[]{1,2,8})for(int spp:new int[]{1,2,8}){
+                if(onlyThinCase!=null&&!matchesThinCase(onlyThinCase,optical,spp))continue;
+                thinCaseMatched=true;
                 setupThin(1.5f);var frame=capture("thin-"+optical+"-"+spp,request(camera,spp,budget.withOpticalSamples(optical),blueSky()));
                 compareThin("thin-optical"+optical+"-SPP"+spp,frame,camera,spp,1.5);
+            }
+            if(onlyThinCase!=null){
+                if(!thinCaseMatched)throw new IllegalArgumentException("unknown isolated optical case: "+onlyThinCase);
+                long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
+                require(routes==accepted,"isolated optical cases bypassed native route: "+routes+" / "+accepted);
+                if(OpticalDetailedProfile.ENABLED)saveDetailedProfile();
+                System.out.println("CudaOpticalMediumProductionNativeSelfTest isolated case passed: "+onlyThinCase+" nativeFrames="+routes);
+                return;
             }
             setupThin(1.5f);var exhausted=capture("event-exhaustion",request(camera,1,budget.withMaxEvents(1),blueSky()));
             checkConstant("one-event-no-unbudgeted-continuation",exhausted,0,0,0);
@@ -56,6 +91,8 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             verifyDensityOptics(camera,budget.withScatteringSteps(64));
             verifyRoughOptics(budget);
             verifyScatteringOptics(camera,budget);
+            verifyHeterogeneousScatteringRoughGlass(camera,budget);
+            verifyExplicitBoundaryScattering(camera,budget);
             verifyUnlitTerminalProof(camera,budget);
             verifyResolvedPublication(camera,budget);
             setupThin(1.5f);apply(SceneTransaction.builder(++revision).upsert(glass(1.5f).toBuilder().transmission(.5f).build()).build());
@@ -67,13 +104,26 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             compareThin("full-HD-multiple-optical-tiles",capture("full-HD",request(fullHd,1,budget.withOpticalSamples(1),blueSky())),fullHd,1,1.5);
             width=37;height=29;
             compareThin("shrink-after-full-HD",capture("shrink",request(camera,1,budget,blueSky())),camera,1,1.5);
+            verifySpatialPbrOptics(camera,budget);
+            verifyScatteringGlassCaustics(camera,budget);
+            verifyDensityBoundaryCaustics(camera,budget);
             require(renderer.health().activeFailure().isEmpty(),"optical session unhealthy");
+        }catch(Exception|Error failure){
+            if(OpticalDetailedProfile.ENABLED)try{saveDetailedProfile();}catch(java.io.IOException saveFailure){failure.addSuppressed(saveFailure);}
+            throw failure;
         }finally{if(previous==null)System.clearProperty(CudaCameraMediumProfile.ENABLE_PROPERTY);else System.setProperty(CudaCameraMediumProfile.ENABLE_PROPERTY,previous);}
+        if(OpticalDetailedProfile.ENABLED)saveDetailedProfile();
         verifyResolvedTemporal();
         long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
         require(routes==accepted,"public optical frame bypassed native route: "+routes+" / "+accepted);
         Files.writeString(OUTPUT.resolve("result.json"),"{\n\"passed\":true,\n\"nativeFrames\":"+routes+",\n\"recoverableRejections\":"+rejected+",\n\"comparisons\":["+String.join(",\n",RESULTS)+"]\n}\n");
         System.out.println("CudaOpticalMediumProductionNativeSelfTest passed: comparisons="+RESULTS.size()+" actualNativeFrames="+routes+" recoverableRejections="+rejected);
+    }
+    private static void saveDetailedProfile()throws java.io.IOException {
+        Files.writeString(OUTPUT.resolve("detailed-profile.json"),OpticalDetailedProfile.deltaJson(java.util.Map.of()));
+    }
+    private static boolean matchesThinCase(String filter,int optical,int spp){
+        return filter.equals(optical+"-"+spp)||filter.equals(optical+"-*");
     }
     /** Same immutable public HDR completion workload and budgets for both primary storage layouts. */
     private static void benchmark()throws Exception {
@@ -257,6 +307,204 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         var a=meanRgb(reference);var b=meanRgb(limit);
         for(int c=0;c<3;c++)near(b[c],a[c],.003,"rough-glass sigmaS limit channel="+c);
         RESULTS.add(String.format(Locale.ROOT,"{\"name\":\"scattering-rough-glass\",\"analyticRedMean\":%.9g,\"litEnergy\":%.9g,\"darkEnergy\":%.9g}",mean[0],lit,energy(unlit)));
+    }
+    private static void verifyScatteringGlassCaustics(CameraState camera,MediumTransport budget)throws Exception {
+        long photonsBefore=CausticPhotonPlan.diagnosticPhotonDispatches.sum();
+        var medium=new Medium(Rgb.ZERO,new Rgb(.2f,0,0),Rgb.ZERO,1,1,0);
+        var environment=EnvironmentState.builder().sunDirection(0,0,-1).sunIntensity(1).cameraMedium(medium).build();
+        var receiver=MaterialAsset.builder(1).shadingModel(MaterialAsset.ShadingModel.PHYSICALLY_BASED)
+                .baseColorRgba8(0xff808080).roughness(1).metallic(0).doubleSided(true).build();
+        var reflector=MaterialAsset.builder(2).roughness(0).metallic(0).doubleSided(true).build();
+        var pane=MaterialAsset.builder(3).transmission(1).roughness(0).indexOfRefraction(1.5f).doubleSided(true).build();
+        apply(SceneTransaction.builder(++revision).resetScene().upsert(receiver).upsert(reflector).upsert(pane)
+                .upsert(plane(1,1,-4,false)).upsert(causticMirror()).upsert(plane(3,3,4.5f,false)).upsert(plane(4,3,4.4f,true))
+                .upsert(SceneInstance.builder(1,1).build()).upsert(SceneInstance.builder(2,2).build())
+                .upsert(SceneInstance.builder(3,3).build()).upsert(SceneInstance.builder(4,4).build()).build());
+        var transport=budget.withOpticalSamples(8).withScatteringSteps(64).withScatteringBounces(0);
+        var policy=Caustics.photonMap(0,0,-1,6,524288,.18f).withMaxEvents(8);
+        var clear=environment.toBuilder().cameraMedium(Medium.vacuum()).build();
+        var clearOff=capture("glass-caustics-clear-off",request(camera,8,transport,clear,Caustics.disabled()));
+        var clearOn=capture("glass-caustics-clear-on",request(camera,8,transport,clear,policy));
+        double clearDelta=energy(clearOn)-energy(clearOff);int clearPixels=positiveRedPixels(clearOff,clearOn);
+        require(clearDelta>.01&&clearPixels>width*height/16,
+                "glass path did not gather the native PBR photon map: delta="+clearDelta+", pixels="+clearPixels);
+        long scatterPhotons=CausticPhotonPlan.diagnosticPhotonDispatches.sum();
+        // Keep the receiver outside the volume-emission sphere while leaving the glass and mirror inside it.
+        apply(SceneTransaction.builder(++revision).upsert(plane(1,1,-10,false)).build());
+        var off=capture("glass-scattering-caustics-off",request(camera,8,transport,environment,Caustics.disabled()));
+        var volumeOnly=Caustics.photonMap(0,0,0,6,524288,.18f).withMaxEvents(8);
+        var on=capture("glass-scattering-caustics-on",request(camera,8,transport,environment,volumeOnly));
+        double delta=energy(on)-energy(off);int changed=positiveRedPixels(off,on);
+        require(delta>1e-4&&changed>width*height/16
+                        &&CausticPhotonPlan.diagnosticPhotonDispatches.sum()-scatterPhotons==1,
+                "scattering glass path produced no caustic gather: delta="+delta+", pixels="+changed);
+        require(CausticPhotonPlan.diagnosticPhotonDispatches.sum()-photonsBefore==2,
+                "each enabled native optical caustic frame must build the photon map exactly once");
+        Files.writeString(OUTPUT.resolve("glass-scattering-caustics.json"),String.format(Locale.ROOT,
+                "{\"passed\":true,\"nativeFrames\":4,\"photonDispatches\":2,\"clearPositivePixels\":%d,\"clearEnergyDelta\":%.9g,\"scatteringPositivePixels\":%d,\"scatteringEnergyDelta\":%.9g}%n",
+                clearPixels,clearDelta,changed,delta));
+    }
+    private static void verifySpatialPbrOptics(CameraState camera,MediumTransport budget)throws Exception {
+        var transform=new AffineTransform(new float[]{2,0,0,0,0,2,0,0,0,0,1,0});
+        var receiver=MaterialAsset.builder(1).baseColorRgba8(0xff808080).roughness(1).doubleSided(true).build();
+        var glass=glass(1.5f);
+        apply(SceneTransaction.builder(++revision).resetScene().upsert(receiver).upsert(glass)
+                .upsert(plane(1,1,-4,false)).upsert(plane(2,2,4.5f,false)).upsert(MediumTransportSelfTest.cube(5,2,1))
+                .upsert(SceneInstance.builder(1,1).build()).upsert(SceneInstance.builder(2,2).build())
+                .upsert(SceneInstance.builder(5,5).transform(transform).mediumBoundary(MediumBoundary.volume(Medium.vacuum())).build())
+                .upsert(SceneLight.directional(30,0,0,-1).intensity(2).castsShadow(true).build()).build());
+        var narrow=CameraState.lookAt(0,0,6,0,0,-1).verticalFieldOfViewDegrees(.01).aspectRatio((double)width/height).build();
+        var reference=meanRgb(capture("PBR-boundary-vacuum",request(narrow,1,budget,blackSky())));
+        require(reference[0]>.001,"PBR boundary receiver has no direct lighting");
+        var medium=new Medium(new Rgb(.1f,.2f,.3f),Rgb.ZERO,Rgb.ZERO,1,1,0);
+        apply(SceneTransaction.builder(++revision).upsert(SceneInstance.builder(5,5).transform(transform)
+                .mediumBoundary(MediumBoundary.volume(medium)).build()).build());
+        var absorbed=meanRgb(capture("PBR-boundary-absorbed",request(narrow,1,budget,blackSky())));
+        var field=MediumDensityField.grid(50,1,new AffineTransform(new float[]{.5f,0,0,.5f,0,.5f,0,.5f,0,0,.5f,.5f}));
+        apply(SceneTransaction.builder(++revision).upsert(TextureAsset.builder(50,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR)
+                        .pixelsRgba8(new byte[]{(byte)128,0,0,(byte)255}).build())
+                .upsert(SceneInstance.builder(5,5).transform(transform).mediumBoundary(MediumBoundary.volume(medium.withDensityField(field))).build()).build());
+        var density=meanRgb(capture("PBR-boundary-density",request(narrow,1,budget,blackSky())));
+        double maximum=0;
+        for(int c=0;c<3;c++) {
+            double sigma=(c+1)*.1;
+            double expected=reference[c]*Math.exp(-4*sigma),densityExpected=reference[c]*Math.exp(-4*sigma*128/255.0);
+            maximum=Math.max(maximum,Math.max(Math.abs(absorbed[c]-expected),Math.abs(density[c]-densityExpected)));
+            near(absorbed[c],expected,.0002,"PBR camera + light boundary Beer channel="+c);
+            near(density[c],densityExpected,.0002,"PBR camera + light density Beer channel="+c);
+        }
+        apply(SceneTransaction.builder(++revision).upsert(TextureAsset.builder(50,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR)
+                .pixelsRgba8(new byte[]{0,0,0,(byte)255}).build()).build());
+        var zero=meanRgb(capture("PBR-boundary-zero-density",request(narrow,1,budget,blackSky())));
+        for(int c=0;c<3;c++)near(zero[c],reference[c],1e-6,"PBR zero-density recovers vacuum channel="+c);
+        RESULTS.add(String.format(Locale.ROOT,"{\"name\":\"PBR-boundary-density-camera-light-Beer\",\"maximumAbsoluteError\":%.9g}",maximum));
+    }
+    private static void verifyDensityBoundaryCaustics(CameraState camera,MediumTransport budget)throws Exception {
+        var medium=new Medium(new Rgb(.01f,.02f,.03f),new Rgb(.2f,.15f,.1f),Rgb.ZERO,1,1,.2f);
+        var field=MediumDensityField.grid(50,1,new AffineTransform(new float[]{.08f,0,0,.5f,0,.08f,0,.5f,0,0,.08f,.5f}));
+        var texture=TextureAsset.builder(50,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR)
+                .pixelsRgba8(new byte[]{(byte)160,0,0,(byte)255}).build();
+        var glass=MaterialAsset.builder(3).transmission(1).roughness(0).indexOfRefraction(1.5f).doubleSided(true).build();
+        apply(SceneTransaction.builder(++revision).resetScene().upsert(receiver().toBuilder().baseColorRgba8(0xff000000).build())
+                .upsert(glass).upsert(texture).upsert(plane(1,1,-10,false))
+                .upsert(plane(3,3,4.5f,false)).upsert(plane(4,3,4.4f,true))
+                .upsert(SceneInstance.builder(1,1).build()).upsert(SceneInstance.builder(3,3).build())
+                .upsert(SceneInstance.builder(4,4).build())
+                .upsert(SceneLight.directional(30,0,0,-1).intensity(1).castsShadow(true).build()).build());
+        var environment=blackSky().toBuilder()
+                .cameraMedium(medium.withDensityField(field)).build();
+        var transport=budget.withOpticalSamples(4).withScatteringSteps(64).withScatteringBounces(2);
+        var policy=Caustics.photonMap(0,0,0,6,131072,.35f).withMaxEvents(12);
+        long before=CausticPhotonPlan.diagnosticPhotonDispatches.sum();
+        var off=capture("density-caustics-off",request(camera,8,transport,environment));
+        var on=capture("density-caustics-on",request(camera,8,transport,environment,policy));
+        double densityDelta=energy(on)-energy(off);
+        require(densityDelta>1e-5,"density photon gather missing: "+densityDelta);
+        apply(SceneTransaction.builder(++revision).upsert(TextureAsset.builder(50,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR)
+                .pixelsRgba8(new byte[]{0,0,0,(byte)255}).build()).build());
+        var zeroOff=capture("zero-density-caustics-off",request(camera,8,transport,environment));
+        var zeroOn=capture("zero-density-caustics-on",request(camera,8,transport,environment,policy));
+        near(energy(zeroOn),0,1e-7,"zero-density caustics cannot invent volume light");
+        near(energy(zeroOn),energy(zeroOff),1e-7,"zero-density on/off limit");
+        apply(SceneTransaction.builder(++revision).upsert(texture)
+                .upsert(MediumTransportSelfTest.cube(5,3,1))
+                .upsert(SceneInstance.builder(5,5).transform(new AffineTransform(new float[]{2,0,0,0,0,2,0,0,0,0,2,0}))
+                        .mediumBoundary(MediumBoundary.volume(medium.withDensityField(field)).withPriority(7)).build()).build());
+        var bounded=environment.toBuilder().cameraMedium(Medium.vacuum()).build();
+        var boundaryOff=capture("boundary-density-caustics-off",request(camera,8,transport,bounded));
+        var boundaryOn=capture("boundary-density-caustics-on",request(camera,8,transport,bounded,policy));
+        double boundaryDelta=energy(boundaryOn)-energy(boundaryOff);
+        require(boundaryDelta>1e-5,"boundary-density photon gather missing: "+boundaryDelta);
+        apply(SceneTransaction.builder(++revision).upsert(glass.toBuilder().roughness(.2f).build()).build());
+        var roughOff=capture("rough-boundary-density-caustics-off",request(camera,8,transport,bounded));
+        var roughOn=capture("rough-boundary-density-caustics-on",request(camera,8,transport,bounded,policy));
+        double roughDelta=energy(roughOn)-energy(roughOff);
+        require(roughDelta>1e-5,"rough glass/boundary-density photon gather missing: "+roughDelta);
+        var outerMedium=new Medium(medium.absorption(),medium.scattering(),Rgb.ZERO,1,1.33f,.2f).withDensityField(field);
+        var innerMedium=new Medium(medium.absorption(),medium.scattering(),Rgb.ZERO,1,1.1f,.2f);
+        apply(SceneTransaction.builder(++revision)
+                .upsert(SceneInstance.builder(5,5).transform(new AffineTransform(new float[]{2,0,0,0,0,2,0,0,0,0,2,0}))
+                        .mediumBoundary(MediumBoundary.surface(outerMedium).withPriority(7)).build())
+                .upsert(SceneInstance.builder(6,5).mediumBoundary(MediumBoundary.surface(innerMedium).withPriority(9)).build()).build());
+        var nestedOff=capture("nested-IOR-density-caustics-off",request(camera,8,transport,bounded));
+        var nestedOn=capture("nested-IOR-density-caustics-on",request(camera,8,transport,bounded,policy));
+        double nestedDelta=energy(nestedOn)-energy(nestedOff);
+        require(nestedDelta>1e-5,"nested priority/IOR photon gather missing: "+nestedDelta);
+        apply(SceneTransaction.builder(++revision).removeLight(30)
+                .upsert(SceneLight.point(31,0,0,0).color(1,1,1).intensity(2).range(20).castsShadow(true).build()).build());
+        var inside=CameraState.lookAt(0,0,.5,0,0,-1).verticalFieldOfViewDegrees(5).aspectRatio((double)width/height).build();
+        var insideOff=capture("inside-nested-caustics-off",request(inside,8,transport,bounded));
+        var insideOn=capture("inside-nested-caustics-on",request(inside,8,transport,bounded,policy));
+        double insideDelta=energy(insideOn)-energy(insideOff);
+        require(insideDelta>1e-5,"interior emitter/camera lost initial medium stack: "+insideDelta);
+        require(CausticPhotonPlan.diagnosticPhotonDispatches.sum()-before==6,"each enabled volume frame builds one photon map");
+        Files.writeString(OUTPUT.resolve("density-boundary-caustics.json"),String.format(Locale.ROOT,
+                "{\"passed\":true,\"nativeFrames\":12,\"photonDispatches\":6,\"densityEnergyDelta\":%.9g,\"boundaryEnergyDelta\":%.9g,\"roughEnergyDelta\":%.9g,\"nestedEnergyDelta\":%.9g,\"insideEnergyDelta\":%.9g,\"zeroDensityEnergy\":%.9g}%n",
+                densityDelta,boundaryDelta,roughDelta,nestedDelta,insideDelta,energy(zeroOn)));
+    }
+    private static int positiveRedPixels(FrameSnapshot before,FrameSnapshot after){
+        var a=before.pixels().order(ByteOrder.LITTLE_ENDIAN);var b=after.pixels().order(ByteOrder.LITTLE_ENDIAN);int changed=0;
+        for(int pixel=0;pixel<width*height;pixel++)
+            if(Float.float16ToFloat(b.getShort(pixel*8))-Float.float16ToFloat(a.getShort(pixel*8))>.001)changed++;
+        return changed;
+    }
+    private static void verifyHeterogeneousScatteringRoughGlass(CameraState camera,MediumTransport budget)throws Exception {
+        var field=MediumDensityField.grid(50,4,new AffineTransform(new float[]{.005f,0,0,.5f,0,.005f,0,.5f,0,0,.1f,.5f}));
+        var medium=new Medium(new Rgb(.12f,.16f,.20f),new Rgb(.1f,.1f,.1f),Rgb.ZERO,1.2f,1,0).withDensityField(field);
+        byte[] rgba=new byte[16];for(int z=0;z<4;z++){rgba[z*4]=(byte)(32+64*z);rgba[z*4+3]=(byte)255;}
+        var texture=TextureAsset.builder(50,1,4).colorSpace(TextureAsset.ColorSpace.LINEAR).pixelsRgba8(rgba).build();
+        setupThin(1.5f);
+        apply(SceneTransaction.builder(++revision).upsert(texture).upsert(receiver().toBuilder().baseColorRgba8(0xff000000).build())
+                .upsert(glass(1.5f).toBuilder().roughness(.45f).build())
+                .upsert(SceneLight.directional(30,1,0,0).color(1,1,1).intensity(3).castsShadow(false).build()).build());
+        var transport=budget.withOpticalSamples(8).withScatteringSteps(64).withScatteringBounces(2);
+        var environment=blackSky().toBuilder().cameraMedium(medium).build();
+        var lateral=capture("heterogeneous-scattering-rough-glass-lateral",request(camera,8,transport,environment));
+        double lateralEnergy=energy(lateral);
+        require(lateralEnergy>1e-6,"long lateral medium connection must retain measurable lighting");
+        // The cloud is 200 world units wide but only 10 deep. Disabling surface
+        // shadows still preserves medium extinction along the full light connection.
+        apply(SceneTransaction.builder(++revision)
+                .upsert(SceneLight.directional(30,0,0,-1).color(1,1,1).intensity(3).castsShadow(false).build()).build());
+        var lit=capture("heterogeneous-scattering-rough-glass-lit",request(camera,8,transport,environment));
+        double litEnergy=energy(lit);require(litEnergy>.01,"heterogeneous scattering through rough glass must deliver real light energy");
+        require(lateralEnergy<litEnergy,"longer lateral cloud connection must attenuate more than the short axial connection");
+        apply(SceneTransaction.builder(++revision).removeLight(30).build());
+        var dark=capture("heterogeneous-scattering-rough-glass-dark",request(camera,8,transport,environment));
+        double darkEnergy=energy(dark);near(darkEnergy,0,1e-6,"heterogeneous scattering through rough glass respects disabled lighting");
+        RESULTS.add(String.format(Locale.ROOT,"{\"name\":\"heterogeneous-scattering-rough-glass\",\"lateralEnergy\":%.9g,\"litEnergy\":%.9g,\"darkEnergy\":%.9g}",lateralEnergy,litEnergy,darkEnergy));
+    }
+    private static void verifyExplicitBoundaryScattering(CameraState camera,MediumTransport budget)throws Exception {
+        var transport=budget.withOpticalSamples(8).withScatteringSteps(64).withScatteringBounces(2);
+        var medium=new Medium(new Rgb(.12f,.16f,.20f),new Rgb(.1f,.1f,.1f),Rgb.ZERO,1,1.5f,.35f);
+        var transform=new AffineTransform(new float[]{100,0,0,0,0,100,0,0,0,0,2,0});
+        var boundary=MediumBoundary.surface(medium).withPriority(-7);
+        apply(SceneTransaction.builder(++revision).resetScene().upsert(receiver().toBuilder().baseColorRgba8(0xff000000).build())
+                .upsert(glass(1.5f)).upsert(plane(1,1,-4,false)).upsert(MediumTransportSelfTest.cube(2,2,1))
+                .upsert(SceneInstance.builder(1,1).build())
+                .upsert(SceneInstance.builder(2,2).transform(transform).mediumBoundary(boundary).build())
+                .upsert(SceneLight.directional(30,0,0,-1).color(1,1,1).intensity(3).castsShadow(true).build()).build());
+        double lit=energy(capture("explicit-IOR-scattering-shadow-lit",request(camera,8,transport,blackSky())));
+        require(lit>.001,"explicit IOR scattering must receive light through its own boundary");
+        apply(SceneTransaction.builder(++revision).removeLight(30).build());
+        double dark=energy(capture("explicit-IOR-scattering-shadow-dark",request(camera,8,transport,blackSky())));
+        near(dark,0,1e-6,"explicit IOR scattering must not invent light");
+        var inside=CameraState.lookAt(0,0,0,0,0,-1).verticalFieldOfViewDegrees(5).aspectRatio((double)width/height).build();
+        apply(SceneTransaction.builder(++revision).upsert(SceneLight.point(30,0,0,1).color(1,1,1).intensity(5).range(20).castsShadow(true).build()).build());
+        double internal=energy(capture("explicit-IOR-scattering-inside-point",request(inside,8,transport,blackSky())));
+        require(internal>.001,"interior camera/light must retain the selected scattering medium");
+        var field=MediumDensityField.grid(50,1,new AffineTransform(new float[]{.5f,0,0,.5f,0,.5f,0,.5f,0,0,.5f,.5f}));
+        var texture=TextureAsset.builder(50,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR)
+                .pixelsRgba8(new byte[]{(byte)160,0,0,(byte)255}).build();
+        apply(SceneTransaction.builder(++revision).upsert(texture)
+                .upsert(SceneInstance.builder(2,2).transform(transform).mediumBoundary(MediumBoundary.surface(medium.withDensityField(field)).withPriority(-7)).build())
+                .upsert(glass(1.5f).toBuilder().roughness(.35f).build()).build());
+        double density=energy(capture("explicit-IOR-density-scattering-rough",request(camera,8,transport,blackSky())));
+        require(density>.0001,"density scattering and rough IOR boundary must deliver finite real light");
+        apply(SceneTransaction.builder(++revision).removeLight(30).build());
+        double densityDark=energy(capture("explicit-IOR-density-scattering-rough-dark",request(camera,8,transport,blackSky())));
+        near(densityDark,0,1e-6,"density boundary scattering dark control");
+        RESULTS.add(String.format(Locale.ROOT,"{\"name\":\"explicit-IOR-boundary-scattering\",\"litEnergy\":%.9g,\"insidePointEnergy\":%.9g,\"densityRoughEnergy\":%.9g,\"darkEnergy\":%.9g}",lit,internal,density,dark+densityDark));
     }
     private static double[] meanRgb(FrameSnapshot frame){
         var data=frame.pixels().order(ByteOrder.LITTLE_ENDIAN);double[] mean=new double[3];
@@ -446,6 +694,14 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         return total;
     }
     private static MaterialAsset receiver(){return MaterialAsset.builder(1).shadingModel(MaterialAsset.ShadingModel.UNLIT).baseColorRgba8(0xff0000ff).doubleSided(true).build();}
+    private static MeshAsset causticMirror() {
+        double ox=-1/Math.sqrt(5),oz=-2/Math.sqrt(5),nx=ox,nz=1+oz,l=Math.hypot(nx,nz);nx/=l;nz/=l;
+        float[] p=new float[12];int at=0;
+        for(double[] corner:new double[][]{{-1,-1.2},{1,-1.2},{1,1.2},{-1,1.2}}) {
+            p[at++]=(float)(2+nz*corner[0]);p[at++]=(float)corner[1];p[at++]=(float)(-nx*corner[0]);
+        }
+        return MeshAsset.triangles(2,p,new int[]{0,1,2,0,2,3},2);
+    }
     private static MeshAsset plane(long id,long material,float z,boolean reverse){return MeshAsset.triangles(id,
             new float[]{-100,-100,z,100,-100,z,100,100,z,-100,100,z},reverse?new int[]{0,2,1,0,3,2}:new int[]{0,1,2,2,3,0},material);}
     private static void setupThin(float ior)throws Exception{apply(SceneTransaction.builder(++revision).resetScene().upsert(receiver()).upsert(glass(ior))
@@ -491,8 +747,12 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
     }
     private static EnvironmentState blueSky(){return EnvironmentState.builder().skyRadiance(0,0,1).ambientIntensity(1).sunIntensity(0).build();}
     private static EnvironmentState blackSky(){return EnvironmentState.builder().skyRadiance(0,0,0).ambientIntensity(0).sunIntensity(0).build();}
-    private static RenderFrameRequest request(CameraState camera,int spp,MediumTransport budget,EnvironmentState environment){return RenderFrameRequest.builder(++sequence,width,height,camera)
-            .minimumSceneRevision(revision).environment(environment).mediumTransport(budget).antiAliasing(spp==1?AntiAliasingState.disabled():AntiAliasingState.multisampled(spp)).build();}
+    private static RenderFrameRequest request(CameraState camera,int spp,MediumTransport budget,EnvironmentState environment){
+        return request(camera,spp,budget,environment,Caustics.disabled());}
+    private static RenderFrameRequest request(CameraState camera,int spp,MediumTransport budget,EnvironmentState environment,Caustics caustics){
+        return RenderFrameRequest.builder(++sequence,width,height,camera).minimumSceneRevision(revision).environment(environment)
+                .mediumTransport(budget).caustics(caustics)
+                .antiAliasing(spp==1?AntiAliasingState.disabled():AntiAliasingState.multisampled(spp)).build();}
     private static void apply(SceneTransaction transaction)throws Exception{long deadline=System.nanoTime()+TIMEOUT.toNanos();for(;;)try{renderer.apply(transaction);return;}
         catch(SubmissionRejectedException pending){require(System.nanoTime()<deadline,"optical scene apply timeout");Thread.sleep(1);}}
     private static FrameSnapshot capture(String name,RenderFrameRequest request)throws Exception{long deadline=System.nanoTime()+TIMEOUT.toNanos();
@@ -500,14 +760,19 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         while(!(renderer.trySubmit(request) instanceof Renderer.FrameSubmitted)){require(System.nanoTime()<deadline,"optical admission timeout");pollPause();}accepted++;
         long submitted=benchmarkPolling?System.nanoTime():0L;
         if(benchmarkPolling)submitNanos+=submitted-captureStarted;
+        // First admission can compile native pipelines. GPU completion has its own deadline.
+        deadline=System.nanoTime()+TIMEOUT.toNanos();
         while(System.nanoTime()<deadline){long pollStarted=benchmarkPolling?System.nanoTime():0L;var ready=renderer.pollFrame();
             if(benchmarkPolling)pollWorkNanos+=System.nanoTime()-pollStarted;
             if(ready.isPresent()&&ready.orElseThrow().frameSequence()==request.sequence()){var frame=ready.orElseThrow();
             require(frame.renderedSceneRevision()==revision&&frame.format()==TextureFormat.RGBA16_FLOAT,"optical final HDR provenance");
             if(name!=null){byte[] bytes=new byte[frame.byteCount()];frame.pixels().get(bytes);Files.write(OUTPUT.resolve(name+".rgba16f"),bytes);}
             if(benchmarkPolling)pollNanos+=System.nanoTime()-submitted;return frame;}
+            var health=renderer.health();
+            if(health.status()==Renderer.Status.FAILED||health.status()==Renderer.Status.RECOVERING)
+                throw new AssertionError("optical frame entered "+health.status()+" before HDR completion: sequence="+request.sequence()+" health="+health+" diagnostics="+renderer.diagnostics());
             long gapStarted=benchmarkPolling?System.nanoTime():0L;pollPause();if(benchmarkPolling)pollGapNanos+=System.nanoTime()-gapStarted;}
-        throw new AssertionError("optical final HDR timeout");}
+        throw new AssertionError("optical final HDR timeout: sequence="+request.sequence()+" health="+renderer.health()+" diagnostics="+renderer.diagnostics());}
     private static void pollPause()throws InterruptedException{if(benchmarkPolling)Thread.onSpinWait();else Thread.sleep(1);}
     private static void expectRejected(RenderFrameRequest frame)throws Exception{long deadline=System.nanoTime()+TIMEOUT.toNanos();for(;;){try{
         if(renderer.trySubmit(frame) instanceof Renderer.FrameSubmitted)throw new AssertionError("unsupported partial-PBR surface was silently accepted");

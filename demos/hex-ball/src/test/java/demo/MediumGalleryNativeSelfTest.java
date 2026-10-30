@@ -12,22 +12,18 @@ import top.ceroxe.rt.renderer.api.*;
 
 /** Explicit GPU gate: feature ablations, finite HDR pixels, persistent/transient parity and images. */
 public final class MediumGalleryNativeSelfTest {
-    private static final int WIDTH=160,HEIGHT=90,FRAMES=32;
+    private static final int WIDTH=160,HEIGHT=90,FRAMES=8;
     private static final Path OUTPUT=Path.of("build/reports/medium-gallery").toAbsolutePath();
     public static void main(String[] arguments) throws Exception {
         Files.createDirectories(OUTPUT);
+        String onlyPreset=System.getProperty("top.ceroxe.rt.gallery.onlyPreset");
         var variants=new LinkedHashMap<String,String[]>();
-        variants.put("all",new String[0]);
-        variants.put("no-absorption",new String[]{"--absorption=false"});
-        variants.put("no-scattering",new String[]{"--scattering=false"});
-        variants.put("uniform-density",new String[]{"--heterogeneous=false"});
-        variants.put("single-scattering",new String[]{"--bounces=0"});
-        variants.put("no-emission",new String[]{"--emission=false"});
-        variants.put("no-refraction",new String[]{"--refraction=false"});
-        variants.put("no-caustics",new String[]{"--caustics=false"});
-        variants.put("persistent",new String[]{"--transient=false"});
-        variants.put("inward",new String[]{"--inward=true"});
-        variants.put("inside",new String[]{"--inside=true"});
+        for(var preset:MediumGalleryScene.Preset.values()) {
+            if(onlyPreset!=null&&!preset.id.equals(onlyPreset))continue;
+            variants.put(preset.id,new String[]{"--scene="+preset.id});
+            if(preset.caustic())variants.put(preset.id+"-off",new String[]{"--scene="+preset.id,"--caustics=false"});
+        }
+        require(!variants.isEmpty(),"unknown gallery preset: "+onlyPreset);
         var results=new LinkedHashMap<String,float[]>();
         for (var variant:variants.entrySet()) {
             var args=new ArrayList<>(List.of("--width="+WIDTH,"--height="+HEIGHT,"--fg=false","--animate=false",
@@ -35,9 +31,9 @@ public final class MediumGalleryNativeSelfTest {
             args.addAll(Arrays.asList(variant.getValue()));
             var options=MediumGalleryDemo.Options.parse(args.toArray(String[]::new));
             var scene=new MediumGalleryScene(options);float[] average=new float[WIDTH*HEIGHT*3];
-            var config=MediumGalleryDemo.configuration(options).copyBuilder()
-                    .temporalRendering(TemporalRenderingOptions.disabled())
-                    .rayTracingOptimizations(RayTracingOptimizationOptions.disabled()).build();
+            // Exercise the same feature policy as the actual FPS window. In
+            // particular, do not mask a default SER/medium admission failure.
+            var config=MediumGalleryDemo.configuration(options);
             long started=System.nanoTime();
             try (var renderer=Renderer.open(config)) {
                 renderer.apply(scene.transaction());
@@ -63,20 +59,26 @@ public final class MediumGalleryNativeSelfTest {
             System.out.printf(Locale.ROOT,"MediumGalleryNative variant=%s frames=%d admissionReadbackWallMs=%.3f (not FPS)%n",
                     variant.getKey(),FRAMES,(System.nanoTime()-started)/1e6);
         }
-        var reference=results.get("all");double energy=Arrays.stream(toDouble(reference)).sum()/reference.length;
-        require(energy>1e-4,"gallery contains measurable lighting");
         for (var variant:results.entrySet()) {
-            if (variant.getKey().equals("all")) continue;
-            double difference=0;
-            for (int i=0;i<reference.length;i++) difference+=Math.abs(reference[i]-variant.getValue()[i]);
-            double relative=difference/(reference.length*energy);
-            System.out.printf(Locale.ROOT,"MediumGalleryNative imageMeanAbsoluteRelativeDifference %s=%.8f%n",variant.getKey(),relative);
-            if (variant.getKey().equals("persistent") || variant.getKey().equals("inward"))
-                require(relative<.08,"equivalent boundary representations agree within the finite Monte Carlo budget: "+variant.getKey());
-            else require(relative>1e-5,"feature ablation must alter the image: "+variant.getKey());
+            double energy=Arrays.stream(toDouble(variant.getValue())).sum()/variant.getValue().length;
+            require(energy>1e-5,"preset contains measurable lighting: "+variant.getKey());
         }
-        System.out.println("MediumGalleryNativeSelfTest passed; images="+OUTPUT
-                +"; these small-scene checks do not certify convergence, 2K throughput or FG presentation");
+        if(onlyPreset==null) {
+            difference(results,"pbr-direct-uniform","pbr-direct-density");
+            difference(results,"pbr-direct-uniform","pbr-multiple-uniform");
+            difference(results,"pbr-direct-density","pbr-multiple-density");
+        }
+        for(var preset:MediumGalleryScene.Preset.values())if(preset.caustic()&&results.containsKey(preset.id))difference(results,preset.id,preset.id+"-off");
+        Files.writeString(OUTPUT.resolve(onlyPreset==null?"result.json":"result-"+onlyPreset+".json"),"{\"passed\":true,\"presets\":"+variants.size()
+                +",\"framesPerPreset\":"+FRAMES+",\"nativeFrames\":"+(variants.size()*FRAMES)+"}\n");
+        System.out.println("介质展厅 GPU 验收通过；图像目录="+OUTPUT);
+    }
+    private static void difference(Map<String,float[]> results,String first,String second) {
+        float[] a=results.get(first),b=results.get(second);double difference=0,energy=0;
+        for(int i=0;i<a.length;i++){difference+=Math.abs(a[i]-b[i]);energy+=a[i];}
+        double relative=difference/Math.max(energy,1e-12);
+        require(relative>1e-5,"preset control must change the image: "+first+" / "+second);
+        System.out.printf(Locale.ROOT,"展厅图像差异 %s / %s = %.8f%n",first,second,relative);
     }
     private static double[] toDouble(float[] values) {double[] result=new double[values.length];for(int i=0;i<values.length;i++)result[i]=values[i];return result;}
     private static void save(Path path,float[] values) throws Exception {

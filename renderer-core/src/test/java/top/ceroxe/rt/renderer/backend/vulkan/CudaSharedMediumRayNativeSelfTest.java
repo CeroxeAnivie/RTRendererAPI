@@ -25,6 +25,7 @@ public final class CudaSharedMediumRayNativeSelfTest {
             var init=cuda.compileBatchKernel(wrapper,"test_init_rays");
             var advance=cuda.compileBatchKernel(wrapper,"test_advance_rays");
             var shadow=cuda.compileBatchKernel(wrapper,"test_init_shadow")) {
+            verifyBlockingExchange(device,cuda);
             for(int session=0;session<2;session++) {
                 // A later lifecycle replaces retired slots with larger capacity; no old buffer is rebound in flight.
                 try(var first=new CudaSharedRayFrame(device,cuda,4096*(session+1),4L<<20);
@@ -36,7 +37,8 @@ public final class CudaSharedMediumRayNativeSelfTest {
                         for(int pair=0;pair<64;pair++) {
                             first.produceThenExchangePairBlocking(command->{},records->cuda.launchBlocking(init,records,4096,128),
                                     command->firstQuery.record(command,4096),records->{
-                                        cuda.launchBlocking(advance,records,4096,128);cuda.downloadAsync(records,pairHost);
+                                        cuda.launchBlocking(advance,records,4096,128);
+                                        cuda.downloadAsync(records,pairHost);
                                     });
                             for(int path=0;path<4096;path++){
                                 int hits=pairHost.getInt(path*128L+96),errors=pairHost.getInt(path*128L+100);
@@ -55,28 +57,66 @@ public final class CudaSharedMediumRayNativeSelfTest {
                 }
                 if(cuda.residentBytes()!=0)throw new AssertionError("shared slot registration leaked bytes="+cuda.residentBytes());
             }
-            verifyBlockingExchange(device,cuda);
         }
         System.out.println("CudaSharedMediumRayNativeSelfTest passed: two slots x two lifecycles x three fresh paths x five rounds; closest/occlusion/epoch/full-array checks; blocking copy, nested exchange and failure drain");
     }
     private static void verifyBlockingExchange(VulkanDeviceRuntime device,CudaMediumRuntime cuda) {
         String fill="extern \"C\" __global__ void exchange_fill(unsigned int *p,int count){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<count)p[i]=0x34567890u;}";
+        String verifyAndPublish="extern \"C\" __global__ void exchange_verify_publish(unsigned int *p,int count){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<count){p[i]=p[i]==0x34567890u?0x13572468u:0xdeadc0deu;__threadfence_system();}}";
+        String verifyCopied="extern \"C\" __global__ void exchange_verify_copied(unsigned int *p,int count){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<count&&p[32+i]!=0x13572468u)p[32+i]=0xdeadbeefu;}";
         try(var kernel=cuda.compileBatchKernel(fill,"exchange_fill");var arena=Arena.ofConfined();
-            var frame=CudaSharedRayFrame.storage(device,cuda,128,1L<<20);
-            var nested=CudaSharedRayFrame.storage(device,cuda,128,1L<<20)) {
+            var verifier=cuda.compileBatchKernel(verifyAndPublish,"exchange_verify_publish");
+            var copied=cuda.compileBatchKernel(verifyCopied,"exchange_verify_copied");
+            var frame=CudaSharedRayFrame.storage(device,cuda,256,1L<<20);
+            var nested=CudaSharedRayFrame.storage(device,cuda,128,1L<<20);
+            var diagnostic=Boolean.getBoolean("top.ceroxe.rt.medium.interopEdgeDiagnostics")
+                    ?top.ceroxe.rt.renderer.rt.device.RtGpuBuffer.createHostVisibleBuffer(device.device(),device.allocator(),256,
+                        org.lwjgl.vulkan.VK10.VK_BUFFER_USAGE_TRANSFER_DST_BIT):null) {
             var host=arena.allocate(128,16);
             try(var firstHost=cuda.allocateHost(128);var secondHost=cuda.allocateHost(128)) {
                 for(int pair=0;pair<32;pair++) {
                     frame.produceThenExchangePairBlocking(command->org.lwjgl.vulkan.VK10.vkCmdFillBuffer(
-                            command,frame.buffer(),0,128,0),storage->{
-                                cuda.launchBlocking(kernel,storage,32,4);cuda.downloadAsync(storage,firstHost);
-                            },command->org.lwjgl.vulkan.VK10.vkCmdFillBuffer(command,frame.buffer(),0,128,0x24681357),
-                            storage->cuda.downloadAsync(storage,secondHost));
+                            command,frame.buffer(),0,256,0x34567890),storage->{
+                                cuda.launchBlocking(verifier,storage,32,4);
+                                cuda.downloadAsync(storage.slice(0,128),firstHost);
+                            },command->{
+                                try(var stack=org.lwjgl.system.MemoryStack.stackPush()) {
+                                    var copy=org.lwjgl.vulkan.VkBufferCopy.calloc(1,stack)
+                                            .srcOffset(0).dstOffset(128).size(128);
+                                    org.lwjgl.vulkan.VK10.vkCmdCopyBuffer(command,frame.buffer(),frame.buffer(),copy);
+                                    if(diagnostic!=null) {
+                                        var dependency=org.lwjgl.vulkan.VkBufferMemoryBarrier.calloc(1,stack).sType$Default()
+                                                .srcAccessMask(org.lwjgl.vulkan.VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                                                .dstAccessMask(org.lwjgl.vulkan.VK10.VK_ACCESS_TRANSFER_READ_BIT)
+                                                .srcQueueFamilyIndex(org.lwjgl.vulkan.VK10.VK_QUEUE_FAMILY_IGNORED)
+                                                .dstQueueFamilyIndex(org.lwjgl.vulkan.VK10.VK_QUEUE_FAMILY_IGNORED)
+                                                .buffer(frame.buffer()).offset(0).size(256);
+                                        org.lwjgl.vulkan.VK10.vkCmdPipelineBarrier(command,org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                                org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,0,null,dependency,null);
+                                        copy.srcOffset(0).dstOffset(0).size(256);
+                                        org.lwjgl.vulkan.VK10.vkCmdCopyBuffer(command,frame.buffer(),diagnostic.buffer(),copy);
+                                        var hostDependency=org.lwjgl.vulkan.VkBufferMemoryBarrier.calloc(1,stack).sType$Default()
+                                                .srcAccessMask(org.lwjgl.vulkan.VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                                                .dstAccessMask(org.lwjgl.vulkan.VK10.VK_ACCESS_HOST_READ_BIT)
+                                                .srcQueueFamilyIndex(org.lwjgl.vulkan.VK10.VK_QUEUE_FAMILY_IGNORED)
+                                                .dstQueueFamilyIndex(org.lwjgl.vulkan.VK10.VK_QUEUE_FAMILY_IGNORED)
+                                                .buffer(diagnostic.buffer()).offset(0).size(256);
+                                        org.lwjgl.vulkan.VK10.vkCmdPipelineBarrier(command,org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                                org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_HOST_BIT,0,null,hostDependency,null);
+                                    }
+                                }
+                            },storage->{
+                                cuda.launchBlocking(copied,storage,32,4);
+                                cuda.downloadAsync(storage.slice(128,128),secondHost);
+                            });
+                    long firstValue=pair*2L+1L,secondValue=firstValue+1L;
                     for(int word=0;word<32;word++) {
-                        if(firstHost.getInt(word*4L)!=0x34567890||secondHost.getInt(word*4L)!=0x24681357)
+                        if(firstHost.getInt(word*4L)!=0x13572468||secondHost.getInt(word*4L)!=0x13572468)
                             throw new AssertionError("queued pair ordering pair="+pair+" word="+word
+                                    +" firstValue="+firstValue+" secondValue="+secondValue
                                     +" first="+Integer.toHexString(firstHost.getInt(word*4L))
-                                    +" second="+Integer.toHexString(secondHost.getInt(word*4L)));
+                                    +" second="+Integer.toHexString(secondHost.getInt(word*4L))
+                                    +edgeDiagnostic(diagnostic,word));
                     }
                 }
             }
@@ -131,6 +171,12 @@ public final class CudaSharedMediumRayNativeSelfTest {
         for(long offset=0;offset<bytes.byteSize();offset+=4)
             if(bytes.get(ValueLayout.JAVA_INT,offset)!=0x34567890)
                 throw new AssertionError("CUDA/Vulkan blocking visibility at byte "+offset);
+    }
+    private static String edgeDiagnostic(top.ceroxe.rt.renderer.rt.device.RtGpuBuffer diagnostic,int word) {
+        if(diagnostic==null)return "";
+        var view=ByteBuffer.wrap(diagnostic.readBytes()).order(ByteOrder.nativeOrder());
+        return " VulkanObservedSource="+Integer.toHexString(view.getInt(word*4))
+                +" VulkanCopiedDestination="+Integer.toHexString(view.getInt(128+word*4));
     }
     private static void verify(CudaMediumRuntime cuda,CudaSharedRayFrame frame,boolean shadow) {
         try(var arena=Arena.ofConfined()) {

@@ -1,6 +1,6 @@
 # RTRendererAPI 7.0.0 Windows 候选制品
 
-本包提供统一公共入口 `renderer-api`、Vulkan 后端 `renderer-core`、NVIDIA provider、全部解析后的运行依赖、Maven 元数据、源码、Javadoc、文档、许可证清单与 SHA-256。当前候选仍有介质组合待实现和验收；支持范围以 `docs/7.0.0.md` 为准。
+本包提供统一公共入口 `renderer-api`、Vulkan 后端 `renderer-core`、NVIDIA provider、全部解析后的运行依赖、Maven 元数据、源码、Javadoc、文档、许可证清单与 SHA-256。介质组合的实现范围见 `docs/7.0.0.md`，当前验收结果统一记录于 `docs/quality/verification-report.md` 顶部。
 
 ## 使用
 
@@ -38,6 +38,8 @@ Maven 使用 `maven/` 中的仓库布局，依赖坐标为 `top.ceroxe.rt:render
 ```
 
 两组原生门禁需要真实兼容 GPU，并应串行运行；分别验证当前支持的介质范围与统一入口的通用契约。`verifyRuntimeDistribution` 校验 ZIP 内全部文件哈希、源码构建布局、三模块 Maven 制品，再生成 ZIP 的 SHA-256。完整 `rendererCoreNativeGate` 还包含旧介质组合验收；当前不应宣称该全量硬件门禁已通过。
+
+`verifyPublishedMavenConsumer` 在独立目录仅声明 `renderer-api`，通过已发布 POM 解析三模块和原生依赖，然后执行公共介质值、统一提交结果、SPI 服务发现及嵌入原生文件 SHA-256 检查。这一步不创建 GPU 设备，不能替代介质 HDR 与统一入口的硬件门禁。根构建的 `--offline` 会传给该独立构建；离线执行要求公开第三方依赖已在缓存中。分发 ZIP 的 `lib/` 还须与完整解析运行图逐项一致，文件缺失、同名冲突或字节不同均验收失败。
 
 首次源码构建在构建期下载固定 SHA-256 的 NVIDIA 官方 NVRTC 归档。离线构建可传入 `-PcudaNvrtcArchive=<cuda_nvrtc-windows-x86_64-12.9.86-archive.zip>`。代理由调用进程配置，不应将某台机器的代理地址写入工程。
 

@@ -224,6 +224,10 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                         cache.handle(), visibilityMissModule, visibilityClosestModule, visibilityAnyModule, recursionDepth
                 );
             }
+            if (Boolean.getBoolean("top.ceroxe.rt.pipeline.handleDiagnostics"))
+                System.out.printf(java.util.Locale.ROOT,
+                        "GPUScene pipeline handles program=%s pipeline=0x%x device=0x%x visibility=%s%n",
+                        program, pipeline, device.address(), visibility);
             byte[] groupHandles = RtRayTracingPipelineFactory.queryShaderGroupHandles(properties, device, pipeline,
                     RtRayTracingPipelineFactory.GROUP_COUNT + (visibility ? 2 : 0));
             RtRayTracingPipelineProperties.ShaderBindingTableData packed = properties.packShaderGroupHandles(
@@ -697,6 +701,11 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         return descriptors.layout();
     }
 
+    public synchronized long maxStorageBufferRangeBytes() {
+        requireOpen();
+        return maxStorageBufferRangeBytes;
+    }
+
     /**
      * Publishes one complete scene/frame resource generation into a bounded descriptor slot.
      *
@@ -794,6 +803,19 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR
                         | KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR, 0, push);
         recordTrace(commandBuffer, stack, slot, count, 1);
+    }
+
+    /** Native light paths retain the full geometric hit and share camera medium transport. */
+    public synchronized void recordNativeOpticalPhotons(VkCommandBuffer commandBuffer,MemoryStack stack,int slot,
+            long sceneAddress,long photonAddress,int count,boolean initialize) {
+        requireOpen();
+        if(sceneAddress==0||(sceneAddress&15)!=0||photonAddress==0||(photonAddress&15)!=0||count<1)
+            throw new IllegalArgumentException("invalid native optical photon dispatch");
+        var push=stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        push.putLong(sceneAddress).putInt(0).putInt(count).putLong(initialize?2L:3L).putLong(photonAddress).flip();
+        VK10.vkCmdPushConstants(commandBuffer,pipelineLayout,
+                KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR|KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR,0,push);
+        recordTrace(commandBuffer,stack,slot,Math.min(count,1024),(count+1023)/1024);
     }
 
     /** Packet boundary producer writes compact continuation state to shared memory and full hits to Vulkan storage. */

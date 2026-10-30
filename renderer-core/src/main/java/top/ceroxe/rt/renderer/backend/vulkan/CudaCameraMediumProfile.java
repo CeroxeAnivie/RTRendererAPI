@@ -16,8 +16,8 @@ final class CudaCameraMediumProfile {
         if (boundaryCount != 0)
             unsupported("opaque geometry without explicit volume boundaries is required");
         if (!terminalOpaqueDoubleSided) unsupported("all referenced surfaces must be opaque, double-sided and UNLIT");
-        if (!medium.densityField().isUniform() || !medium.scattering().isZero() || medium.indexOfRefraction() != 1)
-            unsupported("the camera medium must be homogeneous, non-scattering and IOR one");
+        if (!medium.densityField().isUniform() || !medium.scattering().isZero())
+            unsupported("the camera medium must be homogeneous and non-scattering");
         if (!medium.participating()) unsupported("a participating camera absorption or emission medium is required");
         if (request.caustics().enabled() || !request.shaderData().isEmpty())
             unsupported("caustics and application shader data are not supported by this integration slice");

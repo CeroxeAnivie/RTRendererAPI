@@ -18,9 +18,8 @@ public final class CudaPrimaryMediumAbi {
     /** Constants contain density-scaled sigmaA RGB followed by the medium integration distance. */
     public static byte[] constants(RenderFrameRequest frame) {
         var medium = Objects.requireNonNull(frame, "frame").environment().cameraMedium();
-        if (!medium.densityField().isUniform() || !medium.scattering().isZero() || !medium.emission().isZero()
-                || medium.indexOfRefraction() != 1)
-            throw new IllegalArgumentException("primary batch requires homogeneous absorption with IOR one");
+        if (!medium.densityField().isUniform() || !medium.scattering().isZero() || !medium.emission().isZero())
+            throw new IllegalArgumentException("primary batch requires homogeneous absorption");
         var absorption = medium.absorption().multiply(medium.density());
         return ByteBuffer.allocate(CONSTANT_BYTES).order(ByteOrder.nativeOrder())
                 .putFloat(absorption.red()).putFloat(absorption.green()).putFloat(absorption.blue())

@@ -727,6 +727,11 @@ tasks.register("verifyRuntimeDistribution") {
     val archive = tasks.named<Zip>("runtimeDistribution").flatMap { it.archiveFile }
     dependsOn(archive)
     inputs.file(archive)
+    val resolvedRuntime = provider {
+        project(":renderer-api").configurations.getByName("runtimeClasspath").files +
+            project(":renderer-api").layout.buildDirectory.file("libs/renderer-api-$publishedVersion.jar").get().asFile
+    }
+    inputs.files(resolvedRuntime)
     val checksum = layout.buildDirectory.file("release/rtrenderer-api-$publishedVersion-windows-x86_64-candidate.zip.sha256")
     outputs.file(checksum)
     doLast {
@@ -749,6 +754,24 @@ tasks.register("verifyRuntimeDistribution") {
                 }
             }
             check(expected.keys == names.filter { it != "SHA256SUMS" }.toSet()) { "Distribution checksum coverage is incomplete" }
+            val runtimeFiles = resolvedRuntime.get().toList()
+            check(runtimeFiles.map { it.name }.distinct().size == runtimeFiles.size) {
+                "Resolved runtime has duplicate filenames and cannot be flattened safely into lib/"
+            }
+            val runtimePaths = runtimeFiles.map { "lib/" + it.name }.toSet()
+            check(names.filter { it.startsWith("lib/") }.toSet() == runtimePaths) {
+                "Distribution lib/ differs from the complete resolved API runtime graph"
+            }
+            runtimeFiles.forEach { dependency ->
+                val digest = MessageDigest.getInstance("SHA-256")
+                dependency.inputStream().use { input ->
+                    val buffer = ByteArray(65536)
+                    while (true) { val size = input.read(buffer); if (size < 0) break; digest.update(buffer, 0, size) }
+                }
+                check(HexFormat.of().formatHex(digest.digest()) == expected["lib/" + dependency.name]) {
+                    "Distribution runtime differs from its resolved artifact: ${dependency.name}"
+                }
+            }
             for (entry in entries) {
                 if (entry.name == "SHA256SUMS") continue
                 val digest = MessageDigest.getInstance("SHA-256")
@@ -761,7 +784,9 @@ tasks.register("verifyRuntimeDistribution") {
             val required = listOf("LICENSE", "README.md", "renderer-runtime.cdx.json", "runtime-licenses.json",
                 "maven/SHA256SUMS", "source/LICENSE", "source/settings.gradle.kts", "source/gradle/wrapper/gradle-wrapper.jar",
                 "source/gradle/verification-metadata.xml", "source/renderer-core/gradle.lockfile",
-                "source/gradle/published-consumer-smoke/build.gradle.kts", "source/demos/hex-ball/build.gradle.kts")
+                "source/gradle/published-consumer-smoke/build.gradle.kts",
+                "source/gradle/published-consumer-smoke/src/main/java/consumer/PublishedApiRuntimeSelfTest.java",
+                "source/demos/hex-ball/build.gradle.kts")
             check(names.containsAll(required)) { "Distribution lacks required runtime/source metadata: ${required - names.toSet()}" }
             val mavenSums = zip.getEntry("maven/SHA256SUMS") ?: error("Missing Maven SHA256SUMS")
             val mavenExpected = linkedMapOf<String, String>()
@@ -819,7 +844,7 @@ tasks.register<Sync>("preparePublishedMavenConsumer") {
 
 tasks.register<Exec>("verifyPublishedMavenConsumer") {
     group = "verification"
-    description = "Publishes both modules and compiles an isolated consumer through their Maven POMs."
+    description = "Publishes all three modules and executes isolated API/runtime contracts through their Maven POMs."
     dependsOn(tasks.named("publishAllToLocalStagingRepository"))
     dependsOn(tasks.named("verifyPublishedMavenTopology"))
     dependsOn(verifyPublishedNvidiaRuntimeClosure)
@@ -848,12 +873,14 @@ tasks.register<Exec>("verifyPublishedMavenConsumer") {
         "clean",
         "compileJava",
         "verifyPublishedRuntimeClasspath",
+        "verifyPublishedApiRuntime",
         "-PstagingRepository=${stagingRepository.get().asFile.toURI()}",
         "-PrendererVersion=${project.version}"
     )
     // The consumer is an isolated Gradle invocation and therefore cannot see root properties.
     // Forward only the compiler toolchain; its own build fixes --release to Java 25.
     doFirst {
+        if (gradle.startParameter.isOffline) args("--offline")
         javaInstallationPaths.orNull?.let { paths ->
             args("-Porg.gradle.java.installations.paths=$paths")
         }

@@ -40,8 +40,8 @@ public final class CudaMultipleScatteringAbi {
                 ||frame.antiAliasing().samplesPerPixel()!=plan.samples()||frame.mediumTransport().scatteringSteps()!=plan.steps())
             throw new IllegalArgumentException("invalid multiple-scattering tile or frame budgets");
         var medium=frame.environment().cameraMedium();var budget=frame.mediumTransport();
-        if(!medium.densityField().isUniform()||medium.indexOfRefraction()!=1||budget.scatteringBounces()<1)
-            throw new IllegalArgumentException("multiple scattering requires uniform IOR-one transport with additional bounces");
+        if(!medium.densityField().isUniform()||budget.scatteringBounces()<1)
+            throw new IllegalArgumentException("multiple scattering requires uniform transport with additional bounces");
         var sigma=medium.extinction().multiply(medium.density());var scattering=medium.scattering().multiply(medium.density());
         var emission=medium.emission().multiply(medium.density());var environment=frame.environment();
         var result=ByteBuffer.allocate(HEADER_BYTES).order(ByteOrder.nativeOrder());

@@ -31,11 +31,21 @@ public final class CudaCameraScatteringSelfTest {
         var h=ByteBuffer.wrap(CudaCameraScatteringAbi.header(plan,frame,0,221)).order(ByteOrder.nativeOrder());
         require(h.getInt(8)==1768&&h.getInt(12)==8&&h.getInt(24)==8,"exact integer work dimensions");
         require(Math.abs(h.getFloat(48)-.8f)<1e-6&&h.getFloat(64)==.6f&&h.getFloat(80)==.2f,"density-scaled extinction/scattering/source");
+        var contribution=ByteBuffer.wrap(CudaCameraScatteringAbi.header(plan,frame,0,221,false)).order(ByteOrder.nativeOrder());
+        require(contribution.getFloat(80)==0f&&contribution.getFloat(84)==0f&&contribution.getFloat(88)==0f,
+                "composed scattering output must not duplicate medium emission");
         for(int steps:new int[]{1,8,64}) {
             var hd=CudaCameraScatteringAbi.plan(1920,1080,1,steps);
             require(hd.bytes()+CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE<=512L*1024*1024,"1080p scratch respects shared cap");
             require(hd.paths()==2073600&&hd.tilePixels()>0,"1080p complete frame with bounded light scratch");
         }
+        long contributionLimit=4L*1024*1024;
+        var compact=CudaCameraScatteringAbi.contributionPlan(17,13,8,8,contributionLimit);
+        require(compact.compactContribution()&&compact.transmittanceOffset()==128,"contribution must not retain redundant full primary records");
+        require(compact.primaryOffset()==compact.emissionOffset()+compact.paths()*16,"tile primary must follow complete radiance outputs");
+        require(compact.sourceOffset()==compact.primaryOffset()+compact.tilePixels()*compact.samples()*16,"compact primary and light source scratch overlap");
+        var compactHeader=ByteBuffer.wrap(CudaCameraScatteringAbi.header(compact,frame,0,221,false)).order(ByteOrder.nativeOrder());
+        require(compactHeader.getInt(28)==1,"compact contribution layout flag missing");
         reject(()->CudaCameraScatteringProfile.requireSupported(frame,1,true));
         reject(()->CudaCameraScatteringProfile.requireSupported(frame,0,false));
         reject(()->CudaCameraScatteringProfile.requireSupported(frame.toBuilder()

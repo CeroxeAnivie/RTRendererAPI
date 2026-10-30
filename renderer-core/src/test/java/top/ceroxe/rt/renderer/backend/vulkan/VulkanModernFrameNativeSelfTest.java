@@ -160,7 +160,55 @@ public final class VulkanModernFrameNativeSelfTest {
             FrameSnapshot second = renderer.awaitFrame(Duration.ofSeconds(15)).orElseThrow();
             require(checksum(first) != checksum(second), "application data did not alter real traced scene output");
             require(renderer.status() == Renderer.Status.READY, "deterministic validation poisoned renderer");
+            verifyCombinedValidation(renderer, red);
         }
+    }
+
+    private static void verifyCombinedValidation(Renderer renderer, ResourceData tint) throws Exception {
+        var buffer = new BufferResource(new RenderResourceId(990_010), ResourceVersion.initial(), 4,
+                java.util.Set.of(BufferUsage.COPY_DESTINATION));
+        require(renderer.submitResources(new RenderResourceTransaction(0, List.of(buffer), List.of(), List.of()))
+                        .outcome() == ResourceTransactionEvidence.Outcome.ACCEPTED,
+                "combined-workload fixture publication failed");
+        var write = new WriteBufferCommand(new ResourceSlice.BufferSlice(buffer, new ByteRange(0, 4)), floats(1));
+        var commands = new RenderCommandTransaction(2, List.of(write));
+        expect(FrameValidationException.class, () -> renderer.submitWorkload(
+                RenderWorkload.combined(request(2, 16, 8, List.of()), commands)));
+        require(renderer.status() == Renderer.Status.READY,
+                "combined frame validation poisoned the renderer");
+        require(renderer.diagnostics().latestSubmittedFrameSequence() == 1,
+                "rejected combined frame advanced scene admission");
+        var evidence = renderer.extension(RendererEvidenceAccess.class).orElseThrow();
+        require(evidence.queryCommandExecutionEvidence(2).status() == EvidenceQuery.Status.UNKNOWN,
+                "invalid combined scene submitted the command lane");
+
+        var accepted = renderer.submitWorkload(RenderWorkload.combined(
+                request(2, 16, 8, List.of(tint)), commands));
+        require(accepted.outcome() == WorkloadExecutionEvidence.Outcome.ACCEPTED
+                        && accepted.sceneSubmission().orElseThrow().frameSequence() == 2
+                        && accepted.graphicsExecution().orElseThrow().outcome().recorded(),
+                "corrected combined workload did not admit both exact lanes");
+        long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+        while (!evidence.queryCommandExecutionEvidence(2).evidence().orElseThrow().outcome().gpuCompleted()) {
+            if (System.nanoTime() > deadline) throw new AssertionError("combined command completion timeout");
+            Thread.sleep(1);
+        }
+        require(renderer.awaitFrame(Duration.ofSeconds(15)).orElseThrow().frameSequence() == 2,
+                "combined scene did not publish its exact frame");
+        expect(SubmissionOrderException.class, () -> renderer.submitWorkload(RenderWorkload.combined(
+                request(2, 16, 8, List.of(tint)), commands)));
+        require(renderer.status() == Renderer.Status.READY,
+                "combined sequence validation poisoned the renderer");
+        var nextCommands = new RenderCommandTransaction(3, List.of(write));
+        expect(SceneRevisionException.class, () -> renderer.submitWorkload(RenderWorkload.combined(
+                request(3, 16, 8, List.of(tint)).toBuilder().minimumSceneRevision(99).build(), nextCommands)));
+        require(renderer.status() == Renderer.Status.READY
+                        && renderer.diagnostics().latestSubmittedFrameSequence() == 2
+                        && evidence.queryCommandExecutionEvidence(3).status() == EvidenceQuery.Status.UNKNOWN,
+                "combined scene-revision validation retained partial state");
+        submit(renderer, request(3, 16, 8, List.of(tint)));
+        require(renderer.awaitFrame(Duration.ofSeconds(15)).orElseThrow().frameSequence() == 3,
+                "renderer did not recover after corrected combined validation failures");
     }
 
     private static void verifyMappedHdr(VulkanRtCapabilityProbe.Result capability) throws Exception {

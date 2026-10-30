@@ -49,7 +49,8 @@ public final class RenderingSemanticCapabilities {
         COMBINED_WORKLOADS,
         LOGIC_OPERATIONS,
         GEOMETRY_SHADERS,
-        RAY_TRACING_PIPELINE_RETIREMENT
+        RAY_TRACING_PIPELINE_RETIREMENT,
+        COUNTED_INDIRECT_DRAW
     }
 
     /** Whether a semantic feature has a complete executable backend path. */

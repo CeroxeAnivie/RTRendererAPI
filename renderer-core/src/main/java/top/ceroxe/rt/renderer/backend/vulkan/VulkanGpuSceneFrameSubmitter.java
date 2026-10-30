@@ -113,7 +113,15 @@ final class VulkanGpuSceneFrameSubmitter {
         }
         var photonPlan = temporal.caustics(checked.request());
         GpuSceneRayTracingPipeline photonPipeline = photonPlan.photons() > 0 ? pipelines.photons() : null;
+        if(photonPipeline!=null&&photonPlan.bytes()>photonPipeline.maxStorageBufferRangeBytes())
+            throw new top.ceroxe.rt.renderer.api.FrameValidationException(
+                    top.ceroxe.rt.renderer.api.FrameValidationException.Reason.INVALID_CAUSTICS,
+                    "complete surface and volume photon map exceeds device maxStorageBufferRange="
+                            +photonPipeline.maxStorageBufferRangeBytes()+" bytes; reduce photon or event budget");
         var transport = temporal.selectTransport(checked.request());
+        CudaMediumFrameProfile.validateShaderData(
+                checked.request(), transport, pipelines.usesBuiltInSceneShaders());
+        pipelines.validateShaderData(checked.request().shaderData());
         var serialProgram = transport.program();
         var route = transport.route();
         boolean nativeOpticalFrame = route == CudaMediumFrameProfile.Route.OPTICAL;
@@ -121,7 +129,8 @@ final class VulkanGpuSceneFrameSubmitter {
         boolean nativeMultipleFrame = route == CudaMediumFrameProfile.Route.MULTIPLE_SCATTERING;
         boolean nativeDensityScatteringFrame = route == CudaMediumFrameProfile.Route.DENSITY_SCATTERING;
         boolean nativeScatteringFrame = route == CudaMediumFrameProfile.Route.CAMERA_SCATTERING;
-        boolean nativePbrFrame = route == CudaMediumFrameProfile.Route.PBR;
+        boolean nativePbrScatteringFrame = route == CudaMediumFrameProfile.Route.PBR_SCATTERING;
+        boolean nativePbrFrame = route == CudaMediumFrameProfile.Route.PBR || nativePbrScatteringFrame;
         boolean nativeBoundaryFrame = route == CudaMediumFrameProfile.Route.BOUNDARY;
         boolean nativeCameraFrame = route == CudaMediumFrameProfile.Route.CAMERA;
         boolean nativeMediumFrame = route != CudaMediumFrameProfile.Route.NONE;
@@ -130,7 +139,7 @@ final class VulkanGpuSceneFrameSubmitter {
         if (nativeMediumFrame && !pipelines.supportsPrimaryQueue())
             throw new top.ceroxe.rt.renderer.api.FrameValidationException(
                     top.ceroxe.rt.renderer.api.FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                    "native medium transport requires built-in non-SER scene shaders");
+                    "native medium transport requires built-in scene shaders");
         var selectedProgram = nativeMediumFrame ? GpuSceneRayTracingPipeline.Program.SURFACE_PRIMARY_SHADE
                 : VulkanGpuSceneTemporalCoordinator.primaryQueueProgram(serialProgram,
                 pipelines.supportsPrimaryQueue() && Boolean.getBoolean("top.ceroxe.rt.medium.primaryQueue"));
@@ -146,9 +155,9 @@ final class VulkanGpuSceneFrameSubmitter {
                 width,height,acceptedLightSlotUpperBound,temporal::nativeDensityTexture,nativeDensityCache) : null;
         var nativeOpticalData = nativeOpticalFrame ? CudaOpticalMediumManager.scene(checked.request(),width,height,
                 nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache,
-                temporal.nativeOpticalOpaqueRay(checked.request())) : null;
+                temporal.nativeOpticalOpaqueRay(checked.request()),acceptedLightSlotUpperBound) : null;
         var nativePbrData = nativePbrFrame ? CudaPbrMediumManager.scene(checked.request(),width,height,
-                acceptedLightSlotUpperBound,nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache) : null;
+                acceptedLightSlotUpperBound,nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache,nativePbrScatteringFrame) : null;
         var nativeHeterogeneousMultipleData = nativeHeterogeneousMultipleFrame ? CudaMultipleScatteringManager.scene(
                 checked.request(),width,height,acceptedLightSlotUpperBound,temporal::nativeDensityTexture,nativeDensityCache) : null;
         GpuScenePrimaryQueue.Plan selectedQueue = !nativeMediumFrame && selectedProgram.primaryQueue()
@@ -175,7 +184,17 @@ final class VulkanGpuSceneFrameSubmitter {
                 ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_DENSITY_SCATTERING_LIGHTS)
                 : nativeScatteringFrame || nativeMultipleFrame && !nativeHeterogeneousMultipleFrame
                     ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS) : null;
-        GpuSceneRayTracingPipeline multipleTracer = nativeMultipleFrame
+        var pbrScatteringKind = nativePbrScatteringFrame ? nativePbrData.transportPlan().kind() : null;
+        GpuSceneRayTracingPipeline pbrScatteringPrimary = nativePbrScatteringFrame
+                && pbrScatteringKind != top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM
+                ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.PRIMARY_TRACE) : null;
+        GpuSceneRayTracingPipeline cameraScatteringLights = nativePbrScatteringFrame
+                ? pipelines.forFrame(pbrScatteringKind == top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.DIRECT_DENSITY
+                    ? GpuSceneRayTracingPipeline.Program.NATIVE_DENSITY_SCATTERING_LIGHTS
+                    : GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS) : null;
+        GpuSceneRayTracingPipeline multipleTracer = nativeMultipleFrame || nativePbrScatteringFrame
+                && (pbrScatteringKind == top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.MULTIPLE_UNIFORM
+                    || pbrScatteringKind == top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.MULTIPLE_DENSITY)
                 ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_MULTIPLE_SCATTERING) : null;
         GpuSceneRayTracingPipeline boundaryScatteringQuery = nativeBoundaryScatteringFrame
                 ? pipelines.nativeBoundaryScattering() : null;
@@ -205,6 +224,8 @@ final class VulkanGpuSceneFrameSubmitter {
         requireMemoryHeadroom("resize frame resources", Math.addExact(requestedGrowth,
                 Math.addExact(primaryQueue == null ? 0 : slot.requiredPrimaryQueueGrowth(primaryQueue.bytes()),
                         nativeOpticalFrame ? pipelines.requiredNativeOpticalGrowth(nativeOpticalData)
+                                : nativePbrScatteringFrame ? pipelines.requiredNativePbrScatteringGrowth(nativePbrData,width,height,
+                                    checked.request().antiAliasing().samplesPerPixel(),checked.request().mediumTransport().scatteringSteps())
                                 : nativePbrFrame ? pipelines.requiredNativePbrGrowth(nativePbrData)
                                 : nativeHeterogeneousMultipleFrame ? pipelines.requiredNativeMultipleScatteringGrowth(nativeHeterogeneousMultipleData)
                                 : nativeMultipleFrame ? pipelines.requiredNativeMultipleScatteringGrowth(width,height,
@@ -257,17 +278,39 @@ final class VulkanGpuSceneFrameSubmitter {
             if (photonPipeline != null) photonPipeline.updateDescriptorSet(slot.index(), frameDescriptors);
             if (primaryProducer != null) primaryProducer.updateDescriptorSet(slot.index(), frameDescriptors);
             if (scatteringLights != null) scatteringLights.updateDescriptorSet(slot.index(), frameDescriptors);
+            if (cameraScatteringLights != null) cameraScatteringLights.updateDescriptorSet(slot.index(), frameDescriptors);
+            if (pbrScatteringPrimary != null) pbrScatteringPrimary.updateDescriptorSet(slot.index(),frameDescriptors);
             if (multipleTracer != null) multipleTracer.updateDescriptorSet(slot.index(),frameDescriptors);
             if (boundaryScatteringQuery != null) boundaryScatteringQuery.updateDescriptorSet(slot.index(),frameDescriptors);
             if (opticalTracer != null) opticalTracer.updateDescriptorSet(slot.index(),frameDescriptors);
 
             // Boundary continuations still finish their internal blocking rounds here. The
             // camera route instead acquires CUDA ownership in the final frame submission.
+            CudaPbrMediumManager.RadianceContribution scatteringContribution = null;
+            if(nativePbrScatteringFrame) {
+                var scatteringPlan = nativePbrData.transportPlan();
+                scatteringContribution = switch(scatteringPlan.kind()) {
+                    case DIRECT_UNIFORM -> {
+                        var contribution = pipelines.nativeCameraScatteringForPbr().prepareRadianceContribution(checked.request(),
+                                scatteringPlan.direct(),cameraScatteringLights,slot.index(),framePrimitives.buildPlan());
+                        yield new CudaPbrMediumManager.RadianceContribution(contribution.buffer(),contribution.offset(),contribution.bytes(),false);
+                    }
+                    case DIRECT_DENSITY -> pipelines.nativeDensityScatteringForPbr().prepareRadianceContribution(
+                            scatteringPlan.densityDirect(),pbrScatteringPrimary,cameraScatteringLights,slot.index(),framePrimitives.buildPlan());
+                    case MULTIPLE_UNIFORM -> pipelines.nativeMultipleScatteringForPbr().prepareRadianceContribution(checked.request(),
+                            scatteringPlan.multiple(),pbrScatteringPrimary,cameraScatteringLights,multipleTracer,slot.index(),framePrimitives.buildPlan());
+                    case MULTIPLE_DENSITY -> pipelines.nativeMultipleScatteringForPbr().prepareRadianceContribution(
+                            scatteringPlan.densityMultiple(),pbrScatteringPrimary,multipleTracer,slot.index(),framePrimitives.buildPlan());
+                };
+            }
             CudaCameraMediumManager.Prepared nativeCamera = nativeOpticalFrame
-                    ? pipelines.nativeOpticalMedium().prepare(nativeOpticalData,primaryProducer,opticalTracer,slot.index(),framePrimitives.buildPlan())
+                    ? pipelines.nativeOpticalMedium().prepare(nativeOpticalData,primaryProducer,opticalTracer,slot.index(),
+                            framePrimitives.buildPlan(),photonPlan,photonPipeline,slot.causticPhotons())
                     : nativePbrFrame
-                    ? pipelines.nativePbrMedium().prepare(nativePbrData,primaryProducer,scatteringLights,slot.index(),framePrimitives.buildPlan(),
-                            photonPlan,photonPipeline,slot.causticPhotons())
+                    ? (nativePbrScatteringFrame?pipelines.nativePbrMediumWithScattering(nativePbrData):pipelines.nativePbrMedium())
+                            .prepare(nativePbrData,primaryProducer,scatteringLights,slot.index(),
+                            nativePbrScatteringFrame?null:framePrimitives.buildPlan(),photonPlan,photonPipeline,slot.causticPhotons(),
+                            scatteringContribution)
                     : nativeHeterogeneousMultipleFrame
                     ? pipelines.nativeMultipleScattering().prepare(nativeHeterogeneousMultipleData,primaryProducer,multipleTracer,slot.index(),framePrimitives.buildPlan())
                     : nativeMultipleFrame
@@ -302,7 +345,7 @@ final class VulkanGpuSceneFrameSubmitter {
                 // Native PBR resolves in CUDA after its producer handoff. Its photon map is
                 // recorded inside that handoff so CUDA observes completed photon writes; all
                 // other paths retain the ordinary final-command photon stage.
-                if (!nativePbrFrame)
+                if (!nativePbrFrame && !nativeOpticalFrame)
                     photonPlan.record(commandBuffer, stack, slot.causticPhotons(), photonPipeline, slot.index());
                 pipeline.recordFrame(
                         commandBuffer,
@@ -370,6 +413,13 @@ final class VulkanGpuSceneFrameSubmitter {
             if (nativeScatteringFrame) diagnosticNativeScatteringSubmissions.increment();
             if (nativeMultipleFrame) diagnosticNativeMultipleScatteringSubmissions.increment();
             if (nativeDensityScatteringFrame) diagnosticNativeDensityScatteringSubmissions.increment();
+            if (nativePbrScatteringFrame) {
+                switch (nativePbrData.transportPlan().kind()) {
+                    case DIRECT_UNIFORM -> diagnosticNativeScatteringSubmissions.increment();
+                    case DIRECT_DENSITY -> diagnosticNativeDensityScatteringSubmissions.increment();
+                    case MULTIPLE_UNIFORM, MULTIPLE_DENSITY -> diagnosticNativeMultipleScatteringSubmissions.increment();
+                }
+            }
             if (nativeOpticalFrame) diagnosticNativeOpticalSubmissions.increment();
             if (nativePbrFrame) diagnosticNativePbrSubmissions.increment();
             if (primaryQueue != null && Boolean.getBoolean("top.ceroxe.rt.medium.queueDiagnostics")) {

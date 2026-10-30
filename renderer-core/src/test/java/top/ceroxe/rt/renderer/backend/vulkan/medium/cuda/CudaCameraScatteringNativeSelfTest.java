@@ -20,6 +20,7 @@ public final class CudaCameraScatteringNativeSelfTest {
         try(var runtime=CudaMediumRuntime.open(0);
             var kernel=runtime.compileBatchKernel(CudaCameraScatteringSource.source(),"camera_scattering_resolve");
             var arena=Arena.ofConfined()) {
+            verifyCompactContribution(runtime,kernel,arena);
             for(int steps:new int[]{1,8,64}) {
                 var medium=new Medium(new Rgb(.1f,.1f,.1f),new Rgb(.2f,.2f,.2f),new Rgb(.03f,.07f,.01f),1,1,.6f);
                 var frame=RenderFrameRequest.builder(1,COUNT,1,CameraState.lookAt(0,0,0,0,0,-1).build())
@@ -71,6 +72,38 @@ public final class CudaCameraScatteringNativeSelfTest {
         }
         Files.writeString(output.resolve("result.json"),"{\"passed\":true,\"scope\":\"packaged-native-direct-scattering-component\",\"pathsPerBudget\":"+COUNT+",\"intervalBudgets\":[1,8,64],\"maximumAbsoluteError\":"+maximum+"}\n");
         System.out.println("CudaCameraScatteringNativeSelfTest passed: analytic source, budgets, input/outer guards and invalid-source rejection; maxAbsolute="+maximum);
+    }
+    private static void verifyCompactContribution(CudaMediumRuntime runtime,CudaMediumRuntime.BatchKernel kernel,Arena arena) {
+        var medium=new Medium(new Rgb(.1f,.1f,.1f),new Rgb(.2f,.2f,.2f),new Rgb(.03f,.07f,.01f),1,1,0);
+        var frame=RenderFrameRequest.builder(7,37,1,CameraState.lookAt(0,0,0,0,0,-1).build())
+                .environment(EnvironmentState.builder().cameraMedium(medium).build())
+                .mediumTransport(MediumTransport.balanced().withScatteringSteps(8).withMaxDistance(7).withTransmittanceCutoff(0)).build();
+        long limit=65536+128+37*32+5*16*9;
+        var plan=CudaCameraScatteringAbi.contributionPlan(37,1,1,8,limit);
+        require(plan.tilePixels()==5,"compact contribution fixture must exercise partial final tile");
+        try(var storage=runtime.allocate(plan.bytes())) {
+            var host=arena.allocate(plan.bytes(),16);host.fill((byte)0x5a);
+            for(int first=0;first<37;first+=plan.tilePixels()) {
+                int count=Math.min(plan.tilePixels(),37-first);
+                host.asByteBuffer().put(CudaCameraScatteringAbi.header(plan,frame,first,count,false));
+                for(int i=0;i<count;i++) {
+                    float distance=(first+i)*.13f;long primary=plan.primaryOffset()+i*16L;
+                    host.set(JAVA_FLOAT,primary,distance);host.set(JAVA_INT,primary+4,1);
+                    for(int j=0;j<8;j++) {long source=plan.sourceOffset()+(i*8L+j)*16;
+                        host.set(JAVA_FLOAT,source,.4f);host.set(JAVA_FLOAT,source+4,.2f);host.set(JAVA_FLOAT,source+8,.1f);
+                        host.set(JAVA_FLOAT,source+12,distance/8*.37f);}
+                }
+                runtime.upload(storage.slice(0,plan.bytes()),host);runtime.launchBlocking(kernel,storage.slice(0,plan.bytes()),count,1);
+                runtime.download(storage.slice(0,plan.bytes()),host);
+                require(host.get(JAVA_INT,112)==0,"compact scattering input rejected");
+                for(int i=0;i<count;i++)for(int c=0;c<3;c++) {
+                    double d=(float)((first+i)*.13f),sigma=(float)(.1f+.2f),integral=-Math.expm1(-sigma*d)/sigma;
+                    double expected=.2f*(c==0?.4f:c==1?.2f:.1f)*integral;
+                    double actual=host.get(JAVA_FLOAT,plan.emissionOffset()+(first+i)*16L+c*4);
+                    require(Math.abs(actual-expected)<4e-5,"compact tiled scattering/emission-ownership mismatch path="+(first+i)+" channel="+c);
+                }
+            }
+        }
     }
     private static void require(boolean value,String message){if(!value)throw new AssertionError(message);}
 }

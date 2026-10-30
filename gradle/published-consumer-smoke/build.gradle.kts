@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.JavaExec
 
 plugins {
     java
@@ -79,3 +80,17 @@ tasks.register("verifyPublishedRuntimeClasspath") {
         } ?: throw GradleException("Published runtime classpath omits renderer-nvidia-$version.jar")
     }
 }
+
+val verifyPublishedApiRuntime = tasks.register<JavaExec>("verifyPublishedApiRuntime") {
+    group = "verification"
+    description = "Executes public API, provider linkage and embedded native hashes from published JARs without opening a GPU."
+    dependsOn(tasks.named("classes"), tasks.named("verifyPublishedRuntimeClasspath"))
+    classpath = sourceSets.main.get().runtimeClasspath
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(toolchainJavaVersion)
+    })
+    mainClass.set("consumer.PublishedApiRuntimeSelfTest")
+    args(rendererVersion.get(), providers.gradleProperty("stagingRepository").get())
+}
+
+tasks.named("check") { dependsOn(verifyPublishedApiRuntime) }

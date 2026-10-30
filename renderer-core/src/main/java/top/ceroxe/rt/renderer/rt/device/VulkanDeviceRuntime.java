@@ -498,6 +498,24 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
         return bootstrap.dynamicRenderingEnabled();
     }
 
+    /** @return whether native GPU count-buffer draws are enabled */
+    public synchronized boolean drawIndirectCountEnabled() {
+        requireOpen();
+        return bootstrap.drawIndirectCountEnabled();
+    }
+
+    /** @return whether one native indirect command may execute multiple draws */
+    public synchronized boolean multiDrawIndirectEnabled() {
+        requireOpen();
+        return bootstrap.multiDrawIndirectEnabled();
+    }
+
+    /** @return the unsigned native limit on draws in one indirect command */
+    public synchronized long maxDrawIndirectCount() {
+        requireOpen();
+        return Integer.toUnsignedLong(bootstrap.properties().maxDrawIndirectCount());
+    }
+
     /** Returns whether the Vulkan logicOp core feature was enabled for this device.
      * @return true when enabled
      */

@@ -4,14 +4,49 @@ layout(buffer_reference,std430,buffer_reference_align=16) buffer GsOpticalStorag
 layout(push_constant) uniform GsOpticalDispatch {
     GsOpticalStorage storage;uint firstPixel;uint pixelCount;uint64_t initialize;uint64_t primaryAddress;
 } gsOptical;
-GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch) {
+#include "gpuscene_photon_emission.glsl"
+vec3 gsOpticalBeer(float distance,vec3 extinction,float limit) {
+    return exp(-extinction*min(max(distance,0.0),limit));
+}
+vec3 gsOpticalPbrSurface(GpuScenePayload receiver,vec3 rayOrigin) {
+    vec3 position=receiver.worldPositionAndDistance.xyz,normal=normalize(receiver.worldNormalAndRoughness.xyz);
+    vec3 base=max(receiver.baseColorAndOpacity.rgb,vec3(0.0)),emissive=max(receiver.emissiveAndMetallic.rgb,vec3(0.0));
+    if(gsUnlit(receiver))return base+emissive;
+    float roughness=clamp(receiver.worldNormalAndRoughness.w,.025,1.0),metallic=clamp(receiver.emissiveAndMetallic.a,0.0,1.0);
+    vec3 view=normalize(rayOrigin-position),sigma=gsFrameVec3(GPU_SCENE_FRAME_MEDIUM_EXTINCTION_WORD)
+        *uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_DENSITY_WORD]);
+    float limit=uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_MAX_DISTANCE_WORD]);
+    GsRadianceSplit radiance=gsRadianceSplit(emissive+base*gsFrameVec3(GPU_SCENE_FRAME_SKY_COLOR_WORD)
+        *uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_AMBIENT_INTENSITY_WORD])*(1.0-metallic),vec3(0.0));
+#ifdef RTRENDERER_CAUSTICS
+    radiance.diffuse+=gsGatherCaustics(receiver,view);
+#endif
+    if(gsOptical.storage.lanes[4u].w!=0u)return gsRadiance(radiance);
+    vec3 sunDirection=-normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
+    vec3 sunRadiance=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)*uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
+    GsRadianceSplit sun=gsDirectContribution(position,normal,view,sunDirection,sunRadiance,1.0e20,true,base,roughness,metallic);
+    sun.diffuse*=gsOpticalBeer(sun.diffuseHitDistance,sigma,limit);
+    sun.specular*=gsOpticalBeer(sun.specularHitDistance,sigma,limit);
+    gsAccumulateRadianceSplit(radiance,sun);
+    for(uint slot=0u;slot<gsFrame.words[GPU_SCENE_FRAME_LIGHT_SLOT_UPPER_BOUND_WORD];++slot) {
+        GsRadianceSplit light=gsSceneLight(slot,position,normal,view,base,roughness,metallic);
+        light.diffuse*=gsOpticalBeer(light.diffuseHitDistance,sigma,limit);
+        light.specular*=gsOpticalBeer(light.specularHitDistance,sigma,limit);
+        gsAccumulateRadianceSplit(radiance,light);
+    }
+    return gsRadiance(radiance);
+}
+GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,float minimum) {
     payload.state=uvec4(0u,GS_PAYLOAD_RADIANCE_QUERY,0u,0u);
     payload.launchInfo=launch;payload.mediumBoundary=uvec4(0u);
     // CPU proof excludes masked coverage, backface rejection and inactive material slots.
     // Opaque is an intersection flag: closest-hit still evaluates glass and volume boundaries.
     uint flags=(gsOptical.storage.lanes[11u].w&64u)!=0u?gl_RayFlagsOpaqueEXT:gl_RayFlagsNoneEXT;
-    traceRayEXT(sceneTlas,flags,0xff,0,0,0,origin,gsRayEpsilon(origin),direction,1.0e20,0);
+    traceRayEXT(sceneTlas,flags,0xff,0,0,0,origin,minimum,direction,1.0e20,0);
     return payload;
+}
+GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch) {
+    return gsTraceOpticalRadiance(origin,direction,launch,gsRayEpsilon(origin));
 }
 void gsOpticalStoreAt(GsOpticalStorage destination,uint byteOffset,uint item,GpuScenePayload hit,uvec4 identity,uint stride) {
     GS_DETAIL_BEGIN(64u);
@@ -117,6 +152,9 @@ vec3 gsOpticalScatteringLight(vec3 origin,vec3 direction,uint seed,uvec4 launch)
             float factor=exhaustive?1.0:total/(float(count)*gsScatteringLightWeight(slot,origin,direction,0.0));
             result+=gsScatteringLight(slot,origin,direction,g,sigma,maximum)*factor;}
     }
+#ifdef RTRENDERER_CAUSTICS
+    result+=gsGatherVolumeCaustics(origin,-direction,g);
+#endif
     return result;
 }
 // State scalar planes use the actual tile path count, including partial final tiles.
@@ -154,7 +192,131 @@ void gsOpticalStateWrite(uint item,uint lane,uvec4 value) {
     uint lanes=(gsOptical.storage.lanes[11u].w&2u)!=0u?7u:16u;
     gsOptical.storage.lanes[state/4u+item*lanes+lane]=value;
 }
+// Select light geometry only. CUDA owns phase, density attenuation and the copied medium stack.
+void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 launch,uint epoch,bool initialize,uint hitOffset) {
+    uint base=gsOptical.storage.lanes[4u].z/16u+item*19u;
+    if(initialize) {
+        uvec4 control=gsOptical.storage.lanes[base+5u];uint ordinal=control.x;
+#ifdef RTRENDERER_CAUSTICS
+        if(ordinal==0u&&control.w==0u) {
+            uint selected=(gsOptical.storage.lanes[11u].w&2u)!=0u?GS_INVALID_SLOT:gsOpticalStateRead(item,7u).x;
+            uint mediumSlot=selected==GS_INVALID_SLOT?GS_INVALID_SLOT:gsOptical.storage.lanes[24u+selected*4u].x;
+            float g=uintBitsToFloat(selected==GS_INVALID_SLOT?gsOptical.storage.lanes[10u].w
+                :gsOptical.storage.lanes[26u+selected*4u].w);
+            vec3 caustic=gsGatherVolumeCaustics(position,-uintBitsToFloat(gsOpticalStateRead(item,1u)).xyz,g,mediumSlot);
+            gsOptical.storage.lanes[base+4u]=floatBitsToUint(vec4(caustic,0));
+        }
+#endif
+        uint upper=gsFrame.words[GPU_SCENE_FRAME_LIGHT_SLOT_UPPER_BOUND_WORD];
+        uint samples=gsFrame.words[GPU_SCENE_FRAME_SCATTERING_LIGHT_SAMPLES_WORD];
+        uint selected[8],small[8],candidates=0u;float total=0.0;
+        uint seed=globalPath^gsOpticalStateRead(item,5u).w*0x9e3779b9u^gsOptical.storage.lanes[9u].x
+                ^gsOptical.storage.lanes[8u].z*0x967a889bu;
+        if(samples>0u)for(uint slot=0u;slot<upper;++slot) {
+            float weight=gsScatteringLightWeight(slot,position,vec3(0),0.0);if(weight<=0.0)continue;
+            if(candidates<8u)small[candidates]=slot;++candidates;total+=weight;
+            for(uint k=0u;k<samples;++k)if(gsTransportRandom(seed^slot*0x85ebca6bu^k*0xc2b2ae35u)<weight/total)selected[k]=slot;
+        }
+        bool exhaustive=candidates<=samples;uint count=samples==0u?upper:(exhaustive?candidates:samples);
+        control.y=count+1u;control.z=0u;gsOptical.storage.lanes[base+5u]=control;
+        vec3 direction=vec3(0,0,1),color=vec3(0);float intensity=0.0,distance=1.0e20,attenuation=1.0;bool shadow=true;
+        if(ordinal==0u) {
+            color=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD);intensity=uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
+            if(intensity>0.0)direction=-normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
+        }else if(ordinal<=count) {
+            uint choice=ordinal-1u,slot=samples==0u?choice:(exhaustive?small[choice]:selected[choice]);
+            uint lightBase=slot*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[lightBase+GPU_SCENE_LIGHT_FLAGS_WORD],type=(flags>>1u)&7u;
+            float factor=samples==0u||exhaustive?1.0:total/(float(samples)*gsScatteringLightWeight(slot,position,vec3(0),0.0));
+            color=vec3(uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_COLOR_WORD]),
+                uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_COLOR_WORD+1u]),uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_COLOR_WORD+2u]));
+            intensity=(flags&GPU_SCENE_FLAG_ACTIVE)==0u?0.0:uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_INTENSITY_WORD])*factor;
+            shadow=(flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u;
+            if(intensity>0.0&&type==GPU_SCENE_LIGHT_DIRECTIONAL)direction=-normalize(vec3(uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_DIRECTION_WORD]),
+                uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_DIRECTION_WORD+1u]),uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_DIRECTION_WORD+2u])));
+            else if(intensity>0.0) {
+                vec3 point=vec3(gsFiniteDoubleAsFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_X_WORD],gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_X_WORD+1u]),
+                    gsFiniteDoubleAsFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_Y_WORD],gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_Y_WORD+1u]),
+                    gsFiniteDoubleAsFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_Z_WORD],gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_Z_WORD+1u]));
+                vec3 delta=point-position;distance=length(delta);direction=distance>1.0e-8?delta/distance:vec3(0,0,1);
+                float range=uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_RANGE_WORD]),fade=range>0.0?max(1.0-distance/range,0.0):0.0;
+                attenuation=distance>1.0e-8?fade*fade/max(distance*distance,1.0):0.0;
+                if(type==GPU_SCENE_LIGHT_SPOT) {
+                    vec3 axis=normalize(vec3(uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_DIRECTION_WORD]),
+                        uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_DIRECTION_WORD+1u]),uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_DIRECTION_WORD+2u])));
+                    float inner=uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_INNER_CONE_WORD]),outer=uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_OUTER_CONE_WORD]);
+                    attenuation*=inner==outer?step(outer,dot(axis,-direction)):smoothstep(outer,inner,dot(axis,-direction));
+                }
+            }
+        }
+        vec3 source=color*(intensity*attenuation);
+        if(control.w!=0u) {
+            vec3 normal=uintBitsToFloat(gsOptical.storage.lanes[base+16u]).xyz;
+            vec3 view=uintBitsToFloat(gsOptical.storage.lanes[base+17u]).xyz;
+            vec4 material=uintBitsToFloat(gsOptical.storage.lanes[base+18u]);
+            if(dot(normal,direction)<=0.0)source=vec3(0);
+            else {
+                GsRadianceSplit brdf=gsEvaluateBrdf(normal,view,direction,material.xyz,material.w,0.0);
+                source*=gsRadiance(brdf);
+            }
+            position+=normal*gsRayEpsilon(position);
+        }
+        gsOptical.storage.lanes[base]=floatBitsToUint(vec4(position,distance));
+        gsOptical.storage.lanes[base+1u]=floatBitsToUint(vec4(direction,0));
+        gsOptical.storage.lanes[base+2u]=uvec4(floatBitsToUint(source),max(source.x,max(source.y,source.z))>0.0?(shadow?1u:2u):0u);
+        gsOptical.storage.lanes[base+3u]=uvec4(floatBitsToUint(vec3(1)),gsOptical.storage.lanes[6u].w);
+    }
+    vec4 origin=uintBitsToFloat(gsOptical.storage.lanes[base]);
+    vec3 direction=uintBitsToFloat(gsOptical.storage.lanes[base+1u]).xyz;
+    GpuScenePayload hit;
+    if(gsOptical.storage.lanes[base+2u].w!=0u)hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,0.0);
+    else {hit.worldPositionAndDistance=vec4(0,0,0,-1);hit.previousWorldPosition=vec4(0);hit.motionRevision=uvec2(0);
+        hit.worldNormalAndRoughness=vec4(0,1,0,0);hit.baseColorAndOpacity=vec4(0);hit.emissiveAndMetallic=vec4(0);
+        hit.transmissionIor=vec4(0);hit.state=uvec4(0);hit.surfaceState=uvec4(0);hit.compositeState=vec4(0);
+        hit.launchInfo=launch;hit.mediumBoundary=uvec4(0);}
+    gsOpticalStore(hitOffset,item,hit,uvec4(globalPath/gsOptical.storage.lanes[0u].w,globalPath%gsOptical.storage.lanes[0u].w,epoch,epoch));
+}
+// Light paths use the camera pipeline's geometric hit ABI, with native medium state.
+void gsOpticalPhotonTrace() {
+    uint item=gl_LaunchIDEXT.x+gl_LaunchIDEXT.y*gl_LaunchSizeEXT.x;
+    if(item>=gsOptical.pixelCount)return;
+    GsOpticalStorage photons=GsOpticalStorage(gsOptical.primaryAddress);
+    uint state=photons.lanes[1u].x/16u+item*17u;
+#ifdef RTRENDERER_OPTICAL_PROFILE
+    payload.diagnosticAddress=0ul;payload.diagnosticRecord=0u;
+#endif
+    if(gsOptical.initialize==2ul) {
+        for(uint lane=0u;lane<17u;++lane)photons.lanes[state+lane]=uvec4(0u);
+        vec3 origin,direction,flux;float range;uint row;
+        gsEmitPhoton(item,gsOptical.pixelCount,origin,direction,flux,range,row);
+        float maximum=uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_MEDIUM_MAX_DISTANCE_WORD]);
+        if(range>0.0)maximum=min(maximum,range);
+        photons.lanes[state]=floatBitsToUint(vec4(origin,0));
+        photons.lanes[state+1u]=floatBitsToUint(vec4(direction,0));
+        photons.lanes[state+2u]=uvec4(max(flux.x,max(flux.y,flux.z))>0.0?1u:0u,0u,item,1u);
+        photons.lanes[state+3u]=floatBitsToUint(vec4(flux,maximum));
+        photons.lanes[state+6u]=floatBitsToUint(vec4(1));
+        photons.lanes[state+7u].x=GS_INVALID_SLOT;
+        uint count=gsCaustics.words[row+1u];
+        photons.lanes[state+15u].y=count;
+        for(uint j=0u;j<count;++j) {
+            uint slot=gsCaustics.words[row+2u+j],low=0u,high=gsOptical.storage.lanes[1u].w;
+            while(low<high){uint mid=low+(high-low)/2u;
+                if(gsOptical.storage.lanes[24u+mid*4u].x<slot)low=mid+1u;else high=mid;}
+            uint word=29u+j;
+            photons.lanes[state+word/4u][word%4u]=low;
+        }
+        photons.lanes[state+16u].w=floatBitsToUint(range);
+    }
+    if(photons.lanes[state+2u].x==0u)return;
+    vec3 origin=uintBitsToFloat(photons.lanes[state]).xyz;
+    vec3 direction=uintBitsToFloat(photons.lanes[state+1u]).xyz;
+    uvec4 launch=uvec4(gl_LaunchIDEXT.xy,gl_LaunchSizeEXT.xy);
+    GpuScenePayload hit=gsTraceOpticalRadiance(origin,direction,launch,0.0);
+    uint epoch=photons.lanes[state+2u].w;
+    gsOpticalStoreAt(photons,photons.lanes[1u].y,item,hit,uvec4(item,0u,epoch,epoch),1u);
+}
 void main() {
+    if(gsOptical.initialize>=2ul){gsOpticalPhotonTrace();return;}
     if(gl_LaunchIDEXT.x>=gsOptical.pixelCount)return;
     bool fusedInitialization=(gsOptical.storage.lanes[11u].w&128u)!=0u;
     // Only CUDA consumes this marker, after the complete Vulkan dispatch retires.
@@ -226,30 +388,46 @@ void main() {
             GS_DETAIL_NEXT(15u);
             origin=uintBitsToFloat(gsOpticalStateRead(item,0u)).xyz;direction=uintBitsToFloat(gsOpticalStateRead(item,1u)).xyz;
             GS_DETAIL_NEXT(16u);
-            if(gsOpticalStateRead(item,2u).x==2u){
+            uint mode=gsOpticalStateRead(item,2u).x;
+            if((mode==2u||mode==3u)&&gsOptical.storage.lanes[4u].w!=0u){
+                gsOpticalConnectionTrace(item,globalPath,origin,launch,gsOpticalStateRead(item,2u).w,mode==2u,hitOffset);
+                GS_DETAIL_END();continue;
+            }
+            if(mode==2u){
                 uint epoch=gsOpticalStateRead(item,2u).w;
                 GS_DETAIL_NEXT(17u);
                 vec3 light=gsOpticalScatteringLight(origin,direction,globalPath^epoch*0x9e3779b9u^gsOptical.storage.lanes[9u].x,launch);
                 gsOptical.storage.lanes[evaluationOffset/16u+item]=uvec4(floatBitsToUint(light),epoch);GS_DETAIL_END();continue;
             }
             GS_DETAIL_NEXT(18u);
-            hit=gsTraceOpticalRadiance(origin,direction,launch);
+            // Surface vertices were already offset along the geometric normal;
+            // volume vertices have no self surface. A scene-scale tMin would skip
+            // an arbitrarily close valid boundary and desynchronize its medium stack.
+            hit=gsTraceOpticalRadiance(origin,direction,launch,0.0);
         }
         GS_DETAIL_NEXT(19u);
         uint epoch=gsOptical.initialize!=0ul?1u:gsOpticalStateRead(item,2u).w;
         gsOpticalStore(hitOffset,item,hit,uvec4(pixelIndex,sampleIndex,epoch,epoch));
         GS_DETAIL_NEXT(20u);
         vec3 value=vec3(0);
-        // Admission proves every non-dielectric terminal is UNLIT. Reassert that
-        // proof after the trace/cache boundary instead of retaining the generic
-        // PBR lighting and secondary-query tree in this optical dispatch.
+        // Keep UNLIT terminals cheap; PBR direct light also attenuates the shadow
+        // segment through the admitted global participating medium.
         if(hit.state.x==0u)value=hit.baseColorAndOpacity.rgb;
         else if((hit.mediumBoundary.w&2u)==0u&&hit.transmissionIor.x<1.0){
             GS_DETAIL_NEXT(21u);
-            value=max(hit.baseColorAndOpacity.rgb,vec3(0.0))+max(hit.emissiveAndMetallic.rgb,vec3(0.0));
+            value=gsOpticalPbrSurface(hit,origin);
         }
         GS_DETAIL_NEXT(22u);
-        gsOptical.storage.lanes[evaluationOffset/16u+item]=floatBitsToUint(vec4(value,0));
+        bool pbr=hit.state.x!=0u&&(hit.mediumBoundary.w&2u)==0u&&hit.transmissionIor.x<=0.0&&!gsUnlit(hit);
+        if(pbr&&gsOptical.storage.lanes[4u].w!=0u) {
+            uint connection=gsOptical.storage.lanes[4u].z/16u+item*19u;
+            gsOptical.storage.lanes[connection+15u]=floatBitsToUint(vec4(hit.worldPositionAndDistance.xyz,0));
+            gsOptical.storage.lanes[connection+16u]=floatBitsToUint(vec4(normalize(hit.worldNormalAndRoughness.xyz),0));
+            gsOptical.storage.lanes[connection+17u]=floatBitsToUint(vec4(normalize(origin-hit.worldPositionAndDistance.xyz),0));
+            gsOptical.storage.lanes[connection+18u]=floatBitsToUint(vec4(max(hit.baseColorAndOpacity.rgb,vec3(0)),
+                clamp(hit.worldNormalAndRoughness.w,.025,1.0)));
+        }
+        gsOptical.storage.lanes[evaluationOffset/16u+item]=floatBitsToUint(vec4(value,pbr?1.0:0.0));
         GS_DETAIL_END();
     }
 }

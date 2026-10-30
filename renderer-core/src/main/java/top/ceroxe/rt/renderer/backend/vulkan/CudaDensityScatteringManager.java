@@ -55,15 +55,24 @@ final class CudaDensityScatteringManager implements AutoCloseable {
     }
     static long requiredBytes(CudaDensityScatteringAbi.FrameScene scene) {return Math.addExact(scene.plan().bytes(),CudaDensityScatteringAbi.ALLOCATION_ALLOWANCE);}
     synchronized long requiredGrowthBytes(CudaDensityScatteringAbi.FrameScene scene) {
-        checkOpen();return onNative(()->storage!=null&&storage.byteSize()>=scene.plan().bytes()?0:requiredBytes(scene));
+        checkOpen();return onNative(()->storage!=null&&storage.byteSize()>=scene.plan().bytes()
+                &&(scene.plan().primaryOffset()<scene.plan().emissionOffset()||storage.byteSize()==scene.plan().bytes())?0:requiredBytes(scene));
     }
     synchronized CudaCameraMediumManager.Prepared prepare(CudaDensityScatteringAbi.FrameScene scene,
             GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan) {
         checkOpen();return onNative(()->prepareOnNative(scene,primaryProducer,lightProducer,slot,buildPlan));
     }
+    synchronized CudaPbrMediumManager.RadianceContribution prepareRadianceContribution(CudaDensityScatteringAbi.FrameScene scene,
+            GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan) {
+        checkOpen();return onNative(()->{
+            prepareOnNative(scene,primaryProducer,lightProducer,slot,buildPlan);
+            return new CudaPbrMediumManager.RadianceContribution(storage.buffer(),scene.plan().emissionOffset(),
+                    Math.multiplyExact((long)scene.plan().pixels()*scene.plan().samples(),16),true);
+        });
+    }
     private CudaCameraMediumManager.Prepared prepareOnNative(CudaDensityScatteringAbi.FrameScene scene,
             GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan) {
-        var plan=scene.plan();ensureCapacity(plan.bytes());long address=storage.deviceAddress();
+        var plan=scene.plan();ensureCapacity(plan.bytes(),plan.primaryOffset()>plan.emissionOffset());long address=storage.deviceAddress();
         boolean densityChanged=uploadedDensity!=scene.density();if(densityChanged)uploadedDensity=null;
         try(Arena arena=Arena.ofConfined()) {
             var failed=arena.allocate(4,4);
@@ -77,7 +86,11 @@ final class CudaDensityScatteringManager implements AutoCloseable {
                     // transfer write; small cached headers deliberately preserve this counter.
                     if(initial){if(!full)VK10.vkCmdFillBuffer(command,storage.buffer(),CudaDensityScatteringAbi.FAILED_OFFSET,4,0);
                         if(buildPlan!=null)buildPlan.record(command,stack);
-                        primaryProducer.recordPrimaryQueueTrace(command,stack,slot,address+plan.primaryOffset(),0,plan.pixels());}
+                    }
+                    if(plan.primaryOffset()>plan.emissionOffset())
+                        primaryProducer.recordPrimaryQueueTrace(command,stack,slot,address+plan.primaryOffset(),tileFirst,pixels);
+                    else if(initial)
+                        primaryProducer.recordPrimaryQueueTrace(command,stack,slot,address+plan.primaryOffset(),0,plan.pixels());
                     barrier(command,stack);
                     lightProducer.recordPrimaryQueueTrace(command,stack,slot,address,tileFirst,pixels);
                 }},shared->cuda.launchBlocking(prepare,shared,paths,1),command->{try(MemoryStack stack=MemoryStack.stackPush()) {
@@ -131,7 +144,10 @@ final class CudaDensityScatteringManager implements AutoCloseable {
                 KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,barrier,null);
     }
     private void ensureCapacity(long bytes) {
-        if(storage!=null&&storage.byteSize()>=bytes)return;
+        ensureCapacity(bytes,false);
+    }
+    private void ensureCapacity(long bytes,boolean exactBudget) {
+        if(storage!=null&&storage.byteSize()>=bytes&&(!exactBudget||storage.byteSize()==bytes))return;
         if(bytes+CudaDensityScatteringAbi.ALLOCATION_ALLOWANCE>Math.min(cuda.maxResidentBytes(),CudaDensityScatteringAbi.DEFAULT_RESIDENT_BYTES))
             throw unsupported("complete density-scattering frame exceeds the session CUDA cap");
         if(storage!=null){drain();storage.close();storage=null;}uploadedDensity=null;

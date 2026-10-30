@@ -29,6 +29,12 @@ public final class CausticTransportSelfTest {
             require(plan.headsWord()==52 && plan.recordsWord()==52+plan.hashCapacity(),"disjoint header, heads and records");
             require(plan.bytes()==(plan.recordsWord()+16L*photons)*4,"exact bounded memory accounting");
         }
+        var volumePlan=new CausticPhotonPlan(1024,emitters,3);
+        require(volumePlan.depositsPerPath()==3&&volumePlan.recordCapacity()==3072,"volume map reserves every per-path event slot");
+        require(volumePlan.hashCapacity()>=volumePlan.recordCapacity()*2
+                &&volumePlan.bytes()==(volumePlan.recordsWord()+16L*volumePlan.recordCapacity())*4,
+                "volume map sizes hash and record arrays from complete deposit capacity");
+        reject(()->new CausticPhotonPlan(Caustics.MAX_PHOTONS,emitters,32));
         var camera=CameraState.lookAt(0,0,5,0,0,0).build();
         var policy=Caustics.photonMap(1,2,3,10,1025,.2f).withMaxEvents(21).withNormalThreshold(.8f);
         var frame=RenderFrameRequest.builder(0,32,32,camera).caustics(policy).build();
@@ -59,6 +65,14 @@ public final class CausticTransportSelfTest {
         require(plan.photons()==1024 && plan.headsWord()==52,"only positive shadow-casting emitters are admitted");
         require(plan==caustics.plan(RenderFrameRequest.builder(1,32,32,camera).minimumSceneRevision(1).caustics(first.caustics()).build(),media),"moving frame sequence reuses CPU emitter metadata");
         require(media.containingPoint(FramePrimitiveBatch.empty(),0,0,0).length==1,"photon lights start inside selected medium");
+        var scattering=new Medium(Rgb.ZERO,new Rgb(.2f,.1f,.05f),Rgb.ZERO,1,1,.35f);
+        var scatteringFrame=first.toBuilder().environment(EnvironmentState.builder().cameraMedium(scattering).build())
+                .mediumTransport(MediumTransport.balanced().withScatteringBounces(3))
+                .caustics(first.caustics().withMaxEvents(9)).build();
+        var volumePlan=caustics.plan(scatteringFrame,media);
+        require(volumePlan.depositsPerPath()==5,"event budget reserves one terminal surface plus bounded volume collisions");
+        var fewerBounces=scatteringFrame.toBuilder().mediumTransport(MediumTransport.balanced().withScatteringBounces(1)).build();
+        require(caustics.plan(fewerBounces,media).depositsPerPath()==3,"photon plan cache follows the scattering event budget");
         require(VulkanGpuSceneTemporalCoordinator.program(first,media,surfaces)==Program.COMPACT_CAUSTICS,"explicit caustic specialization");
         reject(()->caustics.plan(first.toBuilder().caustics(Caustics.photonMap(0,0,0,1,1,.1f)).build(),media));
         require(caustics.plan(first.toBuilder().caustics(Caustics.disabled()).build(),media)==CausticPhotonPlan.DISABLED,"disabled plan bypasses scene scans");
@@ -78,6 +92,12 @@ public final class CausticTransportSelfTest {
                 mass+=2*(1-r*r/(radius*radius))/(Math.PI*radius*radius)*2*Math.PI*r*radius/intervals;
             }
             near(mass,1,1e-9,"normalized surface kernel at every world scale");
+            double volumeMass=0;
+            for(int i=0;i<intervals;i++) {
+                double r=radius*(i+.5)/intervals,q=r/radius;
+                volumeMass+=15*(1-q*q)/(8*Math.PI*radius*radius*radius)*4*Math.PI*r*r*radius/intervals;
+            }
+            near(volumeMass,1,1e-9,"normalized volume kernel at every world scale");
         }
         for (int emitters:new int[]{1,2,17}) for (int photons:new int[]{1,100,65536}) {
             double radiance=3.5,radius=2,fluxPerPhoton=radiance*Math.PI*radius*radius*emitters/photons;

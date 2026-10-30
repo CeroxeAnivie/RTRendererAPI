@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 
 /** Owns completed-frame publication and bounded consumer waiting. */
 public interface RendererFrameAccess {
@@ -22,34 +24,42 @@ public interface RendererFrameAccess {
            completion semantics. The task remains cancellable and executor rejection is reported
            through the returned future, matching the non-blocking contract. */
         class CancellableFrameFuture extends CompletableFuture<Optional<FrameSnapshot>> {
-            private volatile Thread runner;
+            private FutureTask<Optional<FrameSnapshot>> task;
 
             @Override
             public boolean cancel(boolean mayInterruptIfRunning) {
-                boolean cancelled = super.cancel(mayInterruptIfRunning);
-                if (cancelled && mayInterruptIfRunning) {
-                    Thread waiting = runner;
-                    if (waiting != null) waiting.interrupt();
-                }
-                return cancelled;
+                if (isDone()) return isCancelled();
+                return task.cancel(mayInterruptIfRunning);
             }
+
+            void taskCancelled() { super.cancel(false); }
         }
         CancellableFrameFuture result = new CancellableFrameFuture();
-        try {
-            executor.execute(() -> {
-                if (result.isDone()) return;
-                result.runner = Thread.currentThread();
-                try {
-                    result.complete(awaitFrame(timeout));
-                } catch (InterruptedException interrupted) {
+        // FutureTask owns the runner/interrupt handshake, including cancellation before run and
+        // delayed interrupts while a shared executor thread is finishing this task.
+        FutureTask<Optional<FrameSnapshot>> task = new FutureTask<>(() -> {
+            try { return awaitFrame(timeout); }
+            catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw interrupted;
+            }
+        }) {
+            @Override protected void done() {
+                if (isCancelled()) {
+                    result.taskCancelled();
+                    return;
+                }
+                try { result.complete(get()); }
+                catch (ExecutionException failure) { result.completeExceptionally(failure.getCause()); }
+                catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                     result.completeExceptionally(interrupted);
-                } catch (RuntimeException failure) {
-                    result.completeExceptionally(failure);
-                } finally {
-                    result.runner = null;
                 }
-            });
+            }
+        };
+        result.task = task;
+        try {
+            executor.execute(task);
         } catch (RuntimeException rejected) {
             result.completeExceptionally(rejected);
         }

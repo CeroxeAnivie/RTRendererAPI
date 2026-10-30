@@ -8,6 +8,9 @@
 layout(set=0,binding=GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
 layout(location=0) rayPayloadEXT GpuScenePayload payload;
 #include "gpuscene_surface_lighting_runtime.glsl"
+#define RTRENDERER_CAUSTICS 1
+#include "gpuscene_caustic_map.glsl"
+#include "gpuscene_caustic_gather.glsl"
 layout(buffer_reference,std430,buffer_reference_align=16) buffer GsScatteringStorage {uvec4 lanes[];};
 layout(push_constant) uniform GsScatteringDispatch {
     GsScatteringStorage storage; uint firstPixel; uint pixelCount;
@@ -26,12 +29,23 @@ void main() {
     vec2 jitter=vec2(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD]),uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD+1u]));
     uint seed=gsTransportHash(pixelIndex^gsFrame.words[GPU_SCENE_FRAME_SEQUENCE_WORD]*0x9e3779b9u);
     for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
-        uint item=pixelIndex*samples+sampleIndex,base=dispatch.primaryOffset/16u+item*13u;
-        vec4 hit=uintBitsToFloat(dispatch.storage.lanes[base]);bool present=dispatch.storage.lanes[base+7u].x!=0u;
-        float distance=present?min(max(hit.w,0.0),maximum):maximum;
+        uint item=pixelIndex*samples+sampleIndex;
+        bool tilePrimary=dispatch.storage.lanes[0u].x==0x524d5331u
+            && dispatch.storage.lanes[2u].x>dispatch.storage.lanes[2u].z;
+        uint primaryItem=tilePrimary?gl_LaunchIDEXT.x*samples+sampleIndex:item;
+        uint base=dispatch.primaryOffset/16u+primaryItem*13u;
         vec2 location=vec2(pixel)+gsScatteringSampleOffset(sampleIndex,samples);if(!gsExactProjectionActive())location+=jitter;
         vec3 direction=gsRayDirectionAtSample(location,extent);
         payload.launchInfo=uvec4(pixel,extent);
+        vec4 hit;bool present;
+        if(dispatch.storage.lanes[0u].x==0x52534331u && dispatch.storage.lanes[1u].w!=0u) {
+            payload.state=uvec4(0u,GS_PAYLOAD_RADIANCE_QUERY,0u,0u);payload.mediumBoundary=uvec4(0u);
+            traceRayEXT(sceneTlas,gl_RayFlagsNoneEXT,0xff,0,0,0,origin,gsRayEpsilon(origin),direction,1e20,0);
+            hit=payload.worldPositionAndDistance;present=payload.state.x!=0u;
+            uint compact=dispatch.primaryOffset/16u+gl_LaunchIDEXT.x*samples+sampleIndex;
+            dispatch.storage.lanes[compact]=uvec4(floatBitsToUint(hit.w),present?1u:0u,0u,0u);
+        } else {hit=uintBitsToFloat(dispatch.storage.lanes[base]);present=dispatch.storage.lanes[base+7u].x!=0u;}
+        float distance=present?min(max(hit.w,0.0),maximum):maximum;
         uint upper=gsFrame.words[GPU_SCENE_FRAME_LIGHT_SLOT_UPPER_BOUND_WORD],sampleCount=gsFrame.words[GPU_SCENE_FRAME_SCATTERING_LIGHT_SAMPLES_WORD];
         uint selected[8],firstCandidates[8],candidates=0u;float total=0.0;
         if(sampleCount>0u) {
@@ -51,6 +65,9 @@ void main() {
             if(interval>0.0&&max(prefix.x,max(prefix.y,prefix.z))>=cutoff) {
                 float u=gsTransportRandom(seed^(j+1u)*0x27d4eb2du),tau=reference*interval;
                 local=tau<1e-3?u*interval:-log(max(1.0-u*(1.0-exp(-tau)),1e-30))/reference;
+                // The inverse CDF is supported on this interval. Float exp/log
+                // cancellation near u=1 can otherwise step beyond its endpoint.
+                local=clamp(local,0.0,interval);
                 vec3 position=origin+direction*(start+local);
                 if(max(sun.x,max(sun.y,sun.z))>0.0)source+=sun*gsScatteringPhase(dot(direction,sunDirection),g)
                     *gsScatteringShadow(position,sunDirection,1e20,sigma,maximum);
@@ -65,6 +82,7 @@ void main() {
                         source+=gsScatteringLight(slot,position,direction,g,sigma,maximum)*factor;
                     }
                 }
+                source+=gsGatherVolumeCaustics(position,-direction,g);
             }
             uint outLane=dispatch.sourceOffset/16u+(gl_LaunchIDEXT.x*samples+sampleIndex)*steps+j;
             dispatch.storage.lanes[outLane]=floatBitsToUint(vec4(source,local));

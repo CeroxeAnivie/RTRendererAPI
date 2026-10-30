@@ -251,8 +251,8 @@ public final class CudaBoundaryMediumAbi {
     }
 
     public static void requireMedium(Medium medium) {
-        if (!medium.scattering().isZero() || medium.indexOfRefraction()!=1)
-            throw new IllegalArgumentException("native boundary continuation requires non-scattering IOR-one media");
+        if (!medium.scattering().isZero())
+            throw new IllegalArgumentException("native boundary continuation requires non-scattering media");
     }
 
     private static int align16(int bytes) { return Math.toIntExact((Math.addExact((long)bytes,15)) & ~15L); }

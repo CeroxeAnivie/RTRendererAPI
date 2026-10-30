@@ -25,8 +25,8 @@
     },
     {
       "name": "api_roughglass_sampling.cu",
-      "bytes": 2313,
-      "sha256": "5b389ec025b1a1ff32310d10b801aa97bdc95a8bb50c6fd95e031940aeeed332"
+      "bytes": 2737,
+      "sha256": "4453b9cd503b968d9452ac6e67dc4aeef5bd6e848c158e0370fe370a5c493890"
     },
     {
       "name": "AUTHORS.txt",
@@ -40,8 +40,8 @@
     },
     {
       "name": "boundary_scattering.cu",
-      "bytes": 21294,
-      "sha256": "a216bfe27b7cf623046c4a0cfc4112e03f0fb56cfb074244a303e0f46041057a"
+      "bytes": 21304,
+      "sha256": "e3950c43785ccd0307f780d322df957dcd1fe1ae8631374d5698c1907880c1ee"
     },
     {
       "name": "boundary_transport.cu",
@@ -55,8 +55,8 @@
     },
     {
       "name": "camera_scattering.cu",
-      "bytes": 3275,
-      "sha256": "ee988d0328df0c7c0f2382a5a57215686a538b2c06ac26221f97dbd7f8bb856d"
+      "bytes": 3753,
+      "sha256": "d9e8cb7132ab734f6540fc3e0f4f5beef30b279671b8349d886fa38dfad604fa"
     },
     {
       "name": "color_funcs.cl",
@@ -80,13 +80,13 @@
     },
     {
       "name": "density_scattering.cu",
-      "bytes": 7126,
-      "sha256": "feaf766e69765f9f4c45f7c199a2e2bc401f1f6b18ed48b6894d5a603487927d"
+      "bytes": 7205,
+      "sha256": "b49ff294aaea5af5cdc3dac9accb8908530b91c7cff66efea78c02cc28d4c9c1"
     },
     {
       "name": "heterogeneous_multiple_scattering.cu",
-      "bytes": 14584,
-      "sha256": "dc32d2e5450269a43323a092c630b2a888cbc9ae679fb7d519d3f760b92656b4"
+      "bytes": 14659,
+      "sha256": "fc3bc463aaee405b67b0ba3c33f7cb06c4b5b52b45863f91937570dc5e832bdd"
     },
     {
       "name": "LICENSE.txt",
@@ -105,8 +105,8 @@
     },
     {
       "name": "multiple_scattering.cu",
-      "bytes": 8904,
-      "sha256": "348450b7111696aaa83facd523630abc11174bd89b5a378ec461deeaee9f6383"
+      "bytes": 9054,
+      "sha256": "7c7738ebb5045b9bde2e2d54260a6fd744817ab5b315efd99f7c5fb8deb1ca61"
     },
     {
       "name": "NOTICE.txt",
@@ -115,13 +115,13 @@
     },
     {
       "name": "optical_transport.cu",
-        "bytes": 27448,
-        "sha256": "722ddcc923960fd84151b876f29404b46d722f0c8aec0fe3d660fb1434911005"
+      "bytes": 39178,
+      "sha256": "ef3e21c5747dafed39cd93e358d2301c52fd77e2325183fc7ce31203f605b80f"
     },
     {
       "name": "pbr_transport.cu",
-      "bytes": 6201,
-      "sha256": "031e3f0736b13c469f7f77b0bcff7eb8eeff1d93ac19e8592379a3d3863071a3"
+      "bytes": 6788,
+      "sha256": "5f3cf33b03ca5092e5ee2d4c24a90c1b9767d56a8aadf7b07e79dce178a71387"
     },
     {
       "name": "primary_absorption.cu",
@@ -177,6 +177,11 @@
       "name": "upstream-segment-function.cl",
       "bytes": 2064,
       "sha256": "40593200c7db1913e33aa4b416ffcbec00e4b68bdfa6c2e3e98868e24d09570a"
+    },
+    {
+      "name": "optical_caustics.cu",
+      "bytes": 11872,
+      "sha256": "6dbf8ec3e66e0a63fe3aa2996224ded0f555d11860ef6dd096c9a398296653b5"
     }
   ]
 }

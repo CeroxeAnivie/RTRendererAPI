@@ -91,12 +91,37 @@ final class CudaMultipleScatteringManager implements AutoCloseable {
         return Math.addExact(scene.plan().bytes(),CudaMultipleScatteringAbi.ALLOCATION_ALLOWANCE);
     }
     synchronized long requiredGrowthBytes(CudaHeterogeneousMultipleScatteringAbi.FrameScene scene) {
-        checkOpen();return onNative(()->storage!=null&&storage.byteSize()>=scene.plan().bytes()?0:requiredBytes(scene));
+        checkOpen();return onNative(()->storage!=null&&storage.byteSize()>=scene.plan().bytes()
+                &&(scene.plan().primaryOffset()<scene.plan().emissionOffset()||storage.byteSize()==scene.plan().bytes())?0:requiredBytes(scene));
     }
     synchronized CudaCameraMediumManager.Prepared prepare(CudaHeterogeneousMultipleScatteringAbi.FrameScene scene,
             GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline multipleProducer,
             int slot,RtTlasBuildPlan buildPlan) {
         checkOpen();return onNative(()->prepareHeterogeneous(scene,primaryProducer,multipleProducer,slot,buildPlan));
+    }
+    synchronized CudaPbrMediumManager.RadianceContribution prepareRadianceContribution(
+            CudaHeterogeneousMultipleScatteringAbi.FrameScene scene,GpuSceneRayTracingPipeline primaryProducer,
+            GpuSceneRayTracingPipeline multipleProducer,int slot,RtTlasBuildPlan buildPlan) {
+        checkOpen();return onNative(()->{
+            prepareHeterogeneous(scene,primaryProducer,multipleProducer,slot,buildPlan);
+            return new CudaPbrMediumManager.RadianceContribution(storage.buffer(),scene.plan().emissionOffset(),
+                    Math.multiplyExact((long)scene.plan().pixels()*scene.plan().samples(),16),true);
+        });
+    }
+    synchronized long requiredGrowthBytes(CudaMultipleScatteringAbi.Plan plan) {
+        checkOpen();return onNative(()->storage!=null&&storage.byteSize()>=plan.bytes()
+                &&(plan.primaryOffset()<plan.emissionOffset()||storage.byteSize()==plan.bytes())?0:
+                Math.addExact(plan.bytes(),CudaMultipleScatteringAbi.ALLOCATION_ALLOWANCE));
+    }
+    synchronized CudaPbrMediumManager.RadianceContribution prepareRadianceContribution(RenderFrameRequest frame,
+            CudaMultipleScatteringAbi.Plan plan,GpuSceneRayTracingPipeline primaryProducer,
+            GpuSceneRayTracingPipeline directLightProducer,GpuSceneRayTracingPipeline multipleProducer,int slot,
+            RtTlasBuildPlan buildPlan) {
+        checkOpen();return onNative(()->{
+            prepareOnNative(frame,plan,primaryProducer,directLightProducer,multipleProducer,slot,buildPlan);
+            return new CudaPbrMediumManager.RadianceContribution(storage.buffer(),plan.emissionOffset(),
+                    Math.multiplyExact((long)plan.pixels()*plan.samples(),16),true);
+        });
     }
     synchronized long requiredGrowthBytes(int width,int height,int samples,int steps) {
         checkOpen();long bytes=requiredBytes(width,height,samples,steps);
@@ -110,12 +135,17 @@ final class CudaMultipleScatteringManager implements AutoCloseable {
     private CudaCameraMediumManager.Prepared prepareOnNative(RenderFrameRequest frame,int width,int height,
             GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline directLightProducer,
             GpuSceneRayTracingPipeline multipleProducer,int slot,RtTlasBuildPlan buildPlan) {
-        uploadedDensity=null;
         CudaMultipleScatteringAbi.Plan plan;
         try {plan=CudaMultipleScatteringAbi.plan(width,height,frame.antiAliasing().samplesPerPixel(),
                 frame.mediumTransport().scatteringSteps(),Math.min(cuda.maxResidentBytes(),CudaMultipleScatteringAbi.RESIDENT_CAP));}
         catch(ArithmeticException|IllegalArgumentException invalid){throw unsupported(invalid.getMessage());}
-        ensureCapacity(plan.bytes());long address=storage.deviceAddress();
+        return prepareOnNative(frame,plan,primaryProducer,directLightProducer,multipleProducer,slot,buildPlan);
+    }
+    private CudaCameraMediumManager.Prepared prepareOnNative(RenderFrameRequest frame,CudaMultipleScatteringAbi.Plan plan,
+            GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline directLightProducer,
+            GpuSceneRayTracingPipeline multipleProducer,int slot,RtTlasBuildPlan buildPlan) {
+        uploadedDensity=null;
+        ensureCapacity(plan.bytes(),plan.primaryOffset()>plan.emissionOffset());long address=storage.deviceAddress();
         try(Arena arena=Arena.ofConfined()) {
             var counters=arena.allocate(CudaMultipleScatteringAbi.STATISTICS_BYTES,16);
             for(int first=0;first<plan.pixels();) {
@@ -142,8 +172,11 @@ final class CudaMultipleScatteringManager implements AutoCloseable {
                 storage.produceThenExchangeBlocking(command->{
                     try(MemoryStack stack=MemoryStack.stackPush()) {
                         VK10.vkCmdUpdateBuffer(command,storage.buffer(),0,stack.malloc(header.length).put(header).flip());
-                        if(initial){if(buildPlan!=null)buildPlan.record(command,stack);
-                            primaryProducer.recordPrimaryQueueTrace(command,stack,slot,address+plan.primaryOffset(),0,plan.pixels());}
+                        if(initial&&buildPlan!=null)buildPlan.record(command,stack);
+                        if(plan.primaryOffset()>plan.emissionOffset())
+                            primaryProducer.recordPrimaryQueueTrace(command,stack,slot,address+plan.primaryOffset(),tileFirst,pixels);
+                        else if(initial)
+                            primaryProducer.recordPrimaryQueueTrace(command,stack,slot,address+plan.primaryOffset(),0,plan.pixels());
                         dependency(command,stack);
                         long sourceOffsets=Integer.toUnsignedLong(plan.sourceOffset())|Integer.toUnsignedLong(plan.primaryOffset())<<32;
                         directLightProducer.recordPrimaryQueueTrace(command,stack,slot,address,tileFirst,pixels,sourceOffsets);
@@ -287,7 +320,7 @@ final class CudaMultipleScatteringManager implements AutoCloseable {
     }
     private CudaCameraMediumManager.Prepared prepareHeterogeneous(CudaHeterogeneousMultipleScatteringAbi.FrameScene scene,
             GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline multipleProducer,int slot,RtTlasBuildPlan buildPlan) {
-        var plan=scene.plan();ensureCapacity(plan.bytes());var kernels=heterogeneousKernels();long address=storage.deviceAddress();
+        var plan=scene.plan();ensureCapacity(plan.bytes(),plan.primaryOffset()>plan.emissionOffset());var kernels=heterogeneousKernels();long address=storage.deviceAddress();
         boolean changed=uploadedDensity!=scene.density();if(changed)uploadedDensity=null;
         try(Arena arena=Arena.ofConfined()) {
             var counters=arena.allocate(CudaMultipleScatteringAbi.STATISTICS_BYTES,16);
@@ -312,8 +345,11 @@ final class CudaMultipleScatteringManager implements AutoCloseable {
                 storage.produceThenExchangeBlocking(command->{try(MemoryStack stack=MemoryStack.stackPush()) {
                     uploadHeterogeneous(command,stack,metadata,full);
                     if(!full)VK10.vkCmdFillBuffer(command,storage.buffer(),CudaMultipleScatteringAbi.STATISTICS_OFFSET,CudaMultipleScatteringAbi.STATISTICS_BYTES,0);
-                    if(initial){if(buildPlan!=null)buildPlan.record(command,stack);
-                        primaryProducer.recordPrimaryQueueTrace(command,stack,slot,address+plan.primaryOffset(),0,plan.pixels());}
+                    if(initial&&buildPlan!=null)buildPlan.record(command,stack);
+                    if(plan.primaryOffset()>plan.emissionOffset())
+                        primaryProducer.recordPrimaryQueueTrace(command,stack,slot,address+plan.primaryOffset(),tileFirst,pixels);
+                    else if(initial)
+                        primaryProducer.recordPrimaryQueueTrace(command,stack,slot,address+plan.primaryOffset(),0,plan.pixels());
                     dependency(command,stack);query.accept(command,0L);
                 }},shared->cuda.launchBlocking(kernels.prepare(),shared,paths,1),command->query.accept(command,32L));
                 diagnosticSecondaryPaths.add(secondary);
@@ -378,7 +414,9 @@ final class CudaMultipleScatteringManager implements AutoCloseable {
         VK10.vkCmdPipelineBarrier(command,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT|KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
                 KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,barrier,null);
     }
-    private void ensureCapacity(long bytes){if(storage!=null&&storage.byteSize()>=bytes)return;
+    private void ensureCapacity(long bytes){ensureCapacity(bytes,false);}
+    private void ensureCapacity(long bytes,boolean exactBudget){
+        if(storage!=null&&storage.byteSize()>=bytes&&(!exactBudget||storage.byteSize()==bytes))return;
         if(bytes+CudaMultipleScatteringAbi.ALLOCATION_ALLOWANCE>Math.min(cuda.maxResidentBytes(),CudaMultipleScatteringAbi.RESIDENT_CAP))throw unsupported("complete multiple-scattering frame exceeds the CUDA resident cap");
         if(storage!=null){drain();storage.close();storage=null;}uploadedDensity=null;
         storage=CudaSharedRayFrame.storage(device,cuda,bytes,cuda.maxResidentBytes()-cuda.residentBytes());}

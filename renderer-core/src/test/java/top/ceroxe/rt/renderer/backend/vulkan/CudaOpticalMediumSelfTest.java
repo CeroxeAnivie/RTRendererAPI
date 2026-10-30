@@ -35,15 +35,15 @@ public final class CudaOpticalMediumSelfTest {
         expectUnsupported(()->CudaOpticalMediumProfile.requireSupported(frame,nativeScene,false));
         verifyStorageLayouts();
         verifyCounterModes(plan,frame,boundary);
-        expectIllegal(()->CudaOpticalMediumAbi.requireMedium(new Medium(Rgb.ZERO,new Rgb(.1f,0,0),Rgb.ZERO,1,1,0)
-                .withDensityField(MediumDensityField.grid(50,1,AffineTransform.identity()))));
+        verifyHeterogeneousScatteringAdmission(frame);
         verifyDensity(frame,medium,boundary);
         var source=CudaOpticalMediumSource.source();
         require(source.contains("GlassMaterial_EvalSpecularReflection")&&source.contains("GlassMaterial_EvalSpecularTransmission")
                 &&source.contains("HomogeneousVolume_SegmentScatter")&&source.contains("PathVolumeInfo_AddVolume")
-                &&source.contains("RoughGlassMaterial_Sample")&&source.contains("SchlickDistribution_SampleH"),"pinned glass, microfacet, segment and priority functions remain assembled");
+                &&source.contains("RoughGlassMaterial_Sample")&&source.contains("SchlickDistribution_SampleH")
+                &&source.contains("DensityGridTexture_ConstEvaluate"),"glass, density-grid free-flight, segment and priority functions remain assembled");
         verifySurfaceProof();
-        System.out.println("CudaOpticalMediumSelfTest passed: primary lifetime, all SPP/branches/budgets, priority, smooth/rough admission");
+        System.out.println("CudaOpticalMediumSelfTest passed: primary lifetime, SPP/branches/budgets, priority, smooth/rough glass, heterogeneous scattering admission");
     }
     private static void verifyCounterModes(CudaOpticalMediumAbi.Plan plan,RenderFrameRequest frame,
             CudaBoundaryMediumAbi.Boundary boundary) {
@@ -119,6 +119,51 @@ public final class CudaOpticalMediumSelfTest {
         expectIllegal(()->CudaOpticalMediumAbi.plan(137,101,8,1,density,minimum-1,plan.externalPrimary(),plan.directPrimary(),plan.compactHits(),plan.compactStates()));
         CudaOpticalMediumProfile.requireSupported(texturedFrame,new MediumSceneIndex.NativeScene(List.of(),new int[0]),true);
     }
+    private static void verifyHeterogeneousScatteringAdmission(RenderFrameRequest frame) {
+        var field=MediumDensityField.grid(50,1,AffineTransform.identity());
+        var medium=new Medium(new Rgb(.1f,.2f,.3f),new Rgb(.1f,.1f,.1f),Rgb.ZERO,1,1,0).withDensityField(field);
+        var texture=TextureAsset.builder(50,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR)
+                .pixelsRgba8(new byte[]{(byte)160,0,0,(byte)255}).build();
+        var density=CudaMediumDensityAbi.prepare(medium,List.of(),id->texture);
+        var scatteredFrame=frame.toBuilder()
+                .environment(frame.environment().toBuilder().cameraMedium(medium).build())
+                .mediumTransport(frame.mediumTransport().withScatteringBounces(2)).build();
+        var plan=CudaOpticalMediumAbi.plan(137,101,8,0,density,512L*1024*1024);
+        var packet=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(plan,scatteredFrame,List.of(),new int[0],density))
+                .order(ByteOrder.nativeOrder());
+        require(packet.getInt(152)>=plan.priorityOffset()&&packet.getInt(156)==scatteredFrame.mediumTransport().scatteringSteps(),
+                "heterogeneous scattering preserves its density descriptor and collision quadrature budget");
+        CudaOpticalMediumProfile.requireSupported(scatteredFrame,new MediumSceneIndex.NativeScene(List.of(),new int[0]),true);
+        var scatteringBoundary=new MediumSceneIndex.NativeBoundary(51,MediumBoundary.volume(medium),AffineTransform.identity());
+        CudaOpticalMediumProfile.requireSupported(scatteredFrame,
+                new MediumSceneIndex.NativeScene(List.of(scatteringBoundary),new int[0]),true);
+        var refractive=new Medium(medium.absorption(),medium.scattering(),medium.emission(),medium.density(),1.5f,medium.anisotropy(),medium.densityField());
+        var opticalBoundary=new CudaBoundaryMediumAbi.Boundary(51,MediumBoundary.surface(refractive).withPriority(-17));
+        var boundaries=List.of(opticalBoundary);
+        var localDensity=CudaMediumDensityAbi.prepare(medium,boundaries,id->texture);
+        require(CudaOpticalMediumAbi.requiresConnections(scatteredFrame,boundaries),"explicit scattering must enable CUDA light connections");
+        var connected=CudaOpticalMediumAbi.plan(137,101,8,1,localDensity,512L*1024*1024,
+                true,true,true,false,true,false,true,true);
+        var connectedData=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(connected,scatteredFrame,boundaries,new int[]{51},localDensity))
+                .order(ByteOrder.nativeOrder());
+        require(connected.connectionTransport()&&connectedData.getInt(72)==connected.connectionOffset()&&connectedData.getInt(76)==1,
+                "connection scratch requires explicit producer/consumer header");
+        require(connected.primaryOffset()==connected.connectionOffset()+(long)connected.tilePaths()*CudaOpticalMediumAbi.CONNECTION_BYTES,
+                "connection scratch must not overlap primary or final output");
+        require(connected.bytes()+65536<=512L*1024*1024,"connection scratch must preserve the public native resident cap");
+        require(connectedData.getFloat(412)==1.5f&&connectedData.getFloat(428)==medium.anisotropy()
+                        &&connectedData.getFloat(432)==.1f&&connectedData.getInt(388)==-17,
+                "selected boundary keeps independent IOR, phase, scattering and signed priority");
+        CudaOpticalMediumProfile.requireSupported(scatteredFrame,new MediumSceneIndex.NativeScene(List.of(
+                new MediumSceneIndex.NativeBoundary(51,opticalBoundary.boundary(),AffineTransform.identity())),new int[]{51}),true);
+        expectUnsupported(()->CudaOpticalMediumProfile.requireSupported(scatteredFrame,new MediumSceneIndex.NativeScene(List.of(
+                new MediumSceneIndex.NativeBoundary(51,MediumBoundary.volume(refractive),AffineTransform.identity())),new int[0]),true));
+        int basic=CudaOpticalMediumAbi.maximumRounds(scatteredFrame,20,false);
+        require(CudaOpticalMediumAbi.maximumRounds(scatteredFrame,20,true)>basic,"light boundary continuation needs its complete round budget");
+        var exhaustive=scatteredFrame.toBuilder().mediumTransport(scatteredFrame.mediumTransport().withLightSamples(0)).build();
+        require(CudaOpticalMediumAbi.maximumRounds(exhaustive,20,true)>CudaOpticalMediumAbi.maximumRounds(exhaustive,2,true),
+                "enumerated lights must expand rounds without dropping light slots");
+    }
     private static void verifyStorageLayouts() {
         long cap=512L*1024*1024;var density=CudaMediumDensityAbi.Scene.empty();
         var external=CudaOpticalMediumAbi.plan(1920,1080,1,0,density,cap,true,false,false,false);
@@ -169,7 +214,7 @@ public final class CudaOpticalMediumSelfTest {
             require(layout.transposedPrimary()==transposedPrimary&&((header.getInt(188)&32)!=0)==transposedPrimary,"full primary field layout is explicit and immutable");
             require(layout.transposedStates()==(transposedState&&compactStates)&&((header.getInt(188)&16)!=0)==layout.transposedStates(),"scalar state layout is immutable and limited to boundary-free storage");
             require(layout.transposedHits()==(transposed&&compactHits)&&((header.getInt(188)&8)!=0)==layout.transposedHits(),"transposed storage is explicit and limited to compact hits");
-            require(header.getInt(4)==4&&(header.getInt(188)&3)==layoutFlags,
+            require(header.getInt(4)==5&&(header.getInt(188)&3)==layoutFlags,
                     "both producers use an explicit versioned hit layout");
             int first=(layout.pixels()-1)/layout.tilePixels()*layout.tilePixels();
             CudaOpticalMediumAbi.updateTile(header,layout,first,layout.pixels()-first,0,0);
@@ -191,16 +236,24 @@ public final class CudaOpticalMediumSelfTest {
         var mesh=MeshAsset.triangles(1,new float[]{0,0,0,1,0,0,0,1,0},new int[]{0,1,2},1);
         var prepared=residency.prepare(SceneTransaction.builder(++revision).upsert(glass).upsert(mesh).upsert(SceneInstance.builder(1,1).build()).build());
         residency.commit(prepared);index.sceneApplied(prepared.changeSet());
-        require(index.opticalUnlitOnly(FramePrimitiveBatch.empty()),"fully transmitting smooth PBR is admitted without a diffuse-lighting path");
+        require(index.opticalTerminalOnly(FramePrimitiveBatch.empty()),"fully transmitting smooth PBR is admitted without a diffuse-lighting path");
         prepared=residency.prepare(SceneTransaction.builder(++revision).upsert(glass.toBuilder().roughness(.2f).build()).build());
         residency.commit(prepared);index.sceneApplied(prepared.changeSet());
-        require(index.opticalUnlitOnly(FramePrimitiveBatch.empty()),"fully transmitting rough PBR uses the pinned microfacet sampler");
+        require(index.opticalTerminalOnly(FramePrimitiveBatch.empty()),"fully transmitting rough PBR uses the pinned microfacet sampler");
         prepared=residency.prepare(SceneTransaction.builder(++revision).upsert(glass.toBuilder().transmission(.5f).build()).build());
         residency.commit(prepared);index.sceneApplied(prepared.changeSet());
-        require(!index.opticalUnlitOnly(FramePrimitiveBatch.empty()),"partial PBR transmission still requires surface lighting");
+        require(!index.opticalTerminalOnly(FramePrimitiveBatch.empty()),"partial PBR transmission still requires surface lighting");
         prepared=residency.prepare(SceneTransaction.builder(++revision).upsert(glass.toBuilder().transmission(.5f).shadingModel(MaterialAsset.ShadingModel.UNLIT).build()).build());
         residency.commit(prepared);index.sceneApplied(prepared.changeSet());
-        require(index.opticalUnlitOnly(FramePrimitiveBatch.empty()),"partial UNLIT transmission uses the retained terminal function");
+        require(index.opticalTerminalOnly(FramePrimitiveBatch.empty()),"partial UNLIT transmission uses the retained terminal function");
+        var receiver=MaterialAsset.builder(2).shadingModel(MaterialAsset.ShadingModel.PHYSICALLY_BASED)
+                .roughness(.8f).metallic(0).doubleSided(true).build();
+        var receiverMesh=MeshAsset.triangles(2,new float[]{0,0,0,1,0,0,0,1,0},new int[]{0,1,2},2);
+        prepared=residency.prepare(SceneTransaction.builder(++revision).upsert(receiver).upsert(receiverMesh)
+                .upsert(SceneInstance.builder(2,2).build()).build());
+        residency.commit(prepared);index.sceneApplied(prepared.changeSet());
+        require(index.opticalTerminalOnly(FramePrimitiveBatch.empty()),"opaque nonmetal PBR terminals compose with dielectric transport");
+        require(index.hasCausticReceiver(FramePrimitiveBatch.empty()),"opaque nonmetal PBR terminals are indexed as caustic receivers");
     }
     private static void require(boolean condition,String why){if(!condition)throw new AssertionError(why);}
     private static void expectIllegal(Runnable action){try{action.run();throw new AssertionError("expected invalid optical ABI");}catch(IllegalArgumentException expected){}}

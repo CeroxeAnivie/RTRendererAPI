@@ -3,7 +3,6 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_buffer_reference : require
 #define RTRENDERER_NO_DIELECTRIC 1
-#define GS_LIGHTING_NO_DIRECT_SURFACE 1
 #include "gpuscene_surface_transport.glsl"
 layout(set=0,binding=GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
 layout(location=0) rayPayloadEXT GpuScenePayload payload;
@@ -13,6 +12,31 @@ layout(buffer_reference,std430,buffer_reference_align=16) buffer GsMultipleStora
 layout(push_constant) uniform GsMultipleDispatch {
     GsMultipleStorage storage;uint firstPixel;uint pixelCount;uint stateOffset;uint primaryOffset;uint64_t mode;
 } dispatch;
+#include "gpuscene_native_multiple_density.glsl"
+
+vec3 gsMultipleSurfaceRadiance(GpuScenePayload surface,vec3 rayOrigin,vec3 sigma,float maximum) {
+    if(((surface.state.z>>GPU_SCENE_SHADING_MODEL_SHIFT)&GPU_SCENE_SHADING_MODEL_MASK)==GPU_SCENE_SHADING_UNLIT)
+        return max(surface.baseColorAndOpacity.rgb,vec3(0))+max(surface.emissiveAndMetallic.rgb,vec3(0));
+    vec3 position=surface.worldPositionAndDistance.xyz,normal=normalize(surface.worldNormalAndRoughness.xyz);
+    vec3 baseColor=max(surface.baseColorAndOpacity.rgb,vec3(0)),emissive=max(surface.emissiveAndMetallic.rgb,vec3(0));
+    float roughness=clamp(surface.worldNormalAndRoughness.w,.025,1.0),metallic=clamp(surface.emissiveAndMetallic.a,0.0,1.0);
+    vec3 view=normalize(rayOrigin-position),sky=gsFrameVec3(GPU_SCENE_FRAME_SKY_COLOR_WORD);
+    float ambient=uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_AMBIENT_INTENSITY_WORD]);
+    GsRadianceSplit result=gsRadianceSplit(emissive+baseColor*sky*ambient*(1.0-metallic),vec3(0));
+    vec3 sunDirection=-normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
+    vec3 sunRadiance=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)*uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
+    GsRadianceSplit sun=gsDirectContribution(position,normal,view,sunDirection,sunRadiance,1.0e20,true,baseColor,roughness,metallic);
+    vec3 sunMedium=exp(-sigma*gsMultipleSegmentMass(position,sunDirection,1.0e20,maximum));
+    result.diffuse+=sun.diffuse*sunMedium;result.specular+=sun.specular*sunMedium;
+    uint lightCount=gsFrame.words[GPU_SCENE_FRAME_LIGHT_SLOT_UPPER_BOUND_WORD];
+    for(uint slot=0u;slot<lightCount;++slot) {
+        GsRadianceSplit light=gsSceneLight(slot,position,normal,view,baseColor,roughness,metallic);
+        vec3 direction=gsMultipleLightDirection(slot,position);
+        result.diffuse+=light.diffuse*exp(-sigma*gsMultipleSegmentMass(position,direction,light.diffuseHitDistance,maximum));
+        result.specular+=light.specular*exp(-sigma*gsMultipleSegmentMass(position,direction,light.specularHitDistance,maximum));
+    }
+    return result.diffuse+result.specular;
+}
 
 vec3 gsMultipleDirect(vec3 position,vec3 direction,float g,vec3 sigma,float maximum,uint seed) {
     vec3 sunDirection=-normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
@@ -55,7 +79,9 @@ void main() {
         uint base=dispatch.stateOffset/16u+secondary*9u;
         if(dispatch.mode==0ul) {
             for(uint k=0u;k<9u;++k)dispatch.storage.lanes[base+k]=uvec4(0);
-            uint primary=dispatch.primaryOffset/16u+(pixelIndex*samples+sampleIndex)*13u;
+            uint primaryItem=dispatch.storage.lanes[2u].x>dispatch.storage.lanes[2u].z
+                ?gl_LaunchIDEXT.x*samples+sampleIndex:pixelIndex*samples+sampleIndex;
+            uint primary=dispatch.primaryOffset/16u+primaryItem*13u;
             float hitDistance=uintBitsToFloat(dispatch.storage.lanes[primary]).w;
             bool hit=dispatch.storage.lanes[primary+7u].x!=0u;
             float distance=hit?min(max(hitDistance,0.0),optical.w):optical.w;
@@ -81,7 +107,7 @@ void main() {
         vec3 terminal=payload.state.x==0u?gsFrameVec3(GPU_SCENE_FRAME_SKY_COLOR_WORD)
             *max(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_AMBIENT_INTENSITY_WORD]),.05)
             *(.35+.65*clamp(direction.y*.5+.5,0.0,1.0))
-            :max(payload.baseColorAndOpacity.rgb,vec3(0))+max(payload.emissiveAndMetallic.rgb,vec3(0));
+            :gsMultipleSurfaceRadiance(payload,origin.xyz,optical.xyz,optical.w);
         vec3 incoming=vec3(0);float end=distance<0.0?origin.w:min(max(distance,0.0),origin.w);
         if(direction.w<end)incoming=gsMultipleDirect(origin.xyz+direction.xyz*direction.w,direction.xyz,g,optical.xyz,optical.w,
             dispatch.storage.lanes[base+8u].z^0xc2b2ae35u);

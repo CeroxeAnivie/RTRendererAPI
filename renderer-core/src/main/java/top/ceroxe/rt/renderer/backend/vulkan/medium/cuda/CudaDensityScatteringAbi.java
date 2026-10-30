@@ -63,7 +63,7 @@ public final class CudaDensityScatteringAbi {
                     ||phase<0||phase>1||chunk<0||chunk>=chunks())throw new IllegalArgumentException("invalid density-scattering tile");
             var medium=frame.environment().cameraMedium();var a=medium.extinction().multiply(medium.density());
             var s=medium.scattering().multiply(medium.density());var e=medium.emission().multiply(medium.density());var env=frame.environment();
-            ByteBuffer out=ByteBuffer.allocate(includeDensity?plan.primaryOffset():HEADER_BYTES).order(ByteOrder.nativeOrder());
+            ByteBuffer out=ByteBuffer.allocate(includeDensity?HEADER_BYTES+density.bytes():HEADER_BYTES).order(ByteOrder.nativeOrder());
             out.putInt(MAGIC).putInt(VERSION).putInt(pixelCount*plan.samples()).putInt(plan.steps())
                     .putInt(firstPixel).putInt(pixelCount).putInt(plan.samples()).putInt(phase)
                     .putInt(plan.primaryOffset()).putInt(plan.transmittanceOffset()).putInt(plan.emissionOffset()).putInt(plan.rayOffset())
@@ -80,8 +80,8 @@ public final class CudaDensityScatteringAbi {
     public static FrameScene scene(RenderFrameRequest frame,int width,int height,int lightUpperBound,
             LongFunction<TextureAsset> textures,CudaMediumDensityAbi.Cache cache,long residentLimit) {
         var medium=frame.environment().cameraMedium();
-        if(lightUpperBound<0||medium.densityField().isUniform()||medium.scattering().isZero()||medium.indexOfRefraction()!=1
-                ||frame.mediumTransport().scatteringBounces()!=0)throw new IllegalArgumentException("density-scattering requires heterogeneous IOR-one direct transport");
+        if(lightUpperBound<0||medium.densityField().isUniform()||medium.scattering().isZero()
+                ||frame.mediumTransport().scatteringBounces()!=0)throw new IllegalArgumentException("density-scattering requires heterogeneous direct transport");
         int samples=frame.antiAliasing().samplesPerPixel(),steps=frame.mediumTransport().scatteringSteps();
         int connections=(int)Math.min(CONNECTIONS,1L+(frame.mediumTransport().lightSamples()==0?lightUpperBound:Math.min(lightUpperBound,frame.mediumTransport().lightSamples())));
         long limit=residentLimit-ALLOCATION_ALLOWANCE-minimumBytes(width,height,samples,steps,connections);

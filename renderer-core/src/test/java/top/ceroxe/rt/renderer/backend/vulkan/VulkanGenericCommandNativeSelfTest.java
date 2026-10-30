@@ -98,6 +98,8 @@ public final class VulkanGenericCommandNativeSelfTest {
         try (VulkanDeviceRuntime device = VulkanDeviceRuntime.open(
                 capability, RendererRtDiagnostics.noop(), true, true, configuration
         ); VulkanGenericCommandSession session = new VulkanGenericCommandSession(device, 2)) {
+            VulkanGenericDescriptorSnapshotNativeSelfTest.verify(device);
+            VulkanGenericIndirectCountNativeSelfTest.verify(device);
             BufferResource buffer = new BufferResource(
                     new RenderResourceId(1L), ResourceVersion.initial(), 24L,
                     EnumSet.of(BufferUsage.COPY_DESTINATION, BufferUsage.VERTEX)

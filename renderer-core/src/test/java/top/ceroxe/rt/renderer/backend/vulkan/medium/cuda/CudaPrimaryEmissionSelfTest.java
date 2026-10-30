@@ -22,11 +22,14 @@ public final class CudaPrimaryEmissionSelfTest {
                 && constants.getFloat(8) == 1 && constants.getFloat(12) == 17, "density-scaled absorption and distance");
         require(constants.getFloat(16) == 1 && constants.getFloat(20) == .25f
                 && constants.getFloat(24) == 2 && constants.getInt(28) == 0, "density-scaled emission and reserved lane");
-        for (var unsupported : new Medium[]{
-                new Medium(Rgb.ZERO,new Rgb(.1f,0,0),Rgb.ZERO,1,1,0),
-                new Medium(Rgb.ZERO,Rgb.ZERO,Rgb.ZERO,1,1.5f,0)})
-            expectIllegal(() -> CudaPrimaryEmissionAbi.constants(frame.toBuilder()
-                    .environment(EnvironmentState.builder().cameraMedium(unsupported).build()).build()));
+        expectIllegal(() -> CudaPrimaryEmissionAbi.constants(frame.toBuilder()
+                .environment(EnvironmentState.builder().cameraMedium(
+                        new Medium(Rgb.ZERO,new Rgb(.1f,0,0),Rgb.ZERO,1,1,0)).build()).build()));
+        var refractiveMedium = new Medium(medium.absorption(),medium.scattering(),medium.emission(),
+                medium.density(),1.5f,medium.anisotropy());
+        require(java.util.Arrays.equals(constants.array(), CudaPrimaryEmissionAbi.constants(frame.toBuilder()
+                .environment(EnvironmentState.builder().cameraMedium(refractiveMedium).build()).build())),
+                "IOR does not alter segment absorption or emission without an interface");
         require(CudaMediumSource.resource("primary_emission.cu").contains("HomogeneousVolume_SegmentScatter"),
                 "transmittance retains the pinned native segment function");
         require(Math.abs(integral(0, .7, 19) - .7 * 19) < 1e-12, "zero-extinction analytic emission");

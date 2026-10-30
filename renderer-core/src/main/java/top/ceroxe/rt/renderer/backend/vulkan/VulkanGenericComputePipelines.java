@@ -49,15 +49,15 @@ final class VulkanGenericComputePipelines implements AutoCloseable {
         }
     }
 
-    void updateBindings(Compiled pipeline, BindingSet bindings) {
+    VulkanGenericDescriptorSetBank.Snapshot snapshotBindings(Compiled pipeline, BindingSet bindings) {
         requireOpen();
         if (pipeline.descriptors() == null) {
             if (!bindings.layout().entries().isEmpty()) {
                 throw new IllegalArgumentException("compute pipeline has no descriptor layout for non-empty bindings");
             }
-            return;
+            return null;
         }
-        pipeline.descriptors().update(bindings, resources, resources.samplers());
+        return pipeline.descriptors().snapshot(bindings, resources, resources.samplers(), null);
     }
 
     @Override

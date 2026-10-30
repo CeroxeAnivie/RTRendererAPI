@@ -208,7 +208,7 @@ public final class CudaSharedRayFrame implements AutoCloseable {
                         check(VulkanQueueHostSync.submit(runtime.frameQueue(),VkSubmitInfo.calloc(1,s).sType$Default()
                                 .pNext(VkTimelineSemaphoreSubmitInfo.calloc(s).sType$Default()
                                     .pWaitSemaphoreValues(s.longs(firstValue)).pSignalSemaphoreValues(s.longs(secondValue)).address())
-                                .pWaitSemaphores(s.longs(pairedToVulkan)).pWaitDstStageMask(s.ints(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT))
+                                .waitSemaphoreCount(1).pWaitSemaphores(s.longs(pairedToVulkan)).pWaitDstStageMask(s.ints(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT))
                                 .pCommandBuffers(s.pointers(acquire.address())).pSignalSemaphores(s.longs(pairedToCuda)),VK_NULL_HANDLE),"submit paired Vulkan continuation");
                         if(profile){middleSubmitNanos[0]=System.nanoTime()-middleStarted;
                             OpticalFrameTimings.consumerRecord.add(middleSubmitNanos[0]);
@@ -218,7 +218,7 @@ public final class CudaSharedRayFrame implements AutoCloseable {
                         if(profile)OpticalFrameTimings.cudaStage.add(finalStarted-cudaStarted-middleSubmitNanos[0]);
                         check(VulkanQueueHostSync.submit(runtime.frameQueue(),VkSubmitInfo.calloc(1,s).sType$Default()
                                 .pNext(VkTimelineSemaphoreSubmitInfo.calloc(s).sType$Default().pWaitSemaphoreValues(s.longs(secondValue)).address())
-                                .pWaitSemaphores(s.longs(pairedToVulkan)).pWaitDstStageMask(s.ints(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT))
+                                .waitSemaphoreCount(1).pWaitSemaphores(s.longs(pairedToVulkan)).pWaitDstStageMask(s.ints(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT))
                                 .pCommandBuffers(s.pointers(pairedAcquire.address())),fence),"acquire paired rays from CUDA");
                         submitted=true;long waitStarted=profile?System.nanoTime():0L;
                         if(profile){OpticalFrameTimings.consumerRecord.add(waitStarted-finalStarted);
@@ -316,7 +316,7 @@ public final class CudaSharedRayFrame implements AutoCloseable {
                 check(vkEndCommandBuffer(acquire), "end acquire");
                 final long consumerSubmitStarted=profile?System.nanoTime():0L;
                 check(VulkanQueueHostSync.submit(runtime.frameQueue(), VkSubmitInfo.calloc(1, s).sType$Default()
-                        .pWaitSemaphores(s.longs(toVulkan)).pWaitDstStageMask(s.ints(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT))
+                        .waitSemaphoreCount(1).pWaitSemaphores(s.longs(toVulkan)).pWaitDstStageMask(s.ints(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT))
                         .pCommandBuffers(s.pointers(acquire.address())), fence), "acquire from CUDA");
                 submitted = true;
                 long waitStarted=profile?System.nanoTime():0L;

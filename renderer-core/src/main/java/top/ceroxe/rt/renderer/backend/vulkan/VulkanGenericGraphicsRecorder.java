@@ -2,6 +2,7 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VK10;
+import org.lwjgl.vulkan.VK12;
 import org.lwjgl.vulkan.VK13;
 import org.lwjgl.vulkan.VkClearValue;
 import org.lwjgl.vulkan.VkCommandBuffer;
@@ -26,7 +27,9 @@ final class VulkanGenericGraphicsRecorder {
             VkCommandBuffer commandBuffer,
             MemoryStack stack,
             List<VulkanGenericCommandPlan.Action> actions,
-            VulkanGenericTextureLayoutUpdates layouts
+            VulkanGenericTextureLayoutUpdates layouts,
+            java.util.Map<VulkanGenericCommandPlan.Action, VulkanGenericDescriptorSetBank.Snapshot> descriptors,
+            VulkanGenericIndirectCounts.Batch indirectCounts
     ) {
         for (VulkanGenericCommandPlan.Action action : actions) {
             switch (action) {
@@ -34,7 +37,8 @@ final class VulkanGenericGraphicsRecorder {
                 case VulkanGenericCommandPlan.EndPass ignored -> VK13.vkCmdEndRendering(commandBuffer);
                 case VulkanGenericCommandPlan.BindGraphics bind -> VK10.vkCmdBindPipeline(
                         commandBuffer, VK10.VK_PIPELINE_BIND_POINT_GRAPHICS, bind.pipeline().pipeline());
-                case VulkanGenericCommandPlan.BindGraphicsBindings bind -> bindGraphicsBindings(stack, commandBuffer, bind);
+                case VulkanGenericCommandPlan.BindGraphicsBindings bind -> bindGraphicsBindings(
+                        stack, commandBuffer, bind, descriptors.get(action));
                 case VulkanGenericCommandPlan.GraphicsPushConstants push -> VK10.vkCmdPushConstants(
                         commandBuffer, push.pipeline().layout(), VK10.VK_SHADER_STAGE_ALL_GRAPHICS,
                         push.command().offsetBytes(), push.command().data().bytes());
@@ -83,7 +87,35 @@ final class VulkanGenericGraphicsRecorder {
                 }
                 case VulkanGenericCommandPlan.Indirect indirect -> {
                     var command = indirect.command();
-                    if (command.kind().indexed()) {
+                    // Both fixed and GPU-counted batches are empty when their maximum is zero.
+                    // Preserve the API's zero-work semantics without issuing a native draw.
+                    if (command.maximumDrawCount() == 0) break;
+                    if (indirect.count() != null) {
+                        long arguments = indirect.arguments().buffer().buffer();
+                        long count = indirectCounts.buffer();
+                        long argumentOffset = command.arguments().range().offsetBytes();
+                        long countOffset = indirectCounts.offset(indirect);
+                        if (command.kind().indexed()) {
+                            VK12.vkCmdDrawIndexedIndirectCount(commandBuffer, arguments, argumentOffset, count, countOffset,
+                                    command.maximumDrawCount(), command.strideBytes());
+                        } else {
+                            VK12.vkCmdDrawIndirectCount(commandBuffer, arguments, argumentOffset, count, countOffset,
+                                    command.maximumDrawCount(), command.strideBytes());
+                        }
+                    } else if (!indirect.multiDrawIndirectEnabled() && command.maximumDrawCount() > 1) {
+                        // Portable fixed-count fallback uses independent native commands; it never
+                        // reads indirect records on the host or changes their instance/base fields.
+                        for (int draw = 0; draw < command.maximumDrawCount(); draw++) {
+                            long offset = command.arguments().range().offsetBytes() + (long) draw * command.strideBytes();
+                            if (command.kind().indexed()) {
+                                VK10.vkCmdDrawIndexedIndirect(commandBuffer, indirect.arguments().buffer().buffer(),
+                                        offset, 1, command.strideBytes());
+                            } else {
+                                VK10.vkCmdDrawIndirect(commandBuffer, indirect.arguments().buffer().buffer(),
+                                        offset, 1, command.strideBytes());
+                            }
+                        }
+                    } else if (command.kind().indexed()) {
                         VK10.vkCmdDrawIndexedIndirect(commandBuffer, indirect.arguments().buffer().buffer(),
                                 command.arguments().range().offsetBytes(), command.maximumDrawCount(), command.strideBytes());
                     } else {
@@ -207,8 +239,8 @@ final class VulkanGenericGraphicsRecorder {
         default -> VK10.VK_ACCESS_MEMORY_READ_BIT | VK10.VK_ACCESS_MEMORY_WRITE_BIT; }; }
 
     private static void bindGraphicsBindings(MemoryStack stack, org.lwjgl.vulkan.VkCommandBuffer commandBuffer,
-                                             VulkanGenericCommandPlan.BindGraphicsBindings bind) {
-        var descriptors = bind.pipeline().descriptors();
+                                             VulkanGenericCommandPlan.BindGraphicsBindings bind,
+                                             VulkanGenericDescriptorSetBank.Snapshot descriptors) {
         if (descriptors == null) return;
         var groups = descriptors.groups();
         var sets = stack.mallocLong(groups.size());

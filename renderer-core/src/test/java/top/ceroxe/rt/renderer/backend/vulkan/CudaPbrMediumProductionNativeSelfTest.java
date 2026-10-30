@@ -38,10 +38,34 @@ public final class CudaPbrMediumProductionNativeSelfTest {
                 renderer=owned;
                 if(Arrays.asList(args).contains("--benchmark")){benchmark();return;}
                 if(Arrays.asList(args).contains("--caustics")){caustics();return;}
+                if(Arrays.asList(args).contains("--scattering")){
+                    long cameraScatterBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeScatteringSubmissions.sum();
+                    long densityScatterBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeDensityScatteringSubmissions.sum();
+                    long multipleScatterBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeMultipleScatteringSubmissions.sum();
+                    long pbrBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum();
+                    scatteringComposition();scatteringTransportMatrix();scatteringTiledComposition();
+                    long cameraScatter=VulkanGpuSceneFrameSubmitter.diagnosticNativeScatteringSubmissions.sum()-cameraScatterBefore;
+                    long densityScatter=VulkanGpuSceneFrameSubmitter.diagnosticNativeDensityScatteringSubmissions.sum()-densityScatterBefore;
+                    long multipleScatter=VulkanGpuSceneFrameSubmitter.diagnosticNativeMultipleScatteringSubmissions.sum()-multipleScatterBefore;
+                    long pbrScatter=VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum()-pbrBefore;
+                    require(cameraScatter==7&&densityScatter==6&&multipleScatter==14&&pbrScatter==27,
+                            "PBR contribution integrator routing counters mismatch: direct="+cameraScatter+", density="
+                                    +densityScatter+", multiple="+multipleScatter+", PBR="+pbrScatter);
+                    require(renderer.health().activeFailure().isEmpty(),"PBR scattering renderer unhealthy");
+                    Files.writeString(OUTPUT.resolve("scattering-result.json"),"{\n  \"passed\":true,\n  \"comparisons\":[\n"
+                            +String.join(",\n",results)+"\n  ],\n  \"nativeContributionRoutes\":{\"directUniform\":"+cameraScatter
+                            +",\"directDensity\":"+densityScatter+",\"multiple\":"+multipleScatter+",\"pbrFrames\":"+pbrScatter+"}\n}\n");
+                    System.out.println("PBR scattering production passed: comparisons="+results.size());return;
+                }
                 Medium a=medium(.4f,.2f,.1f),b=medium(.1f,.5f,.03f);
                 setup("sun");var sunBase=capture("sun-control",SUN,BUDGET,FramePrimitiveBatch.empty());
                 var one=List.of(new Slab(10,-2,2,a,1,1));
                 slabs(one);ratio("sun-boundary",sunBase,capture("sun-boundary",SUN,BUDGET,FramePrimitiveBatch.empty()),one,"sun",Medium.vacuum(),30);
+                var dielectricAbsorber=new Medium(a.absorption(),Rgb.ZERO,a.emission(),1,1.3f,0);
+                var dielectricBoundary=List.of(new Slab(10,-2,2,dielectricAbsorber,1,1));
+                slabs(dielectricBoundary);ratio("sun-boundary-interface-free-IOR-1.3",sunBase,
+                        capture("sun-boundary-interface-free-IOR-1.3",SUN,BUDGET,FramePrimitiveBatch.empty()),
+                        dielectricBoundary,"sun",Medium.vacuum(),30);
                 var nested=List.of(new Slab(10,-2,2,a,1,1),new Slab(11,-1,1,b,8,1));
                 slabs(nested);ratio("sun-nested-priority",sunBase,capture("sun-nested-priority",SUN,BUDGET,FramePrimitiveBatch.empty()),nested,"sun",Medium.vacuum(),30);
                 slabs(List.of());samples=8;var eightBase=capture("eight-SPP-control",SUN,BUDGET,FramePrimitiveBatch.empty());slabs(one);
@@ -70,6 +94,8 @@ public final class CudaPbrMediumProductionNativeSelfTest {
                 ratio("environment-camera-emission-and-shadow",pointBase,capture("environment-camera-emission-and-shadow",environment,BUDGET,FramePrimitiveBatch.empty()),
                         List.of(),"point",environmentMedium,30);
                 singleSidedPbr(one);
+                scatteringComposition();
+                scatteringTransportMatrix();
                 // Distant geometry remains authoritative even when medium integration is short.
                 setup("sun");slabs(one);
                 apply(SceneTransaction.builder(++revision).upsert(plane(9,4)).upsert(SceneInstance.builder(9,9).build()).build());
@@ -135,13 +161,39 @@ public final class CudaPbrMediumProductionNativeSelfTest {
         require(visible>=width*height*3/4 && energy>.1,"native absorber caustic did not deliver reflected HDR energy");
         apply(SceneTransaction.builder(++revision).removeInstance(2).build());
         equal("caustic-generator-removal",off,captureCaustic("absorber-caustic-generator-removed",environment,policy));
-        require(VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum()-nativeBefore==3,
-                "absorber caustic frames bypassed native PBR/CUDA resolve");
-        require(CausticPhotonPlan.diagnosticPhotonDispatches.sum()-photonsBefore==2,
-                "each enabled native PBR frame must dispatch its photon map exactly once");
-        String json=String.format(Locale.ROOT,"{\"passed\":true,\"scope\":\"homogeneous-IOR-one-nonscattering-absorber-PBR-reflection-caustic\","
-                +"\"nativeFrames\":3,\"photonDispatches\":2,\"visiblePixels\":%d,\"causticRedEnergy\":%.9f,"
-                +"\"maxGreenRatioError\":%.9f,\"maxBlueRatioError\":%.9f}%n",visible,energy,maxGreenError,maxBlueError);
+        var scatteringMedium=new Medium(Rgb.ZERO,new Rgb(.2f,0,0),Rgb.ZERO,1,1,0);
+        var scatteringEnvironment=SUN.toBuilder().cameraMedium(scatteringMedium).build();
+        var scatteringTransport=BUDGET.withScatteringSteps(64).withScatteringBounces(0);
+        var scatteringPolicy=Caustics.photonMap(0,0,-1,6,524288,.18f).withMaxEvents(8);
+        apply(SceneTransaction.builder(++revision).resetScene()
+                .upsert(MaterialAsset.builder(1).roughness(1).metallic(0).doubleSided(true).build())
+                .upsert(MaterialAsset.builder(2).roughness(0).metallic(0).doubleSided(true).build())
+                .upsert(plane(1,RECEIVER_Z)).upsert(causticMirror())
+                .upsert(SceneInstance.builder(1,1).build()).upsert(SceneInstance.builder(2,2).build()).build());
+        var scatteringOff=captureCaustic("scattering-caustic-off",scatteringEnvironment,Caustics.disabled(),scatteringTransport);
+        long scatteringPhotonsBefore=CausticPhotonPlan.diagnosticPhotonDispatches.sum();
+        var scatteringOn=captureCaustic("scattering-caustic-on",scatteringEnvironment,scatteringPolicy,scatteringTransport);
+        var scatteringLhs=scatteringOff.pixels().order(ByteOrder.LITTLE_ENDIAN);
+        var scatteringRhs=scatteringOn.pixels().order(ByteOrder.LITTLE_ENDIAN);
+        double scatteringCausticEnergy=0;int scatteringVisible=0;
+        for(int pixel=0;pixel<width*height;pixel++) {
+            double delta=Float.float16ToFloat(scatteringRhs.getShort(pixel*8))-Float.float16ToFloat(scatteringLhs.getShort(pixel*8));
+            if(delta>.001){scatteringCausticEnergy+=delta;scatteringVisible++;}
+        }
+        require(scatteringVisible>=width*height/8&&scatteringCausticEnergy>.01,
+                "single-scattering paths through the specular mirror produced no receiver caustic: visible="
+                        +scatteringVisible+" energy="+scatteringCausticEnergy);
+        require(CausticPhotonPlan.diagnosticPhotonDispatches.sum()-scatteringPhotonsBefore==1,
+                "scattering caustic frame did not dispatch the native photon map exactly once");
+        require(VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum()-nativeBefore==5,
+                "caustic frames bypassed native PBR/CUDA resolve");
+        require(CausticPhotonPlan.diagnosticPhotonDispatches.sum()-photonsBefore==3,
+                "each enabled native PBR caustic frame must dispatch its photon map exactly once");
+        String json=String.format(Locale.ROOT,"{\"passed\":true,\"scope\":\"homogeneous-IOR-one-absorption-and-single-scattering-PBR-caustics\","
+                +"\"nativeFrames\":5,\"photonDispatches\":3,\"absorberVisiblePixels\":%d,\"absorberCausticRedEnergy\":%.9f,"
+                +"\"scatteringVisiblePixels\":%d,\"scatteringCausticRedEnergy\":%.9f,"
+                +"\"maxGreenRatioError\":%.9f,\"maxBlueRatioError\":%.9f}%n",visible,energy,
+                scatteringVisible,scatteringCausticEnergy,maxGreenError,maxBlueError);
         Files.writeString(OUTPUT.resolve("caustic-result.json"),json);
         require(renderer.health().activeFailure().isEmpty(),"native absorber caustic renderer unhealthy");
         System.out.println("Native absorber PBR caustic gate "+json);
@@ -155,9 +207,13 @@ public final class CudaPbrMediumProductionNativeSelfTest {
         return MeshAsset.triangles(2,p,new int[]{0,1,2,0,2,3},2);
     }
     private static FrameSnapshot captureCaustic(String name,EnvironmentState environment,Caustics caustics) throws Exception {
+        return captureCaustic(name,environment,caustics,BUDGET);
+    }
+    private static FrameSnapshot captureCaustic(String name,EnvironmentState environment,Caustics caustics,
+            MediumTransport transport) throws Exception {
         var camera=CameraState.lookAt(0,0,CAMERA_Z,0,0,RECEIVER_Z).verticalFieldOfViewDegrees(FOV).aspectRatio((double)width/height).build();
         var request=RenderFrameRequest.builder(++sequence,width,height,camera).minimumSceneRevision(revision)
-                .environment(environment).clock(FrameClock.of(0,0)).mediumTransport(BUDGET).caustics(caustics).build();
+                .environment(environment).clock(FrameClock.of(0,0)).mediumTransport(transport).caustics(caustics).build();
         long deadline=System.nanoTime()+TIMEOUT.toNanos();
         while(!(renderer.trySubmit(request) instanceof Renderer.FrameSubmitted)) {
             require(System.nanoTime()<deadline,"caustic frame admission timeout");Thread.onSpinWait();
@@ -220,6 +276,134 @@ public final class CudaPbrMediumProductionNativeSelfTest {
         require(VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum()-before>=7,
                 "single-sided medium fixtures bypassed the native PBR route");
         results.add("    {\"name\":\"single-sided-camera-and-shadow-front-back-faces\",\"passed\":true}");
+    }
+    private static void scatteringComposition() throws Exception {
+        setup("sun");var base=capture("PBR-scattering-surface-control",SUN,BUDGET,FramePrimitiveBatch.empty());
+        float absorption=.08f,scattering=.12f;float[] emission={.01f,.02f,.03f};double sigma=(float)(absorption+scattering);
+        var medium=new Medium(new Rgb(absorption,absorption,absorption),new Rgb(scattering,scattering,scattering),
+                new Rgb(emission[0],emission[1],emission[2]),1,1,0);
+        var env=SUN.toBuilder().cameraMedium(medium).build();
+        var transport=BUDGET.withScatteringSteps(64).withMaxDistance(3);
+        var actual=capture("PBR-scattering-composed-HDR",env,transport,FramePrimitiveBatch.empty());
+        double error=0;var lhs=base.pixels().order(ByteOrder.LITTLE_ENDIAN);var rhs=actual.pixels().order(ByteOrder.LITTLE_ENDIAN);
+        for(int y=0;y<height;y++)for(int x=0;x<width;x++) {
+            double fy=Math.tan(Math.toRadians(FOV)/2),dx=((x+.5)/width*2-1)*fy*width/height,dy=-((y+.5)/height*2-1)*fy;
+            double distance=Math.sqrt(1+dx*dx+dy*dy),tr=Math.exp(-sigma*distance),integral=-Math.expm1(-sigma*distance)/sigma;
+            double sunTr=Math.exp(-sigma*3),incoming=scattering*sunTr/(4*Math.PI);
+            for(int c=0;c<3;c++) {int at=((y*width+x)*4+c)*2;
+                double expected=Float.float16ToFloat(lhs.getShort(at))*tr*sunTr+(emission[c]+incoming)*integral;
+                double observed=Float.float16ToFloat(rhs.getShort(at)),delta=Math.abs(expected-observed);error=Math.max(error,delta);
+                require(delta<.003+Math.abs(expected)*.006,"PBR+scattering independent HDR mismatch pixel="+x+","+y+" channel="+c+" expected="+expected+" actual="+observed);
+            }
+        }
+        var darkEnv=env.toBuilder().sunIntensity(0).build();
+        var dark=capture("PBR-scattering-emission-only",darkEnv,transport,FramePrimitiveBatch.empty());
+        var data=dark.pixels().order(ByteOrder.LITTLE_ENDIAN);
+        for(int y=0;y<height;y++)for(int x=0;x<width;x++) {
+            double fy=Math.tan(Math.toRadians(FOV)/2),dx=((x+.5)/width*2-1)*fy*width/height,dy=-((y+.5)/height*2-1)*fy;
+            double integral=-Math.expm1(-sigma*Math.sqrt(1+dx*dx+dy*dy))/sigma;
+            for(int c=0;c<3;c++)require(Math.abs(Float.float16ToFloat(data.getShort(((y*width+x)*4+c)*2))-emission[c]*integral)<.0002,
+                    "composed medium emission was duplicated or omitted");
+        }
+        int oldWidth=width,oldHeight=height;
+        try {width=1920;height=1080;read(false,env,transport,FramePrimitiveBatch.empty());}
+        finally {width=oldWidth;height=oldHeight;}
+        results.add("    {\"name\":\"PBR-single-scattering-composition\",\"maxAbsoluteError\":"+error+",\"fullHdCompleted\":true}");
+    }
+    private static void scatteringTransportMatrix() throws Exception {
+        var field=MediumDensityField.grid(50,2,new AffineTransform(new float[]{
+                .025f,0,0,.5f,0,.025f,0,.5f,0,0,.025f,.5f}));
+        var medium=new Medium(new Rgb(.08f,.08f,.08f),new Rgb(.12f,.12f,.12f),Rgb.ZERO,1,1.3f,0);
+        var dark=EnvironmentState.builder().ambientIntensity(0).sunIntensity(0).build();
+        var lit=dark.toBuilder().sunDirection(0,0,-1).sunIntensity(1).build();
+        for(int bounces:new int[]{0,1,3}) {
+            FrameSnapshot uniform=null;
+            for(boolean dense:new boolean[]{false,true}) {
+                setup("sun");apply(SceneTransaction.builder(++revision).upsert(texture(255)).build());
+                var selected=dense?medium.withDensityField(field):medium;
+                var transport=BUDGET.withMaxDistance(3).withScatteringSteps(64).withScatteringBounces(bounces);
+                String name="PBR-"+(dense?"density":"uniform")+"-bounces-"+bounces;
+                var black=capture(name+"-dark-white-surface",dark.toBuilder().cameraMedium(selected).build(),transport,FramePrimitiveBatch.empty());
+                allBlack(black,"unlit PBR albedo became self-emission in "+name);
+                var actual=capture(name+"-lit",lit.toBuilder().cameraMedium(selected).build(),transport,FramePrimitiveBatch.empty());
+                double energy=meanRgb(actual);require(energy>0,"light failed to reach PBR/scattering output in "+name);
+                if(!dense)uniform=actual;
+                else if(bounces==0) {
+                    var a=uniform.pixels().order(ByteOrder.LITTLE_ENDIAN);var b=actual.pixels().order(ByteOrder.LITTLE_ENDIAN);
+                    for(int i=0;i<width*height;i++)for(int c=0;c<3;c++) {
+                        double expected=Float.float16ToFloat(a.getShort((i*4+c)*2));
+                        double observed=Float.float16ToFloat(b.getShort((i*4+c)*2));
+                        require(Math.abs(expected-observed)<.003+Math.abs(expected)*.006,
+                                "constant density/direct composition differs from uniform transport");
+                    }
+                }
+                results.add("    {\"name\":\""+name+"\",\"darkBelowTolerance\":0.0001,\"meanLitRadiance\":"+energy+"}");
+            }
+        }
+        setup("sun");apply(SceneTransaction.builder(++revision).upsert(texture(0)).build());
+        var zero=medium.withDensityField(field);
+        var env=lit.toBuilder().cameraMedium(zero).build();
+        var vacuum=capture("PBR-density-zero-vacuum",lit,BUDGET.withMaxDistance(3),FramePrimitiveBatch.empty());
+        for(int bounces:new int[]{0,1,3}) {
+            var actual=capture("PBR-density-zero-bounces-"+bounces,env,
+                    BUDGET.withMaxDistance(3).withScatteringSteps(64).withScatteringBounces(bounces),FramePrimitiveBatch.empty());
+            equal("PBR-zero-density-bounces-"+bounces,vacuum,actual);
+        }
+        // Replacing the immutable texture generation must invalidate both native density owners.
+        apply(SceneTransaction.builder(++revision).upsert(texture(255)).build());
+        var restored=capture("PBR-density-generation-restored",env,BUDGET.withMaxDistance(3).withScatteringSteps(64),FramePrimitiveBatch.empty());
+        require(!Arrays.equals(toBytes(vacuum),toBytes(restored)),"density replacement reused an empty atlas");
+        results.add("    {\"name\":\"PBR-zero-density-and-generation-replacement\",\"passed\":true}");
+    }
+    private static double meanRgb(FrameSnapshot frame) {
+        var p=frame.pixels().order(ByteOrder.LITTLE_ENDIAN);double sum=0;
+        for(int i=0;i<width*height;i++)for(int c=0;c<3;c++)sum+=Float.float16ToFloat(p.getShort((i*4+c)*2));
+        return sum/(width*height*3.0);
+    }
+    private static void scatteringTiledComposition() throws Exception {
+        String property="top.ceroxe.rt.medium.cuda.maxResidentBytes",old=System.getProperty(property);
+        var field=MediumDensityField.grid(50,2,new AffineTransform(new float[]{
+                .025f,0,0,.5f,0,.025f,0,.5f,0,0,.025f,.5f}));
+        var medium=new Medium(new Rgb(.08f,.08f,.08f),new Rgb(.12f,.12f,.12f),Rgb.ZERO,1,1.3f,0);
+        Renderer outerRenderer=renderer;long outerSequence=sequence,outerRevision=revision;Set<Long> outerVolumes=volumeIds;
+        try {
+            for(int bounces:new int[]{0,1})for(boolean dense:new boolean[]{false,true}) {
+                var selected=dense?medium.withDensityField(field):medium;
+                var environment=SUN.toBuilder().cameraMedium(selected).build();
+                var transport=BUDGET.withMaxDistance(3).withScatteringSteps(64).withScatteringBounces(bounces);
+                String name="PBR-tiled-"+(dense?"density":"uniform")+"-bounces-"+bounces;
+                var reference=renderTiledCase(property,old,name+"-reference",environment,transport);
+                // Less than the minimum complete scratch for this 713-pixel frame:
+                // every contribution kind must reuse its tile on this budget.
+                System.setProperty(property,"524288");
+                var tiled=renderTiledCase(property,"524288",name,environment,transport);
+                var a=reference.pixels().order(ByteOrder.LITTLE_ENDIAN);
+                var b=tiled.pixels().order(ByteOrder.LITTLE_ENDIAN);
+                for(int i=0;i<width*height;i++)for(int c=0;c<3;c++) {
+                    double expected=Float.float16ToFloat(a.getShort((i*4+c)*2));
+                    double observed=Float.float16ToFloat(b.getShort((i*4+c)*2));
+                    require(Math.abs(expected-observed)<.003+Math.abs(expected)*.01,
+                            name+" tile reuse changed radiance at pixel "+i+" channel "+c);
+                }
+                results.add("    {\"name\":\""+name+"\",\"residentLimitBytes\":524288,\"passed\":true}");
+            }
+        } finally {
+            if(old==null)System.clearProperty(property);else System.setProperty(property,old);
+            renderer=outerRenderer;sequence=outerSequence;revision=outerRevision;volumeIds=outerVolumes;
+        }
+    }
+    private static FrameSnapshot renderTiledCase(String property,String limit,String name,
+            EnvironmentState environment,MediumTransport transport) throws Exception {
+        String previous=System.getProperty(property);
+        try {
+            if(limit==null)System.clearProperty(property);else System.setProperty(property,limit);
+            sequence=0;revision=0;volumeIds=Set.of();
+            try(Renderer owned=Renderer.open("vulkan-rt",RendererConfig.builder().maxFramesInFlight(2).validationEnabled(true)
+                    .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.disabled()).build())) {
+                renderer=owned;setup("sun");apply(SceneTransaction.builder(++revision).upsert(texture(255)).build());
+                return capture(name,environment,transport,FramePrimitiveBatch.empty());
+            }
+        } finally {if(previous==null)System.clearProperty(property);else System.setProperty(property,previous);}
     }
     private static void setup(String light) throws Exception {
         var t=SceneTransaction.builder(++revision).resetScene().upsert(MaterialAsset.builder(1).roughness(1).metallic(0).doubleSided(true).build())

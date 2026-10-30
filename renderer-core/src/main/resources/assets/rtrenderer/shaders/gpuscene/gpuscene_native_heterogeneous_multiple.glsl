@@ -91,7 +91,8 @@ void gsHeterogeneousMultipleMain() {
                 vec3 terminal=payload.state.x==0u?gsFrameVec3(GPU_SCENE_FRAME_SKY_COLOR_WORD)
                     *max(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_AMBIENT_INTENSITY_WORD]),.05)
                     *(.35+.65*clamp(direction.y*.5+.5,0.0,1.0))
-                    :max(payload.baseColorAndOpacity.rgb,vec3(0))+max(payload.emissiveAndMetallic.rgb,vec3(0));
+                    :gsMultipleSurfaceRadiance(payload,origin.xyz,uintBitsToFloat(dispatch.storage.lanes[3u]).xyz,
+                        uintBitsToFloat(dispatch.storage.lanes[3u]).w);
                 dispatch.storage.lanes[base+5u]=floatBitsToUint(vec4(terminal,distance));
             }
             float distance=uintBitsToFloat(dispatch.storage.lanes[base+5u]).w;

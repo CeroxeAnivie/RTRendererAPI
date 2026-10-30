@@ -195,6 +195,7 @@ final class RtVulkanDeviceCapabilities {
                 properties.apiVersion(),
                 properties.limits().maxImageDimension2D(),
                 properties.limits().maxBoundDescriptorSets(),
+                properties.limits().maxDrawIndirectCount(),
                 properties.limits().maxSamplerAnisotropy()
         );
     }
@@ -262,10 +263,11 @@ final class RtVulkanDeviceCapabilities {
             int apiVersion,
             int maxImageDimension2D,
             int maxBoundDescriptorSets,
+            int maxDrawIndirectCount,
             float maxSamplerAnisotropy
     ) {
         StablePhysicalDeviceProperties {
-            if (maxImageDimension2D <= 0 || maxBoundDescriptorSets <= 0
+            if (maxImageDimension2D <= 0 || maxBoundDescriptorSets <= 0 || maxDrawIndirectCount == 0
                     || !Float.isFinite(maxSamplerAnisotropy) || maxSamplerAnisotropy < 1.0F) {
                 throw new IllegalArgumentException("physical-device limits must be finite and positive");
             }

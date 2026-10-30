@@ -1,0 +1,252 @@
+{
+  "date": "2026-10-30",
+  "scope": "optical native correctness after robust surface spawn and continuation trace fixes",
+  "passed": true,
+  "experimentalOpticalTimelineNoHostWait": true,
+  "nativeUnitTest": "CudaOpticalMediumNativeSelfTest",
+  "productionTest": "CudaOpticalMediumProductionNativeSelfTest",
+  "nativeFrames": 130,
+  "comparisons": 44,
+  "recoverableRejections": 1,
+  "logDirectory": "build/interop-binary-experiment-20261030/spawn-bounded-full",
+  "productionResults": [
+    {
+      "name": "thin-optical1-SPP1",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "thin-optical1-SPP2",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "thin-optical1-SPP8",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "thin-optical2-SPP1",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "thin-optical2-SPP2",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "thin-optical2-SPP8",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "thin-optical8-SPP1",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "thin-optical8-SPP2",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "thin-optical8-SPP8",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "one-event-no-unbudgeted-continuation"
+    },
+    {
+      "name": "equal-IOR"
+    },
+    {
+      "name": "stochastic-first-interface",
+      "frames": 64,
+      "redMean": 0.426102325,
+      "blueMean": 0.0276929246
+    },
+    {
+      "name": "closed-boundary-inside-TIR"
+    },
+    {
+      "name": "closed-boundary-inside-unit-IOR"
+    },
+    {
+      "name": "nested-priority-inside-HDR"
+    },
+    {
+      "name": "density-glass-generation0-SPP1",
+      "maximumAbsoluteError": 0.000121024413
+    },
+    {
+      "name": "density-glass-generation0-SPP2",
+      "maximumAbsoluteError": 0.00012096559
+    },
+    {
+      "name": "density-glass-generation0-SPP8",
+      "maximumAbsoluteError": 0.000121803891
+    },
+    {
+      "name": "density-cache-generation0",
+      "assetUploads": 0,
+      "metadataBytes": 1536
+    },
+    {
+      "name": "density-glass-generation1-SPP1",
+      "maximumAbsoluteError": 0.000189760575
+    },
+    {
+      "name": "density-glass-generation1-SPP2",
+      "maximumAbsoluteError": 0.000189718711
+    },
+    {
+      "name": "density-glass-generation1-SPP8",
+      "maximumAbsoluteError": 0.000189712536
+    },
+    {
+      "name": "density-cache-generation1",
+      "assetUploads": 0,
+      "metadataBytes": 1536
+    },
+    {
+      "name": "nested-local-density-priority-two-SPP"
+    },
+    {
+      "name": "rough-0.12",
+      "redMean": 0.414983317,
+      "expectedRed": 0.415037079,
+      "blueMean": 0.0261006351,
+      "expectedBlue": 0.0260977352
+    },
+    {
+      "name": "rough-0.45",
+      "redMean": 0.357219373,
+      "expectedRed": 0.357235945,
+      "blueMean": 0.018306046,
+      "expectedBlue": 0.0182924122
+    },
+    {
+      "name": "rough-0.85",
+      "redMean": 0.289888096,
+      "expectedRed": 0.289381785,
+      "blueMean": 0.00857685086,
+      "expectedBlue": 0.00853589564
+    },
+    {
+      "name": "rough-stochastic",
+      "redMean": 0.354685589,
+      "expectedRed": 0.357235943,
+      "blueMean": 0.018384466,
+      "expectedBlue": 0.0182924119
+    },
+    {
+      "name": "rough-black-transmission",
+      "redMean": 2.48800786E-06,
+      "expectedRed": 0.0,
+      "blueMean": 0.0182219094,
+      "expectedBlue": 0.0182924119
+    },
+    {
+      "name": "rough-smooth-limit",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "rough-equal-IOR"
+    },
+    {
+      "name": "scattering-rough-glass",
+      "analyticRedMean": 0.0964482886,
+      "litEnergy": 0.348392312,
+      "darkEnergy": 0.0
+    },
+    {
+      "name": "heterogeneous-scattering-rough-glass",
+      "litEnergy": 0.265950966,
+      "darkEnergy": 0.0
+    },
+    {
+      "name": "explicit-IOR-boundary-scattering",
+      "litEnergy": 0.0358100031,
+      "insidePointEnergy": 0.0238342161,
+      "densityRoughEnergy": 0.0655392187,
+      "darkEnergy": 0.0
+    },
+    {
+      "name": "partial-unlit-terminal-color-and-emission"
+    },
+    {
+      "name": "partial-unlit-emission-light-independence"
+    },
+    {
+      "name": "resolved-publication-outline-SPP1"
+    },
+    {
+      "name": "resolved-publication-outline-SPP2"
+    },
+    {
+      "name": "resolved-publication-outline-SPP8"
+    },
+    {
+      "name": "partial-PBR-rejection-recovery",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "resize-eight-SPP",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "full-HD-multiple-optical-tiles",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "shrink-after-full-HD",
+      "maximumAbsoluteError": 0.000152994792
+    },
+    {
+      "name": "resolved-publication-temporal-history-three-frames"
+    }
+  ],
+  "sourceAndArtifactHashes": [
+    {
+      "sha256": "7c97cc85e1f293959b482b81e20849a4ee3a4476cbc0d8690dfd0ddb86cfdc1a",
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/medium/luxcore/optical_transport.cu",
+      "bytes": 38256
+    },
+    {
+      "sha256": "4453b9cd503b968d9452ac6e67dc4aeef5bd6e848c158e0370fe370a5c493890",
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/medium/luxcore/api_roughglass_sampling.cu",
+      "bytes": 2737
+    },
+    {
+      "sha256": "f3578118ec263b4a3d76c07223363c2f21abc877403bd64565b2e58ac38321be",
+      "path": "renderer-core/src/main/resources/assets/rtrenderer/shaders/gpuscene/gpuscene_native_optical_runtime.glsl",
+      "bytes": 21652
+    },
+    {
+      "sha256": "13ed103e2b6bbfd448268d0ab2eb6285a3cb9a816861acb0fde0867fe1c7108f",
+      "path": "renderer-core/src/test/java/top/ceroxe/rt/renderer/backend/vulkan/medium/cuda/CudaOpticalMediumNativeSelfTest.java",
+      "bytes": 27534
+    },
+    {
+      "sha256": "d6b67403cbf86b563b0da70a307509375dba87ced45ed4152d25fd81508507ef",
+      "path": "renderer-core/src/test/java/top/ceroxe/rt/renderer/backend/vulkan/CudaOpticalMediumProductionNativeSelfTest.java",
+      "bytes": 57940
+    },
+    {
+      "sha256": "77725ab50fbb4c7465e5c822d03bb5f6eadf95f26a35ff0f0033c4f993ec9e8a",
+      "path": "renderer-core/build/libs/renderer-core-7.0.0.jar",
+      "bytes": 54696777
+    }
+  ],
+  "fixes": [
+    "normal-oriented origin offset and outward nextafter rounding",
+    "propagated surface position uncertainty projected onto geometric normal",
+    "initial trace keeps camera epsilon; spawned surface/volume continuation and direct connection traces use tMin zero",
+    "rough transmission samples failing geometric hemisphere contract contribute zero before destination medium stack commit"
+  ],
+  "unchangedStrictChecks": [
+    "duplicate medium entry remains fatal",
+    "missing medium exit remains fatal",
+    "medium boundary metadata mismatch remains fatal"
+  ],
+  "notEstablished": [
+    "full API closure",
+    "optical or volumetric caustics",
+    "PBR with refractive explicit boundary scattering",
+    "performance improvement from these correctness fixes"
+  ],
+  "performanceMeasurement": null
+}

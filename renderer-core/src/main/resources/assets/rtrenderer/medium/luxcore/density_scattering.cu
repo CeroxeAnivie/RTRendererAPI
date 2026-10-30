@@ -24,7 +24,8 @@ extern "C" __global__ void density_scattering_prepare(unsigned char *buffer,int 
     const unsigned int item=u[4]*u[6]+(unsigned int)index,steps=u[3];
     const Ray ray=((const Ray *)(buffer+u[11]))[index];
     const float3 origin=rgb(ray.origin),direction=rgb(ray.direction),sigma=make_float3(h[12],h[13],h[14]);
-    const float *primary=(const float *)(buffer+u[8])+item*52u;
+    const unsigned int primaryItem=u[8]>u[10]?(unsigned int)index:item;
+    const float *primary=(const float *)(buffer+u[8])+primaryItem*52u;
     const bool hit=((const unsigned int *)primary)[28]!=0u;
     const float distance=hit?fminf(fmaxf(primary[3],0.f),h[15]):h[15];
     Sample *samples=(Sample *)(buffer+u[30])+(unsigned int)index*steps;

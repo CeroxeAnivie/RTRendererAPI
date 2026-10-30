@@ -22,6 +22,12 @@ public final class CudaPbrMediumAbiSelfTest {
         require(full.bytes()<=512L*1024*1024-65536,"many-light residency overflow");
         require(full.primaryBytes()==1920L*1080*208,"external primary must retain complete geometry");
         require(full.emissionOffset()==full.transmittanceOffset()+full.paths()*16,"radiance splits overlap");
+        for(int steps:new int[]{1,8,64})for(int lights:new int[]{0,8,255}) {
+            var combined=CudaPbrMediumAbi.planWithScattering(1920,1080,1,lights,1,steps,512L*1024*1024);
+            require(combined.pbr().tilePixels()==combined.scattering().tilePixels(),"combined paths require one coordinated tile budget");
+            require(combined.pbr().bytes()+combined.scattering().bytes()+2*65536L<=512L*1024*1024,"combined PBR/scattering residency overflow");
+            require(combined.scattering().compactContribution()&&combined.scattering().primaryOffset()==128+1920*1080*32,"combined path retained redundant primary geometry");
+        }
         var medium=new Medium(new Rgb(.1f,.2f,.3f),Rgb.ZERO,new Rgb(.02f,0,0),2,1,0);
         var a=new CudaBoundaryMediumAbi.Boundary(7,MediumBoundary.volume(medium).withPriority(-7));
         var b=new CudaBoundaryMediumAbi.Boundary(0x80000003,MediumBoundary.volume(medium).withPriority(Integer.MIN_VALUE));
@@ -33,6 +39,16 @@ public final class CudaPbrMediumAbiSelfTest {
         require(packed.getInt(128)==1&&packed.getInt(132)==0,"camera containment slots were not compacted correctly");
         require(packed.getInt(416)==-7&&packed.getInt(420)==Integer.MIN_VALUE,"signed priorities lost integer precision");
         require(packed.getFloat(304)==.2f&&packed.getFloat(320)==.04f,"medium density must scale coefficients once");
+        var dielectric=new Medium(new Rgb(.1f,.2f,.3f),Rgb.ZERO,Rgb.ZERO,1,1.3f,0);
+        var dielectricFrame=frame.toBuilder().environment(EnvironmentState.builder().cameraMedium(dielectric).build()).build();
+        var dielectricPlan=CudaPbrMediumAbi.plan(31,23,8,0,0,1,empty,4L*1024*1024);
+        var dielectricPacked=ByteBuffer.wrap(CudaPbrMediumAbi.scenePrefix(dielectricPlan,dielectricFrame,List.of(),new int[0],empty))
+                .order(ByteOrder.nativeOrder());
+        require(Math.abs(dielectricPacked.getFloat(64)-.1f)<1e-6,
+                "interface-free PBR medium must preserve absorption when IOR differs from one");
+        var dielectricBoundary=new CudaBoundaryMediumAbi.Boundary(9,MediumBoundary.volume(dielectric));
+        var boundaryPlan=CudaPbrMediumAbi.plan(31,23,8,1,0,1,empty,4L*1024*1024);
+        CudaPbrMediumAbi.scenePrefix(boundaryPlan,frame,List.of(dielectricBoundary),new int[0],empty);
         byte[] before=packed.array().clone();CudaPbrMediumAbi.updateTile(packed,tiny,17,1);
         require(packed.getInt(44)==tiny.transmittanceOffset()+17*8*16&&packed.getInt(48)==tiny.emissionOffset()+17*8*16,
                 "tiled final radiance lost global pixel identity");
@@ -44,6 +60,56 @@ public final class CudaPbrMediumAbiSelfTest {
         expectUnsupported(()->CudaPbrMediumProfile.requireSupported(frame,new MediumSceneIndex.NativeScene(List.of(),new int[0]),false));
         var scattering=frame.toBuilder().environment(EnvironmentState.builder().cameraMedium(new Medium(Rgb.ZERO,new Rgb(.1f,0,0),Rgb.ZERO,1,1,0)).build()).build();
         expectUnsupported(()->CudaPbrMediumProfile.requireSupported(scattering,new MediumSceneIndex.NativeScene(List.of(),new int[0]),true));
+        CudaPbrMediumProfile.requireSupported(scattering,new MediumSceneIndex.NativeScene(List.of(),new int[0]),true,true);
+        var scatteringCaustics=scattering.toBuilder().caustics(Caustics.photonMap(0,0,0,3,1024,.1f)).build();
+        CudaPbrMediumProfile.requireSupported(scatteringCaustics,
+                new MediumSceneIndex.NativeScene(List.of(),new int[0]),true,true);
+        CudaPbrMediumProfile.requireScatteringContributionSupported(scatteringCaustics,0);
+        var scatteringAbi=CudaPbrMediumAbi.plan(31,23,1,0,0,1,empty,4L*1024*1024);
+        var scatteringBuffer=ByteBuffer.wrap(CudaPbrMediumAbi.scenePrefix(scatteringAbi,scattering,List.of(),new int[0],empty)).order(ByteOrder.nativeOrder());
+        require(Math.abs(scatteringBuffer.getFloat(64)-.1f)<1e-6,"PBR camera attenuation must include scattering extinction");
+        CudaCameraScatteringProfile.requireRadianceContributionSupported(scattering,0);
+        var source=new CudaPbrMediumManager.RadianceContribution(1,16,32,true);
+        require(source.includesCameraEmission(),"volume-emission ownership lost");
+        expectIllegal(()->new CudaPbrMediumManager.RadianceContribution(0,0,16,true));
+        expectIllegal(()->new CudaPbrMediumManager.RadianceContribution(1,1,16,true));
+        CudaPbrMediumAbi.updateTile(scatteringBuffer,scatteringAbi,0,1,scatteringAbi.emissionOffset(),true);
+        require(scatteringBuffer.getInt(280)==1&&scatteringBuffer.getLong(272)==scatteringAbi.emissionOffset(),
+                "composed medium emission must have exactly one owner");
+        CudaPbrMediumAbi.updateTile(scatteringBuffer,scatteringAbi,0,1);
+        require(scatteringBuffer.getInt(280)==0&&scatteringBuffer.getLong(272)==0,"tile reuse retained stale contribution metadata");
+        for(boolean dense:new boolean[]{false,true})for(int bounces:new int[]{0,3}) {
+            var m=scattering.environment().cameraMedium();
+            if(dense)m=m.withDensityField(MediumDensityField.grid(50,2,AffineTransform.identity()));
+            var f=scattering.toBuilder().environment(EnvironmentState.builder().cameraMedium(m).build())
+                    .mediumTransport(scattering.mediumTransport().withScatteringBounces(bounces).withScatteringSteps(64)).build();
+            byte[] texels=new byte[32];for(int i=0;i<8;i++){texels[i*4]=(byte)255;texels[i*4+3]=(byte)255;}
+            var texture=TextureAsset.builder(50,2,4).colorSpace(TextureAsset.ColorSpace.LINEAR).pixelsRgba8(texels).build();
+            var d=dense?CudaMediumDensityAbi.prepare(m,List.of(),id->texture):empty;
+            var combined=CudaPbrMediumAbi.planWithScattering(f,31,23,29,1,d,16L*1024*1024);
+            require(combined.pbr().tilePixels()==combined.scatteringTilePixels(),"combined integrator scratch did not share one tile");
+            require(combined.residentBytes()<=16L*1024*1024,"combined scattering allocation exceeded the complete-frame cap");
+            var kind=dense?(bounces==0?CudaPbrMediumAbi.ScatteringKind.DIRECT_DENSITY:CudaPbrMediumAbi.ScatteringKind.MULTIPLE_DENSITY)
+                    :(bounces==0?CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM:CudaPbrMediumAbi.ScatteringKind.MULTIPLE_UNIFORM);
+            require(combined.kind()==kind,"wrong PBR scattering transport selected");
+            CudaPbrMediumProfile.requireScatteringContributionSupported(f,0);
+            long minimumCombined=combined.residentBytes()-(combined.pbr().tilePixels()-1L)
+                    *((combined.pbr().bytes()-combined.pbr().sceneBytes()-combined.pbr().paths()*32L)/combined.pbr().tilePixels()
+                    +(combined.scatteringBytes()-65536-(dense?(bounces==0?144:224):bounces==0?128:192)-d.bytes()
+                    -combined.pbr().paths()*32L)/combined.scatteringTilePixels());
+            var bounded=CudaPbrMediumAbi.planWithScattering(f,31,23,29,1,d,minimumCombined);
+            require(bounded.pbr().tilePixels()==1&&bounded.scatteringTilePixels()==1,"one-pixel cap dropped an integrator output");
+            expectIllegal(()->CudaPbrMediumAbi.planWithScattering(f,31,23,29,1,d,minimumCombined-1));
+            var hdFrame=f.toBuilder().antiAliasing(AntiAliasingState.disabled()).build();
+            var hd=CudaPbrMediumAbi.planWithScattering(hdFrame,1920,1080,29,1,d,512L*1024*1024);
+            require(hd.pbr().paths()==1920*1080&&hd.residentBytes()<=512L*1024*1024,
+                    "FullHD compact contribution lost outputs or exceeded the unchanged cap");
+            if(hd.tileLocalPrimary()) {
+                require(hd.primaryOffset()>hd.pbr().paths()*32L,"tile-local primary overlaps complete radiance outputs");
+                require(hd.primaryTileBytes()==hd.pbr().tilePaths()*208L,"compact primary scratch was not charged exactly");
+                require(hd.primaryTileBytes()<hd.pbr().primaryBytes(),"FullHD compact contribution retained a redundant complete primary");
+            }
+        }
         expectUnsupported(()->CudaPbrMediumProfile.requireSupported(scattering.toBuilder().caustics(Caustics.photonMap(0,0,0,3,1024,.1f)).build(),new MediumSceneIndex.NativeScene(List.of(),new int[0]),true));
         var boundary=new CudaBoundaryMediumAbi.Boundary(3,MediumBoundary.volume(medium));
         expectUnsupported(()->CudaPbrMediumProfile.requireSupported(absorberCaustics,

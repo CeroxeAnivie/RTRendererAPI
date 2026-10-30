@@ -15,7 +15,9 @@ public final class WorkloadExecutionEvidence {
     public enum Outcome {
         ACCEPTED,
         DEFERRED,
-        REJECTED
+        REJECTED,
+        /** One lane was admitted, while a later lane was deferred, rejected, or used fallback. */
+        PARTIALLY_ACCEPTED
     }
 
     /** Stable reason for a non-normal workload result. */
@@ -32,6 +34,7 @@ public final class WorkloadExecutionEvidence {
     private final RenderWorkload.Mode mode;
     private final Outcome outcome;
     private final Reason reason;
+    private final Optional<SubmissionDeferralReason> submissionDeferralReason;
     private final Optional<Renderer.FrameSubmissionResult> sceneSubmission;
     private final Optional<CommandExecutionEvidence> graphicsExecution;
     private final String detail;
@@ -41,6 +44,7 @@ public final class WorkloadExecutionEvidence {
             RenderWorkload.Mode mode,
             Outcome outcome,
             Reason reason,
+            Optional<SubmissionDeferralReason> submissionDeferralReason,
             Optional<Renderer.FrameSubmissionResult> sceneSubmission,
             Optional<CommandExecutionEvidence> graphicsExecution,
             String detail
@@ -50,6 +54,8 @@ public final class WorkloadExecutionEvidence {
         this.mode = Objects.requireNonNull(mode, "mode");
         this.outcome = Objects.requireNonNull(outcome, "outcome");
         this.reason = Objects.requireNonNull(reason, "reason");
+        this.submissionDeferralReason = Objects.requireNonNull(
+                submissionDeferralReason, "submissionDeferralReason");
         this.sceneSubmission = Objects.requireNonNull(sceneSubmission, "sceneSubmission");
         this.graphicsExecution = Objects.requireNonNull(graphicsExecution, "graphicsExecution");
         this.detail = Objects.requireNonNull(detail, "detail");
@@ -68,10 +74,18 @@ public final class WorkloadExecutionEvidence {
                 && (sceneSubmission.isPresent() != graphicsExecution.isPresent())) {
             throw new IllegalArgumentException("combined evidence must contain both lanes or neither lane");
         }
-        if (outcome == Outcome.REJECTED || outcome == Outcome.DEFERRED) {
+        if (outcome == Outcome.PARTIALLY_ACCEPTED
+                && (mode != RenderWorkload.Mode.COMBINED
+                || sceneSubmission.isEmpty() || graphicsExecution.isEmpty())) {
+            throw new IllegalArgumentException("partial acceptance requires evidence for both combined-workload lanes");
+        }
+        if (outcome != Outcome.ACCEPTED) {
             if (reason == Reason.NONE) throw new IllegalArgumentException("non-accepted workload requires a typed reason");
         } else if (reason != Reason.NONE) {
             throw new IllegalArgumentException("accepted workload must use reason NONE");
+        }
+        if (submissionDeferralReason.isPresent() && outcome != Outcome.DEFERRED) {
+            throw new IllegalArgumentException("submission deferral reason requires a deferred workload");
         }
     }
 
@@ -81,7 +95,7 @@ public final class WorkloadExecutionEvidence {
     ) {
         Renderer.FrameSubmissionResult checked = Objects.requireNonNull(submission, "submission");
         return new WorkloadExecutionEvidence(checked.frameSequence(), RenderWorkload.Mode.RAY_TRACING_SCENE,
-                Outcome.ACCEPTED, Reason.NONE, Optional.of(checked), Optional.empty(),
+                Outcome.ACCEPTED, Reason.NONE, Optional.empty(), Optional.of(checked), Optional.empty(),
                 "retained ray-tracing scene workload admitted by its dedicated fast path");
     }
 
@@ -101,16 +115,22 @@ public final class WorkloadExecutionEvidence {
         };
         if (outcome == Outcome.ACCEPTED) reason = Reason.NONE;
         return new WorkloadExecutionEvidence(checked.transactionSequence(), RenderWorkload.Mode.GRAPHICS_COMMANDS,
-                outcome, reason, Optional.empty(), Optional.of(checked), checked.detail());
+                outcome, reason, Optional.empty(), Optional.empty(), Optional.of(checked), checked.detail());
     }
 
     /** Creates a fail-closed result for a combined workload unsupported by the backend. */
     public static WorkloadExecutionEvidence combinedUnsupported(long sequence, String detail) {
         return new WorkloadExecutionEvidence(sequence, RenderWorkload.Mode.COMBINED,
-                Outcome.REJECTED, Reason.UNSUPPORTED_COMBINATION, Optional.empty(), Optional.empty(), detail);
+                Outcome.REJECTED, Reason.UNSUPPORTED_COMBINATION, Optional.empty(),
+                Optional.empty(), Optional.empty(), detail);
     }
 
-    /** Creates evidence for a combined workload submitted in the declared RT-then-raster order. */
+    /**
+     * Creates evidence for a combined workload submitted in the declared RT-then-raster order.
+     * If the scene was accepted but the graphics lane did not complete the requested work, the
+     * result is {@link Outcome#PARTIALLY_ACCEPTED}; callers must inspect both lane results and
+     * must not retry the entire combined workload as if neither lane had been admitted.
+     */
     public static WorkloadExecutionEvidence combined(
             Renderer.FrameSubmissionResult scene,
             CommandExecutionEvidence graphics
@@ -121,8 +141,7 @@ public final class WorkloadExecutionEvidence {
             throw new IllegalArgumentException("combined evidence lanes must share one sequence");
         }
         Outcome outcome = switch (checkedGraphics.outcome()) {
-            case BLOCKED -> Outcome.DEFERRED;
-            case REJECTED, FALLBACK_COMPLETED -> Outcome.REJECTED;
+            case BLOCKED, REJECTED, FALLBACK_COMPLETED -> Outcome.PARTIALLY_ACCEPTED;
             default -> Outcome.ACCEPTED;
         };
         Reason reason = switch (checkedGraphics.reason()) {
@@ -134,29 +153,54 @@ public final class WorkloadExecutionEvidence {
         if (outcome == Outcome.ACCEPTED) reason = Reason.NONE;
         return new WorkloadExecutionEvidence(
                 checkedScene.frameSequence(), RenderWorkload.Mode.COMBINED, outcome, reason,
-                Optional.of(checkedScene), Optional.of(checkedGraphics),
+                Optional.empty(), Optional.of(checkedScene), Optional.of(checkedGraphics),
                 "retained RT scene submitted before generic raster commands on the shared Vulkan queue"
         );
     }
 
     /** Creates a deferred combined result before either lane is accepted. */
     public static WorkloadExecutionEvidence combinedDeferred(long sequence, String detail) {
+        return combinedDeferred(sequence, SubmissionDeferralReason.PROVIDER_CAPACITY, detail);
+    }
+
+    /** Creates a deferred combined result with the exact frame-admission classification. */
+    public static WorkloadExecutionEvidence combinedDeferred(
+            long sequence, SubmissionDeferralReason deferralReason, String detail
+    ) {
+        SubmissionDeferralReason checkedReason = Objects.requireNonNull(deferralReason, "deferralReason");
         return new WorkloadExecutionEvidence(sequence, RenderWorkload.Mode.COMBINED,
-                Outcome.DEFERRED, Reason.BOUNDED_BACKPRESSURE, Optional.empty(), Optional.empty(), detail);
+                Outcome.DEFERRED, deferralReason(checkedReason), Optional.of(checkedReason),
+                Optional.empty(), Optional.empty(), detail);
     }
 
     /** Creates a deferred scene admission result without fabricating a scene submission. */
     public static WorkloadExecutionEvidence sceneDeferred(
             long sequence, String detail
     ) {
+        return sceneDeferred(sequence, SubmissionDeferralReason.PROVIDER_CAPACITY, detail);
+    }
+
+    /** Creates a deferred scene admission result with the exact frame-admission classification. */
+    public static WorkloadExecutionEvidence sceneDeferred(
+            long sequence, SubmissionDeferralReason deferralReason, String detail
+    ) {
+        SubmissionDeferralReason checkedReason = Objects.requireNonNull(deferralReason, "deferralReason");
         return new WorkloadExecutionEvidence(sequence, RenderWorkload.Mode.RAY_TRACING_SCENE,
-                Outcome.DEFERRED, Reason.BOUNDED_BACKPRESSURE, Optional.empty(), Optional.empty(), detail);
+                Outcome.DEFERRED, deferralReason(checkedReason), Optional.of(checkedReason),
+                Optional.empty(), Optional.empty(), detail);
+    }
+
+    private static Reason deferralReason(SubmissionDeferralReason reason) {
+        return reason == SubmissionDeferralReason.DEVICE_RECOVERING
+                ? Reason.DEVICE_NOT_READY : Reason.BOUNDED_BACKPRESSURE;
     }
 
     public long sequence() { return sequence; }
     public RenderWorkload.Mode mode() { return mode; }
     public Outcome outcome() { return outcome; }
     public Reason reason() { return reason; }
+    /** @return exact frame-admission deferral classification when supplied by the originating lane */
+    public Optional<SubmissionDeferralReason> submissionDeferralReason() { return submissionDeferralReason; }
     public Optional<Renderer.FrameSubmissionResult> sceneSubmission() { return sceneSubmission; }
     public Optional<CommandExecutionEvidence> graphicsExecution() { return graphicsExecution; }
     public String detail() { return detail; }

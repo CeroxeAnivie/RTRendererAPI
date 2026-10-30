@@ -15,6 +15,7 @@ import top.ceroxe.rt.renderer.api.BuildBottomLevelAccelerationStructureCommand;
 import top.ceroxe.rt.renderer.api.BuildProceduralBottomLevelAccelerationStructureCommand;
 import top.ceroxe.rt.renderer.api.BuildTopLevelAccelerationStructureCommand;
 import top.ceroxe.rt.renderer.api.DispatchCommand;
+import top.ceroxe.rt.renderer.api.DispatchIndirectCommand;
 import top.ceroxe.rt.renderer.api.DestroyAccelerationStructureCommand;
 import top.ceroxe.rt.renderer.api.RetireRayTracingPipelineCommand;
 import top.ceroxe.rt.renderer.api.SetPushConstantsCommand;
@@ -221,6 +222,17 @@ final class VulkanGenericCommandPlan {
                     }
                     actions.add(new Dispatch(computePipeline, dispatch));
                 }
+                case DispatchIndirectCommand dispatch -> {
+                    if (computePipeline == null) {
+                        throw new IllegalArgumentException("indirect dispatch has no active compute pipeline in generic backend");
+                    }
+                    var arguments = resources.requireBuffer(dispatch.arguments().resource());
+                    requireReadable(resources, arguments, writes, locallyReadableBuffers, actions);
+                    reads.add(arguments);
+                    noteShaderWrites(resources, activeBindings, writes, textureWrites,
+                            locallyReadableBuffers, locallyReadableTextures);
+                    actions.add(new DispatchIndirect(computePipeline, dispatch, arguments));
+                }
                 case BindVertexBufferCommand bind -> {
                     if (graphicsPipeline == null) throw new IllegalArgumentException("vertex buffer has no active graphics pipeline");
                     var record = resources.requireBuffer(bind.slice().resource());
@@ -263,6 +275,7 @@ final class VulkanGenericCommandPlan {
                 }
                 case IndirectDrawCommand indirect -> {
                     if (graphicsPipeline == null) throw new IllegalArgumentException("indirect draw has no active graphics pipeline");
+                    graphicsPipelines.validateIndirect(indirect);
                     var arguments = resources.requireBuffer(indirect.arguments().resource());
                     requireReadable(resources, arguments, writes, locallyReadableBuffers, actions);
                     reads.add(arguments);
@@ -271,9 +284,10 @@ final class VulkanGenericCommandPlan {
                         count = resources.requireBuffer(indirect.count().orElseThrow().resource());
                         requireReadable(resources, count, writes, locallyReadableBuffers, actions);
                         reads.add(count);
-                        throw new UnsupportedOperationException("counted indirect graphics draws require VK_KHR_draw_indirect_count");
                     }
-                    actions.add(new Indirect(graphicsPipeline, indirect, arguments, count));
+                    noteShaderWrites(resources, activeBindings, writes, textureWrites,
+                            locallyReadableBuffers, locallyReadableTextures);
+                    actions.add(new Indirect(graphicsPipeline, indirect, arguments, count, graphicsPipelines.multiDrawIndirectEnabled()));
                 }
                 case WriteBufferCommand write -> {
                     VulkanGenericResourceRegistry.BufferRecord destination = resources.requireBuffer(
@@ -540,7 +554,7 @@ final class VulkanGenericCommandPlan {
             Action previous = actions.get(index);
             if (previous instanceof EndPass) break;
             if (previous instanceof Draw || previous instanceof DrawIndexed
-                    || previous instanceof MultiDraw || previous instanceof MultiDrawIndexed) {
+                    || previous instanceof MultiDraw || previous instanceof MultiDrawIndexed || previous instanceof Indirect) {
                 throw new UnsupportedOperationException("shader resource hazard requires an explicit barrier between render passes");
             }
             if (previous instanceof BeginPass) {
@@ -701,7 +715,7 @@ final class VulkanGenericCommandPlan {
 
     sealed interface Action permits BeginPass, EndPass, BindGraphics, BindGraphicsBindings, GraphicsPushConstants,
             BindVertex, BindIndex, ViewportAction, ScissorAction, Draw, DrawIndexed, MultiDraw, MultiDrawIndexed, Indirect,
-            BindCompute, BindComputeBindings, PushConstants, Dispatch, BindRayTracing, BindRayTracingBindings,
+            BindCompute, BindComputeBindings, PushConstants, Dispatch, DispatchIndirect, BindRayTracing, BindRayTracingBindings,
             RayTracingPushConstants, BuildAccelerationStructure, TraceRays, Write, WriteTexture, Copy, CopyTexture,
             CopyTextureRegion, CopyBufferToTexture, CopyTextureToBuffer, ClearColor, ClearDepthStencil,
             AutoBufferVisibility, AutoAccelerationStructureInputVisibility, AutoTextureVisibility, Barrier { }
@@ -731,7 +745,8 @@ final class VulkanGenericCommandPlan {
     record MultiDrawIndexed(VulkanGenericGraphicsPipelines.Compiled pipeline, MultiDrawIndexedCommand command) implements Action { }
     record Indirect(VulkanGenericGraphicsPipelines.Compiled pipeline, IndirectDrawCommand command,
                     VulkanGenericResourceRegistry.BufferRecord arguments,
-                    VulkanGenericResourceRegistry.BufferRecord count) implements Action { }
+                    VulkanGenericResourceRegistry.BufferRecord count,
+                    boolean multiDrawIndirectEnabled) implements Action { }
     record ResolvedAttachment(VulkanGenericResourceRegistry.TextureRecord record,
                               top.ceroxe.rt.renderer.api.RenderAttachment attachment,
                               top.ceroxe.rt.renderer.api.TextureView resolveView,
@@ -753,6 +768,9 @@ final class VulkanGenericCommandPlan {
             VulkanGenericComputePipelines.Compiled pipeline,
             DispatchCommand command
     ) implements Action { }
+
+    record DispatchIndirect(VulkanGenericComputePipelines.Compiled pipeline, DispatchIndirectCommand command,
+                            VulkanGenericResourceRegistry.BufferRecord arguments) implements Action { }
 
     record BindRayTracing(VulkanGenericRayTracingPipelines.Compiled pipeline) implements Action { }
 

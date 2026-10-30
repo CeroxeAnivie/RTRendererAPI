@@ -1,3 +1,6 @@
+#ifdef RTR_OPTICAL_TRACE_PATH
+extern "C" __device__ int printf(const char *, ...);
+#endif
 namespace rtr_optical {
 #ifdef RTR_OPTICAL_PHASE_PROFILE
 // Sparse per-path latency samples; overlapping GPU cycles are not wall time.
@@ -37,12 +40,42 @@ template<> struct __align__(16) State<false> {
     rtr_medium::PathVolumeInfo volumes;
 };
 struct __align__(16) Boundary {unsigned int slot;int priority;unsigned int orientation,flags;float4 absorption,emission,sigmaSAndDescriptor;};
+// A light connection retains its own medium stack. It never mutates the camera path.
+struct __align__(16) Connection {
+    float4 origin,direction,source,transport,lighting;uint4 control;
+    rtr_medium::PathVolumeInfo volumes;
+    float4 surfacePoint,surfaceNormal,surfaceView,surfaceMaterial;
+};
+static_assert(sizeof(Connection)==304,"native optical connection ABI");
 static_assert(sizeof(State<false>)==256,"native optical state ABI");
 static_assert(sizeof(State<true>)==112,"native optical boundary-free state ABI");
 static_assert(sizeof(Boundary)==64,"native optical boundary ABI");
 __device__ float3 rgb(float4 v){return make_float3(v.x,v.y,v.z);}
 __device__ float peak(float3 v){return fmaxf(v.x,fmaxf(v.y,v.z));}
 __device__ bool finite3(float3 v){return isfinite(v.x)&&isfinite(v.y)&&isfinite(v.z);}
+// PBRT's ray-spawn construction: select the outgoing side using the geometric normal,
+// then round each moved coordinate away from the surface. A ray-direction epsilon
+// has arbitrarily small normal displacement at grazing incidence and can remain outside.
+__device__ float3 spawnOrigin(float3 point,float3 normal,float3 direction,float3 error){
+    const float epsilon=fmaxf(1.e-5f,dot(make_float3(fabsf(normal.x),fabsf(normal.y),fabsf(normal.z)),error));
+    const float3 offset=normal*(dot(normal,direction)<0.f?-epsilon:epsilon);
+    float3 result=point+offset;
+    if(offset.x!=0.f)result.x=nextafterf(result.x,offset.x>0.f?INFINITY:-INFINITY);
+    if(offset.y!=0.f)result.y=nextafterf(result.y,offset.y>0.f?INFINITY:-INFINITY);
+    if(offset.z!=0.f)result.z=nextafterf(result.z,offset.z>0.f?INFINITY:-INFINITY);
+    return result;
+}
+__device__ float3 positionError(float3 point,float3 incoming,float distance,float3 direction){
+    // Propagate intersection reconstruction and instance-transform rounding before
+    // projecting the uncertainty onto the geometric normal, as in robust BSDF spawn.
+    const float gamma7=4.172327e-7f;
+    return make_float3(fabsf(point.x)+fabsf(incoming.x)+fabsf(distance*direction.x),
+            fabsf(point.y)+fabsf(incoming.y)+fabsf(distance*direction.y),
+            fabsf(point.z)+fabsf(incoming.z)+fabsf(distance*direction.z))*gamma7;
+}
+__device__ float3 spawnOrigin(float3 point,float3 normal,float3 direction){
+    return spawnOrigin(point,normal,direction,positionError(point,point,0.f,direction));
+}
 template<bool Small> __device__ State<Small> *states(unsigned char *b){return (State<Small> *)(b+((unsigned int*)b)[9]);}
 // Scalar planes make the same state component contiguous across a warp. References
 // preserve individual writes and early returns without eagerly loading or flushing state.
@@ -84,6 +117,7 @@ template<bool Compact,bool Transposed> struct HitView {
     __device__ float f(unsigned int n)const{return __uint_as_float(u(n));}
 };
 __device__ const Boundary *table(unsigned char *b){return (const Boundary *)(b+384);}
+__device__ Connection *connections(unsigned char*b){return (Connection*)(b+((unsigned int*)b)[18]);}
 __device__ float3 sigmaS(unsigned char*b,unsigned int selected){return selected==0xffffffffu
         ?make_float3(((float*)b)[40],((float*)b)[41],((float*)b)[42])
         :rgb(table(b)[selected].sigmaSAndDescriptor);
@@ -120,7 +154,7 @@ template<class S> __device__ __forceinline__ void finish(unsigned char *b,int i,
 #undef RTR_FINISH_NEXT
 }
 template<class S> __device__ __forceinline__ bool initialize(unsigned char *b,S *s){
-    unsigned int*h=(unsigned int*)b;if(h[0]!=0x524f5031u||h[1]!=4u||h[8]>32||h[6]<1||h[6]>32)return false;
+    unsigned int*h=(unsigned int*)b;if(h[0]!=0x524f5031u||h[1]!=5u||h[8]>32||h[6]<1||h[6]>32)return false;
     if constexpr(S::SMALL){if(h[7]!=0u||h[8]!=0u)return false;}
     else{
         rtr_medium::PathVolumeInfo_Init(&s->volumes);
@@ -129,7 +163,7 @@ template<class S> __device__ __forceinline__ bool initialize(unsigned char *b,S 
     s->counters.z=1;return true;
 }
 __device__ float ior(unsigned char *b,unsigned int selected){return selected==0xffffffffu?((float*)b)[23]:table(b)[selected].absorption.w;}
-template<class S> __device__ __forceinline__ bool segment(unsigned char*b,S*s,float3 origin,float distance,bool*collision,bool sample=true){
+template<class S> __device__ __forceinline__ bool segment(unsigned char*b,S*s,float3 origin,float distance,bool*collision,bool sample=true,float3*incident=nullptr){
     *collision=false;
     distance=fminf(fmaxf(distance,0.f),s->throughput.w);if(distance==0.f)return true;
     const unsigned int selected=selectedVolume(s);const float*h=(const float*)b;
@@ -143,7 +177,7 @@ template<class S> __device__ __forceinline__ bool segment(unsigned char*b,S*s,fl
     HomogeneousVolume_SegmentScatter(.5f,false,mass,&sigma,&zero,&zero,&tr,&unused);
     float3 integrated=make_float3(rtrApiIntegratedEmission(sigma.x,e.x,mass),rtrApiIntegratedEmission(sigma.y,e.y,mass),rtrApiIntegratedEmission(sigma.z,e.z,mass));
     float3 value=rgb(s->radiance)+rgb(s->terminal)*rgb(s->throughput)*integrated;
-    const bool sampling=sample&&peak(scatter)>0.f&&descriptor<0&&s->counters.w<((unsigned int*)b)[44]+1u;
+    const bool sampling=sample&&peak(scatter)>0.f&&s->counters.w<((unsigned int*)b)[44]+1u;
     float3 weight=rgb(s->throughput)*tr;
     if(sampling){
         const unsigned int seed=((unsigned int*)b)[36]^((unsigned int*)b)[34]*0x967a889bu^s->control.w*0x9e3779b9u;
@@ -151,17 +185,48 @@ template<class S> __device__ __forceinline__ bool segment(unsigned char*b,S*s,fl
         const float rate=channel==0u?sigma.x:channel==1u?sigma.y:sigma.z;
         float3 one=make_float3(1.f),sampleTr,sampleEmission;
         const float optical=HomogeneousVolume_SegmentScatter(random(s->control.z,seed,1u),true,1e30f,&zero,&one,&zero,&sampleTr,&sampleEmission);
-        const float local=rate>0.f?optical/rate:1e30f;
+        float local=1e30f,collisionMass=0.f,collisionDensity=1.f;
+        if(rate>0.f&&descriptor<0){local=optical/rate;collisionMass=local;}
+        else if(rate>0.f){
+            const unsigned int steps=((const unsigned int*)b)[39];
+            const rtr_density::Descriptor &grid=*(const rtr_density::Descriptor*)(b+(unsigned int)descriptor);
+            const float *pixels=(const float*)(b+grid.atlasOffset);
+            const float3 p=rtr_density::map(grid,origin,1.f),v=rtr_density::map(grid,rgb(s->direction),0.f);
+            float first=0.f,last=distance;
+            if(!finite3(p)||!finite3(v)||steps<1u||steps>64u)return false;
+            if(rtr_density::clipAxis(p.x,v.x,&first,&last)&&rtr_density::clipAxis(p.y,v.y,&first,&last)
+                    &&rtr_density::clipAxis(p.z,v.z,&first,&last)){
+                const float interval=(last-first)/(float)steps;float target=optical/rate,prefixMass=0.f;
+                for(unsigned int j=0;j<steps;++j){
+                    const float density=rtr_density::DensityGridTexture_ConstEvaluate(pixels,grid,p+v*(first+((float)j+.5f)*interval));
+                    if(!isfinite(density)||density<0.f)return false;
+                    const float cellMass=density*interval;
+                    if(density>0.f&&target<cellMass){
+                        local=first+(float)j*interval+target/density;
+                        collisionMass=prefixMass+target;collisionDensity=density;break;
+                    }
+                    target-=cellMass;prefixMass+=cellMass;
+                }
+            }
+        }
         if(local<distance){
-            float3 atTr;HomogeneousVolume_SegmentScatter(.5f,false,local,&sigma,&zero,&zero,&atTr,&unused);
-            const float pdf=(sigma.x*atTr.x+sigma.y*atTr.y+sigma.z*atTr.z)/3.f;
+            float3 atTr;HomogeneousVolume_SegmentScatter(.5f,false,collisionMass,&sigma,&zero,&zero,&atTr,&unused);
+            const float pdf=collisionDensity*(sigma.x*atTr.x+sigma.y*atTr.y+sigma.z*atTr.z)/3.f;
             if(!(pdf>0.f)||!isfinite(pdf))return false;
-            weight=rgb(s->throughput)*atTr*scatter/pdf;
+            if(incident)*incident=rgb(s->throughput)*atTr*(1.f/pdf);
+            weight=rgb(s->throughput)*atTr*scatter*(collisionDensity/pdf);
             const float3 point=origin+rgb(s->direction)*local;
             if(!finite3(value)||!finite3(weight)||!finite3(point))return false;
             s->radiance=make_float4(value.x,value.y,value.z,0.f);
             s->throughput=make_float4(weight.x,weight.y,weight.z,fmaxf(s->throughput.w-local,0.f));
             s->origin=make_float4(point.x,point.y,point.z,0.f);s->control.x=2u;++s->counters.w;++s->control.w;
+#ifndef RTR_OPTICAL_CAUSTIC_ONLY
+            if(((unsigned int*)b)[19]!=0u){
+                Connection*c=connections(b)+(s->control.z-((unsigned int*)b)[4]*((unsigned int*)b)[3]);
+                c->lighting=make_float4(0.f);c->control=make_uint4(0u,0u,0u,0u);
+                if constexpr(S::SMALL)rtr_medium::PathVolumeInfo_Init(&c->volumes);else c->volumes=s->volumes;
+            }
+#endif
             *collision=true;return true;
         }
         const float survival=(tr.x+tr.y+tr.z)/3.f;
@@ -215,6 +280,68 @@ __device__ bool roughGlass(float3 incident,float3 normal,float n1,float n2,float
     *direction=Spectrum_IsBlack(*weight)?incident:normalize(tangent*local.x+bitangent*local.y+normal*local.z);
     return finite3(*direction)&&finite3(*weight);
 }
+#ifndef RTR_OPTICAL_CAUSTIC_ONLY
+__device__ bool connectionSegment(unsigned char*b,Connection*c,float distance){
+    distance=fminf(fmaxf(distance,0.f),c->transport.w);
+    const unsigned int selected=c->volumes.currentVolumeIndex;const float*h=(const float*)b;
+    const float3 absorption=selected==0xffffffffu?make_float3(h[20],h[21],h[22]):rgb(table(b)[selected].absorption);
+    const int descriptor=selected==0xffffffffu?((const int*)b)[38]:((const int*)&table(b)[selected].sigmaSAndDescriptor)[3];
+    const float mass=rtr_density::mass(b,descriptor,rgb(c->origin),rgb(c->direction),distance,((unsigned int*)b)[39]);
+    if(!isfinite(mass)||mass<0.f)return false;
+    float3 tr,unused,zero=make_float3(0.f),extinction=absorption+sigmaS(b,selected);
+    HomogeneousVolume_SegmentScatter(.5f,false,mass,&extinction,&zero,&zero,&tr,&unused);
+    const float3 weight=rgb(c->transport)*tr;c->transport=make_float4(weight.x,weight.y,weight.z,fmaxf(c->transport.w-distance,0.f));
+    return finite3(weight);
+}
+// Returns 0 for finished/blocked, 1 for another geometric segment, -1 for invalid state.
+template<bool Compact,bool Transposed> __device__ int connectionStep(unsigned char*b,Connection*c,HitView<Compact,Transposed> view){
+    const bool found=view.u(Compact?14:28)!=0u;
+    const float distance=found?view.f(3):c->origin.w;
+    if(!isfinite(distance)||distance<0.f)return -1;
+    const float travel=fminf(distance,c->origin.w);
+    if(!connectionSegment(b,c,travel))return -2;
+    if(!found||distance>=c->origin.w)return 0;
+    if(++c->control.z>=((unsigned int*)b)[6]){c->transport.x=c->transport.y=c->transport.z=0.f;return 0;}
+    const unsigned int flags=view.u(Compact?19:47);
+    const bool volumeOnly=(flags&2u)!=0u;
+    rtr_medium::PathVolumeInfo candidate=c->volumes;
+    if(flags){
+        const int index=boundaryIndex(b,view.u(Compact?16:44));if(index<0)return -3;
+        const Boundary entry=table(b)[index];
+        if(view.u(Compact?17:45)!=(unsigned int)entry.priority||view.u(Compact?18:46)!=entry.orientation||flags!=entry.flags)return -4;
+        const bool entering=(view.u(Compact?15:29)==2u)==(entry.orientation!=0u);
+        if(entering)for(unsigned int j=0;j<candidate.volumeIndexListSize;++j)if(candidate.volumeIndexList[j]==(unsigned int)index)return -5;
+        const auto status=entering?rtr_medium::add(&candidate,index,priorities(b),((unsigned int*)b)[7])
+                :rtr_medium::remove(&candidate,index,priorities(b),((unsigned int*)b)[7]);
+        if(status!=rtr_medium::OK)return -6;
+    }
+    if(!volumeOnly&&__float_as_uint(c->source.w)!=2u){
+        const float opacity=flags?1.f:fminf(fmaxf(view.f(Compact?11:19),0.f),1.f);
+        const float transmission=fminf(fmaxf(view.f(Compact?12:24),0.f),1.f);
+        const float outside=ior(b,c->volumes.currentVolumeIndex);
+        float n1=view.u(Compact?15:29)==2u?view.f(Compact?13:25):outside;
+        float n2=view.u(Compact?15:29)==2u?outside:view.f(Compact?13:25);
+        if(flags){n1=outside;n2=ior(b,candidate.currentVolumeIndex);}
+        const float3 normal=normalize(make_float3(view.f(Compact?4:12),view.f(Compact?5:13),view.f(Compact?6:14)));
+        float3 rd,td,rw,tw;float fresnel;
+        if(!glass(rgb(c->direction),normal,n1,n2,WHITE,&rd,&td,&rw,&tw,&fresnel))return -7;
+        const float3 tint=make_float3(fminf(fmaxf(view.f(Compact?8:16),0.f),1.f),fminf(fmaxf(view.f(Compact?9:17),0.f),1.f),fminf(fmaxf(view.f(Compact?10:18),0.f),1.f));
+        // Existing direct-light contract: straight connection transmittance, not a bent light path.
+        const float3 factor=make_float3(1.f-opacity)+tint*(opacity*transmission*(1.f-fresnel));
+        const float3 weight=rgb(c->transport)*factor;c->transport.x=weight.x;c->transport.y=weight.y;c->transport.z=weight.z;
+    }
+    c->volumes=candidate;
+    if(peak(rgb(c->transport))<=((float*)b)[32]){c->transport.x=c->transport.y=c->transport.z=0.f;return 0;}
+    const float3 point=make_float3(view.f(0),view.f(1),view.f(2));
+    const float3 normal=normalize(make_float3(view.f(Compact?4:12),view.f(Compact?5:13),view.f(Compact?6:14)));
+    const float3 next=spawnOrigin(point,normal,rgb(c->direction),
+            positionError(point,rgb(c->origin),distance,rgb(c->direction)));
+    const float advance=fminf(fmaxf(dot(next-point,rgb(c->direction)),0.f),fmaxf(c->origin.w-distance,0.f));
+    c->origin=make_float4(point.x,point.y,point.z,fmaxf(c->origin.w-distance,0.f));
+    if(!connectionSegment(b,c,advance))return -8;
+    c->origin=make_float4(next.x,next.y,next.z,fmaxf(c->origin.w-advance,0.f));
+    return c->origin.w>0.f?1:0;
+}
 }
 extern "C" __global__ void native_optical_reset(unsigned char*b,int count){if(blockIdx.x==0&&threadIdx.x==0){unsigned int*h=(unsigned int*)b;h[28]=h[29]=h[30]=h[31]=0;
 #ifdef RTR_OPTICAL_PHASE_PROFILE
@@ -250,6 +377,38 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
     RTR_ENTRY_NEXT(1u);
     if(!s->counters.z&&!initialize(b,s)){finish(b,i,s,statistics,1);return;}
     RTR_ENTRY_NEXT(2u);
+    if(h[19]!=0u&&(s->control.x==2u||s->control.x==3u)){
+        Connection*c=connections(b)+i;
+        HitView<Compact,Transposed> connectionView={(const unsigned int*)(b+h[10]),h[2],(unsigned int)i};
+        if(connectionView.u(Compact?23:51)!=s->control.w){finish(b,i,s,statistics,17);return;}
+        int continuation=0;
+        if(__float_as_uint(c->source.w)!=0u)continuation=connectionStep(b,c,connectionView);
+        if(continuation<0){finish(b,i,s,statistics,32u+(unsigned int)(-continuation));return;}
+        if(continuation>0){s->control.x=3u;++s->control.w;increment(b,statistics,0u);return;}
+        float3 incoming=rgb(c->lighting);
+        if(peak(rgb(c->source))>0.f){
+            const float phase=c->control.w!=0u?1.f:rtr_medium::hgEvaluate(dot(rgb(s->direction),rgb(c->direction)),anisotropy(b,selectedVolume(s)));
+            incoming=incoming+rgb(c->source)*rgb(c->transport)*phase;
+        }
+        if(!finite3(incoming)){finish(b,i,s,statistics,19);return;}
+        c->lighting=make_float4(incoming.x,incoming.y,incoming.z,0.f);
+        ++c->control.x;
+        if(c->control.x<c->control.y){
+            if constexpr(Small)rtr_medium::PathVolumeInfo_Init(&c->volumes);else c->volumes=s->volumes;
+            s->control.x=2u;++s->control.w;increment(b,statistics,0u);return;
+        }
+        const float3 value=rgb(s->radiance)+rgb(s->terminal)*rgb(s->throughput)*incoming;
+        if(!finite3(value)){finish(b,i,s,statistics,20);return;}
+        s->radiance=make_float4(value.x,value.y,value.z,0.f);
+        if(c->control.w!=0u){finish(b,i,s,statistics);return;}
+        const unsigned int seed=h[36]^h[34]*0x967a889bu^s->control.w*0x9e3779b9u;
+        float phasePdf;const float3 direction=rtr_medium::hgSample(rgb(s->direction),anisotropy(b,selectedVolume(s)),
+                random(s->control.z,seed,2u),random(s->control.z,seed,3u),&phasePdf);
+        if(!finite3(direction)||!isfinite(phasePdf)||phasePdf<=0.f){finish(b,i,s,statistics,16);return;}
+        s->direction=make_float4(direction.x,direction.y,direction.z,0.f);s->control.x=1u;++s->control.w;
+        if(peak(rgb(s->throughput))<=((float*)b)[32]||s->throughput.w<=0.f){finish(b,i,s,statistics);return;}
+        increment(b,statistics,0u);return;
+    }
     if(s->control.x==2u){
         RTR_PHASE_NEXT(6u);
         const float4 lighting=((float4*)(b+h[11]))[i];
@@ -282,6 +441,12 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
     ++s->counters.x;
     unsigned int flags=view.u(Compact?19:47);bool volumeOnly=(flags&2u)!=0u;
     float opacity=flags?1.f:fminf(fmaxf(view.f(Compact?11:19),0.f),1.f),transmission=volumeOnly?1.f:fminf(fmaxf(view.f(Compact?12:24),0.f),1.f);
+    if(h[19]!=0u&&((float4*)(b+h[11]))[i].w==1.f&&transmission<=0.f&&opacity>=1.f) {
+        Connection*c=connections(b)+i;
+        c->lighting=make_float4(evaluation.x,evaluation.y,evaluation.z,0.f);c->control=make_uint4(0u,0u,0u,1u);
+        if constexpr(Small)rtr_medium::PathVolumeInfo_Init(&c->volumes);else c->volumes=s->volumes;
+        s->origin=c->surfacePoint;s->control.x=2u;++s->control.w;increment(b,statistics,0u);return;
+    }
     float3 local=rgb(s->terminal)*rgb(s->throughput)*evaluation*(opacity*(1.f-transmission));
     s->radiance.x+=local.x;s->radiance.y+=local.y;s->radiance.z+=local.z;
     if(transmission<=0.f&&opacity>=1.f){finish(b,i,s,statistics);return;}
@@ -332,6 +497,7 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
             factor=(reflection?rw:tw)*multiplier;nextDirection=reflection?rd:td;
         }
         RTR_PHASE_NEXT(6u);
+        if(peak(factor)<=0.f){finish(b,i,s,statistics);return;}
         s->counters.y=1;
         float3 weight=rgb(s->throughput)*(firstInterface?make_float3(1.f):factor);
         if(firstInterface){float3 outer=rgb(s->terminal)*factor;s->terminal.x=outer.x;s->terminal.y=outer.y;s->terminal.z=outer.z;
@@ -344,14 +510,17 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
     }
     RTR_PHASE_NEXT(6u);
     float3 point=make_float3(view.f(0),view.f(1),view.f(2));
-    float epsilon=fmaxf(1.e-5f,fmaxf(fabsf(point.x),fmaxf(fabsf(point.y),fabsf(point.z)))*2.e-7f);
     if(!finite3(point)||!finite3(direction)){finish(b,i,s,statistics,12);return;}
+    const float3 spawnNormal=normalize(make_float3(view.f(Compact?4:12),view.f(Compact?5:13),view.f(Compact?6:14)));
+    const float3 next=spawnOrigin(point,spawnNormal,direction,
+            positionError(point,rgb(s->origin),distance,rgb(s->direction)));
+    const float epsilon=fmaxf(dot(next-point,direction),0.f);
     s->direction=make_float4(direction.x,direction.y,direction.z,0);
     RTR_PHASE_NEXT(1u);
     bool epsilonCollision=false;if(!segment(b,s,point,epsilon,&epsilonCollision,false)){finish(b,i,s,statistics,13);return;}
     RTR_PHASE_NEXT(6u);
     if(epsilonCollision){increment(b,statistics,0u);return;}
-    point+=direction*epsilon;s->origin=make_float4(point.x,point.y,point.z,epsilon);++s->control.w;
+    s->origin=make_float4(next.x,next.y,next.z,epsilon);++s->control.w;
     if(peak(rgb(s->throughput))<=((float*)b)[32]){finish(b,i,s,statistics);return;}increment(b,statistics,0u);
 }
 
@@ -405,3 +574,6 @@ extern "C" __global__ void native_optical_step_5(unsigned char*b,int count){rtr_
 extern "C" __global__ void native_optical_step_6(unsigned char*b,int count){rtr_optical_fixed<false,true,false,true>(b,count);}
 extern "C" __global__ void native_optical_step_7(unsigned char*b,int count){rtr_optical_fixed<true,true,false,true>(b,count);}
 extern "C" __global__ void native_optical_step_8(unsigned char*b,int count){rtr_optical_fixed<true,true,true,true>(b,count);}
+#else
+} // namespace rtr_optical
+#endif

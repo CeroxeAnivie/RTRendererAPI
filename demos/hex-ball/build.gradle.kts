@@ -227,8 +227,16 @@ tasks.register<JavaExec>("mediumGalleryNativeSelfTest") {
     group = "verification"
     description = "Executes the GPU gallery feature/image and representation parity gate."
     dependsOn(tasks.testClasses)
-    classpath = sourceSets.test.get().runtimeClasspath
+    // These image checks disable vendor features and exercise core transport.
+    classpath = files(sourceSets.main.get().output, sourceSets.test.get().output,
+        configurations.testRuntimeClasspath.get().incoming.artifactView {
+            componentFilter { component ->
+                component !is org.gradle.api.artifacts.component.ProjectComponentIdentifier ||
+                    component.projectPath != ":renderer-nvidia"
+            }
+        }.files)
     mainClass.set("demo.MediumGalleryNativeSelfTest")
+    providers.gradleProperty("galleryTestScene").orNull?.let { systemProperty("top.ceroxe.rt.gallery.onlyPreset",it) }
     val validationLog = layout.buildDirectory.file("reports/medium-gallery/validation.jsonl")
     systemProperty("top.ceroxe.rt.validation.logPath", validationLog.get().asFile.absolutePath)
     doFirst {

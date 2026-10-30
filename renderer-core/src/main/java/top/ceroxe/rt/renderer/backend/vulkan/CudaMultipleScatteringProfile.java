@@ -9,8 +9,8 @@ final class CudaMultipleScatteringProfile {
     static void requireSupported(RenderFrameRequest frame,int boundaries,boolean terminal) {
         var medium=frame.environment().cameraMedium();
         if(boundaries!=0||!terminal)unsupported("opaque double-sided UNLIT terminal surfaces without explicit boundaries are required");
-        if(medium.indexOfRefraction()!=1||medium.scattering().isZero())
-            unsupported("IOR-one scattering camera medium is required");
+        if(medium.scattering().isZero())
+            unsupported("a scattering camera medium is required");
         if(frame.mediumTransport().scatteringBounces()<1)unsupported("additional scattering bounces must be requested");
         if(frame.caustics().enabled()||!frame.shaderData().isEmpty())unsupported("caustics and expert shader data require separate integration");
     }

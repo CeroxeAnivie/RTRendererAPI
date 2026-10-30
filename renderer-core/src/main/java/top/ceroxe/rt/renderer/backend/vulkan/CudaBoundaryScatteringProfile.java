@@ -3,7 +3,7 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 
-/** Admission for scattering through explicit, volume-only IOR-one boundaries. */
+/** Admission for scattering through explicit, volume-only boundaries. */
 final class CudaBoundaryScatteringProfile {
     private CudaBoundaryScatteringProfile() { }
 
@@ -12,15 +12,13 @@ final class CudaBoundaryScatteringProfile {
         if(!terminalSurfaces)unsupported("all material surfaces must be opaque double-sided UNLIT terminals");
         if(request.caustics().enabled()||!request.shaderData().isEmpty())
             unsupported("caustics and expert shader data require a later native transport integration");
-        if(request.environment().cameraMedium().indexOfRefraction()!=1)
-            unsupported("the camera medium must have IOR one");
         if(scene.boundaries().isEmpty()||scene.boundaries().size()>32)
             unsupported("one to 32 explicit boundaries are required");
         boolean scattering=!request.environment().cameraMedium().scattering().isZero();
         for(var entry:scene.boundaries()) {
             if(entry.boundary().surfaceInteraction())unsupported("only volume-only explicit boundaries are supported");
             if(entry.boundary().medium().indexOfRefraction()!=1)
-                unsupported("all explicit boundaries must have IOR one");
+                unsupported("IOR-changing boundaries must enable surface interaction");
             scattering|=!entry.boundary().medium().scattering().isZero();
         }
         if(!scattering)unsupported("at least one active medium must scatter");

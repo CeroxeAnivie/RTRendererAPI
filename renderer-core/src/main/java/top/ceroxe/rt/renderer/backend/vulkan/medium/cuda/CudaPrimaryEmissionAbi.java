@@ -22,9 +22,8 @@ public final class CudaPrimaryEmissionAbi {
     public static byte[] constants(RenderFrameRequest frame) {
         var checked = Objects.requireNonNull(frame, "frame");
         var medium = checked.environment().cameraMedium();
-        if (!medium.densityField().isUniform() || !medium.scattering().isZero()
-                || medium.indexOfRefraction() != 1)
-            throw new IllegalArgumentException("primary emission batch requires homogeneous non-scattering transport with IOR one");
+        if (!medium.densityField().isUniform() || !medium.scattering().isZero())
+            throw new IllegalArgumentException("primary emission batch requires homogeneous non-scattering transport");
         var absorption = medium.absorption().multiply(medium.density());
         var emission = medium.emission().multiply(medium.density());
         return ByteBuffer.allocate(CONSTANT_BYTES).order(ByteOrder.nativeOrder())

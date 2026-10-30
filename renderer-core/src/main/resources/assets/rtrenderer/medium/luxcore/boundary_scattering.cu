@@ -81,7 +81,7 @@ __device__ bool walk(unsigned char*b,int packetBase,float3 origin,float3 directi
     for(unsigned int j=0;j<count;++j){float d;unsigned int code;packetEvent(b,packetBase,j,&d,&code);
         if(!isfinite(d)||d<previous)return false;if(d>=end)break;
         if(++*events>budget)return false;
-        if(!integrate(b,v,origin+direction*previous,d-previous,optical,emitted))return false;
+        if(!integrate(b,v,origin+direction*previous,direction,d-previous,optical,emitted))return false;
         const float3 point=origin+direction*d;if(!transition(b,v,code))return false;
         const float advance=fminf(epsilon(point),fmaxf(end-d,0.f));
         if(!integrate(b,v,point,direction,advance,optical,emitted))return false;previous=d+advance;

@@ -88,8 +88,8 @@ public final class CudaBoundaryScatteringAbi {
             int tableBase=HEADER_BYTES;
             for(int index=0;index<ordered.size();index++) {
                 var entry=ordered.get(index);var boundary=entry.boundary();
-                if(boundary.surfaceInteraction()||boundary.medium().indexOfRefraction()!=1)
-                    throw new IllegalArgumentException("boundary scattering requires volume-only IOR-one boundaries");
+                if(boundary.surfaceInteraction())
+                    throw new IllegalArgumentException("boundary scattering requires volume-only boundaries");
                 if(compact.put(entry.slot(),index)!=null)throw new IllegalArgumentException("duplicate boundary slot");
                 int at=tableBase+index*BOUNDARY_BYTES;var m=boundary.medium();
                 var st=m.extinction().multiply(m.density());var ss=m.scattering().multiply(m.density());var e=m.emission().multiply(m.density());
@@ -118,13 +118,13 @@ public final class CudaBoundaryScatteringAbi {
         Objects.requireNonNull(frame);Objects.requireNonNull(boundaries);Objects.requireNonNull(containingSlots);
         if(width<1||height<1||frame.antiAliasing().samplesPerPixel()<1||frame.antiAliasing().samplesPerPixel()>8
                 ||lightUpperBound<0||packetCapacity<1||packetCapacity>32||boundaries.size()>MAX_BOUNDARIES
-                ||containingSlots.length>MAX_BOUNDARIES||frame.environment().cameraMedium().indexOfRefraction()!=1
+                ||containingSlots.length>MAX_BOUNDARIES
                 ||frame.mediumTransport().scatteringSteps()<1)
             throw new IllegalArgumentException("unsupported boundary-scattering frame dimensions or event limits");
         boolean scattering=!frame.environment().cameraMedium().scattering().isZero();
         for(var boundary:boundaries) {
-            if(boundary.boundary().surfaceInteraction()||boundary.boundary().medium().indexOfRefraction()!=1)
-                throw new IllegalArgumentException("boundary scattering requires volume-only IOR-one boundaries");
+            if(boundary.boundary().surfaceInteraction())
+                throw new IllegalArgumentException("boundary scattering requires volume-only boundaries");
             scattering|=!boundary.boundary().medium().scattering().isZero();
         }
         if(!scattering)throw new IllegalArgumentException("at least one active medium must scatter");

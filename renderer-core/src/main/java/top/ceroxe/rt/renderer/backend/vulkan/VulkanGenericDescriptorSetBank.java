@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Owns one immutable binding layout's native descriptor sets.
+ * Owns immutable binding layouts and fence-leased descriptor snapshots.
  *
  * <p>Groups become Vulkan descriptor-set numbers; no group is collapsed or guessed. Descriptor
  * contents are written only from exact versioned values, and all native handles are destroyed
@@ -41,22 +41,18 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
     private final VkDevice device;
     private final BindingLayout layout;
     private final Map<Integer, Long> layoutsByGroup;
-    private final Map<Integer, Long> setsByGroup;
-    private final long pool;
+    private final java.util.ArrayDeque<Allocation> reusable = new java.util.ArrayDeque<>();
+    private final java.util.Set<Snapshot> leased = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     private boolean closed;
 
     private VulkanGenericDescriptorSetBank(
             VkDevice device,
             BindingLayout layout,
-            Map<Integer, Long> layoutsByGroup,
-            Map<Integer, Long> setsByGroup,
-            long pool
+            Map<Integer, Long> layoutsByGroup
     ) {
         this.device = device;
         this.layout = layout;
         this.layoutsByGroup = Collections.unmodifiableMap(new LinkedHashMap<>(layoutsByGroup));
-        this.setsByGroup = Collections.unmodifiableMap(new LinkedHashMap<>(setsByGroup));
-        this.pool = pool;
     }
 
     static VulkanGenericDescriptorSetBank create(
@@ -81,51 +77,65 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
         }
         Map<Integer, List<BindingLayoutEntry>> groups = groups(checkedLayout);
         Map<Integer, Long> createdLayouts = new LinkedHashMap<>();
-        long pool = VK10.VK_NULL_HANDLE;
         try {
             for (Map.Entry<Integer, List<BindingLayoutEntry>> group : groups.entrySet()) {
                 createdLayouts.put(group.getKey(), createLayout(stack, device, group.getValue()));
             }
-            pool = createPool(stack, device, checkedLayout);
-            LongBuffer nativeLayouts = stack.mallocLong(createdLayouts.size());
-            for (long value : createdLayouts.values()) nativeLayouts.put(value);
-            nativeLayouts.flip();
-            VkDescriptorSetAllocateInfo allocateInfo = VkDescriptorSetAllocateInfo.calloc(stack)
-                    .sType$Default().descriptorPool(pool).pSetLayouts(nativeLayouts);
-            LongBuffer nativeSets = stack.mallocLong(createdLayouts.size());
-            VulkanFailures.check(VK10.vkAllocateDescriptorSets(device, allocateInfo, nativeSets),
-                    "vkAllocateDescriptorSets.generic");
-            Map<Integer, Long> sets = new LinkedHashMap<>();
-            int index = 0;
-            for (int group : createdLayouts.keySet()) sets.put(group, nativeSets.get(index++));
             VulkanGenericDescriptorSetBank result = new VulkanGenericDescriptorSetBank(
-                    device, checkedLayout, createdLayouts, sets, pool
+                    device, checkedLayout, createdLayouts
             );
             createdLayouts = null;
-            pool = VK10.VK_NULL_HANDLE;
             return result;
         } finally {
-            if (pool != VK10.VK_NULL_HANDLE) VK10.vkDestroyDescriptorPool(device, pool, null);
             if (createdLayouts != null) {
                 for (long value : createdLayouts.values()) VK10.vkDestroyDescriptorSetLayout(device, value, null);
             }
         }
     }
 
-    void update(BindingSet bindings, VulkanGenericResourceRegistry resources, VulkanGenericSamplerCache samplers) {
-        update(bindings, resources, samplers, null);
+    /** Each command binding owns an immutable set until its submission fence completes. */
+    Snapshot snapshot(BindingSet bindings, VulkanGenericResourceRegistry resources,
+            VulkanGenericSamplerCache samplers, AccelerationStructureResolver accelerationStructures) {
+        requireOpen();
+        Allocation allocation = reusable.pollFirst();
+        if (allocation == null) allocation = allocateSnapshot();
+        Snapshot result = new Snapshot(allocation);
+        leased.add(result);
+        try {
+            update(bindings, resources, samplers, accelerationStructures, allocation.sets());
+            return result;
+        } catch (RuntimeException | Error failure) {
+            result.close();
+            throw failure;
+        }
     }
 
-    /**
-     * Writes one immutable descriptor snapshot, resolving AS values through the transaction-local
-     * RT registry rather than accepting a raw handle from the API boundary.
-     */
-    void update(
-            BindingSet bindings,
-            VulkanGenericResourceRegistry resources,
-            VulkanGenericSamplerCache samplers,
-            AccelerationStructureResolver accelerationStructures
-    ) {
+    private Allocation allocateSnapshot() {
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            long snapshotPool = createPool(stack, device, layout);
+            try {
+                LongBuffer nativeLayouts = stack.mallocLong(layoutsByGroup.size());
+                for (long value : layoutsByGroup.values()) nativeLayouts.put(value);
+                nativeLayouts.flip();
+                var allocation = VkDescriptorSetAllocateInfo.calloc(stack).sType$Default()
+                        .descriptorPool(snapshotPool).pSetLayouts(nativeLayouts);
+                LongBuffer nativeSets = stack.mallocLong(layoutsByGroup.size());
+                VulkanFailures.check(VK10.vkAllocateDescriptorSets(device, allocation, nativeSets),
+                        "vkAllocateDescriptorSets.genericSnapshot");
+                Map<Integer, Long> sets = new LinkedHashMap<>();
+                int index = 0;
+                for (int group : layoutsByGroup.keySet()) sets.put(group, nativeSets.get(index++));
+                return new Allocation(snapshotPool, Map.copyOf(sets));
+            } catch (RuntimeException | Error failure) {
+                VK10.vkDestroyDescriptorPool(device, snapshotPool, null);
+                throw failure;
+            }
+        }
+    }
+
+    private void update(BindingSet bindings, VulkanGenericResourceRegistry resources,
+            VulkanGenericSamplerCache samplers, AccelerationStructureResolver accelerationStructures,
+            Map<Integer, Long> targetSets) {
         requireOpen();
         BindingSet checked = Objects.requireNonNull(bindings, "bindings");
         if (!checked.layout().entries().equals(layout.entries())) {
@@ -137,7 +147,7 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
             for (BindingLayoutEntry entry : layout.entries()) {
                 List<BindingSet.Value> values = checked.values().get(entry.key());
                 VkWriteDescriptorSet write = writes.get(writeIndex++)
-                        .sType$Default().dstSet(set(entry.key().group())).dstBinding(entry.key().binding())
+                        .sType$Default().dstSet(targetSets.get(entry.key().group())).dstBinding(entry.key().binding())
                         .dstArrayElement(0).descriptorType(descriptorType(entry));
                 write.descriptorCount(values.size());
                 if (isBuffer(entry.type())) {
@@ -209,22 +219,39 @@ final class VulkanGenericDescriptorSetBank implements AutoCloseable {
         return value;
     }
 
-    long set(int group) {
-        requireOpen();
-        Long value = setsByGroup.get(group);
-        if (value == null) throw new IllegalArgumentException("binding group is not declared: " + group);
-        return value;
-    }
-
-    List<Integer> groups() { return List.copyOf(setsByGroup.keySet()); }
+    List<Integer> groups() { return List.copyOf(layoutsByGroup.keySet()); }
 
     @Override
     public void close() {
         if (closed) return;
+        if (!leased.isEmpty()) throw new IllegalStateException("descriptor snapshots still have incomplete consumers");
         closed = true;
-        VK10.vkDestroyDescriptorPool(device, pool, null);
+        for (Allocation allocation : reusable) VK10.vkDestroyDescriptorPool(device, allocation.pool(), null);
+        reusable.clear();
         for (long value : layoutsByGroup.values()) VK10.vkDestroyDescriptorSetLayout(device, value, null);
     }
+
+    final class Snapshot implements AutoCloseable {
+        private final Allocation allocation;
+        private boolean released;
+
+        private Snapshot(Allocation allocation) { this.allocation = allocation; }
+        List<Integer> groups() { return VulkanGenericDescriptorSetBank.this.groups(); }
+        long set(int group) {
+            if (released) throw new IllegalStateException("descriptor snapshot has been released");
+            return Objects.requireNonNull(allocation.sets().get(group), "descriptor group");
+        }
+        @Override public void close() {
+            if (released) return;
+            released = true;
+            leased.remove(this);
+            // Keep a bounded reuse cache: normal frames allocate once and update only idle sets.
+            if (reusable.size() < 64 && !closed) reusable.addLast(allocation);
+            else VK10.vkDestroyDescriptorPool(device, allocation.pool(), null);
+        }
+    }
+
+    private record Allocation(long pool, Map<Integer, Long> sets) { }
 
     private static Map<Integer, List<BindingLayoutEntry>> groups(BindingLayout layout) {
         Map<Integer, List<BindingLayoutEntry>> result = new LinkedHashMap<>();

@@ -37,7 +37,7 @@ public final class CudaHeterogeneousMultipleScatteringAbi {
             var scattering = medium.scattering().multiply(medium.density());
             var emission = medium.emission().multiply(medium.density());
             var budget = frame.mediumTransport();
-            ByteBuffer out = ByteBuffer.allocate(includeDensity ? plan.primaryOffset() : HEADER_BYTES).order(ByteOrder.nativeOrder());
+            ByteBuffer out = ByteBuffer.allocate(includeDensity ? HEADER_BYTES + density.bytes() : HEADER_BYTES).order(ByteOrder.nativeOrder());
             out.putInt(MAGIC).putInt(VERSION).putInt(pixels * plan.samples()).putInt(plan.steps())
                     .putInt(first).putInt(pixels).putInt(plan.samples()).putInt(budget.scatteringBounces())
                     .putInt(plan.primaryOffset()).putInt(plan.transmittanceOffset()).putInt(plan.emissionOffset()).putInt(0)
@@ -59,9 +59,9 @@ public final class CudaHeterogeneousMultipleScatteringAbi {
         var medium = frame.environment().cameraMedium();
         int samples = frame.antiAliasing().samplesPerPixel(), steps = frame.mediumTransport().scatteringSteps();
         if (width < 1 || height < 1 || samples < 1 || samples > 8 || steps < 1 || steps > 64
-                || lightUpperBound < 0 || medium.densityField().isUniform() || medium.indexOfRefraction() != 1
+                || lightUpperBound < 0 || medium.densityField().isUniform()
                 || medium.scattering().isZero() || frame.mediumTransport().scatteringBounces() < 1)
-            throw new IllegalArgumentException("heterogeneous IOR-one scattering and additional bounces required");
+            throw new IllegalArgumentException("heterogeneous scattering and additional bounces required");
         int pixels = Math.toIntExact(Math.multiplyExact((long) width, height));
         long paths = Math.multiplyExact((long) pixels, samples);
         int connections = (int) Math.min(MAX_CONNECTIONS, 1L + (frame.mediumTransport().lightSamples() == 0

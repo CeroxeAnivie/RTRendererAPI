@@ -652,6 +652,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
     private BufferRecord create(BufferResource descriptor, long transactionRevision) {
         ResourceGenerationKey generation = ResourceGenerationKey.of(descriptor);
         RtGpuBuffer buffer = descriptor.usage().contains(BufferUsage.ACCELERATION_STRUCTURE_BUILD_INPUT)
+                || descriptor.usage().contains(BufferUsage.INDIRECT)
                 ? RtGpuBuffer.createHostVisibleDeviceAddressBuffer(
                         device.device(), device.allocator(), descriptor.byteSize(), usageFlags(descriptor),
                         top.ceroxe.rt.renderer.RtStallTelemetrySink.NOOP
@@ -724,7 +725,7 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
                 case INDEX -> VK10.VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
                 case UNIFORM -> VK10.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
                 case STORAGE_READ, STORAGE_READ_WRITE -> VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-                case INDIRECT -> VK10.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+                case INDIRECT -> VK10.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
                 case ACCELERATION_STRUCTURE_BUILD_INPUT ->
                         KHRAccelerationStructure.VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
             };

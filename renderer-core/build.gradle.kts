@@ -441,9 +441,12 @@ val nativeSelfTests = linkedMapOf(
     "cudaMultipleScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaMultipleScatteringProductionNativeSelfTest",
     "cudaHeterogeneousMultipleScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaHeterogeneousMultipleScatteringProductionNativeSelfTest",
     "cudaPbrMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaPbrMediumProductionNativeSelfTest",
+    "cudaPbrMediumScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaPbrMediumProductionNativeSelfTest",
     "cudaPbrMediumCausticsProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaPbrMediumProductionNativeSelfTest",
     "cudaOpticalMediumNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumNativeSelfTest",
     "cudaDensityScatteringNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaDensityScatteringNativeSelfTest",
+    "cudaOpticalCausticNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalCausticNativeSelfTest",
+    "causticVolumeTransportNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CausticVolumeTransportNativeSelfTest",
     "cudaDensityScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaDensityScatteringProductionNativeSelfTest",
     "cudaOpticalMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaOpticalMediumProductionNativeSelfTest",
     "cudaMediumDensityNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensityNativeSelfTest",
@@ -491,14 +494,43 @@ nativeSelfTests.forEach { (taskName, mainClassName) ->
 
 tasks.named<JavaExec>("cudaMediumRuntimeNativeSelfTest").configure {
     maxHeapSize = "256m"
+    if (providers.gradleProperty("externalSemaphoreParamsOnly").isPresent) args("--params-only")
+}
+
+tasks.named<JavaExec>("coreVulkanGpuSceneShaderSelfTest").configure {
+    if (providers.gradleProperty("shaderContractsOnly").isPresent) args("--contracts-only")
 }
 
 tasks.named<JavaExec>("cudaPbrMediumCausticsProductionNativeSelfTest").configure {
     args("--caustics")
 }
 
+tasks.named<JavaExec>("cudaPbrMediumScatteringProductionNativeSelfTest").configure {
+    args("--scattering")
+}
+
 tasks.named<JavaExec>("cudaOpticalMediumProductionNativeSelfTest").configure {
     if (providers.gradleProperty("opticalBenchmark").isPresent) args("--benchmark")
+    if (providers.gradleProperty("opticalCaustics").isPresent) args("--caustics")
+    if (providers.gradleProperty("opticalVolumeCaustics").isPresent) args("--volume-caustics")
+    providers.gradleProperty("opticalProductionDirectory").orNull?.let {
+        systemProperty("top.ceroxe.rt.medium.opticalProductionDirectory", it)
+    }
+    providers.gradleProperty("opticalBenchmarkWarmup").orNull?.let {
+        systemProperty("top.ceroxe.rt.medium.opticalBenchmarkWarmup", it)
+    }
+    providers.gradleProperty("opticalBenchmarkFrames").orNull?.let {
+        systemProperty("top.ceroxe.rt.medium.opticalBenchmarkFrames", it)
+    }
+    providers.gradleProperty("opticalFrameProfile").orNull?.let {
+        systemProperty("top.ceroxe.rt.medium.opticalFrameProfile", it)
+    }
+    providers.gradleProperty("opticalDetailedProfile").orNull?.let {
+        systemProperty("top.ceroxe.rt.medium.opticalDetailedProfile", it)
+    }
+    providers.gradleProperty("opticalOnlyThinCase").orNull?.let {
+        systemProperty("top.ceroxe.rt.medium.opticalOnlyThinCase", it)
+    }
 }
 
 tasks.named<JavaExec>("vulkanModernFrameNativeSelfTest").configure {
@@ -613,6 +645,9 @@ val nativeMediumTests = listOf("cudaMediumRuntimeNativeSelfTest", "cudaCameraMed
     "cudaDensityProductionNativeSelfTest", "cudaCameraScatteringProductionNativeSelfTest",
     "cudaMultipleScatteringProductionNativeSelfTest", "cudaDensityScatteringProductionNativeSelfTest",
     "cudaHeterogeneousMultipleScatteringProductionNativeSelfTest", "cudaPbrMediumProductionNativeSelfTest",
+    "cudaPbrMediumScatteringProductionNativeSelfTest",
+    "cudaOpticalCausticNativeSelfTest", "cudaOpticalMediumNativeSelfTest",
+    "causticVolumeTransportNativeSelfTest",
     "cudaPbrMediumCausticsProductionNativeSelfTest",
     "cudaOpticalMediumProductionNativeSelfTest", "vulkanQueuedFrameSlotNativeSelfTest")
 
@@ -624,7 +659,10 @@ val unifiedApiNativeTests = listOf("vulkanModernFrameNativeSelfTest", "vulkanGen
     "vulkanSceneAccelerationNativeSelfTest", "vulkanSceneRuntimeNativeSelfTest",
     "vulkanFrameSlotExternalCompletionNativeSelfTest", "vulkanQueuedFrameSlotNativeSelfTest")
 
-(nativeMediumTests + unifiedApiNativeTests).distinct().filter { it != "cudaMediumRuntimeNativeSelfTest" }.forEach { taskName ->
+(nativeMediumTests + unifiedApiNativeTests).distinct().filter {
+    it != "cudaMediumRuntimeNativeSelfTest" && it != "cudaOpticalCausticNativeSelfTest"
+            && it != "cudaOpticalMediumNativeSelfTest"
+}.forEach { taskName ->
     tasks.named<JavaExec>(taskName).configure {
         val validationLog = layout.buildDirectory.file("reports/vulkan-validation/$taskName.jsonl")
         systemProperty("top.ceroxe.rt.validation.enabled", "true")

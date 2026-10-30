@@ -51,6 +51,8 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
     private final boolean geometryShaderEnabled;
     private final boolean vertexPipelineStoresAndAtomicsEnabled;
     private final boolean dynamicRenderingEnabled;
+    private final boolean drawIndirectCountEnabled;
+    private final boolean multiDrawIndirectEnabled;
     private final Map<String, top.ceroxe.rt.renderer.feature.VulkanFeatureQueueAllocation> featureQueues;
 
     private RtVulkanDeviceBootstrap(
@@ -71,6 +73,8 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
             boolean geometryShaderEnabled,
             boolean vertexPipelineStoresAndAtomicsEnabled,
             boolean dynamicRenderingEnabled,
+            boolean drawIndirectCountEnabled,
+            boolean multiDrawIndirectEnabled,
             Map<String, top.ceroxe.rt.renderer.feature.VulkanFeatureQueueAllocation> featureQueues
     ) {
         this.resources = Objects.requireNonNull(resources, "resources");
@@ -97,6 +101,8 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         this.geometryShaderEnabled = geometryShaderEnabled;
         this.vertexPipelineStoresAndAtomicsEnabled = vertexPipelineStoresAndAtomicsEnabled;
         this.dynamicRenderingEnabled = dynamicRenderingEnabled;
+        this.drawIndirectCountEnabled = drawIndirectCountEnabled;
+        this.multiDrawIndirectEnabled = multiDrawIndirectEnabled;
         this.featureQueues = Map.copyOf(featureQueues);
     }
 
@@ -227,6 +233,8 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                     featureSelection.geometryShader(),
                     featureSelection.vertexPipelineStoresAndAtomics(),
                     featureSelection.vulkan13Features().contains(Vulkan13Feature.DYNAMIC_RENDERING),
+                    featureSelection.vulkan12Features().contains(Vulkan12Feature.DRAW_INDIRECT_COUNT),
+                    featureSelection.multiDrawIndirect(),
                     queueTopology.featureQueues());
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
             try {
@@ -240,6 +248,14 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
 
     boolean dynamicRenderingEnabled() {
         return dynamicRenderingEnabled;
+    }
+
+    boolean drawIndirectCountEnabled() {
+        return drawIndirectCountEnabled;
+    }
+
+    boolean multiDrawIndirectEnabled() {
+        return multiDrawIndirectEnabled;
     }
 
     boolean logicOpEnabled() {
@@ -397,6 +413,8 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         features.features().logicOp(featureSelection.logicOp());
         features.features().geometryShader(featureSelection.geometryShader());
         features.features().vertexPipelineStoresAndAtomics(featureSelection.vertexPipelineStoresAndAtomics());
+        features.features().multiDrawIndirect(featureSelection.multiDrawIndirect());
+        features.features().drawIndirectFirstInstance(featureSelection.drawIndirectFirstInstance());
         features.pNext(acceleration.address());
         acceleration.pNext(rayTracing.address());
         long featureChainTail = rayTracing.address();
@@ -484,7 +502,9 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
             boolean samplerAnisotropy,
             boolean logicOp,
             boolean geometryShader,
-            boolean vertexPipelineStoresAndAtomics
+            boolean vertexPipelineStoresAndAtomics,
+            boolean multiDrawIndirect,
+            boolean drawIndirectFirstInstance
     ) {
         private DeviceFeatureSelection {
             vulkan12Features = Set.copyOf(vulkan12Features);
@@ -505,7 +525,7 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         ) {
             EnumSet<Vulkan12Feature> enabled12 = EnumSet.noneOf(Vulkan12Feature.class);
             EnumSet<Vulkan13Feature> enabled13 = EnumSet.noneOf(Vulkan13Feature.class);
-            if (!required12.isEmpty() || !preferred12.isEmpty()) {
+            if (apiVersion >= VK12.VK_API_VERSION_1_2 || !required12.isEmpty() || !preferred12.isEmpty()) {
                 if (apiVersion < VK12.VK_API_VERSION_1_2) {
                     if (!required12.isEmpty()) {
                         throw new IllegalStateException("required Vulkan 1.2 features need Vulkan 1.2: " + required12);
@@ -518,6 +538,7 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                     VK11.vkGetPhysicalDeviceFeatures2(physicalDevice, query);
                     enableSupported(required12, enabled12, supported, "required Vulkan 1.2 feature");
                     enableOptional(preferred12, enabled12, supported);
+                    if (supported.drawIndirectCount()) enabled12.add(Vulkan12Feature.DRAW_INDIRECT_COUNT);
                 }
             }
             if (!required13.isEmpty() || !preferred13.isEmpty()) {
@@ -580,7 +601,9 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                     coreFeatures.features().samplerAnisotropy(),
                     coreFeatures.features().logicOp(),
                     coreFeatures.features().geometryShader(),
-                    coreFeatures.features().vertexPipelineStoresAndAtomics()
+                    coreFeatures.features().vertexPipelineStoresAndAtomics(),
+                    coreFeatures.features().multiDrawIndirect(),
+                    coreFeatures.features().drawIndirectFirstInstance()
             );
         }
 

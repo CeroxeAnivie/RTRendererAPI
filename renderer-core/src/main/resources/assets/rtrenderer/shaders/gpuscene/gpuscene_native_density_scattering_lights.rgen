@@ -91,8 +91,9 @@ void main() {
             dispatch.storage.lanes[rayOffset+local*2u+1u]=floatBitsToUint(vec4(direction,0));continue;
         }
         origin=uintBitsToFloat(dispatch.storage.lanes[rayOffset+local*2u]).xyz;direction=uintBitsToFloat(dispatch.storage.lanes[rayOffset+local*2u+1u]).xyz;
-        vec4 hit=uintBitsToFloat(dispatch.storage.lanes[primaryOffset+item*13u]);
-        float distance=dispatch.storage.lanes[primaryOffset+item*13u+7u].x!=0u?min(max(hit.w,0.0),maximum):maximum;
+        uint primaryItem=dispatch.storage.lanes[2].x>dispatch.storage.lanes[2].z?local:item;
+        vec4 hit=uintBitsToFloat(dispatch.storage.lanes[primaryOffset+primaryItem*13u]);
+        float distance=dispatch.storage.lanes[primaryOffset+primaryItem*13u+7u].x!=0u?min(max(hit.w,0.0),maximum):maximum;
         uint selected[8],small[8],candidates=0u;float total=0.0;
         if(lightSamples>0u)for(uint slot=0u;slot<upper;++slot) {
             float weight=gsDensityLightWeight(slot,origin,direction,distance);if(weight<=0.0)continue;

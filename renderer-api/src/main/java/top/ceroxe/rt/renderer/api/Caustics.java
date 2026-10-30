@@ -1,14 +1,15 @@
 package top.ceroxe.rt.renderer.api;
 
 /**
- * Optional per-frame surface photon map for specular reflection and refraction caustics.
+ * Optional per-frame photon map for specular reflection and refraction caustics on surfaces
+ * and inside a participating medium.
  * The emission sphere bounds the supported caustic region and must enclose medium boundaries.
  * A fixed-radius normalized density estimate introduces spatial bias and sampling noise;
  * increasing photons and reducing the gather radius must be evaluated together.
  *
  * @param photons emitted photon paths per native frame; zero disables the stage
  * @param maxEvents maximum geometric events per photon, from one to 32
- * @param gatherRadius surface density-estimation radius in world units
+ * @param gatherRadius density-estimation radius in world units
  * @param centerX emission sphere center X
  * @param centerY emission sphere center Y
  * @param centerZ emission sphere center Z
@@ -39,7 +40,7 @@ public record Caustics(int photons, int maxEvents, float gatherRadius,
 
     /** Returns the shared policy that allocates no photon map and dispatches no photon stage. */
     public static Caustics disabled() { return DISABLED; }
-    /** Creates a photon map in a world-space sphere, with 12 events and 0.9 normal agreement. */
+    /** Creates a photon map in a world-space sphere, with 12 events and 0.9 surface-normal agreement. */
     public static Caustics photonMap(double x, double y, double z, float radius, int photons, float gatherRadius) {
         return new Caustics(photons, 12, gatherRadius, x, y, z, radius, .9f);
     }

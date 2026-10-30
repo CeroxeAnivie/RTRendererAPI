@@ -12,7 +12,8 @@ final class VulkanGenericBufferVisibilityNativeSelfTest {
         try (var resources = new VulkanGenericResourceRegistry(device);
              var compute = new VulkanGenericComputePipelines(device, resources);
              var graphics = new VulkanGenericGraphicsPipelines(device.device(), resources, device.maxBoundDescriptorSets(),
-                     device.logicOpEnabled(), device.geometryShaderEnabled(), device.vertexPipelineStoresAndAtomicsEnabled());
+                     device.logicOpEnabled(), device.geometryShaderEnabled(), device.vertexPipelineStoresAndAtomicsEnabled(),
+                     device.drawIndirectCountEnabled(), device.multiDrawIndirectEnabled(), device.maxDrawIndirectCount());
              var rayTracing = new VulkanGenericRayTracingPipelines(device, resources);
              var structures = new VulkanGenericAccelerationStructures(device)) {
             var buffer = new BufferResource(new RenderResourceId(91001), ResourceVersion.initial(), 64,

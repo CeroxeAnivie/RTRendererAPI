@@ -7,6 +7,35 @@
 layout(location = 0) rayPayloadInEXT GpuScenePayload payload;
 hitAttributeEXT vec2 hitAttributes;
 
+// Reconstruct on the primitive, rather than origin + t * direction. At a shared
+// edge the latter can round outside an adjacent face and skip its volume exit.
+// NVIDIA's robust spawn construction adds the base vertex and translation last.
+vec3 gsBoundaryHitPoint(vec3 a,vec3 b,vec3 c,vec2 bary) {
+    // A hit on a shared edge must belong to one face. Normal-only spawning at
+    // the exact edge can put a reflected ray outside the neighbouring face
+    // without tracing its exit. Resolve that float-precision ambiguity inside
+    // the reported triangle; retain the original face normal for Fresnel/Snell.
+    // Only the uncertainty band at an edge moves, by at most a few float ULPs
+    // of the triangle extent. Interior hits keep their original barycentrics.
+    const float edgeBand=8.0*1.192092896e-7;
+    vec3 weights=vec3(1.0-bary.x-bary.y,bary);
+    if(min(weights.x,min(weights.y,weights.z))<edgeBand) {
+        weights=max(weights,vec3(edgeBand));
+        weights/=weights.x+weights.y+weights.z;
+        bary=weights.yz;
+    }
+    precise vec3 edge1=b-a,edge2=c-a;
+    precise vec3 local=a+fma(vec3(bary.x),edge1,bary.y*edge2);
+    precise vec3 world;
+    world.x=gl_ObjectToWorldEXT[3].x+fma(gl_ObjectToWorldEXT[0].x,local.x,
+        fma(gl_ObjectToWorldEXT[1].x,local.y,gl_ObjectToWorldEXT[2].x*local.z));
+    world.y=gl_ObjectToWorldEXT[3].y+fma(gl_ObjectToWorldEXT[0].y,local.x,
+        fma(gl_ObjectToWorldEXT[1].y,local.y,gl_ObjectToWorldEXT[2].y*local.z));
+    world.z=gl_ObjectToWorldEXT[3].z+fma(gl_ObjectToWorldEXT[0].z,local.x,
+        fma(gl_ObjectToWorldEXT[1].z,local.y,gl_ObjectToWorldEXT[2].z*local.z));
+    return world;
+}
+
 void main()
 {
     GS_DETAIL_BEGIN(24u);
@@ -24,7 +53,7 @@ void main()
         vec3 normal=normalize(cross(p1-p0,p2-p0));
         bool back=dot(normal,gl_WorldRayDirectionEXT)>0.0;
         bool boundaryBack=back!=(determinant(mat3(gl_ObjectToWorldEXT))<0.0);
-        payload.worldPositionAndDistance=vec4(gl_WorldRayOriginEXT+gl_WorldRayDirectionEXT*gl_HitTEXT,gl_HitTEXT);
+        payload.worldPositionAndDistance=vec4(gsBoundaryHitPoint(a,b,c,hitAttributes),gl_HitTEXT);
         vec3 bary=gsBarycentrics(hitAttributes);
         payload.previousWorldPosition=vec4(gsPreviousInstancePoint(gl_InstanceCustomIndexEXT,a*bary.x+b*bary.y+c*bary.z),1);
         payload.motionRevision=gsInstanceMotionRevision(gl_InstanceCustomIndexEXT);
@@ -182,7 +211,8 @@ void main()
     float ior = uintBitsToFloat(gsMaterials.words[materialBase + GPU_SCENE_MATERIAL_IOR_WORD]);
     GS_DETAIL_NEXT(45u);
     payload.worldPositionAndDistance = vec4(
-        gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT,
+        boundaryFlags!=0u?gsBoundaryHitPoint(p0,p1,p2,hitAttributes)
+            :gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT,
         gl_HitTEXT
     );
     // Reproject the same geometric point through the last successfully rendered object transform.

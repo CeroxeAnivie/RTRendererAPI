@@ -6866,6 +6866,8 @@ public final class top.ceroxe.rt.renderer.api.RenderingSemanticCapabilities$Feat
     descriptor: Ltop/ceroxe/rt/renderer/api/RenderingSemanticCapabilities$Feature;
   public static final top.ceroxe.rt.renderer.api.RenderingSemanticCapabilities$Feature RAY_TRACING_PIPELINE_RETIREMENT;
     descriptor: Ltop/ceroxe/rt/renderer/api/RenderingSemanticCapabilities$Feature;
+  public static final top.ceroxe.rt.renderer.api.RenderingSemanticCapabilities$Feature COUNTED_INDIRECT_DRAW;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RenderingSemanticCapabilities$Feature;
   public static top.ceroxe.rt.renderer.api.RenderingSemanticCapabilities$Feature[] values();
     descriptor: ()[Ltop/ceroxe/rt/renderer/api/RenderingSemanticCapabilities$Feature;
 
@@ -9622,8 +9624,14 @@ public final class top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence {
   public static top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence combinedDeferred(long, java.lang.String);
     descriptor: (JLjava/lang/String;)Ltop/ceroxe/rt/renderer/api/WorkloadExecutionEvidence;
 
+  public static top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence combinedDeferred(long, top.ceroxe.rt.renderer.api.SubmissionDeferralReason, java.lang.String);
+    descriptor: (JLtop/ceroxe/rt/renderer/api/SubmissionDeferralReason;Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/WorkloadExecutionEvidence;
+
   public static top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence sceneDeferred(long, java.lang.String);
     descriptor: (JLjava/lang/String;)Ltop/ceroxe/rt/renderer/api/WorkloadExecutionEvidence;
+
+  public static top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence sceneDeferred(long, top.ceroxe.rt.renderer.api.SubmissionDeferralReason, java.lang.String);
+    descriptor: (JLtop/ceroxe/rt/renderer/api/SubmissionDeferralReason;Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/WorkloadExecutionEvidence;
 
   public long sequence();
     descriptor: ()J
@@ -9636,6 +9644,9 @@ public final class top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence {
 
   public top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence$Reason reason();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/WorkloadExecutionEvidence$Reason;
+
+  public java.util.Optional<top.ceroxe.rt.renderer.api.SubmissionDeferralReason> submissionDeferralReason();
+    descriptor: ()Ljava/util/Optional;
 
   public java.util.Optional<top.ceroxe.rt.renderer.api.Renderer$FrameSubmissionResult> sceneSubmission();
     descriptor: ()Ljava/util/Optional;
@@ -9654,6 +9665,8 @@ public final class top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence$Outcome 
   public static final top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence$Outcome DEFERRED;
     descriptor: Ltop/ceroxe/rt/renderer/api/WorkloadExecutionEvidence$Outcome;
   public static final top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence$Outcome REJECTED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/WorkloadExecutionEvidence$Outcome;
+  public static final top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence$Outcome PARTIALLY_ACCEPTED;
     descriptor: Ltop/ceroxe/rt/renderer/api/WorkloadExecutionEvidence$Outcome;
   public static top.ceroxe.rt.renderer.api.WorkloadExecutionEvidence$Outcome[] values();
     descriptor: ()[Ltop/ceroxe/rt/renderer/api/WorkloadExecutionEvidence$Outcome;

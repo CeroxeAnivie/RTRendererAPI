@@ -24,7 +24,7 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
     private CudaDensityScatteringManager nativeDensityScattering;
     private CudaOpticalMediumManager nativeOpticalMedium;
     private CudaPbrMediumManager nativePbrMedium;
-    private enum NativeMode { CAMERA, BOUNDARY, DIRECT, MULTIPLE, BOUNDARY_SCATTER, DENSITY, OPTICAL, PBR }
+    private enum NativeMode { CAMERA, BOUNDARY, DIRECT, MULTIPLE, BOUNDARY_SCATTER, DENSITY, OPTICAL, PBR, PBR_SCATTER, PBR_DENSITY, PBR_MULTIPLE }
 
     VulkanGpuScenePipelines(VulkanDeviceRuntime device, RendererConfig configuration, boolean linearHdr) {
         this.device = device;
@@ -51,6 +51,12 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
         }
     }
 
+    void validateShaderDataBeforeTransport(List<ResourceData> values) {
+        if (expert != null || values.isEmpty()) validateShaderData(values);
+    }
+
+    boolean usesBuiltInSceneShaders() { return expert == null; }
+
     GpuSceneRayTracingPipeline photons() {
         if (expert != null) throw new FrameValidationException(FrameValidationException.Reason.INVALID_CAUSTICS,
                 "built-in photon maps require built-in scene shaders; expert programs own their light transport");
@@ -64,8 +70,8 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
         return expert != null ? expert : builtIns.computeIfAbsent(program, this::create);
     }
 
-    /** Experiments cannot replace application-owned ray generation or an enabled SER path. */
-    boolean supportsPrimaryQueue() { return expert == null && !device.shaderExecutionReorderingEnabled(); }
+    /** Built-in queue stages have both ordinary and SER shader permutations. Expert programs own their transport. */
+    boolean supportsPrimaryQueue() { return expert == null; }
 
     long requiredNativeCameraGrowth(int width, int height, int samples) {
         retireOtherNativeModes(NativeMode.CAMERA);
@@ -73,7 +79,7 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
     }
     CudaCameraMediumManager nativeCameraMedium() {
         if(!supportsPrimaryQueue())throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                "native medium transport requires built-in non-SER scene shaders");
+                "native medium transport requires built-in scene shaders");
         retireOtherNativeModes(NativeMode.CAMERA);
         if(nativeCameraMedium==null)nativeCameraMedium=new CudaCameraMediumManager(device);
         return nativeCameraMedium;
@@ -84,7 +90,7 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
     }
     CudaBoundaryMediumManager nativeBoundaryMedium() {
         if(!supportsPrimaryQueue())throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                "native medium transport requires built-in non-SER scene shaders");
+                "native medium transport requires built-in scene shaders");
         retireOtherNativeModes(NativeMode.BOUNDARY);
         if(nativeBoundaryMedium==null)nativeBoundaryMedium=new CudaBoundaryMediumManager(device);
         return nativeBoundaryMedium;
@@ -93,10 +99,22 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
         retireOtherNativeModes(NativeMode.DIRECT);
         return nativeCameraScattering == null ? CudaCameraScatteringManager.requiredBytes(width, height, samples, steps) : nativeCameraScattering.requiredGrowthBytes(width, height, samples, steps);
     }
+    long requiredNativeScatteringGrowthForPbr(int width,int height,int samples,int steps) {
+        retireOtherNativeModes(NativeMode.PBR_SCATTER);
+        return nativeCameraScattering==null?CudaCameraScatteringManager.requiredBytes(width,height,samples,steps)
+                :nativeCameraScattering.requiredGrowthBytes(width,height,samples,steps);
+    }
     CudaCameraScatteringManager nativeCameraScattering() {
         if(!supportsPrimaryQueue())throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                "native medium transport requires built-in non-SER scene shaders");
+                "native medium transport requires built-in scene shaders");
         retireOtherNativeModes(NativeMode.DIRECT);
+        if(nativeCameraScattering==null)nativeCameraScattering=new CudaCameraScatteringManager(device);
+        return nativeCameraScattering;
+    }
+    CudaCameraScatteringManager nativeCameraScatteringForPbr() {
+        if(!supportsPrimaryQueue())throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
+                "native medium transport requires built-in scene shaders");
+        retireOtherNativeModes(NativeMode.PBR_SCATTER);
         if(nativeCameraScattering==null)nativeCameraScattering=new CudaCameraScatteringManager(device);
         return nativeCameraScattering;
     }
@@ -106,7 +124,7 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
     }
     CudaMultipleScatteringManager nativeMultipleScattering() {
         if(!supportsPrimaryQueue())throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                "native medium transport requires built-in non-SER scene shaders");
+                "native medium transport requires built-in scene shaders");
         retireOtherNativeModes(NativeMode.MULTIPLE);
         if(nativeMultipleScattering==null)nativeMultipleScattering=new CudaMultipleScatteringManager(device);
         return nativeMultipleScattering;
@@ -125,7 +143,7 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
     GpuSceneRayTracingPipeline nativeBoundaryScattering() {
         if (!supportsPrimaryQueue()) throw new FrameValidationException(
                 FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                "native medium transport requires built-in non-SER scene shaders");
+                "native medium transport requires built-in scene shaders");
         retireOtherNativeModes(NativeMode.BOUNDARY_SCATTER);
         return builtIns.computeIfAbsent(Program.NATIVE_BOUNDARY_SCATTERING, this::create);
     }
@@ -135,7 +153,7 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
     }
     CudaDensityScatteringManager nativeDensityScattering() {
         if(!supportsPrimaryQueue())throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                "native medium transport requires built-in non-SER scene shaders");
+                "native medium transport requires built-in scene shaders");
         retireOtherNativeModes(NativeMode.DENSITY);
         if(nativeDensityScattering==null)nativeDensityScattering=new CudaDensityScatteringManager(device);
         return nativeDensityScattering;
@@ -146,7 +164,7 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
     }
     CudaOpticalMediumManager nativeOpticalMedium() {
         if(!supportsPrimaryQueue())throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                "native medium transport requires built-in non-SER scene shaders");
+                "native medium transport requires built-in scene shaders");
         retireOtherNativeModes(NativeMode.OPTICAL);
         if(nativeOpticalMedium==null)nativeOpticalMedium=new CudaOpticalMediumManager(device);
         return nativeOpticalMedium;
@@ -156,22 +174,63 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
         return nativePbrMedium == null ? CudaPbrMediumManager.requiredBytes(prepared)
                 : nativePbrMedium.requiredGrowthBytes(prepared);
     }
+    long requiredNativePbrScatteringGrowth(CudaPbrMediumManager.FrameScene prepared,int width,int height,int samples,int steps) {
+        retireOtherNativeModes(pbrScatteringMode(prepared));
+        CudaPbrMediumManager.requireCombinedResidentBudget(prepared,width,height,samples,steps);
+        long pbr=nativePbrMedium==null?CudaPbrMediumManager.requiredBytes(prepared):nativePbrMedium.requiredGrowthBytes(prepared);
+        var plan=prepared.transportPlan();
+        long scattering=switch(plan.kind()) {
+            case DIRECT_UNIFORM -> nativeCameraScattering==null?plan.scatteringBytes():nativeCameraScattering.requiredGrowthBytes(plan.direct());
+            case DIRECT_DENSITY -> nativeDensityScattering==null?plan.scatteringBytes():nativeDensityScattering.requiredGrowthBytes(plan.densityDirect());
+            case MULTIPLE_UNIFORM -> nativeMultipleScattering==null?plan.scatteringBytes():nativeMultipleScattering.requiredGrowthBytes(plan.multiple());
+            case MULTIPLE_DENSITY -> nativeMultipleScattering==null?plan.scatteringBytes():nativeMultipleScattering.requiredGrowthBytes(plan.densityMultiple());
+        };
+        return Math.addExact(pbr,scattering);
+    }
+    private static NativeMode pbrScatteringMode(CudaPbrMediumManager.FrameScene prepared) {
+        return switch(prepared.transportPlan().kind()) {
+            case DIRECT_UNIFORM -> NativeMode.PBR_SCATTER;
+            case DIRECT_DENSITY -> NativeMode.PBR_DENSITY;
+            case MULTIPLE_UNIFORM, MULTIPLE_DENSITY -> NativeMode.PBR_MULTIPLE;
+        };
+    }
+    CudaDensityScatteringManager nativeDensityScatteringForPbr() {
+        if(!supportsPrimaryQueue())throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
+                "native medium transport requires built-in scene shaders");
+        retireOtherNativeModes(NativeMode.PBR_DENSITY);
+        if(nativeDensityScattering==null)nativeDensityScattering=new CudaDensityScatteringManager(device);
+        return nativeDensityScattering;
+    }
+    CudaMultipleScatteringManager nativeMultipleScatteringForPbr() {
+        if(!supportsPrimaryQueue())throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
+                "native medium transport requires built-in scene shaders");
+        retireOtherNativeModes(NativeMode.PBR_MULTIPLE);
+        if(nativeMultipleScattering==null)nativeMultipleScattering=new CudaMultipleScatteringManager(device);
+        return nativeMultipleScattering;
+    }
     CudaPbrMediumManager nativePbrMedium() {
         if (!supportsPrimaryQueue()) throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                "native medium transport requires built-in non-SER scene shaders");
+                "native medium transport requires built-in scene shaders");
         retireOtherNativeModes(NativeMode.PBR);
         if (nativePbrMedium == null) nativePbrMedium = new CudaPbrMediumManager(device);
+        return nativePbrMedium;
+    }
+    CudaPbrMediumManager nativePbrMediumWithScattering(CudaPbrMediumManager.FrameScene prepared) {
+        if (!supportsPrimaryQueue()) throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
+                "native medium transport requires built-in scene shaders");
+        retireOtherNativeModes(pbrScatteringMode(prepared));
+        if(nativePbrMedium==null)nativePbrMedium=new CudaPbrMediumManager(device);
         return nativePbrMedium;
     }
     /** A session has one shared native residency budget across every transport mode. */
     private void retireOtherNativeModes(NativeMode keep) {
         if(keep!=NativeMode.CAMERA)retireNativeCameraMedium();
         if(keep!=NativeMode.BOUNDARY)retireNativeBoundaryMedium();
-        if(keep!=NativeMode.DIRECT)retireNativeCameraScattering();
-        if(keep!=NativeMode.MULTIPLE&&keep!=NativeMode.BOUNDARY_SCATTER)retireNativeMultipleScattering();
-        if(keep!=NativeMode.DENSITY)retireNativeDensityScattering();
+        if(keep!=NativeMode.DIRECT&&keep!=NativeMode.PBR_SCATTER)retireNativeCameraScattering();
+        if(keep!=NativeMode.MULTIPLE&&keep!=NativeMode.BOUNDARY_SCATTER&&keep!=NativeMode.PBR_MULTIPLE)retireNativeMultipleScattering();
+        if(keep!=NativeMode.DENSITY&&keep!=NativeMode.PBR_DENSITY)retireNativeDensityScattering();
         if(keep!=NativeMode.OPTICAL)retireNativeOpticalMedium();
-        if(keep!=NativeMode.PBR)retireNativePbrMedium();
+        if(keep!=NativeMode.PBR&&keep!=NativeMode.PBR_SCATTER&&keep!=NativeMode.PBR_DENSITY&&keep!=NativeMode.PBR_MULTIPLE)retireNativePbrMedium();
     }
 
     private void retireNativeCameraScattering() {

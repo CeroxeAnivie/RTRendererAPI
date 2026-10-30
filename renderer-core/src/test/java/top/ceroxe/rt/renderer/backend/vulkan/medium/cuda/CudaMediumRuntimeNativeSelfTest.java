@@ -7,6 +7,11 @@ import static java.lang.foreign.ValueLayout.*;
 /** Runs the packaged production runtime. Requires a real CUDA device and NVRTC. */
 public final class CudaMediumRuntimeNativeSelfTest {
     public static void main(String[] args) throws Exception {
+        verifyExternalSemaphoreParams();
+        if (java.util.Arrays.asList(args).contains("--params-only")) {
+            System.out.println("CudaMediumRuntimeNativeSelfTest external semaphore params passed");
+            return;
+        }
         int segments = 256;
         long checked = 0;
         for (int session = 0; session < 3; session++) {
@@ -62,6 +67,19 @@ public final class CudaMediumRuntimeNativeSelfTest {
             }
         }
         System.out.println("CudaMediumRuntimeNativeSelfTest passed; outputChannels=" + checked);
+    }
+    private static void verifyExternalSemaphoreParams() {
+        long value = 0x0102030405060708L;
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment params = CudaMediumRuntime.externalSemaphoreParams(arena, value);
+            if (params.byteSize() != CudaMediumRuntime.EXTERNAL_SEMAPHORE_PARAMS_BYTES
+                    || params.get(JAVA_LONG, 0) != value)
+                throw new AssertionError("external semaphore timeline value layout");
+            for (long offset = Long.BYTES; offset < params.byteSize(); offset++) {
+                if (params.get(JAVA_BYTE, offset) != 0)
+                    throw new AssertionError("external semaphore non-value byte is not zero: offset=" + offset);
+            }
+        }
     }
     private static void verifySharedCompilation(CudaMediumRuntime runtime) {
         String wrapper = "extern \"C\" __global__ void first(int *p,int n){if(threadIdx.x==0&&blockIdx.x==0)p[0]+=n;}\n"

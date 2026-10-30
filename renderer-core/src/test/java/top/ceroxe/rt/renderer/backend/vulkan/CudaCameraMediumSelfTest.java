@@ -48,9 +48,10 @@ public final class CudaCameraMediumSelfTest {
         CudaCameraMediumProfile.requireSupported(frame.toBuilder().environment(EnvironmentState.builder()
                 .cameraMedium(new Medium(Rgb.ZERO, Rgb.ZERO, new Rgb(.1f, 0, 0), 1, 1, 0))
                 .build()).build(), 0, true);
+        CudaCameraMediumProfile.requireSupported(frame.toBuilder().environment(EnvironmentState.builder()
+                .cameraMedium(new Medium(new Rgb(.1f,0,0),Rgb.ZERO,Rgb.ZERO,1,1.5f,0)).build()).build(),0,true);
         for (var unsupported : new Medium[]{Medium.vacuum(),
-                new Medium(Rgb.ZERO, new Rgb(.1f, 0, 0), Rgb.ZERO, 1, 1, 0),
-                new Medium(new Rgb(.1f, 0, 0), Rgb.ZERO, Rgb.ZERO, 1, 1.5f, 0)}) {
+                new Medium(Rgb.ZERO, new Rgb(.1f, 0, 0), Rgb.ZERO, 1, 1, 0)}) {
             var rejected = frame.toBuilder().environment(EnvironmentState.builder().cameraMedium(unsupported).build()).build();
             expectUnsupported(() -> CudaCameraMediumProfile.requireSupported(rejected, 0, true));
         }

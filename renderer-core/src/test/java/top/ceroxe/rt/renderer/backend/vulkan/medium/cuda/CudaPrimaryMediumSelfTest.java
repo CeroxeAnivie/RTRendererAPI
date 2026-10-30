@@ -23,11 +23,14 @@ public final class CudaPrimaryMediumSelfTest {
                 && constants.getFloat(8) == 1 && constants.getFloat(12) == 7, "constant lanes and density");
         for (var unsupported : new Medium[]{
                 new Medium(Rgb.ZERO, new Rgb(.1f, 0, 0), Rgb.ZERO, 1, 1, 0),
-                new Medium(Rgb.ZERO, Rgb.ZERO, new Rgb(.1f, 0, 0), 1, 1, 0),
-                new Medium(new Rgb(.1f, 0, 0), Rgb.ZERO, Rgb.ZERO, 1, 1.5f, 0)}) {
+                new Medium(Rgb.ZERO, Rgb.ZERO, new Rgb(.1f, 0, 0), 1, 1, 0)}) {
             expectIllegal(() -> CudaPrimaryMediumAbi.constants(frame.toBuilder()
                     .environment(EnvironmentState.builder().cameraMedium(unsupported).build()).build()));
         }
+        var refractiveMedium = new Medium(medium.absorption(),Rgb.ZERO,Rgb.ZERO,medium.density(),1.5f,0);
+        require(java.util.Arrays.equals(constants.array(), CudaPrimaryMediumAbi.constants(frame.toBuilder()
+                .environment(EnvironmentState.builder().cameraMedium(refractiveMedium).build()).build())),
+                "IOR does not alter segment absorption without an interface");
         require(CudaMediumSource.resource("primary_absorption.cu").contains("HomogeneousVolume_SegmentScatter"),
                 "primary transmittance uses the pinned upstream segment function");
         System.out.println("CudaPrimaryMediumSelfTest passed: production stride, push ABI, constants, sizes and admission");

@@ -706,15 +706,14 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, top.cero
                         "generic Vulkan command lane is unavailable for ordered RT/raster composition"
                 );
             }
-            FrameSubmissionAttempt sceneAttempt;
-            try {
-                sceneAttempt = trySubmitLocked(checked.sceneFrame().orElseThrow());
-            } catch (RuntimeException failure) {
-                throw fail("submit combined retained scene workload", failure);
-            }
+            // The ordinary frame boundary already distinguishes caller validation from native
+            // failure. Preserve that classification so a rejected combined request can be
+            // corrected and retried without destroying the renderer or consuming its sequence.
+            FrameSubmissionAttempt sceneAttempt = trySubmitLocked(checked.sceneFrame().orElseThrow());
             if (sceneAttempt instanceof FrameSubmissionDeferred deferred) {
                 return WorkloadExecutionEvidence.combinedDeferred(
-                        checked.sceneFrame().orElseThrow().sequence(), deferred.detail()
+                        checked.sceneFrame().orElseThrow().sequence(),
+                        deferred.deferralReason(), deferred.detail()
                 );
             }
             FrameSubmissionResult sceneSubmission = ((FrameSubmitted) sceneAttempt).submission();

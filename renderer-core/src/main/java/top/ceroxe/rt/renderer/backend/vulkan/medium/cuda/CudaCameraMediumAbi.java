@@ -28,9 +28,8 @@ public final class CudaCameraMediumAbi {
         var camera = frame.camera();
         if (camera.hasExactProjection()) throw new IllegalArgumentException("camera batch requires basis/FOV projection");
         var medium = frame.environment().cameraMedium();
-        if (!medium.densityField().isUniform() || !medium.scattering().isZero() || !medium.emission().isZero()
-                || medium.indexOfRefraction() != 1)
-            throw new IllegalArgumentException("camera batch requires homogeneous absorption with IOR one");
+        if (!medium.densityField().isUniform() || !medium.scattering().isZero() || !medium.emission().isZero())
+            throw new IllegalArgumentException("camera batch requires homogeneous absorption");
         ByteBuffer data = ByteBuffer.allocate(CONSTANT_BYTES).order(ByteOrder.nativeOrder());
         data.putFloat(0, finiteFloat(camera.x())).putFloat(4, finiteFloat(camera.y())).putFloat(8, finiteFloat(camera.z()));
         data.putFloat(12, frame.mediumTransport().maxDistance());

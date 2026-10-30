@@ -74,7 +74,8 @@ extern "C" __global__ void heterogeneous_multiple_prepare(unsigned char*b,int co
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;using namespace rtr_heterogeneous_multiple;
     unsigned int*u=(unsigned int*)b;float*h=(float*)b;const unsigned int steps=u[3],global=u[4]*u[6]+i;
     State*firstState=states(b)+(unsigned int)i*steps;const float3 origin=rgb(firstState->origin),direction=rgb(firstState->direction);
-    const float*primary=(const float*)(b+u[8])+global*52u;const bool hit=((const unsigned int*)primary)[28]!=0u;
+    const unsigned int primaryItem=u[8]>u[10]?(unsigned int)i:global;
+    const float*primary=(const float*)(b+u[8])+primaryItem*52u;const bool hit=((const unsigned int*)primary)[28]!=0u;
     const float distance=hit?fminf(fmaxf(primary[3],0.f),h[15]):h[15];
     if(!header(b)||!finite(origin)||!finite(direction)||!isfinite(distance)||distance<0.f){atomicAdd(u+29,1u);return;}
     float3 p,v;float first,last;const bool inside=domain(b,origin,direction,distance,&p,&v,&first,&last);

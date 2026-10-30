@@ -4,7 +4,7 @@ import top.ceroxe.rt.renderer.api.FrameValidationException;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaBoundaryMediumAbi;
 
-/** Admission for native IOR-one homogeneous volume boundaries and terminal unlit surfaces. */
+/** Admission for homogeneous volume boundaries and terminal unlit surfaces. */
 final class CudaBoundaryMediumProfile {
     private CudaBoundaryMediumProfile() { }
     static void requireSupported(RenderFrameRequest request, MediumSceneIndex.NativeScene scene,

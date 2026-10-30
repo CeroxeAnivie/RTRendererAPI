@@ -60,6 +60,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     private final VulkanGenericResourceRegistry resources;
     private final VulkanGenericComputePipelines computePipelines;
     private final VulkanGenericGraphicsPipelines graphicsPipelines;
+    private final VulkanGenericIndirectCounts indirectCounts;
     private final VulkanGenericAccelerationStructures accelerationStructures;
     private final VulkanGenericRayTracingPipelines rayTracingPipelines;
     private final VulkanCommandEvidenceHistory commandEvidence;
@@ -103,8 +104,10 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         this.computePipelines = new VulkanGenericComputePipelines(device, resources);
         this.graphicsPipelines = new VulkanGenericGraphicsPipelines(
                 device.device(), resources, device.maxBoundDescriptorSets(),
-                device.logicOpEnabled(), device.geometryShaderEnabled(), device.vertexPipelineStoresAndAtomicsEnabled()
+                device.logicOpEnabled(), device.geometryShaderEnabled(), device.vertexPipelineStoresAndAtomicsEnabled(),
+                device.drawIndirectCountEnabled(), device.multiDrawIndirectEnabled(), device.maxDrawIndirectCount()
         );
+        this.indirectCounts = new VulkanGenericIndirectCounts(device);
         this.accelerationStructures = new VulkanGenericAccelerationStructures(device);
         this.rayTracingPipelines = new VulkanGenericRayTracingPipelines(device, resources);
     }
@@ -152,6 +155,15 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                     "multi-draw and multi-indexed-draw commands preserve every draw range and instance parameter");
             executable(result, RenderingSemanticCapabilities.Feature.INDIRECT_DRAW,
                     "indirect draw commands validate exact argument buffers and record the requested draw count");
+            if (device.drawIndirectCountEnabled()) {
+                executable(result, RenderingSemanticCapabilities.Feature.COUNTED_INDIRECT_DRAW,
+                        "GPU unsigned count normalization and native direct/indexed draw batches preserve all uint32 values without CPU readback; maxDrawIndirectCount="
+                                + device.maxDrawIndirectCount() + "; multiDrawIndirect=" + device.multiDrawIndirectEnabled());
+            } else {
+                result.feature(RenderingSemanticCapabilities.Feature.COUNTED_INDIRECT_DRAW,
+                        new RenderingSemanticCapabilities.Entry(RenderingSemanticCapabilities.Status.UNSUPPORTED,
+                                "Vulkan drawIndirectCount was not supported/enabled on this logical device"));
+            }
         }
         executable(result, RenderingSemanticCapabilities.Feature.BUFFER_UPLOAD,
                 "buffer upload uses staging copies retained through fence completion");
@@ -241,25 +253,29 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         }
 
         ArrayList<StagingUpload> staging = new ArrayList<>();
+        Map<VulkanGenericCommandPlan.Action, VulkanGenericDescriptorSetBank.Snapshot> descriptors =
+                new java.util.IdentityHashMap<>();
         RtCommandContext.AsyncSubmission submission = null;
         RtGpuBuffer cpuReadback = null;
+        VulkanGenericIndirectCounts.Batch countBatch = null;
         boolean submitted = false;
         boolean submissionOwnedByPending = false;
         VulkanGenericTextureLayoutUpdates textureLayouts = new VulkanGenericTextureLayoutUpdates();
         try {
+            countBatch = indirectCounts.prepare(plan);
             for (VulkanGenericCommandPlan.Action action : plan.actions()) {
                 if (action instanceof VulkanGenericCommandPlan.Write write) {
                     staging.add(StagingUpload.create(device, write));
                 } else if (action instanceof VulkanGenericCommandPlan.WriteTexture write) {
                     staging.add(StagingUpload.createTexture(device, write));
                 } else if (action instanceof VulkanGenericCommandPlan.BindComputeBindings bindings) {
-                    computePipelines.updateBindings(bindings.pipeline(), bindings.command().bindingSet());
+                    descriptors.put(action, computePipelines.snapshotBindings(bindings.pipeline(), bindings.command().bindingSet()));
                 } else if (action instanceof VulkanGenericCommandPlan.BindGraphicsBindings bindings) {
-                    graphicsPipelines.updateBindings(bindings.pipeline(), bindings.command().bindingSet());
+                    descriptors.put(action, graphicsPipelines.snapshotBindings(bindings.pipeline(), bindings.command().bindingSet()));
                 } else if (action instanceof VulkanGenericCommandPlan.BindRayTracingBindings bindings) {
-                    rayTracingPipelines.updateBindings(
+                    descriptors.put(action, rayTracingPipelines.snapshotBindings(
                             bindings.pipeline(), bindings.command().bindingSet(), plan.accelerationStructures()
-                    );
+                    ));
                 }
             }
             if (cpuFrameReadbackEnabled && plan.outputRecord().filter(VulkanGenericCpuFrameReadback::supports).isPresent()) {
@@ -267,9 +283,10 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             }
             List<StagingUpload> immutableStaging = List.copyOf(staging);
             RtGpuBuffer immutableCpuReadback = cpuReadback;
+            VulkanGenericIndirectCounts.Batch immutableCounts = countBatch;
             submission = device.frameCommands().submitTimedOneTimeAsync(
                     TIMING_LABEL, (commandBuffer, stack) -> record(
-                            commandBuffer, stack, plan, immutableStaging, textureLayouts, immutableCpuReadback
+                            commandBuffer, stack, plan, immutableStaging, descriptors, textureLayouts, immutableCpuReadback, immutableCounts
                     )
             );
             submitted = true;
@@ -284,7 +301,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             pending.put(checked.sequence(), new PendingSubmission(
                     checked.sequence(), submission, immutableStaging, plan.writes(), plan.textureWrites(), plan.outputResource(),
                     plan.outputRecord().orElse(null), immutableCpuReadback, plan.accelerationStructures(),
-                    plan.pipelineHandles(rayTracingPipelines), plan.retirements()));
+                    plan.pipelineHandles(rayTracingPipelines), plan.retirements(), descriptors, countBatch));
             submissionOwnedByPending = true;
             submission = null;
             staging = null;
@@ -319,6 +336,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             if (staging != null) closeStaging(staging);
             if (cpuReadback != null && !submissionOwnedByPending) releaseReadback(cpuReadback);
             if (!submissionOwnedByPending) {
+                if (countBatch != null) countBatch.close();
+                closeDescriptors(descriptors);
                 if (submitted) plan.accelerationStructures().discardAfterDeviceFailure();
                 else plan.accelerationStructures().close();
             }
@@ -500,6 +519,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                 return;
             } finally {
                 closeStaging(current.staging());
+                closeDescriptors(current.descriptors());
+                if (current.indirectCounts() != null) current.indirectCounts().close();
                 if (completedCpuFrame == null || completedCpuFrame.buffer() != current.readback()) releaseReadback(current.readback());
                 iterator.remove();
                 try {
@@ -527,8 +548,10 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             MemoryStack stack,
             VulkanGenericCommandPlan plan,
             List<StagingUpload> staging,
+            Map<VulkanGenericCommandPlan.Action, VulkanGenericDescriptorSetBank.Snapshot> descriptors,
             VulkanGenericTextureLayoutUpdates textureLayouts,
-            RtGpuBuffer cpuReadback
+            RtGpuBuffer cpuReadback,
+            VulkanGenericIndirectCounts.Batch countBatch
     ) {
         int writeIndex = 0;
         for (VulkanGenericCommandPlan.Action action : plan.actions()) {
@@ -550,7 +573,10 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                         || action instanceof VulkanGenericCommandPlan.MultiDraw
                         || action instanceof VulkanGenericCommandPlan.MultiDrawIndexed
                         || action instanceof VulkanGenericCommandPlan.Indirect) {
-                    VulkanGenericGraphicsRecorder.record(commandBuffer, actionStack, List.of(action), textureLayouts);
+                    if (action instanceof VulkanGenericCommandPlan.BeginPass pass && countBatch != null) {
+                        countBatch.recordPass(commandBuffer, actionStack, pass);
+                    }
+                    VulkanGenericGraphicsRecorder.record(commandBuffer, actionStack, List.of(action), textureLayouts, descriptors, countBatch);
                     continue;
                 }
                 switch (action) {
@@ -558,7 +584,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                             commandBuffer, VK10.VK_PIPELINE_BIND_POINT_COMPUTE, bind.pipeline().pipeline()
                     );
                     case VulkanGenericCommandPlan.BindComputeBindings bind -> recordComputeBindings(
-                            commandBuffer, actionStack, bind
+                            commandBuffer, actionStack, bind, descriptors.get(action)
                     );
                     case VulkanGenericCommandPlan.PushConstants push -> VK10.vkCmdPushConstants(
                             commandBuffer, push.pipeline().layout(), VK10.VK_SHADER_STAGE_COMPUTE_BIT,
@@ -567,12 +593,16 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                     case VulkanGenericCommandPlan.Dispatch dispatch -> VK10.vkCmdDispatch(
                             commandBuffer, dispatch.command().groupsX(), dispatch.command().groupsY(), dispatch.command().groupsZ()
                     );
+                    case VulkanGenericCommandPlan.DispatchIndirect dispatch -> VK10.vkCmdDispatchIndirect(
+                            commandBuffer, dispatch.arguments().buffer().buffer(),
+                            dispatch.command().arguments().range().offsetBytes()
+                    );
                     case VulkanGenericCommandPlan.BindRayTracing bind -> VK10.vkCmdBindPipeline(
                             commandBuffer, KHRRayTracingPipeline.VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                             bind.pipeline().pipeline()
                     );
                     case VulkanGenericCommandPlan.BindRayTracingBindings bind -> recordRayTracingBindings(
-                            commandBuffer, actionStack, bind
+                            commandBuffer, actionStack, bind, descriptors.get(action)
                     );
                     case VulkanGenericCommandPlan.RayTracingPushConstants push -> VK10.vkCmdPushConstants(
                             commandBuffer, push.pipeline().layout(), push.pipeline().shaderStageFlags(),
@@ -648,9 +678,9 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     private static void recordComputeBindings(
             VkCommandBuffer commandBuffer,
             MemoryStack stack,
-            VulkanGenericCommandPlan.BindComputeBindings bind
+            VulkanGenericCommandPlan.BindComputeBindings bind,
+            VulkanGenericDescriptorSetBank.Snapshot descriptors
     ) {
-        VulkanGenericDescriptorSetBank descriptors = bind.pipeline().descriptors();
         if (descriptors == null) return;
         List<Integer> groups = descriptors.groups();
         java.nio.LongBuffer sets = stack.mallocLong(groups.size());
@@ -666,9 +696,9 @@ final class VulkanGenericCommandSession implements AutoCloseable {
     private static void recordRayTracingBindings(
             VkCommandBuffer commandBuffer,
             MemoryStack stack,
-            VulkanGenericCommandPlan.BindRayTracingBindings bind
+            VulkanGenericCommandPlan.BindRayTracingBindings bind,
+            VulkanGenericDescriptorSetBank.Snapshot descriptors
     ) {
-        VulkanGenericDescriptorSetBank descriptors = bind.pipeline().descriptors();
         if (descriptors == null) return;
         List<Integer> groups = descriptors.groups();
         java.nio.LongBuffer sets = stack.mallocLong(groups.size());
@@ -1262,6 +1292,11 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         }
     }
 
+    private static void closeDescriptors(
+            Map<VulkanGenericCommandPlan.Action, VulkanGenericDescriptorSetBank.Snapshot> descriptors) {
+        for (var snapshot : descriptors.values()) if (snapshot != null) snapshot.close();
+    }
+
     private void releaseReadback(RtGpuBuffer readback) {
         if (readback == null) return;
         try {
@@ -1291,6 +1326,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
                         || deviceFailure.nativeResult() != VK10.VK_ERROR_DEVICE_LOST) continue;
             }
             closeStaging(submission.staging());
+            closeDescriptors(submission.descriptors());
+            if (submission.indirectCounts() != null) submission.indirectCounts().close();
             releaseReadback(submission.readback());
             try {
                 submission.accelerationStructures().discardAfterDeviceFailure();
@@ -1308,6 +1345,7 @@ final class VulkanGenericCommandSession implements AutoCloseable {
         cpuFrameFailures.clear();
         failure = closeCollecting(failure, computePipelines);
         failure = closeCollecting(failure, graphicsPipelines);
+        failure = closeCollecting(failure, indirectCounts);
         failure = closeCollecting(failure, rayTracingPipelines);
         failure = closeCollecting(failure, readbackPool);
         failure = closeCollecting(failure, accelerationStructures);
@@ -1358,7 +1396,9 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             RtGpuBuffer readback,
             VulkanGenericAccelerationStructures.Compilation accelerationStructures,
             List<top.ceroxe.rt.renderer.api.RayTracingPipelineHandle> pipelineHandles,
-            List<top.ceroxe.rt.renderer.api.RayTracingPipelineHandle> retirements
+            List<top.ceroxe.rt.renderer.api.RayTracingPipelineHandle> retirements,
+            Map<VulkanGenericCommandPlan.Action, VulkanGenericDescriptorSetBank.Snapshot> descriptors,
+            VulkanGenericIndirectCounts.Batch indirectCounts
     ) { }
 
     private static final class StagingUpload implements AutoCloseable {

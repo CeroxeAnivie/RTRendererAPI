@@ -132,7 +132,11 @@ copy 到 slot-owned buffer、发布 host-read barrier，再恢复 output 的 `GE
 `RenderWorkload` 的 combined mode 要求 retained RT frame 与 command transaction 使用相同 sequence。Vulkan
 provider 只有在两条 lane 都存在时才声明 `COMBINED_WORKLOADS`，并通过同一 frame-queue authority 先提交 retained
 RT、再提交 raster transaction。返回的 `WorkloadExecutionEvidence` 保留两条 lane 的独立记录；任一 lane deferred
-或 rejected 都不会被包装为成功组合。没有真实有序组合路径的 provider 返回 `UNSUPPORTED_COMBINATION`。
+或 rejected 都不会被包装为成功组合。RT 已接纳、图形命令随后被阻塞、拒绝或改用 fallback 时，整体结果为
+`PARTIALLY_ACCEPTED`，调用方必须检查两条 lane 的证据，不得把整个 workload 当作未接纳而重试。若 retained
+scene admission deferred，则两条 lane 都尚未接纳；结果保留精确的 `SubmissionDeferralReason`，供调用方按稳定
+分类遥测和重试；`DEVICE_RECOVERING` 同时归类为 `DEVICE_NOT_READY`，诊断文本不承担分类职责。没有真实有序组合路径的
+provider 返回 `UNSUPPORTED_COMBINATION`。
 
 `renderer-api` 还定义了项目无关的 `ExternalFrameConsumer` negotiation/lease contract。Vulkan provider 在现有
 `VulkanFrameInterop/GpuFrameLease` ABI 上提供窄适配，只宣称 producer 已实际证明的 CPU-observed completion。

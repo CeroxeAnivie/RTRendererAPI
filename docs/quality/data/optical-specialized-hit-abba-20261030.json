@@ -1,0 +1,36 @@
+{
+  "日期": "2026-10-30",
+  "类型": "同制品ABBA，完整HDR交付，无性能插桩",
+  "候选": "native optical ray专用closest-hit路径",
+  "结果": "未采纳；无收益且均值略慢，源码候选已撤回",
+  "每组": {
+    "warmupFrames": 64,
+    "timedFrames": 256,
+    "extent": "1920x1080",
+    "samplesPerPixel": 1,
+    "opticalSamples": 1,
+    "firstInterfaceSampling": "DETERMINISTIC_SPLIT"
+  },
+  "runs": [
+    {"label": "A1", "specialized": true, "meanMs": 13.529005078125, "fps": 73.910997, "medianMs": 13.4191, "p95Ms": 15.8824, "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"},
+    {"label": "B1", "specialized": false, "meanMs": 13.30331484375, "fps": 75.169235, "medianMs": 13.18395, "p95Ms": 15.388, "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"},
+    {"label": "B2", "specialized": false, "meanMs": 13.3557421875, "fps": 74.874094, "medianMs": 13.26855, "p95Ms": 15.4077, "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"},
+    {"label": "A2", "specialized": true, "meanMs": 13.2276171875, "fps": 75.599301, "medianMs": 13.1496, "p95Ms": 15.7347, "hdrSha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"}
+  ],
+  "summary": {
+    "specializedMeanMs": 13.3787109375,
+    "genericMeanMs": 13.329533515625,
+    "frameTimeReductionPercent": -0.3689278641,
+    "fpsGainPercent": -0.3675717894,
+    "meanDeltaMs": 0.049177421875,
+    "allHdrHashesEqual": true
+  },
+  "correctness": {
+    "productionNativeSelfTestPassed": true,
+    "comparisons": 43,
+    "actualNativeFrames": 124,
+    "recoverableRejections": 1,
+    "firstCandidateFailure": "首次专用closest-hit候选漏传outline语义元数据；修正后完整生产回归通过"
+  },
+  "decision": "撤回候选及开关，继续通用closest-hit；微小平均差异未达到可接受收益"
+}

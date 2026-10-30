@@ -1,6 +1,7 @@
 package top.ceroxe.rt.renderer.rt.device;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.*;
 
 import java.lang.ref.WeakReference;
@@ -73,8 +74,30 @@ public final class VulkanQueueHostSync {
      * @return Vulkan result returned by {@link VK10#vkQueueSubmit}
      */
     public static int submit(VkQueue queue, VkSubmitInfo.Buffer submits, long fence) {
+        validateLegacyWaits(submits);
         synchronized (monitor(queue)) {
             return VK10.vkQueueSubmit(queue, submits, fence);
+        }
+    }
+
+    /**
+     * Checks the legacy binding's independently configured count and wait-array pointers.
+     * LWJGL does not infer waitSemaphoreCount from either wait-array setter. A non-null
+     * pointer with count zero would silently discard the dependency in Vulkan.
+     * This allocation-free host check makes that mistake fail before native submission.
+     */
+    static void validateLegacyWaits(VkSubmitInfo.Buffer submits) {
+        Objects.requireNonNull(submits, "submits");
+        long address = submits.address();
+        for (int index = 0; index < submits.remaining(); index++, address += VkSubmitInfo.SIZEOF) {
+            int count = VkSubmitInfo.nwaitSemaphoreCount(address);
+            boolean semaphores = MemoryUtil.memGetAddress(address + VkSubmitInfo.PWAITSEMAPHORES) != 0L;
+            boolean stages = MemoryUtil.memGetAddress(address + VkSubmitInfo.PWAITDSTSTAGEMASK) != 0L;
+            if (count < 0 || (count > 0) != semaphores || (count > 0) != stages) {
+                throw new IllegalArgumentException("VkSubmitInfo wait dependency is inconsistent at index=" + index
+                        + ": waitSemaphoreCount=" + count + ", semaphores=" + semaphores + ", stageMasks=" + stages
+                        + "; set waitSemaphoreCount explicitly before submission");
+            }
         }
     }
 

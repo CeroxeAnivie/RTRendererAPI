@@ -198,13 +198,14 @@ public final class MediumDensitySelfTest {
                 new RouteCase(Medium.vacuum(),0,CudaMediumFrameProfile.Route.NONE),
                 new RouteCase(absorption,0,CudaMediumFrameProfile.Route.CAMERA),
                 new RouteCase(absorption.withDensityField(FIELD),0,CudaMediumFrameProfile.Route.BOUNDARY),
-                new RouteCase(scattering,0,CudaMediumFrameProfile.Route.CAMERA_SCATTERING),
-                new RouteCase(scattering,2,CudaMediumFrameProfile.Route.MULTIPLE_SCATTERING),
-                new RouteCase(GRID,0,CudaMediumFrameProfile.Route.DENSITY_SCATTERING),
-                new RouteCase(GRID,2,CudaMediumFrameProfile.Route.MULTIPLE_SCATTERING)}) {
+                new RouteCase(scattering,0,CudaMediumFrameProfile.Route.PBR_SCATTERING),
+                new RouteCase(scattering,2,CudaMediumFrameProfile.Route.PBR_SCATTERING),
+                new RouteCase(GRID,0,CudaMediumFrameProfile.Route.PBR_SCATTERING),
+                new RouteCase(GRID,2,CudaMediumFrameProfile.Route.PBR_SCATTERING)}) {
             var frame = request(test.medium(),test.bounces(),empty);
             var selected = CudaMediumFrameProfile.select(frame,media,surfaces,true,true);
-            require(selected.route()==test.expected(),"native route must match the complete frame requirements");
+            require(selected.route()==test.expected(),"native route: expected="+test.expected()
+                    +", actual="+selected.route()+", medium="+test.medium()+", bounces="+test.bounces());
             require(selected.program()==Program.SURFACE,"native executor supplies all participating-medium radiance");
         }
         apply(residency,media,surfaces,SceneTransaction.builder(2)

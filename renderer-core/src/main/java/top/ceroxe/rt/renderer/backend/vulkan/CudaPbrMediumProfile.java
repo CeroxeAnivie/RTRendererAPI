@@ -7,7 +7,20 @@ import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaBoundaryMediumAbi;
 /** Opaque direct-light surface shading with native non-scattering medium connections. */
 final class CudaPbrMediumProfile {
     private CudaPbrMediumProfile() { }
+    static void requireScatteringContributionSupported(RenderFrameRequest frame,int boundaryCount) {
+        var medium=frame.environment().cameraMedium();
+        if(boundaryCount!=0||medium.scattering().isZero())
+            unsupported("PBR scattering requires a scattering camera medium without explicit boundaries");
+        if(frame.caustics().enabled() && (!medium.densityField().isUniform() || medium.indexOfRefraction()!=1))
+            unsupported("PBR scattering caustics require a homogeneous global IOR-one medium");
+        if(!frame.shaderData().isEmpty())
+            unsupported("expert shader data requires separate PBR scattering integration");
+    }
     static void requireSupported(RenderFrameRequest frame,MediumSceneIndex.NativeScene scene,boolean pbrSurfaces) {
+        requireSupported(frame,scene,pbrSurfaces,false);
+    }
+    static void requireSupported(RenderFrameRequest frame,MediumSceneIndex.NativeScene scene,boolean pbrSurfaces,
+            boolean scatteringCamera) {
         if(!pbrSurfaces)unsupported("surfaces must be opaque PBR with metallic zero or UNLIT");
         if (!frame.shaderData().isEmpty())
             unsupported("expert shader overrides require a separate native integration");
@@ -15,12 +28,15 @@ final class CudaPbrMediumProfile {
             var camera = frame.environment().cameraMedium();
             if (!scene.boundaries().isEmpty())
                 unsupported("medium caustics currently require a global camera medium; explicit boundaries need photon event integration");
-            if (!camera.densityField().isUniform() || !camera.scattering().isZero()
-                    || camera.indexOfRefraction() != 1)
-                unsupported("native medium caustics require homogeneous non-scattering IOR-one absorption");
+            if (!camera.densityField().isUniform() || camera.indexOfRefraction() != 1)
+                unsupported("native medium caustics require a homogeneous global IOR-one medium");
         }
         try {
-            CudaBoundaryMediumAbi.requireMedium(frame.environment().cameraMedium());
+            var camera=frame.environment().cameraMedium();
+            if(scatteringCamera) {
+                if(camera.scattering().isZero())
+                    unsupported("PBR scattering requires a scattering camera medium");
+            } else CudaBoundaryMediumAbi.requireMedium(camera);
             for(var entry:scene.boundaries()) {
                 if(entry.boundary().surfaceInteraction())unsupported("native PBR currently requires volume-only explicit boundaries");
                 CudaBoundaryMediumAbi.requireMedium(entry.boundary().medium());

@@ -107,12 +107,15 @@ public final class VulkanGpuSceneShaderSelfTest {
    private static void verifyNativePbrMediumCausticContract() {
       String lights = read("assets/rtrenderer/shaders/gpuscene/gpuscene_native_pbr_medium_lights.rgen");
       String photons = read("assets/rtrenderer/shaders/gpuscene/gpuscene_photon_trace.glsl");
+      String segment = read("assets/rtrenderer/shaders/gpuscene/gpuscene_photon_segment.glsl");
       require(lights.contains("#define RTRENDERER_CAUSTICS 1")
               && lights.contains("gsGatherCaustics(receiver")
               && lights.contains("receiver.mediumBoundary=primary.lanes[source+11u]"),
               "native PBR light resolve must gather the published photon map from the primary payload");
       require(photons.contains("GPU_SCENE_FRAME_MEDIUM_EXTINCTION_WORD")
-              && photons.contains("flux*=exp(-extinction*distance)"),
+              && readRaw("assets/rtrenderer/shaders/gpuscene/gpuscene_photon_trace.glsl").contains("#include \"gpuscene_photon_segment.glsl\"")
+              && photons.contains("flux*=segment.transportWeight")
+              && segment.contains("vec3 tr=exp(-extinction*maximum)"),
               "surface photon transport must apply the accepted global absorber medium");
    }
 

@@ -115,6 +115,7 @@ public final class RendererApiContractSelfTest {
       assertManagedPresenterContract();
       assertFramePollingContract();
       assertCpuFrameContract();
+      assertAsyncCpuFrameCancellationContract();
       assertSubmissionDeferralAndCloseContract();
       assertExportedHandleLifecycle();
       assertProviderSelection();
@@ -214,8 +215,73 @@ public final class RendererApiContractSelfTest {
       );
       WorkloadExecutionEvidence sceneEvidence = WorkloadExecutionEvidence.sceneAccepted(scene);
       require(sceneEvidence.outcome() == WorkloadExecutionEvidence.Outcome.ACCEPTED
-                      && sceneEvidence.sceneSubmission().orElseThrow() == scene,
+                      && sceneEvidence.sceneSubmission().orElseThrow() == scene
+                      && sceneEvidence.submissionDeferralReason().isEmpty(),
               "scene workload evidence lost the retained fast-path submission");
+
+      class DeferredSceneAccess implements RendererSceneAccess, RendererCommandAccess {
+         private final SubmissionDeferralReason deferralReason;
+
+         private DeferredSceneAccess(SubmissionDeferralReason deferralReason) {
+            this.deferralReason = deferralReason;
+         }
+
+         @Override public Renderer.SceneUpdateResult apply(SceneTransaction transaction) {
+            throw new UnsupportedOperationException();
+         }
+
+         @Override public Renderer.FrameSubmissionResult submit(RenderFrameRequest request) {
+            throw new UnsupportedOperationException();
+         }
+
+         @Override public Renderer.FrameSubmissionAttempt trySubmit(RenderFrameRequest request) {
+            return new Renderer.FrameSubmissionDeferred(deferralReason, "frame admission deferred");
+         }
+
+         @Override public ResourceTransactionEvidence submitResources(RenderResourceTransaction transaction) {
+            throw new UnsupportedOperationException();
+         }
+
+         @Override public Optional<ResourceResidencyEvidence> resourceResidencyEvidence(
+                 ResourceGenerationKey generation) {
+            return Optional.empty();
+         }
+
+         @Override public RenderingSemanticCapabilities renderingSemanticCapabilities() {
+            throw new UnsupportedOperationException();
+         }
+
+         @Override public CommandExecutionEvidence submitCommands(RenderCommandTransaction transaction) {
+            throw new UnsupportedOperationException();
+         }
+
+         @Override public Optional<CommandExecutionEvidence> commandExecutionEvidence(long transactionSequence) {
+            return Optional.empty();
+         }
+      }
+
+      RenderFrameRequest deferredFrame = RenderFrameRequest.builder(10L, 1, 1, camera()).build();
+      for (SubmissionDeferralReason deferralReason : SubmissionDeferralReason.values()) {
+         WorkloadExecutionEvidence deferredScene = new DeferredSceneAccess(deferralReason).submitWorkload(
+                 RenderWorkload.rayTracing(deferredFrame));
+         WorkloadExecutionEvidence deferredCombined = WorkloadExecutionEvidence.combinedDeferred(
+                 11L, deferralReason, "combined frame admission deferred");
+         WorkloadExecutionEvidence.Reason expectedReason =
+                 deferralReason == SubmissionDeferralReason.DEVICE_RECOVERING
+                         ? WorkloadExecutionEvidence.Reason.DEVICE_NOT_READY
+                         : WorkloadExecutionEvidence.Reason.BOUNDED_BACKPRESSURE;
+         require(deferredScene.outcome() == WorkloadExecutionEvidence.Outcome.DEFERRED
+                         && deferredScene.submissionDeferralReason().orElseThrow() == deferralReason
+                         && deferredScene.reason() == expectedReason
+                         && deferredScene.sceneSubmission().isEmpty(),
+                 "scene workload lost exact frame deferral reason " + deferralReason);
+         require(deferredCombined.outcome() == WorkloadExecutionEvidence.Outcome.DEFERRED
+                         && deferredCombined.submissionDeferralReason().orElseThrow() == deferralReason
+                         && deferredCombined.reason() == expectedReason
+                         && deferredCombined.sceneSubmission().isEmpty()
+                         && deferredCombined.graphicsExecution().isEmpty(),
+                 "combined workload lost exact frame deferral reason " + deferralReason);
+      }
 
       CommandExecutionEvidence rejected = new CommandExecutionEvidence(
               8L, CommandExecutionEvidence.Outcome.REJECTED,
@@ -248,6 +314,51 @@ public final class RendererApiContractSelfTest {
                       && acceptedCombined.sceneSubmission().isPresent()
                       && acceptedCombined.graphicsExecution().isPresent(),
               "combined workload evidence did not preserve both ordered lanes");
+
+      CommandExecutionEvidence blockedGraphics = new CommandExecutionEvidence(
+              7L, CommandExecutionEvidence.Outcome.BLOCKED,
+              CommandExecutionEvidence.Reason.BOUNDED_BACKPRESSURE,
+              OptionalLong.empty(), Optional.empty(), 1L,
+              "generic command frame ring is full"
+      );
+      WorkloadExecutionEvidence partiallyBlocked = WorkloadExecutionEvidence.combined(scene, blockedGraphics);
+      require(partiallyBlocked.outcome() == WorkloadExecutionEvidence.Outcome.PARTIALLY_ACCEPTED
+                      && partiallyBlocked.reason() == WorkloadExecutionEvidence.Reason.BOUNDED_BACKPRESSURE
+                      && partiallyBlocked.sceneSubmission().orElseThrow() == scene
+                      && partiallyBlocked.graphicsExecution().orElseThrow() == blockedGraphics,
+              "combined backpressure hid that the retained scene lane was already accepted");
+
+      CommandExecutionEvidence rejectedGraphics = new CommandExecutionEvidence(
+              7L, CommandExecutionEvidence.Outcome.REJECTED,
+              CommandExecutionEvidence.Reason.COMMAND_VALIDATION_FAILED,
+              OptionalLong.empty(), Optional.empty(), 1L,
+              "generic command validation failed"
+      );
+      WorkloadExecutionEvidence partiallyRejected = WorkloadExecutionEvidence.combined(scene, rejectedGraphics);
+      require(partiallyRejected.outcome() == WorkloadExecutionEvidence.Outcome.PARTIALLY_ACCEPTED
+                      && partiallyRejected.reason() == WorkloadExecutionEvidence.Reason.COMMAND_REJECTED
+                      && partiallyRejected.sceneSubmission().isPresent()
+                      && partiallyRejected.graphicsExecution().orElseThrow() == rejectedGraphics,
+              "combined command rejection hid the accepted scene side effect");
+
+      CommandExecutionEvidence fallbackGraphics = new CommandExecutionEvidence(
+              7L, CommandExecutionEvidence.Outcome.FALLBACK_COMPLETED,
+              CommandExecutionEvidence.Reason.FALLBACK_SELECTED,
+              OptionalLong.of(7L), Optional.of(new RenderResourceId(2L)), 1L,
+              "generic command lane produced fallback output"
+      );
+      WorkloadExecutionEvidence partiallyFallback = WorkloadExecutionEvidence.combined(scene, fallbackGraphics);
+      require(partiallyFallback.outcome() == WorkloadExecutionEvidence.Outcome.PARTIALLY_ACCEPTED
+                      && partiallyFallback.reason() == WorkloadExecutionEvidence.Reason.COMMAND_REJECTED
+                      && partiallyFallback.sceneSubmission().orElseThrow() == scene
+                      && partiallyFallback.graphicsExecution().orElseThrow() == fallbackGraphics
+                      && partiallyFallback.submissionDeferralReason().isEmpty(),
+              "combined fallback hid the accepted scene or fabricated a frame-capacity refusal");
+      expect(IllegalArgumentException.class, () -> WorkloadExecutionEvidence.combined(scene, rejected));
+      expect(IllegalArgumentException.class, () -> WorkloadExecutionEvidence.sceneDeferred(
+              -1L, SubmissionDeferralReason.DEVICE_RECOVERING, "device recovering"));
+      expect(NullPointerException.class, () -> WorkloadExecutionEvidence.combinedDeferred(
+              7L, null, "no typed reason"));
    }
 
    private static void assertGenericCompositionEvidenceContract() {
@@ -1819,21 +1930,72 @@ public final class RendererApiContractSelfTest {
 
       expect(IllegalArgumentException.class, () -> renderer.awaitFrame(Duration.ofNanos(-1L)));
       expect(NullPointerException.class, () -> renderer.awaitFrameAsync(Duration.ZERO, (Executor)null));
-      ExecutorService executor = Executors.newSingleThreadExecutor();
+   }
 
+   private static void assertAsyncCpuFrameCancellationContract() {
+      AtomicInteger waits = new AtomicInteger();
+      AtomicReference<Runnable> queued = new AtomicReference<>();
+      FrameSnapshot frame = FrameSnapshot.builder().frameSequence(0).renderedSceneRevision(0)
+              .extent(1, 1).pixels(new byte[4]).build();
+      RendererFrameAccess immediate = new RendererFrameAccess() {
+         @Override public boolean readFrame(FrameConsumer consumer) { return false; }
+         @Override public Optional<FrameSnapshot> pollFrame() { return Optional.empty(); }
+         @Override public Optional<FrameSnapshot> awaitFrame(Duration timeout) {
+            waits.incrementAndGet();
+            return Optional.of(frame);
+         }
+      };
+      CompletableFuture<Optional<FrameSnapshot>> cancelled = immediate.awaitFrameAsync(
+              Duration.ofSeconds(1), queued::set);
+      require(cancelled.cancel(true), "queued CPU wait did not cancel");
+      expect(CancellationException.class, cancelled::join);
+      queued.get().run();
+      require(waits.get() == 0, "cancelled queued CPU wait still entered the provider");
+      require(immediate.awaitFrameAsync(Duration.ZERO, Runnable::run).join().orElseThrow() == frame,
+              "CPU frame future changed the provider result");
+      CompletableFuture<Optional<FrameSnapshot>> rejected = immediate.awaitFrameAsync(Duration.ZERO,
+              action -> { throw new java.util.concurrent.RejectedExecutionException("queue full"); });
+      require(expect(CompletionException.class, rejected::join).getCause()
+                      instanceof java.util.concurrent.RejectedExecutionException,
+              "CPU wait lost executor rejection");
+
+      AssertionError providerFailure = new AssertionError("injected provider failure");
+      RendererFrameAccess broken = new RendererFrameAccess() {
+         @Override public boolean readFrame(FrameConsumer consumer) { return false; }
+         @Override public Optional<FrameSnapshot> pollFrame() { return Optional.empty(); }
+         @Override public Optional<FrameSnapshot> awaitFrame(Duration timeout) { throw providerFailure; }
+      };
+      CompletableFuture<Optional<FrameSnapshot>> failed = broken.awaitFrameAsync(Duration.ZERO, Runnable::run);
+      require(expect(CompletionException.class, failed::join).getCause() == providerFailure,
+              "provider Error left the CPU wait future incomplete");
+
+      CountDownLatch started = new CountDownLatch(1);
+      CountDownLatch interrupted = new CountDownLatch(1);
+      CountDownLatch release = new CountDownLatch(1);
+      RendererFrameAccess waiting = new RendererFrameAccess() {
+         @Override public boolean readFrame(FrameConsumer consumer) { return false; }
+         @Override public Optional<FrameSnapshot> pollFrame() { return Optional.empty(); }
+         @Override public Optional<FrameSnapshot> awaitFrame(Duration timeout) throws InterruptedException {
+            started.countDown();
+            try { release.await(); }
+            catch (InterruptedException expected) { interrupted.countDown(); throw expected; }
+            return Optional.empty();
+         }
+      };
+      ExecutorService executor = Executors.newSingleThreadExecutor();
       try {
-         CompletableFuture<Optional<FrameSnapshot>> cancelled = renderer.awaitFrameAsync(Duration.ofSeconds(1L), executor);
-         require(cancelled.cancel(false), "async frame wait did not accept cancellation");
-         Objects.requireNonNull(cancelled);
-         expect(CancellationException.class, cancelled::join);
-         require(!executor.awaitTermination(1L, TimeUnit.MILLISECONDS), "caller-owned executor was shut down by frame-wait cancellation");
-      } catch (InterruptedException interrupted) {
-         Thread.currentThread().interrupt();
-         throw new AssertionError("contract executor wait was interrupted", interrupted);
+         CompletableFuture<Optional<FrameSnapshot>> running = waiting.awaitFrameAsync(Duration.ofSeconds(5), executor);
+         require(started.await(5, TimeUnit.SECONDS), "CPU wait never entered the provider");
+         require(running.cancel(true), "running CPU wait did not cancel");
+         require(interrupted.await(5, TimeUnit.SECONDS), "running CPU cancellation did not interrupt the provider");
+         require(!executor.submit(() -> Thread.currentThread().isInterrupted()).get(5, TimeUnit.SECONDS),
+                 "CPU wait cancellation interrupted subsequent executor work");
+      } catch (Exception failure) {
+         throw new AssertionError("CPU wait cancellation contract failed", failure);
       } finally {
+         release.countDown();
          executor.shutdownNow();
       }
-
    }
 
    private static void assertSubmissionDeferralAndCloseContract() {
@@ -1882,6 +2044,7 @@ public final class RendererApiContractSelfTest {
                   && deferredFailure.getCause().getMessage().contains("must override closeAsync"),
             "deferred provider default did not fail with the required override diagnostic");
       expect(IllegalArgumentException.class, () -> renderer.awaitClosed(Duration.ofNanos(-1L)));
+      expect(IllegalArgumentException.class, () -> renderer.awaitClosed(Duration.ofSeconds(Long.MAX_VALUE)));
       expect(NullPointerException.class, () -> renderer.awaitClosed(null));
    }
 

@@ -158,7 +158,7 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
                 created, retired, failedReleases, completedSequence);
     }
 
-    void updateBindings(
+    VulkanGenericDescriptorSetBank.Snapshot snapshotBindings(
             Compiled pipeline,
             BindingSet bindings,
             VulkanGenericAccelerationStructures.Compilation accelerationStructures
@@ -168,9 +168,9 @@ final class VulkanGenericRayTracingPipelines implements AutoCloseable {
             if (!bindings.layout().entries().isEmpty()) {
                 throw new IllegalArgumentException("RT pipeline has no descriptor layout for non-empty bindings");
             }
-            return;
+            return null;
         }
-        pipeline.descriptors().update(bindings, resources, resources.samplers(), accelerationStructures);
+        return pipeline.descriptors().snapshot(bindings, resources, resources.samplers(), accelerationStructures);
     }
 
     @Override

@@ -15,6 +15,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -39,6 +41,7 @@ public final class VulkanValidationFileLogger implements AutoCloseable {
     private static final int QUEUE_CAPACITY = 2048;
     private static final int MAX_MESSAGE_CHARS = 64 * 1024;
     private static final int MAX_OBJECTS_PER_MESSAGE = 64;
+    private static final Map<Path, SharedLog> OPEN_LOGS = new HashMap<>();
     private static final DateTimeFormatter FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss.SSS")
             .withZone(ZoneOffset.UTC);
 
@@ -47,7 +50,7 @@ public final class VulkanValidationFileLogger implements AutoCloseable {
     private final AtomicLong reportedDroppedMessages = new AtomicLong();
     private final AtomicLong writtenMessages = new AtomicLong();
     private final AtomicReference<WriteFailure> writeFailure = new AtomicReference<>();
-    private final BufferedWriter writer;
+    private final SharedLog sharedLog;
     private final Path logPath;
     private final Thread writerThread;
     private final VkDebugUtilsMessengerCallbackEXT callback;
@@ -55,23 +58,20 @@ public final class VulkanValidationFileLogger implements AutoCloseable {
     private long messengerHandle;
 
     private VulkanValidationFileLogger(Path logPath) throws IOException {
-        this.logPath = logPath;
-        Path parent = logPath.getParent();
+        this.logPath = logPath.toAbsolutePath().normalize();
+        Path parent = this.logPath.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        this.writer = Files.newBufferedWriter(
-                logPath,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE,
-                StandardOpenOption.APPEND
-        );
-        writer.write("{\"event\":\"opened\",\"time\":\""
-                + jsonEscape(Instant.now().toString())
-                + "\",\"path\":\""
-                + jsonEscape(logPath.toString())
-                + "\"}\n");
-        writer.flush();
+        this.sharedLog = retainLog(this.logPath);
+        synchronized (sharedLog) {
+            sharedLog.writer.write("{\"event\":\"opened\",\"time\":\""
+                    + jsonEscape(Instant.now().toString())
+                    + "\",\"path\":\""
+                    + jsonEscape(this.logPath.toString())
+                    + "\"}\n");
+            sharedLog.writer.flush();
+        }
         this.callback = new VkDebugUtilsMessengerCallbackEXT() {
             @Override
             public int invoke(int messageSeverity, int messageType, long callbackDataAddress, long userData) {
@@ -121,6 +121,36 @@ public final class VulkanValidationFileLogger implements AutoCloseable {
         }
         Path base = Path.of(System.getProperty("user.home", "."), ".rtrenderer", "logs");
         return base.resolve("vulkan-validation-" + FILE_TIMESTAMP.format(Instant.now()) + ".jsonl");
+    }
+
+    private static synchronized SharedLog retainLog(Path path) throws IOException {
+        SharedLog shared = OPEN_LOGS.get(path);
+        if (shared == null) {
+            BufferedWriter writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE, StandardOpenOption.APPEND);
+            shared = new SharedLog(writer);
+            OPEN_LOGS.put(path, shared);
+        }
+        shared.references++;
+        return shared;
+    }
+
+    private static synchronized void releaseLog(Path path, SharedLog shared, long droppedMessages) throws IOException {
+        synchronized (shared) {
+            shared.writer.write("{\"event\":\"closed\",\"droppedMessages\":" + droppedMessages + "}\n");
+            if (--shared.references == 0) {
+                shared.writer.flush();
+                shared.writer.close();
+                OPEN_LOGS.remove(path, shared);
+            }
+        }
+    }
+
+    private static final class SharedLog {
+        private final BufferedWriter writer;
+        private int references;
+
+        private SharedLog(BufferedWriter writer) { this.writer = writer; }
     }
 
     private static void requireAvailable(String layerName, String extensionName) {
@@ -382,10 +412,7 @@ public final class VulkanValidationFileLogger implements AutoCloseable {
             Thread.currentThread().interrupt();
         }
         try {
-            writer.write("{\"event\":\"closed\",\"droppedMessages\":"
-                    + droppedMessages.get() + "}\n");
-            writer.flush();
-            writer.close();
+            releaseLog(logPath, sharedLog, droppedMessages.get());
         } catch (IOException ex) {
             recordWriteFailure("close", ex);
         }
@@ -423,12 +450,14 @@ public final class VulkanValidationFileLogger implements AutoCloseable {
                 if (line == null) {
                     continue;
                 }
-                reportDropsIfRecovered();
-                writer.write(line);
-                writer.newLine();
+                synchronized (sharedLog) {
+                    reportDropsIfRecovered();
+                    sharedLog.writer.write(line);
+                    sharedLog.writer.newLine();
+                }
                 writtenMessages.incrementAndGet();
             }
-            writer.flush();
+            synchronized (sharedLog) { sharedLog.writer.flush(); }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             drainRemainingMessages();
@@ -442,12 +471,14 @@ public final class VulkanValidationFileLogger implements AutoCloseable {
         String line;
         try {
             while ((line = messages.poll()) != null) {
-                reportDropsIfRecovered();
-                writer.write(line);
-                writer.newLine();
+                synchronized (sharedLog) {
+                    reportDropsIfRecovered();
+                    sharedLog.writer.write(line);
+                    sharedLog.writer.newLine();
+                }
                 writtenMessages.incrementAndGet();
             }
-            writer.flush();
+            synchronized (sharedLog) { sharedLog.writer.flush(); }
         } catch (IOException ex) {
             /* Best-effort shutdown only. */
             recordWriteFailure("drainRemaining", ex);
@@ -462,8 +493,8 @@ public final class VulkanValidationFileLogger implements AutoCloseable {
         if (dropped <= reportedDroppedMessages.get()) {
             return;
         }
-        writer.write("{\"event\":\"dropSummary\",\"droppedMessages\":" + dropped + "}");
-        writer.newLine();
+        sharedLog.writer.write("{\"event\":\"dropSummary\",\"droppedMessages\":" + dropped + "}");
+        sharedLog.writer.newLine();
         writtenMessages.incrementAndGet();
         reportedDroppedMessages.set(dropped);
     }

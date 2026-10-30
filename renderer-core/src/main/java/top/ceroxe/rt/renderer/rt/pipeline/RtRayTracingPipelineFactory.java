@@ -248,6 +248,10 @@ final class RtRayTracingPipelineFactory {
         try {
             int result = KHRRayTracingPipeline.vkCreateRayTracingPipelinesKHR(
                     device, operation, pipelineCache, createInfo, null, handle);
+            if (Boolean.getBoolean("top.ceroxe.rt.pipeline.handleDiagnostics"))
+                System.out.printf(java.util.Locale.ROOT,
+                        "RT pipeline create result=%d operation=%d handle=0x%x device=0x%x cache=0x%x%n",
+                        result, operation, handle.get(0), device.address(), pipelineCache);
             if (result == KHRDeferredHostOperations.VK_OPERATION_DEFERRED_KHR) {
                 finishDeferredPipeline(device, operation);
             } else if (result != KHRDeferredHostOperations.VK_OPERATION_NOT_DEFERRED_KHR) {
@@ -307,6 +311,9 @@ final class RtRayTracingPipelineFactory {
             }
         }
         int result = KHRDeferredHostOperations.vkGetDeferredOperationResultKHR(device, operation);
+        if (Boolean.getBoolean("top.ceroxe.rt.pipeline.handleDiagnostics"))
+            System.out.printf(java.util.Locale.ROOT,
+                    "RT pipeline deferred result=%d operation=0x%x device=0x%x%n", result, operation, device.address());
         if (failure != null) throw new IllegalStateException("deferred RT pipeline join failed, result=" + result, failure);
         checkVk(result, "vkGetDeferredOperationResultKHR");
     }

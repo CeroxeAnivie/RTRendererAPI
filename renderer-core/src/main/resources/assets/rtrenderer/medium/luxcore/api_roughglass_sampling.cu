@@ -15,6 +15,13 @@ OPENCL_FORCE_INLINE bool sample(float3 fixed,float3 tint,float roughness,float n
     EvalStack_PopBSDFEvent(event);EvalStack_PopFloat(pdf);
     EvalStack_PopFloat3(sampledDirection);EvalStack_PopFloat3(sampledWeight);
     *direction=sampledDirection;*weight=sampledWeight;
+    // The mature BSDF layer also checks the sampled event against the geometric
+    // hemisphere. A microfacet transmission can stay on the incident side; it
+    // contributes zero and must not commit the destination medium stack.
+    const float hemisphere=fixed.z*sampledDirection.z;
+    if(!Spectrum_IsBlack(sampledWeight)&&(reflection?hemisphere<=0.f:hemisphere>=0.f)) {
+        *direction=BLACK;*weight=BLACK;
+    }
     // The public radiance transport convention includes eta^2 on transmission, including the
     // smooth limit. Keep that API conversion outside the unchanged upstream sampler.
     if(!reflection)*weight*=tint*((n1/n2)*(n1/n2));

@@ -14,6 +14,7 @@ final class CausticSceneIndex {
     private Caustics cachedPolicy;
     private EnvironmentState cachedEnvironment;
     private CausticPhotonPlan cachedPlan;
+    private int cachedDepositsPerPath;
 
     void sceneApplied(VulkanSceneResidency.SceneChangeSet changes) {
         if (changes.reset()) lights.clear();
@@ -25,8 +26,12 @@ final class CausticSceneIndex {
     CausticPhotonPlan plan(RenderFrameRequest request, MediumSceneIndex media) {
         var policy = request.caustics();
         if (!policy.enabled()) return CausticPhotonPlan.DISABLED;
+        boolean scattering=!request.environment().cameraMedium().scattering().isZero()
+                ||media.hasScattering(request.primitiveBatch());
+        int depositsPerPath=scattering?Math.min(policy.maxEvents(),request.mediumTransport().scatteringBounces()+2):1;
         if (generation == cachedGeneration && cachedBatch == request.primitiveBatch()
-                && policy.equals(cachedPolicy) && request.environment().equals(cachedEnvironment)) return cachedPlan;
+                && policy.equals(cachedPolicy) && request.environment().equals(cachedEnvironment)
+                &&depositsPerPath==cachedDepositsPerPath)return cachedPlan;
         media.validateCausticRegion(request.primitiveBatch(), policy);
         var emitters = new ArrayList<CausticPhotonPlan.Emitter>();
         var env = request.environment();
@@ -44,9 +49,9 @@ final class CausticSceneIndex {
                     : media.containingPoint(request.primitiveBatch(), light.x(), light.y(), light.z());
             emitters.add(new CausticPhotonPlan.Emitter(entry.slot, initial));
         });
-        var plan = new CausticPhotonPlan(policy.photons(), emitters);
+        var plan = new CausticPhotonPlan(policy.photons(), emitters,depositsPerPath);
         cachedGeneration = generation; cachedBatch = request.primitiveBatch(); cachedPolicy = policy;
-        cachedEnvironment = env; cachedPlan = plan;
+        cachedEnvironment = env;cachedDepositsPerPath=depositsPerPath;cachedPlan=plan;
         return plan;
     }
 }

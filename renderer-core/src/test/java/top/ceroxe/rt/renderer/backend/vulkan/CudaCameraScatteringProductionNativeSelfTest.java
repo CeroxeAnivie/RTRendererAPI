@@ -27,6 +27,8 @@ public final class CudaCameraScatteringProductionNativeSelfTest {
         String previous=System.getProperty(CudaCameraMediumProfile.ENABLE_PROPERTY);
         System.setProperty(CudaCameraMediumProfile.ENABLE_PROPERTY,"true");
         long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeScatteringSubmissions.sum();
+        long opticalRoutes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
+        long pbrRoutes=VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum();
         try {
             try(Renderer owned=Renderer.open("vulkan-rt",RendererConfig.builder().maxFramesInFlight(3)
                     .validationEnabled(true).frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F)
@@ -54,17 +56,23 @@ public final class CudaCameraScatteringProductionNativeSelfTest {
                         .color(.5f,.3f,.8f).intensity((i+1)*.04f).castsShadow(false).build());
                 compareLightBudget("nine-light-one-sample-reservoir",medium(.3f),environment(0,true),reservoirLights,false,8,1,12,1);
                 compareLightBudget("nine-light-eight-sample-reservoir",medium(-.3f),environment(0,true),reservoirLights,false,8,2,12,8);
-                expectRejected(request(medium(0),environment(0,true),8,1,12,0).toBuilder()
-                        .environment(environment(0,true).toBuilder().cameraMedium(new Medium(new Rgb(.12f,.08f,.04f),new Rgb(.08f,.12f,.16f),Rgb.ZERO,1.3f,1.2f,0)).build())
-                        .mediumTransport(MediumTransport.balanced().withScatteringBounces(1)).build());
+                var dielectricScattering=new Medium(new Rgb(.12f,.08f,.04f),new Rgb(.08f,.12f,.16f),Rgb.ZERO,1,1.3f,0);
+                compare("IOR-scattering-without-interface-uses-native-scattering-integrator",dielectricScattering,environment(0,true),
+                        List.of(forward),false,8,1,12,false);
                 width=17;height=13;
                 compare("resize-and-rejection-recovery",medium(0),environment(0,true),List.of(forward),false,8,2,7,false);
                 require(renderer.health().activeFailure().isEmpty(),"native scattering session unhealthy");
             }
-            require(VulkanGpuSceneFrameSubmitter.diagnosticNativeScatteringSubmissions.sum()-routes==nativeFrames,
-                    "a public scattering frame bypassed the native controller");
+            long scatteringRoutes=VulkanGpuSceneFrameSubmitter.diagnosticNativeScatteringSubmissions.sum()-routes;
+            long dielectricRoutes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-opticalRoutes;
+            long nativePbrRoutes=VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum()-pbrRoutes;
+            require(scatteringRoutes==nativeFrames&&dielectricRoutes==0&&nativePbrRoutes==nativeFrames,
+                    "a public scattering frame bypassed its native integrator: camera="+scatteringRoutes+", optical="
+                            +dielectricRoutes+", PBR="+nativePbrRoutes+", expectedFrames="+nativeFrames);
             Files.writeString(OUTPUT.resolve("result.json"),"{\n  \"passed\":true,\n  \"scope\":\"public-final-HDR-uniform-direct-scattering\",\n"
-                    +"  \"nativeFrames\":"+nativeFrames+",\n  \"recoverableRejections\":"+rejections+",\n  \"comparisons\":[\n"
+                    +"  \"nativeFrames\":"+nativeFrames+",\n  \"nativeScatteringFrames\":"+scatteringRoutes
+                    +",\n  \"nativeOpticalFrames\":"+dielectricRoutes+",\n  \"nativePbrFrames\":"+nativePbrRoutes
+                    +",\n  \"recoverableRejections\":"+rejections+",\n  \"comparisons\":[\n"
                     +String.join(",\n",RESULTS)+"\n  ]\n}\n");
             System.out.println("CudaCameraScatteringProductionNativeSelfTest passed: independent public HDR comparisons="+RESULTS.size());
         }finally{if(previous==null)System.clearProperty(CudaCameraMediumProfile.ENABLE_PROPERTY);else System.setProperty(CudaCameraMediumProfile.ENABLE_PROPERTY,previous);}

@@ -71,17 +71,19 @@ public final class CudaCameraMediumProductionNativeSelfTest {
                 compare("frame-local-ephemeral-TLAS", localVacuum, localNative, 12);
                 apply(SceneTransaction.builder(++revision).upsert(SceneInstance.builder(1, 1).build()).build());
 
-                expectUnsupported(request(37, 29, new Medium(Rgb.ZERO, new Rgb(.1f, .1f, .1f),
-                        Rgb.ZERO, 1, 1.2f, 0), 12, 1), "scattering-with-refractive-IOR");
+                var refractiveAbsorber = new Medium(ABSORPTION.absorption(), Rgb.ZERO, Rgb.ZERO,
+                        ABSORPTION.density(), 1.2f, 0);
+                compare("IOR-without-interface", vacuum,
+                        capture("IOR-without-interface", request(37, 29, refractiveAbsorber, 12, 1)), 12);
                 apply(SceneTransaction.builder(++revision).upsert(MediumTransportSelfTest.cube(2, 1, 1))
                         .upsert(SceneInstance.builder(2, 2).transform(new AffineTransform(new float[]{
                                 1,0,0,20, 0,1,0,0, 0,0,1,0}))
-                                .mediumBoundary(MediumBoundary.surface(new Medium(ABSORPTION.absorption(),
-                                        new Rgb(.1f, .1f, .1f), Rgb.ZERO, 1, 1, 0))).build()).build());
-                expectUnsupported(request(37, 29, ABSORPTION, 12, 1), "scattering-surface-boundary");
+                                .mediumBoundary(MediumBoundary.volume(new Medium(ABSORPTION.absorption(),
+                                        new Rgb(.1f, .1f, .1f), Rgb.ZERO, 1, 1.2f, 0))).build()).build());
+                expectUnsupported(request(37, 29, ABSORPTION, 12, 1), "IOR-changing-invisible-boundary");
                 apply(SceneTransaction.builder(++revision).removeInstance(2).build());
-                apply(SceneTransaction.builder(++revision).upsert(MaterialAsset.builder(1).doubleSided(true).build()).build());
-                expectUnsupported(request(37, 29, ABSORPTION, 12, 1), "lit-material");
+                apply(SceneTransaction.builder(++revision).upsert(MaterialAsset.builder(1).doubleSided(true).metallic(1).build()).build());
+                expectUnsupported(request(37, 29, ABSORPTION, 12, 1), "metallic-secondary-reflection");
                 apply(SceneTransaction.builder(++revision).upsert(MaterialAsset.builder(1)
                         .shadingModel(MaterialAsset.ShadingModel.UNLIT).doubleSided(true)
                         .emissive(0xff4080ff, .25f).build()).build());

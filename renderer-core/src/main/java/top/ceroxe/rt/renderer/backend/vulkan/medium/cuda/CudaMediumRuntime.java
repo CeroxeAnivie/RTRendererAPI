@@ -12,6 +12,7 @@ import static top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi.ar
  * This is the GPU execution foundation, not the renderer's full medium-path integrator.
  */
 public final class CudaMediumRuntime implements AutoCloseable {
+    static final int EXTERNAL_SEMAPHORE_PARAMS_BYTES = 144;
     private final Thread owner = Thread.currentThread();
     private final Arena libraryArena = Arena.ofConfined();
     private final CudaNativeApi api;
@@ -278,12 +279,17 @@ public final class CudaMediumRuntime implements AutoCloseable {
     private void external(ExternalSemaphore semaphore, boolean signal) {
         external(semaphore,signal,0L);
     }
+    static MemorySegment externalSemaphoreParams(Arena scratch, long value) {
+        MemorySegment params = scratch.allocate(EXTERNAL_SEMAPHORE_PARAMS_BYTES, 8);
+        params.fill((byte) 0);
+        params.set(JAVA_LONG, 0, value);
+        return params;
+    }
     private void external(ExternalSemaphore semaphore, boolean signal,long value) {
         checkOpen(); requireOwned(semaphore); semaphore.checkAlive();
         try (Arena scratch = Arena.ofConfined()) {
             MemorySegment handles = scratch.allocateFrom(ADDRESS, semaphore.handle);
-            MemorySegment params = scratch.allocate(144, 8);
-            params.set(JAVA_LONG,0,value);
+            MemorySegment params = externalSemaphoreParams(scratch, value);
             inContext(() -> {
                 api.checked(signal ? "cuSignalExternalSemaphoresAsync" : "cuWaitExternalSemaphoresAsync",
                         args(ADDRESS, ADDRESS, JAVA_INT, ADDRESS), handles, params, 1, stream);

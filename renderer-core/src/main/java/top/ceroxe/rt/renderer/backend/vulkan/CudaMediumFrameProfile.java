@@ -8,7 +8,7 @@ import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program;
 final class CudaMediumFrameProfile {
     enum Route {
         NONE, CAMERA, BOUNDARY, CAMERA_SCATTERING, MULTIPLE_SCATTERING,
-        DENSITY_SCATTERING, BOUNDARY_SCATTERING, OPTICAL, PBR
+        DENSITY_SCATTERING, BOUNDARY_SCATTERING, OPTICAL, PBR, PBR_SCATTERING
     }
 
     record Selection(Program program, Route route, MediumSceneIndex.NativeScene boundaries) { }
@@ -25,7 +25,9 @@ final class CudaMediumFrameProfile {
         int boundaryCount = media.frameBoundaryCount(batch);
         boolean hasMedium = !medium.isVacuum() || boundaryCount != 0;
         boolean optical = nativeEnabled && (surfaces.transmissiveCount(batch) != 0
-                || media.hasSurfaceInteraction(batch) || medium.indexOfRefraction() != 1);
+                || media.hasSurfaceInteraction(batch)
+                || boundaryCount!=0&&surfaces.opaquePbrMediumOnly(batch)&&surfaces.hasCausticReceiver(batch)
+                    &&(!medium.scattering().isZero()||media.hasScattering(batch)));
         if (!hasMedium && !optical)
             return new Selection(VulkanGpuSceneTemporalCoordinator.program(request, media, surfaces), Route.NONE, null);
         if (!nativeEnabled) throw new FrameValidationException(
@@ -37,13 +39,20 @@ final class CudaMediumFrameProfile {
                 ? media.nativeScene(request) : null;
         Route route;
         if (optical) {
-            CudaOpticalMediumProfile.requireSupported(request, scene, surfaces.opticalUnlitOnly(batch));
+            CudaOpticalMediumProfile.requireSupported(request, scene,
+                    surfaces.opticalTerminalOnly(batch), surfaces.hasCausticReceiver(batch));
             route = Route.OPTICAL;
         } else {
             boolean scattering = !medium.scattering().isZero();
             if (scene != null) for (var boundary : scene.boundaries())
                 scattering |= !boundary.boundary().medium().scattering().isZero();
-            if (boundaryCount != 0 && scattering) {
+            if (scattering && boundaryCount == 0
+                    && surfaces.opaquePbrMediumOnly(batch)) {
+                if (scene == null) scene = media.nativeScene(request);
+                CudaPbrMediumProfile.requireSupported(request, scene, true, true);
+                CudaPbrMediumProfile.requireScatteringContributionSupported(request, boundaryCount);
+                route = Route.PBR_SCATTERING;
+            } else if (boundaryCount != 0 && scattering) {
                 CudaBoundaryScatteringProfile.requireSupported(request, scene, surfaces.cameraAbsorptionOnly(batch));
                 route = Route.BOUNDARY_SCATTERING;
             } else if (scattering && request.mediumTransport().scatteringBounces() != 0) {
@@ -69,5 +78,15 @@ final class CudaMediumFrameProfile {
             }
         }
         return new Selection(Program.SURFACE, route, scene);
+    }
+
+    static void validateShaderData(RenderFrameRequest request, Selection selection, boolean builtIn) {
+        if (!builtIn || request.shaderData().isEmpty()) return;
+        if (selection.route() != Route.NONE) {
+            throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
+                    "built-in medium transport is not integrated with application shader data");
+        }
+        throw new FrameValidationException(FrameValidationException.Reason.INVALID_SHADER_DATA,
+                "built-in scene shaders declare no application data bindings");
     }
 }

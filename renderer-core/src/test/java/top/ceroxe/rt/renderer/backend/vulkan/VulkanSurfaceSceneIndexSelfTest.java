@@ -87,7 +87,35 @@ public final class VulkanSurfaceSceneIndexSelfTest {
         cameraAbsorptionAdmission();
         pbrMediumAdmission();
         opticalOpaqueRayAdmission();
+        shaderDataAdmissionClassification();
         System.out.println("VulkanSurfaceSceneIndexSelfTest passed");
+    }
+
+    private static void shaderDataAdmissionClassification() {
+        var data = java.util.List.of(new ResourceData(java.nio.ByteBuffer.allocateDirect(16)));
+        var request = RenderFrameRequest.builder(1, 1, 1,
+                CameraState.lookAt(0, 0, 1, 0, 0, 0).build()).shaderData(data).build();
+        var cameraTransport = new CudaMediumFrameProfile.Selection(
+                top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.SURFACE,
+                CudaMediumFrameProfile.Route.CAMERA, null);
+        try {
+            CudaMediumFrameProfile.validateShaderData(request, cameraTransport, true);
+            throw new AssertionError("built-in medium plus application shader data must be rejected");
+        } catch (FrameValidationException expected) {
+            require(expected.reason() == FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
+                    "medium plus shader data must report unsupported transport");
+        }
+        var ordinary = new CudaMediumFrameProfile.Selection(
+                top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.SURFACE,
+                CudaMediumFrameProfile.Route.NONE, null);
+        try {
+            CudaMediumFrameProfile.validateShaderData(request, ordinary, true);
+            throw new AssertionError("built-in shaders without application bindings must reject shader data");
+        } catch (FrameValidationException expected) {
+            require(expected.reason() == FrameValidationException.Reason.INVALID_SHADER_DATA,
+                    "shader data without a medium must retain the invalid-binding category");
+        }
+        CudaMediumFrameProfile.validateShaderData(request, ordinary, false);
     }
 
     private static void cameraAbsorptionAdmission() {

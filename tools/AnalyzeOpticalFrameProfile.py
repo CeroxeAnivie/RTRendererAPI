@@ -52,11 +52,26 @@ def analyze(directory):
                         'cuMemcpyDtoHAsync_v2', 'cuSignalExternalSemaphoresAsync', 'cuStreamSynchronize')
             names = ('externalWaitEnqueue', 'resetKernelLaunch', 'opticalKernelLaunch',
                      'counterReadbackAsyncEnqueue', 'externalSignalEnqueue', 'streamCompletionWait')
+        # A queued pair may synchronize once after both steps, or retain the
+        # historical intermediate wait. Match the actual correlated calls.
+        if paired:
+            base_expected, base_names = expected[:-1], names[:-1]
         durations = [0] * len(names)
-        for kernel in kernels:
+        stream_waits_by_round = [0] * (rounds // frames)
+        matched_stream_waits = 0
+        for round_index, kernel in enumerate(kernels):
             index = indices[kernel[2]]
-            sequence = api[index - 2:index + (4 if paired else 5)]
-            assert tuple(row[4] for row in sequence) == expected
+            if paired:
+                sequence = api[index - 2:index + 3]
+                assert tuple(row[4] for row in sequence) == base_expected
+                following = api[index + 3]
+                if following[4] == 'cuStreamSynchronize':
+                    sequence = [*sequence, following]
+                    matched_stream_waits += 1
+                    stream_waits_by_round[round_index % len(stream_waits_by_round)] += following[1] - following[0]
+            else:
+                sequence = api[index - 2:index + 5]
+                assert tuple(row[4] for row in sequence) == expected
             assert len({row[3] for row in sequence}) == 1 and all(row[5] == 0 for row in sequence)
             for i, row in enumerate(sequence):
                 durations[i] += row[1] - row[0]
@@ -93,6 +108,8 @@ def analyze(directory):
                 directory=str(directory.resolve()), fullMeanMs=total / frames / 1e6, frames=frames, rounds=rounds,
                 roundsPerFrame=rounds // frames, wallRanking=ranked, cudaStageApiBreakdown=api_breakdown,
                 overlappingGpuEvidence=gpu, overlappingGpuRanking=detailed_gpu, opticalKernelMeanMsByRound=per_round,
+                pairedHostStreamWaits=matched_stream_waits,
+                pairedHostStreamWaitMeanMsByRound=[value / frames / 1e6 for value in stream_waits_by_round],
                 originalThreeRanks={name: next(row['rank'] for row in ranked if row['component'] == name)
                                     for name in ('CUDA交接', 'Vulkan后续栅栏等待', 'Vulkan录制与提交')},
                 finalHdrSha256=hashlib.sha256((directory / 'benchmark-final.rgba16f').read_bytes()).hexdigest(),

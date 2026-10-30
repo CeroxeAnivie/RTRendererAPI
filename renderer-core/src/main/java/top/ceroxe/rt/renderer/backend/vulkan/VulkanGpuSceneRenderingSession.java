@@ -578,7 +578,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     public synchronized FrameAdmissionAttempt trySubmit(FrameSubmission submission) {
         requireReady("submit frame");
         FrameSubmission checked = Objects.requireNonNull(submission, "submission");
-        pipeline.validateShaderData(checked.request().shaderData());
+        pipeline.validateShaderDataBeforeTransport(checked.request().shaderData());
         try {
             pump();
             // Capability probing and extent negotiation can cross the JNI boundary. A saturated
