@@ -115,8 +115,8 @@
     },
     {
       "name": "optical_transport.cu",
-      "bytes": 39184,
-      "sha256": "1b3799843c04970622ea9f5fbd4ebdbb430ce4345cf70f73fa6d13023318670e"
+      "bytes": 42513,
+      "sha256": "85b89267c51630f8df0947481cb385715dd01ff86edfaf60188b65ac6c084a87"
     },
     {
       "name": "pbr_transport.cu",
@@ -180,8 +180,8 @@
     },
     {
       "name": "optical_caustics.cu",
-      "bytes": 11872,
-      "sha256": "6dbf8ec3e66e0a63fe3aa2996224ded0f555d11860ef6dd096c9a398296653b5"
+      "bytes": 13839,
+      "sha256": "27d2a2ed6c89e28e1cd8914ab348e9a6b3eedd946ff09a999ff2a975f38bb203"
     }
   ]
 }

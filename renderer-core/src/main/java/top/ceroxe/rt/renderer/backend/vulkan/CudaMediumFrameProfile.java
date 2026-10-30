@@ -26,6 +26,8 @@ final class CudaMediumFrameProfile {
         boolean hasMedium = !medium.isVacuum() || boundaryCount != 0;
         boolean optical = nativeEnabled && (surfaces.transmissiveCount(batch) != 0
                 || media.hasSurfaceInteraction(batch)
+                || hasMedium && surfaces.hasMetallicReflection(batch)
+                || hasMedium && request.caustics().enabled()
                 || boundaryCount!=0&&surfaces.opaquePbrMediumOnly(batch)&&surfaces.hasCausticReceiver(batch)
                     &&(!medium.scattering().isZero()||media.hasScattering(batch)));
         if (!hasMedium && !optical)

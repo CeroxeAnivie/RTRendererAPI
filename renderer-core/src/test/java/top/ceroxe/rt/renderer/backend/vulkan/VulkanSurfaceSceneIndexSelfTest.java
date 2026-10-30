@@ -230,8 +230,11 @@ public final class VulkanSurfaceSceneIndexSelfTest {
         apply(residency,index,SceneTransaction.builder(++revision).upsert(material.toBuilder().metallic(.1f).build()).build());
         require(!index.opaquePbrMediumOnly(empty) && !index.opaquePbrMediumOnly(batch),
                 "referenced metal requires secondary reflection segments and invalidates the cached batch");
+        require(index.hasMetallicReflection(empty) && index.hasMetallicReflection(batch)
+                && index.opticalTerminalOnly(batch), "referenced metal must retain native optical reflection");
         apply(residency,index,SceneTransaction.builder(++revision).upsert(material).build());
         require(index.opaquePbrMediumOnly(batch), "material replacement restores the proof");
+        require(!index.hasMetallicReflection(batch), "material replacement invalidates the reflection requirement");
         apply(residency,index,SceneTransaction.builder(++revision)
                 .upsert(TextureAsset.color(61,1,1,new byte[]{-1,-1,-1,100})).build());
         require(!index.opaquePbrMediumOnly(empty) && !index.opaquePbrMediumOnly(batch),
@@ -243,6 +246,8 @@ public final class VulkanSurfaceSceneIndexSelfTest {
         apply(residency,index,SceneTransaction.builder(++revision).upsert(singleSided).build());
         require(index.opaquePbrMediumOnly(empty) && index.opaquePbrMediumOnly(batch),
                 "single-sided PBR preserves public camera and light-query backface rejection");
+        require(index.opticalTerminalOnly(batch) && !index.opticalOpaqueRayOnly(batch),
+                "single-sided PBR optical transport must preserve any-hit sidedness");
         apply(residency,index,SceneTransaction.builder(++revision).upsert(singleSided.toBuilder()
                 .shadingModel(MaterialAsset.ShadingModel.UNLIT).build()).build());
         require(index.opaquePbrMediumOnly(empty) && index.opaquePbrMediumOnly(batch)

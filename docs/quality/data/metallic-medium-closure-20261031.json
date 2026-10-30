@@ -1,0 +1,195 @@
+{
+  "date": "2026-10-31",
+  "baseCommit": "fc21f11e6b46223a2414fa224180dd69ddb99ee9",
+  "hardware": "NVIDIA RTX 5080 Laptop GPU",
+  "passed": true,
+  "nativeFrames": 25,
+  "finalHdrChecks": 40,
+  "independentGgxCases": 81,
+  "opticalAbiVersion": 6,
+  "connectionBytes": 304,
+  "nativeTasks": [
+    "cudaOpticalMediumNativeSelfTest",
+    "cudaOpticalCausticNativeSelfTest",
+    "cudaMetallicMediumProductionNativeSelfTest"
+  ],
+  "cpuContracts": [
+    "coreVulkanSurfaceSceneIndexSelfTest",
+    "coreMediumDensitySelfTest",
+    "coreCudaOpticalMediumSelfTest",
+    "verifyLuxCoreSourceManifest"
+  ],
+  "rebuiltOpticalTraceVariants": 8,
+  "nativeValidationErrors": 0,
+  "comparisons": [
+    {
+      "name": "vacuum-metal0.2-sidesfalse-SPP1",
+      "maximumAbsoluteError": 2.99529326E-05
+    },
+    {
+      "name": "uniform-metal0.2-sidesfalse-SPP1",
+      "maximumAbsoluteError": 1.51967364E-05
+    },
+    {
+      "name": "vacuum-metal0.2-sidesfalse-SPP2",
+      "maximumAbsoluteError": 2.93522531E-05
+    },
+    {
+      "name": "uniform-metal0.2-sidesfalse-SPP2",
+      "maximumAbsoluteError": 1.52005096E-05
+    },
+    {
+      "name": "vacuum-metal0.2-sidesfalse-SPP8",
+      "maximumAbsoluteError": 1.99119145E-05
+    },
+    {
+      "name": "uniform-metal0.2-sidesfalse-SPP8",
+      "maximumAbsoluteError": 1.52428167E-05
+    },
+    {
+      "name": "vacuum-metal1.0-sidesfalse-SPP1",
+      "maximumAbsoluteError": 0.000551849194
+    },
+    {
+      "name": "uniform-metal1.0-sidesfalse-SPP1",
+      "maximumAbsoluteError": 0.000476897279
+    },
+    {
+      "name": "vacuum-metal1.0-sidesfalse-SPP2",
+      "maximumAbsoluteError": 0.000487763882
+    },
+    {
+      "name": "uniform-metal1.0-sidesfalse-SPP2",
+      "maximumAbsoluteError": 0.000486464015
+    },
+    {
+      "name": "vacuum-metal1.0-sidesfalse-SPP8",
+      "maximumAbsoluteError": 0.000487479774
+    },
+    {
+      "name": "uniform-metal1.0-sidesfalse-SPP8",
+      "maximumAbsoluteError": 0.000430674178
+    },
+    {
+      "name": "vacuum-metal0.2-sidestrue-SPP1",
+      "maximumAbsoluteError": 2.99529326E-05
+    },
+    {
+      "name": "uniform-metal0.2-sidestrue-SPP1",
+      "maximumAbsoluteError": 1.51967364E-05
+    },
+    {
+      "name": "vacuum-metal0.2-sidestrue-SPP2",
+      "maximumAbsoluteError": 2.93522531E-05
+    },
+    {
+      "name": "uniform-metal0.2-sidestrue-SPP2",
+      "maximumAbsoluteError": 1.52005096E-05
+    },
+    {
+      "name": "vacuum-metal0.2-sidestrue-SPP8",
+      "maximumAbsoluteError": 1.99119145E-05
+    },
+    {
+      "name": "uniform-metal0.2-sidestrue-SPP8",
+      "maximumAbsoluteError": 1.52428167E-05
+    },
+    {
+      "name": "vacuum-metal1.0-sidestrue-SPP1",
+      "maximumAbsoluteError": 0.000551849194
+    },
+    {
+      "name": "uniform-metal1.0-sidestrue-SPP1",
+      "maximumAbsoluteError": 0.000476897279
+    },
+    {
+      "name": "vacuum-metal1.0-sidestrue-SPP2",
+      "maximumAbsoluteError": 0.000487763882
+    },
+    {
+      "name": "uniform-metal1.0-sidestrue-SPP2",
+      "maximumAbsoluteError": 0.000486464015
+    },
+    {
+      "name": "vacuum-metal1.0-sidestrue-SPP8",
+      "maximumAbsoluteError": 0.000487479774
+    },
+    {
+      "name": "uniform-metal1.0-sidestrue-SPP8",
+      "maximumAbsoluteError": 0.000430674178
+    },
+    {
+      "name": "density-both-reflection-segments",
+      "maximumAbsoluteError": 0.000488232041
+    },
+    {
+      "name": "zero-density-restores-reflection",
+      "maximumAbsoluteError": 0.000551849194
+    },
+    {
+      "name": "emission-before-and-after-reflection",
+      "maximumAbsoluteError": 0.000487314982
+    },
+    {
+      "name": "explicit-boundary-two-crossings",
+      "maximumAbsoluteError": 0.000487837851
+    },
+    {
+      "name": "frame-local-boundary-two-crossings",
+      "maximumAbsoluteError": 0.000487837851
+    },
+    {
+      "name": "boundary-density-two-crossings",
+      "maximumAbsoluteError": 0.000486677232
+    },
+    {
+      "name": "event budget must stop metal reflection",
+      "blackFinalHDR": true
+    },
+    {
+      "name": "metal plus multiple scattering",
+      "positiveFinalHDR": true
+    },
+    {
+      "name": "metal plus density/multiple scattering",
+      "positiveFinalHDR": true
+    },
+    {
+      "name": "metal receiver behind dielectric/medium interfaces",
+      "positiveFinalHDR": true
+    },
+    {
+      "name": "ceiling control must receive no direct light",
+      "blackFinalHDR": true
+    },
+    {
+      "name": "caustics-metal1.0-boundary",
+      "positiveFinalHDR": true
+    },
+    {
+      "name": "ceiling control must receive no direct light",
+      "blackFinalHDR": true
+    },
+    {
+      "name": "caustics-metal0.0-boundary",
+      "positiveFinalHDR": true
+    },
+    {
+      "name": "ceiling control must receive no direct light",
+      "blackFinalHDR": true
+    },
+    {
+      "name": "caustics-metal0.0-density",
+      "positiveFinalHDR": true
+    }
+  ],
+  "remaining": [
+    "partial coverage and surface visibility",
+    "surface overlays",
+    "LIGHTMAP_MODULATED medium surfaces",
+    "PBR partial transmission",
+    "integrated medium and gallery gates",
+    "final packaged consumer and distribution gates"
+  ],
+  "performanceClaim": false
+}

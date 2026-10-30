@@ -47,6 +47,7 @@ struct __align__(16) Boundary {unsigned int slot;int priority;unsigned int orien
 struct __align__(16) Connection {
     float4 origin,direction,source,transport,lighting;uint4 control;
     rtr_medium::PathVolumeInfo volumes;
+    // Point.w carries metallic; normal.w/view.w retain the shared GGX sample point.
     float4 surfacePoint,surfaceNormal,surfaceView,surfaceMaterial;
 };
 static_assert(sizeof(Connection)==304,"native optical connection ABI");
@@ -157,7 +158,7 @@ template<class S> __device__ __forceinline__ void finish(unsigned char *b,int i,
 #undef RTR_FINISH_NEXT
 }
 template<class S> __device__ __forceinline__ bool initialize(unsigned char *b,S *s){
-    unsigned int*h=(unsigned int*)b;if(h[0]!=0x524f5031u||h[1]!=5u||h[8]>32||h[6]<1||h[6]>32)return false;
+    unsigned int*h=(unsigned int*)b;if(h[0]!=0x524f5031u||h[1]!=6u||h[8]>32||h[6]<1||h[6]>32)return false;
     if constexpr(S::SMALL){if(h[7]!=0u||h[8]!=0u)return false;}
     else{
         rtr_medium::PathVolumeInfo_Init(&s->volumes);
@@ -283,6 +284,53 @@ __device__ bool roughGlass(float3 incident,float3 normal,float n1,float n2,float
     *direction=Spectrum_IsBlack(*weight)?incident:normalize(tangent*local.x+bitangent*local.y+normal*local.z);
     return finite3(*direction)&&finite3(*weight);
 }
+// The public opaque PBR path samples one GGX metallic reflection. Keep its
+// f*cos/pdf weight and sample point, then integrate every reflected medium
+// segment through the same selected-volume state as camera and glass paths.
+__device__ float3 metalReflection(const Connection*c,float3*outgoing){
+    *outgoing=make_float3(0.f);
+    const float metallic=fminf(fmaxf(c->surfacePoint.w,0.f),1.f);
+    if(metallic<=1.e-4f)return make_float3(0.f);
+    const float3 normal=rgb(c->surfaceNormal),view=rgb(c->surfaceView);
+    const float normalView=fmaxf(dot(normal,view),0.f);
+    if(normalView<=1.e-5f)return make_float3(0.f);
+    const float roughness=fminf(fmaxf(c->surfaceMaterial.w,.025f),1.f);
+    const float alpha=fmaxf(roughness*roughness,.0025f),a2=alpha*alpha;
+    const float phi=6.283185307179586f*c->surfaceNormal.w,u=c->surfaceView.w;
+    const float denominator=(1.f-u)+a2*u;
+    const float cosine=sqrtf(fmaxf((1.f-u)/denominator,0.f));
+    const float sine=sqrtf(fmaxf(a2*u/denominator,0.f));
+    const float3 tangent=normalize(fabsf(normal.z)<.999f?cross(make_float3(0,0,1),normal):cross(make_float3(0,1,0),normal));
+    const float3 halfVector=normalize(tangent*(cosf(phi)*sine)+cross(normal,tangent)*(sinf(phi)*sine)+normal*cosine);
+    const float viewHalf=dot(view,halfVector);
+    if(viewHalf<=1.e-5f)return make_float3(0.f);
+    *outgoing=normalize(halfVector*(2.f*viewHalf)-view);
+    const float normalLight=dot(normal,*outgoing);
+    if(normalLight<=1.e-5f)return make_float3(0.f);
+    const float k=(roughness+1.f)*(roughness+1.f)*.125f;
+    const float geometry=normalView/fmaxf(normalView*(1.f-k)+k,1.e-6f)
+            *normalLight/fmaxf(normalLight*(1.f-k)+k,1.e-6f);
+    const float3 reflectance=make_float3(.04f)*(1.f-metallic)+rgb(c->surfaceMaterial)*metallic;
+    const float3 fresnel=reflectance+(make_float3(1.f)-reflectance)*powf(1.f-viewHalf,5.f);
+    return fresnel*(metallic*geometry*viewHalf/fmaxf(normalView*fmaxf(dot(normal,halfVector),1.e-5f),1.e-5f));
+}
+template<class S> __device__ int continueMetal(unsigned char*b,S*s,const Connection*c){
+    if((s->counters.y&2u)!=0u||s->counters.x>=((unsigned int*)b)[6])return 0;
+    float3 direction;const float3 factor=metalReflection(c,&direction);
+    if(!finite3(factor)||!finite3(direction))return -1;
+    if(peak(factor)<=0.f)return 0;
+    const float3 weight=rgb(s->throughput)*factor;
+    if(!finite3(weight))return -1;
+    if(peak(weight)<=((float*)b)[32])return 0;
+    s->throughput.x=weight.x;s->throughput.y=weight.y;s->throughput.z=weight.z;
+    s->counters.y|=2u;
+    const float3 point=rgb(c->surfacePoint),next=spawnOrigin(point,rgb(c->surfaceNormal),direction);
+    const float epsilon=fmaxf(dot(next-point,direction),0.f);
+    s->direction=make_float4(direction.x,direction.y,direction.z,0.f);
+    bool collision=false;if(!segment(b,s,point,epsilon,&collision,false))return -1;
+    s->origin=make_float4(next.x,next.y,next.z,epsilon);s->control.x=1u;++s->control.w;
+    return peak(rgb(s->throughput))>((float*)b)[32]?1:0;
+}
 #ifndef RTR_OPTICAL_CAUSTIC_ONLY
 __device__ bool connectionSegment(unsigned char*b,Connection*c,float distance){
     distance=fminf(fmaxf(distance,0.f),c->transport.w);
@@ -401,7 +449,12 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
         const float3 value=rgb(s->radiance)+rgb(s->terminal)*rgb(s->throughput)*incoming;
         if(!finite3(value)){finish(b,i,s,statistics,20);return;}
         s->radiance=make_float4(value.x,value.y,value.z,0.f);
-        if(c->control.w!=0u){finish(b,i,s,statistics);return;}
+        if(c->control.w!=0u){
+            const int reflected=continueMetal(b,s,c);
+            if(reflected<0){finish(b,i,s,statistics,21);return;}
+            if(reflected>0){increment(b,statistics,0u);return;}
+            finish(b,i,s,statistics);return;
+        }
         const unsigned int seed=h[36]^h[34]*0x967a889bu^s->control.w*0x9e3779b9u;
         float phasePdf;const float3 direction=rtr_medium::hgSample(rgb(s->direction),anisotropy(b,selectedVolume(s)),
                 random(s->control.z,seed,2u),random(s->control.z,seed,3u),&phasePdf);
@@ -476,7 +529,7 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
         float3 tint=make_float3(fminf(fmaxf(view.f(Compact?8:16),0),1),fminf(fmaxf(view.f(Compact?9:17),0),1),fminf(fmaxf(view.f(Compact?10:18),0),1));
         if(dot(normal,-direction)<=0.f){finish(b,i,s,statistics,10);return;}
         unsigned int seed=h[36]^h[34]*0x967a889bu^h[35]*0x02e5be93u;bool reflection;float multiplier=transmission;
-        bool firstInterface=!s->counters.y;
+        bool firstInterface=(s->counters.y&1u)==0u;
         float3 factor,nextDirection;
         if(view.f(Compact?7:15)>0.f&&n1!=n2){
             RTR_PHASE_NEXT(5u);
@@ -499,7 +552,7 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
         }
         RTR_PHASE_NEXT(6u);
         if(peak(factor)<=0.f){finish(b,i,s,statistics);return;}
-        s->counters.y=1;
+        s->counters.y|=1u;
         float3 weight=rgb(s->throughput)*(firstInterface?make_float3(1.f):factor);
         if(firstInterface){float3 outer=rgb(s->terminal)*factor;s->terminal.x=outer.x;s->terminal.y=outer.y;s->terminal.z=outer.z;
             if(peak(outer)<=0.f){finish(b,i,s,statistics);return;}}

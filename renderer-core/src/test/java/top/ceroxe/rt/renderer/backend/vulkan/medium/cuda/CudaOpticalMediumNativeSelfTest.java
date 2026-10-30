@@ -6,6 +6,15 @@ import static java.lang.foreign.ValueLayout.*;
 /** Real CUDA checks against independent double Fresnel/Snell references; also compiles the controller. */
 public final class CudaOpticalMediumNativeSelfTest {
     private static final String PROBE="""
+        extern "C" __global__ void optical_metal_probe(float *records,int count){
+            int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;float*r=records+i*16;
+            rtr_optical::Connection c={};
+            c.surfacePoint=make_float4(0,0,0,r[0]);c.surfaceNormal=make_float4(0,0,1,r[3]);
+            c.surfaceView=make_float4(sqrtf(fmaxf(0.f,1.f-r[2]*r[2])),0,r[2],r[4]);
+            c.surfaceMaterial=make_float4(r[5],r[6],r[7],r[1]);
+            float3 out;const float3 weight=rtr_optical::metalReflection(&c,&out);
+            r[8]=out.x;r[9]=out.y;r[10]=out.z;r[11]=weight.x;r[12]=weight.y;r[13]=weight.z;
+        }
         extern "C" __global__ void optical_spawn_probe(float *records,int count){
             int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;float*r=records+i*16;
             const float3 point=make_float3(r[0],r[1],r[2]),normal=make_float3(r[3],r[4],r[5]);
@@ -98,6 +107,7 @@ public final class CudaOpticalMediumNativeSelfTest {
                 }
             }
             verifyRoughGlass(cuda,arena);
+            verifyMetalReflection(cuda,arena);
             verifyCounterReduction(cuda,arena);
             verifyHitLayouts(cuda,arena);
             verifyStateLayouts(cuda,arena);
@@ -115,6 +125,43 @@ public final class CudaOpticalMediumNativeSelfTest {
         }
         System.out.println("CudaOpticalMediumNativeSelfTest passed: smooth/rough glass, selected-medium light connections, independent attenuation, priority transitions and TIR");
     }
+    private static void verifyMetalReflection(CudaMediumRuntime cuda,Arena arena) {
+        var cases=new java.util.ArrayList<float[]>();
+        for(float metal:new float[]{0,.2f,1})for(float roughness:new float[]{.025f,.35f,.9f})
+            for(float cosine:new float[]{1,.7f,.2f})for(float[] sample:new float[][]{{.25f,.125f},{.7f,.8f},{.5f,0}})
+                cases.add(new float[]{metal,roughness,cosine,sample[0],sample[1],.7f,.3f,.1f});
+        try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+PROBE,"optical_metal_probe");
+                var records=cuda.allocate(cases.size()*64L)) {
+            var host=arena.allocate(cases.size()*64L,16);
+            for(int i=0;i<cases.size();i++)for(int j=0;j<8;j++)host.set(JAVA_FLOAT,i*64L+j*4,cases.get(i)[j]);
+            cuda.upload(records.slice(0,records.byteSize()),host);
+            cuda.launchBlocking(kernel,records.slice(0,records.byteSize()),cases.size(),64);
+            cuda.download(records.slice(0,records.byteSize()),host);
+            for(int i=0;i<cases.size();i++) {
+                double[] expected=metalReference(cases.get(i));
+                for(int j=0;j<6;j++)near(host.get(JAVA_FLOAT,i*64L+(8+j)*4),expected[j],3e-5,
+                        "metallic reflection f*cos/pdf case="+i+", component="+j);
+            }
+        }
+    }
+    private static double[] metalReference(float[] r) {
+        if(r[0]<=1e-4)return new double[6];
+        double alpha=Math.max(r[1]*r[1],.0025),a2=alpha*alpha,phi=2*Math.PI*r[3];
+        double hz=Math.sqrt((1-r[4])/(1+(a2-1)*r[4])),sine=Math.sqrt(Math.max(0,1-hz*hz));
+        double hx=Math.cos(phi)*sine,hy=Math.sin(phi)*sine,vx=Math.sqrt(1-r[2]*r[2]),vz=r[2];
+        double vh=vx*hx+vz*hz;
+        if(vh<=1e-5)return new double[6];
+        double x=2*vh*hx-vx,y=2*vh*hy,z=2*vh*hz-vz;
+        double[] result={x,y,z,0,0,0};
+        if(z<=1e-5)return result;
+        double k=(r[1]+1)*(r[1]+1)/8.0,geometry=vz/(vz*(1-k)+k)*z/(z*(1-k)+k);
+        for(int c=0;c<3;c++) {
+            double f0=.04*(1-r[0])+r[5+c]*r[0],f=f0+(1-f0)*Math.pow(1-vh,5);
+            result[3+c]=r[0]*f*geometry*vh/Math.max(vz*Math.max(hz,1e-5),1e-5);
+        }
+        return result;
+    }
+
     private static void verifyRoughTransmissionHemisphere(CudaMediumRuntime cuda,Arena arena) {
         final int count=16384;
         try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+PROBE,"optical_rough_glass_probe");

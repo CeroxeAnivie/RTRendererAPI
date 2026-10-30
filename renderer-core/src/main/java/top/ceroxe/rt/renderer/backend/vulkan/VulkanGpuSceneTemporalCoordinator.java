@@ -50,6 +50,9 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
     boolean nativeOpticalOpaqueRay(RenderFrameRequest request) {
         return surfaceScene.opticalOpaqueRayOnly(request.primitiveBatch());
     }
+    boolean nativeMetallicReflection(RenderFrameRequest request) {
+        return surfaceScene.hasMetallicReflection(request.primitiveBatch());
+    }
     boolean reusablePbrPrimary(RenderFrameRequest request) {
         return surfaceScene.opaqueShadowRayOnly(request.primitiveBatch());
     }

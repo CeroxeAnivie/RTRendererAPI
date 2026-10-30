@@ -74,10 +74,37 @@ __device__ void step(unsigned char*b,unsigned char*m,unsigned int i){
     else {
         float transmission=fminf(fmaxf(hit.f(24),0.f),1.f),opacity=fminf(fmaxf(hit.f(19),0.f),1.f);
         if(transmission<=0.f){
-            // First non-specular receiver terminates a caustic chain; direct photons are excluded.
-            if(s->metadata.y&&!deposit(m,s,i,make_float3(hit.f(0),hit.f(1),hit.f(2)),-incoming,rgb(p->throughput)*policy,normal,raw[44],0u)){reject(m,s,12u);return;}
-            p->control.x=0;return;
-        }
+            const float metallic=fminf(fmaxf(hit.f(23),0.f),1.f);
+            // Public shading-model ABI: PHYSICALLY_BASED is zero at bits 7..8.
+            if(((raw[30]>>7u)&3u)==0u){
+                const unsigned int seed=h[9]^p->control.w*0x967a889bu;
+                const float ci=fmaxf(dot(normal,-incoming),0.f);
+                const float dielectric=.04f+.96f*powf(1.f-ci,5.f);
+                const float diffuseProbability=(1.f-metallic)*(1.f-dielectric);
+                if(random(i,seed,0u)<diffuseProbability){
+                    if(s->metadata.y&&!deposit(m,s,i,make_float3(hit.f(0),hit.f(1),hit.f(2)),-incoming,
+                            rgb(p->throughput)*(policy/diffuseProbability),normal,raw[44],0u)){reject(m,s,12u);return;}
+                    p->control.x=0;return;
+                }
+                // Photons sample the complete opaque specular lobe, including the
+                // dielectric F0 of a nonmetal. The camera's extra reflection is
+                // metallic-only; use unit sampling weight with the actual F0 here.
+                Connection surface={};surface.surfacePoint.w=1.f;
+                surface.surfaceNormal=make_float4(normal.x,normal.y,normal.z,random(i,seed,1u));
+                surface.surfaceView=make_float4(-incoming.x,-incoming.y,-incoming.z,random(i,seed,2u));
+                const float3 f0=make_float3(.04f)*(1.f-metallic)+make_float3(hit.f(16),hit.f(17),hit.f(18))*metallic;
+                surface.surfaceMaterial=make_float4(f0.x,f0.y,f0.z,hit.f(15));
+                const float3 factor=metalReflection(&surface,&out)*(1.f/(1.f-diffuseProbability));
+                const float3 flux=rgb(p->throughput)*factor;
+                if(!finite3(flux)){reject(m,s,18u);return;}
+                if(peak(flux)<=0.f){p->control.x=0;return;}
+                p->throughput.x=flux.x;p->throughput.y=flux.y;p->throughput.z=flux.z;s->metadata.y=1u;
+            }else{
+                // First non-specular receiver terminates a caustic chain; direct photons are excluded.
+                if(s->metadata.y&&!deposit(m,s,i,make_float3(hit.f(0),hit.f(1),hit.f(2)),-incoming,rgb(p->throughput)*policy,normal,raw[44],0u)){reject(m,s,12u);return;}
+                p->control.x=0;return;
+            }
+        }else{
         if(opacity<1.f){reject(m,s,13u);return;}
         float n1=raw[29]==2u?hit.f(25):ior(b,selected),n2=raw[29]==2u?ior(b,selected):hit.f(25);
         if(flags){n1=ior(b,p->volumes.currentVolumeIndex);n2=ior(b,candidate.currentVolumeIndex);}
@@ -99,6 +126,7 @@ __device__ void step(unsigned char*b,unsigned char*m,unsigned int i){
         float3 flux=rgb(p->throughput)*weight;if(!finite3(flux)){reject(m,s,16u);return;}
         p->throughput.x=flux.x;p->throughput.y=flux.y;p->throughput.z=flux.z;
         if(!reflected&&flags)p->volumes=candidate;s->metadata.y|=n1!=n2?1u:0u;
+        }
     }
     float3 point=make_float3(hit.f(0),hit.f(1),hit.f(2));
     const float3 next=spawnOrigin(point,normal,out,positionError(point,rgb(p->origin),distance,incoming));

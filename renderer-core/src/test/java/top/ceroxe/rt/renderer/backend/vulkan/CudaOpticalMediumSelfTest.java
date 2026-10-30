@@ -214,7 +214,7 @@ public final class CudaOpticalMediumSelfTest {
             require(layout.transposedPrimary()==transposedPrimary&&((header.getInt(188)&32)!=0)==transposedPrimary,"full primary field layout is explicit and immutable");
             require(layout.transposedStates()==(transposedState&&compactStates)&&((header.getInt(188)&16)!=0)==layout.transposedStates(),"scalar state layout is immutable and limited to boundary-free storage");
             require(layout.transposedHits()==(transposed&&compactHits)&&((header.getInt(188)&8)!=0)==layout.transposedHits(),"transposed storage is explicit and limited to compact hits");
-            require(header.getInt(4)==5&&(header.getInt(188)&3)==layoutFlags,
+            require(header.getInt(4)==CudaOpticalMediumAbi.VERSION&&(header.getInt(188)&3)==layoutFlags,
                     "both producers use an explicit versioned hit layout");
             int first=(layout.pixels()-1)/layout.tilePixels()*layout.tilePixels();
             CudaOpticalMediumAbi.updateTile(header,layout,first,layout.pixels()-first,0,0);

@@ -255,7 +255,8 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
             vec4 material=uintBitsToFloat(gsOptical.storage.lanes[base+18u]);
             if(dot(normal,direction)<=0.0)source=vec3(0);
             else {
-                GsRadianceSplit brdf=gsEvaluateBrdf(normal,view,direction,material.xyz,material.w,0.0);
+                float metallic=uintBitsToFloat(gsOptical.storage.lanes[base+15u]).w;
+                GsRadianceSplit brdf=gsEvaluateBrdf(normal,view,direction,material.xyz,material.w,metallic);
                 source*=gsRadiance(brdf);
             }
             position+=normal*gsRayEpsilon(position);
@@ -426,9 +427,11 @@ void main() {
         bool pbr=hit.state.x!=0u&&(hit.mediumBoundary.w&2u)==0u&&hit.transmissionIor.x<=0.0&&!gsUnlit(hit);
         if(pbr&&gsOptical.storage.lanes[4u].w!=0u) {
             uint connection=gsOptical.storage.lanes[4u].z/16u+item*19u;
-            gsOptical.storage.lanes[connection+15u]=floatBitsToUint(vec4(hit.worldPositionAndDistance.xyz,0));
-            gsOptical.storage.lanes[connection+16u]=floatBitsToUint(vec4(normalize(hit.worldNormalAndRoughness.xyz),0));
-            gsOptical.storage.lanes[connection+17u]=floatBitsToUint(vec4(normalize(origin-hit.worldPositionAndDistance.xyz),0));
+            vec2 reflectionSample=gsReflectionSample(sampleIndex,samples,launch);
+            gsOptical.storage.lanes[connection+15u]=floatBitsToUint(vec4(hit.worldPositionAndDistance.xyz,
+                clamp(hit.emissiveAndMetallic.a,0.0,1.0)));
+            gsOptical.storage.lanes[connection+16u]=floatBitsToUint(vec4(normalize(hit.worldNormalAndRoughness.xyz),reflectionSample.x));
+            gsOptical.storage.lanes[connection+17u]=floatBitsToUint(vec4(normalize(origin-hit.worldPositionAndDistance.xyz),reflectionSample.y));
             gsOptical.storage.lanes[connection+18u]=floatBitsToUint(vec4(max(hit.baseColorAndOpacity.rgb,vec3(0)),
                 clamp(hit.worldNormalAndRoughness.w,.025,1.0)));
         }

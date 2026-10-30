@@ -23,6 +23,8 @@ public final class MediumDensitySelfTest {
         verifyFrameValidationAndSpecialization();
         verifyPassiveSpecializationTransitions();
         verifyNativeSelection();
+        verifyMetallicSelection();
+        verifyCausticSelection();
         verifyPrimaryQueueSelection();
         verifyHistoryInvalidation();
         System.out.println("MediumDensitySelfTest passed: stable ABI prefix, atlas references/replacement, coordinate composition, frame validation, cached specialization");
@@ -232,6 +234,47 @@ public final class MediumDensitySelfTest {
         expect(FrameValidationException.class,()->CudaMediumFrameProfile.select(rejected,media,surfaces,true,false));
         require(CudaMediumFrameProfile.select(request(absorption,0,empty),media,surfaces,true,true).route()
                 ==CudaMediumFrameProfile.Route.OPTICAL,"a rejected request must not poison later admission");
+    }
+
+    private static void verifyMetallicSelection() {
+        var residency=new VulkanSceneResidency();var media=new MediumSceneIndex();var surfaces=new VulkanSurfaceSceneIndex();
+        var batch=FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(1).build()).build();
+        apply(residency,media,surfaces,SceneTransaction.builder(1)
+                .upsert(texture(500,4,TextureAsset.ColorSpace.LINEAR))
+                .upsert(MaterialAsset.builder(1).metallic(.2f).doubleSided(false).build())
+                .upsert(MeshAsset.triangles(1,new float[]{0,0,0,1,0,0,0,1,0},new int[]{0,1,2},1)).build());
+        for(var medium:new Medium[]{new Medium(new Rgb(.1f,.2f,.3f),Rgb.ZERO,Rgb.ZERO,1,1,0),GRID}) {
+            for(int bounces:new int[]{0,2}) {
+                var frame=request(medium,bounces,batch);
+                var selected=CudaMediumFrameProfile.select(frame,media,surfaces,true,true);
+                require(selected.route()==CudaMediumFrameProfile.Route.OPTICAL,
+                        "metallic medium frames must trace reflected segments through native optical state");
+                var metadata=CudaOpticalMediumManager.scene(frame,32,32,selected.boundaries(),media::densityTexture,
+                        new top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensityAbi.Cache(),false,0,true);
+                require(metadata.plan().connectionTransport(),"metal reflection requires a complete receiver connection record");
+            }
+        }
+        require(CudaMediumFrameProfile.select(request(Medium.vacuum(),0,batch),media,surfaces,true,true).route()
+                ==CudaMediumFrameProfile.Route.NONE,"vacuum metal retains ordinary surface transport");
+        require(!surfaces.hasMetallicReflection(FramePrimitiveBatch.empty()),"unused metallic assets do not select optical transport");
+    }
+
+    private static void verifyCausticSelection() {
+        var residency=new VulkanSceneResidency();var media=new MediumSceneIndex();var surfaces=new VulkanSurfaceSceneIndex();
+        var absorption=new Medium(new Rgb(.1f,.2f,.3f),Rgb.ZERO,Rgb.ZERO,1,1,0);
+        var batch=FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(1).build()).build();
+        long revision=1;
+        for(var model:new MaterialAsset.ShadingModel[]{MaterialAsset.ShadingModel.UNLIT,MaterialAsset.ShadingModel.PHYSICALLY_BASED}) {
+            apply(residency,media,surfaces,SceneTransaction.builder(revision++).resetScene()
+                    .upsert(texture(500,4,TextureAsset.ColorSpace.LINEAR))
+                    .upsert(MaterialAsset.builder(1).shadingModel(model).doubleSided(false).build())
+                    .upsert(MeshAsset.triangles(1,new float[]{0,0,0,1,0,0,0,1,0},new int[]{0,1,2},1)).build());
+            for(var medium:new Medium[]{absorption,GRID}) {
+                var frame=request(medium,2,batch).toBuilder().caustics(Caustics.photonMap(0,0,0,10,1024,1)).build();
+                require(CudaMediumFrameProfile.select(frame,media,surfaces,true,true).route()==CudaMediumFrameProfile.Route.OPTICAL,
+                        "caustics with any participating medium must retain complete photon/camera transport");
+            }
+        }
     }
 
     private static void verifyFrameValidationAndSpecialization() {
