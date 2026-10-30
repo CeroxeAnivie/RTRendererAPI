@@ -20,6 +20,12 @@ layout(push_constant) uniform GsPbrDispatch {
     GsPbrStorage storage;uint firstPixel;uint pixelCount;uint64_t primaryAddress;uint64_t offsets;
 } dispatch;
 
+#ifdef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
+#define GS_PBR_SKIP_CONNECTION break
+#else
+#define GS_PBR_SKIP_CONNECTION continue
+#endif
+
 void main() {
     if(gl_LaunchIDEXT.x>=dispatch.pixelCount)return;
     uint connections=dispatch.storage.lanes[16].x,samples=dispatch.storage.lanes[0].w;
@@ -36,7 +42,13 @@ void main() {
         uint packet=packetOffset+index*stride,outLane=colorOffset+index*2u;
         if(!endpointPacket)dispatch.storage.lanes[packet]=uvec4(0);
         dispatch.storage.lanes[packet+stride-1u]=uvec4(0);
+#ifdef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
+        vec4 resultDiffuse=vec4(0),resultSpecular=vec4(0);
+        // Keep failed/occluded connections zero, but publish every result once.
+        do {
+#else
         dispatch.storage.lanes[outLane]=uvec4(0);dispatch.storage.lanes[outLane+1u]=uvec4(0);
+#endif
         vec4 position=uintBitsToFloat(primary.lanes[source]),normalRoughness=uintBitsToFloat(primary.lanes[source+3u*primaryStride]);
         vec4 base=uintBitsToFloat(primary.lanes[source+4u*primaryStride]),emissive=uintBitsToFloat(primary.lanes[source+5u*primaryStride]);
         uvec4 state=primary.lanes[source+7u*primaryStride];
@@ -64,14 +76,14 @@ void main() {
             dispatch.storage.lanes[colorOffset+local*2u]=floatBitsToUint(vec4(localColor,0));
             dispatch.storage.lanes[colorOffset+local*2u+1u]=uvec4(0);
         }
-        if(state.x==0u||shading==GPU_SCENE_SHADING_UNLIT)continue;
+        if(state.x==0u||shading==GPU_SCENE_SHADING_UNLIT)GS_PBR_SKIP_CONNECTION;
         vec3 direction,color;float distance=1e20,intensity,attenuation=1.0;bool shadow;
         if(light==0u) {
             direction=-normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
             color=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD);intensity=uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);shadow=true;
         }else {
             uint lightBase=(light-1u)*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[lightBase+GPU_SCENE_LIGHT_FLAGS_WORD];
-            if((flags&GPU_SCENE_FLAG_ACTIVE)==0u)continue;uint type=(flags>>1u)&7u;
+            if((flags&GPU_SCENE_FLAG_ACTIVE)==0u)GS_PBR_SKIP_CONNECTION;uint type=(flags>>1u)&7u;
             color=vec3(uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_COLOR_WORD]),
                 uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_COLOR_WORD+1u]),uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_COLOR_WORD+2u]));
             intensity=uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_INTENSITY_WORD]);shadow=(flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u;
@@ -81,7 +93,7 @@ void main() {
                 vec3 point=vec3(gsFiniteDoubleAsFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_X_WORD],gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_X_WORD+1u]),
                     gsFiniteDoubleAsFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_Y_WORD],gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_Y_WORD+1u]),
                     gsFiniteDoubleAsFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_Z_WORD],gsLights.words[lightBase+GPU_SCENE_LIGHT_POSITION_Z_WORD+1u]));
-                vec3 delta=point-position.xyz;distance=length(delta);if(distance<=1e-4)continue;direction=delta/distance;
+                vec3 delta=point-position.xyz;distance=length(delta);if(distance<=1e-4)GS_PBR_SKIP_CONNECTION;direction=delta/distance;
                 float range=uintBitsToFloat(gsLights.words[lightBase+GPU_SCENE_LIGHT_RANGE_WORD]),fade=clamp(1.0-distance/max(range,1e-4),0.0,1.0);
                 attenuation=fade*fade/max(distance*distance,1.0);
                 if(type==GPU_SCENE_LIGHT_SPOT) {
@@ -93,7 +105,7 @@ void main() {
             }
         }
         vec3 normal=normalize(normalRoughness.xyz),radiance=color*(intensity*attenuation);
-        if(dot(normal,direction)<=0.0||max(max(radiance.x,radiance.y),radiance.z)<=0.0)continue;
+        if(dot(normal,direction)<=0.0||max(max(radiance.x,radiance.y),radiance.z)<=0.0)GS_PBR_SKIP_CONNECTION;
         GsRadianceSplit brdf=gsEvaluateBrdf(normal,normalize(gsFrameCameraPosition()-position.xyz),direction,
             max(base.rgb,vec3(0)),clamp(normalRoughness.w,.025,1.0),clamp(emissive.a,0.0,1.0));
         float epsilon=gsRayEpsilon(position.xyz);vec3 origin=position.xyz+normal*epsilon;
@@ -112,7 +124,7 @@ void main() {
                 rayQueryInitializeEXT(query,sceneTlas,gl_RayFlagsOpaqueEXT|gl_RayFlagsTerminateOnFirstHitEXT,
                     0xff,origin,epsilon,direction,max(distance-2.0*epsilon,epsilon));
                 rayQueryProceedEXT(query);
-                if(rayQueryGetIntersectionTypeEXT(query,true)!=gl_RayQueryCommittedIntersectionNoneEXT)continue;
+                if(rayQueryGetIntersectionTypeEXT(query,true)!=gl_RayQueryCommittedIntersectionNoneEXT)GS_PBR_SKIP_CONNECTION;
 #ifndef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
             } else
 #endif
@@ -124,11 +136,19 @@ void main() {
             payload.mediumBoundary=uvec4(index,0,0,0);
             // Geometry remains queryable beyond the medium integration-distance budget.
             traceRayEXT(sceneTlas,gl_RayFlagsNoOpaqueEXT,0xff,0,0,0,origin,epsilon,direction,max(distance-2.0*epsilon,epsilon),0);
-            if(payload.state.x!=0u)continue;
+            if(payload.state.x!=0u)GS_PBR_SKIP_CONNECTION;
             }
 #endif
         }
+#ifdef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
+        resultDiffuse=vec4(brdf.diffuse*radiance,distance);
+        resultSpecular=vec4(brdf.specular*radiance,distance);
+        } while(false);
+        dispatch.storage.lanes[outLane]=floatBitsToUint(resultDiffuse);
+        dispatch.storage.lanes[outLane+1u]=floatBitsToUint(resultSpecular);
+#else
         dispatch.storage.lanes[outLane]=floatBitsToUint(vec4(brdf.diffuse*radiance,distance));
         dispatch.storage.lanes[outLane+1u]=floatBitsToUint(vec4(brdf.specular*radiance,distance));
+#endif
     }
 }
