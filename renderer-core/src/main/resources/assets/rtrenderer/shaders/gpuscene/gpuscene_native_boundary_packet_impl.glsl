@@ -26,8 +26,9 @@ vec2 gsNativeSubpixelOffset(uint sampleIndex,uint samples) {
 }
 
 void gsNativeStorePayload(uint item,uvec4 identity) {
-    uint stateBase=uint(dispatch.offsets&uint64_t(0xffffffffu))/16u+item*(2u+((dispatch.storage.lanes[6u].w&255u)+1u)/2u);
-    dispatch.storage.lanes[stateBase+1u+((dispatch.storage.lanes[6u].w&255u)+1u)/2u]=uvec4(floatBitsToUint(payload.worldPositionAndDistance.w),
+    uint packetStride=(dispatch.storage.lanes[6u].w&1024u)!=0u?1u:2u+((dispatch.storage.lanes[6u].w&255u)+1u)/2u;
+    uint stateBase=uint(dispatch.offsets&uint64_t(0xffffffffu))/16u+item*packetStride;
+    dispatch.storage.lanes[stateBase+packetStride-1u]=uvec4(floatBitsToUint(payload.worldPositionAndDistance.w),
             floatBitsToUint(gsFrameCameraPosition()));
     // Direct native terminal radiance is admitted per sample. Retain full payload for features/outlines.
     bool terminal=(dispatch.storage.lanes[6u].w&512u)!=0u
@@ -70,20 +71,28 @@ void main() {
     uvec4 launch=uvec4(pixel,extent);
     uint samples=clamp(gsFrame.words[GPU_SCENE_FRAME_SAMPLE_COUNT_WORD],1u,8u);
     uint stateBase=uint(dispatch.offsets&uint64_t(0xffffffffu))/16u;
+    bool endpointPacket=(dispatch.storage.lanes[6u].w&1024u)!=0u;
+    uint packetStride=endpointPacket?1u:2u+((dispatch.storage.lanes[6u].w&255u)+1u)/2u;
     vec2 jitter=vec2(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD]),uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD+1u]));
     for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
-        uint item=gl_LaunchIDEXT.x*samples+sampleIndex,base=stateBase+item*(2u+((dispatch.storage.lanes[6u].w&255u)+1u)/2u);
+        uint item=gl_LaunchIDEXT.x*samples+sampleIndex,base=stateBase+item*packetStride;
+#ifndef RTRENDERER_PBR_PRIMARY_CACHED
         vec2 samplePosition=vec2(pixel)+gsNativeSubpixelOffset(sampleIndex,samples);
         if(!gsExactProjectionActive()) samplePosition+=jitter;
         vec3 origin=gsFrameCameraPosition(),direction=gsRayDirectionAtSample(samplePosition,extent);
-        dispatch.storage.lanes[base]=uvec4(floatBitsToUint(direction),0u);
+#else
+        vec3 origin=gsFrameCameraPosition();
+        vec3 direction=endpointPacket?vec3(0):gsRayDirectionAtSample(vec2(pixel)+gsNativeSubpixelOffset(sampleIndex,samples)
+            +(gsExactProjectionActive()?vec2(0):jitter),extent);
+#endif
+        if(!endpointPacket)dispatch.storage.lanes[base]=uvec4(floatBitsToUint(direction),0u);
 #ifdef RTRENDERER_PBR_PRIMARY_CACHED
         // The scattering producer already shaded this exact frame/sample.
         // Only the camera packet is needed here; its complete primary payload
         // remains in the same Vulkan-owned destination for all later consumers.
         GsNativeBoundaryStorage cached=GsNativeBoundaryStorage(dispatch.payloadAddress);
         uint source=pixelIndex*samples+sampleIndex;
-        uint terminal=base+1u+((dispatch.storage.lanes[6u].w&255u)+1u)/2u;
+        uint terminal=base+packetStride-1u;
         dispatch.storage.lanes[terminal]=uvec4(cached.lanes[source].w,floatBitsToUint(origin));
 #else
         float epsilon=max(1e-5,max(abs(origin.x),max(abs(origin.y),abs(origin.z)))*2e-7);

@@ -26,10 +26,12 @@ __device__ bool walk(unsigned char *buffer,const unsigned int *packet,UniformSta
         float geometryEnd,bool receiver,unsigned int &crossed) {
     using namespace rtr_boundary;
     const unsigned int *h=(const unsigned int *)buffer;
-    const unsigned int capacity=h[27]&255u,terminal=4u+4u*((capacity+1u)/2u);
-    if(capacity>32u||packet[3]!=0u)return false;
+    const bool endpoint=(h[27]&1024u)!=0u;
+    const unsigned int capacity=h[27]&255u,terminal=endpoint?0u:4u+4u*((capacity+1u)/2u);
+    if(capacity>32u||(endpoint?capacity!=0u:packet[3]!=0u))return false;
     float3 origin=make_float3(__uint_as_float(packet[terminal+1]),__uint_as_float(packet[terminal+2]),__uint_as_float(packet[terminal+3]));
-    s->direction=make_float4(__uint_as_float(packet[0]),__uint_as_float(packet[1]),__uint_as_float(packet[2]),0.f);
+    // Uniform coefficients do not depend on ray direction; no density grid or interface can inspect it.
+    if(!endpoint)s->direction=make_float4(__uint_as_float(packet[0]),__uint_as_float(packet[1]),__uint_as_float(packet[2]),0.f);
     if(!finite3(origin)||!finite3(rgb(s->direction))||!isfinite(geometryEnd)||geometryEnd<0.f)return false;
     return segment(buffer,s,origin,fmaxf(fminf(geometryEnd,((float *)buffer)[19]),0.f));
 }
@@ -73,7 +75,7 @@ __device__ bool walk(unsigned char *buffer,const unsigned int *packet,rtr_bounda
 template<class StateType>
 __device__ bool resolve(unsigned char *buffer,int i,unsigned int &crossed) {
     using namespace rtr_boundary;
-    unsigned int *h=(unsigned int *)buffer;const unsigned int capacity=h[27]&255u,stride=8u+4u*((capacity+1u)/2u),terminal=stride-4u;
+    unsigned int *h=(unsigned int *)buffer;const unsigned int capacity=h[27]&255u,stride=(h[27]&1024u)!=0u?4u:8u+4u*((capacity+1u)/2u),terminal=stride-4u;
     const unsigned int *packets=(const unsigned int *)(buffer+h[9]);const unsigned int *camera=packets+(unsigned int)i*stride;
     StateType receiver;clear(&receiver);receiver.transport=make_float4(1.f,1.f,1.f,((float *)buffer)[19]);
     if(!initializeVolumes(buffer,&receiver))return false;

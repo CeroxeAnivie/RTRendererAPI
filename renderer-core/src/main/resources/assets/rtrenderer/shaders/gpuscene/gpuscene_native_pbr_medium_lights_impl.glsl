@@ -23,7 +23,8 @@ void main() {
     uint connections=dispatch.storage.lanes[16].x,samples=dispatch.storage.lanes[0].w;
     uint localPixel=gl_LaunchIDEXT.x/connections,light=gl_LaunchIDEXT.x%connections;
     uint paths=dispatch.storage.lanes[16].z,pixel=dispatch.firstPixel+localPixel;
-    uint capacity=dispatch.storage.lanes[6].w&255u,stride=2u+(capacity+1u)/2u;
+    bool endpointPacket=(dispatch.storage.lanes[6].w&1024u)!=0u;
+    uint capacity=dispatch.storage.lanes[6].w&255u,stride=endpointPacket?1u:2u+(capacity+1u)/2u;
     uint packetOffset=dispatch.storage.lanes[2].y/16u,colorOffset=dispatch.storage.lanes[16].y/16u;
     GsPbrStorage primary=GsPbrStorage(dispatch.primaryAddress);
     ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
@@ -31,7 +32,8 @@ void main() {
     for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
         uint local=localPixel*samples+sampleIndex,source=(pixel*samples+sampleIndex)*(primaryStride==1u?13u:1u),index=paths+local*connections+light;
         uint packet=packetOffset+index*stride,outLane=colorOffset+index*2u;
-        dispatch.storage.lanes[packet]=uvec4(0);dispatch.storage.lanes[packet+stride-1u]=uvec4(0);
+        if(!endpointPacket)dispatch.storage.lanes[packet]=uvec4(0);
+        dispatch.storage.lanes[packet+stride-1u]=uvec4(0);
         dispatch.storage.lanes[outLane]=uvec4(0);dispatch.storage.lanes[outLane+1u]=uvec4(0);
         vec4 position=uintBitsToFloat(primary.lanes[source]),normalRoughness=uintBitsToFloat(primary.lanes[source+3u*primaryStride]);
         vec4 base=uintBitsToFloat(primary.lanes[source+4u*primaryStride]),emissive=uintBitsToFloat(primary.lanes[source+5u*primaryStride]);
@@ -93,7 +95,7 @@ void main() {
         GsRadianceSplit brdf=gsEvaluateBrdf(normal,normalize(gsFrameCameraPosition()-position.xyz),direction,
             max(base.rgb,vec3(0)),clamp(normalRoughness.w,.025,1.0),clamp(emissive.a,0.0,1.0));
         float epsilon=gsRayEpsilon(position.xyz);vec3 origin=position.xyz+normal*epsilon;
-        dispatch.storage.lanes[packet]=uvec4(floatBitsToUint(direction),0u);
+        if(!endpointPacket)dispatch.storage.lanes[packet]=uvec4(floatBitsToUint(direction),0u);
         dispatch.storage.lanes[packet+stride-1u]=uvec4(floatBitsToUint(shadow?distance:-1.0),floatBitsToUint(origin));
         if(shadow) {
 #ifdef RTRENDERER_PBR_LIGHT_RAY_QUERY

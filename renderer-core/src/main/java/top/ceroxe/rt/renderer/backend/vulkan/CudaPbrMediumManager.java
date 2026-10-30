@@ -94,7 +94,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                 return new FrameScene(combined.pbr(),frame,boundaries,scene.containing(),density,combined);
             }
             long limit=residentLimit()-CudaPbrMediumAbi.ALLOCATION_ALLOWANCE;
-            long densityLimit=limit-CudaPbrMediumAbi.minimumBytes(width,height,samples,boundaries.size(),lightUpperBound,capacity);
+            long densityLimit=limit-CudaPbrMediumAbi.minimumBytes(width,height,samples,boundaries.size(),lightUpperBound,capacity,false);
             var density=cache==null?CudaMediumDensityAbi.prepare(frame.environment().cameraMedium(),boundaries,textures,densityLimit)
                     :cache.prepare(frame.environment().cameraMedium(),boundaries,textures,densityLimit);
             var plan=CudaPbrMediumAbi.plan(width,height,samples,boundaries.size(),lightUpperBound,capacity,density,limit);

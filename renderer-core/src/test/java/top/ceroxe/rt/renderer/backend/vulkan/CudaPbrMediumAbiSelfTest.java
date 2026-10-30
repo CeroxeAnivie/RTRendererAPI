@@ -24,10 +24,15 @@ public final class CudaPbrMediumAbiSelfTest {
         require(full.emissionOffset()==full.transmittanceOffset()+full.paths()*16,"radiance splits overlap");
         long boundaryFreeMinimum=CudaPbrMediumAbi.minimumBytes(31,23,8,0,7,32);
         var boundaryFree=CudaPbrMediumAbi.plan(31,23,8,0,7,32,empty,boundaryFreeMinimum);
-        require(boundaryFree.capacity()==0&&boundaryFree.packetBytes()==32,
-                "a boundary-free packet must not allocate unreachable event slots");
+        require(boundaryFree.capacity()==0&&boundaryFree.packetBytes()==16&&boundaryFree.endpointPackets(),
+                "a uniform boundary-free packet retains only its endpoint and origin");
         require(boundaryFree.tilePixels()==1&&boundaryFree.bytes()==boundaryFreeMinimum,
                 "boundary-free minimum and tile storage disagree");
+        var endpointHeader=ByteBuffer.wrap(CudaPbrMediumAbi.scenePrefix(boundaryFree,
+                RenderFrameRequest.builder(1,31,23,CameraState.lookAt(0,0,0,0,0,-1).build()).build(),
+                List.of(),new int[0],empty)).order(ByteOrder.nativeOrder());
+        require(endpointHeader.getInt(108)==CudaPbrMediumAbi.ENDPOINT_PACKET_FLAG,
+                "producer and native consumer must select the same endpoint layout");
         for(int steps:new int[]{1,8,64})for(int lights:new int[]{0,8,255}) {
             var combined=CudaPbrMediumAbi.planWithScattering(1920,1080,1,lights,1,steps,512L*1024*1024);
             require(combined.pbr().tilePixels()==combined.scattering().tilePixels(),"combined paths require one coordinated tile budget");
@@ -93,6 +98,8 @@ public final class CudaPbrMediumAbiSelfTest {
             var texture=TextureAsset.builder(50,2,4).colorSpace(TextureAsset.ColorSpace.LINEAR).pixelsRgba8(texels).build();
             var d=dense?CudaMediumDensityAbi.prepare(m,List.of(),id->texture):empty;
             var combined=CudaPbrMediumAbi.planWithScattering(f,31,23,29,1,d,16L*1024*1024);
+            require(combined.pbr().endpointPackets()==!dense&&combined.pbr().packetBytes()==(dense?32:16),
+                    "density integration must retain direction even without interfaces");
             require(combined.pbr().tilePixels()==combined.scatteringTilePixels(),"combined integrator scratch did not share one tile");
             require(combined.residentBytes()<=16L*1024*1024,"combined scattering allocation exceeded the complete-frame cap");
             var kind=dense?(bounces==0?CudaPbrMediumAbi.ScatteringKind.DIRECT_DENSITY:CudaPbrMediumAbi.ScatteringKind.MULTIPLE_DENSITY)

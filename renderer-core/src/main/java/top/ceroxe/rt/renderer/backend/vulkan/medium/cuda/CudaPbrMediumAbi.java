@@ -17,12 +17,13 @@ public final class CudaPbrMediumAbi {
     public static final int STATISTICS_OFFSET=112, STATISTICS_BYTES=16;
     public static final long ALLOCATION_ALLOWANCE=65_536, DEFAULT_RESIDENT_BYTES=512L*1024*1024;
     public static final long NATIVE_LIGHTING_FLAG=4;
+    public static final int ENDPOINT_PACKET_FLAG=1024;
     private CudaPbrMediumAbi() { }
 
     public record Plan(int pixels,int samples,int tilePixels,int boundaryCount,int connections,int capacity,
-            int sceneBytes,int stateOffset,int colorsOffset,int transmittanceOffset,int emissionOffset,long bytes) {
+            int sceneBytes,int stateOffset,int colorsOffset,int transmittanceOffset,int emissionOffset,long bytes,boolean endpointPackets) {
         public int paths(){return Math.multiplyExact(pixels,samples);}
-        public int packetBytes(){return 32+16*((capacity+1)/2);}
+        public int packetBytes(){return endpointPackets?16:32+16*((capacity+1)/2);}
         public int tilePaths(){return Math.multiplyExact(tilePixels,samples);}
         public long primaryBytes(){return Math.multiplyExact((long)paths(),PRIMARY_BYTES);}
     }
@@ -80,7 +81,7 @@ public final class CudaPbrMediumAbi {
         long scratch=Math.addExact(Math.multiplyExact((long)samples,PRIMARY_BYTES),
                 multiple?Math.multiplyExact((long)samples*steps,144L+connections*32L)
                 :Math.multiplyExact((long)samples,32L+steps*(32L+connections*32L)));
-        long minimum=Math.addExact(2*ALLOCATION_ALLOWANCE,Math.addExact(minimumBytes(width,height,samples,0,lights,capacity),
+        long minimum=Math.addExact(2*ALLOCATION_ALLOWANCE,Math.addExact(minimumBytes(width,height,samples,0,lights,capacity,false),
                 Math.addExact(scatteringFixed,scratch)));
         if(residentLimit<minimum)throw new IllegalArgumentException("complete PBR/scattering outputs exceed residency before density conversion");
         return (residentLimit-minimum)/2;
@@ -103,7 +104,7 @@ public final class CudaPbrMediumAbi {
         if(steps<1||steps>64)throw new IllegalArgumentException("scattering steps must be within [1, 64]");
         long paths=Math.multiplyExact(Math.multiplyExact((long)width,height),samples);
         long pbrFixed=Math.addExact(HEADER_BYTES+(long)density.bytes(),Math.multiplyExact(paths,32));
-        long pbrScratch=minimumBytes(width,height,samples,0,lights,capacity)-HEADER_BYTES-paths*32;
+        long pbrScratch=minimumBytes(width,height,samples,0,lights,capacity,uniform)-HEADER_BYTES-paths*32;
         int connections=(int)Math.min(CudaDensityScatteringAbi.CONNECTIONS,1L+(frame.mediumTransport().lightSamples()==0
                 ?lights:Math.min(lights,frame.mediumTransport().lightSamples())));
         int scatteringHeader=uniform?CudaMultipleScatteringAbi.HEADER_BYTES:multiple
@@ -180,11 +181,15 @@ public final class CudaPbrMediumAbi {
     }
 
     public static long minimumBytes(int width,int height,int samples,int boundaries,int lightUpperBound,int capacity) {
+        return minimumBytes(width,height,samples,boundaries,lightUpperBound,capacity,true);
+    }
+    public static long minimumBytes(int width,int height,int samples,int boundaries,int lightUpperBound,int capacity,boolean uniform) {
         dimensions(width,height,samples,boundaries,lightUpperBound,capacity);
         long paths=Math.multiplyExact(Math.multiplyExact((long)width,height),samples);
         long scene=align16(Math.toIntExact(HEADER_BYTES+(long)boundaries*68));
         int eventCapacity=boundaries==0?0:capacity;
-        long scratch=Math.multiplyExact((long)samples,Math.multiplyExact((long)lightUpperBound+2,32+16*((eventCapacity+1)/2)+32));
+        int packetBytes=boundaries==0&&uniform?16:32+16*((eventCapacity+1)/2);
+        long scratch=Math.multiplyExact((long)samples,Math.multiplyExact((long)lightUpperBound+2,packetBytes+32));
         return Math.addExact(Math.addExact(scene,Math.multiplyExact(paths,32)),scratch);
     }
 
@@ -198,7 +203,8 @@ public final class CudaPbrMediumAbi {
         // No interface can produce an event in a scene with no boundaries.
         // Keep the public transport budget; remove only unused wire storage.
         int eventCapacity=boundaries==0?0:capacity;
-        int packetBytes=32+16*((eventCapacity+1)/2);
+        boolean endpointPackets=boundaries==0&&density.bytes()==0;
+        int packetBytes=endpointPackets?16:32+16*((eventCapacity+1)/2);
         long perPixel=Math.multiplyExact((long)samples,Math.multiplyExact((long)connections+1,packetBytes+32));
         long available=storageLimit-state;
         if(available<perPixel)throw new IllegalArgumentException("complete native PBR output and one pixel's light packets exceed residency");
@@ -207,7 +213,7 @@ public final class CudaPbrMediumAbi {
         if(tile<1)throw new IllegalArgumentException("native PBR light dispatch exceeds uint indexing");
         int colors=Math.toIntExact(state+Math.multiplyExact(Math.multiplyExact((long)tile*samples,connections+1L),packetBytes));
         long bytes=Math.addExact(colors,Math.multiplyExact(Math.multiplyExact((long)tile*samples,connections+1L),32));
-        return new Plan(pixels,samples,tile,boundaries,connections,eventCapacity,scene,state,colors,trans,emission,bytes);
+        return new Plan(pixels,samples,tile,boundaries,connections,eventCapacity,scene,state,colors,trans,emission,bytes,endpointPackets);
     }
 
     public static byte[] scenePrefix(Plan plan,RenderFrameRequest frame,List<CudaBoundaryMediumAbi.Boundary> source,
@@ -259,7 +265,7 @@ public final class CudaPbrMediumAbi {
         // camera and connection packets share one tile-local state array.
         b.putInt(36,p.stateOffset()).putInt(40,p.stateOffset()).putInt(44,Math.toIntExact(p.transmittanceOffset()+(long)first*p.samples()*16))
                 .putInt(48,Math.toIntExact(p.emissionOffset()+(long)first*p.samples()*16));
-        b.putInt(108,p.capacity()).putInt(112,paths).putInt(116,0).putInt(120,0).putInt(124,0);
+        b.putInt(108,p.capacity()|(p.endpointPackets()?ENDPOINT_PACKET_FLAG:0)).putInt(112,paths).putInt(116,0).putInt(120,0).putInt(124,0);
         b.putInt(256,p.connections()).putInt(260,p.colorsOffset()).putInt(264,paths).putInt(268,0);
         b.putLong(272,additionalRadianceOffset);
         b.putInt(280,includesCameraEmission?1:0);

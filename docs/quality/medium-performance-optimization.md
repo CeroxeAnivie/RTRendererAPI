@@ -654,3 +654,42 @@ producer 和 CUDA 同步改用 light-major，连接求和顺序未改；8 帧 HD
 正确性：展厅 8 帧 HDR 全字节一致；新增 PBR/UNLIT × outline 开关 × SPP 1/2/8 的 12 帧消费者矩阵，冻结对照/候选全字节一致；31 项 PBR、15 项介质组合检查通过，所有正式 validation 零 warning/error。68,223 个墙钟事件零丢样、严格包含与求和通过。测前 GPU 0 全部为 0%。基线 shader 细粒度 profile 单独复测开销约 6.18%，前三稳定为 primary、local geometry、opaque shadow，只用于路径内部排序。没有将抽样 ms 分摊整帧。
 
 100 FPS 里程碑尚未达到，继续性能主线。额外矩阵最初使用 metallic=.2，被冻结对照明确拒绝，已记录为功能闭合子代理的真实缺口；正式兼容矩阵限定当前已支持的非金属 PBR/UNLIT，没有将该拒绝算成验收通过。证据：[pbr-primary-consumer-20261031.json](data/pbr-primary-consumer-20261031.json)、[完整排名](data/pbr-primary-consumer-ranked-20261031.csv)。
+
+### 两个撤回候选与成熟实现对照要求
+
+散射 queued 交接：参考 NVIDIA cuda-samples 的 pinned async copy 与 stream-ordered external semaphore，移除散射中的独立 CUDA 主机等待，保留最终 Vulkan fence 与发布前失败检查。8 帧 HDR 全字节一致，31 项 PBR、15 项组合、14 项相机散射参考检查通过。但正序和反序关闭诊断 FPS 分别为 −2.65% 和 +3.75%；合并 720 帧仅约 +0.49%，没有稳定净收益，Java 修改全部撤回。等待从 CUDA 边界迁到 Vulkan fence 不能算性能收益。证据：[scattering-queued-20261031.json](data/scattering-queued-20261031.json)。
+
+小灯集合缓存：参考 Falcor `LightData.slang` 的准备数据思路，将灯位、方向与光锥参数保留到各积分区间复用。独立输运参考检查通过，但散射 lights GPU 三轮分别增加 40.89%、5.75%、11.13%，确认没有优化到当前实际成本；源码与全部 SPIR-V 撤回。8 帧总计 460,800 个 HDR 通道中 4 个通道相差一个半精度刻度，原始差异保留，没有称为全字节一致。未把关闭诊断 FPS 的小幅波动作为保留依据。证据：[scattering-prepared-lights-20261031.json](data/scattering-prepared-lights-20261031.json)。
+
+用户再次明确：遇到疑惑必须深入对照成熟项目，不能只引用相似模式。后续候选必须写清楚成熟实现实际读取哪些输入、本项目多做了哪些工作、producer/ABI/consumer 如何一起删除冗余；跨 ray query 保存数据还必须审查其生命周期成本。收益必须落到当前大头与整帧，不得靠等待改名、重排排名或单个偶然较快窗口交差。
+
+### 均匀无边界 PBR packet 只保留终点
+
+对照 PBRT-v4 commit `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/media.h`：`HomogeneousMedium::SamplePoint` 不读取位置，`SampleRay` 只返回 `[0,tMax]`，不读取射线；`wavefront/workitems.h` 与 `integrator.cpp` 保留通用 shadow ray 的职责。映射到本项目：Vulkan 已完成几何/阴影查询，CUDA 均匀分支通过固定 LuxCore 段函数积分，只需要距离，不再需要方向和零事件计数。因此 producer、ABI 与 consumer 一起删除首个 lane；保留距离与起点的 16-byte lane、发布前失败校验、相同采样和输运预算。没有复制外部代码，也没有改写 LuxCore 段积分。有密度描述或任何边界时保留方向/事件的原布局，原生 PBR 31 项和组合 15 项覆盖这些回退分支。
+
+32→16 bytes 降低 scratch，使默认场景 PBR 与散射均从每帧 3 批变为 2 批，跨 API 交接从 6 次变为 4 次。不是删除必要同步或重命名等待。正序关闭诊断 88.389399→98.391878 FPS（+11.32%）；完整反序复测 90.676574→99.021391 FPS（+9.20%）。以反序作为最新正式表，尚未达到稳定关闭诊断 100 FPS。
+
+| 指标 | 对照 ms/帧 | 候选 ms/帧 | 降幅 |
+| --- | ---: | ---: | ---: |
+| 整条 PBR | 3.979303 | 3.425797 | 13.91% |
+| PBR 主射线 packet | 0.192159 | 0.133928 | 30.30% |
+| PBR CUDA 解析 | 0.917985 | 0.829098 | 9.68% |
+| PBR 灯光 packet | 1.382503 | 1.402775 | 增加 1.47% |
+| contribution restore | 0.148511 | 0.157059 | 增加 5.76% |
+
+最新同一 360 帧观测窗口 97.985217 FPS，观测开销 1.06%，49,499 个事件零丢样，严格包含和精确互斥求和通过。
+
+| 排名 | 事件 | ms/帧 | 每秒累计 ms | 占比 | 本轮降幅 |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 1 | PBR 完成 fence 等待 | 3.002210 | 294.172 | 29.417% | 12.91% |
+| 2 | 散射完成 CUDA 同步 | 2.979300 | 291.927 | 29.193% | 30.65% |
+| 3 | 散射统计读回前同步 | 2.104827 | 206.242 | 20.624% | 增加 708.63% |
+| 4 | benchmark park | 0.439320 | 43.047 | 4.305% | 10.18% |
+| 5 | 散射 Vulkan fence 等待 | 0.354739 | 34.759 | 3.476% | 32.82% |
+| 6 | 最终帧录制提交 | 0.120780 | 11.835 | 1.183% | 增加 26.81% |
+| 7 | PBR release 录制 | 0.101633 | 9.959 | 0.996% | 26.03% |
+| 8 | 散射 release 录制 | 0.081839 | 8.019 | 0.802% | 9.52% |
+| | 其余 74 项合计 | 1.020972 | 100.040 | 10.004% | — |
+| | **互斥墙钟求和** | **10.205621** | **1000.000** | **100.000%** | **2.09%** |
+
+更大的 tile 将散射等待重新分配到完成同步与最后一次统计读回，不能把第二项单独的下降当作收益。散射 lights GPU 在反序窗口增加约 15.06%，已完整计入整帧结果；本轮保留依据是 PBR 必要工作减少和两种顺序均有正吞吐收益。展厅 8 帧 HDR 全字节一致，31 项 PBR、15 项介质组合、14 项相机散射独立参考检查通过，全部正式 validation 零 warning/error；CPU ABI 最小分配、密度回退、组合 tile、manifest 检查通过。证据：[pbr-endpoint-packets-20261031.json](data/pbr-endpoint-packets-20261031.json)、[完整排名](data/pbr-endpoint-packets-ranked-20261031.csv)。
