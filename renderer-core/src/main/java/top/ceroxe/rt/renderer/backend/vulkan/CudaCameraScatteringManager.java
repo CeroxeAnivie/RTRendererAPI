@@ -65,13 +65,13 @@ final class CudaCameraScatteringManager implements AutoCloseable {
         return onNative(()->storage!=null&&storage.byteSize()>=bytes?0:Math.addExact(bytes,CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE));
     }
     private static long allocationBytes(CudaCameraScatteringAbi.Plan plan){
-        return Math.addExact(plan.bytes(),OpticalDetailedProfile.cameraScatteringShaderBytes(plan.tilePixels()*plan.samples()));
+        return Math.addExact(plan.bytes(),OpticalDetailedProfile.cameraScatteringShaderBytes(plan.paths()));
     }
     private static CudaCameraScatteringAbi.Plan plan(int width,int height,int samples,int steps,long budget){
         long cap=Math.min(budget,residentLimit()),limit=cap;
         for(int attempt=0;attempt<64;attempt++){
             var plan=CudaCameraScatteringAbi.plan(width,height,samples,steps,limit);
-            long diagnostic=OpticalDetailedProfile.cameraScatteringShaderBytes(plan.tilePixels()*plan.samples());
+            long diagnostic=OpticalDetailedProfile.cameraScatteringShaderBytes(plan.paths());
             long required=Math.addExact(Math.addExact(plan.bytes(),diagnostic),CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE);
             if(required<=cap)return plan;
             limit-=required-cap;
@@ -113,11 +113,11 @@ final class CudaCameraScatteringManager implements AutoCloseable {
         long address=storage.deviceAddress();
         try(Arena arena=Arena.ofConfined()) {
             var failed=arena.allocate(4,4);
+            int diagnosticBytes=OpticalDetailedProfile.cameraScatteringShaderBytes(plan.paths());
             var diagnosticHost=OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS
-                    ?arena.allocate(OpticalDetailedProfile.cameraScatteringShaderBytes(plan.tilePixels()*plan.samples()),16):null;
+                    ?arena.allocate(diagnosticBytes,16):null;
             for(int first=0;first<plan.pixels();) {
                 int tileFirst=first,pixels=Math.min(plan.tilePixels(),plan.pixels()-first);
-                int diagnosticBytes=OpticalDetailedProfile.cameraScatteringShaderBytes(pixels*plan.samples());
                 long diagnosticAddress=diagnosticBytes==0?0:address+plan.bytes();
                 boolean initial=first==0,last=first+pixels==plan.pixels();
                 byte[] header=CudaCameraScatteringAbi.header(plan,frame,first,pixels,includeMediumEmission);
@@ -147,7 +147,7 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                                 KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,barrier,null);
                         long offsets=Integer.toUnsignedLong(plan.sourceOffset())|Integer.toUnsignedLong(plan.primaryOffset())<<32;
                         if(lightsTiming!=null)lightsTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
-                        if(diagnosticBytes!=0){
+                        if(initial&&diagnosticBytes!=0){
                             VK10.vkCmdFillBuffer(command,storage.buffer(),plan.bytes(),diagnosticBytes,0);
                             var diagnosticBarrier=VkBufferMemoryBarrier.calloc(1,stack).sType$Default()
                                     .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT).dstAccessMask(VK10.VK_ACCESS_SHADER_WRITE_BIT)
@@ -161,11 +161,13 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                     }
                 },shared->{
                     cuda.launchBlocking(resolve,shared,pixels*plan.samples(),1,"cameraScattering.resolve");
-                    if(diagnosticBytes!=0){
-                        cuda.download(shared.slice(plan.bytes(),diagnosticBytes),diagnosticHost.asSlice(0,diagnosticBytes));
-                        OpticalDetailedProfile.cameraScatteringShaderSamples(diagnosticHost,pixels*plan.samples());
+                    if(last){
+                        if(diagnosticBytes!=0){
+                            cuda.download(shared.slice(plan.bytes(),diagnosticBytes),diagnosticHost.asSlice(0,diagnosticBytes));
+                            OpticalDetailedProfile.cameraScatteringShaderSamples(diagnosticHost,plan.paths());
+                        }
+                        cuda.download(shared.slice(CudaCameraScatteringAbi.FAILED_OFFSET,4),failed);
                     }
-                    if(last)cuda.download(shared.slice(CudaCameraScatteringAbi.FAILED_OFFSET,4),failed);
                 },ignored->{});
                 if(tlasTiming!=null&&tlasTiming.resolve())OpticalFrameTimings.recordGpuStage("cameraScattering.tlas",tlasTiming.totalNanos());
                 if(lightsTiming!=null&&lightsTiming.resolve())OpticalFrameTimings.recordGpuStage("cameraScattering.lights",lightsTiming.totalNanos());
