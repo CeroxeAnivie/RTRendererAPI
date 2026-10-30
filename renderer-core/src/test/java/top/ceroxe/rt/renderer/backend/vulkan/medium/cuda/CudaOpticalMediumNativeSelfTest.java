@@ -102,6 +102,7 @@ public final class CudaOpticalMediumNativeSelfTest {
             verifyHitLayouts(cuda,arena);
             verifyStateLayouts(cuda,arena);
             verifyConnectionTransport(cuda,arena);
+            verifyConnectionRayContinuity(cuda,arena);
             verifyGrazingSpawn(cuda,arena);
             try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+PROBE,"optical_spawn_bound_probe");var records=cuda.allocate(16)) {
                 var host=arena.allocate(16,16);cuda.launchBlocking(kernel,records.slice(0,16),1,1);cuda.download(records.slice(0,16),host);
@@ -201,7 +202,7 @@ public final class CudaOpticalMediumNativeSelfTest {
             if(host.get(JAVA_INT,68)!=0)throw new AssertionError("optical connection miss did not complete");
             for(int c=0;c<3;c++)near(host.get(JAVA_FLOAT,connection+48+c*4),Math.exp(-sigma[c]*2)*.96,3e-6,"restored exterior channel "+c);
             // An ordinary opaque terminal blocks the connection; it is not a volume crossing.
-            host.set(JAVA_FLOAT,connection+12,3);host.set(JAVA_FLOAT,connection+60,8);
+            host.set(JAVA_FLOAT,connection+12,3);host.set(JAVA_FLOAT,connection+28,0);host.set(JAVA_FLOAT,connection+60,8);
             host.set(JAVA_FLOAT,hit+8,3);host.set(JAVA_FLOAT,hit+12,1);host.set(JAVA_INT,hit+112,1);host.set(JAVA_INT,hit+188,0);
             host.set(JAVA_FLOAT,hit+96,0);
             cuda.upload(records.slice(0,bytes),host);cuda.launchBlocking(kernel,records.slice(0,bytes),1,1);cuda.download(records.slice(0,bytes),host);
@@ -235,6 +236,45 @@ public final class CudaOpticalMediumNativeSelfTest {
             if(host.get(JAVA_INT,68)!=0)throw new AssertionError("non-shadow light connection did not complete");
             for(int c=0;c<3;c++)near(host.get(JAVA_FLOAT,connection+48+c*4),Math.exp(-sigma[c]*.5),3e-6,
                     "non-shadow light retains grid extinction channel "+c);
+        }
+    }
+    private static void verifyConnectionRayContinuity(CudaMediumRuntime cuda,Arena arena) {
+        final int connection=512,hit=connection+CudaOpticalMediumAbi.CONNECTION_BYTES,bytes=hit+CudaOpticalMediumAbi.HIT_BYTES;
+        try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+PROBE,"optical_connection_probe");
+            var records=cuda.allocate(bytes)) {
+            var host=arena.allocate(bytes,16);host.fill((byte)0);
+            host.set(JAVA_INT,24,16);host.set(JAVA_INT,28,1);host.set(JAVA_INT,40,hit);
+            host.set(JAVA_INT,64,448);host.set(JAVA_INT,72,connection);
+            host.set(JAVA_FLOAT,92,1);host.set(JAVA_INT,152,-1);host.set(JAVA_INT,156,64);
+            host.set(JAVA_INT,384,7);host.set(JAVA_INT,396,2);host.set(JAVA_FLOAT,400,.25f);
+            host.set(JAVA_FLOAT,412,1);host.set(JAVA_INT,444,-1);
+            // Production edge: a non-shadow-casting light passes a slanted mirror
+            // just outside x=2. A normal offset moved it inside the adjacent box
+            // without an entry, then its exit rejected the entire renderer frame.
+            host.set(JAVA_FLOAT,connection,2.000003f);host.set(JAVA_FLOAT,connection+4,.64209f);
+            host.set(JAVA_FLOAT,connection+8,-1);host.set(JAVA_FLOAT,connection+12,4);
+            host.set(JAVA_FLOAT,connection+24,1);host.set(JAVA_INT,connection+44,2);
+            for(int c=0;c<3;c++)host.set(JAVA_FLOAT,connection+48+c*4,1);
+            host.set(JAVA_FLOAT,connection+60,4);host.set(JAVA_INT,connection+96,-1);
+            host.set(JAVA_FLOAT,hit,2.000003f);host.set(JAVA_FLOAT,hit+4,.64209f);
+            host.set(JAVA_FLOAT,hit+12,1);host.set(JAVA_FLOAT,hit+48,.8506508f);host.set(JAVA_FLOAT,hit+56,-.5257311f);
+            host.set(JAVA_INT,hit+112,1);
+            cuda.upload(records.slice(0,bytes),host);cuda.launchBlocking(kernel,records.slice(0,bytes),1,1);cuda.download(records.slice(0,bytes),host);
+            if(host.get(JAVA_INT,68)!=1)throw new AssertionError("non-shadow connection did not continue");
+            near(host.get(JAVA_FLOAT,connection),2.000003f,0,"straight connection x must not cross adjacent boundary");
+            near(host.get(JAVA_FLOAT,connection+8),-1,0,"connection retains its original ray origin");
+            near(host.get(JAVA_FLOAT,connection+28),1,0,"absolute hit distance advances the connection cursor");
+            // A thin IOR-one volume immediately after that surface must still
+            // enter and leave, with Beer attenuation over precisely its width.
+            float enter=Math.nextUp(1f),exit=1.00001f;
+            host.set(JAVA_FLOAT,hit+12,enter);host.set(JAVA_INT,hit+176,7);host.set(JAVA_INT,hit+188,2);
+            cuda.upload(records.slice(0,bytes),host);cuda.launchBlocking(kernel,records.slice(0,bytes),1,1);cuda.download(records.slice(0,bytes),host);
+            if(host.get(JAVA_INT,68)!=1||host.get(JAVA_INT,connection+228)!=1)throw new AssertionError("nearby volume entry was skipped");
+            host.set(JAVA_FLOAT,hit+12,exit);host.set(JAVA_INT,hit+116,2);
+            cuda.upload(records.slice(0,bytes),host);cuda.launchBlocking(kernel,records.slice(0,bytes),1,1);cuda.download(records.slice(0,bytes),host);
+            if(host.get(JAVA_INT,68)!=1||host.get(JAVA_INT,connection+228)!=0)throw new AssertionError("thin volume exit lost its entry");
+            near(host.get(JAVA_FLOAT,connection+48),Math.exp(-.25*(exit-enter)),1e-7,"thin boundary segment attenuation");
+            near(host.get(JAVA_FLOAT,connection+28),exit,0,"connection cursor is cumulative");
         }
     }
     private static void verifyStateLayouts(CudaMediumRuntime cuda,Arena arena) {

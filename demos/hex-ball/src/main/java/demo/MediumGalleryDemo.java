@@ -6,6 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.awt.BorderLayout;
@@ -107,12 +110,18 @@ public final class MediumGalleryDemo {
 
     private static void present(Renderer renderer,MediumGalleryScene initialScene,Options options) {
         var selected=new AtomicInteger(options.scene().ordinal());
+        RendererDiagnostics initialDiagnostics=renderer.diagnostics();
         Controls controls=options.controls()?Controls.open(selected):null;
+        // Keep renderer mutation and admission on one worker; the GLFW owner thread stays free to pump input.
+        ExecutorService renderWorker=Executors.newSingleThreadExecutor(task->{
+            var thread=new Thread(task,"medium-gallery-render-worker");thread.setDaemon(true);return thread;
+        });
         try (var presenter=VulkanFramePresenter.open(renderer,VulkanFramePresenterConfig.builder()
                 .title("RTRendererAPI 7 · 介质验收画廊").initialExtent(options.width(),options.height())
                 .windowMode(VulkanFramePresenterConfig.WindowMode.WINDOWED)
                 .presentMode(VulkanFramePresenterConfig.PresentMode.UNCAPPED).maximumFramesQueuedAhead(2).build())) {
             long submitted=0,retired=0,presented=0,start=System.nanoTime(),lastReport=start;
+            long lastDiagnosticsRefresh=start;
             long previousCompleted=0,previousGenerated=0,previousTotal=0,previousEpoch=-1;
             RenderFrameRequest pending=null;
             double previousAdmissionSeconds=0,pendingSeconds=0;
@@ -120,52 +129,70 @@ public final class MediumGalleryDemo {
             MediumGalleryScene scene=initialScene;
             long revision=1,lastCycle=start;
             String lastMetrics="等待首个 GPU 完成样本";
+            RendererDiagnostics lastDiagnostics=initialDiagnostics;
+            GalleryWork work=null;
             presenter.setOverlayText("MEDIUM GALLERY | "+scene.preset().id+"\nWaiting for completed GPU samples | Caustics: "+causticStatus(scene));
             while (true) {
                 presenter.pollEvents();var window=presenter.windowState();long now=System.nanoTime();
-                if (window.closeRequested()) break;
+                if (window.closeRequested()) stopping=true;
                 if (options.frames()>0 && submitted>=options.frames() || options.seconds()>0 && now-start>=options.seconds()*1_000_000_000L)
                     stopping=true;
-                if (stopping && retired==submitted) break;
+                if (stopping && retired==submitted && work==null) break;
                 if(options.cycleSeconds()>0&&now-lastCycle>=options.cycleSeconds()*1_000_000_000L) {
                     selected.updateAndGet(value->(value+1)%(MediumGalleryScene.Preset.values().length-1));lastCycle=now;
                 }
-                if(selected.get()!=scene.preset().ordinal()&&retired==submitted) {
-                    scene=new MediumGalleryScene(options,MediumGalleryScene.Preset.values()[selected.get()],++revision);
-                    renderer.apply(scene.transaction());pending=null;
-                    previousCompleted=renderer.diagnostics().frameGpuTiming().completedSamples();
-                    lastReport=now;
-                    if(controls!=null)controls.update(scene.preset(),"切换中，等待新场景完成样本");
+                if(work!=null&&work.future().isDone()) {
+                    GalleryWorkResult result=work.future().join();
+                    switch(work.kind()) {
+                        case SCENE -> {
+                            scene=result.scene();lastDiagnostics=result.diagnostics();pending=null;
+                            previousCompleted=lastDiagnostics.frameGpuTiming().completedSamples();
+                            lastReport=lastDiagnosticsRefresh=now;
+                            presenter.setOverlayText("MEDIUM GALLERY | "+scene.preset().id+"\nWaiting for completed GPU samples | Caustics: "+causticStatus(scene));
+                            if(controls!=null)controls.update(scene.preset(),"切换完成，等待新场景帧");
+                        }
+                        case FRAME -> {
+                            pending=result.request();pendingSeconds=result.admissionSeconds();
+                            if(result.admitted()) {
+                                submitted++;pending=null;previousAdmissionSeconds=pendingSeconds;
+                                if(firstAdmission) {System.out.printf(Locale.ROOT,"MediumGallery firstAdmissionMs=%.3f%n",(now-start)/1e6);firstAdmission=false;}
+                            }
+                        }
+                        case DIAGNOSTICS -> lastDiagnostics=result.diagnostics();
+                    }
+                    work=null;
+                }
+                if(!stopping&&work==null&&selected.get()!=scene.preset().ordinal()&&retired==submitted) {
+                    var target=MediumGalleryScene.Preset.values()[selected.get()];long targetRevision=++revision;
+                    pending=null;
+                    if(controls!=null)controls.update(target,"切换中，等待新场景完成样本");
+                    work=new GalleryWork(GalleryWorkKind.SCENE,CompletableFuture.supplyAsync(()->{
+                        var next=new MediumGalleryScene(options,target,targetRevision);
+                        renderer.apply(next.transaction());
+                        return new GalleryWorkResult(next,renderer.diagnostics(),null,false,0);
+                    },renderWorker));
                 }
                 if (!window.drawable()) {LockSupport.parkNanos(1_000_000);continue;}
-                if (!stopping && selected.get()==scene.preset().ordinal() && submitted-retired<2) {
-                    if (pending==null) {
-                        pendingSeconds=(now-start)/1e9;
-                        pending=scene.frame(submitted,window.framebufferWidth(),window.framebufferHeight(),pendingSeconds,
-                                submitted==0?0:pendingSeconds-previousAdmissionSeconds);
-                    }
-                    if (renderer.trySubmit(pending) instanceof Renderer.FrameSubmitted) {
-                        submitted++;pending=null;previousAdmissionSeconds=pendingSeconds;
-                        if (firstAdmission) {System.out.printf(Locale.ROOT,"MediumGallery firstAdmissionMs=%.3f%n",(System.nanoTime()-start)/1e6);firstAdmission=false;}
-                    }
+                // Presentation also enters the renderer, so keep it serialized with worker calls.
+                if(work==null) {
+                    var result=presenter.presentLatestFrame();
+                    if (result.isPresent()) {
+                        retired++;
+                        if (result.orElseThrow().outcome()==VulkanFramePresenter.Outcome.PRESENTED) {
+                            presented++;
+                            if (firstPresentation) {System.out.printf(Locale.ROOT,"MediumGallery firstProxyPresentMs=%.3f%n",(System.nanoTime()-start)/1e6);firstPresentation=false;}
+                        }
+                    } else LockSupport.parkNanos(100_000);
                 }
-                var result=presenter.presentLatestFrame();
-                if (result.isPresent()) {
-                    retired++;
-                    if (result.orElseThrow().outcome()==VulkanFramePresenter.Outcome.PRESENTED) {
-                        presented++;
-                        if (firstPresentation) {System.out.printf(Locale.ROOT,"MediumGallery firstProxyPresentMs=%.3f%n",(System.nanoTime()-start)/1e6);firstPresentation=false;}
-                    }
-                } else LockSupport.parkNanos(100_000);
                 now=System.nanoTime();
                 if (now-lastReport>=1_000_000_000L) {
-                    var diagnostics=renderer.diagnostics();var fg=diagnostics.frameGenerationEvidence();
-                    long completed=diagnostics.frameGpuTiming().completedSamples();double seconds=(now-lastReport)/1e9;
+                    var fg=lastDiagnostics.frameGenerationEvidence();
+                    long completed=lastDiagnostics.frameGpuTiming().completedSamples();double seconds=(now-lastReport)/1e9;
                     double nativeRate=(completed-previousCompleted)/seconds;
                     String generated=fg.reported() && fg.resetEpoch()==previousEpoch
                             ?String.format(Locale.ROOT,"FG %.1f/s | observed output %.1f/s",(fg.generatedFramesActuallyPresented()-previousGenerated)/seconds,
                                     (fg.totalFramesActuallyPresented()-previousTotal)/seconds):"FG awaiting runtime evidence";
-                    var gpuTiming=diagnostics.frameGpuTiming();
+                    var gpuTiming=lastDiagnostics.frameGpuTiming();
                     double gpuMillis=gpuTiming.averageTotalNanos()/1e6;
                     String gpuFrame=gpuTiming.enabled()&&gpuTiming.completedSamples()>0
                             ?String.format(Locale.ROOT,"GPU输出阶段 %.2f ms",gpuMillis):"GPU输出阶段等待计时样本";
@@ -181,10 +208,33 @@ public final class MediumGalleryDemo {
                     previousCompleted=completed;previousGenerated=fg.generatedFramesActuallyPresented();
                     previousTotal=fg.totalFramesActuallyPresented();previousEpoch=fg.resetEpoch();lastReport=now;
                 }
+                if(work==null&&now-lastDiagnosticsRefresh>=1_000_000_000L) {
+                    lastDiagnosticsRefresh=now;
+                    work=new GalleryWork(GalleryWorkKind.DIAGNOSTICS,CompletableFuture.supplyAsync(
+                            ()->new GalleryWorkResult(null,renderer.diagnostics(),null,false,0),renderWorker));
+                } else if(!stopping&&work==null&&selected.get()==scene.preset().ordinal()&&submitted-retired<2) {
+                    var frameScene=scene;long sequence=submitted;
+                    int width=window.framebufferWidth(),height=window.framebufferHeight();
+                    RenderFrameRequest request=pending;
+                    double frameSeconds=request==null?(now-start)/1e9:pendingSeconds;
+                    double frameDelta=request==null?(sequence==0?0:frameSeconds-previousAdmissionSeconds):pendingSeconds-previousAdmissionSeconds;
+                    work=new GalleryWork(GalleryWorkKind.FRAME,CompletableFuture.supplyAsync(()->{
+                        RenderFrameRequest frame=request==null
+                                ?frameScene.frame(sequence,width,height,frameSeconds,frameDelta):request;
+                        boolean admitted=renderer.trySubmit(frame) instanceof Renderer.FrameSubmitted;
+                        return new GalleryWorkResult(null,null,frame,admitted,frameSeconds);
+                    },renderWorker));
+                }
+                if(work!=null)LockSupport.parkNanos(1_000_000);
             }
             System.out.println("MediumGallery presentationTimings="+presenter.performanceSnapshot());
-        } finally {if(controls!=null)controls.close();}
+        } finally {renderWorker.shutdownNow();if(controls!=null)controls.close();}
     }
+
+    private enum GalleryWorkKind { SCENE, FRAME, DIAGNOSTICS }
+    private record GalleryWork(GalleryWorkKind kind,CompletableFuture<GalleryWorkResult> future) {}
+    private record GalleryWorkResult(MediumGalleryScene scene,RendererDiagnostics diagnostics,
+            RenderFrameRequest request,boolean admitted,double admissionSeconds) {}
 
     static final class Controls {
         private final JFrame frame=new JFrame("介质验收 · 场景选择");

@@ -266,9 +266,14 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
         gsOptical.storage.lanes[base+3u]=uvec4(floatBitsToUint(vec3(1)),gsOptical.storage.lanes[6u].w);
     }
     vec4 origin=uintBitsToFloat(gsOptical.storage.lanes[base]);
-    vec3 direction=uintBitsToFloat(gsOptical.storage.lanes[base+1u]).xyz;
+    vec4 ray=uintBitsToFloat(gsOptical.storage.lanes[base+1u]);
+    vec3 direction=ray.xyz;
+    // Continue on the same straight light ray. The next representable t
+    // excludes the processed hit without a normal offset crossing a nearby
+    // medium boundary or a scene-scale epsilon skipping a thin volume.
+    float minimum=gsOptical.storage.lanes[base+5u].z==0u?0.0:uintBitsToFloat(floatBitsToUint(ray.w)+1u);
     GpuScenePayload hit;
-    if(gsOptical.storage.lanes[base+2u].w!=0u)hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,0.0);
+    if(gsOptical.storage.lanes[base+2u].w!=0u)hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum);
     else {hit.worldPositionAndDistance=vec4(0,0,0,-1);hit.previousWorldPosition=vec4(0);hit.motionRevision=uvec2(0);
         hit.worldNormalAndRoughness=vec4(0,1,0,0);hit.baseColorAndOpacity=vec4(0);hit.emissiveAndMetallic=vec4(0);
         hit.transmissionIor=vec4(0);hit.state=uvec4(0);hit.surfaceState=uvec4(0);hit.compositeState=vec4(0);

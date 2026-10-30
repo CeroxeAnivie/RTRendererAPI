@@ -41,6 +41,9 @@ template<> struct __align__(16) State<false> {
 };
 struct __align__(16) Boundary {unsigned int slot;int priority;unsigned int orientation,flags;float4 absorption,emission,sigmaSAndDescriptor;};
 // A light connection retains its own medium stack. It never mutates the camera path.
+// origin.xyz and direction.xyz define one fixed straight ray; direction.w is its
+// last processed hit distance. Advancing tMin must not move this ray across a
+// neighbouring boundary without processing that boundary's entry/exit event.
 struct __align__(16) Connection {
     float4 origin,direction,source,transport,lighting;uint4 control;
     rtr_medium::PathVolumeInfo volumes;
@@ -286,7 +289,8 @@ __device__ bool connectionSegment(unsigned char*b,Connection*c,float distance){
     const unsigned int selected=c->volumes.currentVolumeIndex;const float*h=(const float*)b;
     const float3 absorption=selected==0xffffffffu?make_float3(h[20],h[21],h[22]):rgb(table(b)[selected].absorption);
     const int descriptor=selected==0xffffffffu?((const int*)b)[38]:((const int*)&table(b)[selected].sigmaSAndDescriptor)[3];
-    const float mass=rtr_density::mass(b,descriptor,rgb(c->origin),rgb(c->direction),distance,((unsigned int*)b)[39]);
+    const float3 start=rgb(c->origin)+rgb(c->direction)*c->direction.w;
+    const float mass=rtr_density::mass(b,descriptor,start,rgb(c->direction),distance,((unsigned int*)b)[39]);
     if(!isfinite(mass)||mass<0.f)return false;
     float3 tr,unused,zero=make_float3(0.f),extinction=absorption+sigmaS(b,selected);
     HomogeneousVolume_SegmentScatter(.5f,false,mass,&extinction,&zero,&zero,&tr,&unused);
@@ -297,8 +301,8 @@ __device__ bool connectionSegment(unsigned char*b,Connection*c,float distance){
 template<bool Compact,bool Transposed> __device__ int connectionStep(unsigned char*b,Connection*c,HitView<Compact,Transposed> view){
     const bool found=view.u(Compact?14:28)!=0u;
     const float distance=found?view.f(3):c->origin.w;
-    if(!isfinite(distance)||distance<0.f)return -1;
-    const float travel=fminf(distance,c->origin.w);
+    if(!isfinite(distance)||distance<c->direction.w)return -1;
+    const float travel=fminf(distance,c->origin.w)-c->direction.w;
     if(!connectionSegment(b,c,travel))return -2;
     if(!found||distance>=c->origin.w)return 0;
     if(++c->control.z>=((unsigned int*)b)[6]){c->transport.x=c->transport.y=c->transport.z=0.f;return 0;}
@@ -332,15 +336,12 @@ template<bool Compact,bool Transposed> __device__ int connectionStep(unsigned ch
     }
     c->volumes=candidate;
     if(peak(rgb(c->transport))<=((float*)b)[32]){c->transport.x=c->transport.y=c->transport.z=0.f;return 0;}
-    const float3 point=make_float3(view.f(0),view.f(1),view.f(2));
-    const float3 normal=normalize(make_float3(view.f(Compact?4:12),view.f(Compact?5:13),view.f(Compact?6:14)));
-    const float3 next=spawnOrigin(point,normal,rgb(c->direction),
-            positionError(point,rgb(c->origin),distance,rgb(c->direction)));
-    const float advance=fminf(fmaxf(dot(next-point,rgb(c->direction)),0.f),fmaxf(c->origin.w-distance,0.f));
-    c->origin=make_float4(point.x,point.y,point.z,fmaxf(c->origin.w-distance,0.f));
-    if(!connectionSegment(b,c,advance))return -8;
-    c->origin=make_float4(next.x,next.y,next.z,fmaxf(c->origin.w-advance,0.f));
-    return c->origin.w>0.f?1:0;
+    // The geometric hit point may include barycentric edge repair, and a
+    // normal offset can cross another volume at a grazing/shared edge. Neither
+    // may replace the light ray's origin. Vulkan resumes after this exact t;
+    // the next segment integrates from this t without dropping an epsilon gap.
+    c->direction.w=distance;
+    return 1;
 }
 }
 extern "C" __global__ void native_optical_reset(unsigned char*b,int count){if(blockIdx.x==0&&threadIdx.x==0){unsigned int*h=(unsigned int*)b;h[28]=h[29]=h[30]=h[31]=0;

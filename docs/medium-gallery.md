@@ -30,4 +30,6 @@
 
 FPS 来自每秒实际完成帧数，包含介质生产链路。窗口里的“GPU输出阶段”只表示末端着色和输出命令的 GPU 时间；相机与光子在 CUDA/Vulkan 间的传输不在这个计时区间里。
 
+场景构建、帧准备、renderer 提交和诊断读取在后台串行执行。GPU 帧率较低时，窗口仍持续处理关闭、缩放和场景选择输入；场景切换会等待已提交帧排空后再发布新版本。
+
 CPU 场景合同：`:demos:hex-ball:mediumGallerySceneSelfTest`。GPU 图像验收：`:demos:hex-ball:mediumGalleryNativeSelfTest`，逐一运行上述预设及三个焦散关闭对照，检查 HDR、光照和图像差异，输出到 `demos/hex-ball/build/reports/medium-gallery/`。测试结果记录在[总验收清单](quality/verification-report.md#api-closure-20261030)。
