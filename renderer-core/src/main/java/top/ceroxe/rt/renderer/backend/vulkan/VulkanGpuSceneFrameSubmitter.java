@@ -184,6 +184,10 @@ final class VulkanGpuSceneFrameSubmitter {
                 ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_DENSITY_SCATTERING_LIGHTS)
                 : nativeScatteringFrame || nativeMultipleFrame && !nativeHeterogeneousMultipleFrame
                     ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS) : null;
+        GpuSceneRayTracingPipeline scatteringDiagnostic = top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS
+                && (nativeScatteringFrame || nativePbrScatteringFrame
+                    && nativePbrData.transportPlan().kind()==top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM)
+                ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC) : null;
         var pbrScatteringKind = nativePbrScatteringFrame ? nativePbrData.transportPlan().kind() : null;
         GpuSceneRayTracingPipeline pbrScatteringPrimary = nativePbrScatteringFrame
                 && pbrScatteringKind != top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM
@@ -292,7 +296,7 @@ final class VulkanGpuSceneFrameSubmitter {
                 scatteringContribution = switch(scatteringPlan.kind()) {
                     case DIRECT_UNIFORM -> {
                         var contribution = pipelines.nativeCameraScatteringForPbr().prepareRadianceContribution(checked.request(),
-                                scatteringPlan.direct(),cameraScatteringLights,slot.index(),framePrimitives.buildPlan());
+                                scatteringPlan.direct(),cameraScatteringLights,scatteringDiagnostic,slot.index(),framePrimitives.buildPlan());
                         yield new CudaPbrMediumManager.RadianceContribution(contribution.buffer(),contribution.offset(),contribution.bytes(),false);
                     }
                     case DIRECT_DENSITY -> pipelines.nativeDensityScatteringForPbr().prepareRadianceContribution(
@@ -321,7 +325,7 @@ final class VulkanGpuSceneFrameSubmitter {
                     ? pipelines.nativeDensityScattering().prepare(nativeDensityScatteringData,primaryProducer,scatteringLights,slot.index(),framePrimitives.buildPlan())
                     : nativeScatteringFrame
                     ? pipelines.nativeCameraScattering().prepare(checked.request(), width, height,
-                            primaryProducer, scatteringLights, slot.index(), framePrimitives.buildPlan())
+                            primaryProducer, scatteringLights, scatteringDiagnostic, slot.index(), framePrimitives.buildPlan())
                     : nativeBoundaryFrame && !fusedBoundaryFrame
                     ? pipelines.nativeBoundaryMedium().prepare(nativeBoundaryData,
                             primaryProducer, slot.index(), framePrimitives.buildPlan())

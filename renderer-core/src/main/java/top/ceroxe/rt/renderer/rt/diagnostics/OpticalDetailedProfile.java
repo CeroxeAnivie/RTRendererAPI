@@ -45,13 +45,14 @@ public final class OpticalDetailedProfile {
     }
     public static void cameraScatteringShaderSamples(MemorySegment values,int paths){
         long records=(paths+(long)CAMERA_SCATTERING_STRIDE-1)/CAMERA_SCATTERING_STRIDE;
-        addGlobal("cameraScattering/sampledPaths",records);
+        long selected=(records+7)/8;
         long observed=0;
         for(int sample=0;sample<records;sample++)for(int stage=0;stage<CAMERA_SCATTERING_STAGES;stage++){
             long at=((long)sample*CAMERA_SCATTERING_STAGES+stage)*16,ticks=values.get(ValueLayout.JAVA_LONG,at),calls=values.get(ValueLayout.JAVA_LONG,at+8);
             if(calls!=0){if(stage==0)observed++;String prefix="cameraScattering/"+CAMERA_SCATTERING_STAGE_NAMES[stage]+"/";
                 addGlobal(prefix+"ticks",ticks);addGlobal(prefix+"calls",calls);}
         }
+        addGlobal("cameraScattering/sampledPaths",selected);
         addGlobal("cameraScattering/recordedPaths",observed);
     }
     private static void addGlobal(String name,long value){
@@ -96,11 +97,12 @@ public final class OpticalDetailedProfile {
                 -before.getOrDefault("cameraScattering/sampledPaths",0L);
         long recorded=values.getOrDefault("cameraScattering/recordedPaths",0L)
                 -before.getOrDefault("cameraScattering/recordedPaths",0L);
+        long denominator=recorded==0?sampled:recorded;
         var stages=new java.util.ArrayList<CameraStage>();long sumTicks=0;
         for(String name:CAMERA_SCATTERING_STAGE_NAMES){String prefix="cameraScattering/"+name+"/";
             long ticks=values.getOrDefault(prefix+"ticks",0L)-before.getOrDefault(prefix+"ticks",0L);
             long calls=values.getOrDefault(prefix+"calls",0L)-before.getOrDefault(prefix+"calls",0L);
-            long perPath=sampled==0?0:Math.round(ticks/(double)sampled);sumTicks=Math.addExact(sumTicks,ticks);
+            long perPath=denominator==0?0:Math.round(ticks/(double)denominator);sumTicks=Math.addExact(sumTicks,ticks);
             stages.add(new CameraStage(name,ticks,calls,perPath,calls==0?0:Math.round(ticks/(double)calls),
                     calls==0?0:ticks/(double)calls));
         }
@@ -114,7 +116,7 @@ public final class OpticalDetailedProfile {
                     .append(",\"nsPerSampledPath\":").append(stage.nsPerSampledPath())
                     .append(",\"sharePct\":").append(sumTicks==0?0:String.format(java.util.Locale.ROOT,"%.2f",stage.ticks()*100.0/sumTicks))
                     .append(",\"nsPerCall\":").append(stage.nsPerCall()).append('}');}
-        return json.append("\n],\n\"sumNsPerSampledPath\":").append(sampled==0?0:Math.round(sumTicks/(double)sampled))
+        return json.append("\n],\n\"sumNsPerRecordedPath\":").append(denominator==0?0:Math.round(sumTicks/(double)denominator))
                 .append("\n}\n").toString();
     }
     private record CameraStage(String name,long ticks,long calls,long nsPerSampledPath,long nsPerCall,double nsPerCallExact){}

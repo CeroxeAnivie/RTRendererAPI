@@ -81,30 +81,34 @@ final class CudaCameraScatteringManager implements AutoCloseable {
         throw new IllegalArgumentException("unable to reserve native scattering diagnostic storage");
     }
     synchronized CudaCameraMediumManager.Prepared prepare(RenderFrameRequest frame,int width,int height,
-            GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan) {
-        checkOpen();return onNative(()->prepareOnNative(frame,width,height,primaryProducer,lightProducer,slot,buildPlan,true));
+            GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,
+            GpuSceneRayTracingPipeline diagnosticProducer,int slot,RtTlasBuildPlan buildPlan) {
+        checkOpen();return onNative(()->prepareOnNative(frame,width,height,primaryProducer,lightProducer,diagnosticProducer,slot,buildPlan,true));
     }
     synchronized RadianceContribution prepareRadianceContribution(RenderFrameRequest frame,
-            CudaCameraScatteringAbi.Plan plan,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan) {
+            CudaCameraScatteringAbi.Plan plan,GpuSceneRayTracingPipeline lightProducer,
+            GpuSceneRayTracingPipeline diagnosticProducer,int slot,RtTlasBuildPlan buildPlan) {
         if(!plan.compactContribution())throw new IllegalArgumentException("compact contribution plan required");
         checkOpen();long started=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
         try{return onNative(()->{
-                prepareOnNative(frame,plan,null,lightProducer,slot,buildPlan,false);
+                prepareOnNative(frame,plan,null,lightProducer,diagnosticProducer,slot,buildPlan,false);
                 return new RadianceContribution(storage.buffer(),plan.emissionOffset(),Math.multiplyExact((long)plan.paths(),16));
             });
         }finally{if(OpticalFrameTimings.ENABLED)OpticalFrameTimings.cameraScatteringPrepare.add(System.nanoTime()-started);}
     }
     private CudaCameraMediumManager.Prepared prepareOnNative(RenderFrameRequest frame,int width,int height,
-            GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan,
+            GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,
+            GpuSceneRayTracingPipeline diagnosticProducer,int slot,RtTlasBuildPlan buildPlan,
             boolean includeMediumEmission) {
         CudaCameraScatteringAbi.Plan plan;
         try {plan=plan(width,height,frame.antiAliasing().samplesPerPixel(),frame.mediumTransport().scatteringSteps(),
                 Math.min(cuda.maxResidentBytes(),CudaCameraScatteringAbi.DEFAULT_RESIDENT_BYTES));}
         catch(ArithmeticException|IllegalArgumentException invalid){throw unsupported(invalid.getMessage());}
-        return prepareOnNative(frame,plan,primaryProducer,lightProducer,slot,buildPlan,includeMediumEmission);
+        return prepareOnNative(frame,plan,primaryProducer,lightProducer,diagnosticProducer,slot,buildPlan,includeMediumEmission);
     }
     private CudaCameraMediumManager.Prepared prepareOnNative(RenderFrameRequest frame,CudaCameraScatteringAbi.Plan plan,
-            GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan,
+            GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,
+            GpuSceneRayTracingPipeline diagnosticProducer,int slot,RtTlasBuildPlan buildPlan,
             boolean includeMediumEmission) {
         ensureCapacity(allocationBytes(plan),plan.compactContribution());
         long available=Math.min(cuda.maxResidentBytes(),CudaCameraScatteringAbi.DEFAULT_RESIDENT_BYTES);
@@ -119,6 +123,7 @@ final class CudaCameraScatteringManager implements AutoCloseable {
             for(int first=0;first<plan.pixels();) {
                 int tileFirst=first,pixels=Math.min(plan.tilePixels(),plan.pixels()-first);
                 long diagnosticAddress=diagnosticBytes==0?0:address+plan.bytes();
+                boolean profileTile=diagnosticProducer!=null&&profileTile(plan,tileFirst,pixels);
                 boolean initial=first==0,last=first+pixels==plan.pixels();
                 byte[] header=CudaCameraScatteringAbi.header(plan,frame,first,pixels,includeMediumEmission);
                 RtGpuTimestampPool.Capture tlasTiming=OpticalFrameTimings.ENABLED&&initial&&buildPlan!=null
@@ -156,7 +161,8 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                             VK10.vkCmdPipelineBarrier(command,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
                                     KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,diagnosticBarrier,null);
                         }
-                        lightProducer.recordNativeScatteringLights(command,stack,slot,address,tileFirst,pixels,offsets,diagnosticAddress);
+                        (profileTile?diagnosticProducer:lightProducer).recordNativeScatteringLights(command,stack,slot,address,
+                                tileFirst,pixels,offsets,profileTile?diagnosticAddress:0);
                         if(lightsTiming!=null)lightsTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                     }
                 },shared->{
@@ -179,6 +185,12 @@ final class CudaCameraScatteringManager implements AutoCloseable {
         }
         return new CudaCameraMediumManager.Prepared(address+plan.primaryOffset(),address+plan.transmittanceOffset(),
                 address+plan.emissionOffset(),plan.pixels(),plan.samples());
+    }
+    private static boolean profileTile(CudaCameraScatteringAbi.Plan plan,int firstPixel,int pixels) {
+        long firstPath=(long)firstPixel*plan.samples(),endPath=(long)(firstPixel+pixels)*plan.samples();
+        long firstSample=(firstPath+OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE-1)/OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE;
+        long endSample=(endPath+OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE-1)/OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE;
+        return firstSample<endSample&&(firstSample&7L)==0L;
     }
     private void ensureCapacity(long bytes,boolean exactBudget) {
         if(storage!=null&&storage.byteSize()>=bytes&&(!exactBudget||storage.byteSize()==bytes))return;

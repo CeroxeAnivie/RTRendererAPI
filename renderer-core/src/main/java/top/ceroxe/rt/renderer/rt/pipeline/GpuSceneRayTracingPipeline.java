@@ -41,6 +41,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         NATIVE_PBR_MEDIUM_LIGHTS("gpuscene_native_pbr_medium_lights.rgen"),
         NATIVE_BOUNDARY_SCATTERING("gpuscene_native_boundary_scattering.rgen"),
         NATIVE_SCATTERING_LIGHTS("gpuscene_native_scattering_lights.rgen"),
+        NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC("gpuscene_native_scattering_lights.rgen"),
         NATIVE_MULTIPLE_SCATTERING("gpuscene_native_multiple_scattering.rgen"),
         NATIVE_DENSITY_SCATTERING_LIGHTS("gpuscene_native_density_scattering_lights.rgen"),
         NATIVE_OPTICAL_TRACE("gpuscene_native_optical_trace.rgen"),
@@ -55,7 +56,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         public boolean primaryQueue() { return this == PRIMARY_TRACE || this == NATIVE_MEDIUM_TRACE || this == NATIVE_BOUNDARY_PACKET
                 || this == NATIVE_PBR_MEDIUM_TRACE || this == NATIVE_PBR_MEDIUM_LIGHTS
                 || this == NATIVE_BOUNDARY_SCATTERING
-                || this == NATIVE_SCATTERING_LIGHTS || this == NATIVE_MULTIPLE_SCATTERING
+                || this == NATIVE_SCATTERING_LIGHTS || this == NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC || this == NATIVE_MULTIPLE_SCATTERING
                 || this == NATIVE_DENSITY_SCATTERING_LIGHTS || this == NATIVE_OPTICAL_TRACE || this == SURFACE_PRIMARY_SHADE
                 || this == COMPACT_PRIMARY_SHADE || this == GENERAL_PRIMARY_SHADE; }
     }
@@ -179,7 +180,8 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout(),
                     program.primaryQueue() ? GpuScenePrimaryQueue.PUSH_BYTES : 0);
             boolean opticalDiagnostic=program==Program.NATIVE_OPTICAL_TRACE&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS;
-            boolean scatteringDiagnostic=program==Program.NATIVE_SCATTERING_LIGHTS&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS;
+            boolean scatteringDiagnostic=program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC
+                    &&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS;
             byte[] raygenCode = scatteringDiagnostic?RtShaderModuleCompiler.compileCameraScatteringDiagnostic(SHADER_ROOT+program.source,
                     Shaderc.shaderc_raygen_shader,linearHdrOutput,shaderExecutionReorderingEnabled):opticalDiagnostic
                     ?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+program.source,Shaderc.shaderc_raygen_shader,

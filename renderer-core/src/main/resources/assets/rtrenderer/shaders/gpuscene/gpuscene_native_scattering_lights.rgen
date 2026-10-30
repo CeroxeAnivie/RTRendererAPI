@@ -29,7 +29,7 @@ void gsScatteringDetailEnd(uint record,uint stage,uint64_t started){
     GsScatteringDiagnostic target=GsScatteringDiagnostic(dispatch.reserved);
     target.values[word]+=ended-started;target.values[word+1u]+=1ul;
 }
-#define GS_SCATTER_DETAIL_BEGIN(stage) uint detailStage=stage;uint detailRecord=(dispatch.firstPixel+gl_LaunchIDEXT.x)*samples+sampleIndex;bool detailActive=dispatch.reserved!=0ul&&(detailRecord%65536u)==0u;uint64_t detailStarted=gsScatteringDetailStart(detailActive)
+#define GS_SCATTER_DETAIL_BEGIN(stage) uint detailStage=stage;uint detailRecord=(dispatch.firstPixel+gl_LaunchIDEXT.x)*samples+sampleIndex;bool detailActive=dispatch.reserved!=0ul&&(detailRecord%65536u)==0u&&((detailRecord/65536u)&7u)==0u;uint64_t detailStarted=gsScatteringDetailStart(detailActive)
 #define GS_SCATTER_DETAIL_NEXT(stage) gsScatteringDetailEnd(detailRecord,detailStage,detailStarted);detailStage=stage;detailStarted=gsScatteringDetailStart(detailActive)
 #define GS_SCATTER_DETAIL_END() gsScatteringDetailEnd(detailRecord,detailStage,detailStarted)
 #define GS_SCATTER_DETAIL_PAUSE() gsScatteringDetailEnd(detailRecord,detailStage,detailStarted);detailStarted=0ul
