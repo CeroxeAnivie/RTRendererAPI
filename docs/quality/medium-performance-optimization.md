@@ -895,6 +895,12 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 正序 kernel 0.807241→0.797066 ms（下降 1.26%），关闭诊断 111.768264→112.883543 FPS（+1.00%）；反序 kernel 0.805046→0.793753 ms（下降 1.40%），关闭诊断 113.000539→112.040968 FPS（−0.85%）。没有稳定端到端收益，CUDA 源码和 manifest 两个文件均精确恢复；不继续为已拒绝候选追加完整 GPU 回归。[冻结制品与正反序数据](data/pbr-statistics-block-rejected-20261031.json)。
 
+### 撤回：缓存 PBR 连接包按灯分平面
+
+参考固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/wavefront/workqueue.h` 的 `WorkQueue : SOA<WorkItem>` 数据布局原则，独立把严格 cached-primary 路径的连接 packet/color 改为按灯分平面；producer 和 CUDA 使用相同 tile-local 映射，射线调度、积分和灯光求和顺序不变。1080p 连续 8 帧原始 HDR 与冻结对照全字节一致。
+
+正序 CUDA PBR kernel 下降 5.48%，但 Vulkan 连接包增加 7.63%，关闭诊断 114.808490→114.478445 FPS（−0.29%）；反序 kernel 下降 5.39%、连接包增加 8.58%，关闭诊断 113.770162→115.213332 FPS（+1.27%）。生产端退化稳定，整帧收益方向不一致，未保留。3 个源码、清单及 24 份 SPIR-V 全部恢复 `e0b1dfe`；冻结 JAR、binary patch 和原始窗口保留于 `build/pbr-connection-planes`。未为已拒绝候选继续跑全量原生回归。[测量与恢复证据](data/pbr-connection-planes-rejected-20261031.json)。此候选和此前 light-major 调度均已拒绝，后续不要仅换布局名称重复试验。
+
 ### 不透明 PBR 连接贡献最终一次写回
 
 继续处理 PBR 灯光 packet，将严格 opaque 专用路径的贡献保留在私有临时量，所有提前退出保留零贡献，最后统一写两份输出。避免先清零、有效照明后再覆盖。packet 清零、ambient 写入、BRDF、阴影、距离与贡献顺序不变；通用路径仍为原实现。对照固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/wavefront/surfscatter.cpp` 在发布 `ShadowRayWorkItem` 前构造完整候选贡献的原则，独立适配本项目的 dense packet，没有搬入其队列或采样算法。
