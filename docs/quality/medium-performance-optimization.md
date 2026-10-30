@@ -739,3 +739,9 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | **互斥墙钟求和** | **9.415063** | **1000.000** | **100.000%** |
 
 内部采样路径前三仍为主命中、局部灯几何和 opaque 阴影查询，另一次 shader 时钟窗口仅用于排序。后续继续总榜前三各自内部前三，不能将第二、第三共同等待散射链重复计收益。新的 [逐帧噪声分析工具](../../tools/AnalyzeMediumTemporalNoise.py) 接收紧密 RGBA16F 原图，流式统计 HDR/SDR 方差及相邻帧差值；使用 NumPy，无运行时依赖。完整 [画质及性能证据](data/medium-equiangular-clarity-20261031.json)、[最新完整排名](data/medium-equiangular-ranked-20261031.json)。
+
+### 撤回：无纹理主命中省略纹理导数
+
+修改当前 shader 子阶段第一名主命中：四个材质纹理槽均无效时，不算 UV 和 footprint；有任意纹理仍保留原采样路径。对照本项目 visibility closest-hit 的按需纹理计算，以及固定 PBRT-v4 `surfscatter.cpp` 的导数用途；PBRT 自身未采用此无纹理快捷分支，不声称照搬了它的优化。8 帧展厅 HDR 字节一致，但三轮散射 producer GPU 合计仅下降 0.22%，关闭诊断 FPS 102.221→98.113（−4.02%），未证明优化到了实际成本，源文件和两个 SPIR-V 立即恢复。额外纹理矩阵在首帧前因 fixture 太阳方向未归一而停止，没有算成正确性通过，也未再为已拒绝候选投入 GPU。证据：[候选原始结果](data/primary-texture-demand-rejected-20261031.json)。
+
+子代理的 optical 无阴影灯光连接修复合入后，主树重新通过 camera 散射 17 项比较、optical 46 项/152 帧及一次拒绝恢复、PBR 焦散 5 帧和源码清单，日志 `build/scattering-guided/merged-closure-regression.log`。API 的全入口闭合验收由独立子代理继续执行，局部通过不冒充完整闭合。
