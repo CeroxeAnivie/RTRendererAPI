@@ -25,6 +25,7 @@ import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntime;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumSource;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
 import top.ceroxe.rt.renderer.rt.acceleration.RtTlasBuildPlan;
 import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
@@ -113,8 +114,10 @@ final class CudaPbrMediumManager implements AutoCloseable {
             GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan,
             CausticPhotonPlan photonPlan,GpuSceneRayTracingPipeline photonPipeline,RtGpuBuffer photonBuffer,
             RadianceContribution additionalRadiance) {
-        checkOpen();return onNative(()->prepareOnNative(scene,primaryProducer,lightProducer,slot,buildPlan,
-                photonPlan,photonPipeline,photonBuffer,additionalRadiance));
+        checkOpen();long started=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
+        try{return onNative(()->prepareOnNative(scene,primaryProducer,lightProducer,slot,buildPlan,
+                photonPlan,photonPipeline,photonBuffer,additionalRadiance));}
+        finally{if(OpticalFrameTimings.ENABLED)OpticalFrameTimings.pbrMediumPrepare.add(System.nanoTime()-started);}
     }
     private CudaCameraMediumManager.Prepared prepareOnNative(FrameScene scene,GpuSceneRayTracingPipeline primaryProducer,
             GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan,
@@ -174,7 +177,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                         barrier(command,stack);
                     }
                 }},shared->{
-                    cuda.launchBlocking(resolve,shared,paths,1);
+                    cuda.launchBlocking(resolve,shared,paths,1,"pbrMedium.resolve");
                     cuda.download(shared.slice(CudaPbrMediumAbi.STATISTICS_OFFSET,CudaPbrMediumAbi.STATISTICS_BYTES),counters);
                 },command->{});
                 if(counters.get(ValueLayout.JAVA_INT,0)!=0||counters.get(ValueLayout.JAVA_INT,4)!=0||counters.get(ValueLayout.JAVA_INT,12)!=paths)

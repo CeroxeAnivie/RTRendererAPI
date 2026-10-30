@@ -195,6 +195,15 @@ tasks.register<JavaExec>("mediumGalleryDemo") {
     providers.gradleProperty("galleryArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
 }
 
+tasks.register<JavaExec>("mediumGalleryPerformanceBenchmark") {
+    group = "verification"
+    description = "Measures the default 1080p/1-spp PBR uniform-scattering gallery path."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("demo.MediumGalleryPerformanceBenchmark")
+    providers.gradleProperty("galleryPerformanceArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
+}
+
 tasks.register<JavaExec>("mediumCertificationDemo") {
     group = "application"
     description = "Runs the selectable 7.0.0 medium route certification lab (executes GPU work)."

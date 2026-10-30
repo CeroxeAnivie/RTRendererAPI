@@ -21,6 +21,7 @@ import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame;
 import top.ceroxe.rt.renderer.rt.acceleration.RtTlasBuildPlan;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSync;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 
 /** Real primary hits, retained Vulkan lights/visibility and native segment integration. */
@@ -68,10 +69,12 @@ final class CudaCameraScatteringManager implements AutoCloseable {
     synchronized RadianceContribution prepareRadianceContribution(RenderFrameRequest frame,
             CudaCameraScatteringAbi.Plan plan,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan) {
         if(!plan.compactContribution())throw new IllegalArgumentException("compact contribution plan required");
-        checkOpen();return onNative(()->{
-            prepareOnNative(frame,plan,null,lightProducer,slot,buildPlan,false);
-            return new RadianceContribution(storage.buffer(),plan.emissionOffset(),Math.multiplyExact((long)plan.paths(),16));
-        });
+        checkOpen();long started=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
+        try{return onNative(()->{
+                prepareOnNative(frame,plan,null,lightProducer,slot,buildPlan,false);
+                return new RadianceContribution(storage.buffer(),plan.emissionOffset(),Math.multiplyExact((long)plan.paths(),16));
+            });
+        }finally{if(OpticalFrameTimings.ENABLED)OpticalFrameTimings.cameraScatteringPrepare.add(System.nanoTime()-started);}
     }
     private CudaCameraMediumManager.Prepared prepareOnNative(RenderFrameRequest frame,int width,int height,
             GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan,
@@ -114,7 +117,7 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                         lightProducer.recordPrimaryQueueTrace(command,stack,slot,address,tileFirst,pixels,offsets);
                     }
                 },shared->{
-                    cuda.launchBlocking(resolve,shared,pixels*plan.samples(),1);
+                    cuda.launchBlocking(resolve,shared,pixels*plan.samples(),1,"cameraScattering.resolve");
                     if(last)cuda.download(shared.slice(CudaCameraScatteringAbi.FAILED_OFFSET,4),failed);
                 },ignored->{});
                 first+=pixels;

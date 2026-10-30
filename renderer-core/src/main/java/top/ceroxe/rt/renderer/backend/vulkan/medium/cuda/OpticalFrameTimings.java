@@ -13,9 +13,20 @@ public final class OpticalFrameTimings {
     public static final LongAdder producerGpu=new LongAdder(),consumerGpu=new LongAdder(),snapshotCopy=new LongAdder(),rounds=new LongAdder();
     public static final LongAdder releaseCommands=new LongAdder(),releaseSubmit=new LongAdder();
     public static final LongAdder consumerCommands=new LongAdder(),consumerSubmit=new LongAdder();
+    public static final LongAdder cameraScatteringPrepare=new LongAdder(),pbrMediumPrepare=new LongAdder();
+    public static final LongAdder cameraScatteringKernelGpu=new LongAdder(),pbrMediumKernelGpu=new LongAdder();
+    public static final LongAdder cameraScatteringKernelCount=new LongAdder(),pbrMediumKernelCount=new LongAdder();
     public static final LongAdder[] kernelPhases=java.util.stream.IntStream.range(0,8).mapToObj(i->new LongAdder()).toArray(LongAdder[]::new);
     private static final java.util.Map<String,LongAdder[]> roundDetails=new java.util.concurrent.ConcurrentHashMap<>();
     private OpticalFrameTimings() { }
+    public static void recordCudaKernel(String stage,long nanos) {
+        if(!ENABLED)return;
+        switch(stage) {
+            case "cameraScattering.resolve" -> {cameraScatteringKernelGpu.add(nanos);cameraScatteringKernelCount.increment();}
+            case "pbrMedium.resolve" -> {pbrMediumKernelGpu.add(nanos);pbrMediumKernelCount.increment();}
+            default -> throw new IllegalArgumentException("unknown profiled CUDA kernel: "+stage);
+        }
+    }
     public static void recordRound(int opticalSample,int branch,int round,int queries,int[] statistics,long[] phases) {
         if(!KERNEL_PHASES)return;
         String key="sample"+opticalSample+"-branch"+branch+"-round"+round;
@@ -49,6 +60,8 @@ public final class OpticalFrameTimings {
                 consumerWait.sum(),producerGpu.sum(),consumerGpu.sum(),snapshotCopy.sum(),rounds.sum(),
                 releaseCommands.sum(),releaseSubmit.sum(),consumerCommands.sum(),consumerSubmit.sum(),
                 kernelPhases[0].sum(),kernelPhases[1].sum(),kernelPhases[2].sum(),kernelPhases[3].sum(),
-                kernelPhases[4].sum(),kernelPhases[5].sum(),kernelPhases[6].sum(),kernelPhases[7].sum()};
+                kernelPhases[4].sum(),kernelPhases[5].sum(),kernelPhases[6].sum(),kernelPhases[7].sum(),
+                cameraScatteringPrepare.sum(),pbrMediumPrepare.sum(),cameraScatteringKernelGpu.sum(),
+                pbrMediumKernelGpu.sum(),cameraScatteringKernelCount.sum(),pbrMediumKernelCount.sum()};
     }
 }

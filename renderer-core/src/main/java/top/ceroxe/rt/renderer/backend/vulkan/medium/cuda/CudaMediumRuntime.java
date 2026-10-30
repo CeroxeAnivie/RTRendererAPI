@@ -23,6 +23,9 @@ public final class CudaMediumRuntime implements AutoCloseable {
     private final List<NativeResource> resources = new ArrayList<>();
     private MemorySegment context = MemorySegment.NULL;
     private MemorySegment stream = MemorySegment.NULL;
+    private MemorySegment profileStartEvent = MemorySegment.NULL;
+    private MemorySegment profileEndEvent = MemorySegment.NULL;
+    private String pendingProfileStage;
     private MemorySegment module = MemorySegment.NULL;
     private MemorySegment segmentFunction = MemorySegment.NULL;
     private boolean closed;
@@ -79,6 +82,13 @@ public final class CudaMediumRuntime implements AutoCloseable {
             inContext(() -> {
                 api.checked("cuStreamCreate", args(ADDRESS, JAVA_INT), output, 1);
                 stream = output.get(ADDRESS, 0);
+                if (OpticalFrameTimings.ENABLED) {
+                    MemorySegment event = scratch.allocate(ADDRESS);
+                    api.checked("cuEventCreate", args(ADDRESS, JAVA_INT), event, 0);
+                    profileStartEvent = event.get(ADDRESS, 0);
+                    api.checked("cuEventCreate", args(ADDRESS, JAVA_INT), event, 0);
+                    profileEndEvent = event.get(ADDRESS, 0);
+                }
                 byte[] ptx = compile(CudaMediumSource.source());
                 MemorySegment image = scratch.allocateFrom(JAVA_BYTE, ptx);
                 api.checked("cuModuleLoadData", args(ADDRESS, ADDRESS), output, image);
@@ -240,15 +250,30 @@ public final class CudaMediumRuntime implements AutoCloseable {
             nativeStep.run();
             signalExternalBlocking(signal);
             completeConsumer.run();
+            resolveProfiledKernel();
         } catch (RuntimeException | Error failure) {
             try { inContext(this::synchronizeStream); }
             catch (RuntimeException | Error drainFailure) { failure.addSuppressed(drainFailure); }
+            pendingProfileStage = null;
             throw failure;
         } finally {
             externalBatch = enclosingBatch;
         }
     }
     private void synchronizeStream() { api.checked("cuStreamSynchronize", args(ADDRESS), stream); }
+    private void resolveProfiledKernel() {
+        if (pendingProfileStage == null) return;
+        String stage = pendingProfileStage;
+        pendingProfileStage = null;
+        try (Arena scratch = Arena.ofConfined()) {
+            MemorySegment elapsedMillis = scratch.allocate(JAVA_FLOAT);
+            inContext(() -> api.checked("cuEventElapsedTime", args(ADDRESS, ADDRESS, ADDRESS),
+                    elapsedMillis, profileStartEvent, profileEndEvent));
+            float millis = elapsedMillis.get(JAVA_FLOAT, 0);
+            if (!Float.isFinite(millis) || millis < 0) throw new IllegalStateException("CUDA event returned invalid duration");
+            OpticalFrameTimings.recordCudaKernel(stage, Math.round(millis * 1_000_000.0));
+        }
+    }
     /** Two ownership cycles without an intermediate host counter decision or Vulkan fence. */
     void exchangeExternalPairWithCompletionBlocking(ExternalSemaphore wait, ExternalSemaphore signal,
             long firstValue,long secondValue,
@@ -358,20 +383,33 @@ public final class CudaMediumRuntime implements AutoCloseable {
     }
     /** Internal batch ABI is (record pointer, count); completion includes the owning CUDA stream. */
     public void launchBlocking(BatchKernel kernel, Slice records, int count, int recordBytes) {
+        launchBlocking(kernel, records, count, recordBytes, null);
+    }
+    public void launchBlocking(BatchKernel kernel, Slice records, int count, int recordBytes, String profileStage) {
         checkOpen(); requireOwned(kernel); kernel.checkAlive();
         if (count < 1 || recordBytes < 1) throw new IllegalArgumentException("positive batch dimensions required");
         requireSlice(records, Math.multiplyExact((long) count, recordBytes));
+        boolean profile = OpticalFrameTimings.ENABLED && profileStage != null;
+        if (profile && (profileStage.isBlank() || pendingProfileStage != null))
+            throw new IllegalStateException("CUDA profile event pair is already pending or its stage name is blank");
+        if (profile) pendingProfileStage = profileStage;
         try (Arena scratch = Arena.ofConfined()) {
             MemorySegment parameters = scratch.allocate(ADDRESS, 2);
             parameters.setAtIndex(ADDRESS, 0, scratch.allocateFrom(JAVA_LONG, records.address()));
             parameters.setAtIndex(ADDRESS, 1, scratch.allocateFrom(JAVA_INT, count));
             inContext(() -> {
+                if (profile) api.checked("cuEventRecord", args(ADDRESS, ADDRESS), profileStartEvent, stream);
                 api.checked("cuLaunchKernel", args(ADDRESS, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT,
                                 JAVA_INT, JAVA_INT, JAVA_INT, ADDRESS, ADDRESS, ADDRESS),
                         kernel.function, (count - 1) / 256 + 1, 1, 1, 256, 1, 1, 0,
                         stream, parameters, MemorySegment.NULL);
+                if (profile) api.checked("cuEventRecord", args(ADDRESS, ADDRESS), profileEndEvent, stream);
                 synchronizeUnlessBatched();
             });
+            if (profile && !externalBatch) resolveProfiledKernel();
+        } catch (RuntimeException | Error failure) {
+            if (profile) pendingProfileStage = null;
+            throw failure;
         }
     }
     /**
@@ -514,8 +552,12 @@ public final class CudaMediumRuntime implements AutoCloseable {
             }
             try { inContext(() -> {
                 RuntimeException nativeFailure = null;
-                if (!module.equals(MemorySegment.NULL)) try { api.checked("cuModuleUnload", args(ADDRESS), module); }
+                if (!profileEndEvent.equals(MemorySegment.NULL)) try { api.checked("cuEventDestroy_v2", args(ADDRESS), profileEndEvent); }
                 catch (RuntimeException e) { nativeFailure = e; }
+                if (!profileStartEvent.equals(MemorySegment.NULL)) try { api.checked("cuEventDestroy_v2", args(ADDRESS), profileStartEvent); }
+                catch (RuntimeException e) { if (nativeFailure == null) nativeFailure = e; else nativeFailure.addSuppressed(e); }
+                if (!module.equals(MemorySegment.NULL)) try { api.checked("cuModuleUnload", args(ADDRESS), module); }
+                catch (RuntimeException e) { if (nativeFailure == null) nativeFailure = e; else nativeFailure.addSuppressed(e); }
                 if (!stream.equals(MemorySegment.NULL)) try { api.checked("cuStreamDestroy_v2", args(ADDRESS), stream); }
                 catch (RuntimeException e) { if (nativeFailure == null) nativeFailure = e; else nativeFailure.addSuppressed(e); }
                 if (nativeFailure != null) throw nativeFailure;

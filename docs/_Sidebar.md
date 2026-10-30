@@ -5,3 +5,4 @@
 * [Java API 参考](Java-API-Reference)
 * [Vulkan 专家互操作](Vulkan-Interop)
 * [兼容性与版本策略](COMPATIBILITY)
+* [介质性能优化规范](quality/medium-performance-optimization)
