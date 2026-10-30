@@ -150,6 +150,10 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
             int offset = VulkanGpuSceneAbi.FRAME_FEATURE_FLAGS_WORD * Integer.BYTES;
             mediumUniforms.putInt(offset, mediumUniforms.getInt(offset) | VulkanGpuSceneAbi.FEATURE_FLAG_OPAQUE_VISIBILITY);
         }
+        if (surfaceScene.opaqueShadowRayOnly(checkedRequest.primitiveBatch())) {
+            int offset = VulkanGpuSceneAbi.FRAME_FEATURE_FLAGS_WORD * Integer.BYTES;
+            mediumUniforms.putInt(offset, mediumUniforms.getInt(offset) | VulkanGpuSceneAbi.FEATURE_FLAG_OPAQUE_SHADOW_RAY);
+        }
         int[] containingMedia = mediumBoundaries.containing(checkedRequest);
         mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD * 4, surfaceScene.transmissiveCount(checkedRequest.primitiveBatch()));
         mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_CAMERA_MEDIUM_COUNT_WORD * 4, containingMedia.length);

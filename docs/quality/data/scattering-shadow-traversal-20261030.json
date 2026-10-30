@@ -1,0 +1,1882 @@
+{
+  "scene": "pbr-direct-uniform",
+  "extent": [
+    1920,
+    1080
+  ],
+  "spp": 1,
+  "measurement": "sampled shader device clock; mutually exclusive path stages; not frame time",
+  "controlCommit": "b9ec02a",
+  "referenceCommit": "7c7e1b379132e67f82628f909278e3bc592ac1fe",
+  "gpuCompetition": true,
+  "controlRounds": [
+    {
+      "frames": 120,
+      "sampledPaths": 480,
+      "recordedPaths": 473,
+      "missingSamples": 7,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 28666622,
+          "calls": 7738,
+          "nsPerSampledPath": 60606,
+          "sharePct": 39.0,
+          "nsPerCall": 3705
+        },
+        {
+          "rank": 2,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 12424032,
+          "calls": 26488,
+          "nsPerSampledPath": 26266,
+          "sharePct": 16.9,
+          "nsPerCall": 469
+        },
+        {
+          "rank": 3,
+          "stage": "lightRangeAndWeight",
+          "ticks": 9874560,
+          "calls": 8987,
+          "nsPerSampledPath": 20876,
+          "sharePct": 13.44,
+          "nsPerCall": 1099
+        },
+        {
+          "rank": 4,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 8911168,
+          "calls": 473,
+          "nsPerSampledPath": 18840,
+          "sharePct": 12.12,
+          "nsPerCall": 18840
+        },
+        {
+          "rank": 5,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 6216416,
+          "calls": 7738,
+          "nsPerSampledPath": 13143,
+          "sharePct": 8.46,
+          "nsPerCall": 803
+        },
+        {
+          "rank": 6,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 2914528,
+          "calls": 8041,
+          "nsPerSampledPath": 6162,
+          "sharePct": 3.97,
+          "nsPerCall": 362
+        },
+        {
+          "rank": 7,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1446848,
+          "calls": 8514,
+          "nsPerSampledPath": 3059,
+          "sharePct": 1.97,
+          "nsPerCall": 170
+        },
+        {
+          "rank": 8,
+          "stage": "volumeCaustics",
+          "ticks": 1211296,
+          "calls": 3784,
+          "nsPerSampledPath": 2561,
+          "sharePct": 1.65,
+          "nsPerCall": 320
+        },
+        {
+          "rank": 9,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 603808,
+          "calls": 3784,
+          "nsPerSampledPath": 1277,
+          "sharePct": 0.82,
+          "nsPerCall": 160
+        },
+        {
+          "rank": 10,
+          "stage": "localPhaseAndContribution",
+          "ticks": 556928,
+          "calls": 3954,
+          "nsPerSampledPath": 1177,
+          "sharePct": 0.76,
+          "nsPerCall": 141
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 372832,
+          "calls": 3784,
+          "nsPerSampledPath": 788,
+          "sharePct": 0.51,
+          "nsPerCall": 99
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 288512,
+          "calls": 3784,
+          "nsPerSampledPath": 610,
+          "sharePct": 0.39,
+          "nsPerCall": 76
+        },
+        {
+          "rank": 13,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 9218,
+          "calls": 189,
+          "nsPerSampledPath": 19,
+          "sharePct": 0.01,
+          "nsPerCall": 49
+        },
+        {
+          "rank": 14,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 155384
+    },
+    {
+      "frames": 120,
+      "sampledPaths": 480,
+      "recordedPaths": 463,
+      "missingSamples": 17,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 29305426,
+          "calls": 7605,
+          "nsPerSampledPath": 63295,
+          "sharePct": 39.49,
+          "nsPerCall": 3853
+        },
+        {
+          "rank": 2,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 12396160,
+          "calls": 25928,
+          "nsPerSampledPath": 26774,
+          "sharePct": 16.71,
+          "nsPerCall": 478
+        },
+        {
+          "rank": 3,
+          "stage": "lightRangeAndWeight",
+          "ticks": 9868576,
+          "calls": 8797,
+          "nsPerSampledPath": 21314,
+          "sharePct": 13.3,
+          "nsPerCall": 1122
+        },
+        {
+          "rank": 4,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 8864544,
+          "calls": 463,
+          "nsPerSampledPath": 19146,
+          "sharePct": 11.95,
+          "nsPerCall": 19146
+        },
+        {
+          "rank": 5,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 6257120,
+          "calls": 7605,
+          "nsPerSampledPath": 13514,
+          "sharePct": 8.43,
+          "nsPerCall": 823
+        },
+        {
+          "rank": 6,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 3016800,
+          "calls": 7871,
+          "nsPerSampledPath": 6516,
+          "sharePct": 4.07,
+          "nsPerCall": 383
+        },
+        {
+          "rank": 7,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1454144,
+          "calls": 8334,
+          "nsPerSampledPath": 3141,
+          "sharePct": 1.96,
+          "nsPerCall": 174
+        },
+        {
+          "rank": 8,
+          "stage": "volumeCaustics",
+          "ticks": 1201120,
+          "calls": 3704,
+          "nsPerSampledPath": 2594,
+          "sharePct": 1.62,
+          "nsPerCall": 324
+        },
+        {
+          "rank": 9,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 601792,
+          "calls": 3704,
+          "nsPerSampledPath": 1300,
+          "sharePct": 0.81,
+          "nsPerCall": 162
+        },
+        {
+          "rank": 10,
+          "stage": "localPhaseAndContribution",
+          "ticks": 559712,
+          "calls": 3901,
+          "nsPerSampledPath": 1209,
+          "sharePct": 0.75,
+          "nsPerCall": 143
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 376192,
+          "calls": 3704,
+          "nsPerSampledPath": 813,
+          "sharePct": 0.51,
+          "nsPerCall": 102
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 289664,
+          "calls": 3704,
+          "nsPerSampledPath": 626,
+          "sharePct": 0.39,
+          "nsPerCall": 78
+        },
+        {
+          "rank": 13,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 9294,
+          "calls": 206,
+          "nsPerSampledPath": 20,
+          "sharePct": 0.01,
+          "nsPerCall": 45
+        },
+        {
+          "rank": 14,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 160260
+    },
+    {
+      "frames": 120,
+      "sampledPaths": 480,
+      "recordedPaths": 473,
+      "missingSamples": 7,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 27481486,
+          "calls": 7740,
+          "nsPerSampledPath": 58100,
+          "sharePct": 39.33,
+          "nsPerCall": 3551
+        },
+        {
+          "rank": 2,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 11790048,
+          "calls": 26488,
+          "nsPerSampledPath": 24926,
+          "sharePct": 16.87,
+          "nsPerCall": 445
+        },
+        {
+          "rank": 3,
+          "stage": "lightRangeAndWeight",
+          "ticks": 9290176,
+          "calls": 8987,
+          "nsPerSampledPath": 19641,
+          "sharePct": 13.3,
+          "nsPerCall": 1034
+        },
+        {
+          "rank": 4,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 8413728,
+          "calls": 473,
+          "nsPerSampledPath": 17788,
+          "sharePct": 12.04,
+          "nsPerCall": 17788
+        },
+        {
+          "rank": 5,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 5940096,
+          "calls": 7740,
+          "nsPerSampledPath": 12558,
+          "sharePct": 8.5,
+          "nsPerCall": 767
+        },
+        {
+          "rank": 6,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 2761280,
+          "calls": 8041,
+          "nsPerSampledPath": 5838,
+          "sharePct": 3.95,
+          "nsPerCall": 343
+        },
+        {
+          "rank": 7,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1368640,
+          "calls": 8514,
+          "nsPerSampledPath": 2894,
+          "sharePct": 1.96,
+          "nsPerCall": 161
+        },
+        {
+          "rank": 8,
+          "stage": "volumeCaustics",
+          "ticks": 1109152,
+          "calls": 3784,
+          "nsPerSampledPath": 2345,
+          "sharePct": 1.59,
+          "nsPerCall": 293
+        },
+        {
+          "rank": 9,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 565632,
+          "calls": 3784,
+          "nsPerSampledPath": 1196,
+          "sharePct": 0.81,
+          "nsPerCall": 149
+        },
+        {
+          "rank": 10,
+          "stage": "localPhaseAndContribution",
+          "ticks": 518336,
+          "calls": 3956,
+          "nsPerSampledPath": 1096,
+          "sharePct": 0.74,
+          "nsPerCall": 131
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 348992,
+          "calls": 3784,
+          "nsPerSampledPath": 738,
+          "sharePct": 0.5,
+          "nsPerCall": 92
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 271744,
+          "calls": 3784,
+          "nsPerSampledPath": 575,
+          "sharePct": 0.39,
+          "nsPerCall": 72
+        },
+        {
+          "rank": 13,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 8146,
+          "calls": 185,
+          "nsPerSampledPath": 17,
+          "sharePct": 0.01,
+          "nsPerCall": 44
+        },
+        {
+          "rank": 14,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 147711
+    }
+  ],
+  "rejectedTraceFlagsCandidateRounds": [
+    {
+      "frames": 120,
+      "sampledPaths": 480,
+      "recordedPaths": 473,
+      "missingSamples": 7,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 39854752,
+          "calls": 7738,
+          "nsPerSampledPath": 84260,
+          "sharePct": 43.96,
+          "nsPerCall": 5151
+        },
+        {
+          "rank": 2,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 13836480,
+          "calls": 26488,
+          "nsPerSampledPath": 29253,
+          "sharePct": 15.26,
+          "nsPerCall": 522
+        },
+        {
+          "rank": 3,
+          "stage": "lightRangeAndWeight",
+          "ticks": 10930112,
+          "calls": 8987,
+          "nsPerSampledPath": 23108,
+          "sharePct": 12.06,
+          "nsPerCall": 1216
+        },
+        {
+          "rank": 4,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 10662400,
+          "calls": 473,
+          "nsPerSampledPath": 22542,
+          "sharePct": 11.76,
+          "nsPerCall": 22542
+        },
+        {
+          "rank": 5,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 7888800,
+          "calls": 7738,
+          "nsPerSampledPath": 16678,
+          "sharePct": 8.7,
+          "nsPerCall": 1019
+        },
+        {
+          "rank": 6,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 2993536,
+          "calls": 8041,
+          "nsPerSampledPath": 6329,
+          "sharePct": 3.3,
+          "nsPerCall": 372
+        },
+        {
+          "rank": 7,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1528320,
+          "calls": 8514,
+          "nsPerSampledPath": 3231,
+          "sharePct": 1.69,
+          "nsPerCall": 180
+        },
+        {
+          "rank": 8,
+          "stage": "volumeCaustics",
+          "ticks": 1037120,
+          "calls": 3784,
+          "nsPerSampledPath": 2193,
+          "sharePct": 1.14,
+          "nsPerCall": 274
+        },
+        {
+          "rank": 9,
+          "stage": "localPhaseAndContribution",
+          "ticks": 625024,
+          "calls": 3954,
+          "nsPerSampledPath": 1321,
+          "sharePct": 0.69,
+          "nsPerCall": 158
+        },
+        {
+          "rank": 10,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 614752,
+          "calls": 3784,
+          "nsPerSampledPath": 1300,
+          "sharePct": 0.68,
+          "nsPerCall": 162
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 392352,
+          "calls": 3784,
+          "nsPerSampledPath": 829,
+          "sharePct": 0.43,
+          "nsPerCall": 104
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 298272,
+          "calls": 3784,
+          "nsPerSampledPath": 631,
+          "sharePct": 0.33,
+          "nsPerCall": 79
+        },
+        {
+          "rank": 13,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 14,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 191674
+    },
+    {
+      "frames": 120,
+      "sampledPaths": 480,
+      "recordedPaths": 463,
+      "missingSamples": 17,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 32077120,
+          "calls": 7605,
+          "nsPerSampledPath": 69281,
+          "sharePct": 41.7,
+          "nsPerCall": 4218
+        },
+        {
+          "rank": 2,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 12581632,
+          "calls": 25928,
+          "nsPerSampledPath": 27174,
+          "sharePct": 16.36,
+          "nsPerCall": 485
+        },
+        {
+          "rank": 3,
+          "stage": "lightRangeAndWeight",
+          "ticks": 9659136,
+          "calls": 8797,
+          "nsPerSampledPath": 20862,
+          "sharePct": 12.56,
+          "nsPerCall": 1098
+        },
+        {
+          "rank": 4,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 9036928,
+          "calls": 463,
+          "nsPerSampledPath": 19518,
+          "sharePct": 11.75,
+          "nsPerCall": 19518
+        },
+        {
+          "rank": 5,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 6488768,
+          "calls": 7605,
+          "nsPerSampledPath": 14015,
+          "sharePct": 8.44,
+          "nsPerCall": 853
+        },
+        {
+          "rank": 6,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 2946144,
+          "calls": 7871,
+          "nsPerSampledPath": 6363,
+          "sharePct": 3.83,
+          "nsPerCall": 374
+        },
+        {
+          "rank": 7,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1472608,
+          "calls": 8334,
+          "nsPerSampledPath": 3181,
+          "sharePct": 1.91,
+          "nsPerCall": 177
+        },
+        {
+          "rank": 8,
+          "stage": "volumeCaustics",
+          "ticks": 954336,
+          "calls": 3704,
+          "nsPerSampledPath": 2061,
+          "sharePct": 1.24,
+          "nsPerCall": 258
+        },
+        {
+          "rank": 9,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 541888,
+          "calls": 3704,
+          "nsPerSampledPath": 1170,
+          "sharePct": 0.7,
+          "nsPerCall": 146
+        },
+        {
+          "rank": 10,
+          "stage": "localPhaseAndContribution",
+          "ticks": 520192,
+          "calls": 3901,
+          "nsPerSampledPath": 1124,
+          "sharePct": 0.68,
+          "nsPerCall": 133
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 359296,
+          "calls": 3704,
+          "nsPerSampledPath": 776,
+          "sharePct": 0.47,
+          "nsPerCall": 97
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 286016,
+          "calls": 3704,
+          "nsPerSampledPath": 618,
+          "sharePct": 0.37,
+          "nsPerCall": 77
+        },
+        {
+          "rank": 13,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 14,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 166143
+    },
+    {
+      "frames": 120,
+      "sampledPaths": 480,
+      "recordedPaths": 473,
+      "missingSamples": 7,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 32968320,
+          "calls": 7740,
+          "nsPerSampledPath": 69700,
+          "sharePct": 41.68,
+          "nsPerCall": 4259
+        },
+        {
+          "rank": 2,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 12955488,
+          "calls": 26488,
+          "nsPerSampledPath": 27390,
+          "sharePct": 16.38,
+          "nsPerCall": 489
+        },
+        {
+          "rank": 3,
+          "stage": "lightRangeAndWeight",
+          "ticks": 10010944,
+          "calls": 8987,
+          "nsPerSampledPath": 21165,
+          "sharePct": 12.66,
+          "nsPerCall": 1114
+        },
+        {
+          "rank": 4,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 9317888,
+          "calls": 473,
+          "nsPerSampledPath": 19700,
+          "sharePct": 11.78,
+          "nsPerCall": 19700
+        },
+        {
+          "rank": 5,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 6648384,
+          "calls": 7740,
+          "nsPerSampledPath": 14056,
+          "sharePct": 8.41,
+          "nsPerCall": 859
+        },
+        {
+          "rank": 6,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 2928032,
+          "calls": 8041,
+          "nsPerSampledPath": 6190,
+          "sharePct": 3.7,
+          "nsPerCall": 364
+        },
+        {
+          "rank": 7,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1523616,
+          "calls": 8514,
+          "nsPerSampledPath": 3221,
+          "sharePct": 1.93,
+          "nsPerCall": 179
+        },
+        {
+          "rank": 8,
+          "stage": "volumeCaustics",
+          "ticks": 985600,
+          "calls": 3784,
+          "nsPerSampledPath": 2084,
+          "sharePct": 1.25,
+          "nsPerCall": 260
+        },
+        {
+          "rank": 9,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 559808,
+          "calls": 3784,
+          "nsPerSampledPath": 1184,
+          "sharePct": 0.71,
+          "nsPerCall": 148
+        },
+        {
+          "rank": 10,
+          "stage": "localPhaseAndContribution",
+          "ticks": 533888,
+          "calls": 3956,
+          "nsPerSampledPath": 1129,
+          "sharePct": 0.67,
+          "nsPerCall": 135
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 371616,
+          "calls": 3784,
+          "nsPerSampledPath": 786,
+          "sharePct": 0.47,
+          "nsPerCall": 98
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 291584,
+          "calls": 3784,
+          "nsPerSampledPath": 616,
+          "sharePct": 0.37,
+          "nsPerCall": 77
+        },
+        {
+          "rank": 13,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 14,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 167220
+    }
+  ],
+  "traceFlagsCandidateDecision": "reverted: shadow/other-stage ratio increased from 0.6395-0.6528 to 0.7147-0.7844; eight raw HDR frames byte-identical; native completion FPS did not improve",
+  "inlineQueryRounds": [
+    {
+      "frames": 120,
+      "sampledPaths": 477,
+      "recordedPaths": 473,
+      "missingSamples": 4,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 10394432,
+          "calls": 26488,
+          "nsPerSampledPath": 21976,
+          "sharePct": 27.05,
+          "nsPerCall": 392
+        },
+        {
+          "rank": 2,
+          "stage": "lightRangeAndWeight",
+          "ticks": 8444000,
+          "calls": 8987,
+          "nsPerSampledPath": 17852,
+          "sharePct": 21.98,
+          "nsPerCall": 940
+        },
+        {
+          "rank": 3,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 7093376,
+          "calls": 473,
+          "nsPerSampledPath": 14997,
+          "sharePct": 18.46,
+          "nsPerCall": 14997
+        },
+        {
+          "rank": 4,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 6370272,
+          "calls": 7738,
+          "nsPerSampledPath": 13468,
+          "sharePct": 16.58,
+          "nsPerCall": 823
+        },
+        {
+          "rank": 5,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 1465440,
+          "calls": 8041,
+          "nsPerSampledPath": 3098,
+          "sharePct": 3.81,
+          "nsPerCall": 182
+        },
+        {
+          "rank": 6,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1457088,
+          "calls": 8514,
+          "nsPerSampledPath": 3081,
+          "sharePct": 3.79,
+          "nsPerCall": 171
+        },
+        {
+          "rank": 7,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 871136,
+          "calls": 7738,
+          "nsPerSampledPath": 1842,
+          "sharePct": 2.27,
+          "nsPerCall": 113
+        },
+        {
+          "rank": 8,
+          "stage": "volumeCaustics",
+          "ticks": 764192,
+          "calls": 3784,
+          "nsPerSampledPath": 1616,
+          "sharePct": 1.99,
+          "nsPerCall": 202
+        },
+        {
+          "rank": 9,
+          "stage": "localPhaseAndContribution",
+          "ticks": 498976,
+          "calls": 3954,
+          "nsPerSampledPath": 1055,
+          "sharePct": 1.3,
+          "nsPerCall": 126
+        },
+        {
+          "rank": 10,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 408128,
+          "calls": 3784,
+          "nsPerSampledPath": 863,
+          "sharePct": 1.06,
+          "nsPerCall": 108
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 379968,
+          "calls": 3784,
+          "nsPerSampledPath": 803,
+          "sharePct": 0.99,
+          "nsPerCall": 100
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 276000,
+          "calls": 3784,
+          "nsPerSampledPath": 584,
+          "sharePct": 0.72,
+          "nsPerCall": 73
+        },
+        {
+          "rank": 13,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 14,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 81233
+    },
+    {
+      "frames": 120,
+      "sampledPaths": 472,
+      "recordedPaths": 463,
+      "missingSamples": 9,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 9483136,
+          "calls": 25928,
+          "nsPerSampledPath": 20482,
+          "sharePct": 27.09,
+          "nsPerCall": 366
+        },
+        {
+          "rank": 2,
+          "stage": "lightRangeAndWeight",
+          "ticks": 7721184,
+          "calls": 8797,
+          "nsPerSampledPath": 16676,
+          "sharePct": 22.05,
+          "nsPerCall": 878
+        },
+        {
+          "rank": 3,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 6383776,
+          "calls": 463,
+          "nsPerSampledPath": 13788,
+          "sharePct": 18.23,
+          "nsPerCall": 13788
+        },
+        {
+          "rank": 4,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 5844032,
+          "calls": 7605,
+          "nsPerSampledPath": 12622,
+          "sharePct": 16.69,
+          "nsPerCall": 768
+        },
+        {
+          "rank": 5,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 1333920,
+          "calls": 7871,
+          "nsPerSampledPath": 2881,
+          "sharePct": 3.81,
+          "nsPerCall": 169
+        },
+        {
+          "rank": 6,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1330080,
+          "calls": 8334,
+          "nsPerSampledPath": 2873,
+          "sharePct": 3.8,
+          "nsPerCall": 160
+        },
+        {
+          "rank": 7,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 793600,
+          "calls": 7605,
+          "nsPerSampledPath": 1714,
+          "sharePct": 2.27,
+          "nsPerCall": 104
+        },
+        {
+          "rank": 8,
+          "stage": "volumeCaustics",
+          "ticks": 693984,
+          "calls": 3704,
+          "nsPerSampledPath": 1499,
+          "sharePct": 1.98,
+          "nsPerCall": 187
+        },
+        {
+          "rank": 9,
+          "stage": "localPhaseAndContribution",
+          "ticks": 457376,
+          "calls": 3901,
+          "nsPerSampledPath": 988,
+          "sharePct": 1.31,
+          "nsPerCall": 117
+        },
+        {
+          "rank": 10,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 373024,
+          "calls": 3704,
+          "nsPerSampledPath": 806,
+          "sharePct": 1.07,
+          "nsPerCall": 101
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 344896,
+          "calls": 3704,
+          "nsPerSampledPath": 745,
+          "sharePct": 0.99,
+          "nsPerCall": 93
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 252096,
+          "calls": 3704,
+          "nsPerSampledPath": 544,
+          "sharePct": 0.72,
+          "nsPerCall": 68
+        },
+        {
+          "rank": 13,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 14,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 75618
+    },
+    {
+      "frames": 120,
+      "sampledPaths": 477,
+      "recordedPaths": 473,
+      "missingSamples": 4,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 9458752,
+          "calls": 26488,
+          "nsPerSampledPath": 19997,
+          "sharePct": 27.09,
+          "nsPerCall": 357
+        },
+        {
+          "rank": 2,
+          "stage": "lightRangeAndWeight",
+          "ticks": 7699296,
+          "calls": 8987,
+          "nsPerSampledPath": 16278,
+          "sharePct": 22.05,
+          "nsPerCall": 857
+        },
+        {
+          "rank": 3,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 6374016,
+          "calls": 473,
+          "nsPerSampledPath": 13476,
+          "sharePct": 18.26,
+          "nsPerCall": 13476
+        },
+        {
+          "rank": 4,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 5793472,
+          "calls": 7740,
+          "nsPerSampledPath": 12248,
+          "sharePct": 16.59,
+          "nsPerCall": 749
+        },
+        {
+          "rank": 5,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 1355360,
+          "calls": 8041,
+          "nsPerSampledPath": 2865,
+          "sharePct": 3.88,
+          "nsPerCall": 169
+        },
+        {
+          "rank": 6,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1330816,
+          "calls": 8514,
+          "nsPerSampledPath": 2814,
+          "sharePct": 3.81,
+          "nsPerCall": 156
+        },
+        {
+          "rank": 7,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 790176,
+          "calls": 7740,
+          "nsPerSampledPath": 1671,
+          "sharePct": 2.26,
+          "nsPerCall": 102
+        },
+        {
+          "rank": 8,
+          "stage": "volumeCaustics",
+          "ticks": 679488,
+          "calls": 3784,
+          "nsPerSampledPath": 1437,
+          "sharePct": 1.95,
+          "nsPerCall": 180
+        },
+        {
+          "rank": 9,
+          "stage": "localPhaseAndContribution",
+          "ticks": 458336,
+          "calls": 3956,
+          "nsPerSampledPath": 969,
+          "sharePct": 1.31,
+          "nsPerCall": 116
+        },
+        {
+          "rank": 10,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 374208,
+          "calls": 3784,
+          "nsPerSampledPath": 791,
+          "sharePct": 1.07,
+          "nsPerCall": 99
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 345792,
+          "calls": 3784,
+          "nsPerSampledPath": 731,
+          "sharePct": 0.99,
+          "nsPerCall": 91
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 255168,
+          "calls": 3784,
+          "nsPerSampledPath": 539,
+          "sharePct": 0.73,
+          "nsPerCall": 67
+        },
+        {
+          "rank": 13,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 14,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 73816
+    }
+  ],
+  "inlineQueryAuditRounds": [
+    {
+      "frames": 120,
+      "sampledPaths": 477,
+      "recordedPaths": 473,
+      "missingSamples": 4,
+      "shadowParityQueries": 7738,
+      "shadowParityMismatches": 0,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 15109216,
+          "calls": 26488,
+          "nsPerSampledPath": 31943,
+          "sharePct": 32.02,
+          "nsPerCall": 570
+        },
+        {
+          "rank": 2,
+          "stage": "lightRangeAndWeight",
+          "ticks": 9944640,
+          "calls": 8987,
+          "nsPerSampledPath": 21025,
+          "sharePct": 21.08,
+          "nsPerCall": 1107
+        },
+        {
+          "rank": 3,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 6872640,
+          "calls": 473,
+          "nsPerSampledPath": 14530,
+          "sharePct": 14.57,
+          "nsPerCall": 14530
+        },
+        {
+          "rank": 4,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 6705504,
+          "calls": 7738,
+          "nsPerSampledPath": 14177,
+          "sharePct": 14.21,
+          "nsPerCall": 867
+        },
+        {
+          "rank": 5,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 2948256,
+          "calls": 8041,
+          "nsPerSampledPath": 6233,
+          "sharePct": 6.25,
+          "nsPerCall": 367
+        },
+        {
+          "rank": 6,
+          "stage": "volumeCaustics",
+          "ticks": 2098176,
+          "calls": 3784,
+          "nsPerSampledPath": 4436,
+          "sharePct": 4.45,
+          "nsPerCall": 554
+        },
+        {
+          "rank": 7,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1296544,
+          "calls": 8514,
+          "nsPerSampledPath": 2741,
+          "sharePct": 2.75,
+          "nsPerCall": 152
+        },
+        {
+          "rank": 8,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 852832,
+          "calls": 7738,
+          "nsPerSampledPath": 1803,
+          "sharePct": 1.81,
+          "nsPerCall": 110
+        },
+        {
+          "rank": 9,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 497536,
+          "calls": 3784,
+          "nsPerSampledPath": 1052,
+          "sharePct": 1.05,
+          "nsPerCall": 131
+        },
+        {
+          "rank": 10,
+          "stage": "localPhaseAndContribution",
+          "ticks": 453184,
+          "calls": 3954,
+          "nsPerSampledPath": 958,
+          "sharePct": 0.96,
+          "nsPerCall": 115
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 252928,
+          "calls": 3784,
+          "nsPerSampledPath": 535,
+          "sharePct": 0.54,
+          "nsPerCall": 67
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 154464,
+          "calls": 3784,
+          "nsPerSampledPath": 327,
+          "sharePct": 0.33,
+          "nsPerCall": 41
+        },
+        {
+          "rank": 13,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 14,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 99759
+    },
+    {
+      "frames": 120,
+      "sampledPaths": 472,
+      "recordedPaths": 463,
+      "missingSamples": 9,
+      "shadowParityQueries": 7605,
+      "shadowParityMismatches": 0,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 14076192,
+          "calls": 25928,
+          "nsPerSampledPath": 30402,
+          "sharePct": 32.34,
+          "nsPerCall": 543
+        },
+        {
+          "rank": 2,
+          "stage": "lightRangeAndWeight",
+          "ticks": 9209248,
+          "calls": 8797,
+          "nsPerSampledPath": 19890,
+          "sharePct": 21.16,
+          "nsPerCall": 1047
+        },
+        {
+          "rank": 3,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 6250848,
+          "calls": 7605,
+          "nsPerSampledPath": 13501,
+          "sharePct": 14.36,
+          "nsPerCall": 822
+        },
+        {
+          "rank": 4,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 6076640,
+          "calls": 463,
+          "nsPerSampledPath": 13124,
+          "sharePct": 13.96,
+          "nsPerCall": 13124
+        },
+        {
+          "rank": 5,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 2742208,
+          "calls": 7871,
+          "nsPerSampledPath": 5923,
+          "sharePct": 6.3,
+          "nsPerCall": 348
+        },
+        {
+          "rank": 6,
+          "stage": "volumeCaustics",
+          "ticks": 1961728,
+          "calls": 3704,
+          "nsPerSampledPath": 4237,
+          "sharePct": 4.51,
+          "nsPerCall": 530
+        },
+        {
+          "rank": 7,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1167648,
+          "calls": 8334,
+          "nsPerSampledPath": 2522,
+          "sharePct": 2.68,
+          "nsPerCall": 140
+        },
+        {
+          "rank": 8,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 787680,
+          "calls": 7605,
+          "nsPerSampledPath": 1701,
+          "sharePct": 1.81,
+          "nsPerCall": 104
+        },
+        {
+          "rank": 9,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 471104,
+          "calls": 3704,
+          "nsPerSampledPath": 1018,
+          "sharePct": 1.08,
+          "nsPerCall": 127
+        },
+        {
+          "rank": 10,
+          "stage": "localPhaseAndContribution",
+          "ticks": 417312,
+          "calls": 3901,
+          "nsPerSampledPath": 901,
+          "sharePct": 0.96,
+          "nsPerCall": 107
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 226432,
+          "calls": 3704,
+          "nsPerSampledPath": 489,
+          "sharePct": 0.52,
+          "nsPerCall": 61
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 140160,
+          "calls": 3704,
+          "nsPerSampledPath": 303,
+          "sharePct": 0.32,
+          "nsPerCall": 38
+        },
+        {
+          "rank": 13,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 14,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 94011
+    },
+    {
+      "frames": 120,
+      "sampledPaths": 477,
+      "recordedPaths": 473,
+      "missingSamples": 4,
+      "shadowParityQueries": 7740,
+      "shadowParityMismatches": 0,
+      "clockUnit": "nanoseconds",
+      "stages": [
+        {
+          "rank": 1,
+          "stage": "localLightGeometryAndAttenuation",
+          "ticks": 14571552,
+          "calls": 26488,
+          "nsPerSampledPath": 30807,
+          "sharePct": 32.28,
+          "nsPerCall": 550
+        },
+        {
+          "rank": 2,
+          "stage": "lightRangeAndWeight",
+          "ticks": 9563328,
+          "calls": 8987,
+          "nsPerSampledPath": 20218,
+          "sharePct": 21.19,
+          "nsPerCall": 1064
+        },
+        {
+          "rank": 3,
+          "stage": "opaqueShadowQueryResidual",
+          "ticks": 6447712,
+          "calls": 7740,
+          "nsPerSampledPath": 13632,
+          "sharePct": 14.28,
+          "nsPerCall": 833
+        },
+        {
+          "rank": 4,
+          "stage": "primaryRayAndHitOrCacheLoad",
+          "ticks": 6383616,
+          "calls": 473,
+          "nsPerSampledPath": 13496,
+          "sharePct": 14.14,
+          "nsPerCall": 13496
+        },
+        {
+          "rank": 5,
+          "stage": "segmentSamplingAndPosition",
+          "ticks": 2823488,
+          "calls": 8041,
+          "nsPerSampledPath": 5969,
+          "sharePct": 6.25,
+          "nsPerCall": 351
+        },
+        {
+          "rank": 6,
+          "stage": "volumeCaustics",
+          "ticks": 2023776,
+          "calls": 3784,
+          "nsPerSampledPath": 4279,
+          "sharePct": 4.48,
+          "nsPerCall": 535
+        },
+        {
+          "rank": 7,
+          "stage": "candidateReservoirUpdate",
+          "ticks": 1210208,
+          "calls": 8514,
+          "nsPerSampledPath": 2559,
+          "sharePct": 2.68,
+          "nsPerCall": 142
+        },
+        {
+          "rank": 8,
+          "stage": "mediumBeerAttenuation",
+          "ticks": 818464,
+          "calls": 7740,
+          "nsPerSampledPath": 1730,
+          "sharePct": 1.81,
+          "nsPerCall": 106
+        },
+        {
+          "rank": 9,
+          "stage": "sunPhaseEvaluation",
+          "ticks": 486720,
+          "calls": 3784,
+          "nsPerSampledPath": 1029,
+          "sharePct": 1.08,
+          "nsPerCall": 129
+        },
+        {
+          "rank": 10,
+          "stage": "localPhaseAndContribution",
+          "ticks": 430912,
+          "calls": 3956,
+          "nsPerSampledPath": 911,
+          "sharePct": 0.95,
+          "nsPerCall": 109
+        },
+        {
+          "rank": 11,
+          "stage": "sourcePacketWrite",
+          "ticks": 235712,
+          "calls": 3784,
+          "nsPerSampledPath": 498,
+          "sharePct": 0.52,
+          "nsPerCall": 62
+        },
+        {
+          "rank": 12,
+          "stage": "sourcePacketAddress",
+          "ticks": 145504,
+          "calls": 3784,
+          "nsPerSampledPath": 308,
+          "sharePct": 0.32,
+          "nsPerCall": 38
+        },
+        {
+          "rank": 13,
+          "stage": "transmissionShadowFallback",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 14,
+          "stage": "opaqueShadowAnyHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        },
+        {
+          "rank": 15,
+          "stage": "opaqueShadowClosestHit",
+          "ticks": 0,
+          "calls": 0,
+          "nsPerSampledPath": 0,
+          "sharePct": 0.0,
+          "nsPerCall": 0
+        }
+      ],
+      "sumNsPerRecordedPath": 95436
+    }
+  ],
+  "imageComparison": {
+    "rgbChannels": 345600,
+    "changedChannels": 23,
+    "maxHalfFloatUlps": 1,
+    "referenceBytesPerFrame": 115200
+  },
+  "instrumentationOff": {
+    "control": {
+      "frames": 360,
+      "wallMs": 13480.379500000001,
+      "completedFps": 26.705479619472136,
+      "msPerFrame": 37.44549861111111,
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "120",
+          "wallMs": "4634.188900",
+          "completedFps": "25.894499",
+          "submitCpuMs": "4561.323200",
+          "requestBuildCpuMs": "5.547400",
+          "pollCpuMs": "3.714400",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "1.240418000",
+          "gpuFrameLowerMs": "1.240417258",
+          "gpuFrameUpperMs": "1.240419742",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        },
+        {
+          "round": "2",
+          "frames": "120",
+          "wallMs": "4431.397700",
+          "completedFps": "27.079492",
+          "submitCpuMs": "4360.404400",
+          "requestBuildCpuMs": "5.402500",
+          "pollCpuMs": "3.480600",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "1.155602500",
+          "gpuFrameLowerMs": "1.155600758",
+          "gpuFrameUpperMs": "1.155605242",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        },
+        {
+          "round": "3",
+          "frames": "120",
+          "wallMs": "4414.792900",
+          "completedFps": "27.181343",
+          "submitCpuMs": "4342.035100",
+          "requestBuildCpuMs": "4.035900",
+          "pollCpuMs": "3.979400",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "1.109970750",
+          "gpuFrameLowerMs": "1.109968008",
+          "gpuFrameUpperMs": "1.109974492",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        }
+      ]
+    },
+    "query-candidate": {
+      "frames": 360,
+      "wallMs": 11399.4774,
+      "completedFps": 31.580395080216572,
+      "msPerFrame": 31.665215,
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "120",
+          "wallMs": "3949.351100",
+          "completedFps": "30.384738",
+          "submitCpuMs": "3367.838800",
+          "requestBuildCpuMs": "10.513600",
+          "pollCpuMs": "6.405000",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "1.120672000",
+          "gpuFrameLowerMs": "1.120671258",
+          "gpuFrameUpperMs": "1.120673742",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        },
+        {
+          "round": "2",
+          "frames": "120",
+          "wallMs": "3709.740500",
+          "completedFps": "32.347276",
+          "submitCpuMs": "3133.512800",
+          "requestBuildCpuMs": "9.834700",
+          "pollCpuMs": "6.278000",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "0.969048250",
+          "gpuFrameLowerMs": "0.969046508",
+          "gpuFrameUpperMs": "0.969050992",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        },
+        {
+          "round": "3",
+          "frames": "120",
+          "wallMs": "3740.385800",
+          "completedFps": "32.082252",
+          "submitCpuMs": "3257.190200",
+          "requestBuildCpuMs": "7.045200",
+          "pollCpuMs": "6.388000",
+          "deferrals": "58",
+          "gpuFrameMeanMs": "0.980827750",
+          "gpuFrameLowerMs": "0.980825008",
+          "gpuFrameUpperMs": "0.980831492",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        }
+      ]
+    }
+  },
+  "inlineQueryDecision": "retain after production checks; hot shadow query reduced 78.9%, 23083 comparison queries matched, 23/345600 RGB channels differ by at most one half-float ULP, 18.3% native completion throughput gain in concurrent GPU workload"
+}

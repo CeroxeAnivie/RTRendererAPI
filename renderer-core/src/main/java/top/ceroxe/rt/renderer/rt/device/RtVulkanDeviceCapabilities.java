@@ -143,6 +143,14 @@ final class RtVulkanDeviceCapabilities {
         );
     }
 
+    static boolean rayQuerySupported(MemoryStack stack,VkPhysicalDevice device,Set<String> extensions) {
+        if(!extensions.contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME))return false;
+        var query=VkPhysicalDeviceRayQueryFeaturesKHR.calloc(stack).sType$Default();
+        VK11.vkGetPhysicalDeviceFeatures2(device,VkPhysicalDeviceFeatures2.calloc(stack)
+                .sType$Default().pNext(query.address()));
+        return query.rayQuery();
+    }
+
     static boolean timelineSemaphoreSupported(
             MemoryStack stack,
             VkPhysicalDevice device,

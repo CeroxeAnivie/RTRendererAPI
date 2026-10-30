@@ -131,7 +131,10 @@ final class RtShaderModuleCompiler {
     static byte[] compileCameraScatteringDiagnostic(String path,int kind,boolean hdr,boolean ser) {
         String source=readExpandedUtf8Resource(path);
         int end=source.indexOf('\n');
-        source=source.substring(0,end+1)+"#define RTRENDERER_CAMERA_SCATTERING_PROFILE 1\n"+source.substring(end+1);
+        source=source.substring(0,end+1)+"#define RTRENDERER_CAMERA_SCATTERING_PROFILE 1\n"
+                +(kind==Shaderc.shaderc_raygen_shader&&path.endsWith("gpuscene_native_scattering_query.rgen")
+                    &&Boolean.getBoolean("top.ceroxe.rt.medium.scatteringQueryAudit")
+                    ?"#define RTRENDERER_SCATTERING_QUERY_AUDIT 1\n":"")+source.substring(end+1);
         return compileSource(source,path,kind,false,hdr,ser,RtEdgeSink.NOOP);
     }
 

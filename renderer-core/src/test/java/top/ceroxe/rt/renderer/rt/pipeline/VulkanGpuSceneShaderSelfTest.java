@@ -38,6 +38,7 @@ public final class VulkanGpuSceneShaderSelfTest {
       stages.put("gpuscene_primary_trace.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_native_medium_trace.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_native_scattering_lights.rgen", Shaderc.shaderc_raygen_shader);
+      stages.put("gpuscene_native_scattering_query.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_native_multiple_scattering.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_native_density_scattering_lights.rgen", Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene_native_optical_trace.rgen", Shaderc.shaderc_raygen_shader);
@@ -210,16 +211,16 @@ public final class VulkanGpuSceneShaderSelfTest {
                       && visibilityAny.contains("ignoreIntersectionEXT"),
               "opaque probes must stop on opaque blockers while continuing through transparent and masked hits");
       String scatteringRuntime = readRaw(ROOT + "gpuscene_native_scattering_common.glsl");
-      String scatteringRaygen = readRaw(ROOT + "gpuscene_native_scattering_lights.rgen");
+      String scatteringRaygen = readRaw(ROOT + "gpuscene_native_scattering_lights_impl.glsl");
       require(runtime.contains("gsShadowVisibilityDetailed(")
                       && scatteringRuntime.contains("gsScatteringProfileRecord(profileActive,record,12u,fallbackTicks)")
                       && scatteringRuntime.contains("gsScatteringProfileRecord(profileActive,record,13u,anyHitTicks,uint64_t(anyHitCalls))")
                       && scatteringRuntime.contains("gsScatteringProfileRecord(profileActive,record,14u,closestHitTicks,uint64_t(closestHitCalls))")
-                      && scatteringRaygen.contains("GS_CAMERA_SCATTERING_STAGE_COUNT 15u")
+                      && scatteringRaygen.contains("GS_CAMERA_SCATTERING_STAGE_COUNT 16u")
                       && visibilityAny.contains("gsVisibilityRecordAnyHit")
                       && visibilityAny.contains("clockRealtimeEXT")
                       && readRaw(ROOT + "gpuscene.rchit").contains("profileShadow")
-                      && top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_STAGES == 15,
+                      && top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_STAGES == 16,
               "camera-scattering diagnostics must separate traversal, hit shaders, and transmission fallback");
       require(read(ROOT + "gpuscene_lighting.glsl")
                       .contains("inner == outer ? step(outer, cone) : smoothstep(outer, inner, cone)"),

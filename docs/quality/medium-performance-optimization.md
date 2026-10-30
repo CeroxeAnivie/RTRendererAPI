@@ -50,6 +50,8 @@
 5. 更新延迟排名和架构说明。显著收益应对应最大热点下降；如果总帧时间没按预期变化，检查重叠、资源竞争和新的关键路径再继续。
 6. 每个闭环保留可复现命令、原始输出和结论；已验证的改动按当前仓库发布/分支流程及时推送 GitHub，不把未完成验收的候选当作优化成果。
 
+每次优化成功，立即给出前后对照表：原热点延迟、占比和排名、互斥阶段求和、关闭诊断后的原生完成吞吐/帧时、正确性结果、测前 GPU 占用和提交状态。收益用明确的百分比表示，并给出最新延迟排序；不能只口头说“有明显提升”。
+
 发现根因、重大进展或实测显著变化，立即报告。每次 GPU 测量开始前记录 GPU 0 占用；超过 5% 时绝对延迟/FPS 只作参考，继续按相对排名定位和优化，不因用户其他 GPU 任务干扰而停工。当前约 7% 的诊断扰动不再阻塞热点优化，最终性能验收必须关闭诊断。
 
 **严禁只看代码不改代码。** 源码阅读只能用来确定下一项可验证动作；每轮分析都必须落到新增/调整测量、正确性检查或一个有证据的代码改动，并在同一轮拿到结果。若当前缺少关键数据，先补齐最小且低扰动的观测并运行它，不得以继续阅读、口头推测或整理计划代替推进；只有外部条件确实阻断时才说明阻断点。
@@ -108,6 +110,31 @@
 
 已核对 NVIDIA `nvpro-samples/vk_raytracing_tutorial_KHR`，commit `7c7e1b379132e67f82628f909278e3bc592ac1fe`，Apache-2.0：[`ray_tracing__simple/shaders/raytrace.rchit`](https://github.com/nvpro-samples/vk_raytracing_tutorial_KHR/blob/7c7e1b379132e67f82628f909278e3bc592ac1fe/ray_tracing__simple/shaders/raytrace.rchit) 与同目录 `raytraceShadow.rmiss`。其阴影查询预设遮挡，miss 解除遮挡，使用 `TerminateOnFirstHit | Opaque | SkipClosestHitShader`，不运行命中着色。本项目的候选将复用现有轻量 visibility payload/miss；必须额外证明实际引用的持久和帧局部实例都完全不透明、双面、投影阴影且没有介质边界。原有材质不透明标志不足以作此证明，通用路径仍保留 any-hit 和透射语义。当前只是待验证候选，不能据此声称已有收益。
 
+该 trace-flags 候选已完成闭环并撤回：8 帧 160×90 原始 RGBA16F 逐字节一致，Vulkan 验证 0 警告/0 错误，但三轮阴影残差/其余阶段延迟比从 0.6395–0.6528 上升为 0.7147–0.7844；关闭诊断也没有稳定吞吐收益。不能因为成熟示例使用该模式，就假定迁入本项目一定更快。
+
+以下为该轮对照组的完整互斥叶子排名；90 帧预热，3×120 帧，单位 μs/实际抽样路径。测前 GPU 占用为 38%，因此只按相对排名使用。原始三轮 JSON 和已撤回候选见 [scattering-shadow-traversal-20261030.json](data/scattering-shadow-traversal-20261030.json)。
+
+| 排名 | 阶段 | 三轮平均 μs/路径 | 占比 |
+| ---: | --- | ---: | ---: |
+| 1 | 不透明阴影射线遍历与调度残差 | 60.667 | 39.28% |
+| 2 | 局部灯几何与衰减 | 25.989 | 16.83% |
+| 3 | 灯光范围与权重 | 20.610 | 13.34% |
+| 4 | 主射线与命中/缓存读取 | 18.591 | 12.04% |
+| 5 | Beer 介质衰减 | 13.072 | 8.46% |
+| 6 | 散射区间采样与位置 | 6.172 | 4.00% |
+| 7 | 候选蓄水池更新 | 3.031 | 1.96% |
+| 8 | 体积焦散检查 | 2.500 | 1.62% |
+| 9 | 太阳相函数 | 1.258 | 0.81% |
+| 10 | 局部灯相函数与贡献 | 1.161 | 0.75% |
+| 11 | 源包写回 | 0.780 | 0.50% |
+| 12 | 输出地址计算 | 0.604 | 0.39% |
+| 13 | closest-hit 着色 | 0.019 | 0.01% |
+| 14 | 透射阴影回退 | 0 | 0% |
+| 15 | any-hit 着色 | 0 | 0% |
+| | **互斥阶段延迟合计** | **154.452** | **100%** |
+
+下一候选对照同一 NVIDIA commit 的 [`ray_tracing_rayquery/shaders/frag_shader.frag`](https://github.com/nvpro-samples/vk_raytracing_tutorial_KHR/blob/7c7e1b379132e67f82628f909278e3bc592ac1fe/ray_tracing_rayquery/shaders/frag_shader.frag)：`rayQueryInitializeEXT` → `rayQueryProceedEXT` → 检查 committed intersection，在当前 shader 内完成阴影遍历，省去 payload 和 hit/miss dispatch。仍须严格证明可以跳过 any-hit；先实验验证，再决定是否作为可选硬件能力整合。
+
 复现命令：
 
 ```powershell
@@ -115,3 +142,37 @@
 .\gradlew.bat :demos:hex-ball:mediumGalleryPerformanceBenchmark --offline --no-daemon --max-workers=1 --console=plain "-Dorg.gradle.jvmargs=-Xmx512m --enable-native-access=ALL-UNNAMED -Dfile.encoding=UTF-8 -Duser.country=CN -Duser.language=zh -XX:-UseJVMCICompiler" "-PgalleryPerformanceArgs=--warmup=90 --frames=120 --rounds=3 --profile=true"
 .\gradlew.bat :demos:hex-ball:mediumGalleryPerformanceBenchmark --offline --no-daemon --max-workers=1 --console=plain "-Dorg.gradle.jvmargs=-Xmx512m --enable-native-access=ALL-UNNAMED -Dfile.encoding=UTF-8 -Duser.country=CN -Duser.language=zh -XX:-UseJVMCICompiler" "-PgalleryPerformanceArgs=--warmup=90 --frames=120 --rounds=3 --profile=false --shaderProfile=true"
 ```
+
+### 阴影 inline ray query 已验证保留
+
+同一 NVIDIA commit 的 ray query 遍历逻辑已经适配本项目。仅在所有可见持久/帧局部实例都满足完全不透明、双面、投影阴影且没有介质边界时启用；不满足证明或设备不支持 `VK_KHR_ray_query` 时保留通用路径。生产与诊断共用同一实现，预编译资源包含 query 变体，诊断默认关闭。
+
+GPU 空闲后重新测试，两个制品测前 GPU 0 占用均为 0%，每组 90 帧预热、3×120 个完成帧：
+
+| 关闭诊断后的整帧指标 | traceRay 对照 | inline query | 变化 |
+| --- | ---: | ---: | ---: |
+| 完成吞吐 FPS | 37.386 | 56.145 | +50.2% |
+| 完成帧墙钟 ms/帧 | 26.748 | 17.811 | −33.4% |
+
+正确性：三轮阴影查询 parity 共 23,083 次，0 mismatch；8×160×90 原始 HDR 对照的 345,600 个 RGB 通道中 23 个通道变化，最大 1 个 half-float ULP。正式路径 Vulkan validation 0 warning、0 error，生产散射 13 项独立 HDR 验收、shader 编译与 surface index 生命周期检查均通过。
+
+正式 query 三轮完整互斥子阶段表如下，单位 μs/实际抽样路径；这是 shader 采样延迟，不是可相加的整帧时间。阴影残差从第一降至第四，下一轮只修局部灯几何与衰减。旧 traceRay profile 有其他 GPU 任务竞争，其绝对值不用于当前硬件能力判断。
+
+| 排名 | 阶段 | 三轮均值 μs/路径 | 占比 |
+| ---: | --- | ---: | ---: |
+| 1 | 局部灯几何与衰减 | 20.267 | 27.21% |
+| 2 | 灯光范围与权重 | 16.664 | 22.38% |
+| 3 | 主射线与命中/缓存读取 | 13.432 | 18.04% |
+| 4 | 不透明阴影查询残差 | 12.631 | 16.96% |
+| 5 | 候选蓄水池更新 | 2.907 | 3.90% |
+| 6 | 散射区间采样与位置 | 2.661 | 3.57% |
+| 7 | Beer 介质衰减 | 1.739 | 2.33% |
+| 8 | 体积焦散检查 | 1.458 | 1.96% |
+| 9 | 局部灯相函数与贡献 | 0.993 | 1.33% |
+| 10 | 太阳相函数 | 0.798 | 1.07% |
+| 11 | 源包写回 | 0.614 | 0.82% |
+| 12 | 输出地址计算 | 0.313 | 0.42% |
+| 13–15 | 透射回退、any-hit、closest-hit | 0 | 0% |
+| | **互斥延迟求和** | **74.476** | **100%** |
+
+原始轮次、正确性结果和测前 GPU 状态记录在 [scattering-inline-query-20261030.json](data/scattering-inline-query-20261030.json)。

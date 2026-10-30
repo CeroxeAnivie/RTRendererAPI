@@ -196,6 +196,12 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                     featureRequiredExtensions,
                     featurePreferredExtensions
             );
+            if (Boolean.parseBoolean(System.getProperty("top.ceroxe.rt.medium.scatteringInlineQuery","true"))
+                    && RtVulkanDeviceCapabilities.rayQuerySupported(stack,physicalDevice.device(),physicalDevice.extensions())
+                    && !enabledExtensions.contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)) {
+                enabledExtensions = new ArrayList<>(enabledExtensions);
+                enabledExtensions.add(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME);
+            }
             if (top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS
                     ||top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS) {
                 if (!physicalDevice.extensions().contains("VK_KHR_shader_clock"))
@@ -419,6 +425,13 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         features.pNext(acceleration.address());
         acceleration.pNext(rayTracing.address());
         long featureChainTail = rayTracing.address();
+        if (enabledExtensions.contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)) {
+            var query=VkPhysicalDeviceRayQueryFeaturesKHR.calloc(stack).sType$Default();
+            VK11.vkGetPhysicalDeviceFeatures2(physicalDevice,VkPhysicalDeviceFeatures2.calloc(stack)
+                    .sType$Default().pNext(query.address()));
+            if(!query.rayQuery())throw new IllegalStateException("enabled VK_KHR_ray_query requires rayQuery");
+            appendFeatureChain(featureChainTail,query.address());featureChainTail=query.address();
+        }
         if (apiVersion >= VK12.VK_API_VERSION_1_2) {
             VkPhysicalDeviceVulkan12Features features12 = VkPhysicalDeviceVulkan12Features.calloc(stack)
                     .sType$Default()

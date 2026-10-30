@@ -87,8 +87,62 @@ public final class VulkanSurfaceSceneIndexSelfTest {
         cameraAbsorptionAdmission();
         pbrMediumAdmission();
         opticalOpaqueRayAdmission();
+        opaqueShadowRayAdmission();
         shaderDataAdmissionClassification();
         System.out.println("VulkanSurfaceSceneIndexSelfTest passed");
+    }
+
+    private static void opaqueShadowRayAdmission() {
+        var residency = new VulkanSceneResidency();
+        var index = new VulkanSurfaceSceneIndex();
+        var empty = FramePrimitiveBatch.empty();
+        var material = MaterialAsset.builder(81).doubleSided(true).build();
+        var mesh = MeshAsset.triangles(81, new float[]{0,0,0,1,0,0,0,1,0}, new int[]{0,1,2}, 81);
+        var instance = SceneInstance.builder(81,81).build();
+        var batch = FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(81).build()).build();
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(material).upsert(mesh).upsert(instance).build());
+        require(index.opaqueShadowRayOnly(empty) && index.opaqueShadowRayOnly(batch), "opaque shadow blockers admitted");
+        for (var excluded : new MaterialAsset[]{
+                material.toBuilder().doubleSided(false).build(),
+                material.toBuilder().blendMode(MaterialAsset.BlendMode.TRANSLUCENT).transmission(.5f).build(),
+                material.toBuilder().baseColorRgba8(0x80ffffff).build(),
+                material.toBuilder().blendMode(MaterialAsset.BlendMode.MASKED).alphaCutoff(1).build(),
+                material.toBuilder().surfaceOverlay(SurfaceOverlayState.depthEqual(.001f)).build(),
+                material.toBuilder().shadingModel(MaterialAsset.ShadingModel.LIGHTMAP_MODULATED).build()}) {
+            apply(residency,index,SceneTransaction.builder(++revision).upsert(excluded).build());
+            require(!index.opaqueShadowRayOnly(empty) && !index.opaqueShadowRayOnly(batch),
+                    "material update must invalidate persistent and cached frame-local shadow proof");
+        }
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(material).upsert(instance.toBuilder().castsShadow(false).build()).build());
+        require(!index.opaqueShadowRayOnly(batch), "non-casting persistent instance retains any-hit");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(instance).build());
+        require(!index.opaqueShadowRayOnly(FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(81).castsShadow(false).build()).build()),
+                "non-casting frame-local instance retains any-hit");
+        var volumeMesh = MediumTransportSelfTest.cube(82,81,1);
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(volumeMesh)
+                .upsert(SceneInstance.builder(82,82).mediumBoundary(MediumBoundary.volume(Medium.vacuum())).build()).build());
+        require(!index.opaqueShadowRayOnly(empty), "volume-only boundaries cannot become opaque shadow blockers");
+        apply(residency,index,SceneTransaction.builder(++revision).removeInstance(82).build());
+        for(var boundary : new MediumBoundary[]{MediumBoundary.volume(Medium.vacuum()), MediumBoundary.surface(Medium.vacuum())})
+            require(!index.opaqueShadowRayOnly(FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(82).mediumBoundary(boundary).build()).build()),
+                    "frame-local boundaries retain visibility semantics");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(material.toBuilder().baseColorTextureId(81).build())
+                .upsert(TextureAsset.color(81,1,1,new byte[]{-1,-1,-1,-1})).build());
+        require(index.opaqueShadowRayOnly(batch), "opaque texture admitted");
+        byte[] mip = new byte[20]; java.util.Arrays.fill(mip,(byte)255); mip[19]=100;
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(TextureAsset.colorMipChain(81,2,2,2,mip)).build());
+        require(!index.opaqueShadowRayOnly(batch), "fractional alpha in any mip invalidates shadow proof");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(material).upsert(mesh.toBuilder()
+                .vertexColorsRgba8(new int[]{-1,0x80ffffff,-1}).build()).build());
+        require(!index.opaqueShadowRayOnly(batch), "vertex alpha invalidates shadow proof");
+        apply(residency,index,SceneTransaction.builder(++revision).upsert(mesh).upsert(instance.toBuilder().surfaceVisibility(.5f).build()).build());
+        require(!index.opaqueShadowRayOnly(empty), "fractional persistent visibility rejects fast query");
+        apply(residency,index,SceneTransaction.builder(++revision).removeInstance(81).build());
+        require(index.opaqueShadowRayOnly(batch), "retiring rejected instance restores independent frame-local proof");
+        require(!index.opaqueShadowRayOnly(FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(81).surfaceVisibility(.5f).build()).build()),
+                "fractional frame-local visibility rejects fast query");
+        apply(residency,index,SceneTransaction.builder(++revision).resetScene().build());
+        require(index.opaqueShadowRayOnly(empty) && !index.opaqueShadowRayOnly(batch), "reset clears counts and stale mesh proofs");
     }
 
     private static void shaderDataAdmissionClassification() {

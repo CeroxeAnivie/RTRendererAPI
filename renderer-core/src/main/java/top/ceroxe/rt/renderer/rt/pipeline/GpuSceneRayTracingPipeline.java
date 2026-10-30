@@ -182,11 +182,14 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             boolean opticalDiagnostic=program==Program.NATIVE_OPTICAL_TRACE&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS;
             boolean scatteringDiagnostic=program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC
                     &&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS;
-            byte[] raygenCode = scatteringDiagnostic?RtShaderModuleCompiler.compileCameraScatteringDiagnostic(SHADER_ROOT+program.source,
+            boolean inlineScatteringQuery=checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
+                    &&(program==Program.NATIVE_SCATTERING_LIGHTS||program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC);
+            String raygenSource=inlineScatteringQuery?"gpuscene_native_scattering_query.rgen":program.source;
+            byte[] raygenCode = scatteringDiagnostic?RtShaderModuleCompiler.compileCameraScatteringDiagnostic(SHADER_ROOT+raygenSource,
                     Shaderc.shaderc_raygen_shader,linearHdrOutput,shaderExecutionReorderingEnabled):opticalDiagnostic
                     ?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+program.source,Shaderc.shaderc_raygen_shader,
                             linearHdrOutput,shaderExecutionReorderingEnabled,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode(
-                    program.source, Shaderc.shaderc_raygen_shader,
+                    raygenSource, Shaderc.shaderc_raygen_shader,
                     linearHdrOutput, shaderExecutionReorderingEnabled, sceneShaders
             );
             byte[] missCode = opticalDiagnostic?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+"gpuscene.rmiss",Shaderc.shaderc_miss_shader,false,false,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode("gpuscene.rmiss", Shaderc.shaderc_miss_shader, false, false, sceneShaders);

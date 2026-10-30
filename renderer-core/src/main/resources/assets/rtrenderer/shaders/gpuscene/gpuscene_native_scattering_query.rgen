@@ -1,0 +1,3 @@
+#version 460
+#define RTRENDERER_SCATTERING_RAY_QUERY 1
+#include "gpuscene_native_scattering_lights_impl.glsl"

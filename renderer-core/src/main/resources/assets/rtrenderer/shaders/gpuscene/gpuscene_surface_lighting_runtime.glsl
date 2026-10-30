@@ -6,6 +6,9 @@ layout(location=1) rayPayloadEXT GsVisibilityPayload visibility;
 #endif
 
 struct GsShadowVisibility { vec3 approximate; vec3 diffuse; };
+#ifdef RTRENDERER_SCATTERING_QUERY_AUDIT
+void gsScatteringQueryAudit(bool matches);
+#endif
 GsShadowVisibility gsShadowVisibilityDetailed(vec3 origin,vec3 normal,vec3 direction,float maximumDistance,
         bool surfaceReceiver,bool profileAnyHit,out uint64_t probeTicks,out uint64_t fallbackTicks,
         out uint64_t anyHitTicks,out uint anyHitCalls,out uint64_t closestHitTicks,
@@ -25,6 +28,30 @@ GsShadowVisibility gsShadowVisibilityDetailed(vec3 origin,vec3 normal,vec3 direc
     vec3 value=payload.state.x==0u?vec3(1.0):vec3(0.0);
     return GsShadowVisibility(value,value);
 #else
+#ifdef RTRENDERER_SCATTERING_RAY_QUERY
+    if((gsFrame.words[GPU_SCENE_FRAME_FEATURE_FLAGS_WORD]&GPU_SCENE_FEATURE_FLAG_OPAQUE_SHADOW_RAY)!=0u) {
+        // NVIDIA ray-query shadow pattern: traverse here without payload or hit/miss shader dispatch.
+        float epsilon=gsRayEpsilon(origin);
+        rayQueryEXT query;
+        rayQueryInitializeEXT(query,sceneTlas,gl_RayFlagsOpaqueEXT|gl_RayFlagsTerminateOnFirstHitEXT,
+            255,origin+normal*epsilon,epsilon,direction,maximumDistance);
+        while(rayQueryProceedEXT(query)) {}
+        vec3 value=rayQueryGetIntersectionTypeEXT(query,true)==gl_RayQueryCommittedIntersectionNoneEXT
+            ?vec3(1.0):vec3(0.0);
+#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
+        probeTicks=clockRealtimeEXT()-probeStarted;
+#endif
+#ifdef RTRENDERER_SCATTERING_QUERY_AUDIT
+        if(profileAnyHit) {
+            payload.state=uvec4(0u,GS_PAYLOAD_SHADOW_QUERY,0u,0u);
+            traceRayEXT(sceneTlas,gl_RayFlagsTerminateOnFirstHitEXT,255,0,0,0,
+                origin+normal*epsilon,epsilon,direction,maximumDistance,0);
+            gsScatteringQueryAudit((payload.state.x==0u)==(value.x>0.0));
+        }
+#endif
+        return GsShadowVisibility(value,value);
+    }
+#endif
     if((gsFrame.words[GPU_SCENE_FRAME_FEATURE_FLAGS_WORD]&GPU_SCENE_FEATURE_FLAG_OPAQUE_VISIBILITY)!=0u) {
         payload.state=uvec4(0u,GS_PAYLOAD_SHADOW_QUERY,profileAnyHit?1u:0u,0u);
         traceRayEXT(sceneTlas,gl_RayFlagsTerminateOnFirstHitEXT,255,0,0,0,
@@ -53,7 +80,6 @@ GsShadowVisibility gsShadowVisibilityDetailed(vec3 origin,vec3 normal,vec3 direc
         | (uint64_t(floatBitsToUint(visibility.normalDistance.y))<<32u);
     anyHitCalls=visibility.boundary.z;
     probeTicks=clockRealtimeEXT()-probeStarted;
-    probeTicks=probeTicks>anyHitTicks?probeTicks-anyHitTicks:0ul;
 #endif
     if(visibility.tintOpacity.x<=0.0)
         return GsShadowVisibility(vec3(0.0),vec3(0.0));

@@ -12,7 +12,7 @@ public final class OpticalDetailedProfile {
     public static final boolean SHADERS=ENABLED&&Boolean.getBoolean("top.ceroxe.rt.medium.opticalShaderProfile");
     public static final boolean CAMERA_SCATTERING_SHADERS=Boolean.getBoolean("top.ceroxe.rt.medium.cameraScatteringShaderProfile");
     public static final int GROUP=Integer.getInteger("top.ceroxe.rt.medium.opticalShaderProfileGroup",0);
-    public static final int STAGES=176,STRIDE=8192,CAMERA_SCATTERING_STAGES=15,CAMERA_SCATTERING_STRIDE=65536;
+    public static final int STAGES=176,STRIDE=8192,CAMERA_SCATTERING_STAGES=16,CAMERA_SCATTERING_STRIDE=65536;
     private static final String[] CAMERA_SCATTERING_STAGE_NAMES={"primaryRayAndHitOrCacheLoad","lightRangeAndWeight",
             "candidateReservoirUpdate","segmentSamplingAndPosition","sunPhaseEvaluation","opaqueShadowQueryResidual",
             "mediumBeerAttenuation","localLightGeometryAndAttenuation","localPhaseAndContribution",
@@ -48,9 +48,14 @@ public final class OpticalDetailedProfile {
         long records=(paths+(long)CAMERA_SCATTERING_STRIDE-1)/CAMERA_SCATTERING_STRIDE;
         long firstSelected=Math.floorMod(-frameSequence,8L);
         long selected=firstSelected>=records?0:1+(records-1-firstSelected)/8;
+        // The last bucket can be partial; a rotated sample beyond the image is not a dropped record.
+        long offset=(frameSequence*7919L)&65535L;
+        if(selected>0 && (firstSelected+(selected-1)*8L)*CAMERA_SCATTERING_STRIDE+offset>=paths)selected--;
         long observed=0;
         for(int sample=0;sample<records;sample++)for(int stage=0;stage<CAMERA_SCATTERING_STAGES;stage++){
             long at=((long)sample*CAMERA_SCATTERING_STAGES+stage)*16,ticks=values.get(ValueLayout.JAVA_LONG,at),calls=values.get(ValueLayout.JAVA_LONG,at+8);
+            if(stage==15){addGlobal("cameraScattering/shadowParityMismatches",ticks);
+                addGlobal("cameraScattering/shadowParityQueries",calls);continue;}
             if(calls!=0){if(stage==0)observed++;String prefix="cameraScattering/"+CAMERA_SCATTERING_STAGE_NAMES[stage]+"/";
                 try{addGlobal(prefix+"ticks",ticks);addGlobal(prefix+"calls",calls);}
                 catch(ArithmeticException overflow){throw new IllegalStateException("camera-scattering diagnostic overflow stage="
@@ -107,6 +112,10 @@ public final class OpticalDetailedProfile {
                 -before.getOrDefault("cameraScattering/opaqueShadowAnyHit/ticks",0L);
         long closestHitTicks=values.getOrDefault("cameraScattering/opaqueShadowClosestHit/ticks",0L)
                 -before.getOrDefault("cameraScattering/opaqueShadowClosestHit/ticks",0L);
+        long parityQueries=values.getOrDefault("cameraScattering/shadowParityQueries",0L)
+                -before.getOrDefault("cameraScattering/shadowParityQueries",0L);
+        long parityMismatches=values.getOrDefault("cameraScattering/shadowParityMismatches",0L)
+                -before.getOrDefault("cameraScattering/shadowParityMismatches",0L);
         var stages=new java.util.ArrayList<CameraStage>();long sumTicks=0;
         for(String name:CAMERA_SCATTERING_STAGE_NAMES){String prefix="cameraScattering/"+name+"/";
             long ticks=values.getOrDefault(prefix+"ticks",0L)-before.getOrDefault(prefix+"ticks",0L);
@@ -119,6 +128,8 @@ public final class OpticalDetailedProfile {
         stages.sort(java.util.Comparator.comparingLong(CameraStage::nsPerSampledPath).reversed());
         StringBuilder json=new StringBuilder("{\n\"frames\":").append(frames).append(",\n\"sampledPaths\":").append(sampled)
                 .append(",\n\"recordedPaths\":").append(recorded).append(",\n\"missingSamples\":").append(sampled-recorded)
+                .append(",\n\"shadowParityQueries\":").append(parityQueries)
+                .append(",\n\"shadowParityMismatches\":").append(parityMismatches)
                 .append(",\n\"clockUnit\":\"nanoseconds\",\n\"stages\":[");
         for(int i=0;i<stages.size();i++){CameraStage stage=stages.get(i);if(i!=0)json.append(',');
             json.append("\n{\"rank\":").append(i+1).append(",\"stage\":\"").append(stage.name())
