@@ -166,6 +166,11 @@ final class VulkanGpuSceneFrameSubmitter {
         boolean reusePbrPrimary=nativePbrScatteringFrame
                 &&nativePbrData.transportPlan().kind()==top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM
                 &&temporal.reusablePbrPrimary(checked.request())&&!checked.request().caustics().enabled();
+        // The slot upper bound includes inactive holes. Covering that bound proves
+        // every eligible light is enumerated, without a reservoir or PDF correction.
+        boolean exhaustivePbrLights=reusePbrPrimary&&checked.request().mediumTransport().lightSamples()>0
+                &&acceptedLightSlotUpperBound<=checked.request().mediumTransport().lightSamples()
+                &&acceptedLightSlotUpperBound<=8;
         var nativeHeterogeneousMultipleData = nativeHeterogeneousMultipleFrame ? CudaMultipleScatteringManager.scene(
                 checked.request(),width,height,acceptedLightSlotUpperBound,temporal::nativeDensityTexture,nativeDensityCache) : null;
         GpuScenePrimaryQueue.Plan selectedQueue = !nativeMediumFrame && selectedProgram.primaryQueue()
@@ -196,7 +201,8 @@ final class VulkanGpuSceneFrameSubmitter {
         GpuSceneRayTracingPipeline scatteringDiagnostic = top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS
                 && (nativeScatteringFrame || nativePbrScatteringFrame
                     && nativePbrData.transportPlan().kind()==top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM)
-                ? pipelines.forFrame(reusePbrPrimary?GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC
+                ? pipelines.forFrame(exhaustivePbrLights?GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED_DIAGNOSTIC
+                    :reusePbrPrimary?GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC
                     :GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC) : null;
         var pbrScatteringKind = nativePbrScatteringFrame ? nativePbrData.transportPlan().kind() : null;
         GpuSceneRayTracingPipeline pbrScatteringPrimary = nativePbrScatteringFrame
@@ -206,6 +212,7 @@ final class VulkanGpuSceneFrameSubmitter {
         GpuSceneRayTracingPipeline cameraScatteringLights = nativePbrScatteringFrame
                 ? pipelines.forFrame(pbrScatteringKind == top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.DIRECT_DENSITY
                     ? GpuSceneRayTracingPipeline.Program.NATIVE_DENSITY_SCATTERING_LIGHTS
+                    : exhaustivePbrLights?GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED
                     : reusePbrPrimary?GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS_CACHED
                     : GpuSceneRayTracingPipeline.Program.NATIVE_SCATTERING_LIGHTS) : null;
         GpuSceneRayTracingPipeline multipleTracer = nativeMultipleFrame || nativePbrScatteringFrame

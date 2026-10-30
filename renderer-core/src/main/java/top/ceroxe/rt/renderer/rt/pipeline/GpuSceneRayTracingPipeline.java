@@ -46,6 +46,8 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC("gpuscene_native_scattering_lights.rgen"),
         NATIVE_SCATTERING_LIGHTS_CACHED("gpuscene_native_scattering_cached_lights.rgen"),
         NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC("gpuscene_native_scattering_cached_lights.rgen"),
+        NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED("gpuscene_native_scattering_exhaustive_cached_lights.rgen"),
+        NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED_DIAGNOSTIC("gpuscene_native_scattering_exhaustive_cached_lights.rgen"),
         NATIVE_MULTIPLE_SCATTERING("gpuscene_native_multiple_scattering.rgen"),
         NATIVE_DENSITY_SCATTERING_LIGHTS("gpuscene_native_density_scattering_lights.rgen"),
         NATIVE_OPTICAL_TRACE("gpuscene_native_optical_trace.rgen"),
@@ -62,6 +64,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 || this == NATIVE_BOUNDARY_SCATTERING || this == NATIVE_SCATTERING_PRIMARY
                 || this == NATIVE_SCATTERING_LIGHTS || this == NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC || this == NATIVE_MULTIPLE_SCATTERING
                 || this == NATIVE_SCATTERING_LIGHTS_CACHED || this == NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC
+                || this == NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED || this == NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED_DIAGNOSTIC
                 || this == NATIVE_DENSITY_SCATTERING_LIGHTS || this == NATIVE_OPTICAL_TRACE || this == SURFACE_PRIMARY_SHADE
                 || this == COMPACT_PRIMARY_SHADE || this == GENERAL_PRIMARY_SHADE; }
     }
@@ -197,16 +200,21 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     program.primaryQueue() ? GpuScenePrimaryQueue.PUSH_BYTES : 0);
             boolean opticalDiagnostic=program==Program.NATIVE_OPTICAL_TRACE&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS;
             boolean scatteringDiagnostic=(program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC
-                    ||program==Program.NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC)
+                    ||program==Program.NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC
+                    ||program==Program.NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED_DIAGNOSTIC)
                     &&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS;
+            boolean exhaustiveScattering=program==Program.NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED
+                    ||program==Program.NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED_DIAGNOSTIC;
             boolean cachedScattering=program==Program.NATIVE_SCATTERING_LIGHTS_CACHED
-                    ||program==Program.NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC;
+                    ||program==Program.NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC||exhaustiveScattering;
             boolean inlineScatteringQuery=checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
                     &&(program==Program.NATIVE_SCATTERING_LIGHTS||program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC||cachedScattering);
             boolean inlinePbrLightQuery=checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
                     &&program==Program.NATIVE_PBR_MEDIUM_LIGHTS;
-            String raygenSource=inlineScatteringQuery?cachedScattering?"gpuscene_native_scattering_cached_query.rgen":"gpuscene_native_scattering_query.rgen"
-                    :inlinePbrLightQuery?"gpuscene_native_pbr_medium_query.rgen":program.source;
+            String raygenSource=program.source;
+            if(inlineScatteringQuery)raygenSource=exhaustiveScattering?"gpuscene_native_scattering_exhaustive_cached_query.rgen"
+                    :cachedScattering?"gpuscene_native_scattering_cached_query.rgen":"gpuscene_native_scattering_query.rgen";
+            else if(inlinePbrLightQuery)raygenSource="gpuscene_native_pbr_medium_query.rgen";
             byte[] raygenCode = scatteringDiagnostic?RtShaderModuleCompiler.compileCameraScatteringDiagnostic(SHADER_ROOT+raygenSource,
                     Shaderc.shaderc_raygen_shader,linearHdrOutput,shaderExecutionReorderingEnabled):opticalDiagnostic
                     ?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+program.source,Shaderc.shaderc_raygen_shader,

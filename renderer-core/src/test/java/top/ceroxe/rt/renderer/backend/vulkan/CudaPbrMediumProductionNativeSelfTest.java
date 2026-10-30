@@ -44,6 +44,13 @@ public final class CudaPbrMediumProductionNativeSelfTest {
                             "{\"passed\":true,\"frames\":12,\"spp\":[1,2,8],\"outlines\":[false,true],\"shadingModels\":2}\n");
                     System.out.println("PBR cached primary consumer matrix passed: frames=12");return;
                 }
+                if(Arrays.asList(args).contains("--light-selection")){
+                    lightSelectionMatrix();
+                    Files.writeString(OUTPUT.resolve("light-selection-result.json"),
+                            "{\"passed\":true,\"frames\":"+results.size()+",\"comparisons\":[\n"
+                                    +String.join(",\n",results)+"\n]}\n");
+                    System.out.println("PBR light selection matrix passed: frames="+results.size());return;
+                }
                 if(Arrays.asList(args).contains("--scattering")){
                     long cameraScatterBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeScatteringSubmissions.sum();
                     long densityScatterBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeDensityScatteringSubmissions.sum();
@@ -307,6 +314,56 @@ public final class CudaPbrMediumProductionNativeSelfTest {
         }
         samples=1;
         require(renderer.health().activeFailure().isEmpty(),"cached primary renderer unhealthy");
+    }
+    /** Frozen-version HDR matrix for exhaustive admission and reservoir fallback. */
+    private static void lightSelectionMatrix() throws Exception {
+        var medium=new Medium(new Rgb(.012f,.018f,.024f),new Rgb(.06f,.08f,.1f),Rgb.ZERO,1,1,.2f);
+        var environment=SUN.toBuilder().cameraMedium(medium).build();
+        var transport=BUDGET.withScatteringSteps(8).withMaxDistance(30);
+        for(int count=0;count<=9;count++) {
+            setup("sun");
+            var transaction=SceneTransaction.builder(++revision).upsert(plane(1,-35));
+            for(int i=0;i<count;i++)transaction.upsert(selectionLight(i));
+            apply(transaction.build());
+            selectionCapture("lights-"+count+"-covered",environment,
+                    transport.withLightSamples(Math.max(1,Math.min(count,8))));
+            selectionCapture("lights-"+count+"-zero-budget",environment,transport.withLightSamples(0));
+            if(count>1)selectionCapture("lights-"+count+"-one-sample",environment,transport.withLightSamples(1));
+        }
+        // Keep live high slots while removing low/interior slots, then reuse the
+        // holes. A bound on active count alone would admit the wrong shader here.
+        setup("sun");
+        var transaction=SceneTransaction.builder(++revision).upsert(plane(1,-35));
+        for(int i=0;i<8;i++)transaction.upsert(selectionLight(i));
+        apply(transaction.build());
+        selectionCapture("holes-before",environment,transport.withLightSamples(8));
+        apply(SceneTransaction.builder(++revision).removeLights(10,12,15).build());
+        selectionCapture("holes-covered",environment,transport.withLightSamples(8));
+        selectionCapture("holes-insufficient-bound",environment,transport.withLightSamples(5));
+        apply(SceneTransaction.builder(++revision).upsert(selectionLight(0)).upsert(selectionLight(2))
+                .upsert(selectionLight(5)).build());
+        selectionCapture("holes-refilled",environment,transport.withLightSamples(8));
+        apply(SceneTransaction.builder(++revision)
+                .upsert(SceneLight.point(10,.4,0,-15).intensity(0).range(50).build())
+                .upsert(SceneLight.point(11,-.4,0,-15).color(0,0,0).intensity(60).range(50).build())
+                .upsert(SceneLight.point(12,100,0,-15).intensity(60).range(1).build()).build());
+        selectionCapture("zero-black-out-of-range",environment,transport.withLightSamples(8));
+        require(renderer.health().activeFailure().isEmpty(),"light selection renderer unhealthy");
+    }
+    private static SceneLight selectionLight(int i) {
+        var light=switch(i%3) {
+            case 0 -> SceneLight.point(10+i,.4+i*.025,.1,-15);
+            case 1 -> SceneLight.spot(10+i,-.4-i*.025,-.1,-14,0,0,-1).coneDegrees(30,60);
+            default -> SceneLight.directional(10+i,0,0,-1);
+        };
+        if(i%3!=2)light.range(50);
+        return light.color(.7f,.8f,1).intensity(i%3==2?.5f:60).castsShadow(i%2==0).build();
+    }
+    private static void selectionCapture(String name,EnvironmentState environment,MediumTransport transport) throws Exception {
+        var frame=capture(name,environment,transport,FramePrimitiveBatch.empty());
+        double energy=meanRgb(frame);
+        require(energy>0,"light selection matrix lost all illumination: "+name);
+        results.add("    {\"name\":\""+name+"\",\"meanRadiance\":"+energy+"}");
     }
     private static void scatteringComposition() throws Exception {
         setup("sun");var base=capture("PBR-scattering-surface-control",SUN,BUDGET,FramePrimitiveBatch.empty());

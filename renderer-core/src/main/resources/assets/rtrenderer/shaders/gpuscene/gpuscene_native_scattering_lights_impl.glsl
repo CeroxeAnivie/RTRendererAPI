@@ -162,6 +162,20 @@ void main() {
         float distance=present?min(max(hit.w,0.0),maximum):maximum;
         GS_SCATTER_DETAIL_NEXT(1u);
         uint upper=gsFrame.words[GPU_SCENE_FRAME_LIGHT_SLOT_UPPER_BOUND_WORD],sampleCount=gsFrame.words[GPU_SCENE_FRAME_SCATTERING_LIGHT_SAMPLES_WORD];
+#ifdef RTRENDERER_SCATTERING_EXHAUSTIVE_LIGHTS
+        // CPU admission proves 0 <= upper <= sampleCount <= 8. Preserve the
+        // original weight/range filter and ascending contribution order with
+        // one mask instead of three arrays live across every shadow query.
+        uint validLightMask=0u;
+        for(uint slot=0u;slot<upper;++slot) {
+            GS_SCATTER_DETAIL_NEXT(1u);
+            float weight=gsScatteringLightWeight(slot,origin,direction,distance);
+            GS_SCATTER_DETAIL_NEXT(2u);
+            if(weight>0.0)validLightMask|=1u<<slot;
+        }
+        bool exhaustive=true;
+        uint selectedCount=upper;
+#else
         uint selected[8],firstCandidates[8],candidates=0u;float total=0.0;
         if(sampleCount>0u) {
             [[dont_unroll]] for(uint slot=0u;slot<upper;++slot) {
@@ -192,6 +206,7 @@ void main() {
                 selectedFactors[k]=factor;
             }
         }
+#endif
         GS_SCATTER_DETAIL_NEXT(3u);
         vec3 sunDirection=-normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
         vec3 sun=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)*uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
@@ -203,7 +218,12 @@ void main() {
         if(directPacket&&exhaustive&&sampleCount>0u&&distance>8.0
                 &&exp(-reference*distance)>=cutoff) {
             for(uint k=0u;k<selectedCount&&guideCount<2u;++k) {
+#ifdef RTRENDERER_SCATTERING_EXHAUSTIVE_LIGHTS
+                if((validLightMask&(1u<<k))==0u)continue;
+                uint lightBase=k*GPU_SCENE_LIGHT_RECORD_WORDS;
+#else
                 uint lightBase=firstCandidates[k]*GPU_SCENE_LIGHT_RECORD_WORDS;
+#endif
                 uint flags=gsLights.words[lightBase+GPU_SCENE_LIGHT_FLAGS_WORD];
                 if(((flags>>1u)&7u)==GPU_SCENE_LIGHT_DIRECTIONAL)continue;
                 vec4 guide=gsScatteringAngularProposal(gsScatteringLightPosition(lightBase),origin,direction,distance);
@@ -268,6 +288,7 @@ void main() {
                     source+=sunContribution*sunVisibility;
                 }
                 GS_SCATTER_DETAIL_NEXT(7u);
+#ifndef RTRENDERER_SCATTERING_EXHAUSTIVE_LIGHTS
                 if(sampleCount==0u) {
                     [[dont_unroll]] for(uint slot=0u;slot<upper;++slot) {
                         GS_SCATTER_DETAIL_NEXT(1u);
@@ -283,11 +304,19 @@ void main() {
                             GS_SCATTER_DETAIL_RESUME(7u);
                         }
                     }
-                }else {
+                }else
+#endif
+                {
                     [[dont_unroll]] for(uint k=0u;k<selectedCount;++k) {
+#ifdef RTRENDERER_SCATTERING_EXHAUSTIVE_LIGHTS
+                        if((validLightMask&(1u<<k))==0u)continue;
+                        uint slot=k;
+                        float factor=1.0;
+#else
                         uint slot=exhaustive?firstCandidates[k]:selected[k];
                         GS_SCATTER_DETAIL_NEXT(2u);
                         float factor=selectedFactors[k];
+#endif
                         GS_SCATTER_DETAIL_NEXT(7u);
                         GS_SCATTER_DETAIL_PAUSE();
 #ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE

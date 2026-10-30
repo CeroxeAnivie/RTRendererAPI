@@ -1,0 +1,4 @@
+#version 460
+#define RTRENDERER_SCATTERING_CACHED_PRIMARY 1
+#define RTRENDERER_SCATTERING_EXHAUSTIVE_LIGHTS 1
+#include "gpuscene_native_scattering_lights_impl.glsl"
