@@ -895,6 +895,12 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 正序 kernel 0.807241→0.797066 ms（下降 1.26%），关闭诊断 111.768264→112.883543 FPS（+1.00%）；反序 kernel 0.805046→0.793753 ms（下降 1.40%），关闭诊断 113.000539→112.040968 FPS（−0.85%）。没有稳定端到端收益，CUDA 源码和 manifest 两个文件均精确恢复；不继续为已拒绝候选追加完整 GPU 回归。[冻结制品与正反序数据](data/pbr-statistics-block-rejected-20261031.json)。
 
+### 撤回：独立采样点调度与平面 source 布局
+
+在已拒绝串行拆分之外，单独验收完整的 prepare→独立采样点 query 数据流：每个散射点独立 invocation，source 按 step 分平面，Vulkan 和 CUDA 消费者同时改变布局；保持相同位置、完整 PDF、阴影射线、采样数量和累计顺序。新增阶段 timestamp，并为并行诊断准备独占计数槽，避免原子争用。参考相同固定 PBRT-v4 wavefront 独立工作原则，没有复制外部代码。
+
+1080p 8 帧 HDR 仍全字节一致。关闭诊断 114.130945→88.485387 FPS（−22.47%），散射 producer 3.396093→5.703312 ms；采样准备 0.637356 ms，CUDA 积分 0.661662→0.634317 ms 的下降不足以弥补生产退化。明确拒绝；源码、清单、全部 SPIR-V 和诊断结构均恢复，不保留中间架构，也未为其继续跑全回归。冻结制品与 patch 在 `build/scattering-point-planes`，[测量和恢复证据](data/scattering-point-planes-rejected-20261031.json)。后续不要重复这种每散射点扩展 dispatch；回到当前按像素复用状态的生产路径，以实测继续。
+
 ### 撤回：采样准备与阴影查询串行拆分
 
 参考固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/wavefront/surfscatter.cpp` 的阶段划分原则，独立将严格穷举缓存路径的采样/PDF 准备和光源阴影查询分开。复用 source 缓冲和 compact-hit 保留字段，不增加 resident 分配或 CUDA 交接，新增独立 GPU timestamp。光源和采样循环、AoS 布局仍保持原状。
