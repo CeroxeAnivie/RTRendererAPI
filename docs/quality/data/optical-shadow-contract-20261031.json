@@ -1,0 +1,261 @@
+{
+  "date": "2026-10-31",
+  "baseCommit": "f996a189870d21f4fc09ede34da022a09cdb2774",
+  "hardware": "NVIDIA GeForce RTX 5080 Laptop GPU",
+  "passed": true,
+  "scope": "optical unshadowed-light connection semantics, partial PBR oracle and native PBR/optical caustic routing",
+  "reference": {
+    "project": "Blender Cycles",
+    "revision": "a51f293548adba0dda086f5771401e8d8ab66227",
+    "source": "intern/cycles/kernel/light/sample.h",
+    "symbol": "shadow_ray_setup",
+    "implementationCopied": false
+  },
+  "optical": {
+    "passed": true,
+    "nativeFrames": 152,
+    "recoverableRejections": 1,
+    "comparisons": [
+      {
+        "name": "thin-optical1-SPP1",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical1-SPP2",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical1-SPP8",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical2-SPP1",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical2-SPP2",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical2-SPP8",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical8-SPP1",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical8-SPP2",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical8-SPP8",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "one-event-no-unbudgeted-continuation"
+      },
+      {
+        "name": "equal-IOR"
+      },
+      {
+        "name": "stochastic-first-interface",
+        "frames": 64,
+        "redMean": 0.426102325,
+        "blueMean": 0.0276929246
+      },
+      {
+        "name": "closed-boundary-inside-TIR"
+      },
+      {
+        "name": "closed-boundary-inside-unit-IOR"
+      },
+      {
+        "name": "nested-priority-inside-HDR"
+      },
+      {
+        "name": "density-glass-generation0-SPP1",
+        "maximumAbsoluteError": 0.000121024413
+      },
+      {
+        "name": "density-glass-generation0-SPP2",
+        "maximumAbsoluteError": 0.00012096559
+      },
+      {
+        "name": "density-glass-generation0-SPP8",
+        "maximumAbsoluteError": 0.000121803891
+      },
+      {
+        "name": "density-cache-generation0",
+        "assetUploads": 0,
+        "metadataBytes": 1536
+      },
+      {
+        "name": "density-glass-generation1-SPP1",
+        "maximumAbsoluteError": 0.000189760575
+      },
+      {
+        "name": "density-glass-generation1-SPP2",
+        "maximumAbsoluteError": 0.000189718711
+      },
+      {
+        "name": "density-glass-generation1-SPP8",
+        "maximumAbsoluteError": 0.000189712536
+      },
+      {
+        "name": "density-cache-generation1",
+        "assetUploads": 0,
+        "metadataBytes": 1536
+      },
+      {
+        "name": "nested-local-density-priority-two-SPP"
+      },
+      {
+        "name": "rough-0.12",
+        "redMean": 0.414983317,
+        "expectedRed": 0.415037079,
+        "blueMean": 0.0261006351,
+        "expectedBlue": 0.0260977352
+      },
+      {
+        "name": "rough-0.45",
+        "redMean": 0.357219373,
+        "expectedRed": 0.357235945,
+        "blueMean": 0.018306046,
+        "expectedBlue": 0.0182924122
+      },
+      {
+        "name": "rough-0.85",
+        "redMean": 0.289888096,
+        "expectedRed": 0.289381785,
+        "blueMean": 0.00857685086,
+        "expectedBlue": 0.00853589564
+      },
+      {
+        "name": "rough-stochastic",
+        "redMean": 0.354685589,
+        "expectedRed": 0.357235943,
+        "blueMean": 0.018384466,
+        "expectedBlue": 0.0182924119
+      },
+      {
+        "name": "rough-black-transmission",
+        "redMean": 2.48800786E-06,
+        "expectedRed": 0.0,
+        "blueMean": 0.0182219094,
+        "expectedBlue": 0.0182924119
+      },
+      {
+        "name": "rough-smooth-limit",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "rough-equal-IOR"
+      },
+      {
+        "name": "scattering-rough-glass",
+        "analyticRedMean": 0.0964482886,
+        "litEnergy": 0.348516032,
+        "darkEnergy": 0.0
+      },
+      {
+        "name": "heterogeneous-scattering-rough-glass",
+        "lateralEnergy": 0.00132907259,
+        "litEnergy": 0.167782032,
+        "darkEnergy": 0.0
+      },
+      {
+        "name": "explicit-IOR-boundary-scattering",
+        "litEnergy": 0.0359992697,
+        "insidePointEnergy": 0.0236763274,
+        "densityRoughEnergy": 0.0656757977,
+        "darkEnergy": 0.0
+      },
+      {
+        "name": "partial-unlit-terminal-color-and-emission"
+      },
+      {
+        "name": "partial-unlit-emission-light-independence"
+      },
+      {
+        "name": "resolved-publication-outline-SPP1"
+      },
+      {
+        "name": "resolved-publication-outline-SPP2"
+      },
+      {
+        "name": "resolved-publication-outline-SPP8"
+      },
+      {
+        "name": "partial-PBR-Snell-Fresnel-emission",
+        "maximumAbsoluteError": 0.0001953125
+      },
+      {
+        "name": "invalid-boundary-rejection-recovery",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "resize-eight-SPP",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "full-HD-multiple-optical-tiles",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "shrink-after-full-HD",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "PBR-boundary-density-camera-light-Beer",
+        "maximumAbsoluteError": 6.18522682E-05
+      },
+      {
+        "name": "resolved-publication-temporal-history-three-frames"
+      }
+    ]
+  },
+  "pbrCaustics": {
+    "passed": true,
+    "scope": "homogeneous-IOR-one-absorption-and-single-scattering-PBR-caustics",
+    "nativeFrames": 5,
+    "nativePbrFrames": 2,
+    "nativeOpticalFrames": 3,
+    "photonDispatches": 3,
+    "absorberVisiblePixels": 713,
+    "absorberCausticRedEnergy": 61.481689453,
+    "scatteringVisiblePixels": 690,
+    "scatteringCausticRedEnergy": 3.75336647,
+    "maxGreenRatioError": 0.001309881,
+    "maxBlueRatioError": 0.000417394
+  },
+  "validation": [
+    {
+      "task": "cudaOpticalMediumProductionNativeSelfTest",
+      "opened": 3,
+      "closed": 3,
+      "warningsAndErrors": 0,
+      "droppedMessages": 0.0,
+      "sha256": "553c79955f173e949f1cb017838c45049dacdeef54a9aa75c74644cbb10c6986"
+    },
+    {
+      "task": "cudaPbrMediumCausticsProductionNativeSelfTest",
+      "opened": 1,
+      "closed": 1,
+      "warningsAndErrors": 0,
+      "droppedMessages": 0.0,
+      "sha256": "e2f055306ae819c153feb27c2231b983ca127ff7c49309a4bc7d8cd58e99177f"
+    }
+  ],
+  "additionalPassedTasks": [
+    ":renderer-core:cudaOpticalMediumNativeSelfTest",
+    ":renderer-core:verifyLuxCoreSourceManifest",
+    ":renderer-core:coreVulkanGpuSceneShaderSelfTest -PshaderContractsOnly"
+  ],
+  "remaining": [
+    "complete CPU and shader gates",
+    "complete core native and NVIDIA gates",
+    "current packaged consumer and distribution"
+  ],
+  "performanceClaim": false
+}

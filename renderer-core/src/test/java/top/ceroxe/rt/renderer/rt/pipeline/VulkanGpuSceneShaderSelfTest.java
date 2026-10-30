@@ -111,8 +111,19 @@ public final class VulkanGpuSceneShaderSelfTest {
       String segment = read("assets/rtrenderer/shaders/gpuscene/gpuscene_photon_segment.glsl");
       require(lights.contains("#define RTRENDERER_CAUSTICS 1")
               && lights.contains("gsGatherCaustics(receiver")
-              && lights.contains("receiver.mediumBoundary=primary.lanes[source+11u]"),
+              && lights.contains("uint primaryStride=dispatch.storage.lanes[16].w!=0u?uint(extent.x)*uint(extent.y)*samples:1u")
+              && lights.contains("source=(pixel*samples+sampleIndex)*(primaryStride==1u?13u:1u)"),
               "native PBR light resolve must gather the published photon map from the primary payload");
+      for (String field : new String[] {
+              "receiver.previousWorldPosition=uintBitsToFloat(primary.lanes[source+1u*primaryStride])",
+              "receiver.motionRevision=primary.lanes[source+2u*primaryStride].xy",
+              "receiver.transmissionIor=uintBitsToFloat(primary.lanes[source+6u*primaryStride])",
+              "receiver.surfaceState=primary.lanes[source+8u*primaryStride]",
+              "receiver.compositeState=uintBitsToFloat(primary.lanes[source+9u*primaryStride])",
+              "receiver.launchInfo=primary.lanes[source+10u*primaryStride]",
+              "receiver.mediumBoundary=primary.lanes[source+11u*primaryStride]" }) {
+         require(lights.contains(field), "native PBR caustic receiver must retain the strided primary field: " + field);
+      }
       require(photons.contains("GPU_SCENE_FRAME_MEDIUM_EXTINCTION_WORD")
               && readRaw("assets/rtrenderer/shaders/gpuscene/gpuscene_photon_trace.glsl").contains("#include \"gpuscene_photon_segment.glsl\"")
               && photons.contains("flux*=segment.transportWeight")

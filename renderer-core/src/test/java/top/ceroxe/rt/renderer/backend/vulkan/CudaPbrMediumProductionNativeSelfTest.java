@@ -128,6 +128,7 @@ public final class CudaPbrMediumProductionNativeSelfTest {
 
     private static void caustics() throws Exception {
         long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum();
+        long opticalBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
         long photonsBefore=CausticPhotonPlan.diagnosticPhotonDispatches.sum();
         var absorber=new Medium(new Rgb(0,.08f,.16f),Rgb.ZERO,Rgb.ZERO,1,1,0);
         var environment=SUN.toBuilder().cameraMedium(absorber).build();
@@ -191,12 +192,14 @@ public final class CudaPbrMediumProductionNativeSelfTest {
                         +scatteringVisible+" energy="+scatteringCausticEnergy);
         require(CausticPhotonPlan.diagnosticPhotonDispatches.sum()-scatteringPhotonsBefore==1,
                 "scattering caustic frame did not dispatch the native photon map exactly once");
-        require(VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum()-nativeBefore==5,
-                "caustic frames bypassed native PBR/CUDA resolve");
+        long pbrFrames=VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum()-nativeBefore;
+        long opticalFrames=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-opticalBefore;
+        require(pbrFrames==2&&opticalFrames==3,
+                "caustic off frames must use native PBR and enabled frames native optical/CUDA: PBR="+pbrFrames+" optical="+opticalFrames);
         require(CausticPhotonPlan.diagnosticPhotonDispatches.sum()-photonsBefore==3,
                 "each enabled native PBR caustic frame must dispatch its photon map exactly once");
         String json=String.format(Locale.ROOT,"{\"passed\":true,\"scope\":\"homogeneous-IOR-one-absorption-and-single-scattering-PBR-caustics\","
-                +"\"nativeFrames\":5,\"photonDispatches\":3,\"absorberVisiblePixels\":%d,\"absorberCausticRedEnergy\":%.9f,"
+                +"\"nativeFrames\":5,\"nativePbrFrames\":2,\"nativeOpticalFrames\":3,\"photonDispatches\":3,\"absorberVisiblePixels\":%d,\"absorberCausticRedEnergy\":%.9f,"
                 +"\"scatteringVisiblePixels\":%d,\"scatteringCausticRedEnergy\":%.9f,"
                 +"\"maxGreenRatioError\":%.9f,\"maxBlueRatioError\":%.9f}%n",visible,energy,
                 scatteringVisible,scatteringCausticEnergy,maxGreenError,maxBlueError);

@@ -288,7 +288,7 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
     // medium boundary or a scene-scale epsilon skipping a thin volume.
     float minimum=gsOptical.storage.lanes[base+5u].z==0u?0.0:uintBitsToFloat(floatBitsToUint(ray.w)+1u);
     GpuScenePayload hit;
-    if(gsOptical.storage.lanes[base+2u].w!=0u){
+    if(gsOptical.storage.lanes[base+2u].w==1u){
         hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum);
         // Connections need full material hits for transparent attenuation, while
         // preserving the public shadow exclusions for overlays and non-blockers.

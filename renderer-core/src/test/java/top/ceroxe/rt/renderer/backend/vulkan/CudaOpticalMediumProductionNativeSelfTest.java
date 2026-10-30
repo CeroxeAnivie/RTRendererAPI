@@ -95,9 +95,13 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             verifyExplicitBoundaryScattering(camera,budget);
             verifyUnlitTerminalProof(camera,budget);
             verifyResolvedPublication(camera,budget);
-            setupThin(1.5f);apply(SceneTransaction.builder(++revision).upsert(glass(1.5f).toBuilder().transmission(.5f).build()).build());
+            verifyPartialPbr(camera,budget);
+            setupThin(1.5f);
+            apply(SceneTransaction.builder(++revision).upsert(MediumTransportSelfTest.cube(3,2,1))
+                    .upsert(SceneInstance.builder(3,3).mediumBoundary(MediumBoundary.volume(
+                            new Medium(Rgb.ZERO,Rgb.ZERO,Rgb.ZERO,0,1.5f,0))).build()).build());
             expectRejected(request(camera,1,budget,blueSky()));
-            setupThin(1.5f);compareThin("partial-PBR-rejection-recovery",capture("recovery",request(camera,1,budget,blueSky())),camera,1,1.5);
+            setupThin(1.5f);compareThin("invalid-boundary-rejection-recovery",capture("recovery",request(camera,1,budget,blueSky())),camera,1,1.5);
             width=137;height=101;var resized=CameraState.lookAt(0,0,6,0,0,-1).verticalFieldOfViewDegrees(5).aspectRatio((double)width/height).build();
             compareThin("resize-eight-SPP",capture("resized",request(resized,8,budget.withOpticalSamples(2),blueSky())),resized,8,1.5);
             width=1920;height=1080;var fullHd=CameraState.lookAt(0,0,6,0,0,-1).verticalFieldOfViewDegrees(5).aspectRatio((double)width/height).build();
@@ -456,16 +460,16 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         setupThin(1.5f);
         apply(SceneTransaction.builder(++revision).upsert(texture).upsert(receiver().toBuilder().baseColorRgba8(0xff000000).build())
                 .upsert(glass(1.5f).toBuilder().roughness(.45f).build())
-                .upsert(SceneLight.directional(30,1,0,0).color(1,1,1).intensity(3).castsShadow(false).build()).build());
+                .upsert(SceneLight.directional(30,1,0,0).color(1,1,1).intensity(3).castsShadow(true).build()).build());
         var transport=budget.withOpticalSamples(8).withScatteringSteps(64).withScatteringBounces(2);
         var environment=blackSky().toBuilder().cameraMedium(medium).build();
         var lateral=capture("heterogeneous-scattering-rough-glass-lateral",request(camera,8,transport,environment));
         double lateralEnergy=energy(lateral);
         require(lateralEnergy>1e-6,"long lateral medium connection must retain measurable lighting");
-        // The cloud is 200 world units wide but only 10 deep. Disabling surface
-        // shadows still preserves medium extinction along the full light connection.
+        // The cloud is 200 world units wide but only 10 deep. Enabled shadow
+        // connections retain medium extinction along their complete light segment.
         apply(SceneTransaction.builder(++revision)
-                .upsert(SceneLight.directional(30,0,0,-1).color(1,1,1).intensity(3).castsShadow(false).build()).build());
+                .upsert(SceneLight.directional(30,0,0,-1).color(1,1,1).intensity(3).castsShadow(true).build()).build());
         var lit=capture("heterogeneous-scattering-rough-glass-lit",request(camera,8,transport,environment));
         double litEnergy=energy(lit);require(litEnergy>.01,"heterogeneous scattering through rough glass must deliver real light energy");
         require(lateralEnergy<litEnergy,"longer lateral cloud connection must attenuate more than the short axial connection");
@@ -718,6 +722,26 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                 .upsert(SceneInstance.builder(2,2).transform(new AffineTransform(new float[]{100,0,0,0,0,100,0,0,0,0,2,0})).mediumBoundary(MediumBoundary.surface(a).withPriority(1)).build())
                 .upsert(SceneInstance.builder(3,2).transform(new AffineTransform(new float[]{100,0,0,0,0,100,0,0,0,0,1,0})).mediumBoundary(MediumBoundary.surface(b).withPriority(8)).build()).build());
     }
+    private static void verifyPartialPbr(CameraState camera,MediumTransport budget)throws Exception {
+        setupThin(1.5f);
+        apply(SceneTransaction.builder(++revision).upsert(glass(1.5f).toBuilder().transmission(.5f)
+                .emissive(0xff996633,1).build()).build());
+        var frame=capture("partial-PBR",request(camera,1,budget,blackSky()));
+        var pixels=frame.pixels().order(ByteOrder.LITTLE_ENDIAN);double maximum=0;
+        for(int y=0;y<height;y++)for(int x=0;x<width;x++) {
+            double ci=-direction(camera,x,y,0,1)[2],ct=Math.sqrt(1-(1-ci*ci)/2.25);
+            double rs=(ci-1.5*ct)/(ci+1.5*ct),rp=(1.5*ci-ct)/(1.5*ci+ct),f=(rs*rs+rp*rp)*.5;
+            // The local emitter receives 1-transmission. The red UNLIT receiver
+            // receives transmission*(1-Fresnel)*eta^2; reflection sees black.
+            double[] expected={.1+.5*(1-f)/2.25,.2,.3};
+            for(int c=0;c<3;c++) {
+                double actual=Float.float16ToFloat(pixels.getShort((y*width+x)*8+c*2));
+                maximum=Math.max(maximum,Math.abs(actual-expected[c]));
+                near(actual,expected[c],.0015,"partial PBR local/continuation channel="+c+" pixel="+x+","+y);
+            }
+        }
+        RESULTS.add(String.format(Locale.ROOT,"{\"name\":\"partial-PBR-Snell-Fresnel-emission\",\"maximumAbsoluteError\":%.9g}",maximum));
+    }
     private static void compareThin(String name,FrameSnapshot frame,CameraState camera,int samples,double ior){
         var pixels=frame.pixels().order(ByteOrder.LITTLE_ENDIAN);double max=0;
         for(int y=0;y<height;y++)for(int x=0;x<width;x++){double expectedR=0,expectedB=0;
@@ -775,7 +799,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         throw new AssertionError("optical final HDR timeout: sequence="+request.sequence()+" health="+renderer.health()+" diagnostics="+renderer.diagnostics());}
     private static void pollPause()throws InterruptedException{if(benchmarkPolling)Thread.onSpinWait();else Thread.sleep(1);}
     private static void expectRejected(RenderFrameRequest frame)throws Exception{long deadline=System.nanoTime()+TIMEOUT.toNanos();for(;;){try{
-        if(renderer.trySubmit(frame) instanceof Renderer.FrameSubmitted)throw new AssertionError("unsupported partial-PBR surface was silently accepted");
+        if(renderer.trySubmit(frame) instanceof Renderer.FrameSubmitted)throw new AssertionError("IOR-changing volume without surface interaction was silently accepted");
         }catch(FrameValidationException expected){require(expected.reason()==FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,"recoverable optical category");rejected++;return;}
         require(System.nanoTime()<deadline,"optical rejection timeout");Thread.sleep(1);}}
     private static void checkConstant(String name,FrameSnapshot frame,double r,double g,double b){var pixels=frame.pixels().order(ByteOrder.LITTLE_ENDIAN);
