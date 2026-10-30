@@ -164,6 +164,9 @@ final class VulkanGpuSceneFrameSubmitter {
                 temporal.nativeOpticalOpaqueRay(checked.request()),acceptedLightSlotUpperBound) : null;
         var nativePbrData = nativePbrFrame ? CudaPbrMediumManager.scene(checked.request(),width,height,
                 acceptedLightSlotUpperBound,nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache,nativePbrScatteringFrame) : null;
+        boolean reusePbrPrimary=nativePbrScatteringFrame
+                &&nativePbrData.transportPlan().kind()==top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM
+                &&temporal.reusablePbrPrimary(checked.request())&&!checked.request().caustics().enabled();
         var nativeHeterogeneousMultipleData = nativeHeterogeneousMultipleFrame ? CudaMultipleScatteringManager.scene(
                 checked.request(),width,height,acceptedLightSlotUpperBound,temporal::nativeDensityTexture,nativeDensityCache) : null;
         GpuScenePrimaryQueue.Plan selectedQueue = !nativeMediumFrame && selectedProgram.primaryQueue()
@@ -178,7 +181,8 @@ final class VulkanGpuSceneFrameSubmitter {
         GpuScenePrimaryQueue.Plan primaryQueue = selectedQueue;
         GpuSceneRayTracingPipeline pipeline = pipelines.forFrame(selectedProgram);
         GpuSceneRayTracingPipeline primaryProducer = nativePbrFrame
-                ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_PBR_MEDIUM_TRACE)
+                ? pipelines.forFrame(reusePbrPrimary?GpuSceneRayTracingPipeline.Program.NATIVE_PBR_MEDIUM_CACHED
+                    :GpuSceneRayTracingPipeline.Program.NATIVE_PBR_MEDIUM_TRACE)
                 : nativeBoundaryFrame
                 ? pipelines.forFrame(Boolean.parseBoolean(System.getProperty("top.ceroxe.rt.medium.cuda.boundaryPacket","true"))
                     ? GpuSceneRayTracingPipeline.Program.NATIVE_BOUNDARY_PACKET : GpuSceneRayTracingPipeline.Program.NATIVE_MEDIUM_TRACE)
@@ -308,8 +312,10 @@ final class VulkanGpuSceneFrameSubmitter {
                 scatteringContribution = switch(scatteringPlan.kind()) {
                     case DIRECT_UNIFORM -> {
                         var contribution = pipelines.nativeCameraScatteringForPbr().prepareRadianceContribution(checked.request(),
-                                scatteringPlan.direct(),cameraScatteringLights,scatteringDiagnostic,slot.index(),framePrimitives.buildPlan());
-                        yield new CudaPbrMediumManager.RadianceContribution(contribution.buffer(),contribution.offset(),contribution.bytes(),false);
+                                scatteringPlan.direct(),cameraScatteringLights,scatteringDiagnostic,slot.index(),framePrimitives.buildPlan(),
+                                reusePbrPrimary?pipelines.nativePbrMediumWithScattering(nativePbrData).primaryTarget(nativePbrData):null);
+                        yield new CudaPbrMediumManager.RadianceContribution(contribution.buffer(),contribution.offset(),contribution.bytes(),false,
+                                contribution.primaryAddress());
                     }
                     case DIRECT_DENSITY -> pipelines.nativeDensityScatteringForPbr().prepareRadianceContribution(
                             scatteringPlan.densityDirect(),pbrScatteringPrimary,cameraScatteringLights,slot.index(),framePrimitives.buildPlan());

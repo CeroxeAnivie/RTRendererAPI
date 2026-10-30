@@ -508,3 +508,39 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 观测开销 0.95%，低于用户 10% 接受线；67,502 个事件，零丢样，严格包含、兄弟互斥与精确求和全部通过。原生 FPS 来自关闭诊断窗口，不与观测窗口拼接。8 帧 HDR 全字节一致，31 项 PBR 与 15 项介质组合检查通过，三份 validation 零 warning/error。120 FPS 目标尚未达到，画面模糊问题本轮未修改。
 
 完整证据：[pbr-top3-acceptance-20261031.json](data/pbr-top3-acceptance-20261031.json)、[完整排名 CSV](data/pbr-top3-acceptance-ranked-20261031.csv)。所有确定性优化已保留；此次前三项特例到此闭环，后续仍按当前第一名及其最大内部工作推进。
+
+
+### 主命中跨阶段复用：PBR fence 已从第一降为第二
+
+用户本轮要求继续优化 PBR 完成 fence 内当前前三项，直到其总榜排名改变；该停止条件在三轮独立重算中均已满足。紧接着用户扩大任务为同时优化当前第一和第二内部前三项，直到两项退出前二或关闭诊断达到 120 FPS；这个新目标尚未完成，不能把本轮第 2 名结果当成最终任务完成。
+
+发现默认均匀直接散射在 compact shader 中已追踪主射线，却只留下命中距离。PBR 再次追踪相同 sample 并写完整命中。现在让散射 shader 将完整 208-byte payload 写入 PBR 原本就拥有的 Vulkan primary 缓冲；PBR cached producer 只生成摄像机 packet，不再 trace/shade。没有新增一份全帧缓存，没有改变 resident/tile/SPP/光线/积分预算。仅对 direct uniform、严格 opaque-shadow-blocker 场景且关闭 caustics 使用；其他路径仍独立追踪。显式处理旧帧读到新帧写的 Vulkan barrier、PBR sink address/当前 plan 校验、跨 tile 全局像素索引、完整 miss 初始化与元数据；CUDA failure counter 与诊断指针不被覆盖。
+
+参考 Falcor commit `759aad033ff610fb0d82c74f7e0a508d0096d5f2`、BSD-3-Clause，`Source/RenderPasses/PathTracer/GeneratePaths.cs.slang` 第 146 行附近从 V-buffer 载入已有 primary hit 的逻辑，独立适配本项目已有 payload/ownership，没有复制外部代码。参考源码 hash 保留在 JSON。
+
+| 指标 | 对照 | 候选 | 变化 |
+| --- | ---: | ---: | ---: |
+| 主射线 packet GPU，ms/帧 | 1.533851 | 0.407522 | −73.43% |
+| PBR fence，ms/帧 | 5.570807 | 4.455405 | −20.02% |
+| 整条 PBR，ms/帧 | 6.109463 | 4.965915 | −18.72% |
+| 散射与 PBR 两个完整墙钟阶段合计，ms/帧 | 12.209672 | 11.793466 | −3.41% |
+| 关闭诊断原生 FPS | 76.278808 | 79.306374 | +3.97% |
+
+完整 payload 保存让散射墙钟阶段从 6.098965 增至 6.826389 ms，已完整计入上表；不是把 PBR 所有下降都称为净收益。PBR 灯光查询 1.859587→1.893284 ms，CUDA resolve 1.203300→1.241484 ms，restore 0.143981→0.151990 ms，原始变差值完整保留，不宣称这些项更快。
+
+最新墙钟排序，使用同一候选 360 个完成帧窗口归一到一秒：
+
+| 排名 | 事件 | ms/帧 | 每秒累计 ms | 占比 |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | 散射完成 CUDA 同步 | 4.786646 | 378.048 | 37.805% |
+| 2 | PBR 完成 fence 等待 | 4.455405 | 351.886 | 35.189% |
+| 3 | 散射统计读回前同步 | 0.978561 | 77.286 | 7.729% |
+| 4 | benchmark park | 0.527785 | 41.684 | 4.168% |
+| 5 | 散射 Vulkan fence 等待 | 0.485100 | 38.313 | 3.831% |
+| 6 | PBR release 命令录制 | 0.135107 | 10.671 | 1.067% |
+| 7 | 最终帧录制与提交 | 0.099335 | 7.845 | 0.785% |
+| 8 | 散射 release 命令录制 | 0.091594 | 7.234 | 0.723% |
+| | 其余 74 项合计 | 1.101952 | 87.032 | 8.703% |
+| | **互斥墙钟求和** | **12.661484** | **1000.000** | **100.000%** |
+
+三轮均为散射完成同步第一、PBR fence 第二；每轮独立重算结果见 JSON。68,226 个事件、零丢样，观测开销 0.41%。8 帧 HDR 逐字节一致；31 项 PBR、15 项组合、14 项相机散射验收通过，四份 validation 零 warning/error；PBR ABI、场景 proof 和跨线程 wall 契约通过。完整记录：[pbr-shared-primary-20261031.json](data/pbr-shared-primary-20261031.json)、[排名 CSV](data/pbr-shared-primary-ranked-20261031.csv)。

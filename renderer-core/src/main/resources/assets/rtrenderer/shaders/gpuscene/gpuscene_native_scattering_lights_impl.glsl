@@ -81,9 +81,36 @@ void main() {
         payload.launchInfo=uvec4(pixel,extent);
         vec4 hit;bool present;
         if(dispatch.storage.lanes[0u].x==0x52534331u && dispatch.storage.lanes[1u].w!=0u) {
+            uint64_t primarySink=uint64_t(dispatch.storage.lanes[7u].z)|(uint64_t(dispatch.storage.lanes[7u].w)<<32u);
+            if(primarySink!=0ul) {
+                payload.worldPositionAndDistance=vec4(0,0,0,-1);
+                payload.previousWorldPosition=vec4(0);payload.motionRevision=uvec2(0);
+                payload.worldNormalAndRoughness=vec4(0,1,0,1);payload.baseColorAndOpacity=vec4(0,0,0,1);
+                payload.emissiveAndMetallic=vec4(0);payload.transmissionIor=vec4(0,1,0,0);
+                payload.surfaceState=uvec4(0);payload.compositeState=vec4(0);
+            }
             payload.state=uvec4(0u,GS_PAYLOAD_RADIANCE_QUERY,0u,0u);payload.mediumBoundary=uvec4(0u);
-            traceRayEXT(sceneTlas,gl_RayFlagsNoneEXT,0xff,0,0,0,origin,gsRayEpsilon(origin),direction,1e20,0);
+            if(primarySink!=0ul)payload.mediumBoundary.x=gl_LaunchIDEXT.x*samples+sampleIndex;
+            traceRayEXT(sceneTlas,primarySink!=0ul?gl_RayFlagsOpaqueEXT:gl_RayFlagsNoneEXT,
+                0xff,0,0,0,origin,gsRayEpsilon(origin),direction,1e20,0);
             hit=payload.worldPositionAndDistance;present=payload.state.x!=0u;
+            if(primarySink!=0ul) {
+                GsScatteringStorage destination=GsScatteringStorage(primarySink);
+                uint outBase=item*13u;
+                destination.lanes[outBase]=floatBitsToUint(payload.worldPositionAndDistance);
+                destination.lanes[outBase+1u]=floatBitsToUint(payload.previousWorldPosition);
+                destination.lanes[outBase+2u]=uvec4(payload.motionRevision,0u,0u);
+                destination.lanes[outBase+3u]=floatBitsToUint(payload.worldNormalAndRoughness);
+                destination.lanes[outBase+4u]=floatBitsToUint(payload.baseColorAndOpacity);
+                destination.lanes[outBase+5u]=floatBitsToUint(payload.emissiveAndMetallic);
+                destination.lanes[outBase+6u]=floatBitsToUint(payload.transmissionIor);
+                destination.lanes[outBase+7u]=payload.state;
+                destination.lanes[outBase+8u]=payload.surfaceState;
+                destination.lanes[outBase+9u]=floatBitsToUint(payload.compositeState);
+                destination.lanes[outBase+10u]=payload.launchInfo;
+                destination.lanes[outBase+11u]=payload.mediumBoundary;
+                destination.lanes[outBase+12u]=uvec4(pixelIndex,sampleIndex,1u,1u);
+            }
             uint compact=dispatch.primaryOffset/16u+gl_LaunchIDEXT.x*samples+sampleIndex;
             dispatch.storage.lanes[compact]=uvec4(floatBitsToUint(hit.w),present?1u:0u,0u,0u);
         } else {hit=uintBitsToFloat(dispatch.storage.lanes[base]);present=dispatch.storage.lanes[base+7u].x!=0u;}

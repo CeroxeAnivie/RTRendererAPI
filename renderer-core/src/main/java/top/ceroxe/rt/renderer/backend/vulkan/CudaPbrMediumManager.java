@@ -36,7 +36,10 @@ import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 
 /** One Vulkan packet production and one native resolve per tile, independently of light count. */
 final class CudaPbrMediumManager implements AutoCloseable {
-    record RadianceContribution(long buffer,long offset,long bytes,boolean includesCameraEmission) {
+    record RadianceContribution(long buffer,long offset,long bytes,boolean includesCameraEmission,long primaryAddress) {
+        RadianceContribution(long buffer,long offset,long bytes,boolean includesCameraEmission) {
+            this(buffer,offset,bytes,includesCameraEmission,0);
+        }
         RadianceContribution {
             if(buffer==0||offset<0||bytes<16||(offset&15)!=0||(bytes&15)!=0)
                 throw new IllegalArgumentException("invalid GPU medium-radiance contribution extent");
@@ -127,6 +130,10 @@ final class CudaPbrMediumManager implements AutoCloseable {
                 photonPlan,photonPipeline,photonBuffer,additionalRadiance));}
         finally{if(OpticalFrameTimings.ENABLED)OpticalFrameTimings.pbrMediumPrepare.add(System.nanoTime()-started);}
     }
+    /** The allocation already belongs to the coordinated resident plan; the scattering producer borrows it. */
+    synchronized RtGpuBuffer primaryTarget(FrameScene scene) {
+        checkOpen();return onNative(()->{ensureCapacity(scene.plan,true);return primary;});
+    }
     private CudaCameraMediumManager.Prepared prepareOnNative(FrameScene scene,GpuSceneRayTracingPipeline primaryProducer,
             GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan,
             CausticPhotonPlan photonPlan,GpuSceneRayTracingPipeline photonPipeline,RtGpuBuffer photonBuffer,
@@ -137,6 +144,10 @@ final class CudaPbrMediumManager implements AutoCloseable {
                 !=(scene.transportPlan.kind()!=CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM))
             throw new IllegalArgumentException("PBR scattering volume-emission ownership does not match its integrator");
         var plan=scene.plan;ensureCapacity(plan,scene.transportPlan!=null);long address=storage.deviceAddress();boolean changed=!scene.assets.equals(uploadedAssets);
+        if(additionalRadiance!=null&&additionalRadiance.primaryAddress()!=0
+                &&(additionalRadiance.primaryAddress()!=primary.deviceAddress()||scene.transportPlan==null
+                ||scene.transportPlan.kind()!=CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM||plan.boundaryCount()!=0))
+            throw new IllegalArgumentException("cached PBR primary does not belong to the current uniform frame allocation");
         var selectedResolve=plan.boundaryCount()==0&&scene.assets.density.environmentOffset()<0?uniformResolve:resolve;
         if(statistics==null)statistics=cuda.allocateHost(CudaPbrMediumAbi.STATISTICS_BYTES);
         if(additionalRadiance!=null&&additionalRadiance.bytes()!=Math.multiplyExact((long)plan.paths(),16))

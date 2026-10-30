@@ -1,0 +1,3 @@
+#version 460
+#define RTRENDERER_PBR_PRIMARY_CACHED 1
+#include "gpuscene_native_boundary_packet_impl.glsl"

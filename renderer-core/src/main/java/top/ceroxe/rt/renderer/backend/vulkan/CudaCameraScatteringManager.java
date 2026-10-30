@@ -25,12 +25,13 @@ import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSync;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
 import top.ceroxe.rt.renderer.rt.device.RtGpuTimestampPool;
+import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
 import top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 
 /** Real primary hits, retained Vulkan lights/visibility and native segment integration. */
 final class CudaCameraScatteringManager implements AutoCloseable {
-    record RadianceContribution(long buffer,long offset,long bytes) { }
+    record RadianceContribution(long buffer,long offset,long bytes,long primaryAddress) { }
     private final ExecutorService nativeThread=Executors.newSingleThreadExecutor(task->{
         Thread thread=new Thread(task,"RTRenderer-native-scattering");thread.setDaemon(true);return thread;
     });
@@ -89,12 +90,15 @@ final class CudaCameraScatteringManager implements AutoCloseable {
     }
     synchronized RadianceContribution prepareRadianceContribution(RenderFrameRequest frame,
             CudaCameraScatteringAbi.Plan plan,GpuSceneRayTracingPipeline lightProducer,
-            GpuSceneRayTracingPipeline diagnosticProducer,int slot,RtTlasBuildPlan buildPlan) {
+            GpuSceneRayTracingPipeline diagnosticProducer,int slot,RtTlasBuildPlan buildPlan,RtGpuBuffer primaryTarget) {
         if(!plan.compactContribution())throw new IllegalArgumentException("compact contribution plan required");
         checkOpen();long started=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
         try{return onNative(()->{
-                prepareOnNative(frame,plan,null,lightProducer,diagnosticProducer,slot,buildPlan,false);
-                return new RadianceContribution(storage.buffer(),plan.emissionOffset(),Math.multiplyExact((long)plan.paths(),16));
+                if(primaryTarget!=null&&primaryTarget.sizeBytes()<Math.multiplyExact((long)plan.paths(),208))
+                    throw new IllegalArgumentException("scattering primary target does not cover every frame path");
+                prepareOnNative(frame,plan,null,lightProducer,diagnosticProducer,slot,buildPlan,false,primaryTarget);
+                return new RadianceContribution(storage.buffer(),plan.emissionOffset(),Math.multiplyExact((long)plan.paths(),16),
+                        primaryTarget==null?0:primaryTarget.deviceAddress());
             });
         }finally{if(OpticalFrameTimings.ENABLED)OpticalFrameTimings.cameraScatteringPrepare.add(System.nanoTime()-started);}
     }
@@ -106,12 +110,12 @@ final class CudaCameraScatteringManager implements AutoCloseable {
         try {plan=plan(width,height,frame.antiAliasing().samplesPerPixel(),frame.mediumTransport().scatteringSteps(),
                 Math.min(cuda.maxResidentBytes(),CudaCameraScatteringAbi.DEFAULT_RESIDENT_BYTES));}
         catch(ArithmeticException|IllegalArgumentException invalid){throw unsupported(invalid.getMessage());}
-        return prepareOnNative(frame,plan,primaryProducer,lightProducer,diagnosticProducer,slot,buildPlan,includeMediumEmission);
+        return prepareOnNative(frame,plan,primaryProducer,lightProducer,diagnosticProducer,slot,buildPlan,includeMediumEmission,null);
     }
     private CudaCameraMediumManager.Prepared prepareOnNative(RenderFrameRequest frame,CudaCameraScatteringAbi.Plan plan,
             GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,
             GpuSceneRayTracingPipeline diagnosticProducer,int slot,RtTlasBuildPlan buildPlan,
-            boolean includeMediumEmission) {
+            boolean includeMediumEmission,RtGpuBuffer primaryTarget) {
         ensureCapacity(allocationBytes(plan),plan.compactContribution());
         long available=Math.min(cuda.maxResidentBytes(),CudaCameraScatteringAbi.DEFAULT_RESIDENT_BYTES);
         if(storage.byteSize()+CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE>available)
@@ -137,7 +141,19 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                     try(MemoryStack stack=MemoryStack.stackPush()) {
                         // Leave the failure counter intact across tiles, resetting it once per frame.
                         VK10.vkCmdUpdateBuffer(command,storage.buffer(),0,stack.malloc(112).put(header,0,112).flip());
+                        // Byte 112 remains the accumulated failure counter; 120 is a
+                        // frame-local Vulkan primary sink, not a CUDA allocation.
+                        VK10.vkCmdUpdateBuffer(command,storage.buffer(),120,stack.longs(primaryTarget==null?0:primaryTarget.deviceAddress()));
                         if(initial) {
+                            if(primaryTarget!=null) {
+                                var primaryWritable=VkBufferMemoryBarrier.calloc(1,stack).sType$Default()
+                                        .srcAccessMask(VK10.VK_ACCESS_MEMORY_READ_BIT|VK10.VK_ACCESS_MEMORY_WRITE_BIT)
+                                        .dstAccessMask(VK10.VK_ACCESS_SHADER_WRITE_BIT)
+                                        .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED).dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                                        .buffer(primaryTarget.buffer()).offset(0).size(primaryTarget.sizeBytes());
+                                VK10.vkCmdPipelineBarrier(command,VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                        KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,primaryWritable,null);
+                            }
                             VK10.vkCmdFillBuffer(command,storage.buffer(),CudaCameraScatteringAbi.FAILED_OFFSET,4,0);
                             if(tlasTiming!=null)tlasTiming.begin(command,VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
                             if(buildPlan!=null)buildPlan.record(command,stack);

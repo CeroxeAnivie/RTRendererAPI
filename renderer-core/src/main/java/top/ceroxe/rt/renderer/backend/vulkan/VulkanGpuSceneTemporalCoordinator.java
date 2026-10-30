@@ -50,6 +50,9 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
     boolean nativeOpticalOpaqueRay(RenderFrameRequest request) {
         return surfaceScene.opticalOpaqueRayOnly(request.primitiveBatch());
     }
+    boolean reusablePbrPrimary(RenderFrameRequest request) {
+        return surfaceScene.opaqueShadowRayOnly(request.primitiveBatch());
+    }
 
     private boolean builtInMediumTransport() {
         return configuration.sceneShaders().equals(top.ceroxe.rt.renderer.api.SceneShaderProgram.builtIn());
