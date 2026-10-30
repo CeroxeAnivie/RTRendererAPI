@@ -82,7 +82,7 @@ void main() {
         // Only the camera packet is needed here; its complete primary payload
         // remains in the same Vulkan-owned destination for all later consumers.
         GsNativeBoundaryStorage cached=GsNativeBoundaryStorage(dispatch.payloadAddress);
-        uint source=(pixelIndex*samples+sampleIndex)*13u;
+        uint source=pixelIndex*samples+sampleIndex;
         uint terminal=base+1u+((dispatch.storage.lanes[6u].w&255u)+1u)/2u;
         dispatch.storage.lanes[terminal]=uvec4(cached.lanes[source].w,floatBitsToUint(origin));
 #else

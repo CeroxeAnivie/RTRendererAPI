@@ -148,6 +148,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                 &&(additionalRadiance.primaryAddress()!=primary.deviceAddress()||scene.transportPlan==null
                 ||scene.transportPlan.kind()!=CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM||plan.boundaryCount()!=0))
             throw new IllegalArgumentException("cached PBR primary does not belong to the current uniform frame allocation");
+        boolean planarPrimary=additionalRadiance!=null&&additionalRadiance.primaryAddress()!=0;
         var selectedResolve=plan.boundaryCount()==0&&scene.assets.density.environmentOffset()<0?uniformResolve:resolve;
         if(statistics==null)statistics=cuda.allocateHost(CudaPbrMediumAbi.STATISTICS_BYTES);
         if(additionalRadiance!=null&&additionalRadiance.bytes()!=Math.multiplyExact((long)plan.paths(),16))
@@ -161,6 +162,9 @@ final class CudaPbrMediumManager implements AutoCloseable {
                 CudaPbrMediumAbi.updateTile(metadata.asByteBuffer().order(ByteOrder.nativeOrder()),plan,first,pixels,
                         additionalRadiance==null?0L:Math.addExact(plan.emissionOffset(),Math.multiplyExact((long)first*plan.samples(),16)),
                         additionalRadiance!=null&&additionalRadiance.includesCameraEmission());
+                // Shared cached primaries use the field planes already supported by
+                // the final shading consumer. Ordinary packet producers retain AoS.
+                metadata.asByteBuffer().order(ByteOrder.nativeOrder()).putInt(268,planarPrimary?1:0);
                 int bytes=initial?uploadBytes:CudaPbrMediumAbi.HEADER_BYTES;
                 RtGpuTimestampPool.Capture primaryTiming=OpticalFrameTimings.ENABLED
                         ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumPrimaryPackets",new String[]{"start","end"}):null;
@@ -226,7 +230,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
         }
         uploadedAssets=scene.assets;
         // This private flag preserves primary geometry while replacing only the already-integrated radiance split.
-        return new CudaCameraMediumManager.Prepared(primary.deviceAddress(),(address+plan.transmittanceOffset())|CudaPbrMediumAbi.NATIVE_LIGHTING_FLAG,
+        return new CudaCameraMediumManager.Prepared(primary.deviceAddress(),(address+plan.transmittanceOffset())|CudaPbrMediumAbi.NATIVE_LIGHTING_FLAG|(planarPrimary?8L:0L),
                 address+plan.emissionOffset(),plan.pixels(),plan.samples(),true);
     }
     private void upload(org.lwjgl.vulkan.VkCommandBuffer command,MemoryStack stack,ByteBuffer source,int bytes) {

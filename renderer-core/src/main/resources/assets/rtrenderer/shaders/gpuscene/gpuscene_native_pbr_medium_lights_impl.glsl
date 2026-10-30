@@ -27,14 +27,15 @@ void main() {
     uint packetOffset=dispatch.storage.lanes[2].y/16u,colorOffset=dispatch.storage.lanes[16].y/16u;
     GsPbrStorage primary=GsPbrStorage(dispatch.primaryAddress);
     ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
+    uint primaryStride=dispatch.storage.lanes[16].w!=0u?uint(extent.x)*uint(extent.y)*samples:1u;
     for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
-        uint local=localPixel*samples+sampleIndex,source=(pixel*samples+sampleIndex)*13u,index=paths+local*connections+light;
+        uint local=localPixel*samples+sampleIndex,source=(pixel*samples+sampleIndex)*(primaryStride==1u?13u:1u),index=paths+local*connections+light;
         uint packet=packetOffset+index*stride,outLane=colorOffset+index*2u;
         dispatch.storage.lanes[packet]=uvec4(0);dispatch.storage.lanes[packet+stride-1u]=uvec4(0);
         dispatch.storage.lanes[outLane]=uvec4(0);dispatch.storage.lanes[outLane+1u]=uvec4(0);
-        vec4 position=uintBitsToFloat(primary.lanes[source]),normalRoughness=uintBitsToFloat(primary.lanes[source+3u]);
-        vec4 base=uintBitsToFloat(primary.lanes[source+4u]),emissive=uintBitsToFloat(primary.lanes[source+5u]);
-        uvec4 state=primary.lanes[source+7u];
+        vec4 position=uintBitsToFloat(primary.lanes[source]),normalRoughness=uintBitsToFloat(primary.lanes[source+3u*primaryStride]);
+        vec4 base=uintBitsToFloat(primary.lanes[source+4u*primaryStride]),emissive=uintBitsToFloat(primary.lanes[source+5u*primaryStride]);
+        uvec4 state=primary.lanes[source+7u*primaryStride];
         uint shading=(state.z>>GPU_SCENE_SHADING_MODEL_SHIFT)&GPU_SCENE_SHADING_MODEL_MASK;
         if(light==0u) {
             vec3 localColor=state.x==0u?base.rgb:(shading==GPU_SCENE_SHADING_UNLIT?max(base.rgb,vec3(0))+max(emissive.rgb,vec3(0)):
@@ -43,17 +44,17 @@ void main() {
             if (state.x!=0u && shading!=GPU_SCENE_SHADING_UNLIT) {
                 GpuScenePayload receiver;
                 receiver.worldPositionAndDistance=position;
-                receiver.previousWorldPosition=uintBitsToFloat(primary.lanes[source+1u]);
-                receiver.motionRevision=primary.lanes[source+2u].xy;
+                receiver.previousWorldPosition=uintBitsToFloat(primary.lanes[source+1u*primaryStride]);
+                receiver.motionRevision=primary.lanes[source+2u*primaryStride].xy;
                 receiver.worldNormalAndRoughness=normalRoughness;
                 receiver.baseColorAndOpacity=base;
                 receiver.emissiveAndMetallic=emissive;
-                receiver.transmissionIor=uintBitsToFloat(primary.lanes[source+6u]);
+                receiver.transmissionIor=uintBitsToFloat(primary.lanes[source+6u*primaryStride]);
                 receiver.state=state;
-                receiver.surfaceState=primary.lanes[source+8u];
-                receiver.compositeState=uintBitsToFloat(primary.lanes[source+9u]);
-                receiver.launchInfo=primary.lanes[source+10u];
-                receiver.mediumBoundary=primary.lanes[source+11u];
+                receiver.surfaceState=primary.lanes[source+8u*primaryStride];
+                receiver.compositeState=uintBitsToFloat(primary.lanes[source+9u*primaryStride]);
+                receiver.launchInfo=primary.lanes[source+10u*primaryStride];
+                receiver.mediumBoundary=primary.lanes[source+11u*primaryStride];
                 localColor+=gsGatherCaustics(receiver,normalize(gsFrameCameraPosition()-position.xyz));
             }
             dispatch.storage.lanes[colorOffset+local*2u]=floatBitsToUint(vec4(localColor,0));
