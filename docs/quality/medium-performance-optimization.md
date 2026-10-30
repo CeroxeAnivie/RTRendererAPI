@@ -408,3 +408,25 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 新第一名 fence 包含 PBR GPU 生产与解析，不能再加上 GPU 时间；下一次继续优化应拆解其中必要 GPU 工作，而不是把这个 fence 机械删除。原始边界独立重算通过：3 个线程、67,506 个事件、零丢样、严格包含且兄弟不重叠。完整 82 项排名、分布、三轮与制品 hash 见 [pbr-queued-statistics-20261031.json](data/pbr-queued-statistics-20261031.json) 和 [完整排名 CSV](data/pbr-queued-statistics-ranked-20261031.csv)。
 
 正确性：8 帧 RGBA16F 与保留对照全字节一致；14 项相机散射独立 HDR 检查、31 项非散射 PBR 检查（43 个 native frames）、15 项介质组合检查全部通过。覆盖 uniform/density/multiple、低 resident budget 跨 tile、resize、资源替换与 rejection；所有四份 validation 日志均零 warning/error。PBR ABI 与跨线程 timeline 契约自测通过。观测子代理仍保持停止，本候选由主线程顺序完成。
+
+
+### PBR 第一名：严格不透明灯光连接改用 inline query
+
+本次限定允许优化 PBR fence 内 GPU 前三项；使用已有 timestamp 已能确认灯光 packet 查询为第一名，因此未追加 shader 插桩。复用现有 `OPAQUE_SHADOW_RAY` 场景证明，仅在所有可能命中都应遮挡、双面、完全不透明、无介质边界时，使用 opaque triangle first-hit inline query，消除通用 any-hit/closest-hit/miss 调度及材质判定。保持 packet 清零、origin/epsilon/tMax、BRDF、光照、连接输出和 CUDA 输运不变；无 ray-query feature 或证明不成立时仍走原 packet shader。
+
+参考 Falcor commit `759aad033ff610fb0d82c74f7e0a508d0096d5f2`，BSD-3-Clause，`Source/Falcor/Scene/RaytracingInline.slang` 的 visibility specialization；通过已有 ray-query 接口独立适配，未复制外部代码。基线 `12e9924`，冻结制品，360 帧预热、三轮各 120 个完成帧，所有测前 GPU 0 占用为 0%。
+
+| 指标 | 对照 | 候选 | 变化 |
+| --- | ---: | ---: | ---: |
+| 灯光 packet GPU，ms/帧 | 2.363802 | 2.039185 | −13.73% |
+| 三轮灯光 packet 降幅 | — | — | 12.52% / 10.63% / 17.80% |
+| 整条 PBR，ms/帧 | 7.403944 | 7.317564 | −1.17% |
+| 反序对照整条 PBR，ms/帧 | 7.601647 | 7.317564 | −3.74% |
+| 第一组关闭诊断 FPS | 70.513432 | 69.425435 | −1.54% |
+| 反序组关闭诊断 FPS | 66.468479 | 68.647402 | +3.28% |
+
+确定性局部收益保留；不宣称整机 FPS 已稳定提高。CUDA kernel 同组由 2.025168 增至 2.157557 ms，贡献 restore 由 0.131579 增至 0.143174 ms，保留这些变化，不隐藏其他阶段的耗时。下一项按限定特例处理新 GPU 第一名 CUDA 解析。
+
+候选同一观测窗口：360 帧、5129.2839 ms，14.248011 ms/帧、70.185236 FPS；观测相对关闭诊断帧时变化 −1.08%，未测到超过 10% 的拖慢。新主表 PBR fence 6.735173 ms/帧（472.710 ms/墙钟秒，47.271%），散射完成同步 4.119540 ms（289.131 ms/秒，28.913%），散射读回前同步 0.812244 ms（57.008 ms/秒，5.701%）。完整互斥表和求和见本轮 JSON/CSV，GPU 工作不与 fence 相加。67,502 事件，零丢样，严格包含与互斥求和检查通过。
+
+8 帧 HDR 与保留对照全字节一致；31 项 PBR 检查（43 native frames）、15 项散射组合检查通过，三份 validation 日志零 warning/error。场景证明和 PBR ABI 自测通过；通用 shader 原有 8 个 SPIR-V 与改前完全相同，新 query 8 个变体已编译。证据：[pbr-light-inline-query-20261031.json](data/pbr-light-inline-query-20261031.json)、[完整排名 CSV](data/pbr-light-inline-query-ranked-20261031.csv)。工具：`tools/RunMediumPbrTrial.ps1`、`tools/AnalyzeMediumPbrTrial.py`。

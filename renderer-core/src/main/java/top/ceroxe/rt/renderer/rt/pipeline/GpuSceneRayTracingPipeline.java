@@ -184,7 +184,10 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     &&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS;
             boolean inlineScatteringQuery=checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
                     &&(program==Program.NATIVE_SCATTERING_LIGHTS||program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC);
-            String raygenSource=inlineScatteringQuery?"gpuscene_native_scattering_query.rgen":program.source;
+            boolean inlinePbrLightQuery=checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
+                    &&program==Program.NATIVE_PBR_MEDIUM_LIGHTS;
+            String raygenSource=inlineScatteringQuery?"gpuscene_native_scattering_query.rgen"
+                    :inlinePbrLightQuery?"gpuscene_native_pbr_medium_query.rgen":program.source;
             byte[] raygenCode = scatteringDiagnostic?RtShaderModuleCompiler.compileCameraScatteringDiagnostic(SHADER_ROOT+raygenSource,
                     Shaderc.shaderc_raygen_shader,linearHdrOutput,shaderExecutionReorderingEnabled):opticalDiagnostic
                     ?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+program.source,Shaderc.shaderc_raygen_shader,
