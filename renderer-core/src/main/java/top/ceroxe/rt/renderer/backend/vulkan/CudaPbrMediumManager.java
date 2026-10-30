@@ -3,7 +3,6 @@ import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
 
 
 import java.lang.foreign.Arena;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
@@ -51,6 +50,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
     private final CudaMediumRuntime cuda;
     private final CudaMediumRuntime.BatchKernel resolve;
     private CudaSharedRayFrame storage;
+    private CudaMediumRuntime.HostMemory statistics;
     private RtGpuBuffer primary;
     private Assets uploadedAssets;
     private boolean closed;
@@ -132,13 +132,13 @@ final class CudaPbrMediumManager implements AutoCloseable {
                 !=(scene.transportPlan.kind()!=CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM))
             throw new IllegalArgumentException("PBR scattering volume-emission ownership does not match its integrator");
         var plan=scene.plan;ensureCapacity(plan,scene.transportPlan!=null);long address=storage.deviceAddress();boolean changed=!scene.assets.equals(uploadedAssets);
+        if(statistics==null)statistics=cuda.allocateHost(CudaPbrMediumAbi.STATISTICS_BYTES);
         if(additionalRadiance!=null&&additionalRadiance.bytes()!=Math.multiplyExact((long)plan.paths(),16))
             throw new IllegalArgumentException("PBR/scattering complete-frame radiance extent mismatch");
         try(Arena arena=Arena.ofConfined()) {
             int uploadBytes=changed?plan.sceneBytes():CudaPbrMediumAbi.HEADER_BYTES;
             var metadata=arena.allocate(uploadBytes,16);metadata.asByteBuffer().put(scene.metadata,0,changed?scene.metadata.length:CudaPbrMediumAbi.HEADER_BYTES);
             if(changed)scene.assets.density.write(metadata.asByteBuffer().order(ByteOrder.nativeOrder()),scene.metadata.length);
-            var counters=arena.allocate(CudaPbrMediumAbi.STATISTICS_BYTES,16);
             for(int first=0;first<plan.pixels();) {
                 int tileFirst=first,pixels=Math.min(plan.tilePixels(),plan.pixels()-first),paths=pixels*plan.samples();boolean initial=first==0;
                 CudaPbrMediumAbi.updateTile(metadata.asByteBuffer().order(ByteOrder.nativeOrder()),plan,first,pixels,
@@ -152,7 +152,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                 RtGpuTimestampPool.Capture restoreTiming=OpticalFrameTimings.ENABLED&&additionalRadiance!=null
                         ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumContributionRestore",new String[]{"start","end"}):null;
                 try(primaryTiming;lightsTiming;restoreTiming) {
-                storage.produceThenExchangeBlocking(command->{try(MemoryStack stack=MemoryStack.stackPush()) {
+                storage.produceThenExchangeQueuedBlocking(command->{try(MemoryStack stack=MemoryStack.stackPush()) {
                     if(initial&&buildPlan!=null)buildPlan.record(command,stack);
                     upload(command,stack,metadata.asByteBuffer(),bytes);
                     if (initial && photonPlan != null && photonPlan.photons() > 0) {
@@ -194,13 +194,15 @@ final class CudaPbrMediumManager implements AutoCloseable {
                     }
                 }},shared->{
                     cuda.launchBlocking(resolve,shared,paths,1,"pbrMedium.resolve");
-                    cuda.download(shared.slice(CudaPbrMediumAbi.STATISTICS_OFFSET,CudaPbrMediumAbi.STATISTICS_BYTES),counters);
+                    // Pinned copy precedes the CUDA external signal in the same stream.
+                    // The exchange's Vulkan fence proves both complete before validation.
+                    cuda.downloadAsync(shared.slice(CudaPbrMediumAbi.STATISTICS_OFFSET,CudaPbrMediumAbi.STATISTICS_BYTES),statistics);
                 },command->{});
                 if(primaryTiming!=null&&primaryTiming.resolve())OpticalFrameTimings.recordGpuStage("pbrMedium.primaryPackets",primaryTiming.totalNanos());
                 if(lightsTiming!=null&&lightsTiming.resolve())OpticalFrameTimings.recordGpuStage("pbrMedium.lightPackets",lightsTiming.totalNanos());
                 if(restoreTiming!=null&&restoreTiming.resolve())OpticalFrameTimings.recordGpuStage("pbrMedium.contributionRestore",restoreTiming.totalNanos());
                 }
-                if(counters.get(ValueLayout.JAVA_INT,0)!=0||counters.get(ValueLayout.JAVA_INT,4)!=0||counters.get(ValueLayout.JAVA_INT,12)!=paths)
+                if(statistics.getInt(0)!=0||statistics.getInt(4)!=0||statistics.getInt(12)!=paths)
                     throw new RendererException("native PBR medium produced invalid packet states; final output was not published");
                 first+=pixels;
             }

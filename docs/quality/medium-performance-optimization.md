@@ -367,3 +367,43 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 内部 shadow/remainder 比三轮由 0.34884/0.34900/0.34810 降至 0.31996/0.32164/0.31781。候选内部新第一名是主射线与命中/缓存读取，不再是不透明阴影；完整 ms/路径排名保留为内部证据。8 帧 HDR 全字节一致，23,083 次阴影 query 对原 traceRay parity 零差异，14 项生产 HDR 验收全部通过，validation 0 warning/0 error。仅这个 query 的 8 个 SPIR-V 变体重编译与校验。
 
 保留三轮正式 GPU 阶段收益，关闭诊断的 FPS 仍按独立观测组报告，不把反序 +6.60% 当作保证。详细轮次与新内部排名见 [scattering-shadow-single-proceed-20261031.json](data/scattering-shadow-single-proceed-20261031.json)。下一候选按用户指定只处理 PBR 统计读回前同步。
+
+### PBR 统计读回与完成边界合并
+
+本轮按用户指定修复 PBR 统计读回前 CUDA 同步。原实现每个 tile 先 `cuStreamSynchronize`，同步拷回 16-byte 统计，再发 external signal，再等待 CUDA stream，最后提交 Vulkan acquire 并等 fence。统计不参与中间 GPU 调度，只用于每个 tile 返回后拒绝无效结果，因此这些 host 边界可以合并。
+
+现在复用一个由 CUDA runtime 持有并在关闭时释放的 page-locked host 统计缓冲；将 DtoH async 排在 resolve kernel 之后、external signal 之前。新增严格的 enqueue-only exchange 入口，提前提交等待该 signal 的 Vulkan consumer，只用其 fence 作为成功返回的完成边界。每个 tile 返回后仍校验 failed/rejected/completed counts，再处理下一 tile；全部检查通过才发布最终帧。通用含 host-counter 决策或嵌套 exchange 的回调保留原阻塞路径；既有失败 drain 与资源所有权契约保持。
+
+参考 NVIDIA cuda-samples v12.5，commit `9c688d7ff78455ed42e345124d1495aad6bf66de`，BSD-3-Clause：[`Samples/0_Introduction/simpleStreams/simpleStreams.cu`](https://github.com/NVIDIA/cuda-samples/blob/9c688d7ff78455ed42e345124d1495aad6bf66de/Samples/0_Introduction/simpleStreams/simpleStreams.cu) 的 pinned async copy 和 [`Samples/5_Domain_Specific/vulkanImageCUDA/vulkanImageCUDA.cu`](https://github.com/NVIDIA/cuda-samples/blob/9c688d7ff78455ed42e345124d1495aad6bf66de/Samples/5_Domain_Specific/vulkanImageCUDA/vulkanImageCUDA.cu) 的 stream-ordered external semaphore。通过项目已有的 pinned copy、external signal 和 fence 抽象独立适配，未复制外部代码。
+
+冻结对照/候选 JAR 与 benchmark classes，各组 360 帧预热、3×120 个完成帧，所有测前 GPU 0 占用均为 0%。首组对照的 host 录制、轮询耗时更高，故保留原始数据并增加候选之后的反序对照；采用更小且三轮一致的收益，不以首组较大的差值宣称提升。
+
+| 净收益指标 | 反序对照 | 候选 | 改善 |
+| --- | ---: | ---: | ---: |
+| 整条 PBR prepare/交接，ms/帧 | 7.932838 | 7.546261 | −4.87% |
+| 三轮整条 PBR 耗时降幅 | — | — | 5.21% / 4.49% / 4.91% |
+| 关闭全部诊断，原生完成 FPS | 68.426201 | 70.313198 | +2.76% |
+| 关闭全部诊断，墙钟 ms/帧 | 14.614285 | 14.222081 | −2.68% |
+
+实际净省约 0.386577 ms/帧。被取消的读回前 stream wait 中大部分本来就在等必要 GPU 工作，现在由 Vulkan fence 承担；不能声称原来的约 7 ms 整块都省掉了。候选开启 wall+GPU 观测为 14.147752 ms/帧，关闭观测为 14.222081 ms/帧，本组未测出超过 10% 的拖慢，负差值不算优化收益。
+
+新的互斥墙钟主表来自候选同一观测窗口，360 帧、5093.1907 ms、70.682608 FPS。没有借用另一次关闭诊断的 FPS。
+
+| 排名 | 实测墙钟边界 | ms/帧 | 每秒累计 ms | 占这一秒 |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | PBR Vulkan 完成 fence 等待 | 7.012 | 495.607 | 49.56% |
+| 2 | 散射完成边界 CUDA stream 同步 | 4.008 | 283.287 | 28.33% |
+| 3 | 散射统计读回前 CUDA stream 同步 | 0.794 | 56.104 | 5.61% |
+| 4 | 散射 Vulkan consumer fence 等待 | 0.459 | 32.426 | 3.24% |
+| 5 | benchmark park 等待 | 0.450 | 31.798 | 3.18% |
+| 6 | PBR release 命令录制 | 0.133 | 9.424 | 0.94% |
+| 7 | 最终帧命令录制与提交 | 0.102 | 7.185 | 0.72% |
+| 8 | 散射 release 命令录制 | 0.091 | 6.435 | 0.64% |
+| 9 | 散射读回调用自身，扣除子项 | 0.075 | 5.302 | 0.53% |
+| 10 | PBR release 提交 | 0.070 | 4.937 | 0.49% |
+| | 其余 72 项合计 | 0.955 | 67.495 | 6.75% |
+| | **互斥墙钟求和** | **14.148** | **1000.000** | **100.00%** |
+
+新第一名 fence 包含 PBR GPU 生产与解析，不能再加上 GPU 时间；下一次继续优化应拆解其中必要 GPU 工作，而不是把这个 fence 机械删除。原始边界独立重算通过：3 个线程、67,506 个事件、零丢样、严格包含且兄弟不重叠。完整 82 项排名、分布、三轮与制品 hash 见 [pbr-queued-statistics-20261031.json](data/pbr-queued-statistics-20261031.json) 和 [完整排名 CSV](data/pbr-queued-statistics-ranked-20261031.csv)。
+
+正确性：8 帧 RGBA16F 与保留对照全字节一致；14 项相机散射独立 HDR 检查、31 项非散射 PBR 检查（43 个 native frames）、15 项介质组合检查全部通过。覆盖 uniform/density/multiple、低 resident budget 跨 tile、resize、资源替换与 rejection；所有四份 validation 日志均零 warning/error。PBR ABI 与跨线程 timeline 契约自测通过。观测子代理仍保持停止，本候选由主线程顺序完成。

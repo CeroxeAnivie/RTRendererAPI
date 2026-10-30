@@ -142,6 +142,17 @@ public final class CudaSharedRayFrame implements AutoCloseable {
     }
 
     /**
+     * Queues a CUDA batch and its pinned readbacks before the external signal, then uses
+     * the Vulkan consumer fence as the single completion boundary. The native callback
+     * must only enqueue work: no host-counter decisions or nested ownership exchanges.
+     * Host results are complete on return; the caller must validate before publication.
+     */
+    public void produceThenExchangeQueuedBlocking(Consumer<VkCommandBuffer> producer,
+            Consumer<CudaMediumRuntime.Slice> nativeStep, Consumer<VkCommandBuffer> vulkanStep) {
+        exchangeBlocking(Objects.requireNonNull(producer, "producer"), nativeStep, vulkanStep, null, true);
+    }
+
+    /**
      * Queues Vulkan producer, CUDA step, Vulkan continuation and CUDA step before one
      * final ownership fence. Callbacks enqueue work only; host results are readable
      * after this method returns. The two steps share the same allocation and stream.
@@ -274,6 +285,11 @@ public final class CudaSharedRayFrame implements AutoCloseable {
     private void exchangeBlocking(Consumer<VkCommandBuffer> producer,
             Consumer<CudaMediumRuntime.Slice> nativeStep, Consumer<VkCommandBuffer> vulkanStep,
             BlockingConsumer finalConsumer) {
+        exchangeBlocking(producer, nativeStep, vulkanStep, finalConsumer, false);
+    }
+    private void exchangeBlocking(Consumer<VkCommandBuffer> producer,
+            Consumer<CudaMediumRuntime.Slice> nativeStep, Consumer<VkCommandBuffer> vulkanStep,
+            BlockingConsumer finalConsumer, boolean queuedNativeStep) {
         int wallScope = OpticalWallTimeline.enter(SHARED_EXCHANGE);
         int wallStep = OpticalWallTimeline.enter(VULKAN_RELEASE_RECORD);
         try {
@@ -359,7 +375,7 @@ public final class CudaSharedRayFrame implements AutoCloseable {
                 } finally { OpticalWallTimeline.leave(wallConsumerStep); }
             };
             final long cudaStarted=profile?System.nanoTime():0L;
-            if (finalConsumer == null) {
+            if (finalConsumer == null && !queuedNativeStep) {
                 // General continuations may nest exchanges and read host counters. Preserve
                 // their established blocking CUDA boundary before the next Vulkan query.
                 cuda.exchangeExternalBlocking(importedToCuda, importedToVulkan,
