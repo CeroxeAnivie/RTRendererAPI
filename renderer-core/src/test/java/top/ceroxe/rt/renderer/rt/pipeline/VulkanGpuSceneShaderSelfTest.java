@@ -111,7 +111,8 @@ public final class VulkanGpuSceneShaderSelfTest {
       String segment = read("assets/rtrenderer/shaders/gpuscene/gpuscene_photon_segment.glsl");
       require(lights.contains("#define RTRENDERER_CAUSTICS 1")
               && lights.contains("gsGatherCaustics(receiver")
-              && lights.contains("uint primaryStride=dispatch.storage.lanes[16].w!=0u?uint(extent.x)*uint(extent.y)*samples:1u")
+              // Header flags also select color endpoints and compact colors; only bit 0 selects primary planes.
+              && lights.contains("uint primaryStride=(dispatch.storage.lanes[16].w&1u)!=0u?uint(extent.x)*uint(extent.y)*samples:1u")
               && lights.contains("source=(pixel*samples+sampleIndex)*(primaryStride==1u?13u:1u)"),
               "native PBR light resolve must gather the published photon map from the primary payload");
       for (String field : new String[] {

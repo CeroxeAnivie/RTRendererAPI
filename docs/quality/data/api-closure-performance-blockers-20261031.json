@@ -1,0 +1,49 @@
+{
+  "passed": false,
+  "source": {
+    "startedAtUtc": "2026-10-30T22:22:37.6646844+00:00",
+    "commit": "05760a9470f328ea39226a4c79142dd1d03518d5",
+    "tree": "1a0bc6a7108a7f8466b6aab796871b8257ec1c88",
+    "trackedClean": true
+  },
+  "sourceAfterRun": {
+    "completedAtUtc": "2026-10-30T22:31:10.1855820+00:00",
+    "exitCode": 1,
+    "commit": "05760a9470f328ea39226a4c79142dd1d03518d5",
+    "tree": "1a0bc6a7108a7f8466b6aab796871b8257ec1c88",
+    "trackedClean": true
+  },
+  "command": "./gradlew.bat verifyApiClosure --offline --no-daemon --console=plain --continue",
+  "gradle": {
+    "result": "BUILD FAILED",
+    "elapsed": "8m 32s",
+    "actionableTasks": 280,
+    "executed": 255,
+    "upToDate": 25
+  },
+  "failures": [
+    {
+      "task": ":renderer-core:coreVulkanGpuSceneShaderSelfTest",
+      "kind": "stale source contract",
+      "reason": "The primary layout header now packs flags; shader masks bit 0 correctly while the test still required whole-word nonzero selection.",
+      "fix": "Require the bit-0 primaryStride expression; retain all photon receiver field and gather checks. No production code changed."
+    },
+    {
+      "task": ":renderer-core:cudaCameraScatteringProductionNativeSelfTest",
+      "kind": "GraalVM compiler process failure",
+      "frame": "jvmcicompiler.dll+0x3edf82",
+      "runtimeReport": "EXCEPTION_ILLEGAL_INSTRUCTION (0xc000001d)",
+      "gradleExit": "0xC0000409",
+      "crashLog": {
+        "path": "renderer-core/hs_err_pid39212.log",
+        "sha256": "77ec9bad033e87977bf1bf63783772aff3267dd30cdf4ca3c946b8c03c5eeecb"
+      },
+      "retry": "Temporarily set -XX:-UseJVMCICompiler for the retry; no project configuration change and no test tolerance change."
+    }
+  ],
+  "fullLog": {
+    "path": "build/api-closure-performance-final-20261031/complete.log",
+    "sha256": "0c3ba1dbf9e369918761156934d75eeebf4684d64e6eb4648da9a1cd8f71560f"
+  },
+  "nextStep": "Repeat the complete gate from a committed clean tree with both corrections; do not certify this run."
+}
