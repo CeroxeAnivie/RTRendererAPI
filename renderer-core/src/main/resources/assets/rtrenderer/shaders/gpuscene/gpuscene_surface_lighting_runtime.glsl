@@ -1,7 +1,7 @@
 #ifndef GS_SURFACE_LIGHTING_RUNTIME_GLSL
 #define GS_SURFACE_LIGHTING_RUNTIME_GLSL
 #include "gpuscene_visibility.glsl"
-#ifndef RTRENDERER_SURFACE_ONLY
+#if !defined(RTRENDERER_SURFACE_ONLY) && !defined(RTRENDERER_SCATTERING_OPAQUE_ONLY)
 layout(location=1) rayPayloadEXT GsVisibilityPayload visibility;
 #endif
 
@@ -29,7 +29,13 @@ GsShadowVisibility gsShadowVisibilityDetailed(vec3 origin,vec3 normal,vec3 direc
     return GsShadowVisibility(value,value);
 #else
 #ifdef RTRENDERER_SCATTERING_RAY_QUERY
+#ifdef RTRENDERER_SCATTERING_OPAQUE_ONLY
+    // The cached-primary program has the same scene proof as this fast path.
+    // Resolve it at compile time so no hit-shader payload or fallback survives.
+    {
+#else
     if((gsFrame.words[GPU_SCENE_FRAME_FEATURE_FLAGS_WORD]&GPU_SCENE_FEATURE_FLAG_OPAQUE_SHADOW_RAY)!=0u) {
+#endif
         // NVIDIA ray-query shadow pattern: traverse here without payload or hit/miss shader dispatch.
         float epsilon=gsRayEpsilon(origin);
         rayQueryEXT query;
@@ -55,6 +61,7 @@ GsShadowVisibility gsShadowVisibilityDetailed(vec3 origin,vec3 normal,vec3 direc
         return GsShadowVisibility(value,value);
     }
 #endif
+#ifndef RTRENDERER_SCATTERING_OPAQUE_ONLY
     if((gsFrame.words[GPU_SCENE_FRAME_FEATURE_FLAGS_WORD]&GPU_SCENE_FEATURE_FLAG_OPAQUE_VISIBILITY)!=0u) {
         payload.state=uvec4(0u,GS_PAYLOAD_SHADOW_QUERY,profileAnyHit?1u:0u,0u);
         traceRayEXT(sceneTlas,gl_RayFlagsTerminateOnFirstHitEXT,255,0,0,0,
@@ -150,6 +157,7 @@ GsShadowVisibility gsShadowVisibilityDetailed(vec3 origin,vec3 normal,vec3 direc
     fallbackTicks=clockRealtimeEXT()-fallbackStarted;
 #endif
     return GsShadowVisibility(vec3(0.0),vec3(0.0));
+#endif
 #endif
 }
 

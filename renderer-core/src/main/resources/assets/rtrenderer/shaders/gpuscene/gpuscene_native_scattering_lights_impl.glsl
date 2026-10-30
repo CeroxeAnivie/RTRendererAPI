@@ -12,7 +12,9 @@
 #define GS_CAMERA_SCATTERING_STAGE_COUNT 16u
 #include "gpuscene_surface_transport.glsl"
 layout(set=0,binding=GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
+#ifndef RTRENDERER_SCATTERING_OPAQUE_ONLY
 layout(location=0) rayPayloadEXT GpuScenePayload payload;
+#endif
 #include "gpuscene_surface_lighting_runtime.glsl"
 #define RTRENDERER_CAUSTICS 1
 #include "gpuscene_caustic_map.glsl"
@@ -91,7 +93,9 @@ void main() {
         uint base=dispatch.primaryOffset/16u+primaryItem*13u;
         vec2 location=vec2(pixel)+gsScatteringSampleOffset(sampleIndex,samples);if(!gsExactProjectionActive())location+=jitter;
         vec3 direction=gsRayDirectionAtSample(location,extent);
+#ifndef RTRENDERER_SCATTERING_OPAQUE_ONLY
         payload.launchInfo=uvec4(pixel,extent);
+#endif
         vec4 hit;bool present;
 #ifdef RTRENDERER_SCATTERING_CACHED_PRIMARY
         {

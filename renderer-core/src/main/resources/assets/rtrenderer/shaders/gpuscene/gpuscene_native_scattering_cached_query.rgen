@@ -1,4 +1,9 @@
 #version 460
 #define RTRENDERER_SCATTERING_RAY_QUERY 1
 #define RTRENDERER_SCATTERING_CACHED_PRIMARY 1
+// reusablePbrPrimary admits this program only after opaqueShadowRayOnly proves
+// every candidate blocks. Keep the full path when auditing that proof.
+#ifndef RTRENDERER_SCATTERING_QUERY_AUDIT
+#define RTRENDERER_SCATTERING_OPAQUE_ONLY 1
+#endif
 #include "gpuscene_native_scattering_lights_impl.glsl"
