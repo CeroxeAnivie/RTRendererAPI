@@ -16,6 +16,11 @@ public final class OpticalFrameTimings {
     public static final LongAdder cameraScatteringPrepare=new LongAdder(),pbrMediumPrepare=new LongAdder();
     public static final LongAdder cameraScatteringKernelGpu=new LongAdder(),pbrMediumKernelGpu=new LongAdder();
     public static final LongAdder cameraScatteringKernelCount=new LongAdder(),pbrMediumKernelCount=new LongAdder();
+    public static final LongAdder cameraScatteringTlasGpu=new LongAdder(),cameraScatteringTlasCount=new LongAdder();
+    public static final LongAdder cameraScatteringLightsGpu=new LongAdder(),cameraScatteringLightsCount=new LongAdder();
+    public static final LongAdder pbrPrimaryPacketsGpu=new LongAdder(),pbrPrimaryPacketsCount=new LongAdder();
+    public static final LongAdder pbrLightPacketsGpu=new LongAdder(),pbrLightPacketsCount=new LongAdder();
+    public static final LongAdder pbrContributionRestoreGpu=new LongAdder(),pbrContributionRestoreCount=new LongAdder();
     public static final LongAdder[] kernelPhases=java.util.stream.IntStream.range(0,8).mapToObj(i->new LongAdder()).toArray(LongAdder[]::new);
     private static final java.util.Map<String,LongAdder[]> roundDetails=new java.util.concurrent.ConcurrentHashMap<>();
     private OpticalFrameTimings() { }
@@ -25,6 +30,18 @@ public final class OpticalFrameTimings {
             case "cameraScattering.resolve" -> {cameraScatteringKernelGpu.add(nanos);cameraScatteringKernelCount.increment();}
             case "pbrMedium.resolve" -> {pbrMediumKernelGpu.add(nanos);pbrMediumKernelCount.increment();}
             default -> throw new IllegalArgumentException("unknown profiled CUDA kernel: "+stage);
+        }
+    }
+    public static void recordGpuStage(String stage,long nanos) {
+        if(!ENABLED)return;
+        if(nanos<0)throw new IllegalArgumentException("GPU stage duration must not be negative");
+        switch(stage) {
+            case "cameraScattering.tlas" -> {cameraScatteringTlasGpu.add(nanos);cameraScatteringTlasCount.increment();}
+            case "cameraScattering.lights" -> {cameraScatteringLightsGpu.add(nanos);cameraScatteringLightsCount.increment();}
+            case "pbrMedium.primaryPackets" -> {pbrPrimaryPacketsGpu.add(nanos);pbrPrimaryPacketsCount.increment();}
+            case "pbrMedium.lightPackets" -> {pbrLightPacketsGpu.add(nanos);pbrLightPacketsCount.increment();}
+            case "pbrMedium.contributionRestore" -> {pbrContributionRestoreGpu.add(nanos);pbrContributionRestoreCount.increment();}
+            default -> throw new IllegalArgumentException("unknown profiled Vulkan stage: "+stage);
         }
     }
     public static void recordRound(int opticalSample,int branch,int round,int queries,int[] statistics,long[] phases) {
@@ -62,6 +79,10 @@ public final class OpticalFrameTimings {
                 kernelPhases[0].sum(),kernelPhases[1].sum(),kernelPhases[2].sum(),kernelPhases[3].sum(),
                 kernelPhases[4].sum(),kernelPhases[5].sum(),kernelPhases[6].sum(),kernelPhases[7].sum(),
                 cameraScatteringPrepare.sum(),pbrMediumPrepare.sum(),cameraScatteringKernelGpu.sum(),
-                pbrMediumKernelGpu.sum(),cameraScatteringKernelCount.sum(),pbrMediumKernelCount.sum()};
+                pbrMediumKernelGpu.sum(),cameraScatteringKernelCount.sum(),pbrMediumKernelCount.sum(),
+                cameraScatteringTlasGpu.sum(),cameraScatteringTlasCount.sum(),cameraScatteringLightsGpu.sum(),
+                cameraScatteringLightsCount.sum(),pbrPrimaryPacketsGpu.sum(),pbrPrimaryPacketsCount.sum(),
+                pbrLightPacketsGpu.sum(),pbrLightPacketsCount.sum(),pbrContributionRestoreGpu.sum(),
+                pbrContributionRestoreCount.sum()};
     }
 }

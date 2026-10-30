@@ -22,6 +22,7 @@ import top.ceroxe.rt.renderer.rt.acceleration.RtTlasBuildPlan;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSync;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
+import top.ceroxe.rt.renderer.rt.device.RtGpuTimestampPool;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 
 /** Real primary hits, retained Vulkan lights/visibility and native segment integration. */
@@ -96,13 +97,20 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                 int tileFirst=first,pixels=Math.min(plan.tilePixels(),plan.pixels()-first);
                 boolean initial=first==0,last=first+pixels==plan.pixels();
                 byte[] header=CudaCameraScatteringAbi.header(plan,frame,first,pixels,includeMediumEmission);
+                RtGpuTimestampPool.Capture tlasTiming=OpticalFrameTimings.ENABLED&&initial&&buildPlan!=null
+                        ?device.frameCommands().acquireGpuTimestampCapture("cameraScatteringTlas",new String[]{"start","end"}):null;
+                RtGpuTimestampPool.Capture lightsTiming=OpticalFrameTimings.ENABLED
+                        ?device.frameCommands().acquireGpuTimestampCapture("cameraScatteringLights",new String[]{"start","end"}):null;
+                try(tlasTiming;lightsTiming) {
                 storage.produceThenExchangeBlocking(command->{
                     try(MemoryStack stack=MemoryStack.stackPush()) {
                         // Leave the failure counter intact across tiles, resetting it once per frame.
                         VK10.vkCmdUpdateBuffer(command,storage.buffer(),0,stack.malloc(112).put(header,0,112).flip());
                         if(initial) {
                             VK10.vkCmdFillBuffer(command,storage.buffer(),CudaCameraScatteringAbi.FAILED_OFFSET,4,0);
+                            if(tlasTiming!=null)tlasTiming.begin(command,VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
                             if(buildPlan!=null)buildPlan.record(command,stack);
+                            if(tlasTiming!=null)tlasTiming.write(command,VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
                             if(!plan.compactContribution())
                                 primaryProducer.recordPrimaryQueueTrace(command,stack,slot,address+plan.primaryOffset(),0,plan.pixels());
                         }
@@ -114,12 +122,17 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                         VK10.vkCmdPipelineBarrier(command,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT|KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
                                 KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,barrier,null);
                         long offsets=Integer.toUnsignedLong(plan.sourceOffset())|Integer.toUnsignedLong(plan.primaryOffset())<<32;
+                        if(lightsTiming!=null)lightsTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                         lightProducer.recordPrimaryQueueTrace(command,stack,slot,address,tileFirst,pixels,offsets);
+                        if(lightsTiming!=null)lightsTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                     }
                 },shared->{
                     cuda.launchBlocking(resolve,shared,pixels*plan.samples(),1,"cameraScattering.resolve");
                     if(last)cuda.download(shared.slice(CudaCameraScatteringAbi.FAILED_OFFSET,4),failed);
                 },ignored->{});
+                if(tlasTiming!=null&&tlasTiming.resolve())OpticalFrameTimings.recordGpuStage("cameraScattering.tlas",tlasTiming.totalNanos());
+                if(lightsTiming!=null&&lightsTiming.resolve())OpticalFrameTimings.recordGpuStage("cameraScattering.lights",lightsTiming.totalNanos());
+                }
                 first+=pixels;
             }
             int invalidPaths=failed.get(ValueLayout.JAVA_INT,0);

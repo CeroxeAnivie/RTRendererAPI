@@ -28,6 +28,7 @@ import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
 import top.ceroxe.rt.renderer.rt.acceleration.RtTlasBuildPlan;
 import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
+import top.ceroxe.rt.renderer.rt.device.RtGpuTimestampPool;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSync;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
@@ -142,6 +143,13 @@ final class CudaPbrMediumManager implements AutoCloseable {
                         additionalRadiance==null?0L:Math.addExact(plan.emissionOffset(),Math.multiplyExact((long)first*plan.samples(),16)),
                         additionalRadiance!=null&&additionalRadiance.includesCameraEmission());
                 int bytes=initial?uploadBytes:CudaPbrMediumAbi.HEADER_BYTES;
+                RtGpuTimestampPool.Capture primaryTiming=OpticalFrameTimings.ENABLED
+                        ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumPrimaryPackets",new String[]{"start","end"}):null;
+                RtGpuTimestampPool.Capture lightsTiming=OpticalFrameTimings.ENABLED
+                        ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumLightPackets",new String[]{"start","end"}):null;
+                RtGpuTimestampPool.Capture restoreTiming=OpticalFrameTimings.ENABLED&&additionalRadiance!=null
+                        ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumContributionRestore",new String[]{"start","end"}):null;
+                try(primaryTiming;lightsTiming;restoreTiming) {
                 storage.produceThenExchangeBlocking(command->{try(MemoryStack stack=MemoryStack.stackPush()) {
                     if(initial&&buildPlan!=null)buildPlan.record(command,stack);
                     upload(command,stack,metadata.asByteBuffer(),bytes);
@@ -150,16 +158,21 @@ final class CudaPbrMediumManager implements AutoCloseable {
                             throw new IllegalArgumentException("native PBR caustics require a photon pipeline and map buffer");
                         photonPlan.record(command, stack, photonBuffer, photonPipeline, slot);
                     }
+                    if(primaryTiming!=null)primaryTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                     primaryProducer.recordBoundaryPacketTrace(command,stack,slot,address,primary.deviceAddress(),tileFirst,pixels,plan.stateOffset());
+                    if(primaryTiming!=null)primaryTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                     barrier(command,stack);
+                    if(lightsTiming!=null)lightsTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                     lightProducer.recordBoundaryPacketTrace(command,stack,slot,address,primary.deviceAddress(),tileFirst,
                             Math.multiplyExact(pixels,plan.connections()),plan.stateOffset());
+                    if(lightsTiming!=null)lightsTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                     if(additionalRadiance!=null) {
                         // Packet tracing borrows the tile's emission lanes for terminal
                         // radiance. Restore the contribution only after all ray producers
                         // have finished, including on every tile after the first one.
                         long frameOffset=Math.multiplyExact((long)tileFirst*plan.samples(),16);
                         long tileBytes=Math.multiplyExact((long)paths,16);
+                        if(restoreTiming!=null)restoreTiming.begin(command,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT);
                         var dependencies=VkBufferMemoryBarrier.calloc(2,stack);
                         dependencies.get(0).sType$Default().srcAccessMask(VK10.VK_ACCESS_MEMORY_WRITE_BIT)
                                 .dstAccessMask(VK10.VK_ACCESS_TRANSFER_READ_BIT).srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
@@ -175,11 +188,16 @@ final class CudaPbrMediumManager implements AutoCloseable {
                                 .dstOffset(plan.emissionOffset()+frameOffset).size(tileBytes);
                         VK10.vkCmdCopyBuffer(command,additionalRadiance.buffer(),storage.buffer(),copy);
                         barrier(command,stack);
+                        if(restoreTiming!=null)restoreTiming.write(command,VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
                     }
                 }},shared->{
                     cuda.launchBlocking(resolve,shared,paths,1,"pbrMedium.resolve");
                     cuda.download(shared.slice(CudaPbrMediumAbi.STATISTICS_OFFSET,CudaPbrMediumAbi.STATISTICS_BYTES),counters);
                 },command->{});
+                if(primaryTiming!=null&&primaryTiming.resolve())OpticalFrameTimings.recordGpuStage("pbrMedium.primaryPackets",primaryTiming.totalNanos());
+                if(lightsTiming!=null&&lightsTiming.resolve())OpticalFrameTimings.recordGpuStage("pbrMedium.lightPackets",lightsTiming.totalNanos());
+                if(restoreTiming!=null&&restoreTiming.resolve())OpticalFrameTimings.recordGpuStage("pbrMedium.contributionRestore",restoreTiming.totalNanos());
+                }
                 if(counters.get(ValueLayout.JAVA_INT,0)!=0||counters.get(ValueLayout.JAVA_INT,4)!=0||counters.get(ValueLayout.JAVA_INT,12)!=paths)
                     throw new RendererException("native PBR medium produced invalid packet states; final output was not published");
                 first+=pixels;

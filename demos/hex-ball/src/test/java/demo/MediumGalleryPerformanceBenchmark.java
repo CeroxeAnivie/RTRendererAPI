@@ -19,11 +19,15 @@ public final class MediumGalleryPerformanceBenchmark {
     private static final String[] PROFILE_NAMES = {
             "sharedPrepare", "sharedExchange", "vulkanRelease", "cudaStageWall", "legacyResolve",
             "vulkanConsumerRecord", "vulkanConsumerFenceWait", "vulkanProducerGpu", "vulkanConsumerGpu",
-            "snapshotCopy", "sharedExchanges", "releaseCommandRecord", "releaseQueueSubmit",
+            "snapshotCopy", "sharedExchangeCount", "releaseCommandRecord", "releaseQueueSubmit",
             "consumerCommandRecord", "consumerQueueSubmit", "cudaPhase0", "cudaPhase1", "cudaPhase2",
             "cudaPhase3", "cudaPhase4", "cudaPhase5", "cudaPhase6", "cudaPhase7",
             "cameraScatteringPrepare", "pbrMediumPrepare", "cameraScatteringKernelGpu",
-            "pbrMediumKernelGpu", "cameraScatteringKernelCount", "pbrMediumKernelCount"
+            "pbrMediumKernelGpu", "cameraScatteringKernelCount", "pbrMediumKernelCount",
+            "cameraScatteringTlasGpu", "cameraScatteringTlasCount", "cameraScatteringLightsGpu",
+            "cameraScatteringLightsCount", "pbrPrimaryPacketsGpu", "pbrPrimaryPacketsCount",
+            "pbrLightPacketsGpu", "pbrLightPacketsCount", "pbrContributionRestoreGpu",
+            "pbrContributionRestoreCount"
     };
 
     private MediumGalleryPerformanceBenchmark() { }
@@ -160,10 +164,12 @@ public final class MediumGalleryPerformanceBenchmark {
         StringBuilder json = new StringBuilder("{");
         for (int i = 0; i < values.length; i++) {
             if (i > 0) json.append(',');
-            boolean count = i == 27 || i == 28;
+            boolean count = i == 10 || i == 27 || i == 28 || i == 30 || i == 32 || i == 34
+                    || i == 36 || i == 38;
             double perFrame = values[i] / (double) frames;
-            json.append('"').append(PROFILE_NAMES[i]).append(count ? "PerFrame\":" : "MsPerFrame\":")
-                    .append(String.format(Locale.ROOT, "%.6f", count ? perFrame : perFrame / 1e6));
+            String unit = count ? "PerFrame" : "MsPerFrame";
+            json.append('"').append(PROFILE_NAMES[i]).append(unit).append("\":")
+                    .append(String.format(Locale.ROOT, count ? "%.3f" : "%.6f", count ? perFrame : perFrame / 1e6));
         }
         return json.append('}').toString();
     }
