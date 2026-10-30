@@ -12,7 +12,9 @@
 #include "gpuscene_lighting.glsl"
 #include "gpuscene_caustic_gather.glsl"
 layout(set=0,binding=GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
+#ifndef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
 layout(location=0) rayPayloadEXT GpuScenePayload payload;
+#endif
 layout(buffer_reference,std430,buffer_reference_align=16) buffer GsPbrStorage {uvec4 lanes[];};
 layout(push_constant) uniform GsPbrDispatch {
     GsPbrStorage storage;uint firstPixel;uint pixelCount;uint64_t primaryAddress;uint64_t offsets;
@@ -99,7 +101,9 @@ void main() {
         dispatch.storage.lanes[packet+stride-1u]=uvec4(floatBitsToUint(shadow?distance:-1.0),floatBitsToUint(origin));
         if(shadow) {
 #ifdef RTRENDERER_PBR_LIGHT_RAY_QUERY
+#ifndef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
             if((gsFrame.words[GPU_SCENE_FRAME_FEATURE_FLAGS_WORD]&GPU_SCENE_FEATURE_FLAG_OPAQUE_SHADOW_RAY)!=0u) {
+#endif
                 // The scene proof excludes medium interfaces, alpha decisions,
                 // overlays, single-sided and non-shadow-casting instances. Thus
                 // every candidate is a blocking triangle and no boundary event
@@ -109,8 +113,11 @@ void main() {
                     0xff,origin,epsilon,direction,max(distance-2.0*epsilon,epsilon));
                 rayQueryProceedEXT(query);
                 if(rayQueryGetIntersectionTypeEXT(query,true)!=gl_RayQueryCommittedIntersectionNoneEXT)continue;
+#ifndef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
             } else
 #endif
+#endif
+#ifndef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
             {
             payload.state=uvec4(0u,GS_PAYLOAD_SHADOW_QUERY,0u,0u);
             payload.launchInfo=uvec4(pixel%uint(extent.x),pixel/uint(extent.x),extent);
@@ -119,6 +126,7 @@ void main() {
             traceRayEXT(sceneTlas,gl_RayFlagsNoOpaqueEXT,0xff,0,0,0,origin,epsilon,direction,max(distance-2.0*epsilon,epsilon),0);
             if(payload.state.x!=0u)continue;
             }
+#endif
         }
         dispatch.storage.lanes[outLane]=floatBitsToUint(vec4(brdf.diffuse*radiance,distance));
         dispatch.storage.lanes[outLane+1u]=floatBitsToUint(vec4(brdf.specular*radiance,distance));

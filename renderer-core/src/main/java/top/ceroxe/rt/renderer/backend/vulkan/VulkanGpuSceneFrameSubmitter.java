@@ -193,7 +193,8 @@ final class VulkanGpuSceneFrameSubmitter {
                 : primaryQueue != null || nativeCameraFrame || nativeScatteringFrame || nativeMultipleFrame || nativeDensityScatteringFrame || nativeOpticalFrame
                     ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.PRIMARY_TRACE) : null;
         GpuSceneRayTracingPipeline scatteringLights = nativePbrFrame
-                ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_PBR_MEDIUM_LIGHTS)
+                ? pipelines.forFrame(reusePbrPrimary?GpuSceneRayTracingPipeline.Program.NATIVE_PBR_MEDIUM_LIGHTS_OPAQUE
+                    :GpuSceneRayTracingPipeline.Program.NATIVE_PBR_MEDIUM_LIGHTS)
                 : nativeDensityScatteringFrame
                 ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_DENSITY_SCATTERING_LIGHTS)
                 : nativeScatteringFrame || nativeMultipleFrame && !nativeHeterogeneousMultipleFrame

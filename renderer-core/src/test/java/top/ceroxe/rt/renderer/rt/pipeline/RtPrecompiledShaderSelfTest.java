@@ -38,6 +38,7 @@ public final class RtPrecompiledShaderSelfTest {
            "gpuscene/gpuscene_native_boundary_scattering.rgen",
            "gpuscene/gpuscene_native_pbr_medium_lights.rgen",
            "gpuscene/gpuscene_native_pbr_medium_query.rgen",
+           "gpuscene/gpuscene_native_pbr_medium_opaque_query.rgen",
            "gpuscene/gpuscene_native_pbr_primary_cached.rgen",
            "gpuscene/gpuscene_surface_primary_shade.rgen",
            "gpuscene/gpuscene_compact_primary_shade.rgen", "gpuscene/gpuscene_primary_shade.rgen",

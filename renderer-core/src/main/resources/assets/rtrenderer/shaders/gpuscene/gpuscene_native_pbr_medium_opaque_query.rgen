@@ -1,0 +1,5 @@
+#version 460
+#define RTRENDERER_PBR_LIGHT_RAY_QUERY 1
+// Admitted only by the strict reusable-primary opaque-scene proof.
+#define RTRENDERER_PBR_LIGHT_OPAQUE_ONLY 1
+#include "gpuscene_native_pbr_medium_lights_impl.glsl"
