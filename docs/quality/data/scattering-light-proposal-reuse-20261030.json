@@ -1,0 +1,1986 @@
+{
+  "scene": "pbr-direct-uniform",
+  "extent": [
+    1920,
+    1080
+  ],
+  "spp": 1,
+  "baseCommit": "64443c2",
+  "candidate": "Reuse full-segment light proposal correction once per selected light across integration intervals; remove redundant exhaustive-mode proposal recalculation.",
+  "unchanged": [
+    "reservoir RNG and selection",
+    "sample and accumulation order",
+    "light attenuation and scattering formulas",
+    "light/sample budgets",
+    "zero-budget enumeration"
+  ],
+  "reference": {
+    "project": "NVIDIAGameWorks/Falcor",
+    "commit": "759aad033ff610fb0d82c74f7e0a508d0096d5f2",
+    "license": "BSD-3-Clause",
+    "file": "Source/Falcor/Utils/Sampling/AliasTable.slang",
+    "applicability": "Prepare and retain proposal weights separately from repeated sampling. No alias-table algorithm or external code copied."
+  },
+  "artifacts": {
+    "controlCoreSha256": "e6c4939059bf6ed090b3d8b57b2bc01fe1c36091fb559ffb9c94aa47509a7e77",
+    "benchmarkTestClassesSha256": "7190643526f60d5ef66c50d1818660f7d3aef13fe683adf73ed01372ce3e506a",
+    "candidateSourceSha256": "d059fb9ca0b0391303533ef350d23d194707a5d18457a0abf8206c6b56e3d04b",
+    "candidateSpirv": [
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/base/gpuscene_gpuscene_native_scattering_lights.rgen.spv",
+        "sha256": "d63e3e9f5204d393811130f685057871a18cc0384bfd210cc147f2406e6ca760"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/base/gpuscene_gpuscene_native_scattering_query.rgen.spv",
+        "sha256": "19e56b02d320e7d7ad765cff40b4fcdff9972728aa9c5ebc323bcb553ee27052"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/base-hdr/gpuscene_gpuscene_native_scattering_lights.rgen.spv",
+        "sha256": "d63e3e9f5204d393811130f685057871a18cc0384bfd210cc147f2406e6ca760"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/base-hdr/gpuscene_gpuscene_native_scattering_query.rgen.spv",
+        "sha256": "19e56b02d320e7d7ad765cff40b4fcdff9972728aa9c5ebc323bcb553ee27052"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/base-hdr-ser/gpuscene_gpuscene_native_scattering_lights.rgen.spv",
+        "sha256": "d63e3e9f5204d393811130f685057871a18cc0384bfd210cc147f2406e6ca760"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/base-hdr-ser/gpuscene_gpuscene_native_scattering_query.rgen.spv",
+        "sha256": "19e56b02d320e7d7ad765cff40b4fcdff9972728aa9c5ebc323bcb553ee27052"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/base-ser/gpuscene_gpuscene_native_scattering_lights.rgen.spv",
+        "sha256": "d63e3e9f5204d393811130f685057871a18cc0384bfd210cc147f2406e6ca760"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/base-ser/gpuscene_gpuscene_native_scattering_query.rgen.spv",
+        "sha256": "19e56b02d320e7d7ad765cff40b4fcdff9972728aa9c5ebc323bcb553ee27052"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/gbuffer/gpuscene_gpuscene_native_scattering_lights.rgen.spv",
+        "sha256": "d63e3e9f5204d393811130f685057871a18cc0384bfd210cc147f2406e6ca760"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/gbuffer/gpuscene_gpuscene_native_scattering_query.rgen.spv",
+        "sha256": "19e56b02d320e7d7ad765cff40b4fcdff9972728aa9c5ebc323bcb553ee27052"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/gbuffer-hdr/gpuscene_gpuscene_native_scattering_lights.rgen.spv",
+        "sha256": "d63e3e9f5204d393811130f685057871a18cc0384bfd210cc147f2406e6ca760"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/gbuffer-hdr/gpuscene_gpuscene_native_scattering_query.rgen.spv",
+        "sha256": "19e56b02d320e7d7ad765cff40b4fcdff9972728aa9c5ebc323bcb553ee27052"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/gbuffer-hdr-ser/gpuscene_gpuscene_native_scattering_lights.rgen.spv",
+        "sha256": "d63e3e9f5204d393811130f685057871a18cc0384bfd210cc147f2406e6ca760"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/gbuffer-hdr-ser/gpuscene_gpuscene_native_scattering_query.rgen.spv",
+        "sha256": "19e56b02d320e7d7ad765cff40b4fcdff9972728aa9c5ebc323bcb553ee27052"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/gbuffer-ser/gpuscene_gpuscene_native_scattering_lights.rgen.spv",
+        "sha256": "d63e3e9f5204d393811130f685057871a18cc0384bfd210cc147f2406e6ca760"
+      },
+      {
+        "path": "source-overlay/assets/rtrenderer/shaders/spv/gbuffer-ser/gpuscene_gpuscene_native_scattering_query.rgen.spv",
+        "sha256": "19e56b02d320e7d7ad765cff40b4fcdff9972728aa9c5ebc323bcb553ee27052"
+      }
+    ]
+  },
+  "shaderSampling": {
+    "meaning": "Internal sampled-path latency; never add these values as frame time or apportion wall time using them.",
+    "before": {
+      "rounds": [
+        {
+          "frames": 120,
+          "sampledPaths": 477,
+          "recordedPaths": 473,
+          "missingSamples": 4,
+          "shadowParityQueries": 0,
+          "shadowParityMismatches": 0,
+          "clockUnit": "nanoseconds",
+          "stages": [
+            {
+              "rank": 1,
+              "stage": "lightRangeAndWeight",
+              "ticks": 7621504,
+              "calls": 8987,
+              "nsPerSampledPath": 16113,
+              "sharePct": 25.29,
+              "nsPerCall": 848
+            },
+            {
+              "rank": 2,
+              "stage": "primaryRayAndHitOrCacheLoad",
+              "ticks": 5962080,
+              "calls": 473,
+              "nsPerSampledPath": 12605,
+              "sharePct": 19.78,
+              "nsPerCall": 12605
+            },
+            {
+              "rank": 3,
+              "stage": "opaqueShadowQueryResidual",
+              "ticks": 5945888,
+              "calls": 7738,
+              "nsPerSampledPath": 12571,
+              "sharePct": 19.73,
+              "nsPerCall": 768
+            },
+            {
+              "rank": 4,
+              "stage": "localLightGeometryAndAttenuation",
+              "ticks": 5366464,
+              "calls": 26488,
+              "nsPerSampledPath": 11346,
+              "sharePct": 17.8,
+              "nsPerCall": 203
+            },
+            {
+              "rank": 5,
+              "stage": "candidateReservoirUpdate",
+              "ticks": 1323104,
+              "calls": 8514,
+              "nsPerSampledPath": 2797,
+              "sharePct": 4.39,
+              "nsPerCall": 155
+            },
+            {
+              "rank": 6,
+              "stage": "segmentSamplingAndPosition",
+              "ticks": 1223520,
+              "calls": 8041,
+              "nsPerSampledPath": 2587,
+              "sharePct": 4.06,
+              "nsPerCall": 152
+            },
+            {
+              "rank": 7,
+              "stage": "mediumBeerAttenuation",
+              "ticks": 798240,
+              "calls": 7738,
+              "nsPerSampledPath": 1688,
+              "sharePct": 2.65,
+              "nsPerCall": 103
+            },
+            {
+              "rank": 8,
+              "stage": "volumeCaustics",
+              "ticks": 661600,
+              "calls": 3784,
+              "nsPerSampledPath": 1399,
+              "sharePct": 2.2,
+              "nsPerCall": 175
+            },
+            {
+              "rank": 9,
+              "stage": "localPhaseAndContribution",
+              "ticks": 447968,
+              "calls": 3954,
+              "nsPerSampledPath": 947,
+              "sharePct": 1.49,
+              "nsPerCall": 113
+            },
+            {
+              "rank": 10,
+              "stage": "sunPhaseEvaluation",
+              "ticks": 364576,
+              "calls": 3784,
+              "nsPerSampledPath": 771,
+              "sharePct": 1.21,
+              "nsPerCall": 96
+            },
+            {
+              "rank": 11,
+              "stage": "sourcePacketWrite",
+              "ticks": 278016,
+              "calls": 3784,
+              "nsPerSampledPath": 588,
+              "sharePct": 0.92,
+              "nsPerCall": 73
+            },
+            {
+              "rank": 12,
+              "stage": "sourcePacketAddress",
+              "ticks": 147360,
+              "calls": 3784,
+              "nsPerSampledPath": 312,
+              "sharePct": 0.49,
+              "nsPerCall": 39
+            },
+            {
+              "rank": 13,
+              "stage": "transmissionShadowFallback",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 14,
+              "stage": "opaqueShadowAnyHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 15,
+              "stage": "opaqueShadowClosestHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            }
+          ],
+          "sumNsPerRecordedPath": 63722
+        },
+        {
+          "frames": 120,
+          "sampledPaths": 472,
+          "recordedPaths": 463,
+          "missingSamples": 9,
+          "shadowParityQueries": 0,
+          "shadowParityMismatches": 0,
+          "clockUnit": "nanoseconds",
+          "stages": [
+            {
+              "rank": 1,
+              "stage": "lightRangeAndWeight",
+              "ticks": 8559808,
+              "calls": 8797,
+              "nsPerSampledPath": 18488,
+              "sharePct": 25.33,
+              "nsPerCall": 973
+            },
+            {
+              "rank": 2,
+              "stage": "opaqueShadowQueryResidual",
+              "ticks": 6680480,
+              "calls": 7605,
+              "nsPerSampledPath": 14429,
+              "sharePct": 19.77,
+              "nsPerCall": 878
+            },
+            {
+              "rank": 3,
+              "stage": "primaryRayAndHitOrCacheLoad",
+              "ticks": 6627456,
+              "calls": 463,
+              "nsPerSampledPath": 14314,
+              "sharePct": 19.62,
+              "nsPerCall": 14314
+            },
+            {
+              "rank": 4,
+              "stage": "localLightGeometryAndAttenuation",
+              "ticks": 6036672,
+              "calls": 25928,
+              "nsPerSampledPath": 13038,
+              "sharePct": 17.87,
+              "nsPerCall": 233
+            },
+            {
+              "rank": 5,
+              "stage": "candidateReservoirUpdate",
+              "ticks": 1488736,
+              "calls": 8334,
+              "nsPerSampledPath": 3215,
+              "sharePct": 4.41,
+              "nsPerCall": 179
+            },
+            {
+              "rank": 6,
+              "stage": "segmentSamplingAndPosition",
+              "ticks": 1368608,
+              "calls": 7871,
+              "nsPerSampledPath": 2956,
+              "sharePct": 4.05,
+              "nsPerCall": 174
+            },
+            {
+              "rank": 7,
+              "stage": "mediumBeerAttenuation",
+              "ticks": 901152,
+              "calls": 7605,
+              "nsPerSampledPath": 1946,
+              "sharePct": 2.67,
+              "nsPerCall": 118
+            },
+            {
+              "rank": 8,
+              "stage": "volumeCaustics",
+              "ticks": 732128,
+              "calls": 3704,
+              "nsPerSampledPath": 1581,
+              "sharePct": 2.17,
+              "nsPerCall": 198
+            },
+            {
+              "rank": 9,
+              "stage": "localPhaseAndContribution",
+              "ticks": 512096,
+              "calls": 3901,
+              "nsPerSampledPath": 1106,
+              "sharePct": 1.52,
+              "nsPerCall": 131
+            },
+            {
+              "rank": 10,
+              "stage": "sunPhaseEvaluation",
+              "ticks": 409504,
+              "calls": 3704,
+              "nsPerSampledPath": 884,
+              "sharePct": 1.21,
+              "nsPerCall": 111
+            },
+            {
+              "rank": 11,
+              "stage": "sourcePacketWrite",
+              "ticks": 311040,
+              "calls": 3704,
+              "nsPerSampledPath": 672,
+              "sharePct": 0.92,
+              "nsPerCall": 84
+            },
+            {
+              "rank": 12,
+              "stage": "sourcePacketAddress",
+              "ticks": 160000,
+              "calls": 3704,
+              "nsPerSampledPath": 346,
+              "sharePct": 0.47,
+              "nsPerCall": 43
+            },
+            {
+              "rank": 13,
+              "stage": "transmissionShadowFallback",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 14,
+              "stage": "opaqueShadowAnyHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 15,
+              "stage": "opaqueShadowClosestHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            }
+          ],
+          "sumNsPerRecordedPath": 72976
+        },
+        {
+          "frames": 120,
+          "sampledPaths": 477,
+          "recordedPaths": 473,
+          "missingSamples": 4,
+          "shadowParityQueries": 0,
+          "shadowParityMismatches": 0,
+          "clockUnit": "nanoseconds",
+          "stages": [
+            {
+              "rank": 1,
+              "stage": "lightRangeAndWeight",
+              "ticks": 7506016,
+              "calls": 8987,
+              "nsPerSampledPath": 15869,
+              "sharePct": 25.33,
+              "nsPerCall": 835
+            },
+            {
+              "rank": 2,
+              "stage": "opaqueShadowQueryResidual",
+              "ticks": 5849216,
+              "calls": 7740,
+              "nsPerSampledPath": 12366,
+              "sharePct": 19.74,
+              "nsPerCall": 756
+            },
+            {
+              "rank": 3,
+              "stage": "primaryRayAndHitOrCacheLoad",
+              "ticks": 5833536,
+              "calls": 473,
+              "nsPerSampledPath": 12333,
+              "sharePct": 19.69,
+              "nsPerCall": 12333
+            },
+            {
+              "rank": 4,
+              "stage": "localLightGeometryAndAttenuation",
+              "ticks": 5285632,
+              "calls": 26488,
+              "nsPerSampledPath": 11175,
+              "sharePct": 17.84,
+              "nsPerCall": 200
+            },
+            {
+              "rank": 5,
+              "stage": "candidateReservoirUpdate",
+              "ticks": 1307424,
+              "calls": 8514,
+              "nsPerSampledPath": 2764,
+              "sharePct": 4.41,
+              "nsPerCall": 154
+            },
+            {
+              "rank": 6,
+              "stage": "segmentSamplingAndPosition",
+              "ticks": 1202176,
+              "calls": 8041,
+              "nsPerSampledPath": 2542,
+              "sharePct": 4.06,
+              "nsPerCall": 150
+            },
+            {
+              "rank": 7,
+              "stage": "mediumBeerAttenuation",
+              "ticks": 780384,
+              "calls": 7740,
+              "nsPerSampledPath": 1650,
+              "sharePct": 2.63,
+              "nsPerCall": 101
+            },
+            {
+              "rank": 8,
+              "stage": "volumeCaustics",
+              "ticks": 648320,
+              "calls": 3784,
+              "nsPerSampledPath": 1371,
+              "sharePct": 2.19,
+              "nsPerCall": 171
+            },
+            {
+              "rank": 9,
+              "stage": "localPhaseAndContribution",
+              "ticks": 442464,
+              "calls": 3956,
+              "nsPerSampledPath": 935,
+              "sharePct": 1.49,
+              "nsPerCall": 112
+            },
+            {
+              "rank": 10,
+              "stage": "sunPhaseEvaluation",
+              "ticks": 359072,
+              "calls": 3784,
+              "nsPerSampledPath": 759,
+              "sharePct": 1.21,
+              "nsPerCall": 95
+            },
+            {
+              "rank": 11,
+              "stage": "sourcePacketWrite",
+              "ticks": 274144,
+              "calls": 3784,
+              "nsPerSampledPath": 580,
+              "sharePct": 0.93,
+              "nsPerCall": 72
+            },
+            {
+              "rank": 12,
+              "stage": "sourcePacketAddress",
+              "ticks": 142944,
+              "calls": 3784,
+              "nsPerSampledPath": 302,
+              "sharePct": 0.48,
+              "nsPerCall": 38
+            },
+            {
+              "rank": 13,
+              "stage": "transmissionShadowFallback",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 14,
+              "stage": "opaqueShadowAnyHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 15,
+              "stage": "opaqueShadowClosestHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            }
+          ],
+          "sumNsPerRecordedPath": 62646
+        }
+      ],
+      "meanMsPerRecordedPath": {
+        "lightRangeAndWeight": 0.016823259381701896,
+        "primaryRayAndHitOrCacheLoad": 0.013084012401883114,
+        "opaqueShadowQueryResidual": 0.013121825810467933,
+        "localLightGeometryAndAttenuation": 0.01185281866431658,
+        "candidateReservoirUpdate": 0.00292559416861873,
+        "segmentSamplingAndPosition": 0.0026947593855070878,
+        "mediumBeerAttenuation": 0.0017612680240549044,
+        "volumeCaustics": 0.0014502189568597725,
+        "localPhaseAndContribution": 0.0009961863204854817,
+        "sunPhaseEvaluation": 0.0008047896961477755,
+        "sourcePacketWrite": 0.0006130499834854649,
+        "sourcePacketAddress": 0.0003197742942509631,
+        "transmissionShadowFallback": 0.0,
+        "opaqueShadowAnyHit": 0.0,
+        "opaqueShadowClosestHit": 0.0
+      },
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 10.99 W, 180 MHz, 52"
+    },
+    "after": {
+      "rounds": [
+        {
+          "frames": 120,
+          "sampledPaths": 477,
+          "recordedPaths": 473,
+          "missingSamples": 4,
+          "shadowParityQueries": 0,
+          "shadowParityMismatches": 0,
+          "clockUnit": "nanoseconds",
+          "stages": [
+            {
+              "rank": 1,
+              "stage": "opaqueShadowQueryResidual",
+              "ticks": 5983904,
+              "calls": 7738,
+              "nsPerSampledPath": 12651,
+              "sharePct": 25.54,
+              "nsPerCall": 773
+            },
+            {
+              "rank": 2,
+              "stage": "primaryRayAndHitOrCacheLoad",
+              "ticks": 5935936,
+              "calls": 473,
+              "nsPerSampledPath": 12550,
+              "sharePct": 25.33,
+              "nsPerCall": 12550
+            },
+            {
+              "rank": 3,
+              "stage": "localLightGeometryAndAttenuation",
+              "ticks": 5453344,
+              "calls": 26488,
+              "nsPerSampledPath": 11529,
+              "sharePct": 23.27,
+              "nsPerCall": 206
+            },
+            {
+              "rank": 4,
+              "stage": "candidateReservoirUpdate",
+              "ticks": 1486560,
+              "calls": 8514,
+              "nsPerSampledPath": 3143,
+              "sharePct": 6.34,
+              "nsPerCall": 175
+            },
+            {
+              "rank": 5,
+              "stage": "segmentSamplingAndPosition",
+              "ticks": 1175872,
+              "calls": 8041,
+              "nsPerSampledPath": 2486,
+              "sharePct": 5.02,
+              "nsPerCall": 146
+            },
+            {
+              "rank": 6,
+              "stage": "lightRangeAndWeight",
+              "ticks": 864576,
+              "calls": 1419,
+              "nsPerSampledPath": 1828,
+              "sharePct": 3.69,
+              "nsPerCall": 609
+            },
+            {
+              "rank": 7,
+              "stage": "mediumBeerAttenuation",
+              "ticks": 714624,
+              "calls": 7738,
+              "nsPerSampledPath": 1511,
+              "sharePct": 3.05,
+              "nsPerCall": 92
+            },
+            {
+              "rank": 8,
+              "stage": "volumeCaustics",
+              "ticks": 606272,
+              "calls": 3784,
+              "nsPerSampledPath": 1282,
+              "sharePct": 2.59,
+              "nsPerCall": 160
+            },
+            {
+              "rank": 9,
+              "stage": "localPhaseAndContribution",
+              "ticks": 424352,
+              "calls": 3954,
+              "nsPerSampledPath": 897,
+              "sharePct": 1.81,
+              "nsPerCall": 107
+            },
+            {
+              "rank": 10,
+              "stage": "sunPhaseEvaluation",
+              "ticks": 352480,
+              "calls": 3784,
+              "nsPerSampledPath": 745,
+              "sharePct": 1.5,
+              "nsPerCall": 93
+            },
+            {
+              "rank": 11,
+              "stage": "sourcePacketWrite",
+              "ticks": 301344,
+              "calls": 3784,
+              "nsPerSampledPath": 637,
+              "sharePct": 1.29,
+              "nsPerCall": 80
+            },
+            {
+              "rank": 12,
+              "stage": "sourcePacketAddress",
+              "ticks": 133824,
+              "calls": 3784,
+              "nsPerSampledPath": 283,
+              "sharePct": 0.57,
+              "nsPerCall": 35
+            },
+            {
+              "rank": 13,
+              "stage": "transmissionShadowFallback",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 14,
+              "stage": "opaqueShadowAnyHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 15,
+              "stage": "opaqueShadowClosestHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            }
+          ],
+          "sumNsPerRecordedPath": 49541
+        },
+        {
+          "frames": 120,
+          "sampledPaths": 472,
+          "recordedPaths": 463,
+          "missingSamples": 9,
+          "shadowParityQueries": 0,
+          "shadowParityMismatches": 0,
+          "clockUnit": "nanoseconds",
+          "stages": [
+            {
+              "rank": 1,
+              "stage": "opaqueShadowQueryResidual",
+              "ticks": 5287072,
+              "calls": 7605,
+              "nsPerSampledPath": 11419,
+              "sharePct": 25.55,
+              "nsPerCall": 695
+            },
+            {
+              "rank": 2,
+              "stage": "primaryRayAndHitOrCacheLoad",
+              "ticks": 5233248,
+              "calls": 463,
+              "nsPerSampledPath": 11303,
+              "sharePct": 25.29,
+              "nsPerCall": 11303
+            },
+            {
+              "rank": 3,
+              "stage": "localLightGeometryAndAttenuation",
+              "ticks": 4835168,
+              "calls": 25928,
+              "nsPerSampledPath": 10443,
+              "sharePct": 23.37,
+              "nsPerCall": 186
+            },
+            {
+              "rank": 4,
+              "stage": "candidateReservoirUpdate",
+              "ticks": 1305920,
+              "calls": 8334,
+              "nsPerSampledPath": 2821,
+              "sharePct": 6.31,
+              "nsPerCall": 157
+            },
+            {
+              "rank": 5,
+              "stage": "segmentSamplingAndPosition",
+              "ticks": 1038496,
+              "calls": 7871,
+              "nsPerSampledPath": 2243,
+              "sharePct": 5.02,
+              "nsPerCall": 132
+            },
+            {
+              "rank": 6,
+              "stage": "lightRangeAndWeight",
+              "ticks": 761568,
+              "calls": 1389,
+              "nsPerSampledPath": 1645,
+              "sharePct": 3.68,
+              "nsPerCall": 548
+            },
+            {
+              "rank": 7,
+              "stage": "mediumBeerAttenuation",
+              "ticks": 634720,
+              "calls": 7605,
+              "nsPerSampledPath": 1371,
+              "sharePct": 3.07,
+              "nsPerCall": 83
+            },
+            {
+              "rank": 8,
+              "stage": "volumeCaustics",
+              "ticks": 526016,
+              "calls": 3704,
+              "nsPerSampledPath": 1136,
+              "sharePct": 2.54,
+              "nsPerCall": 142
+            },
+            {
+              "rank": 9,
+              "stage": "localPhaseAndContribution",
+              "ticks": 376928,
+              "calls": 3901,
+              "nsPerSampledPath": 814,
+              "sharePct": 1.82,
+              "nsPerCall": 97
+            },
+            {
+              "rank": 10,
+              "stage": "sunPhaseEvaluation",
+              "ticks": 311424,
+              "calls": 3704,
+              "nsPerSampledPath": 673,
+              "sharePct": 1.5,
+              "nsPerCall": 84
+            },
+            {
+              "rank": 11,
+              "stage": "sourcePacketWrite",
+              "ticks": 264352,
+              "calls": 3704,
+              "nsPerSampledPath": 571,
+              "sharePct": 1.28,
+              "nsPerCall": 71
+            },
+            {
+              "rank": 12,
+              "stage": "sourcePacketAddress",
+              "ticks": 118784,
+              "calls": 3704,
+              "nsPerSampledPath": 257,
+              "sharePct": 0.57,
+              "nsPerCall": 32
+            },
+            {
+              "rank": 13,
+              "stage": "transmissionShadowFallback",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 14,
+              "stage": "opaqueShadowAnyHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 15,
+              "stage": "opaqueShadowClosestHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            }
+          ],
+          "sumNsPerRecordedPath": 44695
+        },
+        {
+          "frames": 120,
+          "sampledPaths": 477,
+          "recordedPaths": 473,
+          "missingSamples": 4,
+          "shadowParityQueries": 0,
+          "shadowParityMismatches": 0,
+          "clockUnit": "nanoseconds",
+          "stages": [
+            {
+              "rank": 1,
+              "stage": "opaqueShadowQueryResidual",
+              "ticks": 5489792,
+              "calls": 7740,
+              "nsPerSampledPath": 11606,
+              "sharePct": 25.41,
+              "nsPerCall": 709
+            },
+            {
+              "rank": 2,
+              "stage": "primaryRayAndHitOrCacheLoad",
+              "ticks": 5477824,
+              "calls": 473,
+              "nsPerSampledPath": 11581,
+              "sharePct": 25.35,
+              "nsPerCall": 11581
+            },
+            {
+              "rank": 3,
+              "stage": "localLightGeometryAndAttenuation",
+              "ticks": 5035616,
+              "calls": 26488,
+              "nsPerSampledPath": 10646,
+              "sharePct": 23.31,
+              "nsPerCall": 190
+            },
+            {
+              "rank": 4,
+              "stage": "candidateReservoirUpdate",
+              "ticks": 1370688,
+              "calls": 8514,
+              "nsPerSampledPath": 2898,
+              "sharePct": 6.34,
+              "nsPerCall": 161
+            },
+            {
+              "rank": 5,
+              "stage": "segmentSamplingAndPosition",
+              "ticks": 1092640,
+              "calls": 8041,
+              "nsPerSampledPath": 2310,
+              "sharePct": 5.06,
+              "nsPerCall": 136
+            },
+            {
+              "rank": 6,
+              "stage": "lightRangeAndWeight",
+              "ticks": 809600,
+              "calls": 1419,
+              "nsPerSampledPath": 1712,
+              "sharePct": 3.75,
+              "nsPerCall": 571
+            },
+            {
+              "rank": 7,
+              "stage": "mediumBeerAttenuation",
+              "ticks": 655968,
+              "calls": 7740,
+              "nsPerSampledPath": 1387,
+              "sharePct": 3.04,
+              "nsPerCall": 85
+            },
+            {
+              "rank": 8,
+              "stage": "volumeCaustics",
+              "ticks": 560704,
+              "calls": 3784,
+              "nsPerSampledPath": 1185,
+              "sharePct": 2.6,
+              "nsPerCall": 148
+            },
+            {
+              "rank": 9,
+              "stage": "localPhaseAndContribution",
+              "ticks": 390112,
+              "calls": 3956,
+              "nsPerSampledPath": 825,
+              "sharePct": 1.81,
+              "nsPerCall": 99
+            },
+            {
+              "rank": 10,
+              "stage": "sunPhaseEvaluation",
+              "ticks": 323392,
+              "calls": 3784,
+              "nsPerSampledPath": 684,
+              "sharePct": 1.5,
+              "nsPerCall": 85
+            },
+            {
+              "rank": 11,
+              "stage": "sourcePacketWrite",
+              "ticks": 275808,
+              "calls": 3784,
+              "nsPerSampledPath": 583,
+              "sharePct": 1.28,
+              "nsPerCall": 73
+            },
+            {
+              "rank": 12,
+              "stage": "sourcePacketAddress",
+              "ticks": 123776,
+              "calls": 3784,
+              "nsPerSampledPath": 262,
+              "sharePct": 0.57,
+              "nsPerCall": 33
+            },
+            {
+              "rank": 13,
+              "stage": "transmissionShadowFallback",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 14,
+              "stage": "opaqueShadowAnyHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            },
+            {
+              "rank": 15,
+              "stage": "opaqueShadowClosestHit",
+              "ticks": 0,
+              "calls": 0,
+              "nsPerSampledPath": 0,
+              "sharePct": 0.0,
+              "nsPerCall": 0
+            }
+          ],
+          "sumNsPerRecordedPath": 45678
+        }
+      ],
+      "meanMsPerRecordedPath": {
+        "opaqueShadowQueryResidual": 0.011892149133101064,
+        "primaryRayAndHitOrCacheLoad": 0.01181116075720285,
+        "localLightGeometryAndAttenuation": 0.010872839516771005,
+        "candidateReservoirUpdate": 0.002953751667054796,
+        "segmentSamplingAndPosition": 0.0023463267929686132,
+        "lightRangeAndWeight": 0.0017281131451132956,
+        "mediumBeerAttenuation": 0.0014228476781476933,
+        "volumeCaustics": 0.0012010944585743922,
+        "localPhaseAndContribution": 0.0008453368523752772,
+        "sunPhaseEvaluation": 0.0007005089642722874,
+        "sourcePacketWrite": 0.0005970497155999189,
+        "sourcePacketAddress": 0.00026705393175311304,
+        "transmissionShadowFallback": 0.0,
+        "opaqueShadowAnyHit": 0.0,
+        "opaqueShadowClosestHit": 0.0
+      },
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 7.79 W, 180 MHz, 57"
+    },
+    "ranking": [
+      {
+        "rank": 1,
+        "stage": "opaqueShadowQueryResidual",
+        "beforeRank": 2,
+        "beforeMsPerPath": 0.013121825810467933,
+        "afterMsPerPath": 0.011892149133101064,
+        "reductionPct": 9.371231527748936,
+        "sharePct": 25.49871310904475
+      },
+      {
+        "rank": 2,
+        "stage": "primaryRayAndHitOrCacheLoad",
+        "beforeRank": 3,
+        "beforeMsPerPath": 0.013084012401883114,
+        "afterMsPerPath": 0.01181116075720285,
+        "reductionPct": 9.728297448702117,
+        "sharePct": 25.325060782700476
+      },
+      {
+        "rank": 3,
+        "stage": "localLightGeometryAndAttenuation",
+        "beforeRank": 4,
+        "beforeMsPerPath": 0.01185281866431658,
+        "afterMsPerPath": 0.010872839516771005,
+        "reductionPct": 8.267899605144935,
+        "sharePct": 23.313146548687204
+      },
+      {
+        "rank": 4,
+        "stage": "candidateReservoirUpdate",
+        "beforeRank": 5,
+        "beforeMsPerPath": 0.00292559416861873,
+        "afterMsPerPath": 0.002953751667054796,
+        "reductionPct": -0.9624540114994806,
+        "sharePct": 6.333326761262441
+      },
+      {
+        "rank": 5,
+        "stage": "segmentSamplingAndPosition",
+        "beforeRank": 6,
+        "beforeMsPerPath": 0.0026947593855070878,
+        "afterMsPerPath": 0.0023463267929686132,
+        "reductionPct": 12.930007569967438,
+        "sharePct": 5.030908466110914
+      },
+      {
+        "rank": 6,
+        "stage": "lightRangeAndWeight",
+        "beforeRank": 1,
+        "beforeMsPerPath": 0.016823259381701896,
+        "afterMsPerPath": 0.0017281131451132956,
+        "reductionPct": 89.72783391194153,
+        "sharePct": 3.705357275125458
+      },
+      {
+        "rank": 7,
+        "stage": "mediumBeerAttenuation",
+        "beforeRank": 7,
+        "beforeMsPerPath": 0.0017612680240549044,
+        "afterMsPerPath": 0.0014228476781476933,
+        "reductionPct": 19.214585246831316,
+        "sharePct": 3.0508181773446768
+      },
+      {
+        "rank": 8,
+        "stage": "volumeCaustics",
+        "beforeRank": 8,
+        "beforeMsPerPath": 0.0014502189568597725,
+        "afterMsPerPath": 0.0012010944585743922,
+        "reductionPct": 17.17840586119639,
+        "sharePct": 2.575342999256986
+      },
+      {
+        "rank": 9,
+        "stage": "localPhaseAndContribution",
+        "beforeRank": 9,
+        "beforeMsPerPath": 0.0009961863204854817,
+        "afterMsPerPath": 0.0008453368523752772,
+        "reductionPct": 15.142696201317996,
+        "sharePct": 1.8125404952434616
+      },
+      {
+        "rank": 10,
+        "stage": "sunPhaseEvaluation",
+        "beforeRank": 10,
+        "beforeMsPerPath": 0.0008047896961477755,
+        "afterMsPerPath": 0.0007005089642722874,
+        "reductionPct": 12.957513295043487,
+        "sharePct": 1.502005811596757
+      },
+      {
+        "rank": 11,
+        "stage": "sourcePacketWrite",
+        "beforeRank": 11,
+        "beforeMsPerPath": 0.0006130499834854649,
+        "afterMsPerPath": 0.0005970497155999189,
+        "reductionPct": 2.6099450805915136,
+        "sharePct": 1.280172258145
+      },
+      {
+        "rank": 12,
+        "stage": "sourcePacketAddress",
+        "beforeRank": 12,
+        "beforeMsPerPath": 0.0003197742942509631,
+        "afterMsPerPath": 0.00026705393175311304,
+        "reductionPct": 16.48674188190825,
+        "sharePct": 0.5726073154818698
+      },
+      {
+        "rank": 13,
+        "stage": "transmissionShadowFallback",
+        "beforeRank": 13,
+        "beforeMsPerPath": 0.0,
+        "afterMsPerPath": 0.0,
+        "reductionPct": null,
+        "sharePct": 0.0
+      },
+      {
+        "rank": 14,
+        "stage": "opaqueShadowAnyHit",
+        "beforeRank": 14,
+        "beforeMsPerPath": 0.0,
+        "afterMsPerPath": 0.0,
+        "reductionPct": null,
+        "sharePct": 0.0
+      },
+      {
+        "rank": 15,
+        "stage": "opaqueShadowClosestHit",
+        "beforeRank": 15,
+        "beforeMsPerPath": 0.0,
+        "afterMsPerPath": 0.0,
+        "reductionPct": null,
+        "sharePct": 0.0
+      }
+    ],
+    "beforeSumMsPerPath": 0.0664475570877797,
+    "afterSumMsPerPath": 0.04663823261293431
+  },
+  "productionGpuTimings": {
+    "control": {
+      "frames": 360,
+      "wallMs": 7067.9958,
+      "completedFps": 50.93381634437304,
+      "msPerFrame": 19.633321666666667,
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "120",
+          "wallMs": "2533.445000",
+          "completedFps": "47.366333",
+          "submitCpuMs": "2197.389400",
+          "requestBuildCpuMs": "9.067600",
+          "pollCpuMs": "6.096500",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "1.105940250",
+          "gpuFrameLowerMs": "1.105939508",
+          "gpuFrameUpperMs": "1.105941992",
+          "gpuSamples": "120",
+          "profileData": "{\"sharedPrepareMsPerFrame\":0.000000,\"sharedExchangeMsPerFrame\":16.381575,\"vulkanReleaseMsPerFrame\":1.226974,\"cudaStageWallMsPerFrame\":13.313274,\"legacyResolveMsPerFrame\":0.000000,\"vulkanConsumerRecordMsPerFrame\":0.654791,\"vulkanConsumerFenceWaitMsPerFrame\":1.114144,\"vulkanProducerGpuMsPerFrame\":8.904584,\"vulkanConsumerGpuMsPerFrame\":0.000322,\"snapshotCopyMsPerFrame\":0.000000,\"sharedExchangeCountPerFrame\":6.000,\"releaseCommandRecordMsPerFrame\":0.815128,\"releaseQueueSubmitMsPerFrame\":0.401446,\"consumerCommandRecordMsPerFrame\":0.250734,\"consumerQueueSubmitMsPerFrame\":0.404057,\"cudaPhase0MsPerFrame\":0.000000,\"cudaPhase1MsPerFrame\":0.000000,\"cudaPhase2MsPerFrame\":0.000000,\"cudaPhase3MsPerFrame\":0.000000,\"cudaPhase4MsPerFrame\":0.000000,\"cudaPhase5MsPerFrame\":0.000000,\"cudaPhase6MsPerFrame\":0.000000,\"cudaPhase7MsPerFrame\":0.000000,\"cameraScatteringPrepareMsPerFrame\":7.692892,\"pbrMediumPrepareMsPerFrame\":9.174870,\"cameraScatteringKernelGpuMsPerFrame\":0.663156,\"pbrMediumKernelGpuMsPerFrame\":2.171275,\"cameraScatteringKernelCountPerFrame\":3.000,\"pbrMediumKernelCountPerFrame\":3.000,\"cameraScatteringTlasGpuMsPerFrame\":0.000000,\"cameraScatteringTlasCountPerFrame\":0.000,\"cameraScatteringLightsGpuMsPerFrame\":4.651185,\"cameraScatteringLightsCountPerFrame\":3.000,\"pbrPrimaryPacketsGpuMsPerFrame\":1.636703,\"pbrPrimaryPacketsCountPerFrame\":3.000,\"pbrLightPacketsGpuMsPerFrame\":2.409536,\"pbrLightPacketsCountPerFrame\":3.000,\"pbrContributionRestoreGpuMsPerFrame\":0.162110,\"pbrContributionRestoreCountPerFrame\":3.000}"
+        },
+        {
+          "round": "2",
+          "frames": "120",
+          "wallMs": "2279.736400",
+          "completedFps": "52.637665",
+          "submitCpuMs": "1921.260800",
+          "requestBuildCpuMs": "8.093700",
+          "pollCpuMs": "6.239700",
+          "deferrals": "58",
+          "gpuFrameMeanMs": "0.960577500",
+          "gpuFrameLowerMs": "0.960575758",
+          "gpuFrameUpperMs": "0.960580242",
+          "gpuSamples": "120",
+          "profileData": "{\"sharedPrepareMsPerFrame\":0.000000,\"sharedExchangeMsPerFrame\":14.431168,\"vulkanReleaseMsPerFrame\":1.207833,\"cudaStageWallMsPerFrame\":11.615806,\"legacyResolveMsPerFrame\":0.000000,\"vulkanConsumerRecordMsPerFrame\":0.610225,\"vulkanConsumerFenceWaitMsPerFrame\":0.954527,\"vulkanProducerGpuMsPerFrame\":7.692580,\"vulkanConsumerGpuMsPerFrame\":0.000298,\"snapshotCopyMsPerFrame\":0.000000,\"sharedExchangeCountPerFrame\":6.000,\"releaseCommandRecordMsPerFrame\":0.783622,\"releaseQueueSubmitMsPerFrame\":0.414205,\"consumerCommandRecordMsPerFrame\":0.220485,\"consumerQueueSubmitMsPerFrame\":0.389740,\"cudaPhase0MsPerFrame\":0.000000,\"cudaPhase1MsPerFrame\":0.000000,\"cudaPhase2MsPerFrame\":0.000000,\"cudaPhase3MsPerFrame\":0.000000,\"cudaPhase4MsPerFrame\":0.000000,\"cudaPhase5MsPerFrame\":0.000000,\"cudaPhase6MsPerFrame\":0.000000,\"cudaPhase7MsPerFrame\":0.000000,\"cameraScatteringPrepareMsPerFrame\":6.686996,\"pbrMediumPrepareMsPerFrame\":8.138018,\"cameraScatteringKernelGpuMsPerFrame\":0.621988,\"pbrMediumKernelGpuMsPerFrame\":1.938314,\"cameraScatteringKernelCountPerFrame\":3.000,\"pbrMediumKernelCountPerFrame\":3.000,\"cameraScatteringTlasGpuMsPerFrame\":0.000000,\"cameraScatteringTlasCountPerFrame\":0.000,\"cameraScatteringLightsGpuMsPerFrame\":3.926459,\"cameraScatteringLightsCountPerFrame\":3.000,\"pbrPrimaryPacketsGpuMsPerFrame\":1.483900,\"pbrPrimaryPacketsCountPerFrame\":3.000,\"pbrLightPacketsGpuMsPerFrame\":2.112149,\"pbrLightPacketsCountPerFrame\":3.000,\"pbrContributionRestoreGpuMsPerFrame\":0.128207,\"pbrContributionRestoreCountPerFrame\":3.000}"
+        },
+        {
+          "round": "3",
+          "frames": "120",
+          "wallMs": "2254.814400",
+          "completedFps": "53.219458",
+          "submitCpuMs": "1868.782900",
+          "requestBuildCpuMs": "5.260500",
+          "pollCpuMs": "8.215800",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "0.863901750",
+          "gpuFrameLowerMs": "0.863899008",
+          "gpuFrameUpperMs": "0.863905492",
+          "gpuSamples": "120",
+          "profileData": "{\"sharedPrepareMsPerFrame\":0.000000,\"sharedExchangeMsPerFrame\":14.163588,\"vulkanReleaseMsPerFrame\":1.160343,\"cudaStageWallMsPerFrame\":11.307003,\"legacyResolveMsPerFrame\":0.000000,\"vulkanConsumerRecordMsPerFrame\":0.582581,\"vulkanConsumerFenceWaitMsPerFrame\":1.070655,\"vulkanProducerGpuMsPerFrame\":7.487221,\"vulkanConsumerGpuMsPerFrame\":0.000268,\"snapshotCopyMsPerFrame\":0.000000,\"sharedExchangeCountPerFrame\":6.000,\"releaseCommandRecordMsPerFrame\":0.743353,\"releaseQueueSubmitMsPerFrame\":0.407083,\"consumerCommandRecordMsPerFrame\":0.219998,\"consumerQueueSubmitMsPerFrame\":0.362583,\"cudaPhase0MsPerFrame\":0.000000,\"cudaPhase1MsPerFrame\":0.000000,\"cudaPhase2MsPerFrame\":0.000000,\"cudaPhase3MsPerFrame\":0.000000,\"cudaPhase4MsPerFrame\":0.000000,\"cudaPhase5MsPerFrame\":0.000000,\"cudaPhase6MsPerFrame\":0.000000,\"cudaPhase7MsPerFrame\":0.000000,\"cameraScatteringPrepareMsPerFrame\":6.250986,\"pbrMediumPrepareMsPerFrame\":8.279520,\"cameraScatteringKernelGpuMsPerFrame\":0.633838,\"pbrMediumKernelGpuMsPerFrame\":1.797635,\"cameraScatteringKernelCountPerFrame\":3.000,\"pbrMediumKernelCountPerFrame\":3.000,\"cameraScatteringTlasGpuMsPerFrame\":0.000000,\"cameraScatteringTlasCountPerFrame\":0.000,\"cameraScatteringLightsGpuMsPerFrame\":3.507514,\"cameraScatteringLightsCountPerFrame\":3.000,\"pbrPrimaryPacketsGpuMsPerFrame\":1.580556,\"pbrPrimaryPacketsCountPerFrame\":3.000,\"pbrLightPacketsGpuMsPerFrame\":2.245881,\"pbrLightPacketsCountPerFrame\":3.000,\"pbrContributionRestoreGpuMsPerFrame\":0.113219,\"pbrContributionRestoreCountPerFrame\":3.000}"
+        }
+      ],
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 17.02 W, 180 MHz, 55",
+      "productionRounds": [
+        {
+          "sharedPrepareMsPerFrame": 0.0,
+          "sharedExchangeMsPerFrame": 16.381575,
+          "vulkanReleaseMsPerFrame": 1.226974,
+          "cudaStageWallMsPerFrame": 13.313274,
+          "legacyResolveMsPerFrame": 0.0,
+          "vulkanConsumerRecordMsPerFrame": 0.654791,
+          "vulkanConsumerFenceWaitMsPerFrame": 1.114144,
+          "vulkanProducerGpuMsPerFrame": 8.904584,
+          "vulkanConsumerGpuMsPerFrame": 0.000322,
+          "snapshotCopyMsPerFrame": 0.0,
+          "sharedExchangeCountPerFrame": 6.0,
+          "releaseCommandRecordMsPerFrame": 0.815128,
+          "releaseQueueSubmitMsPerFrame": 0.401446,
+          "consumerCommandRecordMsPerFrame": 0.250734,
+          "consumerQueueSubmitMsPerFrame": 0.404057,
+          "cudaPhase0MsPerFrame": 0.0,
+          "cudaPhase1MsPerFrame": 0.0,
+          "cudaPhase2MsPerFrame": 0.0,
+          "cudaPhase3MsPerFrame": 0.0,
+          "cudaPhase4MsPerFrame": 0.0,
+          "cudaPhase5MsPerFrame": 0.0,
+          "cudaPhase6MsPerFrame": 0.0,
+          "cudaPhase7MsPerFrame": 0.0,
+          "cameraScatteringPrepareMsPerFrame": 7.692892,
+          "pbrMediumPrepareMsPerFrame": 9.17487,
+          "cameraScatteringKernelGpuMsPerFrame": 0.663156,
+          "pbrMediumKernelGpuMsPerFrame": 2.171275,
+          "cameraScatteringKernelCountPerFrame": 3.0,
+          "pbrMediumKernelCountPerFrame": 3.0,
+          "cameraScatteringTlasGpuMsPerFrame": 0.0,
+          "cameraScatteringTlasCountPerFrame": 0.0,
+          "cameraScatteringLightsGpuMsPerFrame": 4.651185,
+          "cameraScatteringLightsCountPerFrame": 3.0,
+          "pbrPrimaryPacketsGpuMsPerFrame": 1.636703,
+          "pbrPrimaryPacketsCountPerFrame": 3.0,
+          "pbrLightPacketsGpuMsPerFrame": 2.409536,
+          "pbrLightPacketsCountPerFrame": 3.0,
+          "pbrContributionRestoreGpuMsPerFrame": 0.16211,
+          "pbrContributionRestoreCountPerFrame": 3.0
+        },
+        {
+          "sharedPrepareMsPerFrame": 0.0,
+          "sharedExchangeMsPerFrame": 14.431168,
+          "vulkanReleaseMsPerFrame": 1.207833,
+          "cudaStageWallMsPerFrame": 11.615806,
+          "legacyResolveMsPerFrame": 0.0,
+          "vulkanConsumerRecordMsPerFrame": 0.610225,
+          "vulkanConsumerFenceWaitMsPerFrame": 0.954527,
+          "vulkanProducerGpuMsPerFrame": 7.69258,
+          "vulkanConsumerGpuMsPerFrame": 0.000298,
+          "snapshotCopyMsPerFrame": 0.0,
+          "sharedExchangeCountPerFrame": 6.0,
+          "releaseCommandRecordMsPerFrame": 0.783622,
+          "releaseQueueSubmitMsPerFrame": 0.414205,
+          "consumerCommandRecordMsPerFrame": 0.220485,
+          "consumerQueueSubmitMsPerFrame": 0.38974,
+          "cudaPhase0MsPerFrame": 0.0,
+          "cudaPhase1MsPerFrame": 0.0,
+          "cudaPhase2MsPerFrame": 0.0,
+          "cudaPhase3MsPerFrame": 0.0,
+          "cudaPhase4MsPerFrame": 0.0,
+          "cudaPhase5MsPerFrame": 0.0,
+          "cudaPhase6MsPerFrame": 0.0,
+          "cudaPhase7MsPerFrame": 0.0,
+          "cameraScatteringPrepareMsPerFrame": 6.686996,
+          "pbrMediumPrepareMsPerFrame": 8.138018,
+          "cameraScatteringKernelGpuMsPerFrame": 0.621988,
+          "pbrMediumKernelGpuMsPerFrame": 1.938314,
+          "cameraScatteringKernelCountPerFrame": 3.0,
+          "pbrMediumKernelCountPerFrame": 3.0,
+          "cameraScatteringTlasGpuMsPerFrame": 0.0,
+          "cameraScatteringTlasCountPerFrame": 0.0,
+          "cameraScatteringLightsGpuMsPerFrame": 3.926459,
+          "cameraScatteringLightsCountPerFrame": 3.0,
+          "pbrPrimaryPacketsGpuMsPerFrame": 1.4839,
+          "pbrPrimaryPacketsCountPerFrame": 3.0,
+          "pbrLightPacketsGpuMsPerFrame": 2.112149,
+          "pbrLightPacketsCountPerFrame": 3.0,
+          "pbrContributionRestoreGpuMsPerFrame": 0.128207,
+          "pbrContributionRestoreCountPerFrame": 3.0
+        },
+        {
+          "sharedPrepareMsPerFrame": 0.0,
+          "sharedExchangeMsPerFrame": 14.163588,
+          "vulkanReleaseMsPerFrame": 1.160343,
+          "cudaStageWallMsPerFrame": 11.307003,
+          "legacyResolveMsPerFrame": 0.0,
+          "vulkanConsumerRecordMsPerFrame": 0.582581,
+          "vulkanConsumerFenceWaitMsPerFrame": 1.070655,
+          "vulkanProducerGpuMsPerFrame": 7.487221,
+          "vulkanConsumerGpuMsPerFrame": 0.000268,
+          "snapshotCopyMsPerFrame": 0.0,
+          "sharedExchangeCountPerFrame": 6.0,
+          "releaseCommandRecordMsPerFrame": 0.743353,
+          "releaseQueueSubmitMsPerFrame": 0.407083,
+          "consumerCommandRecordMsPerFrame": 0.219998,
+          "consumerQueueSubmitMsPerFrame": 0.362583,
+          "cudaPhase0MsPerFrame": 0.0,
+          "cudaPhase1MsPerFrame": 0.0,
+          "cudaPhase2MsPerFrame": 0.0,
+          "cudaPhase3MsPerFrame": 0.0,
+          "cudaPhase4MsPerFrame": 0.0,
+          "cudaPhase5MsPerFrame": 0.0,
+          "cudaPhase6MsPerFrame": 0.0,
+          "cudaPhase7MsPerFrame": 0.0,
+          "cameraScatteringPrepareMsPerFrame": 6.250986,
+          "pbrMediumPrepareMsPerFrame": 8.27952,
+          "cameraScatteringKernelGpuMsPerFrame": 0.633838,
+          "pbrMediumKernelGpuMsPerFrame": 1.797635,
+          "cameraScatteringKernelCountPerFrame": 3.0,
+          "pbrMediumKernelCountPerFrame": 3.0,
+          "cameraScatteringTlasGpuMsPerFrame": 0.0,
+          "cameraScatteringTlasCountPerFrame": 0.0,
+          "cameraScatteringLightsGpuMsPerFrame": 3.507514,
+          "cameraScatteringLightsCountPerFrame": 3.0,
+          "pbrPrimaryPacketsGpuMsPerFrame": 1.580556,
+          "pbrPrimaryPacketsCountPerFrame": 3.0,
+          "pbrLightPacketsGpuMsPerFrame": 2.245881,
+          "pbrLightPacketsCountPerFrame": 3.0,
+          "pbrContributionRestoreGpuMsPerFrame": 0.113219,
+          "pbrContributionRestoreCountPerFrame": 3.0
+        }
+      ],
+      "stages": [
+        {
+          "rank": 1,
+          "key": "cameraScatteringLightsGpuMsPerFrame",
+          "stage": "相机散射灯光与可见性",
+          "measuredTotalMs": 1450.21896,
+          "msPerFrame": 4.028386,
+          "msPerWallSecond": 205.18107268824355,
+          "shareOfWallSecondPct": 20.51810726882435
+        },
+        {
+          "rank": 2,
+          "key": "pbrLightPacketsGpuMsPerFrame",
+          "stage": "PBR 灯光 packet 查询",
+          "measuredTotalMs": 812.10792,
+          "msPerFrame": 2.2558553333333333,
+          "msPerWallSecond": 114.89932124747443,
+          "shareOfWallSecondPct": 11.489932124747442
+        },
+        {
+          "rank": 3,
+          "key": "pbrMediumKernelGpuMsPerFrame",
+          "stage": "CUDA PBR 解析",
+          "measuredTotalMs": 708.86688,
+          "msPerFrame": 1.9690746666666668,
+          "msPerWallSecond": 100.29248744035756,
+          "shareOfWallSecondPct": 10.029248744035757
+        },
+        {
+          "rank": 4,
+          "key": "pbrPrimaryPacketsGpuMsPerFrame",
+          "stage": "PBR 主射线 packet 查询",
+          "measuredTotalMs": 564.13908,
+          "msPerFrame": 1.567053,
+          "msPerWallSecond": 79.81598970389881,
+          "shareOfWallSecondPct": 7.98159897038988
+        },
+        {
+          "rank": 5,
+          "key": "finalFrameGpu",
+          "stage": "最终帧 GPU 输出",
+          "measuredTotalMs": 351.65034,
+          "msPerFrame": 0.9768065,
+          "msPerWallSecond": 49.75248287498982,
+          "shareOfWallSecondPct": 4.9752482874989825
+        },
+        {
+          "rank": 6,
+          "key": "cameraScatteringKernelGpuMsPerFrame",
+          "stage": "CUDA 相机散射积分",
+          "measuredTotalMs": 230.27784,
+          "msPerFrame": 0.6396606666666667,
+          "msPerWallSecond": 32.58035891871922,
+          "shareOfWallSecondPct": 3.258035891871922
+        },
+        {
+          "rank": 7,
+          "key": "pbrContributionRestoreGpuMsPerFrame",
+          "stage": "PBR radiance 恢复拷贝",
+          "measuredTotalMs": 48.42432,
+          "msPerFrame": 0.134512,
+          "msPerWallSecond": 6.851209504114307,
+          "shareOfWallSecondPct": 0.6851209504114306
+        }
+      ],
+      "selectedGpuStages": {
+        "msPerFrame": 11.571348166666667,
+        "msPerWallSecond": 589.3729223777976,
+        "shareOfWallSecondPct": 58.937292237779765
+      },
+      "unattributedArithmeticDifference": {
+        "msPerFrame": 8.0619735,
+        "msPerWallSecond": 410.6270776222023,
+        "shareOfWallSecondPct": 41.062707762220235,
+        "meaning": "Arithmetic difference, not measured GPU idle or measured CPU work. Host attribution is a separate interval timeline."
+      },
+      "wallTotal": {
+        "msPerFrame": 19.633321666666667,
+        "msPerWallSecond": 1000.0,
+        "shareOfWallSecondPct": 100.0
+      }
+    },
+    "candidate": {
+      "frames": 360,
+      "wallMs": 7147.8244,
+      "completedFps": 50.364975390274,
+      "msPerFrame": 19.855067777777776,
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "120",
+          "wallMs": "2482.149000",
+          "completedFps": "48.345204",
+          "submitCpuMs": "2193.063400",
+          "requestBuildCpuMs": "8.669700",
+          "pollCpuMs": "5.446400",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "1.164473750",
+          "gpuFrameLowerMs": "1.164473008",
+          "gpuFrameUpperMs": "1.164475492",
+          "gpuSamples": "120",
+          "profileData": "{\"sharedPrepareMsPerFrame\":0.000000,\"sharedExchangeMsPerFrame\":16.360558,\"vulkanReleaseMsPerFrame\":1.247100,\"cudaStageWallMsPerFrame\":13.290393,\"legacyResolveMsPerFrame\":0.000000,\"vulkanConsumerRecordMsPerFrame\":0.626678,\"vulkanConsumerFenceWaitMsPerFrame\":1.118738,\"vulkanProducerGpuMsPerFrame\":8.731282,\"vulkanConsumerGpuMsPerFrame\":0.000338,\"snapshotCopyMsPerFrame\":0.000000,\"sharedExchangeCountPerFrame\":6.000,\"releaseCommandRecordMsPerFrame\":0.830478,\"releaseQueueSubmitMsPerFrame\":0.404909,\"consumerCommandRecordMsPerFrame\":0.239936,\"consumerQueueSubmitMsPerFrame\":0.386742,\"cudaPhase0MsPerFrame\":0.000000,\"cudaPhase1MsPerFrame\":0.000000,\"cudaPhase2MsPerFrame\":0.000000,\"cudaPhase3MsPerFrame\":0.000000,\"cudaPhase4MsPerFrame\":0.000000,\"cudaPhase5MsPerFrame\":0.000000,\"cudaPhase6MsPerFrame\":0.000000,\"cudaPhase7MsPerFrame\":0.000000,\"cameraScatteringPrepareMsPerFrame\":7.326811,\"pbrMediumPrepareMsPerFrame\":9.519251,\"cameraScatteringKernelGpuMsPerFrame\":0.691488,\"pbrMediumKernelGpuMsPerFrame\":2.283538,\"cameraScatteringKernelCountPerFrame\":3.000,\"pbrMediumKernelCountPerFrame\":3.000,\"cameraScatteringTlasGpuMsPerFrame\":0.000000,\"cameraScatteringTlasCountPerFrame\":0.000,\"cameraScatteringLightsGpuMsPerFrame\":4.237992,\"cameraScatteringLightsCountPerFrame\":3.000,\"pbrPrimaryPacketsGpuMsPerFrame\":1.715982,\"pbrPrimaryPacketsCountPerFrame\":3.000,\"pbrLightPacketsGpuMsPerFrame\":2.555199,\"pbrLightPacketsCountPerFrame\":3.000,\"pbrContributionRestoreGpuMsPerFrame\":0.175351,\"pbrContributionRestoreCountPerFrame\":3.000}"
+        },
+        {
+          "round": "2",
+          "frames": "120",
+          "wallMs": "2401.107300",
+          "completedFps": "49.976942",
+          "submitCpuMs": "1990.022500",
+          "requestBuildCpuMs": "8.275700",
+          "pollCpuMs": "6.444100",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "1.012108500",
+          "gpuFrameLowerMs": "1.012106758",
+          "gpuFrameUpperMs": "1.012111242",
+          "gpuSamples": "120",
+          "profileData": "{\"sharedPrepareMsPerFrame\":0.000000,\"sharedExchangeMsPerFrame\":14.831483,\"vulkanReleaseMsPerFrame\":1.294857,\"cudaStageWallMsPerFrame\":11.751521,\"legacyResolveMsPerFrame\":0.000000,\"vulkanConsumerRecordMsPerFrame\":0.633827,\"vulkanConsumerFenceWaitMsPerFrame\":1.103303,\"vulkanProducerGpuMsPerFrame\":7.574728,\"vulkanConsumerGpuMsPerFrame\":0.000327,\"snapshotCopyMsPerFrame\":0.000000,\"sharedExchangeCountPerFrame\":6.000,\"releaseCommandRecordMsPerFrame\":0.799111,\"releaseQueueSubmitMsPerFrame\":0.485430,\"consumerCommandRecordMsPerFrame\":0.237846,\"consumerQueueSubmitMsPerFrame\":0.395981,\"cudaPhase0MsPerFrame\":0.000000,\"cudaPhase1MsPerFrame\":0.000000,\"cudaPhase2MsPerFrame\":0.000000,\"cudaPhase3MsPerFrame\":0.000000,\"cudaPhase4MsPerFrame\":0.000000,\"cudaPhase5MsPerFrame\":0.000000,\"cudaPhase6MsPerFrame\":0.000000,\"cudaPhase7MsPerFrame\":0.000000,\"cameraScatteringPrepareMsPerFrame\":6.567658,\"pbrMediumPrepareMsPerFrame\":8.706657,\"cameraScatteringKernelGpuMsPerFrame\":0.660480,\"pbrMediumKernelGpuMsPerFrame\":2.083103,\"cameraScatteringKernelCountPerFrame\":3.000,\"pbrMediumKernelCountPerFrame\":3.000,\"cameraScatteringTlasGpuMsPerFrame\":0.000000,\"cameraScatteringTlasCountPerFrame\":0.000,\"cameraScatteringLightsGpuMsPerFrame\":3.545770,\"cameraScatteringLightsCountPerFrame\":3.000,\"pbrPrimaryPacketsGpuMsPerFrame\":1.575956,\"pbrPrimaryPacketsCountPerFrame\":3.000,\"pbrLightPacketsGpuMsPerFrame\":2.271027,\"pbrLightPacketsCountPerFrame\":3.000,\"pbrContributionRestoreGpuMsPerFrame\":0.136809,\"pbrContributionRestoreCountPerFrame\":3.000}"
+        },
+        {
+          "round": "3",
+          "frames": "120",
+          "wallMs": "2264.568100",
+          "completedFps": "52.990237",
+          "submitCpuMs": "1903.914300",
+          "requestBuildCpuMs": "5.775200",
+          "pollCpuMs": "6.009400",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "0.916937500",
+          "gpuFrameLowerMs": "0.916934758",
+          "gpuFrameUpperMs": "0.916941242",
+          "gpuSamples": "120",
+          "profileData": "{\"sharedPrepareMsPerFrame\":0.000000,\"sharedExchangeMsPerFrame\":14.497816,\"vulkanReleaseMsPerFrame\":1.157925,\"cudaStageWallMsPerFrame\":11.699208,\"legacyResolveMsPerFrame\":0.000000,\"vulkanConsumerRecordMsPerFrame\":0.628553,\"vulkanConsumerFenceWaitMsPerFrame\":0.967154,\"vulkanProducerGpuMsPerFrame\":7.558702,\"vulkanConsumerGpuMsPerFrame\":0.000276,\"snapshotCopyMsPerFrame\":0.000000,\"sharedExchangeCountPerFrame\":6.000,\"releaseCommandRecordMsPerFrame\":0.744979,\"releaseQueueSubmitMsPerFrame\":0.402438,\"consumerCommandRecordMsPerFrame\":0.237652,\"consumerQueueSubmitMsPerFrame\":0.390901,\"cudaPhase0MsPerFrame\":0.000000,\"cudaPhase1MsPerFrame\":0.000000,\"cudaPhase2MsPerFrame\":0.000000,\"cudaPhase3MsPerFrame\":0.000000,\"cudaPhase4MsPerFrame\":0.000000,\"cudaPhase5MsPerFrame\":0.000000,\"cudaPhase6MsPerFrame\":0.000000,\"cudaPhase7MsPerFrame\":0.000000,\"cameraScatteringPrepareMsPerFrame\":6.006265,\"pbrMediumPrepareMsPerFrame\":8.835041,\"cameraScatteringKernelGpuMsPerFrame\":0.713428,\"pbrMediumKernelGpuMsPerFrame\":1.933389,\"cameraScatteringKernelCountPerFrame\":3.000,\"pbrMediumKernelCountPerFrame\":3.000,\"cameraScatteringTlasGpuMsPerFrame\":0.000000,\"cameraScatteringTlasCountPerFrame\":0.000,\"cameraScatteringLightsGpuMsPerFrame\":3.170746,\"cameraScatteringLightsCountPerFrame\":3.000,\"pbrPrimaryPacketsGpuMsPerFrame\":1.732644,\"pbrPrimaryPacketsCountPerFrame\":3.000,\"pbrLightPacketsGpuMsPerFrame\":2.492457,\"pbrLightPacketsCountPerFrame\":3.000,\"pbrContributionRestoreGpuMsPerFrame\":0.121080,\"pbrContributionRestoreCountPerFrame\":3.000}"
+        }
+      ],
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.21 W, 180 MHz, 59",
+      "productionRounds": [
+        {
+          "sharedPrepareMsPerFrame": 0.0,
+          "sharedExchangeMsPerFrame": 16.360558,
+          "vulkanReleaseMsPerFrame": 1.2471,
+          "cudaStageWallMsPerFrame": 13.290393,
+          "legacyResolveMsPerFrame": 0.0,
+          "vulkanConsumerRecordMsPerFrame": 0.626678,
+          "vulkanConsumerFenceWaitMsPerFrame": 1.118738,
+          "vulkanProducerGpuMsPerFrame": 8.731282,
+          "vulkanConsumerGpuMsPerFrame": 0.000338,
+          "snapshotCopyMsPerFrame": 0.0,
+          "sharedExchangeCountPerFrame": 6.0,
+          "releaseCommandRecordMsPerFrame": 0.830478,
+          "releaseQueueSubmitMsPerFrame": 0.404909,
+          "consumerCommandRecordMsPerFrame": 0.239936,
+          "consumerQueueSubmitMsPerFrame": 0.386742,
+          "cudaPhase0MsPerFrame": 0.0,
+          "cudaPhase1MsPerFrame": 0.0,
+          "cudaPhase2MsPerFrame": 0.0,
+          "cudaPhase3MsPerFrame": 0.0,
+          "cudaPhase4MsPerFrame": 0.0,
+          "cudaPhase5MsPerFrame": 0.0,
+          "cudaPhase6MsPerFrame": 0.0,
+          "cudaPhase7MsPerFrame": 0.0,
+          "cameraScatteringPrepareMsPerFrame": 7.326811,
+          "pbrMediumPrepareMsPerFrame": 9.519251,
+          "cameraScatteringKernelGpuMsPerFrame": 0.691488,
+          "pbrMediumKernelGpuMsPerFrame": 2.283538,
+          "cameraScatteringKernelCountPerFrame": 3.0,
+          "pbrMediumKernelCountPerFrame": 3.0,
+          "cameraScatteringTlasGpuMsPerFrame": 0.0,
+          "cameraScatteringTlasCountPerFrame": 0.0,
+          "cameraScatteringLightsGpuMsPerFrame": 4.237992,
+          "cameraScatteringLightsCountPerFrame": 3.0,
+          "pbrPrimaryPacketsGpuMsPerFrame": 1.715982,
+          "pbrPrimaryPacketsCountPerFrame": 3.0,
+          "pbrLightPacketsGpuMsPerFrame": 2.555199,
+          "pbrLightPacketsCountPerFrame": 3.0,
+          "pbrContributionRestoreGpuMsPerFrame": 0.175351,
+          "pbrContributionRestoreCountPerFrame": 3.0
+        },
+        {
+          "sharedPrepareMsPerFrame": 0.0,
+          "sharedExchangeMsPerFrame": 14.831483,
+          "vulkanReleaseMsPerFrame": 1.294857,
+          "cudaStageWallMsPerFrame": 11.751521,
+          "legacyResolveMsPerFrame": 0.0,
+          "vulkanConsumerRecordMsPerFrame": 0.633827,
+          "vulkanConsumerFenceWaitMsPerFrame": 1.103303,
+          "vulkanProducerGpuMsPerFrame": 7.574728,
+          "vulkanConsumerGpuMsPerFrame": 0.000327,
+          "snapshotCopyMsPerFrame": 0.0,
+          "sharedExchangeCountPerFrame": 6.0,
+          "releaseCommandRecordMsPerFrame": 0.799111,
+          "releaseQueueSubmitMsPerFrame": 0.48543,
+          "consumerCommandRecordMsPerFrame": 0.237846,
+          "consumerQueueSubmitMsPerFrame": 0.395981,
+          "cudaPhase0MsPerFrame": 0.0,
+          "cudaPhase1MsPerFrame": 0.0,
+          "cudaPhase2MsPerFrame": 0.0,
+          "cudaPhase3MsPerFrame": 0.0,
+          "cudaPhase4MsPerFrame": 0.0,
+          "cudaPhase5MsPerFrame": 0.0,
+          "cudaPhase6MsPerFrame": 0.0,
+          "cudaPhase7MsPerFrame": 0.0,
+          "cameraScatteringPrepareMsPerFrame": 6.567658,
+          "pbrMediumPrepareMsPerFrame": 8.706657,
+          "cameraScatteringKernelGpuMsPerFrame": 0.66048,
+          "pbrMediumKernelGpuMsPerFrame": 2.083103,
+          "cameraScatteringKernelCountPerFrame": 3.0,
+          "pbrMediumKernelCountPerFrame": 3.0,
+          "cameraScatteringTlasGpuMsPerFrame": 0.0,
+          "cameraScatteringTlasCountPerFrame": 0.0,
+          "cameraScatteringLightsGpuMsPerFrame": 3.54577,
+          "cameraScatteringLightsCountPerFrame": 3.0,
+          "pbrPrimaryPacketsGpuMsPerFrame": 1.575956,
+          "pbrPrimaryPacketsCountPerFrame": 3.0,
+          "pbrLightPacketsGpuMsPerFrame": 2.271027,
+          "pbrLightPacketsCountPerFrame": 3.0,
+          "pbrContributionRestoreGpuMsPerFrame": 0.136809,
+          "pbrContributionRestoreCountPerFrame": 3.0
+        },
+        {
+          "sharedPrepareMsPerFrame": 0.0,
+          "sharedExchangeMsPerFrame": 14.497816,
+          "vulkanReleaseMsPerFrame": 1.157925,
+          "cudaStageWallMsPerFrame": 11.699208,
+          "legacyResolveMsPerFrame": 0.0,
+          "vulkanConsumerRecordMsPerFrame": 0.628553,
+          "vulkanConsumerFenceWaitMsPerFrame": 0.967154,
+          "vulkanProducerGpuMsPerFrame": 7.558702,
+          "vulkanConsumerGpuMsPerFrame": 0.000276,
+          "snapshotCopyMsPerFrame": 0.0,
+          "sharedExchangeCountPerFrame": 6.0,
+          "releaseCommandRecordMsPerFrame": 0.744979,
+          "releaseQueueSubmitMsPerFrame": 0.402438,
+          "consumerCommandRecordMsPerFrame": 0.237652,
+          "consumerQueueSubmitMsPerFrame": 0.390901,
+          "cudaPhase0MsPerFrame": 0.0,
+          "cudaPhase1MsPerFrame": 0.0,
+          "cudaPhase2MsPerFrame": 0.0,
+          "cudaPhase3MsPerFrame": 0.0,
+          "cudaPhase4MsPerFrame": 0.0,
+          "cudaPhase5MsPerFrame": 0.0,
+          "cudaPhase6MsPerFrame": 0.0,
+          "cudaPhase7MsPerFrame": 0.0,
+          "cameraScatteringPrepareMsPerFrame": 6.006265,
+          "pbrMediumPrepareMsPerFrame": 8.835041,
+          "cameraScatteringKernelGpuMsPerFrame": 0.713428,
+          "pbrMediumKernelGpuMsPerFrame": 1.933389,
+          "cameraScatteringKernelCountPerFrame": 3.0,
+          "pbrMediumKernelCountPerFrame": 3.0,
+          "cameraScatteringTlasGpuMsPerFrame": 0.0,
+          "cameraScatteringTlasCountPerFrame": 0.0,
+          "cameraScatteringLightsGpuMsPerFrame": 3.170746,
+          "cameraScatteringLightsCountPerFrame": 3.0,
+          "pbrPrimaryPacketsGpuMsPerFrame": 1.732644,
+          "pbrPrimaryPacketsCountPerFrame": 3.0,
+          "pbrLightPacketsGpuMsPerFrame": 2.492457,
+          "pbrLightPacketsCountPerFrame": 3.0,
+          "pbrContributionRestoreGpuMsPerFrame": 0.12108,
+          "pbrContributionRestoreCountPerFrame": 3.0
+        }
+      ],
+      "stages": [
+        {
+          "rank": 1,
+          "key": "cameraScatteringLightsGpuMsPerFrame",
+          "stage": "相机散射灯光与可见性",
+          "measuredTotalMs": 1314.54096,
+          "msPerFrame": 3.6515026666666666,
+          "msPerWallSecond": 183.90784194418654,
+          "shareOfWallSecondPct": 18.390784194418654
+        },
+        {
+          "rank": 2,
+          "key": "pbrLightPacketsGpuMsPerFrame",
+          "stage": "PBR 灯光 packet 查询",
+          "measuredTotalMs": 878.24196,
+          "msPerFrame": 2.439561,
+          "msPerWallSecond": 122.86842972807223,
+          "shareOfWallSecondPct": 12.286842972807221
+        },
+        {
+          "rank": 3,
+          "key": "pbrMediumKernelGpuMsPerFrame",
+          "stage": "CUDA PBR 解析",
+          "measuredTotalMs": 756.0036,
+          "msPerFrame": 2.10001,
+          "msPerWallSecond": 105.7669519693293,
+          "shareOfWallSecondPct": 10.57669519693293
+        },
+        {
+          "rank": 4,
+          "key": "pbrPrimaryPacketsGpuMsPerFrame",
+          "stage": "PBR 主射线 packet 查询",
+          "measuredTotalMs": 602.94984,
+          "msPerFrame": 1.6748606666666668,
+          "msPerWallSecond": 84.35431625880457,
+          "shareOfWallSecondPct": 8.435431625880456
+        },
+        {
+          "rank": 5,
+          "key": "finalFrameGpu",
+          "stage": "最终帧 GPU 输出",
+          "measuredTotalMs": 371.22237,
+          "msPerFrame": 1.03117325,
+          "msPerWallSecond": 51.93501535935886,
+          "shareOfWallSecondPct": 5.193501535935885
+        },
+        {
+          "rank": 6,
+          "key": "cameraScatteringKernelGpuMsPerFrame",
+          "stage": "CUDA 相机散射积分",
+          "measuredTotalMs": 247.84752,
+          "msPerFrame": 0.6884653333333334,
+          "msPerWallSecond": 34.67453957039012,
+          "shareOfWallSecondPct": 3.467453957039012
+        },
+        {
+          "rank": 7,
+          "key": "pbrContributionRestoreGpuMsPerFrame",
+          "stage": "PBR radiance 恢复拷贝",
+          "measuredTotalMs": 51.9888,
+          "msPerFrame": 0.14441333333333334,
+          "msPerWallSecond": 7.273373979360769,
+          "shareOfWallSecondPct": 0.7273373979360769
+        }
+      ],
+      "selectedGpuStages": {
+        "msPerFrame": 11.72998625,
+        "msPerWallSecond": 590.7804688095024,
+        "shareOfWallSecondPct": 59.07804688095024
+      },
+      "unattributedArithmeticDifference": {
+        "msPerFrame": 8.125081527777779,
+        "msPerWallSecond": 409.2195311904976,
+        "shareOfWallSecondPct": 40.92195311904976,
+        "meaning": "Arithmetic difference, not measured GPU idle or measured CPU work. Host attribution is a separate interval timeline."
+      },
+      "wallTotal": {
+        "msPerFrame": 19.855067777777776,
+        "msPerWallSecond": 1000.0,
+        "shareOfWallSecondPct": 100.0
+      }
+    }
+  },
+  "diagnosticsOff": {
+    "control": {
+      "frames": 360,
+      "wallMs": 7000.7216,
+      "completedFps": 51.42327042400886,
+      "msPerFrame": 19.446448888888888,
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "120",
+          "wallMs": "2368.945800",
+          "completedFps": "50.655443",
+          "submitCpuMs": "2294.653200",
+          "requestBuildCpuMs": "4.050200",
+          "pollCpuMs": "3.262800",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "1.389812500",
+          "gpuFrameLowerMs": "1.389811758",
+          "gpuFrameUpperMs": "1.389814242",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        },
+        {
+          "round": "2",
+          "frames": "120",
+          "wallMs": "2256.635900",
+          "completedFps": "53.176500",
+          "submitCpuMs": "2131.899600",
+          "requestBuildCpuMs": "4.781000",
+          "pollCpuMs": "3.892200",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "1.245960250",
+          "gpuFrameLowerMs": "1.245958508",
+          "gpuFrameUpperMs": "1.245962992",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        },
+        {
+          "round": "3",
+          "frames": "120",
+          "wallMs": "2375.139900",
+          "completedFps": "50.523340",
+          "submitCpuMs": "1988.526200",
+          "requestBuildCpuMs": "6.353900",
+          "pollCpuMs": "7.199600",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "0.987628000",
+          "gpuFrameLowerMs": "0.987625258",
+          "gpuFrameUpperMs": "0.987631742",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        }
+      ],
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.24 W, 180 MHz, 57"
+    },
+    "candidate": {
+      "frames": 360,
+      "wallMs": 6402.0148,
+      "completedFps": 56.23229736988424,
+      "msPerFrame": 17.783374444444444,
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "120",
+          "wallMs": "2299.684000",
+          "completedFps": "52.181082",
+          "submitCpuMs": "1862.567500",
+          "requestBuildCpuMs": "8.396400",
+          "pollCpuMs": "6.286900",
+          "deferrals": "57",
+          "gpuFrameMeanMs": "0.960939500",
+          "gpuFrameLowerMs": "0.960938758",
+          "gpuFrameUpperMs": "0.960941242",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        },
+        {
+          "round": "2",
+          "frames": "120",
+          "wallMs": "2096.025900",
+          "completedFps": "57.251201",
+          "submitCpuMs": "1754.770000",
+          "requestBuildCpuMs": "6.908700",
+          "pollCpuMs": "5.001800",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "0.970691500",
+          "gpuFrameLowerMs": "0.970689758",
+          "gpuFrameUpperMs": "0.970694242",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        },
+        {
+          "round": "3",
+          "frames": "120",
+          "wallMs": "2006.304900",
+          "completedFps": "59.811447",
+          "submitCpuMs": "1751.878700",
+          "requestBuildCpuMs": "4.597100",
+          "pollCpuMs": "5.601300",
+          "deferrals": "59",
+          "gpuFrameMeanMs": "0.949665750",
+          "gpuFrameLowerMs": "0.949663008",
+          "gpuFrameUpperMs": "0.949669492",
+          "gpuSamples": "120",
+          "profileData": "{}"
+        }
+      ],
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.30 W, 180 MHz, 61"
+    }
+  },
+  "correctness": {
+    "hdr": [
+      {
+        "frame": "pbr-direct-uniform-0.rgba16f",
+        "bytes": 115200,
+        "byteIdentical": true,
+        "beforeSha256": "7f900c40ce0a933f4b58ce01e471967cba96279e19f0ff5c0a2a62c62a84894f",
+        "afterSha256": "7f900c40ce0a933f4b58ce01e471967cba96279e19f0ff5c0a2a62c62a84894f"
+      },
+      {
+        "frame": "pbr-direct-uniform-1.rgba16f",
+        "bytes": 115200,
+        "byteIdentical": true,
+        "beforeSha256": "d30d9782583f3a0cc17a98a1cd7b29921f2bec917b1d3cd89c66d17b84bee971",
+        "afterSha256": "d30d9782583f3a0cc17a98a1cd7b29921f2bec917b1d3cd89c66d17b84bee971"
+      },
+      {
+        "frame": "pbr-direct-uniform-2.rgba16f",
+        "bytes": 115200,
+        "byteIdentical": true,
+        "beforeSha256": "7660acf72c2c2756d0525977b90367e11cf7f5e22cf10edd071ad9e7c800323f",
+        "afterSha256": "7660acf72c2c2756d0525977b90367e11cf7f5e22cf10edd071ad9e7c800323f"
+      },
+      {
+        "frame": "pbr-direct-uniform-3.rgba16f",
+        "bytes": 115200,
+        "byteIdentical": true,
+        "beforeSha256": "daed10bea6dd72e99f372c117fb0f80157d3c8226275dc75e50ac561b16a5d32",
+        "afterSha256": "daed10bea6dd72e99f372c117fb0f80157d3c8226275dc75e50ac561b16a5d32"
+      },
+      {
+        "frame": "pbr-direct-uniform-4.rgba16f",
+        "bytes": 115200,
+        "byteIdentical": true,
+        "beforeSha256": "4e87a7e18199d745fc711ff3a7420a1acc1b3e66e14f66bbefeebdc228c80feb",
+        "afterSha256": "4e87a7e18199d745fc711ff3a7420a1acc1b3e66e14f66bbefeebdc228c80feb"
+      },
+      {
+        "frame": "pbr-direct-uniform-5.rgba16f",
+        "bytes": 115200,
+        "byteIdentical": true,
+        "beforeSha256": "fb8fc2971c155d1dd0e61636a1dc0a4ebb3e5337426f5572ed7fcb53355fb21e",
+        "afterSha256": "fb8fc2971c155d1dd0e61636a1dc0a4ebb3e5337426f5572ed7fcb53355fb21e"
+      },
+      {
+        "frame": "pbr-direct-uniform-6.rgba16f",
+        "bytes": 115200,
+        "byteIdentical": true,
+        "beforeSha256": "09e2fb6a157adb7d80cc1641c10a2fa22b6bdc2cc30a430c63d500ed92689dbe",
+        "afterSha256": "09e2fb6a157adb7d80cc1641c10a2fa22b6bdc2cc30a430c63d500ed92689dbe"
+      },
+      {
+        "frame": "pbr-direct-uniform-7.rgba16f",
+        "bytes": 115200,
+        "byteIdentical": true,
+        "beforeSha256": "73fa21c150f7360a80c653c22b291a5a05463f38c45ba18869d24a89a2ff4aed",
+        "afterSha256": "73fa21c150f7360a80c653c22b291a5a05463f38c45ba18869d24a89a2ff4aed"
+      }
+    ],
+    "validation": {
+      "warnings": 0,
+      "errors": 0
+    },
+    "productionNative": {
+      "passed": true,
+      "scope": "public-final-HDR-uniform-direct-scattering",
+      "nativeFrames": 14,
+      "nativeScatteringFrames": 14,
+      "nativeOpticalFrames": 0,
+      "nativePbrFrames": 14,
+      "recoverableRejections": 0,
+      "comparisons": [
+        {
+          "name": "analytic-ambient-mixed-RGB",
+          "steps": 1,
+          "samples": 1,
+          "maximumAbsoluteError": 6.03806361194e-05,
+          "referenceSourceEnergy": 131.901113991
+        },
+        {
+          "name": "analytic-HG-isotropic",
+          "steps": 8,
+          "samples": 1,
+          "maximumAbsoluteError": 6.03885614782e-05,
+          "referenceSourceEnergy": 87.0219321629
+        },
+        {
+          "name": "analytic-HG-forward-eight-SPP",
+          "steps": 64,
+          "samples": 8,
+          "maximumAbsoluteError": 0.000243467859421,
+          "referenceSourceEnergy": 420.883615032
+        },
+        {
+          "name": "analytic-HG-backward-two-SPP",
+          "steps": 2,
+          "samples": 2,
+          "maximumAbsoluteError": 0.000117329989114,
+          "referenceSourceEnergy": 38.6691582128
+        },
+        {
+          "name": "directional-medium-shadow",
+          "steps": 8,
+          "samples": 1,
+          "maximumAbsoluteError": 6.03506556214e-05,
+          "referenceSourceEnergy": 53.8559892099
+        },
+        {
+          "name": "opaque-wall-shadow",
+          "steps": 8,
+          "samples": 2,
+          "maximumAbsoluteError": 6.07152275671e-05,
+          "referenceSourceEnergy": 49.5124379963
+        },
+        {
+          "name": "point-spot-directional-sun-enumerated",
+          "steps": 64,
+          "samples": 2,
+          "maximumAbsoluteError": 6.06798096834e-05,
+          "referenceSourceEnergy": 137.754074609
+        },
+        {
+          "name": "point-spot-opaque-shadow",
+          "steps": 64,
+          "samples": 1,
+          "maximumAbsoluteError": 6.06410653193e-05,
+          "referenceSourceEnergy": 131.950743246
+        },
+        {
+          "name": "small-light-set-importance-enumerates",
+          "steps": 64,
+          "samples": 1,
+          "maximumAbsoluteError": 6.07101719221e-05,
+          "referenceSourceEnergy": 137.754046709
+        },
+        {
+          "name": "fractional-double-point-spot-upload-replacement",
+          "steps": 64,
+          "samples": 1,
+          "maximumAbsoluteError": 6.06535492636e-05,
+          "referenceSourceEnergy": 131.948454293
+        },
+        {
+          "name": "nine-light-one-sample-reservoir",
+          "steps": 8,
+          "samples": 1,
+          "maximumAbsoluteError": 0.000242437877565,
+          "referenceSourceEnergy": 304.989722049
+        },
+        {
+          "name": "nine-light-eight-sample-reservoir",
+          "steps": 8,
+          "samples": 2,
+          "maximumAbsoluteError": 6.03826903241e-05,
+          "referenceSourceEnergy": 89.4824026513
+        },
+        {
+          "name": "IOR-scattering-without-interface-uses-native-scattering-integrator",
+          "steps": 8,
+          "samples": 1,
+          "maximumAbsoluteError": 5.96735901513e-05,
+          "referenceSourceEnergy": 35.0386099717
+        },
+        {
+          "name": "resize-and-rejection-recovery",
+          "steps": 8,
+          "samples": 2,
+          "maximumAbsoluteError": 5.87014082141e-05,
+          "referenceSourceEnergy": 24.4117381458
+        }
+      ]
+    }
+  },
+  "accounting": [
+    "Every ms/second and percentage uses stage totals and wall time from the SAME measured timing window.",
+    "GPU leaf work totals and host nested inclusive waits are separate views and must not be summed.",
+    "Unattributed GPU-work difference remains arithmetic until independently measured interval coverage is available.",
+    "Diagnostics-off throughput is a separate experiment, not used to normalize GPU timing table."
+  ],
+  "verifiedGain": {
+    "lightingBeforeMs": 4.028386,
+    "lightingAfterMs": 3.6515026666666666,
+    "lightingReductionPct": 9.355690674462025,
+    "lightingRoundReductionsPct": [
+      8.88360708077618,
+      9.695478801637803,
+      9.601330172880285
+    ],
+    "diagnosticsOffFpsGainPct": 9.351849670825496,
+    "confidence": "Three lighting GPU rounds improve. Whole-frame runs vary with unrelated stages and startup drift; diagnostics-off FPS gain is observed, not guaranteed."
+  }
+}

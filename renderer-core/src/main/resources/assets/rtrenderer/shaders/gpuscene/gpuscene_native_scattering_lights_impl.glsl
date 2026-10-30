@@ -103,6 +103,23 @@ void main() {
                 }
             }
         }
+        // The proposal uses the whole camera segment, not the integration point.
+        // Retain its correction once per selected light for all scattering intervals.
+        bool exhaustive=candidates<=sampleCount;
+        uint selectedCount=exhaustive?candidates:sampleCount;
+        float selectedFactors[8];
+        if(sampleCount>0u) {
+            [[dont_unroll]] for(uint k=0u;k<selectedCount;++k) {
+                float factor=1.0;
+                if(!exhaustive) {
+                    GS_SCATTER_DETAIL_NEXT(1u);
+                    float weight=gsScatteringLightWeight(selected[k],origin,direction,distance);
+                    GS_SCATTER_DETAIL_NEXT(2u);
+                    factor=total/(float(sampleCount)*weight);
+                }
+                selectedFactors[k]=factor;
+            }
+        }
         GS_SCATTER_DETAIL_NEXT(3u);
         vec3 sunDirection=-normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
         vec3 sun=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)*uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
@@ -159,13 +176,10 @@ void main() {
                         }
                     }
                 }else {
-                    bool exhaustive=candidates<=sampleCount;uint count=exhaustive?candidates:sampleCount;
-                    [[dont_unroll]] for(uint k=0u;k<count;++k) {
+                    [[dont_unroll]] for(uint k=0u;k<selectedCount;++k) {
                         uint slot=exhaustive?firstCandidates[k]:selected[k];
-                        GS_SCATTER_DETAIL_NEXT(1u);
-                        float weight=gsScatteringLightWeight(slot,origin,direction,distance);
                         GS_SCATTER_DETAIL_NEXT(2u);
-                        float factor=exhaustive?1.0:total/(float(sampleCount)*weight);
+                        float factor=selectedFactors[k];
                         GS_SCATTER_DETAIL_NEXT(7u);
                         GS_SCATTER_DETAIL_PAUSE();
 #ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
