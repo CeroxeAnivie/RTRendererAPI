@@ -895,6 +895,12 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 正序 kernel 0.807241→0.797066 ms（下降 1.26%），关闭诊断 111.768264→112.883543 FPS（+1.00%）；反序 kernel 0.805046→0.793753 ms（下降 1.40%），关闭诊断 113.000539→112.040968 FPS（−0.85%）。没有稳定端到端收益，CUDA 源码和 manifest 两个文件均精确恢复；不继续为已拒绝候选追加完整 GPU 回归。[冻结制品与正反序数据](data/pbr-statistics-block-rejected-20261031.json)。
 
+### 撤回：零自发光均匀 PBR 静态专用化
+
+参考固定 PBRT-v4 `media.h` 的 `HomogeneousMedium::IsEmissive` 能力判断，为无边界、无密度且实际打包发射系数全零的 PBR 增加静态零发射类型。host 按实际 packed header 选择，kernel 再验证系数；保留同一 LuxCore 段函数、相同浮点累计与统计。1080p 8 帧 HDR 全字节一致，清单与 PBR ABI 检查通过。
+
+正序关闭诊断 112.953455→114.118927 FPS（+1.03%），反序 113.205625→113.752116 FPS（+0.48%）；但 PBR kernel 分别 0.797154→0.827609 ms、0.803215→0.827964 ms，均未改善目标热点。离线 Driver API 资源查询确认原 kernel 76 个寄存器/线程、专用化 54 个，两者 local memory 均为 0；不能把寄存器减少当作时延下降。这轮没有通过热点验收，源码、选择器和清单已恢复；不宣称端到端的微小变化属于确定优化。[测量、资源与恢复证据](data/pbr-nonemissive-uniform-rejected-20261031.json)。新工具 `tools/CudaKernelResources.java` 可对冻结 core JAR 输出寄存器、local/shared bytes、Driver 建议 block size 及多种 block size 的占用，不渲染帧、不修改生产 kernel 配置。
+
 ### 撤回：只遍历有效灯掩码位
 
 参考 Godot 4.4 `4c311cbee68c0b66ff8ebb8b0defdd9979dd2a41`（MIT）`servers/rendering/renderer_rd/shaders/forward_clustered/scene_forward_clustered.glsl` 的有效位遍历。独立把本项目穷举分支从逐槽测试改为 `findLSB` 消费掩码，保持原升序浮点求和；没有搬入 subgroup 行为或增加 feature。1080p 8 帧 HDR 全字节一致。正序关闭诊断 114.094673→113.116613 FPS，散射 producer 3.450299→3.493522 ms；反序 113.881277→112.411592 FPS、3.432177→3.519958 ms。两种顺序均退化，GLSL 和 16 个 SPIR-V 全部恢复，不保留。[两种顺序及制品证据](data/scattering-mask-walk-rejected-20261031.json)。
