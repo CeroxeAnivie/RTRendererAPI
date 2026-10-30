@@ -40,8 +40,13 @@ public final class MediumGalleryPerformanceBenchmark {
         int frames = integer(values, "frames", 120, 1, 100_000);
         int rounds = integer(values, "rounds", 3, 1, 100);
         boolean profile = bool(values, "profile", false);
+        boolean shaderProfile=bool(values,"shaderProfile",false);
         if (profile) System.setProperty("top.ceroxe.rt.medium.opticalFrameProfile", "true");
         else System.clearProperty("top.ceroxe.rt.medium.opticalFrameProfile");
+        if(shaderProfile){System.setProperty("top.ceroxe.rt.medium.opticalDetailedProfile","true");
+            System.setProperty("top.ceroxe.rt.medium.cameraScatteringShaderProfile","true");}
+        else {System.clearProperty("top.ceroxe.rt.medium.opticalDetailedProfile");
+            System.clearProperty("top.ceroxe.rt.medium.cameraScatteringShaderProfile");}
 
         var options = MediumGalleryDemo.Options.parse(new String[]{
                 "--width=" + width, "--height=" + height, "--spp=1", "--scene=pbr-direct-uniform",
@@ -50,7 +55,7 @@ public final class MediumGalleryPerformanceBenchmark {
         var scene = new MediumGalleryScene(options);
         var frameConfig = MediumGalleryDemo.configuration(options);
         Path report = Path.of("build/reports/medium-performance/pbr-direct-uniform-1080p-"
-                + (profile ? "profiled" : "unprofiled") + ".csv").toAbsolutePath();
+                + (profile ? "profiled" : shaderProfile?"shader-sampled":"unprofiled") + ".csv").toAbsolutePath();
         Files.createDirectories(report.getParent());
         System.out.printf(Locale.ROOT,
                 "GalleryPerf device=RTX5080-Laptop targetScene=%s extent=%dx%d spp=1 warmup=%d frames=%d rounds=%d "
@@ -65,6 +70,7 @@ public final class MediumGalleryPerformanceBenchmark {
             Result warmupResult = range(renderer, interop, scene, width, height, sequence, warmup);
             requireHealthy(renderer, "warmup");
             long[] profileBefore = OpticalFrameTimings.snapshot();
+            var detailedBefore=top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.snapshot();
             output.println("round,frames,wallMs,completedFps,submitCpuMs,requestBuildCpuMs,pollCpuMs,deferrals,"
                     + "gpuFrameMeanMs,gpuFrameLowerMs,gpuFrameUpperMs,gpuSamples,profileData");
             for (int round = 0; round < rounds; round++) {
@@ -73,6 +79,15 @@ public final class MediumGalleryPerformanceBenchmark {
                 long[] profileAfter = OpticalFrameTimings.snapshot();
                 long[] delta = subtract(profileAfter, profileBefore);
                 profileBefore = profileAfter;
+                if(shaderProfile){
+                    String shaderSummary=top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile
+                            .cameraScatteringSummaryJson(detailedBefore,result.frames());
+                    detailedBefore=top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.snapshot();
+                    Path shaderReport=Path.of("build/reports/medium-performance/pbr-direct-uniform-1080p-shader-profile-round-"
+                            +(round+1)+".json").toAbsolutePath();
+                    Files.writeString(shaderReport,shaderSummary,StandardCharsets.UTF_8);
+                    System.out.println("GalleryPerf shaderStageReport="+shaderReport+" stages="+shaderSummary.replace('\n',' '));
+                }
                 RendererDiagnostics.FrameGpuTiming gpu = result.gpu().after();
                 double gpuMeanMs = result.gpu().estimateNanos().doubleValue() / result.gpu().samples() / 1e6;
                 double gpuLowMs = result.gpu().lowerNanos().doubleValue() / result.gpu().samples() / 1e6;
@@ -81,10 +96,10 @@ public final class MediumGalleryPerformanceBenchmark {
                 System.out.printf(Locale.ROOT,
                         "GalleryPerf round=%d frames=%d wallMs=%.3f completedFps=%.2f submitCpuMs=%.3f "
                                 + "requestBuildCpuMs=%.3f pollCpuMs=%.3f deferrals=%d gpuFrameMeanMs=%.4f "
-                                + "gpuBoundsMs=[%.4f,%.4f] profile=%s%n",
+                        + "gpuBoundsMs=[%.4f,%.4f] profile=%s shaderProfile=%s%n",
                         round + 1, result.frames(), result.wallNanos() / 1e6, result.frames() * 1e9 / result.wallNanos(),
                         result.submitNanos() / 1e6, result.requestBuildNanos() / 1e6, result.pollNanos() / 1e6,
-                        result.deferrals(), gpuMeanMs, gpuLowMs, gpuHighMs, profileJson);
+                        result.deferrals(), gpuMeanMs, gpuLowMs, gpuHighMs, profileJson,shaderProfile);
                 output.printf(Locale.ROOT,
                         "%d,%d,%.6f,%.6f,%.6f,%.6f,%.6f,%d,%.9f,%.9f,%.9f,%d,\"%s\"%n",
                         round + 1, result.frames(), result.wallNanos() / 1e6,

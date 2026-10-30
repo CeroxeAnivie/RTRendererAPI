@@ -128,6 +128,14 @@ final class RtShaderModuleCompiler {
     }
 
     /** Separate opt-in shader; never replaces or changes bundled production SPIR-V. */
+    static byte[] compileCameraScatteringDiagnostic(String path,int kind,boolean hdr,boolean ser) {
+        String source=readExpandedUtf8Resource(path);
+        int end=source.indexOf('\n');
+        source=source.substring(0,end+1)+"#define RTRENDERER_CAMERA_SCATTERING_PROFILE 1\n"+source.substring(end+1);
+        return compileSource(source,path,kind,false,hdr,ser,RtEdgeSink.NOOP);
+    }
+
+    /** Separate opt-in shader; never replaces or changes bundled production SPIR-V. */
     static byte[] compileOpticalDiagnostic(String path,int kind,boolean hdr,boolean ser,int group) {
         if(group<0||group>7)throw new IllegalArgumentException("optical shader diagnostic group must be 0..7");
         String source=readExpandedUtf8Resource(path);

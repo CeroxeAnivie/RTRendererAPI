@@ -29,6 +29,11 @@ public final class GpuScenePrecompiledProgramSelfTest {
                 RAYGEN, "binary-test.rgen", Shaderc.shaderc_raygen_shader, false, false);
         byte[] hdr = RtShaderModuleCompiler.compileSceneSource(
                 RAYGEN, "binary-test.rgen", Shaderc.shaderc_raygen_shader, true, false);
+        byte[] scatteringDiagnostic=RtShaderModuleCompiler.compileCameraScatteringDiagnostic(
+                "assets/rtrenderer/shaders/gpuscene/gpuscene_native_scattering_lights.rgen",
+                Shaderc.shaderc_raygen_shader,false,false);
+        require(scatteringDiagnostic.length>4&&ByteBuffer.wrap(scatteringDiagnostic).order(ByteOrder.LITTLE_ENDIAN)
+                .getInt()==0x07230203,"sampled camera-scattering diagnostic raygen did not compile to SPIR-V");
         var program = SceneShaderProgram.builder().spirv(ShaderStage.RAY_GENERATION, sdr)
                 .spirv(ShaderStage.RAY_GENERATION, FrameOutputFormat.LINEAR_HDR_RGBA16F, hdr).build();
         require(Arrays.equals(sdr, load(program, false)), "SDR binary selection changed bytes");
@@ -91,7 +96,7 @@ public final class GpuScenePrecompiledProgramSelfTest {
                         Files.readAllBytes(Path.of(args[0], files[i])), all[i], 4, false);
             }
         }
-        System.out.println("GpuScenePrecompiledProgramSelfTest passed: ownership, SDR/HDR, GLSL fallback, all stages, specialization isolation, rejection");
+        System.out.println("GpuScenePrecompiledProgramSelfTest passed: ownership, SDR/HDR, GLSL fallback, sampled scattering diagnostic, all stages, specialization isolation, rejection");
     }
 
     private static void preservesExpertStagesAcrossBuiltInCandidates(byte[] sdr, byte[] hdr, int[] kinds,

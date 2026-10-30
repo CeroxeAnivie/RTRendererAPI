@@ -196,9 +196,10 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                     featureRequiredExtensions,
                     featurePreferredExtensions
             );
-            if (top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS) {
+            if (top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS
+                    ||top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS) {
                 if (!physicalDevice.extensions().contains("VK_KHR_shader_clock"))
-                    throw new IllegalStateException("optical diagnostic shader requires VK_KHR_shader_clock");
+                    throw new IllegalStateException("diagnostic shader requires VK_KHR_shader_clock");
                 enabledExtensions = new ArrayList<>(enabledExtensions);enabledExtensions.add("VK_KHR_shader_clock");
             }
             int coreQueueCount = RtDeviceQueueContexts.requestedQueueCount(
@@ -464,10 +465,11 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
             appendFeatureChain(featureChainTail, invocationReorder.address());
             featureChainTail = invocationReorder.address();
         }
-        if (top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS) {
+        if (top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS
+                ||top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS) {
             var clocks=VkPhysicalDeviceShaderClockFeaturesKHR.calloc(stack).sType$Default();
             VK11.vkGetPhysicalDeviceFeatures2(physicalDevice,VkPhysicalDeviceFeatures2.calloc(stack).sType$Default().pNext(clocks.address()));
-            if(!clocks.shaderDeviceClock())throw new IllegalStateException("optical diagnostic shader requires shaderDeviceClock");
+            if(!clocks.shaderDeviceClock())throw new IllegalStateException("diagnostic shader requires shaderDeviceClock");
             clocks.shaderSubgroupClock(false).shaderDeviceClock(true);
             appendFeatureChain(featureChainTail,clocks.address());featureChainTail=clocks.address();
         }

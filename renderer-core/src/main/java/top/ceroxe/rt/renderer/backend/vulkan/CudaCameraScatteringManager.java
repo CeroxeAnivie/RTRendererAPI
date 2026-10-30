@@ -23,6 +23,7 @@ import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSync;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
 import top.ceroxe.rt.renderer.rt.device.RtGpuTimestampPool;
+import top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 
 /** Real primary hits, retained Vulkan lights/visibility and native segment integration. */
@@ -49,19 +50,35 @@ final class CudaCameraScatteringManager implements AutoCloseable {
     }
 
     static long requiredBytes(int width,int height,int samples,int steps) {
-        try {return Math.addExact(CudaCameraScatteringAbi.plan(width,height,samples,steps,residentLimit()).bytes(),
-                CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE);}
+        try {return Math.addExact(allocationBytes(plan(width,height,samples,steps,residentLimit())),CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE);}
         catch(ArithmeticException|IllegalArgumentException invalid){throw unsupported(invalid.getMessage());}
     }
     synchronized long requiredGrowthBytes(int width,int height,int samples,int steps) {
-        checkOpen();long bytes=requiredBytes(width,height,samples,steps);
-        return onNative(()->storage!=null&&storage.byteSize()>=bytes-CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE?0:bytes);
+        checkOpen();var plan=plan(width,height,samples,steps,Math.min(cuda.maxResidentBytes(),CudaCameraScatteringAbi.DEFAULT_RESIDENT_BYTES));long bytes=allocationBytes(plan);
+        return onNative(()->storage!=null&&storage.byteSize()>=bytes?0:Math.addExact(bytes,CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE));
     }
     static long requiredBytes(CudaCameraScatteringAbi.Plan plan) {
-        return Math.addExact(plan.bytes(),CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE);
+        return Math.addExact(allocationBytes(plan),CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE);
     }
     synchronized long requiredGrowthBytes(CudaCameraScatteringAbi.Plan plan) {
-        checkOpen();return onNative(()->storage!=null&&storage.byteSize()>=plan.bytes()?0:requiredBytes(plan));
+        checkOpen();long bytes=allocationBytes(plan);
+        return onNative(()->storage!=null&&storage.byteSize()>=bytes?0:Math.addExact(bytes,CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE));
+    }
+    private static long allocationBytes(CudaCameraScatteringAbi.Plan plan){
+        return Math.addExact(plan.bytes(),OpticalDetailedProfile.cameraScatteringShaderBytes(plan.tilePixels()*plan.samples()));
+    }
+    private static CudaCameraScatteringAbi.Plan plan(int width,int height,int samples,int steps,long budget){
+        long cap=Math.min(budget,residentLimit()),limit=cap;
+        for(int attempt=0;attempt<64;attempt++){
+            var plan=CudaCameraScatteringAbi.plan(width,height,samples,steps,limit);
+            long diagnostic=OpticalDetailedProfile.cameraScatteringShaderBytes(plan.tilePixels()*plan.samples());
+            long required=Math.addExact(Math.addExact(plan.bytes(),diagnostic),CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE);
+            if(required<=cap)return plan;
+            limit-=required-cap;
+            if(limit<=CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE)
+                throw new IllegalArgumentException("diagnostic buffer exceeds the native scattering resident budget");
+        }
+        throw new IllegalArgumentException("unable to reserve native scattering diagnostic storage");
     }
     synchronized CudaCameraMediumManager.Prepared prepare(RenderFrameRequest frame,int width,int height,
             GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan) {
@@ -81,20 +98,27 @@ final class CudaCameraScatteringManager implements AutoCloseable {
             GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan,
             boolean includeMediumEmission) {
         CudaCameraScatteringAbi.Plan plan;
-        try {plan=CudaCameraScatteringAbi.plan(width,height,frame.antiAliasing().samplesPerPixel(),
-                frame.mediumTransport().scatteringSteps(),Math.min(cuda.maxResidentBytes(),CudaCameraScatteringAbi.DEFAULT_RESIDENT_BYTES));}
+        try {plan=plan(width,height,frame.antiAliasing().samplesPerPixel(),frame.mediumTransport().scatteringSteps(),
+                Math.min(cuda.maxResidentBytes(),CudaCameraScatteringAbi.DEFAULT_RESIDENT_BYTES));}
         catch(ArithmeticException|IllegalArgumentException invalid){throw unsupported(invalid.getMessage());}
         return prepareOnNative(frame,plan,primaryProducer,lightProducer,slot,buildPlan,includeMediumEmission);
     }
     private CudaCameraMediumManager.Prepared prepareOnNative(RenderFrameRequest frame,CudaCameraScatteringAbi.Plan plan,
             GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan,
             boolean includeMediumEmission) {
-        ensureCapacity(plan.bytes(),plan.compactContribution());
+        ensureCapacity(allocationBytes(plan),plan.compactContribution());
+        long available=Math.min(cuda.maxResidentBytes(),CudaCameraScatteringAbi.DEFAULT_RESIDENT_BYTES);
+        if(storage.byteSize()+CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE>available)
+            throw unsupported("camera scattering diagnostic buffer exceeds available CUDA resident memory");
         long address=storage.deviceAddress();
         try(Arena arena=Arena.ofConfined()) {
             var failed=arena.allocate(4,4);
+            var diagnosticHost=OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS
+                    ?arena.allocate(OpticalDetailedProfile.cameraScatteringShaderBytes(plan.tilePixels()*plan.samples()),16):null;
             for(int first=0;first<plan.pixels();) {
                 int tileFirst=first,pixels=Math.min(plan.tilePixels(),plan.pixels()-first);
+                int diagnosticBytes=OpticalDetailedProfile.cameraScatteringShaderBytes(pixels*plan.samples());
+                long diagnosticAddress=diagnosticBytes==0?0:address+plan.bytes();
                 boolean initial=first==0,last=first+pixels==plan.pixels();
                 byte[] header=CudaCameraScatteringAbi.header(plan,frame,first,pixels,includeMediumEmission);
                 RtGpuTimestampPool.Capture tlasTiming=OpticalFrameTimings.ENABLED&&initial&&buildPlan!=null
@@ -123,11 +147,24 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                                 KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,barrier,null);
                         long offsets=Integer.toUnsignedLong(plan.sourceOffset())|Integer.toUnsignedLong(plan.primaryOffset())<<32;
                         if(lightsTiming!=null)lightsTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
-                        lightProducer.recordPrimaryQueueTrace(command,stack,slot,address,tileFirst,pixels,offsets);
+                        if(diagnosticBytes!=0){
+                            VK10.vkCmdFillBuffer(command,storage.buffer(),plan.bytes(),diagnosticBytes,0);
+                            var diagnosticBarrier=VkBufferMemoryBarrier.calloc(1,stack).sType$Default()
+                                    .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT).dstAccessMask(VK10.VK_ACCESS_SHADER_WRITE_BIT)
+                                    .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED).dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                                    .buffer(storage.buffer()).offset(plan.bytes()).size(diagnosticBytes);
+                            VK10.vkCmdPipelineBarrier(command,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                    KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,diagnosticBarrier,null);
+                        }
+                        lightProducer.recordNativeScatteringLights(command,stack,slot,address,tileFirst,pixels,offsets,diagnosticAddress);
                         if(lightsTiming!=null)lightsTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                     }
                 },shared->{
                     cuda.launchBlocking(resolve,shared,pixels*plan.samples(),1,"cameraScattering.resolve");
+                    if(diagnosticBytes!=0){
+                        cuda.download(shared.slice(plan.bytes(),diagnosticBytes),diagnosticHost.asSlice(0,diagnosticBytes));
+                        OpticalDetailedProfile.cameraScatteringShaderSamples(diagnosticHost,pixels*plan.samples());
+                    }
                     if(last)cuda.download(shared.slice(CudaCameraScatteringAbi.FAILED_OFFSET,4),failed);
                 },ignored->{});
                 if(tlasTiming!=null&&tlasTiming.resolve())OpticalFrameTimings.recordGpuStage("cameraScattering.tlas",tlasTiming.totalNanos());
@@ -143,7 +180,7 @@ final class CudaCameraScatteringManager implements AutoCloseable {
     }
     private void ensureCapacity(long bytes,boolean exactBudget) {
         if(storage!=null&&storage.byteSize()>=bytes&&(!exactBudget||storage.byteSize()==bytes))return;
-        if(bytes+CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE>Math.min(cuda.maxResidentBytes(),CudaCameraScatteringAbi.DEFAULT_RESIDENT_BYTES))
+        if(bytes+CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE>residentLimit())
             throw unsupported("complete direct-scattering frame exceeds the CUDA resident cap");
         if(storage!=null){drain();storage.close();storage=null;}
         storage=CudaSharedRayFrame.storage(device,cuda,bytes,cuda.maxResidentBytes()-cuda.residentBytes());

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Objects;
 import top.ceroxe.rt.renderer.api.Medium;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
+import top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile;
 
 /** Bounded, GPU-only camera and direct-light packets. No per-light host exchanges are required. */
 public final class CudaPbrMediumAbi {
@@ -43,7 +44,10 @@ public final class CudaPbrMediumAbi {
                 case MULTIPLE_DENSITY -> {Objects.requireNonNull(densityMultiple,"densityMultiple");var p=densityMultiple.plan();pixels=p.pixels();samples=p.samples();tile=p.tilePixels();bytes=p.bytes();}
                 default -> throw new IllegalArgumentException("unrecognized PBR scattering integrator");
             }
-            if(pbr.pixels()!=pixels||pbr.samples()!=samples||pbr.tilePixels()!=tile||scatteringBytes!=Math.addExact(bytes,ALLOCATION_ALLOWANCE))
+            long diagnostic=kind==ScatteringKind.DIRECT_UNIFORM
+                    ?OpticalDetailedProfile.cameraScatteringShaderBytes(Math.multiplyExact(tile,samples)):0;
+            if(pbr.pixels()!=pixels||pbr.samples()!=samples||pbr.tilePixels()!=tile
+                    ||scatteringBytes!=Math.addExact(Math.addExact(bytes,diagnostic),ALLOCATION_ALLOWANCE))
                 throw new IllegalArgumentException("PBR/scattering contribution plan must share complete outputs, tile and residency");
         }
         public int scatteringTilePixels() {return switch(kind) {
@@ -92,7 +96,8 @@ public final class CudaPbrMediumAbi {
         if(uniform&&!multiple) {
             var combined=planWithScattering(width,height,samples,lights,capacity,steps,residentLimit);
             return new TransportPlan(combined.pbr(),ScatteringKind.DIRECT_UNIFORM,combined.scattering(),null,null,null,
-                    Math.addExact(combined.scattering().bytes(),ALLOCATION_ALLOWANCE));
+                    Math.addExact(Math.addExact(combined.scattering().bytes(),
+                            OpticalDetailedProfile.cameraScatteringShaderBytes(combined.scattering().tilePixels()*samples)),ALLOCATION_ALLOWANCE));
         }
         dimensions(width,height,samples,0,lights,capacity);
         if(steps<1||steps>64)throw new IllegalArgumentException("scattering steps must be within [1, 64]");
@@ -155,6 +160,20 @@ public final class CudaPbrMediumAbi {
         long available=residentLimit-fixed;
         long tile=Math.min(Math.min((long)width*height,available/Math.addExact(pbrScratch,scatteringScratch)),
                 Integer.MAX_VALUE/((long)lights+1));
+        long diagnostic=OpticalDetailedProfile.cameraScatteringShaderBytes(Math.toIntExact(Math.min(
+                Math.multiplyExact(tile,(long)samples),Integer.MAX_VALUE)));
+        for(int attempt=0;diagnostic>0&&attempt<8;attempt++){
+            long adjusted=(available-diagnostic)/Math.addExact(pbrScratch,scatteringScratch);
+            tile=Math.min(tile,adjusted);
+            long next=OpticalDetailedProfile.cameraScatteringShaderBytes(Math.toIntExact(Math.min(
+                    Math.multiplyExact(tile,(long)samples),Integer.MAX_VALUE)));
+            if(next==diagnostic)break;
+            diagnostic=next;
+        }
+        diagnostic=OpticalDetailedProfile.cameraScatteringShaderBytes(Math.toIntExact(Math.min(
+                Math.multiplyExact(tile,(long)samples),Integer.MAX_VALUE)));
+        if(Math.addExact(Math.multiplyExact(tile,Math.addExact(pbrScratch,scatteringScratch)),diagnostic)>available)
+            throw new IllegalArgumentException("camera-scattering shader diagnostics exceed combined residency");
         if(tile<1)throw new IllegalArgumentException("complete PBR scattering outputs and one pixel's scratch exceed residency");
         var pbr=plan(width,height,samples,0,lights,capacity,CudaMediumDensityAbi.Scene.empty(),
                 Math.addExact(pbrFixed,Math.multiplyExact(tile,pbrScratch)));

@@ -179,7 +179,11 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout(),
                     program.primaryQueue() ? GpuScenePrimaryQueue.PUSH_BYTES : 0);
             boolean opticalDiagnostic=program==Program.NATIVE_OPTICAL_TRACE&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS;
-            byte[] raygenCode = opticalDiagnostic?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+program.source,Shaderc.shaderc_raygen_shader,linearHdrOutput,shaderExecutionReorderingEnabled,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode(
+            boolean scatteringDiagnostic=program==Program.NATIVE_SCATTERING_LIGHTS&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS;
+            byte[] raygenCode = scatteringDiagnostic?RtShaderModuleCompiler.compileCameraScatteringDiagnostic(SHADER_ROOT+program.source,
+                    Shaderc.shaderc_raygen_shader,linearHdrOutput,shaderExecutionReorderingEnabled):opticalDiagnostic
+                    ?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+program.source,Shaderc.shaderc_raygen_shader,
+                            linearHdrOutput,shaderExecutionReorderingEnabled,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode(
                     program.source, Shaderc.shaderc_raygen_shader,
                     linearHdrOutput, shaderExecutionReorderingEnabled, sceneShaders
             );
@@ -764,6 +768,20 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     public synchronized void recordPrimaryQueueTrace(VkCommandBuffer commandBuffer, MemoryStack stack, int slot,
             long address, int firstPixel, int count, long transmittanceAddress) {
         recordPrimaryQueueTrace(commandBuffer, stack, slot, address, firstPixel, count, transmittanceAddress, 0);
+    }
+
+    /** Records native direct-scattering work with an optional sampled shader-clock buffer. */
+    public synchronized void recordNativeScatteringLights(VkCommandBuffer commandBuffer,MemoryStack stack,int slot,
+            long address,int firstPixel,int count,long offsets,long diagnosticAddress) {
+        requireOpen();
+        if(address==0||(address&15)!=0||(diagnosticAddress!=0&&(diagnosticAddress&15)!=0)
+                ||firstPixel<0||count<1||(long)firstPixel+count>Integer.MAX_VALUE)
+            throw new IllegalArgumentException("invalid native scattering tile or aligned device address");
+        var push=stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        push.putLong(address).putInt(firstPixel).putInt(count).putLong(offsets).putLong(diagnosticAddress).flip();
+        VK10.vkCmdPushConstants(commandBuffer,pipelineLayout,
+                KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR|KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR,0,push);
+        recordTrace(commandBuffer,stack,slot,count,1);
     }
 
     /** Records native transmittance and separately integrated camera-medium emission for this tile. */

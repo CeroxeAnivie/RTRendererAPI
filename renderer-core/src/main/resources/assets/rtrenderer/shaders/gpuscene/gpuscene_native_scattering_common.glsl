@@ -13,6 +13,65 @@ vec3 gsScatteringShadow(vec3 position,vec3 direction,float distance,vec3 sigma,f
     // A homogeneous Beer factor is the only medium-shadow compatibility operation here.
     return surface*exp(-sigma*min(distance,integrationLimit));
 }
+#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
+void gsScatteringProfileAdd(uint record,uint stage,uint64_t started){
+    if(started==0ul)return;uint word=((record/65536u)*12u+stage)*2u;uint64_t ended=clockRealtimeEXT();
+    GsScatteringDiagnostic target=GsScatteringDiagnostic(dispatch.reserved);
+    target.values[word]+=ended-started;target.values[word+1u]+=1ul;
+}
+uint64_t gsScatteringProfileStart(uint record){return dispatch.reserved!=0ul&&(record%65536u)==0u?clockRealtimeEXT():0ul;}
+vec3 gsScatteringShadowProfile(vec3 position,vec3 direction,float distance,vec3 sigma,float integrationLimit,uint record){
+    uint64_t started=gsScatteringProfileStart(record);
+    vec3 surface=gsShadowTransmittance(position,direction,direction,distance);
+    gsScatteringProfileAdd(record,5u,started);
+    started=gsScatteringProfileStart(record);
+    vec3 attenuation=exp(-sigma*min(distance,integrationLimit));
+    gsScatteringProfileAdd(record,6u,started);
+    return surface*attenuation;
+}
+vec3 gsScatteringLightProfile(uint slot,vec3 position,vec3 rayDirection,float g,vec3 sigma,float integrationLimit,uint record){
+    uint64_t started=gsScatteringProfileStart(record);
+    uint base=slot*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[base+GPU_SCENE_LIGHT_FLAGS_WORD],type=(flags>>1u)&7u;
+    vec3 color=vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD]),
+        uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+2u]));
+    float intensity=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_INTENSITY_WORD]),distance=1e20,attenuation=1.0;
+    vec3 direction;
+    if(type==GPU_SCENE_LIGHT_DIRECTIONAL) {
+        direction=-normalize(vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD]),
+            uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+2u])));
+    }else {
+        vec3 point=vec3(gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD+1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD+1u]),
+            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD+1u]));
+        vec3 delta=point-position;distance=length(delta);if(distance<=1e-8){gsScatteringProfileAdd(record,7u,started);return vec3(0);}
+        direction=delta/distance;float range=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_RANGE_WORD]),fade=max(1.0-distance/range,0.0);
+        attenuation=fade*fade/max(distance*distance,1.0);
+        if(type==GPU_SCENE_LIGHT_SPOT) {
+            vec3 axis=normalize(vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD]),
+                uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+2u])));
+            float inner=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_INNER_CONE_WORD]),outer=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_OUTER_CONE_WORD]);
+            float cone=dot(axis,-direction);attenuation*=inner==outer?step(outer,cone):smoothstep(outer,inner,cone);
+        }
+    }
+    if(attenuation<=0.0||intensity<=0.0){gsScatteringProfileAdd(record,7u,started);return vec3(0);}
+    gsScatteringProfileAdd(record,7u,started);
+    vec3 visibility=vec3(1);
+    if((flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u){
+        float shadowDistance=max(distance-2.0*gsRayEpsilon(position),gsRayEpsilon(position));
+        started=gsScatteringProfileStart(record);
+        visibility=gsShadowTransmittance(position,direction,direction,shadowDistance);
+        gsScatteringProfileAdd(record,5u,started);
+        started=gsScatteringProfileStart(record);
+        visibility*=exp(-sigma*min(shadowDistance,integrationLimit));
+        gsScatteringProfileAdd(record,6u,started);
+    }
+    started=gsScatteringProfileStart(record);
+    vec3 phase=vec3(gsScatteringPhase(dot(rayDirection,direction),g));
+    vec3 result=color*intensity*attenuation*visibility*phase;
+    gsScatteringProfileAdd(record,8u,started);
+    return result;
+}
+#endif
 float gsScatteringLightWeight(uint slot,vec3 origin,vec3 direction,float distance) {
     uint base=slot*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[base+GPU_SCENE_LIGHT_FLAGS_WORD];
     if((flags&GPU_SCENE_FLAG_ACTIVE)==0u)return 0.0;
