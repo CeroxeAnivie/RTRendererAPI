@@ -40,6 +40,7 @@ try {
     }
     # Windows PowerShell reports normal native stderr as ErrorRecord under Stop.
     $ErrorActionPreference='Continue'
+    $launchStartedUtc=[DateTime]::UtcNow
     & java @invokeArgs *> (Join-Path $runDir 'run.log')
     $runCode=$LASTEXITCODE
     $ErrorActionPreference='Stop'
@@ -47,6 +48,11 @@ try {
     if($Mode -ne 'image') {
         $report=if($Mode -eq 'profile'){'shader-sampled'}elseif($Mode -eq 'timings'){'profiled'}else{'unprofiled'}
         Copy-Item "build/reports/medium-performance/pbr-direct-uniform-1080p-$report.csv" $runDir -Force
+        $workload="build/reports/medium-performance/pbr-direct-uniform-1080p-$report-workload.json"
+        # Older frozen benchmark JARs predate explicit request-budget metadata.
+        if((Test-Path -LiteralPath $workload) -and (Get-Item -LiteralPath $workload).LastWriteTimeUtc -ge $launchStartedUtc){
+            Copy-Item -LiteralPath $workload -Destination $runDir -Force
+        }
         if($Mode -eq 'timings'){Copy-Item 'build/reports/medium-performance/*wall-timeline-round-*.json' $runDir -Force}
         if($Mode -eq 'profile'){Copy-Item 'build/reports/medium-performance/*shader-profile-round-*.json' $runDir -Force}
     }

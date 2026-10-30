@@ -62,6 +62,20 @@ public final class MediumGalleryPerformanceBenchmark {
         Path report = Path.of("build/reports/medium-performance/pbr-direct-uniform-1080p-"
                 + (profile ? "profiled" : shaderProfile?"shader-sampled":wallProfile?"wall-timeline":"unprofiled") + ".csv").toAbsolutePath();
         Files.createDirectories(report.getParent());
+        // Capture actual request budgets before warmup, outside every measured window.
+        // In particular maxEvents and scatteringSteps are different API fields.
+        var workload = scene.frame(0, width, height, 0, 0);
+        var budget = workload.mediumTransport();
+        Path workloadReport = report.resolveSibling(report.getFileName().toString().replace(".csv", "-workload.json"));
+        Files.writeString(workloadReport, String.format(Locale.ROOT,
+                "{\"scene\":\"%s\",\"width\":%d,\"height\":%d,\"spp\":%d,\"maxEvents\":%d,"
+                        + "\"opticalSamples\":%d,\"scatteringSteps\":%d,\"lightSamples\":%d,"
+                        + "\"maxDistance\":%s,\"transmittanceCutoff\":%s,\"scatteringBounces\":%d,"
+                        + "\"firstInterfaceSampling\":\"%s\"}%n",
+                scene.preset().id, width, height, workload.antiAliasing().samplesPerPixel(), budget.maxEvents(),
+                budget.opticalSamples(), budget.scatteringSteps(), budget.lightSamples(), budget.maxDistance(),
+                budget.transmittanceCutoff(), budget.scatteringBounces(), budget.firstInterfaceSampling()), StandardCharsets.UTF_8);
+        System.out.println("GalleryPerf workloadReport=" + workloadReport + " budgets=" + budget);
         System.out.printf(Locale.ROOT,
                 "GalleryPerf device=RTX5080-Laptop targetScene=%s extent=%dx%d spp=1 warmup=%d frames=%d rounds=%d "
                         + "profile=%s wallProfile=%s frameGeneration=false reconstruction=false temporal=false denoising=false cpuReadback=false%n",
