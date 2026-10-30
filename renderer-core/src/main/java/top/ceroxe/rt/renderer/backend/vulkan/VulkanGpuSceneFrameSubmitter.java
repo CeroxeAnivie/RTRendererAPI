@@ -282,6 +282,7 @@ final class VulkanGpuSceneFrameSubmitter {
             if (photonPipeline != null) photonPipeline.updateDescriptorSet(slot.index(), frameDescriptors);
             if (primaryProducer != null) primaryProducer.updateDescriptorSet(slot.index(), frameDescriptors);
             if (scatteringLights != null) scatteringLights.updateDescriptorSet(slot.index(), frameDescriptors);
+            if (scatteringDiagnostic != null) scatteringDiagnostic.updateDescriptorSet(slot.index(), frameDescriptors);
             if (cameraScatteringLights != null) cameraScatteringLights.updateDescriptorSet(slot.index(), frameDescriptors);
             if (pbrScatteringPrimary != null) pbrScatteringPrimary.updateDescriptorSet(slot.index(),frameDescriptors);
             if (multipleTracer != null) multipleTracer.updateDescriptorSet(slot.index(),frameDescriptors);
