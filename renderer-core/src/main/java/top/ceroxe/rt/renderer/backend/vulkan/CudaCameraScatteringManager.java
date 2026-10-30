@@ -191,8 +191,12 @@ final class CudaCameraScatteringManager implements AutoCloseable {
         long firstSample=(firstPath+OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE-1)/OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE;
         long endSample=(endPath+OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE-1)/OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE;
         long phase=Math.floorMod(frameSequence,8L);
-        long firstSelected=firstSample+Math.floorMod(-phase-firstSample,8L);
-        return firstSelected<endSample;
+        long offset=(frameSequence*7919L)&(OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE-1L);
+        for(long sample=firstSample+Math.floorMod(-phase-firstSample,8L);sample<endSample;sample+=8L){
+            long target=sample*OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE+offset;
+            if(target>=firstPath&&target<endPath)return true;
+        }
+        return false;
     }
     private void ensureCapacity(long bytes,boolean exactBudget) {
         if(storage!=null&&storage.byteSize()>=bytes&&(!exactBudget||storage.byteSize()==bytes))return;
