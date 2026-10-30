@@ -12,11 +12,14 @@ import top.ceroxe.rt.renderer.api.*;
 
 /** Explicit GPU gate: feature ablations, finite HDR pixels, persistent/transient parity and images. */
 public final class MediumGalleryNativeSelfTest {
-    private static final int WIDTH=160,HEIGHT=90,FRAMES=8;
+    private static final int WIDTH=Integer.getInteger("top.ceroxe.rt.gallery.width",160),
+            HEIGHT=Integer.getInteger("top.ceroxe.rt.gallery.height",90),
+            FRAMES=Integer.getInteger("top.ceroxe.rt.gallery.frames",8);
     private static final Path OUTPUT=Path.of(System.getProperty("top.ceroxe.rt.gallery.output",
             "build/reports/medium-gallery")).toAbsolutePath();
     public static void main(String[] arguments) throws Exception {
         Files.createDirectories(OUTPUT);
+        require(WIDTH>0&&HEIGHT>0&&FRAMES>0,"positive gallery capture dimensions and frame count");
         String onlyPreset=System.getProperty("top.ceroxe.rt.gallery.onlyPreset");
         var variants=new LinkedHashMap<String,String[]>();
         for(var preset:MediumGalleryScene.Preset.values()) {

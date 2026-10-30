@@ -12,6 +12,7 @@ import top.ceroxe.rt.renderer.api.*;
 /** Final public HDR against analytic directional transport and independent CPU quadrature. */
 public final class CudaCameraScatteringProductionNativeSelfTest {
     private static int width=31,height=23;
+    private static float backdropZ=-4,wallX=2;
     private static final Path OUTPUT=Path.of(System.getProperty("top.ceroxe.rt.medium.scatteringProductionDirectory",
             "build/luxcore-native-scattering-20261029/production"));
     private static final List<String> RESULTS=new ArrayList<>();
@@ -40,6 +41,8 @@ public final class CudaCameraScatteringProductionNativeSelfTest {
                 compare("analytic-HG-isotropic",medium(0),environment(0,true),List.of(forward),false,8,1,12,false);
                 compare("analytic-HG-forward-eight-SPP",medium(.6f),environment(0,true),List.of(forward),false,64,8,12,false);
                 compare("analytic-HG-backward-two-SPP",medium(-.6f),environment(0,true),List.of(forward),false,2,2,4,false);
+                compare("zero-reference-uniform-interval-proposal",new Medium(Rgb.ZERO,new Rgb(.001f,0,.002f),Rgb.ZERO,1,1,.3f),
+                        environment(0,true),List.of(forward),false,64,8,12,false);
                 var directional=SceneLight.directional(1,-1,0,0).color(.8f,.5f,.2f).intensity(3).castsShadow(true).build();
                 compare("directional-medium-shadow",medium(.3f),environment(0,true),List.of(directional),false,8,1,12,false);
                 compare("opaque-wall-shadow",medium(.3f),environment(0,true),List.of(directional),true,8,2,12,false);
@@ -67,6 +70,14 @@ public final class CudaCameraScatteringProductionNativeSelfTest {
                         List.of(forward),false,8,1,12,false);
                 width=17;height=13;
                 compare("resize-and-rejection-recovery",medium(0),environment(0,true),List.of(forward),false,8,2,7,false);
+                backdropZ=-24;wallX=.6f;
+                var nearMedium=new Medium(new Rgb(.009f,.014f,.025f),new Rgb(.065f,.085f,.12f),Rgb.ZERO,1,1,.4f);
+                var nearPoint=SceneLight.point(2,1.2,.1,0).color(.9f,.6f,.3f).intensity(40).range(100).castsShadow(true).build();
+                var nearSpot=SceneLight.spot(3,-.7,.2,1,.2f,-.1f,-1).color(.2f,.5f,1).intensity(70).range(100)
+                        .coneDegrees(10,36).castsShadow(true).build();
+                compareGuidedMean("near-point-spot-guided-mean",nearMedium,List.of(nearPoint,nearSpot),false);
+                compareGuidedMean("near-point-spot-guided-opaque-shadow-mean",nearMedium,List.of(nearPoint,nearSpot),true);
+                backdropZ=-4;wallX=2;
                 require(renderer.health().activeFailure().isEmpty(),"native scattering session unhealthy");
             }
             long scatteringRoutes=VulkanGpuSceneFrameSubmitter.diagnosticNativeScatteringSubmissions.sum()-routes;
@@ -91,9 +102,9 @@ public final class CudaCameraScatteringProductionNativeSelfTest {
     private static void setup(List<SceneLight> lights,boolean wall){
         var transaction=SceneTransaction.builder(++revision).resetScene()
                 .upsert(MaterialAsset.builder(1).doubleSided(true).shadingModel(MaterialAsset.ShadingModel.UNLIT).baseColorRgba8(0xff806040).build())
-                .upsert(MeshAsset.triangles(1,new float[]{-20,-20,-4,20,-20,-4,20,20,-4,-20,20,-4},new int[]{0,1,2,2,3,0},1))
+                .upsert(MeshAsset.triangles(1,new float[]{-20,-20,backdropZ,20,-20,backdropZ,20,20,backdropZ,-20,20,backdropZ},new int[]{0,1,2,2,3,0},1))
                 .upsert(SceneInstance.builder(1,1).build());
-        if(wall)transaction.upsert(MeshAsset.triangles(2,new float[]{2,-20,-20,2,20,-20,2,20,20,2,-20,20},new int[]{0,1,2,2,3,0},1))
+        if(wall)transaction.upsert(MeshAsset.triangles(2,new float[]{wallX,-20,-40,wallX,20,-40,wallX,20,20,wallX,-20,20},new int[]{0,1,2,2,3,0},1))
                 .upsert(SceneInstance.builder(2,2).build());
         for(var light:lights)transaction.upsert(light);
         renderer.apply(transaction.build());
@@ -165,9 +176,55 @@ public final class CudaCameraScatteringProductionNativeSelfTest {
         return result;
     }
     private static boolean blocked(boolean wall,double[] position,double[] direction,double distance) {
-        if(wall&&direction[0]>1e-12){double at=(2-position[0])/direction[0];if(at>0&&at<distance)return true;}
-        if(direction[2]<-1e-12){double at=(-4-position[2])/direction[2];if(at>1e-5&&at<distance-1e-5)return true;}
+        if(wall&&direction[0]>1e-12){double at=(wallX-position[0])/direction[0];if(at>0&&at<distance)return true;}
+        if(direction[2]<-1e-12){double at=(backdropZ-position[2])/direction[2];if(at>1e-5&&at<distance-1e-5)return true;}
         return false;
+    }
+    /** Independent Simpson oracle for a localized light, tested over changing real GPU seeds. */
+    private static void compareGuidedMean(String name,Medium medium,List<SceneLight> lights,boolean wall) throws Exception {
+        final int frames=128,n=4096;final float maximum=40;
+        var env=environment(0,true);setup(lights,wall);
+        var vacuum=capture(name+"-vacuum",request(Medium.vacuum(),env,16,1,maximum,4)).pixels().order(ByteOrder.LITTLE_ENDIAN);
+        int channels=width*height*3;double[] expected=new double[channels],mean=new double[channels],m2=new double[channels];
+        int guidedRays=0;
+        for(int y=0;y<height;y++)for(int x=0;x<width;x++) {
+            double[] ray=direction(x,y,0,1);double distance=Math.min((6-backdropZ)/-ray[2],maximum);
+            if(wall&&ray[0]>0)distance=Math.min(distance,wallX/ray[0]);
+            // These near lamps satisfy the shader's distance/perpendicular eligibility on long rays.
+            if(distance>=24)guidedRays++;
+            for(int c=0;c<3;c++) {
+                double sigma=component(medium.extinction(),c)*medium.density(),sum=0;
+                for(int j=0;j<=n;j++) {
+                    double t=distance*j/n;
+                    sum+=(j==0||j==n?1:j%2==0?2:4)*Math.exp(-sigma*t)
+                            *incoming(lights,env,wall,ray,t,c,medium.anisotropy(),sigma,maximum);
+                }
+                int at=(y*width+x)*3+c;
+                expected[at]=Float.float16ToFloat(vacuum.getShort((y*width+x)*8+c*2))*Math.exp(-sigma*distance)
+                        +component(medium.scattering(),c)*medium.density()*sum*distance/(3*n);
+            }
+        }
+        require(guidedRays>width*height/3,"localized-light fixture must exercise long guided rays");
+        for(int f=0;f<frames;f++) {
+            var pixels=capture(name+"-"+f,request(medium,env,16,1,maximum,4)).pixels().order(ByteOrder.LITTLE_ENDIAN);nativeFrames++;
+            for(int i=0;i<channels;i++) {
+                double value=Float.float16ToFloat(pixels.getShort((i/3)*8+(i%3)*2));
+                require(Double.isFinite(value)&&value>=0,"nonfinite localized-light HDR");
+                double delta=value-mean[i];mean[i]+=delta/(f+1);m2[i]+=delta*(value-mean[i]);
+            }
+        }
+        double maximumError=0,squared=0,energy=0;
+        for(int i=0;i<channels;i++) {
+            double error=Math.abs(mean[i]-expected[i]),se=Math.sqrt(m2[i]/(frames-1)/frames);
+            require(error<=6*se+.0015*Math.max(1,expected[i]),name+" channel="+i+" mean="+mean[i]
+                    +" oracle="+expected[i]+" standardError="+se);
+            maximumError=Math.max(maximumError,error);squared+=error*error;energy+=expected[i]*expected[i];
+        }
+        double relativeRms=Math.sqrt(squared/energy);
+        require(relativeRms<.025,"localized-light mean disagrees with independent quadrature: "+relativeRms);
+        RESULTS.add(String.format(Locale.ROOT,"    {\"name\":\"%s\",\"frames\":%d,\"steps\":16,\"samples\":1,\"longGuidedRays\":%d,\"quadratureIntervals\":%d,\"maximumMeanError\":%.12g,\"relativeRmsMeanError\":%.12g}",
+                name,frames,guidedRays,n,maximumError,relativeRms));
+        System.out.printf(Locale.ROOT,"Native scattering localized-light mean=%s frames=%d relativeRms=%.9g%n",name,frames,relativeRms);
     }
     private static double phase(double cosine,double g){double d=1+g*g-2*g*cosine;return (1-g*g)/(4*Math.PI*d*Math.sqrt(d));}
     private static double dot(double[] a,double[] b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}

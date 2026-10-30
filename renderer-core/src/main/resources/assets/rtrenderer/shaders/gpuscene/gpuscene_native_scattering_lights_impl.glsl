@@ -56,6 +56,19 @@ void gsScatteringQueryAudit(bool matches) {
 #endif
 
 #include "gpuscene_native_scattering_common.glsl"
+// A proposal changes only where the fixed number of connections are evaluated.
+// Every contribution is divided by the full mixture PDF before CUDA integration.
+vec4 gsScatteringAngularProposal(vec3 light,vec3 origin,vec3 direction,float distance) {
+    vec3 delta=light-origin;float along=dot(delta,direction);
+    float perpendicular=max(length(delta-direction*along),1.0);
+    float angle=atan(-along,perpendicular);
+    float span=atan(distance*perpendicular,perpendicular*perpendicular-along*(distance-along));
+    return vec4(along,perpendicular,angle,span);
+}
+float gsScatteringAngularPdf(vec4 guide,float distance) {
+    float offset=distance-guide.x;
+    return guide.y/(guide.w*(guide.y*guide.y+offset*offset));
+}
 void main() {
     if(gl_LaunchIDEXT.x>=dispatch.pixelCount)return;
     ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
@@ -165,8 +178,24 @@ void main() {
         vec3 sunDirection=-normalize(gsFrameVec3(GPU_SCENE_FRAME_SUN_DIRECTION_WORD));
         vec3 sun=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)*uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
         float interval=distance/float(steps),reference=min(sigma.x,min(sigma.y,sigma.z));
+        bool directPacket=dispatch.storage.lanes[0u].x==0x52534331u;
+        vec4 guide0=vec4(0),guide1=vec4(0);uint guideCount=0u;
+        // Keep the original per-interval estimator for smooth/directional-only
+        // rays and cutoff-truncated rays. Guide only strongly localized lamps.
+        if(directPacket&&exhaustive&&sampleCount>0u&&distance>8.0
+                &&exp(-reference*distance)>=cutoff) {
+            for(uint k=0u;k<selectedCount&&guideCount<2u;++k) {
+                uint lightBase=firstCandidates[k]*GPU_SCENE_LIGHT_RECORD_WORDS;
+                uint flags=gsLights.words[lightBase+GPU_SCENE_LIGHT_FLAGS_WORD];
+                if(((flags>>1u)&7u)==GPU_SCENE_LIGHT_DIRECTIONAL)continue;
+                vec4 guide=gsScatteringAngularProposal(gsScatteringLightPosition(lightBase),origin,direction,distance);
+                if(guide.x<=0.0||guide.x>=distance||guide.y>2.0||distance/guide.y<12.0)continue;
+                if(guideCount==0u)guide0=guide;else guide1=guide;
+                ++guideCount;
+            }
+        }
         for(uint j=0u;j<steps;++j) {
-            float start=float(j)*interval,local=0.0;vec3 source=vec3(0);
+            float start=float(j)*interval,local=0.0,absolute=0.0,inversePdf=1.0;vec3 source=vec3(0);
             vec3 prefix=exp(-sigma*start);
             if(interval>0.0&&max(prefix.x,max(prefix.y,prefix.z))>=cutoff) {
                 float u=gsTransportRandom(seed^(j+1u)*0x27d4eb2du),tau=reference*interval;
@@ -174,7 +203,27 @@ void main() {
                 // The inverse CDF is supported on this interval. Float exp/log
                 // cancellation near u=1 can otherwise step beyond its endpoint.
                 local=clamp(local,0.0,interval);
-                vec3 position=origin+direction*(start+local);
+                absolute=start+local;
+                float localIntegral=reference*interval<1e-3?interval:(1.0-exp(-tau))/reference;
+                inversePdf=tau<1e-3?interval:localIntegral*exp(reference*local);
+                if(guideCount>0u) {
+                    float choice=(float(j)+u)/float(steps)*float(guideCount+1u);
+                    uint component=min(uint(choice),guideCount);float xi=fract(choice);
+                    float fullTau=reference*distance;
+                    if(component==0u)absolute=fullTau<1e-3?xi*distance
+                        :-log(max(1.0-xi*(1.0-exp(-fullTau)),1e-30))/reference;
+                    else {
+                        vec4 guide=component==1u?guide0:guide1;
+                        absolute=guide.x+guide.y*tan(guide.z+xi*guide.w);
+                    }
+                    absolute=clamp(absolute,0.0,distance);
+                    float fullIntegral=fullTau<1e-3?distance:(1.0-exp(-fullTau))/reference;
+                    float pdf=(fullTau<1e-3?1.0/distance:exp(-reference*absolute)/fullIntegral)
+                        +gsScatteringAngularPdf(guide0,absolute);
+                    if(guideCount==2u)pdf+=gsScatteringAngularPdf(guide1,absolute);
+                    inversePdf=float(guideCount+1u)/(float(steps)*pdf);
+                }
+                vec3 position=origin+direction*absolute;
                 GS_SCATTER_DETAIL_NEXT(3u);
                 if(max(sun.x,max(sun.y,max(sun.z,0.0)))>0.0) {
                     GS_SCATTER_DETAIL_NEXT(4u);
@@ -237,7 +286,8 @@ void main() {
             GS_SCATTER_DETAIL_NEXT(10u);
             uint outLane=dispatch.sourceOffset/16u+(gl_LaunchIDEXT.x*samples+sampleIndex)*steps+j;
             GS_SCATTER_DETAIL_NEXT(11u);
-            dispatch.storage.lanes[outLane]=floatBitsToUint(vec4(source,local));
+            dispatch.storage.lanes[outLane]=floatBitsToUint(directPacket
+                ?vec4(source*inversePdf,absolute):vec4(source,local));
             GS_SCATTER_DETAIL_NEXT(3u);
         }
         GS_SCATTER_DETAIL_END();

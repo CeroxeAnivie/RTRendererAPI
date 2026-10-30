@@ -6,7 +6,10 @@ import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 
 /** Bounded lighting scratch and complete primary/T/radiance output in one exported allocation. */
 public final class CudaCameraScatteringAbi {
-    public static final int MAGIC=0x52534331, VERSION=1, HEADER_BYTES=128;
+    // Version 2 source records carry incoming radiance / sampling PDF in xyz and
+    // absolute camera distance in w. This permits unbiased light-guided proposals
+    // without increasing source storage or changing the LuxCore segment evaluator.
+    public static final int MAGIC=0x52534331, VERSION=2, HEADER_BYTES=128;
     public static final int PRIMARY_BYTES=208, COLOR_BYTES=16, SOURCE_BYTES=16;
     public static final int FAILED_OFFSET=112;
     public static final long DEFAULT_RESIDENT_BYTES=512L*1024*1024, ALLOCATION_ALLOWANCE=65_536;

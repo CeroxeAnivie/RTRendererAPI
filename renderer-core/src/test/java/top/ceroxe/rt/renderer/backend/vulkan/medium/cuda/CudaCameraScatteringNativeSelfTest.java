@@ -21,6 +21,7 @@ public final class CudaCameraScatteringNativeSelfTest {
             var kernel=runtime.compileBatchKernel(CudaCameraScatteringSource.source(),"camera_scattering_resolve");
             var arena=Arena.ofConfined()) {
             verifyCompactContribution(runtime,kernel,arena);
+            verifyPreweightedDistances(runtime,kernel,arena);
             for(int steps:new int[]{1,8,64}) {
                 var medium=new Medium(new Rgb(.1f,.1f,.1f),new Rgb(.2f,.2f,.2f),new Rgb(.03f,.07f,.01f),1,1,.6f);
                 var frame=RenderFrameRequest.builder(1,COUNT,1,CameraState.lookAt(0,0,0,0,0,-1).build())
@@ -36,8 +37,7 @@ public final class CudaCameraScatteringNativeSelfTest {
                     packed.putFloat(primary+12,i*.071f).putInt(primary+112,i%3==0?0:1);
                     for(int j=0;j<steps;j++) {
                         int source=16+plan.sourceOffset()+(i*steps+j)*16;
-                        packed.putFloat(source,.4f).putFloat(source+4,.2f).putFloat(source+8,.1f)
-                                .putFloat(source+12,distance/steps*.37f);
+                        putConstantSource(packed,source,distance,steps,j);
                     }
                 }
                 try(var storage=runtime.allocate(initial.length)) {
@@ -89,9 +89,8 @@ public final class CudaCameraScatteringNativeSelfTest {
                 for(int i=0;i<count;i++) {
                     float distance=(first+i)*.13f;long primary=plan.primaryOffset()+i*16L;
                     host.set(JAVA_FLOAT,primary,distance);host.set(JAVA_INT,primary+4,1);
-                    for(int j=0;j<8;j++) {long source=plan.sourceOffset()+(i*8L+j)*16;
-                        host.set(JAVA_FLOAT,source,.4f);host.set(JAVA_FLOAT,source+4,.2f);host.set(JAVA_FLOAT,source+8,.1f);
-                        host.set(JAVA_FLOAT,source+12,distance/8*.37f);}
+                    for(int j=0;j<8;j++)putConstantSource(host.asByteBuffer().order(ByteOrder.nativeOrder()),
+                            Math.toIntExact(plan.sourceOffset()+(i*8L+j)*16),distance,8,j);
                 }
                 runtime.upload(storage.slice(0,plan.bytes()),host);runtime.launchBlocking(kernel,storage.slice(0,plan.bytes()),count,1);
                 runtime.download(storage.slice(0,plan.bytes()),host);
@@ -102,6 +101,56 @@ public final class CudaCameraScatteringNativeSelfTest {
                     double actual=host.get(JAVA_FLOAT,plan.emissionOffset()+(first+i)*16L+c*4);
                     require(Math.abs(actual-expected)<4e-5,"compact tiled scattering/emission-ownership mismatch path="+(first+i)+" channel="+c);
                 }
+            }
+        }
+    }
+    /** Analytic constant integrand fixture, independent of the producer's choice of proposal. */
+    private static void putConstantSource(ByteBuffer packed,int at,float distance,int steps,int j) {
+        double sigma=(float)(.1f+.2f),t=distance*(j+.37)/steps;
+        double weight=(-Math.expm1(-sigma*distance)/sigma)/steps*Math.exp(sigma*t);
+        packed.putFloat(at,(float)(.4f*weight)).putFloat(at+4,(float)(.2f*weight))
+                .putFloat(at+8,(float)(.1f*weight)).putFloat(at+12,(float)t);
+    }
+    private static void verifyPreweightedDistances(CudaMediumRuntime runtime,CudaMediumRuntime.BatchKernel kernel,Arena arena) {
+        int steps=8;float distance=6;
+        var medium=new Medium(new Rgb(.1f,.2f,.3f),new Rgb(.2f,.1f,.05f),new Rgb(0,0,0),1,1,0);
+        var frame=RenderFrameRequest.builder(1,1,1,CameraState.lookAt(0,0,0,0,0,-1).build())
+                .environment(EnvironmentState.builder().cameraMedium(medium).build())
+                .mediumTransport(MediumTransport.balanced().withScatteringSteps(steps).withMaxDistance(distance)
+                        .withTransmittanceCutoff(.9f)).build();
+        var plan=CudaCameraScatteringAbi.plan(1,1,1,steps);
+        var host=arena.allocate(plan.bytes(),16);host.fill((byte)0);
+        host.asByteBuffer().put(CudaCameraScatteringAbi.header(plan,frame,0,1));
+        host.set(JAVA_FLOAT,plan.primaryOffset()+12,distance);host.set(JAVA_INT,plan.primaryOffset()+112,1);
+        double[] expected=new double[3];
+        // Absolute locations deliberately arrive out of order and outside their old interval.
+        for(int j=0;j<steps;j++) {
+            float t=distance*((j*5)%steps+.31f)/steps,inversePdf=(j+1)*.17f;
+            long at=plan.sourceOffset()+j*16L;host.set(JAVA_FLOAT,at+12,t);
+            for(int c=0;c<3;c++) {
+                float incoming=(c+1)*.13f*inversePdf;host.set(JAVA_FLOAT,at+c*4L,incoming);
+                float sigma=c==0?.1f+.2f:c==1?.2f+.1f:.3f+.05f,scatter=c==0?.2f:c==1?.1f:.05f;
+                expected[c]+=Math.exp(-sigma*t)*scatter*incoming;
+            }
+        }
+        try(var storage=runtime.allocate(plan.bytes())) {
+            runtime.upload(storage.slice(0,plan.bytes()),host);runtime.launchBlocking(kernel,storage.slice(0,plan.bytes()),1,1);
+            runtime.download(storage.slice(0,plan.bytes()),host);
+            require(host.get(JAVA_INT,CudaCameraScatteringAbi.FAILED_OFFSET)==0,"absolute unordered source rejected");
+            for(int c=0;c<3;c++)require(Math.abs(host.get(JAVA_FLOAT,plan.emissionOffset()+c*4L)-expected[c])<2e-6,
+                    "preweighted source was integrated with an extra PDF, prefix cutoff or interval offset");
+            byte[] valid=host.toArray(JAVA_BYTE);
+            for(int invalid=0;invalid<6;invalid++) {
+                host.copyFrom(java.lang.foreign.MemorySegment.ofArray(valid));
+                if(invalid==0)host.set(JAVA_INT,4,1);
+                else if(invalid==1)host.set(JAVA_FLOAT,plan.sourceOffset()+12,-.1f);
+                else if(invalid==2)host.set(JAVA_FLOAT,plan.sourceOffset()+12,distance+.1f);
+                else if(invalid==3)host.set(JAVA_FLOAT,plan.sourceOffset()+12,Float.NaN);
+                else if(invalid==4)host.set(JAVA_FLOAT,plan.sourceOffset(),Float.POSITIVE_INFINITY);
+                else host.set(JAVA_FLOAT,plan.sourceOffset()+4,Float.NaN);
+                runtime.upload(storage.slice(0,plan.bytes()),host);runtime.launchBlocking(kernel,storage.slice(0,plan.bytes()),1,1);
+                runtime.download(storage.slice(0,plan.bytes()),host);
+                require(host.get(JAVA_INT,CudaCameraScatteringAbi.FAILED_OFFSET)==1,"malformed preweighted packet accepted case="+invalid);
             }
         }
     }
