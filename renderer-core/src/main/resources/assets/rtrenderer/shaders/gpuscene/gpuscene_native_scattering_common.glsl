@@ -19,18 +19,19 @@ void gsScatteringProfileAdd(uint record,uint stage,uint64_t started){
     GsScatteringDiagnostic target=GsScatteringDiagnostic(dispatch.reserved);
     target.values[word]+=ended-started;target.values[word+1u]+=1ul;
 }
-uint64_t gsScatteringProfileStart(uint record){return dispatch.reserved!=0ul&&(record%65536u)==0u?clockRealtimeEXT():0ul;}
+uint64_t gsScatteringProfileStart(bool enabled){if(!enabled)return 0ul;return clockRealtimeEXT();}
 vec3 gsScatteringShadowProfile(vec3 position,vec3 direction,float distance,vec3 sigma,float integrationLimit,uint record){
-    uint64_t started=gsScatteringProfileStart(record);
+    bool profileActive=dispatch.reserved!=0ul&&(record%65536u)==0u;
+    uint64_t started=gsScatteringProfileStart(profileActive);
     vec3 surface=gsShadowTransmittance(position,direction,direction,distance);
     gsScatteringProfileAdd(record,5u,started);
-    started=gsScatteringProfileStart(record);
+    started=gsScatteringProfileStart(profileActive);
     vec3 attenuation=exp(-sigma*min(distance,integrationLimit));
     gsScatteringProfileAdd(record,6u,started);
     return surface*attenuation;
 }
-vec3 gsScatteringLightProfile(uint slot,vec3 position,vec3 rayDirection,float g,vec3 sigma,float integrationLimit,uint record){
-    uint64_t started=gsScatteringProfileStart(record);
+vec3 gsScatteringLightProfile(uint slot,vec3 position,vec3 rayDirection,float g,vec3 sigma,float integrationLimit,uint record,bool profileActive){
+    uint64_t started=gsScatteringProfileStart(profileActive);
     uint base=slot*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[base+GPU_SCENE_LIGHT_FLAGS_WORD],type=(flags>>1u)&7u;
     vec3 color=vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD]),
         uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+2u]));
@@ -58,14 +59,14 @@ vec3 gsScatteringLightProfile(uint slot,vec3 position,vec3 rayDirection,float g,
     vec3 visibility=vec3(1);
     if((flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u){
         float shadowDistance=max(distance-2.0*gsRayEpsilon(position),gsRayEpsilon(position));
-        started=gsScatteringProfileStart(record);
+        started=gsScatteringProfileStart(profileActive);
         visibility=gsShadowTransmittance(position,direction,direction,shadowDistance);
         gsScatteringProfileAdd(record,5u,started);
-        started=gsScatteringProfileStart(record);
+        started=gsScatteringProfileStart(profileActive);
         visibility*=exp(-sigma*min(shadowDistance,integrationLimit));
         gsScatteringProfileAdd(record,6u,started);
     }
-    started=gsScatteringProfileStart(record);
+    started=gsScatteringProfileStart(profileActive);
     vec3 phase=vec3(gsScatteringPhase(dot(rayDirection,direction),g));
     vec3 result=color*intensity*attenuation*visibility*phase;
     gsScatteringProfileAdd(record,8u,started);

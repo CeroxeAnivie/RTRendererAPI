@@ -22,7 +22,7 @@ layout(push_constant) uniform GsScatteringDispatch {
 
 #ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
 layout(buffer_reference,std430,buffer_reference_align=8) buffer GsScatteringDiagnostic {uint64_t values[];};
-uint64_t gsScatteringDetailStart(bool enabled){return enabled?clockRealtimeEXT():0ul;}
+uint64_t gsScatteringDetailStart(bool enabled){if(!enabled)return 0ul;return clockRealtimeEXT();}
 void gsScatteringDetailEnd(uint record,uint stage,uint64_t started){
     if(started==0ul)return;
     uint word=((record/65536u)*12u+stage)*2u;uint64_t ended=clockRealtimeEXT();
@@ -120,7 +120,7 @@ void main() {
                         GS_SCATTER_DETAIL_NEXT(7u);
                         if(weight>0.0){
                             GS_SCATTER_DETAIL_PAUSE();
-                            source+=gsScatteringLightProfile(slot,position,direction,g,sigma,maximum,detailRecord);
+                            source+=gsScatteringLightProfile(slot,position,direction,g,sigma,maximum,detailRecord,detailActive);
                             GS_SCATTER_DETAIL_RESUME(7u);
                         }
                     }
@@ -134,7 +134,7 @@ void main() {
                         float factor=exhaustive?1.0:total/(float(sampleCount)*weight);
                         GS_SCATTER_DETAIL_NEXT(7u);
                         GS_SCATTER_DETAIL_PAUSE();
-                        source+=gsScatteringLightProfile(slot,position,direction,g,sigma,maximum,detailRecord)*factor;
+                        source+=gsScatteringLightProfile(slot,position,direction,g,sigma,maximum,detailRecord,detailActive)*factor;
                         GS_SCATTER_DETAIL_RESUME(7u);
                     }
                 }
