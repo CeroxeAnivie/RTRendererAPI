@@ -6,7 +6,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.locks.LockSupport;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
@@ -115,7 +114,7 @@ public final class MediumGalleryPerformanceBenchmark {
                     requestBuild += System.nanoTime() - buildStarted;
                 }
                 long submitStarted = System.nanoTime();
-                Renderer.FrameAdmissionAttempt attempt = renderer.trySubmit(pending);
+                Renderer.FrameSubmissionAttempt attempt = renderer.trySubmit(pending);
                 submit += System.nanoTime() - submitStarted;
                 if (!(attempt instanceof Renderer.FrameSubmitted)) { deferrals++; break; }
                 sequence[0]++;
@@ -161,9 +160,10 @@ public final class MediumGalleryPerformanceBenchmark {
         StringBuilder json = new StringBuilder("{");
         for (int i = 0; i < values.length; i++) {
             if (i > 0) json.append(',');
-            double milliseconds = i == 27 || i == 28 ? values[i] : values[i] / (double) frames / 1e6;
-            json.append('"').append(PROFILE_NAMES[i]).append("MsPerFrame\":")
-                    .append(String.format(Locale.ROOT, "%.6f", milliseconds));
+            boolean count = i == 27 || i == 28;
+            double perFrame = values[i] / (double) frames;
+            json.append('"').append(PROFILE_NAMES[i]).append(count ? "PerFrame\":" : "MsPerFrame\":")
+                    .append(String.format(Locale.ROOT, "%.6f", count ? perFrame : perFrame / 1e6));
         }
         return json.append('}').toString();
     }

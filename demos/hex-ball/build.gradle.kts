@@ -12,6 +12,8 @@ description = "Interactive hex-ball sample and GPU smoke workload for RTRenderer
 dependencies {
     implementation(project(":renderer-api"))
     runtimeOnly(project(":renderer-nvidia"))
+    // The test-only gallery profiler reads core counters; the demo artifact stays API-only.
+    testImplementation(project(":renderer-core"))
 }
 
 val toolchainJavaVersion = 25
