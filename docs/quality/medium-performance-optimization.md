@@ -820,3 +820,9 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 仅把 BRDF 求值移动到现有 shadow query 之后，保留原材质读取、packet 写入、判断及所有数学公式；与本项目普通 `gsDirectContribution` 的求值顺序对齐。也核对固定 PBRT wavefront 实现：其 BRDF-first 后入 shadow queue 的数据寿命不同，不声称该项目直接采用了本候选。1080p 8 帧总共 592 个通道各差一个相邻半精度值，alpha 相同。
 
 正序 PBR light packet GPU 下降 0.68%，关闭诊断 104.962881→104.291611 FPS（−0.64%）；反序 packet 下降 1.14%，关闭诊断 102.863053→102.630426 FPS（−0.23%）。没有稳定端到端收益，GLSL 及 16 份 SPIR-V 已全部恢复；不把单个子阶段的小幅下降作为保留依据。[原始窗口与制品证据](data/pbr-brdf-after-visibility-rejected-20261031.json)。
+
+### 撤回：散射持久 pinned 异步计数读回
+
+在先前 queued-only 实验之外，这次把每帧失败计数及诊断数据改为持久锁页内存，复制入队后再 signal，完整 fence 返回后才读取/校验，保留原错误发布边界。参考相同 NVIDIA cuda-samples pinned async copy 与 stream-ordered semaphore，并复用已验证的 PBR `HostMemory` 数据流。1080p 8 帧 HDR 全字节一致。
+
+正序关闭诊断 105.143829→104.061151 FPS（−1.03%），反序 105.303441→106.222527 FPS（+0.87%）。仍没有稳定端到端收益，两个 Java 文件已完整恢复。不能把 CUDA 等待迁移到 Vulkan fence 计成收益。[两种顺序、逐帧与制品证据](data/scattering-pinned-readback-rejected-20261031.json)。
