@@ -22,6 +22,12 @@ public final class CudaPbrMediumAbiSelfTest {
         require(full.bytes()<=512L*1024*1024-65536,"many-light residency overflow");
         require(full.primaryBytes()==1920L*1080*208,"external primary must retain complete geometry");
         require(full.emissionOffset()==full.transmittanceOffset()+full.paths()*16,"radiance splits overlap");
+        long boundaryFreeMinimum=CudaPbrMediumAbi.minimumBytes(31,23,8,0,7,32);
+        var boundaryFree=CudaPbrMediumAbi.plan(31,23,8,0,7,32,empty,boundaryFreeMinimum);
+        require(boundaryFree.capacity()==0&&boundaryFree.packetBytes()==32,
+                "a boundary-free packet must not allocate unreachable event slots");
+        require(boundaryFree.tilePixels()==1&&boundaryFree.bytes()==boundaryFreeMinimum,
+                "boundary-free minimum and tile storage disagree");
         for(int steps:new int[]{1,8,64})for(int lights:new int[]{0,8,255}) {
             var combined=CudaPbrMediumAbi.planWithScattering(1920,1080,1,lights,1,steps,512L*1024*1024);
             require(combined.pbr().tilePixels()==combined.scattering().tilePixels(),"combined paths require one coordinated tile budget");

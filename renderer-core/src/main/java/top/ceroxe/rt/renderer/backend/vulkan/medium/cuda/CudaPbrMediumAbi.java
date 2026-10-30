@@ -183,7 +183,8 @@ public final class CudaPbrMediumAbi {
         dimensions(width,height,samples,boundaries,lightUpperBound,capacity);
         long paths=Math.multiplyExact(Math.multiplyExact((long)width,height),samples);
         long scene=align16(Math.toIntExact(HEADER_BYTES+(long)boundaries*68));
-        long scratch=Math.multiplyExact((long)samples,Math.multiplyExact((long)lightUpperBound+2,32+16*((capacity+1)/2)+32));
+        int eventCapacity=boundaries==0?0:capacity;
+        long scratch=Math.multiplyExact((long)samples,Math.multiplyExact((long)lightUpperBound+2,32+16*((eventCapacity+1)/2)+32));
         return Math.addExact(Math.addExact(scene,Math.multiplyExact(paths,32)),scratch);
     }
 
@@ -194,7 +195,10 @@ public final class CudaPbrMediumAbi {
         int paths=Math.multiplyExact(pixels,samples),connections=Math.addExact(lightUpperBound,1);
         int scene=Math.addExact(align16(Math.toIntExact(HEADER_BYTES+(long)boundaries*68)),density.bytes());
         int trans=scene,emission=Math.toIntExact(trans+(long)paths*16),state=Math.toIntExact(emission+(long)paths*16);
-        int packetBytes=32+16*((capacity+1)/2);
+        // No interface can produce an event in a scene with no boundaries.
+        // Keep the public transport budget; remove only unused wire storage.
+        int eventCapacity=boundaries==0?0:capacity;
+        int packetBytes=32+16*((eventCapacity+1)/2);
         long perPixel=Math.multiplyExact((long)samples,Math.multiplyExact((long)connections+1,packetBytes+32));
         long available=storageLimit-state;
         if(available<perPixel)throw new IllegalArgumentException("complete native PBR output and one pixel's light packets exceed residency");
@@ -203,7 +207,7 @@ public final class CudaPbrMediumAbi {
         if(tile<1)throw new IllegalArgumentException("native PBR light dispatch exceeds uint indexing");
         int colors=Math.toIntExact(state+Math.multiplyExact(Math.multiplyExact((long)tile*samples,connections+1L),packetBytes));
         long bytes=Math.addExact(colors,Math.multiplyExact(Math.multiplyExact((long)tile*samples,connections+1L),32));
-        return new Plan(pixels,samples,tile,boundaries,connections,capacity,scene,state,colors,trans,emission,bytes);
+        return new Plan(pixels,samples,tile,boundaries,connections,eventCapacity,scene,state,colors,trans,emission,bytes);
     }
 
     public static byte[] scenePrefix(Plan plan,RenderFrameRequest frame,List<CudaBoundaryMediumAbi.Boundary> source,

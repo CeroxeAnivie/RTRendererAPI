@@ -27,7 +27,7 @@ __device__ bool walk(unsigned char *buffer,const unsigned int *packet,UniformSta
     using namespace rtr_boundary;
     const unsigned int *h=(const unsigned int *)buffer;
     const unsigned int capacity=h[27]&255u,terminal=4u+4u*((capacity+1u)/2u);
-    if(capacity<1u||capacity>32u||packet[3]!=0u)return false;
+    if(capacity>32u||packet[3]!=0u)return false;
     float3 origin=make_float3(__uint_as_float(packet[terminal+1]),__uint_as_float(packet[terminal+2]),__uint_as_float(packet[terminal+3]));
     s->direction=make_float4(__uint_as_float(packet[0]),__uint_as_float(packet[1]),__uint_as_float(packet[2]),0.f);
     if(!finite3(origin)||!finite3(rgb(s->direction))||!isfinite(geometryEnd)||geometryEnd<0.f)return false;
@@ -40,7 +40,7 @@ __device__ bool walk(unsigned char *buffer,const unsigned int *packet,rtr_bounda
         float geometryEnd,bool receiver,unsigned int &crossed) {
     using namespace rtr_boundary;
     unsigned int *h=(unsigned int *)buffer;const unsigned int capacity=h[27]&255u,terminal=4u+4u*((capacity+1u)/2u);
-    if(capacity<1u||capacity>32u||packet[3]>capacity||packet[3]>h[6])return false;
+    if(capacity>32u||(capacity==0u&&h[7]!=0u)||packet[3]>capacity||packet[3]>h[6])return false;
     float3 origin=make_float3(__uint_as_float(packet[terminal+1]),__uint_as_float(packet[terminal+2]),__uint_as_float(packet[terminal+3]));
     s->direction=make_float4(__uint_as_float(packet[0]),__uint_as_float(packet[1]),__uint_as_float(packet[2]),0.f);
     if(!finite3(origin)||!finite3(rgb(s->direction))||!isfinite(geometryEnd)||geometryEnd<0.f)return false;
