@@ -1,0 +1,128 @@
+{
+  "scope": "Focused regressions for blockers discovered by complete verifyApiClosure; separate full-gate certification required",
+  "date": "2026-10-31",
+  "device": "NVIDIA GeForce RTX 5080 Laptop GPU",
+  "focusedPassed": true,
+  "initialCompleteRun": {
+    "passed": false,
+    "tasks": 280,
+    "blockers": [
+      "vulkanGpuSceneThroughputNativeSelfTest: fixed 30-second whole-range timeout",
+      "mediumTransportNativeSelfTest: mirrored boundary facing",
+      "primaryQueueNativeSelfTest: outdated all-queued routing assertion",
+      "rtNativeVanillaDynamicLightingSceneSelfTest: missing renamed main class"
+    ]
+  },
+  "fixes": [
+    "Use object-space HitKind without a second mirrored-transform correction in both boundary any-hit shaders",
+    "Retain all 800 throughput frames, sequence assertions and GPU timestamp checks; enforce 30-second no-progress and 300-second whole-range watchdogs",
+    "Assert exact per-case ordinary queue/native PBR/native optical routes, plus 11 byte-identical HDR pairs",
+    "Preserve old Gradle task name and point it at ReferenceDynamicLighting main and extent properties",
+    "Use 8-SPP central-image means for stochastic volume tests without reducing original illumination thresholds; add independent isotropic/anisotropic slab integrals",
+    "Reuse low 32 sequence bits via legal 64-bit increasing frame sequence for strict mirrored-scattering parity at 0.0005",
+    "Avoid VVL 1.4.350 deferred completion-registration race with one host join worker only when debug-utils is enabled; rendering and non-diagnostic parallel compilation unchanged",
+    "Classify converging scene generations as SCENE_UPDATE_BACKLOG; bounded test retry handles only that typed category"
+  ],
+  "results": {
+    "boundary": {
+      "comparisons": 24,
+      "nativeFrames": 24,
+      "recoverableRejections": 1,
+      "mirroredPersistentMaximumAbsolute": 0.000968126595,
+      "mirroredFrameLocal8SppMaximumAbsolute": 0.000968110832
+    },
+    "medium": {
+      "frames": 26,
+      "pointMean": 0.3263,
+      "spotMean": 0.204,
+      "directionalMean": 0.0595,
+      "sunMean": 0.0063,
+      "originalThresholdsRetained": true,
+      "isotropicIntegralTolerance": 0.004,
+      "anisotropicIntegralTolerance": 0.0005,
+      "mirroredParityTolerance": 0.0005
+    },
+    "queue": {
+      "byteIdenticalHdrPairs": 11,
+      "ordinaryQueuedPairs": 2,
+      "nativePairs": 9,
+      "perCaseRouteAssertions": true
+    },
+    "lighting": {
+      "sustainedFrames": 96,
+      "dynamicUpdates": 97,
+      "distinctChecksums": 29
+    },
+    "throughput": {
+      "warmupFrames": 32,
+      "measurementRuns": 3,
+      "framesPerRun": 256,
+      "completedGpuTimestamps": 800,
+      "performanceThreshold": "none",
+      "crashRetry": "First ntdll native crash retained; retried with CICompilerCount=2; completed all original frames"
+    }
+  },
+  "validation": [
+    {
+      "test": "cudaBoundaryMediumProductionNativeSelfTest",
+      "sha256": "9ff8ae9e7ea57d5ce758b69ebb86afce8b577e41a3347cb153baed17742becb7",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "drops": 0
+    },
+    {
+      "test": "mediumTransportNativeSelfTest",
+      "sha256": "019f622563ff39313e03abd065d734645faea1714cef4cad048666b3363f0f8b",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "drops": 0
+    },
+    {
+      "test": "primaryQueueNativeSelfTest",
+      "sha256": "c882f2b9d509f8320872ae8a05c58499ee3ecdf00a94b97337b44be72d7fad7d",
+      "opened": 2,
+      "closed": 2,
+      "warnings": 0,
+      "errors": 0,
+      "drops": 0
+    }
+  ],
+  "logs": [
+    {
+      "path": "build\\api-closure-20261031\\complete-current-platform.log",
+      "sha256": "c691ff17e14853be6477c9ca0669a7d0777f1b89707592c965bdd3821df4ceea"
+    },
+    {
+      "path": "build\\api-closure-20261031\\four-blockers-retest.log",
+      "sha256": "294973b8941a9136c8ec3e4b6af081403eabc62bff42c1e09fa66cda74fbcbaf"
+    },
+    {
+      "path": "build\\api-closure-20261031\\pipeline-directional-probe.log",
+      "sha256": "88c1714d22c227018e269cd6b0452194948e04d927c0a8fcc0aeaf4ecaf8959d"
+    },
+    {
+      "path": "build\\api-closure-20261031\\mirror-scattering-validation-retest.log",
+      "sha256": "8f055a5223dd724b9b0150b149a5e83102a5447f6000ad3f7b2a8879eac288d5"
+    },
+    {
+      "path": "build\\api-closure-20261031\\blockers-final-retest.log",
+      "sha256": "2321b346e64bf605bb03342d6e879f5eede1e1060de6f0aec0f688bd120361b2"
+    },
+    {
+      "path": "build\\api-closure-20261031\\blockers-final-retest-2.log",
+      "sha256": "8d0759961e1f84d03a09281689429ef3fa8b475fd72671e601ae16666cf8f16d"
+    },
+    {
+      "path": "build\\api-closure-20261031\\scene-backpressure-final-retest.log",
+      "sha256": "0f8da30069c06548f1c3b631bcd0e2d775317d0fa38c8bcb680465d569eb7e5c"
+    }
+  ],
+  "references": [
+    "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/v1.4.313/chapters/raytraversal.adoc",
+    "https://raw.githubusercontent.com/KhronosGroup/Vulkan-ValidationLayers/vulkan-sdk-1.4.350.0/layers/chassis/dispatch_object_manual.cpp"
+  ]
+}

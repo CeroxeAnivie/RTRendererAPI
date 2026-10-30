@@ -274,6 +274,12 @@ final class RtRayTracingPipelineFactory {
         long concurrency = Integer.toUnsignedLong(
                 KHRDeferredHostOperations.vkGetDeferredOperationMaxConcurrencyKHR(device, operation));
         int workers = (int) Math.max(1L, Math.min(concurrency, Runtime.getRuntime().availableProcessors()));
+        // VVL 1.4.350 wraps deferred handles in its completion callback. Concurrent
+        // successful joins can pop the registration callback before that handle list
+        // is published (DispatchDevice::DeferredOperationJoinKHR). Keep diagnostic
+        // instances single-join; production instances retain parallel driver work.
+        // https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/vulkan-sdk-1.4.350.0/layers/chassis/dispatch_object_manual.cpp
+        if (device.getPhysicalDevice().getInstance().getCapabilities().VK_EXT_debug_utils) workers = 1;
         if (Boolean.getBoolean("top.ceroxe.rt.pipeline.compileDiagnostics"))
             System.out.println("RT pipeline deferred compile workers=" + workers + ", driverConcurrency=" + concurrency);
         // All create-info, module and result storage remains alive until every join has returned.

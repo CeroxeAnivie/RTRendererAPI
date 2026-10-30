@@ -485,7 +485,7 @@ val nativeSelfTests = linkedMapOf(
     "rtNativeDynamicObjectSceneSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeDynamicObjectSceneSelfTest",
     "rtNativeDynamicBlasTlasStressSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeDynamicBlasTlasStressSelfTest",
     "rtNativeDynamicMeshInstanceStressSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeDynamicMeshInstanceStressSelfTest",
-    "rtNativeVanillaDynamicLightingSceneSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeVanillaDynamicLightingSceneSelfTest",
+    "rtNativeVanillaDynamicLightingSceneSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeReferenceDynamicLightingSceneSelfTest",
     "rtNativeGpuThroughputSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeGpuThroughputSelfTest"
 )
 
@@ -645,7 +645,7 @@ tasks.register("rendererCoreNativeGate") {
     dependsOn(nativeSelfTests.keys)
 }
 
-val nativeMediumTests = listOf("cudaMediumRuntimeNativeSelfTest", "cudaBuiltinShaderDataNativeSelfTest", "cudaMetallicMediumProductionNativeSelfTest", "cudaCompositeMediumProductionNativeSelfTest", "cudaCameraMediumProductionNativeSelfTest",
+val nativeMediumTests = listOf("mediumTransportNativeSelfTest", "primaryQueueNativeSelfTest", "cudaMediumRuntimeNativeSelfTest", "cudaBuiltinShaderDataNativeSelfTest", "cudaMetallicMediumProductionNativeSelfTest", "cudaCompositeMediumProductionNativeSelfTest", "cudaCameraMediumProductionNativeSelfTest",
     "cudaCameraEmissionProductionNativeSelfTest", "cudaBoundaryMediumProductionNativeSelfTest",
     "cudaDensityProductionNativeSelfTest", "cudaCameraScatteringProductionNativeSelfTest",
     "cudaMultipleScatteringProductionNativeSelfTest", "cudaDensityScatteringProductionNativeSelfTest",
@@ -794,9 +794,9 @@ val native1080pMatrixScenarios = linkedMapOf(
         "top.ceroxe.rt.rt.dynamicSky.height"
     ),
     "rtNative1080pDynamicLightingBenchmark" to Native1080pScenario(
-        "top.ceroxe.rt.renderer.rt.RtNativeVanillaDynamicLightingSceneSelfTest",
-        "top.ceroxe.rt.rt.vanillaLighting.width",
-        "top.ceroxe.rt.rt.vanillaLighting.height"
+        "top.ceroxe.rt.renderer.rt.RtNativeReferenceDynamicLightingSceneSelfTest",
+        "top.ceroxe.rt.rt.referenceLighting.width",
+        "top.ceroxe.rt.rt.referenceLighting.height"
     ),
     "rtNative1080pDynamicBlasTlasBenchmark" to Native1080pScenario(
         "top.ceroxe.rt.renderer.rt.RtNativeDynamicBlasTlasStressSelfTest",

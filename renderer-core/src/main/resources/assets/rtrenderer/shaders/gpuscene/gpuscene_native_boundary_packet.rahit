@@ -27,7 +27,9 @@ void gsCollectBoundary() {
     while(low<high) {uint m=low+(high-low)/2u;if(dispatch.storage.lanes[table+m*4u].x<slot)low=m+1u;else high=m;}
     if(low>=dispatch.storage.lanes[1u].w||dispatch.storage.lanes[table+low*4u].x!=slot)return;
     uint orientation=dispatch.storage.lanes[table+low*4u].z;
-    bool back=(gl_HitKindEXT==0xffu)!=(determinant(mat3(gl_ObjectToWorldEXT))<0.0);
+    // Traversal reports facing in instance space. Unlike a world-space cross
+    // product, HitKind needs no additional correction for mirrored transforms.
+    bool back=gl_HitKindEXT==0xffu;
     uint code=low|((back==(orientation!=0u))?0x80000000u:0u);
     uint base=uint(dispatch.offsets&uint64_t(0xffffffffu))/16u+payload.mediumBoundary.x*(2u+((dispatch.storage.lanes[6u].w&255u)+1u)/2u);
     uint count=dispatch.storage.lanes[base].w,capacity=min(dispatch.storage.lanes[1u].z,dispatch.storage.lanes[6u].w&255u);

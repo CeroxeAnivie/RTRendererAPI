@@ -10,7 +10,7 @@ import top.ceroxe.rt.renderer.RendererRtDiagnostics;
 
 /** Small linear-HDR hardware scenes test transport, rather than shader-source spelling. */
 public final class MediumTransportNativeSelfTest {
-    private static long sequence,revision;
+    private static long sequence,revision,completedFrames;
     private static VulkanRendererHost renderer;
     private static FramePrimitiveBatch primitives=FramePrimitiveBatch.empty();
     private static long frameNanoseconds,maximumFrameNanoseconds;
@@ -105,20 +105,36 @@ public final class MediumTransportNativeSelfTest {
             var scatter=new Medium(new Rgb(.05f,.05f,.05f), new Rgb(.25f,.25f,.25f), Rgb.ZERO, 1, 1, 0);
             apply(SceneTransaction.builder(++revision).upsert(MaterialAsset.builder(1).shadingModel(MaterialAsset.ShadingModel.UNLIT).baseColorRgba8(0xff000000).doubleSided(true).build())
                 .upsert(volume(2,2,scatter,1)).upsert(SceneLight.point(1,0,1,0).intensity(30).range(20).build()).build());
-            var point=render(OUTSIDE,EnvironmentState.neutral());
+            // A single collision sample may legitimately have no event. Keep the
+            // original illumination thresholds, but test an 8-SPP central image mean.
+            var point=renderScatteringMean(OUTSIDE,EnvironmentState.neutral());
             MediumTransportSelfTest.require(point[0]>.01,"point light must illuminate participating medium");
             apply(SceneTransaction.builder(++revision).removeLight(1).upsert(SceneLight.spot(2,0,0,3,0,0,-1).coneDegrees(30,60).intensity(30).range(20).build()).build());
-            var spot=render(OUTSIDE,EnvironmentState.neutral());
+            var spot=renderScatteringMean(OUTSIDE,EnvironmentState.neutral());
             MediumTransportSelfTest.require(spot[0]>.01,"spot light must illuminate participating medium");
             apply(SceneTransaction.builder(++revision).removeLight(2).upsert(SceneLight.directional(3,0,0,-1).intensity(2).build()).build());
-            var directional=render(OUTSIDE,EnvironmentState.neutral());
+            var directional=renderScatteringMean(OUTSIDE,EnvironmentState.neutral());
             MediumTransportSelfTest.require(directional[0]>.01,"directional light must illuminate participating medium");
+            double isotropicOracle=directionalScatteringOracle(0);
+            for(int channel=0;channel<3;channel++)near(directional[channel],isotropicOracle,.004,
+                "directional single-scattering independent slab integral channel="+channel);
+            apply(SceneTransaction.builder(++revision).upsert(volume(2,2,scatter,1).toBuilder()
+                .transform(new AffineTransform(new float[]{-2,0,0,0,0,2,0,0,0,0,2,0})).build()).build());
+            // The private sampler uses the low 32 sequence bits. A legal increasing
+            // 64-bit sequence reuses those samples for a strict geometry-only comparison.
+            sequence+=0xffff_ffffL;
+            var mirroredScattering=renderScatteringMean(OUTSIDE,EnvironmentState.neutral());
+            for(int channel=0;channel<3;channel++)near(mirroredScattering[channel],directional[channel],.0005,
+                "mirrored scattering boundary preserves world-space transport channel="+channel);
+            apply(SceneTransaction.builder(++revision).upsert(volume(2,2,scatter,1)).build());
             apply(SceneTransaction.builder(++revision).upsert(volume(2,2,new Medium(scatter.absorption(),scatter.scattering(),
                 scatter.emission(),scatter.density(),scatter.indexOfRefraction(),.7f),1)).build());
-            var anisotropic=render(OUTSIDE,EnvironmentState.neutral());
+            var anisotropic=renderScatteringMean(OUTSIDE,EnvironmentState.neutral());
             MediumTransportSelfTest.require(Math.abs(anisotropic[0]-directional[0])>.005,"phase anisotropy must change scattering");
+            for(int channel=0;channel<3;channel++)near(anisotropic[channel],directionalScatteringOracle(.7),.0005,
+                "anisotropic single-scattering independent slab integral channel="+channel);
             apply(SceneTransaction.builder(++revision).removeLight(3).build());
-            var sun=render(OUTSIDE,EnvironmentState.builder().sunDirection(0,0,-1).sunIntensity(2).build());
+            var sun=renderScatteringMean(OUTSIDE,EnvironmentState.builder().sunDirection(0,0,-1).sunIntensity(2).build());
             MediumTransportSelfTest.require(sun[0]>.005,"environment sun must illuminate medium");
 
             // Inside a broad dielectric slab, sixty-degree incidence must totally reflect.
@@ -145,11 +161,21 @@ public final class MediumTransportNativeSelfTest {
             System.out.printf(Locale.ROOT,"MediumTransportNativeSelfTest passed: absorption=%.4f/%.4f/%.4f, nested=%.4f/%.4f, emission=%.4f, scatter point/spot/directional/sun=%.4f/%.4f/%.4f/%.4f, TIR=%.4f vs %.4f%n",
                 white[0],white[1],white[2],nested[0],nested[1],emission[0],point[0],spot[0],directional[0],sun[0],tir[0],noTir[0]);
             System.out.printf(Locale.ROOT,"Transport correctness frames=%d, admission-to-readback mean=%.2f ms, max=%.2f ms (%dx%d HDR, validation enabled; not a display-FPS benchmark)%n",
-                sequence,frameNanoseconds/1_000_000.0/sequence,maximumFrameNanoseconds/1_000_000.0,width,height);
+                completedFrames,frameNanoseconds/1_000_000.0/completedFrames,maximumFrameNanoseconds/1_000_000.0,width,height);
             if(java.util.Arrays.asList(args).contains("--profile")) profile();
         }
     }
-    private static void apply(SceneTransaction transaction) {renderer.apply(transaction);}
+    private static void apply(SceneTransaction transaction) throws Exception {
+        long deadline=System.nanoTime()+Duration.ofSeconds(30).toNanos();
+        while(true) {
+            try {renderer.apply(transaction);return;}
+            catch(SubmissionRejectedException busy) {
+                if(busy.deferralReason()!=SubmissionDeferralReason.SCENE_UPDATE_BACKLOG)throw busy;
+                if(System.nanoTime()>=deadline)throw new AssertionError("scene generation did not converge",busy);
+                Thread.sleep(1);
+            }
+        }
+    }
     private static void profile() throws Exception {
         width=640;height=360;
         var plane=MeshAsset.triangles(1,new float[]{-100,-100,-4,100,-100,-4,100,100,-4,-100,100,-4},new int[]{0,1,2,2,3,0},1);
@@ -178,9 +204,16 @@ public final class MediumTransportNativeSelfTest {
             lane,times[12]/1e6,times[22]/1e6,times[23]/1e6);
     }
     private static float[] render(CameraState camera,EnvironmentState environment) throws Exception {
+        return render(camera,environment,false);
+    }
+    private static float[] renderScatteringMean(CameraState camera,EnvironmentState environment) throws Exception {
+        return render(camera,environment,true);
+    }
+    private static float[] render(CameraState camera,EnvironmentState environment,boolean scatteringMean) throws Exception {
         long started=System.nanoTime();
         var frame=RenderFrameRequest.builder(++sequence,width,height,camera).minimumSceneRevision(revision).environment(environment)
             .primitiveBatch(primitives)
+            .antiAliasing(new AntiAliasingState(scatteringMean?8:1))
             .mediumTransport(transport).build();
         long deadline=System.nanoTime()+Duration.ofSeconds(30).toNanos();
         while(!(renderer.trySubmit(frame) instanceof FrameSubmitted)) {
@@ -200,7 +233,22 @@ public final class MediumTransportNativeSelfTest {
                     java.nio.file.Files.write(directory.resolve(String.format(Locale.ROOT,"frame-%03d.rgba16f",sequence)),pixels);
                 }
                 long elapsed=System.nanoTime()-started;frameNanoseconds+=elapsed;maximumFrameNanoseconds=Math.max(maximumFrameNanoseconds,elapsed);
+                completedFrames++;
                 lastFrameNanoseconds=elapsed;
+                if(scatteringMean) {
+                    float[] mean=new float[3];int count=0;
+                    for(int y=height/4;y<height-height/4;y++)for(int x=width/4;x<width-width/4;x++) {
+                        int at=y*snapshot.rowBytes()+x*8;
+                        for(int channel=0;channel<3;channel++) {
+                            float value=Float.float16ToFloat(bytes.getShort(at+channel*2));
+                            MediumTransportSelfTest.require(Float.isFinite(value)&&value>=0,"invalid scattering HDR sample");
+                            mean[channel]+=value;
+                        }
+                        count++;
+                    }
+                    for(int channel=0;channel<3;channel++)mean[channel]/=count;
+                    return mean;
+                }
                 int offset=(height/2)*snapshot.rowBytes()+(width/2)*8;
                 return new float[]{Float.float16ToFloat(bytes.getShort(offset)),Float.float16ToFloat(bytes.getShort(offset+2)),Float.float16ToFloat(bytes.getShort(offset+4))};
             }
@@ -210,5 +258,20 @@ public final class MediumTransportNativeSelfTest {
     }
     private static void near(double value,double expected,double tolerance,String message) {
         MediumTransportSelfTest.require(Math.abs(value-expected)<tolerance,message+": "+value+" vs "+expected);
+    }
+    /** Integrates sigmaS * Li * HG * exp(-sigmaT * (camera + light distance)) on the slab. */
+    private static double directionalScatteringOracle(double g) {
+        double[][] offsets={{.5,.3333},{.25,.6667},{.75,.1111},{.125,.4444},
+            {.625,.7778},{.375,.2222},{.875,.5556},{.0625,.8889}};
+        double sum=0,tangent=Math.tan(Math.toRadians(15));int samples=0;
+        for(int y=height/4;y<height-height/4;y++)for(int x=width/4;x<width-width/4;x++)for(double[] offset:offsets) {
+            double dx=(2*(x+offset[0])/width-1)*tangent*width/height;
+            double dy=(1-2*(y+offset[1])/height)*tangent;
+            double cosine=1/Math.sqrt(1+dx*dx+dy*dy),length=4/cosine,rate=.3*(1+cosine);
+            double phase=(1-g*g)/(4*Math.PI*Math.pow(1+g*g+2*g*cosine,1.5));
+            sum+=.25*2*phase*(-Math.expm1(-rate*length))/rate;
+            samples++;
+        }
+        return sum/samples;
     }
 }

@@ -39,8 +39,9 @@ public final class PrimaryQueueNativeSelfTest {
             if(VulkanGpuSceneFrameSubmitter.diagnosticQueuedSubmissions.sum()!=before)
                 throw new AssertionError("serial control unexpectedly submitted queued work");
             var queued=run(true);
-            if(VulkanGpuSceneFrameSubmitter.diagnosticQueuedSubmissions.sum()-before!=queued.size())
-                throw new AssertionError("candidate fell back instead of submitting every queue case");
+            long expectedQueued=queued.keySet().stream().filter(PrimaryQueueNativeSelfTest::ordinarySurface).count();
+            if(VulkanGpuSceneFrameSubmitter.diagnosticQueuedSubmissions.sum()-before!=expectedQueued)
+                throw new AssertionError("ordinary surface cases did not all submit queued work: expected="+expectedQueued);
             for(var entry:serial.entrySet()) {
                 byte[] candidate=queued.get(entry.getKey());
                 if(!Arrays.equals(entry.getValue(),candidate)) {
@@ -53,7 +54,9 @@ public final class PrimaryQueueNativeSelfTest {
                 }
                 System.out.println("PrimaryQueue image="+entry.getKey()+" bytes="+candidate.length+" byteIdentical=true");
             }
-            System.out.println("PrimaryQueueNativeSelfTest passed: "+serial.size()+" HDR pairs; serial control and queued implementation; not timing evidence");
+            System.out.println("PrimaryQueueNativeSelfTest passed: "+serial.size()+" HDR pairs; ordinaryQueuedPairs="
+                    +expectedQueued+" nativeRoutePairs="+(queued.size()-expectedQueued)
+                    +"; exact per-case routes and serial/queue HDR parity; not timing evidence");
         } finally {
             if(previous==null)System.clearProperty(PROPERTY);else System.setProperty(PROPERTY,previous);
             if(previousDiagnostics==null)System.clearProperty("top.ceroxe.rt.medium.queueDiagnostics");
@@ -148,6 +151,7 @@ public final class PrimaryQueueNativeSelfTest {
         var request=RenderFrameRequest.builder(++sequence,width,height,camera).minimumSceneRevision(revision)
                 .clock(FrameClock.of(0,0)).environment(ENV).antiAliasing(new AntiAliasingState(samples))
                 .mediumTransport(MediumTransport.balanced().withMaxEvents(32)).primitiveBatch(primitives).build();
+        var routesBefore=routes();
         long deadline=System.nanoTime()+Duration.ofMinutes(5).toNanos();
         while(!(renderer.trySubmit(request) instanceof Renderer.FrameSubmitted)) {
             if(System.nanoTime()>deadline)throw new AssertionError("admission timeout: "+name);Thread.sleep(1);
@@ -155,6 +159,11 @@ public final class PrimaryQueueNativeSelfTest {
         while(System.nanoTime()<deadline) {
             var ready=renderer.pollFrame();
             if(ready.isPresent()) {var buffer=ready.orElseThrow().pixels();byte[] pixels=new byte[buffer.remaining()];buffer.get(pixels);
+                var actual=routes().subtract(routesBefore);
+                var expected=ordinarySurface(name)?new Routes(Boolean.getBoolean(PROPERTY)?1:0,0,0):
+                        new Routes(0,name.endsWith("footprint-tiles")?0:1,name.endsWith("footprint-tiles")?1:0);
+                if(!actual.equals(expected))throw new AssertionError("wrong exact submission route for "+name
+                        +" queued="+Boolean.getBoolean(PROPERTY)+": actual="+actual+" expected="+expected);
                 images.put(name,pixels);
                 String output=System.getProperty("top.ceroxe.rt.medium.queueImageDirectory");
                 if(output!=null) {
@@ -166,5 +175,16 @@ public final class PrimaryQueueNativeSelfTest {
             Thread.sleep(1);
         }
         throw new AssertionError("readback timeout: "+name);
+    }
+    private static boolean ordinarySurface(String name) {
+        return name.equals("opaque-clean")||name.equals("opaque-metallic");
+    }
+    private static Routes routes() {
+        return new Routes(VulkanGpuSceneFrameSubmitter.diagnosticQueuedSubmissions.sum(),
+                VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum(),
+                VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum());
+    }
+    private record Routes(long queued,long pbr,long optical) {
+        Routes subtract(Routes previous) {return new Routes(queued-previous.queued,pbr-previous.pbr,optical-previous.optical);}
     }
 }

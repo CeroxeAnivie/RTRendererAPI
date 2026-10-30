@@ -65,6 +65,8 @@ public final class CudaBoundaryMediumProductionNativeSelfTest {
                 var budgets=MediumTransport.balanced().withMaxEvents(32).withMaxDistance(30).withTransmittanceCutoff(0);
                 var single=List.of(new Volume(10,-1,1,a,0));
                 compare("outside-single",single,6,1,false,false,budgets,Medium.vacuum());
+                compare("mirrored-persistent",single,6,2,false,false,budgets,Medium.vacuum(),true);
+                compare("mirrored-frame-local-eight-SPP",single,6,8,true,false,budgets,Medium.vacuum(),true);
                 compare("inside-single",single,0,1,false,false,budgets,Medium.vacuum());
                 compare("nested-priority",List.of(new Volume(10,-2,2,a,1),new Volume(11,-1,1,b,9)),
                         6,2,false,false,budgets,Medium.vacuum());
@@ -281,20 +283,35 @@ public final class CudaBoundaryMediumProductionNativeSelfTest {
 
     private static void compare(String name,List<Volume> volumes,double cameraZ,int samples,boolean local,
                                 boolean exact,MediumTransport budget,Medium environment) throws Exception {
+        compare(name,volumes,cameraZ,samples,local,exact,budget,environment,false);
+    }
+    private static void compare(String name,List<Volume> volumes,double cameraZ,int samples,boolean local,
+                                boolean exact,MediumTransport budget,Medium environment,boolean mirrored) throws Exception {
         setup(List.of(),false);
         CameraState camera=camera(cameraZ,exact);
         var vacuum=capture(name+"-vacuum",request(camera,samples,budget,Medium.vacuum(),FramePrimitiveBatch.empty()));
         setup(volumes,local);
+        if(mirrored&&!local) {
+            var changes=SceneTransaction.builder(++revision);
+            for(var volume:volumes)changes.upsert(SceneInstance.builder(volume.identity,2)
+                    .transform(mirrored(volume.transform())).mediumBoundary(volume.boundary()).build());
+            apply(changes.build());
+        }
         FramePrimitiveBatch batch=FramePrimitiveBatch.empty();
         if(local) {
             var builder=FramePrimitiveBatch.builder();
-            for(var volume:volumes)builder.add(PrimitiveInstance.builder(2).transform(volume.transform())
+            for(var volume:volumes)builder.add(PrimitiveInstance.builder(2).transform(mirrored?mirrored(volume.transform()):volume.transform())
                     .mediumBoundary(volume.boundary()).build());
             batch=builder.build();
         }
         var actual=capture(name+"-native",request(camera,samples,budget,environment,batch));
         if(!volumes.isEmpty() || !environment.densityField().isUniform())nativeFrames++;
         compareFrames(name,volumes,cameraZ,samples,budget,environment,camera,vacuum,actual);
+    }
+    private static AffineTransform mirrored(AffineTransform transform) {
+        float[] elements=new float[12];transform.elements().get(elements);
+        elements[0]=-elements[0];elements[4]=-elements[4];elements[8]=-elements[8];
+        return new AffineTransform(elements);
     }
 
     private static void compareFrames(String name,List<Volume> volumes,double cameraZ,int samples,

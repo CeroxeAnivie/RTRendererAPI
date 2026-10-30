@@ -562,7 +562,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             }
             SubmissionDeferralReason reason = busy.getCause() instanceof VulkanMemoryBudgetRejectedException
                     ? SubmissionDeferralReason.RESOURCE_PRESSURE
-                    : SubmissionDeferralReason.PROVIDER_CAPACITY;
+                    : SubmissionDeferralReason.SCENE_UPDATE_BACKLOG;
             throw new SubmissionRejectedException(reason, busy.getMessage());
         } catch (RuntimeException failure) {
             throw fail("apply GPUScene generation", failure);

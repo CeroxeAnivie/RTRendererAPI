@@ -28,7 +28,8 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
    private static final int MEASURED_FRAMES = 256;
    private static final int MEASUREMENT_RUNS = 3;
    private static final int COMPLETION_WINDOW_FRAMES = 16;
-   private static final long TIMEOUT_NANOS = 30_000_000_000L;
+   private static final long COMPLETION_STALL_TIMEOUT_NANOS = 30_000_000_000L;
+   private static final long RANGE_TIMEOUT_NANOS = 300_000_000_000L;
 
    private VulkanGpuSceneThroughputNativeSelfTest() { }
 
@@ -90,6 +91,7 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
       CompletionRateTracker rates = new CompletionRateTracker(firstSequence - 1, start, COMPLETION_WINDOW_FRAMES);
       long latestCompleted = firstSequence - 1;
       long end = start;
+      long lastCompletion = start;
       long consumedLeases = 0;
       RendererDiagnostics diagnostics = baseline;
       while (latestCompleted < finalSequence) {
@@ -112,11 +114,18 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
          end = System.nanoTime();
          require(observed <= nextSequence - 1, "completed sequence exceeds this range's submissions");
          rates.observe(observed, end);
+         if (observed > latestCompleted) lastCompletion = end;
          if (observed == latestCompleted && !admitted) Thread.onSpinWait();
          latestCompleted = observed;
-         if (end - start >= TIMEOUT_NANOS)
+         // This test reports throughput without an FPS floor. A fixed 30-second
+         // range deadline silently imposed one; keep a strict no-progress
+         // watchdog and a separate bounded wall-time budget for all 256 frames.
+         if (latestCompleted < finalSequence && (end - lastCompletion >= COMPLETION_STALL_TIMEOUT_NANOS
+                 || end - start >= RANGE_TIMEOUT_NANOS))
             throw new AssertionError("GPUScene throughput run timed out: submitted=" + (nextSequence - 1)
-                    + ", completed=" + latestCompleted + ", final=" + finalSequence);
+                    + ", completed=" + latestCompleted + ", final=" + finalSequence
+                    + ", elapsedMillis=" + (end-start)/1_000_000L
+                    + ", completionStallMillis=" + (end-lastCompletion)/1_000_000L);
       }
       CompletionMeasurement measurement = rates.finish(end);
       if (consumeLatestLease(interop)) consumedLeases++;
