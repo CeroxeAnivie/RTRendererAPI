@@ -1,5 +1,23 @@
 # 质量验证与性能报告
 
+## 2026-10-31 完整 API 验收通过
+
+当前声明的 Windows x86_64 Vulkan RT 与 NVIDIA 运行契约已通过完整 `verifyApiClosure`。验收源码为 `79a8f2030aff28563d0fa1d3058d151a8ffdab1e`，Git tree 为 `2334c4887aaf487aff31ba134111c8cd1c579723`；验收开始与结束时 tracked 源树均干净。设备为本机 RTX 5080 Laptop GPU。
+
+完整运行于本地时间 2026-10-31 04:21:48 成功结束，耗时 7 分 53 秒：281 个 Gradle 任务，255 个执行、1 个缓存命中、25 个无需更新。14 个必需任务组和 76 个 Java 原生验收任务全部完成，没有失败或原生崩溃。
+
+| 验收项 | 结果 |
+| --- | --- |
+| 公共 API、core、NVIDIA provider、demo 的完整合同 | 通过 |
+| shader 源码与预编译 SPIR-V | 274 个变体、41,825,144 字节逐项匹配 |
+| 全部 core 原生、GPUScene、统一 API 与互操作 | 通过 |
+| 完整介质原生组合 | 通过；含 PBR 31 项/43 帧、光学 46 项/152 帧、组合 41 项/61 帧、金属 52 项/49 帧 |
+| NVIDIA 功能与组合 | DLSS、DLAA、NIS、NRD、RTXMU、FG、MFG 与自适应组合通过 |
+| 完整介质展厅 | 13 个预设，每个 8 帧，共 104 帧通过 |
+| 独立 Maven 消费者、发布校验和、完整运行包 | 通过；ZIP 内 2062 个文件逐项验证 |
+
+本轮产生的 34 份 Vulkan validation 日志共 53 次会话，均正常关闭；警告、错误与丢弃汇总均为零。完整任务原始报告原样归档于 [api-closure-full-result-20261031.json](data/api-closure-full-result-20261031.json)；源码身份、完整日志 SHA-256、逐份 validation 统计，以及实际三模块 JAR 和 ZIP 哈希见 [api-closure-final-20261031.json](data/api-closure-final-20261031.json)。记录明确绑定本轮验收源码和制品。
+
 ## 2026-10-31 完整门禁发现的阻断修复
 
 首轮 `verifyApiClosure` 完整执行 280 项任务，发现吞吐测试整段超时、镜像介质进出面、旧队列路由断言和动态灯光测试类改名四处阻断，原失败记录保留。后续还修复了场景收敛时的公共拒绝分类，以及本机 Khronos validation 1.4.350 多线程 deferred pipeline 完成登记竞争；诊断实例使用单个 host join，关闭诊断仍保留并行编译。
