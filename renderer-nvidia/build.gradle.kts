@@ -762,6 +762,7 @@ val nvidiaAcceptanceTaskNames = listOf(
     // performs Streamline preflight so a previous SDK lifecycle cannot poison generation.
     "nvidiaStreamlineFrameGenerationNativeSelfTest",
     "nvidiaStreamlineMultiFrameGenerationNativeSelfTest",
+    "nvidiaStreamlineAdaptiveFrameGenerationNativeSelfTest",
     "nvidiaNativeBridgeSelfTest",
     "nvidiaStreamlineFrameConstantsSelfTest",
     "nvidiaNrdFrameConstantsSelfTest",

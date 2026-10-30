@@ -1,4 +1,6 @@
 import java.nio.charset.StandardCharsets
+import groovy.json.JsonOutput
+import java.time.Instant
 import java.security.MessageDigest
 import java.util.HexFormat
 import java.util.zip.ZipFile
@@ -971,6 +973,83 @@ tasks.register("strictAcceptanceTest") {
     dependsOn(tasks.named("verifyReleaseChecksums"))
     dependsOn(":renderer-core:rendererCoreGpuSceneNativeGate")
     dependsOn(":renderer-nvidia:nvidiaNativeAcceptanceGate")
+}
+
+// A green bounded GPUScene gate does not establish the medium, generic-command,
+// gallery or packaged-distribution contracts. Keep its fast entry point and make
+// the complete release scope explicit in a separate, opt-in invocation.
+val apiClosureRequiredTasks = listOf(
+    ":check", ":renderer-api:check", ":renderer-core:check", ":renderer-nvidia:check", ":demos:hex-ball:check",
+    ":renderer-core:rendererCoreGpuSceneNativeGate",
+    ":renderer-core:rendererCoreNativeGate",
+    ":renderer-core:rendererCoreMediumNativeGate",
+    ":renderer-core:rendererCoreUnifiedApiNativeGate",
+    ":renderer-nvidia:nvidiaNativeAcceptanceGate",
+    ":demos:hex-ball:mediumGalleryNativeSelfTest",
+    ":verifyPublishedMavenConsumer", ":verifyReleaseChecksums", ":verifyRuntimeDistribution"
+)
+tasks.register("verifyApiClosure") {
+    group = "verification"
+    description = "Runs every current-platform API, medium, vendor, gallery and packaged-consumer release gate."
+    dependsOn(apiClosureRequiredTasks)
+    doLast {
+        val required = apiClosureRequiredTasks.map { project.tasks.getByPath(it) }
+        val graph = gradle.taskGraph.allTasks
+        val omitted = required.filter { !it.state.executed || it.state.failure != null }
+        check(omitted.isEmpty()) { "API closure has incomplete required tasks: " + omitted.map { it.path } }
+        val skippedNative = graph.filter { it is JavaExec && it.name.contains("Native")
+                && (!it.state.executed || it.state.skipMessage == "SKIPPED" || it.state.skipMessage == "NO-SOURCE") }
+        check(skippedNative.isEmpty()) { "API closure cannot skip native evidence: " + skippedNative.map { it.path } }
+        val report = layout.buildDirectory.file("reports/api-closure/result.json").get().asFile
+        report.parentFile.mkdirs()
+        report.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(linkedMapOf(
+            "passed" to true,
+            "completedAtUtc" to Instant.now().toString(),
+            "version" to project.version.toString(),
+            "scope" to "documented Windows x86_64 Vulkan RT and NVIDIA runtime contracts",
+            "requiredTasks" to required.map { task -> linkedMapOf("path" to task.path,
+                "executed" to task.state.executed, "upToDate" to task.state.upToDate) },
+            "nativeTasks" to graph.filter { it is JavaExec && it.name.contains("Native") }.map { task ->
+                linkedMapOf("path" to task.path, "executed" to task.state.executed,
+                    "upToDate" to task.state.upToDate) },
+            "artifacts" to listOf(
+                project(":renderer-api").tasks.named<Jar>("jar").get().archiveFile.get().asFile,
+                project(":renderer-core").tasks.named<Jar>("jar").get().archiveFile.get().asFile,
+                project(":renderer-nvidia").tasks.named<Jar>("jar").get().archiveFile.get().asFile,
+                tasks.named<Zip>("runtimeDistribution").get().archiveFile.get().asFile
+            ).map { artifact ->
+                val digest = MessageDigest.getInstance("SHA-256")
+                artifact.inputStream().use { input ->
+                    val buffer = ByteArray(65536)
+                    while (true) {
+                        val size = input.read(buffer)
+                        if (size < 0) break
+                        digest.update(buffer, 0, size)
+                    }
+                }
+                linkedMapOf("file" to artifact.name, "bytes" to artifact.length(),
+                    "sha256" to HexFormat.of().formatHex(digest.digest()))
+            }
+        ))) + "\n", StandardCharsets.UTF_8)
+        logger.lifecycle("Complete current-platform API closure evidence: {}", report)
+    }
+}
+
+// Reject subset selectors before executing any part of the complete gate. These
+// properties remain useful for focused development, but cannot certify a release.
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.path == ":verifyApiClosure" }) {
+        // A later failed invocation must not leave a previous green result looking current.
+        layout.buildDirectory.file("reports/api-closure/result.json").get().asFile.delete()
+        val selectors = listOf("externalSemaphoreParamsOnly", "shaderContractsOnly", "opticalBenchmark",
+            "opticalCaustics", "opticalVolumeCaustics", "opticalOnlyThinCase", "precompiledSceneOnly",
+            "productionBenchmark", "productionControl", "productionControlJar", "galleryTestScene", "galleryControlJar")
+        val active = selectors.filter { project.providers.gradleProperty(it).isPresent }
+        check(active.isEmpty()) { "verifyApiClosure requires full current-code tests; remove selectors: $active" }
+        check(gradle.startParameter.excludedTaskNames.isEmpty()) {
+            "verifyApiClosure does not allow excluded tasks: " + gradle.startParameter.excludedTaskNames
+        }
+    }
 }
 
 // The NVIDIA gate owns a real Vulkan device and Streamline's process-global pacer. Keep it

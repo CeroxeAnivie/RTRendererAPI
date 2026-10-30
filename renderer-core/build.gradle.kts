@@ -656,7 +656,7 @@ val nativeMediumTests = listOf("cudaMediumRuntimeNativeSelfTest", "cudaBuiltinSh
     "cudaPbrMediumCausticsProductionNativeSelfTest",
     "cudaOpticalMediumProductionNativeSelfTest", "vulkanQueuedFrameSlotNativeSelfTest")
 
-val unifiedApiNativeTests = listOf("vulkanModernFrameNativeSelfTest", "vulkanGenericIntegerTextureNativeSelfTest",
+val unifiedApiNativeTests = listOf("vulkanFrameDisplayTransformNativeSelfTest", "vulkanModernFrameNativeSelfTest", "vulkanGenericIntegerTextureNativeSelfTest",
     "vulkanGenericProceduralRayTracingNativeSelfTest", "vulkanGenericPipelineRetirementNativeSelfTest",
     "vulkanGenericGeometryBarrierNativeSelfTest", "vulkanGenericLogicOperationNativeSelfTest",
     "vulkanEvidenceRetentionNativeSelfTest", "vulkanGenericCommandNativeSelfTest",
