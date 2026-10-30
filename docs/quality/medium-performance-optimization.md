@@ -895,6 +895,10 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 正序 kernel 0.807241→0.797066 ms（下降 1.26%），关闭诊断 111.768264→112.883543 FPS（+1.00%）；反序 kernel 0.805046→0.793753 ms（下降 1.40%），关闭诊断 113.000539→112.040968 FPS（−0.85%）。没有稳定端到端收益，CUDA 源码和 manifest 两个文件均精确恢复；不继续为已拒绝候选追加完整 GPU 回归。[冻结制品与正反序数据](data/pbr-statistics-block-rejected-20261031.json)。
 
+### 撤回：只遍历有效灯掩码位
+
+参考 Godot 4.4 `4c311cbee68c0b66ff8ebb8b0defdd9979dd2a41`（MIT）`servers/rendering/renderer_rd/shaders/forward_clustered/scene_forward_clustered.glsl` 的有效位遍历。独立把本项目穷举分支从逐槽测试改为 `findLSB` 消费掩码，保持原升序浮点求和；没有搬入 subgroup 行为或增加 feature。1080p 8 帧 HDR 全字节一致。正序关闭诊断 114.094673→113.116613 FPS，散射 producer 3.450299→3.493522 ms；反序 113.881277→112.411592 FPS、3.432177→3.519958 ms。两种顺序均退化，GLSL 和 16 个 SPIR-V 全部恢复，不保留。[两种顺序及制品证据](data/scattering-mask-walk-rejected-20261031.json)。
+
 ### 撤回：独立采样点调度与平面 source 布局
 
 在已拒绝串行拆分之外，单独验收完整的 prepare→独立采样点 query 数据流：每个散射点独立 invocation，source 按 step 分平面，Vulkan 和 CUDA 消费者同时改变布局；保持相同位置、完整 PDF、阴影射线、采样数量和累计顺序。新增阶段 timestamp，并为并行诊断准备独占计数槽，避免原子争用。参考相同固定 PBRT-v4 wavefront 独立工作原则，没有复制外部代码。
