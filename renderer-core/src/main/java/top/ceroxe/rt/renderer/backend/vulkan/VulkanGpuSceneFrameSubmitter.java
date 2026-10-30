@@ -161,11 +161,13 @@ final class VulkanGpuSceneFrameSubmitter {
                 nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache,
                 temporal.nativeOpticalOpaqueRay(checked.request()),acceptedLightSlotUpperBound,
                 temporal.nativeSurfaceContinuation(checked.request())) : null;
-        var nativePbrData = nativePbrFrame ? CudaPbrMediumManager.scene(checked.request(),width,height,
+        var initialNativePbrData = nativePbrFrame ? CudaPbrMediumManager.scene(checked.request(),width,height,
                 acceptedLightSlotUpperBound,nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache,nativePbrScatteringFrame) : null;
         boolean reusePbrPrimary=nativePbrScatteringFrame
-                &&nativePbrData.transportPlan().kind()==top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM
+                &&initialNativePbrData.transportPlan().kind()==top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM
                 &&temporal.reusablePbrPrimary(checked.request())&&!checked.request().caustics().enabled();
+        var nativePbrData=reusePbrPrimary?CudaPbrMediumManager.cachedPrimaryScene(checked.request(),width,height,
+                acceptedLightSlotUpperBound,initialNativePbrData):initialNativePbrData;
         // The slot upper bound includes inactive holes. Covering that bound proves
         // every eligible light is enumerated, without a reservoir or PDF correction.
         boolean exhaustivePbrLights=reusePbrPrimary&&checked.request().mediumTransport().lightSamples()>0

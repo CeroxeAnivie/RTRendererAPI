@@ -40,6 +40,28 @@ public final class CudaPbrMediumAbiSelfTest {
             require(combined.scattering().compactContribution()&&combined.scattering().primaryOffset()==128+1920*1080*32,"combined path retained redundant primary geometry");
         }
         var medium=new Medium(new Rgb(.1f,.2f,.3f),Rgb.ZERO,new Rgb(.02f,0,0),2,1,0);
+        var cached=CudaPbrMediumAbi.planWithCachedPrimary(1920,1080,1,2,16,8,512L*1024*1024);
+        require(cached.pbr().compactColors()&&cached.pbr().packetBytes()==0,"cached primaries retained unused packet storage");
+        require(cached.direct().tilePixels()==1920*1080&&cached.pbr().tilePixels()==1920*1080/2,
+                "default cached scene must retain full scattering and two PBR tiles within the same budget");
+        require(cached.residentBytes()<=512L*1024*1024,"independent tiles exceeded coordinated residency");
+        for(int spp:new int[]{1,2,8})for(int lights:new int[]{0,2,15})for(int steps:new int[]{1,8,64}) {
+            var compact=CudaPbrMediumAbi.planWithCachedPrimary(37,23,spp,lights,16,steps,4L*1024*1024);
+            var p=compact.pbr();
+            require(compact.residentBytes()<=4L*1024*1024&&p.tilePixels()>0&&compact.direct().tilePixels()>0,
+                    "compact low-residency plan dropped paths or exceeded its cap");
+            require(p.transmittanceOffset()+(long)p.paths()*16<=p.emissionOffset()
+                    &&p.emissionOffset()+(long)p.paths()*16<=p.colorsOffset(),
+                    "in-place camera lanes overlap live final specular or light colors");
+            require(p.bytes()-p.colorsOffset()==(long)p.tilePaths()*p.connections()*32,
+                    "compact scratch must retain every light and SPP without camera duplication");
+            var header=ByteBuffer.allocate(CudaPbrMediumAbi.HEADER_BYTES).order(ByteOrder.nativeOrder());
+            for(int first=0;first<p.pixels();first+=p.tilePixels()) {
+                CudaPbrMediumAbi.updateTile(header,p,first,Math.min(p.tilePixels(),p.pixels()-first));
+                require(header.getInt(44)==p.transmittanceOffset()+(long)first*spp*16,
+                        "in-place camera alias lost global pixel identity across independent tiles");
+            }
+        }
         var a=new CudaBoundaryMediumAbi.Boundary(7,MediumBoundary.volume(medium).withPriority(-7));
         var b=new CudaBoundaryMediumAbi.Boundary(0x80000003,MediumBoundary.volume(medium).withPriority(Integer.MIN_VALUE));
         var frame=RenderFrameRequest.builder(1,31,23,CameraState.lookAt(0,0,0,0,0,-1).build())

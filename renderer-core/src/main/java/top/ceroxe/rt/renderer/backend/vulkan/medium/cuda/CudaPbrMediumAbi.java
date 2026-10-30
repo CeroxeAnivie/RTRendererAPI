@@ -23,7 +23,8 @@ public final class CudaPbrMediumAbi {
     public record Plan(int pixels,int samples,int tilePixels,int boundaryCount,int connections,int capacity,
             int sceneBytes,int stateOffset,int colorsOffset,int transmittanceOffset,int emissionOffset,long bytes,boolean endpointPackets) {
         public int paths(){return Math.multiplyExact(pixels,samples);}
-        public int packetBytes(){return endpointPackets?16:32+16*((capacity+1)/2);}
+        public boolean compactColors(){return endpointPackets&&stateOffset==colorsOffset;}
+        public int packetBytes(){return compactColors()?0:endpointPackets?16:32+16*((capacity+1)/2);}
         public int tilePaths(){return Math.multiplyExact(tilePixels,samples);}
         public long primaryBytes(){return Math.multiplyExact((long)paths(),PRIMARY_BYTES);}
     }
@@ -47,7 +48,8 @@ public final class CudaPbrMediumAbi {
             }
             long diagnostic=kind==ScatteringKind.DIRECT_UNIFORM
                     ?OpticalDetailedProfile.cameraScatteringShaderBytes(Math.multiplyExact(pixels,samples)):0;
-            if(pbr.pixels()!=pixels||pbr.samples()!=samples||pbr.tilePixels()!=tile
+            if(pbr.pixels()!=pixels||pbr.samples()!=samples
+                    ||pbr.tilePixels()!=tile&&(kind!=ScatteringKind.DIRECT_UNIFORM||!pbr.compactColors())
                     ||scatteringBytes!=Math.addExact(Math.addExact(bytes,diagnostic),ALLOCATION_ALLOWANCE))
                 throw new IllegalArgumentException("PBR/scattering contribution plan must share complete outputs, tile and residency");
         }
@@ -178,6 +180,43 @@ public final class CudaPbrMediumAbi {
         var scattering=CudaCameraScatteringAbi.contributionPlan(width,height,samples,steps,
                 Math.addExact(ALLOCATION_ALLOWANCE,Math.addExact(scatteringFixed,Math.multiplyExact(tile,scatteringScratch))));
         return new CombinedPlan(pbr,scattering);
+    }
+
+    /** Proven cached primaries need no packets or temporary camera colors. The CUDA
+     * consumer reads camera RGB/distance from its final diffuse lane before overwriting it.
+     * Independent tiles retain both complete outputs and minimize ownership exchanges. */
+    public static TransportPlan planWithCachedPrimary(int width,int height,int samples,int lights,int capacity,int steps,long residentLimit) {
+        dimensions(width,height,samples,0,lights,capacity);
+        if(steps<1||steps>64)throw new IllegalArgumentException("scattering steps must be within [1, 64]");
+        int pixels=Math.multiplyExact(width,height),paths=Math.multiplyExact(pixels,samples),connections=Math.addExact(lights,1);
+        long pbrFixed=Math.addExact(HEADER_BYTES,Math.multiplyExact((long)paths,32));
+        long scatteringFixed=Math.addExact(CudaCameraScatteringAbi.HEADER_BYTES,Math.multiplyExact((long)paths,32));
+        long diagnostic=OpticalDetailedProfile.cameraScatteringShaderBytes(paths);
+        long fixed=Math.addExact(Math.addExact(2*ALLOCATION_ALLOWANCE,diagnostic),Math.addExact(pbrFixed,scatteringFixed));
+        long pbrScratch=Math.multiplyExact((long)samples,Math.multiplyExact((long)connections,32));
+        long scatteringScratch=Math.multiplyExact((long)samples,Math.multiplyExact(steps+1L,16));
+        long available=residentLimit-fixed,maxPbrTile=Integer.MAX_VALUE/(long)connections;
+        long balanced=Math.min(Math.min((long)pixels,maxPbrTile),available/Math.addExact(pbrScratch,scatteringScratch));
+        if(available<0||balanced<1)throw new IllegalArgumentException("cached PBR/scattering outputs and one pixel scratch exceed residency");
+        long pbrTile=balanced,scatteringTile=balanced;
+        // The usual cases finish after testing 2 or 3 exchanges. Very small budgets
+        // retain the exact balanced fallback rather than spend unbounded CPU time planning.
+        search: for(int exchanges=2;exchanges<=64;exchanges++)for(int scatteringRounds=1;scatteringRounds<exchanges;scatteringRounds++) {
+            int pbrRounds=exchanges-scatteringRounds;
+            long candidatePbr=((long)pixels+pbrRounds-1)/pbrRounds;
+            long candidateScattering=((long)pixels+scatteringRounds-1)/scatteringRounds;
+            if(candidatePbr<=maxPbrTile&&Math.addExact(Math.multiplyExact(candidatePbr,pbrScratch),
+                    Math.multiplyExact(candidateScattering,scatteringScratch))<=available) {
+                pbrTile=candidatePbr;scatteringTile=candidateScattering;break search;
+            }
+        }
+        int trans=HEADER_BYTES,emission=Math.toIntExact(trans+(long)paths*16),colors=Math.toIntExact(pbrFixed);
+        var pbr=new Plan(pixels,samples,Math.toIntExact(pbrTile),0,connections,0,HEADER_BYTES,colors,colors,
+                trans,emission,Math.addExact(pbrFixed,Math.multiplyExact(pbrTile,pbrScratch)),true);
+        var scattering=CudaCameraScatteringAbi.contributionPlan(width,height,samples,steps,
+                Math.addExact(ALLOCATION_ALLOWANCE,Math.addExact(scatteringFixed,Math.multiplyExact(scatteringTile,scatteringScratch))));
+        return new TransportPlan(pbr,ScatteringKind.DIRECT_UNIFORM,scattering,null,null,null,
+                Math.addExact(Math.addExact(scattering.bytes(),diagnostic),ALLOCATION_ALLOWANCE));
     }
 
     public static long minimumBytes(int width,int height,int samples,int boundaries,int lightUpperBound,int capacity) {

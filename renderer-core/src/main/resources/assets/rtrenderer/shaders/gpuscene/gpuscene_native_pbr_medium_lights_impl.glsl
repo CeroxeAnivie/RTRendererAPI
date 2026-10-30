@@ -35,12 +35,14 @@ void main() {
 #ifdef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
     // This program is selected only for the shared, uniform cached primary proof.
     // Resolve format once, rather than carry optional packet stores through each query.
-    if((dispatch.storage.lanes[16].w&3u)!=3u||!endpointPacket||(dispatch.storage.lanes[6].w&255u)!=0u) {
+    if((dispatch.storage.lanes[16].w&7u)!=7u||!endpointPacket||(dispatch.storage.lanes[6].w&255u)!=0u) {
         atomicAdd(dispatch.storage.lanes[7].y,1u);return;
     }
     const bool colorEndpoints=true;
+    const bool compactColors=true;
 #else
     bool colorEndpoints=(dispatch.storage.lanes[16].w&2u)!=0u;
+    bool compactColors=(dispatch.storage.lanes[16].w&4u)!=0u;
 #endif
     uint capacity=dispatch.storage.lanes[6].w&255u,stride=endpointPacket?1u:2u+(capacity+1u)/2u;
     uint packetOffset=dispatch.storage.lanes[2].y/16u,colorOffset=dispatch.storage.lanes[16].y/16u;
@@ -52,7 +54,7 @@ void main() {
     uint primaryStride=(dispatch.storage.lanes[16].w&1u)!=0u?uint(extent.x)*uint(extent.y)*samples:1u;
 #endif
     for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
-        uint local=localPixel*samples+sampleIndex,source=(pixel*samples+sampleIndex)*(primaryStride==1u?13u:1u),index=paths+local*connections+light;
+        uint local=localPixel*samples+sampleIndex,source=(pixel*samples+sampleIndex)*(primaryStride==1u?13u:1u),index=(compactColors?0u:paths)+local*connections+light;
         uint packet=packetOffset+index*stride,outLane=colorOffset+index*2u;
         if(!colorEndpoints) {
             if(!endpointPacket)dispatch.storage.lanes[packet]=uvec4(0);
@@ -93,8 +95,13 @@ void main() {
             // Preserve the origin validation formerly performed by the CUDA packet walk.
             if(colorEndpoints&&(any(isnan(gsFrameCameraPosition()))||any(isinf(gsFrameCameraPosition()))))
                 atomicAdd(dispatch.storage.lanes[7].y,1u);
-            dispatch.storage.lanes[colorOffset+local*2u]=floatBitsToUint(vec4(localColor,colorEndpoints?position.w:0.0));
-            dispatch.storage.lanes[colorOffset+local*2u+1u]=uvec4(0);
+            if(compactColors) {
+                // Each CUDA path consumes its own camera lane before writing final diffuse.
+                dispatch.storage.lanes[dispatch.storage.lanes[2].w/16u+local]=floatBitsToUint(vec4(localColor,position.w));
+            } else {
+                dispatch.storage.lanes[colorOffset+local*2u]=floatBitsToUint(vec4(localColor,colorEndpoints?position.w:0.0));
+                dispatch.storage.lanes[colorOffset+local*2u+1u]=uvec4(0);
+            }
         }
         if(state.x==0u||shading==GPU_SCENE_SHADING_UNLIT)GS_PBR_SKIP_CONNECTION;
         vec3 direction,color;float distance=1e20,intensity,attenuation=1.0;bool shadow;

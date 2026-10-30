@@ -82,18 +82,21 @@ template<class StateType>
 __device__ bool resolve(unsigned char *buffer,int i,unsigned int &crossed) {
     using namespace rtr_boundary;
     unsigned int *h=(unsigned int *)buffer;const unsigned int capacity=h[27]&255u,stride=(h[27]&1024u)!=0u?4u:8u+4u*((capacity+1u)/2u),terminal=stride-4u;
-    const bool colorEndpoints=(h[67]&2u)!=0u;
+    const bool colorEndpoints=(h[67]&2u)!=0u,compactColors=(h[67]&4u)!=0u;
+    if(compactColors&&(!colorEndpoints||h[9]!=h[65]))return false;
     if(colorEndpoints&&((h[67]&1u)==0u||(h[27]&1024u)==0u||capacity!=0u
             ||h[7]!=0u||h[8]!=0u||((const int *)buffer)[24]>=0))return false;
     float4 *colors=(float4 *)(buffer+h[65]);
+    // Every path consumes its camera lane before publishing final diffuse in place.
+    const float4 cameraColor=compactColors?((const float4 *)(buffer+h[11]))[i]:colors[(unsigned int)i*2u];
     const unsigned int *packets=(const unsigned int *)(buffer+h[9]);
     const unsigned int *camera=colorEndpoints?nullptr:packets+(unsigned int)i*stride;
     StateType receiver;clear(&receiver);receiver.transport=make_float4(1.f,1.f,1.f,((float *)buffer)[19]);
     if(!initializeVolumes(buffer,&receiver))return false;
-    float hit=colorEndpoints?colors[(unsigned int)i*2u].w:__uint_as_float(camera[terminal]);
+    float hit=colorEndpoints?cameraColor.w:__uint_as_float(camera[terminal]);
     float end=hit>=0.f?hit:((float *)buffer)[19];
     if(!walk(buffer,camera,&receiver,end,true,crossed))return false;
-    float3 diffuse=rgb(colors[(unsigned int)i*2u]),specular=rgb(colors[(unsigned int)i*2u+1u]);
+    float3 diffuse=rgb(cameraColor),specular=compactColors?make_float3(0.f):rgb(colors[(unsigned int)i*2u+1u]);
     float3 additionalRadiance=make_float3(0.f);
     const unsigned long long additionalOffset=((const unsigned long long *)(buffer+272))[0];
     if(additionalOffset!=0ull) {
@@ -103,7 +106,7 @@ __device__ bool resolve(unsigned char *buffer,int i,unsigned int &crossed) {
     float diffuseDistance=0.f,specularDistance=0.f,diffuseWeight=0.f,specularWeight=0.f;
     const unsigned int count=h[64],paths=h[66];
     if(peak(rgb(receiver.transport))>0.f)for(unsigned int light=0u;light<count;++light) {
-        const unsigned int index=paths+(unsigned int)i*count+light;
+        const unsigned int index=(compactColors?0u:paths)+(unsigned int)i*count+light;
         float4 d=colors[index*2u],s=colors[index*2u+1u];
         if(peak(rgb(d))+peak(rgb(s))<=0.f)continue;
         const unsigned int *packet=colorEndpoints?nullptr:packets+index*stride;

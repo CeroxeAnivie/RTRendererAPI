@@ -134,6 +134,14 @@ final class CudaPbrMediumManager implements AutoCloseable {
     synchronized RtGpuBuffer primaryTarget(FrameScene scene) {
         checkOpen();return onNative(()->{ensureCapacity(scene.plan,true);return primary;});
     }
+    static FrameScene cachedPrimaryScene(RenderFrameRequest frame,int width,int height,int lights,FrameScene original) {
+        if(original.transportPlan==null||original.transportPlan.kind()!=CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM
+                ||original.plan.boundaryCount()!=0||original.assets.density.environmentOffset()>=0)
+            throw new IllegalArgumentException("compact PBR residency requires uniform cached primaries");
+        var transport=CudaPbrMediumAbi.planWithCachedPrimary(width,height,original.plan.samples(),lights,
+                frame.mediumTransport().maxEvents(),frame.mediumTransport().scatteringSteps(),residentLimit());
+        return new FrameScene(transport.pbr(),frame,original.assets.boundaries,new int[0],original.assets.density,transport);
+    }
     private CudaCameraMediumManager.Prepared prepareOnNative(FrameScene scene,GpuSceneRayTracingPipeline primaryProducer,
             GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan,
             CausticPhotonPlan photonPlan,GpuSceneRayTracingPipeline photonPipeline,RtGpuBuffer photonBuffer,
@@ -150,6 +158,8 @@ final class CudaPbrMediumManager implements AutoCloseable {
             throw new IllegalArgumentException("cached PBR primary does not belong to the current uniform frame allocation");
         boolean planarPrimary=additionalRadiance!=null&&additionalRadiance.primaryAddress()!=0;
         boolean colorEndpoints=planarPrimary&&plan.endpointPackets()&&scene.assets.density.environmentOffset()<0;
+        if(plan.compactColors()&&!colorEndpoints)
+            throw new IllegalArgumentException("compact PBR colors require the current cached primary proof");
         var selectedResolve=plan.boundaryCount()==0&&scene.assets.density.environmentOffset()<0?uniformResolve:resolve;
         if(statistics==null)statistics=cuda.allocateHost(CudaPbrMediumAbi.STATISTICS_BYTES);
         if(additionalRadiance!=null&&additionalRadiance.bytes()!=Math.multiplyExact((long)plan.paths(),16))
@@ -165,7 +175,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                         additionalRadiance!=null&&additionalRadiance.includesCameraEmission());
                 // Bit 0 selects primary field planes. Bit 1 reuses color.w endpoints
                 // only for the proven uniform, interface-free cached-primary path.
-                metadata.asByteBuffer().order(ByteOrder.nativeOrder()).putInt(268,(planarPrimary?1:0)|(colorEndpoints?2:0));
+                metadata.asByteBuffer().order(ByteOrder.nativeOrder()).putInt(268,(planarPrimary?1:0)|(colorEndpoints?2:0)|(plan.compactColors()?4:0));
                 int bytes=initial?uploadBytes:CudaPbrMediumAbi.HEADER_BYTES;
                 RtGpuTimestampPool.Capture primaryTiming=OpticalFrameTimings.ENABLED&&!colorEndpoints
                         ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumPrimaryPackets",new String[]{"start","end"}):null;
