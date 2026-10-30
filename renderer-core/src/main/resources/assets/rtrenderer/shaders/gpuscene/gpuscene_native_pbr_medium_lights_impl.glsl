@@ -32,12 +32,25 @@ void main() {
     uint localPixel=gl_LaunchIDEXT.x/connections,light=gl_LaunchIDEXT.x%connections;
     uint paths=dispatch.storage.lanes[16].z,pixel=dispatch.firstPixel+localPixel;
     bool endpointPacket=(dispatch.storage.lanes[6].w&1024u)!=0u;
+#ifdef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
+    // This program is selected only for the shared, uniform cached primary proof.
+    // Resolve format once, rather than carry optional packet stores through each query.
+    if((dispatch.storage.lanes[16].w&3u)!=3u||!endpointPacket||(dispatch.storage.lanes[6].w&255u)!=0u) {
+        atomicAdd(dispatch.storage.lanes[7].y,1u);return;
+    }
+    const bool colorEndpoints=true;
+#else
     bool colorEndpoints=(dispatch.storage.lanes[16].w&2u)!=0u;
+#endif
     uint capacity=dispatch.storage.lanes[6].w&255u,stride=endpointPacket?1u:2u+(capacity+1u)/2u;
     uint packetOffset=dispatch.storage.lanes[2].y/16u,colorOffset=dispatch.storage.lanes[16].y/16u;
     GsPbrStorage primary=GsPbrStorage(dispatch.primaryAddress);
     ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
+#ifdef RTRENDERER_PBR_LIGHT_OPAQUE_ONLY
+    uint primaryStride=uint(extent.x)*uint(extent.y)*samples;
+#else
     uint primaryStride=(dispatch.storage.lanes[16].w&1u)!=0u?uint(extent.x)*uint(extent.y)*samples:1u;
+#endif
     for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
         uint local=localPixel*samples+sampleIndex,source=(pixel*samples+sampleIndex)*(primaryStride==1u?13u:1u),index=paths+local*connections+light;
         uint packet=packetOffset+index*stride,outLane=colorOffset+index*2u;
