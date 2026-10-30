@@ -13,7 +13,8 @@ import top.ceroxe.rt.renderer.api.*;
 /** Explicit GPU gate: feature ablations, finite HDR pixels, persistent/transient parity and images. */
 public final class MediumGalleryNativeSelfTest {
     private static final int WIDTH=160,HEIGHT=90,FRAMES=8;
-    private static final Path OUTPUT=Path.of("build/reports/medium-gallery").toAbsolutePath();
+    private static final Path OUTPUT=Path.of(System.getProperty("top.ceroxe.rt.gallery.output",
+            "build/reports/medium-gallery")).toAbsolutePath();
     public static void main(String[] arguments) throws Exception {
         Files.createDirectories(OUTPUT);
         String onlyPreset=System.getProperty("top.ceroxe.rt.gallery.onlyPreset");
@@ -47,6 +48,13 @@ public final class MediumGalleryNativeSelfTest {
                     var output=renderer.awaitFrame(Duration.ofSeconds(120)).orElseThrow(()->new AssertionError("GPU frame timed out"));
                     var bytes=output.pixels().order(ByteOrder.LITTLE_ENDIAN);
                     require(output.format()==TextureFormat.RGBA16_FLOAT,"linear HDR output");
+                    // Outside performance measurement: preserve every half-float channel before display mapping.
+                    if (Boolean.getBoolean("top.ceroxe.rt.gallery.rawHdr")) {
+                        var raw = bytes.duplicate(); raw.position(0); raw.limit(output.rowBytes()*HEIGHT);
+                        try (var channel=java.nio.channels.FileChannel.open(OUTPUT.resolve(variant.getKey()+"-"+frame+".rgba16f"),
+                                java.nio.file.StandardOpenOption.CREATE,java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
+                                java.nio.file.StandardOpenOption.WRITE)) { while(raw.hasRemaining())channel.write(raw); }
+                    }
                     for (int y=0;y<HEIGHT;y++) for (int x=0;x<WIDTH;x++) for (int c=0;c<3;c++) {
                         float value=Float.float16ToFloat(bytes.getShort(y*output.rowBytes()+x*8+c*2));
                         require(Float.isFinite(value) && value>=0,"finite nonnegative HDR: "+variant.getKey());

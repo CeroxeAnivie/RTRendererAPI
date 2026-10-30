@@ -209,6 +209,9 @@ tasks.register<JavaExec>("mediumGalleryPerformanceBenchmark") {
             }
         }.files)
     mainClass.set("demo.MediumGalleryPerformanceBenchmark")
+    providers.gradleProperty("galleryControlJar").orNull?.let { controlJar ->
+        classpath = files(file(controlJar), classpath.filter { !it.name.startsWith("renderer-core-") })
+    }
     providers.gradleProperty("galleryPerformanceArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
 }
 
@@ -253,6 +256,11 @@ tasks.register<JavaExec>("mediumGalleryNativeSelfTest") {
             }
         }.files)
     mainClass.set("demo.MediumGalleryNativeSelfTest")
+    providers.gradleProperty("galleryControlJar").orNull?.let { controlJar ->
+        classpath = files(file(controlJar), classpath.filter { !it.name.startsWith("renderer-core-") })
+    }
+    providers.gradleProperty("galleryOutput").orNull?.let { systemProperty("top.ceroxe.rt.gallery.output", it) }
+    if (providers.gradleProperty("galleryRawHdr").isPresent) systemProperty("top.ceroxe.rt.gallery.rawHdr", "true")
     providers.gradleProperty("galleryTestScene").orNull?.let { systemProperty("top.ceroxe.rt.gallery.onlyPreset",it) }
     val validationLog = layout.buildDirectory.file("reports/medium-gallery/validation.jsonl")
     systemProperty("top.ceroxe.rt.validation.logPath", validationLog.get().asFile.absolutePath)
