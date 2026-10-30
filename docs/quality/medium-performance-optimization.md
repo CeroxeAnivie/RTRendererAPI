@@ -450,3 +450,19 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 三轮各 120 帧，360 帧预热，测前 GPU 0 均为 0%。候选观测窗口 14.019467 ms/帧、71.329390 FPS，观测开销 7.71%，在用户允许的 10% 内，最终 FPS 来自关闭全部诊断的独立窗口。墙钟新第一名 PBR fence 6.010726 ms/帧、428.741 ms/秒、42.874%；散射完成同步 4.543996 ms、324.120 ms/秒、32.412%。67,506 事件、零丢样，严格包含和互斥求和通过。GPU 工作不另加到 fence 主表。
 
 正确性：8 帧 HDR 全字节一致，31 项 PBR、15 项介质组合、14 项相机散射检查全部通过，四份 validation 零 warning/error。源码 manifest、PBR ABI 和跨线程 wall timeline 契约通过。正式打包制品仅相对性能制品更新 manifest 中两个适配源的 byte/hash，运行类与 CUDA 源码完全相同，两个 hash 均留档。完整三轮、观测开销和新表：[pbr-uniform-state-20261031.json](data/pbr-uniform-state-20261031.json)、[排名 CSV](data/pbr-uniform-state-ranked-20261031.csv)。
+
+
+### 限定第三项：主射线 packet 避免冗余 any-hit
+
+主射线原先无条件 `NoOpaque`，即使 CPU 已严格证明所有可见实例都双面、无 alpha/overlay/visibility 排除、无介质边界。现在复用更强的 shadow-blocker proof 选择 `Opaque`，保留完整 closest-hit 材质/纹理/法线与 payload 着色，未替换为简化材质；证明不成立时仍收集边界并执行原 any-hit。参考同一 Falcor `759aad033ff610fb0d82c74f7e0a508d0096d5f2`（BSD-3-Clause）按场景是否需要 alpha/candidate 处理选择追踪路径的方式，独立适配 Vulkan primary packet。
+
+| 指标 | 对照 | 候选 | 改善 |
+| --- | ---: | ---: | ---: |
+| 主射线 packet GPU，ms/帧 | 1.730851 | 1.578705 | −8.79% |
+| 三轮主射线降幅 | — | — | 11.53% / 6.50% / 8.19% |
+| 整条 PBR，ms/帧 | 6.591314 | 6.182057 | −6.21% |
+| 关闭诊断原生 FPS | 75.293187 | 76.161664 | +1.15% |
+
+360 帧预热、3×120 完成帧，测前 GPU 0 均为 0%。候选观测窗口 13.135243 ms/帧，76.131062 FPS；观测开销 0.04%，满足 10% 要求。67,502 事件、零丢样，严格包含和互斥求和通过。最新 GPU 排名：灯光 packet 1.959591 ms、主射线 packet 1.578705 ms、CUDA 解析 1.204716 ms、贡献 restore 0.146380 ms。
+
+8 帧 HDR 与上轮对照全字节一致，31 项 PBR、15 项介质组合检查通过，三份 validation 零 warning/error；8 个受影响 SPIR-V 变体重新编译。保留确定收益并上传；最终合并验收另用本次开始前冻结制品比较，不拼接各轮 FPS 来算总收益。证据：[pbr-primary-opaque-20261031.json](data/pbr-primary-opaque-20261031.json)、[完整排名](data/pbr-primary-opaque-ranked-20261031.csv)。

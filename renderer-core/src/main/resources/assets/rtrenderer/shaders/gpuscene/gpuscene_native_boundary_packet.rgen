@@ -85,8 +85,13 @@ void main() {
         payload.emissiveAndMetallic=vec4(0);payload.transmissionIor=vec4(0,1,0,0);
         payload.state=uvec4(0u,GS_PAYLOAD_RADIANCE_QUERY,0u,0u);payload.surfaceState=uvec4(0);
         payload.compositeState=vec4(0);payload.launchInfo=launch;payload.mediumBoundary=uvec4(item,0,0,0);
-        // Every volume interface is collected and ignored by the dedicated any-hit stage.
-        traceRayEXT(sceneTlas,gl_RayFlagsNoOpaqueEXT,0xff,0,0,0,origin,epsilon,direction,1e20,0);
+        // The stronger shadow-blocker proof also admits every radiance hit:
+        // no interfaces, alpha, sidedness, visibility or overlay rejection.
+        // Keep closest-hit payload shading, but avoid redundant any-hit dispatch.
+        // Without that proof, collect every volume interface as before.
+        uint rayFlags=(gsFrame.words[GPU_SCENE_FRAME_FEATURE_FLAGS_WORD]&GPU_SCENE_FEATURE_FLAG_OPAQUE_SHADOW_RAY)!=0u
+            ?gl_RayFlagsOpaqueEXT:gl_RayFlagsNoOpaqueEXT;
+        traceRayEXT(sceneTlas,rayFlags,0xff,0,0,0,origin,epsilon,direction,1e20,0);
         gsNativeStorePayload(item,uvec4(pixelIndex,sampleIndex,1u,1u));
     }
 }

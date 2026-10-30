@@ -50,5 +50,5 @@ try {
         if($Mode -eq 'timings'){Copy-Item 'build/reports/medium-performance/*wall-timeline-round-*.json' $runDir -Force}
         if($Mode -eq 'profile'){Copy-Item 'build/reports/medium-performance/*shader-profile-round-*.json' $runDir -Force}
     }
-    Get-Content (Join-Path $runDir 'run.log') | Select-String 'GalleryPerf round=|frames=8|验收通过' | ForEach-Object { $_.Line }
+    Get-Content (Join-Path $runDir 'run.log') | Select-String 'GalleryPerf round=|frames=8|验收通过' | ForEach-Object { $_.Line -replace ' profile=.*$', '' }
 } finally { Pop-Location }
