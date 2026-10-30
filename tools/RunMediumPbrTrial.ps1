@@ -1,7 +1,8 @@
 param([Parameter(Mandatory=$true)][string]$TrialDirectory,
       [Parameter(Mandatory=$true)][string]$RuntimeClasspathFile,
       [ValidateSet('control','candidate')][string]$Variant='candidate',
-      [ValidateSet('profile','timings','off','image')][string]$Mode='profile', [string]$Label='first', [int]$Warmup=360)
+      [ValidateSet('profile','timings','off','image')][string]$Mode='profile', [string]$Label='first', [int]$Warmup=360,
+      [ValidateRange(1,1000000)][int]$Frames=120,[ValidateRange(1,10000)][int]$Rounds=3)
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -36,7 +37,7 @@ try {
         $enabled=if($Mode -eq 'profile'){'true'}else{'false'}
         $timings=if($Mode -eq 'timings'){'true'}else{'false'}
         $invokeArgs=$javaOptions+@('-cp',$classpath,'demo.MediumGalleryPerformanceBenchmark',
-            "--warmup=$Warmup",'--frames=120','--rounds=3',"--profile=$timings","--shaderProfile=$enabled","--wallProfile=$timings")
+            "--warmup=$Warmup","--frames=$Frames","--rounds=$Rounds","--profile=$timings","--shaderProfile=$enabled","--wallProfile=$timings")
     }
     # Windows PowerShell reports normal native stderr as ErrorRecord under Stop.
     $ErrorActionPreference='Continue'

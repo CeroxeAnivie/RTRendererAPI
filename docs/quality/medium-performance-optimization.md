@@ -1009,3 +1009,9 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | **互斥墙钟求和** | **8.760442** | **1000.000** | **100.000%** | **增加 1.12%** |
 
 1080p 8 帧 HDR、query/no-query 各 33 帧灯光及各 12 帧 cached-primary 矩阵全部与本轮冻结对照全字节一致。四套原生生产回归通过，13 份正式 validation 零 warning/error/drop、会话均正常关闭；全 298 份 shader 与源码精确一致。没有放宽图像或解析误差阈值。[全部窗口和验收证据](data/pbr-static-color-endpoints-20261031.json)、[新完整排名](data/pbr-static-color-endpoints-ranked-20261031.json)。
+
+### 撤回：终点携带起点无效标记
+
+在 `1f85c7f` 上用正无穷终点承载非有限起点，交给原 CUDA finite 检查拒绝发布，尝试替代 shader 逐连接原子失败计数。首窗灯光包 1.017657→1.012266 ms/帧，仅变化 0.53%，关闭诊断 117.709364→117.000231 FPS，未证明明确目标收益。GLSL 和 24 份 SPIR-V 全部恢复，没有追加全量回归或宣称正确性通过。冻结制品和 patch 留于 `build/pbr-endpoint-validity`。[原始证据](data/pbr-endpoint-validity-rejected-20261031.json)。
+
+冻结 benchmark 工具增加可选 `-Frames`、`-Rounds`，保留原 120 帧×3 轮默认值。长窗口验收可指定 `-Warmup 1200 -Frames 600 -Rounds 5`；仍记录相同 JAR SHA、初始 GPU 状态、真实请求预算和 CSV，禁止覆盖已有标签证据。
