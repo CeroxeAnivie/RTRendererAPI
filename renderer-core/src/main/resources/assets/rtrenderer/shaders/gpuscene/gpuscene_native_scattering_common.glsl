@@ -1,5 +1,8 @@
 #ifndef GS_NATIVE_SCATTERING_COMMON_GLSL
 #define GS_NATIVE_SCATTERING_COMMON_GLSL
+#ifndef GS_CAMERA_SCATTERING_STAGE_COUNT
+#define GS_CAMERA_SCATTERING_STAGE_COUNT 15u
+#endif
 // Light geometry and surface visibility use the retained production scene. This stage
 // does not integrate camera radiance; pinned LuxCore CUDA consumes the source samples.
 float gsScatteringPhase(float cosine,float g) {
@@ -15,17 +18,31 @@ vec3 gsScatteringShadow(vec3 position,vec3 direction,float distance,vec3 sigma,f
 }
 #ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
 void gsScatteringProfileAdd(uint record,uint stage,uint64_t started){
-    if(started==0ul)return;uint word=((record/65536u)*12u+stage)*2u;uint64_t ended=clockRealtimeEXT();
+    if(started==0ul)return;uint word=((record/65536u)*GS_CAMERA_SCATTERING_STAGE_COUNT+stage)*2u;uint64_t ended=clockRealtimeEXT();
     GsScatteringDiagnostic target=GsScatteringDiagnostic(dispatch.reserved);
     target.values[word]+=ended-started;target.values[word+1u]+=1ul;
+}
+void gsScatteringProfileRecord(bool profileEnabled,uint record,uint stage,uint64_t ticks,uint64_t calls){
+    if(!profileEnabled||dispatch.reserved==0ul||ticks==0ul)return;
+    uint word=((record/65536u)*GS_CAMERA_SCATTERING_STAGE_COUNT+stage)*2u;
+    GsScatteringDiagnostic target=GsScatteringDiagnostic(dispatch.reserved);
+    target.values[word]+=ticks;target.values[word+1u]+=calls;
+}
+void gsScatteringProfileRecord(bool profileEnabled,uint record,uint stage,uint64_t ticks){
+    gsScatteringProfileRecord(profileEnabled,record,stage,ticks,1ul);
 }
 uint64_t gsScatteringProfileStart(bool enabled){if(!enabled)return 0ul;return clockRealtimeEXT();}
 vec3 gsScatteringShadowProfile(vec3 position,vec3 direction,float distance,vec3 sigma,float integrationLimit,uint record){
     bool profileActive=dispatch.reserved!=0ul&&(record%65536u)==0u;
+    uint64_t probeTicks,fallbackTicks,anyHitTicks,closestHitTicks;
+    uint anyHitCalls,closestHitCalls;
+    vec3 surface=gsShadowTransmittanceDetailed(position,direction,direction,distance,profileActive,
+        probeTicks,fallbackTicks,anyHitTicks,anyHitCalls,closestHitTicks,closestHitCalls);
+    gsScatteringProfileRecord(profileActive,record,5u,probeTicks);
+    gsScatteringProfileRecord(profileActive,record,12u,fallbackTicks);
+    gsScatteringProfileRecord(profileActive,record,13u,anyHitTicks,uint64_t(anyHitCalls));
+    gsScatteringProfileRecord(profileActive,record,14u,closestHitTicks,uint64_t(closestHitCalls));
     uint64_t started=gsScatteringProfileStart(profileActive);
-    vec3 surface=gsShadowTransmittance(position,direction,direction,distance);
-    gsScatteringProfileAdd(record,5u,started);
-    started=gsScatteringProfileStart(profileActive);
     vec3 attenuation=exp(-sigma*min(distance,integrationLimit));
     gsScatteringProfileAdd(record,6u,started);
     return surface*attenuation;
@@ -59,9 +76,14 @@ vec3 gsScatteringLightProfile(uint slot,vec3 position,vec3 rayDirection,float g,
     vec3 visibility=vec3(1);
     if((flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u){
         float shadowDistance=max(distance-2.0*gsRayEpsilon(position),gsRayEpsilon(position));
-        started=gsScatteringProfileStart(profileActive);
-        visibility=gsShadowTransmittance(position,direction,direction,shadowDistance);
-        gsScatteringProfileAdd(record,5u,started);
+        uint64_t probeTicks,fallbackTicks,anyHitTicks,closestHitTicks;
+        uint anyHitCalls,closestHitCalls;
+        visibility=gsShadowTransmittanceDetailed(position,direction,direction,shadowDistance,profileActive,
+            probeTicks,fallbackTicks,anyHitTicks,anyHitCalls,closestHitTicks,closestHitCalls);
+        gsScatteringProfileRecord(profileActive,record,5u,probeTicks);
+        gsScatteringProfileRecord(profileActive,record,12u,fallbackTicks);
+        gsScatteringProfileRecord(profileActive,record,13u,anyHitTicks,uint64_t(anyHitCalls));
+        gsScatteringProfileRecord(profileActive,record,14u,closestHitTicks,uint64_t(closestHitCalls));
         started=gsScatteringProfileStart(profileActive);
         visibility*=exp(-sigma*min(shadowDistance,integrationLimit));
         gsScatteringProfileAdd(record,6u,started);

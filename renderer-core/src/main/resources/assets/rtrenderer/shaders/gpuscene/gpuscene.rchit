@@ -1,6 +1,9 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
+#extension GL_EXT_shader_realtime_clock : require
+#endif
 
 #include "gpuscene_common.glsl"
 
@@ -38,9 +41,20 @@ vec3 gsBoundaryHitPoint(vec3 a,vec3 b,vec3 c,vec2 bary) {
 
 void main()
 {
+#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
+    bool profileShadow=payload.state.y==GS_PAYLOAD_SHADOW_QUERY&&payload.state.z!=0u;
+    uint64_t shadowStarted=profileShadow?clockRealtimeEXT():0ul;
+#endif
     GS_DETAIL_BEGIN(24u);
     if (payload.state.y == GS_PAYLOAD_SHADOW_QUERY) {
         payload.state.x = 1u;
+#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
+        if(profileShadow) {
+            uint64_t elapsed=clockRealtimeEXT()-shadowStarted;
+            payload.state.z=uint(elapsed);
+            payload.state.w=uint(elapsed>>32u);
+        }
+#endif
         GS_DETAIL_END();return;
     }
 

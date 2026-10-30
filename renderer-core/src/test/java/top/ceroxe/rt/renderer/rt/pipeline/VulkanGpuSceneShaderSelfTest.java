@@ -199,8 +199,28 @@ public final class VulkanGpuSceneShaderSelfTest {
       require(runtime.contains("rayPayloadEXTGsVisibilityPayload")
                       && runtime.contains("GsVisibilityPayloadhit=visibility")
                       && runtime.contains("traceRayEXT(") && runtime.contains("event<events")
-                      && runtime.contains("remaining=max(remaining-distance-epsilon,0.0)"),
+                      && runtime.contains("remaining=max(remaining-distance-epsilon,0.0)")
+                      && runtime.contains("gl_RayFlagsNoOpaqueEXT")
+                      && runtime.contains("gl_RayFlagsSkipClosestHitShaderEXT")
+                      && runtime.contains("GS_VISIBILITY_STATE_OPAQUE_PROBE"),
               "ordered surface shadows must trace compact visibility events within event and distance budgets");
+      String visibilityAny = read(ROOT + "gpuscene_visibility.rahit");
+      require(visibilityAny.contains("GS_VISIBILITY_STATE_TRANSMISSION_FOUND")
+                      && visibilityAny.contains("terminateRayEXT")
+                      && visibilityAny.contains("ignoreIntersectionEXT"),
+              "opaque probes must stop on opaque blockers while continuing through transparent and masked hits");
+      String scatteringRuntime = readRaw(ROOT + "gpuscene_native_scattering_common.glsl");
+      String scatteringRaygen = readRaw(ROOT + "gpuscene_native_scattering_lights.rgen");
+      require(runtime.contains("gsShadowVisibilityDetailed(")
+                      && scatteringRuntime.contains("gsScatteringProfileRecord(profileActive,record,12u,fallbackTicks)")
+                      && scatteringRuntime.contains("gsScatteringProfileRecord(profileActive,record,13u,anyHitTicks,uint64_t(anyHitCalls))")
+                      && scatteringRuntime.contains("gsScatteringProfileRecord(profileActive,record,14u,closestHitTicks,uint64_t(closestHitCalls))")
+                      && scatteringRaygen.contains("GS_CAMERA_SCATTERING_STAGE_COUNT 15u")
+                      && visibilityAny.contains("gsVisibilityRecordAnyHit")
+                      && visibilityAny.contains("clockRealtimeEXT")
+                      && readRaw(ROOT + "gpuscene.rchit").contains("profileShadow")
+                      && top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_STAGES == 15,
+              "camera-scattering diagnostics must separate traversal, hit shaders, and transmission fallback");
       require(read(ROOT + "gpuscene_lighting.glsl")
                       .contains("inner == outer ? step(outer, cone) : smoothstep(outer, inner, cone)"),
               "spot lights must define deterministic equal-cone behavior");

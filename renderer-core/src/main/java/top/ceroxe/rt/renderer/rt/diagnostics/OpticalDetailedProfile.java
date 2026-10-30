@@ -12,11 +12,12 @@ public final class OpticalDetailedProfile {
     public static final boolean SHADERS=ENABLED&&Boolean.getBoolean("top.ceroxe.rt.medium.opticalShaderProfile");
     public static final boolean CAMERA_SCATTERING_SHADERS=Boolean.getBoolean("top.ceroxe.rt.medium.cameraScatteringShaderProfile");
     public static final int GROUP=Integer.getInteger("top.ceroxe.rt.medium.opticalShaderProfileGroup",0);
-    public static final int STAGES=176,STRIDE=8192,CAMERA_SCATTERING_STAGES=12,CAMERA_SCATTERING_STRIDE=65536;
+    public static final int STAGES=176,STRIDE=8192,CAMERA_SCATTERING_STAGES=15,CAMERA_SCATTERING_STRIDE=65536;
     private static final String[] CAMERA_SCATTERING_STAGE_NAMES={"primaryRayAndHitOrCacheLoad","lightRangeAndWeight",
-            "candidateReservoirUpdate","segmentSamplingAndPosition","sunPhaseEvaluation","shadowRayVisibility",
+            "candidateReservoirUpdate","segmentSamplingAndPosition","sunPhaseEvaluation","opaqueShadowQueryResidual",
             "mediumBeerAttenuation","localLightGeometryAndAttenuation","localPhaseAndContribution",
-            "volumeCaustics","sourcePacketAddress","sourcePacketWrite"};
+            "volumeCaustics","sourcePacketAddress","sourcePacketWrite","transmissionShadowFallback",
+            "opaqueShadowAnyHit","opaqueShadowClosestHit"};
     private OpticalDetailedProfile(){}
     private static final class Records {
         static final ThreadLocal<String> scope=ThreadLocal.withInitial(()->"unscoped");
@@ -51,7 +52,10 @@ public final class OpticalDetailedProfile {
         for(int sample=0;sample<records;sample++)for(int stage=0;stage<CAMERA_SCATTERING_STAGES;stage++){
             long at=((long)sample*CAMERA_SCATTERING_STAGES+stage)*16,ticks=values.get(ValueLayout.JAVA_LONG,at),calls=values.get(ValueLayout.JAVA_LONG,at+8);
             if(calls!=0){if(stage==0)observed++;String prefix="cameraScattering/"+CAMERA_SCATTERING_STAGE_NAMES[stage]+"/";
-                addGlobal(prefix+"ticks",ticks);addGlobal(prefix+"calls",calls);}
+                try{addGlobal(prefix+"ticks",ticks);addGlobal(prefix+"calls",calls);}
+                catch(ArithmeticException overflow){throw new IllegalStateException("camera-scattering diagnostic overflow stage="
+                        +CAMERA_SCATTERING_STAGE_NAMES[stage]+" bucket="+sample+" ticks="
+                        +Long.toUnsignedString(ticks)+" calls="+Long.toUnsignedString(calls),overflow);}}
         }
         addGlobal("cameraScattering/sampledPaths",selected);
         addGlobal("cameraScattering/recordedPaths",observed);
@@ -99,10 +103,15 @@ public final class OpticalDetailedProfile {
         long recorded=values.getOrDefault("cameraScattering/recordedPaths",0L)
                 -before.getOrDefault("cameraScattering/recordedPaths",0L);
         long denominator=recorded==0?sampled:recorded;
+        long anyHitTicks=values.getOrDefault("cameraScattering/opaqueShadowAnyHit/ticks",0L)
+                -before.getOrDefault("cameraScattering/opaqueShadowAnyHit/ticks",0L);
+        long closestHitTicks=values.getOrDefault("cameraScattering/opaqueShadowClosestHit/ticks",0L)
+                -before.getOrDefault("cameraScattering/opaqueShadowClosestHit/ticks",0L);
         var stages=new java.util.ArrayList<CameraStage>();long sumTicks=0;
         for(String name:CAMERA_SCATTERING_STAGE_NAMES){String prefix="cameraScattering/"+name+"/";
             long ticks=values.getOrDefault(prefix+"ticks",0L)-before.getOrDefault(prefix+"ticks",0L);
             long calls=values.getOrDefault(prefix+"calls",0L)-before.getOrDefault(prefix+"calls",0L);
+            if(name.equals("opaqueShadowQueryResidual"))ticks=Math.max(0L,ticks-anyHitTicks-closestHitTicks);
             long perPath=denominator==0?0:Math.round(ticks/(double)denominator);sumTicks=Math.addExact(sumTicks,ticks);
             stages.add(new CameraStage(name,ticks,calls,perPath,calls==0?0:Math.round(ticks/(double)calls),
                     calls==0?0:ticks/(double)calls));

@@ -190,7 +190,9 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     linearHdrOutput, shaderExecutionReorderingEnabled, sceneShaders
             );
             byte[] missCode = opticalDiagnostic?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+"gpuscene.rmiss",Shaderc.shaderc_miss_shader,false,false,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode("gpuscene.rmiss", Shaderc.shaderc_miss_shader, false, false, sceneShaders);
-            byte[] closestCode = opticalDiagnostic?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+"gpuscene.rchit",Shaderc.shaderc_closesthit_shader,false,false,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode(
+            byte[] closestCode = opticalDiagnostic?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+"gpuscene.rchit",Shaderc.shaderc_closesthit_shader,false,false,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP)
+                    :scatteringDiagnostic?RtShaderModuleCompiler.compileCameraScatteringDiagnostic(SHADER_ROOT+"gpuscene.rchit",
+                            Shaderc.shaderc_closesthit_shader,false,false):loadStageCode(
                     "gpuscene.rchit", Shaderc.shaderc_closesthit_shader, false, false, sceneShaders
             );
             byte[] anyHitCode = opticalDiagnostic?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+"gpuscene.rahit",Shaderc.shaderc_anyhit_shader,false,false,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode(program == Program.NATIVE_BOUNDARY_PACKET
@@ -213,8 +215,11 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     Shaderc.shaderc_miss_shader, false, false, RtEdgeSink.NOOP) : new byte[0];
             byte[] visibilityClosestCode = visibility ? RtShaderModuleCompiler.loadProduction(SHADER_ROOT + "gpuscene_visibility.rchit",
                     Shaderc.shaderc_closesthit_shader, false, false, RtEdgeSink.NOOP) : new byte[0];
-            byte[] visibilityAnyCode = visibility ? RtShaderModuleCompiler.loadProduction(SHADER_ROOT + "gpuscene_visibility.rahit",
-                    Shaderc.shaderc_anyhit_shader, false, false, RtEdgeSink.NOOP) : new byte[0];
+            byte[] visibilityAnyCode = visibility ? scatteringDiagnostic
+                    ? RtShaderModuleCompiler.compileCameraScatteringDiagnostic(SHADER_ROOT + "gpuscene_visibility.rahit",
+                            Shaderc.shaderc_anyhit_shader, false, false)
+                    : RtShaderModuleCompiler.loadProduction(SHADER_ROOT + "gpuscene_visibility.rahit",
+                            Shaderc.shaderc_anyhit_shader, false, false, RtEdgeSink.NOOP) : new byte[0];
             if (visibility) {
                 visibilityMissModule = RtShaderModuleCompiler.createModule(stack, device, visibilityMissCode);
                 visibilityClosestModule = RtShaderModuleCompiler.createModule(stack, device, visibilityClosestCode);

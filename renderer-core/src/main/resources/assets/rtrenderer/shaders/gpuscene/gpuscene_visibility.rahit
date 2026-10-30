@@ -1,15 +1,44 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
+#extension GL_EXT_shader_realtime_clock : require
+#endif
 
 #include "gpuscene_visibility.glsl"
 
 layout(location = 1) rayPayloadInEXT GsVisibilityPayload visibility;
 hitAttributeEXT vec2 hitAttributes;
 
+#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
+void gsVisibilityRecordAnyHit(uint64_t started) {
+    uint64_t elapsed=clockRealtimeEXT()-started;
+    uint64_t total=uint64_t(floatBitsToUint(visibility.normalDistance.x))
+        | (uint64_t(floatBitsToUint(visibility.normalDistance.y))<<32u);
+    total+=elapsed;
+    visibility.normalDistance.x=uintBitsToFloat(uint(total));
+    visibility.normalDistance.y=uintBitsToFloat(uint(total>>32u));
+    visibility.boundary.z++;
+}
+#define GS_VISIBILITY_PROFILE_ANY_HIT_END() \
+    if(profileAnyHit)gsVisibilityRecordAnyHit(profileStarted)
+#else
+#define GS_VISIBILITY_PROFILE_ANY_HIT_END()
+#endif
+
 void main()
 {
-    if ((gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD)&2u)!=0u) return;
+#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
+    bool profileAnyHit=visibility.boundary.y!=0u;
+    uint64_t profileStarted=profileAnyHit?clockRealtimeEXT():0ul;
+#endif
+    bool opaqueProbe = visibility.boundary.x == GS_VISIBILITY_STATE_OPAQUE_PROBE
+        || visibility.boundary.x == GS_VISIBILITY_STATE_TRANSMISSION_FOUND;
+    if ((gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD)&2u)!=0u) {
+        if (opaqueProbe) ignoreIntersectionEXT;
+        GS_VISIBILITY_PROFILE_ANY_HIT_END();
+        return;
+    }
     uint meshSlot = gsInstanceMeshSlot(gl_InstanceCustomIndexEXT);
     uint meshBase = gsMeshBase(meshSlot);
     uint materialSlot = gsTriangleMaterialSlot(meshBase, gl_PrimitiveID);
@@ -17,11 +46,13 @@ void main()
     uint flags = gsMaterials.words[materialBase + GPU_SCENE_MATERIAL_FLAGS_WORD];
     if ((flags & GPU_SCENE_FLAG_ACTIVE) == 0u) {
         ignoreIntersectionEXT;
+        GS_VISIBILITY_PROFILE_ANY_HIT_END();
         return;
     }
     bool mediumBoundary = gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD) != 0u;
     if (!mediumBoundary && (flags & GPU_SCENE_FLAG_DOUBLE_SIDED) == 0u && gl_HitKindEXT == 0xffu) {
         ignoreIntersectionEXT;
+        GS_VISIBILITY_PROFILE_ANY_HIT_END();
         return;
     }
 
@@ -33,21 +64,9 @@ void main()
     float opacity = gsUnpackRgba8(gsMaterials.words[
         materialBase + GPU_SCENE_MATERIAL_BASE_COLOR_WORD
     ]).a;
-    if (blendMode != GPU_SCENE_BLEND_OPAQUE) {
+    if (blendMode != GPU_SCENE_BLEND_OPAQUE || opaqueProbe) {
         uvec3 indices = gsTriangleIndices(meshBase, gl_PrimitiveID);
         vec3 barycentrics = gsBarycentrics(hitAttributes);
-        vec2 uv = gsInstanceUv(
-            gl_InstanceCustomIndexEXT,
-            gsTriangleTexcoord(meshBase, indices, barycentrics)
-        );
-        vec3 p0 = gl_ObjectToWorldEXT * vec4(gsPosition(meshBase, indices.x), 1.0);
-        vec3 p1 = gl_ObjectToWorldEXT * vec4(gsPosition(meshBase, indices.y), 1.0);
-        vec3 p2 = gl_ObjectToWorldEXT * vec4(gsPosition(meshBase, indices.z), 1.0);
-        vec4 uvFootprint = gsTriangleTextureFootprint(
-            meshBase, indices, barycentrics, p0, p1, p2, gl_WorldRayOriginEXT,
-            visibility.launchInfo,
-            gl_InstanceCustomIndexEXT
-        );
         vec4 vertexColor = shadingModel == GPU_SCENE_SHADING_LIGHTMAP_MODULATED
             ? gsTriangleLightmapModulatedColor(
                 meshBase, indices, barycentrics, gl_InstanceCustomIndexEXT
@@ -58,6 +77,18 @@ void main()
             materialBase + GPU_SCENE_MATERIAL_BASE_COLOR_TEXTURE_WORD
         ];
         if (baseTexture != GS_INVALID_SLOT) {
+            vec2 uv = gsInstanceUv(
+                gl_InstanceCustomIndexEXT,
+                gsTriangleTexcoord(meshBase, indices, barycentrics)
+            );
+            vec3 p0 = gl_ObjectToWorldEXT * vec4(gsPosition(meshBase, indices.x), 1.0);
+            vec3 p1 = gl_ObjectToWorldEXT * vec4(gsPosition(meshBase, indices.y), 1.0);
+            vec3 p2 = gl_ObjectToWorldEXT * vec4(gsPosition(meshBase, indices.z), 1.0);
+            vec4 uvFootprint = gsTriangleTextureFootprint(
+                meshBase, indices, barycentrics, p0, p1, p2, gl_WorldRayOriginEXT,
+                visibility.launchInfo,
+                gl_InstanceCustomIndexEXT
+            );
             opacity *= gsSampleTextureFootprint(
                 baseTexture, uv, uvFootprint.xy, uvFootprint.zw
             ).a;
@@ -75,11 +106,30 @@ void main()
         ]);
         if (opacity < cutoff) {
             ignoreIntersectionEXT;
+            GS_VISIBILITY_PROFILE_ANY_HIT_END();
             return;
         }
     }
 
     if (!mediumBoundary && ((gsInstanceFlags(gl_InstanceCustomIndexEXT)&GPU_SCENE_FLAG_CASTS_SHADOW)==0u || overlayMode!=0u)) {
-        ignoreIntersectionEXT; return;
+        ignoreIntersectionEXT;
+        GS_VISIBILITY_PROFILE_ANY_HIT_END();
+        return;
     }
+
+    if (opaqueProbe) {
+        if (mediumBoundary) opacity = 1.0;
+        float transmission = uintBitsToFloat(gsMaterials.words[
+            materialBase + GPU_SCENE_MATERIAL_TRANSMISSION_WORD
+        ]);
+        if (opacity >= 1.0 && transmission <= 0.0) {
+            visibility.tintOpacity = vec4(0.0);
+            GS_VISIBILITY_PROFILE_ANY_HIT_END();
+            terminateRayEXT;
+            return;
+        }
+        visibility.boundary.x = GS_VISIBILITY_STATE_TRANSMISSION_FOUND;
+        ignoreIntersectionEXT;
+    }
+    GS_VISIBILITY_PROFILE_ANY_HIT_END();
 }

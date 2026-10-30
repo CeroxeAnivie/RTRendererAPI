@@ -201,7 +201,13 @@ tasks.register<JavaExec>("mediumGalleryPerformanceBenchmark") {
     group = "verification"
     description = "Measures the default 1080p/1-spp PBR uniform-scattering gallery path."
     dependsOn(tasks.testClasses)
-    classpath = sourceSets.test.get().runtimeClasspath
+    classpath = files(sourceSets.main.get().output, sourceSets.test.get().output,
+        configurations.testRuntimeClasspath.get().incoming.artifactView {
+            componentFilter { component ->
+                component !is org.gradle.api.artifacts.component.ProjectComponentIdentifier ||
+                    component.projectPath != ":renderer-nvidia"
+            }
+        }.files)
     mainClass.set("demo.MediumGalleryPerformanceBenchmark")
     providers.gradleProperty("galleryPerformanceArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
 }

@@ -7,6 +7,7 @@
 #endif
 #define RTRENDERER_NO_DIELECTRIC 1
 #define GS_LIGHTING_NO_DIRECT_SURFACE 1
+#define GS_CAMERA_SCATTERING_STAGE_COUNT 15u
 #include "gpuscene_surface_transport.glsl"
 layout(set=0,binding=GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
 layout(location=0) rayPayloadEXT GpuScenePayload payload;
@@ -25,7 +26,7 @@ layout(buffer_reference,std430,buffer_reference_align=8) buffer GsScatteringDiag
 uint64_t gsScatteringDetailStart(bool enabled){if(!enabled)return 0ul;return clockRealtimeEXT();}
 void gsScatteringDetailEnd(uint record,uint stage,uint64_t started){
     if(started==0ul)return;
-    uint word=((record/65536u)*12u+stage)*2u;uint64_t ended=clockRealtimeEXT();
+    uint word=((record/65536u)*GS_CAMERA_SCATTERING_STAGE_COUNT+stage)*2u;uint64_t ended=clockRealtimeEXT();
     GsScatteringDiagnostic target=GsScatteringDiagnostic(dispatch.reserved);
     target.values[word]+=ended-started;target.values[word+1u]+=1ul;
 }
@@ -106,9 +107,23 @@ void main() {
                     GS_SCATTER_DETAIL_NEXT(4u);
                     float phase=gsScatteringPhase(dot(direction,sunDirection),g);
                     vec3 sunContribution=sun*phase;
+#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
+                    GS_SCATTER_DETAIL_PAUSE();
+                    uint64_t probeTicks,fallbackTicks,anyHitTicks,closestHitTicks;
+                    uint anyHitCalls,closestHitCalls;
+                    vec3 sunVisibility=gsShadowTransmittanceDetailed(position,sunDirection,sunDirection,1e20,
+                        detailActive,probeTicks,fallbackTicks,anyHitTicks,anyHitCalls,
+                        closestHitTicks,closestHitCalls);
+                    gsScatteringProfileRecord(detailActive,detailRecord,5u,probeTicks);
+                    gsScatteringProfileRecord(detailActive,detailRecord,12u,fallbackTicks);
+                    gsScatteringProfileRecord(detailActive,detailRecord,13u,anyHitTicks,uint64_t(anyHitCalls));
+                    gsScatteringProfileRecord(detailActive,detailRecord,14u,closestHitTicks,uint64_t(closestHitCalls));
+                    GS_SCATTER_DETAIL_RESUME(6u);
+#else
                     GS_SCATTER_DETAIL_NEXT(5u);
                     vec3 sunVisibility=gsShadowTransmittance(position,sunDirection,sunDirection,1e20);
                     GS_SCATTER_DETAIL_NEXT(6u);
+#endif
                     sunVisibility*=exp(-sigma*min(maximum,1e20));
                     source+=sunContribution*sunVisibility;
                 }
@@ -120,7 +135,11 @@ void main() {
                         GS_SCATTER_DETAIL_NEXT(7u);
                         if(weight>0.0){
                             GS_SCATTER_DETAIL_PAUSE();
+#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
                             source+=gsScatteringLightProfile(slot,position,direction,g,sigma,maximum,detailRecord,detailActive);
+#else
+                        source+=gsScatteringLight(slot,position,direction,g,sigma,maximum);
+#endif
                             GS_SCATTER_DETAIL_RESUME(7u);
                         }
                     }
@@ -134,7 +153,11 @@ void main() {
                         float factor=exhaustive?1.0:total/(float(sampleCount)*weight);
                         GS_SCATTER_DETAIL_NEXT(7u);
                         GS_SCATTER_DETAIL_PAUSE();
+#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
                         source+=gsScatteringLightProfile(slot,position,direction,g,sigma,maximum,detailRecord,detailActive)*factor;
+#else
+                        source+=gsScatteringLight(slot,position,direction,g,sigma,maximum)*factor;
+#endif
                         GS_SCATTER_DETAIL_RESUME(7u);
                     }
                 }
