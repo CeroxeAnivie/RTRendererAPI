@@ -779,3 +779,9 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 正确性：8 帧展厅 HDR 以及六种纹理组合×SPP 1/2/8×真空/直接介质的 36 帧 HDR，冻结对照与候选均逐字节一致。PBR 31 项/43 帧、PBR 散射组合 15 项、camera 17 项（含两组 128 帧近灯均值）、multiple 解析回归均通过，8 份正式 validation 日志零 warning/error、零丢样且正常关闭；274 个预编译 shader 与源码逐字节匹配。镜像边界的独立 API 闭合修复仍由子代理处理，没有将本轮局部回归冒充完整 API 闭合。
 
 完整 [性能及正确性证据](data/scattering-split-primary-20261031.json)、[最新完整排名](data/scattering-split-primary-ranked-20261031.json)。后续继续总榜前三各自内部前三；当前第一与第三共同等待散射链，不能重复计收益。
+
+### 撤回：先选择 proposal 再求逆 CDF
+
+对照固定 Cycles `shade_volume.h` 的先选采样策略、后计算对应分布原则，删除 guided 分支会覆盖的原区间位置/PDF 计算。1080p、连续 8 帧原始 HDR 共 132,710,400 bytes 与冻结对照完全一致，正式 validation 无 warning/error。实际默认预算由真实请求记录：scatteringSteps=8、maxEvents=16、lightSamples=4。
+
+关闭诊断正序 103.816221→103.408107 FPS（−0.39%），反序 102.273032→103.126660 FPS（+0.83%）；散射 producer GPU 分别增加 1.02% 和下降 0.56%。两种顺序没有稳定收益，GLSL 与 40 份 SPIR-V 已精确恢复，不保留看起来更简洁但没有证明性能改善的改动。没有为已拒绝候选继续消耗 GPU 跑完整回归。[两种顺序、制品和完整尺寸 HDR 证据](data/scattering-proposal-branch-rejected-20261031.json)。
