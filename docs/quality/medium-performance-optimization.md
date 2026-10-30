@@ -302,3 +302,50 @@ GPU 空闲后重新测试，两个制品测前 GPU 0 占用均为 0%，每组 90
 这一差额仍不能叫 GPU 空闲或 CPU 计算；独立子代理正在用嵌套 host 事件边界补齐整个墙钟，不能将其 host wait 再加到本表 GPU 工作上。下一步须结合完整墙钟表选关键路径，再拆大头；GPU 内部当前第一名是不透明阴影查询残差。
 
 正确性：8×160×90 的 RGBA16F 全帧全字节一致，Vulkan validation 0 warning/0 error，14 项独立生产 HDR 对照全部通过，query/通用 raygen 的 16 个 SPIR-V 变体编译成功。原始轮次、制品 SHA-256、HDR 文件 SHA-256、完整内部排名与同窗口归一化结果见 [scattering-light-proposal-reuse-20261030.json](data/scattering-light-proposal-reuse-20261030.json)。
+
+### 跨线程墙钟观测完成
+
+原来只跟踪 benchmark 调用线程，未接通 camera/PBR manager 的专用线程，导致 prepare 的 self 占比很大。现由 `NATIVE_TASK_AWAIT` 显式携带父节点身份到 executor 包装器，worker 记录 `NATIVE_TASK_EXECUTION` 与 CUDA/Vulkan 内部边界；只适用于调用方在相同父作用域内立即等待 Future 的同步任务。Future 返回前恢复调用线程，原始事件保留实际 Java 线程 ID。未携带身份的其他线程不加入记录，不能按接近的时间戳猜父子关系。
+
+参考 Perfetto，commit `8299e44d8586d4650cab0d7bc9d34c7de536e468`，Apache-2.0，[`include/perfetto/tracing/track_event_args.h`](https://github.com/google/perfetto/blob/8299e44d8586d4650cab0d7bc9d34c7de536e468/include/perfetto/tracing/track_event_args.h) 的 `Flow::ProcessScoped`/`TerminatingFlow`。采用显式身份连接线程 track 的思路，未复制外部代码；本项目额外验证被等待的 worker 区间严格包含在调用方父区间中。
+
+观测默认关闭，使用预分配数值数组，不逐事件打印或分配对象；开启时每次 awaited handoff 有一个包装器。满槽只丢失细项并记录 dropped，不等待空槽。每轮结束后批量输出原始边界、父节点、线程、inclusive/self、count、P50/P95/max。`tools/AnalyzeMediumWallTimeline.py` 可独立重算原始区间、严格校验同父兄弟不重叠与包含关系，并输出互斥排名 JSON/CSV；不能把父 inclusive、子 self 和 GPU work 相加。
+
+同制品三组各 90 帧预热、3×120 个完成帧，测前 GPU 0 均为 0%。制品 SHA-256：`3198a476694f2542eb50e32369413a4e91549aab8aa6536aa75228794ecd0641`。
+
+| 观测模式 | 墙钟 ms/帧 | 完成 FPS | 与关闭观测的帧时变化 |
+| --- | ---: | ---: | ---: |
+| 全关 | 17.118159 | 58.417496 | — |
+| 只开墙钟观测 | 16.356668 | 61.137148 | −4.45% |
+| 墙钟与 GPU timestamp | 16.771744 | 59.624090 | −2.02% |
+
+逐轮 wall+GPU 相对关闭观测的帧时变化 −4.140%/−2.930%/+1.734%，本组未测出超过 10% 的观测拖慢；负值属于运行波动，不是渲染优化收益。
+
+以下新主表来自同一个 wall+GPU 窗口：360 帧、6037.828 ms。各行是互斥 host 边界时间，等待包含 GPU 工作。
+
+| 排名 | 实测墙钟边界 | ms/帧 | 每秒累计 ms | 占这一秒 |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | PBR 统计读回前 CUDA stream 同步 | 7.462 | 444.917 | 44.49% |
+| 2 | 散射完成边界 CUDA stream 同步 | 4.893 | 291.740 | 29.17% |
+| 3 | 散射统计读回前 CUDA stream 同步 | 0.948 | 56.534 | 5.65% |
+| 4 | PBR Vulkan consumer fence 等待 | 0.543 | 32.368 | 3.24% |
+| 5 | 散射 Vulkan consumer fence 等待 | 0.499 | 29.771 | 2.98% |
+| 6 | benchmark park 等待 | 0.465 | 27.708 | 2.77% |
+| 7 | PBR 读回调用自身，扣除子项 | 0.205 | 12.251 | 1.23% |
+| 8 | 最终帧命令录制与提交 | 0.139 | 8.314 | 0.83% |
+| 9 | PBR release 命令录制 | 0.134 | 8.017 | 0.80% |
+| 10 | 散射 release 命令录制 | 0.105 | 6.236 | 0.62% |
+| | 其余 76 项合计 | 1.378 | 82.143 | 8.21% |
+| | **互斥墙钟求和** | **16.772** | **1000.000** | **100.00%** |
+
+主表合并小项，完整明细保留，不为展示 86 行挤占阅读空间。三线程共 71,832 个事件、零丢样；独立 raw 重算、包含与兄弟不重叠校验通过。WINDOW self 仅 0.003003 ms/帧，是循环条件检查与计时边界之间的代码；camera/PBR prepare self 分别仅 0.007243/0.006568 ms/帧，不再把大块工作藏在“准备”下面。`NATIVE_TASK_AWAIT` self 是提交、排队与返回唤醒间隙，worker execution self 是 manager 在已观测子 API 之间的工作；这些 elapsed 都不冒称纯 CPU 时间。
+
+同窗 GPU 叶子第一名仍是相机散射灯光与可见性 4.368425 ms/帧。所选 GPU 工作合计 13.353433 ms/帧，与墙钟差 3.418312 ms/帧仍是算术值；新的 host 表完整覆盖墙钟调用边界，并不把这一算术差强行唯一分配成 CPU 计算或 GPU idle。
+
+完整运行对照、86 项分布与 GPU 重叠视图见 [medium-wall-attribution-20261031.json](data/medium-wall-attribution-20261031.json)，完整互斥排名见 [medium-wall-attribution-ranked-20261031.csv](data/medium-wall-attribution-ranked-20261031.csv)。构建与覆盖自测通过，子代理已完成并停止。主线完成手头阴影候选后，按用户指定处理 PBR 统计读回前 CUDA 同步；必须比较整个交接和关闭诊断 FPS，不能把等待转移到 fence 就声称收益。
+
+复现工具：benchmark 增加 `--wallProfile=true`；`--profile=true` 同时采集 GPU timestamp，`--profile=false --shaderProfile=false --wallProfile=false` 为全关验收。`coreOpticalWallTimelineSelfTest` 检查严格覆盖、无关线程隔离、满槽丢样、非法嵌套与真实 executor 父节点传播。独立重算示例：
+
+```powershell
+python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSON的目录> --output <输出JSON路径>
+```

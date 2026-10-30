@@ -1,4 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
+import static top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline.Stage.*;
+
 
 import top.ceroxe.rt.renderer.api.SubmissionDeferralReason;
 import top.ceroxe.rt.renderer.rt.device.RtCommandContext;
@@ -97,6 +100,9 @@ final class VulkanGpuSceneFrameSubmitter {
             int acceptedLightSlotUpperBound,
             long frameSequence
     ) throws VulkanRenderingSession.SubmissionRejectedException {
+        int wallScope = OpticalWallTimeline.enter(FRAME_PREPARATION);
+        int wallStep = OpticalWallTimeline.enter(ROUTE_AND_PIPELINES);
+        try {
         VulkanSceneRuntime.Snapshot sceneState = scene.snapshot();
         if (sceneState.activeRevision() != acceptedSceneRevision) {
             throw new VulkanRenderingSession.SubmissionRejectedException(
@@ -206,6 +212,7 @@ final class VulkanGpuSceneFrameSubmitter {
                 ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_OPTICAL_TRACE) : null;
         // Presentation-time feature work may outlive proxy present. Establish resource ownership
         // before reconfiguration, extent replacement, or any writes to this free slot.
+        wallStep = OpticalWallTimeline.next(wallStep, FEATURE_INPUT_REUSE);
         VulkanFeatureSession.InputCompletion inputCompletion =
                 scene.device().featureSession().awaitFrameInputReuse(frameSequence);
         VulkanGpuSceneFeatureComposition.Selection frameFeatures = features.frameSelection(
@@ -215,6 +222,7 @@ final class VulkanGpuSceneFrameSubmitter {
         // retain their original resource family until their producer has completed.
         features.reconfigure(slot, frameFeatures);
 
+        wallStep = OpticalWallTimeline.next(wallStep, RESOURCE_BUDGET_AND_ENSURE);
         VulkanFramePrimitiveResources primitiveResources = frameRing.primitives(slot);
         long requestedGrowth = Math.addExact(
                 Math.addExact(
@@ -254,10 +262,12 @@ final class VulkanGpuSceneFrameSubmitter {
         slot.ensureCausticResources(photonPlan.bytes());
         if (primaryQueue != null) slot.ensurePrimaryQueue(primaryQueue.bytes());
 
+        wallStep = OpticalWallTimeline.next(wallStep, FRAME_PRIMITIVES);
         VulkanFramePrimitiveResources.Prepared framePrimitives = primitiveResources.prepare(
                 checked.request().primitiveBatch(), acceptedSceneRevision, scene
         );
 
+        wallStep = OpticalWallTimeline.next(wallStep, TEMPORAL_UNIFORMS_DESCRIPTORS);
         RtCommandContext.AsyncSubmission nativeSubmission = null;
         boolean slotPublished = false;
         try (VulkanFeatureSubmissionTransaction featureSubmission =
@@ -291,6 +301,7 @@ final class VulkanGpuSceneFrameSubmitter {
 
             // Boundary continuations still finish their internal blocking rounds here. The
             // camera route instead acquires CUDA ownership in the final frame submission.
+            wallStep = OpticalWallTimeline.next(wallStep, CAMERA_SCATTERING_PREPARE);
             CudaPbrMediumManager.RadianceContribution scatteringContribution = null;
             if(nativePbrScatteringFrame) {
                 var scatteringPlan = nativePbrData.transportPlan();
@@ -308,6 +319,7 @@ final class VulkanGpuSceneFrameSubmitter {
                             scatteringPlan.densityMultiple(),pbrScatteringPrimary,multipleTracer,slot.index(),framePrimitives.buildPlan());
                 };
             }
+            wallStep = OpticalWallTimeline.next(wallStep, MEDIUM_RESOLVE_PREPARE);
             CudaCameraMediumManager.Prepared nativeCamera = nativeOpticalFrame
                     ? pipelines.nativeOpticalMedium().prepare(nativeOpticalData,primaryProducer,opticalTracer,slot.index(),
                             framePrimitives.buildPlan(),photonPlan,photonPipeline,slot.causticPhotons())
@@ -332,6 +344,7 @@ final class VulkanGpuSceneFrameSubmitter {
                             primaryProducer, slot.index(), framePrimitives.buildPlan())
                     : null;
 
+            wallStep = OpticalWallTimeline.next(wallStep, FINAL_FRAME_RECORD_AND_SUBMIT);
             long descriptorEpoch = Math.incrementExact(lastSubmittedDescriptorEpoch);
             int previousLayout = slot.imageLayout();
             boolean acquireExternalOwnership = slot.externallyOwned();
@@ -401,6 +414,7 @@ final class VulkanGpuSceneFrameSubmitter {
                                     recorder.apply(prepared, acquire)))
                     : submitNative(frameSequence, inputCompletion, readySignal, 0L, slot, recorder.apply(nativeCamera, null));
             featureSubmission.commit();
+            wallStep = OpticalWallTimeline.next(wallStep, SLOT_PUBLICATION);
             slot.submitted(
                     nativeSubmission,
                     frameSequence,
@@ -459,6 +473,8 @@ final class VulkanGpuSceneFrameSubmitter {
             }
             throw failure;
         }
+
+        } finally { OpticalWallTimeline.leave(wallStep); OpticalWallTimeline.leave(wallScope); }
     }
 
     private RtCommandContext.AsyncSubmission submitNative(

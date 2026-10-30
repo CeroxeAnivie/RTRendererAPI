@@ -263,6 +263,7 @@ val contractSelfTests = linkedMapOf(
     "coreCudaDensityScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaDensityScatteringSelfTest",
     "coreCudaOpticalMediumSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaOpticalMediumSelfTest",
     "coreCudaPbrMediumAbiSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaPbrMediumAbiSelfTest",
+    "coreOpticalWallTimelineSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimelineSelfTest",
     "coreCudaBoundaryScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaBoundaryScatteringSelfTest",
     "corePacketCapacitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.PacketCapacitySelfTest",
     "coreCudaMediumDensitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensitySelfTest",

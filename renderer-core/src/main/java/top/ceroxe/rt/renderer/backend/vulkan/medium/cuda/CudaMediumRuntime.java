@@ -1,4 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan.medium.cuda;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
+import static top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline.Stage.*;
+
 
 import java.lang.foreign.*;
 import java.nio.file.Path;
@@ -237,6 +240,8 @@ public final class CudaMediumRuntime implements AutoCloseable {
      */
     void exchangeExternalWithCompletionBlocking(ExternalSemaphore wait, ExternalSemaphore signal,
             Runnable nativeStep, Runnable completeConsumer) {
+        int wallScope = OpticalWallTimeline.enter(CUDA_EXCHANGE);
+        try {
         checkOpen(); Objects.requireNonNull(nativeStep, "nativeStep");
         Objects.requireNonNull(completeConsumer, "completeConsumer");
         requireOwned(wait); requireOwned(signal); wait.checkAlive(); signal.checkAlive();
@@ -247,9 +252,11 @@ public final class CudaMediumRuntime implements AutoCloseable {
         externalBatch = true;
         try {
             waitExternalBlocking(wait);
-            nativeStep.run();
+            int callbackTiming = OpticalWallTimeline.enter(CUDA_NATIVE_CALLBACK);
+            try { nativeStep.run(); } finally { OpticalWallTimeline.leave(callbackTiming); }
             signalExternalBlocking(signal);
-            completeConsumer.run();
+            int completionTiming = OpticalWallTimeline.enter(CUDA_COMPLETION_CALLBACK);
+            try { completeConsumer.run(); } finally { OpticalWallTimeline.leave(completionTiming); }
             resolveProfiledKernel();
         } catch (RuntimeException | Error failure) {
             try { inContext(this::synchronizeStream); }
@@ -259,9 +266,17 @@ public final class CudaMediumRuntime implements AutoCloseable {
         } finally {
             externalBatch = enclosingBatch;
         }
+
+        } finally { OpticalWallTimeline.leave(wallScope); }
     }
-    private void synchronizeStream() { api.checked("cuStreamSynchronize", args(ADDRESS), stream); }
+    private void synchronizeStream() {
+        int wallScope = OpticalWallTimeline.enter(CUDA_STREAM_SYNCHRONIZE);
+        try { api.checked("cuStreamSynchronize", args(ADDRESS), stream);
+        } finally { OpticalWallTimeline.leave(wallScope); }
+    }
     private void resolveProfiledKernel() {
+        int wallScope = OpticalWallTimeline.enter(CUDA_KERNEL_EVENT_RESOLVE);
+        try {
         if (pendingProfileStage == null) return;
         String stage = pendingProfileStage;
         pendingProfileStage = null;
@@ -273,11 +288,15 @@ public final class CudaMediumRuntime implements AutoCloseable {
             if (!Float.isFinite(millis) || millis < 0) throw new IllegalStateException("CUDA event returned invalid duration");
             OpticalFrameTimings.recordCudaKernel(stage, Math.round(millis * 1_000_000.0));
         }
+
+        } finally { OpticalWallTimeline.leave(wallScope); }
     }
     /** Two ownership cycles without an intermediate host counter decision or Vulkan fence. */
     void exchangeExternalPairWithCompletionBlocking(ExternalSemaphore wait, ExternalSemaphore signal,
             long firstValue,long secondValue,
             Runnable firstStep, Runnable submitMiddle, Runnable secondStep, Runnable completeConsumer) {
+        int wallScope = OpticalWallTimeline.enter(CUDA_EXCHANGE);
+        try {
         checkOpen();requireOwned(wait);requireOwned(signal);wait.checkAlive();signal.checkAlive();
         if(firstValue<1||secondValue<=firstValue)throw new IllegalArgumentException("ordered timeline values required");
         Objects.requireNonNull(firstStep);Objects.requireNonNull(submitMiddle);
@@ -299,6 +318,8 @@ public final class CudaMediumRuntime implements AutoCloseable {
             try{inContext(this::synchronizeStream);}catch(RuntimeException|Error drain){failure.addSuppressed(drain);}
             throw failure;
         }finally{externalBatch=false;}
+
+        } finally { OpticalWallTimeline.leave(wallScope); }
     }
     private void synchronizeUnlessBatched() { if (!externalBatch) synchronizeStream(); }
     private void external(ExternalSemaphore semaphore, boolean signal) {
@@ -311,6 +332,8 @@ public final class CudaMediumRuntime implements AutoCloseable {
         return params;
     }
     private void external(ExternalSemaphore semaphore, boolean signal,long value) {
+        int wallScope = OpticalWallTimeline.enter(signal ? CUDA_SEMAPHORE_SIGNAL_ENQUEUE : CUDA_SEMAPHORE_WAIT_ENQUEUE);
+        try {
         checkOpen(); requireOwned(semaphore); semaphore.checkAlive();
         try (Arena scratch = Arena.ofConfined()) {
             MemorySegment handles = scratch.allocateFrom(ADDRESS, semaphore.handle);
@@ -321,6 +344,8 @@ public final class CudaMediumRuntime implements AutoCloseable {
                 synchronizeUnlessBatched();
             });
         }
+
+        } finally { OpticalWallTimeline.leave(wallScope); }
     }
     public void evaluateSegmentsBlocking(Slice input, Slice output, int count) {
         checkOpen(); requireSlice(input, CudaMediumAbi.inputBytes(count));
@@ -386,6 +411,8 @@ public final class CudaMediumRuntime implements AutoCloseable {
         launchBlocking(kernel, records, count, recordBytes, null);
     }
     public void launchBlocking(BatchKernel kernel, Slice records, int count, int recordBytes, String profileStage) {
+        int wallScope = OpticalWallTimeline.enter(CUDA_KERNEL_ENQUEUE);
+        try {
         checkOpen(); requireOwned(kernel); kernel.checkAlive();
         if (count < 1 || recordBytes < 1) throw new IllegalArgumentException("positive batch dimensions required");
         requireSlice(records, Math.multiplyExact((long) count, recordBytes));
@@ -411,6 +438,8 @@ public final class CudaMediumRuntime implements AutoCloseable {
             if (profile) pendingProfileStage = null;
             throw failure;
         }
+
+        } finally { OpticalWallTimeline.leave(wallScope); }
     }
     /**
      * Internal camera batch ABI: (records, count, immutable constants, tile output).
@@ -473,6 +502,8 @@ public final class CudaMediumRuntime implements AutoCloseable {
             throw new IllegalArgumentException("batch records, constants and output must not overlap");
     }
     public void upload(Slice destination, MemorySegment source) {
+        int wallScope = OpticalWallTimeline.enter(CUDA_UPLOAD);
+        try {
         checkOpen(); Objects.requireNonNull(source); requireSlice(destination, source.byteSize());
         if (!source.isNative()) throw new IllegalArgumentException("upload source must be native memory");
         inContext(() -> {
@@ -481,8 +512,12 @@ public final class CudaMediumRuntime implements AutoCloseable {
                     destination.address(), source, source.byteSize());
             // The synchronous copy uses the default stream, whereas kernels use our
             // nonblocking stream. Waiting on the latter does not complete the upload.
-            api.checked("cuCtxSynchronize", args());
+            int contextTiming = OpticalWallTimeline.enter(CUDA_CONTEXT_SYNCHRONIZE);
+            try { api.checked("cuCtxSynchronize", args()); }
+            finally { OpticalWallTimeline.leave(contextTiming); }
         });
+
+        } finally { OpticalWallTimeline.leave(wallScope); }
     }
     /** Page-locked host transfer target; its contents are readable only after the owning stream completes. */
     public HostMemory allocateHost(long bytes) {
@@ -496,13 +531,19 @@ public final class CudaMediumRuntime implements AutoCloseable {
 
     /** Enqueues the transfer before the external completion semaphore, without a CPU stream wait. */
     public void downloadAsync(Slice source,HostMemory destination) {
+        int wallScope = OpticalWallTimeline.enter(CUDA_DOWNLOAD_ASYNC_ENQUEUE);
+        try {
         checkOpen();requireOwned(destination);destination.checkAlive();requireSlice(source,destination.bytes);
         if(!externalBatch)throw new IllegalStateException("asynchronous readback requires an external completion batch");
         inContext(()->api.checked("cuMemcpyDtoHAsync_v2",args(ADDRESS,JAVA_LONG,JAVA_LONG,ADDRESS),
                 destination.pointer,source.address(),destination.bytes,stream));
+
+        } finally { OpticalWallTimeline.leave(wallScope); }
     }
 
     public void download(Slice source, MemorySegment destination) {
+        int wallScope = OpticalWallTimeline.enter(CUDA_DOWNLOAD);
+        try {
         checkOpen(); Objects.requireNonNull(destination); requireSlice(source, destination.byteSize());
         if (!destination.isNative() || destination.isReadOnly())
             throw new IllegalArgumentException("readback destination must be writable native memory");
@@ -511,6 +552,8 @@ public final class CudaMediumRuntime implements AutoCloseable {
             api.checked("cuMemcpyDtoH_v2", args(ADDRESS, JAVA_LONG, JAVA_LONG),
                     destination, source.address(), destination.byteSize());
         });
+
+        } finally { OpticalWallTimeline.leave(wallScope); }
     }
     private void requireSlice(Slice slice, long bytes) {
         Objects.requireNonNull(slice); requireOwned(slice.memory); slice.memory.checkAlive();
@@ -531,11 +574,15 @@ public final class CudaMediumRuntime implements AutoCloseable {
     private void checkOpen() { checkOwner(); if (closed) throw new IllegalStateException("CUDA medium runtime is closed"); }
     private void inContext(Runnable action) {
         checkOwner();
-        api.checked("cuCtxPushCurrent_v2", args(ADDRESS), context);
+        int pushTiming = OpticalWallTimeline.enter(CUDA_CONTEXT_PUSH);
+        try { api.checked("cuCtxPushCurrent_v2", args(ADDRESS), context); }
+        finally { OpticalWallTimeline.leave(pushTiming); }
         try { action.run(); }
         finally {
             try (Arena scratch = Arena.ofConfined()) {
-                api.checked("cuCtxPopCurrent_v2", args(ADDRESS), scratch.allocate(ADDRESS));
+                int popTiming = OpticalWallTimeline.enter(CUDA_CONTEXT_POP);
+                try { api.checked("cuCtxPopCurrent_v2", args(ADDRESS), scratch.allocate(ADDRESS)); }
+                finally { OpticalWallTimeline.leave(popTiming); }
             }
         }
     }

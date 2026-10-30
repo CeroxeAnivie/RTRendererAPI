@@ -13,6 +13,8 @@ import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
+import static top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline.Stage.*;
 
 /** Focused steady-state benchmark for the actual default PBR uniform-scattering gallery scene. */
 public final class MediumGalleryPerformanceBenchmark {
@@ -41,6 +43,9 @@ public final class MediumGalleryPerformanceBenchmark {
         int rounds = integer(values, "rounds", 3, 1, 100);
         boolean profile = bool(values, "profile", false);
         boolean shaderProfile=bool(values,"shaderProfile",false);
+        boolean wallProfile=bool(values,"wallProfile",false);
+        if(wallProfile) System.setProperty("top.ceroxe.rt.medium.opticalWallTimeline","true");
+        else System.clearProperty("top.ceroxe.rt.medium.opticalWallTimeline");
         if (profile) System.setProperty("top.ceroxe.rt.medium.opticalFrameProfile", "true");
         else System.clearProperty("top.ceroxe.rt.medium.opticalFrameProfile");
         if(shaderProfile){System.setProperty("top.ceroxe.rt.medium.opticalDetailedProfile","true");
@@ -55,12 +60,12 @@ public final class MediumGalleryPerformanceBenchmark {
         var scene = new MediumGalleryScene(options);
         var frameConfig = MediumGalleryDemo.configuration(options);
         Path report = Path.of("build/reports/medium-performance/pbr-direct-uniform-1080p-"
-                + (profile ? "profiled" : shaderProfile?"shader-sampled":"unprofiled") + ".csv").toAbsolutePath();
+                + (profile ? "profiled" : shaderProfile?"shader-sampled":wallProfile?"wall-timeline":"unprofiled") + ".csv").toAbsolutePath();
         Files.createDirectories(report.getParent());
         System.out.printf(Locale.ROOT,
                 "GalleryPerf device=RTX5080-Laptop targetScene=%s extent=%dx%d spp=1 warmup=%d frames=%d rounds=%d "
-                        + "profile=%s frameGeneration=false reconstruction=false temporal=false denoising=false cpuReadback=false%n",
-                scene.preset().id, width, height, warmup, frames, rounds, profile);
+                        + "profile=%s wallProfile=%s frameGeneration=false reconstruction=false temporal=false denoising=false cpuReadback=false%n",
+                scene.preset().id, width, height, warmup, frames, rounds, profile, wallProfile);
 
         try (var renderer = Renderer.open(frameConfig);
              var output = new PrintWriter(Files.newBufferedWriter(report, StandardCharsets.UTF_8))) {
@@ -87,6 +92,11 @@ public final class MediumGalleryPerformanceBenchmark {
                             +(round+1)+".json").toAbsolutePath();
                     Files.writeString(shaderReport,shaderSummary,StandardCharsets.UTF_8);
                     System.out.println("GalleryPerf shaderStageReport="+shaderReport+" stages="+shaderSummary.replace('\n',' '));
+                }
+                if (result.timeline() != null) {
+                    Path timelineReport = report.resolveSibling("pbr-direct-uniform-1080p-wall-timeline-round-" + (round + 1) + ".json");
+                    Files.writeString(timelineReport, result.timeline().json(result.frames()), StandardCharsets.UTF_8);
+                    System.out.println("GalleryPerf wallTimelineReport=" + timelineReport);
                 }
                 RendererDiagnostics.FrameGpuTiming gpu = result.gpu().after();
                 double gpuMeanMs = result.gpu().estimateNanos().doubleValue() / result.gpu().samples() / 1e6;
@@ -120,7 +130,9 @@ public final class MediumGalleryPerformanceBenchmark {
         RendererDiagnostics beforeDiagnostics = renderer.diagnostics();
         var beforeGpu = beforeDiagnostics.frameGpuTiming();
         long firstSequence = sequence[0], last = Math.addExact(firstSequence, frames) - 1;
-        long started = System.nanoTime(), requestBuild = 0, submit = 0, poll = 0, deferrals = 0;
+        var timeline = OpticalWallTimeline.ENABLED ? OpticalWallTimeline.allocate(262_144) : null;
+        long started = timeline == null ? System.nanoTime() : timeline.begin();
+        long requestBuild = 0, submit = 0, poll = 0, deferrals = 0;
         long deadline = started + Duration.ofMinutes(5).toNanos();
         RendererDiagnostics after = beforeDiagnostics;
         RenderFrameRequest pending = null;
@@ -129,33 +141,53 @@ public final class MediumGalleryPerformanceBenchmark {
             while (sequence[0] <= last) {
                 if (pending == null) {
                     long buildStarted = System.nanoTime();
-                    pending = scene.frame(sequence[0], width, height, 0, 0);
+                    int timing = OpticalWallTimeline.enter(REQUEST_BUILD);
+                    try { pending = scene.frame(sequence[0], width, height, 0, 0); }
+                    finally { OpticalWallTimeline.leave(timing); }
                     requestBuild += System.nanoTime() - buildStarted;
                 }
                 long submitStarted = System.nanoTime();
-                Renderer.FrameSubmissionAttempt attempt = renderer.trySubmit(pending);
+                Renderer.FrameSubmissionAttempt attempt;
+                int timing = OpticalWallTimeline.enter(TRY_SUBMIT);
+                try { attempt = renderer.trySubmit(pending); }
+                finally { OpticalWallTimeline.leave(timing); }
                 submit += System.nanoTime() - submitStarted;
                 if (!(attempt instanceof Renderer.FrameSubmitted)) { deferrals++; break; }
                 sequence[0]++;
                 pending = null;
             }
             long pollStarted = System.nanoTime();
-            if (interop.pollLatestFrame() instanceof VulkanFrameInterop.FrameAvailable available)
-                available.lease().close();
+            int timing = OpticalWallTimeline.enter(FRAME_POLL_AND_LEASE);
+            try {
+                if (interop.pollLatestFrame() instanceof VulkanFrameInterop.FrameAvailable available)
+                    available.lease().close();
+            } finally { OpticalWallTimeline.leave(timing); }
             poll += System.nanoTime() - pollStarted;
-            after = renderer.diagnostics();
+            timing = OpticalWallTimeline.enter(DIAGNOSTICS);
+            try { after = renderer.diagnostics(); }
+            finally { OpticalWallTimeline.leave(timing); }
             if (after.status() != Renderer.Status.READY) throw new AssertionError("renderer left READY: " + after);
             if (System.nanoTime() > deadline) throw new AssertionError("gallery benchmark timed out at sequence " + last);
-            if (after.latestCompletedFrameSequence() < last) LockSupport.parkNanos(100_000L);
+            if (after.latestCompletedFrameSequence() < last) {
+                timing = OpticalWallTimeline.enter(PARK);
+                try { LockSupport.parkNanos(100_000L); }
+                finally { OpticalWallTimeline.leave(timing); }
+            }
         }
         if (sequence[0] != last + 1 || after.latestSubmittedFrameSequence() != last)
             throw new AssertionError("benchmark batch did not submit its complete sequence");
-        if (interop.pollLatestFrame() instanceof VulkanFrameInterop.FrameAvailable available)
-            available.lease().close();
-        long elapsed = System.nanoTime() - started;
-        var afterGpu = renderer.diagnostics().frameGpuTiming();
+        int timing = OpticalWallTimeline.enter(FRAME_POLL_AND_LEASE);
+        try {
+            if (interop.pollLatestFrame() instanceof VulkanFrameInterop.FrameAvailable available)
+                available.lease().close();
+        } finally { OpticalWallTimeline.leave(timing); }
+        timing = OpticalWallTimeline.enter(DIAGNOSTICS);
+        RendererDiagnostics.FrameGpuTiming afterGpu;
+        try { afterGpu = renderer.diagnostics().frameGpuTiming(); }
+        finally { OpticalWallTimeline.leave(timing); }
+        long elapsed = timeline == null ? System.nanoTime() - started : timeline.finish();
         var window = gpuWindow(beforeGpu, afterGpu, frames);
-        return new Result(frames, elapsed, submit, requestBuild, poll, deferrals, window);
+        return new Result(frames, elapsed, submit, requestBuild, poll, deferrals, window, timeline);
     }
 
     private static GpuWindow gpuWindow(RendererDiagnostics.FrameGpuTiming before,
@@ -227,5 +259,5 @@ public final class MediumGalleryPerformanceBenchmark {
     private record GpuWindow(long samples, BigInteger estimateNanos, BigInteger lowerNanos,
             BigInteger upperNanos, RendererDiagnostics.FrameGpuTiming after) { }
     private record Result(int frames, long wallNanos, long submitNanos, long requestBuildNanos,
-            long pollNanos, long deferrals, GpuWindow gpu) { }
+            long pollNanos, long deferrals, GpuWindow gpu, OpticalWallTimeline.Recording timeline) { }
 }

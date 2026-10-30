@@ -1,4 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
+import static top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline.Stage.*;
+
 
 import top.ceroxe.rt.diagnostics.VulkanRtCapabilityProbe;
 import top.ceroxe.rt.renderer.RendererRtDiagnostics;
@@ -576,11 +579,14 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
 
     @Override
     public synchronized FrameAdmissionAttempt trySubmit(FrameSubmission submission) {
+        int wallScope = OpticalWallTimeline.enter(SESSION_ADMISSION);
+        try {
         requireReady("submit frame");
         FrameSubmission checked = Objects.requireNonNull(submission, "submission");
         pipeline.validateShaderDataBeforeTransport(checked.request().shaderData());
         try {
-            pump();
+            int pumpTiming = OpticalWallTimeline.enter(SESSION_PUMP);
+            try { pump(); } finally { OpticalWallTimeline.leave(pumpTiming); }
             // Capability probing and extent negotiation can cross the JNI boundary. A saturated
             // ring cannot admit their result, so reject it before doing that work on every retry.
             if (frameRing.writableSlot() == null) {
@@ -589,11 +595,14 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                         "all bounded frame slots are retained or in flight"
                 );
             }
+            int featureTiming = OpticalWallTimeline.enter(FEATURE_EXTENT_NEGOTIATION);
+            VulkanFrameExtents extents;
+            try {
             VulkanFeatureSession featureSession = scene.device().featureSession();
             featureComposition.refresh(featureSession.capabilities());
             boolean refreshAfterExtentNegotiation =
                     featureSession.extentNegotiationMayChangeCapabilities();
-            VulkanFrameExtents extents = featureSession.negotiateFrameExtents(
+            extents = featureSession.negotiateFrameExtents(
                     checked.request(),
                     VulkanFrameExtents.identity(checked.request().width(), checked.request().height())
             );
@@ -604,6 +613,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             }
             frameAdmissionLimits.validate(extents);
             validateRequiredTemporalContract(checked.request());
+            } finally { OpticalWallTimeline.leave(featureTiming); }
             return new FrameAdmitted(
                     frameSubmitter.submit(
                             checked, extents, acceptedSceneRevision, acceptedLightSlotUpperBound
@@ -626,6 +636,8 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             temporalCoordinator.invalidate(HistoryInvalidationReason.EXPLICIT_RESET);
             throw fail("submit GPUScene frame", failure);
         }
+
+        } finally { OpticalWallTimeline.leave(wallScope); }
     }
 
     private void validateRequiredTemporalContract(RenderFrameRequest request) {

@@ -1,4 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
+import static top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline.Stage.*;
+
 
 import top.ceroxe.rt.renderer.api.FrameSnapshot;
 import top.ceroxe.rt.renderer.api.FrameValidationException;
@@ -656,7 +659,11 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, top.cero
 
     @Override
     public FrameSubmissionAttempt trySubmit(RenderFrameRequest request) {
+        int wallScope = OpticalWallTimeline.enter(HOST_ADMISSION);
+        try {
         return withLifecycleLock(() -> trySubmitLocked(request));
+
+        } finally { OpticalWallTimeline.leave(wallScope); }
     }
 
     @Override

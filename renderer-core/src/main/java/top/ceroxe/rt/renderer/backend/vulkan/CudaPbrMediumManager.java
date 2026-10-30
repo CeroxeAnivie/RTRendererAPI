@@ -1,4 +1,6 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
+
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.ValueLayout;
@@ -252,11 +254,15 @@ final class CudaPbrMediumManager implements AutoCloseable {
     private void checkOpen(){if(closed)throw new IllegalStateException("native PBR manager is closed");}
     private static FrameValidationException unsupported(String message){return new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,message);}
     private <T>T onNative(Callable<T> operation) {
-        var result=nativeThread.submit(operation);boolean interrupted=false;
+        int wallTask = OpticalWallTimeline.enter(OpticalWallTimeline.Stage.NATIVE_TASK_AWAIT);
+        try {
+        var result=nativeThread.submit(OpticalWallTimeline.awaited(operation));boolean interrupted=false;
         try{for(;;)try{return result.get();}catch(InterruptedException ignored){interrupted=true;}catch(ExecutionException failure){
             if(failure.getCause() instanceof RuntimeException runtime)throw runtime;if(failure.getCause() instanceof Error error)throw error;
             throw new IllegalStateException("native PBR operation failed",failure.getCause());}}
         finally{if(interrupted)Thread.currentThread().interrupt();}
+
+        } finally { OpticalWallTimeline.leave(wallTask); }
     }
     @Override public synchronized void close(){if(closed)return;try{onNative(()->{Throwable failure=null;
         try{drain();}catch(RuntimeException|Error exception){failure=exception;}
