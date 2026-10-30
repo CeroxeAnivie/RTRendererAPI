@@ -100,18 +100,30 @@ void main() {
                 // PBR and the final consumer read this same allocation directly.
                 uint outBase=item,outStride=uint(extent.x)*uint(extent.y)*samples;
                 destination.lanes[outBase]=floatBitsToUint(payload.worldPositionAndDistance);
-                destination.lanes[outBase+1u*outStride]=floatBitsToUint(payload.previousWorldPosition);
-                destination.lanes[outBase+2u*outStride]=uvec4(payload.motionRevision,0u,0u);
                 destination.lanes[outBase+3u*outStride]=floatBitsToUint(payload.worldNormalAndRoughness);
                 destination.lanes[outBase+4u*outStride]=floatBitsToUint(payload.baseColorAndOpacity);
                 destination.lanes[outBase+5u*outStride]=floatBitsToUint(payload.emissiveAndMetallic);
-                destination.lanes[outBase+6u*outStride]=floatBitsToUint(payload.transmissionIor);
                 destination.lanes[outBase+7u*outStride]=payload.state;
                 destination.lanes[outBase+8u*outStride]=payload.surfaceState;
                 destination.lanes[outBase+9u*outStride]=floatBitsToUint(payload.compositeState);
-                destination.lanes[outBase+10u*outStride]=payload.launchInfo;
-                destination.lanes[outBase+11u*outStride]=payload.mediumBoundary;
-                destination.lanes[outBase+12u*outStride]=uvec4(pixelIndex,sampleIndex,1u,1u);
+                // Multi-sample fallback may need the representative geometry of
+                // another sample. Retain complete payloads there conservatively.
+                bool compactPrimary=samples==1u
+                    &&(gsFrame.words[GPU_SCENE_FRAME_TEMPORAL_FLAGS_WORD]&GPU_SCENE_TEMPORAL_FLAG_ENABLED)==0u
+                    &&(gsFrame.words[GPU_SCENE_FRAME_FEATURE_FLAGS_WORD]
+                        &(GPU_SCENE_FEATURE_FLAG_DENOISING_ACTIVE|GPU_SCENE_FEATURE_FLAG_RECONSTRUCTION_ACTIVE))==0u
+                    &&gsFrame.words[GPU_SCENE_FRAME_CAUSTIC_PHOTONS_WORD]==0u
+                    &&(payload.surfaceState.z==0u||payload.compositeState.x<=0.0)
+                    &&(payload.state.x==0u||((payload.state.z>>GPU_SCENE_SHADING_MODEL_SHIFT)&GPU_SCENE_SHADING_MODEL_MASK)
+                        !=GPU_SCENE_SHADING_LIGHTMAP_MODULATED);
+                if(!compactPrimary) {
+                    destination.lanes[outBase+1u*outStride]=floatBitsToUint(payload.previousWorldPosition);
+                    destination.lanes[outBase+2u*outStride]=uvec4(payload.motionRevision,0u,0u);
+                    destination.lanes[outBase+6u*outStride]=floatBitsToUint(payload.transmissionIor);
+                    destination.lanes[outBase+10u*outStride]=payload.launchInfo;
+                    destination.lanes[outBase+11u*outStride]=payload.mediumBoundary;
+                    destination.lanes[outBase+12u*outStride]=uvec4(pixelIndex,sampleIndex,1u,1u);
+                }
             }
             uint compact=dispatch.primaryOffset/16u+gl_LaunchIDEXT.x*samples+sampleIndex;
             dispatch.storage.lanes[compact]=uvec4(floatBitsToUint(hit.w),present?1u:0u,0u,0u);

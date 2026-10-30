@@ -41,7 +41,7 @@ void main() {
             vec3 localColor=state.x==0u?base.rgb:(shading==GPU_SCENE_SHADING_UNLIT?max(base.rgb,vec3(0))+max(emissive.rgb,vec3(0)):
                 max(emissive.rgb,vec3(0))+max(base.rgb,vec3(0))*gsFrameVec3(GPU_SCENE_FRAME_SKY_COLOR_WORD)
                     *uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_AMBIENT_INTENSITY_WORD])*(1.0-clamp(emissive.a,0.0,1.0)));
-            if (state.x!=0u && shading!=GPU_SCENE_SHADING_UNLIT) {
+            if (state.x!=0u && shading!=GPU_SCENE_SHADING_UNLIT && gsCausticRegion(position.xyz)) {
                 GpuScenePayload receiver;
                 receiver.worldPositionAndDistance=position;
                 receiver.previousWorldPosition=uintBitsToFloat(primary.lanes[source+1u*primaryStride]);

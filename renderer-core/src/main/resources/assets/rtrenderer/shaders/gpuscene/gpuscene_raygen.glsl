@@ -737,10 +737,26 @@ void main()
         uint base=item*(stride==1u?GS_PRIMARY_WORK_LANES:1u);
         bool outlined=gsPrimaryDispatch.queue.lanes[base+8u*stride].z!=0u
                 && uintBitsToFloat(gsPrimaryDispatch.queue.lanes[base+9u*stride].x)>0.0;
+        if(gsPrimaryNativeLighting()) {
+            // Cached PBR may omit fields needed only by full geometry consumers.
+            // Check every sample before selecting the direct-radiance consumer.
+            for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
+                uint at=(item+sampleIndex)*(stride==1u?GS_PRIMARY_WORK_LANES:1u);
+                uvec4 state=gsPrimaryDispatch.queue.lanes[at+7u*stride];
+                bool sampleOutline=gsPrimaryDispatch.queue.lanes[at+8u*stride].z!=0u
+                    &&uintBitsToFloat(gsPrimaryDispatch.queue.lanes[at+9u*stride].x)>0.0;
+                bool lightmap=state.x!=0u&&((state.z>>GPU_SCENE_SHADING_MODEL_SHIFT)&GPU_SCENE_SHADING_MODEL_MASK)
+                    ==GPU_SCENE_SHADING_LIGHTMAP_MODULATED;
+                outlined=outlined||sampleOutline||lightmap;
+            }
+        }
         if(!outlined) {
             vec3 total=vec3(0.0);
-            for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex)
-                total+=GsPrimaryTransmittance(gsPrimaryDispatch.emissionAddress).values[item+sampleIndex].rgb;
+            for(uint sampleIndex=0u;sampleIndex<samples;++sampleIndex) {
+                if(gsPrimaryNativeLighting())
+                    total+=gsPrimaryNativeDiffuse(item+sampleIndex).rgb+gsPrimaryNativeSpecular(item+sampleIndex).rgb;
+                else total+=GsPrimaryTransmittance(gsPrimaryDispatch.emissionAddress).values[item+sampleIndex].rgb;
+            }
             vec3 color=total/float(samples);
 #ifndef RTRENDERER_LINEAR_HDR_OUTPUT
             color=gsToneMap(color);

@@ -230,7 +230,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
         }
         uploadedAssets=scene.assets;
         // This private flag preserves primary geometry while replacing only the already-integrated radiance split.
-        return new CudaCameraMediumManager.Prepared(primary.deviceAddress(),(address+plan.transmittanceOffset())|CudaPbrMediumAbi.NATIVE_LIGHTING_FLAG|(planarPrimary?8L:0L),
+        return new CudaCameraMediumManager.Prepared(primary.deviceAddress(),(address+plan.transmittanceOffset())|CudaPbrMediumAbi.NATIVE_LIGHTING_FLAG|(planarPrimary?9L:0L),
                 address+plan.emissionOffset(),plan.pixels(),plan.samples(),true);
     }
     private void upload(org.lwjgl.vulkan.VkCommandBuffer command,MemoryStack stack,ByteBuffer source,int bytes) {

@@ -38,6 +38,12 @@ public final class CudaPbrMediumProductionNativeSelfTest {
                 renderer=owned;
                 if(Arrays.asList(args).contains("--benchmark")){benchmark();return;}
                 if(Arrays.asList(args).contains("--caustics")){caustics();return;}
+                if(Arrays.asList(args).contains("--cached-primary")){
+                    cachedPrimaryConsumers();
+                    Files.writeString(OUTPUT.resolve("cached-primary-result.json"),
+                            "{\"passed\":true,\"frames\":12,\"spp\":[1,2,8],\"outlines\":[false,true],\"shadingModels\":2}\n");
+                    System.out.println("PBR cached primary consumer matrix passed: frames=12");return;
+                }
                 if(Arrays.asList(args).contains("--scattering")){
                     long cameraScatterBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeScatteringSubmissions.sum();
                     long densityScatterBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeDensityScatteringSubmissions.sum();
@@ -276,6 +282,28 @@ public final class CudaPbrMediumProductionNativeSelfTest {
         require(VulkanGpuSceneFrameSubmitter.diagnosticNativePbrSubmissions.sum()-before>=7,
                 "single-sided medium fixtures bypassed the native PBR route");
         results.add("    {\"name\":\"single-sided-camera-and-shadow-front-back-faces\",\"passed\":true}");
+    }
+    private static void cachedPrimaryConsumers() throws Exception {
+        var medium=new Medium(new Rgb(.04f,.06f,.08f),new Rgb(.1f,.12f,.14f),Rgb.ZERO,1,1,.2f);
+        var environment=SUN.toBuilder().cameraMedium(medium).build();
+        var transport=BUDGET.withScatteringSteps(8).withMaxDistance(3);
+        for(var shading:List.of(MaterialAsset.ShadingModel.PHYSICALLY_BASED,MaterialAsset.ShadingModel.UNLIT))for(boolean outlined:new boolean[]{false,true}) {
+            setup("point");
+            apply(SceneTransaction.builder(++revision)
+                    .upsert(MaterialAsset.builder(2).roughness(.35f).metallic(0).doubleSided(true).shadingModel(shading).build())
+                    .upsert(MeshAsset.triangles(3,new float[]{-.007f,-.006f,-3.8f,.008f,-.006f,-3.8f,
+                            .006f,.007f,-3.8f,-.007f,.007f,-3.8f},new int[]{0,1,2,2,3,0},2))
+                    .upsert(SceneInstance.builder(3,3).renderState(outlined
+                            ?InstanceRenderState.builder().objectMask(9).outline(OutlineStyle.of(0xff00ff00,2)).build()
+                            :InstanceRenderState.defaults()).build()).build());
+            for(int selectedSamples:new int[]{1,2,8}) {
+                samples=selectedSamples;
+                capture("cached-primary-"+shading+"-outline-"+outlined+"-SPP-"+samples,
+                        environment,transport,FramePrimitiveBatch.empty());
+            }
+        }
+        samples=1;
+        require(renderer.health().activeFailure().isEmpty(),"cached primary renderer unhealthy");
     }
     private static void scatteringComposition() throws Exception {
         setup("sun");var base=capture("PBR-scattering-surface-control",SUN,BUDGET,FramePrimitiveBatch.empty());
