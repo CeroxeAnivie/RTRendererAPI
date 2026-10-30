@@ -49,6 +49,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
     private final VulkanDeviceRuntime device;
     private final CudaMediumRuntime cuda;
     private final CudaMediumRuntime.BatchKernel resolve;
+    private final CudaMediumRuntime.BatchKernel uniformResolve;
     private CudaSharedRayFrame storage;
     private CudaMediumRuntime.HostMemory statistics;
     private RtGpuBuffer primary;
@@ -59,10 +60,14 @@ final class CudaPbrMediumManager implements AutoCloseable {
         this.device=Objects.requireNonNull(device,"device");NativeState initialized;
         try{initialized=onNative(()->{
             var opened=CudaMediumRuntime.open(Integer.getInteger("top.ceroxe.rt.medium.cuda.deviceOrdinal",0));
-            try{return new NativeState(opened,opened.compileBatchKernel(CudaPbrMediumSource.source(),"native_pbr_medium_resolve"));}
+            try {
+                String source=CudaPbrMediumSource.source();
+                return new NativeState(opened,opened.compileBatchKernel(source,"native_pbr_medium_resolve"),
+                        opened.compileBatchKernel(source,"native_pbr_medium_uniform_resolve"));
+            }
             catch(RuntimeException|Error failure){try{opened.close();}catch(RuntimeException cleanup){failure.addSuppressed(cleanup);}throw failure;}
         });}catch(RuntimeException|Error failure){nativeThread.shutdown();throw failure;}
-        cuda=initialized.cuda;resolve=initialized.resolve;
+        cuda=initialized.cuda;resolve=initialized.resolve;uniformResolve=initialized.uniformResolve;
     }
 
     static FrameScene scene(RenderFrameRequest frame,int width,int height,int lightUpperBound,MediumSceneIndex.NativeScene scene,
@@ -132,6 +137,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                 !=(scene.transportPlan.kind()!=CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM))
             throw new IllegalArgumentException("PBR scattering volume-emission ownership does not match its integrator");
         var plan=scene.plan;ensureCapacity(plan,scene.transportPlan!=null);long address=storage.deviceAddress();boolean changed=!scene.assets.equals(uploadedAssets);
+        var selectedResolve=plan.boundaryCount()==0&&scene.assets.density.environmentOffset()<0?uniformResolve:resolve;
         if(statistics==null)statistics=cuda.allocateHost(CudaPbrMediumAbi.STATISTICS_BYTES);
         if(additionalRadiance!=null&&additionalRadiance.bytes()!=Math.multiplyExact((long)plan.paths(),16))
             throw new IllegalArgumentException("PBR/scattering complete-frame radiance extent mismatch");
@@ -193,7 +199,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                         if(restoreTiming!=null)restoreTiming.write(command,VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
                     }
                 }},shared->{
-                    cuda.launchBlocking(resolve,shared,paths,1,"pbrMedium.resolve");
+                    cuda.launchBlocking(selectedResolve,shared,paths,1,"pbrMedium.resolve");
                     // Pinned copy precedes the CUDA external signal in the same stream.
                     // The exchange's Vulkan fence proves both complete before validation.
                     cuda.downloadAsync(shared.slice(CudaPbrMediumAbi.STATISTICS_OFFSET,CudaPbrMediumAbi.STATISTICS_BYTES),statistics);
@@ -273,7 +279,8 @@ final class CudaPbrMediumManager implements AutoCloseable {
         try{cuda.close();}catch(RuntimeException|Error exception){if(failure==null)failure=exception;else failure.addSuppressed(exception);}
         if(failure instanceof RuntimeException runtime)throw runtime;if(failure instanceof Error error)throw error;return null;
     });}finally{closed=true;nativeThread.shutdown();}}
-    private record NativeState(CudaMediumRuntime cuda,CudaMediumRuntime.BatchKernel resolve) { }
+    private record NativeState(CudaMediumRuntime cuda,CudaMediumRuntime.BatchKernel resolve,
+            CudaMediumRuntime.BatchKernel uniformResolve) { }
     private record Assets(List<CudaBoundaryMediumAbi.Boundary> boundaries,CudaMediumDensityAbi.Scene density,int sceneBytes) { }
     static final class FrameScene {
         private final CudaPbrMediumAbi.Plan plan;private final byte[] metadata;private final Assets assets;

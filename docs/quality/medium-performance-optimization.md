@@ -430,3 +430,23 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 候选同一观测窗口：360 帧、5129.2839 ms，14.248011 ms/帧、70.185236 FPS；观测相对关闭诊断帧时变化 −1.08%，未测到超过 10% 的拖慢。新主表 PBR fence 6.735173 ms/帧（472.710 ms/墙钟秒，47.271%），散射完成同步 4.119540 ms（289.131 ms/秒，28.913%），散射读回前同步 0.812244 ms（57.008 ms/秒，5.701%）。完整互斥表和求和见本轮 JSON/CSV，GPU 工作不与 fence 相加。67,502 事件，零丢样，严格包含与互斥求和检查通过。
 
 8 帧 HDR 与保留对照全字节一致；31 项 PBR 检查（43 native frames）、15 项散射组合检查通过，三份 validation 日志零 warning/error。场景证明和 PBR ABI 自测通过；通用 shader 原有 8 个 SPIR-V 与改前完全相同，新 query 8 个变体已编译。证据：[pbr-light-inline-query-20261031.json](data/pbr-light-inline-query-20261031.json)、[完整排名 CSV](data/pbr-light-inline-query-ranked-20261031.csv)。工具：`tools/RunMediumPbrTrial.ps1`、`tools/AnalyzeMediumPbrTrial.py`。
+
+
+### PBR 新第一名：无边界均匀解析移除通用体积状态
+
+限定前三项中的 CUDA 解析成为新 GPU 第一名。原 kernel 无论场景是否存在界面，都为 receiver 和每个有效光连接携带/清零 272-byte 通用 State、32 层 PathVolumeInfo，并编译密度积分、优先级与事件处理。现在用独立 kernel 静态特化无边界且环境无密度 descriptor 的场景，只保留方向、透射率和发射。host 按 scene plan/descriptor 选择，kernel 再检查 magic/version/maxEvents/零边界/零初始集合/无密度；意外非零 packet 事件直接拒绝。边界、密度场景保留通用 kernel。两个入口共享同一个已编译 CUDA module，没有额外编译/同步或 resident 缓冲。
+
+复用锁定 LuxCore `b872186d2fe995a762f73708c606847eed55843e`（Apache-2.0）的 `HomogeneousVolume_SegmentScatter` 和 PathVolumeInfo 语义；只把项目 segment/coefficient 适配器变为模板，使编译器去掉无用状态和密度分支，上游计算与 API 发射积分代码未改。连接遍历顺序、浮点运算、颜色/距离累计、失败与 completed 统计保持。未降低质量、步数或事件预算。
+
+| 指标 | 对照 | 候选 | 降幅/提升 |
+| --- | ---: | ---: | ---: |
+| CUDA PBR kernel，ms/帧 | 2.231929 | 1.260957 | −43.50% |
+| 三轮 kernel 降幅 | — | — | 43.94% / 45.07% / 41.43% |
+| 整条 PBR，ms/帧 | 7.855413 | 6.626251 | −15.65% |
+| 关闭诊断原生 FPS | 70.566711 | 76.827299 | +8.87% |
+
+候选新 GPU 排名：灯光 packet 2.114346 ms、主射线 packet 1.726636 ms、CUDA 解析 1.260957 ms、贡献 restore 0.155791 ms。继续只处理本次限定前三项，下一项为原第三名主射线 packet。
+
+三轮各 120 帧，360 帧预热，测前 GPU 0 均为 0%。候选观测窗口 14.019467 ms/帧、71.329390 FPS，观测开销 7.71%，在用户允许的 10% 内，最终 FPS 来自关闭全部诊断的独立窗口。墙钟新第一名 PBR fence 6.010726 ms/帧、428.741 ms/秒、42.874%；散射完成同步 4.543996 ms、324.120 ms/秒、32.412%。67,506 事件、零丢样，严格包含和互斥求和通过。GPU 工作不另加到 fence 主表。
+
+正确性：8 帧 HDR 全字节一致，31 项 PBR、15 项介质组合、14 项相机散射检查全部通过，四份 validation 零 warning/error。源码 manifest、PBR ABI 和跨线程 wall timeline 契约通过。正式打包制品仅相对性能制品更新 manifest 中两个适配源的 byte/hash，运行类与 CUDA 源码完全相同，两个 hash 均留档。完整三轮、观测开销和新表：[pbr-uniform-state-20261031.json](data/pbr-uniform-state-20261031.json)、[排名 CSV](data/pbr-uniform-state-ranked-20261031.csv)。

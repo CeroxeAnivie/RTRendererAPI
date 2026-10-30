@@ -53,7 +53,8 @@ __device__ bool initializeVolumes(unsigned char *buffer,State *state) {
     state->counters.z=1u;
     return true;
 }
-__device__ int coefficients(unsigned char *buffer,const State &state,float3 *a,float3 *e) {
+template<class StateType>
+__device__ int coefficients(unsigned char *buffer,const StateType &state,float3 *a,float3 *e) {
     unsigned int selected=state.volumes.currentVolumeIndex;
     if(selected==0xffffffffu) {
         const float *h=(const float *)buffer;
@@ -64,7 +65,8 @@ __device__ int coefficients(unsigned char *buffer,const State &state,float3 *a,f
         return ((const int *)&table(buffer)[selected].reserved)[0];
     }
 }
-__device__ bool segment(unsigned char *buffer,State *state,float3 origin,float distance) {
+template<class StateType>
+__device__ bool segment(unsigned char *buffer,StateType *state,float3 origin,float distance) {
     distance=fminf(fmaxf(distance,0.f),state->transport.w);
     float3 a,e,tr,upstreamEmission,zero=make_float3(0.f);
     const int descriptor=coefficients(buffer,*state,&a,&e);

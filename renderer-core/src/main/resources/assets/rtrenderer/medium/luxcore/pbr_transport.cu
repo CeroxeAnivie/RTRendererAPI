@@ -1,6 +1,38 @@
 // Vulkan supplies geometry/BRDF and ordered camera/light boundary events. All medium selection,
 // density integration and attenuation here go through the fixed LuxCore native implementation.
 namespace rtr_pbr {
+// A uniform environment without interfaces has no per-ray priority stack.
+// Keep the same segment implementation, but let the compiler eliminate both
+// the 32-entry volume array and density-grid code from this separate kernel.
+struct UniformState {
+    float4 direction,transport,emission;
+    struct Volumes {static constexpr unsigned int currentVolumeIndex=0xffffffffu;} volumes;
+};
+__device__ void clear(UniformState *s) {
+    s->direction=s->transport=s->emission=make_float4(0.f);
+}
+__device__ bool initializeVolumes(unsigned char *buffer,UniformState *) {
+    const unsigned int *h=(const unsigned int *)buffer;
+    return h[0]==0x52564d31u&&h[1]==1u&&h[6]>=1u&&h[6]<=32u
+        &&h[7]==0u&&h[8]==0u&&((const int *)buffer)[24]<0;
+}
+// Found by ADL from the shared segment template; the pinned LuxCore Beer and
+// API emission functions remain identical to the general boundary path.
+__device__ int coefficients(unsigned char *buffer,const UniformState &,float3 *a,float3 *e) {
+    const float *h=(const float *)buffer;
+    *a=make_float3(h[16],h[17],h[18]);*e=make_float3(h[20],h[21],h[22]);return -1;
+}
+__device__ bool walk(unsigned char *buffer,const unsigned int *packet,UniformState *s,
+        float geometryEnd,bool receiver,unsigned int &crossed) {
+    using namespace rtr_boundary;
+    const unsigned int *h=(const unsigned int *)buffer;
+    const unsigned int capacity=h[27]&255u,terminal=4u+4u*((capacity+1u)/2u);
+    if(capacity<1u||capacity>32u||packet[3]!=0u)return false;
+    float3 origin=make_float3(__uint_as_float(packet[terminal+1]),__uint_as_float(packet[terminal+2]),__uint_as_float(packet[terminal+3]));
+    s->direction=make_float4(__uint_as_float(packet[0]),__uint_as_float(packet[1]),__uint_as_float(packet[2]),0.f);
+    if(!finite3(origin)||!finite3(rgb(s->direction))||!isfinite(geometryEnd)||geometryEnd<0.f)return false;
+    return segment(buffer,s,origin,fmaxf(fminf(geometryEnd,((float *)buffer)[19]),0.f));
+}
 __device__ void clear(rtr_boundary::State *s) {
     unsigned int *words=(unsigned int *)s;for(int j=0;j<68;++j)words[j]=0u;
 }
@@ -38,11 +70,12 @@ __device__ bool walk(unsigned char *buffer,const unsigned int *packet,rtr_bounda
     }
     return segment(buffer,s,origin+rgb(s->direction)*previous,fmaxf(integrationEnd-previous,0.f));
 }
+template<class StateType>
 __device__ bool resolve(unsigned char *buffer,int i,unsigned int &crossed) {
     using namespace rtr_boundary;
     unsigned int *h=(unsigned int *)buffer;const unsigned int capacity=h[27]&255u,stride=8u+4u*((capacity+1u)/2u),terminal=stride-4u;
     const unsigned int *packets=(const unsigned int *)(buffer+h[9]);const unsigned int *camera=packets+(unsigned int)i*stride;
-    State receiver;clear(&receiver);receiver.transport=make_float4(1.f,1.f,1.f,((float *)buffer)[19]);
+    StateType receiver;clear(&receiver);receiver.transport=make_float4(1.f,1.f,1.f,((float *)buffer)[19]);
     if(!initializeVolumes(buffer,&receiver))return false;
     float hit=__uint_as_float(camera[terminal]),end=hit>=0.f?hit:((float *)buffer)[19];
     if(!walk(buffer,camera,&receiver,end,true,crossed))return false;
@@ -64,7 +97,7 @@ __device__ bool resolve(unsigned char *buffer,int i,unsigned int &crossed) {
         float distance=__uint_as_float(packet[terminal]);float3 transmission=make_float3(1.f);
         // A negative connection distance is the existing castsShadow=false surface contract.
         if(distance>=0.f) {
-            State connection;clear(&connection);connection.volumes=receiver.volumes;
+            StateType connection;clear(&connection);connection.volumes=receiver.volumes;
             connection.transport=make_float4(1.f,1.f,1.f,((float *)buffer)[19]);
             if(!walk(buffer,packet,&connection,distance,false,crossed))return false;
             transmission=rgb(connection.transport);
@@ -83,10 +116,10 @@ __device__ bool resolve(unsigned char *buffer,int i,unsigned int &crossed) {
     ((float4 *)(buffer+h[12]))[i]=make_float4(specular.x,specular.y,specular.z,specularWeight>0.f?specularDistance/specularWeight:0.f);
     return true;
 }
-}
-extern "C" __global__ void native_pbr_medium_resolve(unsigned char *buffer,int count) {
+template<class StateType>
+__device__ void run(unsigned char *buffer,int count) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;unsigned int failed=0u,crossed=0u,completed=i<count?1u:0u;
-    if(i<count&&!rtr_pbr::resolve(buffer,i,crossed)) {
+    if(i<count&&!resolve<StateType>(buffer,i,crossed)) {
         unsigned int *h=(unsigned int *)buffer;
         ((float4 *)(buffer+h[11]))[i]=make_float4(0.f);((float4 *)(buffer+h[12]))[i]=make_float4(0.f);failed=1u;
     }
@@ -98,4 +131,11 @@ extern "C" __global__ void native_pbr_medium_resolve(unsigned char *buffer,int c
         unsigned int *h=(unsigned int *)buffer;if(failed)atomicAdd(h+29,failed);if(crossed)atomicAdd(h+30,crossed);
         if(completed){atomicSub(h+28,completed);atomicAdd(h+31,completed);}
     }
+}
+}
+extern "C" __global__ void native_pbr_medium_resolve(unsigned char *buffer,int count) {
+    rtr_pbr::run<rtr_boundary::State>(buffer,count);
+}
+extern "C" __global__ void native_pbr_medium_uniform_resolve(unsigned char *buffer,int count) {
+    rtr_pbr::run<rtr_pbr::UniformState>(buffer,count);
 }
