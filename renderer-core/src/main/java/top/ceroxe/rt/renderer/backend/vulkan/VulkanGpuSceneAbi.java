@@ -228,6 +228,7 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
     static final int LIGHT_RANGE_WORD = 14;
     static final int LIGHT_INNER_CONE_WORD = 15;
     static final int LIGHT_OUTER_CONE_WORD = 16;
+    static final int LIGHT_FLOAT_POSITION_WORD = 17;
 
     static final int FRAME_EXTENT_WORD = 0;
     static final int FRAME_SEQUENCE_WORD = 2;
@@ -467,6 +468,7 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
         values.put("GPU_SCENE_LIGHT_RANGE_WORD", LIGHT_RANGE_WORD);
         values.put("GPU_SCENE_LIGHT_INNER_CONE_WORD", LIGHT_INNER_CONE_WORD);
         values.put("GPU_SCENE_LIGHT_OUTER_CONE_WORD", LIGHT_OUTER_CONE_WORD);
+        values.put("GPU_SCENE_LIGHT_FLOAT_POSITION_WORD", LIGHT_FLOAT_POSITION_WORD);
         values.put("GPU_SCENE_FRAME_EXTENT_WORD", FRAME_EXTENT_WORD);
         values.put("GPU_SCENE_FRAME_SEQUENCE_WORD", FRAME_SEQUENCE_WORD);
         values.put("GPU_SCENE_FRAME_CAMERA_POSITION_WORD", FRAME_CAMERA_POSITION_WORD);
@@ -838,7 +840,24 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
         words[14] = Float.floatToRawIntBits(value.range());
         words[15] = Float.floatToRawIntBits(value.innerConeCosine());
         words[16] = Float.floatToRawIntBits(value.outerConeCosine());
+        // Reuse the reserved tail, keeping the original doubles and the 24-word stride.
+        // Scattering previously decoded these same floats at every integration point.
+        words[LIGHT_FLOAT_POSITION_WORD] = Float.floatToRawIntBits(shaderLightCoordinate(value.x()));
+        words[LIGHT_FLOAT_POSITION_WORD + 1] = Float.floatToRawIntBits(shaderLightCoordinate(value.y()));
+        words[LIGHT_FLOAT_POSITION_WORD + 2] = Float.floatToRawIntBits(shaderLightCoordinate(value.z()));
         return words;
+    }
+
+    private static float shaderLightCoordinate(double value) {
+        // Match gsFiniteDoubleAsFloat's float operation order rather than a double cast.
+        long bits = Double.doubleToRawLongBits(value);
+        int high = (int) (bits >>> 32), low = (int) bits;
+        int exponent = (high >>> 20) & 0x7ff, mantissa = high & 0xfffff;
+        if (exponent == 0 && mantissa == 0 && low == 0) return 0.0f;
+        float fraction = (float) mantissa * 0x1.0p-20f + (float) Integer.toUnsignedLong(low) * 0x1.0p-52f;
+        float magnitude = exponent == 0 ? Math.scalb(fraction, -1022)
+                : Math.scalb(1.0f + fraction, exponent - 1023);
+        return high >= 0 ? magnitude : -magnitude;
     }
 
     static int[] clearedRecord(int wordsPerRecord) {

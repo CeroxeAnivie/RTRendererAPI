@@ -5,6 +5,11 @@
 #endif
 // Light geometry and surface visibility use the retained production scene. This stage
 // does not integrate camera radiance; pinned LuxCore CUDA consumes the source samples.
+vec3 gsScatteringLightPosition(uint base) {
+    return vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_FLOAT_POSITION_WORD]),
+        uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_FLOAT_POSITION_WORD+1u]),
+        uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_FLOAT_POSITION_WORD+2u]));
+}
 float gsScatteringPhase(float cosine,float g) {
     float c=clamp(cosine,-1.0,1.0),edge=g>=0.0?1.0-g:1.0+g;
     float d=edge*edge+(g>=0.0?2.0*g*(1.0-c):-2.0*g*(1.0+c));
@@ -58,9 +63,7 @@ vec3 gsScatteringLightProfile(uint slot,vec3 position,vec3 rayDirection,float g,
         direction=-normalize(vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD]),
             uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+2u])));
     }else {
-        vec3 point=vec3(gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD+1u]),
-            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD+1u]),
-            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD+1u]));
+        vec3 point=gsScatteringLightPosition(base);
         vec3 delta=point-position;distance=length(delta);if(distance<=1e-8){gsScatteringProfileAdd(record,7u,started);return vec3(0);}
         direction=delta/distance;float range=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_RANGE_WORD]),fade=max(1.0-distance/range,0.0);
         attenuation=fade*fade/max(distance*distance,1.0);
@@ -119,9 +122,7 @@ vec3 gsScatteringLight(uint slot,vec3 position,vec3 rayDirection,float g,vec3 si
         direction=-normalize(vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD]),
             uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_DIRECTION_WORD+2u])));
     }else {
-        vec3 point=vec3(gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_X_WORD+1u]),
-            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Y_WORD+1u]),
-            gsFiniteDoubleAsFloat(gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD],gsLights.words[base+GPU_SCENE_LIGHT_POSITION_Z_WORD+1u]));
+        vec3 point=gsScatteringLightPosition(base);
         vec3 delta=point-position;distance=length(delta);if(distance<=1e-8)return vec3(0);direction=delta/distance;
         float range=uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_RANGE_WORD]),fade=max(1.0-distance/range,0.0);
         attenuation=fade*fade/max(distance*distance,1.0);

@@ -41,6 +41,7 @@ public final class VulkanGpuSceneAbiSelfTest {
       packsGeometryAndInstanceReferences();
       verifiesDirectionalDiffuseNumericalOracle();
       preservesDoublePrecisionLightPositions();
+      verifiesScatteringLightPositionCache();
       rejectsUnresolvedAndMismatchedResources();
       matchesShaderContractExactly();
       System.out.println("VulkanGpuSceneAbiSelfTest passed");
@@ -217,6 +218,26 @@ public final class VulkanGpuSceneAbiSelfTest {
       int[] record = VulkanGpuSceneAbi.packLight(light);
       require(record.length == 24, "light descriptor stride changed");
       require(Double.longBitsToDouble(join(record[1], record[2])) == light.x() && Double.longBitsToDouble(join(record[3], record[4])) == light.y(), "persistent light position was truncated to float precision");
+   }
+
+   private static void verifiesScatteringLightPositionCache() {
+      var random = new java.util.Random(0x5080L);
+      for (int sample = 0; sample < 256; sample++) {
+         float x = Math.scalb(random.nextFloat() * 2.0f - 1.0f, sample % 120 - 60);
+         double y = random.nextDouble(-1.0e8, 1.0e8);
+         var light = SceneLight.point(50L, x, y, -x).build();
+         int[] record = VulkanGpuSceneAbi.packLight(light);
+         int base = VulkanGpuSceneAbi.LIGHT_FLOAT_POSITION_WORD;
+         require(record.length == 24 && base >= 17 && base + 2 < record.length,
+               "scattering cache changed the light record size or overlaps existing light fields");
+         require(Float.intBitsToFloat(record[base]) == x && Float.intBitsToFloat(record[base + 2]) == -x,
+               "scattering cache must exactly preserve representable float coordinates");
+         float rounded = (float) y, actual = Float.intBitsToFloat(record[base + 1]);
+         require(Math.abs((double) actual - rounded) <= Math.ulp(rounded),
+               "shader-compatible cached coordinate differs by more than one float ULP");
+         require(Double.longBitsToDouble(join(record[3], record[4])) == y,
+               "scattering cache must retain the original double coordinate");
+      }
    }
 
    private static void verifiesDirectionalDiffuseNumericalOracle() {

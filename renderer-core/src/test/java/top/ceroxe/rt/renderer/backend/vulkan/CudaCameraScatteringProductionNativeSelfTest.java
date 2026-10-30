@@ -49,6 +49,12 @@ public final class CudaCameraScatteringProductionNativeSelfTest {
                 compare("point-spot-directional-sun-enumerated",medium(.25f),environment(.8f,false),List.of(directional,point,spot),false,64,2,12,false);
                 compare("point-spot-opaque-shadow",medium(-.25f),environment(.8f,false),List.of(directional,point,spot),true,64,1,12,false);
                 compare("small-light-set-importance-enumerates",medium(.25f),environment(.8f,false),List.of(directional,point,spot),false,64,1,12,true);
+                var fractionalPoint=SceneLight.point(2,20.123456789,15.987654321,3.0000000000000004)
+                        .color(.2f,.8f,.6f).intensity(40).range(100).castsShadow(true).build();
+                var fractionalSpot=SceneLight.spot(3,-20.123456789,15.321987654,3.567891234,20,-15,-2)
+                        .color(.9f,.2f,.4f).intensity(35).range(100).coneDegrees(20,50).castsShadow(true).build();
+                compare("fractional-double-point-spot-upload-replacement",medium(.25f),environment(.8f,false),
+                        List.of(directional,fractionalPoint,fractionalSpot),true,64,1,12,true);
                 // Nine collinear lights have equal spectral/geometry ratios. Their importance
                 // estimates have an exact sum, independently of which reservoir entries win.
                 var reservoirLights=new ArrayList<SceneLight>();
