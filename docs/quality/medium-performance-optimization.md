@@ -349,3 +349,21 @@ GPU 空闲后重新测试，两个制品测前 GPU 0 占用均为 0%，每组 90
 ```powershell
 python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSON的目录> --output <输出JSON路径>
 ```
+
+### 严格不透明三角形阴影查询收紧
+
+现有阴影第一名中，GPUScene 的持久 BLAS 和帧图元均由 `RtDeviceTriangleBlasBuilder` 生成；严格不透明证明成立时，opaque triangle 在 traversal 内自动提交命中，terminate-on-first-hit 完成遍历，没有需要应用确认的 alpha/procedural candidate。因此仅把这个已证明分支的空 `while(rayQueryProceedEXT(...))` 改为一次 proceed，通用透射/非严格场景路径保持原样。
+
+参考 Falcor 同一 commit `759aad033ff610fb0d82c74f7e0a508d0096d5f2`，BSD-3-Clause，[`Source/Falcor/Scene/RaytracingInline.slang`](https://github.com/NVIDIAGameWorks/Falcor/blob/759aad033ff610fb0d82c74f7e0a508d0096d5f2/Source/Falcor/Scene/RaytracingInline.slang) 根据 alpha/procedural 几何需求特化 visibility query 的方式。本项目的单次 proceed 来自更严格的仅三角形证明，没有复制外部代码，也未引入需要额外 Vulkan feature 的 primitive-culling ray flag。
+
+| 指标 | 对照 | 候选 | 变化 |
+| --- | ---: | ---: | ---: |
+| 正式散射灯光 GPU ms/帧 | 4.115554 | 3.975656 | −3.40% |
+| 正式 GPU 三轮降幅 | — | — | 2.37% / 4.37% / 3.55% |
+| 首组关闭诊断 FPS，90 帧预热 | 58.375178 | 56.164248 | 未改善，不以此宣称收益 |
+| 反序关闭诊断 FPS，360 帧预热 | 64.692861 | 68.959958 | 本组 +6.60% |
+| 反序关闭诊断 ms/帧 | 15.457656 | 14.501169 | 本组 −6.19% |
+
+内部 shadow/remainder 比三轮由 0.34884/0.34900/0.34810 降至 0.31996/0.32164/0.31781。候选内部新第一名是主射线与命中/缓存读取，不再是不透明阴影；完整 ms/路径排名保留为内部证据。8 帧 HDR 全字节一致，23,083 次阴影 query 对原 traceRay parity 零差异，14 项生产 HDR 验收全部通过，validation 0 warning/0 error。仅这个 query 的 8 个 SPIR-V 变体重编译与校验。
+
+保留三轮正式 GPU 阶段收益，关闭诊断的 FPS 仍按独立观测组报告，不把反序 +6.60% 当作保证。详细轮次与新内部排名见 [scattering-shadow-single-proceed-20261031.json](data/scattering-shadow-single-proceed-20261031.json)。下一候选按用户指定只处理 PBR 统计读回前同步。

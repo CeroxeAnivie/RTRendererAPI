@@ -35,7 +35,10 @@ GsShadowVisibility gsShadowVisibilityDetailed(vec3 origin,vec3 normal,vec3 direc
         rayQueryEXT query;
         rayQueryInitializeEXT(query,sceneTlas,gl_RayFlagsOpaqueEXT|gl_RayFlagsTerminateOnFirstHitEXT,
             255,origin+normal*epsilon,epsilon,direction,maximumDistance);
-        while(rayQueryProceedEXT(query)) {}
+        // GPUScene TLAS and frame primitives contain triangles only. Opaque
+        // triangles commit inside traversal, and first-hit termination completes
+        // it in one proceed: there is no candidate for application confirmation.
+        rayQueryProceedEXT(query);
         vec3 value=rayQueryGetIntersectionTypeEXT(query,true)==gl_RayQueryCommittedIntersectionNoneEXT
             ?vec3(1.0):vec3(0.0);
 #ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
