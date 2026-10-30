@@ -11,11 +11,11 @@ import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 
 /** Dielectric continuation with homogeneous or density-grid camera scattering; primary samples remain intact. */
 public final class CudaOpticalMediumAbi {
-    public static final int MAGIC=0x524f5031,VERSION=6,HEADER_BYTES=384,BOUNDARY_BYTES=64;
+    public static final int MAGIC=0x524f5031,VERSION=7,HEADER_BYTES=384,BOUNDARY_BYTES=64;
     public static final int STATE_BYTES=256,HIT_BYTES=208,COLOR_BYTES=16,STATISTICS_OFFSET=112,STATISTICS_BYTES=16;
     public static final int COMPACT_HIT_BYTES=96;
     public static final int COMPACT_STATE_BYTES=112;
-    public static final int CONNECTION_BYTES=304;
+    public static final int CONNECTION_BYTES=352;
     public static final long DEFAULT_RESIDENT_BYTES=512L*1024*1024,ALLOCATION_ALLOWANCE=65536;
     public static final String EXTERNAL_PRIMARY_PROPERTY="top.ceroxe.rt.medium.cuda.opticalExternalPrimary";
     public static final String DIRECT_PRIMARY_PROPERTY="top.ceroxe.rt.medium.cuda.opticalDirectPrimary";
@@ -197,14 +197,11 @@ public final class CudaOpticalMediumAbi {
     }
     /** Every direct connection can consume the full public boundary-event budget. */
     public static int maximumRounds(RenderFrameRequest frame,int lightUpperBound,boolean connectionTransport) {
-        return maximumRounds(frame,lightUpperBound,connectionTransport,false);
-    }
-    public static int maximumRounds(RenderFrameRequest frame,int lightUpperBound,boolean connectionTransport,boolean metallicReflection) {
         if(lightUpperBound<0)throw new IllegalArgumentException("negative light upper bound");
         long collisions=(long)frame.mediumTransport().scatteringBounces()+1;
         long connections=frame.mediumTransport().lightSamples()==0?lightUpperBound:frame.mediumTransport().lightSamples();
         long rounds=frame.mediumTransport().maxEvents()+2*collisions;
-        if(connectionTransport)rounds=Math.addExact(rounds,Math.multiplyExact(collisions+(metallicReflection?2:1),
+        if(connectionTransport)rounds=Math.addExact(rounds,Math.multiplyExact(collisions+frame.mediumTransport().maxEvents(),
                 Math.multiplyExact(connections+1,(long)frame.mediumTransport().maxEvents()+1)));
         return Math.toIntExact(rounds);
     }

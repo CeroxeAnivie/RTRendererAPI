@@ -38,6 +38,11 @@ GpuScenePayload gsTracePhoton(vec3 origin,vec3 direction,uvec4 launchInfo) {
     payload.state=uvec4(0u,GS_PAYLOAD_PHOTON_QUERY,0u,0u);payload.launchInfo=launchInfo;
     payload.mediumBoundary=uvec4(0u);
     traceRayEXT(sceneTlas,gl_RayFlagsNoneEXT,255,0,0,0,origin,gsRayEpsilon(origin),direction,1.0e20,0);
+    while(payload.state.x!=0u&&payload.mediumBoundary.w==0u&&gsSurfaceOverlay(payload)){
+        float minimum=uintBitsToFloat(floatBitsToUint(payload.worldPositionAndDistance.w)+1u);
+        payload.state=uvec4(0u,GS_PAYLOAD_PHOTON_QUERY,0u,0u);payload.launchInfo=launchInfo;payload.mediumBoundary=uvec4(0u);
+        traceRayEXT(sceneTlas,gl_RayFlagsNoneEXT,255,0,0,0,origin,minimum,direction,1.0e20,0);
+    }
     return payload;
 }
 void main() {

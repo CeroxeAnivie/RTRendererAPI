@@ -11,6 +11,7 @@ vec3 gsOpticalBeer(float distance,vec3 extinction,float limit) {
 vec3 gsOpticalPbrSurface(GpuScenePayload receiver,vec3 rayOrigin) {
     vec3 position=receiver.worldPositionAndDistance.xyz,normal=normalize(receiver.worldNormalAndRoughness.xyz);
     vec3 base=max(receiver.baseColorAndOpacity.rgb,vec3(0.0)),emissive=max(receiver.emissiveAndMetallic.rgb,vec3(0.0));
+    if(gsLightmapModulated(receiver))return gsApplyDistanceFog(base,receiver.transmissionIor.z,receiver.transmissionIor.w);
     if(gsUnlit(receiver))return base+emissive;
     float roughness=clamp(receiver.worldNormalAndRoughness.w,.025,1.0),metallic=clamp(receiver.emissiveAndMetallic.a,0.0,1.0);
     vec3 view=normalize(rayOrigin-position),sigma=gsFrameVec3(GPU_SCENE_FRAME_MEDIUM_EXTINCTION_WORD)
@@ -37,7 +38,7 @@ vec3 gsOpticalPbrSurface(GpuScenePayload receiver,vec3 rayOrigin) {
     return gsRadiance(radiance);
 }
 GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,float minimum) {
-    payload.state=uvec4(0u,GS_PAYLOAD_RADIANCE_QUERY,0u,0u);
+    payload.state=uvec4(0u,gsOptical.initialize>=2ul?GS_PAYLOAD_PHOTON_QUERY:GS_PAYLOAD_RADIANCE_QUERY,0u,0u);
     payload.launchInfo=launch;payload.mediumBoundary=uvec4(0u);
     // CPU proof excludes masked coverage, backface rejection and inactive material slots.
     // Opaque is an intersection flag: closest-hit still evaluates glass and volume boundaries.
@@ -47,6 +48,19 @@ GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,f
 }
 GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch) {
     return gsTraceOpticalRadiance(origin,direction,launch,gsRayEpsilon(origin));
+}
+bool gsOpticalOverlayReceiver(GpuScenePayload overlay,vec3 direction,uvec4 launch){
+    vec3 origin=overlay.worldPositionAndDistance.xyz+direction*1.0e-3;
+    float minimum=gsRayEpsilon(origin);
+    GpuScenePayload receiver=gsTraceOpticalRadiance(origin,direction,launch,minimum);
+    // Invisible boundaries change transport on the real continuation below, but
+    // are not the surface whose receiver mask decides overlay composition.
+    while(receiver.state.x!=0u&&(receiver.mediumBoundary.w&2u)!=0u){
+        minimum=uintBitsToFloat(floatBitsToUint(receiver.worldPositionAndDistance.w)+1u);
+        receiver=gsTraceOpticalRadiance(origin,direction,launch,minimum);
+    }
+    return receiver.state.x!=0u&&(receiver.surfaceState.x&overlay.surfaceState.y)!=0u
+        &&receiver.worldPositionAndDistance.w<=max(overlay.compositeState.y,2.0e-3);
 }
 void gsOpticalStoreAt(GsOpticalStorage destination,uint byteOffset,uint item,GpuScenePayload hit,uvec4 identity,uint stride) {
     GS_DETAIL_BEGIN(64u);
@@ -194,7 +208,7 @@ void gsOpticalStateWrite(uint item,uint lane,uvec4 value) {
 }
 // Select light geometry only. CUDA owns phase, density attenuation and the copied medium stack.
 void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 launch,uint epoch,bool initialize,uint hitOffset) {
-    uint base=gsOptical.storage.lanes[4u].z/16u+item*19u;
+    uint base=gsOptical.storage.lanes[4u].z/16u+item*22u;
     if(initialize) {
         uvec4 control=gsOptical.storage.lanes[base+5u];uint ordinal=control.x;
 #ifdef RTRENDERER_CAUSTICS
@@ -274,7 +288,16 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
     // medium boundary or a scene-scale epsilon skipping a thin volume.
     float minimum=gsOptical.storage.lanes[base+5u].z==0u?0.0:uintBitsToFloat(floatBitsToUint(ray.w)+1u);
     GpuScenePayload hit;
-    if(gsOptical.storage.lanes[base+2u].w!=0u)hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum);
+    if(gsOptical.storage.lanes[base+2u].w!=0u){
+        hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum);
+        // Connections need full material hits for transparent attenuation, while
+        // preserving the public shadow exclusions for overlays and non-blockers.
+        while(hit.state.x!=0u&&hit.mediumBoundary.w==0u
+                &&((hit.state.w&GPU_SCENE_FLAG_CASTS_SHADOW)==0u||gsSurfaceOverlay(hit))){
+            minimum=uintBitsToFloat(floatBitsToUint(hit.worldPositionAndDistance.w)+1u);
+            hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum);
+        }
+    }
     else {hit.worldPositionAndDistance=vec4(0,0,0,-1);hit.previousWorldPosition=vec4(0);hit.motionRevision=uvec2(0);
         hit.worldNormalAndRoughness=vec4(0,1,0,0);hit.baseColorAndOpacity=vec4(0);hit.emissiveAndMetallic=vec4(0);
         hit.transmissionIor=vec4(0);hit.state=uvec4(0);hit.surfaceState=uvec4(0);hit.compositeState=vec4(0);
@@ -318,6 +341,10 @@ void gsOpticalPhotonTrace() {
     vec3 direction=uintBitsToFloat(photons.lanes[state+1u]).xyz;
     uvec4 launch=uvec4(gl_LaunchIDEXT.xy,gl_LaunchSizeEXT.xy);
     GpuScenePayload hit=gsTraceOpticalRadiance(origin,direction,launch,0.0);
+    while(hit.state.x!=0u&&hit.mediumBoundary.w==0u&&gsSurfaceOverlay(hit)){
+        float minimum=uintBitsToFloat(floatBitsToUint(hit.worldPositionAndDistance.w)+1u);
+        hit=gsTraceOpticalRadiance(origin,direction,launch,minimum);
+    }
     uint epoch=photons.lanes[state+2u].w;
     gsOpticalStoreAt(photons,photons.lanes[1u].y,item,hit,uvec4(item,0u,epoch,epoch),1u);
 }
@@ -419,14 +446,24 @@ void main() {
         // Keep UNLIT terminals cheap; PBR direct light also attenuates the shadow
         // segment through the admitted global participating medium.
         if(hit.state.x==0u)value=hit.baseColorAndOpacity.rgb;
-        else if((hit.mediumBoundary.w&2u)==0u&&hit.transmissionIor.x<1.0){
+        else if((hit.mediumBoundary.w&2u)==0u&&(hit.transmissionIor.x<1.0||gsSurfaceOverlay(hit))){
             GS_DETAIL_NEXT(21u);
             value=gsOpticalPbrSurface(hit,origin);
         }
         GS_DETAIL_NEXT(22u);
-        bool pbr=hit.state.x!=0u&&(hit.mediumBoundary.w&2u)==0u&&hit.transmissionIor.x<=0.0&&!gsUnlit(hit);
-        if(pbr&&gsOptical.storage.lanes[4u].w!=0u) {
-            uint connection=gsOptical.storage.lanes[4u].z/16u+item*19u;
+        bool surface=hit.state.x!=0u&&(hit.mediumBoundary.w&2u)==0u;
+        bool pbr=surface&&(hit.transmissionIor.x<1.0||gsSurfaceOverlay(hit))&&!gsUnlit(hit)&&!gsLightmapModulated(hit);
+        float surfaceKind=surface?(pbr?1.0:2.0):0.0;
+        if(surface&&gsSurfaceOverlay(hit)){
+            if(!gsOpticalOverlayReceiver(hit,direction,launch))surfaceKind=5.0;
+            else{
+                uint composition=(hit.state.z>>GPU_SCENE_OVERLAY_COMPOSITION_MODE_SHIFT)&GPU_SCENE_OVERLAY_COMPOSITION_MODE_MASK;
+                bool multiply=composition==GPU_SCENE_OVERLAY_COMPOSITION_MULTIPLY;
+                surfaceKind=pbr?(multiply?4.0:3.0):(multiply?7.0:6.0);
+            }
+        }
+        if(surface&&gsOptical.storage.lanes[4u].w!=0u) {
+            uint connection=gsOptical.storage.lanes[4u].z/16u+item*22u;
             vec2 reflectionSample=gsReflectionSample(sampleIndex,samples,launch);
             gsOptical.storage.lanes[connection+15u]=floatBitsToUint(vec4(hit.worldPositionAndDistance.xyz,
                 clamp(hit.emissiveAndMetallic.a,0.0,1.0)));
@@ -434,8 +471,9 @@ void main() {
             gsOptical.storage.lanes[connection+17u]=floatBitsToUint(vec4(normalize(origin-hit.worldPositionAndDistance.xyz),reflectionSample.y));
             gsOptical.storage.lanes[connection+18u]=floatBitsToUint(vec4(max(hit.baseColorAndOpacity.rgb,vec3(0)),
                 clamp(hit.worldNormalAndRoughness.w,.025,1.0)));
+            if(gsSurfaceOverlay(hit))gsOptical.storage.lanes[connection+20u]=floatBitsToUint(vec4(gsSkyRadiance(direction),0));
         }
-        gsOptical.storage.lanes[evaluationOffset/16u+item]=floatBitsToUint(vec4(value,pbr?1.0:0.0));
+        gsOptical.storage.lanes[evaluationOffset/16u+item]=floatBitsToUint(vec4(value,surfaceKind));
         GS_DETAIL_END();
     }
 }

@@ -1,0 +1,170 @@
+{
+  "date": "2026-10-31",
+  "baseCommit": "eac776d",
+  "hardware": "NVIDIA RTX 5080 Laptop GPU",
+  "passed": true,
+  "nativeFrames": 37,
+  "finalHdrChecks": 29,
+  "maximumAbsoluteError": 0.000487772653,
+  "opticalAbiVersion": 7,
+  "connectionBytes": 352,
+  "nativeTasks": [
+    "cudaOpticalMediumNativeSelfTest",
+    "cudaOpticalCausticNativeSelfTest",
+    "cudaCompositeMediumProductionNativeSelfTest",
+    "cudaMetallicMediumProductionNativeSelfTest",
+    "cudaOpticalMediumProductionNativeSelfTest -PopticalVolumeCaustics"
+  ],
+  "regressions": {
+    "metallicHdrChecks": 40,
+    "metallicNativeFrames": 25,
+    "spatialPbrAndVolumeCausticFrames": 16,
+    "volumeCaustics": {
+      "passed": true,
+      "nativeFrames": 12,
+      "photonDispatches": 6,
+      "densityEnergyDelta": 0.115375501,
+      "boundaryEnergyDelta": 0.0521936977,
+      "roughEnergyDelta": 0.0343257556,
+      "nestedEnergyDelta": 0.0329598046,
+      "insideEnergyDelta": 0.0116567087,
+      "zeroDensityEnergy": 0.0
+    }
+  },
+  "cpuContracts": [
+    "coreVulkanSurfaceSceneIndexSelfTest",
+    "coreMediumDensitySelfTest",
+    "coreCudaOpticalMediumSelfTest",
+    "verifyLuxCoreSourceManifest"
+  ],
+  "rebuiltShaderVariants": {
+    "opticalTrace": 8,
+    "photons": 8
+  },
+  "nativeValidationErrors": 0,
+  "checks": [
+    {
+      "name": "material-domain0",
+      "maximumAbsoluteError": 0.000381883069
+    },
+    {
+      "name": "material-domain1",
+      "maximumAbsoluteError": 0.000224690491
+    },
+    {
+      "name": "material-domain2",
+      "maximumAbsoluteError": 0.000224690491
+    },
+    {
+      "name": "vertex-domain0",
+      "maximumAbsoluteError": 0.000381883069
+    },
+    {
+      "name": "vertex-domain1",
+      "maximumAbsoluteError": 0.000224690491
+    },
+    {
+      "name": "vertex-domain2",
+      "maximumAbsoluteError": 0.000224690491
+    },
+    {
+      "name": "texture-domain0",
+      "maximumAbsoluteError": 0.000381883069
+    },
+    {
+      "name": "texture-domain1",
+      "maximumAbsoluteError": 0.000224690491
+    },
+    {
+      "name": "texture-domain2",
+      "maximumAbsoluteError": 0.000224690491
+    },
+    {
+      "name": "product-domain0",
+      "maximumAbsoluteError": 0.000486485132
+    },
+    {
+      "name": "product-domain1",
+      "maximumAbsoluteError": 0.000314604065
+    },
+    {
+      "name": "product-domain2",
+      "maximumAbsoluteError": 0.000314604065
+    },
+    {
+      "name": "frame-local-alpha",
+      "maximumAbsoluteError": 0.000381883069
+    },
+    {
+      "name": "lightmap-visibility1.0",
+      "maximumAbsoluteError": 0.000201389881
+    },
+    {
+      "name": "lightmap-visibility0.5",
+      "maximumAbsoluteError": 0.000244107739
+    },
+    {
+      "name": "overlay-ALPHA_OVER-matchedfalse",
+      "maximumAbsoluteError": 0.000311100876
+    },
+    {
+      "name": "overlay-ALPHA_OVER-matchedtrue",
+      "maximumAbsoluteError": 0.000267248861
+    },
+    {
+      "name": "overlay-MULTIPLY-matchedfalse",
+      "maximumAbsoluteError": 0.000311100876
+    },
+    {
+      "name": "overlay-MULTIPLY-matchedtrue",
+      "maximumAbsoluteError": 0.000487772653
+    },
+    {
+      "name": "overlay-depth-rejection",
+      "maximumAbsoluteError": 0.000311100876
+    },
+    {
+      "name": "PBR-alpha-NEE-domain0",
+      "maximumAbsoluteError": 0.000151271446
+    },
+    {
+      "name": "PBR-partial-transmission-NEE-domain0",
+      "maximumAbsoluteError": 0.000160217285
+    },
+    {
+      "name": "PBR-partial-transmission-single-sided-domain0",
+      "maximumAbsoluteError": 0.000160217285
+    },
+    {
+      "name": "PBR-alpha-NEE-domain1",
+      "maximumAbsoluteError": 0.000120634191
+    },
+    {
+      "name": "PBR-partial-transmission-NEE-domain1",
+      "maximumAbsoluteError": 0.000122070313
+    },
+    {
+      "name": "PBR-partial-transmission-single-sided-domain1",
+      "maximumAbsoluteError": 0.000122070313
+    },
+    {
+      "name": "partial-refraction-0.2",
+      "maximumAbsoluteError": 0.000446028336
+    },
+    {
+      "name": "partial-refraction-0.5",
+      "maximumAbsoluteError": 0.000243855099
+    },
+    {
+      "name": "partial-refraction-0.8",
+      "maximumAbsoluteError": 9.1966668E-05
+    }
+  ],
+  "remaining": [
+    "new composite surface combinations with scattering and caustics",
+    "main-tree integration and complete medium gates",
+    "full gallery verification",
+    "final packaged consumer and distribution gates"
+  ],
+  "performanceClaim": false
+}

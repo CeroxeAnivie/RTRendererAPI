@@ -47,10 +47,14 @@ struct __align__(16) Boundary {unsigned int slot;int priority;unsigned int orien
 struct __align__(16) Connection {
     float4 origin,direction,source,transport,lighting;uint4 control;
     rtr_medium::PathVolumeInfo volumes;
-    // Point.w carries metallic; normal.w/view.w retain the shared GGX sample point.
+    // Point.w carries metallic; normal.w/view.w initially retain the GGX sample.
+    // After preparing continuation, normal.w retains its projected spawn bound.
     float4 surfacePoint,surfaceNormal,surfaceView,surfaceMaterial;
+    // Continuation is prepared before NEE overwrites the shared geometric hit.
+    // Weight.w is the deterministic local opacity*(1-transmission) contribution.
+    float4 continuationDirection,continuationWeight;uint4 continuationBoundary;
 };
-static_assert(sizeof(Connection)==304,"native optical connection ABI");
+static_assert(sizeof(Connection)==352,"native optical connection ABI");
 static_assert(sizeof(State<false>)==256,"native optical state ABI");
 static_assert(sizeof(State<true>)==112,"native optical boundary-free state ABI");
 static_assert(sizeof(Boundary)==64,"native optical boundary ABI");
@@ -60,14 +64,17 @@ __device__ bool finite3(float3 v){return isfinite(v.x)&&isfinite(v.y)&&isfinite(
 // PBRT's ray-spawn construction: select the outgoing side using the geometric normal,
 // then round each moved coordinate away from the surface. A ray-direction epsilon
 // has arbitrarily small normal displacement at grazing incidence and can remain outside.
-__device__ float3 spawnOrigin(float3 point,float3 normal,float3 direction,float3 error){
-    const float epsilon=fmaxf(1.e-5f,dot(make_float3(fabsf(normal.x),fabsf(normal.y),fabsf(normal.z)),error));
+__device__ float3 spawnOriginBound(float3 point,float3 normal,float3 direction,float bound){
+    const float epsilon=fmaxf(1.e-5f,bound);
     const float3 offset=normal*(dot(normal,direction)<0.f?-epsilon:epsilon);
     float3 result=point+offset;
     if(offset.x!=0.f)result.x=nextafterf(result.x,offset.x>0.f?INFINITY:-INFINITY);
     if(offset.y!=0.f)result.y=nextafterf(result.y,offset.y>0.f?INFINITY:-INFINITY);
     if(offset.z!=0.f)result.z=nextafterf(result.z,offset.z>0.f?INFINITY:-INFINITY);
     return result;
+}
+__device__ float3 spawnOrigin(float3 point,float3 normal,float3 direction,float3 error){
+    return spawnOriginBound(point,normal,direction,dot(make_float3(fabsf(normal.x),fabsf(normal.y),fabsf(normal.z)),error));
 }
 __device__ float3 positionError(float3 point,float3 incoming,float distance,float3 direction){
     // Propagate intersection reconstruction and instance-transform rounding before
@@ -158,7 +165,7 @@ template<class S> __device__ __forceinline__ void finish(unsigned char *b,int i,
 #undef RTR_FINISH_NEXT
 }
 template<class S> __device__ __forceinline__ bool initialize(unsigned char *b,S *s){
-    unsigned int*h=(unsigned int*)b;if(h[0]!=0x524f5031u||h[1]!=6u||h[8]>32||h[6]<1||h[6]>32)return false;
+    unsigned int*h=(unsigned int*)b;if(h[0]!=0x524f5031u||h[1]!=7u||h[8]>32||h[6]<1||h[6]>32)return false;
     if constexpr(S::SMALL){if(h[7]!=0u||h[8]!=0u)return false;}
     else{
         rtr_medium::PathVolumeInfo_Init(&s->volumes);
@@ -314,17 +321,109 @@ __device__ float3 metalReflection(const Connection*c,float3*outgoing){
     const float3 fresnel=reflectance+(make_float3(1.f)-reflectance)*powf(1.f-viewHalf,5.f);
     return fresnel*(metallic*geometry*viewHalf/fmaxf(normalView*fmaxf(dot(normal,halfVector),1.e-5f),1.e-5f));
 }
-template<class S> __device__ int continueMetal(unsigned char*b,S*s,const Connection*c){
-    if((s->counters.y&2u)!=0u||s->counters.x>=((unsigned int*)b)[6])return 0;
-    float3 direction;const float3 factor=metalReflection(c,&direction);
-    if(!finite3(factor)||!finite3(direction))return -1;
+template<bool Compact,class S,class V> __device__ int prepareSurfaceContinuation(unsigned char*b,S*s,const V&view,Connection*c,float surfaceKind){
+    const unsigned int*h=(const unsigned int*)b,flags=view.u(Compact?19:47);
+    const float opacity=flags?1.f:fminf(fmaxf(view.f(Compact?11:19),0.f),1.f);
+    const float transmission=fminf(fmaxf(view.f(Compact?12:24),0.f),1.f);
+    const float3 normal=rgb(c->surfaceNormal);
+    const float bound=dot(make_float3(fabsf(normal.x),fabsf(normal.y),fabsf(normal.z)),
+        positionError(rgb(c->surfacePoint),rgb(s->origin),view.f(3),rgb(s->direction)));
+    const float3 overlaySky=rgb(c->continuationWeight);
+    c->continuationDirection=make_float4(0.f);c->continuationWeight=make_float4(0.f,0.f,0.f,opacity*(1.f-transmission));
+    c->continuationBoundary=make_uint4(0u,0u,0u,0u);
+    if(surfaceKind>=3.f){
+        const bool multiply=surfaceKind==4.f||surfaceKind==7.f,unmatched=surfaceKind==5.f;
+        c->continuationWeight=make_float4(overlaySky.x,overlaySky.y,overlaySky.z,unmatched||multiply?0.f:opacity);
+        c->continuationDirection=make_float4(s->direction.x,s->direction.y,s->direction.z,__uint_as_float(unmatched?1u:(multiply?5u:6u)));
+        c->continuationBoundary.y=unmatched?2u:surfaceKind==3.f||surfaceKind==4.f?1u:0u;
+        c->continuationBoundary.z=__float_as_uint(opacity*(1.f-transmission));
+        c->continuationBoundary.w=__float_as_uint(opacity);
+        c->surfaceNormal.w=bound;
+        if(s->counters.x>=h[6])c->continuationDirection.w=0.f;
+        return 0;
+    }
+    if(s->counters.x>=h[6])return 0;
+    float3 direction=rgb(s->direction),factor=make_float3(0.f);unsigned int mode=1u;
+    const bool metal=transmission<=0.f&&c->surfacePoint.w>1.e-4f&&(s->counters.y&2u)==0u;
+    const unsigned int seed=h[36]^h[34]*0x967a889bu;
+    if(transmission<=0.f&&!metal){
+        // With no secondary material lobe, evaluate coverage exactly: its local
+        // contribution was retained above and the straight background has weight 1-alpha.
+        factor=make_float3(1.f-opacity);
+    }else if(opacity<1.f&&random(s->control.z,seed^0x51633e2du,s->counters.x)>=opacity){
+        // Coverage roulette is only needed when another continuing material lobe
+        // competes with the hole. Its probability cancels the coverage weight.
+        factor=make_float3(1.f);
+    }else if(transmission<=0.f){factor=metalReflection(c,&direction);mode=4u;
+    }else{
+        const float3 normal=rgb(c->surfaceNormal),tint=make_float3(fminf(fmaxf(view.f(Compact?8:16),0.f),1.f),
+            fminf(fmaxf(view.f(Compact?9:17),0.f),1.f),fminf(fmaxf(view.f(Compact?10:18),0.f),1.f));
+        if(dot(normal,-direction)<=0.f)return -1;
+        const float exterior=ior(b,selectedVolume(s));
+        float n1=view.u(Compact?15:29)==2u?view.f(Compact?13:25):exterior;
+        float n2=view.u(Compact?15:29)==2u?exterior:view.f(Compact?13:25);
+        int index=-1;bool entering=false;
+        if(flags){
+            if constexpr(S::SMALL)return -2;else{
+                index=boundaryIndex(b,view.u(Compact?16:44));if(index<0)return -2;
+                const Boundary entry=table(b)[index];
+                if(view.u(Compact?17:45)!=(unsigned int)entry.priority||view.u(Compact?18:46)!=entry.orientation||flags!=entry.flags)return -2;
+                auto candidate=s->volumes;entering=(view.u(Compact?15:29)==2u)==(entry.orientation!=0u);
+                if(entering)for(unsigned int j=0;j<candidate.volumeIndexListSize;++j)if(candidate.volumeIndexList[j]==(unsigned int)index)return -2;
+                const auto status=entering?rtr_medium::add(&candidate,index,priorities(b),h[7]):rtr_medium::remove(&candidate,index,priorities(b),h[7]);
+                if(status!=rtr_medium::OK)return -2;
+                n1=ior(b,s->volumes.currentVolumeIndex);n2=ior(b,candidate.currentVolumeIndex);
+            }
+        }
+        const bool first=(s->counters.y&1u)==0u;bool reflection;float multiplier=transmission;
+        if(view.f(Compact?7:15)>0.f&&n1!=n2){
+            reflection=first&&h[37]==0u?h[35]==0u:random(s->control.z,seed^h[35]*0x02e5be93u,s->counters.x)<.5f;
+            if(!roughGlass(direction,normal,n1,n2,tint,view.f(Compact?7:15),
+                random(s->control.z,seed^0xa511e9b3u,s->counters.x),random(s->control.z,seed^0x63d83595u,s->counters.x),reflection,&direction,&factor))return -3;
+            factor*=multiplier;
+        }else{
+            float3 rd,td,rw,tw;float fresnel;
+            if(!glass(direction,normal,n1,n2,tint,&rd,&td,&rw,&tw,&fresnel))return -3;
+            if(first&&h[37]==0u){reflection=h[35]==0u;multiplier*=2.f;}
+            else{reflection=random(s->control.z,seed^h[35]*0x02e5be93u,s->counters.x)<fresnel;
+                const float probability=reflection?fresnel:1.f-fresnel;if(probability<=0.f)return 0;multiplier/=probability;}
+            direction=reflection?rd:td;factor=(reflection?rw:tw)*multiplier;
+        }
+        mode=first?2u:3u;
+        if(!reflection&&flags)c->continuationBoundary=make_uint4((unsigned int)index+1u,entering?1u:0u,0u,0u);
+    }
+    if(!finite3(factor)||!finite3(direction))return -4;
     if(peak(factor)<=0.f)return 0;
-    const float3 weight=rgb(s->throughput)*factor;
-    if(!finite3(weight))return -1;
-    if(peak(weight)<=((float*)b)[32])return 0;
-    s->throughput.x=weight.x;s->throughput.y=weight.y;s->throughput.z=weight.z;
-    s->counters.y|=2u;
-    const float3 point=rgb(c->surfacePoint),next=spawnOrigin(point,rgb(c->surfaceNormal),direction);
+    c->surfaceNormal.w=bound;
+    c->continuationDirection=make_float4(direction.x,direction.y,direction.z,__uint_as_float(mode));
+    c->continuationWeight.x=factor.x;c->continuationWeight.y=factor.y;c->continuationWeight.z=factor.z;
+    return 0;
+}
+__device__ float3 surfaceShading(const Connection*c,float3 shading){
+    const unsigned int mode=__float_as_uint(c->continuationDirection.w);
+    if((mode==5u||mode==6u)&&c->continuationBoundary.y){
+        const float local=__uint_as_float(c->continuationBoundary.z);
+        return shading*local+rgb(c->continuationWeight)*(1.f-local);
+    }
+    return shading;
+}
+template<class S> __device__ int continueSurface(unsigned char*b,S*s,const Connection*c,float3 shading){
+    const unsigned int mode=__float_as_uint(c->continuationDirection.w);if(mode==0u)return 0;
+    const float3 direction=rgb(c->continuationDirection);
+    const float opacity=__uint_as_float(c->continuationBoundary.w);
+    const float3 factor=mode==5u?make_float3(1.f-opacity)+shading*opacity
+        :mode==6u?make_float3(1.f-opacity):mode==1u&&c->continuationBoundary.y==2u?make_float3(1.f):rgb(c->continuationWeight);
+    if(mode==2u){const float3 outer=rgb(s->terminal)*factor;s->terminal.x=outer.x;s->terminal.y=outer.y;s->terminal.z=outer.z;}
+    else{const float3 weight=rgb(s->throughput)*factor;s->throughput.x=weight.x;s->throughput.y=weight.y;s->throughput.z=weight.z;}
+    if(mode==2u||mode==3u)s->counters.y|=1u;else if(mode==4u)s->counters.y|=2u;
+    if(!finite3(rgb(s->throughput))||!finite3(rgb(s->terminal)))return -1;
+    if(peak(rgb(s->throughput))*peak(rgb(s->terminal))<=((float*)b)[32])return 0;
+    if constexpr(!S::SMALL)if(c->continuationBoundary.x!=0u){
+        const auto status=c->continuationBoundary.y?rtr_medium::add(&s->volumes,c->continuationBoundary.x-1u,priorities(b),((unsigned int*)b)[7])
+            :rtr_medium::remove(&s->volumes,c->continuationBoundary.x-1u,priorities(b),((unsigned int*)b)[7]);
+        if(status!=rtr_medium::OK)return -2;
+    }
+    const float3 point=rgb(c->surfacePoint),next=spawnOriginBound(point,rgb(c->surfaceNormal),direction,c->surfaceNormal.w);
     const float epsilon=fmaxf(dot(next-point,direction),0.f);
     s->direction=make_float4(direction.x,direction.y,direction.z,0.f);
     bool collision=false;if(!segment(b,s,point,epsilon,&collision,false))return -1;
@@ -446,11 +545,12 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
             if constexpr(Small)rtr_medium::PathVolumeInfo_Init(&c->volumes);else c->volumes=s->volumes;
             s->control.x=2u;++s->control.w;increment(b,statistics,0u);return;
         }
-        const float3 value=rgb(s->radiance)+rgb(s->terminal)*rgb(s->throughput)*incoming;
+        if(c->control.w!=0u)incoming=surfaceShading(c,incoming);
+        const float3 value=rgb(s->radiance)+rgb(s->terminal)*rgb(s->throughput)*incoming*(c->control.w!=0u?c->continuationWeight.w:1.f);
         if(!finite3(value)){finish(b,i,s,statistics,20);return;}
         s->radiance=make_float4(value.x,value.y,value.z,0.f);
         if(c->control.w!=0u){
-            const int reflected=continueMetal(b,s,c);
+            const int reflected=continueSurface(b,s,c,incoming);
             if(reflected<0){finish(b,i,s,statistics,21);return;}
             if(reflected>0){increment(b,statistics,0u);return;}
             finish(b,i,s,statistics);return;
@@ -495,8 +595,20 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
     ++s->counters.x;
     unsigned int flags=view.u(Compact?19:47);bool volumeOnly=(flags&2u)!=0u;
     float opacity=flags?1.f:fminf(fmaxf(view.f(Compact?11:19),0.f),1.f),transmission=volumeOnly?1.f:fminf(fmaxf(view.f(Compact?12:24),0.f),1.f);
-    if(h[19]!=0u&&((float4*)(b+h[11]))[i].w==1.f&&transmission<=0.f&&opacity>=1.f) {
+    if(h[19]!=0u&&((float4*)(b+h[11]))[i].w!=0.f&&!volumeOnly) {
         Connection*c=connections(b)+i;
+        const float surfaceKind=((float4*)(b+h[11]))[i].w;
+        const int prepared=prepareSurfaceContinuation<Compact>(b,s,view,c,surfaceKind);
+        if(prepared<0){finish(b,i,s,statistics,40u+(unsigned int)(-prepared));return;}
+        if(surfaceKind!=1.f&&surfaceKind!=3.f&&surfaceKind!=4.f){
+            evaluation=surfaceShading(c,evaluation);
+            const float3 value=rgb(s->radiance)+rgb(s->terminal)*rgb(s->throughput)*evaluation*c->continuationWeight.w;
+            if(!finite3(value)){finish(b,i,s,statistics,20);return;}s->radiance=make_float4(value.x,value.y,value.z,0.f);
+            const int continued=continueSurface(b,s,c,evaluation);
+            if(continued<0){finish(b,i,s,statistics,21);return;}
+            if(continued>0){increment(b,statistics,0u);return;}
+            finish(b,i,s,statistics);return;
+        }
         c->lighting=make_float4(evaluation.x,evaluation.y,evaluation.z,0.f);c->control=make_uint4(0u,0u,0u,1u);
         if constexpr(Small)rtr_medium::PathVolumeInfo_Init(&c->volumes);else c->volumes=s->volumes;
         s->origin=c->surfacePoint;s->control.x=2u;++s->control.w;increment(b,statistics,0u);return;

@@ -72,8 +72,11 @@ __device__ void step(unsigned char*b,unsigned char*m,unsigned int i){
     float3 incoming=rgb(p->direction),out=incoming,normal=normalize(make_float3(hit.f(12),hit.f(13),hit.f(14)));
     if(volumeOnly)p->volumes=candidate;
     else {
-        float transmission=fminf(fmaxf(hit.f(24),0.f),1.f),opacity=fminf(fmaxf(hit.f(19),0.f),1.f);
-        if(transmission<=0.f){
+        float transmission=fminf(fmaxf(hit.f(24),0.f),1.f),opacity=flags?1.f:fminf(fmaxf(hit.f(19),0.f),1.f);
+        const unsigned int materialSeed=h[9]^p->control.w*0x51633e2du;
+        const float materialChoice=random(i,materialSeed,0u);
+        if(materialChoice>=opacity){ /* uncovered surface: retain direction and medium */ }
+        else if(materialChoice<opacity*(1.f-transmission)){
             const float metallic=fminf(fmaxf(hit.f(23),0.f),1.f);
             // Public shading-model ABI: PHYSICALLY_BASED is zero at bits 7..8.
             if(((raw[30]>>7u)&3u)==0u){
@@ -83,7 +86,7 @@ __device__ void step(unsigned char*b,unsigned char*m,unsigned int i){
                 const float diffuseProbability=(1.f-metallic)*(1.f-dielectric);
                 if(random(i,seed,0u)<diffuseProbability){
                     if(s->metadata.y&&!deposit(m,s,i,make_float3(hit.f(0),hit.f(1),hit.f(2)),-incoming,
-                            rgb(p->throughput)*(policy/diffuseProbability),normal,raw[44],0u)){reject(m,s,12u);return;}
+                            rgb(p->throughput)*(policy/(opacity*(1.f-transmission)*diffuseProbability)),normal,raw[44],0u)){reject(m,s,12u);return;}
                     p->control.x=0;return;
                 }
                 // Photons sample the complete opaque specular lobe, including the
@@ -105,7 +108,6 @@ __device__ void step(unsigned char*b,unsigned char*m,unsigned int i){
                 p->control.x=0;return;
             }
         }else{
-        if(opacity<1.f){reject(m,s,13u);return;}
         float n1=raw[29]==2u?hit.f(25):ior(b,selected),n2=raw[29]==2u?ior(b,selected):hit.f(25);
         if(flags){n1=ior(b,p->volumes.currentVolumeIndex);n2=ior(b,candidate.currentVolumeIndex);}
         float3 tint=make_float3(hit.f(16),hit.f(17),hit.f(18)),weight;
@@ -122,7 +124,9 @@ __device__ void step(unsigned char*b,unsigned char*m,unsigned int i){
             if(probability<=0.f){p->control.x=0u;return;}out=reflected?rd:td;weight=(reflected?rw:tw)*(1.f/probability);
             if(!reflected)weight*=((n2/n1)*(n2/n1));
         }
-        weight*=transmission;if(peak(weight)<=0.f){p->control.x=0;return;}
+        // Coverage/material-lobe roulette already sampled opacity*transmission;
+        // cancelling that probability leaves only the dielectric transport weight.
+        if(peak(weight)<=0.f){p->control.x=0;return;}
         float3 flux=rgb(p->throughput)*weight;if(!finite3(flux)){reject(m,s,16u);return;}
         p->throughput.x=flux.x;p->throughput.y=flux.y;p->throughput.z=flux.z;
         if(!reflected&&flags)p->volumes=candidate;s->metadata.y|=n1!=n2?1u:0u;

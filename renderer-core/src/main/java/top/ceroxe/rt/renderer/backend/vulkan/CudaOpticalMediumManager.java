@@ -82,10 +82,10 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     }
     static FrameScene scene(RenderFrameRequest frame,int width,int height,MediumSceneIndex.NativeScene scene,
             java.util.function.LongFunction<top.ceroxe.rt.renderer.api.TextureAsset> textures,CudaMediumDensityAbi.Cache densityCache,
-            boolean opaqueRadianceProof,int lightSlotUpperBound,boolean metallicReflection) {
+            boolean opaqueRadianceProof,int lightSlotUpperBound,boolean surfaceContinuations) {
         try{var boundaries=scene.boundaries().stream().map(entry->new CudaBoundaryMediumAbi.Boundary(
                 entry.slot(),entry.boundary(),entry.objectToWorld())).toList();
-            boolean connections=metallicReflection||CudaOpticalMediumAbi.requiresConnections(frame,boundaries);
+            boolean connections=surfaceContinuations||CudaOpticalMediumAbi.requiresConnections(frame,boundaries);
             int samples=frame.antiAliasing().samplesPerPixel();long limit=residentLimit()-(OpticalDetailedProfile.SHADERS?1048576:0);
             var base=CudaOpticalMediumAbi.plan(width,height,samples,boundaries.size(),limit);
             long minimum=base.sceneBytes()+(long)base.paths()*((base.externalPrimary()?0:CudaOpticalMediumAbi.HIT_BYTES)+2L*CudaOpticalMediumAbi.COLOR_BYTES)
@@ -106,7 +106,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                 header.putInt(188,header.getInt(188)|64);
             }
             return new FrameScene(frame,plan,metadata,boundaries,density,
-                    CudaOpticalMediumAbi.maximumRounds(frame,lightSlotUpperBound,connections,metallicReflection));
+                    CudaOpticalMediumAbi.maximumRounds(frame,lightSlotUpperBound,connections));
         }catch(ArithmeticException|IllegalArgumentException invalid){throw unsupported(invalid.getMessage());}
     }
     private static CudaOpticalCausticAbi.Plan nativePhotonPlan(RenderFrameRequest frame,

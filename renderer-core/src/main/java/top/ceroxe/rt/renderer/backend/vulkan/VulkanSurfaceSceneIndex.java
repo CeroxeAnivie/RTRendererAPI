@@ -188,7 +188,7 @@ final class VulkanSurfaceSceneIndex {
         if (instance.volumeOnly) return OPAQUE | CAMERA_ABSORPTION_ONLY | OPTICAL_TERMINAL | PBR_MEDIUM | OPTICAL_OPAQUE_RAY;
         int flags = meshFlags.getOrDefault(instance.mesh, 0);
         if (!instance.shadowBlocker) flags &= ~OPAQUE_SHADOW_RAY;
-        return instance.fullyVisible ? flags : flags & ~(OPAQUE | CAMERA_ABSORPTION_ONLY | OPTICAL_TERMINAL
+        return instance.fullyVisible ? flags : flags & ~(OPAQUE | CAMERA_ABSORPTION_ONLY
                 | PBR_MEDIUM | OPTICAL_OPAQUE_RAY | CAUSTIC_RECEIVER | OPAQUE_SHADOW_RAY);
     }
 
@@ -196,7 +196,8 @@ final class VulkanSurfaceSceneIndex {
         boolean opaque = mesh.vertexOpaque;
         boolean transmissive = false;
         boolean terminal = true;
-        boolean optical = mesh.vertexOpaque;
+        boolean optical = true;
+        boolean opticalFullCoverage = mesh.vertexOpaque;
         boolean causticReceiver = false;
         boolean masked = false;
         boolean pbrMedium = true;
@@ -215,16 +216,15 @@ final class VulkanSurfaceSceneIndex {
             metallicReflection |= material.shadingModel() == MaterialAsset.ShadingModel.PHYSICALLY_BASED
                     && material.transmission() == 0 && material.metallic() > 0;
             transmissive |= material.transmission() > 0;
-            boolean covered=(material.baseColorRgba8() >>> 24)==255
-                    && !material.surfaceOverlay().enabled()
+            opticalFullCoverage &= (material.baseColorRgba8() >>> 24)==255 && !material.surfaceOverlay().enabled()
                     && material.shadingModel()!=MaterialAsset.ShadingModel.LIGHTMAP_MODULATED
                     && (material.baseColorTextureId()<0 || Boolean.TRUE.equals(opaqueTextures.get(material.baseColorTextureId())));
-            boolean dielectric=material.doubleSided() && material.transmission()>0
-                    &&(material.transmission()>=1||material.shadingModel()==MaterialAsset.ShadingModel.UNLIT);
+            boolean dielectric=material.transmission()>0;
             boolean unlit=material.transmission()==0&&material.shadingModel()==MaterialAsset.ShadingModel.UNLIT;
             boolean pbr=material.transmission()==0&&material.shadingModel()==MaterialAsset.ShadingModel.PHYSICALLY_BASED;
-            optical &= covered&&(dielectric||unlit||pbr);
-            causticReceiver |= covered&&pbr;
+            boolean lightmap=material.transmission()==0&&material.shadingModel()==MaterialAsset.ShadingModel.LIGHTMAP_MODULATED;
+            optical &= dielectric||unlit||pbr||lightmap;
+            causticReceiver |= !material.surfaceOverlay().enabled()&&material.transmission()<1&&material.shadingModel()==MaterialAsset.ShadingModel.PHYSICALLY_BASED;
             opaque &= material.transmission() == 0 && (material.baseColorRgba8() >>> 24) == 255
                     && !material.surfaceOverlay().enabled()
                     && material.shadingModel() != MaterialAsset.ShadingModel.LIGHTMAP_MODULATED
@@ -233,7 +233,7 @@ final class VulkanSurfaceSceneIndex {
         return (opaque ? OPAQUE : 0) | (transmissive ? TRANSMISSIVE : 0)
                 | (opaque && terminal ? CAMERA_ABSORPTION_ONLY : 0) | (optical?OPTICAL_TERMINAL:0)
                 | (opaque && pbrMedium ? PBR_MEDIUM : 0)
-                | (optical && doubleSided && !masked ? OPTICAL_OPAQUE_RAY : 0) | (causticReceiver?CAUSTIC_RECEIVER:0)
+                | (optical && opticalFullCoverage && doubleSided && !masked ? OPTICAL_OPAQUE_RAY : 0) | (causticReceiver?CAUSTIC_RECEIVER:0)
                 | (metallicReflection?METALLIC_REFLECTION:0)
                 | (opaque && doubleSided && !masked ? OPAQUE_SHADOW_RAY : 0);
     }

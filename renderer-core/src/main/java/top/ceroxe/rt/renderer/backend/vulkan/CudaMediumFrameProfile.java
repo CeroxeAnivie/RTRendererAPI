@@ -28,6 +28,7 @@ final class CudaMediumFrameProfile {
                 || media.hasSurfaceInteraction(batch)
                 || hasMedium && surfaces.hasMetallicReflection(batch)
                 || hasMedium && request.caustics().enabled()
+                || hasMedium && !surfaces.opaquePbrMediumOnly(batch) && !surfaces.cameraAbsorptionOnly(batch)
                 || boundaryCount!=0&&surfaces.opaquePbrMediumOnly(batch)&&surfaces.hasCausticReceiver(batch)
                     &&(!medium.scattering().isZero()||media.hasScattering(batch)));
         if (!hasMedium && !optical)

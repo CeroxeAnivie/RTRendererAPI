@@ -82,9 +82,6 @@ public final class CudaCameraMediumProductionNativeSelfTest {
                                         new Rgb(.1f, .1f, .1f), Rgb.ZERO, 1, 1.2f, 0))).build()).build());
                 expectUnsupported(request(37, 29, ABSORPTION, 12, 1), "IOR-changing-invisible-boundary");
                 apply(SceneTransaction.builder(++revision).removeInstance(2).build());
-                apply(SceneTransaction.builder(++revision).upsert(MaterialAsset.builder(1).doubleSided(true)
-                        .surfaceOverlay(SurfaceOverlayState.depthEqual(.001f)).build()).build());
-                expectUnsupported(request(37, 29, ABSORPTION, 12, 1), "surface-overlay-continuation");
                 apply(SceneTransaction.builder(++revision).upsert(MaterialAsset.builder(1)
                         .shadingModel(MaterialAsset.ShadingModel.UNLIT).doubleSided(true)
                         .emissive(0xff4080ff, .25f).build()).build());

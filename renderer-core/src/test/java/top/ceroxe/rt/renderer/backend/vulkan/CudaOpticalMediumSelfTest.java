@@ -242,7 +242,7 @@ public final class CudaOpticalMediumSelfTest {
         require(index.opticalTerminalOnly(FramePrimitiveBatch.empty()),"fully transmitting rough PBR uses the pinned microfacet sampler");
         prepared=residency.prepare(SceneTransaction.builder(++revision).upsert(glass.toBuilder().transmission(.5f).build()).build());
         residency.commit(prepared);index.sceneApplied(prepared.changeSet());
-        require(!index.opticalTerminalOnly(FramePrimitiveBatch.empty()),"partial PBR transmission still requires surface lighting");
+        require(index.opticalTerminalOnly(FramePrimitiveBatch.empty()),"partial PBR transmission retains weighted surface lighting and native dielectric continuation");
         prepared=residency.prepare(SceneTransaction.builder(++revision).upsert(glass.toBuilder().transmission(.5f).shadingModel(MaterialAsset.ShadingModel.UNLIT).build()).build());
         residency.commit(prepared);index.sceneApplied(prepared.changeSet());
         require(index.opticalTerminalOnly(FramePrimitiveBatch.empty()),"partial UNLIT transmission uses the retained terminal function");

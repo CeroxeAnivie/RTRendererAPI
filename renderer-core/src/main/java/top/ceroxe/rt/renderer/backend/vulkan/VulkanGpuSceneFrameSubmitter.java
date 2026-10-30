@@ -160,7 +160,7 @@ final class VulkanGpuSceneFrameSubmitter {
         var nativeOpticalData = nativeOpticalFrame ? CudaOpticalMediumManager.scene(checked.request(),width,height,
                 nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache,
                 temporal.nativeOpticalOpaqueRay(checked.request()),acceptedLightSlotUpperBound,
-                temporal.nativeMetallicReflection(checked.request())) : null;
+                temporal.nativeSurfaceContinuation(checked.request())) : null;
         var nativePbrData = nativePbrFrame ? CudaPbrMediumManager.scene(checked.request(),width,height,
                 acceptedLightSlotUpperBound,nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache,nativePbrScatteringFrame) : null;
         boolean reusePbrPrimary=nativePbrScatteringFrame

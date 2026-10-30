@@ -1,5 +1,15 @@
 # 质量验证与性能报告
 
+## 2026-10-31 覆盖、叠层、LIGHTMAP 与部分透射
+
+光学 ABI 7 的 352 字节连接先保存表面延续，再执行灯光连接。局部光照按 `opacity*(1-transmission)` 计权；无竞争分支的覆盖使用精确背景合成，孔洞与金属/介电延续竞争时保留概率补偿。单面材质继续使用共享 any-hit 的背面规则。延续保留原始命中误差界、累计距离和介质栈，不会因灯光连接覆盖几何命中而丢失折射信息。
+
+LIGHTMAP_MODULATED 保留已有贴图、顶点、帧 lightmap、雾与 surfaceVisibility 合成。叠层验证接收 mask 和深度间距，再执行 ALPHA_OVER 或 MULTIPLY；光连接与两种光子路径均跳过叠层，非投影实例不阻挡灯光连接。原生光子查询使用公共 PHOTON_QUERY 的纹理足迹语义，透明覆盖与部分透射按各自概率传输通量。
+
+新增 `cudaCompositeMediumProductionNativeSelfTest` 通过 29 项最终 HDR 检查、37 帧原生光学传输。逐像素参考覆盖材质/顶点/纹理 alpha 及乘积、全局/边界密度、逐帧图元、LIGHTMAP 与分数 visibility、叠层两种模式和 mask/深度不匹配；两端画面对照验证 PBR alpha 与部分透射的实际光连接权重。IOR 1.5、透射率 0.2/0.5/0.8 另有 Snell/Fresnel/Beer 解析对照。全组最大绝对误差 `4.87772653e-4`。
+
+同一最终资源通过金属 40 项/25 原生帧回归及 16 帧密度/边界 PBR 和体积焦散回归；独立 CUDA 光学/焦散数值、三个 CPU 合同和来源清单通过。8 个 optical-trace、8 个 photons SPIR-V 已重建。证据见 [composite-medium-closure-20261031.json](data/composite-medium-closure-20261031.json)。新表面能力与散射/焦散的进一步交叉专项、主树集成、完整门禁、展厅及最终制品验证仍待完成；本项不作为全 API 完成率。
+
 ## 2026-10-31 金属介质反射与焦散路由
 
 原生光学路径现保存真实金属率和公共 GGX 采样点；完成接收面灯光连接后继续追踪一次金属反射。反射保持介质栈与剩余距离，沿途积分吸收、发光、密度和散射。连接仍为 304 字节，内部光学 ABI 升至版本 6。小粗糙度采样改为直接计算正弦，避免 `sqrt(1-cos²)` 的浮点相消。单面 PBR/UNLIT 仍执行共享 any-hit 的背面规则。

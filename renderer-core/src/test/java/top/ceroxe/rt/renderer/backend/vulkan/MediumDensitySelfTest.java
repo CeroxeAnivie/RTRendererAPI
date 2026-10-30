@@ -25,6 +25,7 @@ public final class MediumDensitySelfTest {
         verifyNativeSelection();
         verifyMetallicSelection();
         verifyCausticSelection();
+        verifyCompositeSelection();
         verifyPrimaryQueueSelection();
         verifyHistoryInvalidation();
         System.out.println("MediumDensitySelfTest passed: stable ABI prefix, atlas references/replacement, coordinate composition, frame validation, cached specialization");
@@ -274,6 +275,26 @@ public final class MediumDensitySelfTest {
                 require(CudaMediumFrameProfile.select(frame,media,surfaces,true,true).route()==CudaMediumFrameProfile.Route.OPTICAL,
                         "caustics with any participating medium must retain complete photon/camera transport");
             }
+        }
+    }
+
+    private static void verifyCompositeSelection() {
+        var residency=new VulkanSceneResidency();var media=new MediumSceneIndex();var surfaces=new VulkanSurfaceSceneIndex();
+        var batch=FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(1).surfaceVisibility(.5f).build()).build();
+        long revision=1;
+        for(var material:new MaterialAsset[]{
+                MaterialAsset.builder(1).baseColorRgba8(0x80ffffff).build(),
+                MaterialAsset.builder(1).transmission(.5f).doubleSided(false).build(),
+                MaterialAsset.builder(1).surfaceOverlay(SurfaceOverlayState.depthBias(.01f)).build(),
+                MaterialAsset.builder(1).shadingModel(MaterialAsset.ShadingModel.LIGHTMAP_MODULATED).build()}) {
+            apply(residency,media,surfaces,SceneTransaction.builder(revision++).resetScene()
+                    .upsert(texture(500,4,TextureAsset.ColorSpace.LINEAR)).upsert(material)
+                    .upsert(MeshAsset.triangles(1,new float[]{0,0,0,1,0,0,0,1,0},new int[]{0,1,2},1)).build());
+            var frame=request(GRID,2,batch);
+            var selected=CudaMediumFrameProfile.select(frame,media,surfaces,true,true);
+            require(selected.route()==CudaMediumFrameProfile.Route.OPTICAL&&surfaces.opticalTerminalOnly(batch),
+                    "surface compositing must reach native continuation with current frame-local facts");
+            require(!surfaces.opticalOpaqueRayOnly(batch),"coverage and sidedness keep their hit-stage decisions");
         }
     }
 

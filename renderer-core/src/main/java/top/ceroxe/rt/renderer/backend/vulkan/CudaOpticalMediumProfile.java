@@ -12,7 +12,7 @@ final class CudaOpticalMediumProfile {
     static void requireSupported(RenderFrameRequest request,MediumSceneIndex.NativeScene scene,
             boolean opticalSurfaces,boolean pbrCausticReceiver) {
         if(!opticalSurfaces)
-            unsupported("surfaces must be opaque UNLIT or PBR, or fully covered double-sided dielectric materials");
+            unsupported("scene surfaces must reference supported, resident material and mesh resources");
         for(var entry:scene.boundaries())
             if(!entry.boundary().surfaceInteraction()&&entry.boundary().medium().indexOfRefraction()!=1)
                 unsupported("IOR-changing boundaries must enable surface interaction");

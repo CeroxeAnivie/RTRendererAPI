@@ -436,6 +436,7 @@ val nativeSelfTests = linkedMapOf(
     "cudaPrimaryEmissionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryEmissionNativeSelfTest",
     "cudaMediumTransportNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumTransportNativeSelfTest",
     "cudaMetallicMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaMetallicMediumProductionNativeSelfTest",
+    "cudaCompositeMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCompositeMediumProductionNativeSelfTest",
     "cudaBuiltinShaderDataNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaBuiltinShaderDataNativeSelfTest",
     "cudaCameraMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraMediumProductionNativeSelfTest",
     "cudaCameraEmissionProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraEmissionProductionNativeSelfTest",
@@ -644,7 +645,7 @@ tasks.register("rendererCoreNativeGate") {
     dependsOn(nativeSelfTests.keys)
 }
 
-val nativeMediumTests = listOf("cudaMediumRuntimeNativeSelfTest", "cudaBuiltinShaderDataNativeSelfTest", "cudaMetallicMediumProductionNativeSelfTest", "cudaCameraMediumProductionNativeSelfTest",
+val nativeMediumTests = listOf("cudaMediumRuntimeNativeSelfTest", "cudaBuiltinShaderDataNativeSelfTest", "cudaMetallicMediumProductionNativeSelfTest", "cudaCompositeMediumProductionNativeSelfTest", "cudaCameraMediumProductionNativeSelfTest",
     "cudaCameraEmissionProductionNativeSelfTest", "cudaBoundaryMediumProductionNativeSelfTest",
     "cudaDensityProductionNativeSelfTest", "cudaCameraScatteringProductionNativeSelfTest",
     "cudaMultipleScatteringProductionNativeSelfTest", "cudaDensityScatteringProductionNativeSelfTest",
