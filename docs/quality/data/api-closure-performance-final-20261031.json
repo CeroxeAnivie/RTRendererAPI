@@ -1,0 +1,462 @@
+{
+  "passed": true,
+  "source": {
+    "startedAtUtc": "2026-10-30T22:31:58.9281301+00:00",
+    "commit": "87fa6d11b9f641d66f034009cfd9f65eadc2f5f5",
+    "tree": "0329e4861978b8d0412b57a746c2ac15edbfc7c6",
+    "trackedClean": true,
+    "testJvmAdjustment": "-XX:-UseJVMCICompiler (local process environment only)"
+  },
+  "sourceAfterRun": {
+    "completedAtUtc": "2026-10-30T22:39:39.3102419+00:00",
+    "exitCode": 0,
+    "commit": "87fa6d11b9f641d66f034009cfd9f65eadc2f5f5",
+    "tree": "0329e4861978b8d0412b57a746c2ac15edbfc7c6",
+    "trackedClean": true
+  },
+  "completedAtUtc": "2026-10-30T22:39:38.972420500Z",
+  "scope": "documented Windows x86_64 Vulkan RT and NVIDIA runtime contracts",
+  "device": "NVIDIA GeForce RTX 5080 Laptop GPU",
+  "command": "./gradlew.bat verifyApiClosure --offline --no-daemon --console=plain --continue",
+  "gradle": {
+    "result": "BUILD SUCCESSFUL",
+    "elapsed": "7m 40s",
+    "actionableTasks": 281,
+    "breakdown": "251 executed, 30 up-to-date"
+  },
+  "requiredTaskGroups": 14,
+  "nativeJavaExecTasks": 76,
+  "precompiledShaderVariants": 298,
+  "spirvBytes": 42763320,
+  "distributionFiles": 2158,
+  "gallery": [
+    {
+      "variant": "pbr-direct-uniform",
+      "frames": 8
+    },
+    {
+      "variant": "pbr-direct-density",
+      "frames": 8
+    },
+    {
+      "variant": "pbr-multiple-uniform",
+      "frames": 8
+    },
+    {
+      "variant": "pbr-multiple-density",
+      "frames": 8
+    },
+    {
+      "variant": "boundary-optical-scatter",
+      "frames": 8
+    },
+    {
+      "variant": "absorption-emission",
+      "frames": 8
+    },
+    {
+      "variant": "glass-scatter-caustics",
+      "frames": 8
+    },
+    {
+      "variant": "glass-scatter-caustics-off",
+      "frames": 8
+    },
+    {
+      "variant": "glass-density-caustics",
+      "frames": 8
+    },
+    {
+      "variant": "glass-density-caustics-off",
+      "frames": 8
+    },
+    {
+      "variant": "boundary-density-caustics",
+      "frames": 8
+    },
+    {
+      "variant": "boundary-density-caustics-off",
+      "frames": 8
+    },
+    {
+      "variant": "gallery",
+      "frames": 8
+    }
+  ],
+  "galleryReport": {
+    "path": "demos/hex-ball/build/reports/medium-gallery/result.json",
+    "sha256": "82a4d378ccc2f674f4d83a640c72e1fb69f2d6c2b55782d00091bff604e96cfd",
+    "passed": true,
+    "presets": 13,
+    "framesPerPreset": 8,
+    "nativeFrames": 104
+  },
+  "validationSummary": {
+    "logs": 35,
+    "opened": 66,
+    "closed": 66,
+    "warnings": 0,
+    "errors": 0,
+    "dropSummaries": 0
+  },
+  "validationLogs": [
+    {
+      "path": "demos/hex-ball/build/reports/medium-gallery/validation.jsonl",
+      "sha256": "157c4d655ead331f15de10f0a3cb0c22d14f73f343446d628a28e6cb7762d9b9",
+      "opened": 13,
+      "closed": 13,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/causticVolumeTransportNativeSelfTest.jsonl",
+      "sha256": "ef18faca99e9d4842139b2e39ecad38a5d371f3d633aa3824432c4f26c4b27de",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaBoundaryMediumProductionNativeSelfTest.jsonl",
+      "sha256": "2a8c3856c7f4c97d7a74d357f7dde42291537d86ab65e0cd0fa3ea51fb1679e0",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaBuiltinShaderDataNativeSelfTest.jsonl",
+      "sha256": "018134b1073315b107cf8bce85d97ac288a9d5711c5c4c06cd2cedd6990b018f",
+      "opened": 2,
+      "closed": 2,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaCameraEmissionProductionNativeSelfTest.jsonl",
+      "sha256": "94d4bcc6a43d337c46932ec7d838b760648e274905ec9116267d2059054e8cdb",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaCameraMediumProductionNativeSelfTest.jsonl",
+      "sha256": "85a6fb43146ea91f13cdb3371e6a8e7998dfb70e992da59a5b06d5977614dc06",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaCameraScatteringProductionNativeSelfTest.jsonl",
+      "sha256": "efdedb9940764965369209f861b5ed3b591cbb06f0cdc0900b096e81f08b4241",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaCompositeMediumProductionNativeSelfTest.jsonl",
+      "sha256": "2566fdb913e06fd68fc1e47980a80e67f43270dcb842c35292bfe110e1b46d8c",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaDensityProductionNativeSelfTest.jsonl",
+      "sha256": "dbd3a6901e2f8de7671491c06365bbbe54c13a16359f69ca8398b45705b84512",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaDensityScatteringProductionNativeSelfTest.jsonl",
+      "sha256": "1fe2e11374581df86a050508bed478f10cb364420d33553e214c0b704fd6a304",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaHeterogeneousMultipleScatteringProductionNativeSelfTest.jsonl",
+      "sha256": "cc7a2b2ef44076350975297a27142081fe6213f8cadf394ca67dc48423c402ff",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaMetallicMediumProductionNativeSelfTest.jsonl",
+      "sha256": "ab3bdc316a3d9b8738912f6f53d1c11da96d0920eb03c9585a5a833402a96723",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaMultipleScatteringProductionNativeSelfTest.jsonl",
+      "sha256": "41384d4227ffa4d9b23f77fd9be6886d61d900f28f7a57fd987315b736e27994",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaOpticalMediumProductionNativeSelfTest.jsonl",
+      "sha256": "377a126b610ed9b999de7d26c1357ef948b14f905b3cd9861ac34a363ba06dad",
+      "opened": 3,
+      "closed": 3,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaPbrMediumCausticsProductionNativeSelfTest.jsonl",
+      "sha256": "5fd547f55a631b6369cda4b125ca34fa92859266df67a7ba19d37d19a787aeba",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaPbrMediumProductionNativeSelfTest.jsonl",
+      "sha256": "8e8cbb08eae0bf18b42effc613d4fc782b9d69bc5a950e852641a6f2911e623b",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/cudaPbrMediumScatteringProductionNativeSelfTest.jsonl",
+      "sha256": "e1895b364ffcc7af904125f7339e3c0ea6fc36123c4a5b4310aa77124ba40723",
+      "opened": 9,
+      "closed": 9,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/mediumTransportNativeSelfTest.jsonl",
+      "sha256": "09e55d47b415db647fb21620d25b4d21c020b326ad16de72433fea83d9a67ad9",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/primaryQueueNativeSelfTest.jsonl",
+      "sha256": "9d7dc86daf5da4f1b57dc000e1d06d00a94834c5a62eb44bc72815e1c4d4de60",
+      "opened": 2,
+      "closed": 2,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanEvidenceRetentionNativeSelfTest.jsonl",
+      "sha256": "08e5af65e1d68f3719ed332594dd6f070fddc991fcbaa1e001c0f675535af465",
+      "opened": 2,
+      "closed": 2,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanFrameCompositionNativeSelfTest.jsonl",
+      "sha256": "35ac4ef26f7c5578eb68e3899c7443101c6e29f59ba1f09fdb1b3c54d29a7000",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanFrameDisplayTransformNativeSelfTest.jsonl",
+      "sha256": "75cdf14afeb78c2cbc334a1ff71cb7a206c901e24a0f0ea726b4f094ada5fd8f",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanFrameSlotExternalCompletionNativeSelfTest.jsonl",
+      "sha256": "cf430e4956e2a0202ef1a1dd0b5e5fe21b82b3fbdaeaf3f2acf2d1064f37beed",
+      "opened": 2,
+      "closed": 2,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanGenericAccelerationNativeSelfTest.jsonl",
+      "sha256": "69d9a76a5a391ff9149a75754f83a14f639c078751a4e1f5eed6e61ec1086d01",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanGenericCommandNativeSelfTest.jsonl",
+      "sha256": "ee96f6ae65981d6e4a508f47aae7471783e798029462aa1f4fd159ec86cc2a4b",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanGenericGeometryBarrierNativeSelfTest.jsonl",
+      "sha256": "2be564d1af600e650ef3c2e0f8ad673c080d5355d29db1c53485e79d89c4a8b1",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanGenericIntegerTextureNativeSelfTest.jsonl",
+      "sha256": "ebef915e64903d833fbc683a0ac5222ef778f582af6460659016190ec09bb1db",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanGenericLogicOperationNativeSelfTest.jsonl",
+      "sha256": "0288d1e56d0abb1ea9978d97e56ffbb6106d7ec3603dadf4b92324cce0a6ef00",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanGenericPipelineRetirementNativeSelfTest.jsonl",
+      "sha256": "ab1abda978d34723812eed4676c3ae1276f4f9ccbbd735b78c47d666e91da31d",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanGenericProceduralRayTracingNativeSelfTest.jsonl",
+      "sha256": "42cbf46c5fca19bf5b8c87c8bab2a5c8c359ea2c4109d5816654337a19146e47",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanGenericRayTracingNativeSelfTest.jsonl",
+      "sha256": "a4bb7fe76b5956dafda98b09c624c25df237f14a4c6012963c8f84b5bfba625b",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanModernFrameNativeSelfTest.jsonl",
+      "sha256": "9d08d9e156710a79a5994bff24cea08a039dc816ef9d4cfe103f9fa0fab0d445",
+      "opened": 6,
+      "closed": 6,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanQueuedFrameSlotNativeSelfTest.jsonl",
+      "sha256": "651148d33dfbd80e4358025278bb9f9dd863b0fb4e042b346a9538c8b503f5bd",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanSceneAccelerationNativeSelfTest.jsonl",
+      "sha256": "02dfd77bd6d6f93a11aa43f4a3aa548b7f44c98fd823a0c7224de1e775cc6a44",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "path": "renderer-core/build/reports/vulkan-validation/vulkanSceneRuntimeNativeSelfTest.jsonl",
+      "sha256": "05e1c4c6835c043cb96abc8e450aa099b13297e5fe0d9c4f8ff21630ba6a8239",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "renderer-api/build/libs/renderer-api-7.0.0.jar",
+      "file": "renderer-api-7.0.0.jar",
+      "bytes": 686599,
+      "sha256": "238b50593a9012925b2ae294efd2fe2444aa78b755c8547d5444a4e3e29049ec"
+    },
+    {
+      "path": "renderer-core/build/libs/renderer-core-7.0.0.jar",
+      "file": "renderer-core-7.0.0.jar",
+      "bytes": 56517384,
+      "sha256": "2cca98432ea9b9c7d53c7bc923c07919be64e898a94d785f7e40973d0a4932d7"
+    },
+    {
+      "path": "renderer-nvidia/build/libs/renderer-nvidia-7.0.0.jar",
+      "file": "renderer-nvidia-7.0.0.jar",
+      "bytes": 56518660,
+      "sha256": "1353fe3ee4981edc15e03b2bc9390f9f9fe99aa945553d96049af87182bf30cf"
+    },
+    {
+      "path": "build/release/rtrenderer-api-7.0.0-windows-x86_64-candidate.zip",
+      "file": "rtrenderer-api-7.0.0-windows-x86_64-candidate.zip",
+      "bytes": 355326889,
+      "sha256": "06b22550fa3a4ba1c7bd36be6ffb2733b9da490f00a4a2db1b9ee7da708852af"
+    }
+  ],
+  "rawTaskReport": {
+    "file": "api-closure-performance-final-full-result-20261031.json",
+    "sha256": "f551083f35b5da8862c5ad9065dd869a8da1903ffdbff33f2c3583975bc5a4b4"
+  },
+  "fullLog": {
+    "path": "build/api-closure-performance-final-retest-20261031/complete.log",
+    "sha256": "c0c8f5943649f9730074255e2f5cca677e99b53b52c22a8834e1b513cd2650b1"
+  },
+  "performanceEvidence": "pbr-compact-residency-20261031.json",
+  "performanceSourceCommit": "05760a9470f328ea39226a4c79142dd1d03518d5",
+  "productionSourceUnchangedSincePerformanceAcceptance": true,
+  "changesAfterPerformanceAcceptance": [
+    "docs/quality/data/api-closure-performance-blockers-20261031.json",
+    "renderer-core/src/test/java/top/ceroxe/rt/renderer/rt/pipeline/VulkanGpuSceneShaderSelfTest.java"
+  ],
+  "previousFullGate": "api-closure-final-20261031.json",
+  "previousFailedRun": "api-closure-performance-blockers-20261031.json"
+}

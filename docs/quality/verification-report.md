@@ -1,5 +1,28 @@
 # 质量验证与性能报告
 
+## 2026-10-31 最终 130 FPS 版本完整 API 验收通过
+
+最终性能版本已完成当前声明的 Windows x86_64 Vulkan RT 与 NVIDIA API 全量验收。验收源码为 `87fa6d11b9f641d66f034009cfd9f65eadc2f5f5`，Git tree 为 `0329e4861978b8d0412b57a746c2ac15edbfc7c6`；开始与结束时 tracked 源树均干净。本轮直接执行完整 `verifyApiClosure --offline --no-daemon --console=plain --continue`，没有子集选择器或排除任务。
+
+完整运行于本地时间 2026-10-31 06:39:38 成功结束，耗时 7 分 40 秒：281 个 Gradle 任务，251 个执行、30 个无需更新。14 个必需任务组、76 个 Java 原生验收任务全部完成；所有原生任务均实际执行。
+
+| 验收项 | 结果 |
+| --- | --- |
+| 公共 API、core、NVIDIA provider、demo 合同 | 完整通过 |
+| shader 源码与预编译 SPIR-V | 298 个变体、42,763,320 字节精确匹配 |
+| core 原生、GPUScene、统一 API 与互操作 | 完整通过 |
+| 完整介质原生组合 | 通过；含相机散射 17 项、PBR 31 项/43 帧、光学 46 项/152 帧、组合 41 项/61 帧、金属 52 项/49 帧 |
+| NVIDIA 功能及组合 | DLSS、DLAA、NIS、NRD、RTXMU、FG、MFG 与自适应组合通过 |
+| 完整介质展厅 | 13 个预设，每个 8 帧，共 104 帧通过 |
+| 独立 Maven 消费者、发布校验和与完整运行包 | 通过；ZIP 内 2158 个文件完整验证 |
+| Vulkan validation | 35 份当轮日志、66 次会话全部关闭；警告、错误、丢弃汇总均为零 |
+
+本轮生产源码与性能验收提交 `05760a9470f328ea39226a4c79142dd1d03518d5` 相同，期间只更新一处测试断言及失败记录。性能验收保持默认均匀直接散射、RTX 5080 Laptop、1920×1080、1 SPP、steps=8、maxEvents=16、lightSamples=4，FG、降噪、重建、时域、动画、焦散与 CPU 回读关闭：预热 1200 帧后连续完成 3000 帧，平均 **130.064872 FPS**；5 轮各 600 帧，最低轮 **129.569156 FPS**。另一次相同长度计时窗口为 128.559342 FPS，观测开销 **1.171078%**。这些数值来自独立性能验收，不使用全量功能门禁的耗时计算 FPS。
+
+首轮发现旧 shader 合同仍把 primary 布局头当作布尔值，现改为检查实际 bit 0，完整焦散 receiver 字段检查全部保留；生产实现未改。另一次 GraalVM `jvmcicompiler.dll` 进程崩溃按本机规则临时关闭 JVMCI 编译器后重试，仅设置验收进程环境，不写入项目配置。最终全量运行没有原生崩溃或测试失败，没有放宽误差阈值。[首轮失败记录](data/api-closure-performance-blockers-20261031.json)单独保留。
+
+当前源码身份、全部任务原始报告、逐份 validation 统计、完整日志 SHA-256 及实际三模块 JAR/ZIP 哈希已绑定归档：[最终完整验收证据](data/api-closure-performance-final-20261031.json)、[原始任务报告](data/api-closure-performance-final-full-result-20261031.json)、[性能与图像正确性证据](data/pbr-compact-residency-20261031.json)、[最终长窗口延迟排名](data/pbr-compact-residency-acceptance-ranked-20261031.json)。以下记录保留各历史提交的验收范围。
+
 ## 2026-10-31 完整 API 验收通过
 
 当前声明的 Windows x86_64 Vulkan RT 与 NVIDIA 运行契约已通过完整 `verifyApiClosure`。验收源码为 `79a8f2030aff28563d0fa1d3058d151a8ffdab1e`，Git tree 为 `2334c4887aaf487aff31ba134111c8cd1c579723`；验收开始与结束时 tracked 源树均干净。设备为本机 RTX 5080 Laptop GPU。

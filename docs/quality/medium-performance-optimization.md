@@ -1066,3 +1066,11 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 正确性：1080p 连续 8 帧原始 HDR，query/no-query 各 33 帧灯光矩阵和各 12 帧 cached-primary 矩阵（PBR/UNLIT、outline、SPP 1/2/8）均与冻结对照全字节一致。PBR 31 项/43 帧、散射组合 15 项（含低驻留多块）、camera 17 项独立参考、多散射解析回归通过。新增规划器测试默认 1+2 分块、4 MiB 下 81 组 SPP/灯数/步数、所有输出范围和跨块全局身份；原 ABI 与来源合同通过。13 份正式 validation 日志零 warning/error/drop、会话全关闭；298 份 shader 源码/SPIR-V 一致。冻结 JAR 中改动的源码、SPIR-V 及三个 Java class 与被测构建一致。原 API 全门禁仍绑定既有源码，最终性能版本的全门禁另跑另记。
 
 [完整性能与正确性证据](data/pbr-compact-residency-20261031.json)、[同参降幅表](data/pbr-compact-residency-ranked-20261031.json)、[最终长窗口完整排序](data/pbr-compact-residency-acceptance-ranked-20261031.json)。达到稳定 120 FPS 目标后停止本轮性能改动，继续最终 API 制品门禁。
+
+### 最终性能版本完整 API 门禁完成
+
+最终全量 `verifyApiClosure --offline --no-daemon --console=plain --continue` 于本地时间 2026-10-31 06:39:38 通过，耗时 7 分 40 秒。验收提交 `87fa6d11b9f641d66f034009cfd9f65eadc2f5f5`，tree `0329e4861978b8d0412b57a746c2ac15edbfc7c6`，开始与结束 tracked 源树干净。生产源码与性能验收提交 `05760a9` 相同；只修正了测试中旧的 primary 布局布尔断言，使其检查实际 bit 0，完整 receiver 字段检查和所有图像容差保留。
+
+281 个任务、14 个必需组、76 个实际执行的 Java 原生任务全部通过，未使用子集选择器或排除任务。298 个 shader/SPIR-V、完整介质与统一 API、NVIDIA 功能组合、13 场景/104 帧展厅、独立 Maven 消费者和 2158 文件 ZIP 均通过。35 份本轮 Vulkan validation 日志共 66 次会话全部关闭，warning/error/drop 均为零。遇到的单次 GraalVM 编译器崩溃使用进程级 `-XX:-UseJVMCICompiler` 重试，未修改项目配置，最终全量运行无崩溃。首轮失败另存，不冒充成功。
+
+本轮完成状态：默认均匀直接散射的 3000 帧性能验收为 130.064872 FPS，最低轮 129.569156 FPS；最新生产源码的完整 API 和发布制品门禁也已通过。本轮性能修改停止，后续新改动仍按本规范重新归因和验收。[最终门禁证据与制品哈希](data/api-closure-performance-final-20261031.json)、[完整原始任务报告](data/api-closure-performance-final-full-result-20261031.json)、[首轮失败记录](data/api-closure-performance-blockers-20261031.json)。
