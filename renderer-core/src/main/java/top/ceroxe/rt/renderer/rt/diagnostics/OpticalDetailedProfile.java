@@ -43,9 +43,10 @@ public final class OpticalDetailedProfile {
             if(calls!=0){add("shader/"+stage+"/ticks",ticks);add("shader/"+stage+"/calls",calls);}
         }
     }
-    public static void cameraScatteringShaderSamples(MemorySegment values,int paths){
+    public static void cameraScatteringShaderSamples(MemorySegment values,int paths,long frameSequence){
         long records=(paths+(long)CAMERA_SCATTERING_STRIDE-1)/CAMERA_SCATTERING_STRIDE;
-        long selected=(records+7)/8;
+        long firstSelected=Math.floorMod(-frameSequence,8L);
+        long selected=firstSelected>=records?0:1+(records-1-firstSelected)/8;
         long observed=0;
         for(int sample=0;sample<records;sample++)for(int stage=0;stage<CAMERA_SCATTERING_STAGES;stage++){
             long at=((long)sample*CAMERA_SCATTERING_STAGES+stage)*16,ticks=values.get(ValueLayout.JAVA_LONG,at),calls=values.get(ValueLayout.JAVA_LONG,at+8);

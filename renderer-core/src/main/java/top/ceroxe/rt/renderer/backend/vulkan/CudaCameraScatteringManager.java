@@ -123,7 +123,7 @@ final class CudaCameraScatteringManager implements AutoCloseable {
             for(int first=0;first<plan.pixels();) {
                 int tileFirst=first,pixels=Math.min(plan.tilePixels(),plan.pixels()-first);
                 long diagnosticAddress=diagnosticBytes==0?0:address+plan.bytes();
-                boolean profileTile=diagnosticProducer!=null&&profileTile(plan,tileFirst,pixels);
+                boolean profileTile=diagnosticProducer!=null&&profileTile(plan,tileFirst,pixels,frame.sequence());
                 boolean initial=first==0,last=first+pixels==plan.pixels();
                 byte[] header=CudaCameraScatteringAbi.header(plan,frame,first,pixels,includeMediumEmission);
                 RtGpuTimestampPool.Capture tlasTiming=OpticalFrameTimings.ENABLED&&initial&&buildPlan!=null
@@ -170,7 +170,7 @@ final class CudaCameraScatteringManager implements AutoCloseable {
                     if(last){
                         if(diagnosticBytes!=0){
                             cuda.download(shared.slice(plan.bytes(),diagnosticBytes),diagnosticHost.asSlice(0,diagnosticBytes));
-                            OpticalDetailedProfile.cameraScatteringShaderSamples(diagnosticHost,plan.paths());
+                            OpticalDetailedProfile.cameraScatteringShaderSamples(diagnosticHost,plan.paths(),frame.sequence());
                         }
                         cuda.download(shared.slice(CudaCameraScatteringAbi.FAILED_OFFSET,4),failed);
                     }
@@ -186,11 +186,13 @@ final class CudaCameraScatteringManager implements AutoCloseable {
         return new CudaCameraMediumManager.Prepared(address+plan.primaryOffset(),address+plan.transmittanceOffset(),
                 address+plan.emissionOffset(),plan.pixels(),plan.samples());
     }
-    private static boolean profileTile(CudaCameraScatteringAbi.Plan plan,int firstPixel,int pixels) {
+    private static boolean profileTile(CudaCameraScatteringAbi.Plan plan,int firstPixel,int pixels,long frameSequence) {
         long firstPath=(long)firstPixel*plan.samples(),endPath=(long)(firstPixel+pixels)*plan.samples();
         long firstSample=(firstPath+OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE-1)/OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE;
         long endSample=(endPath+OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE-1)/OpticalDetailedProfile.CAMERA_SCATTERING_STRIDE;
-        return firstSample<endSample&&(firstSample&7L)==0L;
+        long phase=Math.floorMod(frameSequence,8L);
+        long firstSelected=firstSample+Math.floorMod(-phase-firstSample,8L);
+        return firstSelected<endSample;
     }
     private void ensureCapacity(long bytes,boolean exactBudget) {
         if(storage!=null&&storage.byteSize()>=bytes&&(!exactBudget||storage.byteSize()==bytes))return;
