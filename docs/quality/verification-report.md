@@ -10,6 +10,12 @@ LIGHTMAP_MODULATED 保留已有贴图、顶点、帧 lightmap、雾与 surfaceVi
 
 同一最终资源通过金属 40 项/25 原生帧回归及 16 帧密度/边界 PBR 和体积焦散回归；独立 CUDA 光学/焦散数值、三个 CPU 合同和来源清单通过。8 个 optical-trace、8 个 photons SPIR-V 已重建。证据见 [composite-medium-closure-20261031.json](data/composite-medium-closure-20261031.json)。新表面能力与散射/焦散的进一步交叉专项、主树集成、完整门禁、展厅及最终制品验证仍待完成；本项不作为全 API 完成率。
 
+### 表面合成与散射、焦散交叉专项
+
+随后对新表面路径和参与介质组合做了独立生产验证。透明 alpha、LIGHTMAP_MODULATED、MULTIPLY 叠层及粗糙部分透射玻璃分别与全局均匀介质、显式边界密度和全局密度散射组合。41 项检查执行了 61 帧原生光学传输，12 组均保留有限非负 HDR，散射相对吸收对照产生正增量；玻璃对照保留其太阳圆盘反射基线。
+
+焦散专项将透明 alpha 接收面、IOR 1 的部分透射 PBR、ALPHA_OVER 叠层和 MULTIPLY 叠层分别与显式边界、全局密度及无边界均匀介质组合。52 项检查执行 49 帧原生光学传输；12 个开关对照均观察到正的最终 HDR 焦散增量。无边界均匀介质用来覆盖普通光子路径，其他参与介质帧通过原生光子传输。两个 Vulkan 验证会话各 135 条消息并正常关闭，警告和错误为零。机器记录见 [composite-scattering-caustics-closure-20261031.json](data/composite-scattering-caustics-closure-20261031.json)。完整门禁、展厅和最终制品验收仍待完成。
+
 ## 2026-10-31 金属介质反射与焦散路由
 
 原生光学路径现保存真实金属率和公共 GGX 采样点；完成接收面灯光连接后继续追踪一次金属反射。反射保持介质栈与剩余距离，沿途积分吸收、发光、密度和散射。连接仍为 304 字节，内部光学 ABI 升至版本 6。小粗糙度采样改为直接计算正弦，避免 `sqrt(1-cos²)` 的浮点相消。单面 PBR/UNLIT 仍执行共享 any-hit 的背面规则。

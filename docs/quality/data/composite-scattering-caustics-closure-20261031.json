@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-31",
+  "baseCommit": "fbaf0832a58056bf8692cfa34845e9eb2fcf8cf1",
+  "hardware": "NVIDIA GeForce RTX 5080 Laptop GPU",
+  "passed": true,
+  "nativeTasks": [
+    ":renderer-core:cudaCompositeMediumProductionNativeSelfTest",
+    ":renderer-core:cudaMetallicMediumProductionNativeSelfTest"
+  ],
+  "composite": {
+    "checks": 41,
+    "nativeOpticalFrames": 61,
+    "scatteringCombinations": [
+      { "surface": "alpha", "domain": "global-uniform", "controlSum": 0.0, "scatteringSum": 0.00159442425 },
+      { "surface": "alpha", "domain": "explicit-boundary-density", "controlSum": 0.0, "scatteringSum": 9.11395836 },
+      { "surface": "alpha", "domain": "global-density", "controlSum": 0.0, "scatteringSum": 0.107185245 },
+      { "surface": "lightmap", "domain": "global-uniform", "controlSum": 0.0, "scatteringSum": 0.00149643421 },
+      { "surface": "lightmap", "domain": "explicit-boundary-density", "controlSum": 0.0, "scatteringSum": 9.23805618 },
+      { "surface": "lightmap", "domain": "global-density", "controlSum": 0.0, "scatteringSum": 0.108835459 },
+      { "surface": "multiply-overlay", "domain": "global-uniform", "controlSum": 0.0, "scatteringSum": 0.00208479166 },
+      { "surface": "multiply-overlay", "domain": "explicit-boundary-density", "controlSum": 0.0, "scatteringSum": 14.3683548 },
+      { "surface": "multiply-overlay", "domain": "global-density", "controlSum": 0.0, "scatteringSum": 0.175585449 },
+      { "surface": "partial-rough-glass", "domain": "global-uniform", "controlSum": 0.000105500221, "scatteringSum": 0.000893354416 },
+      { "surface": "partial-rough-glass", "domain": "explicit-boundary-density", "controlSum": 0.0, "scatteringSum": 5.23812234 },
+      { "surface": "partial-rough-glass", "domain": "global-density", "controlSum": 0.0, "scatteringSum": 0.0593215823 }
+    ]
+  },
+  "caustics": {
+    "checks": 52,
+    "nativeOpticalFrames": 49,
+    "transparentReceiverCombinations": [
+      { "surface": "alpha", "domain": "explicit-boundary", "hdrIncrease": 103.306274, "maximumPixelIncrease": 0.111938477 },
+      { "surface": "alpha", "domain": "global-density", "hdrIncrease": 105.993042, "maximumPixelIncrease": 0.114807129 },
+      { "surface": "alpha", "domain": "uniform-global-medium-no-boundary", "hdrIncrease": 54.4701447, "maximumPixelIncrease": 0.073425293 },
+      { "surface": "partial-transmission-ior-1", "domain": "explicit-boundary", "hdrIncrease": 98.55896, "maximumPixelIncrease": 0.106445313 },
+      { "surface": "partial-transmission-ior-1", "domain": "global-density", "hdrIncrease": 97.6531982, "maximumPixelIncrease": 0.106323242 },
+      { "surface": "partial-transmission-ior-1", "domain": "uniform-global-medium-no-boundary", "hdrIncrease": 54.7088814, "maximumPixelIncrease": 0.0737609863 },
+      { "surface": "alpha-overlay", "domain": "explicit-boundary", "hdrIncrease": 97.2250366, "maximumPixelIncrease": 0.104736328 },
+      { "surface": "alpha-overlay", "domain": "global-density", "hdrIncrease": 101.800964, "maximumPixelIncrease": 0.109619141 },
+      { "surface": "alpha-overlay", "domain": "uniform-global-medium-no-boundary", "hdrIncrease": 52.0446777, "maximumPixelIncrease": 0.0701293945 },
+      { "surface": "multiply-overlay", "domain": "explicit-boundary", "hdrIncrease": 92.8207703, "maximumPixelIncrease": 0.100036621 },
+      { "surface": "multiply-overlay", "domain": "global-density", "hdrIncrease": 106.83313, "maximumPixelIncrease": 0.115600586 },
+      { "surface": "multiply-overlay", "domain": "uniform-global-medium-no-boundary", "hdrIncrease": 49.7208252, "maximumPixelIncrease": 0.0668945313 }
+    ],
+    "photonDispatchesPerEnabledFrame": 1
+  },
+  "vulkanValidation": {
+    "compositeMessages": 135,
+    "causticMessages": 135,
+    "warningsAndErrors": 0,
+    "sessionsClosed": true
+  },
+  "remaining": [
+    "main-tree integration and complete medium gates",
+    "full gallery verification",
+    "final packaged consumer and distribution gates"
+  ],
+  "performanceClaim": false
+}

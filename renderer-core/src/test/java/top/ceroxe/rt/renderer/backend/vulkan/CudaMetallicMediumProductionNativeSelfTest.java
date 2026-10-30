@@ -65,6 +65,7 @@ public final class CudaMetallicMediumProductionNativeSelfTest {
             verifyCaustics(1,false);
             verifyCaustics(0,false);
             verifyCaustics(0,true);
+            verifyCompositeCaustics();
             require(renderer.health().activeFailure().isEmpty(),"metal reflection left an active renderer failure");
         } finally {renderer=null;}
         long nativeFrames=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-before;
@@ -135,6 +136,55 @@ public final class CudaMetallicMediumProductionNativeSelfTest {
         positive(on,"caustics-metal"+floorMetal+"-"+(density?"density":"boundary"));
         require(CausticPhotonPlan.diagnosticPhotonDispatches.sum()==photonsBefore+1,"caustics did not build a photon map");
     }
+    private static void verifyCompositeCaustics() throws Exception {
+        for(String kind:new String[]{"alpha","partial-transmission","overlay-alpha","overlay-multiply"})for(int domain=0;domain<3;domain++) {
+            long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
+            setup(1,true,domain==0?ABSORBER:null,false);
+            var receiver=MaterialAsset.builder(2).doubleSided(false).roughness(1);
+            if(kind.equals("alpha"))receiver.baseColorRgba8(0x80ffffff).blendMode(MaterialAsset.BlendMode.TRANSLUCENT);
+            // Equal IOR removes reflection of the directly lit floor from the black control.
+            if(kind.equals("partial-transmission"))receiver.transmission(.5f).indexOfRefraction(1);
+            var transaction=SceneTransaction.builder(revision++).upsert(receiver.build())
+                    .upsert(MeshAsset.triangles(2,new float[]{-100,-100,2,100,-100,2,100,100,2,-100,100,2},
+                            new int[]{0,2,1,0,3,2},2))
+                    .upsert(SceneInstance.builder(2,2).renderState(InstanceRenderState.builder().surfaceMask(1).build()).build());
+            if(domain==0)transaction.upsert(boundary(ABSORBER,false).toBuilder().transform(new AffineTransform(
+                    new float[]{4,0,0,0,0,4,0,0,0,0,1,1.5f})).build());
+            if(kind.startsWith("overlay")) {
+                var mode=kind.equals("overlay-alpha")?SurfaceOverlayState.CompositionMode.ALPHA_OVER:SurfaceOverlayState.CompositionMode.MULTIPLY;
+                transaction.upsert(MaterialAsset.builder(4).doubleSided(true).shadingModel(MaterialAsset.ShadingModel.UNLIT)
+                                .baseColorRgba8(0x80000000).blendMode(MaterialAsset.BlendMode.TRANSLUCENT)
+                                .surfaceOverlay(SurfaceOverlayState.depthBias(.05f,mode)).build())
+                        .upsert(MeshAsset.triangles(4,new float[]{-100,-100,1.99f,100,-100,1.99f,100,100,1.99f,-100,100,1.99f},
+                                new int[]{0,2,1,0,3,2},4))
+                        .upsert(SceneInstance.builder(4,4).renderState(InstanceRenderState.builder().overlayReceiverMask(1).build()).build());
+            }
+            var change=transaction.build();long deadline=System.nanoTime()+TIMEOUT.toNanos();
+            for(;;)try{renderer.apply(change);break;}catch(SubmissionRejectedException pending){require(System.nanoTime()<deadline,"composite caustic apply timed out");Thread.sleep(1);}
+            var medium=domain==0?Medium.vacuum():domain==1?ABSORBER.withDensityField(MediumDensityField.grid(50,2,new AffineTransform(
+                    new float[]{.005f,0,0,.5f,0,.005f,0,.5f,0,0,.125f,.25f}))):ABSORBER;
+            var camera=CameraState.lookAt(0,0,1,0,0,2).verticalFieldOfViewDegrees(2).aspectRatio((double)WIDTH/HEIGHT).build();
+            String name="caustics-"+kind+"-"+new String[]{"boundary","density","uniform"}[domain];
+            FrameSnapshot off=capture(medium,1,BUDGET,FramePrimitiveBatch.empty(),camera,false);
+            long photonsBefore=CausticPhotonPlan.diagnosticPhotonDispatches.sum();
+            positiveDelta(capture(medium,1,BUDGET,FramePrimitiveBatch.empty(),camera,true),off,name);
+            require(CausticPhotonPlan.diagnosticPhotonDispatches.sum()==photonsBefore+1,name+" did not build a photon map");
+            require(VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()==nativeBefore+2,
+                    name+" bypassed native optical transport");
+        }
+    }
+    private static void positiveDelta(FrameSnapshot frame,FrameSnapshot control,String why) {
+        var actual=frame.pixels().order(ByteOrder.LITTLE_ENDIAN);var baseline=control.pixels().order(ByteOrder.LITTLE_ENDIAN);
+        double increase=0,maximum=0;
+        for(int p=0;p<WIDTH*HEIGHT;p++)for(int c=0;c<3;c++) {
+            double value=Float.float16ToFloat(actual.getShort(p*8+c*2));
+            double before=Float.float16ToFloat(baseline.getShort(p*8+c*2));
+            require(Double.isFinite(value)&&value>=0&&Double.isFinite(before)&&before>=0,why+" invalid final HDR");
+            increase+=Math.max(value-before,0);maximum=Math.max(maximum,value-before);
+        }
+        require(increase>.0001&&maximum>0,why+" caustics added no final HDR radiance: "+increase);
+        RESULTS.add(String.format(Locale.ROOT,"    {\"name\":\"%s\",\"positiveCausticHdrIncrease\":%.9g,\"maximumPixelIncrease\":%.9g}",why,increase,maximum));
+    }
     private static void compare(String name,FrameSnapshot frame,float metal,int spp,Medium medium,double density,boolean boundary) {
         var pixels=frame.pixels().order(ByteOrder.LITTLE_ENDIAN);double maximum=0;
         for(int y=0;y<HEIGHT;y++)for(int x=0;x<WIDTH;x++) {
@@ -178,7 +228,8 @@ public final class CudaMetallicMediumProductionNativeSelfTest {
     private static void positive(FrameSnapshot frame,String why) {
         var pixels=frame.pixels().order(ByteOrder.LITTLE_ENDIAN);double sum=0;
         for(int p=0;p<WIDTH*HEIGHT;p++)for(int c=0;c<3;c++){double v=Float.float16ToFloat(pixels.getShort(p*8+c*2));require(Double.isFinite(v)&&v>=0,why+" invalid HDR");sum+=v;}
-        require(sum>0,why+" lost all reflected radiance");RESULTS.add("    {\"name\":\""+why+"\",\"positiveFinalHDR\":true}");
+        require(sum>0,why+" lost all reflected radiance");RESULTS.add(String.format(Locale.ROOT,
+                "    {\"name\":\"%s\",\"positiveFinalHDR\":true,\"finalHdrSum\":%.9g}",why,sum));
     }
     private static void allBlack(FrameSnapshot frame,String why) {
         var pixels=frame.pixels();for(int p=0;p<WIDTH*HEIGHT;p++)for(int c=0;c<3;c++)require(pixels.getShort(p*8+c*2)==0,why);

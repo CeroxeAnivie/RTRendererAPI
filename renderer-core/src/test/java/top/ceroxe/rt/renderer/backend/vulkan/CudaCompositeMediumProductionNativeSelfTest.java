@@ -68,6 +68,7 @@ public final class CudaCompositeMediumProductionNativeSelfTest {
             compare("overlay-depth-rejection",capture(MEDIUM,false,LightmapState.fullIntensity(),FramePrimitiveBatch.empty()),2,0,RGB,1,0);
             verifyPbrWeights();
             verifyPartialRefraction();
+            verifyScatteringCombinations();
             require(renderer.health().activeFailure().isEmpty(),"compositing left an active failure");
         }finally{renderer=null;}
         long nativeFrames=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-before;
@@ -104,9 +105,13 @@ public final class CudaCompositeMediumProductionNativeSelfTest {
         for(;;)try{renderer.apply(transaction);return;}catch(SubmissionRejectedException busy){require(System.nanoTime()<deadline,"scene backpressure timed out");Thread.sleep(1);}
     }
     private static FrameSnapshot capture(Medium medium,boolean lit,LightmapState lightmap,FramePrimitiveBatch batch)throws Exception{
+        return capture(medium,lit,lightmap,batch,BUDGET,false);
+    }
+    private static FrameSnapshot capture(Medium medium,boolean lit,LightmapState lightmap,FramePrimitiveBatch batch,
+            MediumTransport transport,boolean sideLight)throws Exception{
         var request=RenderFrameRequest.builder(sequence++,W,H,CAMERA).minimumSceneRevision(revision-1)
-                .environment(EnvironmentState.builder().cameraMedium(medium).sunDirection(0,0,-1).sunIntensity(lit?1:0).build())
-                .mediumTransport(BUDGET).lightmap(lightmap).primitiveBatch(batch).build();
+                .environment(EnvironmentState.builder().cameraMedium(medium).sunDirection(sideLight?1:0,0,sideLight?0:-1).sunIntensity(lit?1:0).build())
+                .mediumTransport(transport).lightmap(lightmap).primitiveBatch(batch).build();
         long deadline=System.nanoTime()+Duration.ofSeconds(60).toNanos();
         while(!(renderer.trySubmit(request) instanceof Renderer.FrameSubmitted)){require(System.nanoTime()<deadline,"frame backpressure timed out");Thread.sleep(1);}
         var frame=renderer.awaitFrame(Duration.ofSeconds(60)).orElseThrow();require(frame.frameSequence()==request.sequence(),"wrong frame sequence");return frame;
@@ -181,6 +186,54 @@ public final class CudaCompositeMediumProductionNativeSelfTest {
                 }
             }
             RESULTS.add(String.format(Locale.ROOT,"    {\"name\":\"partial-refraction-%.1f\",\"maximumAbsoluteError\":%.9g}",transmission,maximum));
+        }
+    }
+    private static void verifyScatteringCombinations()throws Exception{
+        var absorption=new Medium(MEDIUM.absorption(),Rgb.ZERO,Rgb.ZERO,1,1,0);
+        var scattering=new Medium(MEDIUM.absorption(),new Rgb(.3f,.2f,.1f),Rgb.ZERO,1,1,.2f);
+        var transport=BUDGET.withScatteringBounces(2).withOpticalSamples(2);
+        for(String kind:new String[]{"alpha","lightmap","overlay","partial-rough-glass"})for(int domain=0;domain<3;domain++){
+            long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
+            var material=unlit().baseColorRgba8(0x80000000).build();float z=2;
+            var instance=SceneInstance.builder(1,1).build();
+            if(kind.equals("lightmap"))material=material.toBuilder().shadingModel(MaterialAsset.ShadingModel.LIGHTMAP_MODULATED).build();
+            if(kind.equals("overlay")){
+                z=.02f;material=material.toBuilder().blendMode(MaterialAsset.BlendMode.TRANSLUCENT)
+                        .surfaceOverlay(SurfaceOverlayState.depthBias(.05f,SurfaceOverlayState.CompositionMode.MULTIPLY)).build();
+                instance=instance.toBuilder().renderState(InstanceRenderState.builder().overlayReceiverMask(1).build()).build();
+            }
+            if(kind.equals("partial-rough-glass"))material=MaterialAsset.builder(1).doubleSided(true).baseColorRgba8(0xff000000)
+                    .transmission(.5f).roughness(.35f).indexOfRefraction(1.5f).build();
+            setup(material,plane(1,z,1),instance,255,domain,false);
+            apply(SceneTransaction.builder(revision++).upsert(MaterialAsset.builder(2).doubleSided(true)
+                    .shadingModel(MaterialAsset.ShadingModel.UNLIT).baseColorRgba8(0xff000000).build()).build());
+            FrameSnapshot[] frames=new FrameSnapshot[2];
+            for(int phase=0;phase<2;phase++){
+                Medium selected=phase==0?absorption:scattering;
+                if(domain==1){
+                    selected=selected.withDensityField(MediumDensityField.grid(50,2,new AffineTransform(
+                            new float[]{.5f,0,0,.5f,0,.5f,0,.5f,0,0,.2f,.5f})));
+                    apply(SceneTransaction.builder(revision++).upsert(SceneInstance.builder(3,3)
+                            .transform(new AffineTransform(new float[]{4,0,0,0,0,4,0,0,0,0,2.5f,1.5f}))
+                            .mediumBoundary(MediumBoundary.volume(selected)).build()).build());
+                }
+                if(domain==2)selected=selected.withDensityField(MediumDensityField.grid(50,2,new AffineTransform(
+                        new float[]{.005f,0,0,.5f,0,.005f,0,.5f,0,0,.125f,.25f})));
+                frames[phase]=capture(domain==1?Medium.vacuum():selected,true,LightmapState.fullIntensity(),FramePrimitiveBatch.empty(),transport,true);
+            }
+            require(VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()==nativeBefore+2,
+                    "combined scattering bypassed native optical transport: "+kind+" domain="+domain);
+            double controlSum=0,sum=0;var off=frames[0].pixels().order(ByteOrder.LITTLE_ENDIAN);var on=frames[1].pixels().order(ByteOrder.LITTLE_ENDIAN);
+            for(int p=0;p<W*H;p++)for(int c=0;c<3;c++){
+                double control=Float.float16ToFloat(off.getShort(p*8+c*2));
+                require(Double.isFinite(control)&&control>=0,"invalid combined scattering control HDR");controlSum+=control;
+                // A rough dielectric can reflect the side-lit sun disk even without volume scattering.
+                if(!kind.equals("partial-rough-glass"))require(control==0,"scattering control must be black: "+kind+" domain="+domain);
+                double value=Float.float16ToFloat(on.getShort(p*8+c*2));require(Double.isFinite(value)&&value>=0,"invalid combined scattering HDR");sum+=value;
+            }
+            require(sum>controlSum+.0001,"combined surface lost in-scattered radiance: "+kind+" domain="+domain+" control="+controlSum+" scattering="+sum);
+            RESULTS.add(String.format(Locale.ROOT,"    {\"name\":\"%s-scattering-domain%d\",\"controlSum\":%.9g,\"scatteringSum\":%.9g,\"scatteringIncrease\":%.9g}",
+                    kind,domain,controlSum,sum,sum-controlSum));
         }
     }
     private static void require(boolean value,String why){if(!value)throw new AssertionError(why);}
