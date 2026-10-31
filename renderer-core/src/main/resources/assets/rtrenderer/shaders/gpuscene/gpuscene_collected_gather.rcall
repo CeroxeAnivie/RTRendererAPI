@@ -1,0 +1,114 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_ray_query : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#include "gpuscene_common.glsl"
+#include "gpuscene_collected_batch_data.glsl"
+// NVIDIA 952a1a8e8b85f25781db7014d4d2bda124435e79, 13_callable_shader:
+// separate SBT callables and payloads keep shared work behind real stage boundaries.
+layout(set=0,binding=GPU_SCENE_BINDING_TLAS) uniform accelerationStructureEXT sceneTlas;
+layout(location=1) callableDataInEXT GsCollectedBatchData gsCollectedBatch;
+GpuScenePayload payload;
+mat4x3 gsCollectedObjectToWorld;
+vec3 gsCollectedRayOrigin,gsCollectedRayDirection;
+float gsCollectedHitT;
+uint gsCollectedCursor;
+#define GS_BOUNDARY_OBJECT_TO_WORLD gsCollectedObjectToWorld
+#define GS_BOUNDARY_RAY_ORIGIN gsCollectedRayOrigin
+#define GS_BOUNDARY_RAY_DIRECTION gsCollectedRayDirection
+#define GS_BOUNDARY_HIT_T gsCollectedHitT
+#include "gpuscene_boundary_intersection.glsl"
+#define gsCollectedEvents gsCollectedBatch.events
+#define gsCollectedCount gsCollectedBatch.count
+#define gsCollectedComplete gsCollectedBatch.complete
+#define gsCollectedFallback gsCollectedBatch.fallback
+float gsCollectedTolerance(float t) {return 8.0*1.192092896e-7*max(1.0,abs(t));}
+void gsCollectedCountEvent(uint stage) {
+#ifdef RTRENDERER_OPTICAL_PROFILE
+    if(payload.diagnosticAddress!=0ul&&gsDetailActive(stage)) {
+        uint word=(payload.diagnosticRecord*184u+stage)*2u;
+        GsOpticalDiagnostic target=GsOpticalDiagnostic(payload.diagnosticAddress);
+        target.values[word+1u]+=1ul;
+    }
+#endif
+}
+bool gsCollectedFill(vec3 origin,vec3 direction,float minimum,float maximum) {
+    GS_DETAIL_BEGIN(176u);
+    gsCollectedCount=gsCollectedCursor=0u;gsCollectedComplete=true;
+    float firstDiscarded=1.0e30;
+    gsCollectedRayOrigin=origin;gsCollectedRayDirection=direction;
+    rayQueryEXT query;
+    rayQueryInitializeEXT(query,sceneTlas,gl_RayFlagsNoOpaqueEXT,0xff,origin,minimum,direction,maximum);
+    while(rayQueryProceedEXT(query)) {
+        if(rayQueryGetIntersectionTypeEXT(query,false)!=gl_RayQueryCandidateIntersectionTriangleEXT) {
+            gsCollectedFallback=true;break;
+        }
+        gsCollectedCountEvent(179u);
+        uint instance=rayQueryGetIntersectionInstanceCustomIndexEXT(query,false);
+        uint primitive=rayQueryGetIntersectionPrimitiveIndexEXT(query,false);
+        uint boundary=gsInstanceWord(instance,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
+        uint mesh=gsMeshBase(gsInstanceMeshSlot(instance));
+        uint material=gsTriangleMaterialSlot(mesh,primitive)*GPU_SCENE_MATERIAL_RECORD_WORDS;
+        uint flags=gsMaterials.words[material+GPU_SCENE_MATERIAL_FLAGS_WORD];
+        if((boundary&2u)==0u) {
+            if((flags&GPU_SCENE_FLAG_ACTIVE)==0u)continue;
+            if(boundary==0u&&(flags&GPU_SCENE_FLAG_DOUBLE_SIDED)==0u
+                    &&!rayQueryGetIntersectionFrontFaceEXT(query,false))continue;
+        }
+        vec2 bary=rayQueryGetIntersectionBarycentricsEXT(query,false);
+        float rawT=rayQueryGetIntersectionTEXT(query,false),distance=rawT;
+        // Edge repair can substitute another face or split a sub-ULP interval.
+        // Keep the original ordered trace for the entire connection in that case.
+        if(min(1.0-bary.x-bary.y,min(bary.x,bary.y))<8.0*1.192092896e-7) {
+            gsCollectedCountEvent(183u);gsCollectedFallback=true;break;
+        }
+        if(boundary!=0u) {
+            gsCollectedObjectToWorld=rayQueryGetIntersectionObjectToWorldEXT(query,false);
+            gsCollectedHitT=rawT;
+            if(!gsBoundaryTriangleHit(mesh,primitive,bary,distance)||distance<minimum)continue;
+        }
+        if(isnan(distance)||isinf(distance)||abs(distance-rawT)>gsCollectedTolerance(rawT)) {
+            gsCollectedFallback=true;break;
+        }
+        bool duplicate=false;
+        for(uint j=0u;j<gsCollectedCount;++j)
+            if(all(equal(gsCollectedEvents[j].identity.xy,uvec2(instance,primitive)))
+                    &&gsCollectedEvents[j].distance.x==rawT){duplicate=true;break;}
+        if(duplicate)continue;
+        GsCollectedEvent event=GsCollectedEvent(uvec4(instance,primitive,floatBitsToUint(bary)),vec2(rawT,distance));
+        uint position=0u;
+        while(position<gsCollectedCount&&gsCollectedEvents[position].distance.x<rawT)++position;
+        if(gsCollectedCount==GS_CONNECTION_BATCH_CAPACITY) {
+            gsCollectedComplete=false;gsCollectedCountEvent(182u);
+            firstDiscarded=min(firstDiscarded,position<GS_CONNECTION_BATCH_CAPACITY
+                ?gsCollectedEvents[GS_CONNECTION_BATCH_CAPACITY-1u].distance.x:rawT);
+        }
+        if(position<GS_CONNECTION_BATCH_CAPACITY) {
+            uint last=min(gsCollectedCount,GS_CONNECTION_BATCH_CAPACITY-1u);
+            while(last>position){gsCollectedEvents[last]=gsCollectedEvents[last-1u];--last;}
+            gsCollectedEvents[position]=event;
+            gsCollectedCount=min(gsCollectedCount+1u,GS_CONNECTION_BATCH_CAPACITY);
+        }
+    }
+    // Hardware nearest-hit tie selection is unspecified. Do not invent an order
+    // for coincident faces, neighboring float bins, or the overflow boundary.
+    for(uint j=1u;j<gsCollectedCount;++j)
+        if(gsCollectedEvents[j].distance.x-gsCollectedEvents[j-1u].distance.x
+                    <=gsCollectedTolerance(gsCollectedEvents[j].distance.x)
+                ||gsCollectedEvents[j].distance.y<=gsCollectedEvents[j-1u].distance.y)
+            gsCollectedFallback=true;
+    if(!gsCollectedComplete&&gsCollectedCount!=0u
+            &&firstDiscarded-gsCollectedEvents[gsCollectedCount-1u].distance.x
+                <=gsCollectedTolerance(firstDiscarded))gsCollectedFallback=true;
+    GS_DETAIL_END();
+    return !gsCollectedFallback;
+}
+
+void main() {
+#ifdef RTRENDERER_OPTICAL_PROFILE
+    payload.diagnosticAddress=gsCollectedBatch.diagnosticAddress;
+    payload.diagnosticRecord=gsCollectedBatch.diagnosticRecord;
+#endif
+    gsCollectedFill(gsCollectedBatch.originAndMinimum.xyz,gsCollectedBatch.directionAndMaximum.xyz,
+        gsCollectedBatch.originAndMinimum.w,gsCollectedBatch.directionAndMaximum.w);
+}

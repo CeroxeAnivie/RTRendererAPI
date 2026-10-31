@@ -71,7 +71,7 @@ public final class RtPrecompiledShaderSelfTest {
    private static void verifyConnectionCallableBoundary(String stage, byte[] spirv) {
       boolean connection = stage.equals("gpuscene/gpuscene_native_optical_collected_trace.rgen");
       boolean material = stage.equals("gpuscene/gpuscene_collected_material.rcall");
-      boolean gather = stage.equals("gpuscene/gpuscene_collected_gather.rahit");
+      boolean gather = stage.equals("gpuscene/gpuscene_collected_gather.rcall");
       if (!connection && !material && !gather) return;
       var words = java.nio.ByteBuffer.wrap(spirv).order(java.nio.ByteOrder.LITTLE_ENDIAN).asIntBuffer();
       int traces = 0, queries = 0; boolean callableEntry = false;
@@ -87,12 +87,11 @@ public final class RtPrecompiledShaderSelfTest {
          if (opcode == 15 && words.get(at + 1) == 5318) callableEntry = true;
          at += count;
       }
-      if (connection && (queries != 0 || !callableTargets.equals(java.util.Set.of(0))))
-         throw new AssertionError("connection must retain one material callable and no inline ray query: " + callableTargets);
-      if (material && !callableEntry) throw new AssertionError("missing callable boundary");
-      if (material && traces != 0) throw new AssertionError("material must not trace");
-      if (gather && (queries != 0 || traces != 0))
-         throw new AssertionError("gather hit stage must not launch nested traversal");
+      if (connection && (queries != 0 || !callableTargets.equals(java.util.Set.of(0,1))))
+         throw new AssertionError("connection must call separate material/gather stages without embedding traversal: " + callableTargets);
+      if ((material || gather) && (!callableEntry || traces != 0))
+         throw new AssertionError("material/gather must remain non-tracing callable stages");
+      if (gather && queries != 1)throw new AssertionError("gather must contain one traversal loop: " + queries);
    }
 
    private static void verify() {
@@ -293,8 +292,7 @@ public final class RtPrecompiledShaderSelfTest {
       stages.put("gpuscene/gpuscene.rmiss", 17);
       stages.put("gpuscene/gpuscene.rchit", 16);
       stages.put("gpuscene/gpuscene_collected_material.rcall", Shaderc.shaderc_callable_shader);
-      stages.put("gpuscene/gpuscene_collected_gather.rahit", Shaderc.shaderc_anyhit_shader);
-      stages.put("gpuscene/gpuscene_collected_gather.rmiss", Shaderc.shaderc_miss_shader);
+      stages.put("gpuscene/gpuscene_collected_gather.rcall", Shaderc.shaderc_callable_shader);
       stages.put("gpuscene/gpuscene.rahit", 15);
       stages.put("gpuscene/gpuscene_visibility.rmiss", Shaderc.shaderc_miss_shader);
       stages.put("gpuscene/gpuscene_visibility.rchit", Shaderc.shaderc_closesthit_shader);
