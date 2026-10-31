@@ -72,7 +72,7 @@ public final class CudaPbrMediumAbiSelfTest {
                 require(compact.direct().bytes()-compact.direct().sourceOffset()==(long)p.paths()*steps*16,
                         "joint sources must retain every SPP and step");
                 var f=RenderFrameRequest.builder(1,37,23,CameraState.lookAt(0,0,0,0,0,-1).build())
-                        .antiAliasing(AntiAliasingState.multisampled(spp)).build();
+                        .antiAliasing(spp==1?AntiAliasingState.disabled():AntiAliasingState.multisampled(spp)).build();
                 byte[] original=CudaPbrMediumAbi.scenePrefix(p,f,List.of(),new int[0],empty);
                 var metadata=ByteBuffer.wrap(original).order(ByteOrder.nativeOrder());
                 CudaPbrMediumAbi.updateTile(metadata,p,0,p.pixels(),p.emissionOffset(),false);
