@@ -232,7 +232,12 @@ vec3 gsOpticalLightOrigin(vec3 point,vec3 normal,float bound) {
 #include "gpuscene_collected_connections.glsl"
 #endif
 // Select light geometry only. CUDA owns phase, density attenuation and the copied medium stack.
-GpuScenePayload gsOpticalConnectionHitRepeated(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum) {
+#ifdef RTRENDERER_COLLECTED_CONNECTIONS
+GpuScenePayload gsOpticalConnectionHitRepeated(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum)
+#else
+GpuScenePayload gsOpticalConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum)
+#endif
+{
     GpuScenePayload hit=gsTraceOpticalRadiance(origin,direction,launch,minimum,maximum,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY);
     while(hit.state.x!=0u&&hit.mediumBoundary.w==0u
             &&((hit.state.w&GPU_SCENE_FLAG_CASTS_SHADOW)==0u||gsSurfaceOverlay(hit))){
@@ -242,16 +247,16 @@ GpuScenePayload gsOpticalConnectionHitRepeated(vec3 origin,vec3 direction,uvec4 
     }
     return hit;
 }
-GpuScenePayload gsOpticalConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum) {
 #ifdef RTRENDERER_COLLECTED_CONNECTIONS
+GpuScenePayload gsOpticalConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum) {
     if((gsOptical.storage.lanes[11u].w&131072u)!=0u) {
         GpuScenePayload hit;
         if(gsCollectedConnectionHit(origin,direction,launch,minimum,maximum,hit))return hit;
         gsCollectedCountEvent(178u);
     }
-#endif
     return gsOpticalConnectionHitRepeated(origin,direction,launch,minimum,maximum);
 }
+#endif
 #include "gpuscene_optical_connection_transport.glsl"
 void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 launch,uint epoch,bool initialize,uint hitOffset) {
     GS_DETAIL_BEGIN(168u);
