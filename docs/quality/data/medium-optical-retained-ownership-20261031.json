@@ -1,0 +1,696 @@
+{
+  "sourceCommit": "8cd988e930b82f66a3253e5ad76327c0be609619",
+  "baselineCommit": "0c14504",
+  "scene": "micro-all 1920x1080 1SPP native completed frames",
+  "matureReference": {
+    "project": "NVIDIA cuda-samples",
+    "commit": "9c688d7ff78455ed42e345124d1495aad6bf66de",
+    "license": "BSD-3-Clause",
+    "file": "Samples/5_Domain_Specific/vulkanImageCUDA/vulkanImageCUDA.cu",
+    "adopted": "Wait for external CUDA signals in real Vulkan consumer submissions; explicitly prove Vulkan command completion before reuse. Independently adapted to retained paired timeline ownership."
+  },
+  "measurements": {
+    "baselineOff": {
+      "directory": "build\\medium-micro-all-20261031\\active-queue-bounded-launch\\retained-reuse-baseline-matrix-off",
+      "frames": 64,
+      "wallMs": 30937.3394,
+      "msPerFrame": 483.395928125,
+      "fps": 2.0686976075260044,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 7.49 W, 180 MHz, 48",
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "16",
+          "wallMs": "7736.788500",
+          "completedFps": "2.068042",
+          "submitCpuMs": "7726.002500",
+          "requestBuildCpuMs": "0.707700",
+          "pollCpuMs": "0.701500",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.173794000",
+          "gpuFrameLowerMs": "0.173793563",
+          "gpuFrameUpperMs": "0.173795438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "2",
+          "frames": "16",
+          "wallMs": "7594.981000",
+          "completedFps": "2.106654",
+          "submitCpuMs": "7588.483600",
+          "requestBuildCpuMs": "0.727600",
+          "pollCpuMs": "1.335700",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.176113000",
+          "gpuFrameLowerMs": "0.176111563",
+          "gpuFrameUpperMs": "0.176115438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "3",
+          "frames": "16",
+          "wallMs": "7751.493300",
+          "completedFps": "2.064118",
+          "submitCpuMs": "7744.669700",
+          "requestBuildCpuMs": "0.742500",
+          "pollCpuMs": "0.436700",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.174984000",
+          "gpuFrameLowerMs": "0.174981563",
+          "gpuFrameUpperMs": "0.174987438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "4",
+          "frames": "16",
+          "wallMs": "7854.076600",
+          "completedFps": "2.037159",
+          "submitCpuMs": "7846.064600",
+          "requestBuildCpuMs": "0.727400",
+          "pollCpuMs": "0.543200",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.174419000",
+          "gpuFrameLowerMs": "0.174415563",
+          "gpuFrameUpperMs": "0.174423438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        }
+      ]
+    },
+    "candidateOff": {
+      "directory": "build\\medium-micro-all-20261031\\retained-ownership-reuse\\candidate-matrix-off",
+      "frames": 64,
+      "wallMs": 29336.1188,
+      "msPerFrame": 458.37685625,
+      "fps": 2.1816110180191934,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.43 W, 180 MHz, 52",
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "16",
+          "wallMs": "7493.508200",
+          "completedFps": "2.135181",
+          "submitCpuMs": "7484.261400",
+          "requestBuildCpuMs": "0.916200",
+          "pollCpuMs": "0.782800",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.177363000",
+          "gpuFrameLowerMs": "0.177362563",
+          "gpuFrameUpperMs": "0.177364438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "2",
+          "frames": "16",
+          "wallMs": "7301.378900",
+          "completedFps": "2.191367",
+          "submitCpuMs": "7294.399900",
+          "requestBuildCpuMs": "0.946200",
+          "pollCpuMs": "0.697600",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.179484000",
+          "gpuFrameLowerMs": "0.179482563",
+          "gpuFrameUpperMs": "0.179486438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "3",
+          "frames": "16",
+          "wallMs": "7244.377900",
+          "completedFps": "2.208609",
+          "submitCpuMs": "7237.328100",
+          "requestBuildCpuMs": "1.006400",
+          "pollCpuMs": "0.471200",
+          "deferrals": "6",
+          "gpuFrameMeanMs": "0.181039000",
+          "gpuFrameLowerMs": "0.181036563",
+          "gpuFrameUpperMs": "0.181042438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "4",
+          "frames": "16",
+          "wallMs": "7296.853800",
+          "completedFps": "2.192726",
+          "submitCpuMs": "7286.909100",
+          "requestBuildCpuMs": "0.732500",
+          "pollCpuMs": "0.638200",
+          "deferrals": "6",
+          "gpuFrameMeanMs": "0.179474000",
+          "gpuFrameLowerMs": "0.179470563",
+          "gpuFrameUpperMs": "0.179478438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        }
+      ]
+    },
+    "candidateTimings": {
+      "directory": "build\\medium-micro-all-20261031\\retained-ownership-reuse\\candidate-matrix-timings",
+      "frames": 64,
+      "wallMs": 29990.727899999998,
+      "msPerFrame": 468.60512343749997,
+      "fps": 2.1339928865147684,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.86 W, 180 MHz, 55",
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "16",
+          "wallMs": "7525.016100",
+          "completedFps": "2.126241",
+          "submitCpuMs": "7516.648900",
+          "requestBuildCpuMs": "0.875600",
+          "pollCpuMs": "0.960800",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.178151500",
+          "gpuFrameLowerMs": "0.178151063",
+          "gpuFrameUpperMs": "0.178152938",
+          "gpuSamples": "16",
+          "profileData": "{\"sharedPrepareMsPerFrame\":468.496025,\"sharedExchangeMsPerFrame\":467.334925,\"vulkanReleaseMsPerFrame\":17.928606,\"cudaStageWallMsPerFrame\":439.273194,\"legacyResolveMsPerFrame\":0.000000,\"vulkanConsumerRecordMsPerFrame\":5.932269,\"vulkanConsumerFenceWaitMsPerFrame\":3.523906,\"vulkanProducerGpuMsPerFrame\":68.652332,\"vulkanConsumerGpuMsPerFrame\":62.595264,\"snapshotCopyMsPerFrame\":0.000000,\"sharedExchangeCountPerFrame\":949.000,\"releaseCommandRecordMsPerFrame\":9.778756,\"releaseQueueSubmitMsPerFrame\":8.139094,\"consumerCommandRecordMsPerFrame\":0.118756,\"consumerQueueSubmitMsPerFrame\":5.813513,\"cudaPhase0MsPerFrame\":0.000000,\"cudaPhase1MsPerFrame\":0.000000,\"cudaPhase2MsPerFrame\":0.000000,\"cudaPhase3MsPerFrame\":0.000000,\"cudaPhase4MsPerFrame\":0.000000,\"cudaPhase5MsPerFrame\":0.000000,\"cudaPhase6MsPerFrame\":0.000000,\"cudaPhase7MsPerFrame\":0.000000,\"cameraScatteringPrepareMsPerFrame\":0.000000,\"pbrMediumPrepareMsPerFrame\":0.000000,\"cameraScatteringKernelGpuMsPerFrame\":0.000000,\"pbrMediumKernelGpuMsPerFrame\":0.000000,\"cameraScatteringKernelCountPerFrame\":0.000,\"pbrMediumKernelCountPerFrame\":0.000,\"cameraScatteringTlasGpuMsPerFrame\":0.000000,\"cameraScatteringTlasCountPerFrame\":0.000,\"cameraScatteringLightsGpuMsPerFrame\":0.000000,\"cameraScatteringLightsCountPerFrame\":0.000,\"pbrPrimaryPacketsGpuMsPerFrame\":0.000000,\"pbrPrimaryPacketsCountPerFrame\":0.000,\"pbrLightPacketsGpuMsPerFrame\":0.000000,\"pbrLightPacketsCountPerFrame\":0.000,\"pbrContributionRestoreGpuMsPerFrame\":0.000000,\"pbrContributionRestoreCountPerFrame\":0.000,\"cameraScatteringPrimaryGpuMsPerFrame\":0.000000,\"cameraScatteringPrimaryCountPerFrame\":0.000}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[{\"stage\":\"cuda.entry.native_optical_photon_clear\",\"totalMs\":0.401408,\"msPerFrame\":0.025088,\"calls\":16},{\"stage\":\"cuda.entry.native_optical_photon_reset\",\"totalMs\":0.546144,\"msPerFrame\":0.034134,\"calls\":128},{\"stage\":\"cuda.entry.native_optical_photon_step\",\"totalMs\":4.252288,\"msPerFrame\":0.265768,\"calls\":128},{\"stage\":\"cuda.entry.native_optical_reset\",\"totalMs\":59.612416,\"msPerFrame\":3.725776,\"calls\":15056},{\"stage\":\"cuda.entry.native_optical_step_4\",\"totalMs\":1786.287488,\"msPerFrame\":111.642968,\"calls\":15056},{\"stage\":\"vulkan.optical.cameraContinuationTrace/startToend\",\"totalMs\":1948.367168,\"msPerFrame\":121.772948,\"calls\":14800},{\"stage\":\"vulkan.optical.cameraInitialTrace/startToend\",\"totalMs\":121.812512,\"msPerFrame\":7.613282,\"calls\":256},{\"stage\":\"vulkan.opticalPhoton.mapCopy/startToend\",\"totalMs\":0.804864,\"msPerFrame\":0.050304,\"calls\":16},{\"stage\":\"vulkan.opticalPhoton.mapInitialize/startToend\",\"totalMs\":0.177696,\"msPerFrame\":0.011106,\"calls\":16},{\"stage\":\"vulkan.opticalPhoton.trace/startToend\",\"totalMs\":5.908,\"msPerFrame\":0.36925,\"calls\":128},{\"stage\":\"vulkan.shared.continuation\",\"totalMs\":1001.524224,\"msPerFrame\":62.595264,\"calls\":7656},{\"stage\":\"vulkan.shared.producer\",\"totalMs\":1098.437312,\"msPerFrame\":68.652332,\"calls\":7656}]}"
+        },
+        {
+          "round": "2",
+          "frames": "16",
+          "wallMs": "7478.492100",
+          "completedFps": "2.139469",
+          "submitCpuMs": "7470.948100",
+          "requestBuildCpuMs": "0.992300",
+          "pollCpuMs": "0.944500",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.180990000",
+          "gpuFrameLowerMs": "0.180988563",
+          "gpuFrameUpperMs": "0.180992438",
+          "gpuSamples": "16",
+          "profileData": "{\"sharedPrepareMsPerFrame\":465.744825,\"sharedExchangeMsPerFrame\":464.696981,\"vulkanReleaseMsPerFrame\":17.622338,\"cudaStageWallMsPerFrame\":437.521188,\"legacyResolveMsPerFrame\":0.000000,\"vulkanConsumerRecordMsPerFrame\":5.600050,\"vulkanConsumerFenceWaitMsPerFrame\":3.268756,\"vulkanProducerGpuMsPerFrame\":68.718590,\"vulkanConsumerGpuMsPerFrame\":62.532798,\"snapshotCopyMsPerFrame\":0.000000,\"sharedExchangeCountPerFrame\":949.000,\"releaseCommandRecordMsPerFrame\":9.495775,\"releaseQueueSubmitMsPerFrame\":8.111788,\"consumerCommandRecordMsPerFrame\":0.117088,\"consumerQueueSubmitMsPerFrame\":5.482963,\"cudaPhase0MsPerFrame\":0.000000,\"cudaPhase1MsPerFrame\":0.000000,\"cudaPhase2MsPerFrame\":0.000000,\"cudaPhase3MsPerFrame\":0.000000,\"cudaPhase4MsPerFrame\":0.000000,\"cudaPhase5MsPerFrame\":0.000000,\"cudaPhase6MsPerFrame\":0.000000,\"cudaPhase7MsPerFrame\":0.000000,\"cameraScatteringPrepareMsPerFrame\":0.000000,\"pbrMediumPrepareMsPerFrame\":0.000000,\"cameraScatteringKernelGpuMsPerFrame\":0.000000,\"pbrMediumKernelGpuMsPerFrame\":0.000000,\"cameraScatteringKernelCountPerFrame\":0.000,\"pbrMediumKernelCountPerFrame\":0.000,\"cameraScatteringTlasGpuMsPerFrame\":0.000000,\"cameraScatteringTlasCountPerFrame\":0.000,\"cameraScatteringLightsGpuMsPerFrame\":0.000000,\"cameraScatteringLightsCountPerFrame\":0.000,\"pbrPrimaryPacketsGpuMsPerFrame\":0.000000,\"pbrPrimaryPacketsCountPerFrame\":0.000,\"pbrLightPacketsGpuMsPerFrame\":0.000000,\"pbrLightPacketsCountPerFrame\":0.000,\"pbrContributionRestoreGpuMsPerFrame\":0.000000,\"pbrContributionRestoreCountPerFrame\":0.000,\"cameraScatteringPrimaryGpuMsPerFrame\":0.000000,\"cameraScatteringPrimaryCountPerFrame\":0.000}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[{\"stage\":\"cuda.entry.native_optical_photon_clear\",\"totalMs\":0.410208,\"msPerFrame\":0.025638,\"calls\":16},{\"stage\":\"cuda.entry.native_optical_photon_reset\",\"totalMs\":0.9496,\"msPerFrame\":0.05935,\"calls\":128},{\"stage\":\"cuda.entry.native_optical_photon_step\",\"totalMs\":4.590208,\"msPerFrame\":0.286888,\"calls\":128},{\"stage\":\"cuda.entry.native_optical_reset\",\"totalMs\":59.10208,\"msPerFrame\":3.69388,\"calls\":15056},{\"stage\":\"cuda.entry.native_optical_step_4\",\"totalMs\":1790.74416,\"msPerFrame\":111.92151,\"calls\":15056},{\"stage\":\"vulkan.optical.cameraContinuationTrace/startToend\",\"totalMs\":1947.2136,\"msPerFrame\":121.70085,\"calls\":14800},{\"stage\":\"vulkan.optical.cameraInitialTrace/startToend\",\"totalMs\":123.178624,\"msPerFrame\":7.698664,\"calls\":256},{\"stage\":\"vulkan.opticalPhoton.mapCopy/startToend\",\"totalMs\":0.84496,\"msPerFrame\":0.05281,\"calls\":16},{\"stage\":\"vulkan.opticalPhoton.mapInitialize/startToend\",\"totalMs\":0.161312,\"msPerFrame\":0.010082,\"calls\":16},{\"stage\":\"vulkan.opticalPhoton.trace/startToend\",\"totalMs\":6.201056,\"msPerFrame\":0.387566,\"calls\":128},{\"stage\":\"vulkan.shared.continuation\",\"totalMs\":1000.524768,\"msPerFrame\":62.532798,\"calls\":7656},{\"stage\":\"vulkan.shared.producer\",\"totalMs\":1099.49744,\"msPerFrame\":68.71859,\"calls\":7656}]}"
+        },
+        {
+          "round": "3",
+          "frames": "16",
+          "wallMs": "7460.076900",
+          "completedFps": "2.144750",
+          "submitCpuMs": "7450.328500",
+          "requestBuildCpuMs": "1.128300",
+          "pollCpuMs": "0.509800",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.183236000",
+          "gpuFrameLowerMs": "0.183233563",
+          "gpuFrameUpperMs": "0.183239438",
+          "gpuSamples": "16",
+          "profileData": "{\"sharedPrepareMsPerFrame\":464.397688,\"sharedExchangeMsPerFrame\":463.299250,\"vulkanReleaseMsPerFrame\":16.856438,\"cudaStageWallMsPerFrame\":437.171506,\"legacyResolveMsPerFrame\":0.000000,\"vulkanConsumerRecordMsPerFrame\":5.402250,\"vulkanConsumerFenceWaitMsPerFrame\":3.311456,\"vulkanProducerGpuMsPerFrame\":68.505070,\"vulkanConsumerGpuMsPerFrame\":62.253684,\"snapshotCopyMsPerFrame\":0.000000,\"sharedExchangeCountPerFrame\":944.750,\"releaseCommandRecordMsPerFrame\":9.218513,\"releaseQueueSubmitMsPerFrame\":7.629625,\"consumerCommandRecordMsPerFrame\":0.097544,\"consumerQueueSubmitMsPerFrame\":5.304706,\"cudaPhase0MsPerFrame\":0.000000,\"cudaPhase1MsPerFrame\":0.000000,\"cudaPhase2MsPerFrame\":0.000000,\"cudaPhase3MsPerFrame\":0.000000,\"cudaPhase4MsPerFrame\":0.000000,\"cudaPhase5MsPerFrame\":0.000000,\"cudaPhase6MsPerFrame\":0.000000,\"cudaPhase7MsPerFrame\":0.000000,\"cameraScatteringPrepareMsPerFrame\":0.000000,\"pbrMediumPrepareMsPerFrame\":0.000000,\"cameraScatteringKernelGpuMsPerFrame\":0.000000,\"pbrMediumKernelGpuMsPerFrame\":0.000000,\"cameraScatteringKernelCountPerFrame\":0.000,\"pbrMediumKernelCountPerFrame\":0.000,\"cameraScatteringTlasGpuMsPerFrame\":0.000000,\"cameraScatteringTlasCountPerFrame\":0.000,\"cameraScatteringLightsGpuMsPerFrame\":0.000000,\"cameraScatteringLightsCountPerFrame\":0.000,\"pbrPrimaryPacketsGpuMsPerFrame\":0.000000,\"pbrPrimaryPacketsCountPerFrame\":0.000,\"pbrLightPacketsGpuMsPerFrame\":0.000000,\"pbrLightPacketsCountPerFrame\":0.000,\"pbrContributionRestoreGpuMsPerFrame\":0.000000,\"pbrContributionRestoreCountPerFrame\":0.000,\"cameraScatteringPrimaryGpuMsPerFrame\":0.000000,\"cameraScatteringPrimaryCountPerFrame\":0.000}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[{\"stage\":\"cuda.entry.native_optical_photon_clear\",\"totalMs\":0.505952,\"msPerFrame\":0.031622,\"calls\":16},{\"stage\":\"cuda.entry.native_optical_photon_reset\",\"totalMs\":0.541888,\"msPerFrame\":0.033868,\"calls\":128},{\"stage\":\"cuda.entry.native_optical_photon_step\",\"totalMs\":4.442464,\"msPerFrame\":0.277654,\"calls\":128},{\"stage\":\"cuda.entry.native_optical_reset\",\"totalMs\":58.27088,\"msPerFrame\":3.64193,\"calls\":14988},{\"stage\":\"cuda.entry.native_optical_step_4\",\"totalMs\":1789.148672,\"msPerFrame\":111.821792,\"calls\":14988},{\"stage\":\"vulkan.optical.cameraContinuationTrace/startToend\",\"totalMs\":1939.128672,\"msPerFrame\":121.195542,\"calls\":14732},{\"stage\":\"vulkan.optical.cameraInitialTrace/startToend\",\"totalMs\":123.29184,\"msPerFrame\":7.70574,\"calls\":256},{\"stage\":\"vulkan.opticalPhoton.mapCopy/startToend\",\"totalMs\":0.8432,\"msPerFrame\":0.0527,\"calls\":16},{\"stage\":\"vulkan.opticalPhoton.mapInitialize/startToend\",\"totalMs\":0.195424,\"msPerFrame\":0.012214,\"calls\":16},{\"stage\":\"vulkan.opticalPhoton.trace/startToend\",\"totalMs\":6.198848,\"msPerFrame\":0.387428,\"calls\":128},{\"stage\":\"vulkan.shared.continuation\",\"totalMs\":996.058944,\"msPerFrame\":62.253684,\"calls\":7622},{\"stage\":\"vulkan.shared.producer\",\"totalMs\":1096.08112,\"msPerFrame\":68.50507,\"calls\":7622}]}"
+        },
+        {
+          "round": "4",
+          "frames": "16",
+          "wallMs": "7527.142800",
+          "completedFps": "2.125641",
+          "submitCpuMs": "7520.270100",
+          "requestBuildCpuMs": "0.823000",
+          "pollCpuMs": "0.638400",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.180914500",
+          "gpuFrameLowerMs": "0.180911063",
+          "gpuFrameUpperMs": "0.180918938",
+          "gpuSamples": "16",
+          "profileData": "{\"sharedPrepareMsPerFrame\":468.940131,\"sharedExchangeMsPerFrame\":467.960106,\"vulkanReleaseMsPerFrame\":17.361350,\"cudaStageWallMsPerFrame\":440.952413,\"legacyResolveMsPerFrame\":0.000000,\"vulkanConsumerRecordMsPerFrame\":5.663281,\"vulkanConsumerFenceWaitMsPerFrame\":3.300806,\"vulkanProducerGpuMsPerFrame\":68.997412,\"vulkanConsumerGpuMsPerFrame\":62.835856,\"snapshotCopyMsPerFrame\":0.000000,\"sharedExchangeCountPerFrame\":951.000,\"releaseCommandRecordMsPerFrame\":9.267594,\"releaseQueueSubmitMsPerFrame\":8.087975,\"consumerCommandRecordMsPerFrame\":0.085119,\"consumerQueueSubmitMsPerFrame\":5.578163,\"cudaPhase0MsPerFrame\":0.000000,\"cudaPhase1MsPerFrame\":0.000000,\"cudaPhase2MsPerFrame\":0.000000,\"cudaPhase3MsPerFrame\":0.000000,\"cudaPhase4MsPerFrame\":0.000000,\"cudaPhase5MsPerFrame\":0.000000,\"cudaPhase6MsPerFrame\":0.000000,\"cudaPhase7MsPerFrame\":0.000000,\"cameraScatteringPrepareMsPerFrame\":0.000000,\"pbrMediumPrepareMsPerFrame\":0.000000,\"cameraScatteringKernelGpuMsPerFrame\":0.000000,\"pbrMediumKernelGpuMsPerFrame\":0.000000,\"cameraScatteringKernelCountPerFrame\":0.000,\"pbrMediumKernelCountPerFrame\":0.000,\"cameraScatteringTlasGpuMsPerFrame\":0.000000,\"cameraScatteringTlasCountPerFrame\":0.000,\"cameraScatteringLightsGpuMsPerFrame\":0.000000,\"cameraScatteringLightsCountPerFrame\":0.000,\"pbrPrimaryPacketsGpuMsPerFrame\":0.000000,\"pbrPrimaryPacketsCountPerFrame\":0.000,\"pbrLightPacketsGpuMsPerFrame\":0.000000,\"pbrLightPacketsCountPerFrame\":0.000,\"pbrContributionRestoreGpuMsPerFrame\":0.000000,\"pbrContributionRestoreCountPerFrame\":0.000,\"cameraScatteringPrimaryGpuMsPerFrame\":0.000000,\"cameraScatteringPrimaryCountPerFrame\":0.000}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[{\"stage\":\"cuda.entry.native_optical_photon_clear\",\"totalMs\":0.49904,\"msPerFrame\":0.03119,\"calls\":16},{\"stage\":\"cuda.entry.native_optical_photon_reset\",\"totalMs\":0.555264,\"msPerFrame\":0.034704,\"calls\":128},{\"stage\":\"cuda.entry.native_optical_photon_step\",\"totalMs\":4.619616,\"msPerFrame\":0.288726,\"calls\":128},{\"stage\":\"cuda.entry.native_optical_reset\",\"totalMs\":58.875872,\"msPerFrame\":3.679742,\"calls\":15088},{\"stage\":\"cuda.entry.native_optical_step_4\",\"totalMs\":1798.13904,\"msPerFrame\":112.38369,\"calls\":15088},{\"stage\":\"vulkan.optical.cameraContinuationTrace/startToend\",\"totalMs\":1955.306208,\"msPerFrame\":122.206638,\"calls\":14832},{\"stage\":\"vulkan.optical.cameraInitialTrace/startToend\",\"totalMs\":124.05264,\"msPerFrame\":7.75329,\"calls\":256},{\"stage\":\"vulkan.opticalPhoton.mapCopy/startToend\",\"totalMs\":0.84368,\"msPerFrame\":0.05273,\"calls\":16},{\"stage\":\"vulkan.opticalPhoton.mapInitialize/startToend\",\"totalMs\":0.164416,\"msPerFrame\":0.010276,\"calls\":16},{\"stage\":\"vulkan.opticalPhoton.trace/startToend\",\"totalMs\":6.235232,\"msPerFrame\":0.389702,\"calls\":128},{\"stage\":\"vulkan.shared.continuation\",\"totalMs\":1005.373696,\"msPerFrame\":62.835856,\"calls\":7672},{\"stage\":\"vulkan.shared.producer\",\"totalMs\":1103.958592,\"msPerFrame\":68.997412,\"calls\":7672}]}"
+        }
+      ]
+    },
+    "reverseCandidate": {
+      "directory": "build\\medium-micro-all-20261031\\retained-ownership-reuse\\reverse-candidate-matrix-off",
+      "frames": 64,
+      "wallMs": 29524.2882,
+      "msPerFrame": 461.317003125,
+      "fps": 2.1677067899642033,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 7.80 W, 180 MHz, 52",
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "16",
+          "wallMs": "7368.294700",
+          "completedFps": "2.171466",
+          "submitCpuMs": "7359.122500",
+          "requestBuildCpuMs": "0.807000",
+          "pollCpuMs": "0.683800",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.180302000",
+          "gpuFrameLowerMs": "0.180301563",
+          "gpuFrameUpperMs": "0.180303438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "2",
+          "frames": "16",
+          "wallMs": "7377.020500",
+          "completedFps": "2.168897",
+          "submitCpuMs": "7371.968500",
+          "requestBuildCpuMs": "0.823200",
+          "pollCpuMs": "0.444100",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.178879000",
+          "gpuFrameLowerMs": "0.178877563",
+          "gpuFrameUpperMs": "0.178881438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "3",
+          "frames": "16",
+          "wallMs": "7306.353100",
+          "completedFps": "2.189875",
+          "submitCpuMs": "7297.090500",
+          "requestBuildCpuMs": "0.689700",
+          "pollCpuMs": "0.664000",
+          "deferrals": "6",
+          "gpuFrameMeanMs": "0.182667000",
+          "gpuFrameLowerMs": "0.182664563",
+          "gpuFrameUpperMs": "0.182670438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "4",
+          "frames": "16",
+          "wallMs": "7472.619900",
+          "completedFps": "2.141150",
+          "submitCpuMs": "7464.087800",
+          "requestBuildCpuMs": "0.684400",
+          "pollCpuMs": "0.589800",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.179042000",
+          "gpuFrameLowerMs": "0.179038563",
+          "gpuFrameUpperMs": "0.179046438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        }
+      ]
+    },
+    "reverseBaseline": {
+      "directory": "build\\medium-micro-all-20261031\\active-queue-bounded-launch\\retained-reuse-reverse-baseline-matrix-off",
+      "frames": 64,
+      "wallMs": 31714.3965,
+      "msPerFrame": 495.5374453125,
+      "fps": 2.018010968614837,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.51 W, 180 MHz, 56",
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "16",
+          "wallMs": "7962.800600",
+          "completedFps": "2.009343",
+          "submitCpuMs": "7955.792800",
+          "requestBuildCpuMs": "0.709200",
+          "pollCpuMs": "2.070400",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.177594000",
+          "gpuFrameLowerMs": "0.177593563",
+          "gpuFrameUpperMs": "0.177595438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "2",
+          "frames": "16",
+          "wallMs": "7815.191300",
+          "completedFps": "2.047295",
+          "submitCpuMs": "7806.810400",
+          "requestBuildCpuMs": "0.671600",
+          "pollCpuMs": "1.175400",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.175509500",
+          "gpuFrameLowerMs": "0.175508063",
+          "gpuFrameUpperMs": "0.175511938",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "3",
+          "frames": "16",
+          "wallMs": "7935.764000",
+          "completedFps": "2.016189",
+          "submitCpuMs": "7925.619000",
+          "requestBuildCpuMs": "0.914700",
+          "pollCpuMs": "0.677500",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.175207500",
+          "gpuFrameLowerMs": "0.175205063",
+          "gpuFrameUpperMs": "0.175210938",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "4",
+          "frames": "16",
+          "wallMs": "8000.640600",
+          "completedFps": "1.999840",
+          "submitCpuMs": "7993.099500",
+          "requestBuildCpuMs": "0.686800",
+          "pollCpuMs": "0.512100",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.174593500",
+          "gpuFrameLowerMs": "0.174590063",
+          "gpuFrameUpperMs": "0.174597938",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        }
+      ]
+    }
+  },
+  "submissionsPerFrame": {
+    "baseline": {
+      "VULKAN_RELEASE_SUBMIT": 478.21875,
+      "VULKAN_CONSUMER_SUBMIT": 948.4375,
+      "VULKAN_CONSUMER_FENCE_WAIT": 478.21875,
+      "VULKAN_COMMAND_REUSE_WAIT": 0.0
+    },
+    "candidate": {
+      "VULKAN_RELEASE_SUBMIT": 478.21875,
+      "VULKAN_CONSUMER_SUBMIT": 479.21875,
+      "VULKAN_CONSUMER_FENCE_WAIT": 9.0,
+      "VULKAN_COMMAND_REUSE_WAIT": 470.21875
+    }
+  },
+  "hdr": {
+    "passed": true,
+    "mode": "bounded",
+    "supportingReferenceCommit": "9c688d7ff78455ed42e345124d1495aad6bf66de",
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 0.0,
+    "maxLuminanceEnergyRelativeError": 0.0,
+    "maxAbsoluteChannelError": 0.0
+  },
+  "validation": [
+    {
+      "passed": true,
+      "logs": [
+        {
+          "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\retained-ownership-reuse\\interop-validation.jsonl",
+          "passed": true,
+          "opened": 1,
+          "closed": 1,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        }
+      ]
+    },
+    {
+      "passed": true,
+      "logs": [
+        {
+          "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\retained-ownership-reuse\\optical-validation.jsonl",
+          "passed": true,
+          "opened": 3,
+          "closed": 3,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "candidate-core.jar",
+      "sha256": "4b8d275072ff2add5b33b197089dd92997bf3eb1e9401e122892025caba5ca84"
+    },
+    {
+      "file": "matrix-test-classes.jar",
+      "sha256": "83586141e12750acc40b458dedac93d466287cd5df6d9e6fd1752cf2ef5d4ef4"
+    },
+    {
+      "file": "native-test-classes.jar",
+      "sha256": "ce832a64b5c23faa3bffd80adb6ab87f6e7f8783d97aa6d1739a863ff1061f83"
+    }
+  ],
+  "semantics": "No change to transport math, sample identities, budgets, or two proven CUDA synchronization boundaries. Host wait distribution changes; fence reduction alone is not a speedup.",
+  "rejectedPredecessors": [
+    "82a87f1: data/HDR passed but command reuse validation failed; no accepted performance result",
+    "601956a: missing VkSemaphoreWaitInfo count caught by validation gate; no accepted performance result"
+  ],
+  "fpsIncreasePercent": 5.458188286311416,
+  "observationOverheadPercent": 2.2314100391494174,
+  "reverseFpsIncreasePercent": 7.417988488542138,
+  "nestedGpuEvidence": {
+    "candidate": {
+      "cuda.entry.native_optical_photon_clear": {
+        "totalMs": 1.816608,
+        "calls": 64,
+        "msPerFrame": 0.0283845,
+        "callsPerFrame": 1.0
+      },
+      "cuda.entry.native_optical_photon_reset": {
+        "totalMs": 2.5928959999999996,
+        "calls": 512,
+        "msPerFrame": 0.040513999999999994,
+        "callsPerFrame": 8.0
+      },
+      "cuda.entry.native_optical_photon_step": {
+        "totalMs": 17.904576000000002,
+        "calls": 512,
+        "msPerFrame": 0.27975900000000004,
+        "callsPerFrame": 8.0
+      },
+      "cuda.entry.native_optical_reset": {
+        "totalMs": 235.861248,
+        "calls": 60188,
+        "msPerFrame": 3.685332,
+        "callsPerFrame": 940.4375
+      },
+      "cuda.entry.native_optical_step_4": {
+        "totalMs": 7164.31936,
+        "calls": 60188,
+        "msPerFrame": 111.94249,
+        "callsPerFrame": 940.4375
+      },
+      "vulkan.optical.cameraContinuationTrace/startToend": {
+        "totalMs": 7790.015648,
+        "calls": 59164,
+        "msPerFrame": 121.7189945,
+        "callsPerFrame": 924.4375
+      },
+      "vulkan.optical.cameraInitialTrace/startToend": {
+        "totalMs": 492.33561599999996,
+        "calls": 1024,
+        "msPerFrame": 7.692743999999999,
+        "callsPerFrame": 16.0
+      },
+      "vulkan.opticalPhoton.mapCopy/startToend": {
+        "totalMs": 3.336704,
+        "calls": 64,
+        "msPerFrame": 0.052136,
+        "callsPerFrame": 1.0
+      },
+      "vulkan.opticalPhoton.mapInitialize/startToend": {
+        "totalMs": 0.698848,
+        "calls": 64,
+        "msPerFrame": 0.0109195,
+        "callsPerFrame": 1.0
+      },
+      "vulkan.opticalPhoton.trace/startToend": {
+        "totalMs": 24.543136,
+        "calls": 512,
+        "msPerFrame": 0.3834865,
+        "callsPerFrame": 8.0
+      },
+      "vulkan.shared.continuation": {
+        "totalMs": 4003.481632,
+        "calls": 30606,
+        "msPerFrame": 62.5544005,
+        "callsPerFrame": 478.21875
+      },
+      "vulkan.shared.producer": {
+        "totalMs": 4397.974464,
+        "calls": 30606,
+        "msPerFrame": 68.718351,
+        "callsPerFrame": 478.21875
+      }
+    },
+    "baseline": {
+      "cuda.entry.native_optical_photon_clear": {
+        "totalMs": 1.678368,
+        "calls": 64,
+        "msPerFrame": 0.0262245,
+        "callsPerFrame": 1.0
+      },
+      "cuda.entry.native_optical_photon_reset": {
+        "totalMs": 2.8878719999999998,
+        "calls": 512,
+        "msPerFrame": 0.045122999999999996,
+        "callsPerFrame": 8.0
+      },
+      "cuda.entry.native_optical_photon_step": {
+        "totalMs": 16.95232,
+        "calls": 512,
+        "msPerFrame": 0.26488,
+        "callsPerFrame": 8.0
+      },
+      "cuda.entry.native_optical_reset": {
+        "totalMs": 241.23372799999999,
+        "calls": 60188,
+        "msPerFrame": 3.7692769999999998,
+        "callsPerFrame": 940.4375
+      },
+      "cuda.entry.native_optical_step_4": {
+        "totalMs": 7233.116256,
+        "calls": 60188,
+        "msPerFrame": 113.0174415,
+        "callsPerFrame": 940.4375
+      },
+      "vulkan.optical.cameraContinuationTrace/startToend": {
+        "totalMs": 7926.369184,
+        "calls": 59164,
+        "msPerFrame": 123.8495185,
+        "callsPerFrame": 924.4375
+      },
+      "vulkan.optical.cameraInitialTrace/startToend": {
+        "totalMs": 490.21193600000004,
+        "calls": 1024,
+        "msPerFrame": 7.659561500000001,
+        "callsPerFrame": 16.0
+      },
+      "vulkan.opticalPhoton.mapCopy/startToend": {
+        "totalMs": 3.236608,
+        "calls": 64,
+        "msPerFrame": 0.050572,
+        "callsPerFrame": 1.0
+      },
+      "vulkan.opticalPhoton.mapInitialize/startToend": {
+        "totalMs": 0.708672,
+        "calls": 64,
+        "msPerFrame": 0.011073,
+        "callsPerFrame": 1.0
+      },
+      "vulkan.opticalPhoton.trace/startToend": {
+        "totalMs": 23.527424,
+        "calls": 512,
+        "msPerFrame": 0.367616,
+        "callsPerFrame": 8.0
+      },
+      "vulkan.shared.continuation": {
+        "totalMs": 4066.677216,
+        "calls": 30606,
+        "msPerFrame": 63.5418315,
+        "callsPerFrame": 478.21875
+      },
+      "vulkan.shared.producer": {
+        "totalMs": 4464.24528,
+        "calls": 30606,
+        "msPerFrame": 69.7538325,
+        "callsPerFrame": 478.21875
+      }
+    }
+  },
+  "rawGpuFiles": [
+    {
+      "file": "build\\medium-micro-all-20261031\\retained-ownership-reuse\\candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "2a812393a15dd9057b38fd31ad4f9d1c913fcaa17d554c788533c26df8ab9ab1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\retained-ownership-reuse\\candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "2a44873403380555c47b23dec76cfd862f10ff634b6539a064fdc00931a7ba24"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\retained-ownership-reuse\\candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-3.json",
+      "sha256": "1f3ae91f7a807a67c2b534fff250bf831156f2f82702ddf9bb4ccb68626629c1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\retained-ownership-reuse\\candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-4.json",
+      "sha256": "8ffff5782b286aac57da7eb2be87e93714c196f209b16f55490d585f83926b10"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\active-queue-bounded-launch\\candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "04d365f96f909d3c7106f856391880e4f7e62b40f2a4c442829869341febb91a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\active-queue-bounded-launch\\candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "975df7112e3c66e7dbda70d434ac300bcc16e5d14d5928461a14e6115f2bc54e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\active-queue-bounded-launch\\candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-3.json",
+      "sha256": "4012f787a9d8809a77be70c1d2d53c679958ad639e5f68103d5077aa93c8b782"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\active-queue-bounded-launch\\candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-4.json",
+      "sha256": "0095881a0416eaf5099707cbb3f5dc7ef3a80020ce8e929cfd02f95559b857da"
+    }
+  ],
+  "verification": {
+    "interop": "two slots, two lifecycles, RT epoch, retained/classic transitions, explicit acquire, four callback fault stages in both modes; no resident-byte leak",
+    "optical": "46 comparisons / 152 frames passed",
+    "microChecks": "7 cases / 46 features complete",
+    "fixedSequence57": "passed",
+    "fullWindow": "8 warmup + 64 measured micro-all frames passed in each candidate run"
+  },
+  "decision": "Retain: correctness and zero-warning/error validation passed; forward and reverse off windows improved. Fence is no longer first, but CUDA synchronization now encloses the same GPU work; do not interpret fence reduction as total GPU speedup.",
+  "wallBeforeMsPerFrame": 497.30229375,
+  "wallAfterMsPerFrame": 468.6051234375,
+  "wallReductionPercent": 5.7705686607845035,
+  "fenceRankAfter": 12
+}

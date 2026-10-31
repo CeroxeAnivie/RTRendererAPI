@@ -1220,10 +1220,32 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 开启计时 497.302294 ms/帧；fence 等待仍第一，251.240531 ms/帧、505.206862 ms/秒；CUDA 同步第二，160.674503 ms/帧。未达到 180 FPS，继续处理第一名。见[本轮独立证据](data/medium-optical-bounded-launch-20261031.json)、[完整排名](data/medium-optical-bounded-launch-ranked-20261031.json)。
 
-### 待验证架构候选：把空 acquire 合入真正的生产提交
+### 保留：把空 acquire 合入真正的生产提交
 
 对照 NVIDIA cuda-samples `9c688d7ff78455ed42e345124d1495aad6bf66de`（BSD-3-Clause），`Samples/5_Domain_Specific/vulkanImageCUDA/vulkanImageCUDA.cu` 的 `cudaUpdateVkImage` 和 `submitVulkanCuda`：CUDA 外部信号由真正的 Vulkan 消费提交等待。本项目独立适配双轮 timeline 交接，不声称上游原有相同 API。
 
 目前每对两轮输运有第三次仅 acquire 所有权的空 Vulkan 提交。候选在完成第二轮 CUDA 后暂留 external ownership，将 acquire 与上一轮 timeline wait 合入下一次真正 producer；整帧发布前仍显式 acquire。保留两处已经通过 RT epoch 回归的 CUDA stream 同步、所有必要 ownership barrier、采样和输运预算。属性 `top.ceroxe.rt.medium.cuda.opticalRetainedOwnership=false` 可回到原行为。成功标准同时包括正确性、真实提交次数减少和关闭诊断整帧收益；只改变等待归属不算成功。扩展原生回归覆盖连续 retained pair、显式 acquire、retained/legacy 切换及两种模式下四阶段回调故障。
 
 首版数据/HDR 一致，但 validation 报命令缓冲仍 pending，未接受该版性能结果。修正为最后 CUDA 同步后，host 等待第二轮 Vulkan 已经发出的 timeline 值，正式确认命令缓冲可重用；它不新增 GPU 提交，独立记录 `VULKAN_COMMAND_REUSE_WAIT`，不能隐藏进录制成本。仍须零 validation 错误后才验收收益。
+
+最终生产制品 `8cd988e`：扩展交接原生回归通过；4 个 validation 生命周期全部关闭，零 warning/error/drop；光学原生 46 组/152 帧、micro-checks 7 场景/46 功能、固定 sequence 57、完整 micro-all 8 预热+64 测量窗口通过。两帧 1080p HDR 与前一生产制品逐字节一致。独立工具 `tools/CheckVulkanValidation.py` 会拦住 warning/error、日志未关闭和丢日志，避免只依据自测退出码认定成功。
+
+正序关闭诊断 2.068698→2.181611 FPS（+5.458%），反序 2.018011→2.167707（+7.418%）。两组均 8 帧预热、4×16 帧测量，测前 GPU0 为 0%。每帧 release 提交维持 478.21875 次，consumer 提交 948.4375→479.21875 次，实际减少 469.21875 次空提交；fence 等待次数 478.21875→9 次，新增 470.21875 次已完成 timeline 的命令重用确认。所有采样与输运预算不变。
+
+以下将相同阶段名的互斥 host 区间合并，长窗口归一到每秒；不是 GPU 利用率。此前 497.302294→468.605123 ms/帧（−5.771%）。CUDA stream 同步接住了此前在 Vulkan fence 中发生的等待，不能把 fence 的 99.549% 降幅说成 GPU 工作下降。实际 continuation trace 为 123.849519→121.718995 ms/帧，CUDA optical step 为 113.017442→111.942490 ms/帧，调用数均相同；这轮主要收益是交接调度减少。当前同名合并榜 fence 已从第 1 降至第 12，CUDA stream 同步为新第一；180 FPS 尚未达到。观测开销 2.231%，不再调整观测开销。
+
+| 排名 | 互斥阶段 | ms/帧 | 每秒累计 ms | 占比 | 相对上一轮 |
+| ---: | --- | ---: | ---: | ---: | --- |
+| 1 | CUDA stream 同步 | 389.591122 | 831.384683 | 83.1385% | 等待归属改变，增加 140.769% |
+| 2 | CUDA kernel 入队 | 24.004256 | 51.224912 | 5.1225% | 增加 12.376% |
+| 3 | Vulkan release 录制 | 9.435692 | 20.135700 | 2.0136% | 下降 28.094% |
+| 4 | Vulkan release 提交 | 8.043913 | 17.165652 | 1.7166% | 增加 10.635% |
+| 5 | CUDA semaphore 等待入队 | 7.976064 | 17.020864 | 1.7021% | 增加 0.783% |
+| 6 | Vulkan consumer 提交 | 5.582927 | 11.913926 | 1.1914% | 下降 48.581% |
+| 7 | CUDA semaphore 信号入队 | 5.433277 | 11.594574 | 1.1595% | 下降 4.319% |
+| 10 | Vulkan 命令重用确认 | 2.245903 | 4.792741 | 0.4793% | 新增完成确认 |
+| 12 | Vulkan 完成 fence 等待 | 1.138475 | 2.429498 | 0.2429% | 下降 99.549%，含等待归属变化 |
+| | 其余 35 项合计 | 15.153495 | 32.337451 | 3.2337% | — |
+| | **互斥求和** | **468.605123** | **1000.000000** | **100.0000%** | **下降 5.771%** |
+
+[完整证据、制品哈希、正反序原始样本与 validation](data/medium-optical-retained-ownership-20261031.json)、[73 条区间路径及 44 个合并阶段的完整排序](data/medium-optical-retained-ownership-ranked-20261031.json)。该结果仅表示本轮 fence 退出第一且整帧收益通过验收，不表示 shader 内部三个热点已经分别完成全部优化，也不表示原生 180 FPS 达标。
