@@ -87,6 +87,23 @@ __device__ float3 positionError(float3 point,float3 incoming,float distance,floa
 __device__ float3 spawnOrigin(float3 point,float3 normal,float3 direction){
     return spawnOrigin(point,normal,direction,positionError(point,point,0.f,direction));
 }
+__device__ float3 scatterOrigin(float3 origin,float3 direction,float local,float distance,
+        const float3*endPoint,const float3*facingNormal){
+    float3 point=make_float3(fmaf(direction.x,local,origin.x),fmaf(direction.y,local,origin.y),fmaf(direction.z,local,origin.z));
+    if(!endPoint||!facingNormal)return point;
+    // PBRT's error-bound/away-rounding principle, adapted to a volume sample
+    // just before a boundary. Its nearest float may lie on the other side.
+    // Retreat on the incident segment, so a normal offset cannot cross an
+    // adjacent face at a grazing edge. Keep the sampled optical mass/PDF.
+    const float3 normal=*facingNormal;
+    const float3 error=positionError(point,origin,local,direction)+positionError(*endPoint,origin,distance,direction);
+    const float bound=dot(make_float3(fabsf(normal.x),fabsf(normal.y),fabsf(normal.z)),error);
+    const float side=dot(point-*endPoint,normal),approach=-dot(direction,normal);
+    if(side>bound||!(approach>0.f))return point;
+    const float retreat=fminf(local,fmaxf((bound-side)/approach,0.f));
+    const float safeLocal=nextafterf(fmaxf(local-retreat,0.f),0.f);
+    return make_float3(fmaf(direction.x,safeLocal,origin.x),fmaf(direction.y,safeLocal,origin.y),fmaf(direction.z,safeLocal,origin.z));
+}
 template<bool Small> __device__ State<Small> *states(unsigned char *b){return (State<Small> *)(b+((unsigned int*)b)[9]);}
 // Scalar planes make the same state component contiguous across a warp. References
 // preserve individual writes and early returns without eagerly loading or flushing state.
@@ -174,7 +191,8 @@ template<class S> __device__ __forceinline__ bool initialize(unsigned char *b,S 
     s->counters.z=1;return true;
 }
 __device__ float ior(unsigned char *b,unsigned int selected){return selected==0xffffffffu?((float*)b)[23]:table(b)[selected].absorption.w;}
-template<class S> __device__ __forceinline__ bool segment(unsigned char*b,S*s,float3 origin,float distance,bool*collision,bool sample=true,float3*incident=nullptr){
+template<class S> __device__ __forceinline__ bool segment(unsigned char*b,S*s,float3 origin,float distance,bool*collision,bool sample=true,float3*incident=nullptr,
+        const float3*endPoint=nullptr,const float3*facingNormal=nullptr){
     *collision=false;
     distance=fminf(fmaxf(distance,0.f),s->throughput.w);if(distance==0.f)return true;
     const unsigned int selected=selectedVolume(s);const float*h=(const float*)b;
@@ -226,7 +244,7 @@ template<class S> __device__ __forceinline__ bool segment(unsigned char*b,S*s,fl
             if(!(pdf>0.f)||!isfinite(pdf))return false;
             if(incident)*incident=rgb(s->throughput)*atTr*(1.f/pdf);
             weight=rgb(s->throughput)*atTr*scatter*(collisionDensity/pdf);
-            const float3 point=origin+rgb(s->direction)*local;
+            const float3 point=scatterOrigin(origin,rgb(s->direction),local,distance,endPoint,facingNormal);
 #ifdef RTR_OPTICAL_TRACE_PATH
             if(s->control.z-((unsigned int*)b)[4]*((unsigned int*)b)[3]==RTR_OPTICAL_TRACE_PATH)
                 printf("OPTICAL_SCATTER seed=%u volume=%u distance=%.9g local=%.9g origin=[%.9g,%.9g,%.9g] direction=[%.9g,%.9g,%.9g] point=[%.9g,%.9g,%.9g]\n",
@@ -606,7 +624,11 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
 #endif
     RTR_ENTRY_END();
     RTR_PHASE_NEXT(1u);
-    bool collision=false;if(!isfinite(distance)||distance<0||!segment(b,s,rgb(s->origin),distance,&collision)){finish(b,i,s,statistics,3);return;}
+    const bool boundaryEnd=found&&view.u(Compact?19:47)!=0u;
+    const float3 endPoint=make_float3(view.f(0),view.f(1),view.f(2));
+    const float3 endNormal=make_float3(view.f(Compact?4:12),view.f(Compact?5:13),view.f(Compact?6:14));
+    bool collision=false;if(!isfinite(distance)||distance<0||!segment(b,s,rgb(s->origin),distance,&collision,true,nullptr,
+            boundaryEnd?&endPoint:nullptr,boundaryEnd?&endNormal:nullptr)){finish(b,i,s,statistics,3);return;}
     RTR_PHASE_NEXT(2u);
     if(collision){increment(b,statistics,0u);return;}
     float3 evaluation=rgb(((float4*)(b+h[11]))[i]);
