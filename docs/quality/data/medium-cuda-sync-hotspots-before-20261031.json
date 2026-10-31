@@ -1,0 +1,240 @@
+{
+  "sourceCommit": "8cd988e",
+  "scope": "Sampled shader clocks only; not wall percentages. Existing observation reused without instrumentation changes.",
+  "groups": {
+    "0": {
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 28 %, 23.47 W, 1545 MHz, 45",
+      "files": [
+        {
+          "file": "build\\medium-micro-all-20261031\\retained-ownership-reuse\\cuda-sync-baseline-matrix-optical\\micro-all-1080p-optical-shader-group-0-round-1.json",
+          "sha256": "0100a989ab660d7057443692e614c7cdf3acaead4dedff3bfd41ef764c2af1a4"
+        },
+        {
+          "file": "build\\medium-micro-all-20261031\\retained-ownership-reuse\\cuda-sync-baseline-matrix-optical\\micro-all-1080p-optical-shader-group-0-round-2.json",
+          "sha256": "8690e2e7bca598f733287f090bec7e5078c7d286be7ac17cbc10987c842734b0"
+        }
+      ],
+      "ranked": [
+        {
+          "stage": 16,
+          "ticks": 341757344,
+          "calls": 15291,
+          "percentSampledClocks": 61.075180872294176
+        },
+        {
+          "stage": 18,
+          "ticks": 95851456,
+          "calls": 3334,
+          "percentSampledClocks": 17.12953683322383
+        },
+        {
+          "stage": 14,
+          "ticks": 19319136,
+          "calls": 15291,
+          "percentSampledClocks": 3.452507301485962
+        },
+        {
+          "stage": 21,
+          "ticks": 18784480,
+          "calls": 2364,
+          "percentSampledClocks": 3.3569593564959135
+        },
+        {
+          "stage": 15,
+          "ticks": 15249696,
+          "calls": 15291,
+          "percentSampledClocks": 2.725260942592944
+        },
+        {
+          "stage": 9,
+          "ticks": 14345952,
+          "calls": 1024,
+          "percentSampledClocks": 2.5637535771147917
+        },
+        {
+          "stage": 22,
+          "ticks": 11239552,
+          "calls": 7430,
+          "percentSampledClocks": 2.0086113243072132
+        },
+        {
+          "stage": 20,
+          "ticks": 8693376,
+          "calls": 7430,
+          "percentSampledClocks": 1.553586253265303
+        },
+        {
+          "stage": 12,
+          "ticks": 7201184,
+          "calls": 1024,
+          "percentSampledClocks": 1.2869178176158547
+        },
+        {
+          "stage": 13,
+          "ticks": 5948480,
+          "calls": 3072,
+          "percentSampledClocks": 1.0630480903878528
+        },
+        {
+          "stage": 19,
+          "ticks": 5580896,
+          "calls": 7430,
+          "percentSampledClocks": 0.9973574485336095
+        },
+        {
+          "stage": 3,
+          "ticks": 3936992,
+          "calls": 4096,
+          "percentSampledClocks": 0.7035766830303293
+        },
+        {
+          "stage": 0,
+          "ticks": 3499680,
+          "calls": 19387,
+          "percentSampledClocks": 0.625425006214791
+        },
+        {
+          "stage": 11,
+          "ticks": 2479296,
+          "calls": 1024,
+          "percentSampledClocks": 0.4430729998766478
+        },
+        {
+          "stage": 2,
+          "ticks": 1551680,
+          "calls": 4096,
+          "percentSampledClocks": 0.27729948842276064
+        },
+        {
+          "stage": 4,
+          "ticks": 1515712,
+          "calls": 4096,
+          "percentSampledClocks": 0.27087167598747125
+        },
+        {
+          "stage": 5,
+          "ticks": 1154720,
+          "calls": 4096,
+          "percentSampledClocks": 0.20635908516674198
+        },
+        {
+          "stage": 10,
+          "ticks": 942240,
+          "calls": 1024,
+          "percentSampledClocks": 0.16838695476609997
+        },
+        {
+          "stage": 6,
+          "ticks": 294816,
+          "calls": 4096,
+          "percentSampledClocks": 0.052686330930890785
+        },
+        {
+          "stage": 1,
+          "ticks": 221600,
+          "calls": 4096,
+          "percentSampledClocks": 0.03960195828681414
+        }
+      ]
+    },
+    "7": {
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 9 %, 24.32 W, 487 MHz, 53",
+      "files": [
+        {
+          "file": "build\\medium-micro-all-20261031\\retained-ownership-reuse\\cuda-sync-connection-baseline-matrix-optical\\micro-all-1080p-optical-shader-group-7-round-1.json",
+          "sha256": "f1ae5f2a732c473a61fd88b95c5399086fc2a7dc24a790383d6f43a0494a04c9"
+        },
+        {
+          "file": "build\\medium-micro-all-20261031\\retained-ownership-reuse\\cuda-sync-connection-baseline-matrix-optical\\micro-all-1080p-optical-shader-group-7-round-2.json",
+          "sha256": "533bc384a850ef9f8dc56c7af06eb118e3c93333db5d6ee5d82ea2a38c8f7735"
+        }
+      ],
+      "ranked": [
+        {
+          "stage": 173,
+          "ticks": 325133888,
+          "calls": 11957,
+          "percentSampledClocks": 64.76291380124792
+        },
+        {
+          "stage": 168,
+          "ticks": 62044576,
+          "calls": 11957,
+          "percentSampledClocks": 12.358562658725305
+        },
+        {
+          "stage": 169,
+          "ticks": 34015936,
+          "calls": 7408,
+          "percentSampledClocks": 6.775581421512008
+        },
+        {
+          "stage": 174,
+          "ticks": 31701728,
+          "calls": 9687,
+          "percentSampledClocks": 6.31461792692187
+        },
+        {
+          "stage": 172,
+          "ticks": 20560832,
+          "calls": 7408,
+          "percentSampledClocks": 4.095480168766475
+        },
+        {
+          "stage": 171,
+          "ticks": 10934592,
+          "calls": 7408,
+          "percentSampledClocks": 2.178044385049814
+        },
+        {
+          "stage": 160,
+          "ticks": 4845536,
+          "calls": 19387,
+          "percentSampledClocks": 0.9651747845147524
+        },
+        {
+          "stage": 170,
+          "ticks": 2594304,
+          "calls": 7408,
+          "percentSampledClocks": 0.5167553814822056
+        },
+        {
+          "stage": 164,
+          "ticks": 2482176,
+          "calls": 19387,
+          "percentSampledClocks": 0.4944207794406419
+        },
+        {
+          "stage": 161,
+          "ticks": 1729856,
+          "calls": 19387,
+          "percentSampledClocks": 0.3445673279574337
+        },
+        {
+          "stage": 163,
+          "ticks": 1554144,
+          "calls": 19387,
+          "percentSampledClocks": 0.30956752778328245
+        },
+        {
+          "stage": 165,
+          "ticks": 1528512,
+          "calls": 19387,
+          "percentSampledClocks": 0.3044619295426168
+        },
+        {
+          "stage": 162,
+          "ticks": 1518752,
+          "calls": 19387,
+          "percentSampledClocks": 0.30251785031240075
+        },
+        {
+          "stage": 166,
+          "ticks": 1392320,
+          "calls": 19387,
+          "percentSampledClocks": 0.27733405674327466
+        }
+      ]
+    }
+  }
+}

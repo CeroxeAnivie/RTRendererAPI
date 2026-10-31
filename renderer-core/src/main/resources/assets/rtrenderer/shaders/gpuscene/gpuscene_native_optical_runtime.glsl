@@ -226,13 +226,15 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
     GS_DETAIL_BEGIN(168u);
     uint base=gsOptical.storage.lanes[4u].z/16u+item*22u;
     if(initialize) {
-        uvec4 control=gsOptical.storage.lanes[base+5u];uint ordinal=control.x;
+        uvec4 control=gsOptical.storage.lanes[base+5u];
         // PBRT SpawnRayTo: offset the source first, then aim at the finite light endpoint.
         // Moving it after computing direction creates a parallel ray that misses that endpoint.
         if(control.w!=0u) {
             vec4 normal=uintBitsToFloat(gsOptical.storage.lanes[base+16u]);
             position=gsOpticalLightOrigin(position,normal.xyz,normal.w);
         }
+        for(;;) {
+        uint ordinal=control.x;
 #ifdef RTRENDERER_CAUSTICS
         GS_DETAIL_NEXT(169u);
         if(ordinal==0u&&control.w==0u) {
@@ -300,10 +302,23 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
                 source*=gsRadiance(brdf);
             }
         }
+        // PBRT queues shadow work only for nonzero light/BSDF contribution.
+        // Empty ordinals need no CUDA segment integration. Advance exactly the
+        // epoch that the old CUDA consumer would have advanced, preserving all
+        // later random identities. Leave the final ordinal for CUDA to finish
+        // lighting/continuation once, including the all-empty-light case.
+        if((gsOptical.storage.lanes[11u].w&512u)!=0u&&all(equal(source,vec3(0)))&&ordinal<count) {
+            ++control.x;gsOptical.storage.lanes[base+5u]=control;
+            uvec4 stateControl=gsOpticalStateRead(item,2u);++stateControl.w;
+            gsOpticalStateWrite(item,2u,stateControl);epoch=stateControl.w;
+            continue;
+        }
         gsOptical.storage.lanes[base]=floatBitsToUint(vec4(position,distance));
         gsOptical.storage.lanes[base+1u]=floatBitsToUint(vec4(direction,0));
         gsOptical.storage.lanes[base+2u]=uvec4(floatBitsToUint(source),max(source.x,max(source.y,source.z))>0.0?(shadow?1u:2u):0u);
         gsOptical.storage.lanes[base+3u]=uvec4(floatBitsToUint(vec3(1)),gsOptical.storage.lanes[6u].w);
+        break;
+        }
     }
     GS_DETAIL_NEXT(173u);
     vec4 origin=uintBitsToFloat(gsOptical.storage.lanes[base]);

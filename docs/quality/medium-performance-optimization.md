@@ -1249,3 +1249,11 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | **互斥求和** | **468.605123** | **1000.000000** | **100.0000%** | **下降 5.771%** |
 
 [完整证据、制品哈希、正反序原始样本与 validation](data/medium-optical-retained-ownership-20261031.json)、[73 条区间路径及 44 个合并阶段的完整排序](data/medium-optical-retained-ownership-ranked-20261031.json)。该结果仅表示本轮 fence 退出第一且整帧收益通过验收，不表示 shader 内部三个热点已经分别完成全部优化，也不表示原生 180 FPS 达标。
+
+### CUDA 同步主线：删除零贡献连接轮次（候选）
+
+用户要求继续以 micro-all 原生 180 FPS 为终点，必须减少实际延迟，不能搬移等待。当前生产制品重采样：连接路径 stage16 占 shader 互斥抽样时钟 61.075%，普通 continuation trace stage18 为 17.130%，inactive 读取 stage14 已降至 3.453%；这些是内部定位数据，不是整帧墙钟占比。现有观测直接复用，不再为观测开销返工。
+
+参考 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/wavefront/surfscatter.cpp:280–285` 在零灯光或零 BSDF 时不排阴影工作，`media.cpp:285` 同样只为非零光源排队。本项目每个零贡献连接原先仍占一次 Vulkan/CUDA 轮次。候选在 shader 中仅跳过 RGB 三通道严格等于零的中间连接；逐个保留 ordinal 和 epoch 推进，最后一个连接仍交 CUDA 完成照明、相函数、状态与随机数推进。体积焦散首连接 gather 保留。没有近似阈值、采样削减或同步迁移；属性 `top.ceroxe.rt.medium.cuda.opticalSkipEmptyConnections=false` 可同制品对照。
+
+验收同时要求：HDR 微误差线、完整窗口和原生功能回归、validation、连接/step 发射次数减少，以及关闭诊断正反序整帧收益。尚未验收，不预报收益。
