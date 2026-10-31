@@ -1080,3 +1080,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 用户将默认场景下一目标提高到 180 FPS；其余画质、预算、图像与单瓶颈闭环要求不变。当前全尺寸单块让 shader 诊断 pipeline 的覆盖过高，显式诊断现按每 32 帧中的连续 8 帧轮换，保留所有 bucket 相位，其余使用生产 shader，且不清零/读回诊断缓冲。相邻冻结窗口预热 1200 帧、3×240 完成帧：off 132.153392 FPS，细粒度 profile 124.464683 FPS，开销 6.177422%，695 条记录零漏样；三轮内部前三均为 opaque shadow、局部灯几何与衰减、采样位置。此项只是诊断工具调整，不计为渲染提速。
 
 严格 opaque 路径的遮挡连接提前返回零候选：目标散射灯光 GPU 3.144229→3.265265 ms/帧，增加 3.85%；off 129.354390→129.984943 FPS 的 0.49% 波动不算收益。源码及 16 个 SPIR-V 已恢复，没有为已拒绝候选继续跑图像或全量回归。[冻结制品和原始窗口](data/scattering-occluded-return-rejected-20261031.json)。
+
+### 撤回：compute ray-query 调度
+
+参考 NVIDIA nvpro-samples/vk_mini_samples 固定 `af5c0a6b63095bb7b84b59dd4f88b718c28206a8`（Apache-2.0）的 ray-query compute 调度，将相同严格 opaque cached-uniform 散射估计器独立适配为 compute；64 线程没有目标收益，256 线程同样负优化。256 线程反序关闭诊断 130.653296→126.499080 FPS，散射 lights 3.195643→3.374146 ms/帧。全部生产 Java/GLSL/SPIR-V 已恢复；冻结 patch、新文件、参考和原始日志留在 build 试验目录。未对失败候选追加完整回归，也未声称其通过图像一致性。详见 [原始窗口](data/scattering-compute-query-rejected-20261031.json)。
