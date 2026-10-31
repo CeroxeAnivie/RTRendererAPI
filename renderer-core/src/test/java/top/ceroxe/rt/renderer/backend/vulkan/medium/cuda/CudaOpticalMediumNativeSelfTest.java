@@ -160,7 +160,7 @@ public final class CudaOpticalMediumNativeSelfTest {
                 rtr_medium::Material materials[33];
                 for(int j=0;j<33;j++)materials[j].volume.priority=j%5-2;
                 rtr_medium::PathVolumeInfo source;
-                source.currentVolumeIndex=n?(reverse?31u:0u):NULL_INDEX;
+                source.currentVolumeIndex=n?(reverse?31u:0u):0xffffffffu;
                 source.volumeIndexListSize=n;source.scatteredStart=i/68u;
                 for(unsigned int j=0;j<32u;j++)source.volumeIndexList[j]=j<n?(reverse?31u-j:j):0xdeadbeefu;
                 struct Guarded { unsigned int before[4];rtr_medium::PathVolumeInfo value;unsigned int after[4]; } destination;
@@ -183,7 +183,7 @@ public final class CudaOpticalMediumNativeSelfTest {
                     r[0]=p->currentVolumeIndex;r[1]=p->volumeIndexListSize;r[2]=p->scatteredStart;r[3]=status;
                     r[4]=tailOk;
                     for(int j=0;j<4;j++)if(destination.before[j]!=0x12345678u||destination.after[j]!=0x12345678u)r[4]=0u;
-                    for(unsigned int j=0;j<32u;j++)r[5+j]=j<p->volumeIndexListSize?p->volumeIndexList[j]:NULL_INDEX;
+                    for(unsigned int j=0;j<32u;j++)r[5+j]=j<p->volumeIndexListSize?p->volumeIndexList[j]:0xffffffffu;
                 }
             }
             """;
