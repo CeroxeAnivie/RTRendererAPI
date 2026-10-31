@@ -113,6 +113,79 @@ public final class RtGpuBuffer implements AutoCloseable {
     }
 
     /**
+     * Dedicated export-capable storage for native-medium buffers. It retains
+     * Vulkan ownership; declaring export capability does not export a handle or
+     * transfer ownership to CUDA. The owner must outlive every GPU consumer.
+     */
+    public static RtGpuBuffer createExportableDeviceAddressBuffer(
+            VulkanDeviceRuntime runtime, long sizeBytes, int usageFlags) {
+        Objects.requireNonNull(runtime, "runtime");
+        if (sizeBytes <= 0) throw new IllegalArgumentException("positive buffer size required");
+        if (!runtime.enabledExtensions().contains("VK_KHR_external_memory_win32"))
+            throw new IllegalStateException("native buffer requires Win32 external memory support");
+        VkDevice device = runtime.device();
+        long buffer = 0, memory = 0;
+        int usage = usageFlags | VK12.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        int handleType = VK11.VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+        try (var scope = top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.begin(
+                "vulkan.buffer.exportable", sizeBytes); MemoryStack stack = MemoryStack.stackPush()) {
+            var externalProperties = VkExternalBufferProperties.calloc(stack).sType$Default();
+            VK11.vkGetPhysicalDeviceExternalBufferProperties(runtime.physicalDevice(),
+                    VkPhysicalDeviceExternalBufferInfo.calloc(stack).sType$Default().usage(usage).handleType(handleType),
+                    externalProperties);
+            var support = externalProperties.externalMemoryProperties();
+            if ((support.externalMemoryFeatures() & VK11.VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT) == 0
+                    || (support.compatibleHandleTypes() & handleType) == 0)
+                throw new IllegalStateException("native buffer cannot use the required external memory handle type");
+            var external = VkExternalMemoryBufferCreateInfo.calloc(stack).sType$Default().handleTypes(handleType);
+            var output = stack.mallocLong(1);
+            checkVk(VK10.vkCreateBuffer(device, VkBufferCreateInfo.calloc(stack).sType$Default()
+                    .pNext(external.address()).size(sizeBytes).usage(usage)
+                    .sharingMode(VK10.VK_SHARING_MODE_EXCLUSIVE), null, output), "vkCreateBuffer(native primary)");
+            buffer = output.get(0);
+            var requirements = VkMemoryRequirements.malloc(stack);
+            VK10.vkGetBufferMemoryRequirements(device, buffer, requirements);
+            var budget = runtime.memoryBudget();
+            if (budget.deviceLocalBudgetBytes() > 0 && requirements.size() > budget.deviceLocalAvailableBytes())
+                throw new IllegalStateException("native primary exceeds available Vulkan memory budget");
+            var properties = VkPhysicalDeviceMemoryProperties.malloc(stack);
+            VK10.vkGetPhysicalDeviceMemoryProperties(runtime.physicalDevice(), properties);
+            int selected = -1;
+            for (int index = 0; index < properties.memoryTypeCount(); index++) {
+                int flags = properties.memoryTypes(index).propertyFlags();
+                if ((requirements.memoryTypeBits() & (1 << index)) == 0
+                        || (flags & VK10.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == 0) continue;
+                selected = index;
+                if ((flags & VK10.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0) break;
+            }
+            if (selected < 0) throw new IllegalStateException("native primary requires device-local memory");
+            var dedicated = VkMemoryDedicatedAllocateInfo.calloc(stack).sType$Default().buffer(buffer);
+            var export = VkExportMemoryAllocateInfo.calloc(stack).sType$Default()
+                    .handleTypes(handleType).pNext(dedicated.address());
+            var addressFlags = VkMemoryAllocateFlagsInfo.calloc(stack).sType$Default()
+                    .flags(VK12.VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT).pNext(export.address());
+            checkVk(VK10.vkAllocateMemory(device, VkMemoryAllocateInfo.calloc(stack).sType$Default()
+                    .pNext(addressFlags.address()).allocationSize(requirements.size()).memoryTypeIndex(selected),
+                    null, output), "vkAllocateMemory(native primary)");
+            memory = output.get(0);
+            checkVk(VK10.vkBindBufferMemory(device, buffer, memory, 0), "vkBindBufferMemory(native primary)");
+            long address = queryDeviceAddress(stack, device, buffer);
+            if (address == 0) throw new IllegalStateException("native primary device address is null");
+            if (top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.ENABLED)
+                top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.checkpoint(
+                        "vulkan.buffer.exportable.memoryType=" + selected + "/flags="
+                                + properties.memoryTypes(selected).propertyFlags(), buffer, requirements.size());
+            // allocator==0 denotes directly owned VkDeviceMemory in allocation.
+            var result = new RtGpuBuffer(device, 0, buffer, memory, sizeBytes, usage, address, false, RtStallTelemetrySink.NOOP);
+            buffer = memory = 0;
+            return result;
+        } finally {
+            if (buffer != 0) VK10.vkDestroyBuffer(device, buffer, null);
+            if (memory != 0) VK10.vkFreeMemory(device, memory, null);
+        }
+    }
+
+    /**
      * Creates random-access host-visible storage with no-op stall telemetry.
      *
      * @param device     logical device that owns the buffer
@@ -738,7 +811,12 @@ public final class RtGpuBuffer implements AutoCloseable {
         }
         closed = true;
         long destroyStartNanos = System.nanoTime();
-        Vma.vmaDestroyBuffer(allocator, buffer, allocation);
+        if (allocator == 0) {
+            VK10.vkDestroyBuffer(device, buffer, null);
+            VK10.vkFreeMemory(device, allocation, null);
+        } else {
+            Vma.vmaDestroyBuffer(allocator, buffer, allocation);
+        }
         logSlowMemoryStage(
                 "destroyBuffer:usage=0x" + Integer.toHexString(usageFlags),
                 sizeBytes,

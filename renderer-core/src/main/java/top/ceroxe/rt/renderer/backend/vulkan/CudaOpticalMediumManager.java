@@ -486,7 +486,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         if(plan.externalPrimary()) {
             if(primary==null||primary.sizeBytes()<plan.primaryBytes()) {
                 if(primary!=null){drain();primary.close();primary=null;}
-                primary=RtGpuBuffer.createDeviceAddressBuffer(device.device(),device.allocator(),plan.primaryBytes(),VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+                primary=RtGpuBuffer.createExportableDeviceAddressBuffer(device,plan.primaryBytes(),VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
             }
         }else if(primary!=null){drain();primary.close();primary=null;}
     }
