@@ -1,0 +1,236 @@
+{
+  "candidateCommit": "25491759069fe41cef37908a59a958dae5f56479",
+  "decision": "rejected and rolled back: strict 1080p HDR gate failed before any throughput run",
+  "optimization": "hybrid scalar hot state headers with untouched full volume stack",
+  "reference": {
+    "project": "PBRT-v4",
+    "commit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+    "license": "Apache-2.0",
+    "files": [
+      "src/pbrt/wavefront/workitems.h:41",
+      "src/pbrt/util/soa.h:130"
+    ],
+    "scope": "SoA field separation and proxy access only; this project-specific hybrid layout is not upstream code"
+  },
+  "abiPassed": true,
+  "cudaRawLayoutAndNumericalChecksPassed": true,
+  "focusedNative": {
+    "states": {
+      "passed": true,
+      "byteIdenticalComparisons": 32,
+      "nativeFrames": 64,
+      "continuedQueriesBefore": 1342063,
+      "continuedQueriesAfter": 1342063
+    },
+    "connections": {
+      "passed": true,
+      "byteIdenticalComparisons": 84,
+      "nativeFrames": 168,
+      "mirroredVertexOrders": 2,
+      "hitFormats": 3
+    }
+  },
+  "validation": {
+    "states": {
+      "passed": true,
+      "logs": [
+        {
+          "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\states-validation.jsonl",
+          "passed": true,
+          "opened": 2,
+          "closed": 2,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        }
+      ]
+    },
+    "connections": {
+      "passed": true,
+      "logs": [
+        {
+          "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\connections-validation.jsonl",
+          "passed": true,
+          "opened": 2,
+          "closed": 2,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        }
+      ]
+    }
+  },
+  "hdr": {
+    "passed": false,
+    "mode": "byte-identical",
+    "supportingReferenceCommit": null,
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": false,
+        "alphaExact": true,
+        "relativeRms": 9.64807374149859e-07,
+        "luminanceEnergyRelativeError": 2.173000583423375e-09,
+        "maxAbsoluteChannelError": 0.0009765625,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 1,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": false,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "61623d27961ed412ee277cca06bcc43bb1d41fdc9f883d0dddfa7c83443fda26"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 9.64807374149859e-07,
+    "maxLuminanceEnergyRelativeError": 2.173000583423375e-09,
+    "maxAbsoluteChannelError": 0.0009765625
+  },
+  "offControlPending": true,
+  "evidence": [
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\abi-test.log",
+      "bytes": 390,
+      "sha256": "f6cd6d7babf54dc4c49950474b99eb265b62ae046c7c7502e35d583576917965"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\artifacts.json",
+      "bytes": 786,
+      "sha256": "29b98acb3c4fa877c3013e22b32cf077d17b2e32aa4485000bd50095fab6e32e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\candidate-core.jar",
+      "bytes": 56781303,
+      "sha256": "1877eaebefe909a1b9b121fc59b9e5463ab904a664caf6e75b0bb1685f69ee74"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\connections-initial-gpu.csv",
+      "bytes": 65,
+      "sha256": "917d3fad373f419a2aba9713a8c424e0d38499c4a5982f0d4635898180f9ca81"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\connections-test.log",
+      "bytes": 757,
+      "sha256": "f0fc9273111ab02c992c1d0f08732effb9ffe2f971f8ced4fd0de49122809bcf"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\connections-validation-check.json",
+      "bytes": 354,
+      "sha256": "b9ce6f46adf34e8f1d4a237a300d172ebd8dd0dfb746f2a69c88561cef8592c0"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\connections-validation.jsonl",
+      "bytes": 90841,
+      "sha256": "9852d742f0e9debcc2314914389ec1d35ccdd66b3551dd7d4ed2c7af7c5bbf8f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\cuda-initial-gpu.csv",
+      "bytes": 66,
+      "sha256": "4234191d6977fbc92fb778abc8eacb362c1193ae87120831a3883e156fbab93c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\cuda-test.log",
+      "bytes": 281,
+      "sha256": "b79bd2bcd8b6aba5a39480168bce061bb7e7a3644e8f63cb4c6a9c659d6e8661"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\hdr-compare.json",
+      "bytes": 1746,
+      "sha256": "24096856092c482b0fceafdf7d031fc7f4b41d911053f20063c4e6b715d0b88f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\hdr-initial-gpu.csv",
+      "bytes": 66,
+      "sha256": "8ae55ecb1260b609884c7cef306d3b5638e73d7593586304e1bf7599dfdd7faf"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\hdr-test.log",
+      "bytes": 183,
+      "sha256": "fc82014e830bc0a80fe6b7d0efb58e450156476ecbc2aad2c74a78f7ac601c99"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\matrix-test-classes.jar",
+      "bytes": 275201,
+      "sha256": "83586141e12750acc40b458dedac93d466287cd5df6d9e6fd1752cf2ef5d4ef4"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\native-connections\\hybrid-connection-checks.json",
+      "bytes": 105,
+      "sha256": "5fdad30da30cc4c6d26b4ef4d9bb3b329d7fed90ad30e2a7cbfb6de2cde313f5"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\native-states\\hybrid-states.json",
+      "bytes": 129,
+      "sha256": "bfe62167867f2e2f43b83f852bfaa053f59cb6e1c90780e6926c674813b95cce"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\native-test-classes.jar",
+      "bytes": 1520063,
+      "sha256": "26f718a810fb1c7b950cbe8237759ea8f5a7cc9ce7d316c770d6165978e8ca9c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\source-check.json",
+      "bytes": 6701,
+      "sha256": "8b76d49bf91e149b7a7a516c941ccbce5c924aa8b20a995c3cdb8f7cb01873fa"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\source-commit.txt",
+      "bytes": 42,
+      "sha256": "52755670169cbde01bf85f02085c3b43384ac57bffa3a4d9ce05bb6d5ddcee82"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\states-initial-gpu.csv",
+      "bytes": 66,
+      "sha256": "a74e91d664ea2a694445bf0e1206f00179c4bcb4895d4e5c56c6f5c5ccb738a1"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\states-test.log",
+      "bytes": 788,
+      "sha256": "2b5e4e89165ce19b5bd6c695619a77fe3ea620733714900f9dfddb52eb7cf142"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\states-validation-check.json",
+      "bytes": 349,
+      "sha256": "3ef4896ca7c4509f88830b2fa553fda190e6b771eb07d3c3776bc093d860ab06"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\states-validation.jsonl",
+      "bytes": 90789,
+      "sha256": "90b15bf7d1a5aa74ffaafc649ff7829f700706826ea1bf2cf097af4f274e6404"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\pbrt-fixed-soa.h",
+      "bytes": 7132,
+      "sha256": "1ea8ad4a0c6e3a2d9a84c3b6be99f1ece52a686ad65680e20a74c4468bb08db4"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\pbrt-fixed-workitems.h",
+      "bytes": 14616,
+      "sha256": "2f2e42c552977b54d292d54d876296d0faa3067fa33c9ad1a274aabf9fb79b73"
+    }
+  ]
+}

@@ -61,7 +61,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         NativeState initialized;
         try{initialized=onNative(()->{var opened=CudaMediumRuntime.open(Integer.getInteger("top.ceroxe.rt.medium.cuda.deviceOrdinal",0),configuredResidentLimit());
             try{String source=CudaOpticalMediumSource.source();
-                var variants=new CudaMediumRuntime.BatchKernel[12];
+                var variants=new CudaMediumRuntime.BatchKernel[9];
                 for(int layout=0;layout<variants.length;layout++)variants[layout]=opened.compileBatchKernel(source,"native_optical_step_"+layout);
                 return new NativeState(opened,opened.compileBatchKernel(source,"native_optical_reset"),variants,
                         opened.allocateHost(CudaOpticalMediumAbi.STATISTICS_BYTES),opened.allocateHost(CudaOpticalMediumAbi.STATISTICS_BYTES));}
@@ -164,7 +164,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             if(photonPass==null)photonPass=new CudaOpticalPhotonPass(device,cuda);
             photonPass.prepare(scene,photonPlan,tracer,slot,photonBuffer,buildPlan);
         }
-        var step=steps[plan.transposedStates()?(plan.compactStates()?6:9)+(plan.transposedHits()?2:plan.compactHits()?1:0):plan.transposedHits()?4+(plan.compactStates()?1:0):((plan.compactHits()?1:0)|(plan.compactStates()?2:0))];
+        var step=steps[plan.transposedStates()?6+(plan.transposedHits()?2:plan.compactHits()?1:0):plan.transposedHits()?4+(plan.compactStates()?1:0):((plan.compactHits()?1:0)|(plan.compactStates()?2:0))];
         long primaryAddress=plan.externalPrimary()?primary.deviceAddress():0;
         int opticalSamples=frame.mediumTransport().opticalSamples();
         int branches=frame.mediumTransport().firstInterfaceSampling()==top.ceroxe.rt.renderer.api.MediumTransport.FirstInterfaceSampling.DETERMINISTIC_SPLIT?2:1;
@@ -314,8 +314,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                             +states.get(ValueLayout.JAVA_FLOAT,stateAt+(plan.transposedStates()?paths*8L:8))+"]"
                             +",hitDistance="+hits.get(ValueLayout.JAVA_FLOAT,hitStart+12);
                     final int pathIndex=i;
-                    java.util.function.IntToLongFunction stateWord=word->plan.transposedStates()?
-                            (word<28?(word*(long)paths+pathIndex)*4:(28L*paths+pathIndex*36L+word-28)*4)
+                    java.util.function.IntToLongFunction stateWord=word->plan.transposedStates()?(word*(long)paths+pathIndex)*4
                             :pathIndex*(long)plan.stateBytes()+word*4L;
                     java.util.function.IntToLongFunction hitField=word->plan.transposedHits()?((word/4L)*paths*4+pathIndex*4+(word&3))*4
                             :pathIndex*(long)plan.hitBytes()+word*4L;

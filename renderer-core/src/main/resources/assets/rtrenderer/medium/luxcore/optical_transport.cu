@@ -135,23 +135,6 @@ template<> struct StateAccess<true,true> {
     __device__ __forceinline__ StateAccess*operator->(){return this;}
 };
 
-// Keep the hot 112-byte header in scalar planes across paths. The complete
-// 144-byte volume stack remains an ordinary object per path, including its
-// unused tail; references retain the original mutations and copy semantics.
-template<> struct StateAccess<false,true> {
-    static constexpr bool SMALL=false;
-    Float4Ref origin,direction;Uint4Ref control;Float4Ref throughput,radiance;Uint4Ref counters;Float4Ref terminal;
-    rtr_medium::PathVolumeInfo &volumes;
-    __device__ __forceinline__ StateAccess(float*base,unsigned int item,unsigned int paths):
-        origin(base+item,paths),direction(base+4u*paths+item,paths),control((unsigned int*)base+8u*paths+item,paths),
-        throughput(base+12u*paths+item,paths),radiance(base+16u*paths+item,paths),
-        counters((unsigned int*)base+20u*paths+item,paths),terminal(base+24u*paths+item,paths),
-        volumes(((rtr_medium::PathVolumeInfo*)(base+28u*paths))[item]){}
-    __device__ __forceinline__ StateAccess(unsigned char*b,unsigned int item,unsigned int paths):
-        StateAccess((float*)(b+((unsigned int*)b)[9]),item,paths){}
-    __device__ __forceinline__ StateAccess*operator->(){return this;}
-};
-
 template<class S> __device__ unsigned int selectedVolume(const S*s){
     if constexpr(S::SMALL)return 0xffffffffu;else return s->volumes.currentVolumeIndex;
 }
@@ -817,11 +800,6 @@ __device__ __forceinline__ void reduceStatistics(unsigned char*b,unsigned int*st
 }
 __device__ void rtr_optical_dispatch(unsigned char*b,int count,unsigned int*statistics){
     const unsigned int layout=((unsigned int*)b)[47];
-    if((layout&18u)==16u){
-        if((layout&9u)==9u)rtr_optical_step_impl<true,false,true,true>(b,count,statistics);
-        else if(layout&1u)rtr_optical_step_impl<true,false,false,true>(b,count,statistics);
-        else rtr_optical_step_impl<false,false,false,true>(b,count,statistics);return;
-    }
     if((layout&18u)==18u){
         if((layout&9u)==9u)rtr_optical_step_impl<true,true,true,true>(b,count,statistics);
         else if(layout&1u)rtr_optical_step_impl<true,true,false,true>(b,count,statistics);
@@ -860,9 +838,6 @@ extern "C" __global__ void native_optical_step_5(unsigned char*b,int count){rtr_
 extern "C" __global__ void native_optical_step_6(unsigned char*b,int count){rtr_optical_fixed<false,true,false,true>(b,count);}
 extern "C" __global__ void native_optical_step_7(unsigned char*b,int count){rtr_optical_fixed<true,true,false,true>(b,count);}
 extern "C" __global__ void native_optical_step_8(unsigned char*b,int count){rtr_optical_fixed<true,true,true,true>(b,count);}
-extern "C" __global__ void native_optical_step_9(unsigned char*b,int count){rtr_optical_fixed<false,false,false,true>(b,count);}
-extern "C" __global__ void native_optical_step_10(unsigned char*b,int count){rtr_optical_fixed<true,false,false,true>(b,count);}
-extern "C" __global__ void native_optical_step_11(unsigned char*b,int count){rtr_optical_fixed<true,false,true,true>(b,count);}
 #else
 } // namespace rtr_optical
 #endif

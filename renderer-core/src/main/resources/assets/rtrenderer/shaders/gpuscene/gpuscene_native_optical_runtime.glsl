@@ -182,7 +182,6 @@ vec3 gsOpticalScatteringLight(vec3 origin,vec3 direction,uint seed,uvec4 launch)
 uvec4 gsOpticalStateRead(uint item,uint lane) {
     uint state=gsOptical.storage.lanes[2u].y/4u;
     if((gsOptical.storage.lanes[11u].w&16u)!=0u){
-        if(lane>=7u)return gsOptical.storage.lanes[state/4u+7u*gsOptical.storage.lanes[0u].z+item*9u+lane-7u];
         uint paths=gsOptical.storage.lanes[0u].z,word=state+lane*4u*paths+item;uvec4 value;
         for(uint c=0u;c<4u;c++){uint at=word+c*paths;
 #ifdef RTRENDERER_OPTICAL_PROFILE
@@ -200,7 +199,6 @@ uvec4 gsOpticalStateRead(uint item,uint lane) {
 void gsOpticalStateWrite(uint item,uint lane,uvec4 value) {
     uint state=gsOptical.storage.lanes[2u].y/4u;
     if((gsOptical.storage.lanes[11u].w&16u)!=0u){
-        if(lane>=7u){gsOptical.storage.lanes[state/4u+7u*gsOptical.storage.lanes[0u].z+item*9u+lane-7u]=value;return;}
         uint paths=gsOptical.storage.lanes[0u].z,word=state+lane*4u*paths+item;
         for(uint c=0u;c<4u;c++){uint at=word+c*paths;
 #ifdef RTRENDERER_OPTICAL_PROFILE

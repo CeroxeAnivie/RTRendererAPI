@@ -1544,12 +1544,12 @@ header188 bit8192守卫新metadata，byte228是第二plane地址，byte232是包
 [完整验收、排名与原始证据哈希](data/medium-paired-connection-hits-20261031.json)。后续继续从最大实际工作和数据流架构入手，确定性小收益保留，主线优先追求能消除整段工作的大幅改进。
 
 
-## 2026-10-31 架构候选 O：完整介质路径的热状态分离（待验收）
+## 2026-10-31 撤回候选 O：完整介质路径的热状态分离
 
-N后两大真实GPU任务为Vulkan续射线63.520982 ms/帧、CUDA推进60.639885 ms/帧。两者均频繁读取相机状态的origin/direction/control/counters；有边界时，现有256字节AoS让相邻原path的同一标量相隔256字节。候选将前112字节热字段按标量plane连续存放，末144字节完整PathVolumeInfo仍逐path连续存放，布局总字节数、tile大小、全部32槽及尾部均不变。当前没有硬件带宽计数器证明访存已是瓶颈，所以这是可回退候选，不把结构分析冒充性能结论。
+对照固定PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0），`src/pbrt/wavefront/workitems.h` 41–95行 `SOA<RaySamples>` 和 `src/pbrt/util/soa.h` 130行起的SoA/代理读写组织，曾将完整介质路径的前112字节热字段分为标量plane，后144字节PathVolumeInfo仍按原样逐path存放。未减少内存容量、未改变栈复制或数学表达式；PBRT不包含本项目这个具体混合布局。
 
-已通过本机代理核对固定PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0），`src/pbrt/wavefront/workitems.h` 41–95行 `SOA<RaySamples>` 把direct/indirect/subsurface及介质采样字段分开存放，`src/pbrt/util/soa.h` 130行起分离wavelength与pdf，并由GetSetIndirector提供原对象读写。参考范围为按用途分离字段及代理读写；PBRT没有本项目这个112字节标量plane加144字节原样介质栈的混合布局，不声称照搬。固定文件已保存在构建证据目录。
+CPU容量布局通过；真实CUDA的1/31/32/33/255/256/257/1069路径、两种状态大小与两种布局，共32组原始字段/完整栈尾/内存守卫检查通过，原光学数值检查通过；两种初始化和SPP1/2的32组/64帧开关HDR、三种命中格式的84组/168帧连接开关HDR均逐字节一致，前后实际查询量相同，四个validation生命周期关闭且零warning/error/drop。但1080p两帧严格HDR失败：首帧单个RGB分量差一个half ULP（0.0009765625），第二帧完全一致；相对RMS为9.64807374149859e-7。没有放宽阈值，没有进入性能验收，不报告候选FPS收益。
 
-GLSL state读写与CUDA引用代理统一处理头部plane和栈数组；CUDA继续直接引用原PathVolumeInfo对象，保持原add/remove、完整结构复制和所有浮点表达式，未恢复已撤回的有效栈前缀复制。header188 bit16仍表示转置热状态；生产固定入口9/10/11分别覆盖full/compact/transposed命中。`top.ceroxe.rt.medium.cuda.opticalHybridVolumeStates=false` 只关闭新增的完整栈混合布局，原compact状态行为保留；原transposedStates=false仍可关闭全部热状态转置。
+已完整撤回混合布局、12入口扩展、GLSL/ABI/管理器及关联测试，保留N已验收成果。同制品关闭候选的HDR对照正在后续核实。尚无证据判定这一个分量差异的具体成因，不编造寄存器、FMA或介质栈错误。后续先观察全局数据流和已有两次栈相关候选的差异位置，不继续堆同类局部布局变体。
 
-先用真实CUDA原始64字段、包括全部36个栈word及内存尾守卫，覆盖1/31/32/33/255/256/257/1069路径和两种大小/两种布局，检查独立Java字节模型的读写；然后32组/64帧两种初始化与SPP1/2的开关HDR及实际查询量一致，再84组/168帧透明链/嵌套优先级/预算2和3/端点三种命中格式对照。1080p严格HDR通过后才测净收益，正收益做完整回归与新排名；否则完整撤回O，保留N。测试前全量提交推送并冻结制品。
+[失败证据与固定上游文件哈希](data/medium-hybrid-volume-states-rejected-20261031.json)。
