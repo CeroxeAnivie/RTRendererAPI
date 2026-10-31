@@ -1,0 +1,313 @@
+{
+  "sourceCommit": "0c14504",
+  "baselineCommit": "610698e",
+  "scene": "micro-all 1920x1080 1SPP native completed frames",
+  "matureReference": {
+    "project": "PBRT-v4",
+    "commit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+    "file": "src/pbrt/wavefront/workqueue.h",
+    "license": "Apache-2.0",
+    "adopted": "Limit actual launch work to the non-increasing active queue size while retaining original state strides and identities"
+  },
+  "measurements": {
+    "baselineOff": {
+      "directory": "build\\medium-micro-all-20261031\\active-queue-spatial\\candidate-matrix-off",
+      "frames": 64,
+      "wallMs": 31506.051,
+      "msPerFrame": 492.282046875,
+      "fps": 2.0313558179665234,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 76 %, 79.90 W, 2497 MHz, 50",
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "16",
+          "wallMs": "7960.336400",
+          "completedFps": "2.009965",
+          "submitCpuMs": "7950.272600",
+          "requestBuildCpuMs": "0.699700",
+          "pollCpuMs": "0.616400",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.174259000",
+          "gpuFrameLowerMs": "0.174258563",
+          "gpuFrameUpperMs": "0.174260438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "2",
+          "frames": "16",
+          "wallMs": "7799.074300",
+          "completedFps": "2.051526",
+          "submitCpuMs": "7792.791000",
+          "requestBuildCpuMs": "0.698600",
+          "pollCpuMs": "0.480800",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.174517500",
+          "gpuFrameLowerMs": "0.174516063",
+          "gpuFrameUpperMs": "0.174519938",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "3",
+          "frames": "16",
+          "wallMs": "7872.605600",
+          "completedFps": "2.032364",
+          "submitCpuMs": "7863.349500",
+          "requestBuildCpuMs": "0.899300",
+          "pollCpuMs": "0.913600",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.174609500",
+          "gpuFrameLowerMs": "0.174607063",
+          "gpuFrameUpperMs": "0.174612938",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "4",
+          "frames": "16",
+          "wallMs": "7874.034700",
+          "completedFps": "2.031995",
+          "submitCpuMs": "7867.839500",
+          "requestBuildCpuMs": "0.667100",
+          "pollCpuMs": "0.518500",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.174392500",
+          "gpuFrameLowerMs": "0.174389063",
+          "gpuFrameUpperMs": "0.174396938",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        }
+      ]
+    },
+    "candidateOff": {
+      "directory": "build\\medium-micro-all-20261031\\active-queue-bounded-launch\\candidate-matrix-off",
+      "frames": 64,
+      "wallMs": 30921.0706,
+      "msPerFrame": 483.141728125,
+      "fps": 2.069786031276679,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 65.84 W, 1897 MHz, 49",
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "16",
+          "wallMs": "7808.182900",
+          "completedFps": "2.049132",
+          "submitCpuMs": "7800.516600",
+          "requestBuildCpuMs": "0.787200",
+          "pollCpuMs": "0.858500",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.175981500",
+          "gpuFrameLowerMs": "0.175981063",
+          "gpuFrameUpperMs": "0.175982938",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "2",
+          "frames": "16",
+          "wallMs": "7787.295800",
+          "completedFps": "2.054629",
+          "submitCpuMs": "7782.325400",
+          "requestBuildCpuMs": "0.879500",
+          "pollCpuMs": "0.506800",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.173912500",
+          "gpuFrameLowerMs": "0.173911063",
+          "gpuFrameUpperMs": "0.173914938",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "3",
+          "frames": "16",
+          "wallMs": "7717.854200",
+          "completedFps": "2.073115",
+          "submitCpuMs": "7710.939800",
+          "requestBuildCpuMs": "0.733200",
+          "pollCpuMs": "0.591800",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.175601000",
+          "gpuFrameLowerMs": "0.175598563",
+          "gpuFrameUpperMs": "0.175604438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "4",
+          "frames": "16",
+          "wallMs": "7607.737700",
+          "completedFps": "2.103122",
+          "submitCpuMs": "7600.310400",
+          "requestBuildCpuMs": "0.820000",
+          "pollCpuMs": "0.561000",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.182752500",
+          "gpuFrameLowerMs": "0.182749063",
+          "gpuFrameUpperMs": "0.182756938",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        }
+      ]
+    },
+    "reverseCandidate": {
+      "directory": "build\\medium-micro-all-20261031\\active-queue-bounded-launch\\reverse-candidate-matrix-off",
+      "frames": 32,
+      "wallMs": 15860.9533,
+      "msPerFrame": 495.654790625,
+      "fps": 2.017533208423229,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 12 %, 32.89 W, 1590 MHz, 52",
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "16",
+          "wallMs": "7875.669800",
+          "completedFps": "2.031573",
+          "submitCpuMs": "7867.365900",
+          "requestBuildCpuMs": "0.881400",
+          "pollCpuMs": "1.042600",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.174446000",
+          "gpuFrameLowerMs": "0.174445563",
+          "gpuFrameUpperMs": "0.174447438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "2",
+          "frames": "16",
+          "wallMs": "7985.283500",
+          "completedFps": "2.003686",
+          "submitCpuMs": "7977.862300",
+          "requestBuildCpuMs": "0.733500",
+          "pollCpuMs": "0.668900",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.173268000",
+          "gpuFrameLowerMs": "0.173266563",
+          "gpuFrameUpperMs": "0.173270438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        }
+      ]
+    },
+    "reverseBaseline": {
+      "directory": "build\\medium-micro-all-20261031\\active-queue-spatial\\bounded-reverse-baseline-matrix-off",
+      "frames": 32,
+      "wallMs": 16025.0153,
+      "msPerFrame": 500.781728125,
+      "fps": 1.9968779686594123,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 65 %, 79.44 W, 2122 MHz, 57",
+      "rounds": [
+        {
+          "round": "1",
+          "frames": "16",
+          "wallMs": "8043.304100",
+          "completedFps": "1.989232",
+          "submitCpuMs": "8036.726200",
+          "requestBuildCpuMs": "0.704900",
+          "pollCpuMs": "0.485100",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.177836000",
+          "gpuFrameLowerMs": "0.177835563",
+          "gpuFrameUpperMs": "0.177837438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        },
+        {
+          "round": "2",
+          "frames": "16",
+          "wallMs": "7981.711200",
+          "completedFps": "2.004583",
+          "submitCpuMs": "7974.659600",
+          "requestBuildCpuMs": "0.968400",
+          "pollCpuMs": "0.576800",
+          "deferrals": "5",
+          "gpuFrameMeanMs": "0.174462000",
+          "gpuFrameLowerMs": "0.174460563",
+          "gpuFrameUpperMs": "0.174464438",
+          "gpuSamples": "16",
+          "profileData": "{}",
+          "stageData": "{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[]}"
+        }
+      ]
+    }
+  },
+  "hdr": {
+    "passed": true,
+    "mode": "bounded",
+    "supportingReferenceCommit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": false,
+        "alphaExact": true,
+        "relativeRms": 9.648073728310078e-07,
+        "luminanceEnergyRelativeError": 2.1730005787014434e-09,
+        "maxAbsoluteChannelError": 0.0009765625,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 1,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "61623d27961ed412ee277cca06bcc43bb1d41fdc9f883d0dddfa7c83443fda26",
+        "candidateSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 9.648073728310078e-07,
+    "maxLuminanceEnergyRelativeError": 2.1730005787014434e-09,
+    "maxAbsoluteChannelError": 0.0009765625
+  },
+  "verification": [
+    "fixed sequence 57 passed",
+    "8 warmup + 64 measurement micro-all frames passed",
+    "optical native 46 comparisons / 152 frames passed",
+    "micro-checks 7 cases / 46 features passed"
+  ],
+  "artifacts": [
+    {
+      "file": "candidate-core.jar",
+      "sha256": "61a6a49d9420fceac89de8f4c94d86bed36cd9a9abd7c371034f2527dcbbce8f"
+    },
+    {
+      "file": "matrix-test-classes.jar",
+      "sha256": "83586141e12750acc40b458dedac93d466287cd5df6d9e6fd1752cf2ef5d4ef4"
+    }
+  ],
+  "decision": "Retain: positive in both forward and reverse windows; fence remains first. No budget reduction or added synchronization."
+}

@@ -1213,3 +1213,15 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 两帧 1080p HDR 中，一帧逐字节相同，另一帧仅一个 RGB 分量相差一个 half ULP（0.0009765625）；相对 RMS 0.00009648%，亮度能量偏差 0.0000002173%，通过既定微误差线。原版重复与候选关闭队列均逐字节一致；不把结果描述为全字节一致，也不把这点差异归因于尚未证实的具体浮点指令。参考依据是上文 PBRT 的队列重排，误差阈值沿用此前规范，未临时放宽。
 
 [性能、HDR 和原生回归证据](data/medium-optical-active-queue-20261031.json)、[完整新排名](data/medium-optical-active-queue-ranked-20261031.json)。下一候选仍处理第一名：利用一个输入最多一个后继的队列不增性，以前一完成批次的活跃数限制下一对 Vulkan/CUDA 实际 launch 范围；保留完整状态/命中 stride 和诊断记录范围，不新增同步。待独立验证，不预报收益。
+
+### 保留：按存活路径数缩小实际 launch
+
+`0c14504` 保留完整状态/命中 stride 和诊断范围，只收紧下一对 Vulkan/CUDA 发射数量。对照 PBRT 上述按队列 Size 工作的逻辑，一个输入最多产生一个后继，因此上轮完成计数是安全上界，无新增同步。关闭诊断正序 2.031356→2.069786 FPS（+1.892%），反序 1.996878→2.017533（+1.034%），确定性小收益保留。HDR 通过既定微误差线，固定帧 57、72 帧完整窗口、光学 46 组/152 帧及 micro-checks 7 场景/46 功能通过。
+
+开启计时 497.302294 ms/帧；fence 等待仍第一，251.240531 ms/帧、505.206862 ms/秒；CUDA 同步第二，160.674503 ms/帧。未达到 180 FPS，继续处理第一名。见[本轮独立证据](data/medium-optical-bounded-launch-20261031.json)、[完整排名](data/medium-optical-bounded-launch-ranked-20261031.json)。
+
+### 待验证架构候选：把空 acquire 合入真正的生产提交
+
+对照 NVIDIA cuda-samples `9c688d7ff78455ed42e345124d1495aad6bf66de`（BSD-3-Clause），`Samples/5_Domain_Specific/vulkanImageCUDA/vulkanImageCUDA.cu` 的 `cudaUpdateVkImage` 和 `submitVulkanCuda`：CUDA 外部信号由真正的 Vulkan 消费提交等待。本项目独立适配双轮 timeline 交接，不声称上游原有相同 API。
+
+目前每对两轮输运有第三次仅 acquire 所有权的空 Vulkan 提交。候选在完成第二轮 CUDA 后暂留 external ownership，将 acquire 与上一轮 timeline wait 合入下一次真正 producer；整帧发布前仍显式 acquire。保留两处已经通过 RT epoch 回归的 CUDA stream 同步、所有必要 ownership barrier、采样和输运预算。属性 `top.ceroxe.rt.medium.cuda.opticalRetainedOwnership=false` 可回到原行为。成功标准同时包括正确性、真实提交次数减少和关闭诊断整帧收益；只改变等待归属不算成功。扩展原生回归覆盖连续 retained pair、显式 acquire、retained/legacy 切换及两种模式下四阶段回调故障。

@@ -34,6 +34,8 @@ import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 
 /** Blocking dielectric continuation. Original primary samples and all declared branches survive. */
 final class CudaOpticalMediumManager implements AutoCloseable {
+    private static final boolean RETAIN_EXTERNAL_OWNERSHIP=Boolean.parseBoolean(System.getProperty(
+            "top.ceroxe.rt.medium.cuda.opticalRetainedOwnership","true"));
     static final LongAdder diagnosticQueries=new LongAdder(),diagnosticInterfaces=new LongAdder();
     static final LongAdder diagnosticAssetUploads=new LongAdder(),diagnosticUploadedBytes=new LongAdder();
     static final LongAdder diagnosticStorageRecreations=new LongAdder();
@@ -270,6 +272,9 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                 }first+=pixels;
             }
         }
+        // Intermediate pairs leave the completed allocation external-owned. Acquire only
+        // once before the final Vulkan consumer can see this fully validated frame.
+        storage.acquireForVulkanBlocking();
         if(uploadAssets){uploadedAssets=scene.assets;diagnosticAssetUploads.increment();}
         // Publish this proof only after every declared path/branch completed without rejection.
         // The consumer retains its geometry-dependent feature and outline fallback.
@@ -356,7 +361,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             cuda.launchBlocking(step,input,dispatched,1);
             cuda.downloadAsync(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),secondStatistics);
             if(shaderSampleFrame)cuda.downloadAsync(input.slice(shaderSampleOffset,secondShaderSamples.byteSize()),secondShaderSamples);
-        });
+        },RETAIN_EXTERNAL_OWNERSHIP);
         if(shaderSampleFrame){
             long diagnosticStarted=OpticalDetailedProfile.start();
             OpticalDetailedProfile.shaderSamples(firstShaderSamples.segment(),paths);
