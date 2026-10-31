@@ -60,8 +60,9 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                     ==ResourceTransactionEvidence.Outcome.ACCEPTED,"predicate resources rejected");
             var bindings=new BindingSet(program.bindingLayout(),Map.of(destination.key(),
                     List.of(new BindingSet.TextureValue(view,BindingType.READ_WRITE_STORAGE_TEXTURE))));
-            require(session.submit(new RenderCommandTransaction(1,List.of(new BindComputePipelineCommand(new ComputePipelineState(program)),
-                    BindBindingSetCommand.fixed(bindings),new DispatchCommand(2,1,1)))).outcome().recorded(),"predicate dispatch rejected");
+            var submitted=session.submit(new RenderCommandTransaction(1,List.of(new BindComputePipelineCommand(new ComputePipelineState(program)),
+                    BindBindingSetCommand.fixed(bindings),new DispatchCommand(2,1,1))));
+            require(submitted.outcome().recorded(),"predicate dispatch rejected: "+submitted);
             VulkanGenericCommandNativeSelfTest.await(session,1,CommandExecutionEvidence.Outcome.GPU_COMPLETED);
             var pass=RenderPassDescriptor.color(2,1,List.of(RenderAttachment.of(view,LoadOp.LOAD,StoreOp.STORE)));
             require(session.submit(new RenderCommandTransaction(2,List.of(new BeginRenderPassCommand(pass),new EndRenderPassCommand())))
