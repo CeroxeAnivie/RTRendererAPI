@@ -1758,3 +1758,9 @@ X11关闭多命中两帧恢复与U逐字节一致；开启时单通道差异仍�
 定点捕获的396份着色资源未变，关闭/开启多命中各自两帧HDR均与未观测版本逐字节相同。sequence1、path649733首个sample/branch的0003-cuda输入记录中state/hit/connection一致；0004-vulkan输出仅connection.lighting.z从0.29745805263519287变为0.29745808243751526，差1个float ULP，其余connection字段与该交接点state/hit一致。下一CUDA阶段radiance.z随之从0.5727538466453552变为0.57275390625。四组sample/branch的所有捕获hit记录一致。由此确认第一处被捕获的分歧位于完整Vulkan顶点直射光结果，不能归因于之后的CUDA消费；尚未捕获这个dispatch内部逐灯/逐事件数值，不能据此断言具体FMA、求交或材质算术根因。[原始记录与HDR稳定性哈希](data/medium-collected-path-first-divergence-20261031.json)。
 
 X13同时解决原循环组织与编译资源冲突：按固定NVIDIA 13_callable_shader的多个SBT callable和独立payload组织，将最近N个事件的收集/排序/歧义回退拆成第二个真正callable，材质仍为第一个；raygen只消费批次，恢复X2原始查询/消费循环，不再为了缩小编译体而移动查询到循环头。近N收集算法仍来自固定Embree，容量8、完整refill、共享边和同距回退、输运预算均保留。新遍历阶段含单个ray-query循环、没有traceRay；材质阶段无traceRay；raygen不得嵌入ray-query主体，生成时验证两种callable目标。补齐第二模块缓存身份、SBT组数、派发范围与失败清理。新增的是调用栈数据而非逐path device allocation、CPU计数读回或同步。此候选尚未运行，不声称修复了数值分歧或获得FPS收益；先按既定内存预算和严格HDR验证。
+
+X13实际完成两帧：连接管线驱动编译14919.841ms，进程树峰值提交2.348GB，总28.713秒，测前GPU44%。raygen112908字节、独立gather45176字节；400份冻结着色资源核对一致，普通路径10份SPIR-V仍与U相同。严格HDR未通过：两帧各1个通道差异，第0帧(245,184)G差0.0009765625，第1帧(773,338)B差0.00048828125。恢复原循环与拆开遍历没有消除数值分歧，不能宣称该数值根因已经修复，也不计算FPS收益；没有放宽门槛。
+
+候选实现、定点观测工具、冻结JAR与失败证据全部保留。未验收的collected开关默认关闭，ABI与子管线选择使用同一false默认值，避免把候选当成已验收生产路径；显式opticalCollectedConnections=true仍可继续复现和修复，不代表放弃多命中方向。增加独立CPU SBT检查，覆盖24字节handle、32字节stride、64字节base alignment、两个visibility组后的两种callable选择与padding。默认版本仍须确认两帧与U一致；下一轮从已保存的完整顶点直射光第一处分歧继续定位，不再猜测材质编译策略。
+
+两项CPU契约检查已通过。继续定位用HDR捕获器的显式hdrCaptureLightMask诊断参数，只把指定灯光强度清零，保留灯光身份/槽位、场景几何、着色程序、完整预算与帧序列；bit0为太阳，bitN为ID=N的场景灯。它不进入性能基准，也不修改正式micro-all定义。先以全开mask=15对照原完整两帧，确认fixture自身未改变输出，再用相同GPU程序分离每盏灯及前缀贡献，并继续读取目标path的原始交接状态。单灯结果只能定位对应数据路径，不能冒称已捕获原dispatch内所有中间值。

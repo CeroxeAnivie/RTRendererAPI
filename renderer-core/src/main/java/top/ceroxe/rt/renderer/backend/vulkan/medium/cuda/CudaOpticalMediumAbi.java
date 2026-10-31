@@ -179,7 +179,7 @@ public final class CudaOpticalMediumAbi {
                         |(plan.connectionBatchSize()==2?8192:0)|(plan.connectionTransport()&&vertexDirectLighting()?16384:0)
                         |(Boolean.parseBoolean(System.getProperty(REUSE_BOUNDARY_HIT_PROPERTY,"true"))?32768:0)
                         |(plan.activeQueues()&&Boolean.parseBoolean(System.getProperty(SPLIT_TASK_QUEUES_PROPERTY,"true"))?65536:0)
-                        |(Boolean.parseBoolean(System.getProperty(COLLECTED_CONNECTIONS_PROPERTY,"true"))?131072:0));
+                        |(Boolean.parseBoolean(System.getProperty(COLLECTED_CONNECTIONS_PROPERTY,"false"))?131072:0));
         packed.putInt(200,Math.toIntExact(plan.firstQueueOffset())).putInt(204,Math.toIntExact(plan.secondQueueOffset()));
         // These words share the opt-in clock sampling area, which disables batching.
         packed.putInt(228,plan.secondConnectionHitOffset()).putInt(232,plan.connectionBatchSize())

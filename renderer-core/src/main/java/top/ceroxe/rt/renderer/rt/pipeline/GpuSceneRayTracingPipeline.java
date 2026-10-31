@@ -232,7 +232,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     &&Boolean.parseBoolean(System.getProperty(
                         top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY,"true"))
                     &&Boolean.parseBoolean(System.getProperty(
-                        top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.COLLECTED_CONNECTIONS_PROPERTY,"true"));
+                        top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.COLLECTED_CONNECTIONS_PROPERTY,"false"));
             String raygenSource=program.source;
             if(inlineScatteringQuery)raygenSource=exhaustiveScattering?"gpuscene_native_scattering_exhaustive_cached_query.rgen"
                     :cachedScattering?"gpuscene_native_scattering_cached_query.rgen":"gpuscene_native_scattering_query.rgen";

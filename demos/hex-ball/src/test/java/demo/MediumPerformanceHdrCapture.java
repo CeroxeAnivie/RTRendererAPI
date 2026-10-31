@@ -23,13 +23,26 @@ public final class MediumPerformanceHdrCapture {
         }
         Path output=Path.of(args[1]).toAbsolutePath();
         int width=Integer.parseInt(args[2]),height=Integer.parseInt(args[3]),frames=Integer.parseInt(args[4]);
+        int lightMask=Integer.getInteger("top.ceroxe.rt.medium.hdrCaptureLightMask",-1);
+        require(lightMask>=-1,"invalid diagnostic light mask");
         require(width>0&&height>0&&frames>0,"positive HDR extent and frames required");
         Files.createDirectories(output);
         for(var workload:workloads) {
             try(var renderer=Renderer.open(workload.config().copyBuilder().cpuFrameReadbackEnabled(true).build())) {
                 renderer.apply(workload.transaction());
+                if(lightMask>=0) {
+                    var patch=top.ceroxe.rt.renderer.api.SceneTransaction.builder(2);
+                    for(var light:workload.transaction().upserts().lights()) {
+                        require(light.id()>0&&light.id()<31,"light-mask diagnostic requires IDs 1..30");
+                        patch.upsert(light.toBuilder().intensity((lightMask&(1<<light.id()))!=0?light.intensity():0).build());
+                    }
+                    renderer.apply(patch.build());
+                }
                 for(int frame=0;frame<frames;frame++) {
                     var request=workload.frame(frame,width,height);
+                    if(lightMask>=0)request=request.toBuilder().minimumSceneRevision(2)
+                            .environment(request.environment().toBuilder()
+                                    .sunIntensity((lightMask&1)!=0?request.environment().sunIntensity():0).build()).build();
                     long deadline=System.nanoTime()+Duration.ofSeconds(120).toNanos();
                     while(!(renderer.trySubmit(request) instanceof Renderer.FrameSubmitted)) {
                         require(System.nanoTime()<deadline,"HDR frame admission timed out: "+workload.id());

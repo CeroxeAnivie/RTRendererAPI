@@ -6,7 +6,27 @@ public final class RtShaderBindingTableSelfTest {
 
    public static void main(String[] args) {
       computesShaderBindingTableLayoutWithBaseAlignment();
+      packsTwoDistinctCallableRecordsAfterVisibilityGroups();
       System.out.println("RtShaderBindingTableSelfTest passed");
+   }
+
+   private static void packsTwoDistinctCallableRecordsAfterVisibilityGroups() {
+      var properties = new RtRayTracingPipelineProperties(24, 32, 64, 4096, 2);
+      byte[] handles = new byte[7 * 24];
+      for (int group = 0; group < 7; group++)
+         java.util.Arrays.fill(handles, group * 24, (group + 1) * 24, (byte)(group + 1));
+      var table = properties.packShaderGroupHandles(handles, 1, 2, 2, 2);
+      var region = table.layout().callable();
+      require(region.offsetBytes() == 192 && region.sizeBytes() == 64,
+              "both callable records must follow raygen, two miss and two hit groups");
+      byte[] bytes = table.bytes();
+      require(bytes.length == 256, "two callable records must fit the complete aligned table");
+      for (int i = 0; i < 24; i++) {
+         require(bytes[192 + i] == 6, "callable index zero must select material");
+         require(bytes[224 + i] == 7, "callable index one must select gather");
+      }
+      for (int i = 24; i < 32; i++)
+         require(bytes[192 + i] == 0 && bytes[224 + i] == 0, "callable stride padding must remain zero");
    }
 
    private static void computesShaderBindingTableLayoutWithBaseAlignment() {
