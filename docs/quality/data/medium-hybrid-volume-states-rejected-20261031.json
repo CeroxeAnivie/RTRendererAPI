@@ -110,7 +110,7 @@
     "maxLuminanceEnergyRelativeError": 2.173000583423375e-09,
     "maxAbsoluteChannelError": 0.0009765625
   },
-  "offControlPending": true,
+  "offControlPending": false,
   "evidence": [
     {
       "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\abi-test.log",
@@ -231,6 +231,85 @@
       "path": "build\\medium-micro-all-20261031\\pbrt-fixed-workitems.h",
       "bytes": 14616,
       "sha256": "2f2e42c552977b54d292d54d876296d0faa3067fa33c9ad1a274aabf9fb79b73"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\hdr-off-initial-gpu.csv",
+      "bytes": 65,
+      "sha256": "9650f99a43e202f14462a533c6fbbbfc90e51f64cf3772e4ba6c96547e888c97"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\hdr-off-test.log",
+      "bytes": 183,
+      "sha256": "fc82014e830bc0a80fe6b7d0efb58e450156476ecbc2aad2c74a78f7ac601c99"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\hdr-off-compare.json",
+      "bytes": 1655,
+      "sha256": "156248a00931913dac32e49fe54ebab401a635b81198c9ad4d44eae68dbd8cc8"
     }
-  ]
+  ],
+  "hdrOffControl": {
+    "passed": true,
+    "mode": "byte-identical",
+    "supportingReferenceCommit": null,
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 0.0,
+    "maxLuminanceEnergyRelativeError": 0.0,
+    "maxAbsoluteChannelError": 0.0
+  },
+  "sharedRejectionFingerprint": {
+    "previousCandidate": "L active volume copies",
+    "sameEntireFirstHdrBytes": true,
+    "pixel": {
+      "x": 245,
+      "y": 184,
+      "channel": "G",
+      "baseline": 1.43359375,
+      "candidate": 1.4345703125
+    },
+    "baselineSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+    "candidateSha256": "61623d27961ed412ee277cca06bcc43bb1d41fdc9f883d0dddfa7c83443fda26",
+    "cause": "not yet established"
+  }
 }
