@@ -667,7 +667,7 @@ public final class CudaMediumRuntime implements AutoCloseable {
         }
         closed = true;
         lastCompiledSource = null;
-        lastCompiledPtx = null;
+        lastCompiledImage = null;
         try { libraryArena.close(); }
         catch (RuntimeException e) { if (failure == null) failure = e; else failure.addSuppressed(e); }
         if (failure != null) throw failure;
