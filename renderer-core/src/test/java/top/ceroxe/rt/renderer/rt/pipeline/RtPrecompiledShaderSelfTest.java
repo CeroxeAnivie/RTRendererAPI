@@ -260,6 +260,9 @@ public final class RtPrecompiledShaderSelfTest {
       stages.put("gpuscene/gpuscene.rmiss", 17);
       stages.put("gpuscene/gpuscene.rchit", 16);
       stages.put("gpuscene/gpuscene.rahit", 15);
+      stages.put("gpuscene/gpuscene_connection.rmiss", Shaderc.shaderc_miss_shader);
+      stages.put("gpuscene/gpuscene_connection.rchit", Shaderc.shaderc_closesthit_shader);
+      stages.put("gpuscene/gpuscene_connection.rahit", Shaderc.shaderc_anyhit_shader);
       stages.put("gpuscene/gpuscene_visibility.rmiss", Shaderc.shaderc_miss_shader);
       stages.put("gpuscene/gpuscene_visibility.rchit", Shaderc.shaderc_closesthit_shader);
       stages.put("gpuscene/gpuscene_visibility.rahit", Shaderc.shaderc_anyhit_shader);

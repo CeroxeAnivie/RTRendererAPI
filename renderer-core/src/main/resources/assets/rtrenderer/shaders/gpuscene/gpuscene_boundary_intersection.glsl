@@ -5,10 +5,11 @@ uvec2 gsBoundaryNeighborRange(uint mesh,uint primitive) {
     return uvec2(0xffffffffu,gsMeshes.words[mesh+GPU_SCENE_MESH_TRIANGLE_COUNT_WORD]);
 }
 uint gsBoundaryNeighbor(uvec2 range,uint index) {return index;}
+uvec2 gsBoundaryPlaneCertificate(uint mesh,uint primitive) {return uvec2(0u);}
 #endif
 // PBRT's robust edge-function principle, adapted to Vulkan without requiring
 // shaderFloat64: two-float expansions retain transform/subtraction residuals.
-// Only candidates in the existing eight-ULP barycentric edge band use this path.
+// Edge candidates retain full classification; certified interiors need only a plane distance.
 precise vec2 gsBoundaryWideAdd(vec2 a,vec2 b) {
     precise float s=a.x+b.x;
     precise float v=s-a.x;
@@ -125,6 +126,38 @@ float gsBoundaryConnectionDistance(uint mesh,uint primitive,vec2 bary,vec2 wide,
         if(order>0.0&&residual>0.0)return uintBitsToFloat(floatBitsToUint(distance)+(distance>=0.0?1u:0xffffffffu));
     }
     return distance;
+}
+// PBRT-v4 gpu/optix consumes hardware triangle barycentrics; Disk::BasicIntersect
+// solves its known coordinate plane directly. Adapt both principles here while
+// retaining a two-float distance and the original exact shared-edge repair.
+// Return -1 for an uncertified/uncertain case, otherwise 0/1 for rejected/accepted.
+int gsBoundaryPreparedPlaneHit(uint mesh,uint primitive,vec2 bary,float minimum,out float distance) {
+    distance=gl_HitTEXT;
+    if(min(1.0-bary.x-bary.y,min(bary.x,bary.y))<8.0*1.192092896e-7)return -1;
+    uvec2 plane=gsBoundaryPlaneCertificate(mesh,primitive);
+    if(plane.x==0u)return -1;
+    uint axis=plane.x-1u;
+    for(uint world=0u;world<3u;++world) {
+        float scale=gl_ObjectToWorldEXT[axis][world];
+        if(scale==0.0||gl_ObjectToWorldEXT[(axis+1u)%3u][world]!=0.0
+                ||gl_ObjectToWorldEXT[(axis+2u)%3u][world]!=0.0)continue;
+        float denominator=gl_WorldRayDirectionEXT[world];
+        if(denominator==0.0||isnan(denominator)||isinf(denominator))continue;
+        vec2 numerator=gsBoundaryWideAdd(vec2(gl_ObjectToWorldEXT[3][world],0),
+                vec2(-gl_WorldRayOriginEXT[world],0));
+        numerator=gsBoundaryWideAdd(numerator,
+                gsBoundaryWideMultiply(vec2(scale,0),vec2(uintBitsToFloat(plane.y),0)));
+        precise float quotient=numerator.x/denominator;
+        vec2 remainder=gsBoundaryWideAdd(numerator,
+                -gsBoundaryWideMultiply(vec2(denominator,0),vec2(quotient,0)));
+        vec2 wide=gsBoundaryWideAdd(vec2(quotient,0),vec2((remainder.x+remainder.y)/denominator,0));
+        float corrected=wide.x+wide.y;
+        // Unusual cancellation/transform cases retain the full original predicate.
+        if(isnan(corrected)||isinf(corrected)||abs(corrected-gl_HitTEXT)>
+                8.0*1.192092896e-7*max(1.0,abs(gl_HitTEXT)))return -1;
+        distance=corrected;return corrected>=minimum?1:0;
+    }
+    return -1;
 }
 // Near a shared edge, hardware hit t can reorder a very thin entry/exit pair.
 // A straight connection must consume the nearest real crossing after its exact

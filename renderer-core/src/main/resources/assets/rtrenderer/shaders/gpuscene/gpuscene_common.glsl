@@ -72,7 +72,23 @@ struct GpuScenePayload {
 #endif
 };
 
-
+// Connection queries carry only geometry, coverage and dielectric transport.
+// Repair cache lanes are live during traversal, never temporal history output.
+struct GsOpticalConnectionPayload {
+    vec4 worldPositionAndDistance;
+    vec4 previousWorldPosition;
+    uvec2 motionRevision;
+    vec4 worldNormalAndRoughness;
+    vec4 baseColorAndOpacity;
+    vec2 transmissionIor;
+    uvec4 state;
+    float overlayMode;
+    uvec4 launchInfo;
+    uvec4 mediumBoundary;
+#ifdef RTRENDERER_OPTICAL_PROFILE
+    uint64_t diagnosticAddress;uint diagnosticRecord;
+#endif
+};
 
 float gsEncodeGeometricNormal(vec3 normal) {
     vec3 n=normal/(abs(normal.x)+abs(normal.y)+abs(normal.z));
@@ -406,9 +422,16 @@ uvec3 gsTriangleIndices(uint meshBase, uint primitive)
 uvec2 gsBoundaryNeighborRange(uint meshBase,uint primitive) {
     uint triangles=gsMeshes.words[meshBase+GPU_SCENE_MESH_TRIANGLE_COUNT_WORD];
     uint trailer=gsWordIndex(gsRecordOffset(meshBase,GPU_SCENE_MESH_INDEX_OFFSET_WORD))+triangles*3u;
-    if(gsIndices.words[trailer]!=0x42545031u)return uvec2(0xffffffffu,triangles);
+    if(gsIndices.words[trailer]!=0x42545032u)return uvec2(0xffffffffu,triangles);
     uint first=gsIndices.words[trailer+1u+primitive],last=gsIndices.words[trailer+2u+primitive];
     return uvec2(trailer+first,last-first);
+}
+uvec2 gsBoundaryPlaneCertificate(uint meshBase,uint primitive) {
+    uint triangles=gsMeshes.words[meshBase+GPU_SCENE_MESH_TRIANGLE_COUNT_WORD];
+    uint trailer=gsWordIndex(gsRecordOffset(meshBase,GPU_SCENE_MESH_INDEX_OFFSET_WORD))+triangles*3u;
+    if(gsIndices.words[trailer]!=0x42545032u)return uvec2(0u);
+    uint at=trailer+gsIndices.words[trailer+1u+triangles]+primitive*2u;
+    return uvec2(gsIndices.words[at],gsIndices.words[at+1u]);
 }
 uint gsBoundaryNeighbor(uvec2 range,uint index) {
     return range.x==0xffffffffu?index:gsIndices.words[range.x+index];

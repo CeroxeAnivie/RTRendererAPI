@@ -206,10 +206,20 @@ final class RtRayTracingPipelineFactory {
     static long createPipeline(MemoryStack stack, VkDevice device, long pipelineLayout,
             long raygenModule, long missModule, long closestHitModule, long anyHitModule,
             long pipelineCache, long visibilityMiss, long visibilityClosest, long visibilityAny, int recursionDepth) {
+        return createPipeline(stack,device,pipelineLayout,raygenModule,missModule,closestHitModule,anyHitModule,
+                pipelineCache,visibilityMiss,visibilityClosest,visibilityAny,recursionDepth,0L,0L,0L);
+    }
+
+    static long createPipeline(MemoryStack stack, VkDevice device, long pipelineLayout,
+            long raygenModule, long missModule, long closestHitModule, long anyHitModule,
+            long pipelineCache, long visibilityMiss, long visibilityClosest, long visibilityAny, int recursionDepth,
+            long connectionMiss, long connectionClosest, long connectionAny) {
         boolean visibility = visibilityMiss != VK10.VK_NULL_HANDLE;
-        int groupCount = GROUP_COUNT + (visibility ? 2 : 0);
+        boolean connection = connectionMiss != VK10.VK_NULL_HANDLE;
+        if(connection&&!visibility)throw new IllegalArgumentException("connection records require visibility records");
+        int groupCount = GROUP_COUNT + (visibility ? 2 : 0) + (connection ? 2 : 0);
         ByteBuffer main = stack.UTF8("main");
-        VkPipelineShaderStageCreateInfo.Buffer stages = VkPipelineShaderStageCreateInfo.calloc(visibility ? 7 : 4, stack);
+        VkPipelineShaderStageCreateInfo.Buffer stages = VkPipelineShaderStageCreateInfo.calloc(connection ? 10 : visibility ? 7 : 4, stack);
         shaderStage(stages.get(RAYGEN_STAGE), KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR,
                 raygenModule, main);
         shaderStage(stages.get(MISS_STAGE), KHRRayTracingPipeline.VK_SHADER_STAGE_MISS_BIT_KHR,
@@ -224,13 +234,20 @@ final class RtRayTracingPipelineFactory {
             shaderStage(stages.get(6), KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR, visibilityAny, main);
         }
 
+        if(connection) {
+            shaderStage(stages.get(7),KHRRayTracingPipeline.VK_SHADER_STAGE_MISS_BIT_KHR,connectionMiss,main);
+            shaderStage(stages.get(8),KHRRayTracingPipeline.VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,connectionClosest,main);
+            shaderStage(stages.get(9),KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR,connectionAny,main);
+        }
         VkRayTracingShaderGroupCreateInfoKHR.Buffer groups =
                 VkRayTracingShaderGroupCreateInfoKHR.calloc(groupCount, stack);
         generalShaderGroup(groups.get(0), RAYGEN_STAGE);
         generalShaderGroup(groups.get(1), MISS_STAGE);
         if (visibility) generalShaderGroup(groups.get(2), 4);
-        trianglesHitGroup(groups.get(visibility ? 3 : 2), CLOSEST_HIT_STAGE, ANY_HIT_STAGE);
-        if (visibility) trianglesHitGroup(groups.get(4), 5, 6);
+        if(connection)generalShaderGroup(groups.get(3),7);
+        trianglesHitGroup(groups.get(connection ? 4 : visibility ? 3 : 2), CLOSEST_HIT_STAGE, ANY_HIT_STAGE);
+        if (visibility) trianglesHitGroup(groups.get(connection ? 5 : 4), 5, 6);
+        if(connection)trianglesHitGroup(groups.get(6),8,9);
         VkRayTracingPipelineCreateInfoKHR.Buffer createInfo = VkRayTracingPipelineCreateInfoKHR.calloc(1, stack);
         createInfo.get(0).sType$Default()
                 .pStages(stages)

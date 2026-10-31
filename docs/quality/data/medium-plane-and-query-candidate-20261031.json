@@ -1,0 +1,24 @@
+{
+  "upstream": "PBRT-v4",
+  "commit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+  "license": "Apache-2.0",
+  "status": "V/W combined candidate; performance not yet measured",
+  "files": [
+    {
+      "file": "build\\medium-micro-all-20261031\\pbrt-fixed-optix.cu",
+      "sha256": "9c16731fd07a1c41a08b51c5062af8adf24c6687bce94c866eacdebbc593b797"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\pbrt-fixed-shapes.h",
+      "sha256": "a597fdb3e7c7a1238e311ea9a0e97f9472f83134442e50545770e0360b7ab64a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\pbrt-fixed-math.h",
+      "sha256": "6c62417f8fd8888bd04cccadf62672ea56ae66054ca0f179a683833f8c758737"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\pbrt-wavefront-intersect.h",
+      "sha256": "e030ac8474dd517c55de2778a5f4e560c286ff8e6d9a43525fd3182fb650e150"
+    }
+  ]
+}

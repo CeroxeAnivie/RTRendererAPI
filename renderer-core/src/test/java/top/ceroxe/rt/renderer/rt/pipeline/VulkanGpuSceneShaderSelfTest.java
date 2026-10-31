@@ -55,6 +55,9 @@ public final class VulkanGpuSceneShaderSelfTest {
       stages.put("gpuscene.rmiss", Shaderc.shaderc_miss_shader);
       stages.put("gpuscene.rchit", Shaderc.shaderc_closesthit_shader);
       stages.put("gpuscene.rahit", Shaderc.shaderc_anyhit_shader);
+      stages.put("gpuscene_connection.rmiss", Shaderc.shaderc_miss_shader);
+      stages.put("gpuscene_connection.rchit", Shaderc.shaderc_closesthit_shader);
+      stages.put("gpuscene_connection.rahit", Shaderc.shaderc_anyhit_shader);
       stages.put("gpuscene_visibility.rmiss", Shaderc.shaderc_miss_shader);
       stages.put("gpuscene_visibility.rchit", Shaderc.shaderc_closesthit_shader);
       stages.put("gpuscene_visibility.rahit", Shaderc.shaderc_anyhit_shader);
@@ -231,7 +234,7 @@ public final class VulkanGpuSceneShaderSelfTest {
                       && scatteringRaygen.contains("GS_CAMERA_SCATTERING_STAGE_COUNT 16u")
                       && visibilityAny.contains("gsVisibilityRecordAnyHit")
                       && visibilityAny.contains("clockRealtimeEXT")
-                      && readRaw(ROOT + "gpuscene.rchit").contains("profileShadow")
+                      && readRaw(ROOT + "gpuscene_closest_hit_impl.glsl").contains("profileShadow")
                       && top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.CAMERA_SCATTERING_STAGES == 16,
               "camera-scattering diagnostics must separate traversal, hit shaders, and transmission fallback");
       require(read(ROOT + "gpuscene_lighting.glsl")

@@ -30,6 +30,8 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         if(java.util.Arrays.asList(args).contains("--duplicate-branches")){verifyDuplicateBranches(CudaOpticalMediumAbi.REUSE_DUPLICATE_BRANCHES_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--boundary-hit-reuse")){verifyConnectionRanges(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--split-task-queues")){verifyConnectionRanges(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY);return;}
+        if(java.util.Arrays.asList(args).contains("--connection-query")){verifyConnectionRanges(CudaOpticalMediumAbi.CONNECTION_QUERY_PROPERTY);return;}
+        if(java.util.Arrays.asList(args).contains("--prepared-planes")){verifyConnectionRanges(CudaOpticalMediumAbi.PREPARED_PLANES_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--boundary-topology")){verifyConnectionRanges(VulkanBoundaryTopology.PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--vertex-paths")){verifyDuplicateBranches(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--vertex-connections")){verifyConnectionRanges(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY);return;}
@@ -446,7 +448,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                 previousGpu=System.getProperty(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY);
         boolean batches=property.equals(CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY);
         long queueBefore=top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.diagnosticOpticalTaskQueueDispatches.sum();
-        boolean gpu=property.equals(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY),extended=batches||gpu||property.equals(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY)||property.equals(VulkanBoundaryTopology.PROPERTY)||property.equals(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY);
+        boolean gpu=property.equals(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY),planes=property.equals(CudaOpticalMediumAbi.PREPARED_PLANES_PROPERTY),extended=property.equals(CudaOpticalMediumAbi.CONNECTION_QUERY_PROPERTY)||planes||batches||gpu||property.equals(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY)||property.equals(VulkanBoundaryTopology.PROPERTY)||property.equals(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY);
         var references=new ArrayList<byte[]>();int comparisons=0;
         String[] cases=extended?new String[]{"clear","behind-opaque","before-opaque","before-alpha","before-volume",
                 "light-inside-volume","endpoint-overlay","endpoint-nonshadow","endpoint-opaque","sun",
@@ -514,7 +516,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                             if(!bound)references.add(bytes);
                             else {
                                 String context="connection property="+property+" format="+format+" mirror="+mirror+" case="+kind;
-                                if(gpu)requireBoundedHdr(references.get(referenceIndex),bytes,context);
+                                if(gpu||planes)requireBoundedHdr(references.get(referenceIndex),bytes,context);
                                 else require(java.util.Arrays.equals(references.get(referenceIndex),bytes),context);
                                 comparisons++;
                             }
@@ -539,8 +541,8 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                         "task queue comparison did not execute indirect RT");
             require(comparisons==expected&&routes==expected*2L,"finite connection checks bypassed native optical transport: "+routes);
             Files.writeString(OUTPUT.resolve(gpu?"gpu-connection-checks.json":batches?"connection-batch-checks.json":"connection-range-checks.json"),
-                    "{\"passed\":true,\""+(gpu?"boundedComparisons":"byteIdenticalComparisons")+"\":"+comparisons+",\"nativeFrames\":"+routes+",\"mirroredVertexOrders\":2,\"hitFormats\":"+formats.length+"}\n");
-            System.out.println("CudaOpticalMediumProductionNativeSelfTest connection modes passed: "+comparisons+(gpu?" bounded":" byte-identical")+" comparisons / "+routes+" native frames");
+                    "{\"passed\":true,\""+(gpu||planes?"boundedComparisons":"byteIdenticalComparisons")+"\":"+comparisons+",\"nativeFrames\":"+routes+",\"mirroredVertexOrders\":2,\"hitFormats\":"+formats.length+"}\n");
+            System.out.println("CudaOpticalMediumProductionNativeSelfTest connection modes passed: "+comparisons+(gpu||planes?" bounded":" byte-identical")+" comparisons / "+routes+" native frames");
         } finally {
             if(previous==null)System.clearProperty(property);else System.setProperty(property,previous);
             if(previousCompact==null)System.clearProperty(CudaOpticalMediumAbi.COMPACT_HITS_PROPERTY);else System.setProperty(CudaOpticalMediumAbi.COMPACT_HITS_PROPERTY,previousCompact);

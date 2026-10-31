@@ -1,3 +1,4 @@
+layout(location=2) rayPayloadEXT GsOpticalConnectionPayload connectionPayload;
 // Optical queries reuse the renderer's exact trace, texture, sky and terminal surface functions.
 #include "gpuscene_native_scattering_common.glsl"
 layout(buffer_reference,std430,buffer_reference_align=16) buffer GsOpticalStorage {uvec4 lanes[];};
@@ -43,10 +44,33 @@ GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,f
         payload.state.z=GS_OPTICAL_BOUNDARY_HIT_REUSE;
         payload.motionRevision=uvec2(GS_INVALID_SLOT); // Clear for every new ray, including skipped receivers.
     }
+    if(queryKind==GS_PAYLOAD_OPTICAL_CONNECTION_QUERY&&(gsOptical.storage.lanes[11u].w&131072u)!=0u)
+        payload.state.w=0x504c4e31u;
     payload.launchInfo=launch;payload.mediumBoundary=uvec4(0u);
     // CPU proof excludes masked coverage, backface rejection and inactive material slots.
     // Opaque is an intersection flag: closest-hit still evaluates glass and volume boundaries.
     uint flags=(gsOptical.storage.lanes[11u].w&64u)!=0u?gl_RayFlagsOpaqueEXT:gl_RayFlagsNoneEXT;
+    if(queryKind==GS_PAYLOAD_OPTICAL_CONNECTION_QUERY&&(gsOptical.storage.lanes[11u].w&262144u)!=0u) {
+        connectionPayload.state=payload.state;connectionPayload.motionRevision=payload.motionRevision;
+        connectionPayload.launchInfo=launch;connectionPayload.mediumBoundary=uvec4(0u);
+#ifdef RTRENDERER_OPTICAL_PROFILE
+        connectionPayload.diagnosticAddress=payload.diagnosticAddress;connectionPayload.diagnosticRecord=payload.diagnosticRecord;
+#endif
+        // Third hit/miss record: this query never asks for a full shaded interaction.
+        traceRayEXT(sceneTlas,flags,0xff,2,0,2,origin,minimum,direction,maximum,2);
+        GpuScenePayload hit;
+        hit.worldPositionAndDistance=connectionPayload.worldPositionAndDistance;
+        hit.worldNormalAndRoughness=connectionPayload.worldNormalAndRoughness;
+        hit.baseColorAndOpacity=connectionPayload.baseColorAndOpacity;
+        hit.transmissionIor=vec4(connectionPayload.transmissionIor,0,0);
+        hit.state=connectionPayload.state;hit.mediumBoundary=connectionPayload.mediumBoundary;
+        hit.launchInfo=launch;hit.previousWorldPosition=vec4(0);hit.motionRevision=uvec2(0);
+        hit.emissiveAndMetallic=vec4(0);hit.surfaceState=uvec4(0);hit.compositeState=vec4(0,0,connectionPayload.overlayMode,0);
+#ifdef RTRENDERER_OPTICAL_PROFILE
+        hit.diagnosticAddress=payload.diagnosticAddress;hit.diagnosticRecord=payload.diagnosticRecord;
+#endif
+        return hit;
+    }
     traceRayEXT(sceneTlas,flags,0xff,0,0,0,origin,minimum,direction,maximum,0);
     return payload;
 }
