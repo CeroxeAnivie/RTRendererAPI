@@ -1,0 +1,119 @@
+{
+  "sourceCommit": "fbf8ca8",
+  "scene": "micro-all 1920x1080 1SPP",
+  "absolutePerformanceComparable": false,
+  "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 42 %, 74.35 W, 1912 MHz, 75",
+  "decision": "Correctness passed; net duration/FPS gain unverified under nonzero GPU load.",
+  "workCountChanges": [
+    {
+      "metric": "main optical CUDA stream synchronizations per frame",
+      "before": 871.0625,
+      "after": 435.53125,
+      "reductionPercent": 50.0
+    }
+  ],
+  "hdr": {
+    "passed": true,
+    "mode": "bounded",
+    "supportingReferenceCommit": "9c688d7ff78455ed42e345124d1495aad6bf66de",
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 0.0,
+    "maxLuminanceEnergyRelativeError": 0.0,
+    "maxAbsoluteChannelError": 0.0
+  },
+  "interopValidation": {
+    "passed": true,
+    "logs": [
+      {
+        "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\binary-external-pairs\\interop-validation.jsonl",
+        "passed": true,
+        "opened": 1,
+        "closed": 1,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      }
+    ]
+  },
+  "opticalValidation": {
+    "passed": true,
+    "logs": [
+      {
+        "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\binary-external-pairs\\optical-validation.jsonl",
+        "passed": true,
+        "opened": 3,
+        "closed": 3,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      }
+    ]
+  },
+  "verification": [
+    "Real RT epoch, binary/timeline and retained/classic transitions, four-stage fault draining passed",
+    "Two 1080p HDR frames byte-identical",
+    "Fixed sequence 57 passed",
+    "8 warmup + 32 measured timings frames passed",
+    "46 optical comparisons / 152 native frames passed",
+    "micro-checks 7 scenes / 46 features passed"
+  ],
+  "outstanding": [
+    "Independent 8 warmup + 64 measured instrumentation-off micro-all window",
+    "Clean-GPU forward/reverse net-performance acceptance"
+  ],
+  "artifacts": [
+    {
+      "file": "candidate-core.jar",
+      "sha256": "a74166fda520d50119ff02c4f23f70eedaa508ea4d5da7c861763c30c5736b99"
+    },
+    {
+      "file": "matrix-test-classes.jar",
+      "sha256": "83586141e12750acc40b458dedac93d466287cd5df6d9e6fd1752cf2ef5d4ef4"
+    },
+    {
+      "file": "native-test-classes.jar",
+      "sha256": "0932da4996d74edf800061e919cfd08bddf51deb22009cc599fd55145d900aa4"
+    }
+  ]
+}
