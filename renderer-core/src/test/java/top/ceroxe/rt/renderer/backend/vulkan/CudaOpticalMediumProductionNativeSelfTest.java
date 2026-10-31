@@ -25,6 +25,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
     public static void main(String[] args)throws Exception{
         if(java.util.Arrays.asList(args).contains("--benchmark")){benchmark();return;}
         if(java.util.Arrays.asList(args).contains("--connection-ranges")){verifyConnectionRanges();return;}
+        if(java.util.Arrays.asList(args).contains("--connection-materials")){verifyConnectionModes(CudaOpticalMediumAbi.LEAN_CONNECTION_HITS_PROPERTY);return;}
         Files.createDirectories(OUTPUT);String previous=System.getProperty(CudaCameraMediumProfile.ENABLE_PROPERTY);
         System.setProperty(CudaCameraMediumProfile.ENABLE_PROPERTY,"true");
         long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
@@ -351,15 +352,20 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
     }
     /** Real production RT queries; mirrored geometry and identical sequence identities in both modes. */
     private static void verifyConnectionRanges()throws Exception {
+        verifyConnectionModes(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY);
+    }
+    private static void verifyConnectionModes(String property)throws Exception {
         Files.createDirectories(OUTPUT);
-        String previous=System.getProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY);
+        String previous=System.getProperty(property);
+        boolean materials=property.equals(CudaOpticalMediumAbi.LEAN_CONNECTION_HITS_PROPERTY);
         var references=new ArrayList<byte[]>();int comparisons=0;
-        String[] cases={"clear","behind-opaque","before-opaque","before-alpha","before-volume",
-                "light-inside-volume","endpoint-overlay","endpoint-nonshadow","endpoint-opaque","sun"};
+        var cases=new ArrayList<>(List.of("clear","behind-opaque","before-opaque","before-alpha","before-volume",
+                "light-inside-volume","endpoint-overlay","endpoint-nonshadow","endpoint-opaque","sun"));
+        if(materials)cases.addAll(List.of("before-textured-transmission","before-textured-normal"));
         long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
         try {
             for(boolean bound:new boolean[]{false,true}) {
-                System.setProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY,Boolean.toString(bound));
+                System.setProperty(property,Boolean.toString(bound));
                 sequence=0;revision=0;accepted=0;int referenceIndex=0;
                 try(Renderer owned=Renderer.open("vulkan-rt",RendererConfig.builder().validationEnabled(true).maxFramesInFlight(3)
                         .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.disabled()).build())) {
@@ -368,7 +374,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                     var budget=MediumTransport.balanced().withMaxEvents(16).withOpticalSamples(2)
                             .withMaxDistance(30).withTransmittanceCutoff(0);
                     for(int mirror:new int[]{1,-1}) {
-                        double clearEnergy=0;
+                        double clearEnergy=0,texturedEnergy=0;
                         for(String kind:cases) {
                             var receiver=MaterialAsset.builder(1).baseColorRgba8(0xff808080).roughness(1).doubleSided(true).build();
                             var obstacle=MaterialAsset.builder(3).doubleSided(true).baseColorRgba8(0xff000000).build();
@@ -377,6 +383,11 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                             if(kind.equals("endpoint-overlay"))obstacle=obstacle.toBuilder().baseColorRgba8(0x80000000)
                                     .blendMode(MaterialAsset.BlendMode.TRANSLUCENT).surfaceOverlay(SurfaceOverlayState.depthBias(
                                             .05f,SurfaceOverlayState.CompositionMode.ALPHA_OVER)).build();
+                            boolean textured=kind.startsWith("before-textured");
+                            if(textured)obstacle=obstacle.toBuilder().baseColorRgba8(0xb0ffffff)
+                                    .blendMode(MaterialAsset.BlendMode.TRANSLUCENT).transmission(.6f).indexOfRefraction(1.4f)
+                                    .baseColorTextureId(71).metallicRoughnessTextureId(72).emissiveTextureId(73)
+                                    .normalTextureId(kind.endsWith("normal")?74:-1).emissive(0xff80a0ff,3).metallic(.7f).roughness(.4f).build();
                             var scene=SceneTransaction.builder(++revision).resetScene().upsert(receiver).upsert(glass(1.5f)).upsert(obstacle)
                                     .upsert(plane(1,1,-4,false)).upsert(plane(2,2,0,false))
                                     .upsert(SceneInstance.builder(1,1).build()).upsert(SceneInstance.builder(2,2).build());
@@ -390,10 +401,19 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                                 float z=kind.startsWith("before")?-3:kind.startsWith("behind")?-1:-2;
                                 float x=mirror*(z+4);
                                 int[] indices=mirror==1?new int[]{0,1,2,2,3,0}:new int[]{0,2,1,0,3,2};
-                                scene.upsert(MeshAsset.triangles(3,new float[]{x-.35f,-.35f,z,x+.35f,-.35f,z,
-                                        x+.35f,.35f,z,x-.35f,.35f,z},indices,3))
+                                var mesh=MeshAsset.triangles(3,new float[]{x-.35f,-.35f,z,x+.35f,-.35f,z,
+                                        x+.35f,.35f,z,x-.35f,.35f,z},indices,3);
+                                if(textured)mesh=mesh.toBuilder().normals(new float[]{0,0,1,0,0,1,0,0,1,0,0,1})
+                                        .tangents(new float[]{1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1})
+                                        .textureCoordinates(new float[]{0,0,1,0,1,1,0,1}).build();
+                                scene.upsert(mesh)
                                         .upsert(SceneInstance.builder(3,3).castsShadow(!kind.equals("endpoint-nonshadow")).build());
                             }
+                            if(textured)scene
+                                    .upsert(TextureAsset.builder(71,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR).pixelsRgba8(new byte[]{(byte)200,(byte)180,(byte)160,(byte)220}).build())
+                                    .upsert(TextureAsset.builder(72,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR).pixelsRgba8(new byte[]{(byte)140,(byte)170,(byte)190,(byte)255}).build())
+                                    .upsert(TextureAsset.builder(73,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR).pixelsRgba8(new byte[]{(byte)160,(byte)200,(byte)220,(byte)255}).build())
+                                    .upsert(TextureAsset.builder(74,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR).pixelsRgba8(new byte[]{(byte)128,(byte)240,(byte)170,(byte)255}).build());
                             scene.upsert(kind.equals("sun")?SceneLight.directional(30,-mirror,0,-1).intensity(2).castsShadow(true).build()
                                     :SceneLight.point(30,mirror*2,0,-2).intensity(16).range(30).castsShadow(true).build());
                             apply(scene.build());
@@ -401,27 +421,32 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                             byte[] bytes=new byte[snapshot.byteCount()];snapshot.pixels().get(bytes);
                             if(!bound)references.add(bytes);
                             else {require(java.util.Arrays.equals(references.get(referenceIndex),bytes),
-                                    "bounded connection changed HDR: mirror="+mirror+" case="+kind);comparisons++;}
+                                    "connection mode changed HDR: property="+property+" mirror="+mirror+" case="+kind);comparisons++;}
                             referenceIndex++;
                             double e=energy(snapshot);
                             if(kind.equals("clear")){clearEnergy=e;require(e>.001,"finite connection test has no direct lighting");}
                             if(kind.equals("behind-opaque"))near(e,clearEnergy,0,"geometry behind the light cannot occlude it");
                             if(kind.equals("before-opaque"))near(e,0,1e-6,"geometry before the light must occlude it");
-                            if(kind.equals("before-alpha")||kind.contains("volume"))require(e>0&&e<clearEnergy,
+                            if(kind.equals("before-alpha")||kind.contains("volume")||textured)require(e>0&&e<clearEnergy,
                                     "finite connection lost transparent/medium attenuation: "+kind);
+                            if(kind.equals("before-textured-transmission"))texturedEnergy=e;
+                            if(kind.equals("before-textured-normal"))require(Math.abs(e-texturedEnergy)>1e-7,
+                                    "normal-map connection test has no Fresnel sensitivity");
                         }
                     }
                     require(renderer.health().activeFailure().isEmpty(),"finite connection renderer unhealthy");
                 }
             }
             long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
-            require(comparisons==20&&routes==40,"finite connection checks bypassed native optical transport: "+routes);
-            Files.writeString(OUTPUT.resolve("connection-range-checks.json"),
-                    "{\"passed\":true,\"byteIdenticalComparisons\":20,\"nativeFrames\":40,\"mirroredVertexOrders\":2}\n");
-            System.out.println("CudaOpticalMediumProductionNativeSelfTest connection ranges passed: 20 byte-identical comparisons / 40 native frames");
+            int expected=cases.size()*2;
+            require(comparisons==expected&&routes==expected*2L,"connection checks bypassed native optical transport: "+routes);
+            Files.writeString(OUTPUT.resolve(materials?"connection-material-checks.json":"connection-range-checks.json"),
+                    "{\"passed\":true,\"property\":\""+property+"\",\"byteIdenticalComparisons\":"+comparisons
+                            +",\"nativeFrames\":"+routes+",\"mirroredVertexOrders\":2}\n");
+            System.out.println("CudaOpticalMediumProductionNativeSelfTest connection modes passed: "+comparisons+" byte-identical comparisons / "+routes+" native frames; property="+property);
         } finally {
-            if(previous==null)System.clearProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY);
-            else System.setProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY,previous);
+            if(previous==null)System.clearProperty(property);
+            else System.setProperty(property,previous);
         }
     }
     private static void verifySpatialPbrOptics(CameraState camera,MediumTransport budget)throws Exception {

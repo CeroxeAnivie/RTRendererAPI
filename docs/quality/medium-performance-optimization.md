@@ -1435,3 +1435,16 @@ header188 bit4096 / top.ceroxe.rt.medium.cuda.opticalLeanConnectionHits（默认
 正序耗时降幅-7.1960%，反序-8.3639%。不声称已定位寄存器溢出；这里只能确认共享shader的动态分支改法没有带来净收益。转向独立连接命中程序的编译期裁剪与SBT路由，在大头的组织方式上解决问题，不继续给通用shader叠加局部特判。
 
 [全部窗口、逐项正确性与原始证据哈希](data/medium-lean-connection-hits-rejected-20261031.json)。
+
+
+### 独立连接命中程序与 SBT 路由（架构候选验证中）
+
+共享shader动态分支候选负优化后，先回到全局程序组织：当前所有连接仍走通用完整命中程序。新候选将原命中实现提取为一份共享源，分别在编译期生成完整命中与连接专用命中，不复制两套材质算法。连接程序中的 leanConnection 为编译期常量，未消费计算可直接从其模块剔除；完整程序也为常量false，移除前个候选给所有查询叠加的动态分支。
+
+直接核对 [PBRT-v4 b0bdf461 的 gpu/optix/aggregate.cpp](https://github.com/mmp/pbrt-v4/blob/b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f/src/pbrt/gpu/optix/aggregate.cpp#L1247) 1247–1262、1326–1357及1641–1656行：closest/shadow/shadow_Tr采用分别的raygen/miss/SBT组织。注意PBRT的shadowTrSBT实际复用isectHGRB，不能声称PBRT也有本项目这个独立透射closest-hit模块。本项目按消费字段做编译期裁剪属于确定性的死工作消除，独立命中模块是本项目的Vulkan适配；具体收益仍须本项目验证。
+
+内置native optical管线新增第3个hit slot（0完整、1visibility、2连接），只有query kind5走slot2，query4和false属性走完整原路径。沿用同一个any-hit、miss、payload布局、纹理/法线/介质求交、CUDA consumer及所有预算；新增模块与组数进入pipeline cache key、SBT packing与生命周期清理，普通及诊断光学管线一致路由。专家自定义shader仍遵守内置特化拒绝替换的原约束。
+
+仍使用独立24组/48 native帧开关与法线敏感性验证、1080p HDR原版/开关逐字节、关闭诊断GPU空闲正反序作为第一门槛。先证实连接模块实际少了目标指令；若负优化，连同共享源拆分和SBT改动完整撤回，不把架构候选当既成成果。
+
+编译产物检查：完整命中32420条SPIR-V指令，连接命中20849条；算术指令6799→4782，load指令1045→722。这是模块静态计数，不能直接换算GPU执行时间或整帧降幅；仍需净吞吐验证。
