@@ -13,8 +13,8 @@ precise vec2 gsBoundaryWideAdd(vec2 a,vec2 b) {
 }
 precise vec2 gsBoundaryWideMultiply(vec2 a,vec2 b) {
     precise float p=a.x*b.x;
-    // Dekker's split product keeps the residual explicit. Some shader targets
-    // evaluate fma(a,b,-roundedProduct) without preserving that residual.
+    // Split the binary mantissa so both leading factors have an exact product.
+    // The precise return qualifier is also required across function boundaries.
     precise float ahi=uintBitsToFloat(floatBitsToUint(a.x)&0xfffff000u);
     precise float bhi=uintBitsToFloat(floatBitsToUint(b.x)&0xfffff000u);
     precise float alo=a.x-ahi,blo=b.x-bhi;
