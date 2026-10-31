@@ -1,8 +1,8 @@
 {
   "candidateCommit": "da398befa03c5adbb5930ca47301d3cbcadb611c",
-  "decision": "correctness complete; exact redundant work eliminated; net performance pending idle comparison",
-  "performanceComparable": false,
-  "reason": "Every paired window started above the user 10 percent GPU0 threshold",
+  "decision": "retain; correctness complete and subsequent idle bidirectional comparison confirmed net improvement",
+  "performanceComparable": true,
+  "reason": "Subsequent S/T/U/U/T/S six-window validation: initial GPU0 was 0 percent in all windows; older loaded windows retained as historical evidence only",
   "runs": [
     {
       "window": "S-forward",
@@ -2558,5 +2558,50 @@
       "file": "build\\medium-micro-all-20261031\\prepared-boundary\\VulkanGpuSceneUploadPlannerSelfTest.log",
       "sha256": "ef5d7cfeb716b567d85c975f8db56c78c2d7b077cad061d5b1041da776462ec9"
     }
-  ]
+  ],
+  "idleThroughput": {
+    "baseline": {
+      "frames": 64,
+      "msPerFrame": 180.3420421875,
+      "fps": 5.5450187203730845,
+      "windows": [
+        {
+          "directory": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-forward-s-matrix-off",
+          "frames": 32,
+          "wallMs": 5690.8254,
+          "initial": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 11.47 W, 180 MHz, 60"
+        },
+        {
+          "directory": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-reverse-s-matrix-off",
+          "frames": 32,
+          "wallMs": 5851.0653,
+          "initial": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.60 W, 180 MHz, 66"
+        }
+      ]
+    },
+    "candidate": {
+      "frames": 64,
+      "msPerFrame": 172.97594687499998,
+      "fps": 5.7811506054228685,
+      "windows": [
+        {
+          "directory": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-forward-t-matrix-off",
+          "frames": 32,
+          "wallMs": 5453.034299999999,
+          "initial": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.02 W, 180 MHz, 62"
+        },
+        {
+          "directory": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-reverse-t-matrix-off",
+          "frames": 32,
+          "wallMs": 5617.4263,
+          "initial": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.46 W, 180 MHz, 65"
+        }
+      ]
+    },
+    "gain": {
+      "frameTimeReductionPercent": 4.0845136403865006,
+      "fpsIncreasePercent": 4.258450637546196
+    },
+    "completeComparison": "medium-task-queues-20261031.json"
+  }
 }

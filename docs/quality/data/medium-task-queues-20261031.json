@@ -1,0 +1,2885 @@
+{
+  "candidateCommit": "c3ec96dc82c1706f92bdb00d27434d76a7e5f5e4",
+  "decision": "retain; byte-identical correctness and idle bidirectional net gain passed",
+  "baselineCommit": "da398befa03c5adbb5930ca47301d3cbcadb611c",
+  "upstream": {
+    "project": "PBRT-v4",
+    "commit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+    "license": "Apache-2.0",
+    "reference": "Responsibility-specific work queues; local double-ended queue and indirect Vulkan ABI are project adaptations",
+    "files": [
+      {
+        "file": "build\\medium-micro-all-20261031\\pbrt-wavefront-integrator.cpp",
+        "sha256": "4369b0ece834d75e5641ea70852806974b5aec1599e99218ce5f50cc701828db"
+      },
+      {
+        "file": "build\\medium-micro-all-20261031\\pbrt-wavefront-intersect.h",
+        "sha256": "e030ac8474dd517c55de2778a5f4e560c286ff8e6d9a43525fd3182fb650e150"
+      }
+    ]
+  },
+  "fixedBenchmark": {
+    "scene": "micro-all",
+    "width": 1920,
+    "height": 1080,
+    "spp": 1,
+    "frameGeneration": false,
+    "denoise": false,
+    "temporalReconstruction": false,
+    "budgetsUnchanged": true
+  },
+  "correctness": {
+    "strictHdr": {
+      "passed": true,
+      "mode": "byte-identical",
+      "supportingReferenceCommit": null,
+      "frames": [
+        {
+          "file": "micro-all-0.rgba16f",
+          "bytes": 16588800,
+          "pixels": 2073600,
+          "byteIdentical": true,
+          "alphaExact": true,
+          "relativeRms": 0.0,
+          "luminanceEnergyRelativeError": 0.0,
+          "maxAbsoluteChannelError": 0.0,
+          "referenceAbsoluteP99": 0.6396484375,
+          "changedRgbComponents": 0,
+          "limits": {
+            "relativeRms": 0.001,
+            "luminanceEnergyRelativeError": 0.001,
+            "maxAbsoluteChannelError": 0.0032082421875
+          },
+          "passed": true,
+          "referenceSha256": "6d370a47903de3af83a6e73c04e9cd6b37017f7494f1c85f3c67ee98fc8695cf",
+          "candidateSha256": "6d370a47903de3af83a6e73c04e9cd6b37017f7494f1c85f3c67ee98fc8695cf"
+        },
+        {
+          "file": "micro-all-1.rgba16f",
+          "bytes": 16588800,
+          "pixels": 2073600,
+          "byteIdentical": true,
+          "alphaExact": true,
+          "relativeRms": 0.0,
+          "luminanceEnergyRelativeError": 0.0,
+          "maxAbsoluteChannelError": 0.0,
+          "referenceAbsoluteP99": 0.630859375,
+          "changedRgbComponents": 0,
+          "limits": {
+            "relativeRms": 0.001,
+            "luminanceEnergyRelativeError": 0.001,
+            "maxAbsoluteChannelError": 0.003164296875
+          },
+          "passed": true,
+          "referenceSha256": "94b919a94044182902c214c471cb72a2fd3e59eb11cb84b583f3a40e22b23639",
+          "candidateSha256": "94b919a94044182902c214c471cb72a2fd3e59eb11cb84b583f3a40e22b23639"
+        }
+      ],
+      "maxRelativeRms": 0.0,
+      "maxLuminanceEnergyRelativeError": 0.0,
+      "maxAbsoluteChannelError": 0.0
+    },
+    "nativeQueueOracle": "72 exact swaps across full/compact/transposed, partial blocks and empty launches",
+    "connections": "84 byte-identical comparisons / 168 native frames with actual indirect RT",
+    "production": "46 comparisons / 152 native frames / 1 expected recoverable rejection",
+    "featureCoverage": {
+      "scope": "micro combined scene and mutually exclusive request switches",
+      "suite": "micro-checks",
+      "complete": true,
+      "requiredFeatures": [
+        "ABSORPTION",
+        "ALL_LIGHTS",
+        "ALPHA_PRODUCT",
+        "BUILTIN_SHADER_DATA",
+        "DENSITY_GRID",
+        "DIRECTIONAL_LIGHT",
+        "DIRECT_SCATTER",
+        "EMISSION",
+        "FIRST_INTERFACE_OPTICAL_SAMPLES",
+        "FIRST_INTERFACE_SPLIT",
+        "FIRST_INTERFACE_STOCHASTIC",
+        "FOG",
+        "INWARD_BOUNDARY",
+        "LIGHTMAP",
+        "MATERIAL_ALPHA",
+        "METAL_FULL",
+        "METAL_PARTIAL",
+        "MULTIPLE_SCATTER",
+        "NESTED_PRIORITY",
+        "OVERLAY_ALPHA",
+        "OVERLAY_DEPTH_REJECT",
+        "OVERLAY_MASK_REJECT",
+        "OVERLAY_MULTIPLY",
+        "PARTIAL_TRANSMISSION",
+        "PBR_DOUBLE_SIDED",
+        "PBR_SINGLE_SIDED",
+        "PERSISTENT_BOUNDARY",
+        "PHASE_BACKWARD",
+        "PHASE_FORWARD",
+        "POINT_LIGHT",
+        "REFRACTION",
+        "ROUGH_GLASS",
+        "SHADOW_DISABLED",
+        "SMOOTH_GLASS",
+        "SPOT_LIGHT",
+        "SPP_2",
+        "SPP_8",
+        "SURFACE_CAUSTICS",
+        "SURFACE_VISIBILITY",
+        "TEXTURE_ALPHA",
+        "TRANSIENT_BOUNDARY",
+        "UNIFORM",
+        "UNLIT",
+        "VERTEX_ALPHA",
+        "VOLUME_CAUSTICS",
+        "ZERO_DENSITY"
+      ],
+      "executedFeatures": [
+        "ABSORPTION",
+        "ALL_LIGHTS",
+        "ALPHA_PRODUCT",
+        "BUILTIN_SHADER_DATA",
+        "DENSITY_GRID",
+        "DIRECTIONAL_LIGHT",
+        "DIRECT_SCATTER",
+        "EMISSION",
+        "FIRST_INTERFACE_OPTICAL_SAMPLES",
+        "FIRST_INTERFACE_SPLIT",
+        "FIRST_INTERFACE_STOCHASTIC",
+        "FOG",
+        "INWARD_BOUNDARY",
+        "LIGHTMAP",
+        "MATERIAL_ALPHA",
+        "METAL_FULL",
+        "METAL_PARTIAL",
+        "MULTIPLE_SCATTER",
+        "NESTED_PRIORITY",
+        "OVERLAY_ALPHA",
+        "OVERLAY_DEPTH_REJECT",
+        "OVERLAY_MASK_REJECT",
+        "OVERLAY_MULTIPLY",
+        "PARTIAL_TRANSMISSION",
+        "PBR_DOUBLE_SIDED",
+        "PBR_SINGLE_SIDED",
+        "PERSISTENT_BOUNDARY",
+        "PHASE_BACKWARD",
+        "PHASE_FORWARD",
+        "POINT_LIGHT",
+        "REFRACTION",
+        "ROUGH_GLASS",
+        "SHADOW_DISABLED",
+        "SMOOTH_GLASS",
+        "SPOT_LIGHT",
+        "SPP_2",
+        "SPP_8",
+        "SURFACE_CAUSTICS",
+        "SURFACE_VISIBILITY",
+        "TEXTURE_ALPHA",
+        "TRANSIENT_BOUNDARY",
+        "UNIFORM",
+        "UNLIT",
+        "VERTEX_ALPHA",
+        "VOLUME_CAUSTICS",
+        "ZERO_DENSITY"
+      ],
+      "cases": [
+        {
+          "case": "micro-all",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-all-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-direct",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "DIRECT_SCATTER",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-direct-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-stochastic",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_STOCHASTIC",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-stochastic-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-spp2",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SPP_2",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-spp2-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-spp8",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SPP_8",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-spp8-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-camera-density",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-camera-density-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-caustics-off",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 0
+          },
+          "measuredFrames": 1,
+          "csv": "micro-caustics-off-160x90-unprofiled.csv"
+        }
+      ]
+    },
+    "fixedSequences": [
+      57,
+      133
+    ],
+    "longRegressionMeasurementFrames": 128,
+    "precompiledShaders": "30 stages / 17 HDR raygens passed",
+    "vulkanValidation": {
+      "passed": true,
+      "logs": [
+        {
+          "file": "build\\medium-micro-all-20261031\\task-queues\\connections-validation.jsonl",
+          "passed": true,
+          "opened": 2,
+          "closed": 2,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        },
+        {
+          "file": "build\\medium-micro-all-20261031\\task-queues\\full-validation.jsonl",
+          "passed": true,
+          "opened": 3,
+          "closed": 3,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        }
+      ]
+    }
+  },
+  "idleThroughput": {
+    "S": {
+      "frames": 64,
+      "msPerFrame": 180.3420421875,
+      "fps": 5.5450187203730845,
+      "windows": [
+        {
+          "directory": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-forward-s-matrix-off",
+          "frames": 32,
+          "wallMs": 5690.8254,
+          "initial": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 11.47 W, 180 MHz, 60"
+        },
+        {
+          "directory": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-reverse-s-matrix-off",
+          "frames": 32,
+          "wallMs": 5851.0653,
+          "initial": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.60 W, 180 MHz, 66"
+        }
+      ]
+    },
+    "T": {
+      "frames": 64,
+      "msPerFrame": 172.97594687499998,
+      "fps": 5.7811506054228685,
+      "windows": [
+        {
+          "directory": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-forward-t-matrix-off",
+          "frames": 32,
+          "wallMs": 5453.034299999999,
+          "initial": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.02 W, 180 MHz, 62"
+        },
+        {
+          "directory": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-reverse-t-matrix-off",
+          "frames": 32,
+          "wallMs": 5617.4263,
+          "initial": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.46 W, 180 MHz, 65"
+        }
+      ]
+    },
+    "U": {
+      "frames": 64,
+      "msPerFrame": 162.145478125,
+      "fps": 6.167301188807049,
+      "windows": [
+        {
+          "directory": "build\\medium-micro-all-20261031\\task-queues\\u-clean-forward-u-matrix-off",
+          "frames": 32,
+          "wallMs": 5177.3104,
+          "initial": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.11 W, 180 MHz, 63"
+        },
+        {
+          "directory": "build\\medium-micro-all-20261031\\task-queues\\u-clean-reverse-u-matrix-off",
+          "frames": 32,
+          "wallMs": 5200.0002,
+          "initial": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 21.91 W, 180 MHz, 64"
+        }
+      ]
+    },
+    "S->T": {
+      "frameTimeReductionPercent": 4.0845136403865006,
+      "fpsIncreasePercent": 4.258450637546196
+    },
+    "T->U": {
+      "frameTimeReductionPercent": 6.261257097107576,
+      "fpsIncreasePercent": 6.67947627972123
+    },
+    "S->U": {
+      "frameTimeReductionPercent": 10.090028837303056,
+      "fpsIncreasePercent": 11.222369117485975
+    }
+  },
+  "workEliminated": {
+    "vulkan/previousCapacityPathSlots": 167986730,
+    "vulkan/queuedPathSlots": 113175098,
+    "vulkan/eliminatedInactivePathSlots": 54811632,
+    "cuda/pairStep0/activeInputPaths": 83993365,
+    "cuda/pairStep1/activeInputPaths": 29181733,
+    "reductionPercent": 32.62854869548327,
+    "measurementFrames": 8,
+    "perFrame": {
+      "vulkan/previousCapacityPathSlots": 20998341.25,
+      "vulkan/queuedPathSlots": 14146887.25,
+      "vulkan/eliminatedInactivePathSlots": 6851454.0,
+      "cuda/pairStep0/activeInputPaths": 10499170.625,
+      "cuda/pairStep1/activeInputPaths": 3647716.625
+    }
+  },
+  "workCountMeaning": "Eliminated inactive invocation slots, not geometric queries or sample budgets; no new GPU readback",
+  "ranked": {
+    "frames": 32,
+    "msPerFrame": 165.7536375,
+    "baselineMsPerFrame": 180.748140625,
+    "events": 101453,
+    "dropped": 0,
+    "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 2 %, 8.58 W, 180 MHz, 63",
+    "baselineInitialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 20.02 W, 180 MHz, 68",
+    "rows": [
+      {
+        "stage": "CUDA_STREAM_SYNCHRONIZE",
+        "msPerFrame": 144.917215625,
+        "msPerSecond": 874.2928228347328,
+        "percentWall": 87.42928228347327,
+        "baselineMsPerFrame": 151.2028125,
+        "reductionPercent": 4.157063464014588
+      },
+      {
+        "stage": "VULKAN_RELEASE_RECORD",
+        "msPerFrame": 3.72310625,
+        "msPerSecond": 22.46168654971448,
+        "percentWall": 2.246168654971448,
+        "baselineMsPerFrame": 4.75130625,
+        "reductionPercent": 21.640364689184153
+      },
+      {
+        "stage": "CUDA_KERNEL_ENQUEUE",
+        "msPerFrame": 3.41541875,
+        "msPerSecond": 20.60539244576156,
+        "percentWall": 2.060539244576156,
+        "baselineMsPerFrame": 5.06944375,
+        "reductionPercent": 32.627346935253
+      },
+      {
+        "stage": "VULKAN_RELEASE_SUBMIT",
+        "msPerFrame": 2.09384375,
+        "msPerSecond": 12.632264254230922,
+        "percentWall": 1.2632264254230923,
+        "baselineMsPerFrame": 2.885684375,
+        "reductionPercent": 27.44030607990522
+      },
+      {
+        "stage": "CUDA_SEMAPHORE_WAIT_ENQUEUE",
+        "msPerFrame": 1.556040625,
+        "msPerSecond": 9.387671054881073,
+        "percentWall": 0.9387671054881074,
+        "baselineMsPerFrame": 2.239934375,
+        "reductionPercent": 30.531865470389054
+      },
+      {
+        "stage": "VULKAN_CONSUMER_FENCE_WAIT",
+        "msPerFrame": 1.261096875,
+        "msPerSecond": 7.6082606331942495,
+        "percentWall": 0.7608260633194249,
+        "baselineMsPerFrame": 1.406603125,
+        "reductionPercent": 10.344513488835027
+      },
+      {
+        "stage": "CUDA_SEMAPHORE_SIGNAL_ENQUEUE",
+        "msPerFrame": 1.14445,
+        "msPerSecond": 6.9045241918144935,
+        "percentWall": 0.6904524191814494,
+        "baselineMsPerFrame": 1.819253125,
+        "reductionPercent": 37.09231638670401
+      },
+      {
+        "stage": "VULKAN_CONSUMER_SUBMIT",
+        "msPerFrame": 0.92791875,
+        "msPerSecond": 5.598180311427555,
+        "percentWall": 0.5598180311427555,
+        "baselineMsPerFrame": 1.56795,
+        "reductionPercent": 40.81962116138907
+      },
+      {
+        "stage": "CUDA_DOWNLOAD_ASYNC_ENQUEUE",
+        "msPerFrame": 0.86784375,
+        "msPerSecond": 5.235744826414443,
+        "percentWall": 0.5235744826414443,
+        "baselineMsPerFrame": 1.296071875,
+        "reductionPercent": 33.04046120127404
+      },
+      {
+        "stage": "CUDA_CONTEXT_POP",
+        "msPerFrame": 0.8389562500000001,
+        "msPerSecond": 5.06146509152778,
+        "percentWall": 0.506146509152778,
+        "baselineMsPerFrame": 0.9828312499999999,
+        "reductionPercent": 14.6388304197694
+      },
+      {
+        "stage": "NATIVE_TASK_EXECUTION",
+        "msPerFrame": 0.5539625,
+        "msPerSecond": 3.342083518378292,
+        "percentWall": 0.3342083518378292,
+        "baselineMsPerFrame": 0.72098125,
+        "reductionPercent": 23.165477604306627
+      },
+      {
+        "stage": "CUDA_KERNEL_EVENT_RESOLVE",
+        "msPerFrame": 0.499003125,
+        "msPerSecond": 3.010510855304759,
+        "percentWall": 0.3010510855304759,
+        "baselineMsPerFrame": 0.61485625,
+        "reductionPercent": 18.8423107027049
+      },
+      {
+        "stage": "CUDA_DOWNLOAD",
+        "msPerFrame": 0.498946875,
+        "msPerSecond": 3.0101714962363952,
+        "percentWall": 0.3010171496236395,
+        "baselineMsPerFrame": 0.563225,
+        "reductionPercent": 11.41251276132984
+      },
+      {
+        "stage": "CUDA_EXCHANGE",
+        "msPerFrame": 0.379240625,
+        "msPerSecond": 2.2879776921939348,
+        "percentWall": 0.22879776921939346,
+        "baselineMsPerFrame": 0.4627,
+        "reductionPercent": 18.037470283120815
+      },
+      {
+        "stage": "CUDA_CONTEXT_PUSH",
+        "msPerFrame": 0.35779062500000003,
+        "msPerSecond": 2.158568767457668,
+        "percentWall": 0.21585687674576678,
+        "baselineMsPerFrame": 0.4790343750000001,
+        "reductionPercent": 25.310031247757546
+      },
+      {
+        "stage": "FINAL_FRAME_RECORD_AND_SUBMIT",
+        "msPerFrame": 0.33895,
+        "msPerSecond": 2.0449023328371903,
+        "percentWall": 0.20449023328371904,
+        "baselineMsPerFrame": 0.417565625,
+        "reductionPercent": 18.82713046601957
+      },
+      {
+        "stage": "GPU_QUERY_RESOLVE",
+        "msPerFrame": 0.313378125,
+        "msPerSecond": 1.8906259297024477,
+        "percentWall": 0.18906259297024477,
+        "baselineMsPerFrame": 0.38854375,
+        "reductionPercent": 19.345472678430685
+      },
+      {
+        "stage": "TEMPORAL_UNIFORMS_DESCRIPTORS",
+        "msPerFrame": 0.304659375,
+        "msPerSecond": 1.8380252741059757,
+        "percentWall": 0.18380252741059755,
+        "baselineMsPerFrame": 0.3349125,
+        "reductionPercent": 9.033142985108045
+      },
+      {
+        "stage": "PARK",
+        "msPerFrame": 0.302134375,
+        "msPerSecond": 1.822791822592732,
+        "percentWall": 0.1822791822592732,
+        "baselineMsPerFrame": 1.42746875,
+        "reductionPercent": 78.83425644169093
+      },
+      {
+        "stage": "ROUTE_AND_PIPELINES",
+        "msPerFrame": 0.24505625,
+        "msPerSecond": 1.478436634610809,
+        "percentWall": 0.1478436634610809,
+        "baselineMsPerFrame": 0.44756875,
+        "reductionPercent": 45.24723855273631
+      },
+      {
+        "stage": "VULKAN_COMMAND_REUSE_WAIT",
+        "msPerFrame": 0.22153125,
+        "msPerSecond": 1.336509130908213,
+        "percentWall": 0.1336509130908213,
+        "baselineMsPerFrame": 0.257065625,
+        "reductionPercent": 13.823075333390067
+      },
+      {
+        "stage": "OPTICAL_MEDIUM_NATIVE",
+        "msPerFrame": 0.21291875,
+        "msPerSecond": 1.284549486885318,
+        "percentWall": 0.1284549486885318,
+        "baselineMsPerFrame": 0.21594687499999998,
+        "reductionPercent": 1.4022546054440421
+      },
+      {
+        "stage": "VULKAN_CONSUMER_RECORD",
+        "msPerFrame": 0.16845,
+        "msPerSecond": 1.016267290061734,
+        "percentWall": 0.1016267290061734,
+        "baselineMsPerFrame": 0.22415,
+        "reductionPercent": 24.84943118447468
+      },
+      {
+        "stage": "SESSION_PUMP",
+        "msPerFrame": 0.086465625,
+        "msPerSecond": 0.521651447920713,
+        "percentWall": 0.0521651447920713,
+        "baselineMsPerFrame": 0.155978125,
+        "reductionPercent": 44.56554404664115
+      },
+      {
+        "stage": "DIAGNOSTICS",
+        "msPerFrame": 0.083390625,
+        "msPerSecond": 0.5030998188501293,
+        "percentWall": 0.050309981885012935,
+        "baselineMsPerFrame": 0.143309375,
+        "reductionPercent": 41.81076778822042
+      },
+      {
+        "stage": "HOST_ADMISSION",
+        "msPerFrame": 0.069996875,
+        "msPerSecond": 0.42229465401626554,
+        "percentWall": 0.04222946540162655,
+        "baselineMsPerFrame": 0.09185625,
+        "reductionPercent": 23.797373613662653
+      },
+      {
+        "stage": "FRAME_POLL_AND_LEASE",
+        "msPerFrame": 0.054359375,
+        "msPerSecond": 0.32795283301097994,
+        "percentWall": 0.03279528330109799,
+        "baselineMsPerFrame": 0.103571875,
+        "reductionPercent": 47.515312433998126
+      },
+      {
+        "stage": "RESOURCE_BUDGET_AND_ENSURE",
+        "msPerFrame": 0.0528125,
+        "msPerSecond": 0.31862045863096067,
+        "percentWall": 0.031862045863096065,
+        "baselineMsPerFrame": 0.0800375,
+        "reductionPercent": 34.01530532562861
+      },
+      {
+        "stage": "REQUEST_BUILD",
+        "msPerFrame": 0.048459375,
+        "msPerSecond": 0.2923578373958761,
+        "percentWall": 0.029235783739587615,
+        "baselineMsPerFrame": 0.077153125,
+        "reductionPercent": 37.19065170723804
+      },
+      {
+        "stage": "CUDA_UPLOAD",
+        "msPerFrame": 0.04156875,
+        "msPerSecond": 0.2507863515212449,
+        "percentWall": 0.025078635152124492,
+        "baselineMsPerFrame": 0.059003125,
+        "reductionPercent": 29.54822308140458
+      },
+      {
+        "stage": "CUDA_NATIVE_CALLBACK",
+        "msPerFrame": 0.0385875,
+        "msPerSecond": 0.23280032089793504,
+        "percentWall": 0.023280032089793505,
+        "baselineMsPerFrame": 0.0636875,
+        "reductionPercent": 39.411187438665365
+      },
+      {
+        "stage": "FRAME_PRIMITIVES",
+        "msPerFrame": 0.018040625,
+        "msPerSecond": 0.10883999453707315,
+        "percentWall": 0.010883999453707315,
+        "baselineMsPerFrame": 0.022490625,
+        "reductionPercent": 19.78602195359177
+      },
+      {
+        "stage": "SLOT_PUBLICATION",
+        "msPerFrame": 0.018040625,
+        "msPerSecond": 0.10883999453707315,
+        "percentWall": 0.010883999453707315,
+        "baselineMsPerFrame": 0.02440625,
+        "reductionPercent": 26.081946222791295
+      },
+      {
+        "stage": "SHARED_EXCHANGE",
+        "msPerFrame": 0.01693125,
+        "msPerSecond": 0.10214707957766536,
+        "percentWall": 0.010214707957766536,
+        "baselineMsPerFrame": 0.030803125,
+        "reductionPercent": 45.03398599979711
+      },
+      {
+        "stage": "SESSION_ADMISSION",
+        "msPerFrame": 0.016659375,
+        "msPerSecond": 0.10050684408057109,
+        "percentWall": 0.01005068440805711,
+        "baselineMsPerFrame": 0.023775,
+        "reductionPercent": 29.929022082018932
+      },
+      {
+        "stage": "CUDA_CONTEXT_SYNCHRONIZE",
+        "msPerFrame": 0.016209375,
+        "msPerSecond": 0.09779197153365639,
+        "percentWall": 0.00977919715336564,
+        "baselineMsPerFrame": 0.019228125,
+        "reductionPercent": 15.699658703071663
+      },
+      {
+        "stage": "FEATURE_EXTENT_NEGOTIATION",
+        "msPerFrame": 0.0148125,
+        "msPerSecond": 0.08936455466927536,
+        "percentWall": 0.008936455466927536,
+        "baselineMsPerFrame": 0.017265625,
+        "reductionPercent": 14.208144796380095
+      },
+      {
+        "stage": "CUDA_COMPLETION_CALLBACK",
+        "msPerFrame": 0.012253125,
+        "msPerSecond": 0.07392371705869805,
+        "percentWall": 0.007392371705869804,
+        "baselineMsPerFrame": 0.021315625,
+        "reductionPercent": 42.515760152470314
+      },
+      {
+        "stage": "MEDIUM_RESOLVE_PREPARE",
+        "msPerFrame": 0.01024375,
+        "msPerSecond": 0.06180105700546089,
+        "percentWall": 0.006180105700546088,
+        "baselineMsPerFrame": 0.01048125,
+        "reductionPercent": 2.265951103160402
+      },
+      {
+        "stage": "FEATURE_INPUT_REUSE",
+        "msPerFrame": 0.00525,
+        "msPerSecond": 0.031673513047338106,
+        "percentWall": 0.0031673513047338108,
+        "baselineMsPerFrame": 0.016359375,
+        "reductionPercent": 67.90830945558739
+      },
+      {
+        "stage": "WINDOW",
+        "msPerFrame": 0.004978125,
+        "msPerSecond": 0.030033277550243806,
+        "percentWall": 0.0030033277550243808,
+        "baselineMsPerFrame": 0.007871875,
+        "reductionPercent": 36.76061929337039
+      },
+      {
+        "stage": "TRY_SUBMIT",
+        "msPerFrame": 0.001546875,
+        "msPerSecond": 0.009332374380019264,
+        "percentWall": 0.0009332374380019262,
+        "baselineMsPerFrame": 0.00210625,
+        "reductionPercent": 26.55786350148368
+      },
+      {
+        "stage": "FRAME_PREPARATION",
+        "msPerFrame": 0.000909375,
+        "msPerSecond": 0.005486304938556778,
+        "percentWall": 0.0005486304938556779,
+        "baselineMsPerFrame": 0.001271875,
+        "reductionPercent": 28.501228501228503
+      },
+      {
+        "stage": "CAMERA_SCATTERING_PREPARE",
+        "msPerFrame": 0.000209375,
+        "msPerSecond": 0.0012631698655783648,
+        "percentWall": 0.00012631698655783647,
+        "baselineMsPerFrame": 0.000259375,
+        "reductionPercent": 19.277108433734934
+      }
+    ],
+    "gpu": [
+      {
+        "version": "T",
+        "stages": [
+          {
+            "stage": "vulkan.optical.cameraContinuationTrace/startToend",
+            "msPerFrame": 90.06928,
+            "callsPerFrame": 110.1875
+          },
+          {
+            "stage": "vulkan.shared.continuation",
+            "msPerFrame": 55.829289,
+            "callsPerFrame": 65.09375
+          },
+          {
+            "stage": "vulkan.shared.producer",
+            "msPerFrame": 42.408794,
+            "callsPerFrame": 65.09375
+          },
+          {
+            "stage": "cuda.entry.native_optical_step_4",
+            "msPerFrame": 33.864603,
+            "callsPerFrame": 114.1875
+          },
+          {
+            "stage": "vulkan.optical.cameraInitialTrace/startToend",
+            "msPerFrame": 7.421501,
+            "callsPerFrame": 4.0
+          },
+          {
+            "stage": "cuda.entry.native_optical_reset",
+            "msPerFrame": 0.529519,
+            "callsPerFrame": 114.1875
+          },
+          {
+            "stage": "vulkan.opticalPhoton.trace/startToend",
+            "msPerFrame": 0.474955,
+            "callsPerFrame": 8.0
+          },
+          {
+            "stage": "cuda.entry.native_optical_photon_step",
+            "msPerFrame": 0.435543,
+            "callsPerFrame": 8.0
+          },
+          {
+            "stage": "cuda.entry.native_optical_photon_reset",
+            "msPerFrame": 0.16877499999999998,
+            "callsPerFrame": 8.0
+          },
+          {
+            "stage": "vulkan.opticalPhoton.mapCopy/startToend",
+            "msPerFrame": 0.06615299999999999,
+            "callsPerFrame": 1.0
+          },
+          {
+            "stage": "cuda.entry.native_optical_photon_clear",
+            "msPerFrame": 0.043022,
+            "callsPerFrame": 1.0
+          },
+          {
+            "stage": "vulkan.opticalPhoton.mapInitialize/startToend",
+            "msPerFrame": 0.008472,
+            "callsPerFrame": 1.0
+          }
+        ]
+      },
+      {
+        "version": "U",
+        "stages": [
+          {
+            "stage": "vulkan.optical.cameraContinuationTrace/startToend",
+            "msPerFrame": 83.626682,
+            "callsPerFrame": 110.1875
+          },
+          {
+            "stage": "vulkan.shared.continuation",
+            "msPerFrame": 50.343597,
+            "callsPerFrame": 65.09375
+          },
+          {
+            "stage": "vulkan.shared.producer",
+            "msPerFrame": 41.206029,
+            "callsPerFrame": 65.09375
+          },
+          {
+            "stage": "cuda.entry.native_optical_step_4",
+            "msPerFrame": 31.552737,
+            "callsPerFrame": 114.1875
+          },
+          {
+            "stage": "vulkan.optical.cameraInitialTrace/startToend",
+            "msPerFrame": 7.236339,
+            "callsPerFrame": 4.0
+          },
+          {
+            "stage": "cuda.entry.native_optical_reset",
+            "msPerFrame": 0.568688,
+            "callsPerFrame": 114.1875
+          },
+          {
+            "stage": "vulkan.opticalPhoton.trace/startToend",
+            "msPerFrame": 0.426941,
+            "callsPerFrame": 8.0
+          },
+          {
+            "stage": "cuda.entry.native_optical_photon_step",
+            "msPerFrame": 0.329518,
+            "callsPerFrame": 8.0
+          },
+          {
+            "stage": "cuda.entry.native_optical_photon_reset",
+            "msPerFrame": 0.062595,
+            "callsPerFrame": 8.0
+          },
+          {
+            "stage": "vulkan.opticalPhoton.mapCopy/startToend",
+            "msPerFrame": 0.057417,
+            "callsPerFrame": 1.0
+          },
+          {
+            "stage": "cuda.entry.native_optical_photon_clear",
+            "msPerFrame": 0.027708,
+            "callsPerFrame": 1.0
+          },
+          {
+            "stage": "vulkan.opticalPhoton.mapInitialize/startToend",
+            "msPerFrame": 0.007427,
+            "callsPerFrame": 1.0
+          }
+        ]
+      }
+    ]
+  },
+  "gpuMsPerFrame": {
+    "T": {
+      "continuation": 90.06928,
+      "cudaAdvance": 33.864603,
+      "initial": 7.421501
+    },
+    "U": {
+      "continuation": 83.626682,
+      "cudaAdvance": 31.552737,
+      "initial": 7.236339
+    },
+    "overlapsHostWait": true
+  },
+  "targetFps": 180,
+  "targetReached": false,
+  "rawFiles": [
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-baseline-t-matrix-timings\\artifacts.json",
+      "sha256": "28e9b2cea1e70e67fae17d271a869192b91be9614ccf8a233c93c5510eece7ed"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-baseline-t-matrix-timings\\initial-gpu.csv",
+      "sha256": "263e3161fb92b8c482e5a24c5778203b9f07f76421eb6067e43b41d51d621f5b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-baseline-t-matrix-timings\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "2bc5eb519bd1dfe3cb898937b0ea1647ee007e53b8f121ae6b43450601632b88"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-baseline-t-matrix-timings\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "35ed3707f6b8dac750097068e8ab83cefabb61e533e52fedf06809e224515869"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-baseline-t-matrix-timings\\micro-all-1080p-profiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-baseline-t-matrix-timings\\micro-all-1080p-profiled.csv",
+      "sha256": "b767d8bf44cb5a86c2b8087acbad0f13761026004271773c9c2e94f03fe05329"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-baseline-t-matrix-timings\\micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "d1eae79027e30e1b2f390be373158793e627e5378c0c40d0764d6c4707092a2e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-baseline-t-matrix-timings\\micro-all-1080p-wall-timeline-round-2.json",
+      "sha256": "7830328daa1f339054354fd0292bb1a4dc9f69a5902df9398314a5a51170efaf"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-baseline-t-matrix-timings\\micro-profiled-coverage.json",
+      "sha256": "de615f8508573bcc6f1928edf09f253c7464e67018bc91a9c050c0b499a0038c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-baseline-t-matrix-timings\\run.log",
+      "sha256": "18b36924bf0865954221c67ed73ac1c19f53a724b6b75b749d89f4cafa705ac5"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-baseline-t-matrix-timings\\runtime.json",
+      "sha256": "2618a95c28bd17b9d890db8ba87386e9a7d2697059e1c188b146f32627d2bf05"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-forward-t-matrix-off\\artifacts.json",
+      "sha256": "28e9b2cea1e70e67fae17d271a869192b91be9614ccf8a233c93c5510eece7ed"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-forward-t-matrix-off\\initial-gpu.csv",
+      "sha256": "b568ce092cac551b2ced5f50df9491cf6ef17c83d6639c7ac4ba64d70f34c7a0"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-forward-t-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-forward-t-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-forward-t-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-forward-t-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "c5be71b249d6c381c8c41d68665af4e20106c574d5c6ae877c118424b34a188c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-forward-t-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-forward-t-matrix-off\\run.log",
+      "sha256": "112323daf2271d841dbb2fd27ba4a3d54b10893ddd5a8235852ab0f1e4f4e248"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-forward-t-matrix-off\\runtime.json",
+      "sha256": "58a11a2c856a29aa06aa3d321ac5f0b422292e1d1fb8fe237c33460e867a7cbc"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-reverse-t-matrix-off\\artifacts.json",
+      "sha256": "28e9b2cea1e70e67fae17d271a869192b91be9614ccf8a233c93c5510eece7ed"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-reverse-t-matrix-off\\initial-gpu.csv",
+      "sha256": "5a51f470c1ce271cd069dc0a6ce3db1f0ad0c0aa810698151253ec4fa673136a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-reverse-t-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-reverse-t-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-reverse-t-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-reverse-t-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "655a1d8b7d9d43368aec54f88551ac6364f52bbfd1636cb7c93178b861ff4d36"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-reverse-t-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-reverse-t-matrix-off\\run.log",
+      "sha256": "bf655b564387ccdf619dddeb8b45875548d58723f8f23e50f409e90ebcf6aae8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\u-clean-reverse-t-matrix-off\\runtime.json",
+      "sha256": "0ef855e85f1ad150b973c22e96497fb35699e70529b64ef55b3ab96978cf0a4f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-forward-s-matrix-off\\artifacts.json",
+      "sha256": "dfec70f1dee354ab22d47bd02bd4979e49dbb012a47170b97f98031651b9dfa5"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-forward-s-matrix-off\\initial-gpu.csv",
+      "sha256": "c42357f63d9365b83dedfbf1c6ecba7a78dbb449b35342bb0f7f9c911bf30bd6"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-forward-s-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-forward-s-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-forward-s-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-forward-s-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "062a1e87cda2eab9df41e8515f98ea88a4eeadbe3d86614cf3da4aae98a5723f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-forward-s-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-forward-s-matrix-off\\run.log",
+      "sha256": "ee32775daebaeee24c49633ea74830090d001b10a46f0e8a74010c12c664682f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-forward-s-matrix-off\\runtime.json",
+      "sha256": "a95056b62e2e846f6dd8c0cc5096d81cbbd22c2f589c9d9a8ae4fc7fd0f1251f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-reverse-s-matrix-off\\artifacts.json",
+      "sha256": "dfec70f1dee354ab22d47bd02bd4979e49dbb012a47170b97f98031651b9dfa5"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-reverse-s-matrix-off\\initial-gpu.csv",
+      "sha256": "204053e49dad6af5f4c490cbb42f304064e5d6fdb02dc37d30fbaed58af00054"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-reverse-s-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-reverse-s-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-reverse-s-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-reverse-s-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "adb5e0b4c0b6099ae9ca5c2de68a9be4d8d9c0f01ac22a093d293df33fdadcb7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-reverse-s-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-reverse-s-matrix-off\\run.log",
+      "sha256": "510bdf5345a7f624f24b216b1bbee768ec974ba9385d985ce7a61d9300fdee89"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\reused-boundary-hit\\u-clean-reverse-s-matrix-off\\runtime.json",
+      "sha256": "79c8339fbbdf2367167c169e58177cdb30e0f5335abbadd913730e434c5da9f9"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\artifacts.json",
+      "sha256": "a9fb490ba8aae528ae842525d1ee113d3a4fee088407136d2280ccbb0c4c7d28"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\initial-gpu.csv",
+      "sha256": "b1430a6cd65e4fa40022aebefd81983c7d4e9a8b6dd688a1cdf7edd357e94f3d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-all-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-all-160x90-unprofiled-workload.json",
+      "sha256": "574cfa5ee8e2ecdb16472f1eb0e5f2667d96df419ed47bd9532c35f5fb9987b2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-all-160x90-unprofiled.csv",
+      "sha256": "f25ee9ccd07d2bd59b4828ec4c6b08324ad0d4427aa4035bc0629f4192d13d82"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-camera-density-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-camera-density-160x90-unprofiled-workload.json",
+      "sha256": "d01f631a9a17bd8508a976372a8b37e44993bfbf610866f29b7912dc1b0c6c5a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-camera-density-160x90-unprofiled.csv",
+      "sha256": "45e876026e25d4617e1628ce6c90fa0d4ac6a2bef5b29d1f8db791b0134db1f9"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-caustics-off-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-caustics-off-160x90-unprofiled-workload.json",
+      "sha256": "172bd4c8a4551b957d21373716ccd0fce5f748186e84a40c04f0a3d4aaa898fa"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-caustics-off-160x90-unprofiled.csv",
+      "sha256": "4494c5f0b0f4e4802993ae9b60196c0bf5834167be135b5843b8ac9e2fee2572"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-checks-unprofiled-coverage.json",
+      "sha256": "d0f4de2989156b5624cf8e306a5c76d951c9ac3a36db10bd15bab85984725c46"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-direct-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-direct-160x90-unprofiled-workload.json",
+      "sha256": "0e26ad834a08ad4961ad7866b1faa8028dbaf225c186ea591264d528af89a6ae"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-direct-160x90-unprofiled.csv",
+      "sha256": "d2b23b6a1dacb39a2dc90f3bafce7498b92304ab06a22896d37d47052e2e9fdb"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-spp2-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-spp2-160x90-unprofiled-workload.json",
+      "sha256": "047861500fff8ddd7d9661455ad2d656c8d545521c68cad0c2d7a063deda203e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-spp2-160x90-unprofiled.csv",
+      "sha256": "3b3ae81dc571af7f4ff1d3e2764ee2d7e791b7cd75e3c7e4fbd47f2b23d07f5a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-spp8-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-spp8-160x90-unprofiled-workload.json",
+      "sha256": "6953ee17d02c7b76c9f17f2bde0a467dd183c079dc4df252ad0dde3907d5d200"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-spp8-160x90-unprofiled.csv",
+      "sha256": "16ea3409712e89f46680dfbaffa559599c8c75abc41bd638c1480d4de5fa6939"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-stochastic-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-stochastic-160x90-unprofiled-workload.json",
+      "sha256": "1db987b90b9947cf560c6037ab0420010d4377853e41b43bd96969216f086ae9"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\micro-stochastic-160x90-unprofiled.csv",
+      "sha256": "f191be51d33a0085a76a0c1d3474b797f67fe99b89f8352f185756532bc43430"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\run.log",
+      "sha256": "0a047762e4ebd3d5e5caeddd43bbdb46c2dbd64310c703fea753504e815b4672"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\all-features-matrix-off\\runtime.json",
+      "sha256": "854ec94797d8e305cc99ff74f9ce965796f098bf800517107b50bf0e4f9503fa"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\artifacts.json",
+      "sha256": "171d9912f5a3cbf4b2be4f4728f9f59bee7a14154b385504d7fa95aa4d370936"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\candidate-core.jar",
+      "sha256": "a9f563ab66a50f88194512d0edc10ad51f8a1e0d188a889b24d696fc0a5da276"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\connections-test.log",
+      "sha256": "1cb5e59d62e0f18b4cdbdfd89e56be8ac833949387a86783319490823caffef0"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\connections-validation.jsonl",
+      "sha256": "100dfdb0167024c558041273b1aa067971122cac483094ef31560526e999ac3a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\CudaOpticalMediumSelfTest.log",
+      "sha256": "a14f0618d6822be81268a0484cb95df53d0be927e2954f613b41ec76fd07e0de"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\CudaOpticalTaskQueueNativeSelfTest.log",
+      "sha256": "2327e4840c6f319e40cd4b70a58e58f3d0bf119fa2e74e8f2db11c725fa3657f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed133-matrix-off\\artifacts.json",
+      "sha256": "a9fb490ba8aae528ae842525d1ee113d3a4fee088407136d2280ccbb0c4c7d28"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed133-matrix-off\\initial-gpu.csv",
+      "sha256": "c1a0708682d72cc7dd6e2a91522cbefbec599911f1133d95a1397ec7d8608b20"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed133-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed133-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed133-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "b6facf46f30b19f910e5612a3d496673b27d7db0387ce7535fe5f0b67fae5386"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed133-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "91d3df83247ad9926754781dde06ef7ffd4476e0dfd7c96007393f5a7bf8cf01"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed133-matrix-off\\run.log",
+      "sha256": "f3d26085b0161db0ebdb4e4db3543b49f45b525ebc69490874b0a68d9a1ba453"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed133-matrix-off\\runtime.json",
+      "sha256": "da59aea3f5c485de812b4b300f65d60cef7fe0c91d09f171611f35f8c34b786f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed57-matrix-off\\artifacts.json",
+      "sha256": "a9fb490ba8aae528ae842525d1ee113d3a4fee088407136d2280ccbb0c4c7d28"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed57-matrix-off\\initial-gpu.csv",
+      "sha256": "043d16de7ca2cd88e852115be0cf40e18e1b8f2bfc1e69288013d8bc3e60b557"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed57-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed57-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed57-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "7a64d0fff1cfd12980df901160f5f2b7a9ef8e52e8ce0ea13601a91804ccb4da"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed57-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "91d3df83247ad9926754781dde06ef7ffd4476e0dfd7c96007393f5a7bf8cf01"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed57-matrix-off\\run.log",
+      "sha256": "8c84de46a24d1398edc127cc77c2e7e710a919605beb680d52625541826a11fb"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\fixed57-matrix-off\\runtime.json",
+      "sha256": "daf0c31a4b30c04834e4908240b43560dd27e1c9d2e817ca4cf67bcbc637fa5d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\boundary-density-caustics-off.rgba16f",
+      "sha256": "9da4af9044d55fb40510fa7026b9cfbdbc5d38b894c6ab2df093650275a3e218"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\boundary-density-caustics-on.rgba16f",
+      "sha256": "1a330f31409f8cb42af2e381e9533cb4e5d30a0a4e7d95ccee830ac135b25c1f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\density-boundary-caustics.json",
+      "sha256": "4b71a86f39400f19d3219b9968f38322d2eb2ca7272b62cd3cc8732636aa78f1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\density-caustics-off.rgba16f",
+      "sha256": "72886415f5cddeaaa12d920020672d8794f7f34c340326c8b18b20f98dc97ae4"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\density-caustics-on.rgba16f",
+      "sha256": "f1283bb2d77951b5ad1da30572a4dfd21e5cbbd84c4d91a3048a7d060e93a227"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\density-glass-0-1.rgba16f",
+      "sha256": "790e84079400c8805e520e3d152733edb2783430bb5b300fe90b55eeb713a635"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\density-glass-0-2.rgba16f",
+      "sha256": "790e84079400c8805e520e3d152733edb2783430bb5b300fe90b55eeb713a635"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\density-glass-0-8.rgba16f",
+      "sha256": "cc0921074e73ab73a580acde77232cba14df4a250f2016a8256c3f2878ec03b0"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\density-glass-1-1.rgba16f",
+      "sha256": "35210082b693d8ac62a0a649a66240f49ac900fb5b1deb43dfcb566c2f80bd4d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\density-glass-1-2.rgba16f",
+      "sha256": "35210082b693d8ac62a0a649a66240f49ac900fb5b1deb43dfcb566c2f80bd4d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\density-glass-1-8.rgba16f",
+      "sha256": "42e90690d3fcc4e8d5e4e9b2902e8e178226c963ba15d2b34e84c48469ba82cd"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\equal-IOR.rgba16f",
+      "sha256": "6781cbc46aba0f80e958ccdf147ffd1561b0133f091409e68a383b85f24577cf"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\event-exhaustion.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\explicit-IOR-density-scattering-rough-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\explicit-IOR-density-scattering-rough.rgba16f",
+      "sha256": "c9cb004f92bff1f028a61ae4f663adac1ae614c3827abfd9a2c27205165fcb03"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\explicit-IOR-scattering-inside-point.rgba16f",
+      "sha256": "72f42bfe5a4736ef3996be00fbc77ae465fc82413e2eb6df0b4dc8f9fd967ec3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\explicit-IOR-scattering-shadow-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\explicit-IOR-scattering-shadow-lit.rgba16f",
+      "sha256": "ab8d6aca12f8519dc0f2a08d4de3a9dee59f564877afce1ea9b421c4f3b1d9f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\full-HD.rgba16f",
+      "sha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\glass-caustics-clear-off.rgba16f",
+      "sha256": "3424aecde04f52dd24331f6b52e762ff15edba769ef26f71a0630bc17fec7404"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\glass-caustics-clear-on.rgba16f",
+      "sha256": "8f43fcdc46b21e9887bbb9baeb67af31e08273d4425b6b541bfba020b13d4f94"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\glass-scattering-caustics-off.rgba16f",
+      "sha256": "4da0fb1a4309b75d8a47be51f96468cda39b86322b45f410c8a0cfee07eb7eb6"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\glass-scattering-caustics-on.rgba16f",
+      "sha256": "4ef69244bf69f4a0fcb113e3d0fcdd6f6f94be3d636adcccb9962afcc9b97d0d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\glass-scattering-caustics.json",
+      "sha256": "1e5046a855bcca7d30d7c7140c37ead1f8ca1af2953d7ee2d05d371d68956bdd"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\heterogeneous-scattering-rough-glass-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\heterogeneous-scattering-rough-glass-lateral.rgba16f",
+      "sha256": "5253b40e36a712796bb2cd94aae76fe379949fcb79f870b08ef620508e169d58"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\heterogeneous-scattering-rough-glass-lit.rgba16f",
+      "sha256": "b33d11c963e2c9a5973eb3830a8fc861b24da93a9fe1d1c7e09fc5d60f37b240"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\inside-nested-caustics-off.rgba16f",
+      "sha256": "8aaa909d506869fe989d5e561c9396e62ff1a0198fad65e2cec7ffe4baf93843"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\inside-nested-caustics-on.rgba16f",
+      "sha256": "01c1d255647eb555bd1011f22b24ff1b4e9a83aeb179fa02119cb1ef5e97498d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\inside-TIR.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\inside-unit-IOR.rgba16f",
+      "sha256": "6781cbc46aba0f80e958ccdf147ffd1561b0133f091409e68a383b85f24577cf"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\nested-IOR-density-caustics-off.rgba16f",
+      "sha256": "9376ccc375ac489ef682b71e43eba535d1400c50851c91bc19df4f6429958ada"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\nested-IOR-density-caustics-on.rgba16f",
+      "sha256": "51ce7a41d3b12bef3cf5663d71b51dafdf47ce014d8f3cee8f8f3b4cd87709f3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\nested-local-density.rgba16f",
+      "sha256": "14ffbe8d7598c89ce80726b48439d2987750dc25e904891a7d60b81efc5372f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\nested-priority-inside.rgba16f",
+      "sha256": "dbe52ffe13721321e8a67af17c13ddc09672b78aa651c6ec2a62830045ae7db3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\partial-PBR.rgba16f",
+      "sha256": "a2f26b11796ca7ca3fb5f41a2371a21f022a5fad88ce816850b9581698d137dc"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\partial-unlit-terminal-light-independence.rgba16f",
+      "sha256": "27e09588531ce950bfff6a8c2f000bad4d55b4ade0eb2ab0f99902af56f7e872"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\partial-unlit-terminal-proof.rgba16f",
+      "sha256": "27e09588531ce950bfff6a8c2f000bad4d55b4ade0eb2ab0f99902af56f7e872"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\PBR-boundary-absorbed.rgba16f",
+      "sha256": "afb4fa032bd0d2234f5b2bc9bd0a9b21d24adc37495540576b96243fd0db9685"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\PBR-boundary-density.rgba16f",
+      "sha256": "adf25b07781a2a5e3ad85ebc63512644b73bfe1ecbc577656244685a709e63b5"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\PBR-boundary-vacuum.rgba16f",
+      "sha256": "50ce7459e7daee301f26646d53e279a096b229c485a347084232df2c18032d3a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\PBR-boundary-zero-density.rgba16f",
+      "sha256": "50ce7459e7daee301f26646d53e279a096b229c485a347084232df2c18032d3a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\recovery.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resized.rgba16f",
+      "sha256": "a360624488b4b1f7882a6a19f1adc5870b0411a6038c72386abcc2d4ee7652f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-outline-off-1.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-outline-off-2.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-outline-off-8.rgba16f",
+      "sha256": "286f383a8484d310e09c575235a8c2e9f36c0e7cfee3f7cc10827c130c636c30"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-outline-on-1.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-outline-on-2.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-outline-on-8.rgba16f",
+      "sha256": "286f383a8484d310e09c575235a8c2e9f36c0e7cfee3f7cc10827c130c636c30"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-temporal-false-0.rgba16f",
+      "sha256": "9ea866b1f74794d81c25a75079aeb1552b13c53558204562889104e73a3e21aa"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-temporal-false-1.rgba16f",
+      "sha256": "4dc374e844758df7e838f1427a9ec00558b164e5273c16c130047ee0de734da2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-temporal-false-2.rgba16f",
+      "sha256": "7604b2cfb57d2ddec481124923ea2f718a068a7bae7093c9d6b993ec7bd48327"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-temporal-true-0.rgba16f",
+      "sha256": "9ea866b1f74794d81c25a75079aeb1552b13c53558204562889104e73a3e21aa"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-temporal-true-1.rgba16f",
+      "sha256": "4dc374e844758df7e838f1427a9ec00558b164e5273c16c130047ee0de734da2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\resolved-temporal-true-2.rgba16f",
+      "sha256": "7604b2cfb57d2ddec481124923ea2f718a068a7bae7093c9d6b993ec7bd48327"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\result.json",
+      "sha256": "43f5b7f2a305e970c73ae47106fc9efde131f5dcb2765c9bb458996334a309d4"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\rough-0.12.rgba16f",
+      "sha256": "7c89f47e07442c81ee7cd308891047fcf0dfbc865792a2d54b23b26be5a512dc"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\rough-0.45.rgba16f",
+      "sha256": "d15de99946b3eb3c3d505900a407c80c944ac4bb6cadc0ddbf7c55c6f3afdb4b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\rough-0.85.rgba16f",
+      "sha256": "2ab2326999a7300a6bcd112b260250132c85c681f3d66262dccc0a150229a30e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\rough-black.rgba16f",
+      "sha256": "d51586325f604745eed20d77112f8c98b4b051b51cf7b1970d377d9359b66f58"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\rough-boundary-density-caustics-off.rgba16f",
+      "sha256": "8ab79902758f94b2969677f7934dce23d173646730b9ca652ad02ca1ccb55476"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\rough-boundary-density-caustics-on.rgba16f",
+      "sha256": "a34286e16f62991b4155bc4562699e9a073311b6779606701772b0a8c882392f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\rough-equal-IOR.rgba16f",
+      "sha256": "6781cbc46aba0f80e958ccdf147ffd1561b0133f091409e68a383b85f24577cf"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\rough-glass-absorption-limit.rgba16f",
+      "sha256": "ef7e220d04fc6af31289c2c073751800fc197de170aa6d59e64eda4e3135c0b7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\rough-glass-tiny-scattering.rgba16f",
+      "sha256": "f1f8a56c33cb3fb11942983d4bea7a7c78e831cc8bc53b81f0c2b7e04dbac4b7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\rough-smooth-limit.rgba16f",
+      "sha256": "68266de211fb239d7d826abc44399bb5a5d0b1b7f4addfeb14394c884af0bc0c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\rough-stochastic.rgba16f",
+      "sha256": "a3581b475708f6082e0255285dee7fac4f870661145160b800c9223b94859f0f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\scattering-equal-IOR-analytic.rgba16f",
+      "sha256": "ca254487013227fc3558e5f052dfade91a96aed04c35a69fdfef81eb402a2091"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\scattering-rough-glass-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\scattering-rough-glass-lit.rgba16f",
+      "sha256": "380b406910bca7a6c3742843db7ae644f9ace94f2b2e0675f9e6427fbb9d1d14"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\shrink.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\thin-1-1.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\thin-1-2.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\thin-1-8.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\thin-2-1.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\thin-2-2.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\thin-2-8.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\thin-8-1.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\thin-8-2.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\thin-8-8.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\zero-density-caustics-off.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native\\zero-density-caustics-on.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-native.log",
+      "sha256": "85cfc3443c74fb77ade644b0b98b3ee2b204850f022c1bb3c022de6853697721"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\full-validation.jsonl",
+      "sha256": "1fafe6244fbdf249485ed0326a66d63602a6c999437d93eac688d5ba4691c251"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\hdr-fixed\\micro-all-0.rgba16f",
+      "sha256": "6d370a47903de3af83a6e73c04e9cd6b37017f7494f1c85f3c67ee98fc8695cf"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\hdr-fixed\\micro-all-1.rgba16f",
+      "sha256": "94b919a94044182902c214c471cb72a2fd3e59eb11cb84b583f3a40e22b23639"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\hdr-strict-compare.json",
+      "sha256": "ef29adbdcadd8ff3c39f1ce0045146acf1ef92cb9c7ffe799d20b1f7d3f4b2df"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\hdr-test.log",
+      "sha256": "e05c7747c96c19795078a3bc0ca30a3c693b4efb43b00d76d590dd1c4fda9c69"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\idle-throughput-summary.json",
+      "sha256": "a3713778cd77979de95dae0ff0b6a1aa6119d7669bd22010830c8679d46e07a2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\long-regression-matrix-off\\artifacts.json",
+      "sha256": "a9fb490ba8aae528ae842525d1ee113d3a4fee088407136d2280ccbb0c4c7d28"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\long-regression-matrix-off\\initial-gpu.csv",
+      "sha256": "de6be2ed2c7eec20cf646fa4f4019c1df9893451f0476029e6f9150603ccafab"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\long-regression-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\long-regression-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\long-regression-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\long-regression-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "c2d61e0067c641de8520838a4d017008852c89636ed331a02f753e0cb9485067"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\long-regression-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "3ccf8918273a08dd3b8fc400f046f9394fa24c307d557708beeed6cf7ae6847e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\long-regression-matrix-off\\run.log",
+      "sha256": "98b2994cb02308565edc26f97026974b2baac62f7d705416e83c823fa64e7f50"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\long-regression-matrix-off\\runtime.json",
+      "sha256": "c875ed37624eaf93dacf521db331655bed710af63c615d1a29660b08a9eeae7e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\matrix-test-classes.jar",
+      "sha256": "6a5ea7ee228071fbeedc21be0f69d81dc77729f56e7278652d4bd36eee7c09e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\connection-range-checks.json",
+      "sha256": "5fdad30da30cc4c6d26b4ef4d9bb3b329d7fed90ad30e2a7cbfb6de2cde313f5"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-false-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-compact-true-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-false-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-full-true-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-false-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-connections\\range-transposed-true-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\native-test-classes.jar",
+      "sha256": "a7ccd2edb30ad00548876689d8fc68a82ac72db2366b9470912a77cac06a584d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-candidate-matrix-timings\\artifacts.json",
+      "sha256": "a9fb490ba8aae528ae842525d1ee113d3a4fee088407136d2280ccbb0c4c7d28"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-candidate-matrix-timings\\initial-gpu.csv",
+      "sha256": "efab37b3d42d1ccf1293f300d49bdc135077012401c6b2527c292eb29606eb03"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "8b065581f48c3a840e1f1b3b899398c2e96737ee95ef9aaa1b1c620610ff4b1d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "ef9d45b7eebe71c943515844c9c00729e00e597daee0d37f8f56f9bafa1c4cf1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-candidate-matrix-timings\\micro-all-1080p-profiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-candidate-matrix-timings\\micro-all-1080p-profiled.csv",
+      "sha256": "adecf8d5cfa901b303bfe8c2dcbe2743510285c41680e1240d0bb1dac3cfc25e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-candidate-matrix-timings\\micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "66584beac8490b9a05e3b4a6afb554c260728d226edcd3beb30ef8ef80241405"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-candidate-matrix-timings\\micro-all-1080p-wall-timeline-round-2.json",
+      "sha256": "3352ae6974a709a71c3c7b90ef7aa3f62d7e4fd2f70ce6446a86c5df33d60be5"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-candidate-matrix-timings\\micro-profiled-coverage.json",
+      "sha256": "de615f8508573bcc6f1928edf09f253c7464e67018bc91a9c050c0b499a0038c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-candidate-matrix-timings\\run.log",
+      "sha256": "907ceb1f908f7ae2a7050e560c2c2a756f4c50a5b21ec2a0382f0041cbb8579b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-candidate-matrix-timings\\runtime.json",
+      "sha256": "90305d9a3662454e0373e7f9cc8224d1b5ef8a05326783fbf551ccdf40e3fa64"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-idle-comparison.json",
+      "sha256": "697b043d80254ccb28db7920a5e50190b16054e28e28e57e08a406bce3ec533b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\ranked-summary.json",
+      "sha256": "2163739a8c4791365b3e80924f9b2d74bf4ceaec2d0f649f3a93af055a783aa7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\shader-precompiled.log",
+      "sha256": "88cd18c86e9d471dca0f1a272375793c3a7e5deffe25011b9dc5b1f54741059e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\source-commit.txt",
+      "sha256": "f701aa3151c00ff3703158ab3c72ccd5d6114498f362961e3e9937601b6080d8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-forward-u-matrix-off\\artifacts.json",
+      "sha256": "a9fb490ba8aae528ae842525d1ee113d3a4fee088407136d2280ccbb0c4c7d28"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-forward-u-matrix-off\\initial-gpu.csv",
+      "sha256": "6d064d457d509264fcc570241098d5046ba7f2769dd59ffe7e45dfb29324d7ca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-forward-u-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-forward-u-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-forward-u-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-forward-u-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "3c258f07b38eb082e9d1ec3fb338ec8bdce761c7b502f74a5a9bf8c1d32a1332"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-forward-u-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-forward-u-matrix-off\\run.log",
+      "sha256": "db38fc9fffd864029fb741d3e9a8f1d5fe61056a4869ec5cc3bc640fdad19149"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-forward-u-matrix-off\\runtime.json",
+      "sha256": "0ffa0ef979bbf67b3d94eb6137a4836a992d566ec30ba73fa45be72c280f0cac"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-reverse-u-matrix-off\\artifacts.json",
+      "sha256": "a9fb490ba8aae528ae842525d1ee113d3a4fee088407136d2280ccbb0c4c7d28"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-reverse-u-matrix-off\\initial-gpu.csv",
+      "sha256": "2b6b555a1aad3ccd205e1c5e2d467c86b7ca60f948cca271ad753efe4d74b952"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-reverse-u-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-reverse-u-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-reverse-u-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-reverse-u-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "44d05027f12beff5b969097eb79d54f0f8c62bff40e03b3797927d4f7aef6223"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-reverse-u-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-reverse-u-matrix-off\\run.log",
+      "sha256": "dc75922a9d8c10c3759dace9c55471ce7a2329ba12a990e1ed7551ee568698e4"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\u-clean-reverse-u-matrix-off\\runtime.json",
+      "sha256": "2358d8999de642573508f3ce5d3aa57153d64b8aeef8ad7c0591bac93af60c97"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\validation-summary.json",
+      "sha256": "fef9e30b9d97cb4af1311c46edcfb6c4afb8e98e9df729de13bfc3533f184430"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\work-count-summary.json",
+      "sha256": "d11ccdd4db1299aac7e9872eff21e5a94bcc6e9d1e81c7c0029623f038c83ab0"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\work-counts-matrix-optical\\artifacts.json",
+      "sha256": "a9fb490ba8aae528ae842525d1ee113d3a4fee088407136d2280ccbb0c4c7d28"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\work-counts-matrix-optical\\initial-gpu.csv",
+      "sha256": "3d6b16c8aee419e85ed4a9ee724d1444690056567596fd693bffb045c64419f3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\work-counts-matrix-optical\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "d36eae8432e16623aba8ed893ef6f15f2203eef05dc8cf070030044b715f6390"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\work-counts-matrix-optical\\micro-all-1080p-optical-shader-group-7-round-1.json",
+      "sha256": "ab136caef2137c50f803dc70d9a168dab910aaa1311e879e55fcc00f365843a0"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\work-counts-matrix-optical\\micro-all-1080p-profiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\work-counts-matrix-optical\\micro-all-1080p-profiled.csv",
+      "sha256": "9b1c3a757311006e8b1f4f549a70a6d83a348b6f1bfafee95c3d0947fdf35687"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\work-counts-matrix-optical\\micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "c9789c9c112f3c8631fbfe66a0d6aa4c0d055ed7f52b702e465b442d23fa65d6"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\work-counts-matrix-optical\\micro-profiled-coverage.json",
+      "sha256": "3d5f1839634163e1142139d9686a452ff51e5e10079e78aa83dff777316abd2d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\work-counts-matrix-optical\\run.log",
+      "sha256": "e3745ddff5fa9475a8219c8b9384f9f667afef53b21e2a3da89bdf9fe3c4ca1f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\task-queues\\work-counts-matrix-optical\\runtime.json",
+      "sha256": "a6a25e5b9f4f7a3d800efb4c1cc4ad1b1938d2076b19933d68ac2144062665f6"
+    }
+  ]
+}
