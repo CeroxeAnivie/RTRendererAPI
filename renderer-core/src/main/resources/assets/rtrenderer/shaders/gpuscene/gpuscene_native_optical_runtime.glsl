@@ -206,11 +206,28 @@ void gsOpticalStateWrite(uint item,uint lane,uvec4 value) {
     uint lanes=(gsOptical.storage.lanes[11u].w&2u)!=0u?7u:16u;
     gsOptical.storage.lanes[state/4u+item*lanes+lane]=value;
 }
+float gsOpticalNextFloat(float value,bool positive) {
+    if(value==0.0)return uintBitsToFloat(positive?1u:0x80000001u);
+    uint bits=floatBitsToUint(value);
+    return uintBitsToFloat((value>0.0)==positive?bits+1u:bits-1u);
+}
+vec3 gsOpticalLightOrigin(vec3 point,vec3 normal,float bound) {
+    vec3 offset=normal*max(1e-5,bound),result=point+offset;
+    for(uint axis=0u;axis<3u;++axis)if(offset[axis]!=0.0)
+        result[axis]=gsOpticalNextFloat(result[axis],offset[axis]>0.0);
+    return result;
+}
 // Select light geometry only. CUDA owns phase, density attenuation and the copied medium stack.
 void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 launch,uint epoch,bool initialize,uint hitOffset) {
     uint base=gsOptical.storage.lanes[4u].z/16u+item*22u;
     if(initialize) {
         uvec4 control=gsOptical.storage.lanes[base+5u];uint ordinal=control.x;
+        // PBRT SpawnRayTo: offset the source first, then aim at the finite light endpoint.
+        // Moving it after computing direction creates a parallel ray that misses that endpoint.
+        if(control.w!=0u) {
+            vec4 normal=uintBitsToFloat(gsOptical.storage.lanes[base+16u]);
+            position=gsOpticalLightOrigin(position,normal.xyz,normal.w);
+        }
 #ifdef RTRENDERER_CAUSTICS
         if(ordinal==0u&&control.w==0u) {
             uint selected=(gsOptical.storage.lanes[11u].w&2u)!=0u?GS_INVALID_SLOT:gsOpticalStateRead(item,7u).x;
@@ -273,7 +290,6 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
                 GsRadianceSplit brdf=gsEvaluateBrdf(normal,view,direction,material.xyz,material.w,metallic);
                 source*=gsRadiance(brdf);
             }
-            position+=normal*gsRayEpsilon(position);
         }
         gsOptical.storage.lanes[base]=floatBitsToUint(vec4(position,distance));
         gsOptical.storage.lanes[base+1u]=floatBitsToUint(vec4(direction,0));
