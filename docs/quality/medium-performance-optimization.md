@@ -1812,3 +1812,9 @@ any-hit拆分候选已完成4+64帧，但退出阶段仍在2.516GB提交上限�
 此前原生探针只记录 attach 后至少64 KiB的虚拟提交，漏掉小提交及section映射，不能据此把模块增长直接认定为完整根因。新增同进程联合观察：每0.2秒进程private commit、每秒VirtualQueryEx全部已提交区域及映射文件、七类NtAllocate/Free/Map/Unmap普通与Ex API的全尺寸分配/释放/失败申请与96层原生栈、JFR业务阶段及调用栈、每5秒NMT分类与交替JFR检查点。JFR/NMT转储在外部后台线程进行，不阻塞进程内存采样。可选ready文件只在显式开启内存诊断时等待观察器，避免渲染启动早于挂钩。
 
 汇总必须区分进程private commit、MEM_PRIVATE、MEM_MAPPED、MEM_IMAGE、观察到的存活区间、首次扫描时已存在的地址、之后未归因区域；保留process private commit与MEM_PRIVATE之差的符号，不把映射总字节与private commit相加。堆内部逐对象尚未记录，不能宣称覆盖所有malloc。只在同一复现中核对过覆盖率、增长调用栈与本项目触发操作后才允许下根因结论；本次先运行上述粒度，不继续扩充工具、不提前宣布修好。仍遵守3 GB总预算、2.5 GB执行树上限，诊断运行不用于FPS验收。
+
+实跑3625035冻结core SHA256 `2ab5cf0d2dfa11e61a4b010b7405cd73a8d1f836dd71b27451f2c0a976db7539`，micro-all 1080p/1 SPP/collected=true，初始GPU 0%。取得15011条完整原生记录、28次全地址扫描、JFR/NMT检查点，正常复现OOM。峰值进程private commit 2498.740224 MB，其中MEM_PRIVATE 2417.491968 MB；按栈归因1193.963520 MB，初始地址233.132032 MB，新增未归因990.396416 MB；另有进程commit与MEM_PRIVATE差81.248256 MB。映射和image单列，不重复相加。
+
+最后14.375666至21.590326秒，进程增长689.496064 MB，线程31436的已捕获private提交净增684.068864 MB，占99.2129%。该线程的nvgpucomp调用栈在观察结束时存活849.588224 MB；首个失败发生于21.068秒，STATUS_COMMITMENT_LIMIT (0xc000012d)，请求1114112 bytes，原生栈含nvgpucomp64+0x58c801/0x58fe31/0x590c62，外层nvrtum64→nvoglv64后台线程。随后Java C2线程分配失败，不能反过来把C2认作主要增长来源。
+
+这证明后段持续增长和最先申请失败的具体线程/原生栈，尚未证明该异步编译工作对应哪一个shader/哪个编译pass，也未解释启动阶段990.40 MB未归因区间。不得把DLL偏移称为已有符号的函数名，不宣称完整根因已锁定或bug已修复。目标退出后最后一次census收到access denied，已有记录未丢失；不使用这次诊断帧率作性能验收。[精简证据](data/runtime-memory-growth-20261101.json)。
