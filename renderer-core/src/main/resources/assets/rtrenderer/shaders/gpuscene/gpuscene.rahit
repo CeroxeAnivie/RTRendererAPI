@@ -3,6 +3,7 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 #include "gpuscene_common.glsl"
+#include "gpuscene_boundary_intersection.glsl"
 
 layout(location = 0) rayPayloadInEXT GpuScenePayload payload;
 hitAttributeEXT vec2 hitAttributes;
@@ -10,7 +11,11 @@ hitAttributeEXT vec2 hitAttributes;
 void main()
 {
     GS_DETAIL_BEGIN(48u);
-    if((gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD)&2u)!=0u){GS_DETAIL_END();return;}
+    uint boundaryFlags=gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
+    if(boundaryFlags!=0u&&!gsBoundaryCandidateValid(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),gl_PrimitiveID,hitAttributes)) {
+        GS_DETAIL_END();ignoreIntersectionEXT;return;
+    }
+    if((boundaryFlags&2u)!=0u){GS_DETAIL_END();return;}
     GS_DETAIL_NEXT(49u);
     uint meshSlot = gsInstanceMeshSlot(gl_InstanceCustomIndexEXT);
     uint meshBase = gsMeshBase(meshSlot);

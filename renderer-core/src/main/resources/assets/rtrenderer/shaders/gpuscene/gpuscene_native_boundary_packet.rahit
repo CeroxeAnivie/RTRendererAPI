@@ -4,6 +4,7 @@
 #extension GL_EXT_buffer_reference : require
 
 #include "gpuscene_common.glsl"
+#include "gpuscene_boundary_intersection.glsl"
 
 layout(location = 0) rayPayloadInEXT GpuScenePayload payload;
 hitAttributeEXT vec2 hitAttributes;
@@ -22,6 +23,7 @@ void gsPacketPut(uint base,uint index,uvec2 value) {
     if((index&1u)==0u)pair.xy=value;else pair.zw=value;dispatch.storage.lanes[lane]=pair;
 }
 void gsCollectBoundary() {
+    if(!gsBoundaryCandidateValid(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),gl_PrimitiveID,hitAttributes))return;
     uint slot=gl_InstanceCustomIndexEXT,low=0u,high=dispatch.storage.lanes[1u].w;
     uint table=dispatch.storage.lanes[3u].y/16u;
     while(low<high) {uint m=low+(high-low)/2u;if(dispatch.storage.lanes[table+m*4u].x<slot)low=m+1u;else high=m;}

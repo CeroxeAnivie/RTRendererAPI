@@ -102,7 +102,8 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             var plan=CudaOpticalMediumAbi.plan(width,height,samples,boundaries.size(),density,limit-photonBytes,
                     base.externalPrimary(),base.directPrimary(),base.compactHits(),base.compactStates(),base.transposedHits(),base.transposedStates(),base.transposedPrimary(),connections);
             byte[] metadata=CudaOpticalMediumAbi.scenePrefix(plan,frame,boundaries,scene.containing(),density);
-            if(opaqueRadianceProof && Boolean.parseBoolean(System.getProperty("top.ceroxe.rt.medium.cuda.opticalOpaqueRadiance","false"))) {
+            if(opaqueRadianceProof && boundaries.isEmpty()
+                    && Boolean.parseBoolean(System.getProperty("top.ceroxe.rt.medium.cuda.opticalOpaqueRadiance","false"))) {
                 var header=java.nio.ByteBuffer.wrap(metadata).order(ByteOrder.nativeOrder());
                 header.putInt(188,header.getInt(188)|64);
             }
