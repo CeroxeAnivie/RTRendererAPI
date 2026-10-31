@@ -36,6 +36,7 @@ public final class CudaOpticalMediumAbi {
     public static final String REUSE_DUPLICATE_BRANCHES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalReuseDuplicateBranches";
     public static final String BATCH_CONNECTION_HITS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalBatchConnectionHits";
     public static final String VERTEX_DIRECT_LIGHTING_PROPERTY="top.ceroxe.rt.medium.cuda.opticalVertexDirectLighting";
+    public static final String REUSE_BOUNDARY_HIT_PROPERTY="top.ceroxe.rt.medium.cuda.opticalReuseBoundaryHit";
     public static final long RESOLVED_RADIANCE_FLAG=1L;
     private CudaOpticalMediumAbi() { }
     public static boolean vertexDirectLighting(){return !OpticalFrameTimings.KERNEL_PHASES&&Boolean.parseBoolean(System.getProperty(VERTEX_DIRECT_LIGHTING_PROPERTY,"true"));}
@@ -171,7 +172,8 @@ public final class CudaOpticalMediumAbi {
                         |(Boolean.parseBoolean(System.getProperty(SKIP_EMPTY_CONNECTIONS_PROPERTY,"true"))?512:0)
                         |(Boolean.parseBoolean(System.getProperty(BOUND_CONNECTION_RAYS_PROPERTY,"true"))?2048:0)
                         |(Boolean.parseBoolean(System.getProperty(REUSE_DUPLICATE_BRANCHES_PROPERTY,"true"))?4096:0)
-                        |(plan.connectionBatchSize()==2?8192:0)|(plan.connectionTransport()&&vertexDirectLighting()?16384:0));
+                        |(plan.connectionBatchSize()==2?8192:0)|(plan.connectionTransport()&&vertexDirectLighting()?16384:0)
+                        |(Boolean.parseBoolean(System.getProperty(REUSE_BOUNDARY_HIT_PROPERTY,"true"))?32768:0));
         packed.putInt(200,Math.toIntExact(plan.firstQueueOffset())).putInt(204,Math.toIntExact(plan.secondQueueOffset()));
         // These words share the opt-in clock sampling area, which disables batching.
         packed.putInt(228,plan.secondConnectionHitOffset()).putInt(232,plan.connectionBatchSize());

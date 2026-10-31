@@ -11,6 +11,8 @@ const uint GS_PAYLOAD_SHADOW_QUERY = 1u;
 const uint GS_PAYLOAD_BACK_FACE = 2u;
 const uint GS_PAYLOAD_PHOTON_QUERY = 3u;
 #define GS_PAYLOAD_OPTICAL_CONNECTION_QUERY 4u
+// Private query token; final hit shaders restore the public motion/history fields.
+#define GS_OPTICAL_BOUNDARY_HIT_REUSE 0x52424831u
 const float GS_PI = 3.14159265358979323846;
 
 layout(set = 0, binding = GPU_SCENE_BINDING_FRAME_UNIFORMS, std430)

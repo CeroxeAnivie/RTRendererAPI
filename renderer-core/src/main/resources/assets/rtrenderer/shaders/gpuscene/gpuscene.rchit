@@ -62,9 +62,18 @@ void main()
     uint boundaryFlags=gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
     uint hitPrimitive=gl_PrimitiveID;vec2 hitBary=hitAttributes;float hitDistance=gl_HitTEXT;
     bool connection=payload.state.y==GS_PAYLOAD_OPTICAL_CONNECTION_QUERY;
-    if(connection&&boundaryFlags!=0u){uint primitive;vec2 bary;float distance;
-        if(gsBoundaryConnectionHit(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),hitPrimitive,hitBary,
-                gl_RayTminEXT,primitive,bary,distance)){hitPrimitive=primitive;hitBary=bary;hitDistance=distance;}}
+    if(connection&&boundaryFlags!=0u){
+        if(payload.state.z==GS_OPTICAL_BOUNDARY_HIT_REUSE
+                &&all(equal(payload.motionRevision,uvec2(gl_InstanceCustomIndexEXT,gl_PrimitiveID)))) {
+            hitPrimitive=floatBitsToUint(payload.previousWorldPosition.w);
+            hitBary=payload.previousWorldPosition.xy;hitDistance=payload.previousWorldPosition.z;
+        } else {uint primitive;vec2 bary;float distance;
+            // Opaque traversal and a cache replaced by another any-hit candidate
+            // retain the exact original geometric classification and error handling.
+            if(gsBoundaryConnectionHit(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),hitPrimitive,hitBary,
+                    gl_RayTminEXT,primitive,bary,distance)){hitPrimitive=primitive;hitBary=bary;hitDistance=distance;}
+        }
+    }
     if((boundaryFlags&2u)!=0u) {
         uint mesh=gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT));
         uvec3 indices=gsTriangleIndices(mesh,hitPrimitive);

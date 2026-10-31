@@ -1,0 +1,1534 @@
+{
+  "candidateCommit": "6f9def392dd96aa3f2b69fc3838604f4d9169c30",
+  "decision": "correctness passed; throughput acceptance pending clean-GPU comparison; preserve architectural direction while eliminating redundant Vulkan work",
+  "runs": [
+    {
+      "directory": "build\\medium-micro-all-20261031\\sub-ulp-connection-intervals\\r-forward-baseline-matrix-off",
+      "frames": 32,
+      "wallMs": 10567.8845,
+      "msPerFrame": 330.246390625,
+      "fps": 3.0280421781672575,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 49 %, 73.73 W, 1657 MHz, 74"
+    },
+    {
+      "directory": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\forward-candidate-matrix-off",
+      "frames": 32,
+      "wallMs": 10003.503,
+      "msPerFrame": 312.60946875,
+      "fps": 3.198879432534783,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 43 %, 57.25 W, 1380 MHz, 73"
+    },
+    {
+      "directory": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\reverse-candidate-matrix-off",
+      "frames": 32,
+      "wallMs": 11766.4141,
+      "msPerFrame": 367.700440625,
+      "fps": 2.719605117416359,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 32 %, 63.97 W, 1342 MHz, 73"
+    },
+    {
+      "directory": "build\\medium-micro-all-20261031\\sub-ulp-connection-intervals\\r-reverse-baseline-matrix-off",
+      "frames": 32,
+      "wallMs": 10541.2322,
+      "msPerFrame": 329.41350625,
+      "fps": 3.035698236492694,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 46 %, 71.41 W, 1582 MHz, 74"
+    }
+  ],
+  "absoluteComparisonAllowed": false,
+  "ranked": {
+    "msPerFrame": 310.329165625,
+    "frames": 32,
+    "events": 101446,
+    "dropped": 0,
+    "rows": [
+      {
+        "stage": "CUDA_STREAM_SYNCHRONIZE",
+        "msPerFrame": 270.165275,
+        "msPerSecond": 870.5764875689003,
+        "percentWall": 87.05764875689003
+      },
+      {
+        "stage": "VULKAN_RELEASE_RECORD",
+        "msPerFrame": 7.655434375,
+        "msPerSecond": 24.668755705194606,
+        "percentWall": 2.4668755705194605
+      },
+      {
+        "stage": "CUDA_KERNEL_ENQUEUE",
+        "msPerFrame": 6.633793750000001,
+        "msPerSecond": 21.376636439052074,
+        "percentWall": 2.1376636439052072
+      },
+      {
+        "stage": "VULKAN_RELEASE_SUBMIT",
+        "msPerFrame": 4.080303125,
+        "msPerSecond": 13.148306949436444,
+        "percentWall": 1.3148306949436446
+      },
+      {
+        "stage": "CUDA_SEMAPHORE_WAIT_ENQUEUE",
+        "msPerFrame": 3.020140625,
+        "msPerSecond": 9.732055377126624,
+        "percentWall": 0.9732055377126625
+      },
+      {
+        "stage": "CUDA_SEMAPHORE_SIGNAL_ENQUEUE",
+        "msPerFrame": 2.171303125,
+        "msPerSecond": 6.996774282001553,
+        "percentWall": 0.6996774282001553
+      },
+      {
+        "stage": "VULKAN_CONSUMER_SUBMIT",
+        "msPerFrame": 1.9402937500000002,
+        "msPerSecond": 6.2523731731507315,
+        "percentWall": 0.6252373173150731
+      },
+      {
+        "stage": "VULKAN_CONSUMER_FENCE_WAIT",
+        "msPerFrame": 1.86324375,
+        "msPerSecond": 6.00408842091089,
+        "percentWall": 0.600408842091089
+      },
+      {
+        "stage": "CUDA_DOWNLOAD_ASYNC_ENQUEUE",
+        "msPerFrame": 1.85918125,
+        "msPerSecond": 5.990997482481632,
+        "percentWall": 0.5990997482481631
+      },
+      {
+        "stage": "CUDA_CONTEXT_POP",
+        "msPerFrame": 1.5958749999999997,
+        "msPerSecond": 5.142523413118205,
+        "percentWall": 0.5142523413118205
+      },
+      {
+        "stage": "CUDA_KERNEL_EVENT_RESOLVE",
+        "msPerFrame": 1.26094375,
+        "msPerSecond": 4.063246029294318,
+        "percentWall": 0.40632460292943184
+      },
+      {
+        "stage": "NATIVE_TASK_EXECUTION",
+        "msPerFrame": 1.241396875,
+        "msPerSecond": 4.000258475544309,
+        "percentWall": 0.40002584755443094
+      },
+      {
+        "stage": "CUDA_EXCHANGE",
+        "msPerFrame": 0.762134375,
+        "msPerSecond": 2.4558902591867855,
+        "percentWall": 0.24558902591867854
+      },
+      {
+        "stage": "GPU_QUERY_RESOLVE",
+        "msPerFrame": 0.716415625,
+        "msPerSecond": 2.308566852094439,
+        "percentWall": 0.2308566852094439
+      },
+      {
+        "stage": "CUDA_CONTEXT_PUSH",
+        "msPerFrame": 0.675159375,
+        "msPerSecond": 2.1756233373690015,
+        "percentWall": 0.21756233373690015
+      },
+      {
+        "stage": "CUDA_DOWNLOAD",
+        "msPerFrame": 0.63238125,
+        "msPerSecond": 2.037775755708911,
+        "percentWall": 0.20377757557089107
+      },
+      {
+        "stage": "PARK",
+        "msPerFrame": 0.627465625,
+        "msPerSecond": 2.021935720209508,
+        "percentWall": 0.2021935720209508
+      },
+      {
+        "stage": "VULKAN_COMMAND_REUSE_WAIT",
+        "msPerFrame": 0.5551625,
+        "msPerSecond": 1.7889472260266224,
+        "percentWall": 0.17889472260266226
+      },
+      {
+        "stage": "FINAL_FRAME_RECORD_AND_SUBMIT",
+        "msPerFrame": 0.4717875,
+        "msPerSecond": 1.5202808896476891,
+        "percentWall": 0.1520280889647689
+      },
+      {
+        "stage": "ROUTE_AND_PIPELINES",
+        "msPerFrame": 0.437065625,
+        "msPerSecond": 1.4083936458880815,
+        "percentWall": 0.14083936458880814
+      },
+      {
+        "stage": "TEMPORAL_UNIFORMS_DESCRIPTORS",
+        "msPerFrame": 0.41809375,
+        "msPerSecond": 1.3472589634234449,
+        "percentWall": 0.13472589634234447
+      },
+      {
+        "stage": "VULKAN_CONSUMER_RECORD",
+        "msPerFrame": 0.27635624999999997,
+        "msPerSecond": 0.8905261915792578,
+        "percentWall": 0.08905261915792578
+      },
+      {
+        "stage": "OPTICAL_MEDIUM_NATIVE",
+        "msPerFrame": 0.215015625,
+        "msPerSecond": 0.6928630912500944,
+        "percentWall": 0.06928630912500944
+      },
+      {
+        "stage": "SESSION_PUMP",
+        "msPerFrame": 0.168765625,
+        "msPerSecond": 0.5438277922093067,
+        "percentWall": 0.05438277922093067
+      },
+      {
+        "stage": "DIAGNOSTICS",
+        "msPerFrame": 0.13036875,
+        "msPerSecond": 0.42009828414753925,
+        "percentWall": 0.042009828414753925
+      },
+      {
+        "stage": "HOST_ADMISSION",
+        "msPerFrame": 0.105815625,
+        "msPerSecond": 0.34097866627162915,
+        "percentWall": 0.034097866627162916
+      },
+      {
+        "stage": "RESOURCE_BUDGET_AND_ENSURE",
+        "msPerFrame": 0.088809375,
+        "msPerSecond": 0.286177984016226,
+        "percentWall": 0.028617798401622603
+      },
+      {
+        "stage": "CUDA_CONTEXT_SYNCHRONIZE",
+        "msPerFrame": 0.086396875,
+        "msPerSecond": 0.2784039805797741,
+        "percentWall": 0.02784039805797741
+      },
+      {
+        "stage": "FRAME_POLL_AND_LEASE",
+        "msPerFrame": 0.076146875,
+        "msPerSecond": 0.24537453592749142,
+        "percentWall": 0.024537453592749142
+      },
+      {
+        "stage": "CUDA_UPLOAD",
+        "msPerFrame": 0.071496875,
+        "msPerSecond": 0.23039044640230957,
+        "percentWall": 0.023039044640230957
+      },
+      {
+        "stage": "REQUEST_BUILD",
+        "msPerFrame": 0.06744375,
+        "msPerSecond": 0.21732971783096483,
+        "percentWall": 0.021732971783096484
+      },
+      {
+        "stage": "CUDA_NATIVE_CALLBACK",
+        "msPerFrame": 0.059765625,
+        "msPerSecond": 0.19258784419966654,
+        "percentWall": 0.019258784419966653
+      },
+      {
+        "stage": "SHARED_EXCHANGE",
+        "msPerFrame": 0.03649375,
+        "msPerSecond": 0.1175969069052918,
+        "percentWall": 0.011759690690529179
+      },
+      {
+        "stage": "SLOT_PUBLICATION",
+        "msPerFrame": 0.027196875,
+        "msPerSecond": 0.0876387978075659,
+        "percentWall": 0.008763879780756588
+      },
+      {
+        "stage": "SESSION_ADMISSION",
+        "msPerFrame": 0.025128125,
+        "msPerSecond": 0.08097248916128202,
+        "percentWall": 0.008097248916128202
+      },
+      {
+        "stage": "CUDA_COMPLETION_CALLBACK",
+        "msPerFrame": 0.024425,
+        "msPerSecond": 0.07870674981775651,
+        "percentWall": 0.007870674981775651
+      },
+      {
+        "stage": "FEATURE_EXTENT_NEGOTIATION",
+        "msPerFrame": 0.0241625,
+        "msPerSecond": 0.07786087379617367,
+        "percentWall": 0.007786087379617368
+      },
+      {
+        "stage": "FRAME_PRIMITIVES",
+        "msPerFrame": 0.023284375,
+        "msPerSecond": 0.07503121710492629,
+        "percentWall": 0.007503121710492629
+      },
+      {
+        "stage": "FEATURE_INPUT_REUSE",
+        "msPerFrame": 0.013496875,
+        "msPerSecond": 0.043492125443051484,
+        "percentWall": 0.0043492125443051486
+      },
+      {
+        "stage": "MEDIUM_RESOLVE_PREPARE",
+        "msPerFrame": 0.013484375,
+        "msPerSecond": 0.04345184563249992,
+        "percentWall": 0.004345184563249993
+      },
+      {
+        "stage": "WINDOW",
+        "msPerFrame": 0.00803125,
+        "msPerSecond": 0.025879778279380025,
+        "percentWall": 0.0025879778279380024
+      },
+      {
+        "stage": "TRY_SUBMIT",
+        "msPerFrame": 0.002496875,
+        "msPerSecond": 0.008045892157674957,
+        "percentWall": 0.0008045892157674956
+      },
+      {
+        "stage": "FRAME_PREPARATION",
+        "msPerFrame": 0.001409375,
+        "msPerSecond": 0.004541548639688868,
+        "percentWall": 0.0004541548639688868
+      },
+      {
+        "stage": "CAMERA_SCATTERING_PREPARE",
+        "msPerFrame": 0.000325,
+        "msPerSecond": 0.0010472750743406702,
+        "percentWall": 0.00010472750743406702
+      }
+    ]
+  },
+  "correctness": {
+    "paths": {
+      "passed": true,
+      "boundedComparisons": 44,
+      "nativeFrames": 88,
+      "continuedQueriesBefore": 1799767,
+      "continuedQueriesAfter": 1263041
+    },
+    "connections": {
+      "passed": true,
+      "boundedComparisons": 84,
+      "nativeFrames": 168,
+      "mirroredVertexOrders": 2,
+      "hitFormats": 3
+    },
+    "hdr": {
+      "passed": true,
+      "mode": "bounded",
+      "supportingReferenceCommit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+      "frames": [
+        {
+          "file": "micro-all-0.rgba16f",
+          "bytes": 16588800,
+          "pixels": 2073600,
+          "byteIdentical": false,
+          "alphaExact": true,
+          "relativeRms": 2.3234897674436277e-06,
+          "luminanceEnergyRelativeError": 2.440868693793929e-08,
+          "maxAbsoluteChannelError": 0.0009765625,
+          "referenceAbsoluteP99": 0.6396484375,
+          "changedRgbComponents": 185,
+          "limits": {
+            "relativeRms": 0.001,
+            "luminanceEnergyRelativeError": 0.001,
+            "maxAbsoluteChannelError": 0.0032082421875
+          },
+          "passed": true,
+          "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+          "candidateSha256": "6d370a47903de3af83a6e73c04e9cd6b37017f7494f1c85f3c67ee98fc8695cf"
+        },
+        {
+          "file": "micro-all-1.rgba16f",
+          "bytes": 16588800,
+          "pixels": 2073600,
+          "byteIdentical": false,
+          "alphaExact": true,
+          "relativeRms": 2.305268352206454e-06,
+          "luminanceEnergyRelativeError": 2.1358741778754782e-08,
+          "maxAbsoluteChannelError": 0.00048828125,
+          "referenceAbsoluteP99": 0.630859375,
+          "changedRgbComponents": 197,
+          "limits": {
+            "relativeRms": 0.001,
+            "luminanceEnergyRelativeError": 0.001,
+            "maxAbsoluteChannelError": 0.003164296875
+          },
+          "passed": true,
+          "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+          "candidateSha256": "94b919a94044182902c214c471cb72a2fd3e59eb11cb84b583f3a40e22b23639"
+        }
+      ],
+      "maxRelativeRms": 2.3234897674436277e-06,
+      "maxLuminanceEnergyRelativeError": 2.440868693793929e-08,
+      "maxAbsoluteChannelError": 0.0009765625
+    },
+    "production": {
+      "passed": true,
+      "nativeFrames": 152,
+      "recoverableRejections": 1,
+      "comparisons": [
+        {
+          "name": "thin-optical1-SPP1",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical1-SPP2",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical1-SPP8",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical2-SPP1",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical2-SPP2",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical2-SPP8",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical8-SPP1",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical8-SPP2",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical8-SPP8",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "one-event-no-unbudgeted-continuation"
+        },
+        {
+          "name": "equal-IOR"
+        },
+        {
+          "name": "stochastic-first-interface",
+          "frames": 64,
+          "redMean": 0.426102325,
+          "blueMean": 0.0276929246
+        },
+        {
+          "name": "closed-boundary-inside-TIR"
+        },
+        {
+          "name": "closed-boundary-inside-unit-IOR"
+        },
+        {
+          "name": "nested-priority-inside-HDR"
+        },
+        {
+          "name": "density-glass-generation0-SPP1",
+          "maximumAbsoluteError": 0.000121024413
+        },
+        {
+          "name": "density-glass-generation0-SPP2",
+          "maximumAbsoluteError": 0.00012096559
+        },
+        {
+          "name": "density-glass-generation0-SPP8",
+          "maximumAbsoluteError": 0.000121803891
+        },
+        {
+          "name": "density-cache-generation0",
+          "assetUploads": 0,
+          "metadataBytes": 1536
+        },
+        {
+          "name": "density-glass-generation1-SPP1",
+          "maximumAbsoluteError": 0.000189760575
+        },
+        {
+          "name": "density-glass-generation1-SPP2",
+          "maximumAbsoluteError": 0.000189718711
+        },
+        {
+          "name": "density-glass-generation1-SPP8",
+          "maximumAbsoluteError": 0.000189712536
+        },
+        {
+          "name": "density-cache-generation1",
+          "assetUploads": 0,
+          "metadataBytes": 1536
+        },
+        {
+          "name": "nested-local-density-priority-two-SPP"
+        },
+        {
+          "name": "rough-0.12",
+          "redMean": 0.414983317,
+          "expectedRed": 0.415037079,
+          "blueMean": 0.0261006351,
+          "expectedBlue": 0.0260977352
+        },
+        {
+          "name": "rough-0.45",
+          "redMean": 0.357219373,
+          "expectedRed": 0.357235945,
+          "blueMean": 0.018306046,
+          "expectedBlue": 0.0182924122
+        },
+        {
+          "name": "rough-0.85",
+          "redMean": 0.289888096,
+          "expectedRed": 0.289381785,
+          "blueMean": 0.00857685086,
+          "expectedBlue": 0.00853589564
+        },
+        {
+          "name": "rough-stochastic",
+          "redMean": 0.354685589,
+          "expectedRed": 0.357235943,
+          "blueMean": 0.018384466,
+          "expectedBlue": 0.0182924119
+        },
+        {
+          "name": "rough-black-transmission",
+          "redMean": 2.48800786e-06,
+          "expectedRed": 0.0,
+          "blueMean": 0.0182219094,
+          "expectedBlue": 0.0182924119
+        },
+        {
+          "name": "rough-smooth-limit",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "rough-equal-IOR"
+        },
+        {
+          "name": "scattering-rough-glass",
+          "analyticRedMean": 0.0964482886,
+          "litEnergy": 0.348514269,
+          "darkEnergy": 0.0
+        },
+        {
+          "name": "heterogeneous-scattering-rough-glass",
+          "lateralEnergy": 0.00132907642,
+          "litEnergy": 0.167782089,
+          "darkEnergy": 0.0
+        },
+        {
+          "name": "explicit-IOR-boundary-scattering",
+          "litEnergy": 0.0359992697,
+          "insidePointEnergy": 0.0236763274,
+          "densityRoughEnergy": 0.0656758119,
+          "darkEnergy": 0.0
+        },
+        {
+          "name": "partial-unlit-terminal-color-and-emission"
+        },
+        {
+          "name": "partial-unlit-emission-light-independence"
+        },
+        {
+          "name": "resolved-publication-outline-SPP1"
+        },
+        {
+          "name": "resolved-publication-outline-SPP2"
+        },
+        {
+          "name": "resolved-publication-outline-SPP8"
+        },
+        {
+          "name": "partial-PBR-Snell-Fresnel-emission",
+          "maximumAbsoluteError": 0.0001953125
+        },
+        {
+          "name": "invalid-boundary-rejection-recovery",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "resize-eight-SPP",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "full-HD-multiple-optical-tiles",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "shrink-after-full-HD",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "PBR-boundary-density-camera-light-Beer",
+          "maximumAbsoluteError": 6.18522682e-05
+        },
+        {
+          "name": "resolved-publication-temporal-history-three-frames"
+        }
+      ]
+    },
+    "features": {
+      "scope": "micro combined scene and mutually exclusive request switches",
+      "suite": "micro-checks",
+      "complete": true,
+      "requiredFeatures": [
+        "ABSORPTION",
+        "ALL_LIGHTS",
+        "ALPHA_PRODUCT",
+        "BUILTIN_SHADER_DATA",
+        "DENSITY_GRID",
+        "DIRECTIONAL_LIGHT",
+        "DIRECT_SCATTER",
+        "EMISSION",
+        "FIRST_INTERFACE_OPTICAL_SAMPLES",
+        "FIRST_INTERFACE_SPLIT",
+        "FIRST_INTERFACE_STOCHASTIC",
+        "FOG",
+        "INWARD_BOUNDARY",
+        "LIGHTMAP",
+        "MATERIAL_ALPHA",
+        "METAL_FULL",
+        "METAL_PARTIAL",
+        "MULTIPLE_SCATTER",
+        "NESTED_PRIORITY",
+        "OVERLAY_ALPHA",
+        "OVERLAY_DEPTH_REJECT",
+        "OVERLAY_MASK_REJECT",
+        "OVERLAY_MULTIPLY",
+        "PARTIAL_TRANSMISSION",
+        "PBR_DOUBLE_SIDED",
+        "PBR_SINGLE_SIDED",
+        "PERSISTENT_BOUNDARY",
+        "PHASE_BACKWARD",
+        "PHASE_FORWARD",
+        "POINT_LIGHT",
+        "REFRACTION",
+        "ROUGH_GLASS",
+        "SHADOW_DISABLED",
+        "SMOOTH_GLASS",
+        "SPOT_LIGHT",
+        "SPP_2",
+        "SPP_8",
+        "SURFACE_CAUSTICS",
+        "SURFACE_VISIBILITY",
+        "TEXTURE_ALPHA",
+        "TRANSIENT_BOUNDARY",
+        "UNIFORM",
+        "UNLIT",
+        "VERTEX_ALPHA",
+        "VOLUME_CAUSTICS",
+        "ZERO_DENSITY"
+      ],
+      "executedFeatures": [
+        "ABSORPTION",
+        "ALL_LIGHTS",
+        "ALPHA_PRODUCT",
+        "BUILTIN_SHADER_DATA",
+        "DENSITY_GRID",
+        "DIRECTIONAL_LIGHT",
+        "DIRECT_SCATTER",
+        "EMISSION",
+        "FIRST_INTERFACE_OPTICAL_SAMPLES",
+        "FIRST_INTERFACE_SPLIT",
+        "FIRST_INTERFACE_STOCHASTIC",
+        "FOG",
+        "INWARD_BOUNDARY",
+        "LIGHTMAP",
+        "MATERIAL_ALPHA",
+        "METAL_FULL",
+        "METAL_PARTIAL",
+        "MULTIPLE_SCATTER",
+        "NESTED_PRIORITY",
+        "OVERLAY_ALPHA",
+        "OVERLAY_DEPTH_REJECT",
+        "OVERLAY_MASK_REJECT",
+        "OVERLAY_MULTIPLY",
+        "PARTIAL_TRANSMISSION",
+        "PBR_DOUBLE_SIDED",
+        "PBR_SINGLE_SIDED",
+        "PERSISTENT_BOUNDARY",
+        "PHASE_BACKWARD",
+        "PHASE_FORWARD",
+        "POINT_LIGHT",
+        "REFRACTION",
+        "ROUGH_GLASS",
+        "SHADOW_DISABLED",
+        "SMOOTH_GLASS",
+        "SPOT_LIGHT",
+        "SPP_2",
+        "SPP_8",
+        "SURFACE_CAUSTICS",
+        "SURFACE_VISIBILITY",
+        "TEXTURE_ALPHA",
+        "TRANSIENT_BOUNDARY",
+        "UNIFORM",
+        "UNLIT",
+        "VERTEX_ALPHA",
+        "VOLUME_CAUSTICS",
+        "ZERO_DENSITY"
+      ],
+      "cases": [
+        {
+          "case": "micro-all",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-all-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-direct",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "DIRECT_SCATTER",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-direct-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-stochastic",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_STOCHASTIC",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-stochastic-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-spp2",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SPP_2",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-spp2-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-spp8",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SPP_8",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-spp8-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-camera-density",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-camera-density-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-caustics-off",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 0
+          },
+          "measuredFrames": 1,
+          "csv": "micro-caustics-off-160x90-unprofiled.csv"
+        }
+      ]
+    },
+    "validation": {
+      "passed": true,
+      "logs": [
+        {
+          "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\paths-validation-0.jsonl",
+          "passed": true,
+          "opened": 1,
+          "closed": 1,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        },
+        {
+          "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\paths-validation-1.jsonl",
+          "passed": true,
+          "opened": 1,
+          "closed": 1,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        },
+        {
+          "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\connections-validation-0.jsonl",
+          "passed": true,
+          "opened": 1,
+          "closed": 1,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        },
+        {
+          "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\connections-validation-1.jsonl",
+          "passed": true,
+          "opened": 1,
+          "closed": 1,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        },
+        {
+          "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\full-validation.jsonl",
+          "passed": true,
+          "opened": 3,
+          "closed": 3,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        }
+      ]
+    }
+  },
+  "verifiedCallCounts": {
+    "beforeCuda": 179.0625,
+    "afterCuda": 114.1875,
+    "beforeVulkan": 175.0625,
+    "afterVulkan": 110.1875
+  },
+  "tailEvidence": {
+    "source": "paired-connection-hits-v2/connection-breakdown-matrix-optical",
+    "pairRoundsAtLeast5ShareOfBothActiveInputSubstepsPercent": 4.194694600405583,
+    "pairRoundsAtLeast5ShareOfVulkanContinuationTimePercent": 29.873214942851035
+  },
+  "evidence": [
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\artifacts.json",
+      "sha256": "8b4ddae30e0b1584027f478cdcb25ff8161a9eaff582a1b42bf2ee8152aed05c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\connections-test.log",
+      "sha256": "415ad438bcb049ce87db8cfcbb2b3d58bc54550cf9537f4a4aad84e6a2790169"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\connections-validation-0.jsonl",
+      "sha256": "a6e33408c343807373ac06ad64fbdfe9954c6a251a11a2710642f19737ce1b3e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\connections-validation-1.jsonl",
+      "sha256": "c56d9f6442ce10ce41c2a3e6796cb0b888fa9ce4bd57acb2a7c7f80dfde23415"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\cpu-test.log",
+      "sha256": "406608f11c8f3c5215db8c4461539233e8b97604605a4dc1e90423d8a8e1204b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\full-native-test.log",
+      "sha256": "7cdd5ae4468f449d26f2cef01cb8a8b104f28a365bb348e968e7b1508f19ee97"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\full-validation.jsonl",
+      "sha256": "d606b6a26598f432d0b1fe056658cc0133e4a130911fbc7780e90280688dfb13"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\hdr-compare.json",
+      "sha256": "f669b50bbe6ba6efd66c82bec44855a62161cf1f2060c333eb6f7a693d352b0e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\hdr-test.log",
+      "sha256": "e05c7747c96c19795078a3bc0ca30a3c693b4efb43b00d76d590dd1c4fda9c69"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\paths-test.log",
+      "sha256": "da80a488cb48cf8807532fa8c62ad4b3c72cf25717933421c8b0cbfa6af478a9"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\paths-validation-0.jsonl",
+      "sha256": "90f8ba77857c37dc7a7e1dc0ae3182629ca3899485e5d7bb4ae9f5fc4925a197"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\paths-validation-1.jsonl",
+      "sha256": "126f617446455f8ff75bce96fba2d2b60f6e619e55594736e5038a02fa7c6916"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\validation-check.json",
+      "sha256": "766f2ab9df3cc31a1a82047c8dcc7b52b0b558cc884e1f59c716ab33c22665a8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\artifacts.json",
+      "sha256": "fce9dbdd6828058e253f2a27118283f00552c004802c1554a336352a920a9a8b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\initial-gpu.csv",
+      "sha256": "87ad095191dc7500aca48fb321ce27a115b7b0a48e9e13460168fbf8b1a38b5c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-all-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-all-160x90-unprofiled-workload.json",
+      "sha256": "574cfa5ee8e2ecdb16472f1eb0e5f2667d96df419ed47bd9532c35f5fb9987b2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-all-160x90-unprofiled.csv",
+      "sha256": "9a6ae99f5218703b1b66fd66c38b1af3a6fa1ddfa3921bae930556e360e5e52f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-camera-density-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-camera-density-160x90-unprofiled-workload.json",
+      "sha256": "d01f631a9a17bd8508a976372a8b37e44993bfbf610866f29b7912dc1b0c6c5a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-camera-density-160x90-unprofiled.csv",
+      "sha256": "308d075f257fbec9513009299a608d6a50ba7b3e9275a45b120af814f0a68313"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-caustics-off-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-caustics-off-160x90-unprofiled-workload.json",
+      "sha256": "172bd4c8a4551b957d21373716ccd0fce5f748186e84a40c04f0a3d4aaa898fa"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-caustics-off-160x90-unprofiled.csv",
+      "sha256": "6b6b0b431069002cec8fa62b8b75adb58718ddf1c0c0ead7346a3c26c768a8ca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-checks-unprofiled-coverage.json",
+      "sha256": "d0f4de2989156b5624cf8e306a5c76d951c9ac3a36db10bd15bab85984725c46"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-direct-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-direct-160x90-unprofiled-workload.json",
+      "sha256": "0e26ad834a08ad4961ad7866b1faa8028dbaf225c186ea591264d528af89a6ae"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-direct-160x90-unprofiled.csv",
+      "sha256": "044f543558e5863c50772065d5e12293f9d5e3aedf9c9b5f2a5e193d923d10fd"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-spp2-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-spp2-160x90-unprofiled-workload.json",
+      "sha256": "047861500fff8ddd7d9661455ad2d656c8d545521c68cad0c2d7a063deda203e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-spp2-160x90-unprofiled.csv",
+      "sha256": "15bc1b949406d0c1eb2cd6a62cdb4521cddb1fce2cbb7f484cbcd3d51608693b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-spp8-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-spp8-160x90-unprofiled-workload.json",
+      "sha256": "6953ee17d02c7b76c9f17f2bde0a467dd183c079dc4df252ad0dde3907d5d200"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-spp8-160x90-unprofiled.csv",
+      "sha256": "3f7e329e9e967b363f95d272086a994d21f2d4fcbe6ab045db6e02da9e374d60"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-stochastic-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-stochastic-160x90-unprofiled-workload.json",
+      "sha256": "1db987b90b9947cf560c6037ab0420010d4377853e41b43bd96969216f086ae9"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\micro-stochastic-160x90-unprofiled.csv",
+      "sha256": "2c08966d55aa4627c682bc190b032cfb915ab40b3050452a2284e798783329ee"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\run.log",
+      "sha256": "088d41e890402e53a5dfc4aa3e48619bc67932728465f5721a978a9765c976f0"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-features-matrix-off\\runtime.json",
+      "sha256": "c51aeb994410a70d817ed27940ca4c6367f0e20c203b6fb9854e7b2f01c5eefb"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-window-matrix-off\\artifacts.json",
+      "sha256": "fce9dbdd6828058e253f2a27118283f00552c004802c1554a336352a920a9a8b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-window-matrix-off\\initial-gpu.csv",
+      "sha256": "020c2302850dfd5b5a4a33511ae8a14173de51e5ea27cb6f5e482dea8cce6049"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-window-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-window-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-window-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-window-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "aae7b2ab30b00162eed84bb3b11466c45258b9c49e15396ccf47e16bc95c8871"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-window-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "3ccf8918273a08dd3b8fc400f046f9394fa24c307d557708beeed6cf7ae6847e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-window-matrix-off\\run.log",
+      "sha256": "819b6fdff2f03e4b818e6af7501f0f2170a2ff1d2258defbf364f310798f1190"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\complete-window-matrix-off\\runtime.json",
+      "sha256": "0078b65c7c0f0338895e14fedd1f5406d2d19d8cd42d3a95c5c594d810cc5319"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\fixed133-matrix-off\\artifacts.json",
+      "sha256": "fce9dbdd6828058e253f2a27118283f00552c004802c1554a336352a920a9a8b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\fixed133-matrix-off\\initial-gpu.csv",
+      "sha256": "64a4bc1dfb3447c417120241514d8efde9fba60bc50ece9270b0459ee94212b4"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\fixed133-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\fixed133-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\fixed133-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "0dc56a22624d9229ac152d84856739a55d5f9439a4f25db795e3f4c8c77e3504"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\fixed133-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "91d3df83247ad9926754781dde06ef7ffd4476e0dfd7c96007393f5a7bf8cf01"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\fixed133-matrix-off\\run.log",
+      "sha256": "aaf7cb8689434e14778e2321fc23905a71a8a17111e1d651345f3c25beb2a7f7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\fixed133-matrix-off\\runtime.json",
+      "sha256": "88318a90dd8dae6e9b06a5a97c68fe5000f45fad0d6568c5bad66ec8abba2f39"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\forward-candidate-matrix-off\\artifacts.json",
+      "sha256": "fce9dbdd6828058e253f2a27118283f00552c004802c1554a336352a920a9a8b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\forward-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "8aa6c622ae1fe373dbc8599f3aff710b90df22d0b346032706d4a8ba5923c59f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\forward-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\forward-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "a4cf1355da067af53a0217d2a0eb5b8c7fc3b0b56d8fbf41e99158e5b5c0640b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\forward-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\forward-candidate-matrix-off\\run.log",
+      "sha256": "c1f7f0ad4b4fe3a8f353136739a27571d436f8ef025aa1e34b12a2218eae18a2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\forward-candidate-matrix-off\\runtime.json",
+      "sha256": "a364e93fa80ea66da0c63977e508f4025157c7e94267344686b6b1bfad80b50d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\full-native\\density-boundary-caustics.json",
+      "sha256": "4b71a86f39400f19d3219b9968f38322d2eb2ca7272b62cd3cc8732636aa78f1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\full-native\\glass-scattering-caustics.json",
+      "sha256": "1e5046a855bcca7d30d7c7140c37ead1f8ca1af2953d7ee2d05d371d68956bdd"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\full-native\\result.json",
+      "sha256": "43f5b7f2a305e970c73ae47106fc9efde131f5dcb2765c9bb458996334a309d4"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\native-connections\\gpu-connection-checks.json",
+      "sha256": "b5bb63fdbea23d8c12e329cd02975b56fc5ead0cc192b44e8a838c5663d54084"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\native-paths\\gpu-path-checks.json",
+      "sha256": "0091917f37ad2d3f4bf169cbd2e7268981fcbcc55703b3da94163d9d89143674"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\ranked-candidate-matrix-timings\\artifacts.json",
+      "sha256": "fce9dbdd6828058e253f2a27118283f00552c004802c1554a336352a920a9a8b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\ranked-candidate-matrix-timings\\initial-gpu.csv",
+      "sha256": "621df38186f6c3d14493dc8cd10d83b8b45905ed6a2a0470c45627f09c390624"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\ranked-candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "5c18a7f8dc8a5a9b246f80b693d44d7ab53b10fe2ee8257b4a8d28ed34826ed2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\ranked-candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "bff1a797b618b8f3d4b043d6972083072656ff3aa87212de2101b1f600e7cc75"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\ranked-candidate-matrix-timings\\micro-all-1080p-profiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\ranked-candidate-matrix-timings\\micro-all-1080p-profiled.csv",
+      "sha256": "f3a73a6026664440cd9f1446e252c5fa2fcf22103b21ad99537a4cacf75ecde0"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\ranked-candidate-matrix-timings\\micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "55470fe2c4e27b2440f64e9d3215e9f4f8116c1fa4d03eb910c1f0a18f108cdc"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\ranked-candidate-matrix-timings\\micro-all-1080p-wall-timeline-round-2.json",
+      "sha256": "15c2fb61bcbe38eb0b5471b6c8db1e1bb12cbf7406bd02d727b732cd1296e00f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\ranked-candidate-matrix-timings\\micro-profiled-coverage.json",
+      "sha256": "de615f8508573bcc6f1928edf09f253c7464e67018bc91a9c050c0b499a0038c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\ranked-candidate-matrix-timings\\run.log",
+      "sha256": "55271f9ce4303dea95d83d6e2314aa028654bb8c2bf6595ed0e365e80ebc6bee"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\ranked-candidate-matrix-timings\\runtime.json",
+      "sha256": "7e2175697be4b0366f5314d0866d4553839014be89eba0b8e12e6cfa0d7127d6"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\reverse-candidate-matrix-off\\artifacts.json",
+      "sha256": "fce9dbdd6828058e253f2a27118283f00552c004802c1554a336352a920a9a8b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\reverse-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "02b0feb3662a0323ee45a25a79c3e77a27744e17e2cf2b84bf8007dd2935f6e5"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\reverse-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\reverse-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "6083d575ab6f3886ab4c9ef17b455d05858fe53a6f333c906f3742f943778fa9"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\reverse-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\reverse-candidate-matrix-off\\run.log",
+      "sha256": "b2dda2dcb70eaed9437b72b1a263101c0ca3ccc13520d7a0670451c6ad6c13a3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\complete-vertex-direct-lighting-v2\\reverse-candidate-matrix-off\\runtime.json",
+      "sha256": "a0037e3de9486514c3f111cae6994d4dc61632ee322c15c5670ea34ab8963050"
+    }
+  ]
+}
