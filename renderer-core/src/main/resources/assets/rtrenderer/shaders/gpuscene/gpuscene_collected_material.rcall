@@ -1,0 +1,24 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#include "gpuscene_common.glsl"
+#include "gpuscene_hit_evaluation.glsl"
+#include "gpuscene_collected_material_data.glsl"
+
+// NVIDIA vk_raytracing_tutorial_KHR, 952a1a8e8b85f25781db7014d4d2bda124435e79,
+// 13_callable_shader: keep material evaluation behind an SBT callable boundary.
+layout(location=0) callableDataInEXT GsCollectedMaterialData material;
+
+void main() {
+    uint instance=material.identity.x;
+    uint w=GPU_SCENE_INSTANCE_TRANSFORM_WORD;
+    mat4x3 transform=mat4x3(
+        uintBitsToFloat(uvec3(gsInstanceWord(instance,w),gsInstanceWord(instance,w+4u),gsInstanceWord(instance,w+8u))),
+        uintBitsToFloat(uvec3(gsInstanceWord(instance,w+1u),gsInstanceWord(instance,w+5u),gsInstanceWord(instance,w+9u))),
+        uintBitsToFloat(uvec3(gsInstanceWord(instance,w+2u),gsInstanceWord(instance,w+6u),gsInstanceWord(instance,w+10u))),
+        uintBitsToFloat(uvec3(gsInstanceWord(instance,w+3u),gsInstanceWord(instance,w+7u),gsInstanceWord(instance,w+11u))));
+    material.hit.state=uvec4(0u,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY,0u,0u);
+    gsEvaluateTriangleHit(material.hit,instance,transform,material.originAndDistance.xyz,material.direction,
+        gsInstanceWord(instance,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD),material.identity.y,
+        uintBitsToFloat(material.identity.zw),material.originAndDistance.w);
+}

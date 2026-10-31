@@ -16,7 +16,8 @@ final class GpuSceneDescriptorLayout implements AutoCloseable {
     private static final int MISS = KHRRayTracingPipeline.VK_SHADER_STAGE_MISS_BIT_KHR;
     private static final int CLOSEST_HIT = KHRRayTracingPipeline.VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
     private static final int ANY_HIT = KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
-    private static final int ALL_STAGES = RAYGEN | MISS | CLOSEST_HIT | ANY_HIT;
+    private static final int ALL_STAGES = RAYGEN | MISS | CLOSEST_HIT | ANY_HIT
+            | KHRRayTracingPipeline.VK_SHADER_STAGE_CALLABLE_BIT_KHR;
     private static final int SURFACE_STAGES = CLOSEST_HIT | ANY_HIT;
 
     private final VkDevice device;

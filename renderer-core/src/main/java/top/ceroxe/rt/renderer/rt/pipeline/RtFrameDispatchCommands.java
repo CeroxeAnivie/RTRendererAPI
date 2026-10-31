@@ -60,7 +60,9 @@ final class RtFrameDispatchCommands {
         VkStridedDeviceAddressRegionKHR hit = sbtRegion(
                 stack, shaderBindingTableBuffer, shaderBindingTableBaseOffsetBytes, layout, layout.hit());
         KHRRayTracingPipeline.vkCmdTraceRaysKHR(
-                commandBuffer, raygen, miss, hit, VkStridedDeviceAddressRegionKHR.calloc(stack), width, height, 1
+                commandBuffer, raygen, miss, hit,
+                sbtRegion(stack, shaderBindingTableBuffer, shaderBindingTableBaseOffsetBytes, layout, layout.callable()),
+                width, height, 1
         );
     }
 
@@ -73,7 +75,7 @@ final class RtFrameDispatchCommands {
                 pipelineLayout,0,stack.longs(descriptorSet),null);
         KHRRayTracingPipeline.vkCmdTraceRaysIndirectKHR(command,
                 sbtRegion(stack,sbt,base,layout,layout.raygen()),sbtRegion(stack,sbt,base,layout,layout.miss()),
-                sbtRegion(stack,sbt,base,layout,layout.hit()),VkStridedDeviceAddressRegionKHR.calloc(stack),arguments);
+                sbtRegion(stack,sbt,base,layout,layout.hit()),sbtRegion(stack,sbt,base,layout,layout.callable()),arguments);
     }
 
     static void recordImageToBufferCopy(
@@ -211,6 +213,7 @@ final class RtFrameDispatchCommands {
             RtRayTracingPipelineProperties.ShaderBindingTableLayout layout,
             RtRayTracingPipelineProperties.Region region
     ) {
+        if (region.sizeBytes() == 0) return VkStridedDeviceAddressRegionKHR.calloc(stack);
         long address = checkedAdd(checkedAdd(buffer.deviceAddress(), baseOffsetBytes), region.offsetBytes());
         requireAligned(address, layout.baseAlignmentBytes(), "SBT region deviceAddress");
         return VkStridedDeviceAddressRegionKHR.calloc(stack)

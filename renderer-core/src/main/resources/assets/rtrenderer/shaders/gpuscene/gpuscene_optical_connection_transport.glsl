@@ -149,15 +149,35 @@ int gsConnectionTransportStep(uint base,GpuScenePayload hit) {
     direction.w=distance;gsOptical.storage.lanes[base+1u]=floatBitsToUint(direction);return 1;
 }
 void gsOpticalCompleteConnection(uint base,uint item,uvec4 launch,float maximum,inout GpuScenePayload hit,inout uint epoch) {
+#ifdef RTRENDERER_COLLECTED_CONNECTIONS
+    bool firstQuery=true;
+#endif
     for(;;){
+#ifdef RTRENDERER_COLLECTED_CONNECTIONS
+        // One query call site for the first and every subsequent event. Keeping
+        // the material stage separate is insufficient if the driver clones the
+        // robust gather/classification tree at two different loop levels.
+        vec4 origin=uintBitsToFloat(gsOptical.storage.lanes[base]),direction=uintBitsToFloat(gsOptical.storage.lanes[base+1u]);
+        float minimum=firstQuery&&gsOptical.storage.lanes[base+5u].z==0u
+            ?0.0:uintBitsToFloat(floatBitsToUint(direction.w)+1u);
+        if(minimum<=maximum){
+            GS_DETAIL_BEGIN(firstQuery?173u:174u);
+            hit=gsOpticalConnectionHit(origin.xyz,direction.xyz,launch,minimum,maximum);
+            GS_DETAIL_END();
+        }else hit.state.x=0u;
+#endif
         int status;{GS_DETAIL_BEGIN(175u);status=gsConnectionTransportStep(base,hit);GS_DETAIL_END();}
         if(status==2)break;
         if(status<=0){gsOptical.storage.lanes[base+2u].w=status==0?3u:4u+uint(-status);break;}
         ++epoch;
+#ifdef RTRENDERER_COLLECTED_CONNECTIONS
+        firstQuery=false;
+#else
         vec4 origin=uintBitsToFloat(gsOptical.storage.lanes[base]),direction=uintBitsToFloat(gsOptical.storage.lanes[base+1u]);
         float minimum=uintBitsToFloat(floatBitsToUint(direction.w)+1u);
         if(minimum>maximum){hit.state.x=0u;continue;}
         {GS_DETAIL_BEGIN(174u);hit=gsOpticalConnectionHit(origin.xyz,direction.xyz,launch,minimum,maximum);GS_DETAIL_END();}
+#endif
     }
     uvec4 control=gsOpticalStateRead(item,2u);control.w=epoch;gsOpticalStateWrite(item,2u,control);
 }

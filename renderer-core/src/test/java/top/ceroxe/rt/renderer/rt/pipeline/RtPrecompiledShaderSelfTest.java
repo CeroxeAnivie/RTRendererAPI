@@ -56,6 +56,7 @@ public final class RtPrecompiledShaderSelfTest {
          if (kind == null) throw new IllegalArgumentException("unknown shader stage " + stage);
          byte[] spirv = RtShaderModuleCompiler.compileForVerification(SHADER_ROOT + stage, kind,
                  Boolean.parseBoolean(arguments[2]), Boolean.parseBoolean(arguments[3]), Boolean.parseBoolean(arguments[4]));
+         verifyConnectionCallableBoundary(stage, spirv);
          Files.write(Path.of(arguments[5]), spirv);
       } else if (arguments.length >= 1 && arguments.length <= 3) {
          generate(Path.of(arguments[0]), arguments.length>1?arguments[1]:null, arguments.length>2?arguments[2]:null);
@@ -64,6 +65,27 @@ public final class RtPrecompiledShaderSelfTest {
       } else {
          verify();
       }
+   }
+
+   /** Prevent the resource regression from silently returning through code generation. */
+   private static void verifyConnectionCallableBoundary(String stage, byte[] spirv) {
+      boolean connection = stage.equals("gpuscene/gpuscene_native_optical_collected_trace.rgen");
+      boolean material = stage.equals("gpuscene/gpuscene_collected_material.rcall");
+      if (!connection && !material) return;
+      var words = java.nio.ByteBuffer.wrap(spirv).order(java.nio.ByteOrder.LITTLE_ENDIAN).asIntBuffer();
+      int calls = 0, traces = 0; boolean callableEntry = false;
+      for (int at = 5; at < words.limit();) {
+         int instruction = words.get(at), count = instruction >>> 16, opcode = instruction & 0xffff;
+         if (count == 0 || count > words.limit() - at) throw new AssertionError("invalid SPIR-V instruction");
+         if (opcode == 4446) calls++; // OpExecuteCallableKHR
+         if (opcode == 4445) traces++; // OpTraceRayKHR
+         if (opcode == 15 && words.get(at + 1) == 5318) callableEntry = true;
+         at += count;
+      }
+      if (connection && calls != 1)
+         throw new AssertionError("connection material must have exactly one callable invocation site: " + calls);
+      if (material && (!callableEntry || traces != 0))
+         throw new AssertionError("material must remain a non-tracing callable stage");
    }
 
    private static void verify() {
@@ -132,8 +154,12 @@ public final class RtPrecompiledShaderSelfTest {
 
    private static List<ShaderVariant> variants(String selectedStage, String selectedVariant) {
       var variants = new ArrayList<ShaderVariant>();
+      var selectedStages = selectedStage == null ? java.util.Set.<String>of()
+              : java.util.Set.of(selectedStage.split(","));
+      for (String stage : selectedStages)
+         if (!STAGES.containsKey(stage)) throw new IllegalArgumentException("unknown shader stage " + stage);
       for (var stage : STAGES.entrySet()) {
-         if (selectedStage != null && !selectedStage.equals(stage.getKey())) continue;
+         if (selectedStage != null && !selectedStages.contains(stage.getKey())) continue;
          for (boolean gbuffer : new boolean[] { false, true }) {
             for (boolean hdr : hdrVariants(stage.getKey())) {
                for (boolean ser : serVariants(stage.getKey())) {
@@ -259,6 +285,7 @@ public final class RtPrecompiledShaderSelfTest {
       for (String raygen : SCENE_RAYGENS) stages.put(raygen, Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene/gpuscene.rmiss", 17);
       stages.put("gpuscene/gpuscene.rchit", 16);
+      stages.put("gpuscene/gpuscene_collected_material.rcall", Shaderc.shaderc_callable_shader);
       stages.put("gpuscene/gpuscene.rahit", 15);
       stages.put("gpuscene/gpuscene_visibility.rmiss", Shaderc.shaderc_miss_shader);
       stages.put("gpuscene/gpuscene_visibility.rchit", Shaderc.shaderc_closesthit_shader);

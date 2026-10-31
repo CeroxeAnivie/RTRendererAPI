@@ -3,7 +3,8 @@
 // Retain the nearest N events of one traversal, consume in order, then refill.
 // Unlike the tutorial, never truncate transport: ambiguous events use the original
 // trace path, and a full list continues after its last consumed event.
-#include "gpuscene_hit_evaluation.glsl"
+#include "gpuscene_collected_material_data.glsl"
+layout(location=0) callableDataEXT GsCollectedMaterialData gsCollectedMaterial;
 
 mat4x3 gsCollectedObjectToWorld;
 vec3 gsCollectedRayOrigin,gsCollectedRayDirection;
@@ -23,14 +24,6 @@ bool gsCollectedComplete,gsCollectedFallback;
 void gsCollectedReset() {
     gsCollectedCount=gsCollectedCursor=0u;
     gsCollectedComplete=gsCollectedFallback=false;
-}
-mat4x3 gsCollectedTransform(uint instance) {
-    uint w=GPU_SCENE_INSTANCE_TRANSFORM_WORD;
-    return mat4x3(
-        uintBitsToFloat(uvec3(gsInstanceWord(instance,w),gsInstanceWord(instance,w+4u),gsInstanceWord(instance,w+8u))),
-        uintBitsToFloat(uvec3(gsInstanceWord(instance,w+1u),gsInstanceWord(instance,w+5u),gsInstanceWord(instance,w+9u))),
-        uintBitsToFloat(uvec3(gsInstanceWord(instance,w+2u),gsInstanceWord(instance,w+6u),gsInstanceWord(instance,w+10u))),
-        uintBitsToFloat(uvec3(gsInstanceWord(instance,w+3u),gsInstanceWord(instance,w+7u),gsInstanceWord(instance,w+11u))));
 }
 float gsCollectedTolerance(float t) {return 8.0*1.192092896e-7*max(1.0,abs(t));}
 
@@ -139,13 +132,16 @@ bool gsCollectedConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float mini
         GS_DETAIL_BEGIN(177u);
         uint instance=event.identity.x,primitive=event.identity.y;
         uint boundary=gsInstanceWord(instance,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
-        hit.state=uvec4(0u,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY,0u,0u);
-        hit.launchInfo=launch;
+        gsCollectedMaterial.hit.launchInfo=launch;
 #ifdef RTRENDERER_OPTICAL_PROFILE
-        hit.diagnosticAddress=payload.diagnosticAddress;hit.diagnosticRecord=payload.diagnosticRecord;
+        gsCollectedMaterial.hit.diagnosticAddress=payload.diagnosticAddress;
+        gsCollectedMaterial.hit.diagnosticRecord=payload.diagnosticRecord;
 #endif
-        gsEvaluateTriangleHit(hit,instance,gsCollectedTransform(instance),origin,direction,
-            boundary,primitive,uintBitsToFloat(event.identity.zw),event.distance.y);
+        gsCollectedMaterial.identity=event.identity;
+        gsCollectedMaterial.originAndDistance=vec4(origin,event.distance.y);
+        gsCollectedMaterial.direction=direction;
+        executeCallableEXT(0u,0);
+        hit=gsCollectedMaterial.hit;
         GS_DETAIL_END();
         uint blend=(hit.state.z>>1u)&0x7u;
         if(boundary==0u&&blend==GPU_SCENE_BLEND_MASKED) {
