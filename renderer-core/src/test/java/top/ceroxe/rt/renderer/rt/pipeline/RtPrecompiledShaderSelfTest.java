@@ -71,21 +71,27 @@ public final class RtPrecompiledShaderSelfTest {
    private static void verifyConnectionCallableBoundary(String stage, byte[] spirv) {
       boolean connection = stage.equals("gpuscene/gpuscene_native_optical_collected_trace.rgen");
       boolean material = stage.equals("gpuscene/gpuscene_collected_material.rcall");
-      if (!connection && !material) return;
+      boolean gather = stage.equals("gpuscene/gpuscene_collected_gather.rcall");
+      if (!connection && !material && !gather) return;
       var words = java.nio.ByteBuffer.wrap(spirv).order(java.nio.ByteOrder.LITTLE_ENDIAN).asIntBuffer();
-      int calls = 0, traces = 0; boolean callableEntry = false;
+      int traces = 0, queries = 0; boolean callableEntry = false;
+      var constants = new java.util.HashMap<Integer,Integer>();
+      var callableTargets = new java.util.HashSet<Integer>();
       for (int at = 5; at < words.limit();) {
          int instruction = words.get(at), count = instruction >>> 16, opcode = instruction & 0xffff;
          if (count == 0 || count > words.limit() - at) throw new AssertionError("invalid SPIR-V instruction");
-         if (opcode == 4446) calls++; // OpExecuteCallableKHR
+         if (opcode == 43 && count == 4) constants.put(words.get(at + 2),words.get(at + 3));
+         if (opcode == 4446) callableTargets.add(constants.get(words.get(at + 1))); // OpExecuteCallableKHR
          if (opcode == 4445) traces++; // OpTraceRayKHR
+         if (opcode == 4473) queries++; // OpRayQueryInitializeKHR
          if (opcode == 15 && words.get(at + 1) == 5318) callableEntry = true;
          at += count;
       }
-      if (connection && calls != 1)
-         throw new AssertionError("connection material must have exactly one callable invocation site: " + calls);
-      if (material && (!callableEntry || traces != 0))
-         throw new AssertionError("material must remain a non-tracing callable stage");
+      if (connection && (queries != 0 || !callableTargets.equals(java.util.Set.of(0,1))))
+         throw new AssertionError("connection must call separate material/gather stages without embedding traversal: " + callableTargets);
+      if ((material || gather) && (!callableEntry || traces != 0))
+         throw new AssertionError("material/gather must remain non-tracing callable stages");
+      if (gather && queries != 1)throw new AssertionError("gather must contain one traversal loop: " + queries);
    }
 
    private static void verify() {
@@ -286,6 +292,7 @@ public final class RtPrecompiledShaderSelfTest {
       stages.put("gpuscene/gpuscene.rmiss", 17);
       stages.put("gpuscene/gpuscene.rchit", 16);
       stages.put("gpuscene/gpuscene_collected_material.rcall", Shaderc.shaderc_callable_shader);
+      stages.put("gpuscene/gpuscene_collected_gather.rcall", Shaderc.shaderc_callable_shader);
       stages.put("gpuscene/gpuscene.rahit", 15);
       stages.put("gpuscene/gpuscene_visibility.rmiss", Shaderc.shaderc_miss_shader);
       stages.put("gpuscene/gpuscene_visibility.rchit", Shaderc.shaderc_closesthit_shader);

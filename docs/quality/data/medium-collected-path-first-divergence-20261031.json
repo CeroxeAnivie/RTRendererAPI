@@ -1,0 +1,59 @@
+{
+  "candidateCommit": "4d8285c",
+  "frameSequence": 1,
+  "path": 649733,
+  "pixel": [
+    773,
+    338
+  ],
+  "observerChangesGpuPrograms": false,
+  "shaderResourcesUnchanged": 396,
+  "disabledHdrStable": true,
+  "candidateHdrStable": true,
+  "firstObservedDifference": {
+    "scope": "sequence-1-sample-0-branch-0",
+    "record": "0004-vulkan.bin",
+    "field": "connection.lighting.z",
+    "baseline": 0.29745805263519287,
+    "candidate": 0.29745808243751526,
+    "floatUlpDifference": 1,
+    "otherConnectionWordsIdentical": true,
+    "stateIdenticalAtThisBoundary": true,
+    "hitRecordsIdentical": true
+  },
+  "followingCudaRadianceBlue": {
+    "baseline": 0.5727538466453552,
+    "candidate": 0.57275390625
+  },
+  "conclusion": "First captured divergence is the complete vertex direct-light result, not the CUDA consumer. Intermediate light/event values inside that Vulkan dispatch were not captured; exact originating arithmetic operation remains unproven. Strict HDR remains failed.",
+  "evidence": [
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v12-path-capture/path-comparison.json",
+      "sha256": "620695be335fe0c692ee890ff3d3ec3bb15c26804761536ce8a09d764119f84d"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v12-path-capture/disabled-observer-stability.json",
+      "sha256": "ef29adbdcadd8ff3c39f1ce0045146acf1ef92cb9c7ffe799d20b1f7d3f4b2df"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v12-path-capture/candidate-observer-stability.json",
+      "sha256": "1dbacad1a7fa85f651bef674848e4c96e30806c0cec2d9b5740699a4997dc2f8"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v12-path-capture/capture-disabled/sequence-1-sample-0-branch-0/0003-cuda.bin",
+      "sha256": "5eda40b986856c341ee7513fb8eb05e888ebd40d89416e0009a9c61a3489dc88"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v12-path-capture/capture-candidate/sequence-1-sample-0-branch-0/0003-cuda.bin",
+      "sha256": "d60503b2f510cdfc72231b7cd6c8a4100d3fea2daf76a6510825d1ea0dd48072"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v12-path-capture/capture-disabled/sequence-1-sample-0-branch-0/0004-vulkan.bin",
+      "sha256": "337fd4baafa3091e3cd835d678084b891f30914c32764bf5362466d040abf71d"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v12-path-capture/capture-candidate/sequence-1-sample-0-branch-0/0004-vulkan.bin",
+      "sha256": "ef1441d83760cd0c011428bd964ef33243990cedb79e10a4a13eaabbba60c4f9"
+    }
+  ]
+}

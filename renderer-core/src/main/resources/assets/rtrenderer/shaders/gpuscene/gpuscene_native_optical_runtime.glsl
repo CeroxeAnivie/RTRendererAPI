@@ -261,12 +261,7 @@ GpuScenePayload gsOpticalConnectionHit(vec3 origin,vec3 direction,uvec4 launch,f
 void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 launch,uint epoch,bool initialize,uint hitOffset) {
     GS_DETAIL_BEGIN(168u);
     uint base=gsOptical.storage.lanes[4u].z/16u+item*22u;
-#ifdef RTRENDERER_COLLECTED_CONNECTIONS
-    // The host admits this entry only for complete GPU vertex connections.
-    const bool vertexDirect=true;
-#else
     bool vertexDirect=(gsOptical.storage.lanes[11u].w&16384u)!=0u;
-#endif
     vec3 vertexPosition=position;
 #ifdef RTRENDERER_COLLECTED_CONNECTIONS
     gsCollectedReset();
@@ -383,14 +378,11 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
     // Keep directional rays unbounded and retain every earlier material/boundary.
     float maximum=(gsOptical.storage.lanes[11u].w&2048u)!=0u?min(origin.w,1.0e20):1.0e20;
     GpuScenePayload hit;
-#ifndef RTRENDERER_COLLECTED_CONNECTIONS
     if(gsOptical.storage.lanes[base+2u].w==1u&&minimum<=maximum){
         hit=gsOpticalConnectionHit(origin.xyz,direction,launch,minimum,maximum);
         GS_DETAIL_NEXT(174u);
     }
-    else
-#endif
-    {hit.worldPositionAndDistance=vec4(0,0,0,-1);hit.previousWorldPosition=vec4(0);hit.motionRevision=uvec2(0);
+    else {hit.worldPositionAndDistance=vec4(0,0,0,-1);hit.previousWorldPosition=vec4(0);hit.motionRevision=uvec2(0);
         hit.worldNormalAndRoughness=vec4(0,1,0,0);hit.baseColorAndOpacity=vec4(0);hit.emissiveAndMetallic=vec4(0);
         hit.transmissionIor=vec4(0);hit.state=uvec4(0);hit.surfaceState=uvec4(0);hit.compositeState=vec4(0);
         hit.launchInfo=launch;hit.mediumBoundary=uvec4(0);}
@@ -429,7 +421,6 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
             globalPath%gsOptical.storage.lanes[0u].w,epoch,epoch));
         return;
     }
-#ifndef RTRENDERER_COLLECTED_CONNECTIONS
     bool batched=(gsOptical.storage.lanes[11u].w&8192u)!=0u;
     float firstDistance=hit.worldPositionAndDistance.w;
     bool nextSegment=batched&&gsOptical.storage.lanes[base+2u].w==1u&&hit.state.x!=0u
@@ -453,7 +444,6 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
         gsOptical.storage.lanes[identity].z=2u;
     }
     return;
-#endif
     }
 }
 // Light paths use the camera pipeline's geometric hit ABI, with native medium state.
