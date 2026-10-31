@@ -1225,3 +1225,5 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 对照 NVIDIA cuda-samples `9c688d7ff78455ed42e345124d1495aad6bf66de`（BSD-3-Clause），`Samples/5_Domain_Specific/vulkanImageCUDA/vulkanImageCUDA.cu` 的 `cudaUpdateVkImage` 和 `submitVulkanCuda`：CUDA 外部信号由真正的 Vulkan 消费提交等待。本项目独立适配双轮 timeline 交接，不声称上游原有相同 API。
 
 目前每对两轮输运有第三次仅 acquire 所有权的空 Vulkan 提交。候选在完成第二轮 CUDA 后暂留 external ownership，将 acquire 与上一轮 timeline wait 合入下一次真正 producer；整帧发布前仍显式 acquire。保留两处已经通过 RT epoch 回归的 CUDA stream 同步、所有必要 ownership barrier、采样和输运预算。属性 `top.ceroxe.rt.medium.cuda.opticalRetainedOwnership=false` 可回到原行为。成功标准同时包括正确性、真实提交次数减少和关闭诊断整帧收益；只改变等待归属不算成功。扩展原生回归覆盖连续 retained pair、显式 acquire、retained/legacy 切换及两种模式下四阶段回调故障。
+
+首版数据/HDR 一致，但 validation 报命令缓冲仍 pending，未接受该版性能结果。修正为最后 CUDA 同步后，host 等待第二轮 Vulkan 已经发出的 timeline 值，正式确认命令缓冲可重用；它不新增 GPU 提交，独立记录 `VULKAN_COMMAND_REUSE_WAIT`，不能隐藏进录制成本。仍须零 validation 错误后才验收收益。

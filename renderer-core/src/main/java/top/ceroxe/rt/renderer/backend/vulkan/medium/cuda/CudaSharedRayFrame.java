@@ -278,8 +278,20 @@ public final class CudaSharedRayFrame implements AutoCloseable {
                         if(profile)consumerCompleted[0]=System.nanoTime();
                         } finally { OpticalWallTimeline.leave(finalTiming); }
                     });
-            externalOwned=retainExternal;
             if(profile)OpticalFrameTimings.cudaStage.add(System.nanoTime()-consumerCompleted[0]);
+            if(retainExternal){
+                // CUDA completion proves the external data is ready, but a Vulkan host
+                // timeline wait also proves that release/acquire commands are no longer
+                // pending before their next reset. The second Vulkan signal precedes
+                // the already completed second CUDA step, so this adds no GPU submit.
+                wallStep=OpticalWallTimeline.next(wallStep,VULKAN_COMMAND_REUSE_WAIT);
+                long reuseStarted=profile?System.nanoTime():0L;
+                check(VK12.vkWaitSemaphores(device(),VkSemaphoreWaitInfo.calloc(s).sType$Default()
+                        .pSemaphores(s.longs(pairedToCuda)).pValues(s.longs(secondValue)),10_000_000_000L),
+                        "complete paired ray commands before reuse");
+                if(profile)OpticalFrameTimings.consumerWait.add(System.nanoTime()-reuseStarted);
+            }
+            externalOwned=retainExternal;
             wallStep = OpticalWallTimeline.next(wallStep, GPU_QUERY_RESOLVE);
             if(producerTiming!=null&&producerTiming.resolve()){OpticalFrameTimings.producerGpu.add(producerTiming.totalNanos());OpticalFrameTimings.recordNamedGpuStage("vulkan.shared.producer",producerTiming.totalNanos());OpticalDetailedProfile.add("producerGpu/totalNanos",producerTiming.totalNanos());}
             if(continuationTiming!=null&&continuationTiming.resolve()){OpticalFrameTimings.consumerGpu.add(continuationTiming.totalNanos());OpticalFrameTimings.recordNamedGpuStage("vulkan.shared.continuation",continuationTiming.totalNanos());OpticalDetailedProfile.add("continuationGpu/totalNanos",continuationTiming.totalNanos());}
