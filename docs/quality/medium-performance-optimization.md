@@ -1787,8 +1787,8 @@ X19的两帧严格HDR已通过，但新建正反序吞吐窗口在sequence100024
 
 修复原图元的确定性错误否决：已经通过wide精确内外测试的原图元，直接使用其修正距离；替代邻面仍受原nearby限制，minimum、最近事件、薄层包围、介质栈严格拒绝与采样预算不变。硬件遍历独立回归保留原失败射线与双精度slab oracle。先失败帧、边界谓词、严格HDR与完整连接验证，再恢复吞吐对照；当前没有新的性能收益结论。
 
-## 2026-10-31 X22：先修多命中资源膨胀，再恢复吞吐验收
+## 2026-10-31 X22/X23：原生编译内存根因验证
 
-X21边界修复已通过两帧1080p严格HDR及连接测试。随后多命中吞吐在2.5GB执行树提交上限再次失败；不提高上限，不再盲调JVM。启用Native Memory Tracking复现：崩溃进程private bytes约2382MiB，NMT总提交189486KiB，Compiler仅565KiB、compiler arena峰值32074KiB，Java heap提交51200KiB；说明此次新增压力主要不在JVM跟踪的内存中，报错线程是C2不能证明C2膨胀。完整记录为build/medium-micro-all-20261031/collected-memory-root及hs_err_pid5588.log。
+NMT有界复现的执行树峰值2.502GB，崩溃进程private约2382MiB，JVM跟踪提交189486KiB、Compiler565KiB、compiler arena峰值32074KiB；C2是分配失败的线程，不能把主要外部内存归因于JIT。原始证据在build/medium-micro-all-20261031/collected-memory-root和hs_err_pid5588.log。普通/collected raygen查询栈640/1568字节，两个callable均0。X22运行时SBT选择没有改变这些数值，并在首次光子NVRTC编译撞到2.512GB，因此完整撤回，未宣称内存或FPS收益。
 
-实际Vulkan阶段栈查询：普通光学raygen640字节，collected raygen1568字节，两个callable阶段独立需求均0。该结果支持检查常量目标造成的链接合并，但不是驱动内部内联的直接证明。参考已固定NVIDIA vk_raytracing_tutorial_KHR 952a1a8e8b85f25781db7014d4d2bda124435e79、Apache-2.0、13_callable_shader.slang第383行的运行时materialType调用，改为由私有push高32位选择两个实际SBT记录；低32位仍是原dispatch mode，普通路径预处理语义不变。没有改变输运数学、采样、批次容量、回退或引入新分配/读回/同步。SPIR-V门槛检查两种callable数据接口、全部调用目标来自运行时，避免shaderc克隆调用点后用源码调用次数误判。离线8变体生成成功，执行树峰值1.084GB；真实驱动内存、HDR与净吞吐仍待验证，不将这个候选算成已解决或性能成果。
+X23直接处理编译与大型scratch的生命周期重叠，并消除PTX再次交给驱动编译的链路：光子程序编译移至camera scratch申请之前；显式cuda.cubin=true时NVRTC面向实际sm生成CUBIN，cuModuleLoadData直接加载。参考NVIDIA cuda-samples固定5443602d89ed99aede2e4b7bf329daddeadb320e、BSD-3-Clause、Common/nvrtc_helper.h 91–93、174–176、206行，采用实际设备架构→nvrtcGetCUBIN→cuModuleLoadData的逻辑，未复制源码。保留原C++17、fmad=false、源程序、缓存大小、内核和预算，PTX对照可用，默认不启用未验收CUBIN。先按同一3GB总/2.5GB执行树预算验收完整HDR和长窗，再判断编译内存与净吞吐，不能只报中间表示减少。

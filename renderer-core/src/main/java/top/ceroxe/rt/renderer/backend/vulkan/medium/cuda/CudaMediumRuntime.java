@@ -37,10 +37,11 @@ public final class CudaMediumRuntime implements AutoCloseable {
     private boolean externalBatch;
     private String deviceName;
     private int computeMajor, computeMinor;
+    private final boolean nativeCubin = Boolean.getBoolean("top.ceroxe.rt.medium.cuda.cubin");
     // Entry points from one continuation source share PTX. Keep only the last successful
     // compilation, bounded to 8 MiB, within this thread-confined runtime/device/compiler.
     private String lastCompiledSource;
-    private byte[] lastCompiledPtx;
+    private byte[] lastCompiledImage;
     int diagnosticCompilationCount;
     // A continuation has several entry points. Keep its code module alive exactly while those
     // kernels are alive, instead of loading/JITing the same PTX once per entry point.
@@ -131,7 +132,7 @@ public final class CudaMediumRuntime implements AutoCloseable {
         }
     }
     private byte[] compile(String source) {
-        if (source.equals(lastCompiledSource)) return lastCompiledPtx;
+        if (source.equals(lastCompiledSource)) return lastCompiledImage;
         try (Arena scratch = Arena.ofConfined()) {
             MemorySegment programSlot = scratch.allocate(ADDRESS);
             api.checked("nvrtcCreateProgram", args(ADDRESS, ADDRESS, ADDRESS, JAVA_INT, ADDRESS, ADDRESS),
@@ -139,7 +140,10 @@ public final class CudaMediumRuntime implements AutoCloseable {
                     0, MemorySegment.NULL, MemorySegment.NULL);
             try {
                 MemorySegment program = programSlot.get(ADDRESS, 0);
-                String[] options = {"--gpu-architecture=compute_" + computeMajor + computeMinor,
+                // NVIDIA cuda-samples 5443602d89ed99aede2e4b7bf329daddeadb320e,
+                // Common/nvrtc_helper.h: compile for the actual SM and load CUBIN.
+                // This avoids retaining a second PTX compiler in the CUDA driver.
+                String[] options = {"--gpu-architecture=" + (nativeCubin ? "sm_" : "compute_") + computeMajor + computeMinor,
                         "--std=c++17", "--device-as-default-execution-space", "--fmad=false"};
                 MemorySegment optionPointers = scratch.allocate(ADDRESS, options.length);
                 for (int i = 0; i < options.length; i++)
@@ -155,16 +159,16 @@ public final class CudaMediumRuntime implements AutoCloseable {
                     throw new IllegalStateException("NVRTC medium compilation failed (" + status + "): " + log.getString(0));
                 }
                 MemorySegment size = scratch.allocate(JAVA_LONG);
-                api.checked("nvrtcGetPTXSize", args(ADDRESS, ADDRESS), program, size);
+                api.checked(nativeCubin ? "nvrtcGetCUBINSize" : "nvrtcGetPTXSize", args(ADDRESS, ADDRESS), program, size);
                 MemorySegment image = scratch.allocate(size.get(JAVA_LONG, 0));
-                api.checked("nvrtcGetPTX", args(ADDRESS, ADDRESS), program, image);
+                api.checked(nativeCubin ? "nvrtcGetCUBIN" : "nvrtcGetPTX", args(ADDRESS, ADDRESS), program, image);
                 byte[] ptx = image.toArray(JAVA_BYTE);
                 if ((long) source.length() * 2 + ptx.length <= 8L * 1024 * 1024) {
                     lastCompiledSource = source;
-                    lastCompiledPtx = ptx;
+                    lastCompiledImage = ptx;
                 } else {
                     lastCompiledSource = null;
-                    lastCompiledPtx = null;
+                    lastCompiledImage = null;
                 }
                 return ptx;
             } finally { api.checked("nvrtcDestroyProgram", args(ADDRESS), programSlot); }

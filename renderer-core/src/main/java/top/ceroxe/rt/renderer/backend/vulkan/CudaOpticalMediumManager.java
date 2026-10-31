@@ -161,9 +161,11 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         if(nativePhotons&&storage!=null&&storage.byteSize()>plan.bytes()+OpticalDetailedProfile.shaderBytes(plan.tilePaths())){
             drain();storage.close();storage=null;uploadedAssets=null;
         }
+        // Compile the photon program before reserving the large camera scratch.
+        // Compiler temporaries and per-path storage have disjoint lifetimes.
+        if(nativePhotons&&photonPass==null)photonPass=new CudaOpticalPhotonPass(device,cuda);
         ensureCapacity(plan);long address=storage.deviceAddress();
         if(nativePhotons) {
-            if(photonPass==null)photonPass=new CudaOpticalPhotonPass(device,cuda);
             photonPass.prepare(scene,photonPlan,tracer,slot,photonBuffer,buildPlan);
         }
         var step=steps[plan.transposedStates()?6+(plan.transposedHits()?2:plan.compactHits()?1:0):plan.transposedHits()?4+(plan.compactStates()?1:0):((plan.compactHits()?1:0)|(plan.compactStates()?2:0))];
