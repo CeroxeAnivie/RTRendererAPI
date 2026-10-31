@@ -65,7 +65,13 @@ precise float gsBoundaryDistance(GsBoundaryWide3 a,GsBoundaryWide3 b,GsBoundaryW
     vec2 y=gsBoundaryWideDifferenceOfProducts(b.z,c.x,b.x,c.z);
     vec2 z=gsBoundaryWideDifferenceOfProducts(b.x,c.y,b.y,c.x);
     vec2 numerator=gsBoundaryWideAdd(gsBoundaryWideAdd(gsBoundaryWideMultiply(a.x,x),gsBoundaryWideMultiply(a.y,y)),gsBoundaryWideMultiply(a.z,z));
-    return (numerator.x+numerator.y)/(edges.x+edges.y+edges.z);
+    // Retain the edge residuals through the determinant and division too.
+    // Summing only their float heads makes t depend on vertex permutation and
+    // can collapse a real two-ULP entry/exit interval into one distance.
+    vec2 denominator=gsBoundaryWideAdd(gsBoundaryWideAdd(gsBoundaryEdge(b,c),gsBoundaryEdge(c,a)),gsBoundaryEdge(a,b));
+    precise float quotient=numerator.x/denominator.x;
+    vec2 remainder=gsBoundaryWideAdd(numerator,-gsBoundaryWideMultiply(denominator,vec2(quotient,0)));
+    return quotient+(remainder.x+remainder.y)/denominator.x;
 }
 bool gsBoundaryTriangleHit(uint mesh,uint primitive,out vec2 bary,out float distance) {
     uvec3 indices=gsTriangleIndices(mesh,primitive);

@@ -52,12 +52,12 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                         inward=true;
                         objectToWorld=mat4x3(.8,0,0,0,.8,0,0,0,.8,-1.5,-2,0);
                         rayOrigin=vec3(-3.5619245,-2.1426425,-1.2999898);
-                        rayDirection=vec3(.6319559,.47206348,.61464447);hitDistance=1.9968551;
+                        rayDirection=vec3(.6319559,.47206348,.61464447);hitDistance=1.99685502;
                         rayOrigin+=inputs.bias.xyz;rayDirection+=inputs.bias.xyz;
                         uint firstPrimitive,secondPrimitive,lastPrimitive;vec2 firstBary,secondBary,lastBary;float firstT,secondT,lastT;
-                        bool first=gsBoundaryConnectionHit(0u,6u,vec2(.613,.0000001),0,firstPrimitive,firstBary,firstT);
-                        bool second=gsBoundaryConnectionHit(0u,6u,vec2(.613,.0000001),uintBitsToFloat(floatBitsToUint(firstT)+1u),secondPrimitive,secondBary,secondT);
-                        bool last=gsBoundaryConnectionHit(0u,6u,vec2(.613,.0000001),uintBitsToFloat(floatBitsToUint(secondT)+1u),lastPrimitive,lastBary,lastT);
+                        bool first=gsBoundaryConnectionHit(0u,9u,vec2(1.49898014e-7,.54539597),0,firstPrimitive,firstBary,firstT);
+                        bool second=gsBoundaryConnectionHit(0u,9u,vec2(1.49898014e-7,.54539597),uintBitsToFloat(floatBitsToUint(firstT)+1u),secondPrimitive,secondBary,secondT);
+                        bool last=gsBoundaryConnectionHit(0u,9u,vec2(1.49898014e-7,.54539597),uintBitsToFloat(floatBitsToUint(secondT)+1u),lastPrimitive,lastBary,lastT);
                         vec2 directBary;float directT;
                         gsBoundaryTriangleHit(0u,outputIndex==61u?9u:6u,directBary,directT);
                         if(outputIndex==56u||outputIndex==58u||outputIndex==60u)imageStore(target,ivec2(i,0),vec4((outputIndex==56u?first:outputIndex==58u?second:last)?1:0,float(outputIndex==56u?firstPrimitive:secondPrimitive)/255.0,0,1));

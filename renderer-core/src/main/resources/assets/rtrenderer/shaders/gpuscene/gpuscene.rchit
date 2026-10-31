@@ -85,13 +85,6 @@ void main()
         payload.mediumBoundary=uvec4(gl_InstanceCustomIndexEXT,
             gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD),
             gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_ORIENTATION_WORD),boundaryFlags);
-        // Temporary connection-only evidence; these volume-only material lanes
-        // are not consumed for transmission or radiance.
-        if(connection){
-            payload.baseColorAndOpacity=vec4(hitAttributes,gl_HitTEXT,gl_ObjectToWorldEXT[3].y);
-            payload.transmissionIor=vec4(uintBitsToFloat(gl_PrimitiveID),uintBitsToFloat(hitPrimitive),0,0);
-            payload.worldNormalAndRoughness.w=gl_ObjectToWorldEXT[0].x;
-        }
         GS_DETAIL_END();return;
     }
     GS_DETAIL_NEXT(25u);
