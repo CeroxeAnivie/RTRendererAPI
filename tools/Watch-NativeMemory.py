@@ -85,6 +85,7 @@ def main():
     parser.add_argument("--native-stacks", action="store_true")
     parser.add_argument("--native-heaps", action="store_true", help="Trace all Rtl heap object lifetimes and full allocation stacks")
     parser.add_argument("--census-interval", type=float, default=1.0)
+    parser.add_argument("--detach-marker", default="GalleryPerf warmupFrames=")
     parser.add_argument("--frida-directory", type=pathlib.Path)
     args = parser.parse_args()
     if args.native_heaps and not args.native_stacks:
@@ -156,9 +157,12 @@ def main():
                                 records.write(json.dumps({"time": time.time(), "message": message}) + "\n")
                                 records.flush()
                             session = frida.attach(target)
+                            print("Native observer attached", flush=True)
                             script = session.create_script(module.source_for(directory, args.native_heaps))
+                            print("Native observer script compiled", flush=True)
                             script.on("message", receive)
                             script.load()
+                            print("Native observer hooks installed", flush=True)
                         virtual.write(json.dumps(census(kernel, psapi, handle, names)) + "\n")
                         virtual.flush()
                         (directory / "probe-ready").touch()
@@ -182,7 +186,7 @@ def main():
                         virtual.write(json.dumps(snapshot) + "\n")
                         virtual.flush()
                         next_census = time.monotonic() + args.census_interval
-                    if script and "GalleryPerf warmupFrames=" in (directory / "run.log").read_text(encoding="utf-8", errors="replace"):
+                    if script and args.detach_marker in (directory / "run.log").read_text(encoding="utf-8", errors="replace"):
                         if args.native_heaps:
                             script.exports_sync.flush()
                         script.unload()
