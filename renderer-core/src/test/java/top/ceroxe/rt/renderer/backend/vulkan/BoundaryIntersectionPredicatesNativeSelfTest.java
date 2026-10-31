@@ -51,7 +51,7 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
         var program=new ShaderProgram(new RenderResourceId(951002),ResourceVersion.initial(),ShaderProgram.Kind.COMPUTE,List.of(shader),
                 new BindingLayout(List.of(destination)),0);
         var target=new TextureResource(new RenderResourceId(951003),ResourceVersion.initial(),TextureDimension.TEXTURE_2D,
-                2,1,1,1,1,1,TextureFormat.RGBA8_UNORM,Set.of(TextureUsage.STORAGE_READ_WRITE,TextureUsage.COLOR_ATTACHMENT));
+                2,1,1,1,1,1,TextureFormat.RGBA8_UNORM,Set.of(TextureUsage.STORAGE_READ_WRITE,TextureUsage.COLOR_ATTACHMENT,TextureUsage.COPY_DESTINATION));
         var range=new TextureSubresourceRange(TextureAspect.COLOR,0,1,0,1);
         var view=new TextureView(target,TextureViewDimension.TEXTURE_2D,range);
         try(var device=VulkanDeviceRuntime.open(VulkanRtCapabilityProbe.capture(),RendererRtDiagnostics.noop(),true,true,
@@ -60,9 +60,9 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                     ==ResourceTransactionEvidence.Outcome.ACCEPTED,"predicate resources rejected");
             var bindings=new BindingSet(program.bindingLayout(),Map.of(destination.key(),
                     List.of(new BindingSet.TextureValue(view,BindingType.READ_WRITE_STORAGE_TEXTURE))));
-            var submitted=session.submit(new RenderCommandTransaction(1,List.of(new BindComputePipelineCommand(new ComputePipelineState(program)),
+            var submitted=session.submit(new RenderCommandTransaction(1,List.of(new ClearColorCommand(new ResourceSlice.TextureSlice(target,range),new ClearColorValue(0,0,0,1)),new BindComputePipelineCommand(new ComputePipelineState(program)),
                     BindBindingSetCommand.fixed(bindings),new DispatchCommand(2,1,1))));
-            require(submitted.outcome().recorded(),"predicate dispatch rejected: "+submitted);
+            require(submitted.outcome().recorded(),"predicate dispatch rejected: "+submitted.reason()+" "+submitted.detail());
             VulkanGenericCommandNativeSelfTest.await(session,1,CommandExecutionEvidence.Outcome.GPU_COMPLETED);
             var pass=RenderPassDescriptor.color(2,1,List.of(RenderAttachment.of(view,LoadOp.LOAD,StoreOp.STORE)));
             require(session.submit(new RenderCommandTransaction(2,List.of(new BeginRenderPassCommand(pass),new EndRenderPassCommand())))
