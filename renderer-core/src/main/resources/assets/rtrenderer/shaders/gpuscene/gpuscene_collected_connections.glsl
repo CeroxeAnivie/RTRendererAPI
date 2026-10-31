@@ -125,7 +125,10 @@ bool gsCollectedConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float mini
             if(gsCollectedComplete) {
                 gsCollectedCountEvent(180u);
                 hit.state=uvec4(0);hit.worldPositionAndDistance=vec4(0,0,0,-1);
-                hit.mediumBoundary=uvec4(0);return true;
+                hit.mediumBoundary=uvec4(0);hit.previousWorldPosition=vec4(0);hit.motionRevision=uvec2(0);
+                hit.worldNormalAndRoughness=vec4(0,1,0,0);hit.baseColorAndOpacity=vec4(0);
+                hit.emissiveAndMetallic=hit.transmissionIor=hit.compositeState=vec4(0);
+                hit.surfaceState=uvec4(0);hit.launchInfo=launch;return true;
             }
             if(gsCollectedCount!=0u)gsCollectedCountEvent(181u);
             if(!gsCollectedFill(origin,direction,minimum,maximum))return false;
@@ -147,7 +150,11 @@ bool gsCollectedConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float mini
         uint blend=(hit.state.z>>1u)&0x7u;
         if(boundary==0u&&blend==GPU_SCENE_BLEND_MASKED) {
             uint material=gsTriangleMaterialSlot(gsMeshBase(gsInstanceMeshSlot(instance)),primitive)*GPU_SCENE_MATERIAL_RECORD_WORDS;
-            if(hit.baseColorAndOpacity.a<uintBitsToFloat(gsMaterials.words[material+GPU_SCENE_MATERIAL_ALPHA_CUTOFF_WORD]))continue;
+            if(hit.baseColorAndOpacity.a<uintBitsToFloat(gsMaterials.words[material+GPU_SCENE_MATERIAL_ALPHA_CUTOFF_WORD])) {
+                // Even a batch containing only rejected coverage must make progress.
+                // Coincident candidates were excluded before any event was consumed.
+                minimum=uintBitsToFloat(floatBitsToUint(event.distance.y)+1u);continue;
+            }
         }
         if(boundary==0u&&((hit.state.w&GPU_SCENE_FLAG_CASTS_SHADOW)==0u||gsSurfaceOverlay(hit))) {
             minimum=uintBitsToFloat(floatBitsToUint(hit.worldPositionAndDistance.w)+1u);

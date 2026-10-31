@@ -485,6 +485,30 @@ void gsOpticalPhotonTrace() {
     uint epoch=photons.lanes[state+2u].w;
     gsOpticalStoreAt(photons,photons.lanes[1u].y,item,hit,uvec4(item,0u,epoch,epoch),1u);
 }
+#ifdef RTRENDERER_COLLECTED_CONNECTIONS
+// Wavefront responsibility split: connection work does not carry the camera,
+// primary-cache, photon or terminal-surface programs through this entry point.
+void main() {
+    if(gsOptical.initialize!=5ul)return;
+    uint slot=gl_LaunchIDEXT.x;
+    uint control=gsOptical.storage.lanes[14u].w/16u;
+    if(slot>=gsOptical.storage.lanes[control+2u].x)return;
+    uint index=gsOptical.storage.lanes[0u].z-1u-slot;
+    uint queue=gsOptical.storage.lanes[13u].w/16u;
+    uint item=gsOptical.storage.lanes[queue+index/4u][index%4u];
+    uint samples=gsOptical.storage.lanes[0u].w,pixelIndex=gsOptical.firstPixel+item/samples;
+    uint width=gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],height=gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u];
+    uvec4 launch=uvec4(pixelIndex%width,pixelIndex/width,width,height);
+#ifdef RTRENDERER_OPTICAL_PROFILE
+    payload.diagnosticAddress=(item&8191u)==0u?gsU64(gsOptical.storage.lanes[12u].x,gsOptical.storage.lanes[12u].y):0ul;
+    payload.diagnosticRecord=item/8192u;
+#endif
+    uvec4 state=gsOpticalStateRead(item,2u);
+    if(state.x!=2u&&state.x!=3u)return;
+    gsOpticalConnectionTrace(item,pixelIndex*samples+item%samples,uintBitsToFloat(gsOpticalStateRead(item,0u)).xyz,
+        launch,state.w,state.x==2u,gsOptical.storage.lanes[2u].z);
+}
+#else
 void main() {
     if(gsOptical.initialize==2ul||gsOptical.initialize==3ul){gsOpticalPhotonTrace();return;}
     bool splitTasks=gsOptical.initialize==4ul||gsOptical.initialize==5ul;
@@ -649,3 +673,5 @@ void main() {
         GS_DETAIL_END();
     }
 }
+
+#endif
