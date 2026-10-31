@@ -836,6 +836,7 @@ __device__ __forceinline__ void reduceStatistics(unsigned char*b,unsigned int*st
         if(sum)atomicAdd(((unsigned int*)b)+28+threadIdx.x,sum);}
 }
 }
+#ifndef RTR_OPTICAL_LAYOUT
 __device__ void rtr_optical_dispatch(unsigned char*b,int count,unsigned int*statistics){
     const unsigned int layout=((unsigned int*)b)[47];
     if((layout&18u)==18u){
@@ -856,6 +857,7 @@ extern "C" __global__ void native_optical_step(unsigned char*b,int count){
     rtr_optical::queueContinued(b,count,statistics[0]);
     rtr_optical::reduceStatistics(b,statistics);
 }
+#endif
 // Independent entry points keep each layout's compiled resources separate.
 template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=false> __device__ __forceinline__ void rtr_optical_fixed(unsigned char*b,int count){
     const int i=blockIdx.x*blockDim.x+threadIdx.x;
@@ -866,16 +868,34 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
     rtr_optical::queueContinued(b,count,statistics[0]);
     rtr_optical::reduceStatistics(b,statistics);
 }
+#if !defined(RTR_OPTICAL_LAYOUT) || RTR_OPTICAL_LAYOUT == 0
 extern "C" __global__ void native_optical_step_0(unsigned char*b,int count){rtr_optical_fixed<false,false>(b,count);}
+#endif
+#if !defined(RTR_OPTICAL_LAYOUT) || RTR_OPTICAL_LAYOUT == 1
 extern "C" __global__ void native_optical_step_1(unsigned char*b,int count){rtr_optical_fixed<true,false>(b,count);}
+#endif
+#if !defined(RTR_OPTICAL_LAYOUT) || RTR_OPTICAL_LAYOUT == 2
 extern "C" __global__ void native_optical_step_2(unsigned char*b,int count){rtr_optical_fixed<false,true>(b,count);}
+#endif
+#if !defined(RTR_OPTICAL_LAYOUT) || RTR_OPTICAL_LAYOUT == 3
 extern "C" __global__ void native_optical_step_3(unsigned char*b,int count){rtr_optical_fixed<true,true>(b,count);}
+#endif
+#if !defined(RTR_OPTICAL_LAYOUT) || RTR_OPTICAL_LAYOUT == 4
 extern "C" __global__ void native_optical_step_4(unsigned char*b,int count){rtr_optical_fixed<true,false,true>(b,count);}
+#endif
+#if !defined(RTR_OPTICAL_LAYOUT) || RTR_OPTICAL_LAYOUT == 5
 extern "C" __global__ void native_optical_step_5(unsigned char*b,int count){rtr_optical_fixed<true,true,true>(b,count);}
+#endif
 
+#if !defined(RTR_OPTICAL_LAYOUT) || RTR_OPTICAL_LAYOUT == 6
 extern "C" __global__ void native_optical_step_6(unsigned char*b,int count){rtr_optical_fixed<false,true,false,true>(b,count);}
+#endif
+#if !defined(RTR_OPTICAL_LAYOUT) || RTR_OPTICAL_LAYOUT == 7
 extern "C" __global__ void native_optical_step_7(unsigned char*b,int count){rtr_optical_fixed<true,true,false,true>(b,count);}
+#endif
+#if !defined(RTR_OPTICAL_LAYOUT) || RTR_OPTICAL_LAYOUT == 8
 extern "C" __global__ void native_optical_step_8(unsigned char*b,int count){rtr_optical_fixed<true,true,true,true>(b,count);}
+#endif
 #else
 } // namespace rtr_optical
 #endif

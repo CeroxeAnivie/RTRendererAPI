@@ -1800,3 +1800,7 @@ X23直接CUBIN在光学大源的ptxas阶段同样达到2.501GB并失败，69.329
 此前缩短 NVRTC 库生命周期的试验在执行树提交 2.501 GB 时仍失败，已完整撤回。已采集的 JFR 显示 GC 后 Java 堆 17,517,208 bytes，NMT 总提交约 222–244 MB，不能把进程约 2.38 GiB 的主要占用归因于 Java 堆、JIT 或分配失败线程。按需加载 CUDA 入口的两帧严格 HDR 通过，但 16 预热、2×64 测量长窗仍撞到内存上限，未解决稳态资源问题，未取得可接受的 FPS 收益。
 
 新增默认关闭的 `top.ceroxe.rt.nativeMemoryDiagnostics`：在同一 JFR 中记录 Vulkan 管线创建、VMA buffer、CUDA 编译/模块/内存 API 的 begin/end，以及光学帧 begin/end 和每秒进程提交、Java 堆/非堆提交。Windows 进程提交使用 OS MXBean 的 PagefileUsage；它与 NMT 的差额只表示 HotSpot 未跟踪部分，不直接等同泄漏。事件用于把增长与操作对应，不引入 GPU 同步或逐射线观测；关闭后不采集内存数据。继续使用 3 GB 总预算/2.5 GB 执行树上限，先归因并修复资源问题，再验证原始 HDR、完整长窗及关闭诊断吞吐。
+
+本次阶段事件确认：缓存热启动中光学 nvrtcCompileProgram 净增约35.34MB、109.80ms；全帧 primary 的431.31MB申请实际增加434.30MB进程提交。首帧后CUDA登记容量保持1626.28MB不变，进程提交仍从2156.22MB增长到2399.34MB；缩小tile到512MiB仍失败，C1-only隔离也失败，均不保留为解决方案。JFR定期dump配合VirtualQueryEx保住失败前证据，增长位于MEM_PRIVATE，GPU显存用量稳定；尚未证明唯一原生分配者。
+
+继续消除实际可见编译冗余：当前仅按需cuModuleGetFunction，但原source仍同时实例化九种布局以及包含全部布局的generic入口。新增编译期layout选择，生产只生成当前所需入口，reset独立编译不实例化输运；测试generic入口及九种布局仍可用。保留原模板函数、数学、采样与布局ABI。先同预算长窗/JFR证实，再严格HDR和全布局回归；未证明内存根因已完全解决，未声称吞吐收益。

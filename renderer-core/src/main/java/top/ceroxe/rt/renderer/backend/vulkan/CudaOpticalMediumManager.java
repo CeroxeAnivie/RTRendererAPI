@@ -62,7 +62,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         this.device=Objects.requireNonNull(device,"device");
         NativeState initialized;
         try{initialized=onNative(()->{var opened=CudaMediumRuntime.open(Integer.getInteger("top.ceroxe.rt.medium.cuda.deviceOrdinal",0),configuredResidentLimit());
-            try{String source=CudaOpticalMediumSource.source();
+            try{String source=CudaOpticalMediumSource.resetSource();
                 var variants=new CudaMediumRuntime.BatchKernel[9];
                 return new NativeState(opened,opened.compileBatchKernel(source,"native_optical_reset"),variants,
                         opened.allocateHost(CudaOpticalMediumAbi.STATISTICS_BYTES),opened.allocateHost(CudaOpticalMediumAbi.STATISTICS_BYTES));}
@@ -164,7 +164,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         int layout=plan.transposedStates()?6+(plan.transposedHits()?2:plan.compactHits()?1:0):plan.transposedHits()?4+(plan.compactStates()?1:0):((plan.compactHits()?1:0)|(plan.compactStates()?2:0));
         // cuModuleGetFunction can materialize native code and driver resources.
         // Preserve every layout, but load only the one this plan will execute.
-        if(steps[layout]==null)steps[layout]=cuda.compileBatchKernel(CudaOpticalMediumSource.source(),"native_optical_step_"+layout);
+        if(steps[layout]==null)steps[layout]=cuda.compileBatchKernel(CudaOpticalMediumSource.sourceForLayout(layout),"native_optical_step_"+layout);
         var step=steps[layout];
         // Compile the photon program before reserving the large camera scratch.
         // Compiler temporaries and per-path storage have disjoint lifetimes.
