@@ -286,7 +286,7 @@ public final class CudaSharedRayFrame implements AutoCloseable {
                 // the already completed second CUDA step, so this adds no GPU submit.
                 wallStep=OpticalWallTimeline.next(wallStep,VULKAN_COMMAND_REUSE_WAIT);
                 long reuseStarted=profile?System.nanoTime():0L;
-                check(VK12.vkWaitSemaphores(device(),VkSemaphoreWaitInfo.calloc(s).sType$Default()
+                check(VK12.vkWaitSemaphores(device(),VkSemaphoreWaitInfo.calloc(s).sType$Default().semaphoreCount(1)
                         .pSemaphores(s.longs(pairedToCuda)).pValues(s.longs(secondValue)),10_000_000_000L),
                         "complete paired ray commands before reuse");
                 if(profile)OpticalFrameTimings.consumerWait.add(System.nanoTime()-reuseStarted);
