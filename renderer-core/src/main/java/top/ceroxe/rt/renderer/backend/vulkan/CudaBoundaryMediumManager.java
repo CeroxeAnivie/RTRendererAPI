@@ -217,6 +217,7 @@ final class CudaBoundaryMediumManager implements AutoCloseable {
                     .putInt(CudaBoundaryMediumAbi.PACKET_LAYOUT_OFFSET,plan.packetCapacity()|CudaBoundaryMediumAbi.PACKET_TERMINAL_RADIANCE);
             int uploadBytes=first==0?firstUploadBytes:CudaBoundaryMediumAbi.HEADER_BYTES;
             int[] statistics={paths,0,0,0};
+            String[] failureDetail={""};
             boolean recordBuild=buildPending;
                 java.util.function.Consumer<CudaMediumRuntime.Slice> resolve=input->{
                     int queries=statistics[0];
@@ -228,6 +229,7 @@ final class CudaBoundaryMediumManager implements AutoCloseable {
                         cuda.download(statisticsSlice,counters);
                         for(int j=0;j<4;j++) statistics[j]=counters.get(ValueLayout.JAVA_INT,j*4L);
                         diagnosticQueryPaths.add(queries); diagnosticBoundaryCrossings.add(statistics[2]);
+                        if(packet&&statistics[1]!=0)failureDetail[0]=packetFailureDetail(input,plan,tileFirst,paths,frame.width());
                     }
                 };
                 java.util.function.Consumer<org.lwjgl.vulkan.VkCommandBuffer> continuation=command->{
@@ -263,7 +265,7 @@ final class CudaBoundaryMediumManager implements AutoCloseable {
                     storage.exchangeBlocking(resolve,continuation);
                 }
                 if(statistics[1]!=0) throw new RendererException("native boundary continuation rejected "+statistics[1]
-                        +" inconsistent path states; final medium output was not published");
+                        +" inconsistent path states; final medium output was not published"+failureDetail[0]);
             buildPending=false; first+=pixels;
         }
         }
@@ -274,6 +276,35 @@ final class CudaBoundaryMediumManager implements AutoCloseable {
         // The low aligned bit selects the private terminal-radiance ABI; the shader masks it before dereference.
         return new CudaCameraMediumManager.Prepared(primary,trans|(packet&&terminalRadiance()?2L:0L),
                 address+plan.emissionOffset(),plan.pixels(),plan.samples(),packet);
+    }
+
+    /** Read only after a rejected packet, while CUDA still owns the external allocation. */
+    private String packetFailureDetail(CudaMediumRuntime.Slice input,CudaBoundaryMediumAbi.Plan plan,int first,int paths,int width) {
+        try(Arena arena=Arena.ofConfined()) {
+            MemorySegment output=arena.allocate((long)paths*16,16);
+            cuda.download(input.slice(plan.tileTransmittanceOffset(first),output.byteSize()),output);
+            for(int i=0;i<paths;i++) {
+                float marker=output.get(ValueLayout.JAVA_FLOAT,(long)i*16+12);
+                if(marker>=0)continue;
+                int code=(int)-marker;
+                MemorySegment packetData=arena.allocate(plan.packetPathBytes(),16);
+                cuda.download(input.slice(plan.stateOffset()+(long)i*plan.packetPathBytes(),packetData.byteSize()),packetData);
+                ByteBuffer data=packetData.asByteBuffer().order(ByteOrder.nativeOrder());
+                int pixel=first+i/plan.samples();
+                StringBuilder detail=new StringBuilder("; packet pixel=(").append(pixel%width).append(',')
+                        .append(pixel/width).append(") sample=").append(i%plan.samples())
+                        .append(" status=").append(code/256).append(" event=").append(code%256).append(" events=[");
+                int count=Math.min(data.getInt(12),plan.packetCapacity());
+                for(int j=0;j<count;j++) {
+                    if(j>0)detail.append(',');
+                    int event=data.getInt(20+j*8);
+                    detail.append(data.getFloat(16+j*8)).append(':').append(event<0?"enter":"exit")
+                            .append(':').append(event&0x7fffffff);
+                }
+                return detail.append(']').toString();
+            }
+            return "; no failure marker found";
+        }
     }
 
     private void ensurePacketPrimary(CudaBoundaryMediumAbi.Plan plan) {
