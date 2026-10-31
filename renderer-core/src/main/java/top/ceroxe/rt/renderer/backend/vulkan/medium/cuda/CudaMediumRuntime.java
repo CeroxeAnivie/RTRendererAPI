@@ -51,6 +51,10 @@ public final class CudaMediumRuntime implements AutoCloseable {
     public static CudaMediumRuntime open(int deviceOrdinal) {
         return new CudaMediumRuntime(deviceOrdinal, CudaNativeApi.configuredNvrtcLibrary(), configuredLimit());
     }
+    /** Uses the frame owner's device-derived cap without changing other medium sessions. */
+    public static CudaMediumRuntime open(int deviceOrdinal, long maxResidentBytes) {
+        return new CudaMediumRuntime(deviceOrdinal, CudaNativeApi.configuredNvrtcLibrary(), maxResidentBytes);
+    }
     /** Explicit native library selection supports isolated application deployment and tests. */
     public static CudaMediumRuntime open(int deviceOrdinal, Path nvrtcLibrary) {
         return new CudaMediumRuntime(deviceOrdinal, Objects.requireNonNull(nvrtcLibrary, "nvrtcLibrary"), configuredLimit());

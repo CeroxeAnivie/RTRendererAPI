@@ -17,6 +17,8 @@ public final class CudaOpticalMediumAbi {
     public static final int COMPACT_STATE_BYTES=112;
     public static final int CONNECTION_BYTES=352;
     public static final long DEFAULT_RESIDENT_BYTES=512L*1024*1024,ALLOCATION_ALLOWANCE=65536;
+    /** Byte offsets in this ABI are signed Java ints; leave room for allocation alignment. */
+    public static final long MAXIMUM_RESIDENT_BYTES=Integer.MAX_VALUE-ALLOCATION_ALLOWANCE;
     public static final String EXTERNAL_PRIMARY_PROPERTY="top.ceroxe.rt.medium.cuda.opticalExternalPrimary";
     public static final String DIRECT_PRIMARY_PROPERTY="top.ceroxe.rt.medium.cuda.opticalDirectPrimary";
     public static final String REDUCED_COUNTERS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalReducedCounters";
@@ -103,7 +105,8 @@ public final class CudaOpticalMediumAbi {
         int priority=Math.toIntExact(HEADER_BYTES+(long)boundaries*BOUNDARY_BYTES);
         int scene=Math.addExact(Math.toIntExact((priority+(long)boundaries*4+15)&~15L),density.bytes());
         long finalBytes=Math.multiplyExact((long)paths,(externalPrimary?0:HIT_BYTES)+2L*COLOR_BYTES);
-        long available=Math.min(DEFAULT_RESIDENT_BYTES,residentLimit)-ALLOCATION_ALLOWANCE-scene-finalBytes;
+        if(residentLimit<1)throw new IllegalArgumentException("CUDA resident byte limit must be positive");
+        long available=Math.min(MAXIMUM_RESIDENT_BYTES,residentLimit)-ALLOCATION_ALLOWANCE-scene-finalBytes;
         int hitBytes=compactHits?COMPACT_HIT_BYTES:HIT_BYTES;
         int stateBytes=compactStates?COMPACT_STATE_BYTES:STATE_BYTES;
         boolean activeQueues=useActiveQueues(boundaries,connectionTransport);

@@ -46,7 +46,46 @@ public final class CudaOpticalMediumSelfTest {
                 &&source.contains("RoughGlassMaterial_Sample")&&source.contains("SchlickDistribution_SampleH")
                 &&source.contains("DensityGridTexture_ConstEvaluate"),"glass, density-grid free-flight, segment and priority functions remain assembled");
         verifySurfaceProof();
+        verifyResidentCapacity();
         System.out.println("CudaOpticalMediumSelfTest passed: primary lifetime, SPP/branches/budgets, priority, smooth/rough glass, heterogeneous scattering admission");
+    }
+    private static void verifyResidentCapacity() {
+        String property="top.ceroxe.rt.medium.cuda.maxResidentBytes",previous=System.getProperty(property);
+        try {
+            System.clearProperty(property);
+            long gib=1024L*1024*1024;
+            var large=new top.ceroxe.rt.renderer.rt.device.VulkanMemoryBudgetSnapshot(true,0,16*gib,16*gib,List.of());
+            var occupied=new top.ceroxe.rt.renderer.rt.device.VulkanMemoryBudgetSnapshot(true,8*gib,16*gib,8*gib,List.of());
+            var small=new top.ceroxe.rt.renderer.rt.device.VulkanMemoryBudgetSnapshot(true,0,2*gib,2*gib,List.of());
+            require(CudaOpticalMediumManager.residentLimit(large)==CudaOpticalMediumAbi.MAXIMUM_RESIDENT_BYTES,
+                    "large GPUs use the supported optical address range instead of a hidden 512 MiB clamp");
+            require(CudaOpticalMediumManager.residentLimit(occupied)==CudaOpticalMediumManager.residentLimit(large),
+                    "our own resident allocations must not make each following frame retile");
+            require(CudaOpticalMediumManager.residentLimit(small)==CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES
+                    &&CudaOpticalMediumManager.residentLimit(null)==CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES,
+                    "small GPUs and missing driver budgets retain bounded legacy tiling");
+            var tiled=connectionPlan(CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES);
+            var full=connectionPlan(CudaOpticalMediumManager.residentLimit(large));
+            require(tiled.tilePixels()<tiled.pixels()&&full.tilePixels()==full.pixels(),
+                    "1080p complete connection paths must share a full wave when capacity permits");
+            require(full.pixels()==tiled.pixels()&&full.samples()==tiled.samples()&&full.primaryBytes()==tiled.primaryBytes()
+                    &&full.connectionTransport()&&full.boundaryCount()==tiled.boundaryCount(),
+                    "capacity planning changes no spatial samples, boundaries or required outputs");
+            require(full.bytes()+CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE<=CudaOpticalMediumAbi.MAXIMUM_RESIDENT_BYTES,
+                    "large wave offsets and allocation alignment stay within the signed byte-address ABI");
+            System.setProperty(property,"67108864");
+            require(CudaOpticalMediumManager.residentLimit(large)==64L*1024*1024,"explicit resident caps are honored");
+            System.setProperty(property,Long.toString(4*gib));
+            require(CudaOpticalMediumManager.residentLimit(large)==CudaOpticalMediumAbi.MAXIMUM_RESIDENT_BYTES,
+                    "configured capacity cannot overflow the optical address ABI");
+            System.out.println("Optical capacity: 1080p legacy tilePixels="+tiled.tilePixels()+" tiles="
+                    +Math.ceilDiv(tiled.pixels(),tiled.tilePixels())+"; budgeted tilePixels="+full.tilePixels()
+                    +" tiles="+Math.ceilDiv(full.pixels(),full.tilePixels())+" scratchBytes="+full.bytes());
+        } finally {if(previous==null)System.clearProperty(property);else System.setProperty(property,previous);}
+    }
+    private static CudaOpticalMediumAbi.Plan connectionPlan(long limit) {
+        return CudaOpticalMediumAbi.plan(1920,1080,1,3,CudaMediumDensityAbi.Scene.empty(),limit,
+                true,true,true,true,false,false,false,true);
     }
     private static void verifyCounterModes(CudaOpticalMediumAbi.Plan plan,RenderFrameRequest frame,
             CudaBoundaryMediumAbi.Boundary boundary) {

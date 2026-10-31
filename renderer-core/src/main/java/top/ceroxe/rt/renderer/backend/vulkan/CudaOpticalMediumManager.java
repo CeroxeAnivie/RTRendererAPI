@@ -29,6 +29,7 @@ import top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile;
 import top.ceroxe.rt.renderer.rt.acceleration.RtTlasBuildPlan;
 import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
+import top.ceroxe.rt.renderer.rt.device.VulkanMemoryBudgetSnapshot;
 import top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSync;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 
@@ -58,7 +59,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     CudaOpticalMediumManager(VulkanDeviceRuntime device) {
         this.device=Objects.requireNonNull(device,"device");
         NativeState initialized;
-        try{initialized=onNative(()->{var opened=CudaMediumRuntime.open(Integer.getInteger("top.ceroxe.rt.medium.cuda.deviceOrdinal",0));
+        try{initialized=onNative(()->{var opened=CudaMediumRuntime.open(Integer.getInteger("top.ceroxe.rt.medium.cuda.deviceOrdinal",0),configuredResidentLimit());
             try{String source=CudaOpticalMediumSource.source();
                 var variants=new CudaMediumRuntime.BatchKernel[9];
                 for(int layout=0;layout<variants.length;layout++)variants[layout]=opened.compileBatchKernel(source,"native_optical_step_"+layout);
@@ -89,17 +90,22 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     static FrameScene scene(RenderFrameRequest frame,int width,int height,MediumSceneIndex.NativeScene scene,
             java.util.function.LongFunction<top.ceroxe.rt.renderer.api.TextureAsset> textures,CudaMediumDensityAbi.Cache densityCache,
             boolean opaqueRadianceProof,int lightSlotUpperBound,boolean surfaceContinuations) {
+        return scene(frame,width,height,scene,textures,densityCache,opaqueRadianceProof,lightSlotUpperBound,surfaceContinuations,residentLimit());
+    }
+    static FrameScene scene(RenderFrameRequest frame,int width,int height,MediumSceneIndex.NativeScene scene,
+            java.util.function.LongFunction<top.ceroxe.rt.renderer.api.TextureAsset> textures,CudaMediumDensityAbi.Cache densityCache,
+            boolean opaqueRadianceProof,int lightSlotUpperBound,boolean surfaceContinuations,long residentBytes) {
         try{var boundaries=scene.boundaries().stream().map(entry->new CudaBoundaryMediumAbi.Boundary(
                 entry.slot(),entry.boundary(),entry.objectToWorld())).toList();
             boolean connections=surfaceContinuations||CudaOpticalMediumAbi.requiresConnections(frame,boundaries);
-            int samples=frame.antiAliasing().samplesPerPixel();long limit=residentLimit()-(OpticalDetailedProfile.SHADERS?1048576:0);
+            int samples=frame.antiAliasing().samplesPerPixel();long limit=residentBytes-(OpticalDetailedProfile.SHADERS?1048576:0);
             var base=CudaOpticalMediumAbi.plan(width,height,samples,boundaries.size(),limit);
             long minimum=base.sceneBytes()+(long)base.paths()*((base.externalPrimary()?0:CudaOpticalMediumAbi.HIT_BYTES)+2L*CudaOpticalMediumAbi.COLOR_BYTES)
                     +(long)samples*(base.stateBytes()+base.hitBytes()+CudaOpticalMediumAbi.COLOR_BYTES
                         +(base.externalPrimary()&&!base.directPrimary()?CudaOpticalMediumAbi.HIT_BYTES:0)
                         +(connections?CudaOpticalMediumAbi.CONNECTION_BYTES:0)+(CudaOpticalMediumAbi.useActiveQueues(boundaries.size(),connections)?8:0))
                     +CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE;
-            var photons=nativePhotonPlan(frame,boundaries);
+            var photons=nativePhotonPlan(frame,boundaries,limit);
             long photonBytes=photons==null?0:photons.bytes()+base.sceneBytes()+CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE;
             var density=densityCache.prepare(frame.environment().cameraMedium(),boundaries,textures,
                     (limit-minimum-photonBytes)/(photons==null?1:2));
@@ -112,16 +118,16 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                 header.putInt(188,header.getInt(188)|64);
             }
             return new FrameScene(frame,plan,metadata,boundaries,density,
-                    CudaOpticalMediumAbi.maximumRounds(frame,lightSlotUpperBound,connections));
+                    CudaOpticalMediumAbi.maximumRounds(frame,lightSlotUpperBound,connections),photons);
         }catch(ArithmeticException|IllegalArgumentException invalid){throw unsupported(invalid.getMessage());}
     }
     private static CudaOpticalCausticAbi.Plan nativePhotonPlan(RenderFrameRequest frame,
-            java.util.List<CudaBoundaryMediumAbi.Boundary> boundaries) {
+            java.util.List<CudaBoundaryMediumAbi.Boundary> boundaries,long residentBytes) {
         if(!frame.caustics().enabled()||(boundaries.isEmpty()&&frame.environment().cameraMedium().densityField().isUniform()))return null;
         boolean scattering=!frame.environment().cameraMedium().scattering().isZero()
                 ||boundaries.stream().anyMatch(b->!b.boundary().medium().scattering().isZero());
         int deposits=scattering?Math.min(frame.caustics().maxEvents(),frame.mediumTransport().scatteringBounces()+2):1;
-        return CudaOpticalCausticAbi.planForMap(frame.caustics().photons(),deposits,residentLimit());
+        return CudaOpticalCausticAbi.planForMap(frame.caustics().photons(),deposits,residentBytes);
     }
     static long requiredBytes(FrameScene scene){return Math.addExact(scene.plan().bytes()+OpticalDetailedProfile.shaderBytes(scene.plan().tilePaths())+CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE+CudaOpticalPhotonPass.bytes(scene),
             scene.plan().externalPrimary()?scene.plan().primaryBytes():0);}
@@ -424,7 +430,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         }
         long sharedBytes=plan.bytes()+OpticalDetailedProfile.shaderBytes(plan.tilePaths());
         if(storage==null||storage.byteSize()<sharedBytes) {
-            if(sharedBytes+CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE>Math.min(cuda.maxResidentBytes(),CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES))
+            if(sharedBytes+CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE>cuda.maxResidentBytes())
                 throw unsupported("complete native optical frame exceeds the CUDA resident cap");
             uploadedAssets=null;
             if(storage!=null){drain();storage.close();storage=null;}
@@ -441,8 +447,19 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     private void drain(){int result=VulkanQueueHostSync.waitIdle(device.frameQueue());if(result!=VK10.VK_SUCCESS)
         throw new IllegalStateException("drain native optical consumers: VkResult="+result);}
     private void checkOpen(){if(closed)throw new IllegalStateException("native optical manager is closed");}
-    private static long residentLimit(){return Math.min(CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES,
+    private static long configuredResidentLimit(){return Math.min(CudaOpticalMediumAbi.MAXIMUM_RESIDENT_BYTES,
+            Long.getLong("top.ceroxe.rt.medium.cuda.maxResidentBytes",CudaOpticalMediumAbi.MAXIMUM_RESIDENT_BYTES));}
+    private static long residentLimit(){return Math.min(configuredResidentLimit(),
             Long.getLong("top.ceroxe.rt.medium.cuda.maxResidentBytes",CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES));}
+    /** Bound scratch by the device budget instead of serializing every GPU behind a 512 MiB ceiling.
+     * Actual growth still goes through VulkanMemoryBudgetPolicy, including primary/photon buffers.
+     * Use the stable heap budget, not free bytes after our own allocation, to avoid per-frame retile churn.
+     */
+    static long residentLimit(VulkanMemoryBudgetSnapshot budget){
+        long available=budget!=null&&budget.driverBudgetAvailable()&&budget.deviceLocalBudgetBytes()>0
+                ?budget.deviceLocalBudgetBytes()/4:CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES;
+        return Math.min(configuredResidentLimit(),available);
+    }
     private <T>T onNative(Callable<T> operation){
         int wallTask=OpticalWallTimeline.enter(OpticalWallTimeline.Stage.OPTICAL_MEDIUM_NATIVE);
         try {var submitted=nativeThread.submit(OpticalWallTimeline.awaited(operation));boolean interrupted=false;
@@ -474,10 +491,15 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         }
         FrameScene(RenderFrameRequest frame,CudaOpticalMediumAbi.Plan plan,byte[] metadata,
                 java.util.List<CudaBoundaryMediumAbi.Boundary> boundaries,CudaMediumDensityAbi.Scene density,int maximumRounds){
+            this(frame,plan,metadata,boundaries,density,maximumRounds,nativePhotonPlan(frame,boundaries,residentLimit()));
+        }
+        private FrameScene(RenderFrameRequest frame,CudaOpticalMediumAbi.Plan plan,byte[] metadata,
+                java.util.List<CudaBoundaryMediumAbi.Boundary> boundaries,CudaMediumDensityAbi.Scene density,int maximumRounds,
+                CudaOpticalCausticAbi.Plan nativePhotons){
             this.frame=frame;this.plan=plan;this.metadata=metadata.clone();
             this.assets=new FrameAssets(java.util.List.copyOf(boundaries),density,plan.sceneBytes());
             this.maximumRounds=maximumRounds;
-            this.nativePhotons=nativePhotonPlan(frame,boundaries);
+            this.nativePhotons=nativePhotons;
         }
         RenderFrameRequest frame(){return frame;}CudaOpticalMediumAbi.Plan plan(){return plan;}
         CudaOpticalCausticAbi.Plan nativePhotons(){return nativePhotons;}

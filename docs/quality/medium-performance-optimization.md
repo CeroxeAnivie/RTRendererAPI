@@ -1341,3 +1341,21 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 独立属性 top.ceroxe.rt.medium.cuda.opticalBoundConnectionRays，header188 bit2048，false 可回到原无限连接作同制品对照。仅点光/聚光的连接查询使用 min(origin.w,1e20)，方向光、主射线和光子路径保持原范围。初次及 overlay/non-shadow 后续查询都使用同一端点；nextFloat(tHit)>tMax 时保留端点终止命中供 CUDA 消费，不发送 tMin>tMax。
 
 验收包括：真实 native RT 的镜像及反顶点序、光源前后不透明遮挡、alpha 衰减、穿透和终止在体积内部、端点 overlay/non-shadow/opaque、方向光；同 sequence 开关 HDR 字节对照；1080p 两帧 HDR、固定57及完整窗口、micro-checks、完整生产光学回归和 validation。性能按当前 GPU 负载只报本窗排名及占比，净收益待干净 GPU 的关闭诊断对照后判定；不能把理论删除工作包装成已实现加速。
+
+
+### 架构候选：按设备预算规划整批光学队列（验证中）
+
+逐灯光连接仍串行挂在相机路径状态机内，这与 PBRT 的独立 shadowRayQueue 有明显差异。当前先落地其中可独立验收的一层：光学规划器和 manager 分配检查硬性 min(512MiB)，CUDA 会话默认也是 512MiB；显存充足时也强制重复多个 tile 的长尾迭代和跨 API 交接，设置更大的 maxResidentBytes 仍被前两层截断。
+
+对照 PBRT-v4 b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f（Apache-2.0）src/pbrt/wavefront/integrator.cpp 的 227–243 行按 maxSamples/scanlinesPerPass/maxQueueSize 规划 GPU 工作队列，353 行按 pass 生成相机队列，575 行集中消费 shadowRayQueue。PBRT 本身以 1024*1024 为固定样本队列容量，并在 TODO 中提出按 GPU memory 配置；不能声称它总是整帧一批。采用其按队列容量组织 pass 的原则，设备预算部分使用本项目现有 VMA snapshot 和 VulkanMemoryBudgetPolicy，不宣称四分之一显存这个数来自 PBRT。
+
+生产光学容量取已配置上限、驱动 device-local 总预算的四分之一和光学 ABI 可寻址上限中的最小值。ABI 使用有符号 int 字节偏移，最高 Integer.MAX_VALUE-65536；缺少预算报告时回到 512MiB，小显卡保留相应分块。使用稳定的总预算而非扣除自身分配后的 free bytes，避免每帧因自身占用而缩块、迁移和抖动。实际 storage、外部 primary、光子图的增长仍由现有完整 requestedGrowthBytes admission 检查，保留 64MiB reserve/95% watermark。
+
+只有光学 CUDA 会话使用该容量策略，其他介质会话的默认限制不变。显式 maxResidentBytes=536870912 提供原分块方式的同制品对照；清除此属性使用设备预算。只减少串行 tile 长尾，不减少路径、光学样本、首界面分支、散射事件、光子或可见灯光。
+
+必须验证：预算缺失/小显卡、显式小容量、整数偏移上限、自身占用不导致重分块；1080p 两帧 HDR 严格字节一致、固定 sequence57、完整 64 帧窗口、micro-checks、全部生产光学回归和 validation。净性能与同步/trace 次数共同验收，负优化撤回，不只报告循环数减少。有限连接范围的小修单独保留其正确性与未完成的性能验收记录，不把其未验收收益算入本架构候选。
+
+
+有限连接范围候选 cfb4dcf 的真实 RT 20 组/40 帧、镜像顶点序与端点回归、2 个 validation 生命周期和两帧 1080p HDR 均逐字节通过。默认 JVM 正序对旧核心为约 1.07%，但同为 C2 的正序仅约 0.18%，不足以确认稳定收益；默认 JVM 反序遇到 jvmcicompiler.dll 崩溃，C2 反序主动中止以转入架构主线。不把不完整反序窗口当验收，不把 1.07% 报成已确认成果。[完整记录](data/medium-bounded-connections-20261031.json)。
+
+**2026-10-31 用户再次明确核心：消除大头里面的大头工作。** 候选进入实测前必须写清实际删除哪些重复工作、保留哪些必要工作，验收同时列真实工作计数和整帧 ms/FPS。代码位于最大热点、同步数量减少、调度方式改变都不能单独证明已消除大头；不能用等待搬家达成排名变化。当前架构候选删除过小 tile 导致的重复长尾轮次、批次初始化及 Vulkan/CUDA 交接；图像、采样、介质事件和灯光预算必须相同。

@@ -1,0 +1,346 @@
+{
+  "sourceCommit": "cfb4dcf",
+  "decision": "Correctness passed; no accepted net performance gain. Default-JVM forward showed 1.07% vs old core; C2 forward only 0.18%. Default reverse hit jvmcicompiler.dll crash; C2 reverse deliberately stopped to prioritize removal of architectural bottleneck work. Incomplete reverse windows are not accepted performance evidence.",
+  "hdr": {
+    "passed": true,
+    "mode": "byte-identical",
+    "supportingReferenceCommit": null,
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 0.0,
+    "maxLuminanceEnergyRelativeError": 0.0,
+    "maxAbsoluteChannelError": 0.0
+  },
+  "connectionRange": {
+    "passed": true,
+    "byteIdenticalComparisons": 20,
+    "nativeFrames": 40,
+    "mirroredVertexOrders": 2
+  },
+  "validation": {
+    "passed": true,
+    "logs": [
+      {
+        "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\bounded-light-connections\\range-validation.jsonl",
+        "passed": true,
+        "opened": 2,
+        "closed": 2,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      }
+    ]
+  },
+  "windows": [
+    {
+      "run": "build\\medium-micro-all-20261031\\bounded-connection-baseline\\accept-forward-baseline-matrix-off",
+      "frames": 32,
+      "wallMs": 14159.843700000001,
+      "msPerFrame": 442.49511562500004,
+      "fps": 2.2599119508642596,
+      "complete32FrameWindow": true,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 12.19 W, 180 MHz, 57",
+      "artifacts": [
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-connection-baseline\\accept-forward-baseline-matrix-off\\initial-gpu.csv",
+          "sha256": "ee9f946ecd85e7455717202330a852d41c6e04e0b7b2256fb05ac6753d6e40a9"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-connection-baseline\\accept-forward-baseline-matrix-off\\runtime.json",
+          "sha256": "0d205ccc275065bbd9bda40598af642be355d612c82a348437e02637089ca7ef"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-connection-baseline\\accept-forward-baseline-matrix-off\\artifacts.json",
+          "sha256": "7d9686e536fb41b700472f5033c2deec4d35e7e859db2d3046373a8763864de7"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-connection-baseline\\accept-forward-baseline-matrix-off\\micro-all-1080p-unprofiled.csv",
+          "sha256": "6edfc90dedf9d2c77780687c7292b97e92c782aa9af2478e8ff2289c431ae5c7"
+        }
+      ]
+    },
+    {
+      "run": "build\\medium-micro-all-20261031\\bounded-connection-baseline\\c2-forward-baseline-matrix-off",
+      "frames": 32,
+      "wallMs": 13971.0355,
+      "msPerFrame": 436.594859375,
+      "fps": 2.2904529875398283,
+      "complete32FrameWindow": true,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 8.00 W, 180 MHz, 54",
+      "artifacts": [
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-connection-baseline\\c2-forward-baseline-matrix-off\\initial-gpu.csv",
+          "sha256": "3999625fd8769d0164d7c1618e5e87dfe181ba69a29d90a3c7fb4ae627a70026"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-connection-baseline\\c2-forward-baseline-matrix-off\\runtime.json",
+          "sha256": "054aaa4ad70b8310814be46de65b35337abc5d21b0b23c9d1cefb70e0cc23008"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-connection-baseline\\c2-forward-baseline-matrix-off\\artifacts.json",
+          "sha256": "7d9686e536fb41b700472f5033c2deec4d35e7e859db2d3046373a8763864de7"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-connection-baseline\\c2-forward-baseline-matrix-off\\micro-all-1080p-unprofiled.csv",
+          "sha256": "41a5080f194bb9be17677ae1683dbae3bf56cd1681296fac24c9b6b71995210e"
+        }
+      ]
+    },
+    {
+      "run": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-forward-bounded-matrix-off",
+      "frames": 32,
+      "wallMs": 14008.349900000001,
+      "msPerFrame": 437.76093437500003,
+      "fps": 2.2843518493209536,
+      "complete32FrameWindow": true,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 20.57 W, 180 MHz, 60",
+      "artifacts": [
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-forward-bounded-matrix-off\\initial-gpu.csv",
+          "sha256": "aba91504e0fcc49a9945f639e169fe3cc4ccd155b920edc955da431ad161be52"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-forward-bounded-matrix-off\\runtime.json",
+          "sha256": "0ca0e2559b1565a1262d35123519cba34a7d3f15e61e3272a08820faa107ec1c"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-forward-bounded-matrix-off\\artifacts.json",
+          "sha256": "9e531401e39c5880966118fc5325c8c76f2650352a311ac35d6e9730723d8930"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-forward-bounded-matrix-off\\micro-all-1080p-unprofiled.csv",
+          "sha256": "72447f78da981c088e96aae1f3ac89d35b23ae4e74cceb5e21f4949f2a73cf5c"
+        }
+      ]
+    },
+    {
+      "run": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-forward-unbounded-matrix-off",
+      "frames": 32,
+      "wallMs": 14160.9261,
+      "msPerFrame": 442.528940625,
+      "fps": 2.25973921296009,
+      "complete32FrameWindow": true,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.96 W, 180 MHz, 62",
+      "artifacts": [
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-forward-unbounded-matrix-off\\initial-gpu.csv",
+          "sha256": "bbb6a6cedb2e3b52a048f927307d8717e85919c4e39ebd68049e14aae022ccc1"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-forward-unbounded-matrix-off\\runtime.json",
+          "sha256": "751fb6e697d1abe38fdf5fee8fa33ddcde407ddc51be9e942d921811c89aeb9c"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-forward-unbounded-matrix-off\\artifacts.json",
+          "sha256": "9e531401e39c5880966118fc5325c8c76f2650352a311ac35d6e9730723d8930"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-forward-unbounded-matrix-off\\micro-all-1080p-unprofiled.csv",
+          "sha256": "f927a5f820ca24251fa10298e67b47cd865baa8d446b17dcd8709d1599cc5006"
+        }
+      ]
+    },
+    {
+      "run": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-reverse-bounded-matrix-off",
+      "frames": 0,
+      "wallMs": 0,
+      "msPerFrame": null,
+      "fps": null,
+      "complete32FrameWindow": false,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.22 W, 180 MHz, 64",
+      "artifacts": [
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-reverse-bounded-matrix-off\\initial-gpu.csv",
+          "sha256": "2bcaac4f5b18c5ff8d77db47272bfae7f0b625bffd07df6df5fda87b85196915"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-reverse-bounded-matrix-off\\runtime.json",
+          "sha256": "a93743745c32af8089568f674c8dd03e95366dac462b9fe975cb61f6a66f2e5b"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-reverse-bounded-matrix-off\\artifacts.json",
+          "sha256": "9e531401e39c5880966118fc5325c8c76f2650352a311ac35d6e9730723d8930"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-reverse-bounded-matrix-off\\micro-all-1080p-unprofiled.csv",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "run": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-reverse-unbounded-matrix-off",
+      "frames": 32,
+      "wallMs": 14220.6991,
+      "msPerFrame": 444.396846875,
+      "fps": 2.2502409885038634,
+      "complete32FrameWindow": true,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.48 W, 180 MHz, 63",
+      "artifacts": [
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-reverse-unbounded-matrix-off\\initial-gpu.csv",
+          "sha256": "a47e539077d8a3bb702371345bc0f54b38c45d73506fef409801c4240c1f45b4"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-reverse-unbounded-matrix-off\\runtime.json",
+          "sha256": "41570a188ba0685e570e72d24e848b2de99dc42814f247f33d498fc1ec1a9840"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-reverse-unbounded-matrix-off\\artifacts.json",
+          "sha256": "9e531401e39c5880966118fc5325c8c76f2650352a311ac35d6e9730723d8930"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\accept-reverse-unbounded-matrix-off\\micro-all-1080p-unprofiled.csv",
+          "sha256": "fd7d360089d99b21695a6ffedd00ea4094e38be3a154a1fdb49c0d25a57bde11"
+        }
+      ]
+    },
+    {
+      "run": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-forward-bounded-matrix-off",
+      "frames": 32,
+      "wallMs": 13946.0004,
+      "msPerFrame": 435.8125125,
+      "fps": 2.2945646839361915,
+      "complete32FrameWindow": true,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 20.00 W, 225 MHz, 57",
+      "artifacts": [
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-forward-bounded-matrix-off\\initial-gpu.csv",
+          "sha256": "3be65d44f305d507d4a78d817a1ce96be9a247682bf21483838679550c5085a0"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-forward-bounded-matrix-off\\runtime.json",
+          "sha256": "9ca1cbc53814824de940bc6e4a1ba25b2e995b6a39ead22a6f6ce0b7d49e70bf"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-forward-bounded-matrix-off\\artifacts.json",
+          "sha256": "9e531401e39c5880966118fc5325c8c76f2650352a311ac35d6e9730723d8930"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-forward-bounded-matrix-off\\micro-all-1080p-unprofiled.csv",
+          "sha256": "ad6c9fea6562f31c7c496a9f4d3a278fe3b1e68869cbfaa1515992889656ecac"
+        }
+      ]
+    },
+    {
+      "run": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-forward-unbounded-matrix-off",
+      "frames": 32,
+      "wallMs": 13985.0334,
+      "msPerFrame": 437.03229375,
+      "fps": 2.288160427275061,
+      "complete32FrameWindow": true,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.99 W, 180 MHz, 59",
+      "artifacts": [
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-forward-unbounded-matrix-off\\initial-gpu.csv",
+          "sha256": "b78c3076ebd6475df3e12225e54e00827568cd2ddb11c39a113943ac613acc43"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-forward-unbounded-matrix-off\\runtime.json",
+          "sha256": "3fda188ebf41c86a0a4bea0614275c107d2ddda7b8baa601cd863658d9b2e4c9"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-forward-unbounded-matrix-off\\artifacts.json",
+          "sha256": "9e531401e39c5880966118fc5325c8c76f2650352a311ac35d6e9730723d8930"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-forward-unbounded-matrix-off\\micro-all-1080p-unprofiled.csv",
+          "sha256": "1eecfa2f8cfef8244cd85e90af81a8a002a5041e578b0ec7148f47b7992137be"
+        }
+      ]
+    },
+    {
+      "run": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-reverse-bounded-matrix-off",
+      "frames": 0,
+      "wallMs": 0,
+      "msPerFrame": null,
+      "fps": null,
+      "complete32FrameWindow": false,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 20.26 W, 180 MHz, 62",
+      "artifacts": [
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-reverse-bounded-matrix-off\\initial-gpu.csv",
+          "sha256": "c5be6124751b14f56bbed94b355466a5141fea576814e336f83818a38025325d"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-reverse-bounded-matrix-off\\runtime.json",
+          "sha256": "aab234f0b3250a9a96cdf65e1e4b4c5188261eba73258c312c6e93ded1f3938a"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-reverse-bounded-matrix-off\\artifacts.json",
+          "sha256": "9e531401e39c5880966118fc5325c8c76f2650352a311ac35d6e9730723d8930"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-reverse-bounded-matrix-off\\micro-all-1080p-unprofiled.csv",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "run": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-reverse-unbounded-matrix-off",
+      "frames": 32,
+      "wallMs": 14123.2987,
+      "msPerFrame": 441.353084375,
+      "fps": 2.265759627387899,
+      "complete32FrameWindow": true,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.66 W, 180 MHz, 61",
+      "artifacts": [
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-reverse-unbounded-matrix-off\\initial-gpu.csv",
+          "sha256": "17bb6a39f2684b46aa800f20fb000c31db9889e336e994014e64c2b7c6e3e960"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-reverse-unbounded-matrix-off\\runtime.json",
+          "sha256": "0c0b7d538a6069db9cfed6467f79020e5b9bfcc67fc663311cbb6637042c224e"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-reverse-unbounded-matrix-off\\artifacts.json",
+          "sha256": "9e531401e39c5880966118fc5325c8c76f2650352a311ac35d6e9730723d8930"
+        },
+        {
+          "path": "build\\medium-micro-all-20261031\\bounded-light-connections\\c2-reverse-unbounded-matrix-off\\micro-all-1080p-unprofiled.csv",
+          "sha256": "5ce38fcf7ca0f01e43cfb9f0f2703455a17aabb71b735092569a4ebedce26461"
+        }
+      ]
+    }
+  ]
+}
