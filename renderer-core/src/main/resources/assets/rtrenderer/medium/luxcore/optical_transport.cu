@@ -581,9 +581,23 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
         int continuation=0;
         // Mode 2 is an unshadowed light: preserve unit visibility and skip the
         // complete surface/medium connection, matching direct-volume transport.
-        if(__float_as_uint(c->source.w)==1u)continuation=connectionStep(b,c,connectionView);
+        if(__float_as_uint(c->source.w)==1u){
+            const bool batched=(h[47]&8192u)!=0u;
+            const unsigned int count=batched?connectionView.u(Compact?22:50):1u;
+            if(batched&&(h[58]!=2u||h[57]==0u||count<1u||count>2u)){finish(b,i,s,statistics,40u);return;}
+            for(unsigned int segmentIndex=0;segmentIndex<count;++segmentIndex){
+                HitView<Compact,Transposed> segmentView=segmentIndex==0u?connectionView
+                        :HitView<Compact,Transposed>{(const unsigned int*)(b+h[57]),h[2],(unsigned int)i};
+                if(segmentView.u(Compact?23:51)!=s->control.w){finish(b,i,s,statistics,41u);return;}
+                continuation=connectionStep(b,c,segmentView);
+                if(continuation<=0)break;
+                // Retain the old per-hit random/identity epoch even though this
+                // segment no longer needs a kernel entry, queue or API handoff.
+                ++s->control.w;
+            }
+        }
         if(continuation<0){finish(b,i,s,statistics,32u+(unsigned int)(-continuation));return;}
-        if(continuation>0){s->control.x=3u;++s->control.w;increment(b,statistics,0u);return;}
+        if(continuation>0){s->control.x=3u;increment(b,statistics,0u);return;}
         float3 incoming=rgb(c->lighting);
         if(peak(rgb(c->source))>0.f){
             const float phase=c->control.w!=0u?1.f:rtr_medium::hgEvaluate(dot(rgb(s->direction),rgb(c->direction)),anisotropy(b,selectedVolume(s)));

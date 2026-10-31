@@ -225,6 +225,16 @@ vec3 gsOpticalLightOrigin(vec3 point,vec3 normal,float bound) {
     return result;
 }
 // Select light geometry only. CUDA owns phase, density attenuation and the copied medium stack.
+GpuScenePayload gsOpticalConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum) {
+    GpuScenePayload hit=gsTraceOpticalRadiance(origin,direction,launch,minimum,maximum,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY);
+    while(hit.state.x!=0u&&hit.mediumBoundary.w==0u
+            &&((hit.state.w&GPU_SCENE_FLAG_CASTS_SHADOW)==0u||gsSurfaceOverlay(hit))){
+        minimum=uintBitsToFloat(floatBitsToUint(hit.worldPositionAndDistance.w)+1u);
+        if(minimum>maximum)break;
+        hit=gsTraceOpticalRadiance(origin,direction,launch,minimum,maximum,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY);
+    }
+    return hit;
+}
 void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 launch,uint epoch,bool initialize,uint hitOffset) {
     GS_DETAIL_BEGIN(168u);
     uint base=gsOptical.storage.lanes[4u].z/16u+item*22u;
@@ -337,25 +347,36 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
     float maximum=(gsOptical.storage.lanes[11u].w&2048u)!=0u?min(origin.w,1.0e20):1.0e20;
     GpuScenePayload hit;
     if(gsOptical.storage.lanes[base+2u].w==1u&&minimum<=maximum){
-        hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum,maximum,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY);
+        hit=gsOpticalConnectionHit(origin.xyz,direction,launch,minimum,maximum);
         GS_DETAIL_NEXT(174u);
-        // Connections need full material hits for transparent attenuation, while
-        // preserving the public shadow exclusions for overlays and non-blockers.
-        while(hit.state.x!=0u&&hit.mediumBoundary.w==0u
-                &&((hit.state.w&GPU_SCENE_FLAG_CASTS_SHADOW)==0u||gsSurfaceOverlay(hit))){
-            minimum=uintBitsToFloat(floatBitsToUint(hit.worldPositionAndDistance.w)+1u);
-            // At an endpoint overlay, nextFloat(tHit) may exceed tMax. Keep
-            // that terminal hit for CUDA instead of issuing an invalid interval.
-            if(minimum>maximum)break;
-            hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum,maximum,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY);
-        }
     }
     else {hit.worldPositionAndDistance=vec4(0,0,0,-1);hit.previousWorldPosition=vec4(0);hit.motionRevision=uvec2(0);
         hit.worldNormalAndRoughness=vec4(0,1,0,0);hit.baseColorAndOpacity=vec4(0);hit.emissiveAndMetallic=vec4(0);
         hit.transmissionIor=vec4(0);hit.state=uvec4(0);hit.surfaceState=uvec4(0);hit.compositeState=vec4(0);
         hit.launchInfo=launch;hit.mediumBoundary=uvec4(0);}
     GS_DETAIL_END();
-    gsOpticalStore(hitOffset,item,hit,uvec4(globalPath/gsOptical.storage.lanes[0u].w,globalPath%gsOptical.storage.lanes[0u].w,epoch,epoch));
+    bool batched=(gsOptical.storage.lanes[11u].w&8192u)!=0u;
+    float firstDistance=hit.worldPositionAndDistance.w;
+    bool nextSegment=batched&&gsOptical.storage.lanes[base+2u].w==1u&&hit.state.x!=0u
+        &&!isnan(firstDistance)&&!isinf(firstDistance)&&firstDistance>=ray.w&&firstDistance<origin.w
+        &&gsOptical.storage.lanes[base+5u].z+1u<gsOptical.storage.lanes[1u].z
+        &&(hit.mediumBoundary.w!=0u||hit.baseColorAndOpacity.a<1.0||hit.transmissionIor.x>0.0);
+    gsOpticalStore(hitOffset,item,hit,uvec4(globalPath/gsOptical.storage.lanes[0u].w,globalPath%gsOptical.storage.lanes[0u].w,batched?1u:epoch,epoch));
+    // Publish the first record before tracing again, so two complete material
+    // payloads do not remain live together across the second trace.
+    minimum=uintBitsToFloat(floatBitsToUint(firstDistance)+1u);
+    if(nextSegment&&minimum<=maximum){
+        GS_DETAIL_BEGIN(174u);
+        hit=gsOpticalConnectionHit(origin.xyz,direction,launch,minimum,maximum);
+        GS_DETAIL_END();
+        gsOpticalStore(gsOptical.storage.lanes[14u].y,item,hit,
+            uvec4(globalPath/gsOptical.storage.lanes[0u].w,globalPath%gsOptical.storage.lanes[0u].w,1u,epoch+1u));
+        bool compact=(gsOptical.storage.lanes[11u].w&1u)!=0u;
+        bool transposed=compact&&(gsOptical.storage.lanes[11u].w&8u)!=0u;
+        uint stride=transposed?gsOptical.storage.lanes[0u].z:1u;
+        uint identity=hitOffset/16u+item*(transposed?1u:compact?6u:13u)+(compact?5u:12u)*stride;
+        gsOptical.storage.lanes[identity].z=2u;
+    }
 }
 // Light paths use the camera pipeline's geometric hit ABI, with native medium state.
 void gsOpticalPhotonTrace() {

@@ -37,6 +37,7 @@ public final class CudaOpticalMediumSelfTest {
         CudaOpticalMediumProfile.requireSupported(frame,nativeScene,true);
         expectUnsupported(()->CudaOpticalMediumProfile.requireSupported(frame,nativeScene,false));
         verifyStorageLayouts();
+        verifyConnectionBatchStorage();
         verifyCounterModes(plan,frame,boundary);
         verifyHeterogeneousScatteringAdmission(frame);
         verifyDensity(frame,medium,boundary);
@@ -276,6 +277,39 @@ public final class CudaOpticalMediumSelfTest {
         var eight=CudaOpticalMediumAbi.plan(1920,1080,8,0,density,cap,true);
         require(eight.tilePixels()>0&&eight.bytes()+65536<=cap,"eight-SPP final T/E fits without increasing CUDA residency");
         expectIllegal(()->CudaOpticalMediumAbi.plan(1920,1080,8,0,density,cap,false));
+    }
+    private static void verifyConnectionBatchStorage() {
+        String property=CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY,previous=System.getProperty(property);
+        var density=CudaMediumDensityAbi.Scene.empty();
+        var frame=RenderFrameRequest.builder(1,137,101,CameraState.lookAt(0,0,0,0,0,-1).build()).build();
+        try {
+            for(boolean enabled:new boolean[]{false,true})for(boolean compact:new boolean[]{false,true})
+                    for(boolean transposed:new boolean[]{false,true})for(int samples:new int[]{1,2,8}) {
+                System.setProperty(property,Boolean.toString(enabled));
+                long cap=32L*1024*1024;
+                var plan=CudaOpticalMediumAbi.plan(137,101,samples,1,density,cap,
+                        true,true,compact,false,transposed,false,false,true);
+                int planes=enabled?2:1;
+                require(plan.connectionBatchSize()==planes,"connection batch mode must be explicit in storage planning");
+                require(plan.bytes()+CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE<=cap,"extra hits must not exceed the same resident cap");
+                long planeBytes=(long)plan.tilePaths()*plan.hitBytes();
+                require(plan.evaluationOffset()==plan.hitOffset()+planes*planeBytes,"all hit planes end before evaluation");
+                require(plan.secondConnectionHitOffset()==(enabled?plan.hitOffset()+planeBytes:0),"second hit plane must be disjoint and optional");
+                var request=frame.toBuilder().antiAliasing(samples==1?AntiAliasingState.disabled():AntiAliasingState.multisampled(samples)).build();
+                var header=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(plan,request,List.of(),new int[0])).order(ByteOrder.nativeOrder());
+                require(((header.getInt(188)&8192)!=0)==enabled&&header.getInt(228)==plan.secondConnectionHitOffset()
+                        &&header.getInt(232)==planes,"both producers receive the same guarded batch metadata");
+                int first=(plan.pixels()-1)/plan.tilePixels()*plan.tilePixels(),tail=plan.pixels()-first;
+                CudaOpticalMediumAbi.updateTile(header,plan,first,tail,0,0);
+                long tailBytes=(long)header.getInt(8)*plan.hitBytes();
+                require(header.getInt(8)==tail*samples&&tailBytes<=planeBytes,"partial tiles use their live transposed stride");
+                require(!enabled||header.getInt(228)+tailBytes<=plan.evaluationOffset(),"partial second plane cannot overrun into evaluation");
+            }
+            System.setProperty(property,"true");
+            var disconnected=CudaOpticalMediumAbi.plan(137,101,1,1,density,32L*1024*1024,true,true,true,false);
+            require(disconnected.connectionBatchSize()==1&&disconnected.secondConnectionHitOffset()==0,
+                    "non-connection paths keep the original single-hit layout");
+        } finally {if(previous==null)System.clearProperty(property);else System.setProperty(property,previous);}
     }
     private static void verifySurfaceProof(){
         var residency=new VulkanSceneResidency();var index=new VulkanSurfaceSceneIndex();long revision=0;

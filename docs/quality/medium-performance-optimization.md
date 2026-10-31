@@ -1509,3 +1509,14 @@ ABI及两种复制模式各136组真实CUDA输入、合计1360个独立模型检
 本轮观测开销1.0043%，满足10%线，不继续打磨观测开销。202206条互斥区间零丢样。上表为32帧观测窗口，整帧净收益以上方关闭诊断24.2499%为准。第一名包住的真实GPU工作：CUDA光学推进109.827868→67.497932 ms/帧，Vulkan续射线91.964671→59.735283 ms/帧；不能再与host等待求和，已证实工作减少而非等待转移。CUDA stream同步仍为第一，原生180FPS目标尚未达到。
 
 [完整验收与原始证据哈希](data/medium-reused-duplicate-branches-20261031.json)。后续主线优先追求能显著降低整帧耗时的架构改动，从最大热点的最大实际工作入手，优先消除整段重复计算、路径或交接；确定性小收益仍保留，但不让细节试探占据主线。连续失败后回看全局，不用静态指令/源码行数减少代替净收益。新候选仍分别验证，不承诺每轮都能达到本轮降幅。
+
+
+## 2026-10-31 架构候选 N：相邻两段连接命中一次消费（待验收）
+
+本轮从最大热点包住的真实GPU工作出发：一条直线光连接每经过一个透明层或介质边界，都再次装载完整状态、推进一次CUDA、压缩队列、跨Vulkan/CUDA交接。固定 PBRT-v4 commit `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0），`src/pbrt/wavefront/intersect.h` 158行起的 `TraceTransmittance` 在GPU内循环处理连接的命中与透射。此处参考的是完整连接在GPU内连续处理的组织方式；PBRT没有本项目的两段命中包，后者是Vulkan/CUDA架构的确定性适配。
+
+Vulkan仍以原来的origin、direction、nextFloat(t)、端点上限查询，最多额外预取一段，写入第二hit plane。CUDA按原先顺序调用原 `connectionStep`，逐段更新原事件计数、介质优先级栈、衰减和epoch；第一段终止就不消费第二段。没有降低任何采样/事件/散射/光子预算，没有替换段积分公式。仅在透明或介质命中且预算允许时预取。TIR/cutoff等场景可能多一次未被消费的几何查询，必须测净收益；不能声称几何射线必然减少。
+
+header188 bit8192守卫新metadata，byte228是第二plane地址，byte232是包容量2；compact/full/transposed布局和partial tile均保留。额外plane占用真实resident cap，1080p compact约增加199MB；不能通过增加原cap掩盖内存代价。CUDA clock phase诊断复用同一header区，因此该专用诊断强制单段，普通host/GPU事件计时继续使用真实候选路径。`top.ceroxe.rt.medium.cuda.opticalBatchConnectionHits=false` 回到原单段实现。
+
+先做CPU布局/容量和原生专项：三种hit格式、镜像顶点序、透明链、嵌套优先级、预算2/3、端点与overlay/nonshadow，共84组开关HDR逐字节比较/168帧；再做1080p两帧与已验收M严格HDR。通过后检查关闭诊断的正反序原生吞吐，正收益再跑完整生产回归与新排名。测试前全量提交推送、工作区干净并冻结JAR；任何正确性失败或负优化均撤回候选，不覆盖M已验收成果。
