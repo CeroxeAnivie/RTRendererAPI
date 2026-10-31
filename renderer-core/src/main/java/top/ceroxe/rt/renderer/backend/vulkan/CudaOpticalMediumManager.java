@@ -64,7 +64,6 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         try{initialized=onNative(()->{var opened=CudaMediumRuntime.open(Integer.getInteger("top.ceroxe.rt.medium.cuda.deviceOrdinal",0),configuredResidentLimit());
             try{String source=CudaOpticalMediumSource.source();
                 var variants=new CudaMediumRuntime.BatchKernel[9];
-                for(int layout=0;layout<variants.length;layout++)variants[layout]=opened.compileBatchKernel(source,"native_optical_step_"+layout);
                 return new NativeState(opened,opened.compileBatchKernel(source,"native_optical_reset"),variants,
                         opened.allocateHost(CudaOpticalMediumAbi.STATISTICS_BYTES),opened.allocateHost(CudaOpticalMediumAbi.STATISTICS_BYTES));}
             catch(RuntimeException|Error failure){try{opened.close();}catch(RuntimeException cleanup){failure.addSuppressed(cleanup);}throw failure;}
@@ -161,6 +160,11 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         if(nativePhotons&&storage!=null&&storage.byteSize()>plan.bytes()+OpticalDetailedProfile.shaderBytes(plan.tilePaths())){
             drain();storage.close();storage=null;uploadedAssets=null;
         }
+        int layout=plan.transposedStates()?6+(plan.transposedHits()?2:plan.compactHits()?1:0):plan.transposedHits()?4+(plan.compactStates()?1:0):((plan.compactHits()?1:0)|(plan.compactStates()?2:0));
+        // cuModuleGetFunction can materialize native code and driver resources.
+        // Preserve every layout, but load only the one this plan will execute.
+        if(steps[layout]==null)steps[layout]=cuda.compileBatchKernel(CudaOpticalMediumSource.source(),"native_optical_step_"+layout);
+        var step=steps[layout];
         // Compile the photon program before reserving the large camera scratch.
         // Compiler temporaries and per-path storage have disjoint lifetimes.
         if(nativePhotons&&photonPass==null)photonPass=new CudaOpticalPhotonPass(device,cuda);
@@ -168,7 +172,6 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         if(nativePhotons) {
             photonPass.prepare(scene,photonPlan,tracer,slot,photonBuffer,buildPlan);
         }
-        var step=steps[plan.transposedStates()?6+(plan.transposedHits()?2:plan.compactHits()?1:0):plan.transposedHits()?4+(plan.compactStates()?1:0):((plan.compactHits()?1:0)|(plan.compactStates()?2:0))];
         long primaryAddress=plan.externalPrimary()?primary.deviceAddress():0;
         int opticalSamples=frame.mediumTransport().opticalSamples();
         int branches=frame.mediumTransport().firstInterfaceSampling()==top.ceroxe.rt.renderer.api.MediumTransport.FirstInterfaceSampling.DETERMINISTIC_SPLIT?2:1;
