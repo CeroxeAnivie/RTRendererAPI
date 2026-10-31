@@ -38,8 +38,10 @@ void gsCollectBoundary() {
     uint at=count;
     for(uint i=0u;i<count;++i) {
         uvec2 old=gsPacketEvent(base,i);float d=uintBitsToFloat(old.x);
-        if((old.y&0x7fffffffu)==low&&abs(d-distance)<=epsilon)return;
-        if(distance<d||(distance==d&&code<old.y)){at=i;break;}
+        // A nearby opposite-facing hit is a real thin segment, not a repeated triangle hit.
+        // Scan the entire packet: traversal may report a duplicate after an earlier insertion point.
+        if(old.y==code&&abs(d-distance)<=epsilon)return;
+        if(at==count&&(distance<d||(distance==d&&code<old.y)))at=i;
     }
     if(at>=capacity)return;
     uint next=min(count+1u,capacity);

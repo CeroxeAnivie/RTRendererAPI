@@ -65,6 +65,17 @@ public final class CudaBoundaryMediumProductionNativeSelfTest {
                 var budgets=MediumTransport.balanced().withMaxEvents(32).withMaxDistance(30).withTransmittanceCutoff(0);
                 var single=List.of(new Volume(10,-1,1,a,0));
                 compare("outside-single",single,6,1,false,false,budgets,Medium.vacuum());
+                // Opposite-facing entry/exit are closer than the old 1e-5 packet dedup radius.
+                // Strong extinction makes silently skipping the thin interval fail the HDR oracle too.
+                var thin=medium(1024,768,512,0,0,0);
+                compare("sub-epsilon-thin-boundary",List.of(new Volume(10,-0x1p-18,0x1p-18,thin,0)),
+                        6,1,false,false,budgets,Medium.vacuum());
+                compare("sub-epsilon-thin-boundary-mirrored-SPP8",List.of(new Volume(10,-0x1p-18,0x1p-18,thin,0)),
+                        6,8,true,false,budgets,Medium.vacuum(),true);
+                var thinGrid=thin.withDensityField(MediumDensityField.grid(50,2,new AffineTransform(new float[]{
+                        .005f,0,0,.5f,0,.005f,0,.5f,0,0,.5f,.5f})));
+                compare("sub-epsilon-thin-density-boundary",List.of(new Volume(10,-0x1p-18,0x1p-18,thinGrid,0)),
+                        6,1,false,false,budgets,Medium.vacuum());
                 compare("mirrored-persistent",single,6,2,false,false,budgets,Medium.vacuum(),true);
                 compare("mirrored-frame-local-eight-SPP",single,6,8,true,false,budgets,Medium.vacuum(),true);
                 compare("inside-single",single,0,1,false,false,budgets,Medium.vacuum());

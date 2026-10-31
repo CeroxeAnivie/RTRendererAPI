@@ -35,8 +35,8 @@
     },
     {
       "name": "boundary_packet.cu",
-      "bytes": 5702,
-      "sha256": "c9b3ab74076aa0bcfaf8243e757e816a7e3c254c5051f7936c2a83fe4f2967fa"
+      "bytes": 5727,
+      "sha256": "c3a2ca7b6d2c731cbe69ea82f4dba621e907548f0674d5d7eee909fbf49bee97"
     },
     {
       "name": "boundary_scattering.cu",

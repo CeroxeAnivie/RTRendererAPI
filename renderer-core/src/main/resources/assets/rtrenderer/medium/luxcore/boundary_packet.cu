@@ -38,7 +38,7 @@ __device__ void rtr_boundary_packet_resolve_one(unsigned char *buffer,int i,unsi
     for(unsigned int j=0;j<packet[3];++j) {
         const float distance=__uint_as_float(packet[4+j*2]);const unsigned int code=packet[5+j*2],index=code&0x7fffffffu;
         if(!isfinite(distance)||distance<0.f||index>=h[7]){rtr_boundary_packet_fail(buffer,i,failed,BAD_HIT,j+1u);return;}
-        if(distance<previous)continue; // Same epsilon exclusion as the ordered closest-hit route.
+        if(distance<previous){rtr_boundary_packet_fail(buffer,i,failed,BAD_HIT,j+1u);return;}
         if(distance>=end)break;
         if(!segment(buffer,&state,origin+direction*previous,distance-previous)){rtr_boundary_packet_fail(buffer,i,failed,BAD_HIT,j+1u);return;}
         bool entering=(code&0x80000000u)!=0u;
@@ -52,11 +52,9 @@ __device__ void rtr_boundary_packet_resolve_one(unsigned char *buffer,int i,unsi
             state.control.x=FINISHED;state.counters.w=2u;state.transport.x=state.transport.y=state.transport.z=0.f;
             rtr_boundary_packet_finish(buffer,i,state);return;
         }
-        float3 point=origin+direction*distance;
-        const float epsilon=fmaxf(1e-5f,peak(make_float3(fabsf(point.x),fabsf(point.y),fabsf(point.z)))*2e-7f);
-        const float advance=fminf(epsilon,fmaxf(end-distance,0.f));
-        if(!segment(buffer,&state,point,advance)){rtr_boundary_packet_fail(buffer,i,failed,BAD_HIT,j+1u);return;}
-        previous=distance+advance;
+        // The complete ordered packet needs no spawned-ray self-intersection offset.
+        // Integrate exact adjacent intervals, including intervals smaller than a ray epsilon.
+        previous=distance;
     }
     if(!segment(buffer,&state,origin+direction*previous,fmaxf(end-previous,0.f))){rtr_boundary_packet_fail(buffer,i,failed,BAD_HIT);return;}
     state.control.x=FINISHED;state.counters.w=hit?0u:1u;rtr_boundary_packet_finish(buffer,i,state);

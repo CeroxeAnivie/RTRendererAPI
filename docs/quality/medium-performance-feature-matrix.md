@@ -11,3 +11,11 @@
 可复用工具 `tools/RunMediumFeatureMatrix.ps1` 使用冻结 `candidate-core.jar`、`matrix-test-classes.jar` 和运行依赖，保存哈希、初始 GPU0 状态、独立日志和全部报告；标签目录不能覆盖。默认预热 1200 帧、3×240 帧；可显式缩短为 smoke。网络代理仍为进程外本机配置，不写仓库。
 
 新增路径的逐项计时覆盖见 [new-api-timing-coverage.md](new-api-timing-coverage.md)。矩阵实测完成后，另外归档本轮场景数量、覆盖功能、事件有效性、开销及制品哈希；这里不预先宣称实测通过。
+
+## 全矩阵暴露的薄区间边界错误
+
+1080p 的 `route-boundary_density` 在像素 (1439,562) 只留下 t=7.294693 的出界事件，严格栈检查拒绝缺失入界。旧已验收 core 制品也失败。独立射线/盒 slab 计算的入界为 7.294689864、出界为 7.294693295，真实区间约 0.000003432，小于原事件去重阈值 0.00001。
+
+修复仅把同方向同边界的近邻事件视为重复，并完整扫描事件包；方向相反的真实入界/出界必须保留。CUDA 对完整有序交点按相邻端点积分，去掉只适用于重发射线的 epsilon 跳步。栈校验仍严格执行。新增高消光薄盒、镜像 SPP8 与密度薄盒的独立解析 HDR 回归，避免仅仅不报错却漏掉薄段贡献。
+
+成熟实现对照：PBRT v4 固定 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f` 的 [media.h](https://github.com/mmp/pbrt-v4/blob/b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f/src/pbrt/media.h) `SampleT_maj` 按 `tMax - tMin` 积分介质区间；LuxCore 固定 `b872186d2fe995a762f73708c606847eed55843e` 的 `PathVolumeInfo_Update` 区分进入/退出并更新栈。引用用于区间和栈语义对照，事件包修复是本项目的 Vulkan/CUDA 适配逻辑，不宣称上游实现了相同互操作架构。原始失败、定位记录及固定参考保存在 `build/medium-boundary-packet-fix-20261031/`。修复与全矩阵实测结果随后单独归档，不以编译通过代替验收。
