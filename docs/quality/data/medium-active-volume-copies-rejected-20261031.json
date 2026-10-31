@@ -1,0 +1,257 @@
+{
+  "candidateCommits": [
+    "5ece3a5",
+    "384bdab"
+  ],
+  "decision": "rejected: strict HDR gate failed; no performance acceptance run",
+  "reference": {
+    "project": "LuxCoreRender/LuxCore",
+    "commit": "b872186d2fe995a762f73708c606847eed55843e",
+    "file": "include/slg/utils/pathvolumeinfo_funcs.cl",
+    "license": "Apache-2.0",
+    "scope": "valid-prefix semantics only; active-prefix copying is this project's deterministic candidate",
+    "downloadedSha256": "844b3b0a9266cb0b598b8f06b031d92e7093878e55a441a79bf82936ee2dbe25"
+  },
+  "abiPassed": true,
+  "nativeCopyProbe": {
+    "passed": true,
+    "inputCasesPerMode": 136,
+    "modes": 2,
+    "checkpointsPerInput": 5,
+    "totalCheckpoints": 1360
+  },
+  "hdrActiveVsBaseline": {
+    "passed": false,
+    "mode": "byte-identical",
+    "supportingReferenceCommit": null,
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": false,
+        "alphaExact": true,
+        "relativeRms": 9.64807374149859e-07,
+        "luminanceEnergyRelativeError": 2.173000583423375e-09,
+        "maxAbsoluteChannelError": 0.0009765625,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 1,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": false,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "61623d27961ed412ee277cca06bcc43bb1d41fdc9f883d0dddfa7c83443fda26"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 9.64807374149859e-07,
+    "maxLuminanceEnergyRelativeError": 2.173000583423375e-09,
+    "maxAbsoluteChannelError": 0.0009765625
+  },
+  "hdrFullCopyVsBaseline": {
+    "passed": true,
+    "mode": "byte-identical",
+    "supportingReferenceCommit": null,
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 0.0,
+    "maxLuminanceEnergyRelativeError": 0.0,
+    "maxAbsoluteChannelError": 0.0
+  },
+  "hdrSameArtifactSwitch": {
+    "passed": false,
+    "mode": "byte-identical",
+    "supportingReferenceCommit": null,
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": false,
+        "alphaExact": true,
+        "relativeRms": 9.64807374149859e-07,
+        "luminanceEnergyRelativeError": 2.173000583423375e-09,
+        "maxAbsoluteChannelError": 0.0009765625,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 1,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": false,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "61623d27961ed412ee277cca06bcc43bb1d41fdc9f883d0dddfa7c83443fda26"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 9.64807374149859e-07,
+    "maxLuminanceEnergyRelativeError": 2.173000583423375e-09,
+    "maxAbsoluteChannelError": 0.0009765625
+  },
+  "throughputMeasured": false,
+  "explanation": "One RGB component in frame zero differs by one half ULP; second frame exact. Disabling candidate restores both exact frames. No established floating-point/compiler/queue cause; no post hoc tolerance relaxation.",
+  "evidence": [
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\abi-test.log",
+      "sha256": "9095b7d25aa8b0832e8a7548a8beb426e8acc04636b93fdd019da2cd0bc304c7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\candidate-code.patch",
+      "sha256": "1abaaba9744dfd9e7568ecd1ed97e9dc54e472d23ed75609e8bc3e0a77687efb"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\candidate-core.jar",
+      "sha256": "864f4872e06ab69356d5d237cc4d7aaa57e5ac710cabed33e5cfd51b282ada96"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\copy-probe-initial-gpu.csv",
+      "sha256": "994040befeeea4ca2896eb55af28705a5edecec7b22025000b619f13f685d218"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\copy-probe-retry-test.log",
+      "sha256": "f50eb00988b3651e764a531af7c87e1ed216ad823cfcfb79aa770d36eba9e834"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\copy-probe-test.log",
+      "sha256": "1ab3f39b99cad2ffa4548935ce7eb6d4780a1e29c0cd0935dc88d7fd7ca3be42"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\hdr-active\\micro-all-0.rgba16f",
+      "sha256": "61623d27961ed412ee277cca06bcc43bb1d41fdc9f883d0dddfa7c83443fda26"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\hdr-active\\micro-all-1.rgba16f",
+      "sha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\hdr-compare.json",
+      "sha256": "24096856092c482b0fceafdf7d031fc7f4b41d911053f20063c4e6b715d0b88f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\hdr-full-copy\\micro-all-0.rgba16f",
+      "sha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\hdr-full-copy\\micro-all-1.rgba16f",
+      "sha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\hdr-full-copy-test.log",
+      "sha256": "fc82014e830bc0a80fe6b7d0efb58e450156476ecbc2aad2c74a78f7ac601c99"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\hdr-full-copy-vs-baseline.json",
+      "sha256": "156248a00931913dac32e49fe54ebab401a635b81198c9ad4d44eae68dbd8cc8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\hdr-initial-gpu.csv",
+      "sha256": "494821732774600756481f5e926f5c381e59d5b93998aeada05815ee846fcec7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\hdr-switch-compare.json",
+      "sha256": "24096856092c482b0fceafdf7d031fc7f4b41d911053f20063c4e6b715d0b88f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\hdr-test.log",
+      "sha256": "fc82014e830bc0a80fe6b7d0efb58e450156476ecbc2aad2c74a78f7ac601c99"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\matrix-test-classes.jar",
+      "sha256": "83586141e12750acc40b458dedac93d466287cd5df6d9e6fd1752cf2ef5d4ef4"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\native-test-classes.jar",
+      "sha256": "d6ba0b555d1541b9955adfd04f29c5dc77e4413c214bc01e2c1f4e992d78b859"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\source-commit.txt",
+      "sha256": "4bda23c4d6085c259811f36da59da2fea31cd62401fca528df60f10d4e5b0479"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\active-volume-copies\\test-source-commit.txt",
+      "sha256": "a8a62c4478dd508f3d600bbb398e0897c1930cfbf47b971e49099013f7ec63a0"
+    }
+  ]
+}

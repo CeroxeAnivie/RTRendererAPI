@@ -115,8 +115,8 @@
     },
     {
       "name": "optical_transport.cu",
-      "bytes": 57095,
-      "sha256": "786e00828aeb9181e77c3ccdc870ddb0d154ff342c369833ecf865df7a113e3b"
+      "bytes": 56084,
+      "sha256": "5b1b4b33389faa9c3826378cefc9ae544b661f39a462b60fe800057c9964e5d5"
     },
     {
       "name": "pbr_transport.cu",

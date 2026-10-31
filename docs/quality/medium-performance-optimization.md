@@ -1462,10 +1462,15 @@ header188 bit4096 / top.ceroxe.rt.medium.cuda.opticalLeanConnectionHits（默认
 [完整证据与哈希](data/medium-specialized-connection-sbt-rejected-20261031.json)。
 
 
-## 2026-10-31 候选 L：只搬运介质栈有效前缀（待验收）
+## 2026-10-31 撤回候选 L：只搬运介质栈有效前缀
 
 对照仓库固定的 LuxCore commit `b872186d2fe995a762f73708c606847eed55843e`（Apache-2.0），`include/slg/utils/pathvolumeinfo_funcs.cl` 的 `PathVolumeInfo_Init`、`AddVolume`、`RemoveVolume`（本地固定摘录 `upstream-pathvolumeinfo-functions.cl` 25–89 行）：初始化只置长度/当前介质/scatteredStart，添加写入 `list[size++]`，删除和优先级重选仅读取 `[0,size)`。这里引用的是有效前缀语义，不能声称 LuxCore 已采用本项目这项复制优化。
 
 本项目的确定性候选在 optical transport 的9处相机/连接/候选状态交接只复制三个头字段和有效槽位，删除无读者的尾部搬运；栈仍为144字节、32槽，保持顺序、优先级、进出栈、拒绝行为及全部预算。坏长度仍保留并由原验证拒绝，复制最多32项。`top.ceroxe.rt.medium.cuda.opticalActiveVolumeCopies=false` 可用同制品回到完整结构复制。没有改着色器、同步流程、采样或任何输运近似。
 
 专用真实CUDA检查两种复制模式各136种输入，覆盖长度0至32、坏长度33、两种槽顺序、scatteredStart、容量溢出、缺失删除、删除重选优先级、删空再填、有效顺序和两侧内存守卫，五个变更检查点由独立Java列表/优先级模型验证。随后核对ABI、生产native与validation、两个1080p HDR帧及关闭诊断正反序整帧速度。少搬运不是已确认收益；动态循环可能抵消节省，负优化完整撤回。
+
+
+ABI及两种复制模式各136组真实CUDA输入、合计1360个独立模型检查点通过。但1080p两帧严格HDR未通过：第一帧单个RGB分量差一个half ULP（0.0009765625），第二帧完全一致。同制品关闭候选后两帧均恢复与原版逐字节一致，开关对照仍有该差异。尚无证据判定浮点/编译/队列的具体成因，不临时放宽阈值，不宣称画面完全一致；正确性门槛失败后停止性能验收，完整撤回这项源码、开关及专项测试。原设备预算队列等已验收优化保留，本轮没有新增可报告FPS收益。
+
+已通过本机代理重新下载固定提交的 `include/slg/utils/pathvolumeinfo_funcs.cl`，确认本地固定摘录是上游的连续原文；下载文件SHA-256为 `844b3b0a9266cb0b598b8f06b031d92e7093878e55a441a79bf82936ee2dbe25`。[本轮证据与哈希](data/medium-active-volume-copies-rejected-20261031.json)。下一轮停止栈复制细节变体，先核对整条路径和队列职责中的重复工作及其成熟实现依据。

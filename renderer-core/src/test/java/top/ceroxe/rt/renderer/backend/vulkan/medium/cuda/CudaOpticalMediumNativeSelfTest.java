@@ -95,13 +95,6 @@ public final class CudaOpticalMediumNativeSelfTest {
         }
         """;
     public static void main(String[] args){
-        if(java.util.Arrays.asList(args).contains("--active-volume-copies")){
-            try(var cuda=CudaMediumRuntime.open(0);var arena=Arena.ofConfined()){
-                verifyActiveVolumeCopies(cuda,arena);
-            }
-            System.out.println("CudaOpticalMediumNativeSelfTest active-volume copies passed: 136 cases, both copy modes, 5 mutation checkpoints");
-            return;
-        }
         float[][] cases={{1,1.5f,1},{1.5f,1,1},{1.5f,1,.5f},{1,1,1},{1,1,.1f},{1,1.33f,.3f},{1.7f,1.2f,.9f},{1,1.5f,.000001f}};
         try(var cuda=CudaMediumRuntime.open(0);var arena=Arena.ofConfined()){
             try(var controller=cuda.compileBatchKernel(CudaOpticalMediumSource.source(),"native_optical_step")){
@@ -151,80 +144,6 @@ public final class CudaOpticalMediumNativeSelfTest {
             verifyRoughTransmissionHemisphere(cuda,arena);
         }
         System.out.println("CudaOpticalMediumNativeSelfTest passed: smooth/rough glass, selected-medium light connections, independent attenuation, priority transitions and TIR");
-    }
-    private static void verifyActiveVolumeCopies(CudaMediumRuntime cuda,Arena arena) {
-        final String probe="""
-            extern "C" __global__ void optical_volume_copy_probe(unsigned int*out,int count){
-                const int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
-                const unsigned int n=i%34u;const bool reverse=(i/34u)&1u;
-                rtr_medium::Material materials[33];
-                for(int j=0;j<33;j++)materials[j].volume.priority=j%5-2;
-                rtr_medium::PathVolumeInfo source;
-                source.currentVolumeIndex=n?(reverse?31u:0u):0xffffffffu;
-                source.volumeIndexListSize=n;source.scatteredStart=i/68u;
-                for(unsigned int j=0;j<32u;j++)source.volumeIndexList[j]=j<n?(reverse?31u-j:j):0xdeadbeefu;
-                struct Guarded { unsigned int before[4];rtr_medium::PathVolumeInfo value;unsigned int after[4]; } destination;
-                for(int j=0;j<4;j++)destination.before[j]=destination.after[j]=0x12345678u;
-                for(int j=0;j<32;j++)destination.value.volumeIndexList[j]=0x5a5a5a5au;
-                rtr_optical::copyVolumes(&destination.value,&source);
-                unsigned int tailOk=1u;
-            #ifdef RTR_OPTICAL_ACTIVE_VOLUME_COPIES
-                for(unsigned int j=n;j<32u;j++)if(destination.value.volumeIndexList[j]!=0x5a5a5a5au)tailOk=0u;
-            #endif
-                for(unsigned int stage=0;stage<5u;stage++){
-                    auto*p=&destination.value;unsigned int status=rtr_medium::validate(p,33u);
-                    if(n<=32u){
-                        if(stage==1u)status=rtr_medium::add(p,32u,materials,33u);
-                        if(stage==2u)status=rtr_medium::remove(p,n?(reverse?31u:0u):31u,materials,33u);
-                        if(stage==3u)while(p->volumeIndexListSize)status=rtr_medium::remove(p,p->volumeIndexList[0],materials,33u);
-                        if(stage==4u)for(unsigned int j=0;j<3u;j++)status=rtr_medium::add(p,j==0u?31u:j==1u?2u:29u,materials,33u);
-                    }
-                    unsigned int*r=out+(i*5u+stage)*40u;
-                    r[0]=p->currentVolumeIndex;r[1]=p->volumeIndexListSize;r[2]=p->scatteredStart;r[3]=status;
-                    r[4]=tailOk;
-                    for(int j=0;j<4;j++)if(destination.before[j]!=0x12345678u||destination.after[j]!=0x12345678u)r[4]=0u;
-                    for(unsigned int j=0;j<32u;j++)r[5+j]=j<p->volumeIndexListSize?p->volumeIndexList[j]:0xffffffffu;
-                }
-            }
-            """;
-        String property=CudaOpticalMediumSource.ACTIVE_VOLUME_COPIES_PROPERTY,previous=System.getProperty(property);
-        try {
-            for(boolean active:new boolean[]{false,true}) {
-                System.setProperty(property,Boolean.toString(active));
-                try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+probe,"optical_volume_copy_probe");
-                        var records=cuda.allocate(136L*5*160)) {
-                    var host=arena.allocate(records.byteSize(),16);
-                    cuda.launchBlocking(kernel,records.slice(0,records.byteSize()),136,64);
-                    cuda.download(records.slice(0,records.byteSize()),host);
-                    for(int i=0;i<136;i++) {
-                        int n=i%34;boolean reverse=((i/34)&1)!=0;
-                        var live=new java.util.ArrayList<Integer>();
-                        for(int j=0;j<Math.min(n,32);j++)live.add(reverse?31-j:j);
-                        int current=live.isEmpty()?-1:live.getFirst();
-                        for(int stage=0;stage<5;stage++) {
-                            int status=n==33?4:0;
-                            if(n<=32) {
-                                if(stage==1){if(n==32)status=1;else{live.add(32);if(current==-1||32%5>=current%5)current=32;}}
-                                if(stage==2){if(n==0)status=2;else{live.remove(Integer.valueOf(reverse?31:0));current=selectedVolume(live);}}
-                                if(stage==3){live.clear();current=-1;}
-                                if(stage==4){live.addAll(java.util.List.of(31,2,29));current=selectedVolume(live);}
-                            }
-                            long offset=(i*5L+stage)*160;
-                            int[] expected={current,n==33?33:live.size(),i/68,status,1};
-                            for(int j=0;j<expected.length;j++)if(host.get(JAVA_INT,offset+j*4)!=expected[j])
-                                throw new AssertionError("volume copy mode="+active+" case="+i+" checkpoint="+stage+" field="+j);
-                            for(int j=0;j<32;j++)if(host.get(JAVA_INT,offset+20+j*4)!=(j<live.size()?live.get(j):-1))
-                                throw new AssertionError("volume copy changed live order: mode="+active+" case="+i+" checkpoint="+stage+" slot="+j);
-                        }
-                    }
-                }
-            }
-        } finally {
-            if(previous==null)System.clearProperty(property);else System.setProperty(property,previous);
-        }
-    }
-    private static int selectedVolume(java.util.List<Integer> live) {
-        int current=-1;for(int entry:live)if(current==-1||entry%5>=current%5)current=entry;return current;
     }
     private static void verifyMetalReflection(CudaMediumRuntime cuda,Arena arena) {
         var cases=new java.util.ArrayList<float[]>();
