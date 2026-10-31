@@ -1,0 +1,21 @@
+{
+  "status": "candidate-not-yet-validated",
+  "reference": {
+    "repository": "mmp/pbrt-v4",
+    "commit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+    "file": "src/pbrt/wavefront/workqueue.h",
+    "license": "Apache-2.0",
+    "principle": "Reuse storage after a serial stage lifetime ends; independent arena layout, no upstream code copied."
+  },
+  "changes": [
+    "One CUDA owner and exported allocation for strict cached uniform scattering and PBR",
+    "Compact hit aliases final diffuse; same-thread CUDA reads before overwrite",
+    "Source samples and PBR connection colors share scratch with disjoint lifetimes",
+    "Scattering radiance occupies final specular until PBR resolve consumes it; skip self-copy",
+    "512 MiB budget retained; default scattering/PBR exchange count 3 -> 2"
+  ],
+  "artifacts": {
+    "control": "c05e1aed841105611e9f9e557af419993a06946badeab7b6fbf83dbd12226168",
+    "candidate": "ddb51e973bd955219c953d2eeefcfda0a85262bfba6fd2357be4b91db137935f"
+  }
+}

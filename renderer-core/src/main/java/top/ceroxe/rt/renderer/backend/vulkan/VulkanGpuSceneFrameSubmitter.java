@@ -323,6 +323,10 @@ final class VulkanGpuSceneFrameSubmitter {
                 var scatteringPlan = nativePbrData.transportPlan();
                 scatteringContribution = switch(scatteringPlan.kind()) {
                     case DIRECT_UNIFORM -> {
+                        if(scatteringPlan.sharedDirectArena()) {
+                            yield pipelines.nativePbrMediumWithScattering(nativePbrData).prepareSharedScattering(nativePbrData,checked.request(),
+                                    pbrScatteringPrimary,cameraScatteringLights,scatteringDiagnostic,slot.index(),framePrimitives.buildPlan());
+                        }
                         var contribution = pipelines.nativeCameraScatteringForPbr().prepareRadianceContribution(checked.request(),
                                 scatteringPlan.direct(),pbrScatteringPrimary,cameraScatteringLights,scatteringDiagnostic,slot.index(),framePrimitives.buildPlan(),
                                 reusePbrPrimary?pipelines.nativePbrMediumWithScattering(nativePbrData).primaryTarget(nativePbrData):null);

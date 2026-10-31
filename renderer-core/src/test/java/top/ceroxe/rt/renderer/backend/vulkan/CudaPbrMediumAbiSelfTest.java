@@ -42,9 +42,9 @@ public final class CudaPbrMediumAbiSelfTest {
         var medium=new Medium(new Rgb(.1f,.2f,.3f),Rgb.ZERO,new Rgb(.02f,0,0),2,1,0);
         var cached=CudaPbrMediumAbi.planWithCachedPrimary(1920,1080,1,2,16,8,512L*1024*1024);
         require(cached.pbr().compactColors()&&cached.pbr().packetBytes()==0,"cached primaries retained unused packet storage");
-        require(cached.direct().tilePixels()==1920*1080&&cached.pbr().tilePixels()==1920*1080/2,
-                "default cached scene must retain full scattering and two PBR tiles within the same budget");
-        require(cached.residentBytes()<=512L*1024*1024,"independent tiles exceeded coordinated residency");
+        require(cached.sharedDirectArena()&&cached.direct().tilePixels()==1920*1080&&cached.pbr().tilePixels()==1920*1080,
+                "default cached scene must use full scattering and PBR tiles in one serial arena");
+        require(cached.residentBytes()<=512L*1024*1024,"serial arena exceeded coordinated residency");
         for(int spp:new int[]{1,2,8})for(int lights:new int[]{0,2,15})for(int steps:new int[]{1,8,64}) {
             var compact=CudaPbrMediumAbi.planWithCachedPrimary(37,23,spp,lights,16,steps,4L*1024*1024);
             var p=compact.pbr();
@@ -55,6 +55,9 @@ public final class CudaPbrMediumAbiSelfTest {
                     "in-place camera lanes overlap live final specular or light colors");
             require(p.bytes()-p.colorsOffset()==(long)p.tilePaths()*p.connections()*32,
                     "compact scratch must retain every light and SPP without camera duplication");
+            require(compact.sharedDirectArena()&&compact.direct().primaryOffset()==p.transmittanceOffset()
+                    &&compact.direct().emissionOffset()==p.emissionOffset()&&compact.direct().sourceOffset()==p.colorsOffset(),
+                    "serial stages lost their shared hit/output/scratch layout");
             var header=ByteBuffer.allocate(CudaPbrMediumAbi.HEADER_BYTES).order(ByteOrder.nativeOrder());
             for(int first=0;first<p.pixels();first+=p.tilePixels()) {
                 CudaPbrMediumAbi.updateTile(header,p,first,Math.min(p.tilePixels(),p.pixels()-first));

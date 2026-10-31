@@ -21,6 +21,7 @@ import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.RendererException;
 import top.ceroxe.rt.renderer.api.TextureAsset;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaBoundaryMediumAbi;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaCameraScatteringSource;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensityAbi;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntime;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi;
@@ -53,6 +54,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
     private final CudaMediumRuntime cuda;
     private final CudaMediumRuntime.BatchKernel resolve;
     private final CudaMediumRuntime.BatchKernel uniformResolve;
+    private CudaMediumRuntime.BatchKernel scatteringResolve;
     private CudaSharedRayFrame storage;
     private CudaMediumRuntime.HostMemory statistics;
     private RtGpuBuffer primary;
@@ -101,22 +103,23 @@ final class CudaPbrMediumManager implements AutoCloseable {
             return new FrameScene(plan,frame,boundaries,scene.containing(),density);
         }catch(IllegalArgumentException|ArithmeticException invalid){throw unsupported("native PBR medium frame cannot be represented: "+invalid.getMessage());}
     }
-    static long requiredBytes(FrameScene scene){return Math.addExact(scene.plan.bytes()+CudaPbrMediumAbi.ALLOCATION_ALLOWANCE,scene.plan.primaryBytes());}
+    private static long allocationBytes(FrameScene scene){return scene.transportPlan!=null&&scene.transportPlan.sharedDirectArena()
+            ?scene.transportPlan.residentBytes()-CudaPbrMediumAbi.ALLOCATION_ALLOWANCE:scene.plan.bytes();}
+    static long requiredBytes(FrameScene scene){return Math.addExact(allocationBytes(scene)+CudaPbrMediumAbi.ALLOCATION_ALLOWANCE,scene.plan.primaryBytes());}
     static void requireCombinedResidentBudget(FrameScene scene,int width,int height,int samples,int steps) {
-        long pbrBytes=Math.addExact(scene.plan.bytes(),CudaPbrMediumAbi.ALLOCATION_ALLOWANCE);
         if(scene.transportPlan==null)throw unsupported("combined PBR scattering plan is missing");
         if(scene.plan.pixels()!=Math.multiplyExact(width,height)||scene.plan.samples()!=samples
                 ||scene.scatteringSteps!=steps)
             throw unsupported("combined PBR scattering frame does not match its coordinated plan");
-        long scatteringBytes=scene.transportPlan.scatteringBytes();
-        if(Math.addExact(pbrBytes,scatteringBytes)>residentLimit())
+        if(scene.transportPlan.residentBytes()>residentLimit())
             throw unsupported("combined PBR and scattering buffers exceed the CUDA resident cap");
     }
     synchronized long requiredGrowthBytes(FrameScene scene) {
         checkOpen();return onNative(()->{
-            boolean reusable=storage!=null&&storage.byteSize()>=scene.plan.bytes()
-                    &&(scene.transportPlan==null||storage.byteSize()==scene.plan.bytes());
-            long growth=reusable?0:scene.plan.bytes()+CudaPbrMediumAbi.ALLOCATION_ALLOWANCE;
+            long bytes=allocationBytes(scene);
+            boolean reusable=storage!=null&&storage.byteSize()>=bytes
+                    &&(scene.transportPlan==null||storage.byteSize()==bytes);
+            long growth=reusable?0:bytes+CudaPbrMediumAbi.ALLOCATION_ALLOWANCE;
             if(primary==null||primary.sizeBytes()<scene.plan.primaryBytes())growth=Math.addExact(growth,scene.plan.primaryBytes());
             return growth;
         });
@@ -132,7 +135,25 @@ final class CudaPbrMediumManager implements AutoCloseable {
     }
     /** The allocation already belongs to the coordinated resident plan; the scattering producer borrows it. */
     synchronized RtGpuBuffer primaryTarget(FrameScene scene) {
-        checkOpen();return onNative(()->{ensureCapacity(scene.plan,true);return primary;});
+        checkOpen();return onNative(()->{ensureCapacity(scene);return primary;});
+    }
+    /** One runtime, thread and exported arena own both serial stages. All existing
+     * Vulkan/CUDA ownership barriers still cover the complete allocation. */
+    synchronized RadianceContribution prepareSharedScattering(FrameScene scene,RenderFrameRequest frame,
+            GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,
+            GpuSceneRayTracingPipeline diagnosticProducer,int slot,RtTlasBuildPlan buildPlan) {
+        checkOpen();
+        if(scene.transportPlan==null||!scene.transportPlan.sharedDirectArena())
+            throw new IllegalArgumentException("shared scattering requires the cached uniform arena proof");
+        long started=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
+        try{return onNative(()->{
+            ensureCapacity(scene);
+            if(scatteringResolve==null)scatteringResolve=cuda.compileBatchKernel(CudaCameraScatteringSource.source(),"camera_scattering_resolve");
+            CudaCameraScatteringManager.resolveSharedOnNative(device,cuda,scatteringResolve,storage,frame,scene.transportPlan.direct(),
+                    Objects.requireNonNull(primaryProducer,"primaryProducer"),lightProducer,diagnosticProducer,slot,buildPlan,false,primary);
+            return new RadianceContribution(storage.buffer(),scene.plan.emissionOffset(),Math.multiplyExact((long)scene.plan.paths(),16),false,
+                    primary.deviceAddress());
+        });}finally{if(OpticalFrameTimings.ENABLED)OpticalFrameTimings.cameraScatteringPrepare.add(System.nanoTime()-started);}
     }
     static FrameScene cachedPrimaryScene(RenderFrameRequest frame,int width,int height,int lights,FrameScene original) {
         if(original.transportPlan==null||original.transportPlan.kind()!=CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM
@@ -151,7 +172,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
         if(additionalRadiance!=null&&additionalRadiance.includesCameraEmission()
                 !=(scene.transportPlan.kind()!=CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM))
             throw new IllegalArgumentException("PBR scattering volume-emission ownership does not match its integrator");
-        var plan=scene.plan;ensureCapacity(plan,scene.transportPlan!=null);long address=storage.deviceAddress();boolean changed=!scene.assets.equals(uploadedAssets);
+        var plan=scene.plan;ensureCapacity(scene);long address=storage.deviceAddress();boolean changed=!scene.assets.equals(uploadedAssets);
         if(additionalRadiance!=null&&additionalRadiance.primaryAddress()!=0
                 &&(additionalRadiance.primaryAddress()!=primary.deviceAddress()||scene.transportPlan==null
                 ||scene.transportPlan.kind()!=CudaPbrMediumAbi.ScatteringKind.DIRECT_UNIFORM||plan.boundaryCount()!=0))
@@ -160,6 +181,10 @@ final class CudaPbrMediumManager implements AutoCloseable {
         boolean colorEndpoints=planarPrimary&&plan.endpointPackets()&&scene.assets.density.environmentOffset()<0;
         if(plan.compactColors()&&!colorEndpoints)
             throw new IllegalArgumentException("compact PBR colors require the current cached primary proof");
+        boolean sharedRadiance=additionalRadiance!=null&&additionalRadiance.buffer()==storage.buffer();
+        if(sharedRadiance&&(!colorEndpoints||scene.transportPlan==null||!scene.transportPlan.sharedDirectArena()
+                ||additionalRadiance.offset()!=plan.emissionOffset()))
+            throw new IllegalArgumentException("PBR radiance aliases storage without the serial arena proof");
         var selectedResolve=plan.boundaryCount()==0&&scene.assets.density.environmentOffset()<0?uniformResolve:resolve;
         if(statistics==null)statistics=cuda.allocateHost(CudaPbrMediumAbi.STATISTICS_BYTES);
         if(additionalRadiance!=null&&additionalRadiance.bytes()!=Math.multiplyExact((long)plan.paths(),16))
@@ -181,7 +206,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                         ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumPrimaryPackets",new String[]{"start","end"}):null;
                 RtGpuTimestampPool.Capture lightsTiming=OpticalFrameTimings.ENABLED
                         ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumLightPackets",new String[]{"start","end"}):null;
-                RtGpuTimestampPool.Capture restoreTiming=OpticalFrameTimings.ENABLED&&additionalRadiance!=null
+                RtGpuTimestampPool.Capture restoreTiming=OpticalFrameTimings.ENABLED&&additionalRadiance!=null&&!sharedRadiance
                         ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumContributionRestore",new String[]{"start","end"}):null;
                 try(primaryTiming;lightsTiming;restoreTiming) {
                 storage.produceThenExchangeQueuedBlocking(command->{try(MemoryStack stack=MemoryStack.stackPush()) {
@@ -202,7 +227,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                     lightProducer.recordBoundaryPacketTrace(command,stack,slot,address,primary.deviceAddress(),tileFirst,
                             Math.multiplyExact(pixels,plan.connections()),plan.stateOffset());
                     if(lightsTiming!=null)lightsTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
-                    if(additionalRadiance!=null) {
+                    if(additionalRadiance!=null&&!sharedRadiance) {
                         // Packet tracing borrows the tile's emission lanes for terminal
                         // radiance. Restore the contribution only after all ray producers
                         // have finished, including on every tile after the first one.
@@ -273,11 +298,12 @@ final class CudaPbrMediumManager implements AutoCloseable {
                     KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,primaryBarrier,null);
         }
     }
-    private void ensureCapacity(CudaPbrMediumAbi.Plan plan,boolean exactBudget) {
-        if(storage==null||storage.byteSize()<plan.bytes()||(exactBudget&&storage.byteSize()!=plan.bytes())) {
-            if(plan.bytes()+CudaPbrMediumAbi.ALLOCATION_ALLOWANCE>cuda.maxResidentBytes())throw unsupported("native PBR complete-frame storage exceeds CUDA residency");
+    private void ensureCapacity(FrameScene scene) {
+        var plan=scene.plan;long bytes=allocationBytes(scene);boolean exactBudget=scene.transportPlan!=null;
+        if(storage==null||storage.byteSize()<bytes||(exactBudget&&storage.byteSize()!=bytes)) {
+            if(bytes+CudaPbrMediumAbi.ALLOCATION_ALLOWANCE>cuda.maxResidentBytes())throw unsupported("native PBR complete-frame storage exceeds CUDA residency");
             if(storage!=null){drain();storage.close();storage=null;}uploadedAssets=null;
-            storage=CudaSharedRayFrame.storage(device,cuda,plan.bytes(),cuda.maxResidentBytes()-cuda.residentBytes());
+            storage=CudaSharedRayFrame.storage(device,cuda,bytes,cuda.maxResidentBytes()-cuda.residentBytes());
         }
         if(primary==null||primary.sizeBytes()<plan.primaryBytes()) {
             if(primary!=null){drain();primary.close();}

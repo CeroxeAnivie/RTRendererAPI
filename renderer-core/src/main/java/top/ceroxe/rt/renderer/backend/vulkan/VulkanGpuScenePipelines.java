@@ -176,9 +176,11 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
     }
     long requiredNativePbrScatteringGrowth(CudaPbrMediumManager.FrameScene prepared,int width,int height,int samples,int steps) {
         retireOtherNativeModes(pbrScatteringMode(prepared));
+        if(prepared.transportPlan().sharedDirectArena())retireNativeCameraScattering();
         CudaPbrMediumManager.requireCombinedResidentBudget(prepared,width,height,samples,steps);
         long pbr=nativePbrMedium==null?CudaPbrMediumManager.requiredBytes(prepared):nativePbrMedium.requiredGrowthBytes(prepared);
         var plan=prepared.transportPlan();
+        if(plan.sharedDirectArena())return pbr;
         long scattering=switch(plan.kind()) {
             case DIRECT_UNIFORM -> nativeCameraScattering==null?plan.scatteringBytes():nativeCameraScattering.requiredGrowthBytes(plan.direct());
             case DIRECT_DENSITY -> nativeDensityScattering==null?plan.scatteringBytes():nativeDensityScattering.requiredGrowthBytes(plan.densityDirect());

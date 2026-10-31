@@ -117,6 +117,17 @@ final class CudaCameraScatteringManager implements AutoCloseable {
             GpuSceneRayTracingPipeline diagnosticProducer,int slot,RtTlasBuildPlan buildPlan,
             boolean includeMediumEmission,RtGpuBuffer primaryTarget) {
         ensureCapacity(allocationBytes(plan),plan.compactContribution());
+        return resolveSharedOnNative(device,cuda,resolve,storage,frame,plan,primaryProducer,lightProducer,
+                diagnosticProducer,slot,buildPlan,includeMediumEmission,primaryTarget);
+    }
+    /** Executes on the allocation's existing CUDA owner; never transfers a runtime
+     * or its shared buffer to another native thread. */
+    static CudaCameraMediumManager.Prepared resolveSharedOnNative(VulkanDeviceRuntime device,CudaMediumRuntime cuda,
+            CudaMediumRuntime.BatchKernel resolve,CudaSharedRayFrame storage,RenderFrameRequest frame,
+            CudaCameraScatteringAbi.Plan plan,GpuSceneRayTracingPipeline primaryProducer,GpuSceneRayTracingPipeline lightProducer,
+            GpuSceneRayTracingPipeline diagnosticProducer,int slot,RtTlasBuildPlan buildPlan,
+            boolean includeMediumEmission,RtGpuBuffer primaryTarget) {
+        if(storage.byteSize()<allocationBytes(plan))throw new IllegalArgumentException("shared scattering arena is too small");
         long available=Math.min(cuda.maxResidentBytes(),CudaCameraScatteringAbi.DEFAULT_RESIDENT_BYTES);
         if(storage.byteSize()+CudaCameraScatteringAbi.ALLOCATION_ALLOWANCE>available)
             throw unsupported("camera scattering diagnostic buffer exceeds available CUDA resident memory");
