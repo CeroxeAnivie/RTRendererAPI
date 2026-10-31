@@ -71,6 +71,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 || this == COMPACT_PRIMARY_SHADE || this == GENERAL_PRIMARY_SHADE; }
     }
     public static final java.util.concurrent.atomic.LongAdder diagnosticOpticalTaskQueueDispatches=new java.util.concurrent.atomic.LongAdder();
+    public static final java.util.concurrent.atomic.LongAdder diagnosticCollectedConnectionPipelines=new java.util.concurrent.atomic.LongAdder();
     private static final String SHADER_ROOT = "assets/rtrenderer/shaders/gpuscene/";
 
     private final SceneShaderProgram sceneShaders;
@@ -214,14 +215,18 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     &&(program==Program.NATIVE_SCATTERING_LIGHTS||program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC||cachedScattering);
             boolean inlinePbrLightQuery=checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
                     &&(program==Program.NATIVE_PBR_MEDIUM_LIGHTS||program==Program.NATIVE_PBR_MEDIUM_LIGHTS_OPAQUE);
-            String raygenSource=program.source;
+            boolean collectedConnections=checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
+                    &&(program==Program.NATIVE_OPTICAL_TRACE||program==Program.NATIVE_OPTICAL_TRACE_DIAGNOSTIC)
+                    &&Boolean.parseBoolean(System.getProperty(
+                        top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.COLLECTED_CONNECTIONS_PROPERTY,"true"));
+            String raygenSource=collectedConnections?"gpuscene_native_optical_collected_trace.rgen":program.source;
             if(inlineScatteringQuery)raygenSource=exhaustiveScattering?"gpuscene_native_scattering_exhaustive_cached_query.rgen"
                     :cachedScattering?"gpuscene_native_scattering_cached_query.rgen":"gpuscene_native_scattering_query.rgen";
             else if(inlinePbrLightQuery)raygenSource=program==Program.NATIVE_PBR_MEDIUM_LIGHTS_OPAQUE
                     ?"gpuscene_native_pbr_medium_opaque_query.rgen":"gpuscene_native_pbr_medium_query.rgen";
             byte[] raygenCode = scatteringDiagnostic?RtShaderModuleCompiler.compileCameraScatteringDiagnostic(SHADER_ROOT+raygenSource,
                     Shaderc.shaderc_raygen_shader,linearHdrOutput,shaderExecutionReorderingEnabled):opticalDiagnostic
-                    ?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+program.source,Shaderc.shaderc_raygen_shader,
+                    ?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+raygenSource,Shaderc.shaderc_raygen_shader,
                             linearHdrOutput,shaderExecutionReorderingEnabled,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode(
                     raygenSource, Shaderc.shaderc_raygen_shader,
                     linearHdrOutput, shaderExecutionReorderingEnabled, sceneShaders
@@ -299,6 +304,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     new GpuSceneShaderDataBuffers(checkedRuntime, descriptorSetCount,
                             sceneShaders.dataBindingCount(), maxStorageBufferRangeBytes)
             );
+            if(collectedConnections)diagnosticCollectedConnectionPipelines.increment();
             descriptors = null;
             pipelineLayout = 0L;
             pipeline = 0L;
