@@ -37,6 +37,7 @@ import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 final class CudaOpticalMediumManager implements AutoCloseable {
     private static final boolean RETAIN_EXTERNAL_OWNERSHIP=Boolean.parseBoolean(System.getProperty(
             "top.ceroxe.rt.medium.cuda.opticalRetainedOwnership","true"));
+    private static final boolean CAPTURE_PATH=OpticalPathCapture.enabled();
     static final LongAdder diagnosticQueries=new LongAdder(),diagnosticInterfaces=new LongAdder();
     static final LongAdder diagnosticAssetUploads=new LongAdder(),diagnosticUploadedBytes=new LongAdder();
     static final LongAdder diagnosticStorageRecreations=new LongAdder();
@@ -51,6 +52,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     private CudaMediumRuntime.HostMemory firstShaderSamples,secondShaderSamples;
     private long shaderSampleOffset;
     private boolean shaderSampleFrame;
+    private OpticalPathCapture pathCapture;
     private CudaSharedRayFrame storage;
     private RtGpuBuffer primary;
     private CudaOpticalPhotonPass photonPass;
@@ -192,11 +194,14 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                     boolean recordBuild=buildPending,recordPhotons=photonsPending,uploadScene=first==0&&opticalSample==0&&branch==0;
                     int[] statistics={paths,0,0,0};
                     int sampleIndex=opticalSample,branchIndex=branch;int[] roundIndex=OpticalFrameTimings.KERNEL_PHASES||OpticalDetailedProfile.ENABLED?new int[]{0}:null;
+                    if(CAPTURE_PATH)pathCapture=OpticalPathCapture.open(cuda,plan,frame.sequence(),tileFirst,paths,sampleIndex,branchIndex);
                     java.util.function.Consumer<CudaMediumRuntime.Slice> resolve=input->{
                         long resolveStarted=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
                         int queries=statistics[0],dispatched=plan.activeQueues()?Math.max(1,queries):paths;
+                        if(CAPTURE_PATH&&pathCapture!=null)pathCapture.capture(input,"vulkan");
                         cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
                         cuda.launchBlocking(step,input,dispatched,1);
+                        if(CAPTURE_PATH&&pathCapture!=null)pathCapture.capture(input,"cuda");
                         cuda.download(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),counters);
                         for(int j=0;j<4;j++)statistics[j]=counters.get(ValueLayout.JAVA_INT,j*4L);
                         if(phaseCycles!=null){
@@ -381,13 +386,17 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         // pair therefore bounds both steps without another host readback.
         int queries=statistics[0],dispatched=activeQueues?Math.max(1,queries):paths;
         storage.produceThenExchangePairBlocking(producer,input->{
+            if(CAPTURE_PATH&&pathCapture!=null)pathCapture.capture(input,"vulkan");
             cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
             cuda.launchBlocking(step,input,dispatched,1);
+            if(CAPTURE_PATH&&pathCapture!=null)pathCapture.capture(input,"cuda");
             cuda.downloadAsync(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),firstStatistics);
             if(shaderSampleFrame)cuda.downloadAsync(input.slice(shaderSampleOffset,firstShaderSamples.byteSize()),firstShaderSamples);
         },continuation,input->{
+            if(CAPTURE_PATH&&pathCapture!=null)pathCapture.capture(input,"vulkan");
             cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
             cuda.launchBlocking(step,input,dispatched,1);
+            if(CAPTURE_PATH&&pathCapture!=null)pathCapture.capture(input,"cuda");
             cuda.downloadAsync(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),secondStatistics);
             if(shaderSampleFrame)cuda.downloadAsync(input.slice(shaderSampleOffset,secondShaderSamples.byteSize()),secondShaderSamples);
         },RETAIN_EXTERNAL_OWNERSHIP);

@@ -1750,3 +1750,7 @@ X10恢复已能完成两帧的优化材质编译，改材质阶段的数据生�
 X10完整两帧成功，连接管线驱动编译11350.191ms、进程树峰值提交2.310GB、总17.361秒；单通道差异与X4/X6/X8完全相同，局部求值没有解决差异。同一JAR关闭多命中后两帧也未与U完全一致：第0帧(245,184)G相差0.0009765625，第1帧一致。不能把所有差异都归因于callable，也不能拿这个变化过的关闭路径作为U对照。
 
 X11先隔离原路径：closest-hit恢复U原始实现；非collected入口直接保留原gsOpticalConnectionHit，不经过新增包装函数。生成后原closest-hit的2份SPIR-V及普通光学入口的8份SPIR-V全部与U逐字节一致；新的collected入口仍为130268字节，材质callable保留。该二进制核对确认普通路径的着色程序已经恢复，图像仍须实际验证。下一步同一制品关闭/开启多命中分别对照U，严格门槛不变。
+
+X11关闭多命中两帧恢复与U逐字节一致；开启时单通道差异仍在。开启的连接管线编译9487.280ms、进程树峰值提交2.246GB、总15.939秒；关闭峰值1.907GB。没有稳态FPS结论。由此将关闭路径的额外差异与collected内部剩余差异分离。
+
+后续用可选主机侧定点捕获定位第一处状态分歧：opticalCaptureDirectory、opticalCapturePath及opticalCaptureSequence只选择一个frame/path，在已有CUDA交接回调前后读原始header/state/hit/connection与输出记录。不改任何GLSL、SPIR-V、CUDA源码、样本预算或device allocation；默认静态关闭，不进入读回。与早前会改变CUDA代码的printf追踪分开，先核对观测开启后的完整HDR仍各自复现未观测输出，观测不稳定时不得拿它宣称原根因已证实。该调试读回不用于性能窗口。
