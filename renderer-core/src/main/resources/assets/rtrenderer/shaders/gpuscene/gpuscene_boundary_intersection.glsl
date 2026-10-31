@@ -84,7 +84,11 @@ bool gsBoundaryConnectionHit(uint mesh,uint primitive,vec2 bary,float minimum,
         out uint repairedPrimitive,out vec2 repairedBary,out float repairedDistance) {
     repairedPrimitive=primitive;repairedBary=bary;repairedDistance=gl_HitTEXT;
     vec3 weights=vec3(1.0-bary.x-bary.y,bary);
-    if(min(weights.x,min(weights.y,weights.z))>=8.0*1.192092896e-7)return true;
+    if(min(weights.x,min(weights.y,weights.z))>=8.0*1.192092896e-7){
+        // Once a corrected t has been consumed, a later hardware approximation
+        // of the same face must not enter the stack for a second time.
+        return gsBoundaryTriangleHit(mesh,primitive,repairedBary,repairedDistance)&&repairedDistance>=minimum;
+    }
     float tolerance=8.0*1.192092896e-7*max(1.0,abs(gl_HitTEXT));
     bool found=false;float nearest=1.0e30;
     uvec3 indices=gsTriangleIndices(mesh,primitive);

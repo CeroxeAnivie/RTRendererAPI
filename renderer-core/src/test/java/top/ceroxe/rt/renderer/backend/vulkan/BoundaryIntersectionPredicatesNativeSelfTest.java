@@ -38,6 +38,20 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                 """+helper+"""
                 void main(){
                     uint i=gl_GlobalInvocationID.x; gsMeshes.words[17]=12u;
+                    if(i>=50u){
+                        objectToWorld=mat4x3(.85,0,0,0,.85,0,0,0,.85,4.5,-4,0);
+                        rayOrigin=vec3(4.7887306,-6.3649364,-4.199793);
+                        rayDirection=vec3(-.0953462571,.286038786,.953462601);hitDistance=5.2962623;
+                        uint firstPrimitive,repeatPrimitive,exitPrimitive;vec2 firstBary,repeatBary,exitBary;float firstT,repeatT,exitT;
+                        bool first=gsBoundaryConnectionHit(0u,5u,vec2(.37,.629997),0,firstPrimitive,firstBary,firstT);
+                        float minimum=uintBitsToFloat(floatBitsToUint(firstT)+1u);
+                        bool repeat=gsBoundaryConnectionHit(0u,5u,vec2(.37,.629997),minimum,repeatPrimitive,repeatBary,repeatT);
+                        hitDistance=5.2962674;
+                        bool exit=gsBoundaryConnectionHit(0u,2u,vec2(.37,.000003),minimum,exitPrimitive,exitBary,exitT);
+                        if(i==50u||i==52u||i==53u||i==55u)imageStore(target,ivec2(i,0),vec4((i==50u?first:i==52u?repeat:exit)?1:0,0,0,1));
+                        else {uint bits=floatBitsToUint(i==51u?firstT:exitT);imageStore(target,ivec2(i,0),vec4(uvec4(bits,bits>>8,bits>>16,bits>>24)&255u)/255.0);}
+                        return;
+                    }
                     if(i>=44u){
                         objectToWorld=mat4x3(.42,0,0,0,.42,0,0,0,.42,-4.5,-2,0);
                         rayOrigin=vec3(-4.15694094,-1.84399712,-1.29998982);
@@ -81,7 +95,7 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
         var program=new ShaderProgram(new RenderResourceId(951002),ResourceVersion.initial(),ShaderProgram.Kind.COMPUTE,List.of(shader),
                 new BindingLayout(List.of(destination)),0);
         var target=new TextureResource(new RenderResourceId(951003),ResourceVersion.initial(),TextureDimension.TEXTURE_2D,
-                50,1,1,1,1,1,TextureFormat.RGBA8_UNORM,Set.of(TextureUsage.STORAGE_READ_WRITE,TextureUsage.COLOR_ATTACHMENT,TextureUsage.COPY_DESTINATION));
+                56,1,1,1,1,1,TextureFormat.RGBA8_UNORM,Set.of(TextureUsage.STORAGE_READ_WRITE,TextureUsage.COLOR_ATTACHMENT,TextureUsage.COPY_DESTINATION));
         var range=new TextureSubresourceRange(TextureAspect.COLOR,0,1,0,1);
         var view=new TextureView(target,TextureViewDimension.TEXTURE_2D,range);
         try(var device=VulkanDeviceRuntime.open(VulkanRtCapabilityProbe.capture(),RendererRtDiagnostics.noop(),true,true,
@@ -91,10 +105,10 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
             var bindings=new BindingSet(program.bindingLayout(),Map.of(destination.key(),
                     List.of(new BindingSet.TextureValue(view,BindingType.READ_WRITE_STORAGE_TEXTURE))));
             var submitted=session.submit(new RenderCommandTransaction(1,List.of(new ClearColorCommand(new ResourceSlice.TextureSlice(target,range),new ClearColorValue(0,0,0,1)),new BindComputePipelineCommand(new ComputePipelineState(program)),
-                    BindBindingSetCommand.fixed(bindings),new DispatchCommand(50,1,1))));
+                    BindBindingSetCommand.fixed(bindings),new DispatchCommand(56,1,1))));
             require(submitted.outcome().recorded(),"predicate dispatch rejected: "+submitted.reason()+" "+submitted.detail());
             VulkanGenericCommandNativeSelfTest.await(session,1,CommandExecutionEvidence.Outcome.GPU_COMPLETED);
-            var pass=RenderPassDescriptor.color(50,1,List.of(RenderAttachment.of(view,LoadOp.LOAD,StoreOp.STORE)));
+            var pass=RenderPassDescriptor.color(56,1,List.of(RenderAttachment.of(view,LoadOp.LOAD,StoreOp.STORE)));
             require(session.submit(new RenderCommandTransaction(2,List.of(new BeginRenderPassCommand(pass),new EndRenderPassCommand())))
                     .outcome().recorded(),"predicate readback rejected");
             VulkanGenericCommandNativeSelfTest.await(session,2,CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED);
@@ -115,6 +129,14 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
             require(entryPrimitive<=1&&exitPrimitive>=6&&exitPrimitive<=7&&entryT<exitT,"thin connection entry/exit order changed");
             require(Math.abs(entryT-expectedEntry)<=2*Math.ulp((float)expectedEntry)
                     &&Math.abs(exitT-expectedExit)<=2*Math.ulp((float)expectedExit),"thin connection t disagrees with independent slab oracle");
+            float repeatedEntryT=unpack(pixels,51),repeatedExitT=unpack(pixels,54);
+            double secondEntry=(-4.0-(double).85f-(-6.3649364f))/(double).286038786f;
+            double secondExit=((double).85f-(-4.199793f))/(double).953462601f;
+            require(Byte.toUnsignedInt(pixels.get(50*4))==255&&pixels.get(52*4)==0&&Byte.toUnsignedInt(pixels.get(53*4))==255,
+                    "corrected connection re-consumed a hardware approximation of the same entry");
+            require(repeatedEntryT<repeatedExitT&&Math.abs(repeatedEntryT-secondEntry)<=2*Math.ulp((float)secondEntry)
+                    &&Math.abs(repeatedExitT-secondExit)<=2*Math.ulp((float)secondExit),"repeat-entry regression disagrees with independent slab oracle");
+            System.out.println("Repeated-entry rejection passed: entryT="+repeatedEntryT+" exitT="+repeatedExitT);
         }
     }
     private static float unpack(java.nio.ByteBuffer pixels,int pixel){int bits=0;for(int lane=0;lane<4;lane++)bits|=Byte.toUnsignedInt(pixels.get(pixel*4+lane))<<(lane*8);return Float.intBitsToFloat(bits);}
