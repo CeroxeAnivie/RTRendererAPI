@@ -77,11 +77,13 @@ public final class RtPrecompiledShaderSelfTest {
       int traces = 0, queries = 0; boolean callableEntry = false;
       var constants = new java.util.HashMap<Integer,Integer>();
       int dynamicCalls = 0, constantCalls = 0;
+      var callableData = new java.util.HashSet<Integer>();
       for (int at = 5; at < words.limit();) {
          int instruction = words.get(at), count = instruction >>> 16, opcode = instruction & 0xffff;
          if (count == 0 || count > words.limit() - at) throw new AssertionError("invalid SPIR-V instruction");
          if (opcode == 43 && count == 4) constants.put(words.get(at + 2),words.get(at + 3));
          if (opcode == 4446) { // OpExecuteCallableKHR
+            callableData.add(words.get(at + 2));
             if (constants.containsKey(words.get(at + 1))) constantCalls++;
             else dynamicCalls++;
          }
@@ -90,7 +92,9 @@ public final class RtPrecompiledShaderSelfTest {
          if (opcode == 15 && words.get(at + 1) == 5318) callableEntry = true;
          at += count;
       }
-      if (connection && (queries != 0 || dynamicCalls != 2 || constantCalls != 0))
+      // Optimized generation can clone call sites; require both data interfaces,
+      // with every SBT target runtime-selected rather than counting source calls.
+      if (connection && (queries != 0 || dynamicCalls < 2 || callableData.size() != 2 || constantCalls != 0))
          throw new AssertionError("connection requires two runtime callable targets and no embedded traversal: dynamic="
                  + dynamicCalls + ", constant=" + constantCalls);
       if ((material || gather) && (!callableEntry || traces != 0))
