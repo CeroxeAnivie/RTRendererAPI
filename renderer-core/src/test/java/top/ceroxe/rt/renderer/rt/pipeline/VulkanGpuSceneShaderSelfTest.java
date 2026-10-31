@@ -435,7 +435,7 @@ public final class VulkanGpuSceneShaderSelfTest {
       require(entryPoints == 1, stage + " must expose exactly one stage entry point");
       if (stage.endsWith(".rgen")) {
          require(traces > 0, stage + " must issue real hardware rays");
-         int expectedPayloads = stage.equals("gpuscene_surface.rgen")
+         int expectedPayloads = stage.equals("gpuscene_native_optical_trace.rgen") ? 3 : stage.equals("gpuscene_surface.rgen")
                  || stage.equals("gpuscene_primary_trace.rgen") || stage.equals("gpuscene_native_medium_trace.rgen")
                  || stage.equals("gpuscene_native_boundary_packet.rgen")
                  || stage.equals("gpuscene_surface_primary_shade.rgen") ? 1 : 2;
