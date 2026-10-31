@@ -29,6 +29,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         if(java.util.Arrays.asList(args).contains("--connection-batches")){verifyConnectionRanges(CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--duplicate-branches")){verifyDuplicateBranches(CudaOpticalMediumAbi.REUSE_DUPLICATE_BRANCHES_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--boundary-hit-reuse")){verifyConnectionRanges(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY);return;}
+        if(java.util.Arrays.asList(args).contains("--boundary-topology")){verifyConnectionRanges(VulkanBoundaryTopology.PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--vertex-paths")){verifyDuplicateBranches(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--vertex-connections")){verifyConnectionRanges(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY);return;}
         Files.createDirectories(OUTPUT);String previous=System.getProperty(CudaCameraMediumProfile.ENABLE_PROPERTY);
@@ -443,7 +444,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                 previousTransposed=System.getProperty(CudaOpticalMediumAbi.TRANSPOSED_HITS_PROPERTY),
                 previousGpu=System.getProperty(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY);
         boolean batches=property.equals(CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY);
-        boolean gpu=property.equals(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY),extended=batches||gpu||property.equals(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY);
+        boolean gpu=property.equals(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY),extended=batches||gpu||property.equals(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY)||property.equals(VulkanBoundaryTopology.PROPERTY);
         var references=new ArrayList<byte[]>();int comparisons=0;
         String[] cases=extended?new String[]{"clear","behind-opaque","before-opaque","before-alpha","before-volume",
                 "light-inside-volume","endpoint-overlay","endpoint-nonshadow","endpoint-opaque","sun",

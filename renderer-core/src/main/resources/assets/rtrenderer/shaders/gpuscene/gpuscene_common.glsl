@@ -400,6 +400,20 @@ uvec3 gsTriangleIndices(uint meshBase, uint primitive)
     return uvec3(gsIndices.words[base], gsIndices.words[base + 1u], gsIndices.words[base + 2u]);
 }
 
+// Prepared with the exact same position/index generation. The first 3*N words
+// remain the hardware BLAS index stream; the private trailer is not shader ABI.
+#define GS_BOUNDARY_PREPARED_TOPOLOGY 1
+uvec2 gsBoundaryNeighborRange(uint meshBase,uint primitive) {
+    uint triangles=gsMeshes.words[meshBase+GPU_SCENE_MESH_TRIANGLE_COUNT_WORD];
+    uint trailer=gsWordIndex(gsRecordOffset(meshBase,GPU_SCENE_MESH_INDEX_OFFSET_WORD))+triangles*3u;
+    if(gsIndices.words[trailer]!=0x42545031u)return uvec2(0xffffffffu,triangles);
+    uint first=gsIndices.words[trailer+1u+primitive],last=gsIndices.words[trailer+2u+primitive];
+    return uvec2(trailer+first,last-first);
+}
+uint gsBoundaryNeighbor(uvec2 range,uint index) {
+    return range.x==0xffffffffu?index:gsIndices.words[range.x+index];
+}
+
 uint gsTriangleMaterialSlot(uint meshBase, uint primitive)
 {
     uint base = gsWordIndex(gsRecordOffset(meshBase, GPU_SCENE_MESH_TRIANGLE_MATERIAL_OFFSET_WORD));

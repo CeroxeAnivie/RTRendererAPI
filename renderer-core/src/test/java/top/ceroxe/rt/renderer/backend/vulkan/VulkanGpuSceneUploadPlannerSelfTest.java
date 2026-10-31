@@ -28,6 +28,7 @@ public final class VulkanGpuSceneUploadPlannerSelfTest {
       completeScenePacksEveryGpuDomainAndResolvesReferences();
       instanceOnlyGenerationDoesNotRewriteUnchangedGpuDomains();
       triangleMaterialUpdateDoesNotRewriteBlasGeometry();
+      movedVerticesRefreshBoundaryTopology();
       uploadsCompleteMipChainAsOneTextureGeneration();
       System.out.println("VulkanGpuSceneUploadPlannerSelfTest passed");
    }
@@ -110,6 +111,25 @@ public final class VulkanGpuSceneUploadPlannerSelfTest {
 
    private static int chunks(VulkanGpuSceneUploadPlanner.Plan plan, VulkanGpuSceneUploadPlanner.Target target) {
       return (int)plan.chunks().stream().filter((chunk) -> chunk.target() == target).count();
+   }
+
+   private static void movedVerticesRefreshBoundaryTopology() {
+      Fixture fixture = new Fixture();
+      MeshAsset first = MeshAsset.triangles(7, new float[]{0,0,0,1,0,0,0,1,0,0,0,0,0,0,1,1,0,0},
+            new int[]{0,1,2,3,4,5},20);
+      fixture.commit(fixture.prepare(SceneTransaction.builder(0).resetScene().upsert(MaterialAsset.builder(20).build())
+            .upsert(first).build()),0);
+      MeshAsset moved = MeshAsset.triangles(7, new float[]{0,0,0,1,0,0,0,1,0,2,0,0,0,0,1,3,0,0},
+            new int[]{0,1,2,3,4,5},20);
+      PreparedGeneration next=fixture.prepare(SceneTransaction.builder(1).upsert(moved).build());
+      require(next.residency.changeSet().meshUpdates().get(7).dirtyMask()==VulkanSceneResidency.MeshDirtyMask.POSITIONS,
+            "position-only fixture unexpectedly changed indices");
+      ByteBuffer payload=ByteBuffer.wrap(only(next.plan,Target.INDICES).payload()).order(ByteOrder.LITTLE_ENDIAN);
+      int[] expected=VulkanBoundaryTopology.pack(moved),actual=new int[payload.remaining()/4];payload.asIntBuffer().get(actual);
+      require(Arrays.equals(expected,actual),"position update retained stale geometric adjacency");
+      fixture.commit(next,1);
+      require(fixture.memory.state().indices().liveBytes()>=actual.length*4L,
+            "private index trailer escapes its generation allocation");
    }
 
    private static VulkanGpuSceneUploadPlanner.Chunk only(VulkanGpuSceneUploadPlanner.Plan plan, VulkanGpuSceneUploadPlanner.Target target) {

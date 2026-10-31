@@ -153,7 +153,10 @@ final class VulkanGpuSceneMemory {
         List<MeshAsset> lightmapWrites = meshValues(
                 changes, VulkanSceneResidency.MeshDirtyMask.LIGHTMAP_COORDINATES
         );
-        List<MeshAsset> indexWrites = meshValues(changes, VulkanSceneResidency.MeshDirtyMask.INDICES);
+        // The index trailer depends on geometric positions as well as indices.
+        List<MeshAsset> indexWrites = meshValues(changes, VulkanSceneResidency.MeshDirtyMask.BLAS);
+        var preparedIndexWords = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<int[]>();
+        for (MeshAsset mesh : indexWrites) preparedIndexWords.put(mesh.id(), VulkanBoundaryTopology.pack(mesh));
         List<MeshAsset> materialSlotWrites = meshValues(
                 changes, VulkanSceneResidency.MeshDirtyMask.TRIANGLE_MATERIALS
         );
@@ -195,7 +198,7 @@ final class VulkanGpuSceneMemory {
         );
         VulkanRangeArena.Prepared<MeshAsset> preparedIndices = indices.prepare(
                 changes.revision(), changes.reset(),
-                requests(indexWrites, mesh -> intBytes(mesh.triangleIndices().remaining()), GEOMETRY_ALIGNMENT),
+                requests(indexWrites, mesh -> intBytes(preparedIndexWords.get(mesh.id()).length), GEOMETRY_ALIGNMENT),
                 removalBuffer(changes.reset(), removedMeshes)
         );
         VulkanRangeArena.Prepared<MeshAsset> preparedMaterialSlots = triangleMaterialSlots.prepare(
@@ -222,7 +225,7 @@ final class VulkanGpuSceneMemory {
                     optionalOffset(preparedLightmapCoordinates, mesh.id()),
                     offset(preparedIndices, mesh.id()),
                     offset(preparedMaterialSlots, mesh.id())
-            )));
+            ), preparedIndexWords.get(mesh.id())));
         }
         return new Prepared(
                 this, changes.revision(),
@@ -331,7 +334,7 @@ final class VulkanGpuSceneMemory {
         }
     }
 
-    record MeshUpload(MeshAsset mesh, VulkanGpuSceneAbi.GeometryPlacement placement) {
+    record MeshUpload(MeshAsset mesh, VulkanGpuSceneAbi.GeometryPlacement placement, int[] indexWords) {
         MeshUpload {
             mesh = Objects.requireNonNull(mesh, "mesh");
             placement = Objects.requireNonNull(placement, "placement");

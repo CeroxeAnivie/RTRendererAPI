@@ -253,6 +253,7 @@ val registerCoreSelfTest =
     }
 
 val contractSelfTests = linkedMapOf(
+    "coreVulkanBoundaryTopologySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanBoundaryTopologySelfTest",
     "coreCudaMediumContractSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumContractSelfTest",
     "coreCudaNvrtcLibraryLoaderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNvrtcLibraryLoaderSelfTest",
     "coreCudaCameraMediumSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraMediumSelfTest",

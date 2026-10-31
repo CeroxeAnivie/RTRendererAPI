@@ -83,8 +83,8 @@ final class VulkanGpuSceneUploadPlanner {
                         mesh.vertexCount()
                 );
             }
-            if (update.dirty(VulkanSceneResidency.MeshDirtyMask.INDICES)) {
-                builder.add(Target.INDICES, placement.indexBytes(), ints(mesh.triangleIndices()), mesh.triangleCount());
+            if (update.dirty(VulkanSceneResidency.MeshDirtyMask.BLAS)) {
+                builder.add(Target.INDICES, placement.indexBytes(), ints(IntBuffer.wrap(upload.indexWords())), mesh.triangleCount());
             }
             if (update.dirty(VulkanSceneResidency.MeshDirtyMask.TRIANGLE_MATERIALS)) {
                 builder.add(Target.TRIANGLE_MATERIAL_SLOTS, placement.triangleMaterialSlotBytes(),

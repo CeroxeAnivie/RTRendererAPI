@@ -1,5 +1,11 @@
 #ifndef GS_BOUNDARY_INTERSECTION_GLSL
 #define GS_BOUNDARY_INTERSECTION_GLSL
+#ifndef GS_BOUNDARY_PREPARED_TOPOLOGY
+uvec2 gsBoundaryNeighborRange(uint mesh,uint primitive) {
+    return uvec2(0xffffffffu,gsMeshes.words[mesh+GPU_SCENE_MESH_TRIANGLE_COUNT_WORD]);
+}
+uint gsBoundaryNeighbor(uvec2 range,uint index) {return index;}
+#endif
 // PBRT's robust edge-function principle, adapted to Vulkan without requiring
 // shaderFloat64: two-float expansions retain transform/subtraction residuals.
 // Only candidates in the existing eight-ULP barycentric edge band use this path.
@@ -13,12 +19,9 @@ precise vec2 gsBoundaryWideAdd(vec2 a,vec2 b) {
 }
 precise vec2 gsBoundaryWideMultiply(vec2 a,vec2 b) {
     precise float p=a.x*b.x;
-    // Split the binary mantissa so both leading factors have an exact product.
-    // The precise return qualifier is also required across function boundaries.
-    precise float ahi=uintBitsToFloat(floatBitsToUint(a.x)&0xfffff000u);
-    precise float bhi=uintBitsToFloat(floatBitsToUint(b.x)&0xfffff000u);
-    precise float alo=a.x-ahi,blo=b.x-bhi;
-    precise float error=((ahi*bhi-p)+ahi*blo+alo*bhi)+alo*blo;
+    // PBRT-v4 util/math.h TwoProd (b0bdf461, Apache-2.0): retain the
+    // fused product residual instead of splitting the binary mantissas.
+    precise float error=fma(a.x,b.x,-p);
     precise float e=error+a.x*b.y+a.y*b.x+a.y*b.y;
     precise float hi=p+e;
     precise float lo=e-(hi-p);
@@ -60,7 +63,8 @@ bool gsBoundarySharesEdge(vec3 a,vec3 b,vec3 c,vec3 p,vec3 q,vec3 r) {
             +int(gsBoundarySamePoint(c,p)||gsBoundarySamePoint(c,q)||gsBoundarySamePoint(c,r));
     return matches>=2;
 }
-precise vec2 gsBoundaryDistanceWide(GsBoundaryWide3 a,GsBoundaryWide3 b,GsBoundaryWide3 c) {
+precise vec2 gsBoundaryDistanceFromEdges(GsBoundaryWide3 a,GsBoundaryWide3 b,GsBoundaryWide3 c,
+        vec2 e0,vec2 e1,vec2 e2) {
     vec2 x=gsBoundaryWideDifferenceOfProducts(b.y,c.z,b.z,c.y);
     vec2 y=gsBoundaryWideDifferenceOfProducts(b.z,c.x,b.x,c.z);
     vec2 z=gsBoundaryWideDifferenceOfProducts(b.x,c.y,b.y,c.x);
@@ -68,10 +72,13 @@ precise vec2 gsBoundaryDistanceWide(GsBoundaryWide3 a,GsBoundaryWide3 b,GsBounda
     // Retain the edge residuals through the determinant and division too.
     // Summing only their float heads makes t depend on vertex permutation and
     // can collapse a real two-ULP entry/exit interval into one distance.
-    vec2 denominator=gsBoundaryWideAdd(gsBoundaryWideAdd(gsBoundaryEdge(b,c),gsBoundaryEdge(c,a)),gsBoundaryEdge(a,b));
+    vec2 denominator=gsBoundaryWideAdd(gsBoundaryWideAdd(e0,e1),e2);
     precise float quotient=numerator.x/denominator.x;
     vec2 remainder=gsBoundaryWideAdd(numerator,-gsBoundaryWideMultiply(denominator,vec2(quotient,0)));
     return gsBoundaryWideAdd(vec2(quotient,0),vec2((remainder.x+remainder.y)/denominator.x,0));
+}
+precise vec2 gsBoundaryDistanceWide(GsBoundaryWide3 a,GsBoundaryWide3 b,GsBoundaryWide3 c) {
+    return gsBoundaryDistanceFromEdges(a,b,c,gsBoundaryEdge(b,c),gsBoundaryEdge(c,a),gsBoundaryEdge(a,b));
 }
 precise float gsBoundaryDistance(GsBoundaryWide3 a,GsBoundaryWide3 b,GsBoundaryWide3 c,vec3 edges) {
     vec2 distance=gsBoundaryDistanceWide(a,b,c);return distance.x+distance.y;
@@ -81,9 +88,13 @@ bool gsBoundaryTriangleHitWide(uint mesh,uint primitive,out vec2 bary,out vec2 d
     GsBoundaryWide3 a=gsBoundaryRelativePoint(gsPosition(mesh,indices.x));
     GsBoundaryWide3 b=gsBoundaryRelativePoint(gsPosition(mesh,indices.y));
     GsBoundaryWide3 c=gsBoundaryRelativePoint(gsPosition(mesh,indices.z));
-    vec3 edges=gsBoundaryEdges(a,b,c);bary=vec2(0);distance=vec2(0);facing=edges.x+edges.y+edges.z;
+    // One producer for classification, determinant, barycentrics and distance,
+    // following PBRT's triangle-intersection dependency graph.
+    vec2 e0=gsBoundaryEdge(b,c),e1=gsBoundaryEdge(c,a),e2=gsBoundaryEdge(a,b);
+    vec3 edges=vec3(gsBoundaryEdgeSign(e0),gsBoundaryEdgeSign(e1),gsBoundaryEdgeSign(e2));
+    bary=vec2(0);distance=vec2(0);facing=edges.x+edges.y+edges.z;
     if(any(isnan(edges))||any(isinf(edges))||!gsBoundaryInside(edges))return false;
-    distance=gsBoundaryDistanceWide(a,b,c);bary=edges.yz/(edges.x+edges.y+edges.z);
+    distance=gsBoundaryDistanceFromEdges(a,b,c,e0,e1,e2);bary=edges.yz/(edges.x+edges.y+edges.z);
     return !any(isnan(distance))&&!any(isinf(distance));
 }
 bool gsBoundaryTriangleHit(uint mesh,uint primitive,out vec2 bary,out float distance) {
@@ -99,8 +110,9 @@ float gsBoundaryConnectionDistance(uint mesh,uint primitive,vec2 bary,vec2 wide,
     if(min(1.0-bary.x-bary.y,min(bary.x,bary.y))>=8.0*1.192092896e-7)return distance;
     uvec3 indices=gsTriangleIndices(mesh,primitive);
     vec3 a=gsPosition(mesh,indices.x),b=gsPosition(mesh,indices.y),c=gsPosition(mesh,indices.z);
-    uint triangles=gsMeshes.words[mesh+GPU_SCENE_MESH_TRIANGLE_COUNT_WORD];
-    for(uint other=0u;other<triangles;++other){
+    uvec2 neighbors=gsBoundaryNeighborRange(mesh,primitive);
+    for(uint neighbor=0u;neighbor<neighbors.y;++neighbor){
+        uint other=gsBoundaryNeighbor(neighbors,neighbor);
         if(other==primitive)continue;
         uvec3 oi=gsTriangleIndices(mesh,other);
         if(!gsBoundarySharesEdge(a,b,c,gsPosition(mesh,oi.x),gsPosition(mesh,oi.y),gsPosition(mesh,oi.z)))continue;
@@ -130,8 +142,9 @@ bool gsBoundaryConnectionHit(uint mesh,uint primitive,vec2 bary,float minimum,
     bool found=false;float nearest=1.0e30;
     uvec3 indices=gsTriangleIndices(mesh,primitive);
     vec3 a=gsPosition(mesh,indices.x),b=gsPosition(mesh,indices.y),c=gsPosition(mesh,indices.z);
-    uint triangles=gsMeshes.words[mesh+GPU_SCENE_MESH_TRIANGLE_COUNT_WORD];
-    for(uint other=0u;other<triangles;other++) {
+    uvec2 neighbors=gsBoundaryNeighborRange(mesh,primitive);
+    for(uint neighbor=0u;neighbor<neighbors.y;neighbor++) {
+        uint other=gsBoundaryNeighbor(neighbors,neighbor);
         uvec3 oi=gsTriangleIndices(mesh,other);
         vec3 p=gsPosition(mesh,oi.x),q=gsPosition(mesh,oi.y),r=gsPosition(mesh,oi.z);
         if(other!=primitive&&!gsBoundarySamePoint(a,p)&&!gsBoundarySamePoint(a,q)&&!gsBoundarySamePoint(a,r)
@@ -160,8 +173,9 @@ bool gsBoundaryCandidateValid(uint mesh,uint primitive,vec2 bary) {
     // Volume-only boundaries may retain a nearby, equally oriented real crossing;
     // an opposite-facing neighbour cannot justify a false silhouette crossing.
     float facing=edges.x+edges.y+edges.z;
-    uint triangles=gsMeshes.words[mesh+GPU_SCENE_MESH_TRIANGLE_COUNT_WORD];
-    for(uint other=0u;other<triangles;other++) {
+    uvec2 neighbors=gsBoundaryNeighborRange(mesh,primitive);
+    for(uint neighbor=0u;neighbor<neighbors.y;neighbor++) {
+        uint other=gsBoundaryNeighbor(neighbors,neighbor);
         if(other==primitive)continue;
         uvec3 oi=gsTriangleIndices(mesh,other);
         vec3 p=gsPosition(mesh,oi.x),q=gsPosition(mesh,oi.y),r=gsPosition(mesh,oi.z);
