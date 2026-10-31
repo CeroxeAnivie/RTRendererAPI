@@ -212,28 +212,6 @@ void main() {
         vec3 sun=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD)*uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
         float interval=distance/float(steps),reference=min(sigma.x,min(sigma.y,sigma.z));
         bool directPacket=dispatch.storage.lanes[0u].x==0x52534331u;
-#ifdef RTRENDERER_SCATTERING_EXHAUSTIVE_LIGHTS
-        // An unshadowed distant light depends on direction, not sample position.
-        // Cache one contribution to bound live state across the remaining queries.
-        uint invariantLight=upper;
-        vec3 invariantContribution=vec3(0);
-        GS_SCATTER_DETAIL_NEXT(7u);
-        for(uint k=0u;k<upper;++k) {
-            if((validLightMask&(1u<<k))==0u)continue;
-            uint flags=gsLights.words[k*GPU_SCENE_LIGHT_RECORD_WORDS+GPU_SCENE_LIGHT_FLAGS_WORD];
-            if(((flags>>1u)&7u)!=GPU_SCENE_LIGHT_DIRECTIONAL||(flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u)continue;
-            invariantLight=k;
-            GS_SCATTER_DETAIL_PAUSE();
-#ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
-            invariantContribution=gsScatteringLightProfile(k,origin,direction,g,sigma,maximum,detailRecord,detailActive);
-#else
-            invariantContribution=gsScatteringLight(k,origin,direction,g,sigma,maximum);
-#endif
-            GS_SCATTER_DETAIL_RESUME(7u);
-            break;
-        }
-        GS_SCATTER_DETAIL_NEXT(3u);
-#endif
         vec4 guide0=vec4(0),guide1=vec4(0);uint guideCount=0u;
         // Keep the original per-interval estimator for smooth/directional-only
         // rays and cutoff-truncated rays. Guide only strongly localized lamps.
@@ -340,11 +318,6 @@ void main() {
                         float factor=selectedFactors[k];
 #endif
                         GS_SCATTER_DETAIL_NEXT(7u);
-#ifdef RTRENDERER_SCATTERING_EXHAUSTIVE_LIGHTS
-                        if(slot==invariantLight)source+=invariantContribution;
-                        else
-#endif
-                        {
                         GS_SCATTER_DETAIL_PAUSE();
 #ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
                         source+=gsScatteringLightProfile(slot,position,direction,g,sigma,maximum,detailRecord,detailActive)*factor;
@@ -352,7 +325,6 @@ void main() {
                         source+=gsScatteringLight(slot,position,direction,g,sigma,maximum)*factor;
 #endif
                         GS_SCATTER_DETAIL_RESUME(7u);
-                        }
                     }
                 }
                 GS_SCATTER_DETAIL_NEXT(9u);
