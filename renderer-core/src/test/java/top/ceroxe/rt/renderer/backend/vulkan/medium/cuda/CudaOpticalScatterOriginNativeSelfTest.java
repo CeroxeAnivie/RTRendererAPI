@@ -10,7 +10,7 @@ public final class CudaOpticalScatterOriginNativeSelfTest {
         int first=optical.indexOf("__device__ float3 spawnOriginBound(");
         int end=optical.indexOf("template<bool Small> __device__ State",first);
         if(first<0||end<0)throw new AssertionError("production spawn helper missing");
-        String source=CudaMediumSource.source()+"\nnamespace rtr_spawn_probe {\n"+optical.substring(first,end)+"\n}\n"+"""
+        String source="\nnamespace rtr_spawn_probe {\n"+optical.substring(first,end)+"\n}\n"+"""
                 extern "C" __global__ void scatter_origin_probe(unsigned char*b,int count){
                     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
                     float4*v=(float4*)b+i*5;
