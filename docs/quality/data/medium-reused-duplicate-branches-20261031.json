@@ -1,0 +1,2205 @@
+{
+  "candidateCommit": "c7097c0",
+  "decision": "retained: strict HDR and full regression passed; both orders improve completed-frame throughput with every initial GPU0=0%",
+  "optimization": "reuse completed branch-zero paths that never consulted a branch-dependent optical choice; preserve original second weighted addition",
+  "reference": {
+    "project": "PBRT-v4",
+    "commit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+    "license": "Apache-2.0",
+    "files": [
+      "src/pbrt/wavefront/integrator.cpp:356",
+      "src/pbrt/wavefront/surfscatter.cpp:181"
+    ],
+    "scope": "camera/continuation queue responsibilities only; PBRT does not implement this project-specific completed-branch cache"
+  },
+  "throughput": {
+    "before": {
+      "frames": 64,
+      "wallMs": 17563.7147,
+      "msPerFrame": 274.4330421875,
+      "fps": 3.643876087329066
+    },
+    "after": {
+      "frames": 64,
+      "wallMs": 13304.5347,
+      "msPerFrame": 207.8833546875,
+      "fps": 4.810389949225357
+    },
+    "durationReductionPercent": 24.24988149004721,
+    "fpsIncreasePercent": 32.01299478740884,
+    "runs": [
+      {
+        "directory": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-forward-baseline-matrix-off",
+        "frames": 32,
+        "wallMs": 8742.9594,
+        "msPerFrame": 273.21748125,
+        "fps": 3.660087910278984,
+        "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 7.68 W, 180 MHz, 53"
+      },
+      {
+        "directory": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\forward-candidate-matrix-off",
+        "frames": 32,
+        "wallMs": 6637.4444,
+        "msPerFrame": 207.4201375,
+        "fps": 4.821132663649883,
+        "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 17.22 W, 180 MHz, 56"
+      },
+      {
+        "directory": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\reverse-candidate-matrix-off",
+        "frames": 32,
+        "wallMs": 6667.0903,
+        "msPerFrame": 208.346571875,
+        "fps": 4.79969500338101,
+        "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.10 W, 180 MHz, 58"
+      },
+      {
+        "directory": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-reverse-baseline-matrix-off",
+        "frames": 32,
+        "wallMs": 8820.7553,
+        "msPerFrame": 275.648603125,
+        "fps": 3.6278072468465368,
+        "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.26 W, 180 MHz, 60"
+      }
+    ]
+  },
+  "ranked": {
+    "sourceCommit": "c7097c0",
+    "frames": 32,
+    "beforeMsPerFrame": 290.299309375,
+    "msPerFrame": 209.971140625,
+    "durationReductionPercent": 27.670809456261736,
+    "rankedStages": [
+      {
+        "stage": "CUDA_STREAM_SYNCHRONIZE",
+        "selfTotalMs": 5917.218800000001,
+        "count": 4386,
+        "selfMsPerFrame": 184.91308750000002,
+        "selfMsPerSecond": 880.6595370658454,
+        "selfPercentWall": 88.06595370658454,
+        "rank": 1,
+        "beforeMsPerFrame": 263.82925625,
+        "durationReductionPercent": 29.911833839693813
+      },
+      {
+        "stage": "CUDA_KERNEL_ENQUEUE",
+        "selfTotalMs": 158.54039999999998,
+        "count": 15912,
+        "selfMsPerFrame": 4.954387499999999,
+        "selfMsPerSecond": 23.59556406300776,
+        "selfPercentWall": 2.359556406300776,
+        "rank": 2,
+        "beforeMsPerFrame": 5.487196875,
+        "durationReductionPercent": 9.710046625582414
+      },
+      {
+        "stage": "VULKAN_RELEASE_RECORD",
+        "selfTotalMs": 121.1945,
+        "count": 4098,
+        "selfMsPerFrame": 3.787328125,
+        "selfMsPerSecond": 18.037374630278432,
+        "selfPercentWall": 1.803737463027843,
+        "rank": 3,
+        "beforeMsPerFrame": 3.818771875,
+        "durationReductionPercent": 0.8233995386278448
+      },
+      {
+        "stage": "VULKAN_RELEASE_SUBMIT",
+        "selfTotalMs": 93.2581,
+        "count": 4098,
+        "selfMsPerFrame": 2.914315625,
+        "selfMsPerSecond": 13.879600864791463,
+        "selfPercentWall": 1.3879600864791464,
+        "rank": 4,
+        "beforeMsPerFrame": 3.06581875,
+        "durationReductionPercent": 4.941685642701488
+      },
+      {
+        "stage": "CUDA_SEMAPHORE_WAIT_ENQUEUE",
+        "selfTotalMs": 64.6221,
+        "count": 7940,
+        "selfMsPerFrame": 2.019440625,
+        "selfMsPerSecond": 9.61770564749486,
+        "selfPercentWall": 0.9617705647494861,
+        "rank": 5,
+        "beforeMsPerFrame": 2.124475,
+        "durationReductionPercent": 4.944015580319839
+      },
+      {
+        "stage": "CUDA_SEMAPHORE_SIGNAL_ENQUEUE",
+        "selfTotalMs": 49.3607,
+        "count": 7940,
+        "selfMsPerFrame": 1.542521875,
+        "selfMsPerSecond": 7.346351838679022,
+        "selfPercentWall": 0.7346351838679022,
+        "rank": 6,
+        "beforeMsPerFrame": 1.62351875,
+        "durationReductionPercent": 4.9889707156138385
+      },
+      {
+        "stage": "VULKAN_CONSUMER_SUBMIT",
+        "selfTotalMs": 41.3269,
+        "count": 4130,
+        "selfMsPerFrame": 1.291465625,
+        "selfMsPerSecond": 6.15068157059977,
+        "selfPercentWall": 0.615068157059977,
+        "rank": 7,
+        "beforeMsPerFrame": 1.38634375,
+        "durationReductionPercent": 6.84376620156436
+      },
+      {
+        "stage": "VULKAN_CONSUMER_FENCE_WAIT",
+        "selfTotalMs": 40.155699999999996,
+        "count": 288,
+        "selfMsPerFrame": 1.2548656249999999,
+        "selfMsPerSecond": 5.97637190170405,
+        "selfPercentWall": 0.5976371901704051,
+        "rank": 8,
+        "beforeMsPerFrame": 1.35839375,
+        "durationReductionPercent": 7.6213634669623715
+      },
+      {
+        "stage": "CUDA_DOWNLOAD_ASYNC_ENQUEUE",
+        "selfTotalMs": 37.7293,
+        "count": 7684,
+        "selfMsPerFrame": 1.179040625,
+        "selfMsPerSecond": 5.61525084585657,
+        "selfPercentWall": 0.561525084585657,
+        "rank": 9,
+        "beforeMsPerFrame": 1.243840625,
+        "durationReductionPercent": 5.20967065213841
+      },
+      {
+        "stage": "CUDA_CONTEXT_POP",
+        "selfTotalMs": 35.04310000000001,
+        "count": 59774,
+        "selfMsPerFrame": 1.0950968750000003,
+        "selfMsPerSecond": 5.2154637620214634,
+        "selfPercentWall": 0.5215463762021464,
+        "rank": 10,
+        "beforeMsPerFrame": 1.102459375,
+        "durationReductionPercent": 0.6678250615810399
+      },
+      {
+        "stage": "NATIVE_TASK_EXECUTION",
+        "selfTotalMs": 19.2168,
+        "count": 64,
+        "selfMsPerFrame": 0.600525,
+        "selfMsPerSecond": 2.860035899278718,
+        "selfPercentWall": 0.2860035899278718,
+        "rank": 11,
+        "beforeMsPerFrame": 0.5814843749999999,
+        "durationReductionPercent": -3.2744860943168197
+      },
+      {
+        "stage": "CUDA_KERNEL_EVENT_RESOLVE",
+        "selfTotalMs": 17.9151,
+        "count": 4098,
+        "selfMsPerFrame": 0.559846875,
+        "selfMsPerSecond": 2.666303918403072,
+        "selfPercentWall": 0.2666303918403072,
+        "rank": 12,
+        "beforeMsPerFrame": 0.51925625,
+        "durationReductionPercent": -7.8170700882271404
+      },
+      {
+        "stage": "CUDA_CONTEXT_PUSH",
+        "selfTotalMs": 14.901,
+        "count": 59774,
+        "selfMsPerFrame": 0.46565625,
+        "selfMsPerSecond": 2.2177154851563303,
+        "selfPercentWall": 0.22177154851563302,
+        "rank": 13,
+        "beforeMsPerFrame": 0.6092624999999999,
+        "durationReductionPercent": 23.57050532405982
+      },
+      {
+        "stage": "CUDA_EXCHANGE",
+        "selfTotalMs": 13.768999999999998,
+        "count": 8196,
+        "selfMsPerFrame": 0.43028124999999995,
+        "selfMsPerSecond": 2.0492399513534334,
+        "selfPercentWall": 0.20492399513534335,
+        "rank": 14,
+        "beforeMsPerFrame": 0.415259375,
+        "durationReductionPercent": -3.6174679981637814
+      },
+      {
+        "stage": "CUDA_DOWNLOAD",
+        "selfTotalMs": 12.1428,
+        "count": 256,
+        "selfMsPerFrame": 0.3794625,
+        "selfMsPerSecond": 1.80721264298747,
+        "selfPercentWall": 0.180721264298747,
+        "rank": 15,
+        "beforeMsPerFrame": 0.44038125,
+        "durationReductionPercent": 13.833184314727298
+      },
+      {
+        "stage": "GPU_QUERY_RESOLVE",
+        "selfTotalMs": 10.2873,
+        "count": 4098,
+        "selfMsPerFrame": 0.321478125,
+        "selfMsPerSecond": 1.5310586209280397,
+        "selfPercentWall": 0.15310586209280397,
+        "rank": 16,
+        "beforeMsPerFrame": 0.333965625,
+        "durationReductionPercent": 3.739157286023076
+      },
+      {
+        "stage": "FINAL_FRAME_RECORD_AND_SUBMIT",
+        "selfTotalMs": 9.7943,
+        "count": 32,
+        "selfMsPerFrame": 0.306071875,
+        "selfMsPerSecond": 1.457685442337202,
+        "selfPercentWall": 0.1457685442337202,
+        "rank": 17,
+        "beforeMsPerFrame": 0.348775,
+        "durationReductionPercent": 12.243745968030971
+      },
+      {
+        "stage": "PARK",
+        "selfTotalMs": 9.3499,
+        "count": 12,
+        "selfMsPerFrame": 0.292184375,
+        "selfMsPerSecond": 1.3915454006216479,
+        "selfPercentWall": 0.1391545400621648,
+        "rank": 18,
+        "beforeMsPerFrame": 0.226678125,
+        "durationReductionPercent": -28.89835532211147
+      },
+      {
+        "stage": "VULKAN_COMMAND_REUSE_WAIT",
+        "selfTotalMs": 8.703,
+        "count": 3842,
+        "selfMsPerFrame": 0.27196875,
+        "selfMsPerSecond": 1.2952672885924128,
+        "selfPercentWall": 0.1295267288592413,
+        "rank": 19,
+        "beforeMsPerFrame": 0.251071875,
+        "durationReductionPercent": -8.323064859415252
+      },
+      {
+        "stage": "TEMPORAL_UNIFORMS_DESCRIPTORS",
+        "selfTotalMs": 8.6609,
+        "count": 32,
+        "selfMsPerFrame": 0.270653125,
+        "selfMsPerSecond": 1.2890015465667046,
+        "selfPercentWall": 0.12890015465667046,
+        "rank": 20,
+        "beforeMsPerFrame": 0.26383125,
+        "durationReductionPercent": -2.5856963494657936
+      },
+      {
+        "stage": "ROUTE_AND_PIPELINES",
+        "selfTotalMs": 8.5182,
+        "count": 32,
+        "selfMsPerFrame": 0.26619375,
+        "selfMsPerSecond": 1.2677635088691133,
+        "selfPercentWall": 0.1267763508869113,
+        "rank": 21,
+        "beforeMsPerFrame": 0.276571875,
+        "durationReductionPercent": 3.7524151723670407
+      },
+      {
+        "stage": "OPTICAL_MEDIUM_NATIVE",
+        "selfTotalMs": 5.6564,
+        "count": 64,
+        "selfMsPerFrame": 0.1767625,
+        "selfMsPerSecond": 0.8418418810977967,
+        "selfPercentWall": 0.08418418810977966,
+        "rank": 22,
+        "beforeMsPerFrame": 0.151546875,
+        "durationReductionPercent": -16.63882874523146
+      },
+      {
+        "stage": "VULKAN_CONSUMER_RECORD",
+        "selfTotalMs": 3.2121,
+        "count": 288,
+        "selfMsPerFrame": 0.100378125,
+        "selfMsPerSecond": 0.47805676866456276,
+        "selfPercentWall": 0.04780567686645627,
+        "rank": 23,
+        "beforeMsPerFrame": 0.108940625,
+        "durationReductionPercent": 7.859786007286084
+      },
+      {
+        "stage": "SESSION_PUMP",
+        "selfTotalMs": 2.6681,
+        "count": 43,
+        "selfMsPerFrame": 0.083378125,
+        "selfMsPerSecond": 0.39709326125398337,
+        "selfPercentWall": 0.039709326125398334,
+        "rank": 24,
+        "beforeMsPerFrame": 0.1088875,
+        "durationReductionPercent": 23.42727585811044
+      },
+      {
+        "stage": "DIAGNOSTICS",
+        "selfTotalMs": 2.6065,
+        "count": 16,
+        "selfMsPerFrame": 0.081453125,
+        "selfMsPerSecond": 0.3879253346795501,
+        "selfPercentWall": 0.03879253346795501,
+        "rank": 25,
+        "beforeMsPerFrame": 0.187321875,
+        "durationReductionPercent": 56.51702450661462
+      },
+      {
+        "stage": "HOST_ADMISSION",
+        "selfTotalMs": 2.118,
+        "count": 43,
+        "selfMsPerFrame": 0.0661875,
+        "selfMsPerSecond": 0.31522189098457204,
+        "selfPercentWall": 0.03152218909845721,
+        "rank": 26,
+        "beforeMsPerFrame": 0.066578125,
+        "durationReductionPercent": 0.5867167331612411
+      },
+      {
+        "stage": "RESOURCE_BUDGET_AND_ENSURE",
+        "selfTotalMs": 1.6463,
+        "count": 32,
+        "selfMsPerFrame": 0.051446875,
+        "selfMsPerSecond": 0.24501879090080314,
+        "selfPercentWall": 0.024501879090080312,
+        "rank": 27,
+        "beforeMsPerFrame": 0.04965,
+        "durationReductionPercent": -3.6190835850956837
+      },
+      {
+        "stage": "FRAME_POLL_AND_LEASE",
+        "selfTotalMs": 1.5486,
+        "count": 16,
+        "selfMsPerFrame": 0.04839375,
+        "selfMsPerSecond": 0.2304781021618075,
+        "selfPercentWall": 0.02304781021618075,
+        "rank": 28,
+        "beforeMsPerFrame": 0.057784375,
+        "durationReductionPercent": 16.25114920772267
+      },
+      {
+        "stage": "REQUEST_BUILD",
+        "selfTotalMs": 1.4952,
+        "count": 32,
+        "selfMsPerFrame": 0.046725,
+        "selfMsPerSecond": 0.22253058139760726,
+        "selfPercentWall": 0.022253058139760726,
+        "rank": 29,
+        "beforeMsPerFrame": 0.053321875,
+        "durationReductionPercent": 12.371798628611607
+      },
+      {
+        "stage": "CUDA_UPLOAD",
+        "selfTotalMs": 1.1492,
+        "count": 32,
+        "selfMsPerFrame": 0.0359125,
+        "selfMsPerSecond": 0.17103540940484901,
+        "selfPercentWall": 0.017103540940484902,
+        "rank": 30,
+        "beforeMsPerFrame": 0.0364125,
+        "durationReductionPercent": 1.3731548232063129
+      },
+      {
+        "stage": "CUDA_NATIVE_CALLBACK",
+        "selfTotalMs": 0.8824,
+        "count": 256,
+        "selfMsPerFrame": 0.027575,
+        "selfMsPerSecond": 0.13132757157921923,
+        "selfPercentWall": 0.013132757157921924,
+        "rank": 31,
+        "beforeMsPerFrame": 0.030428125,
+        "durationReductionPercent": 9.376604703707514
+      },
+      {
+        "stage": "SHARED_EXCHANGE",
+        "selfTotalMs": 0.8033,
+        "count": 4098,
+        "selfMsPerFrame": 0.025103125,
+        "selfMsPerSecond": 0.11955512040977655,
+        "selfPercentWall": 0.011955512040977655,
+        "rank": 32,
+        "beforeMsPerFrame": 0.0233875,
+        "durationReductionPercent": -7.335649385355425
+      },
+      {
+        "stage": "FEATURE_EXTENT_NEGOTIATION",
+        "selfTotalMs": 0.5986,
+        "count": 32,
+        "selfMsPerFrame": 0.01870625,
+        "selfMsPerSecond": 0.0890896241470089,
+        "selfPercentWall": 0.00890896241470089,
+        "rank": 33,
+        "beforeMsPerFrame": 0.01579375,
+        "durationReductionPercent": -18.44083893945392
+      },
+      {
+        "stage": "SLOT_PUBLICATION",
+        "selfTotalMs": 0.557,
+        "count": 32,
+        "selfMsPerFrame": 0.01740625,
+        "selfMsPerSecond": 0.08289829710972929,
+        "selfPercentWall": 0.00828982971097293,
+        "rank": 34,
+        "beforeMsPerFrame": 0.02175625,
+        "durationReductionPercent": 19.994254524561907
+      },
+      {
+        "stage": "SESSION_ADMISSION",
+        "selfTotalMs": 0.5216,
+        "count": 43,
+        "selfMsPerFrame": 0.0163,
+        "selfMsPerSecond": 0.07762971592896731,
+        "selfPercentWall": 0.007762971592896731,
+        "rank": 35,
+        "beforeMsPerFrame": 0.01841875,
+        "durationReductionPercent": 11.503223617237879
+      },
+      {
+        "stage": "FRAME_PRIMITIVES",
+        "selfTotalMs": 0.4738,
+        "count": 32,
+        "selfMsPerFrame": 0.01480625,
+        "selfMsPerSecond": 0.07051564303517009,
+        "selfPercentWall": 0.007051564303517008,
+        "rank": 36,
+        "beforeMsPerFrame": 0.012709375,
+        "durationReductionPercent": -16.49864765183182
+      },
+      {
+        "stage": "CUDA_CONTEXT_SYNCHRONIZE",
+        "selfTotalMs": 0.4269,
+        "count": 32,
+        "selfMsPerFrame": 0.013340625,
+        "selfMsPerSecond": 0.06353551712054477,
+        "selfPercentWall": 0.006353551712054477,
+        "rank": 37,
+        "beforeMsPerFrame": 0.01448125,
+        "durationReductionPercent": 7.8765645230902015
+      },
+      {
+        "stage": "MEDIUM_RESOLVE_PREPARE",
+        "selfTotalMs": 0.285,
+        "count": 32,
+        "selfMsPerFrame": 0.00890625,
+        "selfMsPerSecond": 0.04241654340443958,
+        "selfPercentWall": 0.004241654340443958,
+        "rank": 38,
+        "beforeMsPerFrame": 0.008496875,
+        "durationReductionPercent": -4.817947774917242
+      },
+      {
+        "stage": "CUDA_COMPLETION_CALLBACK",
+        "selfTotalMs": 0.2766,
+        "count": 256,
+        "selfMsPerFrame": 0.00864375,
+        "selfMsPerSecond": 0.04116637159883505,
+        "selfPercentWall": 0.004116637159883505,
+        "rank": 39,
+        "beforeMsPerFrame": 0.013946875,
+        "durationReductionPercent": 38.02375084024199
+      },
+      {
+        "stage": "FEATURE_INPUT_REUSE",
+        "selfTotalMs": 0.2236,
+        "count": 32,
+        "selfMsPerFrame": 0.0069875,
+        "selfMsPerSecond": 0.03327838282537786,
+        "selfPercentWall": 0.0033278382825377858,
+        "rank": 40,
+        "beforeMsPerFrame": 0.005628125,
+        "durationReductionPercent": -24.153248195446952
+      },
+      {
+        "stage": "WINDOW",
+        "selfTotalMs": 0.1322,
+        "count": 2,
+        "selfMsPerFrame": 0.00413125,
+        "selfMsPerSecond": 0.01967532294058566,
+        "selfPercentWall": 0.0019675322940585663,
+        "rank": 41,
+        "beforeMsPerFrame": 0.004440625,
+        "durationReductionPercent": 6.966924700914845
+      },
+      {
+        "stage": "TRY_SUBMIT",
+        "selfTotalMs": 0.0511,
+        "count": 43,
+        "selfMsPerFrame": 0.001596875,
+        "selfMsPerSecond": 0.007605211817427589,
+        "selfPercentWall": 0.0007605211817427589,
+        "rank": 42,
+        "beforeMsPerFrame": 0.00161875,
+        "durationReductionPercent": 1.3513513513513487
+      },
+      {
+        "stage": "FRAME_PREPARATION",
+        "selfTotalMs": 0.0302,
+        "count": 32,
+        "selfMsPerFrame": 0.00094375,
+        "selfMsPerSecond": 0.004494665301102019,
+        "selfPercentWall": 0.00044946653011020187,
+        "rank": 43,
+        "beforeMsPerFrame": 0.000990625,
+        "durationReductionPercent": 4.731861198738163
+      },
+      {
+        "stage": "CAMERA_SCATTERING_PREPARE",
+        "selfTotalMs": 0.0059,
+        "count": 32,
+        "selfMsPerFrame": 0.000184375,
+        "selfMsPerSecond": 0.0008780968634603282,
+        "selfPercentWall": 8.780968634603282e-05,
+        "rank": 44,
+        "beforeMsPerFrame": 0.00015625,
+        "durationReductionPercent": -17.999999999999993
+      }
+    ],
+    "sumMsPerSecond": 1000.0000000000001,
+    "droppedEvents": 0,
+    "events": 202206,
+    "beforeGpu": {
+      "cuda.entry.native_optical_photon_clear": {
+        "msPerFrame": 0.028312999999999998,
+        "callsPerFrame": 1.0
+      },
+      "cuda.entry.native_optical_photon_reset": {
+        "msPerFrame": 0.036241999999999996,
+        "callsPerFrame": 8.0
+      },
+      "cuda.entry.native_optical_photon_step": {
+        "msPerFrame": 0.35516400000000004,
+        "callsPerFrame": 8.0
+      },
+      "cuda.entry.native_optical_reset": {
+        "msPerFrame": 1.105313,
+        "callsPerFrame": 243.5625
+      },
+      "cuda.entry.native_optical_step_4": {
+        "msPerFrame": 109.827868,
+        "callsPerFrame": 243.5625
+      },
+      "vulkan.optical.cameraContinuationTrace/startToend": {
+        "msPerFrame": 91.96467100000001,
+        "callsPerFrame": 239.5625
+      },
+      "vulkan.optical.cameraInitialTrace/startToend": {
+        "msPerFrame": 10.948112,
+        "callsPerFrame": 4.0
+      },
+      "vulkan.opticalPhoton.mapCopy/startToend": {
+        "msPerFrame": 0.068605,
+        "callsPerFrame": 1.0
+      },
+      "vulkan.opticalPhoton.mapInitialize/startToend": {
+        "msPerFrame": 0.01199,
+        "callsPerFrame": 1.0
+      },
+      "vulkan.opticalPhoton.trace/startToend": {
+        "msPerFrame": 0.487298,
+        "callsPerFrame": 8.0
+      },
+      "vulkan.shared.continuation": {
+        "msPerFrame": 46.798773999999995,
+        "callsPerFrame": 129.78125
+      },
+      "vulkan.shared.producer": {
+        "msPerFrame": 57.086535,
+        "callsPerFrame": 129.78125
+      }
+    },
+    "afterGpu": {
+      "cuda.entry.native_optical_photon_clear": {
+        "msPerFrame": 0.0269,
+        "callsPerFrame": 1.0
+      },
+      "cuda.entry.native_optical_photon_reset": {
+        "msPerFrame": 0.034426,
+        "callsPerFrame": 8.0
+      },
+      "cuda.entry.native_optical_photon_step": {
+        "msPerFrame": 0.31215800000000005,
+        "callsPerFrame": 8.0
+      },
+      "cuda.entry.native_optical_reset": {
+        "msPerFrame": 1.0588039999999999,
+        "callsPerFrame": 240.125
+      },
+      "cuda.entry.native_optical_step_4": {
+        "msPerFrame": 67.49793199999999,
+        "callsPerFrame": 240.125
+      },
+      "vulkan.optical.cameraContinuationTrace/startToend": {
+        "msPerFrame": 59.735282999999995,
+        "callsPerFrame": 236.125
+      },
+      "vulkan.optical.cameraInitialTrace/startToend": {
+        "msPerFrame": 7.462644,
+        "callsPerFrame": 4.0
+      },
+      "vulkan.opticalPhoton.mapCopy/startToend": {
+        "msPerFrame": 0.061201,
+        "callsPerFrame": 1.0
+      },
+      "vulkan.opticalPhoton.mapInitialize/startToend": {
+        "msPerFrame": 0.009581,
+        "callsPerFrame": 1.0
+      },
+      "vulkan.opticalPhoton.trace/startToend": {
+        "msPerFrame": 0.425663,
+        "callsPerFrame": 8.0
+      },
+      "vulkan.shared.continuation": {
+        "msPerFrame": 30.359411,
+        "callsPerFrame": 128.0625
+      },
+      "vulkan.shared.producer": {
+        "msPerFrame": 37.709912,
+        "callsPerFrame": 128.0625
+      }
+    },
+    "initialGpuBefore": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 7.73 W, 180 MHz, 55",
+    "initialGpuAfter": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.55 W, 180 MHz, 59"
+  },
+  "hdr": {
+    "passed": true,
+    "mode": "byte-identical",
+    "supportingReferenceCommit": null,
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 0.0,
+    "maxLuminanceEnergyRelativeError": 0.0,
+    "maxAbsoluteChannelError": 0.0
+  },
+  "focusedNative": {
+    "passed": true,
+    "byteIdenticalComparisons": 32,
+    "nativeFrames": 64,
+    "continuedQueriesBefore": 2299440,
+    "continuedQueriesAfter": 1505929
+  },
+  "productionNative": {
+    "passed": true,
+    "nativeFrames": 152,
+    "recoverableRejections": 1,
+    "comparisons": [
+      {
+        "name": "thin-optical1-SPP1",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical1-SPP2",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical1-SPP8",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical2-SPP1",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical2-SPP2",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical2-SPP8",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical8-SPP1",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical8-SPP2",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "thin-optical8-SPP8",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "one-event-no-unbudgeted-continuation"
+      },
+      {
+        "name": "equal-IOR"
+      },
+      {
+        "name": "stochastic-first-interface",
+        "frames": 64,
+        "redMean": 0.426102325,
+        "blueMean": 0.0276929246
+      },
+      {
+        "name": "closed-boundary-inside-TIR"
+      },
+      {
+        "name": "closed-boundary-inside-unit-IOR"
+      },
+      {
+        "name": "nested-priority-inside-HDR"
+      },
+      {
+        "name": "density-glass-generation0-SPP1",
+        "maximumAbsoluteError": 0.000121024413
+      },
+      {
+        "name": "density-glass-generation0-SPP2",
+        "maximumAbsoluteError": 0.00012096559
+      },
+      {
+        "name": "density-glass-generation0-SPP8",
+        "maximumAbsoluteError": 0.000121803891
+      },
+      {
+        "name": "density-cache-generation0",
+        "assetUploads": 0,
+        "metadataBytes": 1536
+      },
+      {
+        "name": "density-glass-generation1-SPP1",
+        "maximumAbsoluteError": 0.000189760575
+      },
+      {
+        "name": "density-glass-generation1-SPP2",
+        "maximumAbsoluteError": 0.000189718711
+      },
+      {
+        "name": "density-glass-generation1-SPP8",
+        "maximumAbsoluteError": 0.000189712536
+      },
+      {
+        "name": "density-cache-generation1",
+        "assetUploads": 0,
+        "metadataBytes": 1536
+      },
+      {
+        "name": "nested-local-density-priority-two-SPP"
+      },
+      {
+        "name": "rough-0.12",
+        "redMean": 0.414983317,
+        "expectedRed": 0.415037079,
+        "blueMean": 0.0261006351,
+        "expectedBlue": 0.0260977352
+      },
+      {
+        "name": "rough-0.45",
+        "redMean": 0.357219373,
+        "expectedRed": 0.357235945,
+        "blueMean": 0.018306046,
+        "expectedBlue": 0.0182924122
+      },
+      {
+        "name": "rough-0.85",
+        "redMean": 0.289888096,
+        "expectedRed": 0.289381785,
+        "blueMean": 0.00857685086,
+        "expectedBlue": 0.00853589564
+      },
+      {
+        "name": "rough-stochastic",
+        "redMean": 0.354685589,
+        "expectedRed": 0.357235943,
+        "blueMean": 0.018384466,
+        "expectedBlue": 0.0182924119
+      },
+      {
+        "name": "rough-black-transmission",
+        "redMean": 2.48800786e-06,
+        "expectedRed": 0.0,
+        "blueMean": 0.0182219094,
+        "expectedBlue": 0.0182924119
+      },
+      {
+        "name": "rough-smooth-limit",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "rough-equal-IOR"
+      },
+      {
+        "name": "scattering-rough-glass",
+        "analyticRedMean": 0.0964482886,
+        "litEnergy": 0.348514269,
+        "darkEnergy": 0.0
+      },
+      {
+        "name": "heterogeneous-scattering-rough-glass",
+        "lateralEnergy": 0.00132907603,
+        "litEnergy": 0.167782089,
+        "darkEnergy": 0.0
+      },
+      {
+        "name": "explicit-IOR-boundary-scattering",
+        "litEnergy": 0.0359992697,
+        "insidePointEnergy": 0.0236763274,
+        "densityRoughEnergy": 0.0656757977,
+        "darkEnergy": 0.0
+      },
+      {
+        "name": "partial-unlit-terminal-color-and-emission"
+      },
+      {
+        "name": "partial-unlit-emission-light-independence"
+      },
+      {
+        "name": "resolved-publication-outline-SPP1"
+      },
+      {
+        "name": "resolved-publication-outline-SPP2"
+      },
+      {
+        "name": "resolved-publication-outline-SPP8"
+      },
+      {
+        "name": "partial-PBR-Snell-Fresnel-emission",
+        "maximumAbsoluteError": 0.0001953125
+      },
+      {
+        "name": "invalid-boundary-rejection-recovery",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "resize-eight-SPP",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "full-HD-multiple-optical-tiles",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "shrink-after-full-HD",
+        "maximumAbsoluteError": 0.000152994792
+      },
+      {
+        "name": "PBR-boundary-density-camera-light-Beer",
+        "maximumAbsoluteError": 6.18522682e-05
+      },
+      {
+        "name": "resolved-publication-temporal-history-three-frames"
+      }
+    ]
+  },
+  "validation": {
+    "focused": {
+      "passed": true,
+      "logs": [
+        {
+          "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-validation.jsonl",
+          "passed": true,
+          "opened": 2,
+          "closed": 2,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        }
+      ]
+    },
+    "production": {
+      "passed": true,
+      "logs": [
+        {
+          "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-validation.jsonl",
+          "passed": true,
+          "opened": 3,
+          "closed": 3,
+          "warningsAndErrors": 0,
+          "droppedMessages": 0,
+          "messageIds": []
+        }
+      ]
+    }
+  },
+  "featureCoverage": {
+    "complete": true,
+    "requiredFeatures": [
+      "ABSORPTION",
+      "ALL_LIGHTS",
+      "ALPHA_PRODUCT",
+      "BUILTIN_SHADER_DATA",
+      "DENSITY_GRID",
+      "DIRECTIONAL_LIGHT",
+      "DIRECT_SCATTER",
+      "EMISSION",
+      "FIRST_INTERFACE_OPTICAL_SAMPLES",
+      "FIRST_INTERFACE_SPLIT",
+      "FIRST_INTERFACE_STOCHASTIC",
+      "FOG",
+      "INWARD_BOUNDARY",
+      "LIGHTMAP",
+      "MATERIAL_ALPHA",
+      "METAL_FULL",
+      "METAL_PARTIAL",
+      "MULTIPLE_SCATTER",
+      "NESTED_PRIORITY",
+      "OVERLAY_ALPHA",
+      "OVERLAY_DEPTH_REJECT",
+      "OVERLAY_MASK_REJECT",
+      "OVERLAY_MULTIPLY",
+      "PARTIAL_TRANSMISSION",
+      "PBR_DOUBLE_SIDED",
+      "PBR_SINGLE_SIDED",
+      "PERSISTENT_BOUNDARY",
+      "PHASE_BACKWARD",
+      "PHASE_FORWARD",
+      "POINT_LIGHT",
+      "REFRACTION",
+      "ROUGH_GLASS",
+      "SHADOW_DISABLED",
+      "SMOOTH_GLASS",
+      "SPOT_LIGHT",
+      "SPP_2",
+      "SPP_8",
+      "SURFACE_CAUSTICS",
+      "SURFACE_VISIBILITY",
+      "TEXTURE_ALPHA",
+      "TRANSIENT_BOUNDARY",
+      "UNIFORM",
+      "UNLIT",
+      "VERTEX_ALPHA",
+      "VOLUME_CAUSTICS",
+      "ZERO_DENSITY"
+    ],
+    "executedFeatures": [
+      "ABSORPTION",
+      "ALL_LIGHTS",
+      "ALPHA_PRODUCT",
+      "BUILTIN_SHADER_DATA",
+      "DENSITY_GRID",
+      "DIRECTIONAL_LIGHT",
+      "DIRECT_SCATTER",
+      "EMISSION",
+      "FIRST_INTERFACE_OPTICAL_SAMPLES",
+      "FIRST_INTERFACE_SPLIT",
+      "FIRST_INTERFACE_STOCHASTIC",
+      "FOG",
+      "INWARD_BOUNDARY",
+      "LIGHTMAP",
+      "MATERIAL_ALPHA",
+      "METAL_FULL",
+      "METAL_PARTIAL",
+      "MULTIPLE_SCATTER",
+      "NESTED_PRIORITY",
+      "OVERLAY_ALPHA",
+      "OVERLAY_DEPTH_REJECT",
+      "OVERLAY_MASK_REJECT",
+      "OVERLAY_MULTIPLY",
+      "PARTIAL_TRANSMISSION",
+      "PBR_DOUBLE_SIDED",
+      "PBR_SINGLE_SIDED",
+      "PERSISTENT_BOUNDARY",
+      "PHASE_BACKWARD",
+      "PHASE_FORWARD",
+      "POINT_LIGHT",
+      "REFRACTION",
+      "ROUGH_GLASS",
+      "SHADOW_DISABLED",
+      "SMOOTH_GLASS",
+      "SPOT_LIGHT",
+      "SPP_2",
+      "SPP_8",
+      "SURFACE_CAUSTICS",
+      "SURFACE_VISIBILITY",
+      "TEXTURE_ALPHA",
+      "TRANSIENT_BOUNDARY",
+      "UNIFORM",
+      "UNLIT",
+      "VERTEX_ALPHA",
+      "VOLUME_CAUSTICS",
+      "ZERO_DENSITY"
+    ],
+    "cases": 7
+  },
+  "regressionWindow": {
+    "frames": 64,
+    "wallMs": 12890.5688,
+    "msPerFrame": 201.4151375,
+    "fps": 4.96487013047865,
+    "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 13.25 W, 180 MHz, 56",
+    "interpretation": "independent 64-frame regression window, not an additional optimization gain"
+  },
+  "workload": {
+    "scene": "micro-all",
+    "width": 1920,
+    "height": 1080,
+    "spp": 1,
+    "maxEvents": 24,
+    "opticalSamples": 2,
+    "scatteringSteps": 8,
+    "lightSamples": 0,
+    "maxDistance": 32.0,
+    "transmittanceCutoff": 0.0001,
+    "scatteringBounces": 2,
+    "firstInterfaceSampling": "DETERMINISTIC_SPLIT"
+  },
+  "sourceManifest": {
+    "passed": true,
+    "files": 36,
+    "pbrtReferences": [
+      {
+        "file": "build\\medium-micro-all-20261031\\pbrt-fixed-integrator.cpp",
+        "sha256": "4369b0ece834d75e5641ea70852806974b5aec1599e99218ce5f50cc701828db"
+      },
+      {
+        "file": "build\\medium-micro-all-20261031\\pbrt-fixed-surfscatter.cpp",
+        "sha256": "33ca393c316bcf86c85379a5ae5ceb02657a63865aa4001d24a09db39f41e562"
+      }
+    ]
+  },
+  "observationOverheadPercent": 1.0043064489884124,
+  "evidence": [
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-forward-baseline-matrix-off\\artifacts.json",
+      "sha256": "78b237232b6272fb7dc558827dab0918f66ede48288f72db30afe5f6547f9b77"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-forward-baseline-matrix-off\\initial-gpu.csv",
+      "sha256": "75c727c4b69f7a7403fc12982d5c34cc4b0ed0fa20353524e07d13991a7bb876"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-forward-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-forward-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-forward-baseline-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-forward-baseline-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "be71b4733e1f63bc781e4f3a2846767956e2a0ff2ec8994f681a494c32ac9a8f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-forward-baseline-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-forward-baseline-matrix-off\\run.log",
+      "sha256": "d02e90b4f1bb46203fa92732f894dccce5647cfa92c9849b48a5523ac64b64a9"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-forward-baseline-matrix-off\\runtime.json",
+      "sha256": "fe3a1f9fe501f4ceb244ad3b8d7da2be94cc200d47a011d1340402f686708fc7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\artifacts.json",
+      "sha256": "78b237232b6272fb7dc558827dab0918f66ede48288f72db30afe5f6547f9b77"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\initial-gpu.csv",
+      "sha256": "0ea38276de4539b4f48cb86b1e7cf6d7c6657e45dfc1e50e4707eded8883ad37"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "71d984c9632d380e9b42d0571485283e946152abaaf8ccf7f3a4ddcc6e858daf"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "aed9a24406808429ea03ddd92079821e16a5df423df75a199062db6b7c0bbf1b"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\micro-all-1080p-profiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\micro-all-1080p-profiled.csv",
+      "sha256": "6b302e65197d1f2c8d06434742cf0931f22e6f57a20bd555ebeeecc884bd40c9"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "103a766bb9b576ec4861de4f0745c76fef0305fe118f3ce9614a9f70de42505a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\micro-all-1080p-wall-timeline-round-2.json",
+      "sha256": "d7e08824fdb575875b7004e660e5bb793a66e11727dcb5429bcde01dbc2be337"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\micro-profiled-coverage.json",
+      "sha256": "de615f8508573bcc6f1928edf09f253c7464e67018bc91a9c050c0b499a0038c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\ranked.csv",
+      "sha256": "0ca929290f8d26091cb7ede1b96db3b0b4d9931735d14430a4eb5b235b06a385"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\ranked.json",
+      "sha256": "9bfc1b2df24d0d5d8acd6718cb2949a933a1f36dc4b9420404d5477f7e9a6f2e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\run.log",
+      "sha256": "d6f1e0fc17c60d39ed832c544857221ea624be76e643c6cedf930b92291ae1aa"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-ranked-baseline-matrix-timings\\runtime.json",
+      "sha256": "958296cd200cc66916874c4da20438355331a8d73494004e280be32931ef5317"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-reverse-baseline-matrix-off\\artifacts.json",
+      "sha256": "78b237232b6272fb7dc558827dab0918f66ede48288f72db30afe5f6547f9b77"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-reverse-baseline-matrix-off\\initial-gpu.csv",
+      "sha256": "03ab79616d2d98c0b42fbe0b0fde5c73a84cfa706354ab3a1e1c76f800884d94"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-reverse-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-reverse-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-reverse-baseline-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-reverse-baseline-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "9f3cbc52aaf9829932d0a43be31e2cd112e2f45e4480b96913778394c640f450"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-reverse-baseline-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-reverse-baseline-matrix-off\\run.log",
+      "sha256": "b6e25beac2a04276bbe5b4371184d5466f386811addfba5b1aa4d39235a2907d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\m-reverse-baseline-matrix-off\\runtime.json",
+      "sha256": "ca531a26aa127da20759431343ac4d9f89bce8521aa56c9d934f4c78522a4053"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\abi-test.log",
+      "sha256": "9095b7d25aa8b0832e8a7548a8beb426e8acc04636b93fdd019da2cd0bc304c7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\acceptance-ranked.json",
+      "sha256": "ef6cc6e601c8d881485568641e560415c0248d4182c41537fade9f9017b7a7fb"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\artifacts.json",
+      "sha256": "4be06929a6c8ba1d6fffd674ebe5bba888cca647fe678456aafa2e113d415859"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\candidate-core.jar",
+      "sha256": "198253ada584d288abbc777ce47f8997bbcfe1564ee14b0749d968c03f9532d2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\artifacts.json",
+      "sha256": "ad325a7e34d82119de2e2788426cd0a0d1ffc84e3024dbd629f95db1f2399426"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\initial-gpu.csv",
+      "sha256": "09c7ba6b9d70b327c6707677ddd1e9cd5a487b595a19b20203c5e7082d806095"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-all-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-all-160x90-unprofiled-workload.json",
+      "sha256": "574cfa5ee8e2ecdb16472f1eb0e5f2667d96df419ed47bd9532c35f5fb9987b2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-all-160x90-unprofiled.csv",
+      "sha256": "25c62cb0907ab33601061cd73427864f8edc9f245fd3e0a0f14057f6cd60f03e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-camera-density-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-camera-density-160x90-unprofiled-workload.json",
+      "sha256": "d01f631a9a17bd8508a976372a8b37e44993bfbf610866f29b7912dc1b0c6c5a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-camera-density-160x90-unprofiled.csv",
+      "sha256": "86b78ec5573ddf0032017da4a65b336ea4770333f2d68b5d60dd12445f38dd08"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-caustics-off-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-caustics-off-160x90-unprofiled-workload.json",
+      "sha256": "172bd4c8a4551b957d21373716ccd0fce5f748186e84a40c04f0a3d4aaa898fa"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-caustics-off-160x90-unprofiled.csv",
+      "sha256": "464d5f3df5a17feb931e0fc3ea08d3fffb10a122221d93c17e0edd6647bdd44f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-checks-unprofiled-coverage.json",
+      "sha256": "d0f4de2989156b5624cf8e306a5c76d951c9ac3a36db10bd15bab85984725c46"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-direct-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-direct-160x90-unprofiled-workload.json",
+      "sha256": "0e26ad834a08ad4961ad7866b1faa8028dbaf225c186ea591264d528af89a6ae"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-direct-160x90-unprofiled.csv",
+      "sha256": "d7aa83822390a1b89aa0d549b45b31c15740be73a1100c183c53ac0cff6566c0"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-spp2-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-spp2-160x90-unprofiled-workload.json",
+      "sha256": "047861500fff8ddd7d9661455ad2d656c8d545521c68cad0c2d7a063deda203e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-spp2-160x90-unprofiled.csv",
+      "sha256": "c2fe5be4b5b7983e4c18fd6b1288d0515d174715611459141034fc296707186c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-spp8-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-spp8-160x90-unprofiled-workload.json",
+      "sha256": "6953ee17d02c7b76c9f17f2bde0a467dd183c079dc4df252ad0dde3907d5d200"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-spp8-160x90-unprofiled.csv",
+      "sha256": "6df2629e43d63a6a1f7bce69a541bd3900520dab0dc9391790ac3376c70be0e0"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-stochastic-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-stochastic-160x90-unprofiled-workload.json",
+      "sha256": "1db987b90b9947cf560c6037ab0420010d4377853e41b43bd96969216f086ae9"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\micro-stochastic-160x90-unprofiled.csv",
+      "sha256": "4b85cbed9c5542143c24163d8e1cf5b11628fbd41ff110d85f89d26cbfdc40c2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\run.log",
+      "sha256": "61dc33b48d0250e2651f628f87235b5b2dc675d728d8a834f3462ec4e053a45e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-features-matrix-off\\runtime.json",
+      "sha256": "6e33bfe0ce71fd8293f2ac1e7e74e0f415b3c370ba41c5839e6342f9cf9cf995"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-window-matrix-off\\artifacts.json",
+      "sha256": "ad325a7e34d82119de2e2788426cd0a0d1ffc84e3024dbd629f95db1f2399426"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-window-matrix-off\\initial-gpu.csv",
+      "sha256": "50826c7a27f149a62cce113031eb5e44030b8e2e3e2f76c7445992ccc37ffa80"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-window-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-window-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-window-matrix-off\\micro-all-1080p-gpu-stages-round-3.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-window-matrix-off\\micro-all-1080p-gpu-stages-round-4.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-window-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-window-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "4aeb223aafe62bdffac55d8ec6a782868cf8492db403e84232be0a400765a977"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-window-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "c0847bfde9ae5b94b85044afeae14055ee48c44c2d7b3fd1569f5c8a9daf1ca1"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-window-matrix-off\\run.log",
+      "sha256": "fdbcf123e553971d357219f9bcd1aa5f9e9d0660473ddb40bda22a176e46208d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\complete-window-matrix-off\\runtime.json",
+      "sha256": "6e2c463b5db97c29baf2debf580dc5380402f12dc0860abdf24e1b381ddb5ea4"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\fixed57-matrix-off\\artifacts.json",
+      "sha256": "ad325a7e34d82119de2e2788426cd0a0d1ffc84e3024dbd629f95db1f2399426"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\fixed57-matrix-off\\initial-gpu.csv",
+      "sha256": "775a5891c6cbbbe6d7e52f2ce56d2684e02e0df6d3b198708a1e9b56e794c34d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\fixed57-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\fixed57-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\fixed57-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "9c587f36df3644dfd549eeb76a11d6b2f6e09b901479294f417d799bd2891934"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\fixed57-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "91d3df83247ad9926754781dde06ef7ffd4476e0dfd7c96007393f5a7bf8cf01"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\fixed57-matrix-off\\run.log",
+      "sha256": "105643eea63f6d49f0185826f3ab37af8497b61b5f8d762dd7e1a3c16e60741a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\fixed57-matrix-off\\runtime.json",
+      "sha256": "67f42d4e0a36d23e520048653e24d8c8035702474e6d920d17ba5c4cee316dc2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\forward-candidate-matrix-off\\artifacts.json",
+      "sha256": "ad325a7e34d82119de2e2788426cd0a0d1ffc84e3024dbd629f95db1f2399426"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\forward-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "ea814ca6103388a95205b45dc909525d7269a65822c7bd240f837d10148956bd"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\forward-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\forward-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "50b161407ba58e443140039abf3534ae7c1b8a66695b194efc21433ddb305c23"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\forward-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\forward-candidate-matrix-off\\run.log",
+      "sha256": "f6bc72c57a77f57263a3c9ce160861385c66e5be5b132b78b54232e81de9f22f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\forward-candidate-matrix-off\\runtime.json",
+      "sha256": "26a8109bd89381d6aca29f94abd90321bdd4e0526b078ba511c96c9c82921edc"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\boundary-density-caustics-off.rgba16f",
+      "sha256": "9da4af9044d55fb40510fa7026b9cfbdbc5d38b894c6ab2df093650275a3e218"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\boundary-density-caustics-on.rgba16f",
+      "sha256": "1a330f31409f8cb42af2e381e9533cb4e5d30a0a4e7d95ccee830ac135b25c1f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\density-boundary-caustics.json",
+      "sha256": "7d2417b2f583024405f86445db069906fe856441eb1695d659030bccb36b62f6"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\density-caustics-off.rgba16f",
+      "sha256": "83047405bf62947aa62abdaf129065b78cb8725b852d8eb3fa048766ef1eb734"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\density-caustics-on.rgba16f",
+      "sha256": "f1283bb2d77951b5ad1da30572a4dfd21e5cbbd84c4d91a3048a7d060e93a227"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\density-glass-0-1.rgba16f",
+      "sha256": "790e84079400c8805e520e3d152733edb2783430bb5b300fe90b55eeb713a635"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\density-glass-0-2.rgba16f",
+      "sha256": "790e84079400c8805e520e3d152733edb2783430bb5b300fe90b55eeb713a635"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\density-glass-0-8.rgba16f",
+      "sha256": "cc0921074e73ab73a580acde77232cba14df4a250f2016a8256c3f2878ec03b0"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\density-glass-1-1.rgba16f",
+      "sha256": "35210082b693d8ac62a0a649a66240f49ac900fb5b1deb43dfcb566c2f80bd4d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\density-glass-1-2.rgba16f",
+      "sha256": "35210082b693d8ac62a0a649a66240f49ac900fb5b1deb43dfcb566c2f80bd4d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\density-glass-1-8.rgba16f",
+      "sha256": "42e90690d3fcc4e8d5e4e9b2902e8e178226c963ba15d2b34e84c48469ba82cd"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\equal-IOR.rgba16f",
+      "sha256": "6781cbc46aba0f80e958ccdf147ffd1561b0133f091409e68a383b85f24577cf"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\event-exhaustion.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\explicit-IOR-density-scattering-rough-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\explicit-IOR-density-scattering-rough.rgba16f",
+      "sha256": "d105aa8749d92938c7334707c728ac894e6abf5d3fbfae6048d5a617de3da856"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\explicit-IOR-scattering-inside-point.rgba16f",
+      "sha256": "72f42bfe5a4736ef3996be00fbc77ae465fc82413e2eb6df0b4dc8f9fd967ec3"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\explicit-IOR-scattering-shadow-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\explicit-IOR-scattering-shadow-lit.rgba16f",
+      "sha256": "ab8d6aca12f8519dc0f2a08d4de3a9dee59f564877afce1ea9b421c4f3b1d9f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\full-HD.rgba16f",
+      "sha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\glass-caustics-clear-off.rgba16f",
+      "sha256": "3424aecde04f52dd24331f6b52e762ff15edba769ef26f71a0630bc17fec7404"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\glass-caustics-clear-on.rgba16f",
+      "sha256": "8f43fcdc46b21e9887bbb9baeb67af31e08273d4425b6b541bfba020b13d4f94"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\glass-scattering-caustics-off.rgba16f",
+      "sha256": "4da0fb1a4309b75d8a47be51f96468cda39b86322b45f410c8a0cfee07eb7eb6"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\glass-scattering-caustics-on.rgba16f",
+      "sha256": "4ef69244bf69f4a0fcb113e3d0fcdd6f6f94be3d636adcccb9962afcc9b97d0d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\glass-scattering-caustics.json",
+      "sha256": "1e5046a855bcca7d30d7c7140c37ead1f8ca1af2953d7ee2d05d371d68956bdd"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\heterogeneous-scattering-rough-glass-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\heterogeneous-scattering-rough-glass-lateral.rgba16f",
+      "sha256": "59064f90f85b73b6647b72d07da811e9c627455c8c88d99f85362e9f9fc8d9b2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\heterogeneous-scattering-rough-glass-lit.rgba16f",
+      "sha256": "b33d11c963e2c9a5973eb3830a8fc861b24da93a9fe1d1c7e09fc5d60f37b240"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\inside-nested-caustics-off.rgba16f",
+      "sha256": "8aaa909d506869fe989d5e561c9396e62ff1a0198fad65e2cec7ffe4baf93843"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\inside-nested-caustics-on.rgba16f",
+      "sha256": "cf8d20bdd18e62b623470a09d510cee66ef8aec16a12e1e30b5de04a2e607ea4"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\inside-TIR.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\inside-unit-IOR.rgba16f",
+      "sha256": "6781cbc46aba0f80e958ccdf147ffd1561b0133f091409e68a383b85f24577cf"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\nested-IOR-density-caustics-off.rgba16f",
+      "sha256": "9376ccc375ac489ef682b71e43eba535d1400c50851c91bc19df4f6429958ada"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\nested-IOR-density-caustics-on.rgba16f",
+      "sha256": "51ce7a41d3b12bef3cf5663d71b51dafdf47ce014d8f3cee8f8f3b4cd87709f3"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\nested-local-density.rgba16f",
+      "sha256": "14ffbe8d7598c89ce80726b48439d2987750dc25e904891a7d60b81efc5372f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\nested-priority-inside.rgba16f",
+      "sha256": "dbe52ffe13721321e8a67af17c13ddc09672b78aa651c6ec2a62830045ae7db3"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\partial-PBR.rgba16f",
+      "sha256": "a2f26b11796ca7ca3fb5f41a2371a21f022a5fad88ce816850b9581698d137dc"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\partial-unlit-terminal-light-independence.rgba16f",
+      "sha256": "27e09588531ce950bfff6a8c2f000bad4d55b4ade0eb2ab0f99902af56f7e872"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\partial-unlit-terminal-proof.rgba16f",
+      "sha256": "27e09588531ce950bfff6a8c2f000bad4d55b4ade0eb2ab0f99902af56f7e872"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\PBR-boundary-absorbed.rgba16f",
+      "sha256": "afb4fa032bd0d2234f5b2bc9bd0a9b21d24adc37495540576b96243fd0db9685"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\PBR-boundary-density.rgba16f",
+      "sha256": "adf25b07781a2a5e3ad85ebc63512644b73bfe1ecbc577656244685a709e63b5"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\PBR-boundary-vacuum.rgba16f",
+      "sha256": "50ce7459e7daee301f26646d53e279a096b229c485a347084232df2c18032d3a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\PBR-boundary-zero-density.rgba16f",
+      "sha256": "50ce7459e7daee301f26646d53e279a096b229c485a347084232df2c18032d3a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\recovery.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resized.rgba16f",
+      "sha256": "a360624488b4b1f7882a6a19f1adc5870b0411a6038c72386abcc2d4ee7652f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-outline-off-1.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-outline-off-2.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-outline-off-8.rgba16f",
+      "sha256": "286f383a8484d310e09c575235a8c2e9f36c0e7cfee3f7cc10827c130c636c30"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-outline-on-1.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-outline-on-2.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-outline-on-8.rgba16f",
+      "sha256": "286f383a8484d310e09c575235a8c2e9f36c0e7cfee3f7cc10827c130c636c30"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-temporal-false-0.rgba16f",
+      "sha256": "9ea866b1f74794d81c25a75079aeb1552b13c53558204562889104e73a3e21aa"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-temporal-false-1.rgba16f",
+      "sha256": "4dc374e844758df7e838f1427a9ec00558b164e5273c16c130047ee0de734da2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-temporal-false-2.rgba16f",
+      "sha256": "7604b2cfb57d2ddec481124923ea2f718a068a7bae7093c9d6b993ec7bd48327"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-temporal-true-0.rgba16f",
+      "sha256": "9ea866b1f74794d81c25a75079aeb1552b13c53558204562889104e73a3e21aa"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-temporal-true-1.rgba16f",
+      "sha256": "4dc374e844758df7e838f1427a9ec00558b164e5273c16c130047ee0de734da2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\resolved-temporal-true-2.rgba16f",
+      "sha256": "7604b2cfb57d2ddec481124923ea2f718a068a7bae7093c9d6b993ec7bd48327"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\result.json",
+      "sha256": "d7257f6e92683f2def0f98a471f43889a28c3a103bd8321c1d9c28dede30055c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\rough-0.12.rgba16f",
+      "sha256": "7c89f47e07442c81ee7cd308891047fcf0dfbc865792a2d54b23b26be5a512dc"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\rough-0.45.rgba16f",
+      "sha256": "d15de99946b3eb3c3d505900a407c80c944ac4bb6cadc0ddbf7c55c6f3afdb4b"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\rough-0.85.rgba16f",
+      "sha256": "2ab2326999a7300a6bcd112b260250132c85c681f3d66262dccc0a150229a30e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\rough-black.rgba16f",
+      "sha256": "d51586325f604745eed20d77112f8c98b4b051b51cf7b1970d377d9359b66f58"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\rough-boundary-density-caustics-off.rgba16f",
+      "sha256": "8ab79902758f94b2969677f7934dce23d173646730b9ca652ad02ca1ccb55476"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\rough-boundary-density-caustics-on.rgba16f",
+      "sha256": "a34286e16f62991b4155bc4562699e9a073311b6779606701772b0a8c882392f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\rough-equal-IOR.rgba16f",
+      "sha256": "6781cbc46aba0f80e958ccdf147ffd1561b0133f091409e68a383b85f24577cf"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\rough-glass-absorption-limit.rgba16f",
+      "sha256": "ef7e220d04fc6af31289c2c073751800fc197de170aa6d59e64eda4e3135c0b7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\rough-glass-tiny-scattering.rgba16f",
+      "sha256": "f1f8a56c33cb3fb11942983d4bea7a7c78e831cc8bc53b81f0c2b7e04dbac4b7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\rough-smooth-limit.rgba16f",
+      "sha256": "68266de211fb239d7d826abc44399bb5a5d0b1b7f4addfeb14394c884af0bc0c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\rough-stochastic.rgba16f",
+      "sha256": "a3581b475708f6082e0255285dee7fac4f870661145160b800c9223b94859f0f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\scattering-equal-IOR-analytic.rgba16f",
+      "sha256": "ca254487013227fc3558e5f052dfade91a96aed04c35a69fdfef81eb402a2091"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\scattering-rough-glass-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\scattering-rough-glass-lit.rgba16f",
+      "sha256": "380b406910bca7a6c3742843db7ae644f9ace94f2b2e0675f9e6427fbb9d1d14"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\shrink.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\thin-1-1.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\thin-1-2.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\thin-1-8.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\thin-2-1.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\thin-2-2.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\thin-2-8.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\thin-8-1.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\thin-8-2.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\thin-8-8.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\zero-density-caustics-off.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native\\zero-density-caustics-on.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native-initial-gpu.csv",
+      "sha256": "fda28d7ba9d8f639f32abe6f3a943e2338d09f328f1e93baa2d00b19e23f4c84"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-native-test.log",
+      "sha256": "0f15823ef77c2138ec279108d8d3893c7c929731183fd89de4e2fb3b71aa5054"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-validation-check.json",
+      "sha256": "7083fa6112cd05b7fe77d8c69bda77dc5167fba0b7e5b0f252f05dac87124990"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\full-validation.jsonl",
+      "sha256": "3733be8f5c163249d5d5f11fa5ec1bf27344a807ed65293996a6988b1326cd27"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\hdr-compare.json",
+      "sha256": "156248a00931913dac32e49fe54ebab401a635b81198c9ad4d44eae68dbd8cc8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\hdr-initial-gpu.csv",
+      "sha256": "f5c450dc7d0eedfdc9e04d5646b0132294c4db33e55912b359071563e7a50c89"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\hdr-reused\\micro-all-0.rgba16f",
+      "sha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\hdr-reused\\micro-all-1.rgba16f",
+      "sha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\hdr-test.log",
+      "sha256": "fc82014e830bc0a80fe6b7d0efb58e450156476ecbc2aad2c74a78f7ac601c99"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\matrix-test-classes.jar",
+      "sha256": "83586141e12750acc40b458dedac93d466287cd5df6d9e6fd1752cf2ef5d4ef4"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-1-alpha.rgba16f",
+      "sha256": "10b6c360ef8647051fdc6c06b0a1ceafa3c8e5ed82856d9ff9f1d6a188efe7e7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-1-fog.rgba16f",
+      "sha256": "82eee3ed85101e91bb16d584371ea5c125209abc91cc2de8c1c381d4fd3c2982"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-1-metal.rgba16f",
+      "sha256": "9c6b759ad1324b8c7fbaec098d82af1f9a991c797018ca22a3f932919539cb4a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-1-nested.rgba16f",
+      "sha256": "9b53dc4e525497d2827b945f2632e663ed340e855224c09b6a8b913a344bc9ad"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-1-rough.rgba16f",
+      "sha256": "f2b74c36f8cb98d23ee5ac8b9f5f9e1a4a531f93c28365c25b0ef1ab7084dce4"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-1-smooth.rgba16f",
+      "sha256": "b713160ec15cdb6ad672afbc5fdeb731a2173b5da84030532c66dab1e814fd43"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-1-unit.rgba16f",
+      "sha256": "0a080eaa7e55752083e59d35b6d2ed9146f68cb4745ef3d917105a295fa3cdce"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-1-volume.rgba16f",
+      "sha256": "fc7e83b5bf616a9369fa5057101f3f35105e919e9904810c354c740bd37ee8f9"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-2-alpha.rgba16f",
+      "sha256": "b678af9b6361632d2155855663b97ae0e40e16c5a0f06130cf00a57f4b3b1da9"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-2-fog.rgba16f",
+      "sha256": "98b50c97f2ea2d2ef900141a7b59cdd422faf1eea9cf3be45ca67cacde58e8e1"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-2-metal.rgba16f",
+      "sha256": "e0e8f87eadcda768bd8e551ef2812ea5caba94d8cb74795f21045cf4883628f7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-2-nested.rgba16f",
+      "sha256": "1b7410e482b9788888c5849e588278e3cc267c103a3748fce7383d8ff800b9aa"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-2-rough.rgba16f",
+      "sha256": "ab4cc718a4ea818b64dda07b60eec659d564073e3c0ac346ba91de06aa96d6c1"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-2-smooth.rgba16f",
+      "sha256": "eb5477a861147ab7f8ecedc65777ca86d3d5c19ff61b95faa37ac332cc9097cf"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-2-unit.rgba16f",
+      "sha256": "2d146f7a41c448f80983484a88c5de7a9b9e2081b6636122ae2ae5d024c10663"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-false-2-volume.rgba16f",
+      "sha256": "8307f0dd157a165145b4244ee2565ce0fc8053f812251405af1f9c013f1cbfcb"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-1-alpha.rgba16f",
+      "sha256": "7c23f8471657fa208845a46bb71de30d972705c69eadc78ea092a4b5d7db5f17"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-1-fog.rgba16f",
+      "sha256": "75d98137b9e4795fa565053752ef8d3fc5abe190fbdc385ad140ffbbdcd200eb"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-1-metal.rgba16f",
+      "sha256": "15a6d681e3490c63b9d98357ffd8b1dd58813c1a2303b81821ecc4d5dbbe2464"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-1-nested.rgba16f",
+      "sha256": "bd4958a18193d1e2ed631166eb192bcdff4a92cdb4afcca7bbd2f115faa83147"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-1-rough.rgba16f",
+      "sha256": "164d6ca8058fb577ef9e5c1531989902e96910a9e0119c454a999d283e53efa3"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-1-smooth.rgba16f",
+      "sha256": "e35d54f67849c144e115a161b50ae6e8257cc39725ec203da17de5400fd708e9"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-1-unit.rgba16f",
+      "sha256": "a919c594befda766f480e1dd197aefb013a0ef28ae4e40eeb40b836ba29434c7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-1-volume.rgba16f",
+      "sha256": "5f766420e621bd070b47286be44b689d22a0e2b9e6a5c9c0fde4c8d739720835"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-2-alpha.rgba16f",
+      "sha256": "15f4794ae27d3f96e7e87fa40553f0b856d6b0363d8047284ff9539656a71235"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-2-fog.rgba16f",
+      "sha256": "2327bd92694fb090e9b745e0c21f8517ef96738052d90f9277590ab2f03382ca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-2-metal.rgba16f",
+      "sha256": "5ba6e35ff184a6b83951431ddf8d6a825a679721b9f6721eda09fe29f7a0132a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-2-nested.rgba16f",
+      "sha256": "88716b568e856a379baf58579fc3299125ccbcd5c14f16992076cdf9f7d6b79a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-2-rough.rgba16f",
+      "sha256": "ef19a5815cb9227026baa3aba6aa2e356fa91bc3f8a93d49e019ed2077fe129a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-2-smooth.rgba16f",
+      "sha256": "75afd4d81c525200095eca1c0970b15e16eae0e5bb4b60411880c02d877a2961"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-2-unit.rgba16f",
+      "sha256": "764da8d4dfdb67b7c2127e8497aeaa7e56d01d5fa8c527aec3bacf2582e7be72"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-false-true-2-volume.rgba16f",
+      "sha256": "1e6709e35863af12ecad225f1d4f8af46fd591977a1c084de60dc9c41c246e68"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-1-alpha.rgba16f",
+      "sha256": "10b6c360ef8647051fdc6c06b0a1ceafa3c8e5ed82856d9ff9f1d6a188efe7e7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-1-fog.rgba16f",
+      "sha256": "82eee3ed85101e91bb16d584371ea5c125209abc91cc2de8c1c381d4fd3c2982"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-1-metal.rgba16f",
+      "sha256": "9c6b759ad1324b8c7fbaec098d82af1f9a991c797018ca22a3f932919539cb4a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-1-nested.rgba16f",
+      "sha256": "9b53dc4e525497d2827b945f2632e663ed340e855224c09b6a8b913a344bc9ad"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-1-rough.rgba16f",
+      "sha256": "f2b74c36f8cb98d23ee5ac8b9f5f9e1a4a531f93c28365c25b0ef1ab7084dce4"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-1-smooth.rgba16f",
+      "sha256": "b713160ec15cdb6ad672afbc5fdeb731a2173b5da84030532c66dab1e814fd43"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-1-unit.rgba16f",
+      "sha256": "0a080eaa7e55752083e59d35b6d2ed9146f68cb4745ef3d917105a295fa3cdce"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-1-volume.rgba16f",
+      "sha256": "fc7e83b5bf616a9369fa5057101f3f35105e919e9904810c354c740bd37ee8f9"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-2-alpha.rgba16f",
+      "sha256": "b678af9b6361632d2155855663b97ae0e40e16c5a0f06130cf00a57f4b3b1da9"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-2-fog.rgba16f",
+      "sha256": "98b50c97f2ea2d2ef900141a7b59cdd422faf1eea9cf3be45ca67cacde58e8e1"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-2-metal.rgba16f",
+      "sha256": "e0e8f87eadcda768bd8e551ef2812ea5caba94d8cb74795f21045cf4883628f7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-2-nested.rgba16f",
+      "sha256": "1b7410e482b9788888c5849e588278e3cc267c103a3748fce7383d8ff800b9aa"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-2-rough.rgba16f",
+      "sha256": "ab4cc718a4ea818b64dda07b60eec659d564073e3c0ac346ba91de06aa96d6c1"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-2-smooth.rgba16f",
+      "sha256": "eb5477a861147ab7f8ecedc65777ca86d3d5c19ff61b95faa37ac332cc9097cf"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-2-unit.rgba16f",
+      "sha256": "2d146f7a41c448f80983484a88c5de7a9b9e2081b6636122ae2ae5d024c10663"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-false-2-volume.rgba16f",
+      "sha256": "8307f0dd157a165145b4244ee2565ce0fc8053f812251405af1f9c013f1cbfcb"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-1-alpha.rgba16f",
+      "sha256": "7c23f8471657fa208845a46bb71de30d972705c69eadc78ea092a4b5d7db5f17"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-1-fog.rgba16f",
+      "sha256": "75d98137b9e4795fa565053752ef8d3fc5abe190fbdc385ad140ffbbdcd200eb"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-1-metal.rgba16f",
+      "sha256": "15a6d681e3490c63b9d98357ffd8b1dd58813c1a2303b81821ecc4d5dbbe2464"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-1-nested.rgba16f",
+      "sha256": "bd4958a18193d1e2ed631166eb192bcdff4a92cdb4afcca7bbd2f115faa83147"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-1-rough.rgba16f",
+      "sha256": "164d6ca8058fb577ef9e5c1531989902e96910a9e0119c454a999d283e53efa3"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-1-smooth.rgba16f",
+      "sha256": "e35d54f67849c144e115a161b50ae6e8257cc39725ec203da17de5400fd708e9"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-1-unit.rgba16f",
+      "sha256": "a919c594befda766f480e1dd197aefb013a0ef28ae4e40eeb40b836ba29434c7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-1-volume.rgba16f",
+      "sha256": "5f766420e621bd070b47286be44b689d22a0e2b9e6a5c9c0fde4c8d739720835"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-2-alpha.rgba16f",
+      "sha256": "15f4794ae27d3f96e7e87fa40553f0b856d6b0363d8047284ff9539656a71235"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-2-fog.rgba16f",
+      "sha256": "2327bd92694fb090e9b745e0c21f8517ef96738052d90f9277590ab2f03382ca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-2-metal.rgba16f",
+      "sha256": "5ba6e35ff184a6b83951431ddf8d6a825a679721b9f6721eda09fe29f7a0132a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-2-nested.rgba16f",
+      "sha256": "88716b568e856a379baf58579fc3299125ccbcd5c14f16992076cdf9f7d6b79a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-2-rough.rgba16f",
+      "sha256": "ef19a5815cb9227026baa3aba6aa2e356fa91bc3f8a93d49e019ed2077fe129a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-2-smooth.rgba16f",
+      "sha256": "75afd4d81c525200095eca1c0970b15e16eae0e5bb4b60411880c02d877a2961"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-2-unit.rgba16f",
+      "sha256": "764da8d4dfdb67b7c2127e8497aeaa7e56d01d5fa8c527aec3bacf2582e7be72"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\branch-true-true-2-volume.rgba16f",
+      "sha256": "1e6709e35863af12ecad225f1d4f8af46fd591977a1c084de60dc9c41c246e68"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-branches\\duplicate-branches.json",
+      "sha256": "4d16c760037af34dacd63715f308563872d45c94ef50f366623d228f57cf133c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-initial-gpu.csv",
+      "sha256": "799230a51d4f6c7d07ee86d03986d26f30a1f91d5527853e21088a939ed30acb"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-test-classes.jar",
+      "sha256": "5df42f4533c17ff9dc08a75aa9ea5bdffb6b1d06272a41809e43695b11dc3fcb"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-test.log",
+      "sha256": "d55fd10e79c9e9dcd5bd8aa2b3c03d865507fd547a571b4e9e9f5965a11f9ba2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-validation-check.json",
+      "sha256": "d8f8214023cf5d8619b5beeaa926d9f1a3b8e9275cb85860754e16703df51b01"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\native-validation.jsonl",
+      "sha256": "202d92b4be15830a768077d2122a35024b6ad125dc25a024557768a9f05f4461"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\artifacts.json",
+      "sha256": "ad325a7e34d82119de2e2788426cd0a0d1ffc84e3024dbd629f95db1f2399426"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\initial-gpu.csv",
+      "sha256": "d53012b6cee13e38eb2b7376cc46d83ce285e1c19f3ee94842540b3730e24d78"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "b2050d893d4677f15e6708bbcf622e3bdb90d797f2f00559cf3ac0cb5a475e19"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "06480acaedd038b2712d818ffd77ee4285de8a41e2d5fee0c5463ec02f228710"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\micro-all-1080p-profiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\micro-all-1080p-profiled.csv",
+      "sha256": "d00e287467ed1b8c103d73d07d9942d2b344eadcdbae75dae915b5e1758976eb"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "1588c8bc5a30a27f495c4cd2826c2f64635a6dbbcc2668e413c93d71048e096b"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\micro-all-1080p-wall-timeline-round-2.json",
+      "sha256": "47dbb3864d2eb6f9fae92ba1532f59d5ddc2e4e5a4d16c09c44bc2bc8a031b39"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\micro-profiled-coverage.json",
+      "sha256": "de615f8508573bcc6f1928edf09f253c7464e67018bc91a9c050c0b499a0038c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\ranked.csv",
+      "sha256": "0e74b44f9d3041f9db287dede484467172bbb53674e874e7dd6301f67626545c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\ranked.json",
+      "sha256": "6473056511dda670471ef02cdf397004de4bc49ccb203dee4bff6c435cb4de1d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\run.log",
+      "sha256": "31edfc71b47407e0e1b126e8eea1a944c6c4d3da855aa0aa055e4a138dd5756c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\ranked-candidate-matrix-timings\\runtime.json",
+      "sha256": "15ef83aca16b3150ecb8d245c32c43d5ed1ce22910e615fd309bd5b90d62f701"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\reverse-candidate-matrix-off\\artifacts.json",
+      "sha256": "ad325a7e34d82119de2e2788426cd0a0d1ffc84e3024dbd629f95db1f2399426"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\reverse-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "af059781735eeef0acacf1220ec162146f39be9a498f497a549ccdab3e2323ac"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\reverse-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\reverse-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "434eebaf59ca2a41d4abbda2632e5914f9269bb124b18d4d9467ad440aa9b65b"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\reverse-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\reverse-candidate-matrix-off\\run.log",
+      "sha256": "9997ffa8d8f1d1d0e12ca730d39a354e36024fa6b864bd4b9f5327efcaf532a7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\reverse-candidate-matrix-off\\runtime.json",
+      "sha256": "16a29982ff024c26abbdde9d11500cdc835ff40b1a3e580e6748e9d528e2bb02"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\shader-test.log",
+      "sha256": "3ebbc194ea1bac7f9b5cb0de86374718060c1b21ba73c44d040c3391f14a3ce8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\source-check.json",
+      "sha256": "d444b77abcdcaff959c3936854ec4fa11297cf5ab0d4f957d95fa3c755ef664c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\source-commit.txt",
+      "sha256": "dc9da674e0352632b19e828a9a3046a474b9c73ba7d8c6b9e31c55c6e410d994"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\reuse-duplicate-branches\\throughput.json",
+      "sha256": "b9086f87b5646d1a2ce94cb4173039ad882c14d3d129de6da72fddf4398d4536"
+    }
+  ]
+}
