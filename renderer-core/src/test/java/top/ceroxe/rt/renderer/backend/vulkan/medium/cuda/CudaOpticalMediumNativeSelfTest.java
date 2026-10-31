@@ -29,6 +29,17 @@ public final class CudaOpticalMediumNativeSelfTest {
             const float3 result=rtr_optical::spawnOrigin(point,normal,direction,error);
             r[0]=result.x;r[1]=result.y;r[2]=result.z;r[3]=error.x;
         }
+        extern "C" __global__ void optical_terminal_spawn_bound_probe(float *r,int count){
+            int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
+            unsigned int header[96]={};header[6]=16u;
+            float hit[52]={};hit[3]=6.f;hit[19]=1.f;
+            rtr_optical::State<true> state={};state.origin=make_float4(0,0,6,0);
+            state.direction=make_float4(0,0,-1,0);state.counters.x=i==0?0u:16u;
+            rtr_optical::Connection c={};c.surfaceNormal=make_float4(0,0,1,.5f);
+            rtr_optical::HitView<false,false> view={(const unsigned int*)hit,1u,0u};
+            const int result=rtr_optical::prepareSurfaceContinuation<false>((unsigned char*)header,&state,view,&c,1.f);
+            r[i*2]=c.surfaceNormal.w;r[i*2+1]=float(result);
+        }
         extern "C" __global__ void optical_glass_probe(float *records,int count){
             int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;float*r=records+i*16;
             float3 incident=make_float3(sqrtf(fmaxf(0.f,1.f-r[2]*r[2])),0,-r[2]),rd,td,rw,tw;float f;
@@ -114,6 +125,15 @@ public final class CudaOpticalMediumNativeSelfTest {
             verifyConnectionTransport(cuda,arena);
             verifyConnectionRayContinuity(cuda,arena);
             verifyGrazingSpawn(cuda,arena);
+            try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+PROBE,"optical_terminal_spawn_bound_probe");
+                var records=cuda.allocate(16)) {
+                var host=arena.allocate(16,16);cuda.launchBlocking(kernel,records.slice(0,16),2,1);
+                cuda.download(records.slice(0,16),host);
+                for(int i=0;i<2;i++) {
+                    near(host.get(JAVA_FLOAT,i*8L),12*4.172327e-7,1e-10,"terminal NEE spawn bound case "+i);
+                    near(host.get(JAVA_FLOAT,i*8L+4),0,0,"terminal NEE continuation case "+i);
+                }
+            }
             try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+PROBE,"optical_spawn_bound_probe");var records=cuda.allocate(16)) {
                 var host=arena.allocate(16,16);cuda.launchBlocking(kernel,records.slice(0,16),1,1);cuda.download(records.slice(0,16),host);
                 double gamma=7*Math.scalb(1.0,-24)/(1-7*Math.scalb(1.0,-24));
