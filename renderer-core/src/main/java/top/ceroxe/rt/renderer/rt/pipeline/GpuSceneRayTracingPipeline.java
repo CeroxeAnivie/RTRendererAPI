@@ -182,7 +182,6 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         long closestHitModule = 0L;
         long anyHitModule = 0L;
         long visibilityMissModule = 0L, visibilityClosestModule = 0L, visibilityAnyModule = 0L;
-        long connectionMissModule=0L,connectionClosestModule=0L,connectionAnyModule=0L;
         try (MemoryStack stack = MemoryStack.stackPush()) {
             RtRayTracingPipelineProperties properties = RtRayTracingPipelineProperties.query(
                     stack, checkedRuntime.physicalDevice()
@@ -264,28 +263,14 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 visibilityClosestModule = RtShaderModuleCompiler.createModule(stack, device, visibilityClosestCode);
                 visibilityAnyModule = RtShaderModuleCompiler.createModule(stack, device, visibilityAnyCode);
             }
-            boolean connection=program==Program.NATIVE_OPTICAL_TRACE||program==Program.NATIVE_OPTICAL_TRACE_DIAGNOSTIC;
-            byte[][] connectionCode=new byte[3][];
-            String[] connectionStages={"gpuscene_connection.rmiss","gpuscene_connection.rchit","gpuscene_connection.rahit"};
-            int[] connectionKinds={Shaderc.shaderc_miss_shader,Shaderc.shaderc_closesthit_shader,Shaderc.shaderc_anyhit_shader};
-            for(int i=0;i<3;i++)connectionCode[i]=!connection?new byte[0]:opticalDiagnostic
-                    ?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+connectionStages[i],connectionKinds[i],false,false,
-                            top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP)
-                    :RtShaderModuleCompiler.loadProduction(SHADER_ROOT+connectionStages[i],connectionKinds[i],false,false,RtEdgeSink.NOOP);
-            if(connection) {
-                connectionMissModule=RtShaderModuleCompiler.createModule(stack,device,connectionCode[0]);
-                connectionClosestModule=RtShaderModuleCompiler.createModule(stack,device,connectionCode[1]);
-                connectionAnyModule=RtShaderModuleCompiler.createModule(stack,device,connectionCode[2]);
-            }
             String programKey = RtPipelineCacheStore.programKey("gpuscene-7/program="+program+"/data="+sceneShaders.dataBindingCount()+"/depth="+recursionDepth,
-                    raygenCode,missCode,closestCode,anyHitCode,visibilityMissCode,visibilityClosestCode,visibilityAnyCode,connectionCode[0],connectionCode[1],connectionCode[2]);
+                    raygenCode,missCode,closestCode,anyHitCode,visibilityMissCode,visibilityClosestCode,visibilityAnyCode);
             try (RtPipelineCache cache = RtPipelineCache.open(
                     device, checkedRuntime.physicalDevice(), "gpuscene",programKey)) {
                 pipeline = RtRayTracingPipelineFactory.createPipeline(
                         stack, device, pipelineLayout,
                         raygenModule, missModule, closestHitModule, anyHitModule,
-                        cache.handle(), visibilityMissModule, visibilityClosestModule, visibilityAnyModule, recursionDepth,
-                        connectionMissModule,connectionClosestModule,connectionAnyModule
+                        cache.handle(), visibilityMissModule, visibilityClosestModule, visibilityAnyModule, recursionDepth
                 );
             }
             if (Boolean.getBoolean("top.ceroxe.rt.pipeline.handleDiagnostics"))
@@ -293,12 +278,12 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                         "GPUScene pipeline handles program=%s pipeline=0x%x device=0x%x visibility=%s%n",
                         program, pipeline, device.address(), visibility);
             byte[] groupHandles = RtRayTracingPipelineFactory.queryShaderGroupHandles(properties, device, pipeline,
-                    RtRayTracingPipelineFactory.GROUP_COUNT + (visibility ? 2 : 0) + (connection ? 2 : 0));
+                    RtRayTracingPipelineFactory.GROUP_COUNT + (visibility ? 2 : 0));
             RtRayTracingPipelineProperties.ShaderBindingTableData packed = properties.packShaderGroupHandles(
                     groupHandles,
                     RtRayTracingPipelineFactory.RAYGEN_GROUPS,
-                    RtRayTracingPipelineFactory.MISS_GROUPS + (visibility ? 1 : 0) + (connection ? 1 : 0),
-                    RtRayTracingPipelineFactory.HIT_GROUPS + (visibility ? 1 : 0) + (connection ? 1 : 0),
+                    RtRayTracingPipelineFactory.MISS_GROUPS + (visibility ? 1 : 0),
+                    RtRayTracingPipelineFactory.HIT_GROUPS + (visibility ? 1 : 0),
                     RtRayTracingPipelineFactory.CALLABLE_GROUPS
             );
             shaderBindingTable = RtShaderBindingTable.create(
@@ -326,9 +311,6 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             closeSuppressing(failure, descriptors);
             throw failure;
         } finally {
-            RtShaderModuleCompiler.destroyModule(device,connectionAnyModule);
-            RtShaderModuleCompiler.destroyModule(device,connectionClosestModule);
-            RtShaderModuleCompiler.destroyModule(device,connectionMissModule);
             RtShaderModuleCompiler.destroyModule(device, visibilityAnyModule);
             RtShaderModuleCompiler.destroyModule(device, visibilityClosestModule);
             RtShaderModuleCompiler.destroyModule(device, visibilityMissModule);

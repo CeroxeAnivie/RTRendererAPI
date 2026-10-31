@@ -44,37 +44,9 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                 vec3 gsPosition(uint mesh,uint vertex){return positions[vertex];}
                 #define GPU_SCENE_MESH_TRIANGLE_COUNT_WORD 17
                 struct MeshWords{uint words[18];}; MeshWords gsMeshes;
-                #define GS_BOUNDARY_PREPARED_TOPOLOGY 1
-                uvec2 gsBoundaryNeighborRange(uint mesh,uint primitive){return uvec2(0xffffffffu,12u);}
-                uint gsBoundaryNeighbor(uvec2 range,uint index){return index;}
-                uvec2 gsBoundaryPlaneCertificate(uint mesh,uint primitive){
-                    uint axis=primitive<4u?2u:primitive<8u?1u:0u;
-                    return uvec2(axis+1u,floatBitsToUint(positions[indices[primitive].x][axis]));
-                }
                 """+helper+"""
                 void main(){
                     uint i=gl_GlobalInvocationID.x; gsMeshes.words[17]=12u;
-                    if(i>=296u){
-                        uint test=(i-296u)/3u,part=(i-296u)%3u,axis=test%3u,variant=test/6u;
-                        bool mirror=(test/3u)%2u!=0u;float scale=mirror?-.8:.8;
-                        uint world=variant==4u?(axis+1u)%3u:axis;
-                        objectToWorld=mat4x3(0);objectToWorld[3]=vec3(1.5,-2,0)+inputs.bias.xyz;
-                        for(uint k=0u;k<3u;k++)objectToWorld[k][variant==4u?(k+1u)%3u:k]=k==axis?scale:.42;
-                        if(variant==2u)objectToWorld[(axis+1u)%3u][world]=.125;
-                        if(variant==6u)objectToWorld[3][world]=1000000.0+inputs.bias.x;
-                        rayOrigin=vec3(-3.25)+inputs.bias.xyz;rayDirection=vec3(.31,.43,.59);
-                        rayDirection[world]=.953462601;
-                        hitDistance=(scale+objectToWorld[3][world]-rayOrigin[world])/rayDirection[world];
-                        if(variant==5u)rayDirection[world]=0;
-                        uint primitive=axis==0u?10u:axis==1u?6u:2u;
-                        vec2 bary=variant==3u?vec2(0,.3):vec2(.2,.3);float distance;
-                        int result=gsBoundaryPreparedPlaneHit(0u,primitive,bary,0,distance);
-                        if(variant==1u){float minimum=uintBitsToFloat(floatBitsToUint(distance)+1u);
-                            result=gsBoundaryPreparedPlaneHit(0u,primitive,bary,minimum,distance);}
-                        if(part==0u)imageStore(target,ivec2(i,0),vec4(float(result+1)/255.0,0,0,1));
-                        else {uint bits=floatBitsToUint(distance);imageStore(target,ivec2(i,0),vec4(uvec4(bits,bits>>8,bits>>16,bits>>24)&255u)/255.0);}
-                        return;
-                    }
                     if(i>=104u){
                         uint test=(i-104u)/8u,outputIndex=(i-104u)%8u;
                         vertexOrder=test%6u;inward=(test/6u)%2u!=0u;bool mirror=test/12u!=0u;
@@ -169,7 +141,7 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
         var input=new BufferResource(new RenderResourceId(951004),ResourceVersion.initial(),16,
                 Set.of(BufferUsage.UNIFORM,BufferUsage.COPY_DESTINATION));
         var target=new TextureResource(new RenderResourceId(951003),ResourceVersion.initial(),TextureDimension.TEXTURE_2D,
-                422,1,1,1,1,1,TextureFormat.RGBA8_UNORM,Set.of(TextureUsage.STORAGE_READ_WRITE,TextureUsage.COLOR_ATTACHMENT,TextureUsage.COPY_DESTINATION));
+                296,1,1,1,1,1,TextureFormat.RGBA8_UNORM,Set.of(TextureUsage.STORAGE_READ_WRITE,TextureUsage.COLOR_ATTACHMENT,TextureUsage.COPY_DESTINATION));
         var range=new TextureSubresourceRange(TextureAspect.COLOR,0,1,0,1);
         var view=new TextureView(target,TextureViewDimension.TEXTURE_2D,range);
         try(var device=VulkanDeviceRuntime.open(VulkanRtCapabilityProbe.capture(),RendererRtDiagnostics.noop(),true,true,
@@ -182,10 +154,10 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
             var submitted=session.submit(new RenderCommandTransaction(1,List.of(new WriteBufferCommand(
                     new ResourceSlice.BufferSlice(input,new ByteRange(0,16)),new ResourceData(java.nio.ByteBuffer.allocateDirect(16))),
                     new ClearColorCommand(new ResourceSlice.TextureSlice(target,range),new ClearColorValue(0,0,0,1)),new BindComputePipelineCommand(new ComputePipelineState(program)),
-                    BindBindingSetCommand.fixed(bindings),new DispatchCommand(422,1,1))));
+                    BindBindingSetCommand.fixed(bindings),new DispatchCommand(296,1,1))));
             require(submitted.outcome().recorded(),"predicate dispatch rejected: "+submitted.reason()+" "+submitted.detail());
             VulkanGenericCommandNativeSelfTest.await(session,1,CommandExecutionEvidence.Outcome.GPU_COMPLETED);
-            var pass=RenderPassDescriptor.color(422,1,List.of(RenderAttachment.of(view,LoadOp.LOAD,StoreOp.STORE)));
+            var pass=RenderPassDescriptor.color(296,1,List.of(RenderAttachment.of(view,LoadOp.LOAD,StoreOp.STORE)));
             require(session.submit(new RenderCommandTransaction(2,List.of(new BeginRenderPassCommand(pass),new EndRenderPassCommand())))
                     .outcome().recorded(),"predicate readback rejected");
             VulkanGenericCommandNativeSelfTest.await(session,2,CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED);
@@ -240,19 +212,6 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                         &&unpack(pixels,base+1)==lower&&unpack(pixels,base+3)==upper,
                         "sub-ULP interval lost or reordered a crossing: case="+test+" primitives="+first+","+second+" t="+unpack(pixels,base+1)+","+unpack(pixels,base+3));
             }
-            for(int test=0;test<42;test++){
-                int base=296+test*3,axis=test%3,variant=test/6;
-                boolean mirror=(test/3)%2!=0;int expected=variant==1?0:variant==2||variant==3||variant==5?-1:1;
-                int result=Byte.toUnsignedInt(pixels.get(base*4))-1;
-                require(result==expected,"prepared plane proof/repeat rejection failed case="+test+" actual="+result);
-                if(expected>=0){
-                    int world=variant==4?(axis+1)%3:axis;
-                    double translation=variant==6?1000000:new double[]{1.5,-2,0}[world];
-                    double oracle=((mirror?-(double).8f:(double).8f)+translation-(-3.25))/(double).953462601f;
-                    require(unpack(pixels,base+1)==(float)oracle,"prepared plane differs from independent double plane oracle case="+test);
-                }
-            }
-            System.out.println("Prepared plane oracle passed: 42 axis/mirror/permutation/shear/edge/parallel/cancellation/repeat cases");
             System.out.println("Sub-ULP intervals passed: 24 vertex-order/orientation/mirror cases, oracle=["+subEntry+","+subExit+"] enclosure=["+lower+","+upper+"]");
         }
     }

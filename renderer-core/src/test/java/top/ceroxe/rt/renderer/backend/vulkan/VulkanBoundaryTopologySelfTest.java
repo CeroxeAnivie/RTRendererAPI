@@ -15,7 +15,6 @@ public final class VulkanBoundaryTopologySelfTest {
                 10,10,10, 11,10,10, 10,11,10
             }, new int[]{0,1,2, 3,4,5, 0,0,1, 6,7,8}, 1);
             verify(seams);
-            verify(MeshAsset.triangles(9,new float[]{0,0,0,1,2,3,2,1,4},new int[]{0,1,2},1));
             float[] moved = new float[seams.positions().remaining()]; seams.positions().get(moved);
             int[] index = new int[seams.triangleIndices().remaining()]; seams.triangleIndices().get(index);
             moved[9] = 2; moved[15] = 3;
@@ -44,20 +43,7 @@ public final class VulkanBoundaryTopologySelfTest {
         int[] packed = VulkanBoundaryTopology.pack(mesh); int trailer = indices.length;
         require(Arrays.equals(indices, Arrays.copyOf(packed, indices.length)), "BLAS index prefix changed");
         require(packed[trailer] == VulkanBoundaryTopology.MAGIC, "small topology unexpectedly fell back");
-        int planeBase=trailer+packed[trailer+1+mesh.triangleCount()];
-        require(packed.length==planeBase+mesh.triangleCount()*2,"plane certificates not included in owned index storage");
         for (int triangle=0; triangle<mesh.triangleCount(); ++triangle) {
-            int expectedAxis=0;
-            for(int axis=0;axis<3;axis++){
-                int a=indices[triangle*3]*3,b=indices[triangle*3+1]*3,c=indices[triangle*3+2]*3;
-                int u=(axis+1)%3,v=(axis+2)%3;
-                double area=((double)p[b+u]-p[a+u])*((double)p[c+v]-p[a+v])
-                        -((double)p[b+v]-p[a+v])*((double)p[c+u]-p[a+u]);
-                if(p[a+axis]==p[b+axis]&&p[a+axis]==p[c+axis]&&area!=0){expectedAxis=axis+1;break;}
-            }
-            require(packed[planeBase+triangle*2]==expectedAxis,"invalid coordinate-plane proof");
-            if(expectedAxis!=0)require(Float.intBitsToFloat(packed[planeBase+triangle*2+1])
-                    ==p[indices[triangle*3]*3+expectedAxis-1],"plane coordinate changed");
             int cursor=packed[trailer+1+triangle], end=packed[trailer+2+triangle];
             for (int other=0; other<mesh.triangleCount(); ++other) {
                 boolean shared=false;

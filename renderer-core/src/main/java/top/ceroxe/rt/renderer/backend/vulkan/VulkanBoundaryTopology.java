@@ -9,7 +9,7 @@ import top.ceroxe.rt.renderer.api.MeshAsset;
 
 /** Immutable, position-based triangle incidence, prepared with its index generation. */
 final class VulkanBoundaryTopology {
-    static final int MAGIC = 0x42545032;
+    static final int MAGIC = 0x42545031;
     static final String PROPERTY = "top.ceroxe.rt.medium.preparedBoundaryTopology";
     private static final int MAX_NEIGHBORS = 1_048_576;
 
@@ -60,32 +60,10 @@ final class VulkanBoundaryTopology {
             for (int other : sorted) neighbors.add(other);
         }
         offsets[count] = 1 + offsets.length + neighbors.size();
-        int[] packed = java.util.Arrays.copyOf(fallback, Math.addExact(indexWords, Math.addExact(offsets[count], Math.multiplyExact(count, 2))));
+        int[] packed = java.util.Arrays.copyOf(fallback, Math.addExact(indexWords, offsets[count]));
         packed[indexWords] = MAGIC;
         System.arraycopy(offsets, 0, packed, indexWords + 1, offsets.length);
         neighbors.getElements(0, packed, indexWords + 1 + offsets.length, neighbors.size());
-        // A certified object-space coordinate plane belongs to this same immutable
-        // position generation. The per-instance shader accepts it only when an
-        // exact zero pattern proves one independent world coordinate as well.
-        int planeBase = indexWords + offsets[count];
-        for (int triangle = 0; triangle < count; ++triangle) {
-            int a = fallback[triangle * 3] * 3, b = fallback[triangle * 3 + 1] * 3,
-                    c = fallback[triangle * 3 + 2] * 3;
-            for (int axis = 0; axis < 3; ++axis) {
-                int u = (axis + 1) % 3, v = (axis + 2) % 3, start = positions.position();
-                float plane = positions.get(start + a + axis);
-                double area = ((double) positions.get(start + b + u) - positions.get(start + a + u))
-                        * ((double) positions.get(start + c + v) - positions.get(start + a + v))
-                        - ((double) positions.get(start + b + v) - positions.get(start + a + v))
-                        * ((double) positions.get(start + c + u) - positions.get(start + a + u));
-                if (plane == positions.get(start + b + axis) && plane == positions.get(start + c + axis)
-                        && Float.isFinite(plane) && Double.isFinite(area) && area != 0) {
-                    packed[planeBase + triangle * 2] = axis + 1;
-                    packed[planeBase + triangle * 2 + 1] = Float.floatToRawIntBits(plane);
-                    break;
-                }
-            }
-        }
         return packed;
     }
 }
