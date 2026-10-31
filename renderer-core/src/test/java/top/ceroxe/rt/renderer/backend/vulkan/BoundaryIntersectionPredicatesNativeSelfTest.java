@@ -22,10 +22,13 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                 .replace("gl_WorldRayDirectionEXT","rayDirection").replace("gl_HitTEXT","hitDistance");
         var destination=new BindingLayoutEntry(new BindingKey(0,0),BindingType.READ_WRITE_STORAGE_TEXTURE,1,
                 Set.of(ShaderStage.COMPUTE),false);
+        var inputBinding=new BindingLayoutEntry(new BindingKey(0,1),BindingType.UNIFORM_BUFFER,1,
+                Set.of(ShaderStage.COMPUTE),false);
         String source="""
                 #version 460
                 layout(local_size_x=1) in;
                 layout(set=0,binding=0,rgba8) uniform image2D target;
+                layout(set=0,binding=1) uniform Inputs {vec4 bias;} inputs;
                 mat4x3 objectToWorld; vec3 rayOrigin,rayDirection; float hitDistance;
                 const vec3 positions[8]=vec3[8](vec3(-1,-1,-1),vec3(1,-1,-1),vec3(1,1,-1),vec3(-1,1,-1),
                     vec3(-1,-1,1),vec3(1,-1,1),vec3(1,1,1),vec3(-1,1,1));
@@ -44,6 +47,7 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                         objectToWorld=mat4x3(.8,0,0,0,.8,0,0,0,.8,-1.5,-2,0);
                         rayOrigin=vec3(-3.5619245,-2.1426425,-1.2999898);
                         rayDirection=vec3(.6319559,.47206348,.61464447);hitDistance=1.9968551;
+                        rayOrigin+=inputs.bias.xyz;rayDirection+=inputs.bias.xyz;
                         uint firstPrimitive,secondPrimitive,lastPrimitive;vec2 firstBary,secondBary,lastBary;float firstT,secondT,lastT;
                         bool first=gsBoundaryConnectionHit(0u,6u,vec2(.613,.0000001),0,firstPrimitive,firstBary,firstT);
                         bool second=gsBoundaryConnectionHit(0u,6u,vec2(.613,.0000001),uintBitsToFloat(floatBitsToUint(firstT)+1u),secondPrimitive,secondBary,secondT);
@@ -58,6 +62,7 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                         objectToWorld=mat4x3(.85,0,0,0,.85,0,0,0,.85,4.5,-4,0);
                         rayOrigin=vec3(4.7887306,-6.3649364,-4.199793);
                         rayDirection=vec3(-.0953462571,.286038786,.953462601);hitDistance=5.2962623;
+                        rayOrigin+=inputs.bias.xyz;rayDirection+=inputs.bias.xyz;
                         uint firstPrimitive,repeatPrimitive,exitPrimitive;vec2 firstBary,repeatBary,exitBary;float firstT,repeatT,exitT;
                         bool first=gsBoundaryConnectionHit(0u,5u,vec2(.37,.629997),0,firstPrimitive,firstBary,firstT);
                         float minimum=uintBitsToFloat(floatBitsToUint(firstT)+1u);
@@ -72,6 +77,7 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                         objectToWorld=mat4x3(.42,0,0,0,.42,0,0,0,.42,-4.5,-2,0);
                         rayOrigin=vec3(-4.15694094,-1.84399712,-1.29998982);
                         rayDirection=vec3(-.0953462571,.286038786,.953462601);hitDistance=.922941208;
+                        rayOrigin+=inputs.bias.xyz;rayDirection+=inputs.bias.xyz;
                         uint firstPrimitive,secondPrimitive,lastPrimitive;vec2 firstBary,secondBary,lastBary;float firstT,secondT,lastT;
                         bool first=gsBoundaryConnectionHit(0u,7u,vec2(0,.803),0,firstPrimitive,firstBary,firstT);
                         bool second=gsBoundaryConnectionHit(0u,7u,vec2(0,.803),uintBitsToFloat(floatBitsToUint(firstT)+1u),secondPrimitive,secondBary,secondT);
@@ -88,6 +94,7 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                     rayOrigin=primary?vec3(0,0,18):vec3(-2.1338847,-2.7208083,4.065192);
                     rayDirection=primary?vec3(-.33453768,-.15846524,-.92896354):vec3(.475559,-.2623859,-.8396411);
                     hitDistance=primary?19.87817673588675:5.8539205;
+                    rayOrigin+=inputs.bias.xyz;rayDirection+=inputs.bias.xyz;
                     bool valid=gsBoundaryCandidateValid(0u,primary?7u:1u,vec2(-1e-8,.5));
                     GsBoundaryWide3 a=gsBoundaryRelativePoint(positions[1]),b=gsBoundaryRelativePoint(positions[2]),c=gsBoundaryRelativePoint(positions[6]);
                     vec3 ne=gsBoundaryEdges(a,b,c);
@@ -104,23 +111,28 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                 }
                 """;
         var shader=VulkanGenericLogicOperationNativeSelfTest.module(951001,ShaderStage.COMPUTE,
-                Shaderc.shaderc_compute_shader,source,List.of(),List.of(),List.of(destination));
+                Shaderc.shaderc_compute_shader,source,List.of(),List.of(),List.of(destination,inputBinding));
         var evidence=java.nio.file.Path.of("build/medium-edge-predicate");java.nio.file.Files.createDirectories(evidence);
         java.nio.file.Files.writeString(evidence.resolve("predicate.comp"),source,StandardCharsets.UTF_8);
         byte[] spirv=new byte[shader.spirv().remaining()];shader.spirv().get(spirv);java.nio.file.Files.write(evidence.resolve("predicate.spv"),spirv);
         var program=new ShaderProgram(new RenderResourceId(951002),ResourceVersion.initial(),ShaderProgram.Kind.COMPUTE,List.of(shader),
-                new BindingLayout(List.of(destination)),0);
+                new BindingLayout(List.of(destination,inputBinding)),0);
+        var input=new BufferResource(new RenderResourceId(951004),ResourceVersion.initial(),16,
+                Set.of(BufferUsage.UNIFORM,BufferUsage.COPY_DESTINATION));
         var target=new TextureResource(new RenderResourceId(951003),ResourceVersion.initial(),TextureDimension.TEXTURE_2D,
                 64,1,1,1,1,1,TextureFormat.RGBA8_UNORM,Set.of(TextureUsage.STORAGE_READ_WRITE,TextureUsage.COLOR_ATTACHMENT,TextureUsage.COPY_DESTINATION));
         var range=new TextureSubresourceRange(TextureAspect.COLOR,0,1,0,1);
         var view=new TextureView(target,TextureViewDimension.TEXTURE_2D,range);
         try(var device=VulkanDeviceRuntime.open(VulkanRtCapabilityProbe.capture(),RendererRtDiagnostics.noop(),true,true,
                 RendererConfig.builder().build());var session=new VulkanGenericCommandSession(device,1)) {
-            require(session.submitResources(new RenderResourceTransaction(0,List.of(),List.of(target),List.of())).outcome()
+            require(session.submitResources(new RenderResourceTransaction(0,List.of(input),List.of(target),List.of())).outcome()
                     ==ResourceTransactionEvidence.Outcome.ACCEPTED,"predicate resources rejected");
             var bindings=new BindingSet(program.bindingLayout(),Map.of(destination.key(),
-                    List.of(new BindingSet.TextureValue(view,BindingType.READ_WRITE_STORAGE_TEXTURE))));
-            var submitted=session.submit(new RenderCommandTransaction(1,List.of(new ClearColorCommand(new ResourceSlice.TextureSlice(target,range),new ClearColorValue(0,0,0,1)),new BindComputePipelineCommand(new ComputePipelineState(program)),
+                    List.of(new BindingSet.TextureValue(view,BindingType.READ_WRITE_STORAGE_TEXTURE)),inputBinding.key(),
+                    List.of(new BindingSet.BufferValue(input,new ByteRange(0,16),BindingType.UNIFORM_BUFFER))));
+            var submitted=session.submit(new RenderCommandTransaction(1,List.of(new WriteBufferCommand(
+                    new ResourceSlice.BufferSlice(input,new ByteRange(0,16)),new ResourceData(java.nio.ByteBuffer.allocateDirect(16))),
+                    new ClearColorCommand(new ResourceSlice.TextureSlice(target,range),new ClearColorValue(0,0,0,1)),new BindComputePipelineCommand(new ComputePipelineState(program)),
                     BindBindingSetCommand.fixed(bindings),new DispatchCommand(64,1,1))));
             require(submitted.outcome().recorded(),"predicate dispatch rejected: "+submitted.reason()+" "+submitted.detail());
             VulkanGenericCommandNativeSelfTest.await(session,1,CommandExecutionEvidence.Outcome.GPU_COMPLETED);
