@@ -342,7 +342,7 @@ template<bool Compact,class S,class V> __device__ int prepareSurfaceContinuation
         if(s->counters.x>=h[6])c->continuationDirection.w=0.f;
         return 0;
     }
-    if(s->counters.x>=h[6])return 0;
+    if(s->counters.x>=h[6]){c->surfaceNormal.w=bound;return 0;}
     float3 direction=rgb(s->direction),factor=make_float3(0.f);unsigned int mode=1u;
     const bool metal=transmission<=0.f&&c->surfacePoint.w>1.e-4f&&(s->counters.y&2u)==0u;
     const unsigned int seed=h[36]^h[34]*0x967a889bu;
@@ -386,14 +386,14 @@ template<bool Compact,class S,class V> __device__ int prepareSurfaceContinuation
             if(!glass(direction,normal,n1,n2,tint,&rd,&td,&rw,&tw,&fresnel))return -3;
             if(first&&h[37]==0u){reflection=h[35]==0u;multiplier*=2.f;}
             else{reflection=random(s->control.z,seed^h[35]*0x02e5be93u,s->counters.x)<fresnel;
-                const float probability=reflection?fresnel:1.f-fresnel;if(probability<=0.f)return 0;multiplier/=probability;}
+                const float probability=reflection?fresnel:1.f-fresnel;if(probability<=0.f){c->surfaceNormal.w=bound;return 0;}multiplier/=probability;}
             direction=reflection?rd:td;factor=(reflection?rw:tw)*multiplier;
         }
         mode=first?2u:3u;
         if(!reflection&&flags)c->continuationBoundary=make_uint4((unsigned int)index+1u,entering?1u:0u,0u,0u);
     }
     if(!finite3(factor)||!finite3(direction))return -4;
-    if(peak(factor)<=0.f)return 0;
+    if(peak(factor)<=0.f){c->surfaceNormal.w=bound;return 0;}
     c->surfaceNormal.w=bound;
     c->continuationDirection=make_float4(direction.x,direction.y,direction.z,__uint_as_float(mode));
     c->continuationWeight.x=factor.x;c->continuationWeight.y=factor.y;c->continuationWeight.z=factor.z;

@@ -19,3 +19,5 @@
 修复仅把同方向同边界的近邻事件视为重复，并完整扫描事件包；方向相反的真实入界/出界必须保留。CUDA 对完整有序交点按相邻端点积分，去掉只适用于重发射线的 epsilon 跳步。栈校验仍严格执行。新增高消光薄盒、镜像 SPP8 与密度薄盒的独立解析 HDR 回归，避免仅仅不报错却漏掉薄段贡献。
 
 成熟实现对照：PBRT v4 固定 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f` 的 [media.h](https://github.com/mmp/pbrt-v4/blob/b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f/src/pbrt/media.h) `SampleT_maj` 按 `tMax - tMin` 积分介质区间；LuxCore 固定 `b872186d2fe995a762f73708c606847eed55843e` 的 `PathVolumeInfo_Update` 区分进入/退出并更新栈。引用用于区间和栈语义对照，事件包修复是本项目的 Vulkan/CUDA 适配逻辑，不宣称上游实现了相同互操作架构。原始失败、定位记录及固定参考保存在 `build/medium-boundary-packet-fix-20261031/`。修复与全矩阵实测结果随后单独归档，不以编译通过代替验收。
+
+第二个全矩阵阻断出现在第 25 个 `gallery-inward-nested`：同一条灯光连接在内向薄擦边区间先看到出界，严格栈检查 `error=38`。关闭所有计时仍可复现。另发现表面 NEE 先计算点光源方向，再沿法线移动起点，导致最终射线不指向原光源端点；已改为先按已有误差界与向外舍入生成起点，再计算点/聚光源方向及距离。对照 PBRT 上述固定版本 [ray.h](https://github.com/mmp/pbrt-v4/blob/b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f/src/pbrt/ray.h) 的双 Interaction 端点 `SpawnRayTo` 重算 `pt - pf`；单 Point3f 重载不是该逻辑，不能混称。是否消除完整场景错误由后续实测决定，不预先归因。
