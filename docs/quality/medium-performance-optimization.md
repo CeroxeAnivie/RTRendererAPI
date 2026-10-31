@@ -1074,3 +1074,9 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 281 个任务、14 个必需组、76 个实际执行的 Java 原生任务全部通过，未使用子集选择器或排除任务。298 个 shader/SPIR-V、完整介质与统一 API、NVIDIA 功能组合、13 场景/104 帧展厅、独立 Maven 消费者和 2158 文件 ZIP 均通过。35 份本轮 Vulkan validation 日志共 66 次会话全部关闭，warning/error/drop 均为零。遇到的单次 GraalVM 编译器崩溃使用进程级 `-XX:-UseJVMCICompiler` 重试，未修改项目配置，最终全量运行无崩溃。首轮失败另存，不冒充成功。
 
 本轮完成状态：默认均匀直接散射的 3000 帧性能验收为 130.064872 FPS，最低轮 129.569156 FPS；最新生产源码的完整 API 和发布制品门禁也已通过。本轮性能修改停止，后续新改动仍按本规范重新归因和验收。[最终门禁证据与制品哈希](data/api-closure-performance-final-20261031.json)、[完整原始任务报告](data/api-closure-performance-final-full-result-20261031.json)、[首轮失败记录](data/api-closure-performance-blockers-20261031.json)。
+
+### 继续到 180 FPS：观测与首个撤回候选
+
+用户将默认场景下一目标提高到 180 FPS；其余画质、预算、图像与单瓶颈闭环要求不变。当前全尺寸单块让 shader 诊断 pipeline 的覆盖过高，显式诊断现按每 32 帧中的连续 8 帧轮换，保留所有 bucket 相位，其余使用生产 shader，且不清零/读回诊断缓冲。相邻冻结窗口预热 1200 帧、3×240 完成帧：off 132.153392 FPS，细粒度 profile 124.464683 FPS，开销 6.177422%，695 条记录零漏样；三轮内部前三均为 opaque shadow、局部灯几何与衰减、采样位置。此项只是诊断工具调整，不计为渲染提速。
+
+严格 opaque 路径的遮挡连接提前返回零候选：目标散射灯光 GPU 3.144229→3.265265 ms/帧，增加 3.85%；off 129.354390→129.984943 FPS 的 0.49% 波动不算收益。源码及 16 个 SPIR-V 已恢复，没有为已拒绝候选继续跑图像或全量回归。[冻结制品和原始窗口](data/scattering-occluded-return-rejected-20261031.json)。
