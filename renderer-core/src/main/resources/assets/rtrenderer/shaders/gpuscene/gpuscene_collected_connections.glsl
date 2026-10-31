@@ -132,6 +132,7 @@ bool gsCollectedConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float mini
         GS_DETAIL_BEGIN(177u);
         uint instance=event.identity.x,primitive=event.identity.y;
         uint boundary=gsInstanceWord(instance,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
+        gsCollectedMaterial.hit.state=uvec4(0u,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY,0u,0u);
         gsCollectedMaterial.hit.launchInfo=launch;
 #ifdef RTRENDERER_OPTICAL_PROFILE
         gsCollectedMaterial.hit.diagnosticAddress=payload.diagnosticAddress;

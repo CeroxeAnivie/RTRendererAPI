@@ -82,8 +82,8 @@ public final class RtPrecompiledShaderSelfTest {
          if (opcode == 15 && words.get(at + 1) == 5318) callableEntry = true;
          at += count;
       }
-      if (connection && calls == 0)
-         throw new AssertionError("connection material must remain behind a callable boundary");
+      if (connection && calls != 1)
+         throw new AssertionError("connection material must have exactly one callable invocation site: " + calls);
       if (material && (!callableEntry || traces != 0))
          throw new AssertionError("material must remain a non-tracing callable stage");
    }

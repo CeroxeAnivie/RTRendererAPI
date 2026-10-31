@@ -17,7 +17,6 @@ void main() {
         uintBitsToFloat(uvec3(gsInstanceWord(instance,w+1u),gsInstanceWord(instance,w+5u),gsInstanceWord(instance,w+9u))),
         uintBitsToFloat(uvec3(gsInstanceWord(instance,w+2u),gsInstanceWord(instance,w+6u),gsInstanceWord(instance,w+10u))),
         uintBitsToFloat(uvec3(gsInstanceWord(instance,w+3u),gsInstanceWord(instance,w+7u),gsInstanceWord(instance,w+11u))));
-    material.hit.state=uvec4(0u,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY,0u,0u);
     gsEvaluateTriangleHit(material.hit,instance,transform,material.originAndDistance.xyz,material.direction,
         gsInstanceWord(instance,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD),material.identity.y,
         uintBitsToFloat(material.identity.zw),material.originAndDistance.w);
