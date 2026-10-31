@@ -282,6 +282,8 @@ public final class CudaOpticalMediumSelfTest {
         String property=CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY,previous=System.getProperty(property);
         var density=CudaMediumDensityAbi.Scene.empty();
         var frame=RenderFrameRequest.builder(1,137,101,CameraState.lookAt(0,0,0,0,0,-1).build()).build();
+        var boundary=new CudaBoundaryMediumAbi.Boundary(1,MediumBoundary.volume(
+                new Medium(new Rgb(.1f,.2f,.3f),Rgb.ZERO,Rgb.ZERO,1,1,0)));
         try {
             for(boolean enabled:new boolean[]{false,true})for(boolean compact:new boolean[]{false,true})
                     for(boolean transposed:new boolean[]{false,true})for(int samples:new int[]{1,2,8}) {
@@ -296,7 +298,7 @@ public final class CudaOpticalMediumSelfTest {
                 require(plan.evaluationOffset()==plan.hitOffset()+planes*planeBytes,"all hit planes end before evaluation");
                 require(plan.secondConnectionHitOffset()==(enabled?plan.hitOffset()+planeBytes:0),"second hit plane must be disjoint and optional");
                 var request=frame.toBuilder().antiAliasing(samples==1?AntiAliasingState.disabled():AntiAliasingState.multisampled(samples)).build();
-                var header=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(plan,request,List.of(),new int[0])).order(ByteOrder.nativeOrder());
+                var header=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(plan,request,List.of(boundary),new int[0])).order(ByteOrder.nativeOrder());
                 require(((header.getInt(188)&8192)!=0)==enabled&&header.getInt(228)==plan.secondConnectionHitOffset()
                         &&header.getInt(232)==planes,"both producers receive the same guarded batch metadata");
                 int first=(plan.pixels()-1)/plan.tilePixels()*plan.tilePixels(),tail=plan.pixels()-first;
