@@ -38,15 +38,12 @@ vec3 gsOpticalPbrSurface(GpuScenePayload receiver,vec3 rayOrigin) {
     return gsRadiance(radiance);
 }
 GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum,uint queryKind) {
-    if(queryKind==GS_PAYLOAD_OPTICAL_CONNECTION_QUERY&&(gsOptical.storage.lanes[11u].w&4096u)!=0u)
-        queryKind=GS_PAYLOAD_OPTICAL_CONNECTION_LEAN_QUERY;
     payload.state=uvec4(0u,queryKind,0u,0u);
     payload.launchInfo=launch;payload.mediumBoundary=uvec4(0u);
     // CPU proof excludes masked coverage, backface rejection and inactive material slots.
     // Opaque is an intersection flag: closest-hit still evaluates glass and volume boundaries.
     uint flags=(gsOptical.storage.lanes[11u].w&64u)!=0u?gl_RayFlagsOpaqueEXT:gl_RayFlagsNoneEXT;
-    uint hitGroup=queryKind==GS_PAYLOAD_OPTICAL_CONNECTION_LEAN_QUERY?2u:0u;
-    traceRayEXT(sceneTlas,flags,0xff,hitGroup,0,0,origin,minimum,direction,maximum,0);
+    traceRayEXT(sceneTlas,flags,0xff,0,0,0,origin,minimum,direction,maximum,0);
     return payload;
 }
 GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,float minimum,uint queryKind) {

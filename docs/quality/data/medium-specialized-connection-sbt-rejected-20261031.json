@@ -1,0 +1,318 @@
+{
+  "candidateCommits": [
+    "4ecab2b",
+    "e4451d3"
+  ],
+  "decision": "rejected: both orders slower, all four windows initial GPU0=0%",
+  "before": {
+    "frames": 64,
+    "wallMs": 17806.2656,
+    "msPerFrame": 278.2229,
+    "fps": 3.5942404453407684
+  },
+  "after": {
+    "frames": 64,
+    "wallMs": 19641.5762,
+    "msPerFrame": 306.899628125,
+    "fps": 3.2583943034062615
+  },
+  "runs": [
+    {
+      "directory": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-forward-baseline-matrix-off",
+      "frames": 32,
+      "wallMs": 8832.3514,
+      "msPerFrame": 276.01098125,
+      "fps": 3.6230442552364934,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 17.09 W, 180 MHz, 56"
+    },
+    {
+      "directory": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\forward-candidate-matrix-off",
+      "frames": 32,
+      "wallMs": 9702.739099999999,
+      "msPerFrame": 303.21059687499996,
+      "fps": 3.298037767500108,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.37 W, 180 MHz, 58"
+    },
+    {
+      "directory": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\reverse-candidate-matrix-off",
+      "frames": 32,
+      "wallMs": 9938.8371,
+      "msPerFrame": 310.588659375,
+      "fps": 3.219692573490313,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.83 W, 180 MHz, 61"
+    },
+    {
+      "directory": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-reverse-baseline-matrix-off",
+      "frames": 32,
+      "wallMs": 8973.9142,
+      "msPerFrame": 280.43481875,
+      "fps": 3.5658910133105577,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.68 W, 180 MHz, 62"
+    }
+  ],
+  "durationReductionPercent": -10.307105606691614,
+  "fpsIncreasePercent": -9.344008756283007,
+  "forwardReductionPercent": -9.854541113479698,
+  "reverseReductionPercent": -10.752530930148652,
+  "compile": {
+    "full": {
+      "bytes": 552360,
+      "instructions": 32420,
+      "scalarVectorArithmeticInstructions": 6799,
+      "loads": 1045
+    },
+    "connection": {
+      "bytes": 354268,
+      "instructions": 20849,
+      "scalarVectorArithmeticInstructions": 4782,
+      "loads": 722
+    }
+  },
+  "hdr": {
+    "passed": true,
+    "mode": "byte-identical",
+    "supportingReferenceCommit": null,
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 0.0,
+    "maxLuminanceEnergyRelativeError": 0.0,
+    "maxAbsoluteChannelError": 0.0
+  },
+  "native": {
+    "passed": true,
+    "property": "top.ceroxe.rt.medium.cuda.opticalLeanConnectionHits",
+    "byteIdenticalComparisons": 24,
+    "nativeFrames": 48,
+    "mirroredVertexOrders": 2
+  },
+  "validation": {
+    "passed": true,
+    "logs": [
+      {
+        "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\specialized-connection-sbt\\material-validation.jsonl",
+        "passed": true,
+        "opened": 2,
+        "closed": 2,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      }
+    ]
+  },
+  "verificationScope": "ABI, 31 pinned stage/17 HDR source contracts, custom shader isolation, material/normal-sensitive switch checks and 1080p HDR passed; rejected at throughput gate before full adoption suite",
+  "cause": "Unproven: static module size reduction did not improve whole-frame throughput; no fabricated register/spill diagnosis",
+  "evidence": [
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-forward-baseline-matrix-off\\artifacts.json",
+      "sha256": "78b237232b6272fb7dc558827dab0918f66ede48288f72db30afe5f6547f9b77"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-forward-baseline-matrix-off\\initial-gpu.csv",
+      "sha256": "c3d6768f874195785fbdeeb692fa4d33c8cd1d119472e4b344e288f46841c046"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-forward-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-forward-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-forward-baseline-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-forward-baseline-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "5bbdd1ef993d6cf7c119f94800e30172494e746fcccd92c617922e83cbb1bf37"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-forward-baseline-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-forward-baseline-matrix-off\\run.log",
+      "sha256": "f4d14ed40810238d1b1210cbbf2bdba033b6c30c49d98a70a85238a673fbc925"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-forward-baseline-matrix-off\\runtime.json",
+      "sha256": "541b02a29997feaac50afc7eaa86ac2606203b6762f8ba10521f4c8792de6693"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-reverse-baseline-matrix-off\\artifacts.json",
+      "sha256": "78b237232b6272fb7dc558827dab0918f66ede48288f72db30afe5f6547f9b77"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-reverse-baseline-matrix-off\\initial-gpu.csv",
+      "sha256": "23c3820dfbb9ceb5318e7b7b94ba3be91e596ba904016503220e022c0fba0b98"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-reverse-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-reverse-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-reverse-baseline-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-reverse-baseline-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "1467bacd6fd9abf29173db11c6e50a69d8342885ff24ddfd75003a42ee9e6971"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-reverse-baseline-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-reverse-baseline-matrix-off\\run.log",
+      "sha256": "2b0301b02e647381ad2233746c0e69e7ca6a72c8bf108c255fbdaaac0d0919df"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\budgeted-optical-waves\\sbt-reverse-baseline-matrix-off\\runtime.json",
+      "sha256": "2a61a7d9683d634ce27810d7c3672b18c2e97ba0c072b5925d3977af98ca832e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\compile-comparison.json",
+      "sha256": "48e6122fe21e1d542dc20368dcaa28c6daa89fb1d55d3a0053b7a0a1022a2891"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\custom-shaders-test.log",
+      "sha256": "a1c28eff9d1579d24514ad01fa8fbd7f4f68be195c1b71ac97f1b259985de690"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\forward-candidate-matrix-off\\artifacts.json",
+      "sha256": "b38e9ac1cc7b13f9f3940c483937ea0c267157f835b3691b23c0e6a459a45da2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\forward-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "5e7908ae2fc1f25a3cdc84c3e37a3345aa8bc1f7e11cd7f774a5bcb49656e862"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\forward-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\forward-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "d24734859dddded2a1565f7bd24dad2603b44c7a748a993a723ffb47d4504caa"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\forward-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\forward-candidate-matrix-off\\run.log",
+      "sha256": "04c24adb9454b795e8d7c9872d42bd768f99df07c2aa21304329f310b1a91d28"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\forward-candidate-matrix-off\\runtime.json",
+      "sha256": "367420050b8e9a1062ded836c5eb31428a68ed4ebf5b5003279d3740fec50cd9"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\hdr-baseline-check.json",
+      "sha256": "156248a00931913dac32e49fe54ebab401a635b81198c9ad4d44eae68dbd8cc8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\material-correctness\\connection-material-checks.json",
+      "sha256": "588a5b6f1005ee256beebd71deaa3a6d21f32abf86ae5ec78386bf351883c96e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\material-validation-check.json",
+      "sha256": "a746aafdfe6eb6a97fdc6547ba04e188821685bf5225e896864cc207148f61a8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\reverse-candidate-matrix-off\\artifacts.json",
+      "sha256": "b38e9ac1cc7b13f9f3940c483937ea0c267157f835b3691b23c0e6a459a45da2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\reverse-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "b04717f7f75c757ad9b8a5396c38802dbd996dc82cfee672dd1045c696078e00"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\reverse-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\reverse-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "4f17b8b0894649770df7264df6603a6b286ac5477a28a995866a2c463e815754"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\reverse-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\reverse-candidate-matrix-off\\run.log",
+      "sha256": "58f15938e0c7ef081454bb4d3487ee8f76743b47d09ce5b220f18444e22f2028"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\reverse-candidate-matrix-off\\runtime.json",
+      "sha256": "30e710121c3f33d4bb0bcedefcafa56760c7fd83dfa15b6e63956df7b8c0f298"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\shader-test.log",
+      "sha256": "995713b634039b030099ff8a6111f9c0e2033934f93dbcea9defbc8c35d929a7"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\specialized-connection-sbt\\source-commit.txt",
+      "sha256": "9a01269e14a699b57f76a7dea1ba2b0dfad4217c4d873de6c3625b595d1f8dde"
+    }
+  ]
+}

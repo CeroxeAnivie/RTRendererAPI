@@ -259,7 +259,6 @@ public final class RtPrecompiledShaderSelfTest {
       for (String raygen : SCENE_RAYGENS) stages.put(raygen, Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene/gpuscene.rmiss", 17);
       stages.put("gpuscene/gpuscene.rchit", 16);
-      stages.put("gpuscene/gpuscene_optical_connection.rchit", Shaderc.shaderc_closesthit_shader);
       stages.put("gpuscene/gpuscene.rahit", 15);
       stages.put("gpuscene/gpuscene_visibility.rmiss", Shaderc.shaderc_miss_shader);
       stages.put("gpuscene/gpuscene_visibility.rchit", Shaderc.shaderc_closesthit_shader);
