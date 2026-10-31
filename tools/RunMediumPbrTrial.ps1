@@ -54,8 +54,16 @@ try {
         if((Test-Path -LiteralPath $workload) -and (Get-Item -LiteralPath $workload).LastWriteTimeUtc -ge $launchStartedUtc){
             Copy-Item -LiteralPath $workload -Destination $runDir -Force
         }
-        if($Mode -eq 'timings'){Copy-Item 'build/reports/medium-performance/*wall-timeline-round-*.json' $runDir -Force}
-        if($Mode -eq 'profile'){Copy-Item 'build/reports/medium-performance/*shader-profile-round-*.json' $runDir -Force}
+        if($Mode -in @('timings','profile')) {
+            $kind=if($Mode -eq 'timings'){'wall-timeline'}else{'shader-profile'}
+            foreach($round in 1..$Rounds) {
+                $source="build/reports/medium-performance/pbr-direct-uniform-1080p-$kind-round-$round.json"
+                if(!(Test-Path -LiteralPath $source) -or (Get-Item -LiteralPath $source).LastWriteTimeUtc -lt $launchStartedUtc) {
+                    throw "Missing current benchmark round evidence: $source"
+                }
+                Copy-Item -LiteralPath $source -Destination $runDir
+            }
+        }
     }
     Get-Content (Join-Path $runDir 'run.log') | Select-String 'GalleryPerf round=|frames=8|验收通过' | ForEach-Object { $_.Line -replace ' profile=.*$', '' }
 } finally { Pop-Location }

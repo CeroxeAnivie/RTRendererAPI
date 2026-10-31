@@ -20,7 +20,11 @@ def window(root, label, variant, mode):
     result = dict(frames=frames, wallMs=wall, msPerFrame=wall / frames, fps=frames * 1000 / wall,
                   initialGpu=(folder / "initial-gpu.csv").read_text(encoding="utf-8-sig").strip(), rounds=rows)
     if mode == "timings":
-        result["host"] = analyze(folder)
+        # Frozen directories may contain copied leftovers from an earlier longer
+        # benchmark. Only this CSV's rounds belong to the measured window.
+        result["host"] = analyze(folder, [f"pbr-direct-uniform-1080p-wall-timeline-round-{r['round']}.json" for r in rows])
+        if result["host"]["frames"] != frames:
+            raise ValueError("Wall timeline frame count does not match benchmark CSV")
         result["gpuRounds"] = [json.loads(r["profileData"]) for r in rows]
         keys = ["pbrLightPacketsGpuMsPerFrame", "pbrMediumKernelGpuMsPerFrame",
                 "pbrPrimaryPacketsGpuMsPerFrame", "pbrContributionRestoreGpuMsPerFrame"]

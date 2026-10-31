@@ -7,10 +7,11 @@ import math
 from pathlib import Path
 
 
-def analyze(directory):
+def analyze(directory, filenames=None):
     groups, files, threads = {}, [], set()
     wall = frames = events = dropped = 0
-    paths = sorted(directory.glob('*wall-timeline-round-*.json'))
+    paths = ([directory / name for name in filenames] if filenames is not None
+             else sorted(directory.glob('*wall-timeline-round-*.json')))
     if not paths:
         raise ValueError(f'No wall timeline rounds in {directory}')
     for path in paths:
