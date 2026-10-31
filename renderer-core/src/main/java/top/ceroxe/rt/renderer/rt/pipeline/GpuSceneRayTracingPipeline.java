@@ -816,21 +816,15 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     /** Records native direct-scattering work with an optional sampled shader-clock buffer. */
     public synchronized void recordNativeScatteringLights(VkCommandBuffer commandBuffer,MemoryStack stack,int slot,
             long address,int firstPixel,int count,long offsets,long diagnosticAddress) {
-        recordNativeScatteringLights(commandBuffer,stack,slot,address,firstPixel,count,offsets,diagnosticAddress,1);
-    }
-    /** Independent interval lanes preserve the source slot while shortening each raygen invocation. */
-    public synchronized void recordNativeScatteringLights(VkCommandBuffer commandBuffer,MemoryStack stack,int slot,
-            long address,int firstPixel,int count,long offsets,long diagnosticAddress,int intervalLanes) {
         requireOpen();
         if(address==0||(address&15)!=0||(diagnosticAddress!=0&&(diagnosticAddress&15)!=0)
-                ||firstPixel<0||count<1||(long)firstPixel+count>Integer.MAX_VALUE
-                ||intervalLanes<1||intervalLanes>64||(long)count*intervalLanes>Integer.MAX_VALUE)
+                ||firstPixel<0||count<1||(long)firstPixel+count>Integer.MAX_VALUE)
             throw new IllegalArgumentException("invalid native scattering tile or aligned device address");
         var push=stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);
         push.putLong(address).putInt(firstPixel).putInt(count).putLong(offsets).putLong(diagnosticAddress).flip();
         VK10.vkCmdPushConstants(commandBuffer,pipelineLayout,
                 KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR|KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR,0,push);
-        recordTrace(commandBuffer,stack,slot,count,intervalLanes);
+        recordTrace(commandBuffer,stack,slot,count,1);
     }
 
     /** Records native transmittance and separately integrated camera-medium emission for this tile. */

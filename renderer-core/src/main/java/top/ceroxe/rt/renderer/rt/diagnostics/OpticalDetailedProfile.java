@@ -36,11 +36,8 @@ public final class OpticalDetailedProfile {
         if(!ENABLED)return 0;long now=System.nanoTime();add(name,now-start);return now;
     }
     public static int shaderBytes(int paths){return SHADERS?Math.toIntExact(((long)paths+STRIDE-1)/STRIDE*STAGES*16):0;}
-    public static int cameraScatteringShaderBytes(int paths){return cameraScatteringShaderBytes(paths,1);}
-    public static int cameraScatteringShaderBytes(int paths,int planes){
-        if(paths<1||planes<1||planes>64)throw new IllegalArgumentException("invalid scattering diagnostic dimensions");
-        return CAMERA_SCATTERING_SHADERS
-            ?Math.toIntExact(((long)paths+CAMERA_SCATTERING_STRIDE-1)/CAMERA_SCATTERING_STRIDE*CAMERA_SCATTERING_STAGES*16*planes):0;}
+    public static int cameraScatteringShaderBytes(int paths){return CAMERA_SCATTERING_SHADERS
+            ?Math.toIntExact(((long)paths+CAMERA_SCATTERING_STRIDE-1)/CAMERA_SCATTERING_STRIDE*CAMERA_SCATTERING_STAGES*16):0;}
     public static boolean cameraScatteringProfileFrame(long frameSequence){
         // Keep all eight bucket phases together, then use production shaders for
         // three groups. A single full-image tile must not be instrumented every frame.
@@ -53,31 +50,25 @@ public final class OpticalDetailedProfile {
         }
     }
     public static void cameraScatteringShaderSamples(MemorySegment values,int paths,long frameSequence){
-        cameraScatteringShaderSamples(values,paths,frameSequence,1);
-    }
-    public static void cameraScatteringShaderSamples(MemorySegment values,int paths,long frameSequence,int planes){
-        if(planes<1||planes>64)throw new IllegalArgumentException("invalid scattering diagnostic planes");
         long records=(paths+(long)CAMERA_SCATTERING_STRIDE-1)/CAMERA_SCATTERING_STRIDE;
         long firstSelected=Math.floorMod(-frameSequence,8L);
         long selected=firstSelected>=records?0:1+(records-1-firstSelected)/8;
         // The last bucket can be partial; a rotated sample beyond the image is not a dropped record.
         long offset=(frameSequence*7919L)&65535L;
         if(selected>0 && (firstSelected+(selected-1)*8L)*CAMERA_SCATTERING_STRIDE+offset>=paths)selected--;
-        long[] observed=new long[planes];
-        for(int sample=0;sample<records*planes;sample++)for(int stage=0;stage<CAMERA_SCATTERING_STAGES;stage++){
+        long observed=0;
+        for(int sample=0;sample<records;sample++)for(int stage=0;stage<CAMERA_SCATTERING_STAGES;stage++){
             long at=((long)sample*CAMERA_SCATTERING_STAGES+stage)*16,ticks=values.get(ValueLayout.JAVA_LONG,at),calls=values.get(ValueLayout.JAVA_LONG,at+8);
             if(stage==15){addGlobal("cameraScattering/shadowParityMismatches",ticks);
                 addGlobal("cameraScattering/shadowParityQueries",calls);continue;}
-            if(calls!=0){if(stage==0)observed[(int)(sample/records)]++;String prefix="cameraScattering/"+CAMERA_SCATTERING_STAGE_NAMES[stage]+"/";
+            if(calls!=0){if(stage==0)observed++;String prefix="cameraScattering/"+CAMERA_SCATTERING_STAGE_NAMES[stage]+"/";
                 try{addGlobal(prefix+"ticks",ticks);addGlobal(prefix+"calls",calls);}
                 catch(ArithmeticException overflow){throw new IllegalStateException("camera-scattering diagnostic overflow stage="
                         +CAMERA_SCATTERING_STAGE_NAMES[stage]+" bucket="+sample+" ticks="
                         +Long.toUnsignedString(ticks)+" calls="+Long.toUnsignedString(calls),overflow);}}
         }
         addGlobal("cameraScattering/sampledPaths",selected);
-        addGlobal("cameraScattering/recordedPaths",java.util.Arrays.stream(observed).min().orElse(0));
-        addGlobal("cameraScattering/sampledWorkItems",Math.multiplyExact(selected,planes));
-        addGlobal("cameraScattering/recordedWorkItems",java.util.Arrays.stream(observed).sum());
+        addGlobal("cameraScattering/recordedPaths",observed);
     }
     private static void addGlobal(String name,long value){
         if((ENABLED||CAMERA_SCATTERING_SHADERS)&&value!=0)synchronized(Records.totals){Records.totals.merge(name,value,Math::addExact);}
@@ -121,10 +112,6 @@ public final class OpticalDetailedProfile {
                 -before.getOrDefault("cameraScattering/sampledPaths",0L);
         long recorded=values.getOrDefault("cameraScattering/recordedPaths",0L)
                 -before.getOrDefault("cameraScattering/recordedPaths",0L);
-        long sampledWork=values.getOrDefault("cameraScattering/sampledWorkItems",0L)
-                -before.getOrDefault("cameraScattering/sampledWorkItems",0L);
-        long recordedWork=values.getOrDefault("cameraScattering/recordedWorkItems",0L)
-                -before.getOrDefault("cameraScattering/recordedWorkItems",0L);
         long denominator=recorded==0?sampled:recorded;
         long anyHitTicks=values.getOrDefault("cameraScattering/opaqueShadowAnyHit/ticks",0L)
                 -before.getOrDefault("cameraScattering/opaqueShadowAnyHit/ticks",0L);
@@ -146,8 +133,6 @@ public final class OpticalDetailedProfile {
         stages.sort(java.util.Comparator.comparingLong(CameraStage::nsPerSampledPath).reversed());
         StringBuilder json=new StringBuilder("{\n\"frames\":").append(frames).append(",\n\"sampledPaths\":").append(sampled)
                 .append(",\n\"recordedPaths\":").append(recorded).append(",\n\"missingSamples\":").append(sampled-recorded)
-                .append(",\n\"sampledWorkItems\":").append(sampledWork)
-                .append(",\n\"recordedWorkItems\":").append(recordedWork)
                 .append(",\n\"shadowParityQueries\":").append(parityQueries)
                 .append(",\n\"shadowParityMismatches\":").append(parityMismatches)
                 .append(",\n\"clockUnit\":\"nanoseconds\",\n\"stages\":[");
