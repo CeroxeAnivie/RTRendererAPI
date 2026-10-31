@@ -246,6 +246,31 @@
       "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\hdr-off-compare.json",
       "bytes": 1655,
       "sha256": "156248a00931913dac32e49fe54ebab401a635b81198c9ad4d44eae68dbd8cc8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\trace-control.json",
+      "bytes": 1554,
+      "sha256": "d8e186be2fb46ee346b50af3cc43606a8978f6a9dbd589e090ab04674623a42b"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\trace-off-test.log",
+      "bytes": 13842,
+      "sha256": "7f2525ed38cd6614a7a8c00a3565dac9d17099c63f8480da318c6fc1cec84624"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\trace-on-test.log",
+      "bytes": 13750,
+      "sha256": "87f0b90b636168e9a931a2bcf303bfcf915d29d8b3d1f2d4324bad3dce1cb3a6"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\trace-off-initial-gpu.csv",
+      "bytes": 65,
+      "sha256": "2907bdd82008ed1a03c9dcfed15a92f77946691db69895240ed80328978fa7f8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\hybrid-volume-states-v2\\trace-on-initial-gpu.csv",
+      "bytes": 67,
+      "sha256": "e164b1ba32be331853655955bc04b9120b87b97725a5659c748846766e23f841"
     }
   ],
   "hdrOffControl": {
@@ -311,5 +336,49 @@
     "baselineSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
     "candidateSha256": "61623d27961ed412ee277cca06bcc43bb1d41fdc9f883d0dddfa7c83443fda26",
     "cause": "not yet established"
-  }
+  },
+  "traceControl": {
+    "off": {
+      "matchesUntraced": false,
+      "frames": [
+        {
+          "file": "micro-all-0.rgba16f",
+          "byteIdentical": false,
+          "sha256": "61623d27961ed412ee277cca06bcc43bb1d41fdc9f883d0dddfa7c83443fda26"
+        },
+        {
+          "file": "micro-all-1.rgba16f",
+          "byteIdentical": true,
+          "sha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+        }
+      ]
+    },
+    "on": {
+      "matchesUntraced": false,
+      "frames": [
+        {
+          "file": "micro-all-0.rgba16f",
+          "byteIdentical": false,
+          "sha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+        },
+        {
+          "file": "micro-all-1.rgba16f",
+          "byteIdentical": true,
+          "sha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+        }
+      ]
+    },
+    "traces": {
+      "offEvents": 54,
+      "onEvents": 54,
+      "sameEvents": false,
+      "firstDifference": {
+        "index": 1,
+        "off": "OPTICAL_MAIN seed=0 sample=0 branch=0 volume=4294967295 origin=[-7.45905781,3.71126008,0.650014937] direction=[-0.388964951,0.193962738,0.90060246] hitT=12.7533379 boundary=0 side=0 point=[-1.980002e-37,4.20389539e-45,1.40129846e-45]",
+        "on": "OPTICAL_MAIN seed=0 sample=0 branch=0 volume=4294967295 origin=[-7.45905781,3.71126008,0.650014937] direction=[-0.388964951,0.193962738,0.90060246] hitT=12.7533379 boundary=0 side=0 point=[-8.78165453e-37,4.20389539e-45,1.40129846e-45]"
+      },
+      "differencesAfterIgnoringUnusedMissPoint": []
+    }
+  },
+  "traceConclusion": "single-path tracing changes the single half-ULP output itself; geometric traces agree after excluding unused miss positions, so this diagnostic cannot establish the original numerical root cause; candidate remains reverted"
 }
