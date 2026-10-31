@@ -1,0 +1,1460 @@
+{
+  "candidateCommit": "0ea7472",
+  "baselineCommit": "c3da339",
+  "decision": "rejected: no demonstrated completed-frame gain; restore the accepted N implementation",
+  "optimization": "GPU-internal complete connection transport in Vulkan",
+  "numericalPolicy": {
+    "matureReference": "PBRT-v4",
+    "commit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+    "license": "Apache-2.0",
+    "files": [
+      "src/pbrt/wavefront/intersect.h:165",
+      "CMakeLists.txt:249"
+    ],
+    "thresholds": {
+      "relativeRms": 0.001,
+      "luminanceEnergyRelativeError": 0.001,
+      "maxAbsoluteChannelError": "referenceAbsoluteP99*.005+1e-5",
+      "alpha": "exact",
+      "finite": "required"
+    }
+  },
+  "throughput": {
+    "before": {
+      "frames": 64,
+      "wallMs": 12549.6138,
+      "msPerFrame": 196.087715625,
+      "fps": 5.0997585280273725
+    },
+    "after": {
+      "frames": 64,
+      "wallMs": 12567.360999999999,
+      "msPerFrame": 196.36501562499998,
+      "fps": 5.0925568223909545
+    },
+    "durationReductionPercent": -0.14141630398218918,
+    "fpsIncreasePercent": -0.14121660068489028,
+    "runs": [
+      {
+        "label": "p-clean-forward-baseline",
+        "directory": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-forward-baseline-matrix-off",
+        "frames": 32,
+        "wallMs": 6233.257,
+        "msPerFrame": 194.78928125,
+        "fps": 5.133752707452942,
+        "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 8.05 W, 180 MHz, 59"
+      },
+      {
+        "label": "clean-forward-candidate",
+        "directory": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-forward-candidate-matrix-off",
+        "frames": 32,
+        "wallMs": 6257.820599999999,
+        "msPerFrame": 195.55689374999997,
+        "fps": 5.113601371058801,
+        "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.43 W, 180 MHz, 62"
+      },
+      {
+        "label": "clean-reverse-candidate",
+        "directory": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-reverse-candidate-matrix-off",
+        "frames": 32,
+        "wallMs": 6309.5404,
+        "msPerFrame": 197.1731375,
+        "fps": 5.071684777547348,
+        "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.96 W, 180 MHz, 63"
+      },
+      {
+        "label": "p-clean-reverse-baseline",
+        "directory": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-reverse-baseline-matrix-off",
+        "frames": 32,
+        "wallMs": 6316.3568,
+        "msPerFrame": 197.38615,
+        "fps": 5.06621158576729,
+        "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.40 W, 180 MHz, 64"
+      }
+    ]
+  },
+  "ranked": {
+    "before": {
+      "directory": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings",
+      "frames": 32,
+      "msPerFrame": 197.071434375,
+      "fps": 5.07430213400252,
+      "ranked": [
+        {
+          "stage": "CUDA_STREAM_SYNCHRONIZE",
+          "msPerFrame": 173.55024375,
+          "msPerSecond": 880.6463722172824,
+          "sharePercent": 88.06463722172825
+        },
+        {
+          "stage": "CUDA_KERNEL_ENQUEUE",
+          "msPerFrame": 4.208834375,
+          "msPerSecond": 21.356897250725662,
+          "sharePercent": 2.135689725072566
+        },
+        {
+          "stage": "VULKAN_RELEASE_RECORD",
+          "msPerFrame": 3.895,
+          "msPerSecond": 19.764406811939814,
+          "sharePercent": 1.9764406811939814
+        },
+        {
+          "stage": "VULKAN_RELEASE_SUBMIT",
+          "msPerFrame": 2.1668625,
+          "msPerSecond": 10.995315007840036,
+          "sharePercent": 1.0995315007840034
+        },
+        {
+          "stage": "CUDA_SEMAPHORE_WAIT_ENQUEUE",
+          "msPerFrame": 1.821846875,
+          "msPerSecond": 9.244601485638322,
+          "sharePercent": 0.9244601485638322
+        },
+        {
+          "stage": "VULKAN_CONSUMER_SUBMIT",
+          "msPerFrame": 1.5425874999999998,
+          "msPerSecond": 7.827555043135611,
+          "sharePercent": 0.782755504313561
+        },
+        {
+          "stage": "CUDA_SEMAPHORE_SIGNAL_ENQUEUE",
+          "msPerFrame": 1.334603125,
+          "msPerSecond": 6.772179485233931,
+          "sharePercent": 0.6772179485233931
+        },
+        {
+          "stage": "VULKAN_CONSUMER_FENCE_WAIT",
+          "msPerFrame": 1.3290875,
+          "msPerSecond": 6.744191537526074,
+          "sharePercent": 0.6744191537526074
+        },
+        {
+          "stage": "CUDA_DOWNLOAD_ASYNC_ENQUEUE",
+          "msPerFrame": 1.078853125,
+          "msPerSecond": 5.474426714462786,
+          "sharePercent": 0.5474426714462787
+        },
+        {
+          "stage": "CUDA_CONTEXT_POP",
+          "msPerFrame": 0.9926687500000001,
+          "msPerSecond": 5.037101156482614,
+          "sharePercent": 0.5037101156482614
+        },
+        {
+          "stage": "CUDA_KERNEL_EVENT_RESOLVE",
+          "msPerFrame": 0.59955625,
+          "msPerSecond": 3.042329558829548,
+          "sharePercent": 0.3042329558829548
+        },
+        {
+          "stage": "NATIVE_TASK_EXECUTION",
+          "msPerFrame": 0.597296875,
+          "msPerSecond": 3.0308648074455364,
+          "sharePercent": 0.30308648074455363
+        },
+        {
+          "stage": "CUDA_EXCHANGE",
+          "msPerFrame": 0.443175,
+          "msPerSecond": 2.248803848236567,
+          "sharePercent": 0.22488038482365663
+        },
+        {
+          "stage": "CUDA_DOWNLOAD",
+          "msPerFrame": 0.437071875,
+          "msPerSecond": 2.2178347480249823,
+          "sharePercent": 0.22178347480249827
+        },
+        {
+          "stage": "CUDA_CONTEXT_PUSH",
+          "msPerFrame": 0.4366625,
+          "msPerSecond": 2.2157574555888755,
+          "sharePercent": 0.2215757455588875
+        },
+        {
+          "stage": "PARK",
+          "msPerFrame": 0.382225,
+          "msPerSecond": 1.939525133169113,
+          "sharePercent": 0.1939525133169113
+        },
+        {
+          "stage": "GPU_QUERY_RESOLVE",
+          "msPerFrame": 0.344890625,
+          "msPerSecond": 1.7500792344349627,
+          "sharePercent": 0.1750079234434963
+        },
+        {
+          "stage": "FINAL_FRAME_RECORD_AND_SUBMIT",
+          "msPerFrame": 0.283321875,
+          "msPerSecond": 1.437660794922095,
+          "sharePercent": 0.14376607949220951
+        },
+        {
+          "stage": "VULKAN_COMMAND_REUSE_WAIT",
+          "msPerFrame": 0.267646875,
+          "msPerSecond": 1.3581211089716059,
+          "sharePercent": 0.13581211089716058
+        },
+        {
+          "stage": "ROUTE_AND_PIPELINES",
+          "msPerFrame": 0.248328125,
+          "msPerSecond": 1.2600919346203445,
+          "sharePercent": 0.12600919346203446
+        },
+        {
+          "stage": "TEMPORAL_UNIFORMS_DESCRIPTORS",
+          "msPerFrame": 0.233,
+          "msPerSecond": 1.182312397222587,
+          "sharePercent": 0.11823123972225871
+        },
+        {
+          "stage": "OPTICAL_MEDIUM_NATIVE",
+          "msPerFrame": 0.13792500000000002,
+          "msPerSecond": 0.6998731218322976,
+          "sharePercent": 0.06998731218322976
+        },
+        {
+          "stage": "VULKAN_CONSUMER_RECORD",
+          "msPerFrame": 0.11323125,
+          "msPerSecond": 0.5745695735107729,
+          "sharePercent": 0.05745695735107729
+        },
+        {
+          "stage": "SESSION_PUMP",
+          "msPerFrame": 0.10301875,
+          "msPerSecond": 0.5227482629672722,
+          "sharePercent": 0.05227482629672721
+        },
+        {
+          "stage": "DIAGNOSTICS",
+          "msPerFrame": 0.08995625,
+          "msPerSecond": 0.45646519134186414,
+          "sharePercent": 0.045646519134186415
+        },
+        {
+          "stage": "HOST_ADMISSION",
+          "msPerFrame": 0.066703125,
+          "msPerSecond": 0.33847180953213685,
+          "sharePercent": 0.033847180953213686
+        },
+        {
+          "stage": "RESOURCE_BUDGET_AND_ENSURE",
+          "msPerFrame": 0.063528125,
+          "msPerSecond": 0.32236090025667885,
+          "sharePercent": 0.032236090025667886
+        },
+        {
+          "stage": "FRAME_POLL_AND_LEASE",
+          "msPerFrame": 0.04931875,
+          "msPerSecond": 0.25025823837133676,
+          "sharePercent": 0.025025823837133677
+        },
+        {
+          "stage": "REQUEST_BUILD",
+          "msPerFrame": 0.045671875,
+          "msPerSecond": 0.23175289277639632,
+          "sharePercent": 0.023175289277639635
+        },
+        {
+          "stage": "CUDA_UPLOAD",
+          "msPerFrame": 0.036146875,
+          "msPerSecond": 0.18342016495002234,
+          "sharePercent": 0.018342016495002233
+        },
+        {
+          "stage": "CUDA_NATIVE_CALLBACK",
+          "msPerFrame": 0.03365625,
+          "msPerSecond": 0.1707819811975223,
+          "sharePercent": 0.017078198119752228
+        },
+        {
+          "stage": "CUDA_CONTEXT_SYNCHRONIZE",
+          "msPerFrame": 0.020978125,
+          "msPerSecond": 0.1064493444548716,
+          "sharePercent": 0.010644934445487161
+        },
+        {
+          "stage": "SHARED_EXCHANGE",
+          "msPerFrame": 0.020553125,
+          "msPerSecond": 0.10429276604792052,
+          "sharePercent": 0.010429276604792053
+        },
+        {
+          "stage": "SESSION_ADMISSION",
+          "msPerFrame": 0.017846875,
+          "msPerSecond": 0.09056043589777622,
+          "sharePercent": 0.009056043589777622
+        },
+        {
+          "stage": "FRAME_PRIMITIVES",
+          "msPerFrame": 0.016015625,
+          "msPerSecond": 0.0812681201148841,
+          "sharePercent": 0.00812681201148841
+        },
+        {
+          "stage": "SLOT_PUBLICATION",
+          "msPerFrame": 0.015728125,
+          "msPerSecond": 0.07980925825135837,
+          "sharePercent": 0.007980925825135838
+        },
+        {
+          "stage": "FEATURE_EXTENT_NEGOTIATION",
+          "msPerFrame": 0.0129125,
+          "msPerSecond": 0.06552192630530754,
+          "sharePercent": 0.0065521926305307536
+        },
+        {
+          "stage": "CUDA_COMPLETION_CALLBACK",
+          "msPerFrame": 0.0119125,
+          "msPerSecond": 0.06044762417130502,
+          "sharePercent": 0.0060447624171305015
+        },
+        {
+          "stage": "MEDIUM_RESOLVE_PREPARE",
+          "msPerFrame": 0.009084375,
+          "msPerSecond": 0.04609686344857914,
+          "sharePercent": 0.004609686344857914
+        },
+        {
+          "stage": "FEATURE_INPUT_REUSE",
+          "msPerFrame": 0.005946875,
+          "msPerSecond": 0.030176240503146233,
+          "sharePercent": 0.0030176240503146236
+        },
+        {
+          "stage": "WINDOW",
+          "msPerFrame": 0.00478125,
+          "msPerSecond": 0.02426150707819955,
+          "sharePercent": 0.0024261507078199547
+        },
+        {
+          "stage": "TRY_SUBMIT",
+          "msPerFrame": 0.001634375,
+          "msPerSecond": 0.008293312550260367,
+          "sharePercent": 0.0008293312550260367
+        },
+        {
+          "stage": "FRAME_PREPARATION",
+          "msPerFrame": 0.000946875,
+          "msPerSecond": 0.004804729833133636,
+          "sharePercent": 0.00048047298331336364
+        },
+        {
+          "stage": "CAMERA_SCATTERING_PREPARE",
+          "msPerFrame": 0.000175,
+          "msPerSecond": 0.0008880028734504409,
+          "sharePercent": 8.880028734504408e-05
+        }
+      ],
+      "gpu": [
+        {
+          "stage": "vulkan.optical.cameraContinuationTrace/startToend",
+          "msPerFrame": 65.14624599999999,
+          "callsPerFrame": 175.0625
+        },
+        {
+          "stage": "cuda.entry.native_optical_step_4",
+          "msPerFrame": 61.593873,
+          "callsPerFrame": 179.0625
+        },
+        {
+          "stage": "vulkan.shared.producer",
+          "msPerFrame": 39.071983,
+          "callsPerFrame": 97.53125
+        },
+        {
+          "stage": "vulkan.shared.continuation",
+          "msPerFrame": 34.515614,
+          "callsPerFrame": 97.53125
+        },
+        {
+          "stage": "vulkan.optical.cameraInitialTrace/startToend",
+          "msPerFrame": 7.6113990000000005,
+          "callsPerFrame": 4.0
+        },
+        {
+          "stage": "cuda.entry.native_optical_reset",
+          "msPerFrame": 0.816796,
+          "callsPerFrame": 179.0625
+        },
+        {
+          "stage": "vulkan.opticalPhoton.trace/startToend",
+          "msPerFrame": 0.46496499999999996,
+          "callsPerFrame": 8.0
+        },
+        {
+          "stage": "cuda.entry.native_optical_photon_step",
+          "msPerFrame": 0.34748,
+          "callsPerFrame": 8.0
+        },
+        {
+          "stage": "vulkan.opticalPhoton.mapCopy/startToend",
+          "msPerFrame": 0.065955,
+          "callsPerFrame": 1.0
+        },
+        {
+          "stage": "cuda.entry.native_optical_photon_reset",
+          "msPerFrame": 0.042005,
+          "callsPerFrame": 8.0
+        },
+        {
+          "stage": "cuda.entry.native_optical_photon_clear",
+          "msPerFrame": 0.028171,
+          "callsPerFrame": 1.0
+        },
+        {
+          "stage": "vulkan.opticalPhoton.mapInitialize/startToend",
+          "msPerFrame": 0.008171999999999999,
+          "callsPerFrame": 1.0
+        }
+      ],
+      "events": 153359,
+      "droppedEvents": 0,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 8.02 W, 180 MHz, 60"
+    },
+    "after": {
+      "directory": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings",
+      "frames": 32,
+      "msPerFrame": 197.74605,
+      "fps": 5.05699102459948,
+      "ranked": [
+        {
+          "stage": "CUDA_STREAM_SYNCHRONIZE",
+          "msPerFrame": 174.51558124999997,
+          "msPerSecond": 882.5237280340111,
+          "sharePercent": 88.25237280340112,
+          "durationReductionPercent": -0.5562294118068412
+        },
+        {
+          "stage": "CUDA_KERNEL_ENQUEUE",
+          "msPerFrame": 4.086628125,
+          "msPerSecond": 20.6660417490008,
+          "sharePercent": 2.06660417490008,
+          "durationReductionPercent": 2.9035651943419727
+        },
+        {
+          "stage": "VULKAN_RELEASE_RECORD",
+          "msPerFrame": 3.92738125,
+          "msPerSecond": 19.860731731430285,
+          "sharePercent": 1.9860731731430286,
+          "durationReductionPercent": -0.8313543003851009
+        },
+        {
+          "stage": "VULKAN_RELEASE_SUBMIT",
+          "msPerFrame": 2.5290375,
+          "msPerSecond": 12.789319938375508,
+          "sharePercent": 1.2789319938375505,
+          "durationReductionPercent": -16.71425851894155
+        },
+        {
+          "stage": "CUDA_SEMAPHORE_WAIT_ENQUEUE",
+          "msPerFrame": 1.738140625,
+          "msPerSecond": 8.78976154011673,
+          "sharePercent": 0.8789761540116731,
+          "durationReductionPercent": 4.594582077596399
+        },
+        {
+          "stage": "CUDA_SEMAPHORE_SIGNAL_ENQUEUE",
+          "msPerFrame": 1.340840625,
+          "msPerSecond": 6.7806190060433575,
+          "sharePercent": 0.6780619006043357,
+          "durationReductionPercent": -0.4673674055723609
+        },
+        {
+          "stage": "VULKAN_CONSUMER_FENCE_WAIT",
+          "msPerFrame": 1.318721875,
+          "msPerSecond": 6.668764685817997,
+          "sharePercent": 0.6668764685817997,
+          "durationReductionPercent": 0.7799053862142191
+        },
+        {
+          "stage": "VULKAN_CONSUMER_SUBMIT",
+          "msPerFrame": 1.128659375,
+          "msPerSecond": 5.707620329205058,
+          "sharePercent": 0.5707620329205059,
+          "durationReductionPercent": 26.833364395860837
+        },
+        {
+          "stage": "CUDA_DOWNLOAD_ASYNC_ENQUEUE",
+          "msPerFrame": 1.034159375,
+          "msPerSecond": 5.229734677380407,
+          "sharePercent": 0.5229734677380408,
+          "durationReductionPercent": 4.14270941653897
+        },
+        {
+          "stage": "CUDA_CONTEXT_POP",
+          "msPerFrame": 0.9370999999999999,
+          "msPerSecond": 4.7389062891521725,
+          "sharePercent": 0.47389062891521727,
+          "durationReductionPercent": 5.597914712234086
+        },
+        {
+          "stage": "NATIVE_TASK_EXECUTION",
+          "msPerFrame": 0.615728125,
+          "msPerSecond": 3.1137316017184666,
+          "sharePercent": 0.3113731601718467,
+          "durationReductionPercent": -3.0857770685640995
+        },
+        {
+          "stage": "CUDA_KERNEL_EVENT_RESOLVE",
+          "msPerFrame": 0.5937375,
+          "msPerSecond": 3.002525208468134,
+          "sharePercent": 0.30025252084681336,
+          "durationReductionPercent": 0.9705094392727931
+        },
+        {
+          "stage": "CUDA_EXCHANGE",
+          "msPerFrame": 0.45688125,
+          "msPerSecond": 2.3104443805577914,
+          "sharePercent": 0.23104443805577912,
+          "durationReductionPercent": -3.0927398883059842
+        },
+        {
+          "stage": "CUDA_DOWNLOAD",
+          "msPerFrame": 0.4358,
+          "msPerSecond": 2.2038366885204534,
+          "sharePercent": 0.22038366885204536,
+          "durationReductionPercent": 0.2909990490694403
+        },
+        {
+          "stage": "CUDA_CONTEXT_PUSH",
+          "msPerFrame": 0.4109375,
+          "msPerSecond": 2.078107249171349,
+          "sharePercent": 0.2078107249171349,
+          "durationReductionPercent": 5.891277588526611
+        },
+        {
+          "stage": "PARK",
+          "msPerFrame": 0.350221875,
+          "msPerSecond": 1.771068878493401,
+          "sharePercent": 0.17710688784934012,
+          "durationReductionPercent": 8.372849761266266
+        },
+        {
+          "stage": "GPU_QUERY_RESOLVE",
+          "msPerFrame": 0.343409375,
+          "msPerSecond": 1.7366181271383172,
+          "sharePercent": 0.17366181271383171,
+          "durationReductionPercent": 0.4294839849590004
+        },
+        {
+          "stage": "FINAL_FRAME_RECORD_AND_SUBMIT",
+          "msPerFrame": 0.283140625,
+          "msPerSecond": 1.4318395993244872,
+          "sharePercent": 0.1431839599324487,
+          "durationReductionPercent": 0.06397317538577862
+        },
+        {
+          "stage": "ROUTE_AND_PIPELINES",
+          "msPerFrame": 0.26974375,
+          "msPerSecond": 1.364091722691806,
+          "sharePercent": 0.13640917226918062,
+          "durationReductionPercent": -8.62392248159567
+        },
+        {
+          "stage": "VULKAN_COMMAND_REUSE_WAIT",
+          "msPerFrame": 0.26949375,
+          "msPerSecond": 1.362827474935656,
+          "sharePercent": 0.1362827474935656,
+          "durationReductionPercent": -0.6900416827209321
+        },
+        {
+          "stage": "TEMPORAL_UNIFORMS_DESCRIPTORS",
+          "msPerFrame": 0.2351,
+          "msPerSecond": 1.1888985898833377,
+          "sharePercent": 0.11888985898833379,
+          "durationReductionPercent": -0.9012875536480669
+        },
+        {
+          "stage": "OPTICAL_MEDIUM_NATIVE",
+          "msPerFrame": 0.1470125,
+          "msPerSecond": 0.743440893003931,
+          "sharePercent": 0.0743440893003931,
+          "durationReductionPercent": -6.588725756751845
+        },
+        {
+          "stage": "VULKAN_CONSUMER_RECORD",
+          "msPerFrame": 0.130384375,
+          "msPerSecond": 0.6593526141230128,
+          "sharePercent": 0.06593526141230129,
+          "durationReductionPercent": -15.148755312689733
+        },
+        {
+          "stage": "DIAGNOSTICS",
+          "msPerFrame": 0.0968875,
+          "msPerSecond": 0.48995921789588215,
+          "sharePercent": 0.04899592178958822,
+          "durationReductionPercent": -7.705134440352945
+        },
+        {
+          "stage": "SESSION_PUMP",
+          "msPerFrame": 0.096390625,
+          "msPerSecond": 0.48744652548053424,
+          "sharePercent": 0.04874465254805342,
+          "durationReductionPercent": 6.433901595583336
+        },
+        {
+          "stage": "HOST_ADMISSION",
+          "msPerFrame": 0.06709375,
+          "msPerSecond": 0.33929249155672137,
+          "sharePercent": 0.033929249155672137,
+          "durationReductionPercent": -0.5856172405715565
+        },
+        {
+          "stage": "RESOURCE_BUDGET_AND_ENSURE",
+          "msPerFrame": 0.062,
+          "msPerSecond": 0.31353344352516777,
+          "sharePercent": 0.03135334435251678,
+          "durationReductionPercent": 2.4054306655516777
+        },
+        {
+          "stage": "FRAME_POLL_AND_LEASE",
+          "msPerFrame": 0.055053125,
+          "msPerSecond": 0.27840315900115326,
+          "sharePercent": 0.027840315900115327,
+          "durationReductionPercent": -11.627170193891768
+        },
+        {
+          "stage": "CUDA_UPLOAD",
+          "msPerFrame": 0.048340625,
+          "msPerSecond": 0.24445810674852922,
+          "sharePercent": 0.024445810674852925,
+          "durationReductionPercent": -33.733898158554496
+        },
+        {
+          "stage": "REQUEST_BUILD",
+          "msPerFrame": 0.0466375,
+          "msPerSecond": 0.23584541890975824,
+          "sharePercent": 0.023584541890975825,
+          "durationReductionPercent": -2.11426616489907
+        },
+        {
+          "stage": "CUDA_NATIVE_CALLBACK",
+          "msPerFrame": 0.03316875,
+          "msPerSecond": 0.167734071047184,
+          "sharePercent": 0.016773407104718398,
+          "durationReductionPercent": 1.4484679665738187
+        },
+        {
+          "stage": "SHARED_EXCHANGE",
+          "msPerFrame": 0.022028125,
+          "msPerSecond": 0.11139603041375541,
+          "sharePercent": 0.011139603041375542,
+          "durationReductionPercent": -7.176524251178362
+        },
+        {
+          "stage": "CUDA_CONTEXT_SYNCHRONIZE",
+          "msPerFrame": 0.020996875,
+          "msPerSecond": 0.10618100841963722,
+          "sharePercent": 0.010618100841963723,
+          "durationReductionPercent": -0.08937881722033136
+        },
+        {
+          "stage": "SESSION_ADMISSION",
+          "msPerFrame": 0.01946875,
+          "msPerSecond": 0.09845329401017112,
+          "sharePercent": 0.009845329401017112,
+          "durationReductionPercent": -9.087725442129212
+        },
+        {
+          "stage": "SLOT_PUBLICATION",
+          "msPerFrame": 0.01844375,
+          "msPerSecond": 0.09326987820995665,
+          "sharePercent": 0.009326987820995666,
+          "durationReductionPercent": -17.266044108881374
+        },
+        {
+          "stage": "FRAME_PRIMITIVES",
+          "msPerFrame": 0.0162875,
+          "msPerSecond": 0.08236574131316404,
+          "sharePercent": 0.008236574131316402,
+          "durationReductionPercent": -1.6975609756097576
+        },
+        {
+          "stage": "FEATURE_EXTENT_NEGOTIATION",
+          "msPerFrame": 0.012334375,
+          "msPerSecond": 0.06237482366904421,
+          "sharePercent": 0.006237482366904421,
+          "durationReductionPercent": 4.47725072604066
+        },
+        {
+          "stage": "CUDA_COMPLETION_CALLBACK",
+          "msPerFrame": 0.00885625,
+          "msPerSecond": 0.04478597676160914,
+          "sharePercent": 0.0044785976761609145,
+          "durationReductionPercent": 25.655823714585523
+        },
+        {
+          "stage": "MEDIUM_RESOLVE_PREPARE",
+          "msPerFrame": 0.008653125,
+          "msPerSecond": 0.04375877545973737,
+          "sharePercent": 0.004375877545973737,
+          "durationReductionPercent": 4.747162022703833
+        },
+        {
+          "stage": "FEATURE_INPUT_REUSE",
+          "msPerFrame": 0.00835625,
+          "msPerSecond": 0.04225748124930941,
+          "sharePercent": 0.004225748124930941,
+          "durationReductionPercent": -40.51497635312666
+        },
+        {
+          "stage": "WINDOW",
+          "msPerFrame": 0.0045625,
+          "msPerSecond": 0.023072521549735128,
+          "sharePercent": 0.002307252154973513,
+          "durationReductionPercent": 4.575163398692816
+        },
+        {
+          "stage": "TRY_SUBMIT",
+          "msPerFrame": 0.001628125,
+          "msPerSecond": 0.00823341351192603,
+          "sharePercent": 0.0008233413511926029,
+          "durationReductionPercent": 0.3824091778202643
+        },
+        {
+          "stage": "FRAME_PREPARATION",
+          "msPerFrame": 0.000828125,
+          "msPerSecond": 0.004187820692246444,
+          "sharePercent": 0.00041878206922464444,
+          "durationReductionPercent": 12.541254125412548
+        },
+        {
+          "stage": "CAMERA_SCATTERING_PREPARE",
+          "msPerFrame": 0.00019375,
+          "msPerSecond": 0.0009797920110161493,
+          "sharePercent": 9.797920110161493e-05,
+          "durationReductionPercent": -10.71428571428572
+        }
+      ],
+      "gpu": [
+        {
+          "stage": "vulkan.optical.cameraContinuationTrace/startToend",
+          "msPerFrame": 81.987196,
+          "callsPerFrame": 166.6875
+        },
+        {
+          "stage": "cuda.entry.native_optical_step_4",
+          "msPerFrame": 48.021617000000006,
+          "callsPerFrame": 170.6875
+        },
+        {
+          "stage": "vulkan.shared.producer",
+          "msPerFrame": 47.373857,
+          "callsPerFrame": 93.34375
+        },
+        {
+          "stage": "vulkan.shared.continuation",
+          "msPerFrame": 43.011688,
+          "callsPerFrame": 93.34375
+        },
+        {
+          "stage": "vulkan.optical.cameraInitialTrace/startToend",
+          "msPerFrame": 7.5837579999999996,
+          "callsPerFrame": 4.0
+        },
+        {
+          "stage": "cuda.entry.native_optical_reset",
+          "msPerFrame": 0.7670710000000001,
+          "callsPerFrame": 170.6875
+        },
+        {
+          "stage": "vulkan.opticalPhoton.trace/startToend",
+          "msPerFrame": 0.463367,
+          "callsPerFrame": 8.0
+        },
+        {
+          "stage": "cuda.entry.native_optical_photon_step",
+          "msPerFrame": 0.34598399999999996,
+          "callsPerFrame": 8.0
+        },
+        {
+          "stage": "vulkan.opticalPhoton.mapCopy/startToend",
+          "msPerFrame": 0.065443,
+          "callsPerFrame": 1.0
+        },
+        {
+          "stage": "cuda.entry.native_optical_photon_reset",
+          "msPerFrame": 0.039535,
+          "callsPerFrame": 8.0
+        },
+        {
+          "stage": "cuda.entry.native_optical_photon_clear",
+          "msPerFrame": 0.025673,
+          "callsPerFrame": 1.0
+        },
+        {
+          "stage": "vulkan.opticalPhoton.mapInitialize/startToend",
+          "msPerFrame": 0.007672,
+          "callsPerFrame": 1.0
+        }
+      ],
+      "events": 146659,
+      "droppedEvents": 0,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.81 W, 180 MHz, 62"
+    }
+  },
+  "hdr": {
+    "passed": true,
+    "mode": "bounded",
+    "supportingReferenceCommit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": false,
+        "alphaExact": true,
+        "relativeRms": 2.2809442054569046e-06,
+        "luminanceEnergyRelativeError": 2.207073913642903e-08,
+        "maxAbsoluteChannelError": 0.0009765625,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 126,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "8f31befbb95369502e34e2ce8e04c7883254f131afb6ae46240441f8015e109f"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": false,
+        "alphaExact": true,
+        "relativeRms": 2.2646852097143504e-06,
+        "luminanceEnergyRelativeError": 2.00194553406987e-08,
+        "maxAbsoluteChannelError": 0.00048828125,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 151,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "96a8b92630456051440d0b00b14f2876f7714227f6d3c34130a52f2769151246"
+      }
+    ],
+    "maxRelativeRms": 2.2809442054569046e-06,
+    "maxLuminanceEnergyRelativeError": 2.207073913642903e-08,
+    "maxAbsoluteChannelError": 0.0009765625
+  },
+  "paths": {
+    "passed": true,
+    "boundedComparisons": 32,
+    "nativeFrames": 64,
+    "continuedQueriesBefore": 1342063,
+    "continuedQueriesAfter": 1322015
+  },
+  "connections": {
+    "passed": true,
+    "boundedComparisons": 84,
+    "nativeFrames": 168,
+    "mirroredVertexOrders": 2,
+    "hitFormats": 3
+  },
+  "validation": {
+    "passed": true,
+    "logs": [
+      {
+        "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\gpu-complete-connections\\paths-validation.jsonl",
+        "passed": true,
+        "opened": 2,
+        "closed": 2,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      },
+      {
+        "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\gpu-complete-connections\\connections-validation.jsonl",
+        "passed": true,
+        "opened": 2,
+        "closed": 2,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      }
+    ]
+  },
+  "sourceCheck": {
+    "passed": true,
+    "files": [
+      {
+        "name": "api_density.cu",
+        "passed": true
+      },
+      {
+        "name": "api_emission.cu",
+        "passed": true
+      },
+      {
+        "name": "api_glass_helpers.cu",
+        "passed": true
+      },
+      {
+        "name": "api_roughglass_helpers.cu",
+        "passed": true
+      },
+      {
+        "name": "api_roughglass_sampling.cu",
+        "passed": true
+      },
+      {
+        "name": "AUTHORS.txt",
+        "passed": true
+      },
+      {
+        "name": "boundary_packet.cu",
+        "passed": true
+      },
+      {
+        "name": "boundary_scattering.cu",
+        "passed": true
+      },
+      {
+        "name": "boundary_transport.cu",
+        "passed": true
+      },
+      {
+        "name": "camera_absorption.cu",
+        "passed": true
+      },
+      {
+        "name": "camera_scattering.cu",
+        "passed": true
+      },
+      {
+        "name": "color_funcs.cl",
+        "passed": true
+      },
+      {
+        "name": "cudadevice_math.cl",
+        "passed": true
+      },
+      {
+        "name": "cudadevice_oclemul_funcs.cl",
+        "passed": true
+      },
+      {
+        "name": "cudadevice_oclemul_types.cl",
+        "passed": true
+      },
+      {
+        "name": "density_scattering.cu",
+        "passed": true
+      },
+      {
+        "name": "heterogeneous_multiple_scattering.cu",
+        "passed": true
+      },
+      {
+        "name": "LICENSE.txt",
+        "passed": true
+      },
+      {
+        "name": "medium_transport_types.cu",
+        "passed": true
+      },
+      {
+        "name": "medium_transport.cu",
+        "passed": true
+      },
+      {
+        "name": "multiple_scattering.cu",
+        "passed": true
+      },
+      {
+        "name": "NOTICE.txt",
+        "passed": true
+      },
+      {
+        "name": "optical_transport.cu",
+        "passed": true
+      },
+      {
+        "name": "pbr_transport.cu",
+        "passed": true
+      },
+      {
+        "name": "primary_absorption.cu",
+        "passed": true
+      },
+      {
+        "name": "primary_emission.cu",
+        "passed": true
+      },
+      {
+        "name": "segment_batch.cu",
+        "passed": true
+      },
+      {
+        "name": "segment_helpers.cl",
+        "passed": true
+      },
+      {
+        "name": "upstream-densitygrid-functions.cl",
+        "passed": true
+      },
+      {
+        "name": "upstream-evalstack-functions.cl",
+        "passed": true
+      },
+      {
+        "name": "upstream-glass-functions.cl",
+        "passed": true
+      },
+      {
+        "name": "upstream-microfacet-functions.cl",
+        "passed": true
+      },
+      {
+        "name": "upstream-pathvolumeinfo-functions.cl",
+        "passed": true
+      },
+      {
+        "name": "upstream-roughglass-sample.cl",
+        "passed": true
+      },
+      {
+        "name": "upstream-segment-function.cl",
+        "passed": true
+      },
+      {
+        "name": "optical_caustics.cu",
+        "passed": true
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "Algorithm": "SHA256",
+      "Hash": "080435940EC18EE0DB1EA80AD35E0EA78C7053B2286A8933F4BAA088310A5A7D",
+      "Path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\gpu-complete-connections\\candidate-core.jar"
+    },
+    {
+      "Algorithm": "SHA256",
+      "Hash": "22FA58C05DF67790C148A9C200D070C5251B2BC9BB5655C2659E6BE9343AD518",
+      "Path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\gpu-complete-connections\\native-test-classes.jar"
+    },
+    {
+      "Algorithm": "SHA256",
+      "Hash": "83586141E12750ACC40B458DEDAC93D466287CD5DF6D9E6FD1752CF2EF5D4EF4",
+      "Path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\gpu-complete-connections\\matrix-test-classes.jar"
+    }
+  ],
+  "skippedAfterNoGain": [
+    "full 152-frame native acceptance",
+    "fixed57",
+    "64-frame acceptance",
+    "micro-checks"
+  ],
+  "reason": "CUDA work decreased but Vulkan work increased; actual round count fell only 4.677%/4.784%, and clean forward/reverse throughput showed no net gain. No proven hardware-level register or occupancy cause.",
+  "exploratoryRuns": [
+    {
+      "directory": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-forward-baseline-matrix-off",
+      "frames": 32,
+      "wallMs": 6101.3626,
+      "msPerFrame": 190.66758125,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 7.85 W, 225 MHz, 56"
+    },
+    {
+      "directory": "build\\medium-micro-all-20261031\\gpu-complete-connections\\forward-candidate-matrix-off",
+      "frames": 32,
+      "wallMs": 6219.7925,
+      "msPerFrame": 194.368515625,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 1 %, 60.88 W, 180 MHz, 59"
+    },
+    {
+      "directory": "build\\medium-micro-all-20261031\\gpu-complete-connections\\reverse-candidate-matrix-off",
+      "frames": 32,
+      "wallMs": 6321.5077,
+      "msPerFrame": 197.547115625,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 85 %, 73.93 W, 2152 MHz, 64"
+    },
+    {
+      "directory": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-reverse-baseline-matrix-off",
+      "frames": 32,
+      "wallMs": 6179.9265,
+      "msPerFrame": 193.122703125,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 1 %, 61.90 W, 180 MHz, 63"
+    }
+  ],
+  "evidenceFiles": [
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\abi-test.log",
+      "sha256": "406608f11c8f3c5215db8c4461539233e8b97604605a4dc1e90423d8a8e1204b"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\artifacts.json",
+      "sha256": "8d1e99abb74cc56bed2f2f244043a9589ca063c5476ac405d3b073b46f99fbed"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-forward-candidate-matrix-off\\artifacts.json",
+      "sha256": "4f17a96fd99b44b26aba8d2a2c8788e1457e5d025e703e38764673027d2cee34"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-forward-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "6cdcb79b2bd679391b129c7981959d190a91c94804bc517c71a9a2519e655e08"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-forward-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-forward-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "d28ce3bccee40c5201e5eb9be07ec17c3e97c192ac2ce435be5f5f0ec27a6a8f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-forward-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-forward-candidate-matrix-off\\run.log",
+      "sha256": "eac5663c295c83b27719cc1b30e90fb68a8a9dafcadb079eda185fafb25f5295"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-forward-candidate-matrix-off\\runtime.json",
+      "sha256": "38d1d54a7850e8a79b1eb3bfc42958ab499aabe73ce16dd00ed979a508f05467"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-reverse-candidate-matrix-off\\artifacts.json",
+      "sha256": "4f17a96fd99b44b26aba8d2a2c8788e1457e5d025e703e38764673027d2cee34"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-reverse-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "20f1851ea1a6463ffe45e8f7077f9e3d685b647e4833f834e4c8fbdb20f04a2a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-reverse-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-reverse-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "9f752d28a28fc9ca29369643e20e4454d004e86e9aaaf6e3bf194f869e1d8a39"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-reverse-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-reverse-candidate-matrix-off\\run.log",
+      "sha256": "48a7632c495c3b13dd261794a19620c69998813a01172255cbf50aa87300885e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-reverse-candidate-matrix-off\\runtime.json",
+      "sha256": "b87707855a87fc5933e1d8abbf7e69a091e28833e5787a180dcf5ce9b5acbc0d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\clean-throughput.json",
+      "sha256": "984a42000fd8a0f49eb80dfe077f698e76c4ac6df3f78b917fd6de1c34187e42"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\connections-initial-gpu.csv",
+      "sha256": "31f20d7e388d464acecd5aad65d14b69e61e1a7f8e7d7a8e9fc5cd548e442220"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\connections-test.log",
+      "sha256": "178ded555c90c9049ad1419ff5aca9f6e0276559cc12bf16aaa0268c1b5cd1fd"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\connections-validation.jsonl",
+      "sha256": "7ab35a501d39edec26ca65f4b364431359c83f4c05cc71a60ad6479508aee01f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\forward-candidate-matrix-off\\artifacts.json",
+      "sha256": "4f17a96fd99b44b26aba8d2a2c8788e1457e5d025e703e38764673027d2cee34"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\forward-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "f20674a9d0a35814f863b8045b4cc5589cae5357192d0101dcaa24fc07b85c5b"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\forward-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\forward-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "5855e0931c449b7627318ff651a0b7b37c3e2548fa83dc47e66bd921f0892d34"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\forward-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\forward-candidate-matrix-off\\run.log",
+      "sha256": "7763a0f619ee6d5fe157c4ccc3a8f26693b12cecc72be258634c7cfe7755e0b2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\forward-candidate-matrix-off\\runtime.json",
+      "sha256": "9ffe5d311946f3912f679626c22e74de10c74245a127f5495bc8cebdcbcc49bc"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\hdr-compare.json",
+      "sha256": "fbf2348d62c04e880c1426bf93f528340746122d72f8ef35fa8d08bfee0786aa"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\hdr-initial-gpu.csv",
+      "sha256": "7ba2a07465906a458f4bf0206387f29c561855b2b62d38884b8b69772573639c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\hdr-test.log",
+      "sha256": "e05c7747c96c19795078a3bc0ca30a3c693b4efb43b00d76d590dd1c4fda9c69"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\native-connections\\gpu-connection-checks.json",
+      "sha256": "b5bb63fdbea23d8c12e329cd02975b56fc5ead0cc192b44e8a838c5663d54084"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\native-paths\\gpu-path-checks.json",
+      "sha256": "9d8d442d6fda500f7041abd3d0a303bc5b56a8918638a90579a60f06a23b31a1"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\paths-initial-gpu.csv",
+      "sha256": "4a41572ce9eb516ea4a87b2f27c4c3bbead2cf65730e85f91a0c457751b57f76"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\paths-test.log",
+      "sha256": "86ad8e11ed647aeef2c8916ae33d1eb116ae99a56f177a55e282998b91de4c4a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\paths-validation.jsonl",
+      "sha256": "8a1e853e1848fb72725b50394a41deb0f8b63f077f0e6d63023eba6334cfba63"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings\\artifacts.json",
+      "sha256": "4f17a96fd99b44b26aba8d2a2c8788e1457e5d025e703e38764673027d2cee34"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings\\initial-gpu.csv",
+      "sha256": "14b7598ee20d33298d08cf00199aca9ffe6ef5436db0566c1087622dbb7a0420"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "beeb8b059f7355483a095f9a9dbee1512f1a7f7b621a44d778eeeef35db24fac"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "e0a0ed7b55147e13da781eaf87147667c1a8537d7edd7b9964d2af5c4771fe16"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings\\micro-all-1080p-profiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings\\micro-all-1080p-profiled.csv",
+      "sha256": "f32dbea94fa86fc10694866dd31a78304c814b27c028be407aeed0ad4654d189"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings\\micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "f0367c2590e113a4eb4ea724e9e80efae48b6c36aeca7a2a62d4780e34ffcd7f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings\\micro-all-1080p-wall-timeline-round-2.json",
+      "sha256": "18584738d1a1754884f04b2be65bc5ee9ada2cbd86eb9418dc00df7ff52be946"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings\\micro-profiled-coverage.json",
+      "sha256": "de615f8508573bcc6f1928edf09f253c7464e67018bc91a9c050c0b499a0038c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings\\run.log",
+      "sha256": "7f342f95f47eff7bfca6a382786f4261972edaee62f75254db5010d316ce97d5"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-candidate-matrix-timings\\runtime.json",
+      "sha256": "1a0112275d34ec4c58e6ff88e72e7355003271ad56e8b6f1f234610b17c60a78"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\ranked-comparison.json",
+      "sha256": "15abdb1fee705b63218b5e303e4b5dd0ddcb4b44fb553bab06c672feebbac403"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\reverse-candidate-matrix-off\\artifacts.json",
+      "sha256": "4f17a96fd99b44b26aba8d2a2c8788e1457e5d025e703e38764673027d2cee34"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\reverse-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "9d9bf5d4426a27bb99df00419f8b0ce1dd49472ecca44a47ea0527e50a65013e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\reverse-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\reverse-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "dc376c3a530e864cb4dd88ec75186ca216661a5b0cd2c46beeb6996ba021319e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\reverse-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\reverse-candidate-matrix-off\\run.log",
+      "sha256": "b20a489db0585df3bee0094a9c0f436917e38fe0a89100d11594ff5c41ff6f70"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\reverse-candidate-matrix-off\\runtime.json",
+      "sha256": "afdc2993a1f475be384df2fa546a67046902d630461738dc7b18d500d7cfea5d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\source-check.json",
+      "sha256": "15f2dc8dc3c35ad47ebbdaba4ed95beca67185b6f66b9995d04678c955dc1209"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\gpu-complete-connections\\special-validation-check.json",
+      "sha256": "21df2ec714303b5a7ed211e3654a0540439c7295789ba8d8a5fefa7b71d2b0c2"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-forward-baseline-matrix-off\\artifacts.json",
+      "sha256": "8bc829738206337458a493d2a2ef11e69d5d68594062d1eb312dc946611ec29f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-forward-baseline-matrix-off\\initial-gpu.csv",
+      "sha256": "ac4aa1f5a10fba4fc795caa28e108dbef742b03997ab42f82f0e02ccf6a80afa"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-forward-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-forward-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-forward-baseline-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-forward-baseline-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "cb2bcc351f09ed7a9ef807392a7dde82e10575e2a2ba8fcb81257ec7f696923b"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-forward-baseline-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-forward-baseline-matrix-off\\run.log",
+      "sha256": "2602253447cf6ae6ff55a1a4a4cc3357bc69643c34cef8fc9bb61b6a402718c3"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-forward-baseline-matrix-off\\runtime.json",
+      "sha256": "6fb375fe4b562c18f75c0e12642fb19573ddce3c620a5a85b0c67b60ca5cbd9d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-reverse-baseline-matrix-off\\artifacts.json",
+      "sha256": "8bc829738206337458a493d2a2ef11e69d5d68594062d1eb312dc946611ec29f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-reverse-baseline-matrix-off\\initial-gpu.csv",
+      "sha256": "749ba70297bfbfe9df36a95322cec0a66d58a80284b5828ec3fc91d6b62f25e9"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-reverse-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-reverse-baseline-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-reverse-baseline-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-reverse-baseline-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "f16e27a8be3b0e4e0ba119fd51c1b3874df39e491fc8392bde69a9ac4f971c46"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-reverse-baseline-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-reverse-baseline-matrix-off\\run.log",
+      "sha256": "1c6d6bc8683b3df0c60e8a4506bfda5c4947618495aaaa057fb3d05d832c16a4"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-clean-reverse-baseline-matrix-off\\runtime.json",
+      "sha256": "18024be3b0f4436fd9cd5bde440c883e9996602a7cb1f1036ae7cafe94dcf227"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings\\artifacts.json",
+      "sha256": "8bc829738206337458a493d2a2ef11e69d5d68594062d1eb312dc946611ec29f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings\\initial-gpu.csv",
+      "sha256": "7f97819acbb23fe28b628db395ee9bc389516a2caa742602cf6c459a8e2e9a3b"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "43fc4833124b58406860c12a3964bb9b7df7af2ef50970935bfdf09debf13261"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "192f5645608c1be8931db85d40645ce3e7ca4672ddd3b3d3e911a63dc8ce4513"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings\\micro-all-1080p-profiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings\\micro-all-1080p-profiled.csv",
+      "sha256": "37bd58473553dffa4ab0c74b0a3d8d6846099bd52f803c1cde1245daa3020e34"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings\\micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "9c01f22c2f2432cffda41cd28029d5bdb2168924c56efb6450376c3188814584"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings\\micro-all-1080p-wall-timeline-round-2.json",
+      "sha256": "e9ec99473c8b4a4db4140d1a5fd518033d919b690a59087a0b1dc2da73fcc17f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings\\micro-profiled-coverage.json",
+      "sha256": "de615f8508573bcc6f1928edf09f253c7464e67018bc91a9c050c0b499a0038c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings\\run.log",
+      "sha256": "e64a6e1bed0bf110790ed9a96d14e180c19196f4ccbb3293f13576886f981209"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\paired-connection-hits-v2\\p-ranked-baseline-matrix-timings\\runtime.json",
+      "sha256": "1a849c13f8e467d0700d36459f6d103a55cbea9aee5c7e196d2dc109c7a59b35"
+    }
+  ]
+}

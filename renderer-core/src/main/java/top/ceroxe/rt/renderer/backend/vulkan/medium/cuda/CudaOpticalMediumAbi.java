@@ -35,13 +35,12 @@ public final class CudaOpticalMediumAbi {
     public static final String BOUND_CONNECTION_RAYS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalBoundConnectionRays";
     public static final String REUSE_DUPLICATE_BRANCHES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalReuseDuplicateBranches";
     public static final String BATCH_CONNECTION_HITS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalBatchConnectionHits";
-    public static final String VULKAN_CONNECTIONS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalVulkanConnections";
     public static final long RESOLVED_RADIANCE_FLAG=1L;
     private CudaOpticalMediumAbi() { }
     public record Plan(int pixels,int samples,int tilePixels,int boundaryCount,int stateOffset,int hitOffset,
             int evaluationOffset,int primaryOffset,int transmittanceOffset,int emissionOffset,int priorityOffset,
             int sceneBytes,long bytes,boolean externalPrimary,boolean directPrimary,boolean compactHits,boolean compactStates,boolean transposedHits,boolean transposedStates,boolean transposedPrimary,
-            int connectionOffset,boolean connectionTransport,boolean activeQueues,int connectionBatchSize,boolean vulkanConnections) {
+            int connectionOffset,boolean connectionTransport,boolean activeQueues,int connectionBatchSize) {
         public int paths(){return Math.multiplyExact(pixels,samples);}
         public int tilePaths(){return Math.multiplyExact(tilePixels,samples);}
         public long primaryBytes(){return Math.multiplyExact((long)paths(),HIT_BYTES);}
@@ -114,8 +113,7 @@ public final class CudaOpticalMediumAbi {
         int hitBytes=compactHits?COMPACT_HIT_BYTES:HIT_BYTES;
         int stateBytes=compactStates?COMPACT_STATE_BYTES:STATE_BYTES;
         boolean activeQueues=useActiveQueues(boundaries,connectionTransport);
-        boolean vulkanConnections=connectionTransport&&Boolean.parseBoolean(System.getProperty(VULKAN_CONNECTIONS_PROPERTY,"true"));
-        int connectionBatchSize=connectionTransport&&!vulkanConnections&&!OpticalFrameTimings.KERNEL_PHASES
+        int connectionBatchSize=connectionTransport&&!OpticalFrameTimings.KERNEL_PHASES
                 &&Boolean.parseBoolean(System.getProperty(BATCH_CONNECTION_HITS_PROPERTY,"true"))?2:1;
         int tilePixels=Math.toIntExact(Math.min(pixels,(available-(activeQueues?32L:0L))/((long)samples*(stateBytes+(long)hitBytes*connectionBatchSize+COLOR_BYTES
                 +(externalPrimary&&!directPrimary?HIT_BYTES:0)+(connectionTransport?CONNECTION_BYTES:0)+(activeQueues?8:0)))));
@@ -128,7 +126,7 @@ public final class CudaOpticalMediumAbi {
         int emission=Math.toIntExact(attenuation+(long)paths*COLOR_BYTES);
         long bytes=Math.addExact(emission,(long)paths*COLOR_BYTES);
         if(activeQueues)bytes=Math.addExact(bytes,2L*((tilePixels*(long)samples*4L+15L)&~15L));
-        return new Plan(pixels,samples,tilePixels,boundaries,scene,hit,evaluation,primary,attenuation,emission,priority,scene,bytes,externalPrimary,directPrimary,compactHits,compactStates,transposedHits,transposedStates,transposedPrimary,connection,connectionTransport,activeQueues,connectionBatchSize,vulkanConnections);
+        return new Plan(pixels,samples,tilePixels,boundaries,scene,hit,evaluation,primary,attenuation,emission,priority,scene,bytes,externalPrimary,directPrimary,compactHits,compactStates,transposedHits,transposedStates,transposedPrimary,connection,connectionTransport,activeQueues,connectionBatchSize);
     }
     public static byte[] scene(Plan plan,RenderFrameRequest frame,List<CudaBoundaryMediumAbi.Boundary> source,int[] containing) {
         return scene(plan,frame,source,containing,CudaMediumDensityAbi.Scene.empty());
@@ -171,7 +169,7 @@ public final class CudaOpticalMediumAbi {
                         |(Boolean.parseBoolean(System.getProperty(SKIP_EMPTY_CONNECTIONS_PROPERTY,"true"))?512:0)
                         |(Boolean.parseBoolean(System.getProperty(BOUND_CONNECTION_RAYS_PROPERTY,"true"))?2048:0)
                         |(Boolean.parseBoolean(System.getProperty(REUSE_DUPLICATE_BRANCHES_PROPERTY,"true"))?4096:0)
-                        |(plan.connectionBatchSize()==2?8192:0)|(plan.vulkanConnections()?16384:0));
+                        |(plan.connectionBatchSize()==2?8192:0));
         packed.putInt(200,Math.toIntExact(plan.firstQueueOffset())).putInt(204,Math.toIntExact(plan.secondQueueOffset()));
         // These words share the opt-in clock sampling area, which disables batching.
         packed.putInt(228,plan.secondConnectionHitOffset()).putInt(232,plan.connectionBatchSize());

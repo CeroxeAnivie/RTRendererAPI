@@ -578,9 +578,6 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
         Connection*c=connections(b)+i;
         HitView<Compact,Transposed> connectionView={(const unsigned int*)(b+h[10]),h[2],(unsigned int)i};
         if(connectionView.u(Compact?23:51)!=s->control.w){finish(b,i,s,statistics,17);return;}
-        const unsigned int connectionMode=__float_as_uint(c->source.w);
-        if((h[47]&16384u)!=0u&&connectionMode>=5u&&connectionMode<=11u){finish(b,i,s,statistics,32u+connectionMode-4u);return;}
-        if(connectionMode==3u&&(h[47]&16384u)==0u){finish(b,i,s,statistics,42u);return;}
         int continuation=0;
         // Mode 2 is an unshadowed light: preserve unit visibility and skip the
         // complete surface/medium connection, matching direct-volume transport.

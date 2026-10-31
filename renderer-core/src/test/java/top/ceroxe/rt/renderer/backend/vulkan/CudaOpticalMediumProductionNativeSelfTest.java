@@ -1,7 +1,6 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import java.nio.ByteOrder;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -27,9 +26,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         if(java.util.Arrays.asList(args).contains("--benchmark")){benchmark();return;}
         if(java.util.Arrays.asList(args).contains("--connection-ranges")){verifyConnectionRanges(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--connection-batches")){verifyConnectionRanges(CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY);return;}
-        if(java.util.Arrays.asList(args).contains("--duplicate-branches")){verifyDuplicateBranches(CudaOpticalMediumAbi.REUSE_DUPLICATE_BRANCHES_PROPERTY);return;}
-        if(java.util.Arrays.asList(args).contains("--gpu-paths")){verifyDuplicateBranches(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY);return;}
-        if(java.util.Arrays.asList(args).contains("--gpu-connections")){verifyConnectionRanges(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY);return;}
+        if(java.util.Arrays.asList(args).contains("--duplicate-branches")){verifyDuplicateBranches();return;}
         Files.createDirectories(OUTPUT);String previous=System.getProperty(CudaCameraMediumProfile.ENABLE_PROPERTY);
         System.setProperty(CudaCameraMediumProfile.ENABLE_PROPERTY,"true");
         long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
@@ -130,9 +127,9 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         System.out.println("CudaOpticalMediumProductionNativeSelfTest passed: comparisons="+RESULTS.size()+" actualNativeFrames="+routes+" recoverableRejections="+rejected);
     }
     /** Same sequence identities, both initialization layouts, and branch-zero dead lobes. */
-    private static void verifyDuplicateBranches(String property)throws Exception {
+    private static void verifyDuplicateBranches()throws Exception {
         Files.createDirectories(OUTPUT);
-        boolean gpu=property.equals(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY);
+        String property=CudaOpticalMediumAbi.REUSE_DUPLICATE_BRANCHES_PROPERTY;
         String previous=System.getProperty(property),previousFused=System.getProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY);
         var references=new ArrayList<byte[]>();var queryReferences=new ArrayList<Long>();int comparisons=0;
         String[] kinds={"fog","volume","nested","alpha","unit","smooth","rough","metal"};
@@ -183,9 +180,8 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                         byte[] bytes=new byte[frame.byteCount()];frame.pixels().get(bytes);
                         if(!reuse){references.add(bytes);queryReferences.add(queries);totalBefore+=queries;}
                         else {
-                            if(gpu)requireBoundedHdr(references.get(index),bytes,"GPU path: fused="+fused+" spp="+spp+" case="+kind);
-                            else require(java.util.Arrays.equals(references.get(index),bytes),"duplicate-branch reuse changed HDR: fused="+fused+" spp="+spp+" case="+kind);
-                            if(!gpu&&kind.equals("fog"))require(queries<queryReferences.get(index),"duplicate-branch reuse deleted no continued path work");
+                            require(java.util.Arrays.equals(references.get(index),bytes),"duplicate-branch reuse changed HDR: fused="+fused+" spp="+spp+" case="+kind);
+                            if(kind.equals("fog"))require(queries<queryReferences.get(index),"duplicate-branch reuse deleted no continued path work");
                             totalAfter+=queries;comparisons++;
                         }
                         index++;
@@ -195,7 +191,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             }
             long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
             require(routes==64,"duplicate-branch checks bypassed optical route: "+routes);
-            Files.writeString(OUTPUT.resolve(gpu?"gpu-path-checks.json":"duplicate-branches.json"),"{\"passed\":true,\""+(gpu?"boundedComparisons":"byteIdenticalComparisons")+"\":"+comparisons
+            Files.writeString(OUTPUT.resolve("duplicate-branches.json"),"{\"passed\":true,\"byteIdenticalComparisons\":"+comparisons
                     +",\"nativeFrames\":"+routes+",\"continuedQueriesBefore\":"+totalBefore+",\"continuedQueriesAfter\":"+totalAfter+"}\n");
             System.out.println("CudaOpticalMediumProductionNativeSelfTest duplicate branches passed: comparisons="+comparisons+" nativeFrames="+routes);
         } finally {
@@ -433,21 +429,17 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
     private static void verifyConnectionRanges(String property)throws Exception {
         Files.createDirectories(OUTPUT);
         String previous=System.getProperty(property),previousCompact=System.getProperty(CudaOpticalMediumAbi.COMPACT_HITS_PROPERTY),
-                previousTransposed=System.getProperty(CudaOpticalMediumAbi.TRANSPOSED_HITS_PROPERTY),
-                previousGpu=System.getProperty(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY);
+                previousTransposed=System.getProperty(CudaOpticalMediumAbi.TRANSPOSED_HITS_PROPERTY);
         boolean batches=property.equals(CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY);
-        boolean gpu=property.equals(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY),extended=batches||gpu;
         var references=new ArrayList<byte[]>();int comparisons=0;
-        String[] cases=extended?new String[]{"clear","behind-opaque","before-opaque","before-alpha","before-volume",
+        String[] cases=batches?new String[]{"clear","behind-opaque","before-opaque","before-alpha","before-volume",
                 "light-inside-volume","endpoint-overlay","endpoint-nonshadow","endpoint-opaque","sun",
                 "before-alpha-chain","before-volume-nested","before-volume-budget2","before-volume-budget3"}
                 :new String[]{"clear","behind-opaque","before-opaque","before-alpha","before-volume",
                 "light-inside-volume","endpoint-overlay","endpoint-nonshadow","endpoint-opaque","sun"};
-        String[] formats=extended?new String[]{"full","compact","transposed"}:new String[]{"transposed"};
+        String[] formats=batches?new String[]{"full","compact","transposed"}:new String[]{"transposed"};
         long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
         try {
-            // Batching has its own strict fallback test even when full GPU connections are the default.
-            if(batches)System.setProperty(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY,"false");
             for(boolean bound:new boolean[]{false,true}) {
                 System.setProperty(property,Boolean.toString(bound));
                 sequence=0;revision=0;accepted=0;int referenceIndex=0;
@@ -502,12 +494,8 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                             var snapshot=capture("range-"+format+"-"+bound+"-"+mirror+"-"+kind,request(camera,1,caseBudget,blackSky()));
                             byte[] bytes=new byte[snapshot.byteCount()];snapshot.pixels().get(bytes);
                             if(!bound)references.add(bytes);
-                            else {
-                                String context="connection property="+property+" format="+format+" mirror="+mirror+" case="+kind;
-                                if(gpu)requireBoundedHdr(references.get(referenceIndex),bytes,context);
-                                else require(java.util.Arrays.equals(references.get(referenceIndex),bytes),context);
-                                comparisons++;
-                            }
+                            else {require(java.util.Arrays.equals(references.get(referenceIndex),bytes),
+                                    "connection mode changed HDR: property="+property+" format="+format+" mirror="+mirror+" case="+kind);comparisons++;}
                             referenceIndex++;
                             double e=energy(snapshot);
                             if(kind.equals("clear")){clearEnergy=e;require(e>.001,"finite connection test has no direct lighting");}
@@ -525,36 +513,14 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
             int expected=cases.length*formats.length*2;
             require(comparisons==expected&&routes==expected*2L,"finite connection checks bypassed native optical transport: "+routes);
-            Files.writeString(OUTPUT.resolve(gpu?"gpu-connection-checks.json":batches?"connection-batch-checks.json":"connection-range-checks.json"),
-                    "{\"passed\":true,\""+(gpu?"boundedComparisons":"byteIdenticalComparisons")+"\":"+comparisons+",\"nativeFrames\":"+routes+",\"mirroredVertexOrders\":2,\"hitFormats\":"+formats.length+"}\n");
-            System.out.println("CudaOpticalMediumProductionNativeSelfTest connection modes passed: "+comparisons+(gpu?" bounded":" byte-identical")+" comparisons / "+routes+" native frames");
+            Files.writeString(OUTPUT.resolve(batches?"connection-batch-checks.json":"connection-range-checks.json"),
+                    "{\"passed\":true,\"byteIdenticalComparisons\":"+comparisons+",\"nativeFrames\":"+routes+",\"mirroredVertexOrders\":2,\"hitFormats\":"+formats.length+"}\n");
+            System.out.println("CudaOpticalMediumProductionNativeSelfTest connection modes passed: "+comparisons+" byte-identical comparisons / "+routes+" native frames");
         } finally {
             if(previous==null)System.clearProperty(property);else System.setProperty(property,previous);
             if(previousCompact==null)System.clearProperty(CudaOpticalMediumAbi.COMPACT_HITS_PROPERTY);else System.setProperty(CudaOpticalMediumAbi.COMPACT_HITS_PROPERTY,previousCompact);
             if(previousTransposed==null)System.clearProperty(CudaOpticalMediumAbi.TRANSPOSED_HITS_PROPERTY);else System.setProperty(CudaOpticalMediumAbi.TRANSPOSED_HITS_PROPERTY,previousTransposed);
-            if(previousGpu==null)System.clearProperty(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY);else System.setProperty(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY,previousGpu);
         }
-    }
-    /** Predeclared cross-backend policy, identical to CompareMediumHdr.py --bounded. */
-    private static void requireBoundedHdr(byte[] reference,byte[] candidate,String context) {
-        require(reference.length==candidate.length&&reference.length%8==0,"HDR extent: "+context);
-        var a=ByteBuffer.wrap(reference).order(ByteOrder.LITTLE_ENDIAN);var b=ByteBuffer.wrap(candidate).order(ByteOrder.LITTLE_ENDIAN);
-        int pixels=reference.length/8;double[] magnitudes=new double[pixels*3];double square=0,error=0,lightA=0,lightB=0,maximum=0;
-        double[] luma={.2126,.7152,.0722};
-        for(int i=0;i<pixels;i++){
-            require(a.getShort(i*8+6)==b.getShort(i*8+6),"HDR alpha: "+context);
-            require(Float.isFinite(Float.float16ToFloat(a.getShort(i*8+6))),"nonfinite HDR alpha: "+context);
-            for(int c=0;c<3;c++){
-                double x=Float.float16ToFloat(a.getShort(i*8+c*2)),y=Float.float16ToFloat(b.getShort(i*8+c*2));
-                require(Double.isFinite(x)&&Double.isFinite(y),"nonfinite HDR: "+context);
-                double delta=y-x;square+=x*x;error+=delta*delta;lightA+=x*luma[c];lightB+=y*luma[c];
-                maximum=Math.max(maximum,Math.abs(delta));magnitudes[i*3+c]=Math.abs(x);
-            }
-        }
-        java.util.Arrays.sort(magnitudes);double at=.99*(magnitudes.length-1),fraction=at-Math.floor(at);
-        double p99=magnitudes[(int)Math.floor(at)]*(1-fraction)+magnitudes[(int)Math.ceil(at)]*fraction;
-        require(Math.sqrt(error/Math.max(square,1e-30))<=.001&&Math.abs(lightB-lightA)/Math.max(Math.abs(lightA),1e-30)<=.001
-                &&maximum<=p99*.005+1e-5,"cross-backend HDR error limit exceeded: "+context+" maximum="+maximum);
     }
     private static void verifySpatialPbrOptics(CameraState camera,MediumTransport budget)throws Exception {
         var transform=new AffineTransform(new float[]{2,0,0,0,0,2,0,0,0,0,1,0});
