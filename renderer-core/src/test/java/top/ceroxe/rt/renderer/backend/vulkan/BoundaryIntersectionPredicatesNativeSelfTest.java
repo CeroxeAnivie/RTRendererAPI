@@ -47,13 +47,17 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                     vec3 ne=gsBoundaryEdges(a,b,c);
                     GsBoundaryWide3 ca=gsBoundaryRelativePoint(positions[3]),cb=gsBoundaryRelativePoint(positions[6]),cc=gsBoundaryRelativePoint(positions[2]);
                     vec3 ce=gsBoundaryEdges(ca,cb,cc);
-                    float debug[18]=float[18](ce.x,ce.y,ce.z,ne.x,ne.y,ne.z,gsBoundaryDistance(a,b,c,ne),hitDistance,a.x.x,a.x.y,a.y.x,a.y.y,a.z.x,a.z.y,rayDirection.x,rayDirection.y,rayDirection.z,objectToWorld[0][0]);
+                    vec2 product=gsBoundaryWideMultiply(a.x,b.x);
+                    float debug[18]=float[18](ce.x,ce.y,ce.z,ne.x,ne.y,ne.z,gsBoundaryDistance(a,b,c,ne),hitDistance,a.x.x,a.x.y,a.y.x,a.y.y,a.z.x,a.z.y,product.x,product.y,rayDirection.z,objectToWorld[0][0]);
                     if(i<2u)imageStore(target,ivec2(i,0),vec4(valid?1:0,gsBoundaryInside(ne)?1:0,0,1));
                     else {uint bits=floatBitsToUint(debug[i-2u]);imageStore(target,ivec2(i,0),vec4(uvec4(bits,bits>>8,bits>>16,bits>>24)&255u)/255.0);}
                 }
                 """;
         var shader=VulkanGenericLogicOperationNativeSelfTest.module(951001,ShaderStage.COMPUTE,
                 Shaderc.shaderc_compute_shader,source,List.of(),List.of(),List.of(destination));
+        var evidence=java.nio.file.Path.of("build/medium-edge-predicate");java.nio.file.Files.createDirectories(evidence);
+        java.nio.file.Files.writeString(evidence.resolve("predicate.comp"),source,StandardCharsets.UTF_8);
+        byte[] spirv=new byte[shader.spirv().remaining()];shader.spirv().get(spirv);java.nio.file.Files.write(evidence.resolve("predicate.spv"),spirv);
         var program=new ShaderProgram(new RenderResourceId(951002),ResourceVersion.initial(),ShaderProgram.Kind.COMPUTE,List.of(shader),
                 new BindingLayout(List.of(destination)),0);
         var target=new TextureResource(new RenderResourceId(951003),ResourceVersion.initial(),TextureDimension.TEXTURE_2D,
