@@ -104,8 +104,7 @@ public final class CudaOpticalMediumAbi {
         long available=Math.min(DEFAULT_RESIDENT_BYTES,residentLimit)-ALLOCATION_ALLOWANCE-scene-finalBytes;
         int hitBytes=compactHits?COMPACT_HIT_BYTES:HIT_BYTES;
         int stateBytes=compactStates?COMPACT_STATE_BYTES:STATE_BYTES;
-        boolean activeQueues=Boolean.parseBoolean(System.getProperty(ACTIVE_QUEUES_PROPERTY,"true"))
-                &&reducedCounters()&&!OpticalFrameTimings.KERNEL_PHASES;
+        boolean activeQueues=useActiveQueues(boundaries,connectionTransport);
         int tilePixels=Math.toIntExact(Math.min(pixels,(available-(activeQueues?32L:0L))/((long)samples*(stateBytes+hitBytes+COLOR_BYTES
                 +(externalPrimary&&!directPrimary?HIT_BYTES:0)+(connectionTransport?CONNECTION_BYTES:0)+(activeQueues?8:0)))));
         if(tilePixels<1)throw new IllegalArgumentException("complete native optical frame exceeds the CUDA resident cap");
@@ -193,6 +192,11 @@ public final class CudaOpticalMediumAbi {
     public static boolean minimalStateWrites(){return Boolean.parseBoolean(System.getProperty(MINIMAL_STATE_WRITES_PROPERTY,"true"));}
     public static boolean fusedInitialization(){return Boolean.parseBoolean(System.getProperty(FUSED_INITIALIZATION_PROPERTY,"true"));}
     public static boolean resolvedPublication(){return Boolean.parseBoolean(System.getProperty(RESOLVED_PUBLICATION_PROPERTY,"true"));}
+    public static boolean useActiveQueues(int boundaries,boolean connections){
+        // Keep the proven single-tile boundary-free layout within the same cap.
+        return (boundaries>0||connections)&&Boolean.parseBoolean(System.getProperty(ACTIVE_QUEUES_PROPERTY,"true"))
+                &&reducedCounters()&&!OpticalFrameTimings.KERNEL_PHASES;
+    }
     public static boolean reducedCounters() {
         return Boolean.parseBoolean(System.getProperty(REDUCED_COUNTERS_PROPERTY,"true"));
     }
