@@ -1,0 +1,107 @@
+{
+  "rows": [
+    {
+      "stage": 173,
+      "ticks": 154717248,
+      "calls": 5595,
+      "sharePercent": 50.48228932849113,
+      "msPerSampledCall": 0.02765276997319035
+    },
+    {
+      "stage": 174,
+      "ticks": 70400608,
+      "calls": 6393,
+      "sharePercent": 22.970831681013916,
+      "msPerSampledCall": 0.011012139527608322
+    },
+    {
+      "stage": 168,
+      "ticks": 24235904,
+      "calls": 5595,
+      "sharePercent": 7.907870219263048,
+      "msPerSampledCall": 0.004331707596067918
+    },
+    {
+      "stage": 169,
+      "ticks": 19983232,
+      "calls": 4740,
+      "sharePercent": 6.520276908896172,
+      "msPerSampledCall": 0.0042158717299578055
+    },
+    {
+      "stage": 172,
+      "ticks": 15331616,
+      "calls": 4740,
+      "sharePercent": 5.00251319610677,
+      "msPerSampledCall": 0.003234518143459916
+    },
+    {
+      "stage": 171,
+      "ticks": 8224512,
+      "calls": 4740,
+      "sharePercent": 2.683554676267556,
+      "msPerSampledCall": 0.0017351291139240507
+    },
+    {
+      "stage": 164,
+      "ticks": 2556576,
+      "calls": 11459,
+      "sharePercent": 0.8341785482267402,
+      "msPerSampledCall": 0.0002231063792652064
+    },
+    {
+      "stage": 170,
+      "ticks": 2238976,
+      "calls": 4740,
+      "sharePercent": 0.7305496684606732,
+      "msPerSampledCall": 0.000472357805907173
+    },
+    {
+      "stage": 160,
+      "ticks": 1961408,
+      "calls": 11459,
+      "sharePercent": 0.6399827260837597,
+      "msPerSampledCall": 0.00017116746662012392
+    },
+    {
+      "stage": 161,
+      "ticks": 1523904,
+      "calls": 11459,
+      "sharePercent": 0.49723068133195425,
+      "msPerSampledCall": 0.00013298752072606683
+    },
+    {
+      "stage": 165,
+      "ticks": 1496352,
+      "calls": 11459,
+      "sharePercent": 0.488240810754767,
+      "msPerSampledCall": 0.00013058312243651278
+    },
+    {
+      "stage": 163,
+      "ticks": 1437536,
+      "calls": 11459,
+      "sharePercent": 0.46904989075375625,
+      "msPerSampledCall": 0.00012545038834104198
+    },
+    {
+      "stage": 162,
+      "ticks": 1429696,
+      "calls": 11459,
+      "sharePercent": 0.46649179750008507,
+      "msPerSampledCall": 0.00012476620996596563
+    },
+    {
+      "stage": 166,
+      "ticks": 940704,
+      "calls": 11459,
+      "sharePercent": 0.30693986684967994,
+      "msPerSampledCall": 8.209302731477441e-05
+    }
+  ],
+  "interpretation": "Internal sampled shader ranks; not mutually exclusive host time or whole-frame milliseconds.",
+  "kind": "sampled-shader-group-internal-only",
+  "sourceCommit": "9b6d2b5",
+  "group": 7,
+  "sourceSha256": "280d8723dc5015c61b6eb48d0529f97e80a91e318b8c48b76d7b2145fbe9ca83"
+}

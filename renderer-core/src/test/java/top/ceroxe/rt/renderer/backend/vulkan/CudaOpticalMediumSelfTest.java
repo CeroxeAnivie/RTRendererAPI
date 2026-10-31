@@ -38,6 +38,7 @@ public final class CudaOpticalMediumSelfTest {
         expectUnsupported(()->CudaOpticalMediumProfile.requireSupported(frame,nativeScene,false));
         verifyStorageLayouts();
         verifyConnectionBatchStorage();
+        verifyVulkanConnectionStorage();
         verifyCounterModes(plan,frame,boundary);
         verifyHeterogeneousScatteringAdmission(frame);
         verifyDensity(frame,medium,boundary);
@@ -280,6 +281,8 @@ public final class CudaOpticalMediumSelfTest {
     }
     private static void verifyConnectionBatchStorage() {
         String property=CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY,previous=System.getProperty(property);
+        String previousGpu=System.getProperty(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY);
+        System.setProperty(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY,"false");
         var density=CudaMediumDensityAbi.Scene.empty();
         var frame=RenderFrameRequest.builder(1,137,101,CameraState.lookAt(0,0,0,0,0,-1).build()).build();
         var boundary=new CudaBoundaryMediumAbi.Boundary(1,MediumBoundary.volume(
@@ -311,6 +314,21 @@ public final class CudaOpticalMediumSelfTest {
             var disconnected=CudaOpticalMediumAbi.plan(137,101,1,1,density,32L*1024*1024,true,true,true,false);
             require(disconnected.connectionBatchSize()==1&&disconnected.secondConnectionHitOffset()==0,
                     "non-connection paths keep the original single-hit layout");
+        } finally {
+            if(previous==null)System.clearProperty(property);else System.setProperty(property,previous);
+            if(previousGpu==null)System.clearProperty(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY);
+            else System.setProperty(CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY,previousGpu);
+        }
+    }
+    private static void verifyVulkanConnectionStorage() {
+        String property=CudaOpticalMediumAbi.VULKAN_CONNECTIONS_PROPERTY,previous=System.getProperty(property);
+        try {
+            System.setProperty(property,"false");var original=connectionPlan(CudaOpticalMediumAbi.MAXIMUM_RESIDENT_BYTES);
+            System.setProperty(property,"true");var gpu=connectionPlan(CudaOpticalMediumAbi.MAXIMUM_RESIDENT_BYTES);
+            require(!original.vulkanConnections()&&gpu.vulkanConnections()&&gpu.connectionBatchSize()==1,
+                    "complete Vulkan connections retain an independent rollback path and no lookahead plane");
+            require(gpu.pixels()==original.pixels()&&gpu.samples()==original.samples()&&gpu.bytes()<=original.bytes()
+                    &&gpu.tilePixels()==gpu.pixels(),"GPU-local connection transport adds no memory or sampling budget");
         } finally {if(previous==null)System.clearProperty(property);else System.setProperty(property,previous);}
     }
     private static void verifySurfaceProof(){

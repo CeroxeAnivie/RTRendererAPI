@@ -235,6 +235,7 @@ GpuScenePayload gsOpticalConnectionHit(vec3 origin,vec3 direction,uvec4 launch,f
     }
     return hit;
 }
+#include "gpuscene_optical_connection_transport.glsl"
 void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 launch,uint epoch,bool initialize,uint hitOffset) {
     GS_DETAIL_BEGIN(168u);
     uint base=gsOptical.storage.lanes[4u].z/16u+item*22u;
@@ -355,6 +356,11 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
         hit.transmissionIor=vec4(0);hit.state=uvec4(0);hit.surfaceState=uvec4(0);hit.compositeState=vec4(0);
         hit.launchInfo=launch;hit.mediumBoundary=uvec4(0);}
     GS_DETAIL_END();
+    if((gsOptical.storage.lanes[11u].w&16384u)!=0u&&gsOptical.storage.lanes[base+2u].w==1u){
+        gsOpticalCompleteConnection(base,item,launch,maximum,hit,epoch);
+        gsOpticalStore(hitOffset,item,hit,uvec4(globalPath/gsOptical.storage.lanes[0u].w,globalPath%gsOptical.storage.lanes[0u].w,epoch,epoch));
+        return;
+    }
     bool batched=(gsOptical.storage.lanes[11u].w&8192u)!=0u;
     float firstDistance=hit.worldPositionAndDistance.w;
     bool nextSegment=batched&&gsOptical.storage.lanes[base+2u].w==1u&&hit.state.x!=0u

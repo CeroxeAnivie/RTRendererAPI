@@ -1559,3 +1559,18 @@ O同制品关闭候选后，两个1080p HDR帧均恢复与N逐字节一致；ren
 
 
 现有单path追踪进一步显示：两边均54条事件，排除未命中时不消费的point字段后，记录的origin/direction/命中距离/边界/介质等全部一致。但追踪开关本身改变同一个half分量：O关闭布局时从基线像素值变成候选值，O启用布局时反而恢复基线值。追踪并未保持未观测结果，不能拿它证明原数值根因，也不以几何轨迹一致为由解禁候选。O仍完全撤回，性能主线保留N；下一步使用已有稀疏shader计时确认当前Vulkan续射线内的实际大头，不继续堆栈相关变体。
+
+
+## 2026-10-31 架构候选 P：整条直线光连接在 Vulkan 内完成（待验收）
+
+N 的现有稀疏 shader 分组7实测，第一段几何查询与区间处理占50.4823%，第二段查询占22.9708%，连接初始化7.9079%、焦散gather6.5203%、BRDF与源贡献5.0025%、灯光几何2.6836%、选灯0.7305%。这是分组抽样内部占比，不能折算整帧耗时。查询合计73.4531%是此轮关注的实际大头，不转去优化占比很小的选灯缓存。
+
+对照固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0），`src/pbrt/wavefront/intersect.h` 165行起 `TraceTransmittance` 在GPU循环里处理整条连接的求交和介质透射。把本项目直线光连接的每段CUDA消费搬到已有Vulkan连接程序：同一GPU调用连续追踪、密度积分、Beer衰减、透明表面Fresnel与介质栈进出，完成整条连接后才交回CUDA。删除中间状态重载、kernel入队、队列压缩和Vulkan/CUDA交接；CUDA相机输运与散射保持。不是将host等待改名或换位置。没有减少任何样本、灯光、事件、散射、密度积分或光子预算。
+
+数值与栈语义参照仓库固定LuxCore `b872186d2fe995a762f73708c606847eed55843e`（Apache-2.0）的 `FrDiel2/FresnelCauchy_Evaluate`、`PathVolumeInfo_AddVolume/RemoveVolume` 和八角密度插值，保留本项目域裁剪与midpoint积分。保留完整栈布局及原删除顺序、同优先级后入胜出、逐段epoch、预算和拒绝码；不恢复L/O复制或布局候选。极端IOR和掠射在提交当前段状态前回退原CUDA double路径，已完成前段正常保留。
+
+这是跨后端浮点实现，验证前固定使用已有bounded HDR门槛：相对RMS≤0.001，亮度能量相对差≤0.001，最大RGB分量差≤参考绝对P99×0.005+0.00001，alpha完全一致且所有值有限。PBRT同固定提交 `CMakeLists.txt` 249行明确给CUDA启用 `--use_fast_math`，支持成熟实现允许有界浮点近似的原则；不声称PBRT用本项目ABI或完全相同的积分公式，也不改变O的严格失败结论。独立解析/能量/预算断言继续保持。
+
+新开关 `top.ceroxe.rt.medium.cuda.opticalVulkanConnections=false` 完整回到N两段命中包。header188 bit16384，source mode3表示已完成、5至11保留原connection错误1至7，hit epoch仍由CUDA校验。开启时只需一个hit plane，真实预算仍包含全部状态与输出。沿用stage175记录新段积分、stage174记录后续查询，不另做观测优化。
+
+按规则先全量提交推送main、确认工作区干净并冻结JAR，再运行CPU ABI、32组/64帧跨路径与84组/168帧连接专项、validation和1080p两帧bounded HDR。通过后用N/P/P/N四窗关闭诊断比较；正收益再完整生产回归、固定57与长窗口、全部互斥覆盖及新排名。失败或负优化完整撤回P，保留N。
