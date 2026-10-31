@@ -1390,3 +1390,36 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 全部门禁已通过；独立完整 64 帧窗口 283.178086ms/帧、3.531347FPS。容量回归的四批到一批是明确布局测试，真实生产的工作计数以上述同步/录制次数为准。注意提高并行工作集会增加暂存显存，仍受设备预算、显式上限和现有 growth admission 约束。180FPS 尚未达到。
 
 [完整正确性、净收益、制品与原始证据哈希](data/medium-budgeted-waves-20261031.json)、[全部44阶段及逐项降幅](data/medium-budgeted-waves-ranked-20261031.json)。
+
+
+### 命中阶段 payload 缓存：负优化，已撤回（f8467e9 → a1f0ab1）
+
+同一次边界结果从 any-hit 传给 closest-hit，20 组/40 native 帧开关逐字节一致，2 个 validation 生命周期零 warning/error/drop，两个1080p HDR 帧与同制品关闭及前版冻结制品均逐字节一致。但真实整帧没有收益，不能以删除一次软件求交就认定成功。
+
+| 有效反序对照（各32帧） | 原版 | 缓存候选 | 改善 |
+| --- | ---: | ---: | ---: |
+| 关闭诊断 ms/帧 | 279.206878 | 296.363659 | -6.1448% |
+| 原生 FPS | 3.581574 | 3.374233 | -5.7891% |
+
+此反序两窗测前 GPU0 均为0%，两轮均变慢，立即完整回滚并推送 main。正序候选测前86%，不得拿其绝对值做收益或退化结论。寄存器/payload 压力只是待证原因，不把猜测记为已定位根因；未继续跑已无采用价值候选的完整验收。保留设备预算队列的已验收成果。
+
+[原始窗口、排除理由、正确性与证据哈希](data/medium-boundary-hit-cache-rejected-20261031.json)。
+
+### 单次边界求交内复用宽精度项（编译检查后放弃）
+
+全局复查连接路径后，边界函数内部仍存在重复计算：gsBoundaryTriangleHit 用三个宽精度边函数判断三角形内外，gsBoundaryDistance 为分母再算同三个函数，且 b×c 为距离分子再次计算。当前候选让内外判断、分母和距离分子消费同一次局部计算，保留全部两浮点展开、括号运算顺序、邻面搜索、距离修正及介质事件，不增加跨 trace payload。
+
+对照 [PBRT-v4 b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f shapes.cpp 206–243行](https://github.com/mmp/pbrt-v4/blob/b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f/src/pbrt/shapes.cpp#L206)：其三角形求交缓存 e0/e1/e2，并将它们用于内外判断、det 及 tScaled。只借用一次生产、多处消费的组织，不替换本项目已修正的宽精度算法。源码少算不等于 GPU 已加速，仍以严格 HDR、边界/端点与光学生产门禁、关闭诊断正反序整帧判断。编译器可能本已合并部分表达式，负优化立即撤回；仍需继续解决独立连接队列、推迟未被消费的着色等架构问题。
+
+编译检查提前停止本候选：base any-hit 前后均17942条 SPIR-V 指令，closest-hit 前后均32420条；各 opcode 的计数完全相同。这个源码改写没有消除目标算术指令，仅改变编排，不能算已删除实际重复工作，已恢复原源码和全部四份生成资源，不继续占用 GPU 验收。此判断不声称两份二进制逐字节相同，也不将未实测的性能记为零或收益。
+
+
+### 按光连接消费需求裁剪命中着色（候选验证中）
+
+参考 [PBRT-v4 b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f intersect.h::TransmittanceTraceResult/TraceTransmittance](https://github.com/mmp/pbrt-v4/blob/b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f/src/pbrt/wavefront/intersect.h#L158)：其专用透射查询只产生 hit、pHit、material，独立于完整表面着色。采用按消费者需求安排工作的组织，本项目的透明面规则比 PBRT 的 shadow opaque 规则更复杂，必须保留原有 base tint/alpha、纹理过滤、光照调制、真实法线/法线贴图、IOR/透射与所有介质边界处理。
+
+旧连接查询使用完整命中着色，无条件生成消费者不读取的金属粗糙度与发光纹理、相机距离雾坐标、上一帧变换与运动 revision、描边/mask，以及焦散几何法线编码。新 query kind5 保留原 query4 的几何/any-hit/介质求交，只跳过上述无人消费字段；边界仍使用原几何法线，普通透明面仍使用原法线贴图。不会提前结束光路，不减少任何连接、光学样本、事件、散射或光子。
+
+header188 bit4096 / top.ceroxe.rt.medium.cuda.opticalLeanConnectionHits（默认true，false回到完整命中）用于同制品对照，不增加 payload ABI。CUDA connectionStep 的所有读取字段保持；默认完整命中记录布局也保留，只将未读取输出清零。此为删除未消费计算的确定性候选，未通过严格图像和性能门禁前不称为成果。
+
+新增独立 --connection-materials 原生验证：同 sequence 开关对照24组/48帧，含镜像/反顶点序、端点、overlay/non-shadow、体积、带颜色/alpha纹理、MR/发光贴图的透射障碍及会实际改变 Fresnel 的法线贴图。后续1080p HDR、完整生产回归、互斥功能覆盖、固定57、完整窗口、validation及关闭诊断正反序净收益共同验收，负优化完整撤回。

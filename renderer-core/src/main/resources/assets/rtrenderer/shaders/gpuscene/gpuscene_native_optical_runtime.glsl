@@ -38,6 +38,8 @@ vec3 gsOpticalPbrSurface(GpuScenePayload receiver,vec3 rayOrigin) {
     return gsRadiance(radiance);
 }
 GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum,uint queryKind) {
+    if(queryKind==GS_PAYLOAD_OPTICAL_CONNECTION_QUERY&&(gsOptical.storage.lanes[11u].w&4096u)!=0u)
+        queryKind=GS_PAYLOAD_OPTICAL_CONNECTION_LEAN_QUERY;
     payload.state=uvec4(0u,queryKind,0u,0u);
     payload.launchInfo=launch;payload.mediumBoundary=uvec4(0u);
     // CPU proof excludes masked coverage, backface rejection and inactive material slots.

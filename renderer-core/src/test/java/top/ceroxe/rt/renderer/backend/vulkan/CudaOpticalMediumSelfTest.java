@@ -92,17 +92,20 @@ public final class CudaOpticalMediumSelfTest {
         String previous=System.getProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY);
         String previousFused=System.getProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY);
         String previousBound=System.getProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY);
+        String previousLean=System.getProperty(CudaOpticalMediumAbi.LEAN_CONNECTION_HITS_PROPERTY);
         try {
-            for(boolean reduced:new boolean[]{false,true})for(boolean fused:new boolean[]{false,true})for(boolean bound:new boolean[]{false,true}) {
+            for(boolean reduced:new boolean[]{false,true})for(boolean fused:new boolean[]{false,true})for(boolean bound:new boolean[]{false,true})for(boolean lean:new boolean[]{false,true}) {
                 System.setProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY,Boolean.toString(reduced));
                 System.setProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY,Boolean.toString(fused));
                 System.setProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY,Boolean.toString(bound));
+                System.setProperty(CudaOpticalMediumAbi.LEAN_CONNECTION_HITS_PROPERTY,Boolean.toString(lean));
                 var data=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(plan,frame,List.of(boundary),new int[0])).order(ByteOrder.nativeOrder());
                 require(data.getInt(184)==(reduced?1:0),"counter mode is explicit in the optical header");
                 require(((data.getInt(188)&128)!=0)==fused,"fused initialization mode is explicit in the optical header");
                 require(((data.getInt(188)&2048)!=0)==bound,"connection ray range mode is explicit in the optical header");
+                require(((data.getInt(188)&4096)!=0)==lean,"connection hit requirements are explicit in the optical header");
                 CudaOpticalMediumAbi.updateTile(data,plan,0,plan.pixels(),0,0);
-                require(data.getInt(184)==(reduced?1:0)&&((data.getInt(188)&128)!=0)==fused&&((data.getInt(188)&2048)!=0)==bound,
+                require(data.getInt(184)==(reduced?1:0)&&((data.getInt(188)&128)!=0)==fused&&((data.getInt(188)&2048)!=0)==bound&&((data.getInt(188)&4096)!=0)==lean,
                         "tile update preserves counter and fused initialization modes");
             }
             System.clearProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY);
@@ -116,6 +119,8 @@ public final class CudaOpticalMediumSelfTest {
             else System.setProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY,previousFused);
             if(previousBound==null)System.clearProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY);
             else System.setProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY,previousBound);
+            if(previousLean==null)System.clearProperty(CudaOpticalMediumAbi.LEAN_CONNECTION_HITS_PROPERTY);
+            else System.setProperty(CudaOpticalMediumAbi.LEAN_CONNECTION_HITS_PROPERTY,previousLean);
         }
     }
     private static void verifyDensity(RenderFrameRequest frame,Medium medium,CudaBoundaryMediumAbi.Boundary boundary) {

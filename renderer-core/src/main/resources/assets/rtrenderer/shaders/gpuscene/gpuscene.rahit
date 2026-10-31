@@ -12,7 +12,7 @@ void main()
 {
     GS_DETAIL_BEGIN(48u);
     uint boundaryFlags=gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
-    if(boundaryFlags!=0u&&payload.state.y==GS_PAYLOAD_OPTICAL_CONNECTION_QUERY){
+    if(boundaryFlags!=0u&&gsOpticalConnectionQuery(payload.state.y)){
         uint primitive;vec2 bary;float distance;
         if(!gsBoundaryConnectionHit(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),gl_PrimitiveID,hitAttributes,
                 gl_RayTminEXT,primitive,bary,distance)){GS_DETAIL_END();ignoreIntersectionEXT;return;}
