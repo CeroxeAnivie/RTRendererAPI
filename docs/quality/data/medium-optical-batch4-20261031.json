@@ -1,0 +1,230 @@
+{
+  "sourceCommit": "a06d720",
+  "scene": "micro-all 1920x1080 1SPP",
+  "batchRounds": 4,
+  "absolutePerformanceComparable": false,
+  "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 40 %, 66.94 W, 1822 MHz, 75",
+  "netDurationReductionPercent": null,
+  "decision": "Four-round correctness passed; net performance pending clean-GPU acceptance. Eight-round variant not accepted after a strict HDR mismatch.",
+  "workCountChanges": [
+    {
+      "metric": "Main optical CUDA stream synchronizations/frame",
+      "before": 435.53125,
+      "after": 229.875,
+      "reductionPercent": 47.219631197531754
+    },
+    {
+      "metric": "Optical CUDA steps/frame including empty tails",
+      "before": 871.0625,
+      "after": 887.5,
+      "increasePercent": 1.8870632130300713
+    },
+    {
+      "metric": "Optical continuation traces/frame including empty tails",
+      "before": 855.0625,
+      "after": 871.5,
+      "increasePercent": 1.9223740954608548
+    }
+  ],
+  "hdr4": {
+    "passed": true,
+    "mode": "byte-identical",
+    "supportingReferenceCommit": null,
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 0.0,
+    "maxLuminanceEnergyRelativeError": 0.0,
+    "maxAbsoluteChannelError": 0.0
+  },
+  "hdr8StrictGate": {
+    "passed": false,
+    "mode": "byte-identical",
+    "supportingReferenceCommit": null,
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": false,
+        "alphaExact": true,
+        "relativeRms": 9.64807374149859e-07,
+        "luminanceEnergyRelativeError": 2.173000583423375e-09,
+        "maxAbsoluteChannelError": 0.0009765625,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 1,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": false,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "61623d27961ed412ee277cca06bcc43bb1d41fdc9f883d0dddfa7c83443fda26"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 9.64807374149859e-07,
+    "maxLuminanceEnergyRelativeError": 2.173000583423375e-09,
+    "maxAbsoluteChannelError": 0.0009765625
+  },
+  "control2Repeat": {
+    "passed": true,
+    "mode": "byte-identical",
+    "supportingReferenceCommit": null,
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 0.0,
+    "maxLuminanceEnergyRelativeError": 0.0,
+    "maxAbsoluteChannelError": 0.0
+  },
+  "interopValidation": {
+    "passed": true,
+    "logs": [
+      {
+        "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\binary-round-batches\\interop-validation.jsonl",
+        "passed": true,
+        "opened": 1,
+        "closed": 1,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      }
+    ]
+  },
+  "opticalValidation": {
+    "passed": true,
+    "logs": [
+      {
+        "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\binary-round-batches\\optical-4-validation.jsonl",
+        "passed": true,
+        "opened": 3,
+        "closed": 3,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      }
+    ]
+  },
+  "verification": [
+    "Real RT per-round snapshots for 2/4/6/8 rounds and empty tails passed; all round callback fault drains passed",
+    "Two 1080p HDR frames byte-identical for four rounds",
+    "Fixed sequence 57 passed",
+    "8 warmup + 64 measured instrumentation-off frames passed",
+    "46 optical comparisons / 152 native frames passed",
+    "micro-checks 7 scenes / 46 features passed",
+    "32 measured timings frames; zero dropped wall events; exclusive sum 1000ms/second"
+  ],
+  "artifacts": [
+    {
+      "file": "candidate-core.jar",
+      "sha256": "055c4c1b5386d50af81561ccbe623b4faf9d5fee11be1ac43fc31c4d47dcbb0c"
+    },
+    {
+      "file": "matrix-test-classes.jar",
+      "sha256": "83586141e12750acc40b458dedac93d466287cd5df6d9e6fd1752cf2ef5d4ef4"
+    },
+    {
+      "file": "native-test-classes.jar",
+      "sha256": "4ba4369ef0e1ac3bb331096c00e34093e3da221e8555275d785e8d77d463450f"
+    }
+  ]
+}
