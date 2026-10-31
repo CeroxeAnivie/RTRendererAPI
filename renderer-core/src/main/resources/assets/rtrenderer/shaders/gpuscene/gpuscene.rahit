@@ -16,14 +16,6 @@ void main()
         uint primitive;vec2 bary;float distance;
         if(!gsBoundaryConnectionHit(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),gl_PrimitiveID,hitAttributes,
                 gl_RayTminEXT,primitive,bary,distance)){GS_DETAIL_END();ignoreIntersectionEXT;return;}
-        if(payload.compositeState.w==1.0){
-            // Carry the already validated crossing to closest-hit. A later
-            // candidate may replace it; the consumer checks every input key.
-            payload.surfaceState=uvec4(gl_InstanceCustomIndexEXT,gl_PrimitiveID,floatBitsToUint(gl_HitTEXT),GS_OPTICAL_BOUNDARY_CACHE_TAG);
-            payload.motionRevision=uvec2(primitive,gl_InstanceID);
-            payload.previousWorldPosition=vec4(bary,distance,0);
-            payload.compositeState.xy=hitAttributes;
-        }
     }else if((boundaryFlags&2u)!=0u){
         bool valid=gsBoundaryCandidateValid(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),gl_PrimitiveID,hitAttributes);
         GS_DETAIL_END();if(!valid)ignoreIntersectionEXT;return;
