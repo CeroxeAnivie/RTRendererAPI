@@ -1,0 +1,19 @@
+{
+  "status": "candidate-not-yet-validated",
+  "baseline": "39fb8cc",
+  "target": "Overall rank 1 scattering chain, internal rank 1 opaque shadow queries",
+  "description": "Permute exhaustive cached ray-query invocations into screen-local 16x16 Morton order. Preserve original global pixel identity, sample seed, compact primary/source addresses, query flags, rays and integrator. Complete 16-row bands only; partial bands and non-row tiles retain scanline order. No new allocation or padded launch.",
+  "reference": {
+    "repository": "NVIDIAGameWorks/Falcor",
+    "commit": "759aad033ff610fb0d82c74f7e0a508d0096d5f2",
+    "file": "Source/RenderPasses/PathTracer/GeneratePaths.cs.slang",
+    "license": "BSD-3-Clause",
+    "principle": "Map linearly indexed threads to pixels in Morton order within screen tiles; independent adaptation to the existing Vulkan ray-generation dispatch."
+  },
+  "correctnessRequirement": "Byte-identical HDR, including 1080p bottom 8-row tail, plus existing query/no-query, SPP, odd extent and low-budget matrices if target performance improves.",
+  "artifacts": {
+    "control": "4ed178137a72375030c1470d924b0f4fb2e5eecf401c5253adc1e20525027b85",
+    "candidate": "1e3e1f101110b4095a1b1f22470dd98a42ec6f80a0f550b1339e153e570f81c2"
+  },
+  "referenceSha256": "d266a49482870376687683650758b1b81906c18a8dbe0aa706843c06e98ad86c"
+}

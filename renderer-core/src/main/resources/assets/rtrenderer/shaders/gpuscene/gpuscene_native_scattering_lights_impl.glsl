@@ -34,7 +34,7 @@ void gsScatteringDetailEnd(uint record,uint stage,uint64_t started){
     GsScatteringDiagnostic target=GsScatteringDiagnostic(dispatch.reserved);
     target.values[word]+=ended-started;target.values[word+1u]+=1ul;
 }
-#define GS_SCATTER_DETAIL_BEGIN(stage) uint detailStage=stage;uint detailRecord=(dispatch.firstPixel+gl_LaunchIDEXT.x)*samples+sampleIndex;uint detailSequence=gsFrame.words[GPU_SCENE_FRAME_SEQUENCE_WORD];uint detailOffset=(detailSequence*7919u)&65535u;bool detailActive=dispatch.reserved!=0ul&&((detailRecord/65536u+detailSequence)&7u)==0u&&(detailRecord%65536u)==detailOffset;uint64_t detailStarted=gsScatteringDetailStart(detailActive)
+#define GS_SCATTER_DETAIL_BEGIN(stage) uint detailStage=stage;uint detailRecord=pixelIndex*samples+sampleIndex;uint detailSequence=gsFrame.words[GPU_SCENE_FRAME_SEQUENCE_WORD];uint detailOffset=(detailSequence*7919u)&65535u;bool detailActive=dispatch.reserved!=0ul&&((detailRecord/65536u+detailSequence)&7u)==0u&&(detailRecord%65536u)==detailOffset;uint64_t detailStarted=gsScatteringDetailStart(detailActive)
 #define GS_SCATTER_DETAIL_NEXT(stage) gsScatteringDetailEnd(detailRecord,detailStage,detailStarted);detailStage=stage;detailStarted=gsScatteringDetailStart(detailActive)
 #define GS_SCATTER_DETAIL_END() gsScatteringDetailEnd(detailRecord,detailStage,detailStarted)
 #define GS_SCATTER_DETAIL_PAUSE() gsScatteringDetailEnd(detailRecord,detailStage,detailStarted);detailStarted=0ul
@@ -71,10 +71,29 @@ float gsScatteringAngularPdf(vec4 guide,float distance) {
     float offset=distance-guide.x;
     return guide.y/(guide.w*(guide.y*guide.y+offset*offset));
 }
+uint gsScatteringLocalPixel(uint width) {
+    uint invocation=gl_LaunchIDEXT.x;
+#if defined(RTRENDERER_SCATTERING_RAY_QUERY) && defined(RTRENDERER_SCATTERING_EXHAUSTIVE_LIGHTS)
+    // Screen-local Morton ordering keeps neighboring shadow queries together.
+    // Only complete 16-row bands are permuted; partial bands and non-row tiles
+    // retain their original indexing, without padding or extra invocations.
+    if((width&15u)==0u&&dispatch.firstPixel%width==0u) {
+        uint bandPixels=width*16u;
+        if(invocation<(dispatch.pixelCount/bandPixels)*bandPixels) {
+            uint tile=invocation>>8u,code=invocation&255u,tilesAcross=width>>4u;
+            uint x=(code&1u)|((code>>1u)&2u)|((code>>2u)&4u)|((code>>3u)&8u);
+            uint y=((code>>1u)&1u)|((code>>2u)&2u)|((code>>3u)&4u)|((code>>4u)&8u);
+            return (tile/tilesAcross*16u+y)*width+tile%tilesAcross*16u+x;
+        }
+    }
+#endif
+    return invocation;
+}
 void main() {
     if(gl_LaunchIDEXT.x>=dispatch.pixelCount)return;
     ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
-    uint pixelIndex=dispatch.firstPixel+gl_LaunchIDEXT.x;ivec2 pixel=ivec2(pixelIndex%uint(extent.x),pixelIndex/uint(extent.x));
+    uint localPixel=gsScatteringLocalPixel(uint(extent.x));
+    uint pixelIndex=dispatch.firstPixel+localPixel;ivec2 pixel=ivec2(pixelIndex%uint(extent.x),pixelIndex/uint(extent.x));
     uint samples=clamp(gsFrame.words[GPU_SCENE_FRAME_SAMPLE_COUNT_WORD],1u,8u),steps=dispatch.storage.lanes[0u].w;
     vec4 constants=uintBitsToFloat(dispatch.storage.lanes[3u]);vec3 sigma=constants.xyz;float maximum=constants.w;
     float g=uintBitsToFloat(dispatch.storage.lanes[4u]).w,cutoff=uintBitsToFloat(dispatch.storage.lanes[5u]).w;
@@ -89,7 +108,7 @@ void main() {
         GS_SCATTER_DETAIL_BEGIN(0u);
         bool tilePrimary=dispatch.storage.lanes[0u].x==0x524d5331u
             && dispatch.storage.lanes[2u].x>dispatch.storage.lanes[2u].z;
-        uint primaryItem=tilePrimary?gl_LaunchIDEXT.x*samples+sampleIndex:item;
+        uint primaryItem=tilePrimary?localPixel*samples+sampleIndex:item;
         uint base=dispatch.primaryOffset/16u+primaryItem*13u;
         vec2 location=vec2(pixel)+gsScatteringSampleOffset(sampleIndex,samples);if(!gsExactProjectionActive())location+=jitter;
         vec3 direction=gsRayDirectionAtSample(location,extent);
@@ -99,7 +118,7 @@ void main() {
         vec4 hit;bool present;
 #ifdef RTRENDERER_SCATTERING_CACHED_PRIMARY
         {
-            uint cached=dispatch.primaryOffset/16u+gl_LaunchIDEXT.x*samples+sampleIndex;
+            uint cached=dispatch.primaryOffset/16u+localPixel*samples+sampleIndex;
             uvec4 record=dispatch.storage.lanes[cached];
             hit=vec4(0,0,0,uintBitsToFloat(record.x));present=record.y!=0u;
         }
@@ -114,7 +133,7 @@ void main() {
                 payload.surfaceState=uvec4(0);payload.compositeState=vec4(0);
             }
             payload.state=uvec4(0u,GS_PAYLOAD_RADIANCE_QUERY,0u,0u);payload.mediumBoundary=uvec4(0u);
-            if(primarySink!=0ul)payload.mediumBoundary.x=gl_LaunchIDEXT.x*samples+sampleIndex;
+            if(primarySink!=0ul)payload.mediumBoundary.x=localPixel*samples+sampleIndex;
             traceRayEXT(sceneTlas,primarySink!=0ul?gl_RayFlagsOpaqueEXT:gl_RayFlagsNoneEXT,
                 0xff,0,0,0,origin,gsRayEpsilon(origin),direction,1e20,0);
             hit=payload.worldPositionAndDistance;present=payload.state.x!=0u;
@@ -149,7 +168,7 @@ void main() {
                     destination.lanes[outBase+12u*outStride]=uvec4(pixelIndex,sampleIndex,1u,1u);
                 }
             }
-            uint compact=dispatch.primaryOffset/16u+gl_LaunchIDEXT.x*samples+sampleIndex;
+            uint compact=dispatch.primaryOffset/16u+localPixel*samples+sampleIndex;
             dispatch.storage.lanes[compact]=uvec4(floatBitsToUint(hit.w),present?1u:0u,0u,0u);
         } else {hit=uintBitsToFloat(dispatch.storage.lanes[base]);present=dispatch.storage.lanes[base+7u].x!=0u;}
 #endif
@@ -331,7 +350,7 @@ void main() {
                 source+=gsGatherVolumeCaustics(position,-direction,g);
             }
             GS_SCATTER_DETAIL_NEXT(10u);
-            uint localPath=gl_LaunchIDEXT.x*samples+sampleIndex;
+            uint localPath=localPixel*samples+sampleIndex;
             // The shared uniform arena stores interval planes. Adjacent Vulkan
             // producers and CUDA consumers access contiguous paths in each plane.
             // Multiple-scattering headers reuse this word for the bounce budget.
