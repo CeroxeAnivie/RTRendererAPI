@@ -1,8 +1,0 @@
-#version 460
-#extension GL_EXT_ray_query : require
-#define RTRENDERER_COLLECTED_CONNECTIONS 1
-#define RTRENDERER_NATIVE_OPTICAL_TRACE 1
-#define RTRENDERER_COMPACT_MEDIA 1
-#define RTRENDERER_PASSIVE_MEDIA 1
-#define RTRENDERER_CAUSTICS 1
-#include "gpuscene_raygen.glsl"

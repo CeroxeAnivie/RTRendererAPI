@@ -34,7 +34,7 @@ public final class RtPrecompiledShaderSelfTest {
            "gpuscene/gpuscene_native_scattering_exhaustive_cached_query.rgen",
            "gpuscene/gpuscene_native_scattering_query.rgen",
            "gpuscene/gpuscene_native_multiple_scattering.rgen", "gpuscene/gpuscene_native_density_scattering_lights.rgen",
-           "gpuscene/gpuscene_native_optical_trace.rgen", "gpuscene/gpuscene_native_optical_collected_trace.rgen", "gpuscene/gpuscene_native_boundary_packet.rgen",
+           "gpuscene/gpuscene_native_optical_trace.rgen", "gpuscene/gpuscene_native_boundary_packet.rgen",
            "gpuscene/gpuscene_native_boundary_scattering.rgen",
            "gpuscene/gpuscene_native_pbr_medium_lights.rgen",
            "gpuscene/gpuscene_native_pbr_medium_query.rgen",

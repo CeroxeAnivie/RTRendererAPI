@@ -7,7 +7,8 @@ param([Parameter(Mandatory=$true)][string]$TrialDirectory,
       [string]$Label='first',[string]$Cases='',
       [ValidateRange(0,2147483647)][long]$FirstSequence=0,
       [ValidateRange(1,100000)][int]$Warmup=1200,
-      [ValidateRange(1,100000)][int]$Frames=240,[ValidateRange(1,100)][int]$Rounds=3)
+      [ValidateRange(1,100000)][int]$Frames=240,[ValidateRange(1,100)][int]$Rounds=3,
+      [ValidateRange(1,8)][double]$MemoryLimitGB=3)
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -41,12 +42,14 @@ if($Mode -eq 'optical'){$matrixArguments+='--opticalShaderProfile=true';$matrixA
 if($JvmMode -eq 'stable'){$matrixArguments=@('-XX:ReservedCodeCacheSize=256m','-XX:-UseJVMCICompiler',
     '-XX:ActiveProcessorCount=4','-XX:TieredStopAtLevel=1')+$matrixArguments}
 @{jvmMode=$JvmMode;arguments=$matrixArguments;inheritedJavaToolOptions=$env:JAVA_TOOL_OPTIONS;
+    processTreeMemoryLimitGB=$MemoryLimitGB-.5;totalMemoryBudgetGB=$MemoryLimitGB;
     javaVersion=(& java -version 2>&1 | Out-String)} | ConvertTo-Json -Depth 4 |
     Set-Content -Encoding UTF8 (Join-Path $runDir 'runtime.json')
 Push-Location (Join-Path $repoRoot 'demos/hex-ball')
 try {
     $ErrorActionPreference='Continue'
-    & java @matrixArguments *> (Join-Path $runDir 'run.log')
+    & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath java -ArgumentList $matrixArguments `
+        -WorkingDirectory (Get-Location).Path -MemoryLimitGB $MemoryLimitGB *> (Join-Path $runDir 'run.log')
     $runCode=$LASTEXITCODE
     $ErrorActionPreference='Stop'
     if($runCode -ne 0){Get-Content (Join-Path $runDir 'run.log') -Tail 30;throw "Medium feature matrix failed: exit $runCode"}

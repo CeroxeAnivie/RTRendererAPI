@@ -228,11 +228,8 @@ vec3 gsOpticalLightOrigin(vec3 point,vec3 normal,float bound) {
         result[axis]=gsOpticalNextFloat(result[axis],offset[axis]>0.0);
     return result;
 }
-#ifdef RTRENDERER_COLLECTED_CONNECTIONS
-#include "gpuscene_collected_connections.glsl"
-#endif
 // Select light geometry only. CUDA owns phase, density attenuation and the copied medium stack.
-GpuScenePayload gsOpticalConnectionHitRepeated(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum) {
+GpuScenePayload gsOpticalConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum) {
     GpuScenePayload hit=gsTraceOpticalRadiance(origin,direction,launch,minimum,maximum,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY);
     while(hit.state.x!=0u&&hit.mediumBoundary.w==0u
             &&((hit.state.w&GPU_SCENE_FLAG_CASTS_SHADOW)==0u||gsSurfaceOverlay(hit))){
@@ -242,30 +239,14 @@ GpuScenePayload gsOpticalConnectionHitRepeated(vec3 origin,vec3 direction,uvec4 
     }
     return hit;
 }
-GpuScenePayload gsOpticalConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum) {
-#ifdef RTRENDERER_COLLECTED_CONNECTIONS
-    if((gsOptical.storage.lanes[11u].w&131072u)!=0u) {
-        GpuScenePayload hit;
-        if(gsCollectedConnectionHit(origin,direction,launch,minimum,maximum,hit))return hit;
-        gsCollectedCountEvent(178u);
-    }
-#endif
-    return gsOpticalConnectionHitRepeated(origin,direction,launch,minimum,maximum);
-}
 #include "gpuscene_optical_connection_transport.glsl"
 void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 launch,uint epoch,bool initialize,uint hitOffset) {
     GS_DETAIL_BEGIN(168u);
     uint base=gsOptical.storage.lanes[4u].z/16u+item*22u;
     bool vertexDirect=(gsOptical.storage.lanes[11u].w&16384u)!=0u;
     vec3 vertexPosition=position;
-#ifdef RTRENDERER_COLLECTED_CONNECTIONS
-    gsCollectedReset();
-#endif
     for(;;) {
     if(initialize) {
-#ifdef RTRENDERER_COLLECTED_CONNECTIONS
-        gsCollectedReset();
-#endif
         uvec4 control=gsOptical.storage.lanes[base+5u];
         // PBRT SpawnRayTo: offset the source first, then aim at the finite light endpoint.
         // Moving it after computing direction creates a parallel ray that misses that endpoint.
@@ -485,30 +466,6 @@ void gsOpticalPhotonTrace() {
     uint epoch=photons.lanes[state+2u].w;
     gsOpticalStoreAt(photons,photons.lanes[1u].y,item,hit,uvec4(item,0u,epoch,epoch),1u);
 }
-#ifdef RTRENDERER_COLLECTED_CONNECTIONS
-// Wavefront responsibility split: connection work does not carry the camera,
-// primary-cache, photon or terminal-surface programs through this entry point.
-void main() {
-    if(gsOptical.initialize!=5ul)return;
-    uint slot=gl_LaunchIDEXT.x;
-    uint control=gsOptical.storage.lanes[14u].w/16u;
-    if(slot>=gsOptical.storage.lanes[control+2u].x)return;
-    uint index=gsOptical.storage.lanes[0u].z-1u-slot;
-    uint queue=gsOptical.storage.lanes[13u].w/16u;
-    uint item=gsOptical.storage.lanes[queue+index/4u][index%4u];
-    uint samples=gsOptical.storage.lanes[0u].w,pixelIndex=gsOptical.firstPixel+item/samples;
-    uint width=gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],height=gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u];
-    uvec4 launch=uvec4(pixelIndex%width,pixelIndex/width,width,height);
-#ifdef RTRENDERER_OPTICAL_PROFILE
-    payload.diagnosticAddress=(item&8191u)==0u?gsU64(gsOptical.storage.lanes[12u].x,gsOptical.storage.lanes[12u].y):0ul;
-    payload.diagnosticRecord=item/8192u;
-#endif
-    uvec4 state=gsOpticalStateRead(item,2u);
-    if(state.x!=2u&&state.x!=3u)return;
-    gsOpticalConnectionTrace(item,pixelIndex*samples+item%samples,uintBitsToFloat(gsOpticalStateRead(item,0u)).xyz,
-        launch,state.w,state.x==2u,gsOptical.storage.lanes[2u].z);
-}
-#else
 void main() {
     if(gsOptical.initialize==2ul||gsOptical.initialize==3ul){gsOpticalPhotonTrace();return;}
     bool splitTasks=gsOptical.initialize==4ul||gsOptical.initialize==5ul;
@@ -673,5 +630,3 @@ void main() {
         GS_DETAIL_END();
     }
 }
-
-#endif

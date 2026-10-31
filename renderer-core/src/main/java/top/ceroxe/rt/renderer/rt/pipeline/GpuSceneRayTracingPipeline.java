@@ -53,8 +53,6 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         NATIVE_DENSITY_SCATTERING_LIGHTS("gpuscene_native_density_scattering_lights.rgen"),
         NATIVE_OPTICAL_TRACE("gpuscene_native_optical_trace.rgen"),
         NATIVE_OPTICAL_TRACE_DIAGNOSTIC("gpuscene_native_optical_trace.rgen"),
-        NATIVE_OPTICAL_CONNECTIONS("gpuscene_native_optical_collected_trace.rgen"),
-        NATIVE_OPTICAL_CONNECTIONS_DIAGNOSTIC("gpuscene_native_optical_collected_trace.rgen"),
         SURFACE_PRIMARY_SHADE("gpuscene_surface_primary_shade.rgen"),
         COMPACT_PRIMARY_SHADE("gpuscene_compact_primary_shade.rgen"),
         GENERAL_PRIMARY_SHADE("gpuscene_primary_shade.rgen"),
@@ -69,12 +67,10 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 || this == NATIVE_SCATTERING_LIGHTS || this == NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC || this == NATIVE_MULTIPLE_SCATTERING
                 || this == NATIVE_SCATTERING_LIGHTS_CACHED || this == NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC
                 || this == NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED || this == NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED_DIAGNOSTIC
-                || this == NATIVE_DENSITY_SCATTERING_LIGHTS || this == NATIVE_OPTICAL_TRACE || this == NATIVE_OPTICAL_TRACE_DIAGNOSTIC || this == NATIVE_OPTICAL_CONNECTIONS
-                || this == NATIVE_OPTICAL_CONNECTIONS_DIAGNOSTIC || this == SURFACE_PRIMARY_SHADE
+                || this == NATIVE_DENSITY_SCATTERING_LIGHTS || this == NATIVE_OPTICAL_TRACE || this == NATIVE_OPTICAL_TRACE_DIAGNOSTIC || this == SURFACE_PRIMARY_SHADE
                 || this == COMPACT_PRIMARY_SHADE || this == GENERAL_PRIMARY_SHADE; }
     }
     public static final java.util.concurrent.atomic.LongAdder diagnosticOpticalTaskQueueDispatches=new java.util.concurrent.atomic.LongAdder();
-    public static final java.util.concurrent.atomic.LongAdder diagnosticCollectedConnectionPipelines=new java.util.concurrent.atomic.LongAdder();
     private static final String SHADER_ROOT = "assets/rtrenderer/shaders/gpuscene/";
 
     private final SceneShaderProgram sceneShaders;
@@ -87,7 +83,6 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     private final RtRayTracingPipelineProperties properties;
     private final long maxStorageBufferRangeBytes;
     private final boolean shaderExecutionReorderingEnabled;
-    private GpuSceneRayTracingPipeline connectionTracer;
     private boolean closed;
     private boolean closing;
     private boolean pipelineDestroyed;
@@ -187,7 +182,6 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         long closestHitModule = 0L;
         long anyHitModule = 0L;
         long visibilityMissModule = 0L, visibilityClosestModule = 0L, visibilityAnyModule = 0L;
-        GpuSceneRayTracingPipeline ownedConnectionTracer=null;
         try (MemoryStack stack = MemoryStack.stackPush()) {
             RtRayTracingPipelineProperties properties = RtRayTracingPipelineProperties.query(
                     stack, checkedRuntime.physicalDevice()
@@ -207,8 +201,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             descriptors = GpuSceneDescriptorLayout.create(stack, device, descriptorSetCount, sceneShaders.dataBindingCount());
             pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout(),
                     program.primaryQueue() ? GpuScenePrimaryQueue.PUSH_BYTES : 0);
-            boolean opticalDiagnostic=(program==Program.NATIVE_OPTICAL_TRACE_DIAGNOSTIC
-                    ||program==Program.NATIVE_OPTICAL_CONNECTIONS_DIAGNOSTIC)&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS;
+            boolean opticalDiagnostic=program==Program.NATIVE_OPTICAL_TRACE_DIAGNOSTIC&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS;
             boolean scatteringDiagnostic=(program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC
                     ||program==Program.NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC
                     ||program==Program.NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED_DIAGNOSTIC)
@@ -221,15 +214,6 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     &&(program==Program.NATIVE_SCATTERING_LIGHTS||program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC||cachedScattering);
             boolean inlinePbrLightQuery=checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
                     &&(program==Program.NATIVE_PBR_MEDIUM_LIGHTS||program==Program.NATIVE_PBR_MEDIUM_LIGHTS_OPAQUE);
-            boolean collectedConnections=program==Program.NATIVE_OPTICAL_CONNECTIONS
-                    ||program==Program.NATIVE_OPTICAL_CONNECTIONS_DIAGNOSTIC;
-            boolean ownConnectionTracer=(program==Program.NATIVE_OPTICAL_TRACE||program==Program.NATIVE_OPTICAL_TRACE_DIAGNOSTIC)
-                    &&checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
-                    &&checkedRuntime.traceRaysIndirectEnabled()
-                    &&Boolean.parseBoolean(System.getProperty(
-                        top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY,"true"))
-                    &&Boolean.parseBoolean(System.getProperty(
-                        top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.COLLECTED_CONNECTIONS_PROPERTY,"true"));
             String raygenSource=program.source;
             if(inlineScatteringQuery)raygenSource=exhaustiveScattering?"gpuscene_native_scattering_exhaustive_cached_query.rgen"
                     :cachedScattering?"gpuscene_native_scattering_cached_query.rgen":"gpuscene_native_scattering_query.rgen";
@@ -237,7 +221,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     ?"gpuscene_native_pbr_medium_opaque_query.rgen":"gpuscene_native_pbr_medium_query.rgen";
             byte[] raygenCode = scatteringDiagnostic?RtShaderModuleCompiler.compileCameraScatteringDiagnostic(SHADER_ROOT+raygenSource,
                     Shaderc.shaderc_raygen_shader,linearHdrOutput,shaderExecutionReorderingEnabled):opticalDiagnostic
-                    ?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+raygenSource,Shaderc.shaderc_raygen_shader,
+                    ?RtShaderModuleCompiler.compileOpticalDiagnostic(SHADER_ROOT+program.source,Shaderc.shaderc_raygen_shader,
                             linearHdrOutput,shaderExecutionReorderingEnabled,top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP):loadStageCode(
                     raygenSource, Shaderc.shaderc_raygen_shader,
                     linearHdrOutput, shaderExecutionReorderingEnabled, sceneShaders
@@ -309,23 +293,18 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     packed.bytes(),
                     packed.layout()
             );
-            if(ownConnectionTracer)ownedConnectionTracer=open(checkedRuntime,descriptorSetCount,linearHdrOutput,sceneShaders,
-                    opticalDiagnostic?Program.NATIVE_OPTICAL_CONNECTIONS_DIAGNOSTIC:Program.NATIVE_OPTICAL_CONNECTIONS);
             GpuSceneRayTracingPipeline result = new GpuSceneRayTracingPipeline(
                     device, descriptors, pipelineLayout, pipeline, shaderBindingTable, properties,
                     maxStorageBufferRangeBytes, shaderExecutionReorderingEnabled, sceneShaders,
                     new GpuSceneShaderDataBuffers(checkedRuntime, descriptorSetCount,
                             sceneShaders.dataBindingCount(), maxStorageBufferRangeBytes)
             );
-            result.connectionTracer=ownedConnectionTracer;ownedConnectionTracer=null;
-            if(collectedConnections)diagnosticCollectedConnectionPipelines.increment();
             descriptors = null;
             pipelineLayout = 0L;
             pipeline = 0L;
             shaderBindingTable = null;
             return result;
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
-            closeSuppressing(failure,ownedConnectionTracer);
             closeSuppressing(failure, shaderBindingTable);
             if (pipeline != 0L) VK10.vkDestroyPipeline(device, pipeline, null);
             if (pipelineLayout != 0L) VK10.vkDestroyPipelineLayout(device, pipelineLayout, null);
@@ -900,13 +879,10 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         for(int kind=0;kind<2;++kind){
             var push=stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);
             push.putLong(storageAddress).putInt(firstPixel).putInt(pathCapacity).putLong(4L+kind).putLong(primaryAddress).flip();
-            GpuSceneRayTracingPipeline selected=kind==1&&connectionTracer!=null?connectionTracer:this;
-            VK10.vkCmdPushConstants(command,selected.pipelineLayout,KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            VK10.vkCmdPushConstants(command,pipelineLayout,KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR
                     |KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR,0,push);
-            // Layouts have identical descriptor/push definitions. Consume the parent's
-            // already-updated descriptor set; no scene upload, copy or synchronization.
-            RtFrameDispatchCommands.recordTraceRaysIndirect(command,stack,selected.pipelineLayout,selected.pipeline,descriptors.set(slot),
-                    selected.shaderBindingTable.buffer(),selected.shaderBindingTable.baseOffsetBytes(),selected.shaderBindingTable.layout(),
+            RtFrameDispatchCommands.recordTraceRaysIndirect(command,stack,pipelineLayout,pipeline,descriptors.set(slot),
+                    shaderBindingTable.buffer(),shaderBindingTable.baseOffsetBytes(),shaderBindingTable.layout(),
                     controlAddress+16L+kind*16L);
         }
     }
@@ -1568,14 +1544,10 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         if (closed) return;
         closing = true;
         RuntimeException failure = null;
-        if(connectionTracer!=null) {
-            try {connectionTracer.close();connectionTracer=null;}
-            catch(RuntimeException closeFailure){failure=closeFailure;}
-        }
         try {
             shaderBindingTable.close();
         } catch (RuntimeException closeFailure) {
-            if(failure==null)failure=closeFailure;else failure.addSuppressed(closeFailure);
+            failure = closeFailure;
         }
         try { applicationData.close(); }
         catch (RuntimeException closeFailure) {

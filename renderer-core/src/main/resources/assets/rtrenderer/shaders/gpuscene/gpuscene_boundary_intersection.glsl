@@ -1,11 +1,5 @@
 #ifndef GS_BOUNDARY_INTERSECTION_GLSL
 #define GS_BOUNDARY_INTERSECTION_GLSL
-#ifndef GS_BOUNDARY_OBJECT_TO_WORLD
-#define GS_BOUNDARY_OBJECT_TO_WORLD gl_ObjectToWorldEXT
-#define GS_BOUNDARY_RAY_ORIGIN gl_WorldRayOriginEXT
-#define GS_BOUNDARY_RAY_DIRECTION gl_WorldRayDirectionEXT
-#define GS_BOUNDARY_HIT_T gl_HitTEXT
-#endif
 #ifndef GS_BOUNDARY_PREPARED_TOPOLOGY
 uvec2 gsBoundaryNeighborRange(uint mesh,uint primitive) {
     return uvec2(0xffffffffu,gsMeshes.words[mesh+GPU_SCENE_MESH_TRIANGLE_COUNT_WORD]);
@@ -38,9 +32,9 @@ precise vec2 gsBoundaryWideDifferenceOfProducts(vec2 a,vec2 b,vec2 c,vec2 d) {
 }
 struct GsBoundaryWide3 {vec2 x;vec2 y;vec2 z;};
 precise vec2 gsBoundaryRelativeCoordinate(vec3 p,int component) {
-    vec2 value=gsBoundaryWideAdd(vec2(GS_BOUNDARY_OBJECT_TO_WORLD[3][component],0),vec2(-GS_BOUNDARY_RAY_ORIGIN[component],0));
+    vec2 value=gsBoundaryWideAdd(vec2(gl_ObjectToWorldEXT[3][component],0),vec2(-gl_WorldRayOriginEXT[component],0));
     for(int axis=0;axis<3;axis++)value=gsBoundaryWideAdd(value,
-            gsBoundaryWideMultiply(vec2(GS_BOUNDARY_OBJECT_TO_WORLD[axis][component],0),vec2(p[axis],0)));
+            gsBoundaryWideMultiply(vec2(gl_ObjectToWorldEXT[axis][component],0),vec2(p[axis],0)));
     return value;
 }
 GsBoundaryWide3 gsBoundaryRelativePoint(vec3 p) {
@@ -50,9 +44,9 @@ precise vec2 gsBoundaryEdge(GsBoundaryWide3 a,GsBoundaryWide3 b) {
     vec2 x=gsBoundaryWideDifferenceOfProducts(a.y,b.z,a.z,b.y);
     vec2 y=gsBoundaryWideDifferenceOfProducts(a.z,b.x,a.x,b.z);
     vec2 z=gsBoundaryWideDifferenceOfProducts(a.x,b.y,a.y,b.x);
-    return gsBoundaryWideAdd(gsBoundaryWideAdd(gsBoundaryWideMultiply(x,vec2(GS_BOUNDARY_RAY_DIRECTION.x,0)),
-            gsBoundaryWideMultiply(y,vec2(GS_BOUNDARY_RAY_DIRECTION.y,0))),
-            gsBoundaryWideMultiply(z,vec2(GS_BOUNDARY_RAY_DIRECTION.z,0)));
+    return gsBoundaryWideAdd(gsBoundaryWideAdd(gsBoundaryWideMultiply(x,vec2(gl_WorldRayDirectionEXT.x,0)),
+            gsBoundaryWideMultiply(y,vec2(gl_WorldRayDirectionEXT.y,0))),
+            gsBoundaryWideMultiply(z,vec2(gl_WorldRayDirectionEXT.z,0)));
 }
 float gsBoundaryEdgeSign(vec2 edge){return edge.x!=0.0?edge.x:edge.y;}
 vec3 gsBoundaryEdges(GsBoundaryWide3 a,GsBoundaryWide3 b,GsBoundaryWide3 c) {
@@ -137,14 +131,14 @@ float gsBoundaryConnectionDistance(uint mesh,uint primitive,vec2 bary,vec2 wide,
 // previous t, even when traversal reports the neighbouring face as its candidate.
 bool gsBoundaryConnectionHit(uint mesh,uint primitive,vec2 bary,float minimum,
         out uint repairedPrimitive,out vec2 repairedBary,out float repairedDistance) {
-    repairedPrimitive=primitive;repairedBary=bary;repairedDistance=GS_BOUNDARY_HIT_T;
+    repairedPrimitive=primitive;repairedBary=bary;repairedDistance=gl_HitTEXT;
     vec3 weights=vec3(1.0-bary.x-bary.y,bary);
     if(min(weights.x,min(weights.y,weights.z))>=8.0*1.192092896e-7){
         // Once a corrected t has been consumed, a later hardware approximation
         // of the same face must not enter the stack for a second time.
         return gsBoundaryTriangleHit(mesh,primitive,repairedBary,repairedDistance)&&repairedDistance>=minimum;
     }
-    float tolerance=8.0*1.192092896e-7*max(1.0,abs(GS_BOUNDARY_HIT_T));
+    float tolerance=8.0*1.192092896e-7*max(1.0,abs(gl_HitTEXT));
     bool found=false;float nearest=1.0e30;
     uvec3 indices=gsTriangleIndices(mesh,primitive);
     vec3 a=gsPosition(mesh,indices.x),b=gsPosition(mesh,indices.y),c=gsPosition(mesh,indices.z);
@@ -160,7 +154,7 @@ bool gsBoundaryConnectionHit(uint mesh,uint primitive,vec2 bary,float minimum,
         if(!gsBoundaryTriangleHitWide(mesh,other,candidateBary,candidateWide,facing))continue;
         float candidateDistance=gsBoundaryConnectionDistance(mesh,other,candidateBary,candidateWide,facing);
         if(candidateDistance<minimum
-                ||abs(candidateDistance-GS_BOUNDARY_HIT_T)>tolerance||candidateDistance>=nearest)continue;
+                ||abs(candidateDistance-gl_HitTEXT)>tolerance||candidateDistance>=nearest)continue;
         found=true;nearest=candidateDistance;repairedPrimitive=other;repairedBary=candidateBary;repairedDistance=candidateDistance;
     }
     return found;
@@ -190,7 +184,7 @@ bool gsBoundaryCandidateValid(uint mesh,uint primitive,vec2 bary) {
         vec3 oe=gsBoundaryEdges(wa,wb,wc);
         if(!gsBoundaryInside(oe)||((oe.x+oe.y+oe.z)<0.0)!=(facing<0.0))continue;
         float distance=gsBoundaryDistance(wa,wb,wc,oe);
-        if(abs(distance-GS_BOUNDARY_HIT_T)<=8.0*1.192092896e-7*max(1.0,abs(GS_BOUNDARY_HIT_T)))return true;
+        if(abs(distance-gl_HitTEXT)<=8.0*1.192092896e-7*max(1.0,abs(gl_HitTEXT)))return true;
     }
     return false;
 }

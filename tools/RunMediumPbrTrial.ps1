@@ -2,7 +2,8 @@ param([Parameter(Mandatory=$true)][string]$TrialDirectory,
       [Parameter(Mandatory=$true)][string]$RuntimeClasspathFile,
       [ValidateSet('control','candidate')][string]$Variant='candidate',
       [ValidateSet('profile','timings','off','image')][string]$Mode='profile', [string]$Label='first', [int]$Warmup=360,
-      [ValidateRange(1,1000000)][int]$Frames=120,[ValidateRange(1,10000)][int]$Rounds=3)
+      [ValidateRange(1,1000000)][int]$Frames=120,[ValidateRange(1,10000)][int]$Rounds=3,
+      [ValidateRange(1,8)][double]$MemoryLimitGB=3)
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -42,7 +43,8 @@ try {
     # Windows PowerShell reports normal native stderr as ErrorRecord under Stop.
     $ErrorActionPreference='Continue'
     $launchStartedUtc=[DateTime]::UtcNow
-    & java @invokeArgs *> (Join-Path $runDir 'run.log')
+    & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath java -ArgumentList $invokeArgs `
+        -WorkingDirectory (Get-Location).Path -MemoryLimitGB $MemoryLimitGB *> (Join-Path $runDir 'run.log')
     $runCode=$LASTEXITCODE
     $ErrorActionPreference='Stop'
     if($runCode -ne 0){Get-Content (Join-Path $runDir 'run.log') -Tail 30; throw "$Variant $Mode failed with exit $runCode"}

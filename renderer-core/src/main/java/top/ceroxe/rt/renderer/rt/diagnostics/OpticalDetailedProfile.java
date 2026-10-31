@@ -13,7 +13,7 @@ public final class OpticalDetailedProfile {
     public static final boolean SHADERS=ENABLED&&Boolean.getBoolean("top.ceroxe.rt.medium.opticalShaderProfile");
     public static final boolean CAMERA_SCATTERING_SHADERS=Boolean.getBoolean("top.ceroxe.rt.medium.cameraScatteringShaderProfile");
     public static final int GROUP=Integer.getInteger("top.ceroxe.rt.medium.opticalShaderProfileGroup",0);
-    public static final int STAGES=184,STRIDE=8192,CAMERA_SCATTERING_STAGES=16,CAMERA_SCATTERING_STRIDE=65536;
+    public static final int STAGES=176,STRIDE=8192,CAMERA_SCATTERING_STAGES=16,CAMERA_SCATTERING_STRIDE=65536;
     private static final String[] CAMERA_SCATTERING_STAGE_NAMES={"primaryRayAndHitOrCacheLoad","lightRangeAndWeight",
             "candidateReservoirUpdate","segmentSamplingAndPosition","sunPhaseEvaluation","opaqueShadowQueryResidual",
             "mediumBeerAttenuation","localLightGeometryAndAttenuation","localPhaseAndContribution",
