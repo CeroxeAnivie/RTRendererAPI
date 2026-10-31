@@ -11,6 +11,9 @@ const allocTls = new NativeFunction(k.getExportByName('TlsAlloc'), 'uint32', [])
 const heapTls = allocTls();
 if (heapTls === 0xffffffff) throw new Error('Cannot allocate observer recursion guard');
 heapHandles.add(16).writeU32(heapTls);
+// CModule data pages are read-only. All mutable bookkeeping lives in explicit
+// writable storage owned by this script, never in C static/BSS variables.
+const heapState = Memory.alloc(80 + 65520 + 65536 * 24);
 const heapNative = new CModule(`
 #include <gum/guminterceptor.h>
 #include <stdint.h>
@@ -25,11 +28,11 @@ extern uint32_t capture_context(GumCpuContext*,void**);
 extern uint32_t thread_id(void);extern uint32_t tick_count(void);
 extern void* tls_get(uint32_t);extern uint32_t tls_set(uint32_t,void*);
 extern void acquire(void*);extern void release(void*);
-static void* lock;
-static StackEntry stacks[65536];
-static uint32_t next_stack,used;
-static uint8_t buffer[65520];
-static uint64_t counters[8];
+extern void* lock;
+extern StackEntry stacks[65536];
+extern uint32_t next_stack,used;
+extern uint8_t buffer[65520];
+extern uint64_t counters[8];
 void flush_locked(void){
  if(!used)return;uint32_t written=0;
  if(!write_file(heap_file,buffer,used,&written,0)||written!=used)counters[6]++;
@@ -84,6 +87,8 @@ void heap_leave(GumInvocationContext*ic){
 }
 void heap_statistics(uint64_t*output){acquire(&lock);for(uint32_t i=0;i<8;i++)output[i]=counters[i];release(&lock);}
 `, {heap_file: heapHandles, stack_file: heapHandles.add(8), tls_slot: heapHandles.add(16),
+    lock: heapState, next_stack: heapState.add(8), used: heapState.add(12), counters: heapState.add(16),
+    buffer: heapState.add(80), stacks: heapState.add(80 + 65520),
     write_file: k.getExportByName('WriteFile'), capture_context: native.capture_context,
     thread_id: k.getExportByName('GetCurrentThreadId'), tick_count: k.getExportByName('GetTickCount'),
     tls_get: k.getExportByName('TlsGetValue'), tls_set: k.getExportByName('TlsSetValue'),
