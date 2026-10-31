@@ -1143,3 +1143,25 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 当前待验收候选把 cached uniform 散射与 PBR 的 Vulkan 生产合成一次 ownership release，在同一 CUDA stream 按原顺序执行两个 kernel，再一次 signal/fence 完成。PBR 灯光生产只依赖 Vulkan 主命中，不依赖散射 CUDA 结果；为提前生产，两个 header 和两份 scratch 同时保留，camera RGB/distance 与散射 radiance 各有明确所有者。默认完整批次占用 530,907,552 字节（含原 65,536 字节 allowance），仍在原 512 MiB 预算内；不足则回退已验收的串行 arena。输出偏移仍对 allocation 计数，第二个 header 的 wire pointer 转成相对自身的偏移。
 
 成熟参考：NVIDIA/cuda-samples 固定 `9c688d7ff78455ed42e345124d1495aad6bf66de`，BSD-3-Clause，`Samples/5_Domain_Specific/vulkanImageCUDA/vulkanImageCUDA.cu::cudaUpdateVkImage`。其两次 kernel launch 在同一 stream 的 external wait/signal 之间顺序执行；本项目独立适配缓冲和原有 ownership barrier，不引入数学近似。必须保留两个 kernel 的独立 event 计时、两份失败计数、完整 HDR 比较及低预算回退验证。两段工作会重新归入一个等待边界，排名转移不计收益；判定依据是完整链路、交接次数及关闭诊断 FPS。此处仅记录候选，不表示已通过或已提速。
+
+### 保留：uniform 散射与 PBR 一次交接
+
+生产提交 `db2aca4`，测试 fixture 修正 `4898381`。每帧 ownership exchange 从 2 次降为 1 次，两个 kernel 的 event 计数仍分别为 1。正序关闭诊断 143.658934→148.231853 FPS（+3.18%），反序 139.936412→144.347279 FPS（+3.15%）；各窗口预热 1200 帧，3×240 完成帧，初始 GPU0 占用均为 0%。反序完整散射+PBR prepare 6.496115→6.084459 ms/帧（−6.34%）。这是可重复的交接收益，未达到 180 FPS。
+
+反序计时窗口互斥墙钟表如下。原散射 stream 同步和独立 fence 被合并进唯一 PBR fence，不能把原排名消失当成 GPU 工作消失，也不能把该 fence 的同比增幅解释为负优化。
+
+| 排名 | 阶段 | ms/帧 | 每秒累计 ms | 占比 |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | 合批完成 fence 等待 | 5.579255 | 794.537 | 79.454% |
+| 2 | benchmark park | 0.494302 | 70.393 | 7.039% |
+| 3 | 最终帧录制提交 | 0.172586 | 24.578 | 2.458% |
+| 4 | 合批 release 录制 | 0.093929 | 13.376 | 1.338% |
+| 5 | 两个 CUDA kernel 入队 | 0.076401 | 10.880 | 1.088% |
+| | 其余 47 项 | 0.605543 | 86.235 | 8.623% |
+| | **互斥墙钟求和** | **7.022016** | **1000.000** | **100.000%** |
+
+该等待所覆盖的最大实际 GPU 工作仍是纯散射灯光查询 2.432998 ms/帧（inclusive lights 3.221553 减 primary 0.788555），随后是 PBR 灯光 0.955043、主命中 0.788555、散射 CUDA 0.604974、PBR CUDA 0.573909 ms/帧。它们属于 GPU 证据，不加到上面的墙钟表中。细粒度 profile 695 条记录零漏样，开销 2.18%；内部前三仍是 shadow 31.19%、局部灯几何/衰减 27.61%、采样位置 13.41%，合计 72.21%。后续宏观优化优先处理这一散射查询执行路径。
+
+正确性：CPU ABI 精确预算/低预算回退/相对偏移和非法布局通过；CUDA component 包含 SPP2、1/8/64 步、514 条非整 block 路径、camera lane 不可变和非法 flag 拒绝。1080p 8 帧、query/no-query 灯光及 cached-primary 矩阵 90 帧，共 98 帧 HDR 全字节一致。PBR 31 项/43 帧、组合 15 项、camera 独立参考 17 项、多次散射解析回归通过；13 份 validation 日志会话均关闭，零 warning/error/drop。完整 API 门禁尚未重新执行，不能把此前全门禁套用到本提交。
+
+[冻结制品、正反序窗口与正确性证据](data/scattering-joint-batch-20261031.json)、[完整互斥墙钟排名](data/scattering-joint-batch-ranked-20261031.json)。
