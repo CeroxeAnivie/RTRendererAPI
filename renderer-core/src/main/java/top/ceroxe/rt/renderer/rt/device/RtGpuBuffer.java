@@ -283,6 +283,15 @@ public final class RtGpuBuffer implements AutoCloseable {
             long buffer = bufferHandle.get(0);
             long allocation = allocationHandle.get(0);
             try {
+                if (top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.ENABLED) {
+                    var info = org.lwjgl.util.vma.VmaAllocationInfo.malloc(stack);
+                    Vma.vmaGetAllocationInfo(allocator, allocation, info);
+                    var properties = stack.mallocInt(1);
+                    Vma.vmaGetAllocationMemoryProperties(allocator, allocation, properties);
+                    top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.checkpoint(
+                            "vulkan.buffer.memoryType=" + info.memoryType() + "/flags=" + properties.get(0),
+                            buffer, info.size());
+                }
                 long deviceAddress = queryDeviceAddress ? queryDeviceAddress(stack, device, buffer) : 0L;
                 if (queryDeviceAddress && deviceAddress == 0L) {
                     throw new IllegalStateException("vkGetBufferDeviceAddress returned null for device-address buffer");

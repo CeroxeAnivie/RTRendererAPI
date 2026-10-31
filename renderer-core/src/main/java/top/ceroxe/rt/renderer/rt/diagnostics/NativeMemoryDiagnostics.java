@@ -74,7 +74,7 @@ public final class NativeMemoryDiagnostics {
     @Label("Renderer native memory phases")
     @Category({"Renderer", "Memory"})
     @Period("1 s")
-    @StackTrace(false)
+    @StackTrace(true)
     public static final class MemorySample extends Event {
         public String operation, phase;
         public long id;
