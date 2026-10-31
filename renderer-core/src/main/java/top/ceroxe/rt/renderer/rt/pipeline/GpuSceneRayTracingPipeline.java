@@ -300,7 +300,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 visibilityClosestModule = RtShaderModuleCompiler.createModule(stack, device, visibilityClosestCode);
                 visibilityAnyModule = RtShaderModuleCompiler.createModule(stack, device, visibilityAnyCode);
             }
-            String programKey = RtPipelineCacheStore.programKey("gpuscene-7/program="+program+"/data="+sceneShaders.dataBindingCount()+"/depth="+recursionDepth,
+            String programKey = RtPipelineCacheStore.programKey("gpuscene-7/program="+program+"/data="+sceneShaders.dataBindingCount()+"/depth="+recursionDepth+"/disableOpt="+(collectedConnections&&Boolean.getBoolean("top.ceroxe.rt.pipeline.collectedDisableOptimization")),
                     raygenCode,missCode,closestCode,anyHitCode,visibilityMissCode,visibilityClosestCode,visibilityAnyCode,
                     callableCode,gatherCode);
             try (var memory = top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.begin("vulkan.pipeline." + program, raygenCode.length);

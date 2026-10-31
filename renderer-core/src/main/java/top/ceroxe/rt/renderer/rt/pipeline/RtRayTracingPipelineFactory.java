@@ -251,6 +251,8 @@ final class RtRayTracingPipelineFactory {
             generalShaderGroup(groups.get(groupCount - callableCount + i), ordinaryStages + i);
         VkRayTracingPipelineCreateInfoKHR.Buffer createInfo = VkRayTracingPipelineCreateInfoKHR.calloc(1, stack);
         createInfo.get(0).sType$Default()
+                .flags(callableCount > 0 && Boolean.getBoolean("top.ceroxe.rt.pipeline.collectedDisableOptimization")
+                        ? VK10.VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT : 0)
                 .pStages(stages)
                 .pGroups(groups)
                 .maxPipelineRayRecursionDepth(recursionDepth)
