@@ -55,7 +55,7 @@ GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,f
 }
 GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,float minimum) {
     return gsTraceOpticalRadiance(origin,direction,launch,minimum,
-            gsOptical.initialize>=2ul?GS_PAYLOAD_PHOTON_QUERY:GS_PAYLOAD_RADIANCE_QUERY);
+            (gsOptical.initialize==2ul||gsOptical.initialize==3ul)?GS_PAYLOAD_PHOTON_QUERY:GS_PAYLOAD_RADIANCE_QUERY);
 }
 GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch) {
     return gsTraceOpticalRadiance(origin,direction,launch,gsRayEpsilon(origin));
@@ -467,14 +467,20 @@ void gsOpticalPhotonTrace() {
     gsOpticalStoreAt(photons,photons.lanes[1u].y,item,hit,uvec4(item,0u,epoch,epoch),1u);
 }
 void main() {
-    if(gsOptical.initialize>=2ul){gsOpticalPhotonTrace();return;}
+    if(gsOptical.initialize==2ul||gsOptical.initialize==3ul){gsOpticalPhotonTrace();return;}
+    bool splitTasks=gsOptical.initialize==4ul||gsOptical.initialize==5ul;
+    bool initializing=gsOptical.initialize==1ul;
     if(gl_LaunchIDEXT.x>=gsOptical.pixelCount)return;
     bool fusedInitialization=(gsOptical.storage.lanes[11u].w&128u)!=0u;
     // Only CUDA consumes this marker, after the complete Vulkan dispatch retires.
-    if(gl_LaunchIDEXT.x==0u)gsOptical.storage.lanes[4u].y=gsOptical.initialize!=0ul?1u:0u;
+    if(gl_LaunchIDEXT.x==0u&&!splitTasks){
+        gsOptical.storage.lanes[4u].y=initializing?1u:0u;
+        if(initializing&&(gsOptical.storage.lanes[11u].w&65536u)!=0u)
+            gsOptical.storage.lanes[gsOptical.storage.lanes[14u].w/16u+3u].x=0u;
+    }
     ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
     uint samples=gsOptical.storage.lanes[0u].w;
-    bool queuedPaths=gsOptical.initialize==0ul&&(gsOptical.storage.lanes[11u].w&256u)!=0u;
+    bool queuedPaths=!initializing&&(gsOptical.storage.lanes[11u].w&256u)!=0u;
     uint stateOffset=gsOptical.storage.lanes[2u].y,hitOffset=gsOptical.storage.lanes[2u].z;
     uint evaluationOffset=gsOptical.storage.lanes[2u].w,primaryOffset=gsOptical.storage.lanes[3u].x;
     bool firstPass=gsOptical.storage.lanes[8u].z==0u&&gsOptical.storage.lanes[8u].w==0u;
@@ -483,14 +489,21 @@ void main() {
     uint stateLanes=(gsOptical.storage.lanes[11u].w&2u)!=0u?7u:16u;
     vec2 jitter=vec2(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD]),
         uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD+1u]));
-    for(uint dispatchSample=0u;dispatchSample<samples;dispatchSample++) {
-        uint item=gl_LaunchIDEXT.x*samples+dispatchSample;
+    for(uint dispatchSample=0u;dispatchSample<(splitTasks?1u:samples);dispatchSample++) {
+        uint item=splitTasks?gl_LaunchIDEXT.x:gl_LaunchIDEXT.x*samples+dispatchSample;
         if(queuedPaths){
             // CUDA publishes only surviving original IDs. Inactive launch slots
             // leave before reading strided path state or constructing payloads.
-            if(item>=gsOptical.storage.lanes[13u].y)continue;
+            uint index=item;
+            if(splitTasks){
+                uint control=gsOptical.storage.lanes[14u].w/16u;
+                bool connection=gsOptical.initialize==5ul;
+                uint count=gsOptical.storage.lanes[control+(connection?2u:1u)].x;
+                if(item>=count)continue;
+                if(connection)index=gsOptical.storage.lanes[0u].z-1u-item;
+            }else if(item>=gsOptical.storage.lanes[13u].y)continue;
             uint queue=gsOptical.storage.lanes[13u].w/16u;
-            item=gsOptical.storage.lanes[queue+item/4u][item%4u];
+            item=gsOptical.storage.lanes[queue+index/4u][index%4u];
         }
         uint pixelIndex=gsOptical.firstPixel+item/samples,sampleIndex=item%samples;
         ivec2 pixel=ivec2(pixelIndex%uint(extent.x),pixelIndex/uint(extent.x));
@@ -502,7 +515,7 @@ void main() {
 #endif
         GS_DETAIL_BEGIN(0u);
         GpuScenePayload hit;vec3 origin,direction;
-        if(gsOptical.initialize!=0ul) {
+        if(initializing) {
             // Deterministic branches differ only after a CUDA optical-lobe choice.
             // Reuse a successful completed path that never made that choice, from
             // the immediately preceding branch of this same sample and tile.
@@ -579,7 +592,7 @@ void main() {
             hit=gsTraceOpticalRadiance(origin,direction,launch,0.0);
         }
         GS_DETAIL_NEXT(19u);
-        uint epoch=gsOptical.initialize!=0ul?1u:gsOpticalStateRead(item,2u).w;
+        uint epoch=initializing?1u:gsOpticalStateRead(item,2u).w;
         gsOpticalStore(hitOffset,item,hit,uvec4(pixelIndex,sampleIndex,epoch,epoch));
         GS_DETAIL_NEXT(20u);
         vec3 value=vec3(0);

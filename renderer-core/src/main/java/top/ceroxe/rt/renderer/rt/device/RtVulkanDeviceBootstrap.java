@@ -43,6 +43,7 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
     private final int queueFamilyIndex;
     private final int requestedQueueCount;
     private final boolean timelineSemaphoreEnabled;
+    private final boolean traceRaysIndirectEnabled;
     private final int accelerationStructureScratchAlignment;
     private final boolean memoryBudgetEnabled;
     private final boolean shaderExecutionReorderingEnabled;
@@ -93,6 +94,9 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         this.queueFamilyIndex = queueFamilyIndex;
         this.requestedQueueCount = requestedQueueCount;
         this.timelineSemaphoreEnabled = timelineSemaphoreEnabled;
+        try(MemoryStack stack=MemoryStack.stackPush()){
+            this.traceRaysIndirectEnabled=supportsIndirectTrace(stack,this.physicalDevice);
+        }
         this.accelerationStructureScratchAlignment = accelerationStructureScratchAlignment;
         this.memoryBudgetEnabled = memoryBudgetEnabled;
         this.shaderExecutionReorderingEnabled = shaderExecutionReorderingEnabled;
@@ -401,6 +405,15 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
                         + preferred.stableId());
     }
 
+    boolean traceRaysIndirectEnabled(){return traceRaysIndirectEnabled;}
+
+    private static boolean supportsIndirectTrace(MemoryStack stack,VkPhysicalDevice physicalDevice){
+        var rt=VkPhysicalDeviceRayTracingPipelineFeaturesKHR.calloc(stack).sType$Default();
+        VK11.vkGetPhysicalDeviceFeatures2(physicalDevice,VkPhysicalDeviceFeatures2.calloc(stack)
+                .sType$Default().pNext(rt.address()));
+        return rt.rayTracingPipelineTraceRaysIndirect();
+    }
+
     private static VkDevice createDevice(
             MemoryStack stack,
             VkPhysicalDevice physicalDevice,
@@ -413,7 +426,8 @@ final class RtVulkanDeviceBootstrap implements AutoCloseable {
         VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration =
                 VkPhysicalDeviceAccelerationStructureFeaturesKHR.calloc(stack).sType$Default().accelerationStructure(true);
         VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracing =
-                VkPhysicalDeviceRayTracingPipelineFeaturesKHR.calloc(stack).sType$Default().rayTracingPipeline(true);
+                VkPhysicalDeviceRayTracingPipelineFeaturesKHR.calloc(stack).sType$Default().rayTracingPipeline(true)
+                        .rayTracingPipelineTraceRaysIndirect(supportsIndirectTrace(stack,physicalDevice));
         VkPhysicalDeviceFeatures2 features = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
         features.features().shaderInt64(true);
         features.features().samplerAnisotropy(featureSelection.samplerAnisotropy());

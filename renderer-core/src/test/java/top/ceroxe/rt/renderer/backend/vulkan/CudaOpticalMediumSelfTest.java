@@ -23,11 +23,13 @@ public final class CudaOpticalMediumSelfTest {
         require(plan.primaryOffset()>=plan.hitOffset()+plan.tilePaths()*plan.hitBytes()+plan.tilePaths()*16,"initial primary cache is disjoint from mutable hit/evaluation");
         require(plan.transmittanceOffset()==plan.primaryOffset()+plan.cachedPrimaryPaths()*208,"shared initial primary cache matches its declared extent");
         require(plan.primaryBytes()==plan.paths()*208L,"complete Vulkan-owned primary storage remains budgeted");
-        require(plan.bytes()==plan.emissionOffset()+plan.paths()*16L+plan.queueStrideBytes()*2L,"complete accumulated radiance and disjoint active queues");
+        require(plan.bytes()==plan.emissionOffset()+plan.paths()*16L+plan.queueStrideBytes()*2L+CudaOpticalMediumAbi.TASK_QUEUE_CONTROL_BYTES,"complete accumulated radiance and disjoint active queues");
         var data=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(plan,frame,List.of(boundary),new int[]{boundary.slot()})).order(ByteOrder.nativeOrder());
         require(plan.activeQueues()&&data.getInt(200)==plan.firstQueueOffset()&&data.getInt(204)==plan.secondQueueOffset(),"active queue offsets are explicit");
         require((data.getInt(188)&256)!=0&&plan.firstQueueOffset()>=plan.emissionOffset()+plan.paths()*16L
-                &&plan.secondQueueOffset()+plan.queueStrideBytes()==plan.bytes(),"queues never alias accumulated radiance");
+                &&plan.secondQueueOffset()+plan.queueStrideBytes()==plan.queueControlOffset()
+                &&plan.queueControlOffset()+CudaOpticalMediumAbi.TASK_QUEUE_CONTROL_BYTES==plan.bytes()
+                &&data.getInt(236)==plan.queueControlOffset(),"queues never alias accumulated radiance");
         require(data.getInt(24)==32&&data.getInt(132)==8&&data.getInt(144)==7,"event/sample/frame budgets are explicit");
         require(data.getInt(256)==0&&data.getInt(384)==boundary.slot()&&data.getInt(388)==-7,"unsigned wire slots compact into signed priority table");
         require(data.getFloat(92)==1.5f&&data.getFloat(400)==.2f,"IOR and density-scaled optical coefficients");

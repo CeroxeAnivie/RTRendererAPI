@@ -175,6 +175,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             int firstUploadBytes=uploadAssets?plan.sceneBytes():CudaOpticalMediumAbi.HEADER_BYTES;
             var metadata=arena.allocate(firstUploadBytes,16);
             metadata.asByteBuffer().put(scene.metadata,0,uploadAssets?scene.metadata.length:CudaOpticalMediumAbi.HEADER_BYTES);
+            if(!device.traceRaysIndirectEnabled())metadata.set(ValueLayout.JAVA_INT,188,metadata.get(ValueLayout.JAVA_INT,188)&~65536);
             if(uploadAssets)scene.assets.density.write(metadata.asByteBuffer().order(ByteOrder.nativeOrder()),scene.metadata.length);
             if(shaderSampleFrame){
                 if(OpticalFrameTimings.KERNEL_PHASES)throw new IllegalStateException("shader and CUDA clock sampling must run separately");
@@ -378,6 +379,10 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             recordPairStep("cuda/pairStep0",queries,firstStatistics);
             recordPairStep("cuda/pairStep1",firstStatistics.getInt(0),secondStatistics);
             OpticalDetailedProfile.add("cuda/dispatchedPathSlots",Math.multiplyExact((long)dispatched,2L));
+            OpticalDetailedProfile.add("vulkan/previousCapacityPathSlots",Math.multiplyExact((long)dispatched,2L));
+            OpticalDetailedProfile.add("vulkan/queuedPathSlots",(long)queries+firstStatistics.getInt(0));
+            if(device.traceRaysIndirectEnabled()&&Boolean.parseBoolean(System.getProperty(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY,"true")))
+                OpticalDetailedProfile.add("vulkan/eliminatedInactivePathSlots",Math.multiplyExact((long)dispatched,2L)-queries-firstStatistics.getInt(0));
         }
         diagnosticQueries.add((long)queries+firstStatistics.getInt(0));
         diagnosticInterfaces.add((long)firstStatistics.getInt(8)+secondStatistics.getInt(8));
@@ -405,7 +410,10 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         OpticalDetailedProfile.defer(initialize?"optical.cameraInitialTrace":"optical.cameraContinuationTrace",timing);
         if(timing!=null)timing.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
         int dispatchedPixels=initialize||!plan.activeQueues()?pixels:Math.min(pixels,Math.max(1,Math.ceilDiv(activeBound,plan.samples())));
-        tracer.recordNativeOpticalTrace(command,stack,slot,address,primaryAddress,first,dispatchedPixels,initialize);
+        if(!initialize&&plan.activeQueues()&&device.traceRaysIndirectEnabled()
+                &&Boolean.parseBoolean(System.getProperty(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY,"true")))
+            tracer.recordNativeOpticalTaskQueues(command,stack,slot,address,primaryAddress,first,pixels*plan.samples(),address+plan.queueControlOffset());
+        else tracer.recordNativeOpticalTrace(command,stack,slot,address,primaryAddress,first,dispatchedPixels,initialize);
         if(timing!=null)timing.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
     }
     private void uploadMetadata(org.lwjgl.vulkan.VkCommandBuffer command,MemoryStack stack,java.nio.ByteBuffer source,int bytes){

@@ -67,7 +67,7 @@ public final class CudaSharedRayFrame implements AutoCloseable {
                     .handleTypes(VK11.VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT);
             check(vkCreateBuffer(device(), VkBufferCreateInfo.calloc(s).sType$Default().pNext(external.address())
                     .size(bytes).usage(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-                            | VK12.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
+                            | VK12.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT)
                     .sharingMode(VK_SHARING_MODE_EXCLUSIVE), null, out), "create shared ray buffer");
             buffer = out.get(0);
             var requirements = VkMemoryRequirements.malloc(s);

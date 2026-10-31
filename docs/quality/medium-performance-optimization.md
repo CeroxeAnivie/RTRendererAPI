@@ -1651,3 +1651,14 @@ S完成84组/168帧连接逐字节对照、两帧1080p逐字节HDR、46组/152�
 T正确性回归完成：两个1080p HDR帧及84组/168帧连接开关逐字节一致；拓扑独立oracle、position-only上传、极薄/镜像/排列GPU谓词、46组/152帧光学生产、27组边界解析、7场景/46功能、固定sequence133和128帧长窗全部通过。四份validation日志共生命周期完整关闭，零warning/error/drop；30着色阶段及17 HDR raygen预编译契约通过。确定消除了静态邻接重复搜索和求交边函数重复生产，不以源码变化替代FPS证据。
 
 T正反序四个窗口测前GPU0均超过10%，仅归档实测，不认定绝对净收益。最新受载排名：32完成帧、101449区间零丢样，304.157313ms/帧。CUDA stream同步247.733275ms/帧、每秒814.490610ms、81.4491%；Vulkan release录制9.853797ms、3.2397%；CUDA kernel入队9.722591ms、3.1966%；Vulkan release提交5.300494ms、1.7427%；CUDA semaphore等待4.409941ms、1.4499%；信号3.339775ms、1.0980%；Vulkan consumer提交2.807275ms、0.9230%；park2.719500ms、0.8941%；其余18.270666ms、6.0070%。互斥求和1000ms/秒。空闲净吞吐仍须补验收；180FPS尚未达到。[完整证据](data/medium-prepared-boundary-results-20261031.json)。
+
+
+## 2026-10-31 候选U：按GPU任务类型生产队列并间接派发
+
+从整个输运生产/消费边界修复：旧active queue混合相机续射线与完整光连接，Vulkan每轮按上个host窗口的数量上界派发，raygen再读真实count并分支。对照固定PBRT-v4 b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f 的wavefront/integrator.cpp 356–425按职责推进，以及intersect.h的EnqueueWorkAfterIntersection/medium/nextRay/材质队列分工，采用“由生产者按下一阶段职责排队”的逻辑，适配本项目双后端。PBRT不包含本项目双端ping-pong队列或Vulkan间接参数，不机械翻译它的ABI。
+
+CUDA以warp为单位将主路径存队列前端、光连接存后端；只增加固定64字节控制区，保持原path ID、完整介质栈、随机数、估计器公式和原逐path累加顺序。CUDA输出两个VkTraceRaysIndirectCommandKHR的精确width，Vulkan按两类工作分别间接派发，无CPU计数读回决策，不新增逐path状态数组；不支持间接RT的设备回原队列。空队列width=0，必须验证初始化标记只消费一次；固定64字节计入resident cap，partial tile按实际path数索引。没有承诺调用数下降：两类工作可能增加RT调用，但目标是消除过量invocation与混合分支执行，最后看完整帧。
+
+此候选不改变数学，门槛是严格HDR逐字节一致，不能用bounded放宽。先独立CUDA整数队列oracle覆盖full/compact/transposed状态、1/31/32/33/255/256/257/1069路径、连续三次交换与空队列；再84组/168帧生产连接开关、1080p HDR、功能/固定133/长窗和生产回归。全量提交推送、冻结制品后测试，负优化撤回。
+
+受载时依然核对实际工作消除并列表：射线/查询数量、无效派发槽、整段重复计算和状态读写。U复用已有pair读回统计推导旧容量、真实排队数量与消除的无效invocation，不新增GPU读回。工作量减少证明消除了哪些工作，不能冒充空闲FPS收益。

@@ -70,6 +70,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 || this == NATIVE_DENSITY_SCATTERING_LIGHTS || this == NATIVE_OPTICAL_TRACE || this == NATIVE_OPTICAL_TRACE_DIAGNOSTIC || this == SURFACE_PRIMARY_SHADE
                 || this == COMPACT_PRIMARY_SHADE || this == GENERAL_PRIMARY_SHADE; }
     }
+    public static final java.util.concurrent.atomic.LongAdder diagnosticOpticalTaskQueueDispatches=new java.util.concurrent.atomic.LongAdder();
     private static final String SHADER_ROOT = "assets/rtrenderer/shaders/gpuscene/";
 
     private final SceneShaderProgram sceneShaders;
@@ -865,6 +866,25 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR
                         | KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR, 0, push);
         recordTrace(commandBuffer, stack, slot, count, 1);
+    }
+
+    /** Two disjoint task queues; CUDA publishes exact VkTraceRaysIndirectCommandKHR dimensions. */
+    public synchronized void recordNativeOpticalTaskQueues(VkCommandBuffer command,MemoryStack stack,int slot,
+            long storageAddress,long primaryAddress,int firstPixel,int pathCapacity,long controlAddress){
+        requireOpen();
+        if(storageAddress==0L||(storageAddress&15L)!=0L||(primaryAddress&15L)!=0L
+                ||controlAddress==0L||(controlAddress&15L)!=0L||firstPixel<0||pathCapacity<1)
+            throw new IllegalArgumentException("invalid optical task queue dispatch");
+        diagnosticOpticalTaskQueueDispatches.add(2);
+        for(int kind=0;kind<2;++kind){
+            var push=stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            push.putLong(storageAddress).putInt(firstPixel).putInt(pathCapacity).putLong(4L+kind).putLong(primaryAddress).flip();
+            VK10.vkCmdPushConstants(command,pipelineLayout,KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR
+                    |KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR,0,push);
+            RtFrameDispatchCommands.recordTraceRaysIndirect(command,stack,pipelineLayout,pipeline,descriptors.set(slot),
+                    shaderBindingTable.buffer(),shaderBindingTable.baseOffsetBytes(),shaderBindingTable.layout(),
+                    controlAddress+16L+kind*16L);
+        }
     }
 
     /** Native light paths retain the full geometric hit and share camera medium transport. */

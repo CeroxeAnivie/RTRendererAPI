@@ -29,6 +29,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         if(java.util.Arrays.asList(args).contains("--connection-batches")){verifyConnectionRanges(CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--duplicate-branches")){verifyDuplicateBranches(CudaOpticalMediumAbi.REUSE_DUPLICATE_BRANCHES_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--boundary-hit-reuse")){verifyConnectionRanges(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY);return;}
+        if(java.util.Arrays.asList(args).contains("--split-task-queues")){verifyConnectionRanges(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--boundary-topology")){verifyConnectionRanges(VulkanBoundaryTopology.PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--vertex-paths")){verifyDuplicateBranches(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--vertex-connections")){verifyConnectionRanges(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY);return;}
@@ -444,7 +445,8 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                 previousTransposed=System.getProperty(CudaOpticalMediumAbi.TRANSPOSED_HITS_PROPERTY),
                 previousGpu=System.getProperty(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY);
         boolean batches=property.equals(CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY);
-        boolean gpu=property.equals(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY),extended=batches||gpu||property.equals(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY)||property.equals(VulkanBoundaryTopology.PROPERTY);
+        long queueBefore=top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.diagnosticOpticalTaskQueueDispatches.sum();
+        boolean gpu=property.equals(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY),extended=batches||gpu||property.equals(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY)||property.equals(VulkanBoundaryTopology.PROPERTY)||property.equals(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY);
         var references=new ArrayList<byte[]>();int comparisons=0;
         String[] cases=extended?new String[]{"clear","behind-opaque","before-opaque","before-alpha","before-volume",
                 "light-inside-volume","endpoint-overlay","endpoint-nonshadow","endpoint-opaque","sun",
@@ -532,6 +534,9 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             }
             long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
             int expected=cases.length*formats.length*2;
+            if(property.equals(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY))
+                require(top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.diagnosticOpticalTaskQueueDispatches.sum()>queueBefore,
+                        "task queue comparison did not execute indirect RT");
             require(comparisons==expected&&routes==expected*2L,"finite connection checks bypassed native optical transport: "+routes);
             Files.writeString(OUTPUT.resolve(gpu?"gpu-connection-checks.json":batches?"connection-batch-checks.json":"connection-range-checks.json"),
                     "{\"passed\":true,\""+(gpu?"boundedComparisons":"byteIdenticalComparisons")+"\":"+comparisons+",\"nativeFrames\":"+routes+",\"mirroredVertexOrders\":2,\"hitFormats\":"+formats.length+"}\n");

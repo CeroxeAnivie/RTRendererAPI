@@ -64,6 +64,18 @@ final class RtFrameDispatchCommands {
         );
     }
 
+    static void recordTraceRaysIndirect(VkCommandBuffer command,MemoryStack stack,long pipelineLayout,
+            long pipeline,long descriptorSet,RtGpuBuffer sbt,int base,
+            RtRayTracingPipelineProperties.ShaderBindingTableLayout layout,long arguments){
+        if(arguments==0L||(arguments&3L)!=0L)throw new IllegalArgumentException("unaligned indirect ray arguments");
+        VK10.vkCmdBindPipeline(command,KHRRayTracingPipeline.VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,pipeline);
+        VK10.vkCmdBindDescriptorSets(command,KHRRayTracingPipeline.VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                pipelineLayout,0,stack.longs(descriptorSet),null);
+        KHRRayTracingPipeline.vkCmdTraceRaysIndirectKHR(command,
+                sbtRegion(stack,sbt,base,layout,layout.raygen()),sbtRegion(stack,sbt,base,layout,layout.miss()),
+                sbtRegion(stack,sbt,base,layout,layout.hit()),VkStridedDeviceAddressRegionKHR.calloc(stack),arguments);
+    }
+
     static void recordImageToBufferCopy(
             VkCommandBuffer commandBuffer,
             MemoryStack stack,

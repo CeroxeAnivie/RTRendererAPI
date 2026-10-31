@@ -36,6 +36,8 @@ public final class CudaOpticalMediumAbi {
     public static final String REUSE_DUPLICATE_BRANCHES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalReuseDuplicateBranches";
     public static final String BATCH_CONNECTION_HITS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalBatchConnectionHits";
     public static final String VERTEX_DIRECT_LIGHTING_PROPERTY="top.ceroxe.rt.medium.cuda.opticalVertexDirectLighting";
+    public static final String SPLIT_TASK_QUEUES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalSplitTaskQueues";
+    public static final int TASK_QUEUE_CONTROL_BYTES=64;
     public static final String REUSE_BOUNDARY_HIT_PROPERTY="top.ceroxe.rt.medium.cuda.opticalReuseBoundaryHit";
     public static final long RESOLVED_RADIANCE_FLAG=1L;
     private CudaOpticalMediumAbi() { }
@@ -54,6 +56,7 @@ public final class CudaOpticalMediumAbi {
         public long queueStrideBytes(){return activeQueues?((tilePaths()*4L+15L)&~15L):0L;}
         public long firstQueueOffset(){return activeQueues?emissionOffset+paths()*(long)COLOR_BYTES:0L;}
         public long secondQueueOffset(){return activeQueues?firstQueueOffset()+queueStrideBytes():0L;}
+        public long queueControlOffset(){return activeQueues?secondQueueOffset()+queueStrideBytes():0L;}
     }
     public static Plan plan(int width,int height,int samples,int boundaries,long residentLimit) {
         return plan(width,height,samples,boundaries,CudaMediumDensityAbi.Scene.empty(),residentLimit);
@@ -118,7 +121,7 @@ public final class CudaOpticalMediumAbi {
         boolean activeQueues=useActiveQueues(boundaries,connectionTransport);
         int connectionBatchSize=connectionTransport&&!vertexDirectLighting()&&!OpticalFrameTimings.KERNEL_PHASES
                 &&Boolean.parseBoolean(System.getProperty(BATCH_CONNECTION_HITS_PROPERTY,"true"))?2:1;
-        int tilePixels=Math.toIntExact(Math.min(pixels,(available-(activeQueues?32L:0L))/((long)samples*(stateBytes+(long)hitBytes*connectionBatchSize+COLOR_BYTES
+        int tilePixels=Math.toIntExact(Math.min(pixels,(available-(activeQueues?32L+TASK_QUEUE_CONTROL_BYTES:0L))/((long)samples*(stateBytes+(long)hitBytes*connectionBatchSize+COLOR_BYTES
                 +(externalPrimary&&!directPrimary?HIT_BYTES:0)+(connectionTransport?CONNECTION_BYTES:0)+(activeQueues?8:0)))));
         if(tilePixels<1)throw new IllegalArgumentException("complete native optical frame exceeds the CUDA resident cap");
         int hit=Math.toIntExact(scene+(long)tilePixels*samples*stateBytes);
@@ -128,7 +131,7 @@ public final class CudaOpticalMediumAbi {
         int attenuation=Math.toIntExact(primary+(long)(externalPrimary?(directPrimary?0:tilePixels*samples):paths)*HIT_BYTES);
         int emission=Math.toIntExact(attenuation+(long)paths*COLOR_BYTES);
         long bytes=Math.addExact(emission,(long)paths*COLOR_BYTES);
-        if(activeQueues)bytes=Math.addExact(bytes,2L*((tilePixels*(long)samples*4L+15L)&~15L));
+        if(activeQueues)bytes=Math.addExact(bytes,TASK_QUEUE_CONTROL_BYTES+2L*((tilePixels*(long)samples*4L+15L)&~15L));
         return new Plan(pixels,samples,tilePixels,boundaries,scene,hit,evaluation,primary,attenuation,emission,priority,scene,bytes,externalPrimary,directPrimary,compactHits,compactStates,transposedHits,transposedStates,transposedPrimary,connection,connectionTransport,activeQueues,connectionBatchSize);
     }
     public static byte[] scene(Plan plan,RenderFrameRequest frame,List<CudaBoundaryMediumAbi.Boundary> source,int[] containing) {
@@ -173,10 +176,12 @@ public final class CudaOpticalMediumAbi {
                         |(Boolean.parseBoolean(System.getProperty(BOUND_CONNECTION_RAYS_PROPERTY,"true"))?2048:0)
                         |(Boolean.parseBoolean(System.getProperty(REUSE_DUPLICATE_BRANCHES_PROPERTY,"true"))?4096:0)
                         |(plan.connectionBatchSize()==2?8192:0)|(plan.connectionTransport()&&vertexDirectLighting()?16384:0)
-                        |(Boolean.parseBoolean(System.getProperty(REUSE_BOUNDARY_HIT_PROPERTY,"true"))?32768:0));
+                        |(Boolean.parseBoolean(System.getProperty(REUSE_BOUNDARY_HIT_PROPERTY,"true"))?32768:0)
+                        |(plan.activeQueues()&&Boolean.parseBoolean(System.getProperty(SPLIT_TASK_QUEUES_PROPERTY,"true"))?65536:0));
         packed.putInt(200,Math.toIntExact(plan.firstQueueOffset())).putInt(204,Math.toIntExact(plan.secondQueueOffset()));
         // These words share the opt-in clock sampling area, which disables batching.
-        packed.putInt(228,plan.secondConnectionHitOffset()).putInt(232,plan.connectionBatchSize());
+        packed.putInt(228,plan.secondConnectionHitOffset()).putInt(232,plan.connectionBatchSize())
+                .putInt(236,Math.toIntExact(plan.queueControlOffset()));
         var boundaries=new ArrayList<>(source);boundaries.sort((a,b)->Integer.compareUnsigned(a.slot(),b.slot()));
         var compact=new HashMap<Integer,Integer>();
         for(int index=0;index<boundaries.size();index++) {

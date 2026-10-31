@@ -528,8 +528,15 @@ extern "C" __global__ void native_optical_reset(unsigned char*b,int count){if(bl
     // The preceding Vulkan pass consumed the previous output queue. Retain
     // original path IDs in two disjoint queues; no state/radiance is reordered.
     if((h[47]&256u)!=0u){
+        // A zero-sized indirect dispatch has no invocation to clear initialization.
+        // Consume its marker once; a real initialization resets this generation bit.
+        if((h[47]&65536u)!=0u){unsigned int*c=(unsigned int*)(b+h[59]);
+            if(h[17]!=0u&&c[12]!=0u)h[17]=0u;c[12]=1u;}
         if(h[17]!=0u){h[52]=h[2];h[54]=0u;h[55]=h[50];}
         else{h[52]=h[53];h[54]=h[55];h[55]=h[55]==h[50]?h[51]:h[50];}
+        if((h[47]&65536u)!=0u){unsigned int*c=(unsigned int*)(b+h[59]);
+            c[0]=h[17]!=0u?h[2]:c[4];c[1]=h[17]!=0u?0u:c[8];
+            c[4]=c[8]=0u;c[5]=c[6]=c[9]=c[10]=1u;}
         h[53]=0u;
     }
 #ifdef RTR_OPTICAL_PHASE_PROFILE
@@ -545,10 +552,19 @@ extern "C" __global__ void native_optical_reset(unsigned char*b,int count){if(bl
 #define RTR_ENTRY_NEXT(p)
 #define RTR_ENTRY_END()
 #endif
+namespace rtr_optical {
+__device__ __forceinline__ unsigned int queuedInputItem(const unsigned int*h,const unsigned char*b,unsigned int slot){
+    if(h[54]==0u)return slot;
+    unsigned int physical=slot;
+    if((h[47]&65536u)!=0u){const unsigned int*c=(const unsigned int*)(b+h[59]);
+        if(slot>=c[0])physical=h[2]-1u-(slot-c[0]);}
+    return ((const unsigned int*)(b+h[54]))[physical];
+}
+}
 template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=false> __device__ __forceinline__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*statistics){
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;using namespace rtr_optical;
     unsigned int*h=(unsigned int*)b;
-    if((h[47]&256u)!=0u){if((unsigned int)i>=h[52])return;if(h[54]!=0u)i=((unsigned int*)(b+h[54]))[i];}
+    if((h[47]&256u)!=0u){if((unsigned int)i>=h[52])return;i=queuedInputItem(h,b,i);}
     RTR_PHASE_SCOPE(b);
     RTR_ENTRY_SCOPE(b);
     StateAccess<Small,TransposedState> state(b,i,h[2]);auto*s=state.operator->();
@@ -777,16 +793,35 @@ __device__ __forceinline__ void queueContinued(unsigned char*b,int count,unsigne
     unsigned int*h=(unsigned int*)b;if((h[47]&256u)==0u)return;
     const unsigned int slot=blockIdx.x*blockDim.x+threadIdx.x,lane=threadIdx.x&31u;
     const bool active=slot<(unsigned int)count&&slot<h[52]&&continued!=0u;
+    const unsigned int item=active?queuedInputItem(h,b,slot):0u;
+    if((h[47]&65536u)!=0u){
+        // PBRT separates transport and shadow work. Adapt that producer/consumer
+        // contract to two ends of each existing ping-pong allocation; no extra
+        // path state, radiance accumulator, or cross-path arithmetic is introduced.
+        unsigned int mode=0u;
+        if(active){unsigned int word=(h[47]&16u)!=0u?8u*h[2]+item:item*((h[47]&2u)!=0u?28u:64u)+8u;
+            mode=((unsigned int*)(b+h[9]))[word];}
+        unsigned int*c=(unsigned int*)(b+h[59]);
+        for(unsigned int kind=0u;kind<2u;++kind){
+            const unsigned int mask=__ballot_sync(0xffffffffu,active&&((mode==2u||mode==3u)==(kind!=0u)));
+            if(mask==0u)continue;
+            const int leader=__ffs(mask)-1;unsigned int base=0u;
+            if(lane==(unsigned int)leader){base=atomicAdd(c+(kind==0u?4u:8u),__popc(mask));atomicAdd(h+53,__popc(mask));}
+            base=__shfl_sync(0xffffffffu,base,leader);
+            if((mask&(1u<<lane))!=0u){unsigned int index=base+__popc(mask&((1u<<lane)-1u));
+                if(kind!=0u)index=h[2]-1u-index;
+                ((unsigned int*)(b+h[55]))[index]=item;}
+        }
+        return;
+    }
     const unsigned int mask=__ballot_sync(0xffffffffu,active);
     if(mask==0u)return;
     const int leader=__ffs(mask)-1;unsigned int base=0u;
     if(lane==(unsigned int)leader)base=atomicAdd(h+53,__popc(mask));
     base=__shfl_sync(0xffffffffu,base,leader);
-    if(active){
-        const unsigned int item=h[54]!=0u?((unsigned int*)(b+h[54]))[slot]:slot;
-        const unsigned int rank=__popc(mask&((1u<<lane)-1u));
-        ((unsigned int*)(b+h[55]))[base+rank]=item;
-    }
+    if(active){const unsigned int rank=__popc(mask&((1u<<lane)-1u));
+        ((unsigned int*)(b+h[55]))[base+rank]=item;}
+
 }
 // CudaMediumRuntime launches 256 threads per block. Every lane, including tail lanes,
 // must call this helper; counters are exact integers and do not affect radiance ordering.

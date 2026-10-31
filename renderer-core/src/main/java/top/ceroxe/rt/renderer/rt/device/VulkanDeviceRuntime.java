@@ -498,6 +498,9 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
         return bootstrap.dynamicRenderingEnabled();
     }
 
+    /** @return whether GPU-produced ray dispatch dimensions are enabled */
+    public synchronized boolean traceRaysIndirectEnabled(){requireOpen();return bootstrap.traceRaysIndirectEnabled();}
+
     /** @return whether native GPU count-buffer draws are enabled */
     public synchronized boolean drawIndirectCountEnabled() {
         requireOpen();
