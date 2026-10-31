@@ -26,6 +26,7 @@ public final class CudaOpticalMediumAbi {
     public static final String COMPACT_STATES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalCompactStates";
     public static final String TRANSPOSED_PRIMARY_PROPERTY="top.ceroxe.rt.medium.cuda.opticalTransposedPrimary";
     public static final String TRANSPOSED_STATES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalTransposedStates";
+    public static final String HYBRID_VOLUME_STATES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalHybridVolumeStates";
     public static final String TRANSPOSED_HITS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalTransposedHits";
     public static final String MINIMAL_STATE_WRITES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalMinimalStateWrites";
     public static final String FUSED_INITIALIZATION_PROPERTY="top.ceroxe.rt.medium.cuda.opticalFusedInitialization";
@@ -101,7 +102,7 @@ public final class CudaOpticalMediumAbi {
         directPrimary &= externalPrimary;
         transposedPrimary &= directPrimary;
         compactStates &= boundaries==0;
-        transposedStates &= compactStates;
+        transposedStates &= compactStates||Boolean.parseBoolean(System.getProperty(HYBRID_VOLUME_STATES_PROPERTY,"true"));
         if(width<1||height<1||(samples!=1&&samples!=2&&samples!=4&&samples!=8)||boundaries<0)
             throw new IllegalArgumentException("invalid native optical dimensions or boundary count");
         int pixels=Math.toIntExact((long)width*height),paths=Math.multiplyExact(pixels,samples);

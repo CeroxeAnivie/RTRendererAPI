@@ -72,19 +72,26 @@ public final class CudaOpticalMediumNativeSelfTest {
             }
             if(reduced)rtr_optical::reduceStatistics(b,statistics);
         }
-        template<bool Transposed> __device__ void stateLayoutProbe(unsigned char*b,int i,int count){
-            rtr_optical::StateAccess<true,Transposed> access(b,i,count);auto*s=access.operator->();
-            float*output=(float*)(b+((unsigned int*)b)[11])+i*28;
+        template<bool Small,bool Transposed> __device__ void stateLayoutProbe(unsigned char*b,int i,int count){
+            rtr_optical::StateAccess<Small,Transposed> access(b,i,count);auto*s=access.operator->();
+            float*output=(float*)(b+((unsigned int*)b)[11])+i*(Small?28:64);
             float4 vectors[5]={s->origin,s->direction,s->throughput,s->radiance,s->terminal};
             for(int k=0;k<5;k++){output[k*4]=vectors[k].x;output[k*4+1]=vectors[k].y;output[k*4+2]=vectors[k].z;output[k*4+3]=vectors[k].w;}
             unsigned int*u=(unsigned int*)output;u[20]=s->control.x;u[21]=s->control.y;u[22]=s->control.z;u[23]=s->control.w;
             u[24]=s->counters.x;u[25]=s->counters.y;u[26]=s->counters.z;u[27]=s->counters.w;
+            if constexpr(!Small){
+                unsigned int*volume=(unsigned int*)&s->volumes;
+                for(unsigned int k=0;k<36u;k++)u[28u+k]=volume[k];
+                volume[0]^=0x1020304u;volume[35]^=0x5060708u;
+            }
             s->origin=make_float4(i+.25f,i+.5f,i+.75f,i+1.f);s->control.w+=7u;s->counters.z=1u;
             s->throughput.y+=2.f;s->radiance.z+=3.f;s->terminal.x+=4.f;
         }
         extern "C" __global__ void optical_state_layout_probe(unsigned char*b,int count){
             int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
-            if(((unsigned int*)b)[47]&16u)stateLayoutProbe<true>(b,i,count);else stateLayoutProbe<false>(b,i,count);
+            unsigned int flags=((unsigned int*)b)[47];
+            if(flags&2u){if(flags&16u)stateLayoutProbe<true,true>(b,i,count);else stateLayoutProbe<true,false>(b,i,count);}
+            else {if(flags&16u)stateLayoutProbe<false,true>(b,i,count);else stateLayoutProbe<false,false>(b,i,count);}
         }
         extern "C" __global__ void optical_connection_probe(unsigned char*b,int count){
             if(blockIdx.x!=0||threadIdx.x!=0)return;
@@ -347,34 +354,38 @@ public final class CudaOpticalMediumNativeSelfTest {
     private static void verifyStateLayouts(CudaMediumRuntime cuda,Arena arena) {
         int[] fields={0,1,2,3,4,5,6,7,12,13,14,15,16,17,18,19,24,25,26,27,8,9,10,11,20,21,22,23};
         try(var kernel=cuda.compileBatchKernel(CudaOpticalMediumSource.source()+"\n"+PROBE,"optical_state_layout_probe")) {
-            for(int count:new int[]{1,31,32,33,255,256,257,1069})for(boolean transposed:new boolean[]{false,true}) {
-                int output=384+count*112,bytes=output+count*112+16;
+            for(int count:new int[]{1,31,32,33,255,256,257,1069})for(boolean compact:new boolean[]{false,true})for(boolean transposed:new boolean[]{false,true}) {
+                int words=compact?28:64,output=384+count*words*4,bytes=output+count*words*4+16;
                 try(var records=cuda.allocate(bytes)) {
                     var host=arena.allocate(bytes,16);host.fill((byte)0x5a);
-                    host.set(JAVA_INT,8,count);host.set(JAVA_INT,36,384);host.set(JAVA_INT,44,output);host.set(JAVA_INT,188,transposed?18:2);
-                    for(int i=0;i<count;i++)for(int k=0;k<28;k++)
-                        host.set(JAVA_FLOAT,384+(transposed?k*(long)count+i:i*28L+k)*4,i*32f+k+.125f);
+                    host.set(JAVA_INT,8,count);host.set(JAVA_INT,36,384);host.set(JAVA_INT,44,output);host.set(JAVA_INT,188,(transposed?16:0)|(compact?2:0));
+                    for(int i=0;i<count;i++)for(int k=0;k<words;k++)
+                        host.set(JAVA_FLOAT,stateWordOffset(count,words,transposed,i,k),i*64f+k+.125f);
                     cuda.upload(records.slice(0,bytes),host);cuda.launchBlocking(kernel,records.slice(0,bytes),count,1);
                     cuda.download(records.slice(0,bytes),host);
-                    for(int i=0;i<count;i++)for(int k=0;k<28;k++) {
-                        float expected=i*32f+fields[k]+.125f;
-                        near(host.get(JAVA_FLOAT,output+(i*28L+k)*4),expected,0,"state read count="+count+" transposed="+transposed+" field="+k);
+                    for(int i=0;i<count;i++)for(int k=0;k<words;k++) {
+                        float expected=i*64f+(k<28?fields[k]:k)+.125f;
+                        near(host.get(JAVA_FLOAT,output+(i*(long)words+k)*4),expected,0,"state read count="+count+" compact="+compact+" transposed="+transposed+" field="+k);
                     }
-                    for(int i=0;i<count;i++)for(int k=0;k<28;k++) {
-                        float expected=i*32f+k+.125f;
+                    for(int i=0;i<count;i++)for(int k=0;k<words;k++) {
+                        float expected=i*64f+k+.125f;
                         int bits=Float.floatToRawIntBits(expected);
                         if(k<4)bits=Float.floatToRawIntBits(i+(k+1)*.25f);
                         else if(k==11)bits+=7;else if(k==22)bits=1;
                         else if(k==13)bits=Float.floatToRawIntBits(expected+2);
                         else if(k==18)bits=Float.floatToRawIntBits(expected+3);
                         else if(k==24)bits=Float.floatToRawIntBits(expected+4);
-                        long at=384+(transposed?k*(long)count+i:i*28L+k)*4;
+                        else if(k==28)bits^=0x1020304;else if(k==63)bits^=0x5060708;
+                        long at=stateWordOffset(count,words,transposed,i,k);
                         if(host.get(JAVA_INT,at)!=bits)throw new AssertionError("state write mismatch count="+count+" field="+k);
                     }
                     for(int k=0;k<4;k++)if(host.get(JAVA_INT,bytes-16+k*4L)!=0x5a5a5a5a)throw new AssertionError("state tail guard overwritten");
                 }
             }
         }
+    }
+    private static long stateWordOffset(int count,int words,boolean transposed,int item,int word) {
+        return 384+(transposed?(word<28?word*(long)count+item:28L*count+item*36L+word-28):item*(long)words+word)*4;
     }
     private static void verifyHitLayouts(CudaMediumRuntime cuda,Arena arena) {
         int[] full={0,1,2,3,12,13,14,15,16,17,18,19,24,25,28,29,44,45,46,47,48,49,50,51};

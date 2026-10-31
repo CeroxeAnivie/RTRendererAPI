@@ -38,6 +38,7 @@ public final class CudaOpticalMediumSelfTest {
         expectUnsupported(()->CudaOpticalMediumProfile.requireSupported(frame,nativeScene,false));
         verifyStorageLayouts();
         verifyConnectionBatchStorage();
+        verifyHybridVolumeStorage();
         verifyCounterModes(plan,frame,boundary);
         verifyHeterogeneousScatteringAdmission(frame);
         verifyDensity(frame,medium,boundary);
@@ -221,8 +222,8 @@ public final class CudaOpticalMediumSelfTest {
         require(compactState.stateBytes()==112&&compact.stateBytes()==256&&compactState.tilePixels()==compactState.pixels(),
                 "boundary-free compact state fits the complete 1080p frame within the identical cap");
         var boundaryState=CudaOpticalMediumAbi.plan(1920,1080,1,1,density,cap,true,true,true,true);
-        require(!boundaryState.transposedStates()&&!boundaryState.compactStates()&&boundaryState.stateBytes()==256,
-                "any explicit volume boundary preserves the complete 32-entry stack");
+        require(boundaryState.transposedStates()&&!boundaryState.compactStates()&&boundaryState.stateBytes()==256,
+                "hybrid state preserves the complete 32-entry stack behind transposed hot headers");
         require(compact.hitBytes()==96&&direct.hitBytes()==208,"only mutable continuation hits use the compact layout");
         require((compact.pixels()+compact.tilePixels()-1)/compact.tilePixels()==2,
                 "compact continuation fits the same-budget 1080p frame in two tiles");
@@ -260,7 +261,7 @@ public final class CudaOpticalMediumSelfTest {
             var header=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(layout,sampledFrame,List.of(),new int[0])).order(ByteOrder.nativeOrder());
             int layoutFlags=(compactHits?1:0)|(compactStates?2:0);
             require(layout.transposedPrimary()==transposedPrimary&&((header.getInt(188)&32)!=0)==transposedPrimary,"full primary field layout is explicit and immutable");
-            require(layout.transposedStates()==(transposedState&&compactStates)&&((header.getInt(188)&16)!=0)==layout.transposedStates(),"scalar state layout is immutable and limited to boundary-free storage");
+            require(layout.transposedStates()==transposedState&&((header.getInt(188)&16)!=0)==layout.transposedStates(),"scalar hot state layout is explicit for compact and complete stacks");
             require(layout.transposedHits()==(transposed&&compactHits)&&((header.getInt(188)&8)!=0)==layout.transposedHits(),"transposed storage is explicit and limited to compact hits");
             require(header.getInt(4)==CudaOpticalMediumAbi.VERSION&&(header.getInt(188)&3)==layoutFlags,
                     "both producers use an explicit versioned hit layout");
@@ -311,6 +312,24 @@ public final class CudaOpticalMediumSelfTest {
             var disconnected=CudaOpticalMediumAbi.plan(137,101,1,1,density,32L*1024*1024,true,true,true,false);
             require(disconnected.connectionBatchSize()==1&&disconnected.secondConnectionHitOffset()==0,
                     "non-connection paths keep the original single-hit layout");
+        } finally {if(previous==null)System.clearProperty(property);else System.setProperty(property,previous);}
+    }
+    private static void verifyHybridVolumeStorage() {
+        String property=CudaOpticalMediumAbi.HYBRID_VOLUME_STATES_PROPERTY,previous=System.getProperty(property);
+        try {
+            for(int samples:new int[]{1,2,8})for(int boundaries:new int[]{1,32}) {
+                System.setProperty(property,"false");
+                var original=CudaOpticalMediumAbi.plan(137,101,samples,boundaries,CudaMediumDensityAbi.Scene.empty(),3L*1024*1024,
+                        true,true,true,true,true,true,true,true);
+                System.setProperty(property,"true");
+                var hybrid=CudaOpticalMediumAbi.plan(137,101,samples,boundaries,CudaMediumDensityAbi.Scene.empty(),3L*1024*1024,
+                        true,true,true,true,true,true,true,true);
+                require(!original.transposedStates()&&hybrid.transposedStates()&&!hybrid.compactStates(),"hybrid full-stack storage has an independent rollback switch");
+                require(original.bytes()==hybrid.bytes()&&original.tilePixels()==hybrid.tilePixels()
+                        &&original.hitOffset()==hybrid.hitOffset(),"hybrid headers add no capacity or tiling cost");
+                long prefixEnd=hybrid.stateOffset()+112L*hybrid.tilePaths();
+                require(prefixEnd+144L*hybrid.tilePaths()==hybrid.hitOffset(),"complete 32-entry stacks follow all hot headers without overlap");
+            }
         } finally {if(previous==null)System.clearProperty(property);else System.setProperty(property,previous);}
     }
     private static void verifySurfaceProof(){
