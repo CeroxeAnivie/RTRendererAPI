@@ -1794,3 +1794,5 @@ NMT有界复现的执行树峰值2.502GB，崩溃进程private约2382MiB，JVM�
 X23直接处理编译与大型scratch的生命周期重叠，并消除PTX再次交给驱动编译的链路：光子程序编译移至camera scratch申请之前；显式cuda.cubin=true时NVRTC面向实际sm生成CUBIN，cuModuleLoadData直接加载。参考NVIDIA cuda-samples固定5443602d89ed99aede2e4b7bf329daddeadb320e、BSD-3-Clause、Common/nvrtc_helper.h 91–93、174–176、206行，采用实际设备架构→nvrtcGetCUBIN→cuModuleLoadData的逻辑，未复制源码。保留原C++17、fmad=false、源程序、缓存大小、内核和预算，PTX对照可用，默认不启用未验收CUBIN。先按同一3GB总/2.5GB执行树预算验收完整HDR和长窗，再判断编译内存与净吞吐，不能只报中间表示减少。
 
 X23直接CUBIN在光学大源的ptxas阶段同样达到2.501GB并失败，69.329秒，没有HDR，已撤回CUBIN选项；不在发布中留下失败模式。后续从实际函数需求改：旧管理器无条件cuModuleGetFunction全部9种光学布局，当前plan只运行一种；保留原PTX、所有入口和布局映射，按需加载所选入口并在同一native线程缓存，首次加载和光子编译均在大型camera scratch申请前。不是降低功能或把内核启动搬到另一后端。按NVIDIA CUDA lazy-loading的函数加载职责组织，实际内存、原始HDR与吞吐仍须验证；代码删除了8次当前场景不需要的函数获取，不提前声称驱动一定省下多少内存。
+
+按需加载两帧严格HDR通过，执行树峰值2.250GB；长窗第一轮64帧完成，但第二轮仍在2.501GB失败，因此不能宣布整个内存问题解决。下一项处理源代码中明确的编译器常驻：旧NVRTC与builtins绑定在整个CUDA执行runtime的Arena里，即使program已经销毁也保留到renderer关闭。现在将编译器符号、downcall与两个库的生命周期限定到一次实际编译，在提取相同PTX并销毁program后关闭；执行driver/context、PTX缓存及已加载module保持原生命周期。不再保留没有执行职责的编译器库到稳态。必须同时验证重复编译/失败清理、严格HDR和完整长窗，不能拿短窗替代稳定性。

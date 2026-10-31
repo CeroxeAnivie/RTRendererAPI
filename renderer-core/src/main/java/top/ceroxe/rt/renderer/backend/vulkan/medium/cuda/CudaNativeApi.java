@@ -18,11 +18,18 @@ final class CudaNativeApi {
     private final Map<String, MethodHandle> calls = new HashMap<>();
 
     CudaNativeApi(Arena arena, Path nvrtcLibrary) {
+        this(arena,nvrtcLibrary,false);
+    }
+    static CudaNativeApi compiler(Arena arena,Path nvrtcLibrary) {
+        return new CudaNativeApi(arena,nvrtcLibrary,true);
+    }
+    private CudaNativeApi(Arena arena,Path nvrtcLibrary,boolean compilerOnly) {
         try {
-            driver = SymbolLookup.libraryLookup(isWindows() ? "nvcuda.dll" : "libcuda.so.1", arena);
+            driver = compilerOnly?null:SymbolLookup.libraryLookup(isWindows() ? "nvcuda.dll" : "libcuda.so.1", arena);
         } catch (RuntimeException | UnsatisfiedLinkError e) {
             throw new IllegalStateException("CUDA medium requires an available NVIDIA CUDA driver", e);
         }
+        if(!compilerOnly){compiler=null;builtins=null;return;}
         try {
             compiler = nvrtcLibrary == null
                     ? SymbolLookup.libraryLookup(isWindows() ? "nvrtc64_120_0.dll" : "libnvrtc.so", arena)

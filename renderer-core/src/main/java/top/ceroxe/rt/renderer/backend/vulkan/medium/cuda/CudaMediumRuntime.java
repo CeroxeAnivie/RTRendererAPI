@@ -19,6 +19,7 @@ public final class CudaMediumRuntime implements AutoCloseable {
     private final Thread owner = Thread.currentThread();
     private final Arena libraryArena = Arena.ofConfined();
     private final CudaNativeApi api;
+    private final Path nvrtcLibrary;
     private final int deviceOrdinal;
     private int nativeDevice;
     private final long maxResidentBytes;
@@ -70,6 +71,7 @@ public final class CudaMediumRuntime implements AutoCloseable {
         if (ordinal < 0) throw new IllegalArgumentException("CUDA device ordinal must be nonnegative");
         if (limit < 1) throw new IllegalArgumentException("CUDA resident byte limit must be positive");
         deviceOrdinal = ordinal;
+        this.nvrtcLibrary=nvrtcLibrary;
         maxResidentBytes = limit;
         CudaNativeApi loaded;
         try { loaded = new CudaNativeApi(libraryArena, nvrtcLibrary); }
@@ -132,9 +134,12 @@ public final class CudaMediumRuntime implements AutoCloseable {
     }
     private byte[] compile(String source) {
         if (source.equals(lastCompiledSource)) return lastCompiledImage;
-        try (Arena scratch = Arena.ofConfined()) {
+        try (Arena scratch = Arena.ofConfined(); Arena compilerArena = Arena.ofConfined()) {
+            // Compilation and execution have separate native lifetimes. After PTX
+            // extraction and program destruction, no NVRTC downcall remains live.
+            CudaNativeApi compiler=CudaNativeApi.compiler(compilerArena,nvrtcLibrary);
             MemorySegment programSlot = scratch.allocate(ADDRESS);
-            api.checked("nvrtcCreateProgram", args(ADDRESS, ADDRESS, ADDRESS, JAVA_INT, ADDRESS, ADDRESS),
+            compiler.checked("nvrtcCreateProgram", args(ADDRESS, ADDRESS, ADDRESS, JAVA_INT, ADDRESS, ADDRESS),
                     programSlot, scratch.allocateFrom(source), scratch.allocateFrom("rtr_luxcore_segment.cu"),
                     0, MemorySegment.NULL, MemorySegment.NULL);
             try {
@@ -144,20 +149,20 @@ public final class CudaMediumRuntime implements AutoCloseable {
                 MemorySegment optionPointers = scratch.allocate(ADDRESS, options.length);
                 for (int i = 0; i < options.length; i++)
                     optionPointers.setAtIndex(ADDRESS, i, scratch.allocateFrom(options[i]));
-                int status = api.call("nvrtcCompileProgram", args(ADDRESS, JAVA_INT, ADDRESS),
+                int status = compiler.call("nvrtcCompileProgram", args(ADDRESS, JAVA_INT, ADDRESS),
                         program, options.length, optionPointers);
                 diagnosticCompilationCount++;
                 if (status != 0) {
                     MemorySegment size = scratch.allocate(JAVA_LONG);
-                    api.checked("nvrtcGetProgramLogSize", args(ADDRESS, ADDRESS), program, size);
+                    compiler.checked("nvrtcGetProgramLogSize", args(ADDRESS, ADDRESS), program, size);
                     MemorySegment log = scratch.allocate(Math.max(1, size.get(JAVA_LONG, 0)));
-                    api.checked("nvrtcGetProgramLog", args(ADDRESS, ADDRESS), program, log);
+                    compiler.checked("nvrtcGetProgramLog", args(ADDRESS, ADDRESS), program, log);
                     throw new IllegalStateException("NVRTC medium compilation failed (" + status + "): " + log.getString(0));
                 }
                 MemorySegment size = scratch.allocate(JAVA_LONG);
-                api.checked("nvrtcGetPTXSize", args(ADDRESS, ADDRESS), program, size);
+                compiler.checked("nvrtcGetPTXSize", args(ADDRESS, ADDRESS), program, size);
                 MemorySegment image = scratch.allocate(size.get(JAVA_LONG, 0));
-                api.checked("nvrtcGetPTX", args(ADDRESS, ADDRESS), program, image);
+                compiler.checked("nvrtcGetPTX", args(ADDRESS, ADDRESS), program, image);
                 byte[] ptx = image.toArray(JAVA_BYTE);
                 if ((long) source.length() * 2 + ptx.length <= 8L * 1024 * 1024) {
                     lastCompiledSource = source;
@@ -167,7 +172,7 @@ public final class CudaMediumRuntime implements AutoCloseable {
                     lastCompiledImage = null;
                 }
                 return ptx;
-            } finally { api.checked("nvrtcDestroyProgram", args(ADDRESS), programSlot); }
+            } finally { compiler.checked("nvrtcDestroyProgram", args(ADDRESS), programSlot); }
         }
     }
 
