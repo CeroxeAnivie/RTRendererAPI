@@ -85,6 +85,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     private final long pipeline;
     private final RtShaderBindingTable shaderBindingTable;
     private final RtRayTracingPipelineProperties properties;
+    private final RtPipelineCache compilationCache;
     private final long maxStorageBufferRangeBytes;
     private final boolean shaderExecutionReorderingEnabled;
     private GpuSceneRayTracingPipeline connectionTracer;
@@ -103,10 +104,12 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             long maxStorageBufferRangeBytes,
             boolean shaderExecutionReorderingEnabled,
             SceneShaderProgram sceneShaders,
-            GpuSceneShaderDataBuffers applicationData
+            GpuSceneShaderDataBuffers applicationData,
+            RtPipelineCache compilationCache
     ) {
         this.sceneShaders = sceneShaders;
         this.applicationData = applicationData;
+        this.compilationCache = Objects.requireNonNull(compilationCache, "compilationCache");
         this.device = Objects.requireNonNull(device, "device");
         this.descriptors = Objects.requireNonNull(descriptors, "descriptors");
         if (pipelineLayout == 0L || pipeline == 0L) {
@@ -189,6 +192,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         long visibilityMissModule = 0L, visibilityClosestModule = 0L, visibilityAnyModule = 0L;
         long callableModule = 0L, gatherModule = 0L;
         GpuSceneRayTracingPipeline ownedConnectionTracer=null;
+        RtPipelineCache compilationCache = null;
         try (MemoryStack stack = MemoryStack.stackPush()) {
             RtRayTracingPipelineProperties properties = RtRayTracingPipelineProperties.query(
                     stack, checkedRuntime.physicalDevice()
@@ -303,13 +307,12 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             String programKey = RtPipelineCacheStore.programKey("gpuscene-7/program="+program+"/data="+sceneShaders.dataBindingCount()+"/depth="+recursionDepth,
                     raygenCode,missCode,closestCode,anyHitCode,visibilityMissCode,visibilityClosestCode,visibilityAnyCode,
                     callableCode,gatherCode);
-            try (var memory = top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.begin("vulkan.pipeline." + program, raygenCode.length);
-                 RtPipelineCache cache = RtPipelineCache.open(
-                    device, checkedRuntime.physicalDevice(), "gpuscene",programKey)) {
+            compilationCache = RtPipelineCache.open(device, checkedRuntime.physicalDevice(), "gpuscene", programKey);
+            try (var memory = top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.begin("vulkan.pipeline." + program, raygenCode.length)) {
                 pipeline = RtRayTracingPipelineFactory.createPipeline(
                         stack, device, pipelineLayout,
                         raygenModule, missModule, closestHitModule, anyHitModule,
-                        cache.handle(), visibilityMissModule, visibilityClosestModule, visibilityAnyModule, recursionDepth,
+                        compilationCache.handle(), visibilityMissModule, visibilityClosestModule, visibilityAnyModule, recursionDepth,
                         collectedConnections ? new long[]{callableModule,gatherModule} : new long[0]
                 );
             }
@@ -355,8 +358,10 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     device, descriptors, pipelineLayout, pipeline, shaderBindingTable, properties,
                     maxStorageBufferRangeBytes, shaderExecutionReorderingEnabled, sceneShaders,
                     new GpuSceneShaderDataBuffers(checkedRuntime, descriptorSetCount,
-                            sceneShaders.dataBindingCount(), maxStorageBufferRangeBytes)
+                            sceneShaders.dataBindingCount(), maxStorageBufferRangeBytes),
+                    compilationCache
             );
+            compilationCache = null;
             result.connectionTracer=ownedConnectionTracer;ownedConnectionTracer=null;
             if(collectedConnections)diagnosticCollectedConnectionPipelines.increment();
             descriptors = null;
@@ -369,6 +374,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             closeSuppressing(failure, shaderBindingTable);
             if (pipeline != 0L) VK10.vkDestroyPipeline(device, pipeline, null);
             if (pipelineLayout != 0L) VK10.vkDestroyPipelineLayout(device, pipelineLayout, null);
+            closeSuppressing(failure, compilationCache);
             closeSuppressing(failure, descriptors);
             throw failure;
         } finally {
@@ -1626,6 +1632,10 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         if (!pipelineDestroyed) {
             VK10.vkDestroyPipeline(device, pipeline, null);
             pipelineDestroyed = true;
+        }
+        try { compilationCache.close(); }
+        catch (RuntimeException closeFailure) {
+            if (failure == null) failure = closeFailure; else failure.addSuppressed(closeFailure);
         }
         if (!layoutDestroyed) {
             VK10.vkDestroyPipelineLayout(device, pipelineLayout, null);

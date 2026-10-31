@@ -132,6 +132,7 @@ uint32_t capture_context(GumCpuContext*cpu,void**frames){
 }
 extern uint64_t virtual_query(void*,MemoryInfo*,uint64_t);
 extern uint32_t thread_id(void);
+extern uint32_t tick_count(void);
 void allocation_enter(GumInvocationContext*ic){
  Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
  c->base=gum_invocation_context_get_nth_argument(ic,1);
@@ -145,7 +146,7 @@ void allocation_leave(GumInvocationContext*ic){
  int32_t status=(int32_t)(uintptr_t)gum_invocation_context_get_return_value(ic);
  if(!c->keep||status)return;
  Record r={0}; MemoryInfo m={0};uint32_t written=0;
- r.kind=1;r.tid=thread_id();r.flags=c->flags;r.base=(uint64_t)(uintptr_t)*c->base;r.size=*c->size;
+ r.kind=1;r.tid=thread_id();r.reserved=tick_count();r.flags=c->flags;r.base=(uint64_t)(uintptr_t)*c->base;r.size=*c->size;
  virtual_query(*c->base,&m,sizeof(m));r.allocation_base=(uint64_t)(uintptr_t)m.allocation_base;r.frame_count=c->count;
  for(uint32_t i=0;i<c->count;i++)r.frames[i]=c->frames[i];
  write_file(trace_file,&r,sizeof(r),&written,0);
@@ -159,16 +160,17 @@ void free_enter(GumInvocationContext*ic){
 void free_leave(GumInvocationContext*ic){
  int32_t status=(int32_t)(uintptr_t)gum_invocation_context_get_return_value(ic);if(status)return;
  Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
- Record r={0};uint32_t written=0;r.kind=2;r.tid=thread_id();r.flags=c->flags;
+ Record r={0};uint32_t written=0;r.kind=2;r.tid=thread_id();r.reserved=tick_count();r.flags=c->flags;
  r.base=(uint64_t)(uintptr_t)c->base;r.size=(uint64_t)(uintptr_t)c->size;
  write_file(trace_file,&r,sizeof(r),&written,0);
 }
 `,{trace_file:cell,write_file:k.getExportByName('WriteFile'),lookup_function:nt.getExportByName('RtlLookupFunctionEntry'),virtual_unwind:nt.getExportByName('RtlVirtualUnwind'),stack_limits:k.getExportByName('GetCurrentThreadStackLimits'),
- virtual_query:k.getExportByName('VirtualQuery'),thread_id:k.getExportByName('GetCurrentThreadId')});
+ virtual_query:k.getExportByName('VirtualQuery'),thread_id:k.getExportByName('GetCurrentThreadId'),tick_count:k.getExportByName('GetTickCount')});
 Interceptor.attach(nt.getExportByName('NtAllocateVirtualMemory'),{onEnter:native.allocation_enter,onLeave:native.allocation_leave});
 Interceptor.attach(nt.getExportByName('NtFreeVirtualMemory'),{onEnter:native.free_enter,onLeave:native.free_leave});
 function modules(){send({kind:'modules',modules:Process.enumerateModules().map(m=>({name:m.name,base:m.base.toString(),size:m.size}))});}
-modules();setInterval(modules,1000);send({kind:'ready',recordBytes:816});
+const tick=new NativeFunction(k.getExportByName('GetTickCount'),'uint32',[]);
+modules();setInterval(modules,1000);send({kind:'ready',recordBytes:816,tick:tick(),epochMillis:Date.now()});
 '''
 
 if __name__ == "__main__":
