@@ -39,7 +39,7 @@ public final class CudaSharedMediumRayNativeSelfTest {
                                     command->firstQuery.record(command,4096),records->{
                                         cuda.launchBlocking(advance,records,4096,128);
                                         cuda.downloadAsync(records,pairHost);
-                                    },pair>=16&&pair<56);
+                                    },pair>=16&&pair<56,pair%16>=8);
                             for(int path=0;path<4096;path++){
                                 int hits=pairHost.getInt(path*128L+96),errors=pairHost.getInt(path*128L+100);
                                 if(errors!=0||Float.intBitsToFloat(hits)!=(path%4==0?0:1))
@@ -109,7 +109,7 @@ public final class CudaSharedMediumRayNativeSelfTest {
                             },storage->{
                                 cuda.launchBlocking(copied,storage,32,4);
                                 cuda.downloadAsync(storage.slice(128,128),secondHost);
-                            },pair>=8&&pair<28);
+                            },pair>=8&&pair<28,pair%8>=4);
                     long firstValue=pair*2L+1L,secondValue=firstValue+1L;
                     for(int word=0;word<32;word++) {
                         if(firstHost.getInt(word*4L)!=0x13572468||secondHost.getInt(word*4L)!=0x13572468)
@@ -135,18 +135,18 @@ public final class CudaSharedMediumRayNativeSelfTest {
                 nested.exchangeBlocking(other->cuda.launchBlocking(kernel,other,32,4),command->{});
                 cuda.download(storage,host);requireFilled(host);
             },command->{});
-            for(boolean retained:new boolean[]{false,true})for(int stage=0;stage<4;stage++) {
+            for(boolean binary:new boolean[]{false,true})for(boolean retained:new boolean[]{false,true})for(int stage=0;stage<4;stage++) {
                 final int failureStage=stage;
                 RuntimeException injected=new IllegalStateException("paired exchange callback failure stage="+stage);
                 try(var failed=CudaSharedRayFrame.storage(device,cuda,128,1L<<20)) {
                     // Exercise failures after a completed externally-owned pair too.
                     failed.produceThenExchangePairBlocking(command->{},storage->cuda.launchBlocking(kernel,storage,32,4),
-                            command->{},storage->cuda.launchBlocking(kernel,storage,32,4),retained);
+                            command->{},storage->cuda.launchBlocking(kernel,storage,32,4),retained,binary);
                     try {
                         failed.produceThenExchangePairBlocking(command->{if(failureStage==0)throw injected;},
                                 storage->{cuda.launchBlocking(kernel,storage,32,4);if(failureStage==1)throw injected;},
                                 command->{if(failureStage==2)throw injected;},
-                                storage->{cuda.launchBlocking(kernel,storage,32,4);if(failureStage==3)throw injected;},retained);
+                                storage->{cuda.launchBlocking(kernel,storage,32,4);if(failureStage==3)throw injected;},retained,binary);
                         throw new AssertionError("paired exchange lost callback failure");
                     } catch(RuntimeException failure) {if(failure!=injected)throw failure;}
                 }

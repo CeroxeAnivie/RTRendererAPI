@@ -330,6 +330,32 @@ public final class CudaMediumRuntime implements AutoCloseable {
 
         } finally { OpticalWallTimeline.leave(wallScope); }
     }
+    /** NVIDIA's binary external-semaphore chain, with one completion boundary for both rounds. */
+    void exchangeExternalBinaryPairWithCompletionBlocking(ExternalSemaphore firstWait,ExternalSemaphore firstSignal,
+            ExternalSemaphore secondWait,ExternalSemaphore secondSignal,
+            Runnable firstStep,Runnable submitMiddle,Runnable secondStep,Runnable completeConsumer) {
+        int wallScope=OpticalWallTimeline.enter(CUDA_EXCHANGE);
+        try {
+            checkOpen();
+            requireOwned(firstWait);firstWait.checkAlive();requireOwned(firstSignal);firstSignal.checkAlive();
+            requireOwned(secondWait);secondWait.checkAlive();requireOwned(secondSignal);secondSignal.checkAlive();
+            Objects.requireNonNull(firstStep);Objects.requireNonNull(submitMiddle);
+            Objects.requireNonNull(secondStep);Objects.requireNonNull(completeConsumer);
+            if(externalBatch)throw new IllegalStateException("queued ownership pairs cannot nest");
+            externalBatch=true;
+            try {
+                external(firstWait,false);firstStep.run();external(firstSignal,true);
+                submitMiddle.run();
+                external(secondWait,false);secondStep.run();external(secondSignal,true);
+                completeConsumer.run();
+                inContext(this::synchronizeStream);
+                resolveProfiledKernel();
+            }catch(RuntimeException|Error failure){
+                try{inContext(this::synchronizeStream);}catch(RuntimeException|Error drain){failure.addSuppressed(drain);}
+                pendingProfileCount=0;throw failure;
+            }finally{externalBatch=false;}
+        }finally{OpticalWallTimeline.leave(wallScope);}
+    }
     private void synchronizeUnlessBatched() { if (!externalBatch) synchronizeStream(); }
     private void external(ExternalSemaphore semaphore, boolean signal) {
         external(semaphore,signal,0L);

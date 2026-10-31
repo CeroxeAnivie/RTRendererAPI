@@ -1259,3 +1259,11 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 参考 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/wavefront/surfscatter.cpp:280–285` 在零灯光或零 BSDF 时不排阴影工作，`media.cpp:285` 同样只为非零光源排队。本项目每个零贡献连接原先仍占一次 Vulkan/CUDA 轮次。候选在 shader 中仅跳过 RGB 三通道严格等于零的中间连接；逐个保留 ordinal 和 epoch 推进，最后一个连接仍交 CUDA 完成照明、相函数、状态与随机数推进。体积焦散首连接 gather 保留。没有近似阈值、采样削减或同步迁移；属性 `top.ceroxe.rt.medium.cuda.opticalSkipEmptyConnections=false` 可同制品对照。
 
 验收同时要求：HDR 微误差线、完整窗口和原生功能回归、validation、连接/step 发射次数减少，以及关闭诊断正反序整帧收益。尚未验收，不预报收益。
+
+`5f3bde8` 正确性通过：两帧 HDR 逐字节一致、固定帧 57、72 帧完整窗口、46 组/152 帧光学原生、7 场景/46 功能、3 个 validation 生命周期零 warning/error/drop。同一前 32 帧工作计数：CUDA step 941→871.0625 次/帧，RT continuation 925→855.0625 次/帧，实际删去 69.9375 轮/帧。测前 GPU 占用非零，**不声明净性能收益或负优化**，停止无效绝对 FPS 对照；保留独立开关的候选，继续真实热点主线，待干净 GPU 验收。[工作计数与正确性](data/medium-empty-connections-20261031.json)、[受占用窗口排名（仅占比有效）](data/medium-empty-connections-loaded-ranked-20261031.json)。
+
+### CUDA 同步架构候选：独立二进制信号量串联两轮
+
+回到 NVIDIA cuda-samples 固定 `9c688d7ff78455ed42e345124d1495aad6bf66de`（BSD-3-Clause）的 `cudaUpdateVkImage`/`submitVulkanCuda`：同一 stream 上外部 wait→kernels→signal，再由真正 Vulkan 提交等待，不在中途调用主机完成同步。此前本项目 timeline 双轮删除中间同步曾失败，不能在旧协议上盲删。新候选为两轮分别使用独立 binary semaphore 对，保留 release/acquire barrier、末尾 CUDA 同步、pinned 统计读取和发布验证；retained 模式把 fence 放在真正的中间 Vulkan 提交上，在最后 CUDA 同步后确认命令可重用，不新增空提交。跨模式及通用交换先显式恢复所有权，故障路径必须能 drain。
+
+属性 `top.ceroxe.rt.medium.cuda.opticalBinaryPairs=false` 回到已验证 timeline 协议。真实 RT epoch、连续 retained、classic/retained/binary/timeline 交替、四阶段故障清理与零 validation 问题是先决门禁。只有同步次数/真实 GPU 空隙及关闭诊断整帧收益能支持性能结论，等待归属变化不能算收益。当前为待验证候选。

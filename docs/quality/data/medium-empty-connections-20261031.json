@@ -1,0 +1,124 @@
+{
+  "sourceCommit": "5f3bde8",
+  "scene": "micro-all 1920x1080 1SPP",
+  "absolutePerformanceComparable": false,
+  "decision": "Correctness and work-count reduction verified; net speedup is unverified while GPU is occupied. Preserve independently switchable candidate for clean-GPU acceptance.",
+  "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 39 %, 62.49 W, 1402 MHz, 79",
+  "candidateOffInitialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 71 %, 79.83 W, 1762 MHz, 78",
+  "workCounts": {
+    "baselineFirst32Frames": {
+      "cuda.entry.native_optical_photon_clear": 1.0,
+      "cuda.entry.native_optical_photon_reset": 8.0,
+      "cuda.entry.native_optical_photon_step": 8.0,
+      "cuda.entry.native_optical_reset": 941.0,
+      "cuda.entry.native_optical_step_4": 941.0,
+      "vulkan.optical.cameraContinuationTrace/startToend": 925.0,
+      "vulkan.optical.cameraInitialTrace/startToend": 16.0,
+      "vulkan.opticalPhoton.mapCopy/startToend": 1.0,
+      "vulkan.opticalPhoton.mapInitialize/startToend": 1.0,
+      "vulkan.opticalPhoton.trace/startToend": 8.0,
+      "vulkan.shared.continuation": 478.5,
+      "vulkan.shared.producer": 478.5
+    },
+    "candidateFirst32Frames": {
+      "cuda.entry.native_optical_photon_clear": 1.0,
+      "cuda.entry.native_optical_photon_reset": 8.0,
+      "cuda.entry.native_optical_photon_step": 8.0,
+      "cuda.entry.native_optical_reset": 871.0625,
+      "cuda.entry.native_optical_step_4": 871.0625,
+      "vulkan.optical.cameraContinuationTrace/startToend": 855.0625,
+      "vulkan.optical.cameraInitialTrace/startToend": 16.0,
+      "vulkan.opticalPhoton.mapCopy/startToend": 1.0,
+      "vulkan.opticalPhoton.mapInitialize/startToend": 1.0,
+      "vulkan.opticalPhoton.trace/startToend": 8.0,
+      "vulkan.shared.continuation": 443.53125,
+      "vulkan.shared.producer": 443.53125
+    }
+  },
+  "hdr": {
+    "passed": true,
+    "mode": "bounded",
+    "supportingReferenceCommit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+    "frames": [
+      {
+        "file": "micro-all-0.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.6396484375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.0032082421875
+        },
+        "passed": true,
+        "referenceSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb",
+        "candidateSha256": "f4e73bd6b5e45b76b8a25cd5af54aa570358ac381b277e6e08dd67685a2366bb"
+      },
+      {
+        "file": "micro-all-1.rgba16f",
+        "bytes": 16588800,
+        "pixels": 2073600,
+        "byteIdentical": true,
+        "alphaExact": true,
+        "relativeRms": 0.0,
+        "luminanceEnergyRelativeError": 0.0,
+        "maxAbsoluteChannelError": 0.0,
+        "referenceAbsoluteP99": 0.630859375,
+        "changedRgbComponents": 0,
+        "limits": {
+          "relativeRms": 0.001,
+          "luminanceEnergyRelativeError": 0.001,
+          "maxAbsoluteChannelError": 0.003164296875
+        },
+        "passed": true,
+        "referenceSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517",
+        "candidateSha256": "51f42ef9944078ba482ba1c9ad1b02c25f206cfe94bbd980837bc31fdad6e517"
+      }
+    ],
+    "maxRelativeRms": 0.0,
+    "maxLuminanceEnergyRelativeError": 0.0,
+    "maxAbsoluteChannelError": 0.0
+  },
+  "validation": {
+    "passed": true,
+    "logs": [
+      {
+        "file": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\skip-empty-connections\\optical-validation.jsonl",
+        "passed": true,
+        "opened": 3,
+        "closed": 3,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      }
+    ]
+  },
+  "verification": [
+    "ABI passed",
+    "fixed sequence 57 passed",
+    "8 warmup + 64 micro-all frames passed",
+    "46 optical comparisons / 152 native frames passed",
+    "micro-checks 7 cases / 46 features complete"
+  ],
+  "interruptedAbsoluteComparison": "Stopped after two rounds: initial nonzero GPU load makes absolute or historical FPS comparison invalid; not a correctness or performance failure.",
+  "artifacts": [
+    {
+      "file": "candidate-core.jar",
+      "sha256": "408b511fcbb2069eed2a2250d45329d4a1615b3b7b2f0c7fd5700e8f23089846"
+    },
+    {
+      "file": "matrix-test-classes.jar",
+      "sha256": "83586141e12750acc40b458dedac93d466287cd5df6d9e6fd1752cf2ef5d4ef4"
+    },
+    {
+      "file": "native-test-classes.jar",
+      "sha256": "ce832a64b5c23faa3bffd80adb6ab87f6e7f8783d97aa6d1739a863ff1061f83"
+    }
+  ]
+}
