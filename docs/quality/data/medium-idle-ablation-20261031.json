@@ -1,0 +1,385 @@
+{
+  "sourceCommit": "a1da3a7",
+  "acceptance": "All ten windows began with GPU 0 utilization 0%; diagnostics off; 8 warmup + 32 measured/window; forward and reverse order; frames/wallMs pooled, never average rounded FPS. Historic idle measurement, not a claim about current loaded GPU.",
+  "currentDefault": "binary2; four-round batches and blocked-first-connection code reverted",
+  "changes": [
+    {
+      "name": "零贡献连接跳过",
+      "decision": "keep",
+      "windows": {
+        "forward": {
+          "before": {
+            "frames": 32,
+            "wallMs": 15439.6508,
+            "msPerFrame": 482.4890875,
+            "fps": 2.072585734905352,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 17.60 W, 1492 MHz, 54",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-timeline-no-empty-matrix-off"
+          },
+          "after": {
+            "frames": 32,
+            "wallMs": 15294.6073,
+            "msPerFrame": 477.956478125,
+            "fps": 2.092240707612022,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.53 W, 180 MHz, 59",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-timeline-empty-matrix-off"
+          },
+          "durationReductionPercent": 0.9394221532523228,
+          "fpsIncreasePercent": 0.9483309846078702
+        },
+        "reverse": {
+          "before": {
+            "frames": 32,
+            "wallMs": 15779.7035,
+            "msPerFrame": 493.115734375,
+            "fps": 2.02792150055291,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 23.15 W, 1207 MHz, 70",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-timeline-no-empty-matrix-off"
+          },
+          "after": {
+            "frames": 32,
+            "wallMs": 14945.0782,
+            "msPerFrame": 467.03369375,
+            "fps": 2.1411731388598554,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 23.24 W, 180 MHz, 69",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-timeline-empty-matrix-off"
+          },
+          "durationReductionPercent": 5.289233096173196,
+          "fpsIncreasePercent": 5.584616479290139
+        }
+      },
+      "pooled64Frames": {
+        "beforeMsPerFrame": 487.8024109375,
+        "afterMsPerFrame": 472.4950859375,
+        "beforeFps": 2.0500103680875936,
+        "afterFps": 2.1164241274929925,
+        "durationReductionPercent": 3.1380174957686413,
+        "fpsIncreasePercent": 3.239679195737666
+      }
+    },
+    {
+      "name": "独立 binary 双轮链",
+      "decision": "keep",
+      "windows": {
+        "forward": {
+          "before": {
+            "frames": 32,
+            "wallMs": 15294.6073,
+            "msPerFrame": 477.956478125,
+            "fps": 2.092240707612022,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 18.53 W, 180 MHz, 59",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-timeline-empty-matrix-off"
+          },
+          "after": {
+            "frames": 32,
+            "wallMs": 14317.553899999999,
+            "msPerFrame": 447.42355937499997,
+            "fps": 2.2350186507766527,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 21.63 W, 180 MHz, 60",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary2-matrix-off"
+          },
+          "durationReductionPercent": 6.388221553096041,
+          "fpsIncreasePercent": 6.824164286889833
+        },
+        "reverse": {
+          "before": {
+            "frames": 32,
+            "wallMs": 14945.0782,
+            "msPerFrame": 467.03369375,
+            "fps": 2.1411731388598554,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 23.24 W, 180 MHz, 69",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-timeline-empty-matrix-off"
+          },
+          "after": {
+            "frames": 32,
+            "wallMs": 14740.280299999999,
+            "msPerFrame": 460.63375937499995,
+            "fps": 2.1709220821262134,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 23.26 W, 180 MHz, 69",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary2-matrix-off"
+          },
+          "durationReductionPercent": 1.3703367574215974,
+          "fpsIncreasePercent": 1.3893758858846361
+        }
+      },
+      "pooled64Frames": {
+        "beforeMsPerFrame": 472.4950859375,
+        "afterMsPerFrame": 454.02865937499996,
+        "beforeFps": 2.1164241274929925,
+        "afterFps": 2.20250413570052,
+        "durationReductionPercent": 3.908279072545251,
+        "fpsIncreasePercent": 4.067238087551628
+      }
+    },
+    {
+      "name": "四轮批次",
+      "decision": "revert",
+      "windows": {
+        "forward": {
+          "before": {
+            "frames": 32,
+            "wallMs": 14317.553899999999,
+            "msPerFrame": 447.42355937499997,
+            "fps": 2.2350186507766527,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 21.63 W, 180 MHz, 60",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary2-matrix-off"
+          },
+          "after": {
+            "frames": 32,
+            "wallMs": 14695.5945,
+            "msPerFrame": 459.237328125,
+            "fps": 2.1775233387121564,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 20.94 W, 180 MHz, 63",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary4-matrix-off"
+          },
+          "durationReductionPercent": -2.640399349221245,
+          "fpsIncreasePercent": -2.5724757171273316
+        },
+        "reverse": {
+          "before": {
+            "frames": 32,
+            "wallMs": 14740.280299999999,
+            "msPerFrame": 460.63375937499995,
+            "fps": 2.1709220821262134,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 23.26 W, 180 MHz, 69",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary2-matrix-off"
+          },
+          "after": {
+            "frames": 32,
+            "wallMs": 14895.731800000001,
+            "msPerFrame": 465.49161875000004,
+            "fps": 2.148266391316202,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.93 W, 180 MHz, 68",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary4-matrix-off"
+          },
+          "durationReductionPercent": -1.0546034189051534,
+          "fpsIncreasePercent": -1.0435976029053107
+        }
+      },
+      "pooled64Frames": {
+        "beforeMsPerFrame": 454.02865937499996,
+        "afterMsPerFrame": 462.3644734375,
+        "beforeFps": 2.20250413570052,
+        "afterFps": 2.162795927129498,
+        "durationReductionPercent": -1.8359664947086962,
+        "fpsIncreasePercent": -1.8028664703683916
+      }
+    },
+    {
+      "name": "首段不透明遮挡提前结束",
+      "decision": "revert",
+      "windows": {
+        "forward": {
+          "before": {
+            "frames": 32,
+            "wallMs": 14695.5945,
+            "msPerFrame": 459.237328125,
+            "fps": 2.1775233387121564,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 20.94 W, 180 MHz, 63",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary4-matrix-off"
+          },
+          "after": {
+            "frames": 32,
+            "wallMs": 14770.243999999999,
+            "msPerFrame": 461.57012499999996,
+            "fps": 2.1665180345023414,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 22.02 W, 180 MHz, 65",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary4-blocked-matrix-off"
+          },
+          "durationReductionPercent": -0.507971963978715,
+          "fpsIncreasePercent": -0.5054046500518328
+        },
+        "reverse": {
+          "before": {
+            "frames": 32,
+            "wallMs": 14895.731800000001,
+            "msPerFrame": 465.49161875000004,
+            "fps": 2.148266391316202,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 19.93 W, 180 MHz, 68",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary4-matrix-off"
+          },
+          "after": {
+            "frames": 32,
+            "wallMs": 16159.6305,
+            "msPerFrame": 504.988453125,
+            "fps": 1.9802432982610587,
+            "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 23.47 W, 180 MHz, 67",
+            "run": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary4-blocked-matrix-off"
+          },
+          "durationReductionPercent": -8.484972185119478,
+          "fpsIncreasePercent": -7.821334157362059
+        }
+      },
+      "pooled64Frames": {
+        "beforeMsPerFrame": 462.3644734375,
+        "afterMsPerFrame": 483.27928906249997,
+        "beforeFps": 2.162795927129498,
+        "afterFps": 2.0691968860074104,
+        "durationReductionPercent": -4.523447805041436,
+        "fpsIncreasePercent": -4.3276871362669
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-timeline-no-empty-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "66fd87e6420b3dace03e82f85f68105776ecdbf4612a2c68a470e468ab326b4f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-timeline-no-empty-matrix-off\\initial-gpu.csv",
+      "sha256": "3b2a70a5e0a0323ff62be1954a17c14f395fab83b07c8cd6121f589e3d0bf89f"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-timeline-no-empty-matrix-off\\runtime.json",
+      "sha256": "0605382ec6273567f9801367bb24b7a0aec81dcaa6535fb75b5fb5b06a2a1bed"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-timeline-no-empty-matrix-off\\artifacts.json",
+      "sha256": "734f0b7f5b3445cbd894861b3da790bbaff35d24a52ae60d5d08d1ce5e4c6025"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-timeline-empty-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "78c60ea8b88a4bdc621d7f6656e89003c130eafc3198e182c7ee60ceae53393a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-timeline-empty-matrix-off\\initial-gpu.csv",
+      "sha256": "ffad0fa6ec4bb8722f2ba289ae8e57f2688b7247748e9f3af35531a6bc6e6984"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-timeline-empty-matrix-off\\runtime.json",
+      "sha256": "bfd12c1ff3103dd2ed740a879c548e9c86acdce1a6513d6fab3cfb95658b9b8a"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-timeline-empty-matrix-off\\artifacts.json",
+      "sha256": "734f0b7f5b3445cbd894861b3da790bbaff35d24a52ae60d5d08d1ce5e4c6025"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary2-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "cc5f1b94d584dd6bcb202d0c56fa4beb4d92cc794560fb79c9c545f46347582d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary2-matrix-off\\initial-gpu.csv",
+      "sha256": "595605de30364c1ebf719775017542f7acba51de88408d7e3a6bce5c9a4f67fa"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary2-matrix-off\\runtime.json",
+      "sha256": "646da2b934dd77ee5f93603b5f8e04b86b25aa816c68e65d2c8a939b69f9b08c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary2-matrix-off\\artifacts.json",
+      "sha256": "734f0b7f5b3445cbd894861b3da790bbaff35d24a52ae60d5d08d1ce5e4c6025"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary4-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "83ba69f171aff6fcacbf74b12084399f3f790e0ebf70ca595a9e035d7ecdb365"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary4-matrix-off\\initial-gpu.csv",
+      "sha256": "a0cccf466889199f884f33de6c1de4c5c08f030624b655315525b51801e07c8c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary4-matrix-off\\runtime.json",
+      "sha256": "60177e346ae4c5a773dbfea6b5bd57e35892d929eba80434d5e0ce07c5639392"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary4-matrix-off\\artifacts.json",
+      "sha256": "734f0b7f5b3445cbd894861b3da790bbaff35d24a52ae60d5d08d1ce5e4c6025"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary4-blocked-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "158cab58defa6cae4021ce0a7ef29bd71e11f9c17f994c41523459a194b9f03d"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary4-blocked-matrix-off\\initial-gpu.csv",
+      "sha256": "85f501a0af2f533c4c98b9d8328d7641fd8bf10930c30b7b3280ce5e476a2432"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary4-blocked-matrix-off\\runtime.json",
+      "sha256": "09db7e0a9829ca147ab6427c3f14522790de1b4d8ebdb5b140246e7612fa2a55"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-forward-binary4-blocked-matrix-off\\artifacts.json",
+      "sha256": "734f0b7f5b3445cbd894861b3da790bbaff35d24a52ae60d5d08d1ce5e4c6025"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-timeline-no-empty-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "3367e6f67489e28604192159e3cf9b306d1a1689bc3d3a57382566340af21486"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-timeline-no-empty-matrix-off\\initial-gpu.csv",
+      "sha256": "cb1020cb2b7a479c20d826c7a546af28f926ccf938a2c91f1012c8c2b86c1049"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-timeline-no-empty-matrix-off\\runtime.json",
+      "sha256": "6748088cd5e9ecf6dfc34790e619f19a2753498b34851536b26e198edfe2a7e8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-timeline-no-empty-matrix-off\\artifacts.json",
+      "sha256": "734f0b7f5b3445cbd894861b3da790bbaff35d24a52ae60d5d08d1ce5e4c6025"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-timeline-empty-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "38d323f60c6cdfb7f7b5d077e5928d43b7c86e6433cf54ed7127df9a434aa170"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-timeline-empty-matrix-off\\initial-gpu.csv",
+      "sha256": "82cee0e9cbffdc895631dd8b58222ced1c7cafb4a7181d0b373f61a40160902c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-timeline-empty-matrix-off\\runtime.json",
+      "sha256": "c7a30f0ccea5ff309f20c99fe25ddd5f78c2508c918cb7b311923b3d258b10c8"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-timeline-empty-matrix-off\\artifacts.json",
+      "sha256": "734f0b7f5b3445cbd894861b3da790bbaff35d24a52ae60d5d08d1ce5e4c6025"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary2-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "b413369827515dfdaadf48aa24af6e8ab456b3b704f8cbb7eb7f40410126e60e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary2-matrix-off\\initial-gpu.csv",
+      "sha256": "4b62a235371b527c6ab7b7c0a63a0a180aa6e564608cc57f18f5b57676c90135"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary2-matrix-off\\runtime.json",
+      "sha256": "48f54d22aeec1d0965291a77eafe0e5d41768baf6cc18c2eb567a8265b8ed86c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary2-matrix-off\\artifacts.json",
+      "sha256": "734f0b7f5b3445cbd894861b3da790bbaff35d24a52ae60d5d08d1ce5e4c6025"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary4-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "74ca2b0d5def7303c5225e5bec8d5857cf204c74e417b8f41880790ca36153a4"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary4-matrix-off\\initial-gpu.csv",
+      "sha256": "36674ef822f16fab557e8357497920c7efb013c50fe0644771da6bd5e17f799c"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary4-matrix-off\\runtime.json",
+      "sha256": "2007e76e7ffb0525d762cd84ebffd30af74694bef764e87cc1191dea9a5da505"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary4-matrix-off\\artifacts.json",
+      "sha256": "734f0b7f5b3445cbd894861b3da790bbaff35d24a52ae60d5d08d1ce5e4c6025"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary4-blocked-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "90023887cd0d4375a32babbefba2c52043a4f84828f34902420dd4587ab39665"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary4-blocked-matrix-off\\initial-gpu.csv",
+      "sha256": "b0295b9f2d27f2a249c89dd5bb9bfa57e18b6d66d90e7321514f759b5483d10e"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary4-blocked-matrix-off\\runtime.json",
+      "sha256": "4ac2364b0ee147d2c3ade844b33055a7ee698fd1747165df8150370ccdb06eef"
+    },
+    {
+      "path": "build\\medium-micro-all-20261031\\skip-blocked-connections\\idle-ablation-reverse-binary4-blocked-matrix-off\\artifacts.json",
+      "sha256": "734f0b7f5b3445cbd894861b3da790bbaff35d24a52ae60d5d08d1ce5e4c6025"
+    }
+  ]
+}
