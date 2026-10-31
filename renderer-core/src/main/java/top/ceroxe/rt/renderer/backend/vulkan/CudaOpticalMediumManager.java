@@ -185,8 +185,9 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                     int sampleIndex=opticalSample,branchIndex=branch;int[] roundIndex=OpticalFrameTimings.KERNEL_PHASES||OpticalDetailedProfile.ENABLED?new int[]{0}:null;
                     java.util.function.Consumer<CudaMediumRuntime.Slice> resolve=input->{
                         long resolveStarted=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
-                        int queries=statistics[0];cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
-                        cuda.launchBlocking(step,input,paths,1);
+                        int queries=statistics[0],dispatched=plan.activeQueues()?Math.max(1,queries):paths;
+                        cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
+                        cuda.launchBlocking(step,input,dispatched,1);
                         cuda.download(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),counters);
                         for(int j=0;j<4;j++)statistics[j]=counters.get(ValueLayout.JAVA_INT,j*4L);
                         if(phaseCycles!=null){
@@ -196,7 +197,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                             OpticalFrameTimings.recordRound(sampleIndex,branchIndex,roundIndex[0],queries,statistics,phases);
                         }
                         if(OpticalDetailedProfile.ENABLED){
-                            OpticalDetailedProfile.add("cuda/dispatchedPaths",paths);OpticalDetailedProfile.add("cuda/activeInputPaths",queries);
+                            OpticalDetailedProfile.add("cuda/dispatchedPaths",dispatched);OpticalDetailedProfile.add("cuda/activeInputPaths",queries);
                             OpticalDetailedProfile.add("cuda/continuedPaths",statistics[0]);OpticalDetailedProfile.add("cuda/errors",statistics[1]);
                             OpticalDetailedProfile.add("cuda/interfaces",statistics[2]);OpticalDetailedProfile.add("cuda/completedPaths",statistics[3]);
                         }
@@ -210,7 +211,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                     };
                     java.util.function.Consumer<org.lwjgl.vulkan.VkCommandBuffer> continuation=command->{
                         if(statistics[1]==0&&statistics[0]>0)try(MemoryStack stack=MemoryStack.stackPush()){
-                            recordOpticalTrace(tracer,command,stack,slot,address,primaryAddress,tileFirst,pixels,false,plan);
+                            recordOpticalTrace(tracer,command,stack,slot,address,primaryAddress,tileFirst,pixels,false,plan,statistics[0]);
                         }
                     };
                     if(OpticalDetailedProfile.ENABLED)OpticalDetailedProfile.scope(tileFirst,sampleIndex,branchIndex,0);
@@ -243,13 +244,13 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                         int bytes=uploadScene?firstUploadBytes:CudaOpticalMediumAbi.HEADER_BYTES;
                         uploadMetadata(command,stack,metadata.asByteBuffer(),bytes);
                         if(detail!=null)detail.write(command,VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-                        recordOpticalTrace(tracer,command,stack,slot,address,primaryAddress,tileFirst,pixels,true,plan);
+                        recordOpticalTrace(tracer,command,stack,slot,address,primaryAddress,tileFirst,pixels,true,plan,paths);
                         if(detail!=null)detail.write(command,VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
                     }};
                     java.util.function.Consumer<org.lwjgl.vulkan.VkCommandBuffer> queuedContinuation=command->{try(MemoryStack stack=MemoryStack.stackPush()){
-                        recordOpticalTrace(tracer,command,stack,slot,address,primaryAddress,tileFirst,pixels,false,plan);
+                        recordOpticalTrace(tracer,command,stack,slot,address,primaryAddress,tileFirst,pixels,false,plan,statistics[0]);
                     }};
-                    if(queued)exchangePair(producer,queuedContinuation,step,paths,statistics);
+                    if(queued)exchangePair(producer,queuedContinuation,step,paths,statistics,plan.activeQueues());
                     else storage.produceThenExchangeBlocking(producer,resolve,continuation);
                     if(roundIndex!=null)roundIndex[0]++;
                     buildPending=false;photonsPending=false;int rounds=queued?2:1;
@@ -259,7 +260,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                             throw new RendererException("native optical continuation exceeded the public event and scattering budgets");
                         if(OpticalDetailedProfile.ENABLED)OpticalDetailedProfile.scope(tileFirst,sampleIndex,branchIndex,roundIndex[0]);
                         if(queued&&rounds+2<=limit){
-                            exchangePair(queuedContinuation,queuedContinuation,step,paths,statistics);rounds+=2;
+                            exchangePair(queuedContinuation,queuedContinuation,step,paths,statistics,plan.activeQueues());rounds+=2;
                         }else{if(queued)storage.produceThenExchangeBlocking(queuedContinuation,resolve,command->{});
                             else storage.exchangeBlocking(resolve,continuation);rounds++;}
                         if(roundIndex!=null)roundIndex[0]++;
@@ -341,16 +342,18 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     }
     private void exchangePair(java.util.function.Consumer<org.lwjgl.vulkan.VkCommandBuffer> producer,
             java.util.function.Consumer<org.lwjgl.vulkan.VkCommandBuffer> continuation,
-            CudaMediumRuntime.BatchKernel step,int paths,int[] statistics) {
-        int queries=statistics[0];
+            CudaMediumRuntime.BatchKernel step,int paths,int[] statistics,boolean activeQueues) {
+        // One input can publish at most one successor. The completed previous
+        // pair therefore bounds both steps without another host readback.
+        int queries=statistics[0],dispatched=activeQueues?Math.max(1,queries):paths;
         storage.produceThenExchangePairBlocking(producer,input->{
             cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
-            cuda.launchBlocking(step,input,paths,1);
+            cuda.launchBlocking(step,input,dispatched,1);
             cuda.downloadAsync(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),firstStatistics);
             if(shaderSampleFrame)cuda.downloadAsync(input.slice(shaderSampleOffset,firstShaderSamples.byteSize()),firstShaderSamples);
         },continuation,input->{
             cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
-            cuda.launchBlocking(step,input,paths,1);
+            cuda.launchBlocking(step,input,dispatched,1);
             cuda.downloadAsync(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),secondStatistics);
             if(shaderSampleFrame)cuda.downloadAsync(input.slice(shaderSampleOffset,secondShaderSamples.byteSize()),secondShaderSamples);
         });
@@ -363,7 +366,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         if(OpticalDetailedProfile.ENABLED) {
             recordPairStep("cuda/pairStep0",queries,firstStatistics);
             recordPairStep("cuda/pairStep1",firstStatistics.getInt(0),secondStatistics);
-            OpticalDetailedProfile.add("cuda/dispatchedPathSlots",Math.multiplyExact((long)paths,2L));
+            OpticalDetailedProfile.add("cuda/dispatchedPathSlots",Math.multiplyExact((long)dispatched,2L));
         }
         diagnosticQueries.add((long)queries+firstStatistics.getInt(0));
         diagnosticInterfaces.add((long)firstStatistics.getInt(8)+secondStatistics.getInt(8));
@@ -378,7 +381,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         OpticalDetailedProfile.add(scope+"/completedPaths",statistics.getInt(12));
     }
     private void recordOpticalTrace(GpuSceneRayTracingPipeline tracer,org.lwjgl.vulkan.VkCommandBuffer command,MemoryStack stack,
-            int slot,long address,long primaryAddress,int first,int pixels,boolean initialize,CudaOpticalMediumAbi.Plan plan){
+            int slot,long address,long primaryAddress,int first,int pixels,boolean initialize,CudaOpticalMediumAbi.Plan plan,int activeBound){
         if(shaderSampleFrame){
             VK10.vkCmdFillBuffer(command,storage.buffer(),plan.bytes(),OpticalDetailedProfile.shaderBytes(pixels*plan.samples()),0);
             var dependency=VkBufferMemoryBarrier.calloc(1,stack).sType$Default().srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
@@ -390,7 +393,8 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         var timing=OpticalFrameTimings.ENABLED?device.frameCommands().acquireGpuTimestampCapture("opticalCameraTrace",new String[]{"start","end"}):null;
         OpticalDetailedProfile.defer(initialize?"optical.cameraInitialTrace":"optical.cameraContinuationTrace",timing);
         if(timing!=null)timing.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
-        tracer.recordNativeOpticalTrace(command,stack,slot,address,primaryAddress,first,pixels,initialize);
+        int dispatchedPixels=initialize||!plan.activeQueues()?pixels:Math.min(pixels,Math.max(1,Math.ceilDiv(activeBound,plan.samples())));
+        tracer.recordNativeOpticalTrace(command,stack,slot,address,primaryAddress,first,dispatchedPixels,initialize);
         if(timing!=null)timing.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
     }
     private void uploadMetadata(org.lwjgl.vulkan.VkCommandBuffer command,MemoryStack stack,java.nio.ByteBuffer source,int bytes){
