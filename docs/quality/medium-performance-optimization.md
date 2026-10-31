@@ -1104,3 +1104,9 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 ### 撤回：PBRT CUDA fast-math 编译策略
 
 参考固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`CMakeLists.txt:249` 的 `--use_fast_math`，只为严格缓存均匀路径的两份 CUDA kernel 启用，并隔离不同算术模式的 PTX/module 缓存。8 帧 1080p 的最大相对 RMS 为 0.000587%，亮度能量偏差 0.00000412%，通过事先固定的误差线；运行时 5376 通道及缓存隔离回归通过。但目标 PBR CUDA 0.586008→0.624507 ms，三轮均慢约 6.6%；散射 CUDA 0.639015→0.632566 ms 仅约 1%，off 139.115187→139.716659 FPS 仅 +0.43%，没有确定性目标收益。已立即恢复全部生产代码，保留误差比较工具和冻结证据，不继续为失败候选跑全量回归。[原始证据](data/scattering-fast-arithmetic-rejected-20261031.json)。
+
+### 撤回：有界低贡献连接省略
+
+对照 OSPRay `1fc364776c5cbbf8b1100dbf321cc3d40da41311`（Apache-2.0）`Renderer.cpp:43` 默认 minContribution=0.001 和 `scivis/volumes.ispc:225/276/343` 的低贡献终止。独立适配为严格 opaque cached exhaustive 路径的局部灯连接上界：考虑相机 T、散射、inverse PDF、无表面遮挡时的光照和 Beer/phase；将每路径每通道 0.001 分摊给固定步数与连接数。8 帧 1080p 相对 RMS 最大 0.003576%，亮度能量偏差 0.000339%，通过事先误差线。但排除主射线后的 lights 2.474456→2.634219 ms，三轮均退化；散射整段 4.609648→4.715325 ms，off 138.143426→137.802385 FPS。已恢复全部 GLSL/SPIR-V，不继续为失败候选追加全量回归。成熟逻辑和微小误差本身不足以保留负优化。[冻结证据](data/scattering-contribution-cull-rejected-20261031.json)。
+
+补充计时范围：原 cameraScatteringLights capture 在 split primary 前开始，包住 primary 和 lights；同窗细分时必须减去单独的 primary capture，不能将两个 inclusive 项相加。主表互斥墙钟及原生 FPS 不受影响。

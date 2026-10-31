@@ -262,16 +262,6 @@ void main() {
                     inversePdf=float(guideCount+1u)/(float(steps)*pdf);
                 }
                 vec3 position=origin+direction*absolute;
-#if defined(RTRENDERER_SCATTERING_EXHAUSTIVE_LIGHTS) && defined(RTRENDERER_SCATTERING_CACHED_PRIMARY) && defined(RTRENDERER_SCATTERING_OPAQUE_ONLY)
-                // Nonnegative RGB and sigma >= reference make this a conservative
-                // bound on camera T * scattering * inverse PDF in every channel.
-                vec3 scattering=uintBitsToFloat(dispatch.storage.lanes[4u]).xyz;
-                float maximumCameraWeight=1.0001*max(scattering.x,max(scattering.y,scattering.z))
-                    *exp(-reference*absolute)*inversePdf;
-                float contributionTolerance=1e-3/(float(steps)*float(upper+1u));
-#else
-                const float maximumCameraWeight=0.0,contributionTolerance=0.0;
-#endif
                 GS_SCATTER_DETAIL_NEXT(3u);
                 if(max(sun.x,max(sun.y,max(sun.z,0.0)))>0.0) {
                     GS_SCATTER_DETAIL_NEXT(4u);
@@ -330,9 +320,9 @@ void main() {
                         GS_SCATTER_DETAIL_NEXT(7u);
                         GS_SCATTER_DETAIL_PAUSE();
 #ifdef RTRENDERER_CAMERA_SCATTERING_PROFILE
-                        source+=gsScatteringLightProfile(slot,position,direction,g,sigma,maximum,detailRecord,detailActive,maximumCameraWeight,contributionTolerance)*factor;
+                        source+=gsScatteringLightProfile(slot,position,direction,g,sigma,maximum,detailRecord,detailActive)*factor;
 #else
-                        source+=gsScatteringLight(slot,position,direction,g,sigma,maximum,maximumCameraWeight,contributionTolerance)*factor;
+                        source+=gsScatteringLight(slot,position,direction,g,sigma,maximum)*factor;
 #endif
                         GS_SCATTER_DETAIL_RESUME(7u);
                     }

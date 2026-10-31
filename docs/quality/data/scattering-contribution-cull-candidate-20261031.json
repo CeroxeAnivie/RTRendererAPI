@@ -1,5 +1,5 @@
 {
-  "status": "candidate-not-yet-validated",
+  "status": "rejected-and-restored",
   "scope": "Only exhaustive opaque cached uniform ray-query scattering. Omit negligible shadowed local-light connections before ray query; all other paths remain strict.",
   "reference": {
     "repository": "RenderKit/ospray",
@@ -26,5 +26,6 @@
   "artifacts": {
     "control": "ddb51e973bd955219c953d2eeefcfda0a85262bfba6fd2357be4b91db137935f",
     "candidate": "3effe5b40fd48fc35e80be8743ee0b46b4e9e43aa43e225c25a3a52d766535cc"
-  }
+  },
+  "reason": "Small image error but target scattering stage became slower in all three rounds; no production approximate culling retained."
 }
