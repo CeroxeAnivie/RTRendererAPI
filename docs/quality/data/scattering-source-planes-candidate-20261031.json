@@ -12,6 +12,6 @@
   "correctnessRequirement": "Byte-identical linear HDR plus unchanged independent references, malformed-source rejection and partial final-tile native test.",
   "artifacts": {
     "control": "ddb51e973bd955219c953d2eeefcfda0a85262bfba6fd2357be4b91db137935f",
-    "candidate": "411eda35c0d204e32e3be3565ebf75bed9b58ed49b7264198072c11372681348"
+    "candidate": "d7a73579b10bd49f02d8ed987e6a1a33c3d5ce68f26dc02763a648a2ea71b9d3"
   }
 }

@@ -55,8 +55,8 @@
     },
     {
       "name": "camera_scattering.cu",
-      "bytes": 4118,
-      "sha256": "b759b15132ea00d490bcb7b305eca2e47689fd88f2bfc6e077241d9ef3059066"
+      "bytes": 4056,
+      "sha256": "51b213e6481a669858deae5fded8c4a598e967ad0de68463703b4ab85916f4a6"
     },
     {
       "name": "color_funcs.cl",
