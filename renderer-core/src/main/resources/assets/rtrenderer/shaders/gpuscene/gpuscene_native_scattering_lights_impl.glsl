@@ -34,7 +34,7 @@ void gsScatteringDetailEnd(uint record,uint stage,uint64_t started){
     GsScatteringDiagnostic target=GsScatteringDiagnostic(dispatch.reserved);
     target.values[word]+=ended-started;target.values[word+1u]+=1ul;
 }
-#define GS_SCATTER_DETAIL_BEGIN(stage) uint detailStage=stage;uint detailRecord=(dispatch.firstPixel+gl_LaunchIDEXT.x)*samples+sampleIndex;uint detailSequence=gsFrame.words[GPU_SCENE_FRAME_SEQUENCE_WORD];uint detailOffset=(detailSequence*7919u)&65535u;bool detailActive=dispatch.reserved!=0ul&&((detailRecord/65536u+detailSequence)&7u)==0u&&(detailRecord%65536u)==detailOffset;uint64_t detailStarted=gsScatteringDetailStart(detailActive)
+#define GS_SCATTER_DETAIL_BEGIN(stage) uint detailStage=stage;uint detailPath=(dispatch.firstPixel+gl_LaunchIDEXT.x)*samples+sampleIndex;uint detailBuckets=(uint(extent.x)*uint(extent.y)*samples-1u)/65536u+1u;uint detailRecord=detailPath+gl_LaunchIDEXT.y*detailBuckets*65536u;uint detailSequence=gsFrame.words[GPU_SCENE_FRAME_SEQUENCE_WORD];uint detailOffset=(detailSequence*7919u)&65535u;bool detailActive=dispatch.reserved!=0ul&&((detailPath/65536u+detailSequence)&7u)==0u&&(detailPath%65536u)==detailOffset;uint64_t detailStarted=gsScatteringDetailStart(detailActive)
 #define GS_SCATTER_DETAIL_NEXT(stage) gsScatteringDetailEnd(detailRecord,detailStage,detailStarted);detailStage=stage;detailStarted=gsScatteringDetailStart(detailActive)
 #define GS_SCATTER_DETAIL_END() gsScatteringDetailEnd(detailRecord,detailStage,detailStarted)
 #define GS_SCATTER_DETAIL_PAUSE() gsScatteringDetailEnd(detailRecord,detailStage,detailStarted);detailStarted=0ul
@@ -232,7 +232,9 @@ void main() {
                 ++guideCount;
             }
         }
-        for(uint j=0u;j<steps;++j) {
+        // Each interval has an independent source slot. One-dimensional callers
+        // keep the original loop; a joint cached producer exposes intervals in Y.
+        for(uint j=gl_LaunchIDEXT.y;j<steps;j+=gl_LaunchSizeEXT.y) {
             float start=float(j)*interval,local=0.0,absolute=0.0,inversePdf=1.0;vec3 source=vec3(0);
             vec3 prefix=exp(-sigma*start);
             if(interval>0.0&&max(prefix.x,max(prefix.y,prefix.z))>=cutoff) {

@@ -303,8 +303,9 @@ final class CudaPbrMediumManager implements AutoCloseable {
         int headerBase=CudaPbrMediumAbi.JOINT_PBR_HEADER_OFFSET;
         if(statistics==null)statistics=cuda.allocateHost(CudaPbrMediumAbi.STATISTICS_BYTES);
         if(jointScatteringFailure==null)jointScatteringFailure=cuda.allocateHost(4);
+        int intervalLanes=direct.steps();
         int diagnosticBytes=OpticalDetailedProfile.cameraScatteringProfileFrame(work.frame().sequence())
-                ?OpticalDetailedProfile.cameraScatteringShaderBytes(paths):0;
+                ?OpticalDetailedProfile.cameraScatteringShaderBytes(paths,intervalLanes):0;
         if(diagnosticBytes!=0&&(jointDiagnostic==null||jointDiagnostic.byteSize()!=diagnosticBytes)) {
             if(jointDiagnostic!=null)jointDiagnostic.close();
             jointDiagnostic=cuda.allocateHost(diagnosticBytes);
@@ -351,7 +352,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                     barrier(command,stack);
                 }
                 (diagnosticBytes!=0&&work.diagnostic()!=null?work.diagnostic():work.lights())
-                        .recordNativeScatteringLights(command,stack,slot,address,0,pixels,offsets,diagnosticAddress);
+                        .recordNativeScatteringLights(command,stack,slot,address,0,pixels,offsets,diagnosticAddress,intervalLanes);
                 if(lightsTiming!=null)lightsTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                 barrier(command,stack);
                 if(pbrTiming!=null)pbrTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
@@ -374,7 +375,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
             throw new RendererException("native joint camera scattering produced invalid transport; final output was not published");
         if(statistics.getInt(0)!=0||statistics.getInt(4)!=0||statistics.getInt(12)!=paths)
             throw new RendererException("native joint PBR medium produced invalid packet states; final output was not published");
-        if(diagnosticBytes!=0)OpticalDetailedProfile.cameraScatteringShaderSamples(jointDiagnostic.segment(),paths,work.frame().sequence());
+        if(diagnosticBytes!=0)OpticalDetailedProfile.cameraScatteringShaderSamples(jointDiagnostic.segment(),paths,work.frame().sequence(),intervalLanes);
         uploadedAssets=scene.assets;
         return new CudaCameraMediumManager.Prepared(primary.deviceAddress(),(address+plan.transmittanceOffset())|CudaPbrMediumAbi.NATIVE_LIGHTING_FLAG|9L,
                 address+plan.emissionOffset(),pixels,plan.samples(),true);

@@ -1165,3 +1165,9 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 正确性：CPU ABI 精确预算/低预算回退/相对偏移和非法布局通过；CUDA component 包含 SPP2、1/8/64 步、514 条非整 block 路径、camera lane 不可变和非法 flag 拒绝。1080p 8 帧、query/no-query 灯光及 cached-primary 矩阵 90 帧，共 98 帧 HDR 全字节一致。PBR 31 项/43 帧、组合 15 项、camera 独立参考 17 项、多次散射解析回归通过；13 份 validation 日志会话均关闭，零 warning/error/drop。完整 API 门禁尚未重新执行，不能把此前全门禁套用到本提交。
 
 [冻结制品、正反序窗口与正确性证据](data/scattering-joint-batch-20261031.json)、[完整互斥墙钟排名](data/scattering-joint-batch-ranked-20261031.json)。
+
+### 宏观下一候选：独立介质采样点展开调度
+
+第一名的最大 GPU 工作仍是散射灯光查询。当前一条 raygen invocation 依次执行全部介质采样点，三项主要延迟都在该串行体内；候选仅在完整 joint cached-uniform producer 中把独立 interval 展开到 dispatch Y，保留像素、SPP、随机种子、source slot、光线数量及各点灯光累加顺序。其他调用 Y=1，保持原循环。参考固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/wavefront/integrator.cpp` 的独立队列分阶段执行与 `workqueue.h::ForAllQueued`；这是独立工作的调度适配，不声称上游使用相同二维 layout，也不引入估计器近似。
+
+诊断同步按 interval 分配独立 plane，防止多个 invocation 写同一个抽样 bucket；读回后再合计完整路径，额外报告 sampled/recorded work items。只有显式诊断分配额外空间，计入原预算；关闭诊断不增加日志或缓冲。先对比严格 HDR，再测完整散射灯光 GPU 和关闭诊断 FPS；若失败，精确恢复并回到全局审查，不直接试多个调度尺寸。

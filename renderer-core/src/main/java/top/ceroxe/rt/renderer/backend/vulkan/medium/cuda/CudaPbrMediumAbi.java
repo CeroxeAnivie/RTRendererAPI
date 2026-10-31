@@ -48,7 +48,8 @@ public final class CudaPbrMediumAbi {
                 default -> throw new IllegalArgumentException("unrecognized PBR scattering integrator");
             }
             long diagnostic=kind==ScatteringKind.DIRECT_UNIFORM
-                    ?OpticalDetailedProfile.cameraScatteringShaderBytes(Math.multiplyExact(pixels,samples)):0;
+                    ?OpticalDetailedProfile.cameraScatteringShaderBytes(Math.multiplyExact(pixels,samples),
+                            jointDirectBatch(pbr,direct)?direct.steps():1):0;
             if(pbr.pixels()!=pixels||pbr.samples()!=samples
                     ||pbr.tilePixels()!=tile&&(kind!=ScatteringKind.DIRECT_UNIFORM||!pbr.compactColors())
                     ||scatteringBytes!=Math.addExact(Math.addExact(bytes,diagnostic),ALLOCATION_ALLOWANCE))
@@ -70,7 +71,8 @@ public final class CudaPbrMediumAbi {
                 &&(direct.sourceOffset()==pbr.colorsOffset()||jointDirectBatch());}
         /** Both Vulkan producers fit before one ownership release. Their scratch
          * ranges and headers remain disjoint until the two CUDA kernels finish. */
-        public boolean jointDirectBatch(){return kind==ScatteringKind.DIRECT_UNIFORM&&direct!=null&&pbr.compactColors()
+        public boolean jointDirectBatch(){return kind==ScatteringKind.DIRECT_UNIFORM&&jointDirectBatch(pbr,direct);}
+        private static boolean jointDirectBatch(Plan pbr,CudaCameraScatteringAbi.Plan direct){return direct!=null&&pbr.compactColors()
                 &&direct.tilePixels()==direct.pixels()&&pbr.tilePixels()==pbr.pixels()
                 &&pbr.transmittanceOffset()==HEADER_BYTES+JOINT_PBR_HEADER_OFFSET
                 &&direct.primaryOffset()==pbr.transmittanceOffset()
@@ -217,7 +219,8 @@ public final class CudaPbrMediumAbi {
         long scatteringScratch=Math.multiplyExact((long)samples,Math.multiplyExact((long)steps,16));
         long jointFixed=Math.addExact(fixed,JOINT_PBR_HEADER_OFFSET);
         long jointBytes=Math.addExact(jointFixed,Math.multiplyExact((long)pixels,Math.addExact(pbrScratch,scatteringScratch)));
-        if(jointBytes+diagnostic+ALLOCATION_ALLOWANCE<=residentLimit
+        long jointDiagnostic=OpticalDetailedProfile.cameraScatteringShaderBytes(paths,steps);
+        if(jointBytes+jointDiagnostic+ALLOCATION_ALLOWANCE<=residentLimit
                 &&(long)pixels*connections<=Integer.MAX_VALUE) {
             int trans=HEADER_BYTES+JOINT_PBR_HEADER_OFFSET;
             int emission=Math.toIntExact(trans+(long)paths*16),source=Math.toIntExact(jointFixed);
@@ -227,7 +230,7 @@ public final class CudaPbrMediumAbi {
             var scattering=new CudaCameraScatteringAbi.Plan(pixels,samples,steps,pixels,trans,trans,emission,
                     source,colors,true);
             return new TransportPlan(pbr,ScatteringKind.DIRECT_UNIFORM,scattering,null,null,null,
-                    Math.addExact(Math.addExact(scattering.bytes(),diagnostic),ALLOCATION_ALLOWANCE));
+                    Math.addExact(Math.addExact(scattering.bytes(),jointDiagnostic),ALLOCATION_ALLOWANCE));
         }
         long available=residentLimit-ALLOCATION_ALLOWANCE-fixed;
         long pbrTile=Math.min(Math.min((long)pixels,Integer.MAX_VALUE/(long)connections),available/pbrScratch);
