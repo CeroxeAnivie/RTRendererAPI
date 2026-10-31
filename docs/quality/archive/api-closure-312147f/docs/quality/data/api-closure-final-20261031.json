@@ -1,0 +1,436 @@
+{
+  "passed": true,
+  "source": {
+    "startedAtUtc": "2026-10-30T20:13:54.4231851+00:00",
+    "commit": "79a8f2030aff28563d0fa1d3058d151a8ffdab1e",
+    "tree": "2334c4887aaf487aff31ba134111c8cd1c579723",
+    "trackedClean": true
+  },
+  "sourceAfterRun": {
+    "commit": "79a8f2030aff28563d0fa1d3058d151a8ffdab1e",
+    "tree": "2334c4887aaf487aff31ba134111c8cd1c579723",
+    "trackedClean": true
+  },
+  "completedAtUtc": "2026-10-30T20:21:48.192295700Z",
+  "scope": "documented Windows x86_64 Vulkan RT and NVIDIA runtime contracts",
+  "device": "NVIDIA GeForce RTX 5080 Laptop GPU",
+  "command": "./gradlew.bat verifyApiClosure -PcudaNvrtcArchive=<fixed-official-12.9.86-archive> -PnvidiaBridgeBuildDirectory=<isolated-short-build-directory> --no-daemon --console=plain --continue",
+  "gradle": {
+    "result": "BUILD SUCCESSFUL",
+    "elapsed": "7m 53s",
+    "actionableTasks": 281,
+    "executed": 255,
+    "fromCache": 1,
+    "upToDate": 25
+  },
+  "requiredTaskGroups": 14,
+  "nativeJavaExecTasks": 76,
+  "precompiledShaderVariants": 274,
+  "spirvBytes": 41825144,
+  "distributionFiles": 2062,
+  "validationSummary": {
+    "logs": 34,
+    "opened": 53,
+    "closed": 53,
+    "warnings": 0,
+    "errors": 0,
+    "dropSummaries": 0
+  },
+  "gallery": [
+    {
+      "variant": "pbr-direct-uniform",
+      "frames": 8
+    },
+    {
+      "variant": "pbr-direct-density",
+      "frames": 8
+    },
+    {
+      "variant": "pbr-multiple-uniform",
+      "frames": 8
+    },
+    {
+      "variant": "pbr-multiple-density",
+      "frames": 8
+    },
+    {
+      "variant": "boundary-optical-scatter",
+      "frames": 8
+    },
+    {
+      "variant": "absorption-emission",
+      "frames": 8
+    },
+    {
+      "variant": "glass-scatter-caustics",
+      "frames": 8
+    },
+    {
+      "variant": "glass-scatter-caustics-off",
+      "frames": 8
+    },
+    {
+      "variant": "glass-density-caustics",
+      "frames": 8
+    },
+    {
+      "variant": "glass-density-caustics-off",
+      "frames": 8
+    },
+    {
+      "variant": "boundary-density-caustics",
+      "frames": 8
+    },
+    {
+      "variant": "boundary-density-caustics-off",
+      "frames": 8
+    },
+    {
+      "variant": "gallery",
+      "frames": 8
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "renderer-api/build/libs/renderer-api-7.0.0.jar",
+      "file": "renderer-api-7.0.0.jar",
+      "bytes": 686599,
+      "sha256": "238b50593a9012925b2ae294efd2fe2444aa78b755c8547d5444a4e3e29049ec"
+    },
+    {
+      "path": "renderer-core/build/libs/renderer-core-7.0.0.jar",
+      "file": "renderer-core-7.0.0.jar",
+      "bytes": 56192885,
+      "sha256": "c80912813d32a58e159ad1505cb4a4758fddf4edfcf72cd69aad831d6d2e33c1"
+    },
+    {
+      "path": "renderer-nvidia/build/libs/renderer-nvidia-7.0.0.jar",
+      "file": "renderer-nvidia-7.0.0.jar",
+      "bytes": 56518664,
+      "sha256": "1b210b30fc00fff1d36485f5fa31783dbe7eaad96cbe875adc697ceeb0aa6d48"
+    },
+    {
+      "path": "build/release/rtrenderer-api-7.0.0-windows-x86_64-candidate.zip",
+      "file": "rtrenderer-api-7.0.0-windows-x86_64-candidate.zip",
+      "bytes": 352746367,
+      "sha256": "ef1fda7e2144a09019a2685c2471ad747b5f921164cb0245ef68d2d1b975490f"
+    }
+  ],
+  "validationLogs": [
+    {
+      "file": "causticVolumeTransportNativeSelfTest.jsonl",
+      "sha256": "324a126b5ffc00a83acadd32d7a48974cf725e3b3cc2e684f74e6e4a6e059028",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaBoundaryMediumProductionNativeSelfTest.jsonl",
+      "sha256": "ee4a48fbb4b2776d306a57f11dac13d9d86e57b2742c14fcb654a003cd6a631f",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaBuiltinShaderDataNativeSelfTest.jsonl",
+      "sha256": "7fe1d1778abc80c3925b60be34cdad4567561a4c2726ddef5e1591f9a6a54a9f",
+      "opened": 2,
+      "closed": 2,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaCameraEmissionProductionNativeSelfTest.jsonl",
+      "sha256": "8eab4fae1da798c9cc19f608101b7aa65b1209c2c4d4e754cbb1e497e1caacc1",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaCameraMediumProductionNativeSelfTest.jsonl",
+      "sha256": "35734665096476a54f8b295ddbe1af2e864a3bf75733830161e6a043a67989f8",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaCameraScatteringProductionNativeSelfTest.jsonl",
+      "sha256": "48ae1b88734d053aa3e23c49feb974810a2ce30a6d1bae8438134909a597fe11",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaCompositeMediumProductionNativeSelfTest.jsonl",
+      "sha256": "a312304d33e92713229a2e1013f8466e6a5d142bcc6996e412541a7accd16c29",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaDensityProductionNativeSelfTest.jsonl",
+      "sha256": "bd44a5ea3b250034b0f29baefe08c3376e6683ea2b3c9d54e0e6bb39404f1e7b",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaDensityScatteringProductionNativeSelfTest.jsonl",
+      "sha256": "4b5568994d0b4b540138d0b376fa9366e3c9cfa32ba9d53463ef116e7671172c",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaHeterogeneousMultipleScatteringProductionNativeSelfTest.jsonl",
+      "sha256": "7a7a46dff223d6ef2df0385f719389f5636ca1de46fa76c3f0541c83e2c40a72",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaMetallicMediumProductionNativeSelfTest.jsonl",
+      "sha256": "11ac7728387ffd3167c2442d304d1c1e168a08bb29f565ba734a2c862e115bc4",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaMultipleScatteringProductionNativeSelfTest.jsonl",
+      "sha256": "bf5cfe9d3457aaedd1de731931254d8e10fa692fa9ec1884a6edc1fadf22ffb0",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaOpticalMediumProductionNativeSelfTest.jsonl",
+      "sha256": "3f619491c262ac19eb4be0ac13ae30b4eb9ab992aa746c441c7bc6e78cd3b3b2",
+      "opened": 3,
+      "closed": 3,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaPbrMediumCausticsProductionNativeSelfTest.jsonl",
+      "sha256": "07b2dd64fa7b3a8cc7ed63eff85288b0a38885dc5eb94c362a91700298f775bc",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaPbrMediumProductionNativeSelfTest.jsonl",
+      "sha256": "16f8946e31258a78e0a5ab4270fa4947e8904a52c3ca62e8db84a8108ed254fd",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "cudaPbrMediumScatteringProductionNativeSelfTest.jsonl",
+      "sha256": "bff00f0e8cb561aad30e9c5d02bf2f831f8fda845a59276cdef81feb63c9adda",
+      "opened": 9,
+      "closed": 9,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "mediumTransportNativeSelfTest.jsonl",
+      "sha256": "5970be26eef5718ca4d6f6b1cec34f7f794ea6fd99c6d44fe0d8a95d0e485dab",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "primaryQueueNativeSelfTest.jsonl",
+      "sha256": "b501cbe322eaace7bfde0d9d01b27a986c82e4f60be10b44e5ad44a54fb1ca79",
+      "opened": 2,
+      "closed": 2,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanEvidenceRetentionNativeSelfTest.jsonl",
+      "sha256": "f6684796f0b60308697ce571cc6ae2213c89c0ee154dee0a35391d8ba0a3e973",
+      "opened": 2,
+      "closed": 2,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanFrameCompositionNativeSelfTest.jsonl",
+      "sha256": "556c9b790f6d03cc697e447022f7438313e3e5accca88905ef1db062d9d07f1b",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanFrameDisplayTransformNativeSelfTest.jsonl",
+      "sha256": "5076ce980de77f633023638b4433c933991f932d56eaf462b16fd7a8f9a027c3",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanFrameSlotExternalCompletionNativeSelfTest.jsonl",
+      "sha256": "ceaa079bd07cc0c36c4535234357324866d4a0e34ae33ccc0023280e7e2e3bc6",
+      "opened": 2,
+      "closed": 2,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanGenericAccelerationNativeSelfTest.jsonl",
+      "sha256": "e72ef07e8ddd595c91b98a3b0fa9e92c5273187f021edb261e2f02117009185c",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanGenericCommandNativeSelfTest.jsonl",
+      "sha256": "faabde3885fdc73e0e07f7fb343d41de217e53ec0b19f503b7166edb1cbdec21",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanGenericGeometryBarrierNativeSelfTest.jsonl",
+      "sha256": "e490b3098b0b8bc0d0bc784185b0028dd9516de29d297dae974c628c9fe5857b",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanGenericIntegerTextureNativeSelfTest.jsonl",
+      "sha256": "900f453194a9976427844fbce6865f43e9852a83fcec7500b2aa09f90fd988c1",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanGenericLogicOperationNativeSelfTest.jsonl",
+      "sha256": "c0c3d0dbff2b770f5eb44807e2410c2d2e184acc5ced2675063c927c83a82298",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanGenericPipelineRetirementNativeSelfTest.jsonl",
+      "sha256": "557ab1620d211104b0097d196985b9e5e1880dd0d699eb819f25fb0acf881881",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanGenericProceduralRayTracingNativeSelfTest.jsonl",
+      "sha256": "bfe599a3fb9b1a0a2e2e21341188c42b94912ff7f2376ccd9e220e39b7ec15d9",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanGenericRayTracingNativeSelfTest.jsonl",
+      "sha256": "48d66da437af804b420b35394e1045506383e4dde4a95cbeabac5316f97a11a8",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanModernFrameNativeSelfTest.jsonl",
+      "sha256": "33bb36f1900d1f1449a809fb73b3b6a9b43ebf32c6f30546e1f78ea9b7bbf8a2",
+      "opened": 6,
+      "closed": 6,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanQueuedFrameSlotNativeSelfTest.jsonl",
+      "sha256": "66d45fd7e1bdeac0d583dfc01ebd7c6a88160bf30f93fe119c661c3125626643",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanSceneAccelerationNativeSelfTest.jsonl",
+      "sha256": "a67a251b0f49cd44d6dd8506e5c3383ab7ce1a435ef2d77b5471ae424068614b",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    },
+    {
+      "file": "vulkanSceneRuntimeNativeSelfTest.jsonl",
+      "sha256": "26e33df81afba89e0ab663f2bd10168ec2884bac1ffb3a514ba0c3277135a864",
+      "opened": 1,
+      "closed": 1,
+      "warnings": 0,
+      "errors": 0,
+      "dropSummaries": 0
+    }
+  ],
+  "rawTaskReport": {
+    "file": "api-closure-full-result-20261031.json",
+    "sha256": "779929167b16f2f2effd67e2b766c40da8c3386b7c3dea95f5779d82d4bc96e6"
+  },
+  "fullLog": {
+    "path": "build/api-closure-20261031/complete-final-current-platform.log",
+    "sha256": "7017eb09d607a0fabf5dd2ac8915070f1a07cd9ad9404003fde3d8638fb7eed5"
+  },
+  "failedEarlierRuns": "api-closure-blockers-20261031.json"
+}

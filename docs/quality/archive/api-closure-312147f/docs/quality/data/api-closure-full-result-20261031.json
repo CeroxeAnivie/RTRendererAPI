@@ -1,0 +1,482 @@
+{
+    "passed": true,
+    "completedAtUtc": "2026-10-30T20:21:48.192295700Z",
+    "version": "7.0.0",
+    "scope": "documented Windows x86_64 Vulkan RT and NVIDIA runtime contracts",
+    "requiredTasks": [
+        {
+            "path": ":check",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-api:check",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:check",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:check",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":demos:hex-ball:check",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rendererCoreGpuSceneNativeGate",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rendererCoreNativeGate",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rendererCoreMediumNativeGate",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rendererCoreUnifiedApiNativeGate",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaNativeAcceptanceGate",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":demos:hex-ball:mediumGalleryNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":verifyPublishedMavenConsumer",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":verifyReleaseChecksums",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":verifyRuntimeDistribution",
+            "executed": true,
+            "upToDate": false
+        }
+    ],
+    "nativeTasks": [
+        {
+            "path": ":renderer-nvidia:nvidiaStreamlineFrameGenerationNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaStreamlineMultiFrameGenerationNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaStreamlineAdaptiveFrameGenerationNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaNativeBridgeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaStreamlinePlanLeaseNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaStreamlineDeviceHandoffNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaStreamlineGpuSceneNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaStreamlineDlaaGpuSceneNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaStreamlineNisGpuSceneNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaNrdGpuSceneNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaNrdDlaaGpuSceneNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaNrdDlssGpuSceneNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaRtxmuGpuSceneNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-nvidia:nvidiaNrdDlssFrameGenerationGpuSceneNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:coreRtNativeBenchmarkReportSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanFrameCompositionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rtNativeGpuThroughputSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rtNativeStressSceneSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:gpuSceneRayTracingPipelineNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanFrameSlotExternalCompletionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanGenericAccelerationNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanGenericProceduralRayTracingNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanGpuSceneNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanGpuSceneRenderingSessionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanGpuSceneThroughputNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanSceneAccelerationNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanSceneRuntimeNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanSerNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:causticVolumeTransportNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaBoundaryMediumProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaBuiltinShaderDataNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaCameraEmissionProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaCameraMediumProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaCameraScatteringProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaCompositeMediumProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaDensityProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaDensityScatteringProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaHeterogeneousMultipleScatteringProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaMediumRuntimeNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaMetallicMediumProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaMultipleScatteringProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaOpticalCausticNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaOpticalMediumNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaOpticalMediumProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaPbrMediumCausticsProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaPbrMediumProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaPbrMediumScatteringProductionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:mediumTransportNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:primaryQueueNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanQueuedFrameSlotNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaCameraMediumNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaCameraScatteringNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaDensityScatteringNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaMediumDensityNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaMediumTransportNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaPrimaryEmissionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaPrimaryMediumNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:cudaSharedMediumRayNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rtNativeDynamicBlasTlasStressSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rtNativeDynamicMeshInstanceStressSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rtNativeDynamicObjectSceneSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rtNativeDynamicSkySceneSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rtNativeFluidSceneSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rtNativeMaskedMaterialStressSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rtNativeMicroSceneSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:rtNativeVanillaDynamicLightingSceneSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanEvidenceRetentionNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanFrameDisplayTransformNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanGenericCommandNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanGenericGeometryBarrierNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanGenericIntegerTextureNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanGenericLogicOperationNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanGenericPipelineRetirementNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanGenericRayTracingNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":renderer-core:vulkanModernFrameNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        },
+        {
+            "path": ":demos:hex-ball:mediumGalleryNativeSelfTest",
+            "executed": true,
+            "upToDate": false
+        }
+    ],
+    "artifacts": [
+        {
+            "file": "renderer-api-7.0.0.jar",
+            "bytes": 686599,
+            "sha256": "238b50593a9012925b2ae294efd2fe2444aa78b755c8547d5444a4e3e29049ec"
+        },
+        {
+            "file": "renderer-core-7.0.0.jar",
+            "bytes": 56192885,
+            "sha256": "c80912813d32a58e159ad1505cb4a4758fddf4edfcf72cd69aad831d6d2e33c1"
+        },
+        {
+            "file": "renderer-nvidia-7.0.0.jar",
+            "bytes": 56518664,
+            "sha256": "1b210b30fc00fff1d36485f5fa31783dbe7eaad96cbe875adc697ceeb0aa6d48"
+        },
+        {
+            "file": "rtrenderer-api-7.0.0-windows-x86_64-candidate.zip",
+            "bytes": 352746367,
+            "sha256": "ef1fda7e2144a09019a2685c2471ad747b5f921164cb0245ef68d2d1b975490f"
+        }
+    ]
+}

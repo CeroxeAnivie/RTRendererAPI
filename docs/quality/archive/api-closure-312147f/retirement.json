@@ -1,0 +1,14 @@
+{
+  "sourceWorktree": "C:\\Users\\Administrator\\.codex\\worktrees\\medium-capability-closure\\RTRendererAPI",
+  "completedAgent": "complete_api_closure",
+  "archiveCommit": "312147f52f787167f088025117ba4325bce82a2d",
+  "sourceChanges": "Implementation parent already on main; retain the original acceptance documentation here without replacing newer main verification results.",
+  "preservedTrackedDocuments": [
+    "docs/quality/data/api-closure-final-20261031.json",
+    "docs/quality/data/api-closure-full-result-20261031.json",
+    "docs/quality/verification-report.md"
+  ],
+  "preservedIgnoredReports": "build/archived-worktrees/medium-capability-closure/build/reports/api-closure",
+  "preservedIgnoredRelease": "build/archived-worktrees/medium-capability-closure/build/release/rtrenderer-api-7.0.0-windows-x86_64-candidate.zip",
+  "currentFullGate": "cb24e32 (newer final 130 FPS API acceptance)"
+}
