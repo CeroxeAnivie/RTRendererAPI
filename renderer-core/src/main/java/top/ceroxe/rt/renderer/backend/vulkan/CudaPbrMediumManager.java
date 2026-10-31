@@ -22,6 +22,7 @@ import top.ceroxe.rt.renderer.api.RendererException;
 import top.ceroxe.rt.renderer.api.TextureAsset;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaBoundaryMediumAbi;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaCameraScatteringSource;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaCameraScatteringAbi;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensityAbi;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntime;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPbrMediumAbi;
@@ -33,6 +34,7 @@ import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
 import top.ceroxe.rt.renderer.rt.device.RtGpuTimestampPool;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSync;
+import top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 
 /** One Vulkan packet production and one native resolve per tile, independently of light count. */
@@ -57,6 +59,8 @@ final class CudaPbrMediumManager implements AutoCloseable {
     private CudaMediumRuntime.BatchKernel scatteringResolve;
     private CudaSharedRayFrame storage;
     private CudaMediumRuntime.HostMemory statistics;
+    private CudaMediumRuntime.HostMemory jointScatteringFailure,jointDiagnostic;
+    private JointScattering pendingJoint;
     private RtGpuBuffer primary;
     private Assets uploadedAssets;
     private boolean closed;
@@ -149,7 +153,11 @@ final class CudaPbrMediumManager implements AutoCloseable {
         try{return onNative(()->{
             ensureCapacity(scene);
             if(scatteringResolve==null)scatteringResolve=cuda.compileBatchKernel(CudaCameraScatteringSource.source(),"camera_scattering_resolve");
-            CudaCameraScatteringManager.resolveSharedOnNative(device,cuda,scatteringResolve,storage,frame,scene.transportPlan.direct(),
+            if(scene.transportPlan.jointDirectBatch()) {
+                if(pendingJoint!=null)throw new IllegalStateException("previous joint scattering frame was not consumed");
+                pendingJoint=new JointScattering(scene,frame,Objects.requireNonNull(primaryProducer,"primaryProducer"),
+                        Objects.requireNonNull(lightProducer,"lightProducer"),diagnosticProducer,slot,buildPlan);
+            } else CudaCameraScatteringManager.resolveSharedOnNative(device,cuda,scatteringResolve,storage,frame,scene.transportPlan.direct(),
                     Objects.requireNonNull(primaryProducer,"primaryProducer"),lightProducer,diagnosticProducer,slot,buildPlan,false,primary);
             return new RadianceContribution(storage.buffer(),scene.plan.emissionOffset(),Math.multiplyExact((long)scene.plan.paths(),16),false,
                     primary.deviceAddress());
@@ -167,6 +175,9 @@ final class CudaPbrMediumManager implements AutoCloseable {
             GpuSceneRayTracingPipeline lightProducer,int slot,RtTlasBuildPlan buildPlan,
             CausticPhotonPlan photonPlan,GpuSceneRayTracingPipeline photonPipeline,RtGpuBuffer photonBuffer,
             RadianceContribution additionalRadiance) {
+        if(scene.transportPlan!=null&&scene.transportPlan.jointDirectBatch())
+            return prepareJointOnNative(scene,lightProducer,slot,photonPlan,additionalRadiance);
+        if(pendingJoint!=null)throw new IllegalStateException("joint scattering cannot be consumed by a different transport");
         if((scene.transportPlan!=null)!=(additionalRadiance!=null))
             throw new IllegalArgumentException("PBR scattering requires the coordinated integrator contribution");
         if(additionalRadiance!=null&&additionalRadiance.includesCameraEmission()
@@ -270,6 +281,103 @@ final class CudaPbrMediumManager implements AutoCloseable {
         // This private flag preserves primary geometry while replacing only the already-integrated radiance split.
         return new CudaCameraMediumManager.Prepared(primary.deviceAddress(),(address+plan.transmittanceOffset())|CudaPbrMediumAbi.NATIVE_LIGHTING_FLAG|(planarPrimary?9L:0L),
                 address+plan.emissionOffset(),plan.pixels(),plan.samples(),true);
+    }
+    private record JointScattering(FrameScene scene,RenderFrameRequest frame,GpuSceneRayTracingPipeline primary,
+            GpuSceneRayTracingPipeline lights,GpuSceneRayTracingPipeline diagnostic,int slot,RtTlasBuildPlan buildPlan) { }
+
+    /** Full uniform producers need only the Vulkan primary payload, not either
+     * CUDA result. Keep their ranges live together and release the allocation once. */
+    private CudaCameraMediumManager.Prepared prepareJointOnNative(FrameScene scene,GpuSceneRayTracingPipeline pbrLights,
+            int slot,CausticPhotonPlan photonPlan,RadianceContribution contribution) {
+        JointScattering work=pendingJoint;pendingJoint=null;
+        var plan=scene.plan;var direct=scene.transportPlan.direct();
+        if(work==null||work.scene()!=scene||work.slot()!=slot||contribution==null
+                ||contribution.buffer()!=storage.buffer()||contribution.offset()!=plan.emissionOffset()
+                ||contribution.bytes()!=(long)plan.paths()*16||contribution.includesCameraEmission()
+                ||contribution.primaryAddress()!=primary.deviceAddress()
+                ||scene.assets.density.environmentOffset()>=0||!scene.assets.boundaries.isEmpty()
+                ||photonPlan!=null&&photonPlan.photons()!=0)
+            throw new IllegalArgumentException("joint scattering/PBR requires its exact cached uniform frame");
+        Objects.requireNonNull(pbrLights,"pbrLights");
+        long address=storage.deviceAddress();int pixels=plan.pixels(),paths=plan.paths();
+        int headerBase=CudaPbrMediumAbi.JOINT_PBR_HEADER_OFFSET;
+        if(statistics==null)statistics=cuda.allocateHost(CudaPbrMediumAbi.STATISTICS_BYTES);
+        if(jointScatteringFailure==null)jointScatteringFailure=cuda.allocateHost(4);
+        int diagnosticBytes=OpticalDetailedProfile.cameraScatteringProfileFrame(work.frame().sequence())
+                ?OpticalDetailedProfile.cameraScatteringShaderBytes(paths):0;
+        if(diagnosticBytes!=0&&(jointDiagnostic==null||jointDiagnostic.byteSize()!=diagnosticBytes)) {
+            if(jointDiagnostic!=null)jointDiagnostic.close();
+            jointDiagnostic=cuda.allocateHost(diagnosticBytes);
+        }
+        byte[] scatterHeader=CudaCameraScatteringAbi.header(direct,work.frame(),0,pixels,false);
+        // Joint input is camera RGB/distance written by the PBR producer. The
+        // scattering kernel leaves that lane intact for the following PBR kernel.
+        ByteBuffer.wrap(scatterHeader).order(ByteOrder.nativeOrder()).putInt(28,7);
+        byte[] original=scene.metadata.clone();var metadata=ByteBuffer.wrap(original).order(ByteOrder.nativeOrder());
+        CudaPbrMediumAbi.updateTile(metadata,plan,0,pixels,plan.emissionOffset(),false);
+        metadata.putInt(268,7);
+        byte[] pbrHeader=CudaPbrMediumAbi.jointHeader(scene.transportPlan,original);
+        long diagnosticAddress=diagnosticBytes==0?0:address+plan.bytes();
+        var captures=device.frameCommands();
+        try(var primaryTiming=OpticalFrameTimings.ENABLED?captures.acquireGpuTimestampCapture("jointScatteringPrimary",new String[]{"start","end"}):null;
+            var lightsTiming=OpticalFrameTimings.ENABLED?captures.acquireGpuTimestampCapture("jointScatteringLights",new String[]{"start","end"}):null;
+            var pbrTiming=OpticalFrameTimings.ENABLED?captures.acquireGpuTimestampCapture("jointPbrLights",new String[]{"start","end"}):null;
+            var tlasTiming=OpticalFrameTimings.ENABLED&&work.buildPlan()!=null?captures.acquireGpuTimestampCapture("jointScatteringTlas",new String[]{"start","end"}):null) {
+            storage.produceThenExchangeQueuedBlocking(command->{try(MemoryStack stack=MemoryStack.stackPush()) {
+                VK10.vkCmdUpdateBuffer(command,storage.buffer(),0,stack.malloc(112).put(scatterHeader,0,112).flip());
+                VK10.vkCmdFillBuffer(command,storage.buffer(),CudaCameraScatteringAbi.FAILED_OFFSET,4,0);
+                VK10.vkCmdUpdateBuffer(command,storage.buffer(),120,stack.longs(primary.deviceAddress()));
+                VK10.vkCmdUpdateBuffer(command,storage.buffer(),headerBase,stack.malloc(pbrHeader.length).put(pbrHeader).flip());
+                var writable=VkBufferMemoryBarrier.calloc(1,stack).sType$Default()
+                        .srcAccessMask(VK10.VK_ACCESS_MEMORY_READ_BIT|VK10.VK_ACCESS_MEMORY_WRITE_BIT)
+                        .dstAccessMask(VK10.VK_ACCESS_SHADER_WRITE_BIT)
+                        .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED).dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                        .buffer(primary.buffer()).offset(0).size(primary.sizeBytes());
+                VK10.vkCmdPipelineBarrier(command,VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                        KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,writable,null);
+                if(tlasTiming!=null)tlasTiming.begin(command,VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                if(work.buildPlan()!=null)work.buildPlan().record(command,stack);
+                if(tlasTiming!=null)tlasTiming.write(command,VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+                barrier(command,stack);
+                long offsets=Integer.toUnsignedLong(direct.sourceOffset())|Integer.toUnsignedLong(direct.primaryOffset())<<32;
+                // Keep the established inclusive lights/primary timing convention.
+                if(lightsTiming!=null)lightsTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+                if(primaryTiming!=null)primaryTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+                work.primary().recordNativeScatteringLights(command,stack,slot,address,0,pixels,offsets,0);
+                if(primaryTiming!=null)primaryTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+                barrier(command,stack);
+                if(diagnosticBytes!=0) {
+                    VK10.vkCmdFillBuffer(command,storage.buffer(),plan.bytes(),diagnosticBytes,0);
+                    barrier(command,stack);
+                }
+                (diagnosticBytes!=0&&work.diagnostic()!=null?work.diagnostic():work.lights())
+                        .recordNativeScatteringLights(command,stack,slot,address,0,pixels,offsets,diagnosticAddress);
+                if(lightsTiming!=null)lightsTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+                barrier(command,stack);
+                if(pbrTiming!=null)pbrTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+                pbrLights.recordBoundaryPacketTrace(command,stack,slot,address+headerBase,primary.deviceAddress(),0,
+                        Math.multiplyExact(pixels,plan.connections()),plan.stateOffset()-headerBase);
+                if(pbrTiming!=null)pbrTiming.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+            }},shared->{
+                cuda.launchBlocking(scatteringResolve,shared,paths,1,"cameraScattering.resolve");
+                cuda.downloadAsync(shared.slice(CudaCameraScatteringAbi.FAILED_OFFSET,4),jointScatteringFailure);
+                cuda.launchBlocking(uniformResolve,shared.slice(headerBase,shared.byteSize()-headerBase),paths,1,"pbrMedium.resolve");
+                cuda.downloadAsync(shared.slice(headerBase+CudaPbrMediumAbi.STATISTICS_OFFSET,CudaPbrMediumAbi.STATISTICS_BYTES),statistics);
+                if(diagnosticBytes!=0)cuda.downloadAsync(shared.slice(plan.bytes(),diagnosticBytes),jointDiagnostic);
+            },command->{});
+            if(primaryTiming!=null&&primaryTiming.resolve())OpticalFrameTimings.recordGpuStage("cameraScattering.primary",primaryTiming.totalNanos());
+            if(lightsTiming!=null&&lightsTiming.resolve())OpticalFrameTimings.recordGpuStage("cameraScattering.lights",lightsTiming.totalNanos());
+            if(pbrTiming!=null&&pbrTiming.resolve())OpticalFrameTimings.recordGpuStage("pbrMedium.lightPackets",pbrTiming.totalNanos());
+            if(tlasTiming!=null&&tlasTiming.resolve())OpticalFrameTimings.recordGpuStage("cameraScattering.tlas",tlasTiming.totalNanos());
+        }
+        if(jointScatteringFailure.getInt(0)!=0)
+            throw new RendererException("native joint camera scattering produced invalid transport; final output was not published");
+        if(statistics.getInt(0)!=0||statistics.getInt(4)!=0||statistics.getInt(12)!=paths)
+            throw new RendererException("native joint PBR medium produced invalid packet states; final output was not published");
+        if(diagnosticBytes!=0)OpticalDetailedProfile.cameraScatteringShaderSamples(jointDiagnostic.segment(),paths,work.frame().sequence());
+        uploadedAssets=scene.assets;
+        return new CudaCameraMediumManager.Prepared(primary.deviceAddress(),(address+plan.transmittanceOffset())|CudaPbrMediumAbi.NATIVE_LIGHTING_FLAG|9L,
+                address+plan.emissionOffset(),pixels,plan.samples(),true);
     }
     private void upload(org.lwjgl.vulkan.VkCommandBuffer command,MemoryStack stack,ByteBuffer source,int bytes) {
         var writable=VkBufferMemoryBarrier.calloc(1,stack).sType$Default().srcAccessMask(VK10.VK_ACCESS_MEMORY_READ_BIT|VK10.VK_ACCESS_MEMORY_WRITE_BIT)

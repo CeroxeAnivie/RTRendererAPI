@@ -21,6 +21,7 @@ public final class CudaCameraScatteringNativeSelfTest {
             var kernel=runtime.compileBatchKernel(CudaCameraScatteringSource.source(),"camera_scattering_resolve");
             var arena=Arena.ofConfined()) {
             verifyCompactContribution(runtime,kernel,arena);
+            verifyJointCameraLane(runtime,kernel,arena);
             verifyPreweightedDistances(runtime,kernel,arena);
             for(int steps:new int[]{1,8,64}) {
                 var medium=new Medium(new Rgb(.1f,.1f,.1f),new Rgb(.2f,.2f,.2f),new Rgb(.03f,.07f,.01f),1,1,.6f);
@@ -109,6 +110,59 @@ public final class CudaCameraScatteringNativeSelfTest {
     }
     }
     /** Analytic constant integrand fixture, independent of the producer's choice of proposal. */
+    private static void verifyJointCameraLane(CudaMediumRuntime runtime,CudaMediumRuntime.BatchKernel kernel,Arena arena) {
+        for(int steps:new int[]{1,8,64}) {
+            var medium=new Medium(new Rgb(.1f,.1f,.1f),new Rgb(.2f,.2f,.2f),Rgb.ZERO,1,1,0);
+            var frame=RenderFrameRequest.builder(7,COUNT,1,CameraState.lookAt(0,0,0,0,0,-1).build())
+                    .environment(EnvironmentState.builder().cameraMedium(medium).build())
+                    .antiAliasing(AntiAliasingState.multisampled(2))
+                    .mediumTransport(MediumTransport.balanced().withScatteringSteps(steps).withMaxDistance(7).withTransmittanceCutoff(0)).build();
+            var transport=CudaPbrMediumAbi.planWithCachedPrimary(COUNT,1,2,2,16,steps,4L*1024*1024);
+            require(transport.jointDirectBatch(),"joint component fixture must retain both complete producers");
+            var plan=transport.direct();int paths=plan.paths(),bytes=Math.toIntExact(plan.bytes());
+            var host=arena.allocate(bytes+32,16);host.fill((byte)0x5a);
+            host.asSlice(16).asByteBuffer().put(CudaCameraScatteringAbi.header(plan,frame,0,COUNT,false));
+            host.set(JAVA_INT,16+28,3);
+            for(int i=0;i<paths;i++) {
+                float distance=i%3==0?7:Math.min(i*.017f,7);
+                long primary=16+plan.primaryOffset()+i*16L;
+                host.set(JAVA_FLOAT,primary,distance);host.set(JAVA_INT,primary+4,i%3==0?0:1);
+                for(int j=0;j<steps;j++)putConstantSource(host.asByteBuffer().order(ByteOrder.nativeOrder()),
+                        Math.toIntExact(16+plan.sourceOffset()+(j*(long)paths+i)*16),distance,steps,j);
+            }
+            try(var storage=runtime.allocate(host.byteSize())) {
+                runtime.upload(storage.slice(0,host.byteSize()),host);
+                runtime.launchBlocking(kernel,storage.slice(16,bytes),paths,1);
+                runtime.download(storage.slice(0,host.byteSize()),host);
+                require(host.get(JAVA_INT,16+112)==0,"planar reference rejected");
+                byte[] reference=host.asSlice(16+plan.emissionOffset(),paths*16L).toArray(JAVA_BYTE);
+                host.set(JAVA_INT,16+28,7);
+                for(int i=0;i<paths;i++) {
+                    long at=16+plan.primaryOffset()+i*16L;
+                    host.set(JAVA_FLOAT,at,.13f);host.set(JAVA_FLOAT,at+4,.27f);host.set(JAVA_FLOAT,at+8,.39f);
+                    host.set(JAVA_FLOAT,at+12,i%3==0?-1:Math.min(i*.017f,7));
+                }
+                host.asSlice(16+plan.emissionOffset(),paths*16L).fill((byte)0x5a);
+                byte[] immutable=host.toArray(JAVA_BYTE);
+                runtime.upload(storage.slice(0,host.byteSize()),host);
+                runtime.launchBlocking(kernel,storage.slice(16,bytes),paths,1);
+                runtime.download(storage.slice(0,host.byteSize()),host);
+                require(host.get(JAVA_INT,16+112)==0,"joint camera source rejected");
+                require(Arrays.equals(reference,host.asSlice(16+plan.emissionOffset(),paths*16L).toArray(JAVA_BYTE)),
+                        "joint camera-distance source changed radiance");
+                for(int i=0;i<immutable.length;i++)if(i<16+plan.emissionOffset()||i>=16+plan.emissionOffset()+paths*16)
+                    require(host.get(JAVA_BYTE,i)==immutable[i],"joint kernel overwrote camera color, source, header or outer guard");
+                for(int flags:new int[]{2,4,5,6,8}) {
+                    host.copyFrom(java.lang.foreign.MemorySegment.ofArray(immutable));
+                    host.set(JAVA_INT,16+28,flags);
+                    runtime.upload(storage.slice(0,host.byteSize()),host);
+                    runtime.launchBlocking(kernel,storage.slice(16,bytes),paths,1);
+                    runtime.download(storage.slice(0,host.byteSize()),host);
+                    require(host.get(JAVA_INT,16+112)==paths,"invalid joint flags accepted: "+flags);
+                }
+            }
+        }
+    }
     private static void putConstantSource(ByteBuffer packed,int at,float distance,int steps,int j) {
         double sigma=(float)(.1f+.2f),t=distance*(j+.37)/steps;
         double weight=(-Math.expm1(-sigma*distance)/sigma)/steps*Math.exp(sigma*t);

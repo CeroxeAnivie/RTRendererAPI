@@ -32,7 +32,7 @@ __device__ bool resolve(bool hit,float hitDistance,const float4 *source,int step
         HomogeneousVolume_SegmentScatter(.5f,false,(preweighted?0.f:start)+incoming.w,&sigma,&zero,&zero,&segmentTr,&segmentE);
         output+=segmentTr*scatter*rgb(incoming)/pdf;
     }
-    *attenuation=make_float4(tr.x,tr.y,tr.z,1.f);
+    if(attenuation)*attenuation=make_float4(tr.x,tr.y,tr.z,1.f);
     *radiance=make_float4(output.x,output.y,output.z,0.f);
     return isfinite(output.x)&&isfinite(output.y)&&isfinite(output.z);
 }
@@ -45,18 +45,20 @@ extern "C" __global__ void camera_scattering_resolve(unsigned char *buffer,int c
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
     const unsigned int *u=(const unsigned int *)buffer;const float *h=(const float *)buffer;
     if(u[0]!=0x52534331u||u[1]!=2u||u[3]<1u||u[3]>64u||u[6]<1u||u[6]>8u
-            ||(u[7]&~3u)!=0u||u[7]==2u) {
+            ||(u[7]&~7u)!=0u||u[7]==2u||((u[7]&4u)!=0u&&(u[7]&3u)!=3u)) {
         atomicAdd((unsigned int *)buffer+28,1u);return;
     }
     const unsigned int item=u[4]*u[6]+(unsigned int)i;
     bool hit;float distance;
-    if((u[7]&1u)!=0u) {
+    const bool joint=(u[7]&4u)!=0u;
+    if(joint) {distance=((const float4 *)(buffer+u[8]))[item].w;hit=distance>=0.f;}
+    else if((u[7]&1u)!=0u) {
         const unsigned int *compact=(const unsigned int *)(buffer+u[8])+(unsigned int)i*4u;
         distance=__uint_as_float(compact[0]);hit=compact[1]!=0u;
     } else {const float *primary=(const float *)(buffer+u[8])+item*52u;distance=primary[3];hit=((const unsigned int*)primary)[28]!=0u;}
     const bool planar=(u[7]&2u)!=0u;
     const int sourceStride=planar?(int)u[2]:1;
     const float4 *source=(const float4 *)(buffer+u[11])+(unsigned int)i*(planar?1u:u[3]);
-    if(!rtr_camera_scattering::resolve(hit,distance,source,u[3],h,(float4 *)(buffer+u[9])+item,(float4 *)(buffer+u[10])+item,true,sourceStride))
+    if(!rtr_camera_scattering::resolve(hit,distance,source,u[3],h,joint?nullptr:(float4 *)(buffer+u[9])+item,(float4 *)(buffer+u[10])+item,true,sourceStride))
         atomicAdd((unsigned int *)buffer+28,1u);
 }

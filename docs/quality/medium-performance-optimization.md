@@ -1135,3 +1135,11 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 针对散射内部第二名，仅将一个有效且不投影阴影的方向灯贡献每路径计算一次，在每个积分点仍按原槽位累加。参考固定 Falcor `759aad033ff610fb0d82c74f7e0a508d0096d5f2`（BSD-3-Clause）`LightHelpers.slang::sampleDirectionalLight` 的位置无关方向与强度。仅保持一个 RGB 和槽号跨阴影查询，区别于已拒绝的整套小灯参数数组缓存。1080p 8 帧 HDR 全字节一致，但散射灯光三轮均慢，均值 2.416707→2.588441 ms（+7.11%）；off 138.053365→137.869682 FPS。全部生产 GLSL/SPIR-V 恢复。[原始证据](data/scattering-directional-invariant-candidate-20261031.json)。
 
 用户要求大头失败后先跳出局部，当前暂停继续试细节，检查完整中间 source 数据、Vulkan/CUDA 串行生产消费、shader 跨查询状态与已有真实 GPU 工作成本。不能据“少算几次”或成熟实现采用该逻辑就声称提速；寄存器压力目前只是待查假设，不作已证实根因。
+
+### 当前优先级：宏观架构先行
+
+用户要求现阶段暂时宏观优先。暂停连续尝试 shader 算式细节，优先审查完整帧依赖、生产消费时序、跨 API 提交/ownership 交接、CPU/GPU 等待和中间缓冲生命周期。大头候选失败后必须回到这张全局依赖图，对照成熟项目，再决定下一轮；不能仅凭主观判断断言架构已被证实占主导。
+
+当前待验收候选把 cached uniform 散射与 PBR 的 Vulkan 生产合成一次 ownership release，在同一 CUDA stream 按原顺序执行两个 kernel，再一次 signal/fence 完成。PBR 灯光生产只依赖 Vulkan 主命中，不依赖散射 CUDA 结果；为提前生产，两个 header 和两份 scratch 同时保留，camera RGB/distance 与散射 radiance 各有明确所有者。默认完整批次占用 530,907,552 字节（含原 65,536 字节 allowance），仍在原 512 MiB 预算内；不足则回退已验收的串行 arena。输出偏移仍对 allocation 计数，第二个 header 的 wire pointer 转成相对自身的偏移。
+
+成熟参考：NVIDIA/cuda-samples 固定 `9c688d7ff78455ed42e345124d1495aad6bf66de`，BSD-3-Clause，`Samples/5_Domain_Specific/vulkanImageCUDA/vulkanImageCUDA.cu::cudaUpdateVkImage`。其两次 kernel launch 在同一 stream 的 external wait/signal 之间顺序执行；本项目独立适配缓冲和原有 ownership barrier，不引入数学近似。必须保留两个 kernel 的独立 event 计时、两份失败计数、完整 HDR 比较及低预算回退验证。两段工作会重新归入一个等待边界，排名转移不计收益；判定依据是完整链路、交接次数及关闭诊断 FPS。此处仅记录候选，不表示已通过或已提速。

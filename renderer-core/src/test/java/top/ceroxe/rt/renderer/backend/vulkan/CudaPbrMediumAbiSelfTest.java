@@ -43,8 +43,15 @@ public final class CudaPbrMediumAbiSelfTest {
         var cached=CudaPbrMediumAbi.planWithCachedPrimary(1920,1080,1,2,16,8,512L*1024*1024);
         require(cached.pbr().compactColors()&&cached.pbr().packetBytes()==0,"cached primaries retained unused packet storage");
         require(cached.sharedDirectArena()&&cached.direct().tilePixels()==1920*1080&&cached.pbr().tilePixels()==1920*1080,
-                "default cached scene must use full scattering and PBR tiles in one serial arena");
+                "default cached scene must retain complete scattering and PBR tiles in one arena");
         require(cached.residentBytes()<=512L*1024*1024,"serial arena exceeded coordinated residency");
+        require(cached.jointDirectBatch(),"default scene must fit both live producers under the existing cap");
+        require(cached.residentBytes()==530_907_552L,"joint residency must charge both scratch ranges and both headers");
+        var fallback=CudaPbrMediumAbi.planWithCachedPrimary(1920,1080,1,2,16,8,cached.residentBytes()-1);
+        require(!fallback.jointDirectBatch()&&fallback.sharedDirectArena(),"one byte below joint residency must use the serial arena");
+        require(fallback.residentBytes()<cached.residentBytes(),"fallback must release simultaneous scratch residency");
+        var exact=CudaPbrMediumAbi.planWithCachedPrimary(1920,1080,1,2,16,8,cached.residentBytes());
+        require(exact.jointDirectBatch(),"exact joint residency limit must be accepted");
         for(int spp:new int[]{1,2,8})for(int lights:new int[]{0,2,15})for(int steps:new int[]{1,8,64}) {
             var compact=CudaPbrMediumAbi.planWithCachedPrimary(37,23,spp,lights,16,steps,4L*1024*1024);
             var p=compact.pbr();
@@ -56,8 +63,31 @@ public final class CudaPbrMediumAbiSelfTest {
             require(p.bytes()-p.colorsOffset()==(long)p.tilePaths()*p.connections()*32,
                     "compact scratch must retain every light and SPP without camera duplication");
             require(compact.sharedDirectArena()&&compact.direct().primaryOffset()==p.transmittanceOffset()
-                    &&compact.direct().emissionOffset()==p.emissionOffset()&&compact.direct().sourceOffset()==p.colorsOffset(),
-                    "serial stages lost their shared hit/output/scratch layout");
+                    &&compact.direct().emissionOffset()==p.emissionOffset()
+                    &&(compact.jointDirectBatch()?compact.direct().bytes()==p.colorsOffset():compact.direct().sourceOffset()==p.colorsOffset()),
+                    "shared stages lost their proven hit/output/scratch layout");
+            if(compact.jointDirectBatch()) {
+                require(compact.direct().sourceOffset()==p.emissionOffset()+(long)p.paths()*16,
+                        "joint source must follow all complete outputs");
+                require(compact.direct().bytes()-compact.direct().sourceOffset()==(long)p.paths()*steps*16,
+                        "joint sources must retain every SPP and step");
+                var f=RenderFrameRequest.builder(1,37,23,CameraState.lookAt(0,0,0,0,0,-1).build())
+                        .antiAliasing(AntiAliasingState.multisampled(spp)).build();
+                byte[] original=CudaPbrMediumAbi.scenePrefix(p,f,List.of(),new int[0],empty);
+                var metadata=ByteBuffer.wrap(original).order(ByteOrder.nativeOrder());
+                CudaPbrMediumAbi.updateTile(metadata,p,0,p.pixels(),p.emissionOffset(),false);
+                metadata.putInt(268,7);
+                byte[] beforeJoint=original.clone();
+                var relative=ByteBuffer.wrap(CudaPbrMediumAbi.jointHeader(compact,original)).order(ByteOrder.nativeOrder());
+                for(int field:new int[]{36,40,44,48,260})
+                    require(relative.getInt(field)+128==metadata.getInt(field),"joint packet pointer lost allocation identity");
+                require(relative.getLong(272)+128==p.emissionOffset(),"joint radiance contribution pointer lost identity");
+                require(java.util.Arrays.equals(original,beforeJoint),"joint header conversion mutated scene metadata");
+                for(int field:new int[]{28,32,96}) {
+                    byte[] invalid=original.clone();ByteBuffer.wrap(invalid).order(ByteOrder.nativeOrder()).putInt(field,field==96?0:1);
+                    expectIllegal(()->CudaPbrMediumAbi.jointHeader(compact,invalid));
+                }
+            }
             var header=ByteBuffer.allocate(CudaPbrMediumAbi.HEADER_BYTES).order(ByteOrder.nativeOrder());
             for(int first=0;first<p.pixels();first+=p.tilePixels()) {
                 CudaPbrMediumAbi.updateTile(header,p,first,Math.min(p.tilePixels(),p.pixels()-first));
