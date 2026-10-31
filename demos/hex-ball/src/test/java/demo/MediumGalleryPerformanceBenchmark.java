@@ -24,6 +24,8 @@ import static top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimel
 
 /** Native completed-frame benchmark: all closed medium features, or an explicitly selected focus case. */
 public final class MediumGalleryPerformanceBenchmark {
+    // Fixed arrays are allocated before the clock starts; split long rounds rather than grow in flight.
+    private static final int WALL_EVENT_CAPACITY = 262_144;
     private static final String[] PROFILE_NAMES = {
             "sharedPrepare", "sharedExchange", "vulkanRelease", "cudaStageWall", "legacyResolve",
             "vulkanConsumerRecord", "vulkanConsumerFenceWait", "vulkanProducerGpu", "vulkanConsumerGpu",
@@ -120,13 +122,21 @@ public final class MediumGalleryPerformanceBenchmark {
             var sequence = new long[]{0};
             Result warmupResult = range(renderer, interop, scene, width, height, sequence, warmup);
             requireHealthy(renderer, "warmup");
+            long eventsPerFrame = warmupResult.timeline()==null ? 0
+                    : Math.max(2048L, Math.ceilDiv(warmupResult.timeline().attemptedEvents(),warmup)*2L);
+            int windowFrames = wallWindowFrames(frames,eventsPerFrame);
+            System.out.println("GalleryPerf wallWindowFrames="+windowFrames+" warmupEventBudgetPerFrame="+eventsPerFrame);
             long[] profileBefore = OpticalFrameTimings.snapshot();
             var detailedBefore=top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.snapshot();
             var stagesBefore=OpticalFrameTimings.stageSnapshot();
             output.println("round,frames,wallMs,completedFps,submitCpuMs,requestBuildCpuMs,pollCpuMs,deferrals,"
                     + "gpuFrameMeanMs,gpuFrameLowerMs,gpuFrameUpperMs,gpuSamples,profileData,stageData");
-            for (int round = 0; round < rounds; round++) {
-                Result result = range(renderer, interop, scene, width, height, sequence, frames);
+            int totalFrames = Math.multiplyExact(frames,rounds), window = 0;
+            for (int offset = 0; offset < totalFrames;) {
+                int round = window++;
+                int count = Math.min(windowFrames,Math.min(frames-offset%frames,totalFrames-offset));
+                Result result = range(renderer, interop, scene, width, height, sequence, count);
+                offset += count;
                 requireHealthy(renderer, "round " + (round + 1));
                 long[] profileAfter = OpticalFrameTimings.snapshot();
                 long[] delta = subtract(profileAfter, profileBefore);
@@ -144,9 +154,11 @@ public final class MediumGalleryPerformanceBenchmark {
                     System.out.println("GalleryPerf shaderStageReport="+shaderReport+" stages="+shaderSummary.replace('\n',' '));
                 }
                 if (result.timeline() != null) {
-                    require(result.timeline().droppedEvents()==0,"wall timeline lost events for "+scene.id());
                     Path timelineReport = report.resolveSibling(stem+"-wall-timeline-round-" + (round + 1) + ".json");
                     Files.writeString(timelineReport, result.timeline().json(result.frames()), StandardCharsets.UTF_8);
+                    require(result.timeline().droppedEvents()==0,"wall timeline lost events for "+scene.id()
+                            +" attempted="+result.timeline().attemptedEvents()+" capacity="+WALL_EVENT_CAPACITY
+                            +"; failed evidence="+timelineReport);
                     System.out.println("GalleryPerf wallTimelineReport=" + timelineReport);
                 }
                 RendererDiagnostics.FrameGpuTiming gpu = result.gpu().after();
@@ -189,10 +201,7 @@ public final class MediumGalleryPerformanceBenchmark {
         RendererDiagnostics beforeDiagnostics = renderer.diagnostics();
         var beforeGpu = beforeDiagnostics.frameGpuTiming();
         long firstSequence = sequence[0], last = Math.addExact(firstSequence, frames) - 1;
-        var plan=scene.frame(sequence[0],width,height);
-        long eventsPerFrame=2048L+128L*plan.mediumTransport().maxEvents()*plan.mediumTransport().opticalSamples()*plan.antiAliasing().samplesPerPixel();
-        int capacity=(int)Math.min(2_000_000L,Math.max(262_144L,eventsPerFrame*frames));
-        var timeline = OpticalWallTimeline.ENABLED ? OpticalWallTimeline.allocate(capacity) : null;
+        var timeline = OpticalWallTimeline.ENABLED ? OpticalWallTimeline.allocate(WALL_EVENT_CAPACITY) : null;
         long started = timeline == null ? System.nanoTime() : timeline.begin();
         long requestBuild = 0, submit = 0, poll = 0, deferrals = 0;
         long deadline = started + Duration.ofMinutes(5).toNanos();
@@ -323,6 +332,12 @@ public final class MediumGalleryPerformanceBenchmark {
             .map(v->"\""+v+"\"").collect(java.util.stream.Collectors.joining(",","[","]"));}
     private static String longMap(Map<String,Long> values){return values.entrySet().stream().sorted(Map.Entry.comparingByKey())
             .map(e->"\""+e.getKey()+"\":"+e.getValue()).collect(java.util.stream.Collectors.joining(",","{","}"));}
+
+    static int wallWindowFrames(int requestedFrames,long eventsPerFrame) {
+        if(eventsPerFrame==0)return requestedFrames;
+        require(eventsPerFrame<WALL_EVENT_CAPACITY,"single-frame wall event budget exceeds fixed capacity: "+eventsPerFrame);
+        return (int)Math.min(requestedFrames,(WALL_EVENT_CAPACITY-1L)/eventsPerFrame);
+    }
 
     private record GpuWindow(long samples, BigInteger estimateNanos, BigInteger lowerNanos,
             BigInteger upperNanos, RendererDiagnostics.FrameGpuTiming after) { }

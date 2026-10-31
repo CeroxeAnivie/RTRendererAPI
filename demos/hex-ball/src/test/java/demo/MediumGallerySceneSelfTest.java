@@ -74,6 +74,9 @@ public final class MediumGallerySceneSelfTest {
         var capture=MediumGalleryDemo.Options.parse(new String[]{"--fg=false","--capture=build/gallery.png"});
         require(MediumGalleryDemo.configuration(capture).cpuFrameReadbackEnabled(),"explicit non-FG capture policy");
         var performance=MediumPerformanceCases.all();
+        require(MediumGalleryPerformanceBenchmark.wallWindowFrames(240,0)==240,"diagnostics-off preserves requested windows");
+        require(MediumGalleryPerformanceBenchmark.wallWindowFrames(240,10_000)==26,"long diagnostic rounds split before fixed arrays fill");
+        require(MediumGalleryPerformanceBenchmark.wallWindowFrames(4,140_000)==1,"high-SPP diagnostic windows retain every event");
         require(performance.stream().anyMatch(c->c.id().equals("pbr-direct-uniform")),"focused optimization case must remain in the complete matrix");
         require(performance.stream().anyMatch(c->c.id().equals("metal-density-multiple-caustics"))
                         &&performance.stream().anyMatch(c->c.id().equals("alpha-density-multiple-caustics")),

@@ -103,6 +103,8 @@ public final class OpticalWallTimeline {
             kinds = new int[capacity]; parents = new int[capacity];
         }
         public long droppedEvents(){return dropped;}
+        /** Includes capacity losses, so warmup can size later windows without recording allocations. */
+        public long attemptedEvents(){return (long)size + dropped;}
 
         public long begin() {
             if (owner != Thread.currentThread() || size != 0 || active != null)

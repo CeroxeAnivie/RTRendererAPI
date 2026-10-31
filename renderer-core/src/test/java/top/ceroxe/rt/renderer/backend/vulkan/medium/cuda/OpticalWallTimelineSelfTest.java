@@ -43,6 +43,7 @@ public final class OpticalWallTimelineSelfTest {
         bounded.finish();
         json = bounded.json(1);
         require(json.contains("\"droppedEvents\":2"), "capacity exhaustion reports all lost events");
+        require(bounded.attemptedEvents()==4, "warmup sizing counts retained and lost nested events");
         require(json.contains("\"uncoveredMs\":0.0"), "lost detail remains covered by the measured parent");
 
         var ordered = OpticalWallTimeline.allocate(8);
