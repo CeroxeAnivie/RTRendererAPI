@@ -59,6 +59,7 @@
 - Vulkan/CUDA 之间会有交叉等待。GPU interval、host wait 和外层 exchange wall 可能重叠；报告保留时间线关系，不把三者相加成一帧。
 - 采样器应预分配 query 和 CPU 统计结构，满载时丢诊断样本而不等待。诊断开关默认关闭，稳定 benchmark 再跑关闭插桩的对照。
 - 同一候选至少采集同制品 instrumentation-off 基线和 instrumentation-on profile，记录开销和帧时分布。用户允许观测开销在 **10% 以内**；已达标时不为继续压低观测开销反复返工。定位时开启观测，最终验收关闭全部诊断；超过 10% 再减少采样频率或改为轮换采样。
+  **2026-10-31 最新指令：完成这次稀疏观测调整后，不再继续优化观测开销，立即落地已测出的大头修复；最终验收关闭诊断。当前稀疏采样开销 6.63%，已经满足接受线。**
 - 先完成一轮覆盖全链路的分阶段计时，再按证据深入。不得在看到热点后才发现首轮漏掉主要阶段或同步边界。
 
 ## 分支与 worktree
@@ -1199,3 +1200,10 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 恢复 opt-in shader 观测时保留两轮 queued 调度，将两份采样数据异步下载到预分配 pinned host 内存，在原有同步之后汇总；记录偏移取当前 `plan.bytes()`。主机仅遍历所选组并按 stage 汇总，避免逐样本字符串和锁。默认关闭，无新增生产观测工作。工具支持独立 `normal/stable` JVM 模式并记录实参；冻结 benchmark 必须同时包含 demo main 与 test 类。后续先测观测开销，再对照 PBRT wavefront 活跃队列检查全尺寸 inactive 调度，不能提前宣布性能收益。
 
 [本轮正确性、制品哈希和观测开销](data/medium-micro-recovered-correctness-20261031.json)、[完整互斥排名](data/medium-micro-recovered-ranked-20261031.json)。
+
+
+### 待验收：压缩 optical continuation 活跃路径
+
+对照 PBRT-v4 固定 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/wavefront/workqueue.h:40–135` 的 `Push`、`Reset`、按队列 Size 限定工作，以及 `integrator.cpp` 的 current/next 队列生命周期，独立适配 Vulkan/CUDA 共享缓冲。两个队列只保存原始 path ID，不搬动光学状态；CUDA 每 warp 一次原子保留输出区间，下一轮 Vulkan/CUDA 使用同一队列。保留完整容量 launch、原始像素/SPP/随机身份、所有交接屏障及严格错误检查。内存规划计入双队列与对齐，reducedCounters 关闭或 kernel clock profile 使用原路径。属性 `top.ceroxe.rt.medium.cuda.opticalActiveQueues=false` 可作同制品精确对照。
+
+该候选针对总榜第一内部前五中的第二项（inactive 状态读取），以及活跃连接射线的调度稀疏性；不把它说成已经消除了连接输运的实际工作。已补生产 helper 的部分 warp、尾 block、队列空转、唯一 ID、ping-pong 与容量保护回归，待运行 HDR、原生功能和性能验证。此处不声明已提速或达到目标。

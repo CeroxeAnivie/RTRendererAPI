@@ -383,8 +383,8 @@ void main() {
     // Only CUDA consumes this marker, after the complete Vulkan dispatch retires.
     if(gl_LaunchIDEXT.x==0u)gsOptical.storage.lanes[4u].y=gsOptical.initialize!=0ul?1u:0u;
     ivec2 extent=ivec2(gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD],gsFrame.words[GPU_SCENE_FRAME_EXTENT_WORD+1u]);
-    uint pixelIndex=gsOptical.firstPixel+gl_LaunchIDEXT.x;ivec2 pixel=ivec2(pixelIndex%uint(extent.x),pixelIndex/uint(extent.x));
-    uvec4 launch=uvec4(pixel,extent);uint samples=gsOptical.storage.lanes[0u].w;
+    uint samples=gsOptical.storage.lanes[0u].w;
+    bool queuedPaths=gsOptical.initialize==0ul&&(gsOptical.storage.lanes[11u].w&256u)!=0u;
     uint stateOffset=gsOptical.storage.lanes[2u].y,hitOffset=gsOptical.storage.lanes[2u].z;
     uint evaluationOffset=gsOptical.storage.lanes[2u].w,primaryOffset=gsOptical.storage.lanes[3u].x;
     bool firstPass=gsOptical.storage.lanes[8u].z==0u&&gsOptical.storage.lanes[8u].w==0u;
@@ -393,8 +393,18 @@ void main() {
     uint stateLanes=(gsOptical.storage.lanes[11u].w&2u)!=0u?7u:16u;
     vec2 jitter=vec2(uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD]),
         uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_CURRENT_JITTER_WORD+1u]));
-    for(uint sampleIndex=0u;sampleIndex<samples;sampleIndex++) {
-        uint item=gl_LaunchIDEXT.x*samples+sampleIndex,globalPath=pixelIndex*samples+sampleIndex;
+    for(uint dispatchSample=0u;dispatchSample<samples;dispatchSample++) {
+        uint item=gl_LaunchIDEXT.x*samples+dispatchSample;
+        if(queuedPaths){
+            // CUDA publishes only surviving original IDs. Inactive launch slots
+            // leave before reading strided path state or constructing payloads.
+            if(item>=gsOptical.storage.lanes[13u].y)continue;
+            uint queue=gsOptical.storage.lanes[13u].w/16u;
+            item=gsOptical.storage.lanes[queue+item/4u][item%4u];
+        }
+        uint pixelIndex=gsOptical.firstPixel+item/samples,sampleIndex=item%samples;
+        ivec2 pixel=ivec2(pixelIndex%uint(extent.x),pixelIndex/uint(extent.x));
+        uvec4 launch=uvec4(pixel,extent);uint globalPath=pixelIndex*samples+sampleIndex;
         uint initialItem=gsOptical.primaryAddress!=0ul?item:globalPath;
 #ifdef RTRENDERER_OPTICAL_PROFILE
         payload.diagnosticAddress=(item&8191u)==0u?gsU64(gsOptical.storage.lanes[12u].x,gsOptical.storage.lanes[12u].y):0ul;

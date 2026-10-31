@@ -522,6 +522,13 @@ template<bool Compact,bool Transposed> __device__ int connectionStep(unsigned ch
 }
 }
 extern "C" __global__ void native_optical_reset(unsigned char*b,int count){if(blockIdx.x==0&&threadIdx.x==0){unsigned int*h=(unsigned int*)b;h[28]=h[29]=h[30]=h[31]=0;
+    // The preceding Vulkan pass consumed the previous output queue. Retain
+    // original path IDs in two disjoint queues; no state/radiance is reordered.
+    if((h[47]&256u)!=0u){
+        if(h[17]!=0u){h[52]=h[2];h[54]=0u;h[55]=h[50];}
+        else{h[52]=h[53];h[54]=h[55];h[55]=h[55]==h[50]?h[51]:h[50];}
+        h[53]=0u;
+    }
 #ifdef RTR_OPTICAL_PHASE_PROFILE
     for(int j=0;j<8;j++)((unsigned long long*)(b+192))[j]=0ull;
 #endif
@@ -537,9 +544,11 @@ extern "C" __global__ void native_optical_reset(unsigned char*b,int count){if(bl
 #endif
 template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=false> __device__ __forceinline__ void rtr_optical_step_impl(unsigned char*b,int count,unsigned int*statistics){
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;using namespace rtr_optical;
+    unsigned int*h=(unsigned int*)b;
+    if((h[47]&256u)!=0u){if((unsigned int)i>=h[52])return;if(h[54]!=0u)i=((unsigned int*)(b+h[54]))[i];}
     RTR_PHASE_SCOPE(b);
     RTR_ENTRY_SCOPE(b);
-    unsigned int*h=(unsigned int*)b;StateAccess<Small,TransposedState> state(b,i,h[2]);auto*s=state.operator->();
+    StateAccess<Small,TransposedState> state(b,i,h[2]);auto*s=state.operator->();
     if((h[47]&128u)!=0u&&h[17]!=0u){
         // Camera origin/direction retain the exact Vulkan projection. Construct
         // all deterministic fields here instead of writing and reloading them
@@ -733,6 +742,24 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
 }
 
 namespace rtr_optical {
+// PBRT wavefront queue principle: launch capacity, then process queued work
+// only. One atomic reservation per participating warp keeps original path IDs.
+// All lanes (including the final partial block) must enter this helper.
+__device__ __forceinline__ void queueContinued(unsigned char*b,int count,unsigned int continued){
+    unsigned int*h=(unsigned int*)b;if((h[47]&256u)==0u)return;
+    const unsigned int slot=blockIdx.x*blockDim.x+threadIdx.x,lane=threadIdx.x&31u;
+    const bool active=slot<(unsigned int)count&&slot<h[52]&&continued!=0u;
+    const unsigned int mask=__ballot_sync(0xffffffffu,active);
+    if(mask==0u)return;
+    const int leader=__ffs(mask)-1;unsigned int base=0u;
+    if(lane==(unsigned int)leader)base=atomicAdd(h+53,__popc(mask));
+    base=__shfl_sync(0xffffffffu,base,leader);
+    if(active){
+        const unsigned int item=h[54]!=0u?((unsigned int*)(b+h[54]))[slot]:slot;
+        const unsigned int rank=__popc(mask&((1u<<lane)-1u));
+        ((unsigned int*)(b+h[55]))[base+rank]=item;
+    }
+}
 // CudaMediumRuntime launches 256 threads per block. Every lane, including tail lanes,
 // must call this helper; counters are exact integers and do not affect radiance ordering.
 __device__ __forceinline__ void reduceStatistics(unsigned char*b,unsigned int*statistics){
@@ -759,17 +786,21 @@ __device__ void rtr_optical_dispatch(unsigned char*b,int count,unsigned int*stat
 }
 extern "C" __global__ void native_optical_step(unsigned char*b,int count){
     const int i=blockIdx.x*blockDim.x+threadIdx.x;
+    if((((unsigned int*)b)[47]&256u)!=0u&&blockIdx.x*blockDim.x>=((unsigned int*)b)[52])return;
     if(((unsigned int*)b)[46]==0u){if(i<count)rtr_optical_dispatch(b,count,nullptr);return;}
     unsigned int statistics[4]={0u,0u,0u,0u};
     if(i<count)rtr_optical_dispatch(b,count,statistics);
+    rtr_optical::queueContinued(b,count,statistics[0]);
     rtr_optical::reduceStatistics(b,statistics);
 }
 // Independent entry points keep each layout's compiled resources separate.
 template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=false> __device__ __forceinline__ void rtr_optical_fixed(unsigned char*b,int count){
     const int i=blockIdx.x*blockDim.x+threadIdx.x;
+    if((((unsigned int*)b)[47]&256u)!=0u&&blockIdx.x*blockDim.x>=((unsigned int*)b)[52])return;
     if(((unsigned int*)b)[46]==0u){if(i<count)rtr_optical_step_impl<Compact,Small,Transposed,TransposedState>(b,count,nullptr);return;}
     unsigned int statistics[4]={0u,0u,0u,0u};
     if(i<count)rtr_optical_step_impl<Compact,Small,Transposed,TransposedState>(b,count,statistics);
+    rtr_optical::queueContinued(b,count,statistics[0]);
     rtr_optical::reduceStatistics(b,statistics);
 }
 extern "C" __global__ void native_optical_step_0(unsigned char*b,int count){rtr_optical_fixed<false,false>(b,count);}

@@ -432,6 +432,7 @@ tasks.named("check") {
 val nativeSelfTests = linkedMapOf(
     "vulkanFrameDisplayTransformNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDisplayTransformNativeSelfTest",
     "cudaMediumRuntimeNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntimeNativeSelfTest",
+    "cudaOpticalActiveQueueNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalActiveQueueNativeSelfTest",
     "cudaCameraMediumNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraMediumNativeSelfTest",
     "cudaPrimaryMediumNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryMediumNativeSelfTest",
     "cudaPrimaryEmissionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryEmissionNativeSelfTest",
@@ -652,7 +653,7 @@ val nativeMediumTests = listOf("mediumTransportNativeSelfTest", "primaryQueueNat
     "cudaMultipleScatteringProductionNativeSelfTest", "cudaDensityScatteringProductionNativeSelfTest",
     "cudaHeterogeneousMultipleScatteringProductionNativeSelfTest", "cudaPbrMediumProductionNativeSelfTest",
     "cudaPbrMediumScatteringProductionNativeSelfTest",
-    "cudaOpticalCausticNativeSelfTest", "cudaOpticalMediumNativeSelfTest",
+    "cudaOpticalCausticNativeSelfTest", "cudaOpticalMediumNativeSelfTest", "cudaOpticalActiveQueueNativeSelfTest",
     "causticVolumeTransportNativeSelfTest",
     "cudaPbrMediumCausticsProductionNativeSelfTest",
     "cudaOpticalMediumProductionNativeSelfTest", "vulkanQueuedFrameSlotNativeSelfTest")

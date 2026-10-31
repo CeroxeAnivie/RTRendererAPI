@@ -95,7 +95,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             long minimum=base.sceneBytes()+(long)base.paths()*((base.externalPrimary()?0:CudaOpticalMediumAbi.HIT_BYTES)+2L*CudaOpticalMediumAbi.COLOR_BYTES)
                     +(long)samples*(base.stateBytes()+base.hitBytes()+CudaOpticalMediumAbi.COLOR_BYTES
                         +(base.externalPrimary()&&!base.directPrimary()?CudaOpticalMediumAbi.HIT_BYTES:0)
-                        +(connections?CudaOpticalMediumAbi.CONNECTION_BYTES:0))
+                        +(connections?CudaOpticalMediumAbi.CONNECTION_BYTES:0)+(base.activeQueues()?8:0))
                     +CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE;
             var photons=nativePhotonPlan(frame,boundaries);
             long photonBytes=photons==null?0:photons.bytes()+base.sceneBytes()+CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE;
