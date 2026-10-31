@@ -83,14 +83,21 @@ def main():
     parser.add_argument("directory", type=pathlib.Path)
     parser.add_argument("--timeout", type=float, default=180)
     parser.add_argument("--native-stacks", action="store_true")
+    parser.add_argument("--native-heaps", action="store_true", help="Trace all Rtl heap object lifetimes and full allocation stacks")
+    parser.add_argument("--census-interval", type=float, default=1.0)
     parser.add_argument("--frida-directory", type=pathlib.Path)
     args = parser.parse_args()
+    if args.native_heaps and not args.native_stacks:
+        parser.error("--native-heaps requires --native-stacks")
+    if args.census_interval < 0.1:
+        parser.error("--census-interval must be at least 0.1 seconds")
     root = pathlib.Path(__file__).resolve().parent.parent
     directory = args.directory.resolve()
     # The manifest must identify the frozen artifact actually used by this run.
     manifest = json.loads((directory / "runtime.json").read_text(encoding="utf-8-sig"))
     if "arguments" not in manifest:
         raise ValueError("runtime.json requires arguments")
+    (directory / "probe-ready").unlink(missing_ok=True)
     (directory / "run.ps1").write_text(
         "$ErrorActionPreference='Stop'\n"
         "$meta=Get-Content (Join-Path $PSScriptRoot 'runtime.json') -Raw|ConvertFrom-Json\n"
@@ -149,7 +156,7 @@ def main():
                                 records.write(json.dumps({"time": time.time(), "message": message}) + "\n")
                                 records.flush()
                             session = frida.attach(target)
-                            script = session.create_script(module.SOURCE.replace("__TRACE_FILE__", json.dumps(str(directory / "native-commit.bin"))))
+                            script = session.create_script(module.source_for(directory, args.native_heaps))
                             script.on("message", receive)
                             script.load()
                         virtual.write(json.dumps(census(kernel, psapi, handle, names)) + "\n")
@@ -162,10 +169,22 @@ def main():
                         writer.writerow([time.time(), now - start, counters.private, counters.workingSet])
                         memory.flush()
                     if now >= next_census:
-                        virtual.write(json.dumps(census(kernel, psapi, handle, names)) + "\n")
+                        try:
+                            snapshot = census(kernel, psapi, handle, names)
+                        except OSError:
+                            # The OS denies queries while a terminated target is being
+                            # reaped; preserve the real process exit and earlier evidence.
+                            exit_code = ctypes.c_ulong()
+                            kernel.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+                            if kernel.GetExitCodeProcess(handle, ctypes.byref(exit_code)) and exit_code.value != 259:
+                                break
+                            raise
+                        virtual.write(json.dumps(snapshot) + "\n")
                         virtual.flush()
-                        next_census = time.monotonic() + 1
+                        next_census = time.monotonic() + args.census_interval
                     if script and "GalleryPerf warmupFrames=" in (directory / "run.log").read_text(encoding="utf-8", errors="replace"):
+                        if args.native_heaps:
+                            script.exports_sync.flush()
                         script.unload()
                         session.detach()
                         session = script = None
@@ -187,6 +206,8 @@ def main():
         finally:
             if session:
                 try:
+                    if script and args.native_heaps:
+                        script.exports_sync.flush()
                     session.detach()
                 except Exception:
                     pass
@@ -195,8 +216,11 @@ def main():
             if handle:
                 kernel.CloseHandle(handle)
             if process.poll() is None:
-                process.terminate()
-                process.wait(timeout=10)
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.terminate()
+                    process.wait(timeout=10)
             diagnostics.shutdown(wait=True)
     print((directory / "run.log").read_text(encoding="utf-8", errors="replace")[-2400:])
     return process.returncode

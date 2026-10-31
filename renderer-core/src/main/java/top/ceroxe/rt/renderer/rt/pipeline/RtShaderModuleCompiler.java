@@ -61,6 +61,26 @@ final class RtShaderModuleCompiler {
     private RtShaderModuleCompiler() {
     }
 
+    /** Memory-only counterfactuals are restricted to the standalone isolation harness. */
+    static byte[] memoryStage(String program, String stage, String source, int kind, byte[] code) {
+        if (!top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.ENABLED || code.length == 0) return code;
+        boolean stub = java.util.Arrays.asList(System.getProperty(
+                "top.ceroxe.rt.pipeline.memoryStubStages", "").split(",")).contains(stage);
+        if (stub) {
+            if (!Boolean.getBoolean("top.ceroxe.rt.pipeline.memoryIsolation"))
+                throw new IllegalStateException("Shader stubs require the memory isolation harness");
+            code = compileSource("#version 460\n#extension GL_EXT_ray_tracing : require\nvoid main() {}\n",
+                    "memory-isolation-" + stage, kind, false, false, false, RtEdgeSink.NOOP);
+        }
+        try {
+            String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(code));
+            top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.checkpoint(
+                    "shader." + program + "/" + stage + "/" + source + (stub ? "/STUB" : "") + "/sha256=" + digest,
+                    0, code.length);
+        } catch (NoSuchAlgorithmException exception) { throw new AssertionError(exception); }
+        return code;
+    }
+
     static long createModule(MemoryStack stack, VkDevice device, byte[] spirv) {
         if (spirv.length == 0 || spirv.length % Integer.BYTES != 0) {
             throw new IllegalArgumentException("SPIR-V bytecode size must be positive and 4-byte aligned");

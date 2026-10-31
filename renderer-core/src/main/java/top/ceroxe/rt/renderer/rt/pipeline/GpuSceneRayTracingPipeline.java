@@ -280,6 +280,12 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             int recursionDepth = GpuScenePipelineRequirements.recursionDepth(missCode, closestCode, anyHitCode);
             if (properties.maxRayRecursionDepth() < recursionDepth)
                 throw new IllegalStateException("device cannot execute the declared shader recursion depth");
+            raygenCode = RtShaderModuleCompiler.memoryStage(program.name(), "raygen", raygenSource, Shaderc.shaderc_raygen_shader, raygenCode);
+            missCode = RtShaderModuleCompiler.memoryStage(program.name(), "miss", "gpuscene.rmiss", Shaderc.shaderc_miss_shader, missCode);
+            closestCode = RtShaderModuleCompiler.memoryStage(program.name(), "closest", "gpuscene.rchit", Shaderc.shaderc_closesthit_shader, closestCode);
+            anyHitCode = RtShaderModuleCompiler.memoryStage(program.name(), "any", "gpuscene.rahit", Shaderc.shaderc_anyhit_shader, anyHitCode);
+            callableCode = RtShaderModuleCompiler.memoryStage(program.name(), "material", "gpuscene_collected_material.rcall", Shaderc.shaderc_callable_shader, callableCode);
+            gatherCode = RtShaderModuleCompiler.memoryStage(program.name(), "gather", "gpuscene_collected_gather.rcall", Shaderc.shaderc_callable_shader, gatherCode);
             raygenModule = RtShaderModuleCompiler.createModule(stack, device, raygenCode);
             missModule = RtShaderModuleCompiler.createModule(stack, device, missCode);
             closestHitModule = RtShaderModuleCompiler.createModule(stack, device, closestCode);

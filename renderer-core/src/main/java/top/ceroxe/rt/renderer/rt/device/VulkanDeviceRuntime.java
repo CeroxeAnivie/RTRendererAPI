@@ -151,6 +151,7 @@ public final class VulkanDeviceRuntime implements AutoCloseable {
             boolean gpuTimingsEnabled,
             RendererConfig configuration
     ) {
+        top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.checkpoint("device.open.begin", 0, 0);
         VulkanRtCapabilityProbe.Result checkedCapability = Objects.requireNonNull(capability, "capability");
         RendererRtDiagnostics checkedDiagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         RendererConfig checkedConfiguration = Objects.requireNonNull(configuration, "configuration");

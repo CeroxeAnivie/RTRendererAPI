@@ -15,6 +15,15 @@ import sys
 import time
 
 
+def source_for(directory, heaps=False):
+    source = SOURCE.replace("__TRACE_FILE__", json.dumps(str(directory / "native-commit.bin")))
+    if heaps:
+        source += pathlib.Path(__file__).with_name("Trace-NativeHeap.js").read_text(encoding="utf-8").replace(
+            "__HEAP_FILE__", json.dumps(str(directory / "native-heap.bin"))).replace(
+            "__HEAP_STACK_FILE__", json.dumps(str(directory / "native-heap-stacks.bin")))
+    return source
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime", required=True, type=pathlib.Path)
