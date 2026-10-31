@@ -104,7 +104,26 @@ typedef struct {void* base;void* allocation_base;uint32_t allocation_protect;uin
 typedef struct {void**base;uint64_t*size;uint32_t flags,keep,count;void*frames[96];} Call;
 extern void* trace_file;
 extern uint32_t write_file(void*,const void*,uint32_t,uint32_t*,void*);
-extern uint16_t capture_stack(uint32_t,uint32_t,void**,uint32_t*);
+extern void* lookup_function(uint64_t,uint64_t*,void*);
+extern void* virtual_unwind(uint32_t,uint64_t,uint64_t,void*,void*,void**,uint64_t*,void*);
+extern void stack_limits(uint64_t*,uint64_t*);
+uint32_t capture_context(GumCpuContext*cpu,void**frames){
+ uint64_t c[154]={0},image=0,establisher=0,low=0,high=0;void*handler=0;
+ ((uint32_t*)c)[12]=0x10000b;
+ c[15]=cpu->rax;c[16]=cpu->rcx;c[17]=cpu->rdx;c[18]=cpu->rbx;
+ c[19]=cpu->rsp;c[20]=cpu->rbp;c[21]=cpu->rsi;c[22]=cpu->rdi;
+ c[23]=cpu->r8;c[24]=cpu->r9;c[25]=cpu->r10;c[26]=cpu->r11;
+ c[27]=cpu->r12;c[28]=cpu->r13;c[29]=cpu->r14;c[30]=cpu->r15;c[31]=cpu->rip;
+ stack_limits(&low,&high);uint32_t n=0;
+ while(n<96&&c[31]&&c[19]>=low&&c[19]+8<=high){
+  uint64_t pc=c[31],sp=c[19];frames[n++]=(void*)(uintptr_t)pc;
+  void*entry=lookup_function(pc,&image,0);
+  if(!entry){c[31]=*((uint64_t*)(uintptr_t)sp);c[19]+=8;}
+  else virtual_unwind(0,image,pc,entry,c,&handler,&establisher,0);
+  if(c[31]==pc&&c[19]==sp)break;
+ }
+ return n;
+}
 extern uint64_t virtual_query(void*,MemoryInfo*,uint64_t);
 extern uint32_t thread_id(void);
 void allocation_enter(GumInvocationContext*ic){
@@ -113,7 +132,7 @@ void allocation_enter(GumInvocationContext*ic){
  c->size=gum_invocation_context_get_nth_argument(ic,3);
  c->flags=(uint32_t)(uintptr_t)gum_invocation_context_get_nth_argument(ic,4);
  c->keep=(c->flags&0x1000)&&*c->size>=65536;
- if(c->keep)c->count=capture_stack(0,96,c->frames,0);
+ if(c->keep)c->count=capture_context(ic->cpu_context,c->frames);
 }
 void allocation_leave(GumInvocationContext*ic){
  Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
@@ -138,7 +157,7 @@ void free_leave(GumInvocationContext*ic){
  r.base=(uint64_t)(uintptr_t)c->base;r.size=(uint64_t)(uintptr_t)c->size;
  write_file(trace_file,&r,sizeof(r),&written,0);
 }
-`,{trace_file:cell,write_file:k.getExportByName('WriteFile'),capture_stack:nt.getExportByName('RtlCaptureStackBackTrace'),
+`,{trace_file:cell,write_file:k.getExportByName('WriteFile'),lookup_function:nt.getExportByName('RtlLookupFunctionEntry'),virtual_unwind:nt.getExportByName('RtlVirtualUnwind'),stack_limits:k.getExportByName('GetCurrentThreadStackLimits'),
  virtual_query:k.getExportByName('VirtualQuery'),thread_id:k.getExportByName('GetCurrentThreadId')});
 Interceptor.attach(nt.getExportByName('NtAllocateVirtualMemory'),{onEnter:native.allocation_enter,onLeave:native.allocation_leave});
 Interceptor.attach(nt.getExportByName('NtFreeVirtualMemory'),{onEnter:native.free_enter,onLeave:native.free_leave});
