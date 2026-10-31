@@ -1,6 +1,10 @@
 # 介质性能基准覆盖
 
-默认 `MediumGalleryPerformanceBenchmark` 运行完整介质矩阵；`--suite=focused` 单独运行原默认均匀直接散射。180 FPS 目标仍对应后者的原场景、1080p、1 SPP 和原预算，各功能场景分别报告自己的 FPS。
+默认 `MediumGalleryPerformanceBenchmark` 只运行新追加的 `micro-all` 可见组合场景，固定 1920×1080、1 SPP。用户已把后续 180 FPS 目标转到该场景，计数单位是一个完成的原生帧。`--suite=all` 保留原 54 个并追加它，共 55 个场景；`--suite=focused` 仍能单独回测原默认均匀直接散射。
+
+`micro-all` 将玻璃/金属、四种 alpha、LIGHTMAP/visibility、两种叠层的接收与拒绝、均匀/密度介质、正反各向异性、吸收/发光、内向/嵌套/临时边界及表面/体积焦散布置在同一可见的 6×5 展板上，带实际数据绑定及点/聚/方向灯。默认无动画、FG、降噪、重建、时域或 CPU 图像读回；散射步数 8、事件预算 24、额外散射 2 次、首界面光学采样 2、全灯光、光子预算 65536，逐请求保存实际预算，不在优化过程中调低。
+
+`--suite=micro-checks` 默认 160×90，追加直接散射、随机首界面、SPP2/8、全局密度及焦散关闭的互斥检查；全部完成且实际功能并集覆盖 46 项才报告完整。单独 `micro` 的成功只证明组合场景完成，不能独自宣称互斥路径全部覆盖。快速检查与 1080p 性能场景各自报告，不混合帧率。
 
 矩阵复用 12 个隔离认证路由、展厅介质与焦散开关场景，并增加金属/密度/边界、部分透射、材质/顶点/纹理 alpha 及其乘积、LIGHTMAP/visibility/fog、两种叠层的匹配与 mask/depth 拒绝、应用数据、首界面策略、SPP 和新增焦散组合。场景 coverage 从实际 SceneTransaction、材质/纹理/顶点、边界和 RenderFrameRequest 推导，新增必需 Feature 若没有真实 fixture，CPU 检查直接失败。
 

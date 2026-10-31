@@ -74,9 +74,21 @@ public final class MediumGallerySceneSelfTest {
         var capture=MediumGalleryDemo.Options.parse(new String[]{"--fg=false","--capture=build/gallery.png"});
         require(MediumGalleryDemo.configuration(capture).cpuFrameReadbackEnabled(),"explicit non-FG capture policy");
         var performance=MediumPerformanceCases.all();
+        require(performance.size()==55,"retain all 54 original cases and append exactly one combined scene");
+        var micro=MediumPerformanceCases.micro();var microFrame=micro.frame(0,1920,1080);
+        require(microFrame.width()==1920&&microFrame.height()==1080&&microFrame.antiAliasing().samplesPerPixel()==1,
+                "combined performance unit is one native 1080p/1-spp frame");
+        require(microFrame.caustics().enabled()&&microFrame.mediumTransport().scatteringBounces()>0
+                        &&micro.transaction().upserts().instances().size()>30&&!microFrame.primitiveBatch().primitives().isEmpty(),
+                "combined frame contains real simultaneous geometry, transient volumes, scattering and caustics");
+        MediumPerformanceCases.verify(MediumPerformanceCases.microChecks());
+        var visible=micro.features();var missing=java.util.EnumSet.allOf(MediumPerformanceCases.Feature.class);missing.removeAll(visible);
+        require(missing.equals(java.util.EnumSet.of(MediumPerformanceCases.Feature.SPP_2,MediumPerformanceCases.Feature.SPP_8,
+                        MediumPerformanceCases.Feature.FIRST_INTERFACE_STOCHASTIC,MediumPerformanceCases.Feature.DIRECT_SCATTER)),
+                "only mutually exclusive request policies may require supplemental micro checks: "+missing);
         require(MediumGalleryPerformanceBenchmark.wallWindowFrames(240,0)==240,"diagnostics-off preserves requested windows");
-        require(MediumGalleryPerformanceBenchmark.wallWindowFrames(240,10_000)==26,"long diagnostic rounds split before fixed arrays fill");
-        require(MediumGalleryPerformanceBenchmark.wallWindowFrames(4,140_000)==1,"high-SPP diagnostic windows retain every event");
+        require(MediumGalleryPerformanceBenchmark.wallWindowFrames(240,10_000)==199,"long diagnostic rounds split before fixed arrays fill");
+        require(MediumGalleryPerformanceBenchmark.wallWindowFrames(4,1_252_574)==1,"measured high-SPP diagnostic windows retain every event");
         require(performance.stream().anyMatch(c->c.id().equals("pbr-direct-uniform")),"focused optimization case must remain in the complete matrix");
         require(performance.stream().anyMatch(c->c.id().equals("metal-density-multiple-caustics"))
                         &&performance.stream().anyMatch(c->c.id().equals("alpha-density-multiple-caustics")),

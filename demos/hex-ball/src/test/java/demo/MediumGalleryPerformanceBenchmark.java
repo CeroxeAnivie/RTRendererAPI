@@ -26,6 +26,7 @@ import static top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimel
 public final class MediumGalleryPerformanceBenchmark {
     // Fixed arrays are allocated before the clock starts; split long rounds rather than grow in flight.
     private static final int WALL_EVENT_CAPACITY = 262_144;
+    private static final int MAX_WALL_EVENT_CAPACITY = 2_000_000;
     private static final String[] PROFILE_NAMES = {
             "sharedPrepare", "sharedExchange", "vulkanRelease", "cudaStageWall", "legacyResolve",
             "vulkanConsumerRecord", "vulkanConsumerFenceWait", "vulkanProducerGpu", "vulkanConsumerGpu",
@@ -44,8 +45,10 @@ public final class MediumGalleryPerformanceBenchmark {
 
     public static void main(String[] args) throws Exception {
         var values = parse(args);
-        int width = integer(values, "width", 1920, 1920, 1920);
-        int height = integer(values, "height", 1080, 1080, 1080);
+        String suite=values.getOrDefault("suite","micro");
+        boolean quickChecks=suite.equals("micro-checks");
+        int width = integer(values, "width", quickChecks?160:1920, quickChecks?64:1920, 1920);
+        int height = integer(values, "height", quickChecks?90:1080, quickChecks?36:1080, 1080);
         int warmup = integer(values, "warmup", 90, 1, 100_000);
         int frames = integer(values, "frames", 120, 1, 100_000);
         int rounds = integer(values, "rounds", 3, 1, 100);
@@ -61,9 +64,14 @@ public final class MediumGalleryPerformanceBenchmark {
         else {System.clearProperty("top.ceroxe.rt.medium.opticalDetailedProfile");
             System.clearProperty("top.ceroxe.rt.medium.cameraScatteringShaderProfile");}
 
-        String suite=values.getOrDefault("suite","all");
-        if(!suite.equals("all")&&!suite.equals("focused"))throw new IllegalArgumentException("suite must be all or focused");
-        List<MediumPerformanceCases.Workload> cases=suite.equals("all")?MediumPerformanceCases.all():List.of(MediumPerformanceCases.focused());
+        if(!Set.of("all","focused","micro","micro-checks").contains(suite))
+            throw new IllegalArgumentException("suite must be all, focused, micro or micro-checks");
+        List<MediumPerformanceCases.Workload> cases=switch(suite) {
+            case "all"->MediumPerformanceCases.all();
+            case "focused"->List.of(MediumPerformanceCases.focused());
+            case "micro-checks"->MediumPerformanceCases.microChecks();
+            default->List.of(MediumPerformanceCases.micro());
+        };
         if(values.containsKey("cases")) {
             Set<String> selected=Set.of(values.get("cases").split(","));
             var available=cases.stream().map(MediumPerformanceCases.Workload::id).collect(java.util.stream.Collectors.toSet());
@@ -81,9 +89,9 @@ public final class MediumGalleryPerformanceBenchmark {
             String evidence=runCase(scene,width,height,warmup,frames,rounds,profile,shaderProfile,wallProfile,reportDirectory);
             completed.add(evidence);covered.addAll(scene.features());
         }
-        boolean full=suite.equals("all")&&!values.containsKey("cases");
+        boolean full=(suite.equals("all")||quickChecks)&&!values.containsKey("cases");
         if(full)require(covered.containsAll(EnumSet.allOf(MediumPerformanceCases.Feature.class)),"completed matrix lost required features");
-        Files.writeString(summary,"{\n\"scope\":\"all closed medium features and new cross-feature combinations\",\n\"complete\":"+full
+        Files.writeString(summary,"{\n\"scope\":\""+(quickChecks?"micro combined scene and mutually exclusive request switches":"all closed medium features and new cross-feature combinations")+"\",\n\"suite\":\""+suite+"\",\n\"complete\":"+full
                 +",\n\"requiredFeatures\":"+strings(EnumSet.allOf(MediumPerformanceCases.Feature.class))
                 +",\n\"executedFeatures\":"+strings(covered)+",\n\"cases\":[\n"+String.join(",\n",completed)+"\n]}\n",StandardCharsets.UTF_8);
         System.out.println("GalleryPerf coverageReport="+summary+" completedCases="+completed.size()+" complete="+full);
@@ -91,7 +99,7 @@ public final class MediumGalleryPerformanceBenchmark {
 
     private static String runCase(MediumPerformanceCases.Workload scene,int width,int height,int warmup,int frames,int rounds,
             boolean profile,boolean shaderProfile,boolean wallProfile,Path reportDirectory)throws Exception {
-        var frameConfig=scene.config();String stem=scene.id()+"-1080p";
+        var frameConfig=scene.config();String stem=scene.id()+"-"+(width==1920&&height==1080?"1080p":width+"x"+height);
         Path report = reportDirectory.resolve(stem+"-"
                 + (profile ? "profiled" : shaderProfile?"shader-sampled":wallProfile?"wall-timeline":"unprofiled") + ".csv").toAbsolutePath();
         Files.createDirectories(report.getParent());
@@ -120,7 +128,7 @@ public final class MediumGalleryPerformanceBenchmark {
             renderer.apply(scene.transaction());
             var interop = renderer.extension(VulkanFrameInterop.class).orElseThrow();
             var sequence = new long[]{0};
-            Result warmupResult = range(renderer, interop, scene, width, height, sequence, warmup);
+            Result warmupResult = range(renderer, interop, scene, width, height, sequence, warmup,WALL_EVENT_CAPACITY);
             requireHealthy(renderer, "warmup");
             long eventsPerFrame = warmupResult.timeline()==null ? 0
                     : Math.max(2048L, Math.ceilDiv(warmupResult.timeline().attemptedEvents(),warmup)*2L);
@@ -135,7 +143,8 @@ public final class MediumGalleryPerformanceBenchmark {
             for (int offset = 0; offset < totalFrames;) {
                 int round = window++;
                 int count = Math.min(windowFrames,Math.min(frames-offset%frames,totalFrames-offset));
-                Result result = range(renderer, interop, scene, width, height, sequence, count);
+                int capacity=(int)Math.max(WALL_EVENT_CAPACITY,1+eventsPerFrame*count);
+                Result result = range(renderer, interop, scene, width, height, sequence, count,capacity);
                 offset += count;
                 requireHealthy(renderer, "round " + (round + 1));
                 long[] profileAfter = OpticalFrameTimings.snapshot();
@@ -157,7 +166,7 @@ public final class MediumGalleryPerformanceBenchmark {
                     Path timelineReport = report.resolveSibling(stem+"-wall-timeline-round-" + (round + 1) + ".json");
                     Files.writeString(timelineReport, result.timeline().json(result.frames()), StandardCharsets.UTF_8);
                     require(result.timeline().droppedEvents()==0,"wall timeline lost events for "+scene.id()
-                            +" attempted="+result.timeline().attemptedEvents()+" capacity="+WALL_EVENT_CAPACITY
+                            +" attempted="+result.timeline().attemptedEvents()+" capacity="+capacity
                             +"; failed evidence="+timelineReport);
                     System.out.println("GalleryPerf wallTimelineReport=" + timelineReport);
                 }
@@ -197,11 +206,11 @@ public final class MediumGalleryPerformanceBenchmark {
     }
 
     private static Result range(Renderer renderer, VulkanFrameInterop interop, MediumPerformanceCases.Workload scene,
-            int width, int height, long[] sequence, int frames) throws InterruptedException {
+            int width, int height, long[] sequence, int frames,int eventCapacity) throws InterruptedException {
         RendererDiagnostics beforeDiagnostics = renderer.diagnostics();
         var beforeGpu = beforeDiagnostics.frameGpuTiming();
         long firstSequence = sequence[0], last = Math.addExact(firstSequence, frames) - 1;
-        var timeline = OpticalWallTimeline.ENABLED ? OpticalWallTimeline.allocate(WALL_EVENT_CAPACITY) : null;
+        var timeline = OpticalWallTimeline.ENABLED ? OpticalWallTimeline.allocate(eventCapacity) : null;
         long started = timeline == null ? System.nanoTime() : timeline.begin();
         long requestBuild = 0, submit = 0, poll = 0, deferrals = 0;
         long deadline = started + Duration.ofMinutes(5).toNanos();
@@ -335,8 +344,8 @@ public final class MediumGalleryPerformanceBenchmark {
 
     static int wallWindowFrames(int requestedFrames,long eventsPerFrame) {
         if(eventsPerFrame==0)return requestedFrames;
-        require(eventsPerFrame<WALL_EVENT_CAPACITY,"single-frame wall event budget exceeds fixed capacity: "+eventsPerFrame);
-        return (int)Math.min(requestedFrames,(WALL_EVENT_CAPACITY-1L)/eventsPerFrame);
+        require(eventsPerFrame<MAX_WALL_EVENT_CAPACITY,"single-frame wall event budget exceeds fixed capacity: "+eventsPerFrame);
+        return (int)Math.min(requestedFrames,(MAX_WALL_EVENT_CAPACITY-1L)/eventsPerFrame);
     }
 
     private record GpuWindow(long samples, BigInteger estimateNanos, BigInteger lowerNanos,

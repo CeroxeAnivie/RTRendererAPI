@@ -1,6 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$TrialDirectory,
       [Parameter(Mandatory=$true)][string]$RuntimeClasspathFile,
       [ValidateSet('off','timings')][string]$Mode='timings',
+      [ValidateSet('micro','micro-checks','all','focused')][string]$Suite='micro',
       [string]$Label='first',[string]$Cases='',
       [ValidateRange(1,100000)][int]$Warmup=1200,
       [ValidateRange(1,100000)][int]$Frames=240,[ValidateRange(1,100)][int]$Rounds=3)
@@ -28,7 +29,7 @@ $enabled=($Mode -eq 'timings').ToString().ToLowerInvariant()
 $matrixArguments=@('-Xmx768m','-XX:-UseJVMCICompiler','--enable-native-access=ALL-UNNAMED',
     '--sun-misc-unsafe-memory-access=allow','-Dfile.encoding=UTF-8','-Dstdout.encoding=UTF-8','-Dstderr.encoding=UTF-8',
     '-Dtop.ceroxe.rt.medium.scatteringInlineQuery=true',
-    '-cp',$matrixClasspath,'demo.MediumGalleryPerformanceBenchmark','--suite=all',
+    '-cp',$matrixClasspath,'demo.MediumGalleryPerformanceBenchmark',"--suite=$Suite",
     "--warmup=$Warmup","--frames=$Frames","--rounds=$Rounds","--profile=$enabled","--wallProfile=$enabled",
     "--output=$runDir")
 if($Cases){$matrixArguments+="--cases=$Cases"}
@@ -40,8 +41,8 @@ try {
     $ErrorActionPreference='Stop'
     if($runCode -ne 0){Get-Content (Join-Path $runDir 'run.log') -Tail 30;throw "Medium feature matrix failed: exit $runCode"}
     $suffix=if($Mode -eq 'timings'){'profiled'}else{'unprofiled'}
-    $coverage=Get-Content -Raw -Encoding UTF8 (Join-Path $runDir "all-$suffix-coverage.json") | ConvertFrom-Json
-    if(!$Cases -and !$coverage.complete){throw 'Full medium matrix did not establish complete feature coverage'}
+    $coverage=Get-Content -Raw -Encoding UTF8 (Join-Path $runDir "$Suite-$suffix-coverage.json") | ConvertFrom-Json
+    if(!$Cases -and $Suite -in @('all','micro-checks') -and !$coverage.complete){throw 'Full medium matrix did not establish complete feature coverage'}
     Write-Output "Matrix completed: mode=$Mode cases=$($coverage.cases.Count) complete=$($coverage.complete)"
     Write-Output "Evidence: $runDir"
 } finally {Pop-Location}

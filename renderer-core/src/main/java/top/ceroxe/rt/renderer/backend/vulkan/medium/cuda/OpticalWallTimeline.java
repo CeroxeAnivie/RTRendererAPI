@@ -167,8 +167,10 @@ public final class OpticalWallTimeline {
                 if (self[i] < 0) throw new IllegalStateException("overlapping sibling wall intervals");
                 sum = Math.addExact(sum, self[i]);
                 String name = Stage.values()[kinds[i]].name();
-                paths[i] = parents[i] < 0 ? name : paths[parents[i]] + "/" + name;
-                groups.computeIfAbsent(paths[i], Samples::new).add(ends[i] - starts[i], self[i]);
+                String path = parents[i] < 0 ? name : paths[parents[i]] + "/" + name;
+                Samples samples=groups.computeIfAbsent(path, Samples::new);
+                paths[i]=samples.path;
+                samples.add(ends[i] - starts[i], self[i]);
             }
             long wall = ends[0] - starts[0];
             if (sum != wall) throw new IllegalStateException("wall intervals do not cover the window");

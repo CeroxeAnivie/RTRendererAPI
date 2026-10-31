@@ -53,10 +53,25 @@ final class MediumPerformanceCases {
         // Newly closed cross-feature paths must have their own workload, not just independent switches.
         result.add(composite("metal-density-multiple-caustics","metal-caustics",2));
         result.add(composite("alpha-density-multiple-caustics","alpha-caustics",2));
+        result.add(micro());
         verify(result);
         return List.copyOf(result);
     }
     static Workload focused(){return gallery("pbr-direct-uniform","pbr-direct-uniform");}
+    static Workload micro(){return MediumMicroAllScene.workload();}
+    static List<Workload> microChecks() {
+        var base=micro();
+        return List.of(base,
+                map(base,"micro-direct",f->f.toBuilder().mediumTransport(f.mediumTransport().withScatteringBounces(0)).build()),
+                map(base,"micro-stochastic",f->f.toBuilder().mediumTransport(f.mediumTransport()
+                        .withFirstInterfaceSampling(MediumTransport.FirstInterfaceSampling.STOCHASTIC_SINGLE_BRANCH)).build()),
+                map(base,"micro-spp2",f->f.toBuilder().antiAliasing(new AntiAliasingState(2)).build()),
+                map(base,"micro-spp8",f->f.toBuilder().antiAliasing(new AntiAliasingState(8)).build()),
+                map(base,"micro-camera-density",f->f.toBuilder().environment(f.environment().toBuilder()
+                        .cameraMedium(f.environment().cameraMedium().withDensityField(MediumDensityField.grid(50,8,
+                                new AffineTransform(new float[]{1f/24,0,0,.5f,0,1f/16,0,.5f,0,0,1f/32,.15f})))).build()).build()),
+                map(base,"micro-caustics-off",f->f.toBuilder().caustics(Caustics.disabled()).build()));
+    }
     private static Workload gallery(String id,String preset,String... extra) {
         var args=new ArrayList<>(List.of("--width=1920","--height=1080","--spp=1","--scene="+preset,
                 "--fg=false","--animate=false","--controls=false","--photons=65536"));
