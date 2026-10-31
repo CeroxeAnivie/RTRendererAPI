@@ -1390,3 +1390,14 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 全部门禁已通过；独立完整 64 帧窗口 283.178086ms/帧、3.531347FPS。容量回归的四批到一批是明确布局测试，真实生产的工作计数以上述同步/录制次数为准。注意提高并行工作集会增加暂存显存，仍受设备预算、显式上限和现有 growth admission 约束。180FPS 尚未达到。
 
 [完整正确性、净收益、制品与原始证据哈希](data/medium-budgeted-waves-20261031.json)、[全部44阶段及逐项降幅](data/medium-budgeted-waves-ranked-20261031.json)。
+
+
+### 消除连接命中的重复软件求交（候选验证中）
+
+前一架构候选完整验收并保留后，CUDA 同步仍包住主要实际 GPU 工作。现有 gsBoundaryConnectionHit 对普通内部命中也重新做宽精度三角形求交，边缘命中还会搜索邻接面；同一候选在 any-hit 已成功计算，closest-hit 又完整重做，丢弃了 producer 的结果。
+
+对照 PBRT-v4 b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f（Apache-2.0）wavefront/intersect.h::EnqueueWorkAfterIntersection（48–140 行）将已算出的 SurfaceInteraction 几何属性传给后续 MaterialEvalWorkItem 消费的 producer/consumer 原则。本项目保留已经修复的边界重求交算法，只复用同一次 trace 的精确结果，不改任何边缘容差、距离、介质语义或数学算法。
+
+header188 bit4096 / top.ceroxe.rt.medium.cuda.opticalReuseBoundaryHits 可同制品关闭。any-hit 使用 payload 原有字段的临时生命周期携带 repaired primitive/bary/distance，不扩大 payload ABI。closest-hit 同时核对 query 类型、启用标记、缓存 tag、InstanceCustomIndex、InstanceID、原始 PrimitiveID、HitT 的精确位以及原始 bary 的精确位；任一不匹配就走原计算。每条 trace 清除身份，miss 清除暂存字段，最终 material/boundary 发布照常覆盖这些字段。不能假设 any-hit 的调用顺序一定等于最终 closest-hit，必须保留完整 key 检查及 fallback。
+
+真正删除的工作是缓存命中时第二次软件三角形求交/邻面搜索，不把存取或延迟转移当作收益。验收包括同制品开关、原冻结制品的 1080p HDR、镜像/顶点序/端点 native 对照、已知 sequence57、完整窗口、完整光学与 micro-checks、validation，以及 GPU0 初始0%的关闭诊断正反序净收益。若存取/寄存器成本导致负优化，完整撤回该候选。

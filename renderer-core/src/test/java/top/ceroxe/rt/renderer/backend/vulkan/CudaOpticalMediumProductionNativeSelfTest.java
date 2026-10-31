@@ -24,7 +24,8 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
     private static long submitNanos,pollNanos,pollWorkNanos,pollGapNanos;
     public static void main(String[] args)throws Exception{
         if(java.util.Arrays.asList(args).contains("--benchmark")){benchmark();return;}
-        if(java.util.Arrays.asList(args).contains("--connection-ranges")){verifyConnectionRanges();return;}
+        if(java.util.Arrays.asList(args).contains("--connection-ranges")){verifyConnectionRanges(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY);return;}
+        if(java.util.Arrays.asList(args).contains("--boundary-hit-cache")){verifyConnectionRanges(CudaOpticalMediumAbi.REUSE_BOUNDARY_HITS_PROPERTY);return;}
         Files.createDirectories(OUTPUT);String previous=System.getProperty(CudaCameraMediumProfile.ENABLE_PROPERTY);
         System.setProperty(CudaCameraMediumProfile.ENABLE_PROPERTY,"true");
         long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
@@ -350,16 +351,16 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                 clearPixels,clearDelta,changed,delta));
     }
     /** Real production RT queries; mirrored geometry and identical sequence identities in both modes. */
-    private static void verifyConnectionRanges()throws Exception {
+    private static void verifyConnectionRanges(String property)throws Exception {
         Files.createDirectories(OUTPUT);
-        String previous=System.getProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY);
+        String previous=System.getProperty(property);
         var references=new ArrayList<byte[]>();int comparisons=0;
         String[] cases={"clear","behind-opaque","before-opaque","before-alpha","before-volume",
                 "light-inside-volume","endpoint-overlay","endpoint-nonshadow","endpoint-opaque","sun"};
         long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
         try {
             for(boolean bound:new boolean[]{false,true}) {
-                System.setProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY,Boolean.toString(bound));
+                System.setProperty(property,Boolean.toString(bound));
                 sequence=0;revision=0;accepted=0;int referenceIndex=0;
                 try(Renderer owned=Renderer.open("vulkan-rt",RendererConfig.builder().validationEnabled(true).maxFramesInFlight(3)
                         .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.disabled()).build())) {
@@ -417,11 +418,11 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
             require(comparisons==20&&routes==40,"finite connection checks bypassed native optical transport: "+routes);
             Files.writeString(OUTPUT.resolve("connection-range-checks.json"),
-                    "{\"passed\":true,\"byteIdenticalComparisons\":20,\"nativeFrames\":40,\"mirroredVertexOrders\":2}\n");
+                    "{\"passed\":true,\"property\":\""+property+"\",\"byteIdenticalComparisons\":20,\"nativeFrames\":40,\"mirroredVertexOrders\":2}\n");
             System.out.println("CudaOpticalMediumProductionNativeSelfTest connection ranges passed: 20 byte-identical comparisons / 40 native frames");
         } finally {
-            if(previous==null)System.clearProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY);
-            else System.setProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY,previous);
+            if(previous==null)System.clearProperty(property);
+            else System.setProperty(property,previous);
         }
     }
     private static void verifySpatialPbrOptics(CameraState camera,MediumTransport budget)throws Exception {

@@ -62,9 +62,16 @@ void main()
     uint boundaryFlags=gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
     uint hitPrimitive=gl_PrimitiveID;vec2 hitBary=hitAttributes;float hitDistance=gl_HitTEXT;
     bool connection=payload.state.y==GS_PAYLOAD_OPTICAL_CONNECTION_QUERY;
-    if(connection&&boundaryFlags!=0u){uint primitive;vec2 bary;float distance;
-        if(gsBoundaryConnectionHit(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),hitPrimitive,hitBary,
-                gl_RayTminEXT,primitive,bary,distance)){hitPrimitive=primitive;hitBary=bary;hitDistance=distance;}}
+    if(connection&&boundaryFlags!=0u){
+        bool cached=payload.compositeState.w==1.0&&payload.surfaceState.w==GS_OPTICAL_BOUNDARY_CACHE_TAG
+                &&payload.surfaceState.x==gl_InstanceCustomIndexEXT&&payload.surfaceState.y==gl_PrimitiveID
+                &&payload.surfaceState.z==floatBitsToUint(gl_HitTEXT)&&payload.motionRevision.y==uint(gl_InstanceID)
+                &&all(equal(floatBitsToUint(payload.compositeState.xy),floatBitsToUint(hitAttributes)));
+        if(cached){hitPrimitive=payload.motionRevision.x;hitBary=payload.previousWorldPosition.xy;hitDistance=payload.previousWorldPosition.z;}
+        else {uint primitive;vec2 bary;float distance;
+            if(gsBoundaryConnectionHit(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),hitPrimitive,hitBary,
+                    gl_RayTminEXT,primitive,bary,distance)){hitPrimitive=primitive;hitBary=bary;hitDistance=distance;}}
+    }
     if((boundaryFlags&2u)!=0u) {
         uint mesh=gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT));
         uvec3 indices=gsTriangleIndices(mesh,hitPrimitive);
