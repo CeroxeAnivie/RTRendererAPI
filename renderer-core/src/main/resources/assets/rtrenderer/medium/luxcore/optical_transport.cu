@@ -399,6 +399,9 @@ template<bool Compact,class S,class V> __device__ int prepareSurfaceContinuation
             }
         }
         const bool first=(s->counters.y&1u)==0u;bool reflection;float multiplier=transmission;
+        // Record the decision even if this lobe has zero weight or terminates.
+        // A branch may be replayed only when no branch-dependent choice occurred.
+        s->counters.y|=4u;
         if(view.f(Compact?7:15)>0.f&&n1!=n2){
             reflection=first&&h[37]==0u?h[35]==0u:random(s->control.z,seed^h[35]*0x02e5be93u,s->counters.x)<.5f;
             if(!roughGlass(direction,normal,n1,n2,tint,view.f(Compact?7:15),
@@ -549,6 +552,13 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
     RTR_PHASE_SCOPE(b);
     RTR_ENTRY_SCOPE(b);
     StateAccess<Small,TransposedState> state(b,i,h[2]);auto*s=state.operator->();
+    if((h[47]&4096u)!=0u&&h[17]!=0u&&h[35]==1u&&h[37]==0u&&s->control.x==4u){
+        // The Vulkan producer retained the completed branch-zero state. Keep the
+        // original second weighted addition, rather than merging its two weights.
+        if(s->control.y!=0u||(s->counters.y&5u)!=0u||s->counters.z!=1u
+                ||s->control.z!=global(b,i)){finish(b,i,s,statistics,18u);return;}
+        finish(b,i,s,statistics);return;
+    }
     if((h[47]&128u)!=0u&&h[17]!=0u){
         // Camera origin/direction retain the exact Vulkan projection. Construct
         // all deterministic fields here instead of writing and reloading them
@@ -693,6 +703,7 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
         if(dot(normal,-direction)<=0.f){finish(b,i,s,statistics,10);return;}
         unsigned int seed=h[36]^h[34]*0x967a889bu^h[35]*0x02e5be93u;bool reflection;float multiplier=transmission;
         bool firstInterface=(s->counters.y&1u)==0u;
+        s->counters.y|=4u;
         float3 factor,nextDirection;
         if(view.f(Compact?7:15)>0.f&&n1!=n2){
             RTR_PHASE_NEXT(5u);

@@ -25,6 +25,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
     public static void main(String[] args)throws Exception{
         if(java.util.Arrays.asList(args).contains("--benchmark")){benchmark();return;}
         if(java.util.Arrays.asList(args).contains("--connection-ranges")){verifyConnectionRanges();return;}
+        if(java.util.Arrays.asList(args).contains("--duplicate-branches")){verifyDuplicateBranches();return;}
         Files.createDirectories(OUTPUT);String previous=System.getProperty(CudaCameraMediumProfile.ENABLE_PROPERTY);
         System.setProperty(CudaCameraMediumProfile.ENABLE_PROPERTY,"true");
         long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
@@ -123,6 +124,80 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         require(routes==accepted,"public optical frame bypassed native route: "+routes+" / "+accepted);
         Files.writeString(OUTPUT.resolve("result.json"),"{\n\"passed\":true,\n\"nativeFrames\":"+routes+",\n\"recoverableRejections\":"+rejected+",\n\"comparisons\":["+String.join(",\n",RESULTS)+"]\n}\n");
         System.out.println("CudaOpticalMediumProductionNativeSelfTest passed: comparisons="+RESULTS.size()+" actualNativeFrames="+routes+" recoverableRejections="+rejected);
+    }
+    /** Same sequence identities, both initialization layouts, and branch-zero dead lobes. */
+    private static void verifyDuplicateBranches()throws Exception {
+        Files.createDirectories(OUTPUT);
+        String property=CudaOpticalMediumAbi.REUSE_DUPLICATE_BRANCHES_PROPERTY;
+        String previous=System.getProperty(property),previousFused=System.getProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY);
+        var references=new ArrayList<byte[]>();var queryReferences=new ArrayList<Long>();int comparisons=0;
+        String[] kinds={"fog","volume","nested","alpha","unit","smooth","rough","metal"};
+        long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
+        long totalBefore=0,totalAfter=0;
+        try {
+            for(boolean reuse:new boolean[]{false,true}) {
+                System.setProperty(property,Boolean.toString(reuse));sequence=0;revision=0;int index=0;
+                try(Renderer owned=Renderer.open("vulkan-rt",RendererConfig.builder().validationEnabled(true).maxFramesInFlight(3)
+                        .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.disabled()).build())) {
+                    renderer=owned;
+                    var camera=CameraState.lookAt(0,0,6,0,0,-1).verticalFieldOfViewDegrees(5).aspectRatio((double)width/height).build();
+                    var budget=MediumTransport.balanced().withMaxEvents(24).withOpticalSamples(2)
+                            .withMaxDistance(30).withTransmittanceCutoff(0).withScatteringBounces(2);
+                    var fog=new Medium(new Rgb(.02f,.03f,.04f),new Rgb(.12f,.11f,.10f),new Rgb(.01f,.02f,.03f),1,1,.2f);
+                    for(boolean fused:new boolean[]{false,true})for(int spp:new int[]{1,2})for(String kind:kinds) {
+                        System.setProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY,Boolean.toString(fused));
+                        var surface=MaterialAsset.builder(1).baseColorRgba8(0xff808080).roughness(.5f)
+                                .metallic(kind.equals("metal")?.8f:0).doubleSided(true).build();
+                        // An off-camera explicit optical boundary keeps every case on the production optical route.
+                        var scene=SceneTransaction.builder(++revision).resetScene().upsert(surface).upsert(glass(1.5f))
+                                .upsert(plane(1,1,-4,false)).upsert(SceneInstance.builder(1,1).build())
+                                .upsert(MediumTransportSelfTest.cube(2,2,1)).upsert(SceneInstance.builder(2,2)
+                                        .transform(new AffineTransform(new float[]{1,0,0,1000,0,1,0,0,0,0,1,0}))
+                                        .mediumBoundary(MediumBoundary.surface(new Medium(Rgb.ZERO,Rgb.ZERO,Rgb.ZERO,1,1.5f,0))).build())
+                                .upsert(SceneLight.point(30,2,1,1).intensity(20).range(30).castsShadow(true).build())
+                                .upsert(SceneLight.directional(31,-1,0,-1).intensity(2).castsShadow(true).build());
+                        if(kind.equals("unit")||kind.equals("smooth")||kind.equals("rough")||kind.equals("alpha")) {
+                            var obstacle=MaterialAsset.builder(3).transmission(1).indexOfRefraction(kind.equals("unit")?1:1.5f)
+                                    .doubleSided(true).roughness(kind.equals("rough")?.35f:0).build();
+                            if(kind.equals("alpha"))obstacle=obstacle.toBuilder().transmission(0).baseColorRgba8(0x80808080)
+                                    .blendMode(MaterialAsset.BlendMode.TRANSLUCENT).build();
+                            scene.upsert(obstacle).upsert(plane(3,3,0,false)).upsert(SceneInstance.builder(3,3).build());
+                        }
+                        if(kind.equals("volume")||kind.equals("nested")) {
+                            scene.upsert(MediumTransportSelfTest.cube(3,1,1)).upsert(SceneInstance.builder(3,3)
+                                    .transform(new AffineTransform(new float[]{3,0,0,0,0,3,0,0,0,0,3,0}))
+                                    .mediumBoundary(MediumBoundary.volume(fog).withPriority(1)).build());
+                            if(kind.equals("nested"))scene.upsert(SceneInstance.builder(4,3)
+                                    .mediumBoundary(MediumBoundary.volume(new Medium(new Rgb(.2f,.1f,.3f),
+                                            new Rgb(.2f,.2f,.2f),Rgb.ZERO,1,1,0)).withPriority(8)).build());
+                        }
+                        apply(scene.build());
+                        long queries=CudaOpticalMediumManager.diagnosticQueries.sum();
+                        var frame=capture("branch-"+reuse+"-"+fused+"-"+spp+"-"+kind,
+                                request(camera,spp,budget,blackSky().toBuilder().cameraMedium(fog).build()));
+                        queries=CudaOpticalMediumManager.diagnosticQueries.sum()-queries;
+                        byte[] bytes=new byte[frame.byteCount()];frame.pixels().get(bytes);
+                        if(!reuse){references.add(bytes);queryReferences.add(queries);totalBefore+=queries;}
+                        else {
+                            require(java.util.Arrays.equals(references.get(index),bytes),"duplicate-branch reuse changed HDR: fused="+fused+" spp="+spp+" case="+kind);
+                            if(kind.equals("fog"))require(queries<queryReferences.get(index),"duplicate-branch reuse deleted no continued path work");
+                            totalAfter+=queries;comparisons++;
+                        }
+                        index++;
+                    }
+                    require(renderer.health().activeFailure().isEmpty(),"duplicate-branch reuse session unhealthy");
+                }
+            }
+            long routes=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum()-nativeBefore;
+            require(routes==64,"duplicate-branch checks bypassed optical route: "+routes);
+            Files.writeString(OUTPUT.resolve("duplicate-branches.json"),"{\"passed\":true,\"byteIdenticalComparisons\":"+comparisons
+                    +",\"nativeFrames\":"+routes+",\"continuedQueriesBefore\":"+totalBefore+",\"continuedQueriesAfter\":"+totalAfter+"}\n");
+            System.out.println("CudaOpticalMediumProductionNativeSelfTest duplicate branches passed: comparisons="+comparisons+" nativeFrames="+routes);
+        } finally {
+            if(previous==null)System.clearProperty(property);else System.setProperty(property,previous);
+            if(previousFused==null)System.clearProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY);
+            else System.setProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY,previousFused);
+        }
     }
     private static void saveDetailedProfile()throws java.io.IOException {
         Files.writeString(OUTPUT.resolve("detailed-profile.json"),OpticalDetailedProfile.deltaJson(java.util.Map.of()));

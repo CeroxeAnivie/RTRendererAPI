@@ -1474,3 +1474,16 @@ header188 bit4096 / top.ceroxe.rt.medium.cuda.opticalLeanConnectionHits（默认
 ABI及两种复制模式各136组真实CUDA输入、合计1360个独立模型检查点通过。但1080p两帧严格HDR未通过：第一帧单个RGB分量差一个half ULP（0.0009765625），第二帧完全一致。同制品关闭候选后两帧均恢复与原版逐字节一致，开关对照仍有该差异。尚无证据判定浮点/编译/队列的具体成因，不临时放宽阈值，不宣称画面完全一致；正确性门槛失败后停止性能验收，完整撤回这项源码、开关及专项测试。原设备预算队列等已验收优化保留，本轮没有新增可报告FPS收益。
 
 已通过本机代理重新下载固定提交的 `include/slg/utils/pathvolumeinfo_funcs.cl`，确认本地固定摘录是上游的连续原文；下载文件SHA-256为 `844b3b0a9266cb0b598b8f06b031d92e7093878e55a441a79bf82936ee2dbe25`。[本轮证据与哈希](data/medium-active-volume-copies-rejected-20261031.json)。下一轮停止栈复制细节变体，先核对整条路径和队列职责中的重复工作及其成熟实现依据。
+
+
+## 2026-10-31 架构候选 M：删除没有光学分支选择的整段重复路径（待验收）
+
+四次候选未产生可保留收益后，停止着色器裁剪和栈复制变体，回查完整数据流。现在每个 optical sample 的确定性反射/折射分支从相机各跑一整遍；首个光学lobe选择之前，CUDA体积采样、相函数/材质随机数和Vulkan连接种子均不含branch，只有 `prepareSurfaceContinuation` 和主光学lobe选择读取branch。完全未到分支选择而已经完成的路径仍重复了全部散射、所有灯光连接和续射线。
+
+已核对固定 PBRT-v4 commit `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`、Apache-2.0：`src/pbrt/wavefront/integrator.cpp` 356–375行的每样本相机队列，以及 `surfscatter.cpp` 181–193行在实际BSDF处采样并生产后续队列的职责。PBRT并没有本项目这项双分支缓存，不能声称直接照搬；该参考用于核对相机工作和实际分支职责。实现是本项目确定性的公共子路径结果复用，没有更换积分器或采样估计器。
+
+候选只在同一tile/optical sample紧接的branch1，复用branch0成功完成、原path ID匹配、初始化成功且从未读取光学分支选择的状态。不额外分配缓存：状态本来保留在原位置。Vulkan在重置前设置专用重放mode；CUDA验证完整条件后按原浮点表达式再做一次 `output + radiance * terminal.w`，保留原累加顺序与两份权重，不合并权重、不减少声明的样本/事件/散射/光子预算。只删除已证明完全相同的第二条实际输运。随机首界面仍走原路径。
+
+新增独立“曾进行分支相关选择”位，在选择前记录，包括零Fresnel反射、零权重/失败lobe，不能仅凭“成功穿过界面”标记判断，否则branch0零贡献会错误覆盖branch1。碰过任何相关选择的路径全部按原逻辑重算。`top.ceroxe.rt.medium.cuda.opticalReuseDuplicateBranches=false` 可同制品关闭。初始化、重复使用、队列、共享内存所有权及原ABI保持。
+
+门槛：独立原生开关HDR对照覆盖体积散射、边界/嵌套优先级、alpha、等IOR零反射、光滑/粗糙介电及金属，SPP1/2和两种初始化；要求无界面散射用例实际continued查询减少。随后1080p两帧与冻结原版严格HDR、关闭诊断正反序整帧检验；有收益再做fixed57、完整窗口、完整生产native/validation及互斥功能覆盖。引用成熟实现和代码少跑都不是性能结论；失败完整撤回。

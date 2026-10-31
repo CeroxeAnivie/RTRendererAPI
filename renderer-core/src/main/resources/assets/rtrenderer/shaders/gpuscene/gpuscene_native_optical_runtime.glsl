@@ -438,6 +438,18 @@ void main() {
         GS_DETAIL_BEGIN(0u);
         GpuScenePayload hit;vec3 origin,direction;
         if(gsOptical.initialize!=0ul) {
+            // Deterministic branches differ only after a CUDA optical-lobe choice.
+            // Reuse a successful completed path that never made that choice, from
+            // the immediately preceding branch of this same sample and tile.
+            if(gsOptical.storage.lanes[8u].w==1u&&gsOptical.storage.lanes[9u].y==0u
+                    &&(gsOptical.storage.lanes[11u].w&4096u)!=0u) {
+                uvec4 previousControl=gsOpticalStateRead(item,2u),previousCounters=gsOpticalStateRead(item,5u);
+                if(previousControl.x==0u&&previousControl.y==0u&&previousControl.z==globalPath
+                        &&previousCounters.z==1u&&(previousCounters.y&5u)==0u) {
+                    previousControl.x=4u;gsOpticalStateWrite(item,2u,previousControl);
+                    GS_DETAIL_END();continue;
+                }
+            }
             GS_DETAIL_NEXT(1u);
             if(fusedInitialization) {
                 // Deterministic state is constructed by its first CUDA consumer.
