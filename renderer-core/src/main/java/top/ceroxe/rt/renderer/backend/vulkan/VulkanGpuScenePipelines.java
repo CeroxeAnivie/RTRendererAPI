@@ -14,6 +14,7 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
     private final VulkanDeviceRuntime device;
     private final RendererConfig configuration;
     private final boolean linearHdr;
+    private long shaderDataMaxRange;
     private final EnumMap<Program, GpuSceneRayTracingPipeline> builtIns = new EnumMap<>(Program.class);
     private final GpuSceneRayTracingPipeline expert;
     private CudaCameraMediumManager nativeCameraMedium;
@@ -47,7 +48,16 @@ final class VulkanGpuScenePipelines implements AutoCloseable {
         if (expert != null) {
             expert.validateShaderData(values);
         } else if (!values.isEmpty()) {
-            forFrame(Program.SURFACE).validateShaderData(values);
+            // Validation needs only the declared interface and physical limits. Creating
+            // SURFACE here compiles and retains a program that medium frames never use.
+            if (shaderDataMaxRange == 0) {
+                try (var stack = org.lwjgl.system.MemoryStack.stackPush()) {
+                    var properties = org.lwjgl.vulkan.VkPhysicalDeviceProperties.malloc(stack);
+                    org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceProperties(device.physicalDevice(), properties);
+                    shaderDataMaxRange = Integer.toUnsignedLong(properties.limits().maxStorageBufferRange());
+                }
+            }
+            SceneShaderTransportPolicy.validateData(configuration.sceneShaders(), values, shaderDataMaxRange);
         }
     }
 

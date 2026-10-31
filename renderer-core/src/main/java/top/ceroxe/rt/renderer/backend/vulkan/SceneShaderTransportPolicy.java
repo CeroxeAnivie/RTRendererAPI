@@ -24,4 +24,15 @@ final class SceneShaderTransportPolicy {
                     "frame shader data count must equal declared dataBindingCount=" + program.dataBindingCount());
         }
     }
+    static void validateData(SceneShaderProgram program, List<ResourceData> data, long maxRange) {
+        validateDataCount(program, data);
+        for (ResourceData value : data) {
+            if (value.byteSize() <= 0 || (value.byteSize() & 3) != 0 || value.byteSize() > maxRange) {
+                throw new FrameValidationException(FrameValidationException.Reason.INVALID_SHADER_DATA,
+                        "shader data must have a positive, 4-byte-aligned size no greater than device maxStorageBufferRange="
+                                + maxRange);
+            }
+        }
+    }
+
 }

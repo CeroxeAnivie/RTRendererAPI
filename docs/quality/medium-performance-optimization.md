@@ -1804,3 +1804,5 @@ X23直接CUBIN在光学大源的ptxas阶段同样达到2.501GB并失败，69.329
 本次阶段事件确认：缓存热启动中光学 nvrtcCompileProgram 净增约35.34MB、109.80ms；全帧 primary 的431.31MB申请实际增加434.30MB进程提交。首帧后CUDA登记容量保持1626.28MB不变，进程提交仍从2156.22MB增长到2399.34MB；缩小tile到512MiB仍失败，C1-only隔离也失败，均不保留为解决方案。JFR定期dump配合VirtualQueryEx保住失败前证据，增长位于MEM_PRIVATE，GPU显存用量稳定；尚未证明唯一原生分配者。
 
 继续消除实际可见编译冗余：当前仅按需cuModuleGetFunction，但原source仍同时实例化九种布局以及包含全部布局的generic入口。新增编译期layout选择，生产只生成当前所需入口，reset独立编译不实例化输运；测试generic入口及九种布局仍可用。保留原模板函数、数学、采样与布局ABI。先同预算长窗/JFR证实，再严格HDR和全布局回归；未证明内存根因已完全解决，未声称吞吐收益。
+
+any-hit拆分候选已完成4+64帧，但退出阶段仍在2.516GB提交上限失败，四窗约2.60–2.80FPS，无收益，完整撤回。禁止将64帧完成当成资源修复通过。随后沿真实管线创建调用者核对，发现内置shader带application data时，admission与frame submit的validateShaderData通过forFrame(SURFACE)创建整条SURFACE管线，仅用于校验binding count和maxStorageBufferRange；micro-all实际消费SURFACE_PRIMARY_SHADE。改为只查询一次物理设备限制、复用相同数据校验，不创建闲置GPU程序。减少的是整个无用管线及编译生命周期，不改帧/样本/光路工作。继续同预算JFR长窗验证，而非单凭代码宣布内存修复。
