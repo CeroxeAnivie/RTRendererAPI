@@ -28,6 +28,7 @@ public final class CudaSharedRayFrame implements AutoCloseable {
     private final long bytes;
     private long buffer, memory, allocationBytes, toCuda, toVulkan, commandPool, fence;
     private VkCommandBuffer release, acquire, pairedAcquire;
+    private final VkCommandBuffer[] batchCommands=new VkCommandBuffer[8];
     private CudaMediumRuntime.DeviceMemory imported;
     private CudaMediumRuntime.ExternalSemaphore importedToCuda, importedToVulkan;
     private long pairedToCuda,pairedToVulkan;
@@ -326,6 +327,106 @@ public final class CudaSharedRayFrame implements AutoCloseable {
         finally{busy=false;if(profile){OpticalFrameTimings.exchange.add(System.nanoTime()-started);OpticalFrameTimings.rounds.add(2);}}
 
         } finally { OpticalWallTimeline.leave(wallStep); OpticalWallTimeline.leave(wallScope); }
+    }
+
+    /**
+     * Retained binary batch. Every round has its own command buffer and all callbacks
+     * enqueue only. Statistics and buffer contents are complete when this returns.
+     * Even length leaves the same second-pair signal for the next producer/publication.
+     */
+    public void produceThenExchangeBatchBlocking(int rounds,
+            java.util.function.BiConsumer<Integer,VkCommandBuffer> producer,
+            java.util.function.BiConsumer<Integer,CudaMediumRuntime.Slice> nativeStep) {
+        int wallScope=OpticalWallTimeline.enter(SHARED_EXCHANGE);
+        int wallStep=OpticalWallTimeline.enter(VULKAN_RELEASE_RECORD);
+        try {
+            checkOpen();Objects.requireNonNull(producer);Objects.requireNonNull(nativeStep);
+            if(rounds<2||rounds>8||(rounds&1)!=0)throw new IllegalArgumentException("even batch of 2..8 rounds required");
+            if(externalOwned&&!externalOwnedBinary)acquireForVulkanBlocking();
+            if(busy)throw new IllegalStateException("native ray slot is already in an exchange");
+            busy=true;boolean profile=OpticalFrameTimings.ENABLED;
+            long started=profile?System.nanoTime():0L;
+            var captures=profile?new top.ceroxe.rt.renderer.rt.device.RtGpuTimestampPool.Capture[rounds]:null;
+            try(MemoryStack s=MemoryStack.stackPush()) {
+                if(binarySecondToCuda==0){binarySecondToCuda=semaphore(s);importedBinarySecondToCuda=importSemaphore(binarySecondToCuda,s);}
+                if(binarySecondToVulkan==0){binarySecondToVulkan=semaphore(s);importedBinarySecondToVulkan=importSemaphore(binarySecondToVulkan,s);}
+                check(vkResetFences(device(),fence),"reset optical batch fence");
+                for(int round=0;round<rounds;round++) {
+                    // No command is reset or re-recorded while an earlier round is pending.
+                    if(batchCommands[round]==null)batchCommands[round]=command(s);
+                    var command=batchCommands[round];
+                    check(vkResetCommandBuffer(command,0),"reset optical batch command");
+                    check(vkBeginCommandBuffer(command,VkCommandBufferBeginInfo.calloc(s).sType$Default()),"begin optical batch command");
+                    if(round>0||externalOwned)barrier(command,VK11.VK_QUEUE_FAMILY_EXTERNAL,runtime.queueFamilyIndex(),0,
+                            VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,s);
+                    barrier(command,VK_QUEUE_FAMILY_IGNORED,VK_QUEUE_FAMILY_IGNORED,
+                            VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,s);
+                    if(captures!=null){
+                        captures[round]=runtime.frameCommands().acquireGpuTimestampCapture("opticalBatchRound",new String[]{"start","end"});
+                        if(captures[round]!=null)captures[round].begin(command,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                    }
+                    producer.accept(round,command);
+                    if(captures!=null&&captures[round]!=null)captures[round].write(command,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+                    barrier(command,runtime.queueFamilyIndex(),VK11.VK_QUEUE_FAMILY_EXTERNAL,
+                            VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,0,
+                            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,s);
+                    check(vkEndCommandBuffer(command),"end optical batch command");
+                }
+                if(profile){long elapsed=System.nanoTime()-started;OpticalFrameTimings.releaseCommands.add(elapsed);OpticalFrameTimings.release.add(elapsed);}
+                wallStep=OpticalWallTimeline.next(wallStep,CUDA_EXCHANGE);
+                long cudaStarted=profile?System.nanoTime():0L;long[] submitNanos={0L};
+                var slice=imported.slice(0,bytes);
+                cuda.exchangeExternalBinaryBatchBlocking(importedToCuda,importedToVulkan,
+                        importedBinarySecondToCuda,importedBinarySecondToVulkan,rounds,round->{
+                            int submitTiming=OpticalWallTimeline.enter(round==0?VULKAN_RELEASE_SUBMIT:VULKAN_CONSUMER_SUBMIT);
+                            long submitStarted=profile?System.nanoTime():0L;
+                            try {
+                                try(MemoryStack submitStack=MemoryStack.stackPush()) {
+                                    long output=(round&1)==0?toCuda:binarySecondToCuda;
+                                    long input=(round&1)==0?binarySecondToVulkan:toVulkan;
+                                    var submit=VkSubmitInfo.calloc(1,submitStack).sType$Default()
+                                            .pCommandBuffers(submitStack.pointers(batchCommands[round].address()))
+                                            .pSignalSemaphores(submitStack.longs(output));
+                                    if(round>0||externalOwned)submit.waitSemaphoreCount(1).pWaitSemaphores(submitStack.longs(input))
+                                            .pWaitDstStageMask(submitStack.ints(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
+                                    check(VulkanQueueHostSync.submit(runtime.frameQueue(),submit,round==rounds-1?fence:VK_NULL_HANDLE),
+                                            "submit optical batch round");
+                                    if(round==rounds-1)submitted=true;
+                                }
+                            }finally{
+                                if(profile){long elapsed=System.nanoTime()-submitStarted;submitNanos[0]+=elapsed;
+                                    if(round==0){OpticalFrameTimings.releaseSubmit.add(elapsed);OpticalFrameTimings.release.add(elapsed);}
+                                    else{OpticalFrameTimings.consumerRecord.add(elapsed);OpticalFrameTimings.consumerSubmit.add(elapsed);}}
+                                OpticalWallTimeline.leave(submitTiming);
+                            }
+                        },round->nativeStep.accept(round,slice));
+                if(profile)OpticalFrameTimings.cudaStage.add(System.nanoTime()-cudaStarted-submitNanos[0]);
+                // CUDA completion covers the last transfer; the last real Vulkan fence
+                // proves every command buffer is reusable. No empty acquire submission.
+                wallStep=OpticalWallTimeline.next(wallStep,VULKAN_COMMAND_REUSE_WAIT);
+                long reuseStarted=profile?System.nanoTime():0L;
+                check(vkWaitForFences(device(),fence,true,10_000_000_000L),"complete optical batch commands before reuse");
+                submitted=false;externalOwned=true;externalOwnedBinary=true;
+                if(profile)OpticalFrameTimings.consumerWait.add(System.nanoTime()-reuseStarted);
+                wallStep=OpticalWallTimeline.next(wallStep,GPU_QUERY_RESOLVE);
+                if(captures!=null)for(int round=0;round<rounds;round++){
+                    var capture=captures[round];
+                    if(capture!=null&&capture.resolve()){
+                        if(round==0)OpticalFrameTimings.producerGpu.add(capture.totalNanos());
+                        else OpticalFrameTimings.consumerGpu.add(capture.totalNanos());
+                        OpticalFrameTimings.recordNamedGpuStage(round==0?"vulkan.shared.producer":"vulkan.shared.continuation",capture.totalNanos());
+                    }
+                }
+                OpticalDetailedProfile.resolveDeferred();
+            }catch(RuntimeException|Error failure){broken=true;throw failure;}
+            finally{
+                busy=false;
+                if(captures!=null)for(var capture:captures)if(capture!=null)capture.close();
+                if(profile){OpticalFrameTimings.exchange.add(System.nanoTime()-started);OpticalFrameTimings.rounds.add(rounds);}
+            }
+        }finally{OpticalWallTimeline.leave(wallStep);OpticalWallTimeline.leave(wallScope);}
     }
 
     /** Completes the deferred acquire before a Vulkan consumer outside this slot uses its buffer. */

@@ -48,6 +48,7 @@ public final class CudaSharedMediumRayNativeSelfTest {
                             if(pair%11==0)first.acquireForVulkanBlocking();
                         }
                     }
+                    verifyBatchEpochs(cuda,first,firstQuery,init,advance);
                     for(int pass=0;pass<3;pass++) {
                         for(int slot=0;slot<2;slot++){final int index=slot;frames[slot].exchangeBlocking(records->cuda.launchBlocking(init,records,4096,128),cmd->queries[index].record(cmd,4096));}
                         for(int round=1;round<5;round++)for(int slot=0;slot<2;slot++){final int index=slot;frames[slot].exchangeBlocking(records->cuda.launchBlocking(advance,records,4096,128),cmd->queries[index].record(cmd,4096));}
@@ -59,7 +60,35 @@ public final class CudaSharedMediumRayNativeSelfTest {
                 if(cuda.residentBytes()!=0)throw new AssertionError("shared slot registration leaked bytes="+cuda.residentBytes());
             }
         }
-        System.out.println("CudaSharedMediumRayNativeSelfTest passed: two slots x two lifecycles x three fresh paths x five rounds; closest/occlusion/epoch/full-array checks; blocking copy, nested exchange and failure drain");
+        System.out.println("CudaSharedMediumRayNativeSelfTest passed: two slots x two lifecycles x three fresh paths x five rounds; closest/occlusion/epoch/full-array checks; 2/4/6/8-round batches, every-round failure drain, blocking copy and nested exchange");
+    }
+    private static void verifyBatchEpochs(CudaMediumRuntime cuda,CudaSharedRayFrame frame,MediumRayQueryPipeline query,
+            CudaMediumRuntime.BatchKernel init,CudaMediumRuntime.BatchKernel advance){
+        var outputs=new CudaMediumRuntime.HostMemory[8];
+        try {
+            for(int round=0;round<outputs.length;round++)outputs[round]=cuda.allocateHost(frame.byteSize());
+            for(int batch=0;batch<16;batch++){
+                int rounds=new int[]{4,8,6,2}[batch%4];
+                frame.produceThenExchangeBatchBlocking(rounds,(round,command)->{
+                    if(round>0)query.record(command,4096);
+                },(round,records)->{
+                    cuda.launchBlocking(round==0?init:advance,records,4096,128);
+                    cuda.downloadAsync(records,outputs[round]);
+                });
+                for(int round=0;round<rounds;round++)for(int path=0;path<4096;path++){
+                    int hits=outputs[round].getInt(path*128L+96),errors=outputs[round].getInt(path*128L+100);
+                    float expected=path%4==0?0:Math.min(round,2);
+                    if(errors!=0||Float.intBitsToFloat(hits)!=expected)
+                        throw new AssertionError("queued batch epoch batch="+batch+" round="+round+" path="+path
+                                +" hits="+Float.intBitsToFloat(hits)+" expected="+expected+" errors="+errors);
+                }
+                if(rounds>=4)verify(cuda,frame,false);
+                // Transition from a retained batch back through both pair protocols.
+                frame.produceThenExchangePairBlocking(command->{},records->cuda.launchBlocking(init,records,4096,128),
+                        command->query.record(command,4096),records->cuda.launchBlocking(advance,records,4096,128),true,batch%2==0);
+                if(batch%3==0)frame.acquireForVulkanBlocking();
+            }
+        }finally{for(var output:outputs)if(output!=null)output.close();}
     }
     private static void verifyBlockingExchange(VulkanDeviceRuntime device,CudaMediumRuntime cuda) {
         String fill="extern \"C\" __global__ void exchange_fill(unsigned int *p,int count){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<count)p[i]=0x34567890u;}";
@@ -153,6 +182,24 @@ public final class CudaSharedMediumRayNativeSelfTest {
                 frame.nativeOnlyBlocking(storage->{
                     cuda.launchBlocking(kernel,storage,32,4);cuda.download(storage,host);requireFilled(host);
                 });
+            }
+            for(int failureRound=0;failureRound<8;failureRound++)for(boolean recordFailure:new boolean[]{false,true}){
+                final int selectedRound=failureRound;
+                RuntimeException injected=new IllegalStateException("batch callback failure round="+failureRound+" record="+recordFailure);
+                try(var failed=CudaSharedRayFrame.storage(device,cuda,128,1L<<20)){
+                    failed.produceThenExchangeBatchBlocking(2,(round,command)->{},
+                            (round,storage)->cuda.launchBlocking(kernel,storage,32,4));
+                    try {
+                        failed.produceThenExchangeBatchBlocking(8,(round,command)->{
+                            if(recordFailure&&round==selectedRound)throw injected;
+                        },(round,storage)->{
+                            cuda.launchBlocking(kernel,storage,32,4);
+                            if(!recordFailure&&round==selectedRound)throw injected;
+                        });
+                        throw new AssertionError("batch exchange lost callback failure");
+                    }catch(RuntimeException failure){if(failure!=injected)throw failure;}
+                }
+                frame.nativeOnlyBlocking(storage->{cuda.launchBlocking(kernel,storage,32,4);cuda.download(storage,host);requireFilled(host);});
             }
             for(boolean consumerFailure:new boolean[]{false,true}) {
                 RuntimeException injected=new IllegalStateException("queued exchange callback failure");

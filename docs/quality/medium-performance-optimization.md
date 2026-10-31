@@ -1290,3 +1290,13 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | **互斥求和** | **812.436384** | **1000.000000** | **100.0000%** | **待空闲复测** |
 
 [正确性与同步次数证据](data/medium-binary-pairs-20261031.json)、[完整本窗排序](data/medium-binary-pairs-loaded-ranked-20261031.json)。CUDA 同步仍为第一，180 FPS 尚未达到。
+
+### CUDA 同步架构候选：长尾偶数批次
+
+首两轮仍读取存活上界，随后将长尾交接按 `top.ceroxe.rt.medium.cuda.opticalBatchRounds=2|4|8` 排队（候选默认 4，2 为原双轮对照）。剩余预算不足整批时使用更短偶数尾批，最后单轮沿用原路径；不超过 `maximumRounds`。只有 retained binary 模式使用该批次，其他协议仍走原双轮。
+
+成熟依据仍为 NVIDIA cuda-samples `9c688d7ff78455ed42e345124d1495aad6bf66de`（BSD-3-Clause）`cudaUpdateVkImage` 的 stream wait→work→signal 与真正 Vulkan 提交依赖；同时参考 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/wavefront/integrator.cpp` 的逐深度 GPU 队列排队、`workqueue.h::Size` 的 GPU 队列边界。采用其依赖和队列 guard 思路，不照搬输运算法或改变采样。
+
+每轮独立 Vulkan command buffer，最后一个真实提交携带 fence；四个 binary semaphore 按奇偶复用，消费依赖先于重新 signal。每轮 pinned 统计和 shader 样本独立，批末汇总全部错误/完成/界面计数，最后 active 数控制下一批上界。单路径最多一个后继，故上一完成批次的 active 数可安全约束整个批次；已空队列仍由原 GPU guard 返回。CUDA event 槽扩至 16，容纳八轮 reset+step，不插入隐式完成同步。任何回调失败都不能提交等待未排队 signal 的 Vulkan 工作。
+
+必须验证 2/4/6/8 轮真实 RT epoch、空队列尾部、协议/所有权切换、每轮记录及 CUDA 回调故障清理、HDR、固定失败帧、完整窗口、原生功能与 validation。同步次数变化只算工作计数证据；是否保留最终性能方案以干净 GPU 下关闭诊断整帧收益为准，不将等待转移算优化。
