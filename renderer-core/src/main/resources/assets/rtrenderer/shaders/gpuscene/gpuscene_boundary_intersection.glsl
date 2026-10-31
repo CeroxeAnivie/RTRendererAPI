@@ -3,7 +3,7 @@
 // PBRT's robust edge-function principle, adapted to Vulkan without requiring
 // shaderFloat64: two-float expansions retain transform/subtraction residuals.
 // Only candidates in the existing eight-ULP barycentric edge band use this path.
-vec2 gsBoundaryWideAdd(vec2 a,vec2 b) {
+precise vec2 gsBoundaryWideAdd(vec2 a,vec2 b) {
     precise float s=a.x+b.x;
     precise float v=s-a.x;
     precise float e=(a.x-(s-v))+(b.x-v)+a.y+b.y;
@@ -11,7 +11,7 @@ vec2 gsBoundaryWideAdd(vec2 a,vec2 b) {
     precise float lo=e-(hi-s);
     return vec2(hi,lo);
 }
-vec2 gsBoundaryWideMultiply(vec2 a,vec2 b) {
+precise vec2 gsBoundaryWideMultiply(vec2 a,vec2 b) {
     precise float p=a.x*b.x;
     // Dekker's split product keeps the residual explicit. Some shader targets
     // evaluate fma(a,b,-roundedProduct) without preserving that residual.
@@ -24,11 +24,11 @@ vec2 gsBoundaryWideMultiply(vec2 a,vec2 b) {
     precise float lo=e-(hi-p);
     return vec2(hi,lo);
 }
-vec2 gsBoundaryWideDifferenceOfProducts(vec2 a,vec2 b,vec2 c,vec2 d) {
+precise vec2 gsBoundaryWideDifferenceOfProducts(vec2 a,vec2 b,vec2 c,vec2 d) {
     return gsBoundaryWideAdd(gsBoundaryWideMultiply(a,b),-gsBoundaryWideMultiply(c,d));
 }
 struct GsBoundaryWide3 {vec2 x;vec2 y;vec2 z;};
-vec2 gsBoundaryRelativeCoordinate(vec3 p,int component) {
+precise vec2 gsBoundaryRelativeCoordinate(vec3 p,int component) {
     vec2 value=gsBoundaryWideAdd(vec2(gl_ObjectToWorldEXT[3][component],0),vec2(-gl_WorldRayOriginEXT[component],0));
     for(int axis=0;axis<3;axis++)value=gsBoundaryWideAdd(value,
             gsBoundaryWideMultiply(vec2(gl_ObjectToWorldEXT[axis][component],0),vec2(p[axis],0)));
@@ -37,7 +37,7 @@ vec2 gsBoundaryRelativeCoordinate(vec3 p,int component) {
 GsBoundaryWide3 gsBoundaryRelativePoint(vec3 p) {
     return GsBoundaryWide3(gsBoundaryRelativeCoordinate(p,0),gsBoundaryRelativeCoordinate(p,1),gsBoundaryRelativeCoordinate(p,2));
 }
-vec2 gsBoundaryEdge(GsBoundaryWide3 a,GsBoundaryWide3 b) {
+precise vec2 gsBoundaryEdge(GsBoundaryWide3 a,GsBoundaryWide3 b) {
     vec2 x=gsBoundaryWideDifferenceOfProducts(a.y,b.z,a.z,b.y);
     vec2 y=gsBoundaryWideDifferenceOfProducts(a.z,b.x,a.x,b.z);
     vec2 z=gsBoundaryWideDifferenceOfProducts(a.x,b.y,a.y,b.x);
