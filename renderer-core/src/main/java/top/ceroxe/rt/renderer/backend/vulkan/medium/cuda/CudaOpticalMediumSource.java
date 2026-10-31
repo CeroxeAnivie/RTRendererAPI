@@ -3,7 +3,9 @@ package top.ceroxe.rt.renderer.backend.vulkan.medium.cuda;
 /** Pinned LuxCore glass/priority/segment code with separate public transport-budget glue. */
 public final class CudaOpticalMediumSource {
     private CudaOpticalMediumSource() { }
-    public static String source(){return (OpticalFrameTimings.ENTRY_PHASES?"#define RTR_OPTICAL_ENTRY_PROFILE 1\n":"")
+    public static String source(){return (System.getProperty("top.ceroxe.rt.medium.opticalTracePath")!=null
+            ?"#define RTR_OPTICAL_TRACE_PATH "+Integer.parseUnsignedInt(System.getProperty("top.ceroxe.rt.medium.opticalTracePath"))+"u\n":"")
+            +(OpticalFrameTimings.ENTRY_PHASES?"#define RTR_OPTICAL_ENTRY_PROFILE 1\n":"")
             +(OpticalFrameTimings.FINISH_PHASES?"#define RTR_OPTICAL_FINISH_PROFILE 1\n":"")
             +(OpticalFrameTimings.KERNEL_PHASES?"#define RTR_OPTICAL_PHASE_PROFILE 1\n":"")
             +CudaMediumTransportSource.source()+"\n"
