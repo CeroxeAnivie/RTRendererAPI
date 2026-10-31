@@ -1732,3 +1732,7 @@ X3有界冷启动失败：88.021秒后驱动deferred管线返回-3，执行树�
 X4继续从程序职责边界修复：参考[NVIDIA 13_callable_shader](https://github.com/nvpro-samples/vk_raytracing_tutorial_KHR/tree/952a1a8e8b85f25781db7014d4d2bda124435e79/raytrace_tutorial/13_callable_shader)的材质callable分工，通过实际SBT调用共用原材质求值函数，不照搬示例的材质模型。收集入口不再包含材质函数体；首段/后续查询共用一个查询调用点，专用入口仅在完整vertexDirect模式下启用，旧配对路径继续由原入口处理。补齐可选callable模块的缓存身份、生命周期、descriptor可见性、SBT组与直接/间接派发区域；无新全局逐path数组、CPU读回或CUDA同步。预编译生成门槛检查恰有一个callable调用点，材质阶段必须是无trace的callable。HDR收集入口147868字节，材质独立阶段459424字节。尚待有界驱动冷启动与完整正确性/吞吐验证，未认定收益。
 
 X4独立连接管线驱动编译成功返回，wall=13431.675ms；完整启动18.519秒后进入输运拒绝诊断，诊断一次申请530841600字节失败，完整HDR尚未产出。不能把这个启动算作完整成功。单独120组/240帧严格连接对照已逐字节通过，有界进程树峰值提交1.766GB；validation另行核对。原拒绝诊断为全path同时分配state/hit/connection，可能分配超过GB并掩盖原拒绝原因。接续修复为4096条路径的有界扫描，最多读取4条完整记录；成功帧不进入此路径、不新增读回或计时。诊断自身失败时保留原拒绝路径数和frameSequence，将诊断异常作为suppressed，不覆盖原失败。
+
+严格连接validation已核对：2 opened/2 closed、零warning/error/drop。分块诊断保住了原拒绝454117条路径与frameSequence=0；后续读回发现device lost。相同预算U完整1080p两帧成功，峰值提交2.258GB。进一步实测JVM在-Xmx512m时InitialHeapSize=528482304字节；显式-Xms32m、最大堆与Job预算不变，X4完整两帧成功，峰值提交2.215GB。两个试验启动器均固定小初始堆，避免默认预提交挤占native/驱动余量；不提高上限。
+
+X4完整HDR第0帧逐字节一致，第1帧仅(773,338)蓝通道相差一个half-float bin（0.00048828125）。仍未通过严格门槛，不放宽容差。X6保留真正的callable边界及单查询循环，恢复与U一致的performance编译策略；无材质内联后HDR入口反而缩至130232字节，原先结构化编译已不再需要。接下来重新验证资源、严格HDR与全功能，然后才做净吞吐判断。

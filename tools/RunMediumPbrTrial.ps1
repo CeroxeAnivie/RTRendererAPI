@@ -25,7 +25,7 @@ Get-FileHash -Algorithm SHA256 (Join-Path $trialRoot "$Variant-core.jar"),(Join-
 Start-Sleep -Seconds 2
 nvidia-smi --query-gpu=index,name,utilization.gpu,power.draw,clocks.gr,temperature.gpu --format=csv,noheader |
     Set-Content -Encoding UTF8 (Join-Path $runDir 'initial-gpu.csv')
-$javaOptions=@('-Xmx512m','-XX:-UseJVMCICompiler','--enable-native-access=ALL-UNNAMED',
+$javaOptions=@('-Xms32m','-Xmx512m','-XX:-UseJVMCICompiler','--enable-native-access=ALL-UNNAMED',
     '--sun-misc-unsafe-memory-access=allow','-Dfile.encoding=UTF-8','-Dstdout.encoding=UTF-8','-Dstderr.encoding=UTF-8',
     '-Duser.language=en','-Duser.country=US','-Dtop.ceroxe.rt.medium.scatteringInlineQuery=true')
 Push-Location (Join-Path $repoRoot 'demos/hex-ball')

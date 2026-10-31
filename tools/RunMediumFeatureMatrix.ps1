@@ -30,7 +30,7 @@ $runtime=(Get-Content -Raw -Encoding UTF8 $RuntimeClasspathFile).Trim()
 $runtime=($runtime.Split(';') | Where-Object { [IO.Path]::GetFileName($_) -notlike 'renderer-core-*.jar' }) -join ';'
 $matrixClasspath=$matrixJar+';'+$coreJar+';'+$runtime
 $enabled=($Mode -ne 'off').ToString().ToLowerInvariant()
-$matrixArguments=@('-Xmx768m','--enable-native-access=ALL-UNNAMED',
+$matrixArguments=@('-Xms32m','-Xmx768m','--enable-native-access=ALL-UNNAMED',
     '--sun-misc-unsafe-memory-access=allow','-Dfile.encoding=UTF-8','-Dstdout.encoding=UTF-8','-Dstderr.encoding=UTF-8',
     '-Dtop.ceroxe.rt.medium.scatteringInlineQuery=true',
     "-Dtop.ceroxe.rt.medium.benchmarkFirstSequence=$FirstSequence",
