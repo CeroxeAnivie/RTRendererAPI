@@ -43,8 +43,6 @@ final class RtPipelineCache implements AutoCloseable {
             DeviceIdentity identity = identity(stack, physicalDevice);
             var store = new RtPipelineCacheStore(cacheDirectory(),namespace,identity,programKey,RtPipelineCacheStore.Policy.configured());
             byte[] initialData = store.read();
-            top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.checkpoint(
-                    "vulkan.pipelineCache.read." + programKey, 0, initialData.length);
             long handle = create(stack, device, initialData);
             return new RtPipelineCache(device, handle, store, identity);
         }
@@ -165,8 +163,6 @@ final class RtPipelineCache implements AutoCloseable {
                     return null;
                 }
                 long requested = size.get(0);
-                top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.checkpoint(
-                        "vulkan.pipelineCache.persist", handle, requested);
                 if (requested < HEADER_BYTES || requested > store.maxEntryBytes() || requested > Integer.MAX_VALUE) {
                     RtPipelineCacheStore.warn("Pipeline cache extraction skipped: {} bytes, entry budget {}",requested,store.maxEntryBytes());
                     return null;

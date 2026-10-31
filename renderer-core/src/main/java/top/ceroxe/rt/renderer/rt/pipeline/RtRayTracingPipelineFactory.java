@@ -214,6 +214,15 @@ final class RtRayTracingPipelineFactory {
             long raygenModule, long missModule, long closestHitModule, long anyHitModule,
             long pipelineCache, long visibilityMiss, long visibilityClosest, long visibilityAny,
             int recursionDepth, long... callableModules) {
+        return createPipeline(stack, device, pipelineLayout, raygenModule, missModule, closestHitModule,
+                anyHitModule, pipelineCache, visibilityMiss, visibilityClosest, visibilityAny,
+                recursionDepth, 0, callableModules);
+    }
+
+    static long createPipeline(MemoryStack stack, VkDevice device, long pipelineLayout,
+            long raygenModule, long missModule, long closestHitModule, long anyHitModule,
+            long pipelineCache, long visibilityMiss, long visibilityClosest, long visibilityAny,
+            int recursionDepth, int flags, long... callableModules) {
         boolean visibility = visibilityMiss != VK10.VK_NULL_HANDLE;
         int callableCount = callableModules.length;
         for (long module : callableModules)
@@ -251,6 +260,7 @@ final class RtRayTracingPipelineFactory {
             generalShaderGroup(groups.get(groupCount - callableCount + i), ordinaryStages + i);
         VkRayTracingPipelineCreateInfoKHR.Buffer createInfo = VkRayTracingPipelineCreateInfoKHR.calloc(1, stack);
         createInfo.get(0).sType$Default()
+                .flags(flags)
                 .pStages(stages)
                 .pGroups(groups)
                 .maxPipelineRayRecursionDepth(recursionDepth)

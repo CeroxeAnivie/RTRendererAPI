@@ -85,7 +85,6 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
     private final long pipeline;
     private final RtShaderBindingTable shaderBindingTable;
     private final RtRayTracingPipelineProperties properties;
-    private final RtPipelineCache compilationCache;
     private final long maxStorageBufferRangeBytes;
     private final boolean shaderExecutionReorderingEnabled;
     private GpuSceneRayTracingPipeline connectionTracer;
@@ -104,12 +103,10 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             long maxStorageBufferRangeBytes,
             boolean shaderExecutionReorderingEnabled,
             SceneShaderProgram sceneShaders,
-            GpuSceneShaderDataBuffers applicationData,
-            RtPipelineCache compilationCache
+            GpuSceneShaderDataBuffers applicationData
     ) {
         this.sceneShaders = sceneShaders;
         this.applicationData = applicationData;
-        this.compilationCache = Objects.requireNonNull(compilationCache, "compilationCache");
         this.device = Objects.requireNonNull(device, "device");
         this.descriptors = Objects.requireNonNull(descriptors, "descriptors");
         if (pipelineLayout == 0L || pipeline == 0L) {
@@ -192,7 +189,6 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         long visibilityMissModule = 0L, visibilityClosestModule = 0L, visibilityAnyModule = 0L;
         long callableModule = 0L, gatherModule = 0L;
         GpuSceneRayTracingPipeline ownedConnectionTracer=null;
-        RtPipelineCache compilationCache = null;
         try (MemoryStack stack = MemoryStack.stackPush()) {
             RtRayTracingPipelineProperties properties = RtRayTracingPipelineProperties.query(
                     stack, checkedRuntime.physicalDevice()
@@ -304,15 +300,20 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 visibilityClosestModule = RtShaderModuleCompiler.createModule(stack, device, visibilityClosestCode);
                 visibilityAnyModule = RtShaderModuleCompiler.createModule(stack, device, visibilityAnyCode);
             }
-            String programKey = RtPipelineCacheStore.programKey("gpuscene-7/program="+program+"/data="+sceneShaders.dataBindingCount()+"/depth="+recursionDepth,
+            int compileFlags = top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.ENABLED
+                    && java.util.Arrays.asList(System.getProperty("top.ceroxe.rt.pipeline.memoryDisableOptimizationProgram", "").split(",")).contains(program.name())
+                    ? VK10.VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT : 0;
+            String programKey = RtPipelineCacheStore.programKey("gpuscene-7/program="+program+"/data="+sceneShaders.dataBindingCount()+"/depth="+recursionDepth
+                            +(compileFlags==0?"":"/compileFlags="+compileFlags),
                     raygenCode,missCode,closestCode,anyHitCode,visibilityMissCode,visibilityClosestCode,visibilityAnyCode,
                     callableCode,gatherCode);
-            compilationCache = RtPipelineCache.open(device, checkedRuntime.physicalDevice(), "gpuscene", programKey);
-            try (var memory = top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.begin("vulkan.pipeline." + program, raygenCode.length)) {
+            try (var memory = top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.begin("vulkan.pipeline." + program, raygenCode.length);
+                 RtPipelineCache cache = RtPipelineCache.open(
+                    device, checkedRuntime.physicalDevice(), "gpuscene",programKey)) {
                 pipeline = RtRayTracingPipelineFactory.createPipeline(
                         stack, device, pipelineLayout,
                         raygenModule, missModule, closestHitModule, anyHitModule,
-                        compilationCache.handle(), visibilityMissModule, visibilityClosestModule, visibilityAnyModule, recursionDepth,
+                        cache.handle(), visibilityMissModule, visibilityClosestModule, visibilityAnyModule, recursionDepth, compileFlags,
                         collectedConnections ? new long[]{callableModule,gatherModule} : new long[0]
                 );
             }
@@ -358,10 +359,8 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     device, descriptors, pipelineLayout, pipeline, shaderBindingTable, properties,
                     maxStorageBufferRangeBytes, shaderExecutionReorderingEnabled, sceneShaders,
                     new GpuSceneShaderDataBuffers(checkedRuntime, descriptorSetCount,
-                            sceneShaders.dataBindingCount(), maxStorageBufferRangeBytes),
-                    compilationCache
+                            sceneShaders.dataBindingCount(), maxStorageBufferRangeBytes)
             );
-            compilationCache = null;
             result.connectionTracer=ownedConnectionTracer;ownedConnectionTracer=null;
             if(collectedConnections)diagnosticCollectedConnectionPipelines.increment();
             descriptors = null;
@@ -374,7 +373,6 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             closeSuppressing(failure, shaderBindingTable);
             if (pipeline != 0L) VK10.vkDestroyPipeline(device, pipeline, null);
             if (pipelineLayout != 0L) VK10.vkDestroyPipelineLayout(device, pipelineLayout, null);
-            closeSuppressing(failure, compilationCache);
             closeSuppressing(failure, descriptors);
             throw failure;
         } finally {
@@ -1632,10 +1630,6 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         if (!pipelineDestroyed) {
             VK10.vkDestroyPipeline(device, pipeline, null);
             pipelineDestroyed = true;
-        }
-        try { compilationCache.close(); }
-        catch (RuntimeException closeFailure) {
-            if (failure == null) failure = closeFailure; else failure.addSuppressed(closeFailure);
         }
         if (!layoutDestroyed) {
             VK10.vkDestroyPipelineLayout(device, pipelineLayout, null);
