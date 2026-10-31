@@ -223,9 +223,6 @@ vec3 gsOpticalLightOrigin(vec3 point,vec3 normal,float bound) {
 }
 // Select light geometry only. CUDA owns phase, density attenuation and the copied medium stack.
 void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 launch,uint epoch,bool initialize,uint hitOffset) {
-    vec3 sourcePosition=position;
-    for(;;) {
-    position=sourcePosition;
     GS_DETAIL_BEGIN(168u);
     uint base=gsOptical.storage.lanes[4u].z/16u+item*22u;
     if(initialize) {
@@ -347,31 +344,8 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
         hit.worldNormalAndRoughness=vec4(0,1,0,0);hit.baseColorAndOpacity=vec4(0);hit.emissiveAndMetallic=vec4(0);
         hit.transmissionIor=vec4(0);hit.state=uvec4(0);hit.surfaceState=uvec4(0);hit.compositeState=vec4(0);
         hit.launchInfo=launch;hit.mediumBoundary=uvec4(0);}
-    // PBRT TraceTransmittance rejects an opaque blocker before medium work.
-    // Here only a first segment can stay in GLSL: its connection stack still
-    // equals the main path stack, so the next light needs no CUDA stack reset.
-    // Continuing light segments retain their full CUDA boundary validation.
-    if(initialize&&(gsOptical.storage.lanes[11u].w&1024u)!=0u
-            &&gsOptical.storage.lanes[base+2u].w==1u&&hit.state.x!=0u&&hit.mediumBoundary.w==0u
-            &&hit.worldPositionAndDistance.w>=0.0&&hit.worldPositionAndDistance.w<origin.w
-            &&hit.baseColorAndOpacity.w>=1.0&&hit.transmissionIor.x<=0.0) {
-        // A strictly zero connection cannot change lighting or consume RNG.
-        // Preserve the ordinal/epoch increments of the original CUDA consumer.
-        gsOptical.storage.lanes[base+2u]=uvec4(0u);
-        uvec4 control=gsOptical.storage.lanes[base+5u];
-        if(control.x+1u<control.y) {
-            ++control.x;gsOptical.storage.lanes[base+5u]=control;
-            uvec4 stateControl=gsOpticalStateRead(item,2u);++stateControl.w;
-            gsOpticalStateWrite(item,2u,stateControl);epoch=stateControl.w;
-            GS_DETAIL_END();continue;
-        }
-        // Keep the final CUDA consumer for phase/surface accumulation and
-        // continuation. Its source mode skips only the proven-zero segment.
-    }
     GS_DETAIL_END();
     gsOpticalStore(hitOffset,item,hit,uvec4(globalPath/gsOptical.storage.lanes[0u].w,globalPath%gsOptical.storage.lanes[0u].w,epoch,epoch));
-    return;
-    }
 }
 // Light paths use the camera pipeline's geometric hit ABI, with native medium state.
 void gsOpticalPhotonTrace() {
