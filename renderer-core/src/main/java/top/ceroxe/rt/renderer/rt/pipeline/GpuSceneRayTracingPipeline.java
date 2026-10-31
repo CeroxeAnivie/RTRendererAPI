@@ -303,7 +303,8 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             String programKey = RtPipelineCacheStore.programKey("gpuscene-7/program="+program+"/data="+sceneShaders.dataBindingCount()+"/depth="+recursionDepth,
                     raygenCode,missCode,closestCode,anyHitCode,visibilityMissCode,visibilityClosestCode,visibilityAnyCode,
                     callableCode,gatherCode);
-            try (RtPipelineCache cache = RtPipelineCache.open(
+            try (var memory = top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.begin("vulkan.pipeline." + program, raygenCode.length);
+                 RtPipelineCache cache = RtPipelineCache.open(
                     device, checkedRuntime.physicalDevice(), "gpuscene",programKey)) {
                 pipeline = RtRayTracingPipelineFactory.createPipeline(
                         stack, device, pipelineLayout,

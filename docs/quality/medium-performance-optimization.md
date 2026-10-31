@@ -1794,3 +1794,9 @@ NMT有界复现的执行树峰值2.502GB，崩溃进程private约2382MiB，JVM�
 X23直接处理编译与大型scratch的生命周期重叠，并消除PTX再次交给驱动编译的链路：光子程序编译移至camera scratch申请之前；显式cuda.cubin=true时NVRTC面向实际sm生成CUBIN，cuModuleLoadData直接加载。参考NVIDIA cuda-samples固定5443602d89ed99aede2e4b7bf329daddeadb320e、BSD-3-Clause、Common/nvrtc_helper.h 91–93、174–176、206行，采用实际设备架构→nvrtcGetCUBIN→cuModuleLoadData的逻辑，未复制源码。保留原C++17、fmad=false、源程序、缓存大小、内核和预算，PTX对照可用，默认不启用未验收CUBIN。先按同一3GB总/2.5GB执行树预算验收完整HDR和长窗，再判断编译内存与净吞吐，不能只报中间表示减少。
 
 X23直接CUBIN在光学大源的ptxas阶段同样达到2.501GB并失败，69.329秒，没有HDR，已撤回CUBIN选项；不在发布中留下失败模式。后续从实际函数需求改：旧管理器无条件cuModuleGetFunction全部9种光学布局，当前plan只运行一种；保留原PTX、所有入口和布局映射，按需加载所选入口并在同一native线程缓存，首次加载和光子编译均在大型camera scratch申请前。不是降低功能或把内核启动搬到另一后端。按NVIDIA CUDA lazy-loading的函数加载职责组织，实际内存、原始HDR与吞吐仍须验证；代码删除了8次当前场景不需要的函数获取，不提前声称驱动一定省下多少内存。
+
+## 2026-10-31 原生内存 JFR 归因
+
+此前缩短 NVRTC 库生命周期的试验在执行树提交 2.501 GB 时仍失败，已完整撤回。已采集的 JFR 显示 GC 后 Java 堆 17,517,208 bytes，NMT 总提交约 222–244 MB，不能把进程约 2.38 GiB 的主要占用归因于 Java 堆、JIT 或分配失败线程。按需加载 CUDA 入口的两帧严格 HDR 通过，但 16 预热、2×64 测量长窗仍撞到内存上限，未解决稳态资源问题，未取得可接受的 FPS 收益。
+
+新增默认关闭的 `top.ceroxe.rt.nativeMemoryDiagnostics`：在同一 JFR 中记录 Vulkan 管线创建、VMA buffer、CUDA 编译/模块/内存 API 的 begin/end，以及光学帧 begin/end 和每秒进程提交、Java 堆/非堆提交。Windows 进程提交使用 OS MXBean 的 PagefileUsage；它与 NMT 的差额只表示 HotSpot 未跟踪部分，不直接等同泄漏。事件用于把增长与操作对应，不引入 GPU 同步或逐射线观测；关闭后不采集内存数据。继续使用 3 GB 总预算/2.5 GB 执行树上限，先归因并修复资源问题，再验证原始 HDR、完整长窗及关闭诊断吞吐。

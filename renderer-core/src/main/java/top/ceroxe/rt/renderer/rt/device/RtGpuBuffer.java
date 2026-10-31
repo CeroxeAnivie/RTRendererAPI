@@ -261,7 +261,8 @@ public final class RtGpuBuffer implements AutoCloseable {
         }
 
         long createStartNanos = System.nanoTime();
-        try (MemoryStack stack = MemoryStack.stackPush()) {
+        try (var memory = top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.begin("vulkan.buffer", sizeBytes);
+             MemoryStack stack = MemoryStack.stackPush()) {
             VkBufferCreateInfo bufferCreateInfo = VkBufferCreateInfo.calloc(stack)
                     .sType$Default()
                     .size(sizeBytes)

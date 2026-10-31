@@ -1,6 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan.medium.cuda;
 
 import java.lang.foreign.*;
+import top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics;
 import java.lang.invoke.MethodHandle;
 import java.nio.file.*;
 import java.util.*;
@@ -66,12 +67,26 @@ final class CudaNativeApi {
     }
     private static boolean isWindows() { return System.getProperty("os.name", "").startsWith("Windows"); }
     int call(String name, MemoryLayout[] layouts, Object... arguments) {
+        String diagnostic = NativeMemoryDiagnostics.ENABLED ? diagnosticOperation(name, arguments) : null;
+        try (var memory = diagnostic == null ? null : NativeMemoryDiagnostics.begin(diagnostic,
+                (name.equals("cuMemAlloc_v2") || name.equals("cuMemHostAlloc")) ? (long) arguments[1] : 0)) {
         MethodHandle method = calls.computeIfAbsent(name, key -> linker.downcallHandle(
                 (name.startsWith("nvrtc") ? compiler : driver).find(name)
                         .orElseThrow(() -> new IllegalStateException("Missing native CUDA symbol: " + name)),
                 FunctionDescriptor.of(JAVA_INT, layouts)));
         try { return (int) method.invokeWithArguments(arguments); }
         catch (Throwable e) { throw new IllegalStateException("Native CUDA invocation failed: " + name, e); }
+        }
+    }
+    private static String diagnosticOperation(String name, Object[] arguments) {
+        return switch (name) {
+            case "cuInit", "cuDevicePrimaryCtxRetain", "cuModuleLoadData", "cuModuleUnload",
+                 "cuMemAlloc_v2", "cuMemFree_v2", "cuMemHostAlloc", "cuMemFreeHost",
+                 "cuImportExternalMemory", "cuExternalMemoryGetMappedBuffer", "cuDestroyExternalMemory",
+                 "nvrtcCreateProgram", "nvrtcCompileProgram", "nvrtcGetPTX", "nvrtcDestroyProgram" -> name;
+            case "cuModuleGetFunction" -> name + ":" + ((MemorySegment) arguments[2]).getString(0);
+            default -> null;
+        };
     }
     void checked(String name, MemoryLayout[] layouts, Object... arguments) {
         int result = call(name, layouts, arguments);

@@ -154,6 +154,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     private CudaCameraMediumManager.Prepared prepareOnNative(FrameScene scene,GpuSceneRayTracingPipeline tracer,int slot,
             RtTlasBuildPlan buildPlan,CausticPhotonPlan photonPlan,GpuSceneRayTracingPipeline photonPipeline,RtGpuBuffer photonBuffer){
         var frame=scene.frame();var plan=scene.plan();
+        top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.checkpoint("optical.frame.begin",frame.sequence(),cuda.residentBytes());
         shaderSampleFrame=OpticalDetailedProfile.opticalProfileFrame(frame.sequence());
         boolean nativePhotons=scene.nativePhotons()!=null&&photonPlan!=null&&photonPlan.photons()>0;
         if(!nativePhotons&&photonPass!=null){photonPass.close();photonPass=null;}
@@ -292,6 +293,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         // once before the final Vulkan consumer can see this fully validated frame.
         storage.acquireForVulkanBlocking();
         if(uploadAssets){uploadedAssets=scene.assets;diagnosticAssetUploads.increment();}
+        top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics.checkpoint("optical.frame.end",frame.sequence(),cuda.residentBytes());
         // Publish this proof only after every declared path/branch completed without rejection.
         // The consumer retains its geometry-dependent feature and outline fallback.
         return new CudaCameraMediumManager.Prepared(plan.externalPrimary()?primaryAddress:address+plan.primaryOffset(),(address+plan.transmittanceOffset())|(plan.transposedPrimary()?8L:0L)
