@@ -1786,3 +1786,9 @@ X19的两帧严格HDR已通过，但新建正反序吞吐窗口在sequence100024
 独立硬件ray-query回归重现：图元10的硬件t=0.4719546437263489，双精度slab入口=0.47195353843408044；原谓词拒绝入口，却接受图元7出口t=1.3665012121200562。根因是近边精确求交分支对原图元也套用了固定8*epsilon*max(1,abs(t))硬件距离容差。实例变换误差不由t的固定ULP数控制。[NVIDIA self-intersection-avoidance固定commit 5a5c45bc61aca5d095032860058481e0497350e0](https://github.com/NVIDIA/self-intersection-avoidance/blob/5a5c45bc61aca5d095032860058481e0497350e0/SelfIntersectionAvoidance.glsl)中safeSpawnOffset明确按顶点、三角形extent和双向实例变换估算误差；这里参考其误差来源分析，没有复制其源码，也没有盲目扩大容差。
 
 修复原图元的确定性错误否决：已经通过wide精确内外测试的原图元，直接使用其修正距离；替代邻面仍受原nearby限制，minimum、最近事件、薄层包围、介质栈严格拒绝与采样预算不变。硬件遍历独立回归保留原失败射线与双精度slab oracle。先失败帧、边界谓词、严格HDR与完整连接验证，再恢复吞吐对照；当前没有新的性能收益结论。
+
+## 2026-10-31 X22：先修多命中资源膨胀，再恢复吞吐验收
+
+X21边界修复已通过两帧1080p严格HDR及连接测试。随后多命中吞吐在2.5GB执行树提交上限再次失败；不提高上限，不再盲调JVM。启用Native Memory Tracking复现：崩溃进程private bytes约2382MiB，NMT总提交189486KiB，Compiler仅565KiB、compiler arena峰值32074KiB，Java heap提交51200KiB；说明此次新增压力主要不在JVM跟踪的内存中，报错线程是C2不能证明C2膨胀。完整记录为build/medium-micro-all-20261031/collected-memory-root及hs_err_pid5588.log。
+
+实际Vulkan阶段栈查询：普通光学raygen640字节，collected raygen1568字节，两个callable阶段独立需求均0。该结果支持检查常量目标造成的链接合并，但不是驱动内部内联的直接证明。参考已固定NVIDIA vk_raytracing_tutorial_KHR 952a1a8e8b85f25781db7014d4d2bda124435e79、Apache-2.0、13_callable_shader.slang第383行的运行时materialType调用，改为由私有push高32位选择两个实际SBT记录；低32位仍是原dispatch mode，普通路径预处理语义不变。没有改变输运数学、采样、批次容量、回退或引入新分配/读回/同步。SPIR-V门槛检查两种callable数据接口、全部调用目标来自运行时，避免shaderc克隆调用点后用源码调用次数误判。离线8变体生成成功，执行树峰值1.084GB；真实驱动内存、HDR与净吞吐仍待验证，不将这个候选算成已解决或性能成果。
