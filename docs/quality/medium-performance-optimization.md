@@ -1414,7 +1414,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 编译检查提前停止本候选：base any-hit 前后均17942条 SPIR-V 指令，closest-hit 前后均32420条；各 opcode 的计数完全相同。这个源码改写没有消除目标算术指令，仅改变编排，不能算已删除实际重复工作，已恢复原源码和全部四份生成资源，不继续占用 GPU 验收。此判断不声称两份二进制逐字节相同，也不将未实测的性能记为零或收益。
 
 
-### 按光连接消费需求裁剪命中着色（候选验证中）
+### 按光连接消费需求裁剪命中着色（共享程序动态分支候选已撤回）
 
 参考 [PBRT-v4 b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f intersect.h::TransmittanceTraceResult/TraceTransmittance](https://github.com/mmp/pbrt-v4/blob/b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f/src/pbrt/wavefront/intersect.h#L158)：其专用透射查询只产生 hit、pHit、material，独立于完整表面着色。采用按消费者需求安排工作的组织，本项目的透明面规则比 PBRT 的 shadow opaque 规则更复杂，必须保留原有 base tint/alpha、纹理过滤、光照调制、真实法线/法线贴图、IOR/透射与所有介质边界处理。
 
@@ -1423,3 +1423,15 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 header188 bit4096 / top.ceroxe.rt.medium.cuda.opticalLeanConnectionHits（默认true，false回到完整命中）用于同制品对照，不增加 payload ABI。CUDA connectionStep 的所有读取字段保持；默认完整命中记录布局也保留，只将未读取输出清零。此为删除未消费计算的确定性候选，未通过严格图像和性能门禁前不称为成果。
 
 新增独立 --connection-materials 原生验证：同 sequence 开关对照24组/48帧，含镜像/反顶点序、端点、overlay/non-shadow、体积、带颜色/alpha纹理、MR/发光贴图的透射障碍及会实际改变 Fresnel 的法线贴图。后续1080p HDR、完整生产回归、互斥功能覆盖、固定57、完整窗口、validation及关闭诊断正反序净收益共同验收，负优化完整撤回。
+
+
+24组/48 native 帧、两个validation生命周期、两个1080p HDR帧的同制品开关与前版逐字节对照均通过；但是四个窗口测前GPU0全为0%的关闭诊断正反序都更慢，候选代码已完整撤回，保留证据。
+
+| 净吞吐（正反序各32帧，合计64帧） | 原版 | 动态分支候选 | 改善 |
+| --- | ---: | ---: | ---: |
+| ms/帧 | 278.971733 | 300.665345 | -7.7763% |
+| 原生 FPS | 3.584593 | 3.325957 | -7.2152% |
+
+正序耗时降幅-7.1960%，反序-8.3639%。不声称已定位寄存器溢出；这里只能确认共享shader的动态分支改法没有带来净收益。转向独立连接命中程序的编译期裁剪与SBT路由，在大头的组织方式上解决问题，不继续给通用shader叠加局部特判。
+
+[全部窗口、逐项正确性与原始证据哈希](data/medium-lean-connection-hits-rejected-20261031.json)。

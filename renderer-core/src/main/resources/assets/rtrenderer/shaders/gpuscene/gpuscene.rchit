@@ -61,10 +61,7 @@ void main()
 
     uint boundaryFlags=gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
     uint hitPrimitive=gl_PrimitiveID;vec2 hitBary=hitAttributes;float hitDistance=gl_HitTEXT;
-    bool connection=gsOpticalConnectionQuery(payload.state.y);
-    // Transmittance consumers use geometry, tinted opacity, normals and IOR.
-    // Emission/PBR maps, reprojection, distance fog and outline data have no reader.
-    bool leanConnection=payload.state.y==GS_PAYLOAD_OPTICAL_CONNECTION_LEAN_QUERY;
+    bool connection=payload.state.y==GS_PAYLOAD_OPTICAL_CONNECTION_QUERY;
     if(connection&&boundaryFlags!=0u){uint primitive;vec2 bary;float distance;
         if(gsBoundaryConnectionHit(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),hitPrimitive,hitBary,
                 gl_RayTminEXT,primitive,bary,distance)){hitPrimitive=primitive;hitBary=bary;hitDistance=distance;}}
@@ -101,26 +98,23 @@ void main()
     vec3 p1 = gsPosition(meshBase, indices.y);
     vec3 p2 = gsPosition(meshBase, indices.z);
     vec3 objectGeometricNormal = normalize(cross(p1 - p0, p2 - p0));
-    vec3 localPosition = leanConnection?vec3(0):p0 * barycentrics.x + p1 * barycentrics.y + p2 * barycentrics.z;
+    vec3 localPosition = p0 * barycentrics.x + p1 * barycentrics.y + p2 * barycentrics.z;
     GS_DETAIL_NEXT(27u);
     vec3 wp0 = gl_ObjectToWorldEXT * vec4(p0, 1.0);
     vec3 wp1 = gl_ObjectToWorldEXT * vec4(p1, 1.0);
     vec3 wp2 = gl_ObjectToWorldEXT * vec4(p2, 1.0);
     GS_DETAIL_NEXT(28u);
-    float sphericalDistance=0.0,cylindricalDistance=0.0;
-    if(!leanConnection) {
-        vec3 camera = gsFrameCameraPosition();
-        vec3 cameraRelative0 = wp0 - camera;
-        vec3 cameraRelative1 = wp1 - camera;
-        vec3 cameraRelative2 = wp2 - camera;
-        sphericalDistance = length(cameraRelative0) * barycentrics.x
-            + length(cameraRelative1) * barycentrics.y
-            + length(cameraRelative2) * barycentrics.z;
-        GS_DETAIL_NEXT(29u);
-        cylindricalDistance = max(length(cameraRelative0.xz), abs(cameraRelative0.y)) * barycentrics.x
-            + max(length(cameraRelative1.xz), abs(cameraRelative1.y)) * barycentrics.y
-            + max(length(cameraRelative2.xz), abs(cameraRelative2.y)) * barycentrics.z;
-    }
+    vec3 camera = gsFrameCameraPosition();
+    vec3 cameraRelative0 = wp0 - camera;
+    vec3 cameraRelative1 = wp1 - camera;
+    vec3 cameraRelative2 = wp2 - camera;
+    float sphericalDistance = length(cameraRelative0) * barycentrics.x
+        + length(cameraRelative1) * barycentrics.y
+        + length(cameraRelative2) * barycentrics.z;
+    GS_DETAIL_NEXT(29u);
+    float cylindricalDistance = max(length(cameraRelative0.xz), abs(cameraRelative0.y)) * barycentrics.x
+        + max(length(cameraRelative1.xz), abs(cameraRelative1.y)) * barycentrics.y
+        + max(length(cameraRelative2.xz), abs(cameraRelative2.y)) * barycentrics.z;
     GS_DETAIL_NEXT(30u);
     vec3 geometricNormal = normalize(cross(wp1 - wp0, wp2 - wp0));
     vec3 objectShadingNormal = objectGeometricNormal;
@@ -184,27 +178,24 @@ void main()
     }
 
     GS_DETAIL_NEXT(40u);
-    float roughness=0.0,metallic=0.0;
-    if(!leanConnection) {
-        roughness = uintBitsToFloat(gsMaterials.words[
-            materialBase + GPU_SCENE_MATERIAL_ROUGHNESS_WORD
-        ]);
-        metallic = uintBitsToFloat(gsMaterials.words[
-            materialBase + GPU_SCENE_MATERIAL_METALLIC_WORD
-        ]);
-        uint metallicRoughnessTexture = gsMaterials.words[materialBase + GPU_SCENE_MATERIAL_METALLIC_ROUGHNESS_TEXTURE_WORD];
-        if (metallicRoughnessTexture != GS_INVALID_SLOT) {
-            vec4 sampled = gsSampleTextureFootprint(
-                metallicRoughnessTexture, uv, uvFootprint.xy, uvFootprint.zw
-            );
-            roughness *= sampled.g;
-            metallic *= sampled.b;
-        }
+    float roughness = uintBitsToFloat(gsMaterials.words[
+        materialBase + GPU_SCENE_MATERIAL_ROUGHNESS_WORD
+    ]);
+    float metallic = uintBitsToFloat(gsMaterials.words[
+        materialBase + GPU_SCENE_MATERIAL_METALLIC_WORD
+    ]);
+    uint metallicRoughnessTexture = gsMaterials.words[materialBase + GPU_SCENE_MATERIAL_METALLIC_ROUGHNESS_TEXTURE_WORD];
+    if (metallicRoughnessTexture != GS_INVALID_SLOT) {
+        vec4 sampled = gsSampleTextureFootprint(
+            metallicRoughnessTexture, uv, uvFootprint.xy, uvFootprint.zw
+        );
+        roughness *= sampled.g;
+        metallic *= sampled.b;
     }
 
     GS_DETAIL_NEXT(41u);
     uint normalTexture = gsMaterials.words[materialBase + GPU_SCENE_MATERIAL_NORMAL_TEXTURE_WORD];
-    if ((!leanConnection||boundaryFlags==0u)&&normalTexture != GS_INVALID_SLOT
+    if (normalTexture != GS_INVALID_SLOT
             && gsOptionalOffsetPresent(meshBase, GPU_SCENE_MESH_TANGENT_OFFSET_WORD)) {
         vec4 objectTangent = gsTangent(meshBase, indices.x) * barycentrics.x
             + gsTangent(meshBase, indices.y) * barycentrics.y
@@ -220,20 +211,17 @@ void main()
     }
 
     GS_DETAIL_NEXT(42u);
-    vec3 emissive=vec3(0);
-    if(!leanConnection) {
-        emissive = gsUnpackRgba8(gsMaterials.words[
-            materialBase + GPU_SCENE_MATERIAL_EMISSIVE_COLOR_WORD
-        ]).rgb * uintBitsToFloat(gsMaterials.words[
-            materialBase + GPU_SCENE_MATERIAL_EMISSIVE_STRENGTH_WORD
-        ]);
-        GS_DETAIL_NEXT(43u);
-        uint emissiveTexture = gsMaterials.words[materialBase + GPU_SCENE_MATERIAL_EMISSIVE_TEXTURE_WORD];
-        if (emissiveTexture != GS_INVALID_SLOT) {
-            emissive *= gsSampleTextureFootprint(
-                emissiveTexture, uv, uvFootprint.xy, uvFootprint.zw
-            ).rgb;
-        }
+    vec3 emissive = gsUnpackRgba8(gsMaterials.words[
+        materialBase + GPU_SCENE_MATERIAL_EMISSIVE_COLOR_WORD
+    ]).rgb * uintBitsToFloat(gsMaterials.words[
+        materialBase + GPU_SCENE_MATERIAL_EMISSIVE_STRENGTH_WORD
+    ]);
+    GS_DETAIL_NEXT(43u);
+    uint emissiveTexture = gsMaterials.words[materialBase + GPU_SCENE_MATERIAL_EMISSIVE_TEXTURE_WORD];
+    if (emissiveTexture != GS_INVALID_SLOT) {
+        emissive *= gsSampleTextureFootprint(
+            emissiveTexture, uv, uvFootprint.xy, uvFootprint.zw
+        ).rgb;
     }
 
     GS_DETAIL_NEXT(44u);
@@ -249,11 +237,11 @@ void main()
     );
     // Reproject the same geometric point through the last successfully rendered object transform.
     // Using a prior scene transaction here would advance temporal state ahead of the GPU frame.
-    payload.previousWorldPosition = leanConnection?vec4(0):vec4(
+    payload.previousWorldPosition = vec4(
         gsPreviousInstancePoint(gl_InstanceCustomIndexEXT, localPosition),
         1.0
     );
-    payload.motionRevision = leanConnection?uvec2(0):gsInstanceMotionRevision(gl_InstanceCustomIndexEXT);
+    payload.motionRevision = gsInstanceMotionRevision(gl_InstanceCustomIndexEXT);
     payload.worldNormalAndRoughness = vec4(worldNormal, roughness);
     payload.baseColorAndOpacity = vec4(baseColor.rgb, baseColor.a);
     payload.emissiveAndMetallic = vec4(emissive, metallic);
@@ -265,25 +253,21 @@ void main()
         gsInstanceFlags(gl_InstanceCustomIndexEXT)
     );
     GS_DETAIL_NEXT(46u);
-    if(leanConnection) {
-        payload.surfaceState=uvec4(0);payload.compositeState=vec4(0);
-    } else {
-        payload.surfaceState = uvec4(
-            gsInstanceSurfaceMask(gl_InstanceCustomIndexEXT),
-            gsInstanceOverlayReceiverMask(gl_InstanceCustomIndexEXT),
-            gsInstanceObjectMask(gl_InstanceCustomIndexEXT),
-            gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_OUTLINE_COLOR_WORD)
-        );
-        payload.compositeState = vec4(
-            gsInstanceOutlineWidth(gl_InstanceCustomIndexEXT),
-            uintBitsToFloat(gsMaterials.words[
-                materialBase + GPU_SCENE_MATERIAL_OVERLAY_DEPTH_THRESHOLD_WORD
-            ]),
-            float((materialFlags >> GPU_SCENE_OVERLAY_DEPTH_MODE_SHIFT)
-                & GPU_SCENE_OVERLAY_DEPTH_MODE_MASK),
-            0.0
-        );
-    }
+    payload.surfaceState = uvec4(
+        gsInstanceSurfaceMask(gl_InstanceCustomIndexEXT),
+        gsInstanceOverlayReceiverMask(gl_InstanceCustomIndexEXT),
+        gsInstanceObjectMask(gl_InstanceCustomIndexEXT),
+        gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_OUTLINE_COLOR_WORD)
+    );
+    payload.compositeState = vec4(
+        gsInstanceOutlineWidth(gl_InstanceCustomIndexEXT),
+        uintBitsToFloat(gsMaterials.words[
+            materialBase + GPU_SCENE_MATERIAL_OVERLAY_DEPTH_THRESHOLD_WORD
+        ]),
+        float((materialFlags >> GPU_SCENE_OVERLAY_DEPTH_MODE_SHIFT)
+            & GPU_SCENE_OVERLAY_DEPTH_MODE_MASK),
+        0.0
+    );
     payload.mediumBoundary = uvec4(
         gl_InstanceCustomIndexEXT,
         gsInstanceWord(gl_InstanceCustomIndexEXT, GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD),
@@ -292,7 +276,7 @@ void main()
     );
     GS_DETAIL_NEXT(47u);
     // Only caustic frames consume the spare geometric-normal lane.
-    if (!leanConnection&&gsFrame.words[GPU_SCENE_FRAME_CAUSTIC_PHOTONS_WORD] != 0u)
+    if (gsFrame.words[GPU_SCENE_FRAME_CAUSTIC_PHOTONS_WORD] != 0u)
         payload.compositeState.w = gsEncodeGeometricNormal(backFace ? -geometricNormal : geometricNormal);
     if (payload.mediumBoundary.w != 0u) {
         // Volume interfaces must use the geometric boundary normal, never a normal-map perturbation.
