@@ -138,7 +138,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         if(scene.nativePhotons()!=null)growth=Math.addExact(growth,photonPass==null?CudaOpticalPhotonPass.bytes(scene):photonPass.growth(scene));
         return growth;
     });}
-    synchronized CudaCameraMediumManager.Prepared prepare(FrameScene scene,GpuSceneRayTracingPipeline primaryProducer,
+    synchronized CudaCameraMediumManager.Prepared prepare(FrameScene scene,
             GpuSceneRayTracingPipeline opticalTracer,int slot,RtTlasBuildPlan buildPlan,
             CausticPhotonPlan photonPlan,GpuSceneRayTracingPipeline photonPipeline,RtGpuBuffer photonBuffer){
         checkOpen();Objects.requireNonNull(opticalTracer,"opticalTracer");

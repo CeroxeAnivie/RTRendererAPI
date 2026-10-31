@@ -118,12 +118,6 @@ final class VulkanGpuSceneFrameSubmitter {
             );
         }
         var photonPlan = temporal.caustics(checked.request());
-        GpuSceneRayTracingPipeline photonPipeline = photonPlan.photons() > 0 ? pipelines.photons() : null;
-        if(photonPipeline!=null&&photonPlan.bytes()>photonPipeline.maxStorageBufferRangeBytes())
-            throw new top.ceroxe.rt.renderer.api.FrameValidationException(
-                    top.ceroxe.rt.renderer.api.FrameValidationException.Reason.INVALID_CAUSTICS,
-                    "complete surface and volume photon map exceeds device maxStorageBufferRange="
-                            +photonPipeline.maxStorageBufferRangeBytes()+" bytes; reduce photon or event budget");
         var transport = temporal.selectTransport(checked.request());
         pipelines.validateShaderData(checked.request().shaderData());
         var serialProgram = transport.program();
@@ -162,6 +156,11 @@ final class VulkanGpuSceneFrameSubmitter {
                 temporal.nativeOpticalOpaqueRay(checked.request()),acceptedLightSlotUpperBound,
                 temporal.nativeSurfaceContinuation(checked.request()),
                 CudaOpticalMediumManager.residentLimit(scene.device().memoryBudget())) : null;
+        // Native optical photons use the optical tracer and CUDA wavefront. Creating
+        // the serial PHOTONS program here starts a second, unused driver compilation.
+        boolean nativeOpticalPhotons = nativeOpticalData != null && nativeOpticalData.nativePhotons() != null;
+        GpuSceneRayTracingPipeline photonPipeline = photonPlan.photons() > 0 && !nativeOpticalPhotons
+                ? pipelines.photons() : null;
         var initialNativePbrData = nativePbrFrame ? CudaPbrMediumManager.scene(checked.request(),width,height,
                 acceptedLightSlotUpperBound,nativeBoundaryScene,temporal::nativeDensityTexture,nativeDensityCache,nativePbrScatteringFrame) : null;
         boolean reusePbrPrimary=nativePbrScatteringFrame
@@ -187,13 +186,18 @@ final class VulkanGpuSceneFrameSubmitter {
         }
         GpuScenePrimaryQueue.Plan primaryQueue = selectedQueue;
         GpuSceneRayTracingPipeline pipeline = pipelines.forFrame(selectedProgram);
+        if(photonPlan.photons()>0&&photonPlan.bytes()>pipeline.maxStorageBufferRangeBytes())
+            throw new top.ceroxe.rt.renderer.api.FrameValidationException(
+                    top.ceroxe.rt.renderer.api.FrameValidationException.Reason.INVALID_CAUSTICS,
+                    "complete surface and volume photon map exceeds device maxStorageBufferRange="
+                            +pipeline.maxStorageBufferRangeBytes()+" bytes; reduce photon or event budget");
         GpuSceneRayTracingPipeline primaryProducer = nativePbrFrame
                 ? pipelines.forFrame(reusePbrPrimary?GpuSceneRayTracingPipeline.Program.NATIVE_PBR_MEDIUM_CACHED
                     :GpuSceneRayTracingPipeline.Program.NATIVE_PBR_MEDIUM_TRACE)
                 : nativeBoundaryFrame
                 ? pipelines.forFrame(Boolean.parseBoolean(System.getProperty("top.ceroxe.rt.medium.cuda.boundaryPacket","true"))
                     ? GpuSceneRayTracingPipeline.Program.NATIVE_BOUNDARY_PACKET : GpuSceneRayTracingPipeline.Program.NATIVE_MEDIUM_TRACE)
-                : primaryQueue != null || nativeCameraFrame || nativeScatteringFrame || nativeMultipleFrame || nativeDensityScatteringFrame || nativeOpticalFrame
+                : primaryQueue != null || nativeCameraFrame || nativeScatteringFrame || nativeMultipleFrame || nativeDensityScatteringFrame
                     ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.PRIMARY_TRACE) : null;
         GpuSceneRayTracingPipeline scatteringLights = nativePbrFrame
                 ? pipelines.forFrame(reusePbrPrimary?GpuSceneRayTracingPipeline.Program.NATIVE_PBR_MEDIUM_LIGHTS_OPAQUE
@@ -346,7 +350,7 @@ final class VulkanGpuSceneFrameSubmitter {
             }
             wallStep = OpticalWallTimeline.next(wallStep, MEDIUM_RESOLVE_PREPARE);
             CudaCameraMediumManager.Prepared nativeCamera = nativeOpticalFrame
-                    ? pipelines.nativeOpticalMedium().prepare(nativeOpticalData,primaryProducer,opticalTracer,slot.index(),
+                    ? pipelines.nativeOpticalMedium().prepare(nativeOpticalData,opticalTracer,slot.index(),
                             framePrimitives.buildPlan(),photonPlan,photonPipeline,slot.causticPhotons())
                     : nativePbrFrame
                     ? (nativePbrScatteringFrame?pipelines.nativePbrMediumWithScattering(nativePbrData):pipelines.nativePbrMedium())
