@@ -250,11 +250,15 @@ void main()
     );
     // Reproject the same geometric point through the last successfully rendered object transform.
     // Using a prior scene transaction here would advance temporal state ahead of the GPU frame.
-    payload.previousWorldPosition = leanConnection?vec4(0):vec4(
-        gsPreviousInstancePoint(gl_InstanceCustomIndexEXT, localPosition),
-        1.0
-    );
-    payload.motionRevision = leanConnection?uvec2(0):gsInstanceMotionRevision(gl_InstanceCustomIndexEXT);
+    if(leanConnection) {
+        payload.previousWorldPosition=vec4(0);payload.motionRevision=uvec2(0);
+    } else {
+        payload.previousWorldPosition = vec4(
+            gsPreviousInstancePoint(gl_InstanceCustomIndexEXT, localPosition),
+            1.0
+        );
+        payload.motionRevision = gsInstanceMotionRevision(gl_InstanceCustomIndexEXT);
+    }
     payload.worldNormalAndRoughness = vec4(worldNormal, roughness);
     payload.baseColorAndOpacity = vec4(baseColor.rgb, baseColor.a);
     payload.emissiveAndMetallic = vec4(emissive, metallic);
