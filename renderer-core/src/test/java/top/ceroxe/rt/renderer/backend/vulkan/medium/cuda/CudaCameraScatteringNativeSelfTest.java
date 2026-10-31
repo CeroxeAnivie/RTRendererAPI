@@ -79,8 +79,11 @@ public final class CudaCameraScatteringNativeSelfTest {
                 .environment(EnvironmentState.builder().cameraMedium(medium).build())
                 .mediumTransport(MediumTransport.balanced().withScatteringSteps(8).withMaxDistance(7).withTransmittanceCutoff(0)).build();
         long limit=65536+128+37*32+5*16*9;
-        var plan=CudaCameraScatteringAbi.contributionPlan(37,1,1,8,limit);
-        require(plan.tilePixels()==5,"compact contribution fixture must exercise partial final tile");
+        var original=CudaCameraScatteringAbi.contributionPlan(37,1,1,8,limit);
+        require(original.tilePixels()==5,"compact contribution fixture must exercise partial final tile");
+        for(boolean planar:new boolean[]{false,true}) {
+        var plan=planar?new CudaCameraScatteringAbi.Plan(original.pixels(),original.samples(),original.steps(),original.tilePixels(),
+                original.transmittanceOffset(),original.transmittanceOffset(),original.emissionOffset(),original.sourceOffset(),original.bytes(),true):original;
         try(var storage=runtime.allocate(plan.bytes())) {
             var host=arena.allocate(plan.bytes(),16);host.fill((byte)0x5a);
             for(int first=0;first<37;first+=plan.tilePixels()) {
@@ -90,7 +93,7 @@ public final class CudaCameraScatteringNativeSelfTest {
                     float distance=(first+i)*.13f;long primary=plan.primaryOffset()+i*16L;
                     host.set(JAVA_FLOAT,primary,distance);host.set(JAVA_INT,primary+4,1);
                     for(int j=0;j<8;j++)putConstantSource(host.asByteBuffer().order(ByteOrder.nativeOrder()),
-                            Math.toIntExact(plan.sourceOffset()+(i*8L+j)*16),distance,8,j);
+                            Math.toIntExact(plan.sourceOffset()+(planar?j*(long)count+i:i*8L+j)*16),distance,8,j);
                 }
                 runtime.upload(storage.slice(0,plan.bytes()),host);runtime.launchBlocking(kernel,storage.slice(0,plan.bytes()),count,1);
                 runtime.download(storage.slice(0,plan.bytes()),host);
@@ -103,6 +106,7 @@ public final class CudaCameraScatteringNativeSelfTest {
                 }
             }
         }
+    }
     }
     /** Analytic constant integrand fixture, independent of the producer's choice of proposal. */
     private static void putConstantSource(ByteBuffer packed,int at,float distance,int steps,int j) {

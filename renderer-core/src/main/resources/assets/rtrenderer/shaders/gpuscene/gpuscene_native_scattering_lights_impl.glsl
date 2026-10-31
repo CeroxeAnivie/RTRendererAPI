@@ -331,7 +331,12 @@ void main() {
                 source+=gsGatherVolumeCaustics(position,-direction,g);
             }
             GS_SCATTER_DETAIL_NEXT(10u);
-            uint outLane=dispatch.sourceOffset/16u+(gl_LaunchIDEXT.x*samples+sampleIndex)*steps+j;
+            uint localPath=gl_LaunchIDEXT.x*samples+sampleIndex;
+            // The shared uniform arena stores interval planes. Adjacent Vulkan
+            // producers and CUDA consumers access contiguous paths in each plane.
+            bool planarSources=(dispatch.storage.lanes[1u].w&2u)!=0u;
+            uint outLane=dispatch.sourceOffset/16u+(planarSources
+                ?j*dispatch.storage.lanes[0u].z+localPath:localPath*steps+j);
             GS_SCATTER_DETAIL_NEXT(11u);
             dispatch.storage.lanes[outLane]=floatBitsToUint(directPacket
                 ?vec4(source*inversePdf,absolute):vec4(source,local));

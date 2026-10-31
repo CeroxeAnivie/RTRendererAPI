@@ -1,0 +1,17 @@
+{
+  "status": "candidate-not-yet-validated",
+  "scope": "Shared strict uniform arena only: store incoming samples in step planes (j * actualTilePathCount + localPath), with identical values and integration order. General paths retain original AoS layout.",
+  "reference": {
+    "repository": "mmp/pbrt-v4",
+    "commit": "b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f",
+    "file": "src/pbrt/wavefront/workqueue.h",
+    "license": "Apache-2.0",
+    "logic": "WorkQueue inherits SOA for adjacent work-item field accesses. Independently apply field planes to the existing Vulkan/CUDA source ABI."
+  },
+  "format": "Internal version2 flag bit1 selects planar samples. Compact bit0 and same hit/output alias remain intact. Both producer and consumer use actual final-tile path count.",
+  "correctnessRequirement": "Byte-identical linear HDR plus unchanged independent references, malformed-source rejection and partial final-tile native test.",
+  "artifacts": {
+    "control": "ddb51e973bd955219c953d2eeefcfda0a85262bfba6fd2357be4b91db137935f",
+    "candidate": "411eda35c0d204e32e3be3565ebf75bed9b58ed49b7264198072c11372681348"
+  }
+}

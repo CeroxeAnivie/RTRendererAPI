@@ -18,6 +18,7 @@ public final class CudaCameraScatteringAbi {
     public record Plan(int pixels,int samples,int steps,int tilePixels,int primaryOffset,
                        int transmittanceOffset,int emissionOffset,int sourceOffset,long bytes,boolean compactContribution) {
         public int paths() {return Math.multiplyExact(pixels,samples);}
+        public boolean planarSources() {return compactContribution&&primaryOffset==transmittanceOffset;}
     }
 
     public static Plan plan(int width,int height,int samples,int steps) {
@@ -69,7 +70,7 @@ public final class CudaCameraScatteringAbi {
         var environment=frame.environment();
         return ByteBuffer.allocate(HEADER_BYTES).order(ByteOrder.nativeOrder())
                 .putInt(MAGIC).putInt(VERSION).putInt(pixelCount*plan.samples()).putInt(plan.steps())
-                .putInt(firstPixel).putInt(pixelCount).putInt(plan.samples()).putInt(plan.compactContribution()?1:0)
+                .putInt(firstPixel).putInt(pixelCount).putInt(plan.samples()).putInt(plan.compactContribution()?(plan.planarSources()?3:1):0)
                 .putInt(plan.primaryOffset()).putInt(plan.transmittanceOffset())
                 .putInt(plan.emissionOffset()).putInt(plan.sourceOffset())
                 .putFloat(extinction.red()).putFloat(extinction.green()).putFloat(extinction.blue())

@@ -6,7 +6,7 @@ __device__ float integral(float sigma,float distance) {
     return rtrApiIntegratedEmission(sigma,1.f,distance);
 }
 __device__ bool resolve(bool hit,float hitDistance,const float4 *source,int steps,const float *h,
-        float4 *attenuation,float4 *radiance,bool preweighted=false) {
+        float4 *attenuation,float4 *radiance,bool preweighted=false,int sourceStride=1) {
     const float distance=hit?fminf(fmaxf(hitDistance,0.f),h[15]):h[15];
     const float3 sigma=make_float3(h[12],h[13],h[14]),zero=make_float3(0.f);
     const float3 scatter=make_float3(h[16],h[17],h[18]);
@@ -23,7 +23,7 @@ __device__ bool resolve(bool hit,float hitDistance,const float4 *source,int step
         const float start=j*interval;
         const float3 prefix=make_float3(expf(-sigma.x*start),expf(-sigma.y*start),expf(-sigma.z*start));
         if(!preweighted&&fmaxf(prefix.x,fmaxf(prefix.y,prefix.z))<h[23])break;
-        const float4 incoming=source[j];
+        const float4 incoming=source[j*sourceStride];
         if(!isfinite(incoming.x)||!isfinite(incoming.y)||!isfinite(incoming.z)||!isfinite(incoming.w)
                 ||incoming.w<0.f||incoming.w>(preweighted?distance:interval)*(1.f+1e-5f))return false;
         const float pdf=preweighted?1.f:
@@ -44,16 +44,19 @@ __device__ bool resolve(const float *primary,const float4 *source,int steps,cons
 extern "C" __global__ void camera_scattering_resolve(unsigned char *buffer,int count) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=count)return;
     const unsigned int *u=(const unsigned int *)buffer;const float *h=(const float *)buffer;
-    if(u[0]!=0x52534331u||u[1]!=2u||u[3]<1u||u[3]>64u||u[6]<1u||u[6]>8u) {
+    if(u[0]!=0x52534331u||u[1]!=2u||u[3]<1u||u[3]>64u||u[6]<1u||u[6]>8u
+            ||(u[7]&~3u)!=0u||u[7]==2u) {
         atomicAdd((unsigned int *)buffer+28,1u);return;
     }
     const unsigned int item=u[4]*u[6]+(unsigned int)i;
     bool hit;float distance;
-    if(u[7]!=0u) {
+    if((u[7]&1u)!=0u) {
         const unsigned int *compact=(const unsigned int *)(buffer+u[8])+(unsigned int)i*4u;
         distance=__uint_as_float(compact[0]);hit=compact[1]!=0u;
     } else {const float *primary=(const float *)(buffer+u[8])+item*52u;distance=primary[3];hit=((const unsigned int*)primary)[28]!=0u;}
-    const float4 *source=(const float4 *)(buffer+u[11])+(unsigned int)i*u[3];
-    if(!rtr_camera_scattering::resolve(hit,distance,source,u[3],h,(float4 *)(buffer+u[9])+item,(float4 *)(buffer+u[10])+item,true))
+    const bool planar=(u[7]&2u)!=0u;
+    const int sourceStride=planar?(int)u[2]:1;
+    const float4 *source=(const float4 *)(buffer+u[11])+(unsigned int)i*(planar?1u:u[3]);
+    if(!rtr_camera_scattering::resolve(hit,distance,source,u[3],h,(float4 *)(buffer+u[9])+item,(float4 *)(buffer+u[10])+item,true,sourceStride))
         atomicAdd((unsigned int *)buffer+28,1u);
 }
