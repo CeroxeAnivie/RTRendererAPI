@@ -6,6 +6,7 @@
 #endif
 
 #include "gpuscene_common.glsl"
+#include "gpuscene_boundary_intersection.glsl"
 
 layout(location = 0) rayPayloadInEXT GpuScenePayload payload;
 hitAttributeEXT vec2 hitAttributes;
@@ -59,16 +60,21 @@ void main()
     }
 
     uint boundaryFlags=gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
+    uint hitPrimitive=gl_PrimitiveID;vec2 hitBary=hitAttributes;float hitDistance=gl_HitTEXT;
+    bool connection=payload.state.y==GS_PAYLOAD_OPTICAL_CONNECTION_QUERY;
+    if(connection&&boundaryFlags!=0u){uint primitive;vec2 bary;float distance;
+        if(gsBoundaryConnectionHit(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),hitPrimitive,hitBary,
+                gl_RayTminEXT,primitive,bary,distance)){hitPrimitive=primitive;hitBary=bary;hitDistance=distance;}}
     if((boundaryFlags&2u)!=0u) {
         uint mesh=gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT));
-        uvec3 indices=gsTriangleIndices(mesh,gl_PrimitiveID);
+        uvec3 indices=gsTriangleIndices(mesh,hitPrimitive);
         vec3 a=gsPosition(mesh,indices.x),b=gsPosition(mesh,indices.y),c=gsPosition(mesh,indices.z);
         vec3 p0=gl_ObjectToWorldEXT*vec4(a,1),p1=gl_ObjectToWorldEXT*vec4(b,1),p2=gl_ObjectToWorldEXT*vec4(c,1);
         vec3 normal=normalize(cross(p1-p0,p2-p0));
         bool back=dot(normal,gl_WorldRayDirectionEXT)>0.0;
         bool boundaryBack=back!=(determinant(mat3(gl_ObjectToWorldEXT))<0.0);
-        payload.worldPositionAndDistance=vec4(gsBoundaryHitPoint(a,b,c,hitAttributes),gl_HitTEXT);
-        vec3 bary=gsBarycentrics(hitAttributes);
+        payload.worldPositionAndDistance=vec4(gsBoundaryHitPoint(a,b,c,hitBary),hitDistance);
+        vec3 bary=gsBarycentrics(hitBary);
         payload.previousWorldPosition=vec4(gsPreviousInstancePoint(gl_InstanceCustomIndexEXT,a*bary.x+b*bary.y+c*bary.z),1);
         payload.motionRevision=gsInstanceMotionRevision(gl_InstanceCustomIndexEXT);
         payload.worldNormalAndRoughness=vec4(back?-normal:normal,0);
@@ -84,8 +90,8 @@ void main()
     GS_DETAIL_NEXT(25u);
     uint meshSlot = gsInstanceMeshSlot(gl_InstanceCustomIndexEXT);
     uint meshBase = gsMeshBase(meshSlot);
-    uvec3 indices = gsTriangleIndices(meshBase, gl_PrimitiveID);
-    vec3 barycentrics = gsBarycentrics(hitAttributes);
+    uvec3 indices = gsTriangleIndices(meshBase, hitPrimitive);
+    vec3 barycentrics = gsBarycentrics(hitBary);
 
     GS_DETAIL_NEXT(26u);
     vec3 p0 = gsPosition(meshBase, indices.x);
@@ -129,7 +135,7 @@ void main()
     if (dot(worldNormal, gl_WorldRayDirectionEXT) > 0.0) worldNormal = -worldNormal;
 
     GS_DETAIL_NEXT(33u);
-    uint materialSlot = gsTriangleMaterialSlot(meshBase, gl_PrimitiveID);
+    uint materialSlot = gsTriangleMaterialSlot(meshBase, hitPrimitive);
     uint materialBase = materialSlot * GPU_SCENE_MATERIAL_RECORD_WORDS;
     uint materialFlags = gsMaterials.words[materialBase + GPU_SCENE_MATERIAL_FLAGS_WORD];
     uint shadingModel = (materialFlags >> GPU_SCENE_SHADING_MODEL_SHIFT)
@@ -225,9 +231,9 @@ void main()
     float ior = uintBitsToFloat(gsMaterials.words[materialBase + GPU_SCENE_MATERIAL_IOR_WORD]);
     GS_DETAIL_NEXT(45u);
     payload.worldPositionAndDistance = vec4(
-        boundaryFlags!=0u?gsBoundaryHitPoint(p0,p1,p2,hitAttributes)
-            :gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT,
-        gl_HitTEXT
+        boundaryFlags!=0u?gsBoundaryHitPoint(p0,p1,p2,hitBary)
+            :gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * hitDistance,
+        hitDistance
     );
     // Reproject the same geometric point through the last successfully rendered object transform.
     // Using a prior scene transaction here would advance temporal state ahead of the GPU frame.

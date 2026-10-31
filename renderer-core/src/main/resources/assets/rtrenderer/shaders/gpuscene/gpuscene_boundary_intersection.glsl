@@ -60,12 +60,48 @@ bool gsBoundarySharesEdge(vec3 a,vec3 b,vec3 c,vec3 p,vec3 q,vec3 r) {
             +int(gsBoundarySamePoint(c,p)||gsBoundarySamePoint(c,q)||gsBoundarySamePoint(c,r));
     return matches>=2;
 }
-float gsBoundaryDistance(GsBoundaryWide3 a,GsBoundaryWide3 b,GsBoundaryWide3 c,vec3 edges) {
+precise float gsBoundaryDistance(GsBoundaryWide3 a,GsBoundaryWide3 b,GsBoundaryWide3 c,vec3 edges) {
     vec2 x=gsBoundaryWideDifferenceOfProducts(b.y,c.z,b.z,c.y);
     vec2 y=gsBoundaryWideDifferenceOfProducts(b.z,c.x,b.x,c.z);
     vec2 z=gsBoundaryWideDifferenceOfProducts(b.x,c.y,b.y,c.x);
     vec2 numerator=gsBoundaryWideAdd(gsBoundaryWideAdd(gsBoundaryWideMultiply(a.x,x),gsBoundaryWideMultiply(a.y,y)),gsBoundaryWideMultiply(a.z,z));
     return (numerator.x+numerator.y)/(edges.x+edges.y+edges.z);
+}
+bool gsBoundaryTriangleHit(uint mesh,uint primitive,out vec2 bary,out float distance) {
+    uvec3 indices=gsTriangleIndices(mesh,primitive);
+    GsBoundaryWide3 a=gsBoundaryRelativePoint(gsPosition(mesh,indices.x));
+    GsBoundaryWide3 b=gsBoundaryRelativePoint(gsPosition(mesh,indices.y));
+    GsBoundaryWide3 c=gsBoundaryRelativePoint(gsPosition(mesh,indices.z));
+    vec3 edges=gsBoundaryEdges(a,b,c);bary=vec2(0);distance=0;
+    if(any(isnan(edges))||any(isinf(edges))||!gsBoundaryInside(edges))return false;
+    distance=gsBoundaryDistance(a,b,c,edges);bary=edges.yz/(edges.x+edges.y+edges.z);
+    return !isnan(distance)&&!isinf(distance);
+}
+// Near a shared edge, hardware hit t can reorder a very thin entry/exit pair.
+// A straight connection must consume the nearest real crossing after its exact
+// previous t, even when traversal reports the neighbouring face as its candidate.
+bool gsBoundaryConnectionHit(uint mesh,uint primitive,vec2 bary,float minimum,
+        out uint repairedPrimitive,out vec2 repairedBary,out float repairedDistance) {
+    repairedPrimitive=primitive;repairedBary=bary;repairedDistance=gl_HitTEXT;
+    vec3 weights=vec3(1.0-bary.x-bary.y,bary);
+    if(min(weights.x,min(weights.y,weights.z))>=8.0*1.192092896e-7)return true;
+    float tolerance=8.0*1.192092896e-7*max(1.0,abs(gl_HitTEXT));
+    bool found=false;float nearest=1.0e30;
+    uvec3 indices=gsTriangleIndices(mesh,primitive);
+    vec3 a=gsPosition(mesh,indices.x),b=gsPosition(mesh,indices.y),c=gsPosition(mesh,indices.z);
+    uint triangles=gsMeshes.words[mesh+GPU_SCENE_MESH_TRIANGLE_COUNT_WORD];
+    for(uint other=0u;other<triangles;other++) {
+        uvec3 oi=gsTriangleIndices(mesh,other);
+        vec3 p=gsPosition(mesh,oi.x),q=gsPosition(mesh,oi.y),r=gsPosition(mesh,oi.z);
+        if(other!=primitive&&!gsBoundarySamePoint(a,p)&&!gsBoundarySamePoint(a,q)&&!gsBoundarySamePoint(a,r)
+                &&!gsBoundarySamePoint(b,p)&&!gsBoundarySamePoint(b,q)&&!gsBoundarySamePoint(b,r)
+                &&!gsBoundarySamePoint(c,p)&&!gsBoundarySamePoint(c,q)&&!gsBoundarySamePoint(c,r))continue;
+        vec2 candidateBary;float candidateDistance;
+        if(!gsBoundaryTriangleHit(mesh,other,candidateBary,candidateDistance)||candidateDistance<minimum
+                ||abs(candidateDistance-gl_HitTEXT)>tolerance||candidateDistance>=nearest)continue;
+        found=true;nearest=candidateDistance;repairedPrimitive=other;repairedBary=candidateBary;repairedDistance=candidateDistance;
+    }
+    return found;
 }
 bool gsBoundaryCandidateValid(uint mesh,uint primitive,vec2 bary) {
     vec3 weights=vec3(1.0-bary.x-bary.y,bary);

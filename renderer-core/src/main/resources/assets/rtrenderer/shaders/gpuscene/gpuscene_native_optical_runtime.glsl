@@ -37,14 +37,18 @@ vec3 gsOpticalPbrSurface(GpuScenePayload receiver,vec3 rayOrigin) {
     }
     return gsRadiance(radiance);
 }
-GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,float minimum) {
-    payload.state=uvec4(0u,gsOptical.initialize>=2ul?GS_PAYLOAD_PHOTON_QUERY:GS_PAYLOAD_RADIANCE_QUERY,0u,0u);
+GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,float minimum,uint queryKind) {
+    payload.state=uvec4(0u,queryKind,0u,0u);
     payload.launchInfo=launch;payload.mediumBoundary=uvec4(0u);
     // CPU proof excludes masked coverage, backface rejection and inactive material slots.
     // Opaque is an intersection flag: closest-hit still evaluates glass and volume boundaries.
     uint flags=(gsOptical.storage.lanes[11u].w&64u)!=0u?gl_RayFlagsOpaqueEXT:gl_RayFlagsNoneEXT;
     traceRayEXT(sceneTlas,flags,0xff,0,0,0,origin,minimum,direction,1.0e20,0);
     return payload;
+}
+GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,float minimum) {
+    return gsTraceOpticalRadiance(origin,direction,launch,minimum,
+            gsOptical.initialize>=2ul?GS_PAYLOAD_PHOTON_QUERY:GS_PAYLOAD_RADIANCE_QUERY);
 }
 GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch) {
     return gsTraceOpticalRadiance(origin,direction,launch,gsRayEpsilon(origin));
@@ -305,13 +309,13 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
     float minimum=gsOptical.storage.lanes[base+5u].z==0u?0.0:uintBitsToFloat(floatBitsToUint(ray.w)+1u);
     GpuScenePayload hit;
     if(gsOptical.storage.lanes[base+2u].w==1u){
-        hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum);
+        hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY);
         // Connections need full material hits for transparent attenuation, while
         // preserving the public shadow exclusions for overlays and non-blockers.
         while(hit.state.x!=0u&&hit.mediumBoundary.w==0u
                 &&((hit.state.w&GPU_SCENE_FLAG_CASTS_SHADOW)==0u||gsSurfaceOverlay(hit))){
             minimum=uintBitsToFloat(floatBitsToUint(hit.worldPositionAndDistance.w)+1u);
-            hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum);
+            hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY);
         }
     }
     else {hit.worldPositionAndDistance=vec4(0,0,0,-1);hit.previousWorldPosition=vec4(0);hit.motionRevision=uvec2(0);
