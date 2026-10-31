@@ -1,0 +1,452 @@
+{
+  "sourceCommit": "d8c94f6",
+  "diagnosticMode": "step original GPU programs with identical CUDA consumers; not a production HDR acceptance",
+  "conclusion": "The first spot connection hit differs only in its four RGBA attributes. The next CUDA consumer produces different transmittance. Input position/direction/source and hit position/distance/normal agree at this event; exact internal interpolation operation or barycentrics have not been captured.",
+  "results": [
+    [
+      {
+        "scope": "sequence-1-sample-0-branch-0",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 0,
+            "first": null
+          }
+        ]
+      },
+      {
+        "scope": "sequence-1-sample-0-branch-1",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 0,
+            "first": null
+          }
+        ]
+      },
+      {
+        "scope": "sequence-1-sample-1-branch-0",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 0,
+            "first": null
+          }
+        ]
+      },
+      {
+        "scope": "sequence-1-sample-1-branch-1",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 0,
+            "first": null
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "scope": "sequence-1-sample-0-branch-0",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 67,
+            "first": {
+              "record": "0009-cuda.bin",
+              "changes": [
+                {
+                  "word": 17,
+                  "uint": [
+                    1050438043,
+                    1050438044
+                  ],
+                  "float": [
+                    0.30549320578575134,
+                    0.30549323558807373
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "part": "hit",
+            "differentRecords": 4,
+            "first": {
+              "record": "0004-vulkan.bin",
+              "changes": [
+                {
+                  "word": 8,
+                  "uint": [
+                    1048608898,
+                    1048608897
+                  ],
+                  "float": [
+                    0.2509804368019104,
+                    0.250980406999588
+                  ]
+                },
+                {
+                  "word": 9,
+                  "uint": [
+                    1058050194,
+                    1058050193
+                  ],
+                  "float": [
+                    0.5647059679031372,
+                    0.5647059082984924
+                  ]
+                },
+                {
+                  "word": 10,
+                  "uint": [
+                    1063313636,
+                    1063313634
+                  ],
+                  "float": [
+                    0.8784315586090088,
+                    0.8784314393997192
+                  ]
+                },
+                {
+                  "word": 11,
+                  "uint": [
+                    1056997505,
+                    1056997504
+                  ],
+                  "float": [
+                    0.501960813999176,
+                    0.5019607543945312
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "part": "connection",
+            "differentRecords": 71,
+            "first": {
+              "record": "0005-cuda.bin",
+              "changes": [
+                {
+                  "word": 12,
+                  "uint": [
+                    1056810336,
+                    1056810338
+                  ],
+                  "float": [
+                    0.49540233612060547,
+                    0.49540239572525024
+                  ]
+                },
+                {
+                  "word": 13,
+                  "uint": [
+                    1056766274,
+                    1056766276
+                  ],
+                  "float": [
+                    0.49408918619155884,
+                    0.4940892457962036
+                  ]
+                },
+                {
+                  "word": 14,
+                  "uint": [
+                    1056722328,
+                    1056722330
+                  ],
+                  "float": [
+                    0.4927794933319092,
+                    0.49277955293655396
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "scope": "sequence-1-sample-0-branch-1",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 76,
+            "first": {
+              "record": "0000-vulkan.bin",
+              "changes": [
+                {
+                  "word": 17,
+                  "uint": [
+                    1050438043,
+                    1050438044
+                  ],
+                  "float": [
+                    0.30549320578575134,
+                    0.30549323558807373
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 76,
+            "first": {
+              "record": "0000-vulkan.bin",
+              "changes": [
+                {
+                  "word": 16,
+                  "uint": [
+                    1020807590,
+                    1020807592
+                  ],
+                  "float": [
+                    0.0264023058116436,
+                    0.0264023095369339
+                  ]
+                },
+                {
+                  "word": 17,
+                  "uint": [
+                    1026938116,
+                    1026938118
+                  ],
+                  "float": [
+                    0.044392600655555725,
+                    0.04439260810613632
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "scope": "sequence-1-sample-1-branch-0",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 60,
+            "first": {
+              "record": "0000-vulkan.bin",
+              "changes": [
+                {
+                  "word": 17,
+                  "uint": [
+                    1050438043,
+                    1050438044
+                  ],
+                  "float": [
+                    0.30549320578575134,
+                    0.30549323558807373
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "part": "hit",
+            "differentRecords": 4,
+            "first": {
+              "record": "0004-vulkan.bin",
+              "changes": [
+                {
+                  "word": 8,
+                  "uint": [
+                    1048608898,
+                    1048608897
+                  ],
+                  "float": [
+                    0.2509804368019104,
+                    0.250980406999588
+                  ]
+                },
+                {
+                  "word": 9,
+                  "uint": [
+                    1058050194,
+                    1058050193
+                  ],
+                  "float": [
+                    0.5647059679031372,
+                    0.5647059082984924
+                  ]
+                },
+                {
+                  "word": 10,
+                  "uint": [
+                    1063313636,
+                    1063313634
+                  ],
+                  "float": [
+                    0.8784315586090088,
+                    0.8784314393997192
+                  ]
+                },
+                {
+                  "word": 11,
+                  "uint": [
+                    1056997505,
+                    1056997504
+                  ],
+                  "float": [
+                    0.501960813999176,
+                    0.5019607543945312
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "part": "connection",
+            "differentRecords": 66,
+            "first": {
+              "record": "0000-vulkan.bin",
+              "changes": [
+                {
+                  "word": 16,
+                  "uint": [
+                    1020807590,
+                    1020807592
+                  ],
+                  "float": [
+                    0.0264023058116436,
+                    0.0264023095369339
+                  ]
+                },
+                {
+                  "word": 17,
+                  "uint": [
+                    1026938116,
+                    1026938118
+                  ],
+                  "float": [
+                    0.044392600655555725,
+                    0.04439260810613632
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "scope": "sequence-1-sample-1-branch-1",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 76,
+            "first": {
+              "record": "0000-vulkan.bin",
+              "changes": [
+                {
+                  "word": 17,
+                  "uint": [
+                    1050438043,
+                    1050438044
+                  ],
+                  "float": [
+                    0.30549320578575134,
+                    0.30549323558807373
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 76,
+            "first": {
+              "record": "0000-vulkan.bin",
+              "changes": [
+                {
+                  "word": 16,
+                  "uint": [
+                    1020807590,
+                    1020807592
+                  ],
+                  "float": [
+                    0.0264023058116436,
+                    0.0264023095369339
+                  ]
+                },
+                {
+                  "word": 17,
+                  "uint": [
+                    1026938116,
+                    1026938118
+                  ],
+                  "float": [
+                    0.044392600655555725,
+                    0.04439260810613632
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  ],
+  "evidence": [
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v17-spot-source/spot-source-paths.json",
+      "sha256": "690dbffb25341a16b106d14f00522f342b3b30be4e675abf135d2decbdd224f7"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v18-event-stepping/spot-events-paths.json",
+      "sha256": "e64b798321f4c2fd2de07ddf5ddaba1017e6762927771f9b75383c6be48355bb"
+    }
+  ]
+}

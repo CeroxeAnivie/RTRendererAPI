@@ -2,6 +2,7 @@
 // nearest-N collection, ordered consumption and complete refill without truncation.
 #include "gpuscene_collected_material_data.glsl"
 #include "gpuscene_collected_batch_data.glsl"
+GpuScenePayload gsOpticalConnectionHitRepeated(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum);
 layout(location=0) callableDataEXT GsCollectedMaterialData gsCollectedMaterial;
 layout(location=1) callableDataEXT GsCollectedBatchData gsCollectedBatch;
 #define gsCollectedEvents gsCollectedBatch.events
@@ -56,6 +57,15 @@ bool gsCollectedConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float mini
         GS_DETAIL_BEGIN(177u);
         uint instance=event.identity.x,primitive=event.identity.y;
         uint boundary=gsInstanceWord(instance,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
+        if((boundary&2u)==0u) {
+            // Surface attributes must come from the original closest-hit producer.
+            // Re-evaluating vertex colors/alpha in another stage changes rounding
+            // before transport. The ordered trace also retains masked/overlay rules.
+            // Keep the batch: the next minimum excludes every event it consumed.
+            hit=gsOpticalConnectionHitRepeated(origin,direction,launch,minimum,maximum);
+            GS_DETAIL_END();
+            return true;
+        }
         gsCollectedMaterial.hit.state=uvec4(0u,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY,0u,0u);
         gsCollectedMaterial.hit.launchInfo=launch;
 #ifdef RTRENDERER_OPTICAL_PROFILE

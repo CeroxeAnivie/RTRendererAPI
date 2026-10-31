@@ -31,10 +31,10 @@ vec3 gsBoundaryHitPoint(mat4x3 hitObjectToWorld,vec3 a,vec3 b,vec3 c,vec2 bary) 
     return world;
 }
 
-void gsEvaluateTriangleHit(inout GpuScenePayload payload,uint instanceIndex,mat4x3 hitObjectToWorld,
-        vec3 rayOrigin,vec3 rayDirection,uint boundaryFlags,uint hitPrimitive,vec2 hitBary,float hitDistance) {
-    GS_DETAIL_BEGIN(24u);
-    if((boundaryFlags&2u)!=0u) {
+// The collected path only evaluates invisible medium interfaces in its callable.
+// Ordinary surfaces retain the original closest-hit producer, including interpolation.
+void gsEvaluateInvisibleBoundaryHit(inout GpuScenePayload payload,uint instanceIndex,mat4x3 hitObjectToWorld,
+        vec3 rayDirection,uint boundaryFlags,uint hitPrimitive,vec2 hitBary,float hitDistance) {
         uint mesh=gsMeshBase(gsInstanceMeshSlot(instanceIndex));
         uvec3 indices=gsTriangleIndices(mesh,hitPrimitive);
         vec3 a=gsPosition(mesh,indices.x),b=gsPosition(mesh,indices.y),c=gsPosition(mesh,indices.z);
@@ -54,6 +54,13 @@ void gsEvaluateTriangleHit(inout GpuScenePayload payload,uint instanceIndex,mat4
         payload.mediumBoundary=uvec4(instanceIndex,
             gsInstanceWord(instanceIndex,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD),
             gsInstanceWord(instanceIndex,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_ORIENTATION_WORD),boundaryFlags);
+}
+void gsEvaluateTriangleHit(inout GpuScenePayload payload,uint instanceIndex,mat4x3 hitObjectToWorld,
+        vec3 rayOrigin,vec3 rayDirection,uint boundaryFlags,uint hitPrimitive,vec2 hitBary,float hitDistance) {
+    GS_DETAIL_BEGIN(24u);
+    if((boundaryFlags&2u)!=0u) {
+        gsEvaluateInvisibleBoundaryHit(payload,instanceIndex,hitObjectToWorld,rayDirection,boundaryFlags,
+                hitPrimitive,hitBary,hitDistance);
         GS_DETAIL_END();return;
     }
     GS_DETAIL_NEXT(25u);

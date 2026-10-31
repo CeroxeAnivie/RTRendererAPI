@@ -26,7 +26,7 @@ void main() {
     hit.diagnosticAddress=material.hit.diagnosticAddress;
     hit.diagnosticRecord=material.hit.diagnosticRecord;
 #endif
-    gsEvaluateTriangleHit(hit,instance,transform,material.originAndDistance.xyz,material.direction,
+    gsEvaluateInvisibleBoundaryHit(hit,instance,transform,material.direction,
         gsInstanceWord(instance,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD),material.identity.y,
         uintBitsToFloat(material.identity.zw),material.originAndDistance.w);
     material.hit=hit;
