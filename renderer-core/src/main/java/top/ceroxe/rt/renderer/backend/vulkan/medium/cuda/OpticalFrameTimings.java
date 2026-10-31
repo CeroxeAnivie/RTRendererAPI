@@ -25,18 +25,21 @@ public final class OpticalFrameTimings {
     public static final LongAdder pbrContributionRestoreGpu=new LongAdder(),pbrContributionRestoreCount=new LongAdder();
     public static final LongAdder[] kernelPhases=java.util.stream.IntStream.range(0,8).mapToObj(i->new LongAdder()).toArray(LongAdder[]::new);
     private static final java.util.Map<String,LongAdder[]> roundDetails=new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<String,LongAdder[]> namedGpuStages=new java.util.concurrent.ConcurrentHashMap<>();
     private OpticalFrameTimings() { }
     public static void recordCudaKernel(String stage,long nanos) {
         if(!ENABLED)return;
+        recordNamedGpuStage("cuda."+stage,nanos);
         switch(stage) {
             case "cameraScattering.resolve" -> {cameraScatteringKernelGpu.add(nanos);cameraScatteringKernelCount.increment();}
             case "pbrMedium.resolve" -> {pbrMediumKernelGpu.add(nanos);pbrMediumKernelCount.increment();}
-            default -> throw new IllegalArgumentException("unknown profiled CUDA kernel: "+stage);
+            default -> {if(!stage.startsWith("entry."))throw new IllegalArgumentException("unknown profiled CUDA kernel: "+stage);}
         }
     }
     public static void recordGpuStage(String stage,long nanos) {
         if(!ENABLED)return;
         if(nanos<0)throw new IllegalArgumentException("GPU stage duration must not be negative");
+        recordNamedGpuStage("vulkan."+stage,nanos);
         switch(stage) {
             case "cameraScattering.tlas" -> {cameraScatteringTlasGpu.add(nanos);cameraScatteringTlasCount.increment();}
             case "cameraScattering.lights" -> {cameraScatteringLightsGpu.add(nanos);cameraScatteringLightsCount.increment();}
@@ -46,6 +49,33 @@ public final class OpticalFrameTimings {
             case "pbrMedium.contributionRestore" -> {pbrContributionRestoreGpu.add(nanos);pbrContributionRestoreCount.increment();}
             default -> throw new IllegalArgumentException("unknown profiled Vulkan stage: "+stage);
         }
+    }
+    /** Inclusive GPU evidence only. Never sum these rows with host waits or their enclosing producer. */
+    public static void recordNamedGpuStage(String stage,long nanos) {
+        if(!ENABLED)return;
+        if(stage==null||stage.isBlank()||nanos<0)throw new IllegalArgumentException("invalid named GPU timing");
+        var values=namedGpuStages.computeIfAbsent(stage,k->new LongAdder[]{new LongAdder(),new LongAdder()});
+        values[0].add(nanos);values[1].increment();
+    }
+    public static java.util.Map<String,long[]> stageSnapshot() {
+        var result=new java.util.TreeMap<String,long[]>();
+        namedGpuStages.forEach((name,values)->result.put(name,new long[]{values[0].sum(),values[1].sum()}));
+        return result;
+    }
+    public static String stageDeltaJson(java.util.Map<String,long[]> before,int frames) {
+        if(frames<1)throw new IllegalArgumentException("frames must be positive");
+        StringBuilder json=new StringBuilder("{\"interpretation\":\"GPU event/timestamp evidence; stages may be nested and must not be added to exclusive wall time\",\"stages\":[");
+        boolean first=true;
+        for(var entry:stageSnapshot().entrySet()) {
+            long[] old=before.get(entry.getKey()),value=entry.getValue();
+            long nanos=value[0]-(old==null?0:old[0]),calls=value[1]-(old==null?0:old[1]);
+            if(calls==0)continue;
+            if(!first)json.append(',');first=false;
+            json.append("{\"stage\":\"").append(entry.getKey()).append("\",\"totalMs\":")
+                    .append(nanos/1e6).append(",\"msPerFrame\":").append(nanos/(double)frames/1e6)
+                    .append(",\"calls\":").append(calls).append('}');
+        }
+        return json.append("]}").toString();
     }
     public static void recordRound(int opticalSample,int branch,int round,int queries,int[] statistics,long[] phases) {
         if(!KERNEL_PHASES)return;

@@ -73,6 +73,12 @@ public final class MediumGallerySceneSelfTest {
         require(!new MediumGalleryScene(noCaustics).frame(0,640,360,0,0).caustics().enabled(),"specialized caustic preset has an explicit off control");
         var capture=MediumGalleryDemo.Options.parse(new String[]{"--fg=false","--capture=build/gallery.png"});
         require(MediumGalleryDemo.configuration(capture).cpuFrameReadbackEnabled(),"explicit non-FG capture policy");
+        var performance=MediumPerformanceCases.all();
+        require(performance.stream().anyMatch(c->c.id().equals("pbr-direct-uniform")),"focused optimization case must remain in the complete matrix");
+        require(performance.stream().anyMatch(c->c.id().equals("metal-density-multiple-caustics"))
+                        &&performance.stream().anyMatch(c->c.id().equals("alpha-density-multiple-caustics")),
+                "newly closed cross-feature paths must have actual performance fixtures");
+        System.out.println("Medium performance fixture coverage: cases="+performance.size()+" requiredFeatures="+MediumPerformanceCases.Feature.values().length);
         System.out.println("MediumGallerySceneSelfTest passed: native defaults, gallery feature switches, four PBR medium combinations, explicit boundary refraction/scattering, glass/scattering/caustics cross-feature, absorption/emission, revision and capture policy");
     }
     private static void require(boolean condition,String message) {if(!condition)throw new AssertionError(message);}

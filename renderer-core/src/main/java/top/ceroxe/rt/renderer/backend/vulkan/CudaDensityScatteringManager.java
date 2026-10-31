@@ -1,6 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import java.lang.foreign.Arena;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.util.Objects;
@@ -160,11 +161,15 @@ final class CudaDensityScatteringManager implements AutoCloseable {
     private void checkOpen(){if(closed)throw new IllegalStateException("density-scattering manager is closed");}
     private static FrameValidationException unsupported(String reason){return new FrameValidationException(
             FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,reason);}
-    private <T>T onNative(Callable<T> task) {var result=nativeThread.submit(task);boolean interrupted=false;
+    private <T>T onNative(Callable<T> task) {
+        int wallTask=OpticalWallTimeline.enter(OpticalWallTimeline.Stage.DENSITY_SCATTERING_NATIVE);
+        try {var result=nativeThread.submit(OpticalWallTimeline.awaited(task));boolean interrupted=false;
         try{for(;;)try{return result.get();}catch(InterruptedException ignored){interrupted=true;}catch(ExecutionException failure){
             if(failure.getCause() instanceof RuntimeException runtime)throw runtime;if(failure.getCause() instanceof Error error)throw error;
             throw new IllegalStateException("native density-scattering operation failed",failure.getCause());}}
-        finally{if(interrupted)Thread.currentThread().interrupt();}}
+        finally{if(interrupted)Thread.currentThread().interrupt();}
+        }finally{OpticalWallTimeline.leave(wallTask);}
+    }
     @Override public synchronized void close(){if(closed)return;try{onNative(()->{Throwable failure=null;
         try{drain();}catch(RuntimeException|Error exception){failure=exception;}
         if(storage!=null)try{storage.close();storage=null;}catch(RuntimeException|Error exception){if(failure==null)failure=exception;else failure.addSuppressed(exception);}

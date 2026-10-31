@@ -5,6 +5,7 @@ import java.lang.foreign.ValueLayout;
 import java.util.Map;
 import java.util.TreeMap;
 import top.ceroxe.rt.renderer.rt.device.RtGpuTimestampPool;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
 
 /** 显式开启的分轮诊断；生产默认路径不分配记录、不读时钟、不增加 GPU 工作。 */
 public final class OpticalDetailedProfile {
@@ -77,14 +78,14 @@ public final class OpticalDetailedProfile {
         if(capture!=null)Records.pending.get().add(new Pending(Records.scope.get(),name,capture));
     }
     public static void resolveDeferred(){
-        if(!ENABLED)return;
+        if(!ENABLED&&!OpticalFrameTimings.ENABLED)return;
         Throwable failure=null;
         try{for(var pending:Records.pending.get())try(var capture=pending.capture()){
-            synchronized(Records.totals){
-                if(capture.resolve())for(int i=0;i<capture.segmentCount();i++)
-                    Records.totals.merge(pending.scope()+"/"+pending.name()+"/"+capture.segmentName(i)+"Nanos",capture.segmentNanos(i),Math::addExact);
-                else Records.totals.merge(pending.scope()+"/timestampUnavailable",1L,Math::addExact);
-            }
+            if(capture.resolve())for(int i=0;i<capture.segmentCount();i++) {
+                long nanos=capture.segmentNanos(i);
+                if(ENABLED)synchronized(Records.totals){Records.totals.merge(pending.scope()+"/"+pending.name()+"/"+capture.segmentName(i)+"Nanos",nanos,Math::addExact);}
+                OpticalFrameTimings.recordNamedGpuStage("vulkan."+pending.name()+"/"+capture.segmentName(i),nanos);
+            }else if(ENABLED)synchronized(Records.totals){Records.totals.merge(pending.scope()+"/timestampUnavailable",1L,Math::addExact);}
         }catch(RuntimeException|Error exception){if(failure==null)failure=exception;else failure.addSuppressed(exception);}}
         finally{Records.pending.get().clear();}
         if(failure instanceof RuntimeException exception)throw exception;
@@ -92,7 +93,7 @@ public final class OpticalDetailedProfile {
     }
     /** The caller must retire submitted GPU work before abandoning its query ranges. */
     public static void discardDeferred(){
-        if(!ENABLED)return;
+        if(!ENABLED&&!OpticalFrameTimings.ENABLED)return;
         try{for(var pending:Records.pending.get())pending.capture().close();}
         finally{Records.pending.get().clear();}
     }

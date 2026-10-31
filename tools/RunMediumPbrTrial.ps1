@@ -37,7 +37,7 @@ try {
         $enabled=if($Mode -eq 'profile'){'true'}else{'false'}
         $timings=if($Mode -eq 'timings'){'true'}else{'false'}
         $invokeArgs=$javaOptions+@('-cp',$classpath,'demo.MediumGalleryPerformanceBenchmark',
-            "--warmup=$Warmup","--frames=$Frames","--rounds=$Rounds","--profile=$timings","--shaderProfile=$enabled","--wallProfile=$timings")
+            '--suite=focused',"--warmup=$Warmup","--frames=$Frames","--rounds=$Rounds","--profile=$timings","--shaderProfile=$enabled","--wallProfile=$timings")
     }
     # Windows PowerShell reports normal native stderr as ErrorRecord under Stop.
     $ErrorActionPreference='Continue'

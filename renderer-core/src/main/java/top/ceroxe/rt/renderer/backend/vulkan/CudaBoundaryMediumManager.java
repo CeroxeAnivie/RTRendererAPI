@@ -1,6 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import java.lang.foreign.Arena;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -323,12 +324,16 @@ final class CudaBoundaryMediumManager implements AutoCloseable {
     }
     private void checkOpen() {if(closed) throw new IllegalStateException("native boundary manager is closed");}
     private <T>T onNative(Callable<T> operation) {
-        var submitted=nativeThread.submit(operation); boolean interrupted=false;
+        int wallTask=OpticalWallTimeline.enter(OpticalWallTimeline.Stage.BOUNDARY_MEDIUM_NATIVE);
+        try {
+        var submitted=nativeThread.submit(OpticalWallTimeline.awaited(operation)); boolean interrupted=false;
         try {for(;;) try {return submitted.get();} catch(InterruptedException ignored) {interrupted=true;}
             catch(ExecutionException failure) {if(failure.getCause() instanceof RuntimeException runtime) throw runtime;
                 if(failure.getCause() instanceof Error error) throw error;
                 throw new IllegalStateException("native boundary operation failed",failure.getCause());}
         } finally {if(interrupted) Thread.currentThread().interrupt();}
+
+        }finally{OpticalWallTimeline.leave(wallTask);}
     }
     private static FrameValidationException unsupported(String message) {
         return new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,message);

@@ -1,6 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import java.lang.foreign.Arena;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
 import java.lang.foreign.ValueLayout;
 import java.util.Objects;
 import java.util.function.LongFunction;
@@ -423,11 +424,15 @@ final class CudaMultipleScatteringManager implements AutoCloseable {
     private void drain(){int result=VulkanQueueHostSync.waitIdle(device.frameQueue());if(result!=VK10.VK_SUCCESS)throw new IllegalStateException("drain multiple-scattering consumers: VkResult="+result);}
     private static long residentLimit(){return Math.min(CudaMultipleScatteringAbi.RESIDENT_CAP,Long.getLong("top.ceroxe.rt.medium.cuda.maxResidentBytes",CudaMultipleScatteringAbi.RESIDENT_CAP));}
     private void checkOpen(){if(closed)throw new IllegalStateException("multiple-scattering manager is closed");}
-    private <T>T onNative(Callable<T> operation){var submitted=nativeThread.submit(operation);boolean interrupted=false;
+    private <T>T onNative(Callable<T> operation){
+        int wallTask=OpticalWallTimeline.enter(OpticalWallTimeline.Stage.MULTIPLE_SCATTERING_NATIVE);
+        try {var submitted=nativeThread.submit(OpticalWallTimeline.awaited(operation));boolean interrupted=false;
         try{for(;;)try{return submitted.get();}catch(InterruptedException ignored){interrupted=true;}catch(ExecutionException failure){
             if(failure.getCause() instanceof RuntimeException runtime)throw runtime;if(failure.getCause() instanceof Error error)throw error;
             throw new IllegalStateException("native multiple-scattering operation failed",failure.getCause());}}
-        finally{if(interrupted)Thread.currentThread().interrupt();}}
+        finally{if(interrupted)Thread.currentThread().interrupt();}
+        }finally{OpticalWallTimeline.leave(wallTask);}
+    }
     private static FrameValidationException unsupported(String reason){return new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,reason);}
     @Override public synchronized void close(){if(closed)return;try{onNative(()->{Throwable failure=null;
         try{drain();}catch(RuntimeException|Error exception){failure=exception;}

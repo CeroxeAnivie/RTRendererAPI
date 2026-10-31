@@ -7,6 +7,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.List;
+import java.util.Map;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.concurrent.locks.LockSupport;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.Renderer;
@@ -14,9 +19,10 @@ import top.ceroxe.rt.renderer.api.RendererDiagnostics;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalFrameTimings;
 import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
+import top.ceroxe.rt.renderer.backend.vulkan.MediumPerformanceRouteProbe;
 import static top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline.Stage.*;
 
-/** Focused steady-state benchmark for the actual default PBR uniform-scattering gallery scene. */
+/** Native completed-frame benchmark: all closed medium features, or an explicitly selected focus case. */
 public final class MediumGalleryPerformanceBenchmark {
     private static final String[] PROFILE_NAMES = {
             "sharedPrepare", "sharedExchange", "vulkanRelease", "cudaStageWall", "legacyResolve",
@@ -53,18 +59,43 @@ public final class MediumGalleryPerformanceBenchmark {
         else {System.clearProperty("top.ceroxe.rt.medium.opticalDetailedProfile");
             System.clearProperty("top.ceroxe.rt.medium.cameraScatteringShaderProfile");}
 
-        var options = MediumGalleryDemo.Options.parse(new String[]{
-                "--width=" + width, "--height=" + height, "--spp=1", "--scene=pbr-direct-uniform",
-                "--fg=false", "--caustics=false", "--animate=false", "--controls=false"
-        });
-        var scene = new MediumGalleryScene(options);
-        var frameConfig = MediumGalleryDemo.configuration(options);
-        Path report = Path.of("build/reports/medium-performance/pbr-direct-uniform-1080p-"
+        String suite=values.getOrDefault("suite","all");
+        if(!suite.equals("all")&&!suite.equals("focused"))throw new IllegalArgumentException("suite must be all or focused");
+        List<MediumPerformanceCases.Workload> cases=suite.equals("all")?MediumPerformanceCases.all():List.of(MediumPerformanceCases.focused());
+        if(values.containsKey("cases")) {
+            Set<String> selected=Set.of(values.get("cases").split(","));
+            var available=cases.stream().map(MediumPerformanceCases.Workload::id).collect(java.util.stream.Collectors.toSet());
+            require(available.containsAll(selected),"unknown medium performance cases: "+selected);
+            cases=cases.stream().filter(c->selected.contains(c.id())).toList();
+        }
+        if(shaderProfile)require(cases.size()==1&&cases.getFirst().id().equals("pbr-direct-uniform"),
+                "camera shader-clock profile requires the focused pbr-direct-uniform case; use normal timings for the complete matrix");
+        Path reportDirectory=Path.of(values.getOrDefault("output","build/reports/medium-performance")).toAbsolutePath();
+        Files.createDirectories(reportDirectory);
+        Path summary=reportDirectory.resolve(suite+"-"+(profile?"profiled":"unprofiled")+"-coverage.json");
+        Files.writeString(summary,"{\"complete\":false,\"status\":\"running\"}\n",StandardCharsets.UTF_8);
+        var completed=new ArrayList<String>();var covered=EnumSet.noneOf(MediumPerformanceCases.Feature.class);
+        for(var scene:cases) {
+            String evidence=runCase(scene,width,height,warmup,frames,rounds,profile,shaderProfile,wallProfile,reportDirectory);
+            completed.add(evidence);covered.addAll(scene.features());
+        }
+        boolean full=suite.equals("all")&&!values.containsKey("cases");
+        if(full)require(covered.containsAll(EnumSet.allOf(MediumPerformanceCases.Feature.class)),"completed matrix lost required features");
+        Files.writeString(summary,"{\n\"scope\":\"all closed medium features and new cross-feature combinations\",\n\"complete\":"+full
+                +",\n\"requiredFeatures\":"+strings(EnumSet.allOf(MediumPerformanceCases.Feature.class))
+                +",\n\"executedFeatures\":"+strings(covered)+",\n\"cases\":[\n"+String.join(",\n",completed)+"\n]}\n",StandardCharsets.UTF_8);
+        System.out.println("GalleryPerf coverageReport="+summary+" completedCases="+completed.size()+" complete="+full);
+    }
+
+    private static String runCase(MediumPerformanceCases.Workload scene,int width,int height,int warmup,int frames,int rounds,
+            boolean profile,boolean shaderProfile,boolean wallProfile,Path reportDirectory)throws Exception {
+        var frameConfig=scene.config();String stem=scene.id()+"-1080p";
+        Path report = reportDirectory.resolve(stem+"-"
                 + (profile ? "profiled" : shaderProfile?"shader-sampled":wallProfile?"wall-timeline":"unprofiled") + ".csv").toAbsolutePath();
         Files.createDirectories(report.getParent());
         // Capture actual request budgets before warmup, outside every measured window.
         // In particular maxEvents and scatteringSteps are different API fields.
-        var workload = scene.frame(0, width, height, 0, 0);
+        var workload = scene.frame(0, width, height);
         var budget = workload.mediumTransport();
         Path workloadReport = report.resolveSibling(report.getFileName().toString().replace(".csv", "-workload.json"));
         Files.writeString(workloadReport, String.format(Locale.ROOT,
@@ -72,15 +103,16 @@ public final class MediumGalleryPerformanceBenchmark {
                         + "\"opticalSamples\":%d,\"scatteringSteps\":%d,\"lightSamples\":%d,"
                         + "\"maxDistance\":%s,\"transmittanceCutoff\":%s,\"scatteringBounces\":%d,"
                         + "\"firstInterfaceSampling\":\"%s\"}%n",
-                scene.preset().id, width, height, workload.antiAliasing().samplesPerPixel(), budget.maxEvents(),
+                scene.id(), width, height, workload.antiAliasing().samplesPerPixel(), budget.maxEvents(),
                 budget.opticalSamples(), budget.scatteringSteps(), budget.lightSamples(), budget.maxDistance(),
                 budget.transmittanceCutoff(), budget.scatteringBounces(), budget.firstInterfaceSampling()), StandardCharsets.UTF_8);
         System.out.println("GalleryPerf workloadReport=" + workloadReport + " budgets=" + budget);
         System.out.printf(Locale.ROOT,
-                "GalleryPerf device=RTX5080-Laptop targetScene=%s extent=%dx%d spp=1 warmup=%d frames=%d rounds=%d "
+                "GalleryPerf device=RTX5080-Laptop targetScene=%s extent=%dx%d spp=%d warmup=%d frames=%d rounds=%d "
                         + "profile=%s wallProfile=%s frameGeneration=false reconstruction=false temporal=false denoising=false cpuReadback=false%n",
-                scene.preset().id, width, height, warmup, frames, rounds, profile, wallProfile);
+                scene.id(), width, height,workload.antiAliasing().samplesPerPixel(), warmup, frames, rounds, profile, wallProfile);
 
+        var routesBefore=MediumPerformanceRouteProbe.snapshot();
         try (var renderer = Renderer.open(frameConfig);
              var output = new PrintWriter(Files.newBufferedWriter(report, StandardCharsets.UTF_8))) {
             renderer.apply(scene.transaction());
@@ -90,25 +122,30 @@ public final class MediumGalleryPerformanceBenchmark {
             requireHealthy(renderer, "warmup");
             long[] profileBefore = OpticalFrameTimings.snapshot();
             var detailedBefore=top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.snapshot();
+            var stagesBefore=OpticalFrameTimings.stageSnapshot();
             output.println("round,frames,wallMs,completedFps,submitCpuMs,requestBuildCpuMs,pollCpuMs,deferrals,"
-                    + "gpuFrameMeanMs,gpuFrameLowerMs,gpuFrameUpperMs,gpuSamples,profileData");
+                    + "gpuFrameMeanMs,gpuFrameLowerMs,gpuFrameUpperMs,gpuSamples,profileData,stageData");
             for (int round = 0; round < rounds; round++) {
                 Result result = range(renderer, interop, scene, width, height, sequence, frames);
                 requireHealthy(renderer, "round " + (round + 1));
                 long[] profileAfter = OpticalFrameTimings.snapshot();
                 long[] delta = subtract(profileAfter, profileBefore);
                 profileBefore = profileAfter;
+                String stageJson=OpticalFrameTimings.stageDeltaJson(stagesBefore,result.frames());
+                stagesBefore=OpticalFrameTimings.stageSnapshot();
+                Files.writeString(report.resolveSibling(stem+"-gpu-stages-round-"+(round+1)+".json"),stageJson,StandardCharsets.UTF_8);
                 if(shaderProfile){
                     String shaderSummary=top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile
                             .cameraScatteringSummaryJson(detailedBefore,result.frames());
                     detailedBefore=top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.snapshot();
-                    Path shaderReport=Path.of("build/reports/medium-performance/pbr-direct-uniform-1080p-shader-profile-round-"
+                    Path shaderReport=reportDirectory.resolve(stem+"-shader-profile-round-"
                             +(round+1)+".json").toAbsolutePath();
                     Files.writeString(shaderReport,shaderSummary,StandardCharsets.UTF_8);
                     System.out.println("GalleryPerf shaderStageReport="+shaderReport+" stages="+shaderSummary.replace('\n',' '));
                 }
                 if (result.timeline() != null) {
-                    Path timelineReport = report.resolveSibling("pbr-direct-uniform-1080p-wall-timeline-round-" + (round + 1) + ".json");
+                    require(result.timeline().droppedEvents()==0,"wall timeline lost events for "+scene.id());
+                    Path timelineReport = report.resolveSibling(stem+"-wall-timeline-round-" + (round + 1) + ".json");
                     Files.writeString(timelineReport, result.timeline().json(result.frames()), StandardCharsets.UTF_8);
                     System.out.println("GalleryPerf wallTimelineReport=" + timelineReport);
                 }
@@ -125,11 +162,11 @@ public final class MediumGalleryPerformanceBenchmark {
                         result.submitNanos() / 1e6, result.requestBuildNanos() / 1e6, result.pollNanos() / 1e6,
                         result.deferrals(), gpuMeanMs, gpuLowMs, gpuHighMs, profileJson,shaderProfile);
                 output.printf(Locale.ROOT,
-                        "%d,%d,%.6f,%.6f,%.6f,%.6f,%.6f,%d,%.9f,%.9f,%.9f,%d,\"%s\"%n",
+                        "%d,%d,%.6f,%.6f,%.6f,%.6f,%.6f,%d,%.9f,%.9f,%.9f,%d,\"%s\",\"%s\"%n",
                         round + 1, result.frames(), result.wallNanos() / 1e6,
                         result.frames() * 1e9 / result.wallNanos(), result.submitNanos() / 1e6,
                         result.requestBuildNanos() / 1e6, result.pollNanos() / 1e6, result.deferrals(),
-                        gpuMeanMs, gpuLowMs, gpuHighMs, result.gpu().samples(), profileJson.replace("\"", "\"\""));
+                        gpuMeanMs, gpuLowMs, gpuHighMs, result.gpu().samples(), profileJson.replace("\"", "\"\""),stageJson.replace('\n',' ').replace("\"","\"\""));
                 output.flush();
                 if (output.checkError()) throw new IllegalStateException("failed to write " + report);
             }
@@ -137,14 +174,25 @@ public final class MediumGalleryPerformanceBenchmark {
                     "native benchmark must not count generated frames");
             System.out.println("GalleryPerf warmupFrames=" + warmupResult.frames() + " report=" + report);
         }
+        var routes=MediumPerformanceRouteProbe.delta(routesBefore);
+        boolean zeroDensity=scene.features().contains(MediumPerformanceCases.Feature.ZERO_DENSITY);
+        require(zeroDensity||routes.entrySet().stream().filter(e->!e.getKey().equals("photonMaps")).mapToLong(e->e.getValue()).sum()>=warmup+(long)frames*rounds,
+                "medium performance case bypassed native execution: "+scene.id()+" "+routes);
+        require(!workload.caustics().enabled()||routes.getOrDefault("photonMaps",0L)>0,
+                "caustics performance case never produced a photon map: "+scene.id());
+        return "{\"case\":\""+scene.id()+"\",\"features\":"+strings(scene.features())+",\"nativeRoutes\":"+longMap(routes)
+                +",\"measuredFrames\":"+((long)frames*rounds)+",\"csv\":\""+report.getFileName()+"\"}";
     }
 
-    private static Result range(Renderer renderer, VulkanFrameInterop interop, MediumGalleryScene scene,
+    private static Result range(Renderer renderer, VulkanFrameInterop interop, MediumPerformanceCases.Workload scene,
             int width, int height, long[] sequence, int frames) throws InterruptedException {
         RendererDiagnostics beforeDiagnostics = renderer.diagnostics();
         var beforeGpu = beforeDiagnostics.frameGpuTiming();
         long firstSequence = sequence[0], last = Math.addExact(firstSequence, frames) - 1;
-        var timeline = OpticalWallTimeline.ENABLED ? OpticalWallTimeline.allocate(262_144) : null;
+        var plan=scene.frame(sequence[0],width,height);
+        long eventsPerFrame=2048L+128L*plan.mediumTransport().maxEvents()*plan.mediumTransport().opticalSamples()*plan.antiAliasing().samplesPerPixel();
+        int capacity=(int)Math.min(2_000_000L,Math.max(262_144L,eventsPerFrame*frames));
+        var timeline = OpticalWallTimeline.ENABLED ? OpticalWallTimeline.allocate(capacity) : null;
         long started = timeline == null ? System.nanoTime() : timeline.begin();
         long requestBuild = 0, submit = 0, poll = 0, deferrals = 0;
         long deadline = started + Duration.ofMinutes(5).toNanos();
@@ -156,7 +204,7 @@ public final class MediumGalleryPerformanceBenchmark {
                 if (pending == null) {
                     long buildStarted = System.nanoTime();
                     int timing = OpticalWallTimeline.enter(REQUEST_BUILD);
-                    try { pending = scene.frame(sequence[0], width, height, 0, 0); }
+                    try { pending = scene.frame(sequence[0], width, height); }
                     finally { OpticalWallTimeline.leave(timing); }
                     requestBuild += System.nanoTime() - buildStarted;
                 }
@@ -253,6 +301,8 @@ public final class MediumGalleryPerformanceBenchmark {
         for (String arg : args) {
             int at = arg.indexOf('=');
             if (!arg.startsWith("--") || at < 3) throw new IllegalArgumentException("expected --name=value: " + arg);
+            if(!Set.of("width","height","warmup","frames","rounds","profile","shaderProfile","wallProfile","suite","cases","output")
+                    .contains(arg.substring(2,at)))throw new IllegalArgumentException("unknown benchmark option: "+arg);
             if (values.put(arg.substring(2, at), arg.substring(at + 1)) != null)
                 throw new IllegalArgumentException("duplicate option: " + arg);
         }
@@ -269,6 +319,10 @@ public final class MediumGalleryPerformanceBenchmark {
         return Boolean.parseBoolean(value);
     }
     private static void require(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
+    private static String strings(java.util.Collection<?> values){return values.stream().map(Object::toString).sorted()
+            .map(v->"\""+v+"\"").collect(java.util.stream.Collectors.joining(",","[","]"));}
+    private static String longMap(Map<String,Long> values){return values.entrySet().stream().sorted(Map.Entry.comparingByKey())
+            .map(e->"\""+e.getKey()+"\":"+e.getValue()).collect(java.util.stream.Collectors.joining(",","{","}"));}
 
     private record GpuWindow(long samples, BigInteger estimateNanos, BigInteger lowerNanos,
             BigInteger upperNanos, RendererDiagnostics.FrameGpuTiming after) { }

@@ -321,8 +321,10 @@ public final class CudaMediumRuntime implements AutoCloseable {
             completeConsumer.run();
             // Complete pinned host transfers before reading batch statistics.
             inContext(this::synchronizeStream);
+            resolveProfiledKernel();
         }catch(RuntimeException|Error failure){
             try{inContext(this::synchronizeStream);}catch(RuntimeException|Error drain){failure.addSuppressed(drain);}
+            pendingProfileCount=0;
             throw failure;
         }finally{externalBatch=false;}
 
@@ -410,12 +412,12 @@ public final class CudaMediumRuntime implements AutoCloseable {
                 diagnosticLiveBatchModules++;
             }
             module.references++;
-            return own(new BatchKernel(module, function[0]));
+            return own(new BatchKernel(module, function[0],"entry."+entryPoint));
         }
     }
     /** Internal batch ABI is (record pointer, count); completion includes the owning CUDA stream. */
     public void launchBlocking(BatchKernel kernel, Slice records, int count, int recordBytes) {
-        launchBlocking(kernel, records, count, recordBytes, null);
+        launchBlocking(kernel, records, count, recordBytes, OpticalFrameTimings.ENABLED?kernel.profileStage:null);
     }
     public void launchBlocking(BatchKernel kernel, Slice records, int count, int recordBytes, String profileStage) {
         int wallScope = OpticalWallTimeline.enter(CUDA_KERNEL_ENQUEUE);
@@ -489,6 +491,11 @@ public final class CudaMediumRuntime implements AutoCloseable {
         launchFourArgumentBlocking(kernel, primary, count, constants, output);
     }
     private void launchFourArgumentBlocking(BatchKernel kernel, Slice records, int count, Slice constants, Slice output) {
+        boolean profile=OpticalFrameTimings.ENABLED;
+        if(profile&&pendingProfileCount==PROFILE_SLOTS)throw new IllegalStateException("CUDA profile event slots are full");
+        int wallScope=OpticalWallTimeline.enter(CUDA_KERNEL_ENQUEUE);
+        final int profileSlot=pendingProfileCount;
+        if(profile){pendingProfileStages[profileSlot]=kernel.profileStage;pendingProfileCount++;}
         try (Arena scratch = Arena.ofConfined()) {
             MemorySegment parameters = scratch.allocate(ADDRESS, 4);
             parameters.setAtIndex(ADDRESS, 0, scratch.allocateFrom(JAVA_LONG, records.address()));
@@ -496,13 +503,17 @@ public final class CudaMediumRuntime implements AutoCloseable {
             parameters.setAtIndex(ADDRESS, 2, scratch.allocateFrom(JAVA_LONG, constants.address()));
             parameters.setAtIndex(ADDRESS, 3, scratch.allocateFrom(JAVA_LONG, output.address()));
             inContext(() -> {
+                if(profile)api.checked("cuEventRecord",args(ADDRESS,ADDRESS),profileStartEvents[profileSlot],stream);
                 api.checked("cuLaunchKernel", args(ADDRESS, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT,
                                 JAVA_INT, JAVA_INT, JAVA_INT, ADDRESS, ADDRESS, ADDRESS),
                         kernel.function, (count - 1) / 256 + 1, 1, 1, 256, 1, 1, 0,
                         stream, parameters, MemorySegment.NULL);
+                if(profile)api.checked("cuEventRecord",args(ADDRESS,ADDRESS),profileEndEvents[profileSlot],stream);
                 synchronizeUnlessBatched();
             });
-        }
+            if(profile&&!externalBatch)resolveProfiledKernel();
+        }catch(RuntimeException|Error failure){if(profile)pendingProfileCount=0;throw failure;}
+        finally{OpticalWallTimeline.leave(wallScope);}
     }
     private static void requireDisjoint(Slice first, Slice second) {
         if (first.address() < Math.addExact(second.address(), second.bytes)
@@ -700,7 +711,10 @@ public final class CudaMediumRuntime implements AutoCloseable {
     public final class BatchKernel extends NativeResource {
         private final BatchModule module;
         private final MemorySegment function;
-        private BatchKernel(BatchModule module, MemorySegment function) { this.module = module; this.function = function; }
+        private final String profileStage;
+        private BatchKernel(BatchModule module, MemorySegment function,String profileStage) {
+            this.module = module; this.function = function;this.profileStage=profileStage;
+        }
         @Override void destroy() {
             if (--module.references == 0) {
                 batchModules.remove(module.source, module);

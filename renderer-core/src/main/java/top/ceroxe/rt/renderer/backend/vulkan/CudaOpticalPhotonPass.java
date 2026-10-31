@@ -11,6 +11,7 @@ import top.ceroxe.rt.renderer.rt.acceleration.RtTlasBuildPlan;
 import top.ceroxe.rt.renderer.rt.device.RtGpuBuffer;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
+import top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile;
 
 /** Bounded photon wavefront using the same native density and medium stack as camera paths. */
 final class CudaOpticalPhotonPass implements AutoCloseable {
@@ -64,10 +65,18 @@ final class CudaOpticalPhotonPass implements AutoCloseable {
                 storage.produceThenExchangeBlocking(command->{try(MemoryStack stack=MemoryStack.stackPush()) {
                     if(initialize) {
                         if(build!=null)build.record(command,stack);
+                        var initialization=OpticalFrameTimings.ENABLED?device.frameCommands().acquireGpuTimestampCapture("opticalPhotonInitialize",new String[]{"start","end"}):null;
+                        OpticalDetailedProfile.defer("opticalPhoton.mapInitialize",initialization);
+                        if(initialization!=null)initialization.begin(command,VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
                         output.initializeMap(command,stack,map);
                         upload(command,stack,prefix.asByteBuffer());
+                        if(initialization!=null)initialization.write(command,VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
                     }
+                    var trace=OpticalFrameTimings.ENABLED?device.frameCommands().acquireGpuTimestampCapture("opticalPhotonTrace",new String[]{"start","end"}):null;
+                    OpticalDetailedProfile.defer("opticalPhoton.trace",trace);
+                    if(trace!=null)trace.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                     tracer.recordNativeOpticalPhotons(command,stack,slot,address,photonAddress,plan.paths(),initialize);
+                    if(trace!=null)trace.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
                 }},input->{
                     var photons=input.slice(offset,plan.bytes());
                     if(initialize) {
@@ -83,12 +92,16 @@ final class CudaOpticalPhotonPass implements AutoCloseable {
                     counts[1]=statistics.get(ValueLayout.JAVA_INT,4);
                 },command->{
                     if(counts[0]==0&&counts[1]==0)try(MemoryStack stack=MemoryStack.stackPush()) {
+                        var copy=OpticalFrameTimings.ENABLED?device.frameCommands().acquireGpuTimestampCapture("opticalPhotonCopy",new String[]{"start","end"}):null;
+                        OpticalDetailedProfile.defer("opticalPhoton.mapCopy",copy);
+                        if(copy!=null)copy.begin(command,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT);
                         var copies=VkBufferCopy.calloc(2,stack);
                         copies.get(0).srcOffset(offset+(long)plan.headsOffset()).dstOffset(output.headsWord()*4L)
                                 .size(plan.hashCapacity()*4L);
                         copies.get(1).srcOffset(offset+(long)plan.photonOffset()).dstOffset(output.recordsWord()*4L)
                                 .size(plan.capacity()*(long)CudaOpticalCausticAbi.PHOTON_BYTES);
                         VK10.vkCmdCopyBuffer(command,storage.buffer(),map.buffer(),copies);
+                        if(copy!=null)copy.write(command,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT);
                         var barrier=VkMemoryBarrier.calloc(1,stack).sType$Default().srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
                                 .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT);
                         VK10.vkCmdPipelineBarrier(command,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,

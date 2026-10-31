@@ -219,14 +219,18 @@ final class CudaPbrMediumManager implements AutoCloseable {
                         ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumLightPackets",new String[]{"start","end"}):null;
                 RtGpuTimestampPool.Capture restoreTiming=OpticalFrameTimings.ENABLED&&additionalRadiance!=null&&!sharedRadiance
                         ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumContributionRestore",new String[]{"start","end"}):null;
-                try(primaryTiming;lightsTiming;restoreTiming) {
+                RtGpuTimestampPool.Capture photonTiming=OpticalFrameTimings.ENABLED&&initial&&photonPlan!=null&&photonPlan.photons()>0
+                        ?device.frameCommands().acquireGpuTimestampCapture("pbrMediumPhotons",new String[]{"start","end"}):null;
+                try(primaryTiming;lightsTiming;restoreTiming;photonTiming) {
                 storage.produceThenExchangeQueuedBlocking(command->{try(MemoryStack stack=MemoryStack.stackPush()) {
                     if(initial&&buildPlan!=null)buildPlan.record(command,stack);
                     upload(command,stack,metadata.asByteBuffer(),bytes);
                     if (initial && photonPlan != null && photonPlan.photons() > 0) {
                         if (photonPipeline == null || photonBuffer == null)
                             throw new IllegalArgumentException("native PBR caustics require a photon pipeline and map buffer");
+                        if(photonTiming!=null)photonTiming.begin(command,VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
                         photonPlan.record(command, stack, photonBuffer, photonPipeline, slot);
+                        if(photonTiming!=null)photonTiming.write(command,VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
                     }
                     if(!colorEndpoints) {
                         if(primaryTiming!=null)primaryTiming.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
@@ -271,6 +275,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
                 if(primaryTiming!=null&&primaryTiming.resolve())OpticalFrameTimings.recordGpuStage("pbrMedium.primaryPackets",primaryTiming.totalNanos());
                 if(lightsTiming!=null&&lightsTiming.resolve())OpticalFrameTimings.recordGpuStage("pbrMedium.lightPackets",lightsTiming.totalNanos());
                 if(restoreTiming!=null&&restoreTiming.resolve())OpticalFrameTimings.recordGpuStage("pbrMedium.contributionRestore",restoreTiming.totalNanos());
+                if(photonTiming!=null&&photonTiming.resolve())OpticalFrameTimings.recordNamedGpuStage("vulkan.pbrMedium.photonBuild",photonTiming.totalNanos());
                 }
                 if(statistics.getInt(0)!=0||statistics.getInt(4)!=0||statistics.getInt(12)!=paths)
                     throw new RendererException("native PBR medium produced invalid packet states; final output was not published");

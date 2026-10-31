@@ -1,6 +1,7 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
 
 import java.lang.foreign.Arena;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 import java.util.Objects;
@@ -133,7 +134,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         try{return onNative(()->{
             try{return prepareOnNative(scene,opticalTracer,slot,buildPlan,photonPlan,photonPipeline,photonBuffer);}
             catch(RuntimeException|Error failure){uploadedAssets=null;
-                if(OpticalDetailedProfile.ENABLED)try{drain();OpticalDetailedProfile.discardDeferred();}
+                if(OpticalDetailedProfile.ENABLED||OpticalFrameTimings.ENABLED)try{drain();OpticalDetailedProfile.discardDeferred();}
                     catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
                 throw failure;}
         });}finally{if(OpticalFrameTimings.ENABLED)OpticalFrameTimings.prepare.add(System.nanoTime()-started);}
@@ -218,7 +219,11 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                         if(recordPhotons) {
                             if(photonPipeline==null||photonBuffer==null)
                                 throw new IllegalArgumentException("native optical caustics require a photon pipeline and map buffer");
+                            var photons=OpticalFrameTimings.ENABLED?device.frameCommands().acquireGpuTimestampCapture("opticalVulkanPhotons",new String[]{"start","end"}):null;
+                            OpticalDetailedProfile.defer("opticalPhoton.vulkanBuild",photons);
+                            if(photons!=null)photons.begin(command,VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
                             photonPlan.record(command,stack,photonBuffer,photonPipeline,slot);
+                            if(photons!=null)photons.write(command,VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
                         }
                         if(detail!=null)detail.write(command,VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
                         if(uploadScene&&plan.externalPrimary()) {
@@ -370,7 +375,11 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                     .buffer(storage.buffer()).offset(plan.bytes()).size(OpticalDetailedProfile.shaderBytes(pixels*plan.samples()));
             VK10.vkCmdPipelineBarrier(command,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,0,null,dependency,null);
         }
+        var timing=OpticalFrameTimings.ENABLED?device.frameCommands().acquireGpuTimestampCapture("opticalCameraTrace",new String[]{"start","end"}):null;
+        OpticalDetailedProfile.defer(initialize?"optical.cameraInitialTrace":"optical.cameraContinuationTrace",timing);
+        if(timing!=null)timing.begin(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
         tracer.recordNativeOpticalTrace(command,stack,slot,address,primaryAddress,first,pixels,initialize);
+        if(timing!=null)timing.write(command,KHRRayTracingPipeline.VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
     }
     private void uploadMetadata(org.lwjgl.vulkan.VkCommandBuffer command,MemoryStack stack,java.nio.ByteBuffer source,int bytes){
         for(int offset=0;offset<bytes;){int length=Math.min(65536,bytes-offset);
@@ -406,11 +415,15 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     private void checkOpen(){if(closed)throw new IllegalStateException("native optical manager is closed");}
     private static long residentLimit(){return Math.min(CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES,
             Long.getLong("top.ceroxe.rt.medium.cuda.maxResidentBytes",CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES));}
-    private <T>T onNative(Callable<T> operation){var submitted=nativeThread.submit(operation);boolean interrupted=false;
+    private <T>T onNative(Callable<T> operation){
+        int wallTask=OpticalWallTimeline.enter(OpticalWallTimeline.Stage.OPTICAL_MEDIUM_NATIVE);
+        try {var submitted=nativeThread.submit(OpticalWallTimeline.awaited(operation));boolean interrupted=false;
         try{for(;;)try{return submitted.get();}catch(InterruptedException ignored){interrupted=true;}
             catch(ExecutionException failure){if(failure.getCause() instanceof RuntimeException runtime)throw runtime;
                 if(failure.getCause() instanceof Error error)throw error;throw new IllegalStateException("native optical operation failed",failure.getCause());}
-        }finally{if(interrupted)Thread.currentThread().interrupt();}}
+        }finally{if(interrupted)Thread.currentThread().interrupt();}
+        }finally{OpticalWallTimeline.leave(wallTask);}
+    }
     private static FrameValidationException unsupported(String message){return new FrameValidationException(
             FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,"native optical candidate: "+message);}
     @Override public synchronized void close(){if(closed)return;try{onNative(()->{Throwable failure=null;

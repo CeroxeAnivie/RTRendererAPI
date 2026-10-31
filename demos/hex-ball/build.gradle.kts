@@ -199,7 +199,7 @@ tasks.register<JavaExec>("mediumGalleryDemo") {
 
 tasks.register<JavaExec>("mediumGalleryPerformanceBenchmark") {
     group = "verification"
-    description = "Measures the default 1080p/1-spp PBR uniform-scattering gallery path."
+    description = "Measures every closed medium feature and new combination at 1080p; --suite=focused selects the 1-spp optimization baseline."
     dependsOn(tasks.testClasses)
     classpath = files(sourceSets.main.get().output, sourceSets.test.get().output,
         configurations.testRuntimeClasspath.get().incoming.artifactView {

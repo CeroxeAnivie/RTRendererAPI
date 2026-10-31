@@ -255,8 +255,8 @@ public final class CudaSharedRayFrame implements AutoCloseable {
                     });
             if(profile)OpticalFrameTimings.cudaStage.add(System.nanoTime()-consumerCompleted[0]);
             wallStep = OpticalWallTimeline.next(wallStep, GPU_QUERY_RESOLVE);
-            if(producerTiming!=null&&producerTiming.resolve()){OpticalFrameTimings.producerGpu.add(producerTiming.totalNanos());OpticalDetailedProfile.add("producerGpu/totalNanos",producerTiming.totalNanos());}
-            if(continuationTiming!=null&&continuationTiming.resolve()){OpticalFrameTimings.consumerGpu.add(continuationTiming.totalNanos());OpticalDetailedProfile.add("continuationGpu/totalNanos",continuationTiming.totalNanos());}
+            if(producerTiming!=null&&producerTiming.resolve()){OpticalFrameTimings.producerGpu.add(producerTiming.totalNanos());OpticalFrameTimings.recordNamedGpuStage("vulkan.shared.producer",producerTiming.totalNanos());OpticalDetailedProfile.add("producerGpu/totalNanos",producerTiming.totalNanos());}
+            if(continuationTiming!=null&&continuationTiming.resolve()){OpticalFrameTimings.consumerGpu.add(continuationTiming.totalNanos());OpticalFrameTimings.recordNamedGpuStage("vulkan.shared.continuation",continuationTiming.totalNanos());OpticalDetailedProfile.add("continuationGpu/totalNanos",continuationTiming.totalNanos());}
             OpticalDetailedProfile.resolveDeferred();
         }catch(RuntimeException|Error failure){broken=true;throw failure;}
         finally{busy=false;if(profile){OpticalFrameTimings.exchange.add(System.nanoTime()-started);OpticalFrameTimings.rounds.add(2);}}
@@ -390,8 +390,8 @@ public final class CudaSharedRayFrame implements AutoCloseable {
                         });
             }
             wallStep = OpticalWallTimeline.next(wallStep, GPU_QUERY_RESOLVE);
-            if(producerTiming!=null&&producerTiming.resolve()){OpticalFrameTimings.producerGpu.add(producerTiming.totalNanos());OpticalDetailedProfile.add("producerGpu/totalNanos",producerTiming.totalNanos());}
-            if(consumerTiming!=null&&consumerTiming.resolve()){OpticalFrameTimings.consumerGpu.add(consumerTiming.totalNanos());OpticalDetailedProfile.add("continuationGpu/totalNanos",consumerTiming.totalNanos());}
+            if(producerTiming!=null&&producerTiming.resolve()){OpticalFrameTimings.producerGpu.add(producerTiming.totalNanos());OpticalFrameTimings.recordNamedGpuStage("vulkan.shared.producer",producerTiming.totalNanos());OpticalDetailedProfile.add("producerGpu/totalNanos",producerTiming.totalNanos());}
+            if(consumerTiming!=null&&consumerTiming.resolve()){OpticalFrameTimings.consumerGpu.add(consumerTiming.totalNanos());OpticalFrameTimings.recordNamedGpuStage("vulkan.shared.continuation",consumerTiming.totalNanos());OpticalDetailedProfile.add("continuationGpu/totalNanos",consumerTiming.totalNanos());}
             OpticalDetailedProfile.resolveDeferred();
         } catch (RuntimeException | Error failure) { broken = true; throw failure; }
         finally { busy = false;if(profile){OpticalFrameTimings.exchange.add(System.nanoTime()-exchangeStarted);OpticalFrameTimings.rounds.increment();} }
@@ -473,6 +473,8 @@ public final class CudaSharedRayFrame implements AutoCloseable {
         // A failed callback may leave the release submission outstanding; it never queues an unfulfilled Vulkan wait.
         if (broken) try { check(VulkanQueueHostSync.waitIdle(runtime.frameQueue()), "drain failed native ray release"); }
         catch (RuntimeException e) { if (failure == null) failure = e; else failure.addSuppressed(e); }
+        if(broken&&failure==null)try{OpticalDetailedProfile.discardDeferred();}
+        catch(RuntimeException e){failure=e;}
         for (AutoCloseable resource : new AutoCloseable[]{importedPairedToVulkan,importedPairedToCuda,importedToVulkan, importedToCuda, imported}) if (resource != null) try { resource.close(); }
         catch (Exception e) { if (failure == null) failure = new IllegalStateException("native ray CUDA cleanup", e); else failure.addSuppressed(e); }
         if (fence != 0) vkDestroyFence(device(), fence, null);

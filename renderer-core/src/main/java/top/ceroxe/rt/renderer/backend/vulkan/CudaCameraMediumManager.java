@@ -1,4 +1,5 @@
 package top.ceroxe.rt.renderer.backend.vulkan;
+import top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimeline;
 
 import java.util.Objects;
 import java.util.concurrent.Callable;
@@ -219,7 +220,9 @@ final class CudaCameraMediumManager implements AutoCloseable {
     }
 
     private <T> T onNative(Callable<T> operation) {
-        var submitted = nativeThread.submit(operation);
+        int wallTask=OpticalWallTimeline.enter(OpticalWallTimeline.Stage.PRIMARY_MEDIUM_NATIVE);
+        try {
+        var submitted = nativeThread.submit(OpticalWallTimeline.awaited(operation));
         boolean interrupted = false;
         try {
             for (;;) {
@@ -237,6 +240,8 @@ final class CudaCameraMediumManager implements AutoCloseable {
         } finally {
             if (interrupted) Thread.currentThread().interrupt();
         }
+
+        }finally{OpticalWallTimeline.leave(wallTask);}
     }
 
     private static FrameValidationException unsupported(String message) {

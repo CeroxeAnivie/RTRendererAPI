@@ -26,7 +26,9 @@ public final class OpticalWallTimeline {
         CUDA_SEMAPHORE_SIGNAL_ENQUEUE, CUDA_COMPLETION_CALLBACK, CUDA_STREAM_SYNCHRONIZE,
         CUDA_KERNEL_ENQUEUE, CUDA_UPLOAD, CUDA_CONTEXT_SYNCHRONIZE, CUDA_DOWNLOAD,
         CUDA_DOWNLOAD_ASYNC_ENQUEUE, CUDA_CONTEXT_PUSH, CUDA_CONTEXT_POP, CUDA_KERNEL_EVENT_RESOLVE,
-        NATIVE_TASK_AWAIT, NATIVE_TASK_EXECUTION
+        NATIVE_TASK_AWAIT, NATIVE_TASK_EXECUTION,
+        PRIMARY_MEDIUM_NATIVE, BOUNDARY_MEDIUM_NATIVE, DENSITY_SCATTERING_NATIVE,
+        MULTIPLE_SCATTERING_NATIVE, OPTICAL_MEDIUM_NATIVE
     }
 
     private static volatile Recording active;
@@ -100,6 +102,7 @@ public final class OpticalWallTimeline {
             starts = new long[capacity]; ends = new long[capacity]; threadIds = new long[capacity];
             kinds = new int[capacity]; parents = new int[capacity];
         }
+        public long droppedEvents(){return dropped;}
 
         public long begin() {
             if (owner != Thread.currentThread() || size != 0 || active != null)
