@@ -26,8 +26,7 @@ public final class CudaMediumRuntime implements AutoCloseable {
     private final List<NativeResource> resources = new ArrayList<>();
     private MemorySegment context = MemorySegment.NULL;
     private MemorySegment stream = MemorySegment.NULL;
-    // Eight queued optical rounds each record reset + transport before completion.
-    private static final int PROFILE_SLOTS=16;
+    private static final int PROFILE_SLOTS=8;
     private final MemorySegment[] profileStartEvents=new MemorySegment[PROFILE_SLOTS];
     private final MemorySegment[] profileEndEvents=new MemorySegment[PROFILE_SLOTS];
     private final String[] pendingProfileStages=new String[PROFILE_SLOTS];
@@ -349,36 +348,6 @@ public final class CudaMediumRuntime implements AutoCloseable {
                 submitMiddle.run();
                 external(secondWait,false);secondStep.run();external(secondSignal,true);
                 completeConsumer.run();
-                inContext(this::synchronizeStream);
-                resolveProfiledKernel();
-            }catch(RuntimeException|Error failure){
-                try{inContext(this::synchronizeStream);}catch(RuntimeException|Error drain){failure.addSuppressed(drain);}
-                pendingProfileCount=0;throw failure;
-            }finally{externalBatch=false;}
-        }finally{OpticalWallTimeline.leave(wallScope);}
-    }
-    /** Alternate independent binary pairs; only the final round completes on the host. */
-    void exchangeExternalBinaryBatchBlocking(ExternalSemaphore firstWait,ExternalSemaphore firstSignal,
-            ExternalSemaphore secondWait,ExternalSemaphore secondSignal,int rounds,
-            java.util.function.IntConsumer submitRound,java.util.function.IntConsumer nativeStep) {
-        int wallScope=OpticalWallTimeline.enter(CUDA_EXCHANGE);
-        try {
-            checkOpen();
-            if(rounds<2||rounds>8||(rounds&1)!=0)throw new IllegalArgumentException("even batch of 2..8 rounds required");
-            requireOwned(firstWait);firstWait.checkAlive();requireOwned(firstSignal);firstSignal.checkAlive();
-            requireOwned(secondWait);secondWait.checkAlive();requireOwned(secondSignal);secondSignal.checkAlive();
-            Objects.requireNonNull(submitRound);Objects.requireNonNull(nativeStep);
-            if(externalBatch)throw new IllegalStateException("queued ownership batches cannot nest");
-            externalBatch=true;
-            try {
-                for(int round=0;round<rounds;round++) {
-                    // Submit only after the previous CUDA signal was enqueued. A failed
-                    // callback must never leave Vulkan waiting on an unqueued signal.
-                    submitRound.accept(round);
-                    external((round&1)==0?firstWait:secondWait,false);
-                    nativeStep.accept(round);
-                    external((round&1)==0?firstSignal:secondSignal,true);
-                }
                 inContext(this::synchronizeStream);
                 resolveProfiledKernel();
             }catch(RuntimeException|Error failure){

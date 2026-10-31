@@ -36,7 +36,6 @@ import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 final class CudaOpticalMediumManager implements AutoCloseable {
     private static final boolean RETAIN_EXTERNAL_OWNERSHIP=Boolean.parseBoolean(System.getProperty(
             "top.ceroxe.rt.medium.cuda.opticalRetainedOwnership","true"));
-    private static final int BATCH_ROUNDS=batchRounds();
     static final LongAdder diagnosticQueries=new LongAdder(),diagnosticInterfaces=new LongAdder();
     static final LongAdder diagnosticAssetUploads=new LongAdder(),diagnosticUploadedBytes=new LongAdder();
     static final LongAdder diagnosticStorageRecreations=new LongAdder();
@@ -49,8 +48,6 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     private final CudaMediumRuntime.BatchKernel[] steps;
     private final CudaMediumRuntime.HostMemory firstStatistics,secondStatistics;
     private CudaMediumRuntime.HostMemory firstShaderSamples,secondShaderSamples;
-    private final CudaMediumRuntime.HostMemory[] batchStatistics=new CudaMediumRuntime.HostMemory[8];
-    private final CudaMediumRuntime.HostMemory[] batchShaderSamples=new CudaMediumRuntime.HostMemory[8];
     private long shaderSampleOffset;
     private boolean shaderSampleFrame;
     private CudaSharedRayFrame storage;
@@ -71,12 +68,6 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         });}catch(RuntimeException|Error failure){nativeThread.shutdown();throw failure;}
         cuda=initialized.cuda();reset=initialized.reset();steps=initialized.steps();
         firstStatistics=initialized.firstStatistics();secondStatistics=initialized.secondStatistics();
-        batchStatistics[0]=firstStatistics;batchStatistics[1]=secondStatistics;
-    }
-    private static int batchRounds(){
-        int value=Integer.getInteger("top.ceroxe.rt.medium.cuda.opticalBatchRounds",4);
-        if(value!=2&&value!=4&&value!=8)throw new IllegalArgumentException("opticalBatchRounds must be 2, 4 or 8");
-        return value;
     }
     static FrameScene scene(RenderFrameRequest frame,int width,int height,MediumSceneIndex.NativeScene scene) {
         return scene(frame,width,height,scene,id->null,new CudaMediumDensityAbi.Cache());
@@ -270,11 +261,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                         if(rounds>=limit)
                             throw new RendererException("native optical continuation exceeded the public event and scattering budgets");
                         if(OpticalDetailedProfile.ENABLED)OpticalDetailedProfile.scope(tileFirst,sampleIndex,branchIndex,roundIndex[0]);
-                        int batch=Math.min(BATCH_ROUNDS,(limit-rounds)&~1);
-                        boolean binary=Boolean.parseBoolean(System.getProperty("top.ceroxe.rt.medium.cuda.opticalBinaryPairs","true"));
-                        if(queued&&RETAIN_EXTERNAL_OWNERSHIP&&binary&&batch>2){
-                            exchangeBatch(queuedContinuation,step,paths,statistics,plan.activeQueues(),batch);rounds+=batch;
-                        }else if(queued&&rounds+2<=limit){
+                        if(queued&&rounds+2<=limit){
                             exchangePair(queuedContinuation,queuedContinuation,step,paths,statistics,plan.activeQueues());rounds+=2;
                         }else{if(queued)storage.produceThenExchangeBlocking(queuedContinuation,resolve,command->{});
                             else storage.exchangeBlocking(resolve,continuation);rounds++;}
@@ -397,39 +384,6 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         OpticalDetailedProfile.add(scope+"/errors",statistics.getInt(4));
         OpticalDetailedProfile.add(scope+"/interfaces",statistics.getInt(8));
         OpticalDetailedProfile.add(scope+"/completedPaths",statistics.getInt(12));
-    }
-    private void exchangeBatch(java.util.function.Consumer<org.lwjgl.vulkan.VkCommandBuffer> continuation,
-            CudaMediumRuntime.BatchKernel step,int paths,int[] statistics,boolean activeQueues,int rounds){
-        int queries=statistics[0],dispatched=activeQueues?Math.max(1,queries):paths;
-        for(int round=0;round<rounds;round++){
-            if(batchStatistics[round]==null)batchStatistics[round]=cuda.allocateHost(CudaOpticalMediumAbi.STATISTICS_BYTES);
-            if(shaderSampleFrame&&(batchShaderSamples[round]==null||batchShaderSamples[round].byteSize()!=firstShaderSamples.byteSize())){
-                if(batchShaderSamples[round]!=null)batchShaderSamples[round].close();
-                batchShaderSamples[round]=cuda.allocateHost(firstShaderSamples.byteSize());
-            }
-        }
-        // Each input emits at most one successor. A completed batch's active count
-        // bounds every round; GPU queue guards handle shrinkage and empty tails.
-        storage.produceThenExchangeBatchBlocking(rounds,(round,command)->continuation.accept(command),(round,input)->{
-            cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
-            cuda.launchBlocking(step,input,dispatched,1);
-            cuda.downloadAsync(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),batchStatistics[round]);
-            if(shaderSampleFrame)cuda.downloadAsync(input.slice(shaderSampleOffset,batchShaderSamples[round].byteSize()),batchShaderSamples[round]);
-        });
-        int active=queries;statistics[1]=statistics[2]=statistics[3]=0;
-        long diagnosticStarted=shaderSampleFrame?OpticalDetailedProfile.start():0L;
-        for(int round=0;round<rounds;round++){
-            var current=batchStatistics[round];
-            if(shaderSampleFrame)OpticalDetailedProfile.shaderSamples(batchShaderSamples[round].segment(),paths);
-            if(OpticalDetailedProfile.ENABLED)recordPairStep("cuda/batchStep"+round,active,current);
-            diagnosticQueries.add(active);diagnosticInterfaces.add(current.getInt(8));
-            active=current.getInt(0);
-            // Never lose errors or completed/interface counts from an earlier round.
-            for(int j=1;j<4;j++)statistics[j]=Math.addExact(statistics[j],current.getInt(j*4L));
-        }
-        statistics[0]=active;
-        if(shaderSampleFrame)OpticalDetailedProfile.elapsed("diagnosticReadbackAndAggregationNanos",diagnosticStarted);
-        if(OpticalDetailedProfile.ENABLED)OpticalDetailedProfile.add("cuda/dispatchedPathSlots",Math.multiplyExact((long)dispatched,rounds));
     }
     private void recordOpticalTrace(GpuSceneRayTracingPipeline tracer,org.lwjgl.vulkan.VkCommandBuffer command,MemoryStack stack,
             int slot,long address,long primaryAddress,int first,int pixels,boolean initialize,CudaOpticalMediumAbi.Plan plan,int activeBound){

@@ -1291,7 +1291,9 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 [正确性与同步次数证据](data/medium-binary-pairs-20261031.json)、[完整本窗排序](data/medium-binary-pairs-loaded-ranked-20261031.json)。CUDA 同步仍为第一，180 FPS 尚未达到。
 
-### CUDA 同步架构候选：长尾偶数批次
+### 已撤回的 CUDA 同步架构候选：长尾偶数批次
+
+后续干净 GPU 的正反序关闭诊断对照均确认四轮为负优化，已撤回代码、恢复双轮。以下保留当时的正确性和工作计数记录，不能作为性能收益；最终对照见后续验收表。
 
 首两轮仍读取存活上界，随后将长尾交接按 `top.ceroxe.rt.medium.cuda.opticalBatchRounds=2|4|8` 排队（候选默认 4，2 为原双轮对照）。剩余预算不足整批时使用更短偶数尾批，最后单轮沿用原路径；不超过 `maximumRounds`。只有 retained binary 模式使用该批次，其他协议仍走原双轮。
 
