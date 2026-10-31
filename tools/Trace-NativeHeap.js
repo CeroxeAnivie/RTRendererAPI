@@ -46,7 +46,7 @@ uint32_t intern(GumCpuContext*cpu){
  b=(b+(uint64_t)(uintptr_t)frames[i])*1469598103934665603ULL;}
  a^=count;b^=count;uint32_t slot=(uint32_t)a&65535;
  acquire(&lock);
- for(uint32_t probe=0;probe<65536;probe++,slot=(slot+1)&65535){
+ for(uint32_t probe=0;probe<256;probe++,slot=(slot+1)&65535){
   StackEntry*entry=&stacks[slot];
   if(entry->id&&entry->a==a&&entry->b==b){uint32_t id=entry->id;release(&lock);return id;}
   if(entry->id)continue;

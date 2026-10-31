@@ -128,6 +128,7 @@ extern uint32_t write_file(void*,const void*,uint32_t,uint32_t*,void*);
 extern void* lookup_function(uint64_t,uint64_t*,void*);
 extern void* virtual_unwind(uint32_t,uint64_t,uint64_t,void*,void*,void**,uint64_t*,void*);
 extern void stack_limits(uint64_t*,uint64_t*);
+extern uint64_t virtual_query(void*,MemoryInfo*,uint64_t);
 uint32_t capture_context(GumCpuContext*cpu,void**frames){
  uint64_t c[154]={0},image=0,establisher=0,low=0,high=0;void*handler=0;
  ((uint32_t*)c)[12]=0x10000b;
@@ -139,7 +140,13 @@ uint32_t capture_context(GumCpuContext*cpu,void**frames){
  while(n<96&&c[31]&&c[19]>=low&&c[19]+8<=high){
   uint64_t pc=c[31],sp=c[19];frames[n++]=(void*)(uintptr_t)pc;
   void*entry=lookup_function(pc,&image,0);
-  if(!entry){c[31]=*((uint64_t*)(uintptr_t)sp);c[19]+=8;}
+  if(!entry){
+   // Windows unwind tables do not describe JVM JIT frames. Do not interpret
+   // arbitrary Java frame data as native return PCs and invent deeper frames.
+   MemoryInfo m={0};virtual_query((void*)(uintptr_t)pc,&m,sizeof(m));
+   if(m.type!=0x1000000)break;
+   c[31]=*((uint64_t*)(uintptr_t)sp);c[19]+=8;
+  }
   else virtual_unwind(0,image,pc,entry,c,&handler,&establisher,0);
   if(c[31]==pc&&c[19]==sp)break;
  }
