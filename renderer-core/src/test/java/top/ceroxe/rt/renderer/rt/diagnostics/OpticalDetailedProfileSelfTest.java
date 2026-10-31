@@ -10,6 +10,8 @@ public final class OpticalDetailedProfileSelfTest {
         System.setProperty("top.ceroxe.rt.medium.opticalDetailedProfile","true");
         System.setProperty("top.ceroxe.rt.medium.opticalShaderProfile","true");
         System.setProperty("top.ceroxe.rt.medium.opticalShaderProfileGroup","0");
+        require(OpticalDetailedProfile.opticalProfileFrame(0)&&OpticalDetailedProfile.opticalProfileFrame(8),"sampled frame schedule");
+        for(long frame=1;frame<8;frame++)require(!OpticalDetailedProfile.opticalProfileFrame(frame),"production shader between samples");
         try(var arena=Arena.ofConfined()) {
             int paths=OpticalDetailedProfile.STRIDE+1;
             var records=arena.allocate(OpticalDetailedProfile.shaderBytes(paths),16);

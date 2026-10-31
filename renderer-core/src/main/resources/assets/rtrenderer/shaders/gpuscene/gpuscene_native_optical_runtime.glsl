@@ -223,6 +223,7 @@ vec3 gsOpticalLightOrigin(vec3 point,vec3 normal,float bound) {
 }
 // Select light geometry only. CUDA owns phase, density attenuation and the copied medium stack.
 void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 launch,uint epoch,bool initialize,uint hitOffset) {
+    GS_DETAIL_BEGIN(168u);
     uint base=gsOptical.storage.lanes[4u].z/16u+item*22u;
     if(initialize) {
         uvec4 control=gsOptical.storage.lanes[base+5u];uint ordinal=control.x;
@@ -233,6 +234,7 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
             position=gsOpticalLightOrigin(position,normal.xyz,normal.w);
         }
 #ifdef RTRENDERER_CAUSTICS
+        GS_DETAIL_NEXT(169u);
         if(ordinal==0u&&control.w==0u) {
             uint selected=(gsOptical.storage.lanes[11u].w&2u)!=0u?GS_INVALID_SLOT:gsOpticalStateRead(item,7u).x;
             uint mediumSlot=selected==GS_INVALID_SLOT?GS_INVALID_SLOT:gsOptical.storage.lanes[24u+selected*4u].x;
@@ -242,6 +244,7 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
             gsOptical.storage.lanes[base+4u]=floatBitsToUint(vec4(caustic,0));
         }
 #endif
+        GS_DETAIL_NEXT(170u);
         uint upper=gsFrame.words[GPU_SCENE_FRAME_LIGHT_SLOT_UPPER_BOUND_WORD];
         uint samples=gsFrame.words[GPU_SCENE_FRAME_SCATTERING_LIGHT_SAMPLES_WORD];
         uint selected[8],small[8],candidates=0u;float total=0.0;
@@ -254,6 +257,7 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
         }
         bool exhaustive=candidates<=samples;uint count=samples==0u?upper:(exhaustive?candidates:samples);
         control.y=count+1u;control.z=0u;gsOptical.storage.lanes[base+5u]=control;
+        GS_DETAIL_NEXT(171u);
         vec3 direction=vec3(0,0,1),color=vec3(0);float intensity=0.0,distance=1.0e20,attenuation=1.0;bool shadow=true;
         if(ordinal==0u) {
             color=gsFrameVec3(GPU_SCENE_FRAME_SUN_COLOR_WORD);intensity=uintBitsToFloat(gsFrame.words[GPU_SCENE_FRAME_SUN_INTENSITY_WORD]);
@@ -283,6 +287,7 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
                 }
             }
         }
+        GS_DETAIL_NEXT(172u);
         vec3 source=color*(intensity*attenuation);
         if(control.w!=0u) {
             vec3 normal=uintBitsToFloat(gsOptical.storage.lanes[base+16u]).xyz;
@@ -300,6 +305,7 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
         gsOptical.storage.lanes[base+2u]=uvec4(floatBitsToUint(source),max(source.x,max(source.y,source.z))>0.0?(shadow?1u:2u):0u);
         gsOptical.storage.lanes[base+3u]=uvec4(floatBitsToUint(vec3(1)),gsOptical.storage.lanes[6u].w);
     }
+    GS_DETAIL_NEXT(173u);
     vec4 origin=uintBitsToFloat(gsOptical.storage.lanes[base]);
     vec4 ray=uintBitsToFloat(gsOptical.storage.lanes[base+1u]);
     vec3 direction=ray.xyz;
@@ -310,6 +316,7 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
     GpuScenePayload hit;
     if(gsOptical.storage.lanes[base+2u].w==1u){
         hit=gsTraceOpticalRadiance(origin.xyz,direction,launch,minimum,GS_PAYLOAD_OPTICAL_CONNECTION_QUERY);
+        GS_DETAIL_NEXT(174u);
         // Connections need full material hits for transparent attenuation, while
         // preserving the public shadow exclusions for overlays and non-blockers.
         while(hit.state.x!=0u&&hit.mediumBoundary.w==0u
@@ -322,6 +329,7 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
         hit.worldNormalAndRoughness=vec4(0,1,0,0);hit.baseColorAndOpacity=vec4(0);hit.emissiveAndMetallic=vec4(0);
         hit.transmissionIor=vec4(0);hit.state=uvec4(0);hit.surfaceState=uvec4(0);hit.compositeState=vec4(0);
         hit.launchInfo=launch;hit.mediumBoundary=uvec4(0);}
+    GS_DETAIL_END();
     gsOpticalStore(hitOffset,item,hit,uvec4(globalPath/gsOptical.storage.lanes[0u].w,globalPath%gsOptical.storage.lanes[0u].w,epoch,epoch));
 }
 // Light paths use the camera pipeline's geometric hit ABI, with native medium state.

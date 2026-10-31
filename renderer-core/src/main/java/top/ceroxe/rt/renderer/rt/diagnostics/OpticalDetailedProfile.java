@@ -38,6 +38,7 @@ public final class OpticalDetailedProfile {
         if(!ENABLED)return 0;long now=System.nanoTime();add(name,now-start);return now;
     }
     public static int shaderBytes(int paths){return SHADERS?Math.toIntExact(((long)paths+STRIDE-1)/STRIDE*STAGES*16):0;}
+    public static boolean opticalProfileFrame(long frameSequence){return SHADERS&&Math.floorMod(frameSequence,8L)==0L;}
     public static int cameraScatteringShaderBytes(int paths){return CAMERA_SCATTERING_SHADERS
             ?Math.toIntExact(((long)paths+CAMERA_SCATTERING_STRIDE-1)/CAMERA_SCATTERING_STRIDE*CAMERA_SCATTERING_STAGES*16):0;}
     public static boolean cameraScatteringProfileFrame(long frameSequence){
@@ -110,7 +111,7 @@ public final class OpticalDetailedProfile {
     }
     public static String deltaJson(Map<String,Long> before){
         StringBuilder json=new StringBuilder("{\n\"scope\":\"diagnostic-only; wall and GPU time overlap; shader device-clock ticks are sampled latency, not frame percentages\",\n\"shaderGroup\":")
-                .append(SHADERS?GROUP:-1).append(",\n\"sampleStride\":").append(STRIDE).append(",\n\"values\":{");
+                .append(SHADERS?GROUP:-1).append(",\n\"sampleStride\":").append(STRIDE).append(",\n\"sampleFramePeriod\":8,\n\"values\":{");
         boolean first=true;for(var entry:snapshot().entrySet()){long value=entry.getValue()-before.getOrDefault(entry.getKey(),0L);
             if(value==0)continue;if(!first)json.append(',');first=false;json.append("\n\"").append(entry.getKey()).append("\":").append(value);}
         return json.append("\n}}\n").toString();

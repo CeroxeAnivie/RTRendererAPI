@@ -47,6 +47,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     private final CudaMediumRuntime.HostMemory firstStatistics,secondStatistics;
     private CudaMediumRuntime.HostMemory firstShaderSamples,secondShaderSamples;
     private long shaderSampleOffset;
+    private boolean shaderSampleFrame;
     private CudaSharedRayFrame storage;
     private RtGpuBuffer primary;
     private CudaOpticalPhotonPass photonPass;
@@ -144,6 +145,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     private CudaCameraMediumManager.Prepared prepareOnNative(FrameScene scene,GpuSceneRayTracingPipeline tracer,int slot,
             RtTlasBuildPlan buildPlan,CausticPhotonPlan photonPlan,GpuSceneRayTracingPipeline photonPipeline,RtGpuBuffer photonBuffer){
         var frame=scene.frame();var plan=scene.plan();
+        shaderSampleFrame=OpticalDetailedProfile.opticalProfileFrame(frame.sequence());
         boolean nativePhotons=scene.nativePhotons()!=null&&photonPlan!=null&&photonPlan.photons()>0;
         if(!nativePhotons&&photonPass!=null){photonPass.close();photonPass=null;}
         if(nativePhotons&&storage!=null&&storage.byteSize()>plan.bytes()+OpticalDetailedProfile.shaderBytes(plan.tilePaths())){
@@ -166,11 +168,11 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             var metadata=arena.allocate(firstUploadBytes,16);
             metadata.asByteBuffer().put(scene.metadata,0,uploadAssets?scene.metadata.length:CudaOpticalMediumAbi.HEADER_BYTES);
             if(uploadAssets)scene.assets.density.write(metadata.asByteBuffer().order(ByteOrder.nativeOrder()),scene.metadata.length);
-            if(OpticalDetailedProfile.SHADERS){
+            if(shaderSampleFrame){
                 if(OpticalFrameTimings.KERNEL_PHASES)throw new IllegalStateException("shader and CUDA clock sampling must run separately");
                 metadata.set(ValueLayout.JAVA_LONG,192,address+plan.bytes());
             }
-            var shaderHost=OpticalDetailedProfile.SHADERS&&!queued?arena.allocate(OpticalDetailedProfile.shaderBytes(plan.tilePaths()),16):null;
+            var shaderHost=shaderSampleFrame&&!queued?arena.allocate(OpticalDetailedProfile.shaderBytes(plan.tilePaths()),16):null;
             var counters=arena.allocate(CudaOpticalMediumAbi.STATISTICS_BYTES,16);
             var phaseCycles=OpticalFrameTimings.KERNEL_PHASES?arena.allocate(64,16):null;boolean buildPending=buildPlan!=null&&!nativePhotons;
             boolean photonsPending=photonPlan!=null&&photonPlan.photons()>0&&!nativePhotons;
@@ -345,14 +347,14 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
             cuda.launchBlocking(step,input,paths,1);
             cuda.downloadAsync(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),firstStatistics);
-            if(firstShaderSamples!=null)cuda.downloadAsync(input.slice(shaderSampleOffset,firstShaderSamples.byteSize()),firstShaderSamples);
+            if(shaderSampleFrame)cuda.downloadAsync(input.slice(shaderSampleOffset,firstShaderSamples.byteSize()),firstShaderSamples);
         },continuation,input->{
             cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
             cuda.launchBlocking(step,input,paths,1);
             cuda.downloadAsync(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),secondStatistics);
-            if(secondShaderSamples!=null)cuda.downloadAsync(input.slice(shaderSampleOffset,secondShaderSamples.byteSize()),secondShaderSamples);
+            if(shaderSampleFrame)cuda.downloadAsync(input.slice(shaderSampleOffset,secondShaderSamples.byteSize()),secondShaderSamples);
         });
-        if(firstShaderSamples!=null){
+        if(shaderSampleFrame){
             long diagnosticStarted=OpticalDetailedProfile.start();
             OpticalDetailedProfile.shaderSamples(firstShaderSamples.segment(),paths);
             OpticalDetailedProfile.shaderSamples(secondShaderSamples.segment(),paths);
@@ -377,7 +379,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     }
     private void recordOpticalTrace(GpuSceneRayTracingPipeline tracer,org.lwjgl.vulkan.VkCommandBuffer command,MemoryStack stack,
             int slot,long address,long primaryAddress,int first,int pixels,boolean initialize,CudaOpticalMediumAbi.Plan plan){
-        if(OpticalDetailedProfile.SHADERS){
+        if(shaderSampleFrame){
             VK10.vkCmdFillBuffer(command,storage.buffer(),plan.bytes(),OpticalDetailedProfile.shaderBytes(pixels*plan.samples()),0);
             var dependency=VkBufferMemoryBarrier.calloc(1,stack).sType$Default().srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
                     .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT|VK10.VK_ACCESS_SHADER_WRITE_BIT)

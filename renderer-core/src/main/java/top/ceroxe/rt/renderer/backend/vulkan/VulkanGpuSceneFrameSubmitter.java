@@ -225,7 +225,9 @@ final class VulkanGpuSceneFrameSubmitter {
         GpuSceneRayTracingPipeline boundaryScatteringQuery = nativeBoundaryScatteringFrame
                 ? pipelines.nativeBoundaryScattering() : null;
         GpuSceneRayTracingPipeline opticalTracer = nativeOpticalFrame
-                ? pipelines.forFrame(GpuSceneRayTracingPipeline.Program.NATIVE_OPTICAL_TRACE) : null;
+                ? pipelines.forFrame(top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.opticalProfileFrame(frameSequence)
+                    ?GpuSceneRayTracingPipeline.Program.NATIVE_OPTICAL_TRACE_DIAGNOSTIC
+                    :GpuSceneRayTracingPipeline.Program.NATIVE_OPTICAL_TRACE) : null;
         // Presentation-time feature work may outlive proxy present. Establish resource ownership
         // before reconfiguration, extent replacement, or any writes to this free slot.
         wallStep = OpticalWallTimeline.next(wallStep, FEATURE_INPUT_REUSE);

@@ -52,6 +52,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         NATIVE_MULTIPLE_SCATTERING("gpuscene_native_multiple_scattering.rgen"),
         NATIVE_DENSITY_SCATTERING_LIGHTS("gpuscene_native_density_scattering_lights.rgen"),
         NATIVE_OPTICAL_TRACE("gpuscene_native_optical_trace.rgen"),
+        NATIVE_OPTICAL_TRACE_DIAGNOSTIC("gpuscene_native_optical_trace.rgen"),
         SURFACE_PRIMARY_SHADE("gpuscene_surface_primary_shade.rgen"),
         COMPACT_PRIMARY_SHADE("gpuscene_compact_primary_shade.rgen"),
         GENERAL_PRIMARY_SHADE("gpuscene_primary_shade.rgen"),
@@ -66,7 +67,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 || this == NATIVE_SCATTERING_LIGHTS || this == NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC || this == NATIVE_MULTIPLE_SCATTERING
                 || this == NATIVE_SCATTERING_LIGHTS_CACHED || this == NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC
                 || this == NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED || this == NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED_DIAGNOSTIC
-                || this == NATIVE_DENSITY_SCATTERING_LIGHTS || this == NATIVE_OPTICAL_TRACE || this == SURFACE_PRIMARY_SHADE
+                || this == NATIVE_DENSITY_SCATTERING_LIGHTS || this == NATIVE_OPTICAL_TRACE || this == NATIVE_OPTICAL_TRACE_DIAGNOSTIC || this == SURFACE_PRIMARY_SHADE
                 || this == COMPACT_PRIMARY_SHADE || this == GENERAL_PRIMARY_SHADE; }
     }
     private static final String SHADER_ROOT = "assets/rtrenderer/shaders/gpuscene/";
@@ -199,7 +200,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             descriptors = GpuSceneDescriptorLayout.create(stack, device, descriptorSetCount, sceneShaders.dataBindingCount());
             pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout(),
                     program.primaryQueue() ? GpuScenePrimaryQueue.PUSH_BYTES : 0);
-            boolean opticalDiagnostic=program==Program.NATIVE_OPTICAL_TRACE&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS;
+            boolean opticalDiagnostic=program==Program.NATIVE_OPTICAL_TRACE_DIAGNOSTIC&&top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS;
             boolean scatteringDiagnostic=(program==Program.NATIVE_SCATTERING_LIGHTS_DIAGNOSTIC
                     ||program==Program.NATIVE_SCATTERING_LIGHTS_CACHED_DIAGNOSTIC
                     ||program==Program.NATIVE_SCATTERING_LIGHTS_EXHAUSTIVE_CACHED_DIAGNOSTIC)
