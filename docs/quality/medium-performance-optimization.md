@@ -1804,3 +1804,9 @@ X23直接CUBIN在光学大源的ptxas阶段同样达到2.501GB并失败，69.329
 本次阶段事件确认：缓存热启动中光学 nvrtcCompileProgram 净增约35.34MB、109.80ms；全帧 primary 的431.31MB申请实际增加434.30MB进程提交。首帧后CUDA登记容量保持1626.28MB不变，进程提交仍从2156.22MB增长到2399.34MB；缩小tile到512MiB仍失败，C1-only隔离也失败，均不保留为解决方案。JFR定期dump配合VirtualQueryEx保住失败前证据，增长位于MEM_PRIVATE，GPU显存用量稳定；尚未证明唯一原生分配者。
 
 继续消除实际可见编译冗余：当前仅按需cuModuleGetFunction，但原source仍同时实例化九种布局以及包含全部布局的generic入口。新增编译期layout选择，生产只生成当前所需入口，reset独立编译不实例化输运；测试generic入口及九种布局仍可用。保留原模板函数、数学、采样与布局ABI。先同预算长窗/JFR证实，再严格HDR和全布局回归；未证明内存根因已完全解决，未声称吞吐收益。
+
+## 2026-10-31 原生分配调用栈与 any-hit 收集重构
+
+进程内原生分配观测已捕获 `NtAllocateVirtualMemory → nvgpucomp64.dll`，最大单组调用链累计约276.10MB，其他链经 `nvrtum64.dll`。这是累计申请，不能冒充未释放净值；注入诊断在完成12测量帧后的退出阶段出现0xc0000005，不能作为正确性或性能验收。原始调用栈保存在build/medium-micro-all-20261031/native-allocation-stacks。JFR-only普通管线控制完成4预热+64测量，峰值2.128GB；旧collected同窗口失败。候选仅关闭collected驱动优化仍失败，删除该无效开关。
+
+本轮改掉真正的程序边界：参考先前固定Intel Embree next_hit single_pass，使用独立any-hit收集一次遍历的最近N项，随后按原规则排序/消费。几何精确谓词不再和inline rayQuery状态活跃于同一callable；移除旧gather callable，保留不可见边界材质callable和原表面closest-hit生产者。独立miss/hit SBT记录与payload location2显式隔离；所有候选被ignore，歧义提前标记fallback，溢出边界/完整refill/原精确求交和采样预算保持。未验收前开关仍默认false。先同预算长窗和严格HDR，随后关闭诊断吞吐；不把native堆定位或IR变化当作修复已通过。

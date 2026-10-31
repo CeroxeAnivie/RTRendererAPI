@@ -5,6 +5,7 @@ struct GsCollectedEvent {uvec4 identity;vec2 distance;};
 struct GsCollectedBatchData {
     GsCollectedEvent events[GS_CONNECTION_BATCH_CAPACITY];
     vec4 originAndMinimum,directionAndMaximum;
+    float firstDiscarded;
     uint count;
     bool complete,fallback;
 #ifdef RTRENDERER_OPTICAL_PROFILE

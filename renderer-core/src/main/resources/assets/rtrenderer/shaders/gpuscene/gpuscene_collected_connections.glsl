@@ -4,7 +4,7 @@
 #include "gpuscene_collected_batch_data.glsl"
 GpuScenePayload gsOpticalConnectionHitRepeated(vec3 origin,vec3 direction,uvec4 launch,float minimum,float maximum);
 layout(location=0) callableDataEXT GsCollectedMaterialData gsCollectedMaterial;
-layout(location=1) callableDataEXT GsCollectedBatchData gsCollectedBatch;
+layout(location=2) rayPayloadEXT GsCollectedBatchData gsCollectedBatch;
 #define gsCollectedEvents gsCollectedBatch.events
 #define gsCollectedCount gsCollectedBatch.count
 #define gsCollectedComplete gsCollectedBatch.complete
@@ -31,7 +31,19 @@ bool gsCollectedFill(vec3 origin,vec3 direction,float minimum,float maximum) {
     gsCollectedBatch.diagnosticAddress=payload.diagnosticAddress;
     gsCollectedBatch.diagnosticRecord=payload.diagnosticRecord;
 #endif
-    executeCallableEXT(1u,1);
+    gsCollectedCount=0u;gsCollectedComplete=true;gsCollectedFallback=false;gsCollectedBatch.firstDiscarded=1.0e30;
+    // Embree next_hit single_pass: any-hit collects nearest-N without accepting
+    // a candidate. Exact geometry repair lives in that stage, outside rayQuery state.
+    traceRayEXT(sceneTlas,gl_RayFlagsNoOpaqueEXT|gl_RayFlagsSkipClosestHitShaderEXT,0xff,
+        2u,0u,2u,origin,minimum,direction,maximum,2);
+    for(uint j=1u;j<gsCollectedCount;++j)
+        if(gsCollectedEvents[j].distance.x-gsCollectedEvents[j-1u].distance.x
+                    <=8.0*1.192092896e-7*max(1.0,abs(gsCollectedEvents[j].distance.x))
+                ||gsCollectedEvents[j].distance.y<=gsCollectedEvents[j-1u].distance.y)
+            gsCollectedFallback=true;
+    if(!gsCollectedComplete&&gsCollectedCount!=0u
+            &&gsCollectedBatch.firstDiscarded-gsCollectedEvents[gsCollectedCount-1u].distance.x
+                <=8.0*1.192092896e-7*max(1.0,abs(gsCollectedBatch.firstDiscarded)))gsCollectedFallback=true;
     return !gsCollectedFallback;
 }
 
