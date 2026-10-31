@@ -52,15 +52,18 @@ public final class CudaOpticalMediumSelfTest {
             CudaBoundaryMediumAbi.Boundary boundary) {
         String previous=System.getProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY);
         String previousFused=System.getProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY);
+        String previousBound=System.getProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY);
         try {
-            for(boolean reduced:new boolean[]{false,true})for(boolean fused:new boolean[]{false,true}) {
+            for(boolean reduced:new boolean[]{false,true})for(boolean fused:new boolean[]{false,true})for(boolean bound:new boolean[]{false,true}) {
                 System.setProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY,Boolean.toString(reduced));
                 System.setProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY,Boolean.toString(fused));
+                System.setProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY,Boolean.toString(bound));
                 var data=ByteBuffer.wrap(CudaOpticalMediumAbi.scene(plan,frame,List.of(boundary),new int[0])).order(ByteOrder.nativeOrder());
                 require(data.getInt(184)==(reduced?1:0),"counter mode is explicit in the optical header");
                 require(((data.getInt(188)&128)!=0)==fused,"fused initialization mode is explicit in the optical header");
+                require(((data.getInt(188)&2048)!=0)==bound,"connection ray range mode is explicit in the optical header");
                 CudaOpticalMediumAbi.updateTile(data,plan,0,plan.pixels(),0,0);
-                require(data.getInt(184)==(reduced?1:0)&&((data.getInt(188)&128)!=0)==fused,
+                require(data.getInt(184)==(reduced?1:0)&&((data.getInt(188)&128)!=0)==fused&&((data.getInt(188)&2048)!=0)==bound,
                         "tile update preserves counter and fused initialization modes");
             }
             System.clearProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY);
@@ -72,6 +75,8 @@ public final class CudaOpticalMediumSelfTest {
             else System.setProperty(CudaOpticalMediumAbi.REDUCED_COUNTERS_PROPERTY,previous);
             if(previousFused==null)System.clearProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY);
             else System.setProperty(CudaOpticalMediumAbi.FUSED_INITIALIZATION_PROPERTY,previousFused);
+            if(previousBound==null)System.clearProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY);
+            else System.setProperty(CudaOpticalMediumAbi.BOUND_CONNECTION_RAYS_PROPERTY,previousBound);
         }
     }
     private static void verifyDensity(RenderFrameRequest frame,Medium medium,CudaBoundaryMediumAbi.Boundary boundary) {

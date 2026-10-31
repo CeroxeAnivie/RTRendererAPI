@@ -1330,3 +1330,14 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 四轮虽减少 47.2196% 的主光学同步次数，但增加空尾工作且实际更慢；首段遮挡跳过没有缩短长尾。两者均撤回，默认恢复已验收的 binary 双轮链。负降幅表示退化。不同 GPU 负载下的内部排名不能拿来填本表的阶段耗时收益。
 
 [原始窗口、哈希与逐项收益](data/medium-idle-ablation-20261031.json)。
+
+
+### 有限光源连接范围候选（验证中）
+
+总榜第一 CUDA stream 同步包住的实际 shader 工作中，连接路径是 61.075%，连接内首次 trace/空构造占 64.763%（内部抽样口径，不能与墙钟相加）。当前 producer 固定 trace tMax=1e20，而 CUDA connectionStep 已使用 min(hitDistance, endpoint) 并在 distance>=endpoint 时结束，光源后方的 closest-hit 材质计算和 BVH 遍历属于不会被消费的工作。
+
+参考 [PBRT-v4 b0bdf461 的 TraceTransmittance](https://github.com/mmp/pbrt-v4/blob/b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f/src/pbrt/wavefront/intersect.h)（Apache-2.0）使用 sr.tMax、pLight=ray(tMax)、trace(ray,tMax)，以及 CPUAggregate 的有限 shadow ray 查询。采用有限连接区间，保留本项目透明表面、overlay 排除、介质优先级、数值偏移和事件预算；不搬用 PBRT 的随机积分/轮盘策略，不降低任何采样预算。
+
+独立属性 top.ceroxe.rt.medium.cuda.opticalBoundConnectionRays，header188 bit2048，false 可回到原无限连接作同制品对照。仅点光/聚光的连接查询使用 min(origin.w,1e20)，方向光、主射线和光子路径保持原范围。初次及 overlay/non-shadow 后续查询都使用同一端点；nextFloat(tHit)>tMax 时保留端点终止命中供 CUDA 消费，不发送 tMin>tMax。
+
+验收包括：真实 native RT 的镜像及反顶点序、光源前后不透明遮挡、alpha 衰减、穿透和终止在体积内部、端点 overlay/non-shadow/opaque、方向光；同 sequence 开关 HDR 字节对照；1080p 两帧 HDR、固定57及完整窗口、micro-checks、完整生产光学回归和 validation。性能按当前 GPU 负载只报本窗排名及占比，净收益待干净 GPU 的关闭诊断对照后判定；不能把理论删除工作包装成已实现加速。
