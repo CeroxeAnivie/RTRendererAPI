@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--runtime", required=True, type=pathlib.Path)
     parser.add_argument("--output", required=True, type=pathlib.Path)
     parser.add_argument("--frida-directory", type=pathlib.Path)
+    parser.add_argument("--detach-marker", default="GalleryPerf warmupFrames=")
     args = parser.parse_args()
     if args.frida_directory:
         sys.path.insert(0, str(args.frida_directory.resolve()))
@@ -63,8 +64,11 @@ def main():
                 script.load()
                 print("Observing native commit/release, PID", target, flush=True)
                 next_dump = time.monotonic() + 5
+                finish_deadline = time.monotonic() + 120
                 while process.poll() is None:
-                    if "GalleryPerf warmupFrames=" in (out / "run.log").read_text(encoding="utf-8", errors="replace"):
+                    if time.monotonic() > finish_deadline:
+                        raise TimeoutError("Native attribution exceeded its 120 second bound")
+                    if args.detach_marker in (out / "run.log").read_text(encoding="utf-8", errors="replace"):
                         script.unload()
                         session.detach()
                         session = None
