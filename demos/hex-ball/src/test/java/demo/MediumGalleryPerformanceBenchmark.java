@@ -127,7 +127,9 @@ public final class MediumGalleryPerformanceBenchmark {
              var output = new PrintWriter(Files.newBufferedWriter(report, StandardCharsets.UTF_8))) {
             renderer.apply(scene.transaction());
             var interop = renderer.extension(VulkanFrameInterop.class).orElseThrow();
-            var sequence = new long[]{0};
+            var sequence = new long[]{Long.getLong("top.ceroxe.rt.medium.benchmarkFirstSequence",0L)};
+            require(sequence[0]>=0,"first benchmark sequence must be nonnegative");
+            System.out.println("GalleryPerf firstSequence="+sequence[0]);
             Result warmupResult = range(renderer, interop, scene, width, height, sequence, warmup,WALL_EVENT_CAPACITY);
             requireHealthy(renderer, "warmup");
             long eventsPerFrame = warmupResult.timeline()==null ? 0

@@ -3,6 +3,7 @@ param([Parameter(Mandatory=$true)][string]$TrialDirectory,
       [ValidateSet('off','timings')][string]$Mode='timings',
       [ValidateSet('micro','micro-checks','all','focused')][string]$Suite='micro',
       [string]$Label='first',[string]$Cases='',
+      [ValidateRange(0,2147483647)][long]$FirstSequence=0,
       [ValidateRange(1,100000)][int]$Warmup=1200,
       [ValidateRange(1,100000)][int]$Frames=240,[ValidateRange(1,100)][int]$Rounds=3)
 $ErrorActionPreference='Stop'
@@ -29,6 +30,7 @@ $enabled=($Mode -eq 'timings').ToString().ToLowerInvariant()
 $matrixArguments=@('-Xmx768m','-XX:-UseJVMCICompiler','--enable-native-access=ALL-UNNAMED',
     '--sun-misc-unsafe-memory-access=allow','-Dfile.encoding=UTF-8','-Dstdout.encoding=UTF-8','-Dstderr.encoding=UTF-8',
     '-Dtop.ceroxe.rt.medium.scatteringInlineQuery=true',
+    "-Dtop.ceroxe.rt.medium.benchmarkFirstSequence=$FirstSequence",
     '-cp',$matrixClasspath,'demo.MediumGalleryPerformanceBenchmark',"--suite=$Suite",
     "--warmup=$Warmup","--frames=$Frames","--rounds=$Rounds","--profile=$enabled","--wallProfile=$enabled",
     "--output=$runDir")

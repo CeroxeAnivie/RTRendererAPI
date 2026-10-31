@@ -260,7 +260,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                             else storage.exchangeBlocking(resolve,continuation);rounds++;}
                         if(roundIndex!=null)roundIndex[0]++;
                     }
-                    if(statistics[1]!=0)throw new RendererException("native optical continuation rejected "+statistics[1]+" paths; "
+                    if(statistics[1]!=0)throw new RendererException("native optical continuation rejected "+statistics[1]+" paths; frameSequence="+frame.sequence()+"; "
                             +rejectionDetails(plan,paths)+"; incomplete radiance was not published");
                 }first+=pixels;
             }

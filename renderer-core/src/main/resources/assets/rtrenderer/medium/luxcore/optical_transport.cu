@@ -227,6 +227,11 @@ template<class S> __device__ __forceinline__ bool segment(unsigned char*b,S*s,fl
             if(incident)*incident=rgb(s->throughput)*atTr*(1.f/pdf);
             weight=rgb(s->throughput)*atTr*scatter*(collisionDensity/pdf);
             const float3 point=origin+rgb(s->direction)*local;
+#ifdef RTR_OPTICAL_TRACE_PATH
+            if(s->control.z-((unsigned int*)b)[4]*((unsigned int*)b)[3]==RTR_OPTICAL_TRACE_PATH)
+                printf("OPTICAL_SCATTER seed=%u volume=%u distance=%.9g local=%.9g origin=[%.9g,%.9g,%.9g] direction=[%.9g,%.9g,%.9g] point=[%.9g,%.9g,%.9g]\n",
+                        ((unsigned int*)b)[36],selected,distance,local,origin.x,origin.y,origin.z,s->direction.x,s->direction.y,s->direction.z,point.x,point.y,point.z);
+#endif
             if(!finite3(value)||!finite3(weight)||!finite3(point))return false;
             s->radiance=make_float4(value.x,value.y,value.z,0.f);
             s->throughput=make_float4(weight.x,weight.y,weight.z,fmaxf(s->throughput.w-local,0.f));
@@ -593,6 +598,12 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
     if(view.u(Compact?20:48)!=s->control.z/h[3]||view.u(Compact?21:49)!=s->control.z%h[3]||view.u(Compact?23:51)!=s->control.w){finish(b,i,s,statistics,2);return;}
     RTR_ENTRY_NEXT(5u);
     bool found=view.u(Compact?14:28)!=0;float distance=found?view.f(3):s->throughput.w;
+#ifdef RTR_OPTICAL_TRACE_PATH
+    if(s->control.z-h[4]*h[3]==RTR_OPTICAL_TRACE_PATH)
+        printf("OPTICAL_MAIN seed=%u sample=%u branch=%u volume=%u origin=[%.9g,%.9g,%.9g] direction=[%.9g,%.9g,%.9g] hitT=%.9g boundary=%u side=%u point=[%.9g,%.9g,%.9g]\n",
+                h[36],h[34],h[35],selectedVolume(s),s->origin.x,s->origin.y,s->origin.z,s->direction.x,s->direction.y,s->direction.z,
+                distance,view.u(Compact?16:44),view.u(Compact?15:29),view.f(0),view.f(1),view.f(2));
+#endif
     RTR_ENTRY_END();
     RTR_PHASE_NEXT(1u);
     bool collision=false;if(!isfinite(distance)||distance<0||!segment(b,s,rgb(s->origin),distance,&collision)){finish(b,i,s,statistics,3);return;}
