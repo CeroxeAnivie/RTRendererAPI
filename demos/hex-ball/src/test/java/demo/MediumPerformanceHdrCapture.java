@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.locks.LockSupport;
 import top.ceroxe.rt.renderer.api.Renderer;
+import top.ceroxe.rt.renderer.api.SceneTransaction;
 import top.ceroxe.rt.renderer.api.TextureFormat;
 
 /** Captures the actual matrix workloads for frozen-core HDR comparison, outside all FPS windows. */
@@ -29,29 +30,10 @@ public final class MediumPerformanceHdrCapture {
         Files.createDirectories(output);
         for(var workload:workloads) {
             try(var renderer=Renderer.open(workload.config().copyBuilder().cpuFrameReadbackEnabled(true).build())) {
-                renderer.apply(workload.transaction());
-                long requiredRevision=workload.transaction().revision();
-                if(lightMask>=0) {
-                    var patch=top.ceroxe.rt.renderer.api.SceneTransaction.builder(Math.addExact(requiredRevision,1));
-                    boolean changed=false;
-                    for(var light:workload.transaction().upserts().lights()) {
-                        require(light.id()>0&&light.id()<31,"light-mask diagnostic requires IDs 1..30");
-                        if((lightMask&(1<<light.id()))==0&&light.intensity()!=0) {
-                            patch.upsert(light.toBuilder().intensity(0).build());
-                            changed=true;
-                        }
-                    }
-                    if(changed) {
-                        var transaction=patch.build();
-                        renderer.apply(transaction);
-                        requiredRevision=transaction.revision();
-                    }
-                }
+                renderer.apply(maskedTransaction(workload.transaction(),lightMask));
                 for(int frame=0;frame<frames;frame++) {
                     var request=workload.frame(frame,width,height);
                     // The all-on control must submit the exact original request and transaction.
-                    if(requiredRevision!=workload.transaction().revision())
-                        request=request.toBuilder().minimumSceneRevision(requiredRevision).build();
                     if(lightMask>=0&&(lightMask&1)==0&&request.environment().sunIntensity()!=0)
                         request=request.toBuilder().environment(request.environment().toBuilder().sunIntensity(0).build()).build();
                     long deadline=System.nanoTime()+Duration.ofSeconds(120).toNanos();
@@ -76,6 +58,28 @@ public final class MediumPerformanceHdrCapture {
             }
             System.out.println("MatrixHDR case="+workload.id()+" frames="+frames+" extent="+width+"x"+height);
         }
+    }
+    private static SceneTransaction maskedTransaction(SceneTransaction original,int mask) {
+        if(mask<0)return original;
+        boolean changed=false;
+        for(var light:original.upserts().lights()) {
+            require(light.id()>0&&light.id()<31,"light-mask diagnostic requires IDs 1..30");
+            changed|=(mask&(1<<light.id()))==0&&light.intensity()!=0;
+        }
+        if(!changed)return original;
+        // Mask before the initial publish: no extra generation, revision or apply/admission race.
+        var copy=SceneTransaction.builder(original.revision());
+        if(original.reset())copy.resetScene();
+        copy.upsertTextures(original.upserts().textures()).upsertMaterials(original.upserts().materials())
+                .upsertMeshes(original.upserts().meshes()).upsertInstances(original.upserts().instances());
+        for(var light:original.upserts().lights())
+            copy.upsert((mask&(1<<light.id()))!=0||light.intensity()==0?light:light.toBuilder().intensity(0).build());
+        for(var ids=original.removals().textureIds();ids.hasRemaining();)copy.removeTexture(ids.get());
+        for(var ids=original.removals().materialIds();ids.hasRemaining();)copy.removeMaterial(ids.get());
+        for(var ids=original.removals().meshIds();ids.hasRemaining();)copy.removeMesh(ids.get());
+        for(var ids=original.removals().instanceIds();ids.hasRemaining();)copy.removeInstance(ids.get());
+        for(var ids=original.removals().lightIds();ids.hasRemaining();)copy.removeLight(ids.get());
+        return copy.build();
     }
     private static void require(boolean condition,String message){if(!condition)throw new AssertionError(message);}
 }
