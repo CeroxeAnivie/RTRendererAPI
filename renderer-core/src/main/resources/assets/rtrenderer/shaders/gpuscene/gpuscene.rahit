@@ -12,7 +12,7 @@ void main()
 {
     GS_DETAIL_BEGIN(48u);
     uint boundaryFlags=gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
-    if((boundaryFlags&2u)!=0u&&!gsBoundaryCandidateValid(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),gl_PrimitiveID,hitAttributes)) {
+    if(boundaryFlags!=0u&&!gsBoundaryCandidateValid(gsMeshBase(gsInstanceMeshSlot(gl_InstanceCustomIndexEXT)),gl_PrimitiveID,hitAttributes)) {
         GS_DETAIL_END();ignoreIntersectionEXT;return;
     }
     if((boundaryFlags&2u)!=0u){GS_DETAIL_END();return;}
