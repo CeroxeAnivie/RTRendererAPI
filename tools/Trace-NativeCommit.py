@@ -64,6 +64,12 @@ def main():
                 print("Observing native commit/release, PID", target, flush=True)
                 next_dump = time.monotonic() + 5
                 while process.poll() is None:
+                    if "GalleryPerf warmupFrames=" in (out / "run.log").read_text(encoding="utf-8", errors="replace"):
+                        script.unload()
+                        session.detach()
+                        session = None
+                        process.wait(timeout=30)
+                        break
                     if time.monotonic() >= next_dump:
                         # Save before the hard memory limit can prevent the emergency dump.
                         subprocess.run(["jcmd", str(target), "JFR.dump", "name=1", "filename=" + str(out / "checkpoint.jfr")],
