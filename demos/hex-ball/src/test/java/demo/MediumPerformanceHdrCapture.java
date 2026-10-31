@@ -30,19 +30,30 @@ public final class MediumPerformanceHdrCapture {
         for(var workload:workloads) {
             try(var renderer=Renderer.open(workload.config().copyBuilder().cpuFrameReadbackEnabled(true).build())) {
                 renderer.apply(workload.transaction());
+                long requiredRevision=workload.transaction().revision();
                 if(lightMask>=0) {
-                    var patch=top.ceroxe.rt.renderer.api.SceneTransaction.builder(2);
+                    var patch=top.ceroxe.rt.renderer.api.SceneTransaction.builder(Math.addExact(requiredRevision,1));
+                    boolean changed=false;
                     for(var light:workload.transaction().upserts().lights()) {
                         require(light.id()>0&&light.id()<31,"light-mask diagnostic requires IDs 1..30");
-                        patch.upsert(light.toBuilder().intensity((lightMask&(1<<light.id()))!=0?light.intensity():0).build());
+                        if((lightMask&(1<<light.id()))==0&&light.intensity()!=0) {
+                            patch.upsert(light.toBuilder().intensity(0).build());
+                            changed=true;
+                        }
                     }
-                    renderer.apply(patch.build());
+                    if(changed) {
+                        var transaction=patch.build();
+                        renderer.apply(transaction);
+                        requiredRevision=transaction.revision();
+                    }
                 }
                 for(int frame=0;frame<frames;frame++) {
                     var request=workload.frame(frame,width,height);
-                    if(lightMask>=0)request=request.toBuilder().minimumSceneRevision(2)
-                            .environment(request.environment().toBuilder()
-                                    .sunIntensity((lightMask&1)!=0?request.environment().sunIntensity():0).build()).build();
+                    // The all-on control must submit the exact original request and transaction.
+                    if(requiredRevision!=workload.transaction().revision())
+                        request=request.toBuilder().minimumSceneRevision(requiredRevision).build();
+                    if(lightMask>=0&&(lightMask&1)==0&&request.environment().sunIntensity()!=0)
+                        request=request.toBuilder().environment(request.environment().toBuilder().sunIntensity(0).build()).build();
                     long deadline=System.nanoTime()+Duration.ofSeconds(120).toNanos();
                     while(!(renderer.trySubmit(request) instanceof Renderer.FrameSubmitted)) {
                         require(System.nanoTime()<deadline,"HDR frame admission timed out: "+workload.id());
