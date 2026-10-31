@@ -1,0 +1,18 @@
+{
+  "status": "candidate-not-yet-validated",
+  "baseline": "39fb8cc",
+  "target": "Overall rank 1 scattering chain, internal rank 2 local-light geometry and attenuation",
+  "description": "For strict cached exhaustive shaders, evaluate one active non-shadow-casting directional light once per camera path; reuse its unchanged RGB at the original light slot in each integration sample. Keep other lights, weights, accumulation order, rays, source layout and integration budgets unchanged. Only one RGB plus slot index remains live across queries.",
+  "reference": {
+    "repository": "NVIDIAGameWorks/Falcor",
+    "commit": "759aad033ff610fb0d82c74f7e0a508d0096d5f2",
+    "file": "Source/Falcor/Scene/Lights/LightHelpers.slang:sampleDirectionalLight",
+    "license": "BSD-3-Clause",
+    "principle": "Directional sampling returns fixed direction and intensity without position-dependent falloff; when shadows are disabled, all terms of this project contribution are invariant along the camera ray. Independent loop-invariant adaptation."
+  },
+  "correctnessRequirement": "Byte-identical HDR plus affected native and light/cached-primary query/no-query matrices after target gain.",
+  "artifacts": {
+    "control": "4ed178137a72375030c1470d924b0f4fb2e5eecf401c5253adc1e20525027b85",
+    "candidate": "0d0c2f695bdcfc81c88cdbe3cd107e7a6c24e0014ffed36a6f2ffa47ae54c622"
+  }
+}
