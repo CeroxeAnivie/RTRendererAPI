@@ -1100,3 +1100,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 正序 off 127.514190→139.849798 FPS（+9.67%），PBR 整段 2.580339→1.944339 ms（−24.65%）；反序 off 132.066318→137.502640 FPS（+4.12%），PBR 整段 2.492217→1.992112 ms（−20.07%）。各窗预热 1200 帧、3×240 帧；反序计时开销 1.25%。8 帧 1080p HDR、8 帧小图及 query/no-query 两组矩阵共 106 帧逐字节一致；PBR、组合、camera、多次散射专项通过，16 份 validation 零 warning/error。
 
 发现旧采集工具通配符混入此前长窗口 round 4/5；已修工具并按 CSV 的三轮重算墙钟表，原 FPS/GPU 数据未受影响。详见 [完整证据](data/scattering-serial-arena-20261031.json) 和 [修正后的最新排名](data/scattering-serial-arena-ranked-20261031.json)。180 FPS 尚未达到。
+
+### 撤回：PBRT CUDA fast-math 编译策略
+
+参考固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`CMakeLists.txt:249` 的 `--use_fast_math`，只为严格缓存均匀路径的两份 CUDA kernel 启用，并隔离不同算术模式的 PTX/module 缓存。8 帧 1080p 的最大相对 RMS 为 0.000587%，亮度能量偏差 0.00000412%，通过事先固定的误差线；运行时 5376 通道及缓存隔离回归通过。但目标 PBR CUDA 0.586008→0.624507 ms，三轮均慢约 6.6%；散射 CUDA 0.639015→0.632566 ms 仅约 1%，off 139.115187→139.716659 FPS 仅 +0.43%，没有确定性目标收益。已立即恢复全部生产代码，保留误差比较工具和冻结证据，不继续为失败候选跑全量回归。[原始证据](data/scattering-fast-arithmetic-rejected-20261031.json)。

@@ -1,5 +1,5 @@
 {
-  "status": "candidate-not-yet-validated",
+  "status": "rejected-and-restored",
   "scope": "Opt-in --use_fast_math only for strict cached uniform shared scattering and PBR CUDA kernels. All other kernel compilation remains --fmad=false.",
   "reference": {
     "repository": "mmp/pbrt-v4",
@@ -19,5 +19,6 @@
   "artifacts": {
     "control": "ddb51e973bd955219c953d2eeefcfda0a85262bfba6fd2357be4b91db137935f",
     "candidate": "5b8324f8200c475e0eacd37c2ead458ed02b331639183e69a32cfb9f12bbc2f2"
-  }
+  },
+  "result": "Negligible off-FPS change; PBR CUDA target cost increased consistently. No production fast-math compilation retained."
 }
