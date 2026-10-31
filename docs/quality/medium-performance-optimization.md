@@ -1122,3 +1122,8 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 修复后 PBR 31 项/43 帧、组合 15 项、camera 17 项独立参考及多次散射解析通过；query/no-query 灯光与消费者矩阵 90 帧，加 1080p/小图 16 帧，共 106 帧全字节一致。14 份正式 validation 无 warning/error。最终生产提交为 `39fb8cc`；候选制品不与后来未验收的阴影排序改动混用。最近细粒度观测 695 条路径零漏样，阴影、局部灯几何、采样位置三项合计 72.13%。
 
 证据：[性能与正确性](data/scattering-source-planes-20261031.json)、[互斥墙钟排名](data/scattering-source-planes-ranked-20261031.json)、[第一名内部排序](data/scattering-current-internal-ranked-20261031.json)。后续按用户最新授权集中处理总榜第一内部前三，不继续围绕尾部 source 地址与写回做微优化。
+
+
+### 撤回：阴影查询的屏幕 Morton 排序
+
+针对总榜第一内部第一名，参考固定 Falcor `759aad033ff610fb0d82c74f7e0a508d0096d5f2`（BSD-3-Clause）`Source/RenderPasses/PathTracer/GeneratePaths.cs.slang` 的 16×16 屏幕 Morton 调度。只重排严格穷举 cached query 的像素执行顺序，保留全部像素身份、源索引、随机数与射线；完整 16 行重排，末尾 8 行及非整行 tile 保留原映射。1080p 8 帧 HDR 全字节一致，但灯光 GPU 三轮均增加，均值 2.438277→2.456899 ms（+0.76%）；off 136.693355→137.565750 的 +0.64% 不算目标收益。全部 GLSL/SPIR-V 已恢复，不追加失败候选的完整回归。[冻结证据](data/scattering-shadow-morton-candidate-20261031.json)。
