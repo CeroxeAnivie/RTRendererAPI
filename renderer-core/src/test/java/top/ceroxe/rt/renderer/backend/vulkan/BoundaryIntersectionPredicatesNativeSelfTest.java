@@ -47,7 +47,7 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                     vec3 ne=gsBoundaryEdges(a,b,c);
                     GsBoundaryWide3 ca=gsBoundaryRelativePoint(positions[3]),cb=gsBoundaryRelativePoint(positions[6]),cc=gsBoundaryRelativePoint(positions[2]);
                     vec3 ce=gsBoundaryEdges(ca,cb,cc);
-                    float debug[14]=float[14](ce.x,ce.y,ce.z,ne.x,ne.y,ne.z,gsBoundaryDistance(a,b,c,ne),hitDistance,a.x.x,a.x.y,a.y.x,a.y.y,a.z.x,a.z.y);
+                    float debug[18]=float[18](ce.x,ce.y,ce.z,ne.x,ne.y,ne.z,gsBoundaryDistance(a,b,c,ne),hitDistance,a.x.x,a.x.y,a.y.x,a.y.y,a.z.x,a.z.y,rayDirection.x,rayDirection.y,rayDirection.z,objectToWorld[0][0]);
                     if(i<2u)imageStore(target,ivec2(i,0),vec4(valid?1:0,gsBoundaryInside(ne)?1:0,0,1));
                     else {uint bits=floatBitsToUint(debug[i-2u]);imageStore(target,ivec2(i,0),vec4(uvec4(bits,bits>>8,bits>>16,bits>>24)&255u)/255.0);}
                 }
@@ -57,7 +57,7 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
         var program=new ShaderProgram(new RenderResourceId(951002),ResourceVersion.initial(),ShaderProgram.Kind.COMPUTE,List.of(shader),
                 new BindingLayout(List.of(destination)),0);
         var target=new TextureResource(new RenderResourceId(951003),ResourceVersion.initial(),TextureDimension.TEXTURE_2D,
-                16,1,1,1,1,1,TextureFormat.RGBA8_UNORM,Set.of(TextureUsage.STORAGE_READ_WRITE,TextureUsage.COLOR_ATTACHMENT,TextureUsage.COPY_DESTINATION));
+                20,1,1,1,1,1,TextureFormat.RGBA8_UNORM,Set.of(TextureUsage.STORAGE_READ_WRITE,TextureUsage.COLOR_ATTACHMENT,TextureUsage.COPY_DESTINATION));
         var range=new TextureSubresourceRange(TextureAspect.COLOR,0,1,0,1);
         var view=new TextureView(target,TextureViewDimension.TEXTURE_2D,range);
         try(var device=VulkanDeviceRuntime.open(VulkanRtCapabilityProbe.capture(),RendererRtDiagnostics.noop(),true,true,
@@ -67,17 +67,17 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
             var bindings=new BindingSet(program.bindingLayout(),Map.of(destination.key(),
                     List.of(new BindingSet.TextureValue(view,BindingType.READ_WRITE_STORAGE_TEXTURE))));
             var submitted=session.submit(new RenderCommandTransaction(1,List.of(new ClearColorCommand(new ResourceSlice.TextureSlice(target,range),new ClearColorValue(0,0,0,1)),new BindComputePipelineCommand(new ComputePipelineState(program)),
-                    BindBindingSetCommand.fixed(bindings),new DispatchCommand(16,1,1))));
+                    BindBindingSetCommand.fixed(bindings),new DispatchCommand(20,1,1))));
             require(submitted.outcome().recorded(),"predicate dispatch rejected: "+submitted.reason()+" "+submitted.detail());
             VulkanGenericCommandNativeSelfTest.await(session,1,CommandExecutionEvidence.Outcome.GPU_COMPLETED);
-            var pass=RenderPassDescriptor.color(16,1,List.of(RenderAttachment.of(view,LoadOp.LOAD,StoreOp.STORE)));
+            var pass=RenderPassDescriptor.color(20,1,List.of(RenderAttachment.of(view,LoadOp.LOAD,StoreOp.STORE)));
             require(session.submit(new RenderCommandTransaction(2,List.of(new BeginRenderPassCommand(pass),new EndRenderPassCommand())))
                     .outcome().recorded(),"predicate readback rejected");
             VulkanGenericCommandNativeSelfTest.await(session,2,CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED);
             var pixels=session.captureLatestCpuFrame(1).pixels();
             int entry=Byte.toUnsignedInt(pixels.get(0)),miss=Byte.toUnsignedInt(pixels.get(4));
             System.out.println("Boundary predicate edge results: realEntry="+entry+" emptySlab="+miss);
-            for(int index=2;index<16;index++){int at=index*4;int bits=0;for(int lane=0;lane<4;lane++)bits|=Byte.toUnsignedInt(pixels.get(at+lane))<<(lane*8);
+            for(int index=2;index<20;index++){int at=index*4;int bits=0;for(int lane=0;lane<4;lane++)bits|=Byte.toUnsignedInt(pixels.get(at+lane))<<(lane*8);
                 System.out.println("predicate component "+(index-2)+"="+Float.intBitsToFloat(bits));}
             require(entry==255&&miss==0,"GPU predicate disagrees with the independent double-precision slab oracle");
         }
