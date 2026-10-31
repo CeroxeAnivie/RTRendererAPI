@@ -274,8 +274,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                             else storage.exchangeBlocking(resolve,continuation);rounds++;}
                         if(roundIndex!=null)roundIndex[0]++;
                     }
-                    if(statistics[1]!=0)throw new RendererException("native optical continuation rejected "+statistics[1]+" paths; frameSequence="+frame.sequence()+"; "
-                            +rejectionDetails(plan,paths)+"; incomplete radiance was not published");
+                    if(statistics[1]!=0)throw rejectedFrame(plan,paths,statistics[1],frame.sequence());
                 }first+=pixels;
             }
         }
@@ -289,36 +288,52 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                 |(CudaOpticalMediumAbi.resolvedPublication()?CudaOpticalMediumAbi.RESOLVED_RADIANCE_FLAG:0L),
                 address+plan.emissionOffset(),plan.pixels(),plan.samples(),plan.externalPrimary());
     }
-    /** Executed only after transport has already failed; successful frames have no diagnostic readback. */
+    private RendererException rejectedFrame(CudaOpticalMediumAbi.Plan plan,int paths,int rejected,long sequence) {
+        String reason="native optical continuation rejected "+rejected+" paths; frameSequence="+sequence;
+        try {return new RendererException(reason+"; "+rejectionDetails(plan,paths)+"; incomplete radiance was not published");}
+        catch(RuntimeException|Error diagnosticFailure) {
+            var failure=new RendererException(reason+"; diagnostic readback failed; incomplete radiance was not published");
+            failure.addSuppressed(diagnosticFailure);return failure;
+        }
+    }
+    /** Failure-only: scan bounded blocks and fetch at most four complete records. */
     private String rejectionDetails(CudaOpticalMediumAbi.Plan plan,int paths) {
         try(Arena arena=Arena.ofConfined()) {
-            var states=arena.allocate(Math.multiplyExact((long)paths,plan.stateBytes()),16);
-            var hits=arena.allocate(Math.multiplyExact((long)paths,plan.hitBytes()),16);
-            var connection=plan.connectionTransport()?arena.allocate(Math.multiplyExact((long)paths,CudaOpticalMediumAbi.CONNECTION_BYTES),16):null;
-            storage.exchangeBlocking(input->{
-                cuda.download(input.slice(plan.stateOffset(),states.byteSize()),states);
-                cuda.download(input.slice(plan.hitOffset(),hits.byteSize()),hits);
-                if(connection!=null)cuda.download(input.slice(plan.connectionOffset(),connection.byteSize()),connection);
-            },command->{});
+            int chunkPaths=Math.min(paths,4096),scanStride=plan.transposedStates()?4:plan.stateBytes();
+            var scan=arena.allocate(Math.multiplyExact((long)chunkPaths,scanStride),16);
+            var states=arena.allocate(plan.stateBytes(),16);
+            var hits=arena.allocate(plan.hitBytes(),16);
+            var connection=plan.connectionTransport()?arena.allocate(CudaOpticalMediumAbi.CONNECTION_BYTES,16):null;
             var histogram=new java.util.TreeMap<Integer,Integer>();var examples=new java.util.ArrayList<String>();
-            for(int i=0;i<paths;i++) {
-                long errorAt=plan.transposedStates()?(9L*paths+i)*4:i*(long)plan.stateBytes()+36;
-                int error=states.get(ValueLayout.JAVA_INT,errorAt);if(error==0)continue;histogram.merge(error,1,Integer::sum);
-                if(examples.size()<4) {
+            int[] samplePaths=new int[4],sampleErrors=new int[4],sampleCount={0};
+            storage.exchangeBlocking(input->{
+                for(int first=0;first<paths;first+=chunkPaths) {
+                    int count=Math.min(chunkPaths,paths-first);
+                    long offset=plan.stateOffset()+(plan.transposedStates()?(9L*paths+first)*4:first*(long)plan.stateBytes());
+                    cuda.download(input.slice(offset,(long)count*scanStride),scan.asSlice(0,(long)count*scanStride));
+                    for(int j=0;j<count;j++) {
+                        int error=scan.get(ValueLayout.JAVA_INT,(long)j*scanStride+(plan.transposedStates()?0:36));
+                        if(error==0)continue;histogram.merge(error,1,Integer::sum);
+                        if(sampleCount[0]<4) {int index=sampleCount[0]++;samplePaths[index]=first+j;sampleErrors[index]=error;}
+                    }
+                }
+                for(int example=0;example<sampleCount[0];example++) {
+                    int i=samplePaths[example],error=sampleErrors[example];
+                    downloadDiagnosticRecord(input,plan.stateOffset(),paths,i,plan.stateBytes(),4,plan.transposedStates(),states);
+                    downloadDiagnosticRecord(input,plan.hitOffset(),paths,i,plan.hitBytes(),16,plan.transposedHits(),hits);
+                    if(connection!=null)cuda.download(input.slice(plan.connectionOffset()+(long)i*CudaOpticalMediumAbi.CONNECTION_BYTES,
+                            CudaOpticalMediumAbi.CONNECTION_BYTES),connection);
                     int hitWord=plan.compactHits()?16:44;
-                    long hitAt=plan.transposedHits()?((hitWord/4L)*paths*4+i*4+(hitWord&3))*4:i*(long)plan.hitBytes()+hitWord*4L;
+                    long hitAt=hitWord*4L;
                     String sample="path="+i+",error="+error+",hitBoundary="+hits.get(ValueLayout.JAVA_INT,hitAt);
-                    long stateAt=plan.transposedStates()?i*4L:i*(long)plan.stateBytes();
-                    long hitStart=plan.transposedHits()?i*16L:i*(long)plan.hitBytes();
+                    long stateAt=0;
+                    long hitStart=0;
                     sample+=",rayOrigin=["+states.get(ValueLayout.JAVA_FLOAT,stateAt)+","
-                            +states.get(ValueLayout.JAVA_FLOAT,stateAt+(plan.transposedStates()?paths*4L:4))+","
-                            +states.get(ValueLayout.JAVA_FLOAT,stateAt+(plan.transposedStates()?paths*8L:8))+"]"
+                            +states.get(ValueLayout.JAVA_FLOAT,stateAt+4)+","
+                            +states.get(ValueLayout.JAVA_FLOAT,stateAt+8)+"]"
                             +",hitDistance="+hits.get(ValueLayout.JAVA_FLOAT,hitStart+12);
-                    final int pathIndex=i;
-                    java.util.function.IntToLongFunction stateWord=word->plan.transposedStates()?(word*(long)paths+pathIndex)*4
-                            :pathIndex*(long)plan.stateBytes()+word*4L;
-                    java.util.function.IntToLongFunction hitField=word->plan.transposedHits()?((word/4L)*paths*4+pathIndex*4+(word&3))*4
-                            :pathIndex*(long)plan.hitBytes()+word*4L;
+                    java.util.function.IntToLongFunction stateWord=word->word*4L;
+                    java.util.function.IntToLongFunction hitField=word->word*4L;
                     sample+=",rayDirection=["+states.get(ValueLayout.JAVA_FLOAT,stateWord.applyAsLong(4))+","
                             +states.get(ValueLayout.JAVA_FLOAT,stateWord.applyAsLong(5))+","
                             +states.get(ValueLayout.JAVA_FLOAT,stateWord.applyAsLong(6))+"]"
@@ -332,12 +347,12 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                             +",originOffset="+states.get(ValueLayout.JAVA_FLOAT,stateWord.applyAsLong(3))
                             +",surfaceEvents="+states.get(ValueLayout.JAVA_INT,stateWord.applyAsLong(20))
                             +",scatterEvents="+states.get(ValueLayout.JAVA_INT,stateWord.applyAsLong(23));
-                    if(!plan.compactStates()) {long base=i*(long)plan.stateBytes();
+                    if(!plan.compactStates()) {long base=0;
                         int size=states.get(ValueLayout.JAVA_INT,base+244);var stack=new java.util.ArrayList<Integer>();
                         for(int k=0;k<Math.max(0,Math.min(size,32));k++)stack.add(states.get(ValueLayout.JAVA_INT,base+116+k*4L));
                         sample+=",mainVolume="+states.get(ValueLayout.JAVA_INT,base+112)+",mainStackSize="+size+",mainStack="+stack;
                     }
-                    if(connection!=null){long base=i*(long)CudaOpticalMediumAbi.CONNECTION_BYTES;
+                    if(connection!=null){long base=0;
                         sample+=",connectionOrdinal="+connection.get(ValueLayout.JAVA_INT,base+80)
                                 +",connectionEvents="+connection.get(ValueLayout.JAVA_INT,base+88)
                                 +",connectionVolume="+connection.get(ValueLayout.JAVA_INT,base+96)
@@ -348,9 +363,16 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                                 +connection.get(ValueLayout.JAVA_FLOAT,base+20)+","+connection.get(ValueLayout.JAVA_FLOAT,base+24)+"]";}
                     examples.add(sample);
                 }
-            }
+            },command->{});
             return "errorCodes="+histogram+",examples="+examples;
         }
+    }
+    private void downloadDiagnosticRecord(CudaMediumRuntime.Slice input,long base,int paths,int item,
+            int bytes,int laneBytes,boolean transposed,java.lang.foreign.MemorySegment target) {
+        if(!transposed) {cuda.download(input.slice(base+(long)item*bytes,bytes),target);return;}
+        for(int lane=0;lane<bytes/laneBytes;lane++)
+            cuda.download(input.slice(base+((long)lane*paths+item)*laneBytes,laneBytes),
+                    target.asSlice((long)lane*laneBytes,laneBytes));
     }
     private void exchangePair(java.util.function.Consumer<org.lwjgl.vulkan.VkCommandBuffer> producer,
             java.util.function.Consumer<org.lwjgl.vulkan.VkCommandBuffer> continuation,
