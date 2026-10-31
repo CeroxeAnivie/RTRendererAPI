@@ -1,0 +1,2562 @@
+{
+  "candidateCommit": "da398befa03c5adbb5930ca47301d3cbcadb611c",
+  "decision": "correctness complete; exact redundant work eliminated; net performance pending idle comparison",
+  "performanceComparable": false,
+  "reason": "Every paired window started above the user 10 percent GPU0 threshold",
+  "runs": [
+    {
+      "window": "S-forward",
+      "directory": "build\\medium-micro-all-20261031\\reused-boundary-hit\\t-forward-baseline-matrix-off",
+      "frames": 32,
+      "wallMs": 10655.3747,
+      "msPerFrame": 332.980459375,
+      "fps": 3.0031792312287244,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 38 %, 72.47 W, 1762 MHz, 75"
+    },
+    {
+      "window": "T-forward",
+      "directory": "build\\medium-micro-all-20261031\\prepared-boundary\\forward-candidate-matrix-off",
+      "frames": 32,
+      "wallMs": 9639.7167,
+      "msPerFrame": 301.241146875,
+      "fps": 3.319599630972557,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 44 %, 61.70 W, 1725 MHz, 76"
+    },
+    {
+      "window": "T-reverse",
+      "directory": "build\\medium-micro-all-20261031\\prepared-boundary\\reverse-candidate-matrix-off",
+      "frames": 32,
+      "wallMs": 9643.6616,
+      "msPerFrame": 301.364425,
+      "fps": 3.3182416935907417,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 36 %, 55.28 W, 1665 MHz, 75"
+    },
+    {
+      "window": "S-reverse",
+      "directory": "build\\medium-micro-all-20261031\\reused-boundary-hit\\t-reverse-baseline-matrix-off",
+      "frames": 32,
+      "wallMs": 10785.2035,
+      "msPerFrame": 337.037609375,
+      "fps": 2.967027928587532,
+      "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 37 %, 54.12 W, 1365 MHz, 75"
+    }
+  ],
+  "ranked": {
+    "frames": 32,
+    "msPerFrame": 304.1573125,
+    "events": 101449,
+    "dropped": 0,
+    "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 35 %, 61.40 W, 1462 MHz, 75",
+    "rows": [
+      {
+        "stage": "CUDA_STREAM_SYNCHRONIZE",
+        "msPerFrame": 247.73327500000002,
+        "msPerSecond": 814.4906100194452,
+        "percentWall": 81.44906100194453
+      },
+      {
+        "stage": "VULKAN_RELEASE_RECORD",
+        "msPerFrame": 9.853796875,
+        "msPerSecond": 32.39704084050256,
+        "percentWall": 3.2397040840502567
+      },
+      {
+        "stage": "CUDA_KERNEL_ENQUEUE",
+        "msPerFrame": 9.722590624999999,
+        "msPerSecond": 31.965664560506,
+        "percentWall": 3.1965664560506
+      },
+      {
+        "stage": "VULKAN_RELEASE_SUBMIT",
+        "msPerFrame": 5.30049375,
+        "msPerSecond": 17.42681675621394,
+        "percentWall": 1.7426816756213943
+      },
+      {
+        "stage": "CUDA_SEMAPHORE_WAIT_ENQUEUE",
+        "msPerFrame": 4.409940625,
+        "msPerSecond": 14.49888082174582,
+        "percentWall": 1.4498880821745819
+      },
+      {
+        "stage": "CUDA_SEMAPHORE_SIGNAL_ENQUEUE",
+        "msPerFrame": 3.339775,
+        "msPerSecond": 10.980419877296226,
+        "percentWall": 1.0980419877296228
+      },
+      {
+        "stage": "VULKAN_CONSUMER_SUBMIT",
+        "msPerFrame": 2.807275,
+        "msPerSecond": 9.229681104576436,
+        "percentWall": 0.9229681104576436
+      },
+      {
+        "stage": "PARK",
+        "msPerFrame": 2.7195,
+        "msPerSecond": 8.941096887157695,
+        "percentWall": 0.8941096887157696
+      },
+      {
+        "stage": "CUDA_DOWNLOAD_ASYNC_ENQUEUE",
+        "msPerFrame": 2.7037875,
+        "msPerSecond": 8.889437764216172,
+        "percentWall": 0.8889437764216173
+      },
+      {
+        "stage": "CUDA_CONTEXT_POP",
+        "msPerFrame": 2.1809624999999997,
+        "msPerSecond": 7.17050818891622,
+        "percentWall": 0.717050818891622
+      },
+      {
+        "stage": "VULKAN_CONSUMER_FENCE_WAIT",
+        "msPerFrame": 2.04834375,
+        "msPerSecond": 6.734487930484985,
+        "percentWall": 0.6734487930484985
+      },
+      {
+        "stage": "CUDA_KERNEL_EVENT_RESOLVE",
+        "msPerFrame": 1.767784375,
+        "msPerSecond": 5.812072576752532,
+        "percentWall": 0.5812072576752532
+      },
+      {
+        "stage": "NATIVE_TASK_EXECUTION",
+        "msPerFrame": 1.5317125,
+        "msPerSecond": 5.035921995135331,
+        "percentWall": 0.5035921995135331
+      },
+      {
+        "stage": "CUDA_EXCHANGE",
+        "msPerFrame": 1.0184968749999999,
+        "msPerSecond": 3.348585857195197,
+        "percentWall": 0.3348585857195197
+      },
+      {
+        "stage": "CUDA_DOWNLOAD",
+        "msPerFrame": 0.977871875,
+        "msPerSecond": 3.215020105755307,
+        "percentWall": 0.32150201057553074
+      },
+      {
+        "stage": "CUDA_CONTEXT_PUSH",
+        "msPerFrame": 0.953775,
+        "msPerSecond": 3.1357950665743077,
+        "percentWall": 0.3135795066574308
+      },
+      {
+        "stage": "GPU_QUERY_RESOLVE",
+        "msPerFrame": 0.934346875,
+        "msPerSecond": 3.0719198145203235,
+        "percentWall": 0.30719198145203236
+      },
+      {
+        "stage": "VULKAN_COMMAND_REUSE_WAIT",
+        "msPerFrame": 0.67964375,
+        "msPerSecond": 2.234513924435073,
+        "percentWall": 0.2234513924435073
+      },
+      {
+        "stage": "TEMPORAL_UNIFORMS_DESCRIPTORS",
+        "msPerFrame": 0.552215625,
+        "msPerSecond": 1.815559259322427,
+        "percentWall": 0.1815559259322427
+      },
+      {
+        "stage": "FINAL_FRAME_RECORD_AND_SUBMIT",
+        "msPerFrame": 0.536284375,
+        "msPerSecond": 1.7631809361808457,
+        "percentWall": 0.17631809361808456
+      },
+      {
+        "stage": "ROUTE_AND_PIPELINES",
+        "msPerFrame": 0.50231875,
+        "msPerSecond": 1.6515096936885252,
+        "percentWall": 0.1651509693688525
+      },
+      {
+        "stage": "VULKAN_CONSUMER_RECORD",
+        "msPerFrame": 0.385590625,
+        "msPerSecond": 1.2677341926474317,
+        "percentWall": 0.12677341926474317
+      },
+      {
+        "stage": "OPTICAL_MEDIUM_NATIVE",
+        "msPerFrame": 0.272759375,
+        "msPerSecond": 0.896770729455995,
+        "percentWall": 0.0896770729455995
+      },
+      {
+        "stage": "SESSION_PUMP",
+        "msPerFrame": 0.200703125,
+        "msPerSecond": 0.659866183555919,
+        "percentWall": 0.0659866183555919
+      },
+      {
+        "stage": "DIAGNOSTICS",
+        "msPerFrame": 0.15841875,
+        "msPerSecond": 0.5208447848841379,
+        "percentWall": 0.052084478488413785
+      },
+      {
+        "stage": "HOST_ADMISSION",
+        "msPerFrame": 0.124459375,
+        "msPerSecond": 0.409194090968962,
+        "percentWall": 0.0409194090968962
+      },
+      {
+        "stage": "RESOURCE_BUDGET_AND_ENSURE",
+        "msPerFrame": 0.097021875,
+        "msPerSecond": 0.3189858373041746,
+        "percentWall": 0.03189858373041746
+      },
+      {
+        "stage": "CUDA_UPLOAD",
+        "msPerFrame": 0.095903125,
+        "msPerSecond": 0.31530764199529154,
+        "percentWall": 0.03153076419952915
+      },
+      {
+        "stage": "CUDA_CONTEXT_SYNCHRONIZE",
+        "msPerFrame": 0.0861875,
+        "msPerSecond": 0.2833648788240132,
+        "percentWall": 0.028336487882401316
+      },
+      {
+        "stage": "REQUEST_BUILD",
+        "msPerFrame": 0.085165625,
+        "msPerSecond": 0.28000518646087125,
+        "percentWall": 0.028000518646087127
+      },
+      {
+        "stage": "CUDA_NATIVE_CALLBACK",
+        "msPerFrame": 0.080746875,
+        "msPerSecond": 0.26547734241964016,
+        "percentWall": 0.026547734241964015
+      },
+      {
+        "stage": "FRAME_POLL_AND_LEASE",
+        "msPerFrame": 0.06115,
+        "msPerSecond": 0.2010472787827516,
+        "percentWall": 0.02010472787827516
+      },
+      {
+        "stage": "SHARED_EXCHANGE",
+        "msPerFrame": 0.040803125,
+        "msPerSecond": 0.13415138588851125,
+        "percentWall": 0.013415138588851124
+      },
+      {
+        "stage": "SLOT_PUBLICATION",
+        "msPerFrame": 0.03404375,
+        "msPerSecond": 0.11192809970662797,
+        "percentWall": 0.011192809970662796
+      },
+      {
+        "stage": "SESSION_ADMISSION",
+        "msPerFrame": 0.03184375,
+        "msPerSecond": 0.10469500055172928,
+        "percentWall": 0.010469500055172928
+      },
+      {
+        "stage": "FEATURE_EXTENT_NEGOTIATION",
+        "msPerFrame": 0.02731875,
+        "msPerSecond": 0.08981783069904,
+        "percentWall": 0.008981783069904
+      },
+      {
+        "stage": "CUDA_COMPLETION_CALLBACK",
+        "msPerFrame": 0.02660625,
+        "msPerSecond": 0.08747529290455576,
+        "percentWall": 0.008747529290455577
+      },
+      {
+        "stage": "FRAME_PRIMITIVES",
+        "msPerFrame": 0.02435625,
+        "msPerSecond": 0.08007780513250032,
+        "percentWall": 0.008007780513250032
+      },
+      {
+        "stage": "FEATURE_INPUT_REUSE",
+        "msPerFrame": 0.01624375,
+        "msPerSecond": 0.05340575199881147,
+        "percentWall": 0.005340575199881147
+      },
+      {
+        "stage": "WINDOW",
+        "msPerFrame": 0.01489375,
+        "msPerSecond": 0.0489672593355782,
+        "percentWall": 0.00489672593355782
+      },
+      {
+        "stage": "MEDIUM_RESOLVE_PREPARE",
+        "msPerFrame": 0.0145125,
+        "msPerSecond": 0.047713796129757687,
+        "percentWall": 0.004771379612975769
+      },
+      {
+        "stage": "TRY_SUBMIT",
+        "msPerFrame": 0.0026,
+        "msPerSecond": 0.00854820809215297,
+        "percentWall": 0.000854820809215297
+      },
+      {
+        "stage": "FRAME_PREPARATION",
+        "msPerFrame": 0.0014625,
+        "msPerSecond": 0.004808367051836047,
+        "percentWall": 0.00048083670518360465
+      },
+      {
+        "stage": "CAMERA_SCATTERING_PREPARE",
+        "msPerFrame": 0.00033125,
+        "msPerSecond": 0.00108907458866372,
+        "percentWall": 0.000108907458866372
+      }
+    ]
+  },
+  "correctness": {
+    "strictHdr": {
+      "passed": true,
+      "mode": "byte-identical",
+      "supportingReferenceCommit": null,
+      "frames": [
+        {
+          "file": "micro-all-0.rgba16f",
+          "bytes": 16588800,
+          "pixels": 2073600,
+          "byteIdentical": true,
+          "alphaExact": true,
+          "relativeRms": 0.0,
+          "luminanceEnergyRelativeError": 0.0,
+          "maxAbsoluteChannelError": 0.0,
+          "referenceAbsoluteP99": 0.6396484375,
+          "changedRgbComponents": 0,
+          "limits": {
+            "relativeRms": 0.001,
+            "luminanceEnergyRelativeError": 0.001,
+            "maxAbsoluteChannelError": 0.0032082421875
+          },
+          "passed": true,
+          "referenceSha256": "6d370a47903de3af83a6e73c04e9cd6b37017f7494f1c85f3c67ee98fc8695cf",
+          "candidateSha256": "6d370a47903de3af83a6e73c04e9cd6b37017f7494f1c85f3c67ee98fc8695cf"
+        },
+        {
+          "file": "micro-all-1.rgba16f",
+          "bytes": 16588800,
+          "pixels": 2073600,
+          "byteIdentical": true,
+          "alphaExact": true,
+          "relativeRms": 0.0,
+          "luminanceEnergyRelativeError": 0.0,
+          "maxAbsoluteChannelError": 0.0,
+          "referenceAbsoluteP99": 0.630859375,
+          "changedRgbComponents": 0,
+          "limits": {
+            "relativeRms": 0.001,
+            "luminanceEnergyRelativeError": 0.001,
+            "maxAbsoluteChannelError": 0.003164296875
+          },
+          "passed": true,
+          "referenceSha256": "94b919a94044182902c214c471cb72a2fd3e59eb11cb84b583f3a40e22b23639",
+          "candidateSha256": "94b919a94044182902c214c471cb72a2fd3e59eb11cb84b583f3a40e22b23639"
+        }
+      ],
+      "maxRelativeRms": 0.0,
+      "maxLuminanceEnergyRelativeError": 0.0,
+      "maxAbsoluteChannelError": 0.0
+    },
+    "topologyCpu": true,
+    "sceneMemoryCpu": true,
+    "uploadPlannerCpu": true,
+    "opticalCpu": true,
+    "predicatesGpu": true,
+    "connections": "84 comparisons / 168 byte-identical frames",
+    "fullOptical": "46 comparisons / 152 frames",
+    "fullBoundary": "27 analytic comparisons / 27 frames",
+    "features": {
+      "scope": "micro combined scene and mutually exclusive request switches",
+      "suite": "micro-checks",
+      "complete": true,
+      "requiredFeatures": [
+        "ABSORPTION",
+        "ALL_LIGHTS",
+        "ALPHA_PRODUCT",
+        "BUILTIN_SHADER_DATA",
+        "DENSITY_GRID",
+        "DIRECTIONAL_LIGHT",
+        "DIRECT_SCATTER",
+        "EMISSION",
+        "FIRST_INTERFACE_OPTICAL_SAMPLES",
+        "FIRST_INTERFACE_SPLIT",
+        "FIRST_INTERFACE_STOCHASTIC",
+        "FOG",
+        "INWARD_BOUNDARY",
+        "LIGHTMAP",
+        "MATERIAL_ALPHA",
+        "METAL_FULL",
+        "METAL_PARTIAL",
+        "MULTIPLE_SCATTER",
+        "NESTED_PRIORITY",
+        "OVERLAY_ALPHA",
+        "OVERLAY_DEPTH_REJECT",
+        "OVERLAY_MASK_REJECT",
+        "OVERLAY_MULTIPLY",
+        "PARTIAL_TRANSMISSION",
+        "PBR_DOUBLE_SIDED",
+        "PBR_SINGLE_SIDED",
+        "PERSISTENT_BOUNDARY",
+        "PHASE_BACKWARD",
+        "PHASE_FORWARD",
+        "POINT_LIGHT",
+        "REFRACTION",
+        "ROUGH_GLASS",
+        "SHADOW_DISABLED",
+        "SMOOTH_GLASS",
+        "SPOT_LIGHT",
+        "SPP_2",
+        "SPP_8",
+        "SURFACE_CAUSTICS",
+        "SURFACE_VISIBILITY",
+        "TEXTURE_ALPHA",
+        "TRANSIENT_BOUNDARY",
+        "UNIFORM",
+        "UNLIT",
+        "VERTEX_ALPHA",
+        "VOLUME_CAUSTICS",
+        "ZERO_DENSITY"
+      ],
+      "executedFeatures": [
+        "ABSORPTION",
+        "ALL_LIGHTS",
+        "ALPHA_PRODUCT",
+        "BUILTIN_SHADER_DATA",
+        "DENSITY_GRID",
+        "DIRECTIONAL_LIGHT",
+        "DIRECT_SCATTER",
+        "EMISSION",
+        "FIRST_INTERFACE_OPTICAL_SAMPLES",
+        "FIRST_INTERFACE_SPLIT",
+        "FIRST_INTERFACE_STOCHASTIC",
+        "FOG",
+        "INWARD_BOUNDARY",
+        "LIGHTMAP",
+        "MATERIAL_ALPHA",
+        "METAL_FULL",
+        "METAL_PARTIAL",
+        "MULTIPLE_SCATTER",
+        "NESTED_PRIORITY",
+        "OVERLAY_ALPHA",
+        "OVERLAY_DEPTH_REJECT",
+        "OVERLAY_MASK_REJECT",
+        "OVERLAY_MULTIPLY",
+        "PARTIAL_TRANSMISSION",
+        "PBR_DOUBLE_SIDED",
+        "PBR_SINGLE_SIDED",
+        "PERSISTENT_BOUNDARY",
+        "PHASE_BACKWARD",
+        "PHASE_FORWARD",
+        "POINT_LIGHT",
+        "REFRACTION",
+        "ROUGH_GLASS",
+        "SHADOW_DISABLED",
+        "SMOOTH_GLASS",
+        "SPOT_LIGHT",
+        "SPP_2",
+        "SPP_8",
+        "SURFACE_CAUSTICS",
+        "SURFACE_VISIBILITY",
+        "TEXTURE_ALPHA",
+        "TRANSIENT_BOUNDARY",
+        "UNIFORM",
+        "UNLIT",
+        "VERTEX_ALPHA",
+        "VOLUME_CAUSTICS",
+        "ZERO_DENSITY"
+      ],
+      "cases": [
+        {
+          "case": "micro-all",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-all-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-direct",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "DIRECT_SCATTER",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-direct-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-stochastic",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_STOCHASTIC",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-stochastic-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-spp2",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SPP_2",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-spp2-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-spp8",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SPP_8",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-spp8-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-camera-density",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_CAUSTICS",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "VOLUME_CAUSTICS",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 2
+          },
+          "measuredFrames": 1,
+          "csv": "micro-camera-density-160x90-unprofiled.csv"
+        },
+        {
+          "case": "micro-caustics-off",
+          "features": [
+            "ABSORPTION",
+            "ALL_LIGHTS",
+            "ALPHA_PRODUCT",
+            "BUILTIN_SHADER_DATA",
+            "DENSITY_GRID",
+            "DIRECTIONAL_LIGHT",
+            "EMISSION",
+            "FIRST_INTERFACE_OPTICAL_SAMPLES",
+            "FIRST_INTERFACE_SPLIT",
+            "FOG",
+            "INWARD_BOUNDARY",
+            "LIGHTMAP",
+            "MATERIAL_ALPHA",
+            "METAL_FULL",
+            "METAL_PARTIAL",
+            "MULTIPLE_SCATTER",
+            "NESTED_PRIORITY",
+            "OVERLAY_ALPHA",
+            "OVERLAY_DEPTH_REJECT",
+            "OVERLAY_MASK_REJECT",
+            "OVERLAY_MULTIPLY",
+            "PARTIAL_TRANSMISSION",
+            "PBR_DOUBLE_SIDED",
+            "PBR_SINGLE_SIDED",
+            "PERSISTENT_BOUNDARY",
+            "PHASE_BACKWARD",
+            "PHASE_FORWARD",
+            "POINT_LIGHT",
+            "REFRACTION",
+            "ROUGH_GLASS",
+            "SHADOW_DISABLED",
+            "SMOOTH_GLASS",
+            "SPOT_LIGHT",
+            "SURFACE_VISIBILITY",
+            "TEXTURE_ALPHA",
+            "TRANSIENT_BOUNDARY",
+            "UNIFORM",
+            "UNLIT",
+            "VERTEX_ALPHA",
+            "ZERO_DENSITY"
+          ],
+          "nativeRoutes": {
+            "boundary": 0,
+            "boundaryFused": 0,
+            "boundaryScattering": 0,
+            "camera": 0,
+            "directDensity": 0,
+            "directUniform": 0,
+            "multiple": 0,
+            "optical": 2,
+            "pbr": 0,
+            "photonMaps": 0
+          },
+          "measuredFrames": 1,
+          "csv": "micro-caustics-off-160x90-unprofiled.csv"
+        }
+      ]
+    },
+    "fixedSequence133": true,
+    "longRegressionFrames": 128,
+    "precompiledShaderContracts": true,
+    "validation": [
+      {
+        "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-validation.jsonl",
+        "passed": true,
+        "opened": 1,
+        "closed": 1,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      },
+      {
+        "file": "build\\medium-micro-all-20261031\\prepared-boundary\\connections-validation.jsonl",
+        "passed": true,
+        "opened": 2,
+        "closed": 2,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      },
+      {
+        "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-validation.jsonl",
+        "passed": true,
+        "opened": 3,
+        "closed": 3,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      },
+      {
+        "file": "build\\medium-micro-all-20261031\\prepared-boundary\\predicate-validation.jsonl",
+        "passed": true,
+        "opened": 1,
+        "closed": 1,
+        "warningsAndErrors": 0,
+        "droppedMessages": 0,
+        "messageIds": []
+      }
+    ]
+  },
+  "rawFiles": [
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\artifacts.json",
+      "sha256": "28e9b2cea1e70e67fae17d271a869192b91be9614ccf8a233c93c5510eece7ed"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\initial-gpu.csv",
+      "sha256": "86508adde5aca50c64b5266bc89c55a4f4905c2e844155bb8c064da207ff8f9c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-all-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-all-160x90-unprofiled-workload.json",
+      "sha256": "574cfa5ee8e2ecdb16472f1eb0e5f2667d96df419ed47bd9532c35f5fb9987b2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-all-160x90-unprofiled.csv",
+      "sha256": "ca7bc9bd559431f789013ea1ab7e3c24469dbbb851bac97a49310ab389f14142"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-camera-density-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-camera-density-160x90-unprofiled-workload.json",
+      "sha256": "d01f631a9a17bd8508a976372a8b37e44993bfbf610866f29b7912dc1b0c6c5a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-camera-density-160x90-unprofiled.csv",
+      "sha256": "f0ada6ed69936f4a823c4b1e981b8df501c833df220bc5c5a50642560b5df637"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-caustics-off-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-caustics-off-160x90-unprofiled-workload.json",
+      "sha256": "172bd4c8a4551b957d21373716ccd0fce5f748186e84a40c04f0a3d4aaa898fa"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-caustics-off-160x90-unprofiled.csv",
+      "sha256": "1a214f4a1c4b92ceb2ba6012d01614ca683d60ebfe482e518f14873797bb57f6"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-checks-unprofiled-coverage.json",
+      "sha256": "d0f4de2989156b5624cf8e306a5c76d951c9ac3a36db10bd15bab85984725c46"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-direct-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-direct-160x90-unprofiled-workload.json",
+      "sha256": "0e26ad834a08ad4961ad7866b1faa8028dbaf225c186ea591264d528af89a6ae"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-direct-160x90-unprofiled.csv",
+      "sha256": "4f77847910b3aac81c0d5163ba39c28954c47bea7188f11fdf5b561e8abf65aa"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-spp2-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-spp2-160x90-unprofiled-workload.json",
+      "sha256": "047861500fff8ddd7d9661455ad2d656c8d545521c68cad0c2d7a063deda203e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-spp2-160x90-unprofiled.csv",
+      "sha256": "795e748e469773b47fffac61aa73f0ad4db0f8749c7ca1cfb774bd2718aaa6bc"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-spp8-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-spp8-160x90-unprofiled-workload.json",
+      "sha256": "6953ee17d02c7b76c9f17f2bde0a467dd183c079dc4df252ad0dde3907d5d200"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-spp8-160x90-unprofiled.csv",
+      "sha256": "585a7c18aad3a37b13d75218f780f15df4c7aed19a7e858122435ce1a798a9c4"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-stochastic-160x90-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-stochastic-160x90-unprofiled-workload.json",
+      "sha256": "1db987b90b9947cf560c6037ab0420010d4377853e41b43bd96969216f086ae9"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\micro-stochastic-160x90-unprofiled.csv",
+      "sha256": "920b134136921bd17637987b72807645948870353f5afffb9f87b0a2f3055f82"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\run.log",
+      "sha256": "c4c5d5ebb0f33d25ea58affadf30cb23d15b289e1dae32d8803fecb220a63d0f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\all-features-matrix-off\\runtime.json",
+      "sha256": "640568509a62cd8cd9a8d39cd5db0969d2015c976487d6abfb3500c86858c5d2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\artifacts.json",
+      "sha256": "93a6793f7ab82c4cf48e811860d4b29183db3355240d1c98c5555f3eb70a0bba"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\32-initial-volumes-terminal-before-exit-native.rgba16f",
+      "sha256": "922671cdbfd2672c437f01c8c7537b7c03740df32e138bcc725fc87594fe1ba3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\32-initial-volumes-terminal-before-exit-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\cutoff-preserves-emission-native.rgba16f",
+      "sha256": "cacb4ddde341e3b13609ee09434c052d58a913ea675c45bc0fcc50596d7c4d32"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\cutoff-preserves-emission-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\density-cached-first.rgba16f",
+      "sha256": "22b54db225b8ba25f71a5d19b3c094f67031a5e192bf1be0cd42250abf71ba22"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\density-cached-second.rgba16f",
+      "sha256": "22b54db225b8ba25f71a5d19b3c094f67031a5e192bf1be0cd42250abf71ba22"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\distance-clamped-before-exit-native.rgba16f",
+      "sha256": "4058a4297bb584abcb4c1a7d131dce67db5fe042cdf9a4df8a947f3db97430c2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\distance-clamped-before-exit-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\environment-density-short-domain-one-step-native.rgba16f",
+      "sha256": "551201ae56eeca1e1eb3d6dfbbbb46a26a6c32df19aa4bfec77e6c765eb05c7a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\environment-density-short-domain-one-step-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\event-budget-preserves-emission-native.rgba16f",
+      "sha256": "520a3bc8d822dd861d9289b5333c79615f2ce22dbb1bea3eb8d2a09612049ccb"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\event-budget-preserves-emission-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\exact-projection-jitter-native.rgba16f",
+      "sha256": "269c8a58057760be0a8e93f1bb22268549d7bafc70ea5aaec84690d4485d3153"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\exact-projection-jitter-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\frame-local-eight-SPP-native.rgba16f",
+      "sha256": "269c8a58057760be0a8e93f1bb22268549d7bafc70ea5aaec84690d4485d3153"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\frame-local-eight-SPP-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\full-HD-bounded-continuation-tiles-native.rgba16f",
+      "sha256": "03d4f55db4fbd6d2e8be8396c44ca8431f4d5ac4fd02599bf2d5d3d9c146e677"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\full-HD-bounded-continuation-tiles-vacuum.rgba16f",
+      "sha256": "fb2041e4f0e360e07e8f700d10dd508ebb666af8c74e9d1dc05a4110df29e5aa"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\inside-single-native.rgba16f",
+      "sha256": "22380b068a5b110ad5ecb5d80ffcf859fe1818d84372c0f7714a351296a7f169"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\inside-single-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\material-shaded-boundary-optical.rgba16f",
+      "sha256": "269c8a58057760be0a8e93f1bb22268549d7bafc70ea5aaec84690d4485d3153"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\mirrored-frame-local-eight-SPP-native.rgba16f",
+      "sha256": "269c8a58057760be0a8e93f1bb22268549d7bafc70ea5aaec84690d4485d3153"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\mirrored-frame-local-eight-SPP-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\mirrored-persistent-native.rgba16f",
+      "sha256": "269c8a58057760be0a8e93f1bb22268549d7bafc70ea5aaec84690d4485d3153"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\mirrored-persistent-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\mode-switch-back-to-boundary-native.rgba16f",
+      "sha256": "269c8a58057760be0a8e93f1bb22268549d7bafc70ea5aaec84690d4485d3153"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\mode-switch-back-to-boundary-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\mode-switch-camera-after-boundary-native.rgba16f",
+      "sha256": "24f56e40c964d9953af02eb87b526659a5db50f0c3ed09be3b2d36bdd46cbbea"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\mode-switch-camera-after-boundary-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\mode-switch-camera-before-boundary-native.rgba16f",
+      "sha256": "3c0b6784c76d398b84bb70520d547639c70b3d15d07ff3ba5dfb876a517268ed"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\mode-switch-camera-before-boundary-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\nested-priority-native.rgba16f",
+      "sha256": "3b492d1bb2afa9bb051ff2a90171a8f6ec39b720bcac55a27442c87f70a2ca47"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\nested-priority-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\outside-single-native.rgba16f",
+      "sha256": "269c8a58057760be0a8e93f1bb22268549d7bafc70ea5aaec84690d4485d3153"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\outside-single-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\overflow-recovery-native.rgba16f",
+      "sha256": "269c8a58057760be0a8e93f1bb22268549d7bafc70ea5aaec84690d4485d3153"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\overflow-recovery-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\overlap-priority-restoration-native.rgba16f",
+      "sha256": "0866623d17035380da05167b901c51a806547e58b0642e8d6843c9f336882695"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\overlap-priority-restoration-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\overlap-tie-latest-entry-native.rgba16f",
+      "sha256": "4f2caf15a436a406a4ef451b75fece55c484141608faa5335cf6a5d213dda8e9"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\overlap-tie-latest-entry-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\resize-down-after-full-HD-native.rgba16f",
+      "sha256": "c493f51f0a152d867b64c267c0b3ad26cf1d3ae183b38ceccc6dc9319ff70709"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\resize-down-after-full-HD-vacuum.rgba16f",
+      "sha256": "19e9c70a5fc2205729c3db3be484158f3c45a61d5ad03280ba4dd3bdb9038ef5"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\resize-eight-SPP-complete-frame-native.rgba16f",
+      "sha256": "2317993686fa38ec33a1d5ef72aa546ebdd5f893a60903ddc10b3bd1628f3477"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\resize-eight-SPP-complete-frame-vacuum.rgba16f",
+      "sha256": "5c2a865a767e3fb3982da51ef737c80867b9ef5f884c281f758cdd511999b01b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\result.json",
+      "sha256": "f1d4389c682dbdc0e55e49dc0fce45ad1f6879ed97db269e7336e63c5ee70e0a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\scaled-translated-boundary-density-native.rgba16f",
+      "sha256": "22b54db225b8ba25f71a5d19b3c094f67031a5e192bf1be0cd42250abf71ba22"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\scaled-translated-boundary-density-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\sub-epsilon-thin-boundary-mirrored-SPP8-native.rgba16f",
+      "sha256": "5e3b5016f6c2cc45c008859d5c15d7266192c4f05b70156e79d59212d85ed8e0"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\sub-epsilon-thin-boundary-mirrored-SPP8-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\sub-epsilon-thin-boundary-native.rgba16f",
+      "sha256": "8085608067a8a7dc609644db429f60c1d14c03b40d1db482a084082aed3725f2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\sub-epsilon-thin-boundary-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\sub-epsilon-thin-density-boundary-native.rgba16f",
+      "sha256": "67ced380ab21b4e9cfde2f5502d4e7bd31a1e525c392bfbb0e6265e99a3ff4f4"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\sub-epsilon-thin-density-boundary-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\surface-rejection-recovery-native.rgba16f",
+      "sha256": "269c8a58057760be0a8e93f1bb22268549d7bafc70ea5aaec84690d4485d3153"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native\\surface-rejection-recovery-vacuum.rgba16f",
+      "sha256": "d51515c1771d1c0a2da90ff071116398f3a66987f4bfe55ee1a6fba246e4c7e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-native.log",
+      "sha256": "b72bfe7e52cb402fe773bddc1023e365d537ac8a4b051afc6602f905b5d91c5d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\boundary-validation.jsonl",
+      "sha256": "f2eaf5b6582a1d647d9c27ec1de5270d26570617ccba97a5210266aa4962188a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\connections-test.log",
+      "sha256": "7b06a40a186bf686008e045f7647d4daf0653c2c6bbaf2aa4869dd69f1d501cd"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\connections-validation.jsonl",
+      "sha256": "4b7e5a79d23187ba76bee83a58a6c4fcb2e0876c1ce799951d1023151c0f7ed6"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\CudaOpticalMediumSelfTest.log",
+      "sha256": "406608f11c8f3c5215db8c4461539233e8b97604605a4dc1e90423d8a8e1204b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\fixed133-matrix-off\\artifacts.json",
+      "sha256": "28e9b2cea1e70e67fae17d271a869192b91be9614ccf8a233c93c5510eece7ed"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\fixed133-matrix-off\\initial-gpu.csv",
+      "sha256": "8afcb36012a4c5c3b1d9e25e1c3dd9eddbd902967609a43778533c0bf370642f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\fixed133-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\fixed133-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\fixed133-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "6050e403253c51b3b1357a1f40b23546288334458f5a858481c2d38cc90c7f3e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\fixed133-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "91d3df83247ad9926754781dde06ef7ffd4476e0dfd7c96007393f5a7bf8cf01"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\fixed133-matrix-off\\run.log",
+      "sha256": "d6e2bac76e040d78993e890a148499c834a88dde8022e25549d527717a304cf3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\fixed133-matrix-off\\runtime.json",
+      "sha256": "252fd9ca9217c72987867ae27e2ae059788a2eee3634fe9629f5cb51c7d841b2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\forward-candidate-matrix-off\\artifacts.json",
+      "sha256": "28e9b2cea1e70e67fae17d271a869192b91be9614ccf8a233c93c5510eece7ed"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\forward-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "8f83f329f37dd5e91dbfd24b0cffeb6af95083c2f842d159d1d6cea2c2c3d070"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\forward-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\forward-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\forward-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "baa530ae2a5d7c8b48271917758ffd145d85bcc87f7b9967718ad7e2aff1ccf1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\forward-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\forward-candidate-matrix-off\\run.log",
+      "sha256": "b9b7c48384502658800ed21da61e096c8d4c6896319220b1fd4e80dd4bed95d2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\forward-candidate-matrix-off\\runtime.json",
+      "sha256": "b9bd50983bc29f339af61a9c658754998a6373e42d3217c8dec72f48cc093fe4"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\boundary-density-caustics-off.rgba16f",
+      "sha256": "9da4af9044d55fb40510fa7026b9cfbdbc5d38b894c6ab2df093650275a3e218"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\boundary-density-caustics-on.rgba16f",
+      "sha256": "1a330f31409f8cb42af2e381e9533cb4e5d30a0a4e7d95ccee830ac135b25c1f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\density-boundary-caustics.json",
+      "sha256": "4b71a86f39400f19d3219b9968f38322d2eb2ca7272b62cd3cc8732636aa78f1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\density-caustics-off.rgba16f",
+      "sha256": "72886415f5cddeaaa12d920020672d8794f7f34c340326c8b18b20f98dc97ae4"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\density-caustics-on.rgba16f",
+      "sha256": "f1283bb2d77951b5ad1da30572a4dfd21e5cbbd84c4d91a3048a7d060e93a227"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\density-glass-0-1.rgba16f",
+      "sha256": "790e84079400c8805e520e3d152733edb2783430bb5b300fe90b55eeb713a635"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\density-glass-0-2.rgba16f",
+      "sha256": "790e84079400c8805e520e3d152733edb2783430bb5b300fe90b55eeb713a635"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\density-glass-0-8.rgba16f",
+      "sha256": "cc0921074e73ab73a580acde77232cba14df4a250f2016a8256c3f2878ec03b0"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\density-glass-1-1.rgba16f",
+      "sha256": "35210082b693d8ac62a0a649a66240f49ac900fb5b1deb43dfcb566c2f80bd4d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\density-glass-1-2.rgba16f",
+      "sha256": "35210082b693d8ac62a0a649a66240f49ac900fb5b1deb43dfcb566c2f80bd4d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\density-glass-1-8.rgba16f",
+      "sha256": "42e90690d3fcc4e8d5e4e9b2902e8e178226c963ba15d2b34e84c48469ba82cd"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\equal-IOR.rgba16f",
+      "sha256": "6781cbc46aba0f80e958ccdf147ffd1561b0133f091409e68a383b85f24577cf"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\event-exhaustion.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\explicit-IOR-density-scattering-rough-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\explicit-IOR-density-scattering-rough.rgba16f",
+      "sha256": "c9cb004f92bff1f028a61ae4f663adac1ae614c3827abfd9a2c27205165fcb03"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\explicit-IOR-scattering-inside-point.rgba16f",
+      "sha256": "72f42bfe5a4736ef3996be00fbc77ae465fc82413e2eb6df0b4dc8f9fd967ec3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\explicit-IOR-scattering-shadow-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\explicit-IOR-scattering-shadow-lit.rgba16f",
+      "sha256": "ab8d6aca12f8519dc0f2a08d4de3a9dee59f564877afce1ea9b421c4f3b1d9f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\full-HD.rgba16f",
+      "sha256": "943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\glass-caustics-clear-off.rgba16f",
+      "sha256": "3424aecde04f52dd24331f6b52e762ff15edba769ef26f71a0630bc17fec7404"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\glass-caustics-clear-on.rgba16f",
+      "sha256": "8f43fcdc46b21e9887bbb9baeb67af31e08273d4425b6b541bfba020b13d4f94"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\glass-scattering-caustics-off.rgba16f",
+      "sha256": "4da0fb1a4309b75d8a47be51f96468cda39b86322b45f410c8a0cfee07eb7eb6"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\glass-scattering-caustics-on.rgba16f",
+      "sha256": "4ef69244bf69f4a0fcb113e3d0fcdd6f6f94be3d636adcccb9962afcc9b97d0d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\glass-scattering-caustics.json",
+      "sha256": "1e5046a855bcca7d30d7c7140c37ead1f8ca1af2953d7ee2d05d371d68956bdd"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\heterogeneous-scattering-rough-glass-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\heterogeneous-scattering-rough-glass-lateral.rgba16f",
+      "sha256": "5253b40e36a712796bb2cd94aae76fe379949fcb79f870b08ef620508e169d58"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\heterogeneous-scattering-rough-glass-lit.rgba16f",
+      "sha256": "b33d11c963e2c9a5973eb3830a8fc861b24da93a9fe1d1c7e09fc5d60f37b240"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\inside-nested-caustics-off.rgba16f",
+      "sha256": "8aaa909d506869fe989d5e561c9396e62ff1a0198fad65e2cec7ffe4baf93843"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\inside-nested-caustics-on.rgba16f",
+      "sha256": "01c1d255647eb555bd1011f22b24ff1b4e9a83aeb179fa02119cb1ef5e97498d"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\inside-TIR.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\inside-unit-IOR.rgba16f",
+      "sha256": "6781cbc46aba0f80e958ccdf147ffd1561b0133f091409e68a383b85f24577cf"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\nested-IOR-density-caustics-off.rgba16f",
+      "sha256": "9376ccc375ac489ef682b71e43eba535d1400c50851c91bc19df4f6429958ada"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\nested-IOR-density-caustics-on.rgba16f",
+      "sha256": "51ce7a41d3b12bef3cf5663d71b51dafdf47ce014d8f3cee8f8f3b4cd87709f3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\nested-local-density.rgba16f",
+      "sha256": "14ffbe8d7598c89ce80726b48439d2987750dc25e904891a7d60b81efc5372f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\nested-priority-inside.rgba16f",
+      "sha256": "dbe52ffe13721321e8a67af17c13ddc09672b78aa651c6ec2a62830045ae7db3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\partial-PBR.rgba16f",
+      "sha256": "a2f26b11796ca7ca3fb5f41a2371a21f022a5fad88ce816850b9581698d137dc"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\partial-unlit-terminal-light-independence.rgba16f",
+      "sha256": "27e09588531ce950bfff6a8c2f000bad4d55b4ade0eb2ab0f99902af56f7e872"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\partial-unlit-terminal-proof.rgba16f",
+      "sha256": "27e09588531ce950bfff6a8c2f000bad4d55b4ade0eb2ab0f99902af56f7e872"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\PBR-boundary-absorbed.rgba16f",
+      "sha256": "afb4fa032bd0d2234f5b2bc9bd0a9b21d24adc37495540576b96243fd0db9685"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\PBR-boundary-density.rgba16f",
+      "sha256": "adf25b07781a2a5e3ad85ebc63512644b73bfe1ecbc577656244685a709e63b5"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\PBR-boundary-vacuum.rgba16f",
+      "sha256": "50ce7459e7daee301f26646d53e279a096b229c485a347084232df2c18032d3a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\PBR-boundary-zero-density.rgba16f",
+      "sha256": "50ce7459e7daee301f26646d53e279a096b229c485a347084232df2c18032d3a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\recovery.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resized.rgba16f",
+      "sha256": "a360624488b4b1f7882a6a19f1adc5870b0411a6038c72386abcc2d4ee7652f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-outline-off-1.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-outline-off-2.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-outline-off-8.rgba16f",
+      "sha256": "286f383a8484d310e09c575235a8c2e9f36c0e7cfee3f7cc10827c130c636c30"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-outline-on-1.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-outline-on-2.rgba16f",
+      "sha256": "42dffdaf2d3b50b3d88f88746bcf9dcb7fa32a0134dcef2992e01ebdd0f45ca1"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-outline-on-8.rgba16f",
+      "sha256": "286f383a8484d310e09c575235a8c2e9f36c0e7cfee3f7cc10827c130c636c30"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-temporal-false-0.rgba16f",
+      "sha256": "9ea866b1f74794d81c25a75079aeb1552b13c53558204562889104e73a3e21aa"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-temporal-false-1.rgba16f",
+      "sha256": "4dc374e844758df7e838f1427a9ec00558b164e5273c16c130047ee0de734da2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-temporal-false-2.rgba16f",
+      "sha256": "7604b2cfb57d2ddec481124923ea2f718a068a7bae7093c9d6b993ec7bd48327"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-temporal-true-0.rgba16f",
+      "sha256": "9ea866b1f74794d81c25a75079aeb1552b13c53558204562889104e73a3e21aa"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-temporal-true-1.rgba16f",
+      "sha256": "4dc374e844758df7e838f1427a9ec00558b164e5273c16c130047ee0de734da2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\resolved-temporal-true-2.rgba16f",
+      "sha256": "7604b2cfb57d2ddec481124923ea2f718a068a7bae7093c9d6b993ec7bd48327"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\result.json",
+      "sha256": "43f5b7f2a305e970c73ae47106fc9efde131f5dcb2765c9bb458996334a309d4"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\rough-0.12.rgba16f",
+      "sha256": "7c89f47e07442c81ee7cd308891047fcf0dfbc865792a2d54b23b26be5a512dc"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\rough-0.45.rgba16f",
+      "sha256": "d15de99946b3eb3c3d505900a407c80c944ac4bb6cadc0ddbf7c55c6f3afdb4b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\rough-0.85.rgba16f",
+      "sha256": "2ab2326999a7300a6bcd112b260250132c85c681f3d66262dccc0a150229a30e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\rough-black.rgba16f",
+      "sha256": "d51586325f604745eed20d77112f8c98b4b051b51cf7b1970d377d9359b66f58"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\rough-boundary-density-caustics-off.rgba16f",
+      "sha256": "8ab79902758f94b2969677f7934dce23d173646730b9ca652ad02ca1ccb55476"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\rough-boundary-density-caustics-on.rgba16f",
+      "sha256": "a34286e16f62991b4155bc4562699e9a073311b6779606701772b0a8c882392f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\rough-equal-IOR.rgba16f",
+      "sha256": "6781cbc46aba0f80e958ccdf147ffd1561b0133f091409e68a383b85f24577cf"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\rough-glass-absorption-limit.rgba16f",
+      "sha256": "ef7e220d04fc6af31289c2c073751800fc197de170aa6d59e64eda4e3135c0b7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\rough-glass-tiny-scattering.rgba16f",
+      "sha256": "f1f8a56c33cb3fb11942983d4bea7a7c78e831cc8bc53b81f0c2b7e04dbac4b7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\rough-smooth-limit.rgba16f",
+      "sha256": "68266de211fb239d7d826abc44399bb5a5d0b1b7f4addfeb14394c884af0bc0c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\rough-stochastic.rgba16f",
+      "sha256": "a3581b475708f6082e0255285dee7fac4f870661145160b800c9223b94859f0f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\scattering-equal-IOR-analytic.rgba16f",
+      "sha256": "ca254487013227fc3558e5f052dfade91a96aed04c35a69fdfef81eb402a2091"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\scattering-rough-glass-dark.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\scattering-rough-glass-lit.rgba16f",
+      "sha256": "380b406910bca7a6c3742843db7ae644f9ace94f2b2e0675f9e6427fbb9d1d14"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\shrink.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\thin-1-1.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\thin-1-2.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\thin-1-8.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\thin-2-1.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\thin-2-2.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\thin-2-8.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\thin-8-1.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\thin-8-2.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\thin-8-8.rgba16f",
+      "sha256": "95b2c4064eb6bacf38cee7ff3d22c5d15c6c3a859b395ee9835f8d1e903b86f8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\zero-density-caustics-off.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native\\zero-density-caustics-on.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-native.log",
+      "sha256": "1c361b125fbb2a0dce599ee43c7005ed82f535ab4b41c5be949cd294235a57c9"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\full-validation.jsonl",
+      "sha256": "4434622a0ef13382663388b0cd794abe342cbc5d77f03f6ff3be422fa7526928"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\hdr-fixed\\micro-all-0.rgba16f",
+      "sha256": "6d370a47903de3af83a6e73c04e9cd6b37017f7494f1c85f3c67ee98fc8695cf"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\hdr-fixed\\micro-all-1.rgba16f",
+      "sha256": "94b919a94044182902c214c471cb72a2fd3e59eb11cb84b583f3a40e22b23639"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\hdr-startup-threads.txt",
+      "sha256": "3f90396bb5568d85d5fe60023e7b82a8a7943e46653af9633e3db29a9e92945a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\hdr-strict-compare.json",
+      "sha256": "ef29adbdcadd8ff3c39f1ce0045146acf1ef92cb9c7ffe799d20b1f7d3f4b2df"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\hdr-test.log",
+      "sha256": "e05c7747c96c19795078a3bc0ca30a3c693b4efb43b00d76d590dd1c4fda9c69"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\long-regression-matrix-off\\artifacts.json",
+      "sha256": "28e9b2cea1e70e67fae17d271a869192b91be9614ccf8a233c93c5510eece7ed"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\long-regression-matrix-off\\initial-gpu.csv",
+      "sha256": "934112c15eca4ad17234831319849a0c20bbd9b5b7cf998a850eb20903739b73"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\long-regression-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\long-regression-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\long-regression-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\long-regression-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "5ad8efa4ef20cceb137921537a73bd4028c8c4074549cfc395d182a330d296d3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\long-regression-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "3ccf8918273a08dd3b8fc400f046f9394fa24c307d557708beeed6cf7ae6847e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\long-regression-matrix-off\\run.log",
+      "sha256": "5d3bef3e5fa67f8cffffe5d7e99b4b9275697517763c0854abed3be27fd32bbf"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\long-regression-matrix-off\\runtime.json",
+      "sha256": "1f1057ce207460091aff28b7cacd763a35ce0b764f1fa282751833ad9f90bbdb"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\connection-range-checks.json",
+      "sha256": "5fdad30da30cc4c6d26b4ef4d9bb3b329d7fed90ad30e2a7cbfb6de2cde313f5"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-false-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-compact-true-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-false-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-full-true-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-false-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-before-alpha-chain.rgba16f",
+      "sha256": "87a653cca10ded8916c554f8dc9363cd99162ed17de4cd211c2a76f8c3889e59"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-before-alpha.rgba16f",
+      "sha256": "9b8b6a279c2c705e81a9a4fb520cd8584a8e3fc02611b3c57184050c0f60dba8"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-before-volume-budget3.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-before-volume-nested.rgba16f",
+      "sha256": "032ea2882937e2a9824bbff8646b985d4030e19f73965fa6509da103eca8358a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-before-volume.rgba16f",
+      "sha256": "018ee94339de1432312aae8acdbab1a3bcb0ac53d5b5a83f4ab4eccd6e90b53c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-behind-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-clear.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-endpoint-nonshadow.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-endpoint-opaque.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-endpoint-overlay.rgba16f",
+      "sha256": "c87bc36911709f6d1985019bbb51307a851565a4efcb9d19387f5ee9e0d4553c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-light-inside-volume.rgba16f",
+      "sha256": "e0d8ff593db525bab7e863cce1f56459641d375240dcc04c68e89dea53c6498c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true--1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-before-alpha-chain.rgba16f",
+      "sha256": "36fa5cd22860e0d2af0b3aa9e8f2fa8fb343c9d6fa16e478fbf6c666a3724df7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-before-alpha.rgba16f",
+      "sha256": "76c41802fe8b74b5c59ae151e380d4c20393baf1acdd1bef9beab70d186d0a53"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-before-opaque.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-before-volume-budget2.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-before-volume-budget3.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-before-volume-nested.rgba16f",
+      "sha256": "e6fb3bb8215670509dea1e7de0a41f6eaddcebf57b9a55b01b69f868949e9e3b"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-before-volume.rgba16f",
+      "sha256": "0eac47cd5f43cbc36ba41ade84a3914cce37105e07e5df7f727467d0e09ed1e7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-behind-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-clear.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-endpoint-nonshadow.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-endpoint-opaque.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-endpoint-overlay.rgba16f",
+      "sha256": "44973036782986ecf2c08bbf3cedbe832347323314815b1ddc96efed25be0fe3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-light-inside-volume.rgba16f",
+      "sha256": "411b33117e27842a2820f061907c74ce19b4e213e81acc8472188c06789115af"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\native-connections\\range-transposed-true-1-sun.rgba16f",
+      "sha256": "c611f5ef82e5c51acc066a0a47ff5a03132c73c02d29ada9b58678f509d9ca84"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\predicate-validation.jsonl",
+      "sha256": "3f35c086f4197f8615b7fb34fdfbaed0218eb31e0282d1ace844ea80b02247b7"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\predicates-test.log",
+      "sha256": "5da66f7780cb68d7c891fd34897d9244df27158bca767bd9ad926044baa6d712"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-candidate-matrix-timings\\artifacts.json",
+      "sha256": "28e9b2cea1e70e67fae17d271a869192b91be9614ccf8a233c93c5510eece7ed"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-candidate-matrix-timings\\initial-gpu.csv",
+      "sha256": "b6d39529a43bdfb98f209f237258325acf63bb926c6113dfc8b759b5c39d75b2"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "f52f6d4f797d1de87372beabb422980d789f1ec54f08111e0c6eda1b4551219a"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-candidate-matrix-timings\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "5eb45207ea715cdfc7307d876ecdb9d94a01962e6cba5013c2763af67672b132"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-candidate-matrix-timings\\micro-all-1080p-profiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-candidate-matrix-timings\\micro-all-1080p-profiled.csv",
+      "sha256": "ebae11b4701195f907d6ec08ab79ebd9a119b679dd1a109c92e3bc05b582949e"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-candidate-matrix-timings\\micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "c81ca3025a23f58a08d13beca028a01b9aacb9915a9c7c7d672da9b4c2e84d1f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-candidate-matrix-timings\\micro-all-1080p-wall-timeline-round-2.json",
+      "sha256": "5de764b8a85750c16f7060f004d0b198b00f313f0e71f062a572e6fac1578a01"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-candidate-matrix-timings\\micro-profiled-coverage.json",
+      "sha256": "de615f8508573bcc6f1928edf09f253c7464e67018bc91a9c050c0b499a0038c"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-candidate-matrix-timings\\run.log",
+      "sha256": "d9be0dd16b36922b5c0965c2cb59a715125e70d223aba370656b2571f6adab25"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-candidate-matrix-timings\\runtime.json",
+      "sha256": "3751ab7a1dbe4bf11e6abeb15d0638836f16cabef02a7e4aff57afd9c33a4c93"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\ranked-summary.json",
+      "sha256": "8ef8ca3a2c69e68e26ef3a7aa3d1f074d8a101e61d235913350f7e1182771328"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\reverse-candidate-matrix-off\\artifacts.json",
+      "sha256": "28e9b2cea1e70e67fae17d271a869192b91be9614ccf8a233c93c5510eece7ed"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\reverse-candidate-matrix-off\\initial-gpu.csv",
+      "sha256": "d7d3792eed8628a1007b01aa3201425066d8ea6bc0068ec0140280b65064eedf"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\reverse-candidate-matrix-off\\micro-all-1080p-gpu-stages-round-2.json",
+      "sha256": "774f8deab0748e73fd6888d6bd4ed7b71730e8d19a49d977e953d9e59e8e0008"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\reverse-candidate-matrix-off\\micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\reverse-candidate-matrix-off\\micro-all-1080p-unprofiled.csv",
+      "sha256": "73ef499382bbf940a1440ca81d0082147db9f19e5e3cd2009171bfdf26117cc3"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\reverse-candidate-matrix-off\\micro-unprofiled-coverage.json",
+      "sha256": "1cf0beb77f0c42238ef1e4159611f747b9836bd8815257c4c4e81ffab58da027"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\reverse-candidate-matrix-off\\run.log",
+      "sha256": "d0542ae2630930ed09bb8ccafe40cc38641bf3095cac25db5e69ccb75f426742"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\reverse-candidate-matrix-off\\runtime.json",
+      "sha256": "0eab244a943dace77458a007993f3cce907089f0d47452378d401b248a1ee548"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\root-hotspot-review.json",
+      "sha256": "712776bbb10d747042fb16e8b89f8e72f59ff2f63acfb76cf2e45414ddb18a72"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\shader-precompiled.log",
+      "sha256": "1a61983741126a0f3345951fb330e5fca1d0cb8c8f985a62b6193b86a75b5c69"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\source-commit.txt",
+      "sha256": "cf5c8695a0ecd0e1b6c99e3a7ee847cb5408bd3cb9c1f8e1d88282773801f9a4"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\validation-summary.json",
+      "sha256": "05351ed3055ce48842f7cbb0867f2a12d2953a1aa7f5b5f35817b8d80e3a529f"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\VulkanBoundaryTopologySelfTest.log",
+      "sha256": "29de6ea99b4540cbc825d6e2c0b5cf9bde221a96bbfe8456b7ddf90b290e6872"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\VulkanGpuSceneMemorySelfTest.log",
+      "sha256": "2478dcff8ca2f6cf8b978829a99f13ed88d21e83cceb553eb2b8c736ca010ded"
+    },
+    {
+      "file": "build\\medium-micro-all-20261031\\prepared-boundary\\VulkanGpuSceneUploadPlannerSelfTest.log",
+      "sha256": "ef5d7cfeb716b567d85c975f8db56c78c2d7b077cad061d5b1041da776462ec9"
+    }
+  ]
+}

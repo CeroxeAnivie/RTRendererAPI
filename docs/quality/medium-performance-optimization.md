@@ -1646,3 +1646,8 @@ S完成84组/168帧连接逐字节对照、两帧1080p逐字节HDR、46组/152�
 对照固定PBRT-v4 b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f（Apache-2.0）：util/mesh.cpp 23–40将不随射线变化的几何准备放在构建阶段，shapes.cpp 206–260的边函数只生产一次并复用于分类/重心/距离，util/math.h 558–561的TwoProd用FMA残差而非软件拆分乘数。采用这三种职责思想；PBRT没有本项目薄层邻面修复或trailer，不宣称直接照搬其邻接。保留本项目两float扩展、向外舍入薄层顺序、栈校验、优先级与所有预算。FMA残差属于明确算法替换，事前冻结现有bounded HDR线，先尝试严格HDR；独立几何/能量/错误输入断言不放宽。上游文件SHA256见[data/medium-prepared-boundary-candidate-20261031.json](data/medium-prepared-boundary-candidate-20261031.json)。
 
 本轮组合不声称完整renderer重构。完整输运仍为混合后端；先验收最大实测GPU任务的几何数据流重组，再由新表决定是否推进整个输运后端/队列分工。测试前全量推送main、冻结制品，依次验证拓扑独立oracle、position-only更新、GPU极薄/镜像/顶点排列、84组连接、1080p HDR，再做关闭诊断正反序整帧。失败保留证据并撤回，不以代码变化规模或调用数充当收益。
+
+
+T正确性回归完成：两个1080p HDR帧及84组/168帧连接开关逐字节一致；拓扑独立oracle、position-only上传、极薄/镜像/排列GPU谓词、46组/152帧光学生产、27组边界解析、7场景/46功能、固定sequence133和128帧长窗全部通过。四份validation日志共生命周期完整关闭，零warning/error/drop；30着色阶段及17 HDR raygen预编译契约通过。确定消除了静态邻接重复搜索和求交边函数重复生产，不以源码变化替代FPS证据。
+
+T正反序四个窗口测前GPU0均超过10%，仅归档实测，不认定绝对净收益。最新受载排名：32完成帧、101449区间零丢样，304.157313ms/帧。CUDA stream同步247.733275ms/帧、每秒814.490610ms、81.4491%；Vulkan release录制9.853797ms、3.2397%；CUDA kernel入队9.722591ms、3.1966%；Vulkan release提交5.300494ms、1.7427%；CUDA semaphore等待4.409941ms、1.4499%；信号3.339775ms、1.0980%；Vulkan consumer提交2.807275ms、0.9230%；park2.719500ms、0.8941%；其余18.270666ms、6.0070%。互斥求和1000ms/秒。空闲净吞吐仍须补验收；180FPS尚未达到。[完整证据](data/medium-prepared-boundary-results-20261031.json)。
