@@ -29,6 +29,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         if(java.util.Arrays.asList(args).contains("--connection-batches")){verifyConnectionRanges(CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--duplicate-branches")){verifyDuplicateBranches(CudaOpticalMediumAbi.REUSE_DUPLICATE_BRANCHES_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--boundary-hit-reuse")){verifyConnectionRanges(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY);return;}
+        if(java.util.Arrays.asList(args).contains("--collected-connections")){verifyConnectionRanges(CudaOpticalMediumAbi.COLLECTED_CONNECTIONS_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--split-task-queues")){verifyConnectionRanges(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--boundary-topology")){verifyConnectionRanges(VulkanBoundaryTopology.PROPERTY);return;}
         if(java.util.Arrays.asList(args).contains("--vertex-paths")){verifyDuplicateBranches(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY);return;}
@@ -444,15 +445,22 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
         String previous=System.getProperty(property),previousCompact=System.getProperty(CudaOpticalMediumAbi.COMPACT_HITS_PROPERTY),
                 previousTransposed=System.getProperty(CudaOpticalMediumAbi.TRANSPOSED_HITS_PROPERTY),
                 previousGpu=System.getProperty(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY);
+        boolean collected=property.equals(CudaOpticalMediumAbi.COLLECTED_CONNECTIONS_PROPERTY);
         boolean batches=property.equals(CudaOpticalMediumAbi.BATCH_CONNECTION_HITS_PROPERTY);
         long queueBefore=top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.diagnosticOpticalTaskQueueDispatches.sum();
-        boolean gpu=property.equals(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY),extended=batches||gpu||property.equals(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY)||property.equals(VulkanBoundaryTopology.PROPERTY)||property.equals(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY);
+        boolean gpu=property.equals(CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY),extended=collected||batches||gpu||property.equals(CudaOpticalMediumAbi.REUSE_BOUNDARY_HIT_PROPERTY)||property.equals(VulkanBoundaryTopology.PROPERTY)||property.equals(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY);
+        long collectedBefore=top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.diagnosticCollectedConnectionPipelines.sum();
         var references=new ArrayList<byte[]>();int comparisons=0;
         String[] cases=extended?new String[]{"clear","behind-opaque","before-opaque","before-alpha","before-volume",
                 "light-inside-volume","endpoint-overlay","endpoint-nonshadow","endpoint-opaque","sun",
                 "before-alpha-chain","before-volume-nested","before-volume-budget2","before-volume-budget3"}
                 :new String[]{"clear","behind-opaque","before-opaque","before-alpha","before-volume",
                 "light-inside-volume","endpoint-overlay","endpoint-nonshadow","endpoint-opaque","sun"};
+        if(collected)cases=new String[]{"clear","behind-opaque","before-opaque","before-alpha","before-volume",
+                "light-inside-volume","endpoint-overlay","endpoint-nonshadow","endpoint-opaque","sun",
+                "before-alpha-chain","before-volume-nested","before-volume-budget2","before-volume-budget3",
+                "before-alpha-overflow","before-alpha-coincident","before-alpha-masked",
+                "before-alpha-overflow-masked","before-alpha-overflow-nonshadow","before-alpha-overflow-overlay"};
         String[] formats=extended?new String[]{"full","compact","transposed"}:new String[]{"transposed"};
         long nativeBefore=VulkanGpuSceneFrameSubmitter.diagnosticNativeOpticalSubmissions.sum();
         try {
@@ -477,7 +485,8 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                             var obstacle=MaterialAsset.builder(3).doubleSided(true).baseColorRgba8(0xff000000).build();
                             if(kind.startsWith("before-alpha"))obstacle=obstacle.toBuilder().baseColorRgba8(0x80000000)
                                     .blendMode(MaterialAsset.BlendMode.TRANSLUCENT).build();
-                            if(kind.equals("endpoint-overlay"))obstacle=obstacle.toBuilder().baseColorRgba8(0x80000000)
+                            if(kind.endsWith("masked"))obstacle=obstacle.toBuilder().blendMode(MaterialAsset.BlendMode.MASKED).alphaCutoff(.7f).build();
+                            if(kind.equals("endpoint-overlay")||kind.endsWith("overflow-overlay"))obstacle=obstacle.toBuilder().baseColorRgba8(0x80000000)
                                     .blendMode(MaterialAsset.BlendMode.TRANSLUCENT).surfaceOverlay(SurfaceOverlayState.depthBias(
                                             .05f,SurfaceOverlayState.CompositionMode.ALPHA_OVER)).build();
                             var scene=SceneTransaction.builder(++revision).resetScene().upsert(receiver).upsert(glass(1.5f)).upsert(obstacle)
@@ -498,10 +507,11 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                                 int[] indices=mirror==1?new int[]{0,1,2,2,3,0}:new int[]{0,2,1,0,3,2};
                                 scene.upsert(MeshAsset.triangles(3,new float[]{x-.35f,-.35f,z,x+.35f,-.35f,z,
                                         x+.35f,.35f,z,x-.35f,.35f,z},indices,3))
-                                        .upsert(SceneInstance.builder(3,3).castsShadow(!kind.equals("endpoint-nonshadow")).build());
-                                if(kind.equals("before-alpha-chain"))for(int layer=1;layer<=2;layer++) {
-                                    float dz=layer*.2f,dx=mirror*dz;
-                                    scene.upsert(SceneInstance.builder(3+layer,3)
+                                        .upsert(SceneInstance.builder(3,3).castsShadow(!kind.endsWith("nonshadow")).build());
+                                if(kind.equals("before-alpha-chain")||kind.startsWith("before-alpha-overflow")||kind.equals("before-alpha-coincident"))
+                                for(int layer=1;layer<=(kind.startsWith("before-alpha-overflow")?10:2);layer++) {
+                                    float dz=kind.equals("before-alpha-coincident")?0:layer*(kind.startsWith("before-alpha-overflow")?.04f:.2f),dx=mirror*dz;
+                                    scene.upsert(SceneInstance.builder(3+layer,3).castsShadow(!kind.endsWith("nonshadow"))
                                             .transform(new AffineTransform(new float[]{1,0,0,dx,0,1,0,0,0,0,1,dz})).build());
                                 }
                             }
@@ -524,6 +534,7 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
                             if(kind.equals("behind-opaque"))near(e,clearEnergy,0,"geometry behind the light cannot occlude it");
                             if(kind.equals("before-opaque"))near(e,0,1e-6,"geometry before the light must occlude it");
                             if(kind.endsWith("budget2"))near(e,0,1e-6,"second hit preserves the connection event budget");
+                            else if(kind.endsWith("masked")||kind.endsWith("overflow-nonshadow")||kind.endsWith("overflow-overlay"))near(e,clearEnergy,0,"masked hits must not consume connection events");
                             else if(kind.startsWith("before-alpha")||kind.contains("volume"))require(e>0&&e<clearEnergy,
                                     "finite connection lost transparent/medium attenuation: "+kind);
                         }
@@ -537,8 +548,10 @@ public final class CudaOpticalMediumProductionNativeSelfTest {
             if(property.equals(CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY))
                 require(top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.diagnosticOpticalTaskQueueDispatches.sum()>queueBefore,
                         "task queue comparison did not execute indirect RT");
+            if(collected)require(top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.diagnosticCollectedConnectionPipelines.sum()>collectedBefore,
+                    "connection collection comparison did not execute the collected ray-query pipeline");
             require(comparisons==expected&&routes==expected*2L,"finite connection checks bypassed native optical transport: "+routes);
-            Files.writeString(OUTPUT.resolve(gpu?"gpu-connection-checks.json":batches?"connection-batch-checks.json":"connection-range-checks.json"),
+            Files.writeString(OUTPUT.resolve(collected?"collected-connection-checks.json":gpu?"gpu-connection-checks.json":batches?"connection-batch-checks.json":"connection-range-checks.json"),
                     "{\"passed\":true,\""+(gpu?"boundedComparisons":"byteIdenticalComparisons")+"\":"+comparisons+",\"nativeFrames\":"+routes+",\"mirroredVertexOrders\":2,\"hitFormats\":"+formats.length+"}\n");
             System.out.println("CudaOpticalMediumProductionNativeSelfTest connection modes passed: "+comparisons+(gpu?" bounded":" byte-identical")+" comparisons / "+routes+" native frames");
         } finally {

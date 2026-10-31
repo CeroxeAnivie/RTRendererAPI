@@ -7,7 +7,7 @@ layout(buffer_reference,std430,buffer_reference_align=8) buffer GsOpticalDiagnos
 bool gsDetailActive(uint stage){return (stage<24u?0u:stage<48u?1u:stage<64u?2u:stage<96u?3u:stage<124u?4u:stage<152u?5u:stage<160u?6u:7u)==RTRENDERER_OPTICAL_PROFILE_GROUP;}
 uint64_t gsDetailStart(uint64_t address,uint stage){return address!=0ul&&gsDetailActive(stage)?clockRealtimeEXT():0ul;}
 void gsDetailEnd(uint64_t address,uint record,uint stage,uint64_t started){
-    if(started==0ul)return;uint64_t ended=clockRealtimeEXT();uint word=(record*176u+stage)*2u;
+    if(started==0ul)return;uint64_t ended=clockRealtimeEXT();uint word=(record*184u+stage)*2u;
     GsOpticalDiagnostic target=GsOpticalDiagnostic(address);
     target.values[word]+=ended-started;target.values[word+1u]+=1ul;
 }

@@ -424,10 +424,11 @@ final class RtShaderModuleCompiler {
                     Shaderc.shaderc_env_version_vulkan_1_2
             );
             // Exhaustive inlining duplicates the volume/light call tree. The extended volume
-            // programs and the 32-slot queue consumer keep function boundaries so the driver
+            // programs, collected connection queries and the 32-slot queue consumer keep function boundaries so the driver
             // does not receive a single flattened transport entry point. Sampling and the
             // medium capacity are unchanged; pinned generation uses this same policy.
             boolean structuredTransport = source.contains("#define RTRENDERER_VOLUME_TRANSPORT")
+                    || source.contains("#define RTRENDERER_STRUCTURED_CONNECTION_TRACE")
                     || source.contains("#define RTRENDERER_STRUCTURED_PRIMARY_SHADE");
             Shaderc.shaderc_compile_options_set_optimization_level(options, structuredTransport
                     ? Shaderc.shaderc_optimization_level_zero : Shaderc.shaderc_optimization_level_performance);
