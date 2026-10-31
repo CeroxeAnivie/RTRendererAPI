@@ -159,8 +159,13 @@ bool gsBoundaryConnectionHit(uint mesh,uint primitive,vec2 bary,float minimum,
         vec2 candidateBary,candidateWide;float facing;
         if(!gsBoundaryTriangleHitWide(mesh,other,candidateBary,candidateWide,facing))continue;
         float candidateDistance=gsBoundaryConnectionDistance(mesh,other,candidateBary,candidateWide,facing);
+        // A real crossing of the reported primitive is already certified by the
+        // wide inside test. Hardware t includes instance-transform error, which
+        // is not bounded by a constant number of ULPs of t alone (NVIDIA SIA).
+        // Only an alternative primitive needs the nearby-candidate restriction.
         if(candidateDistance<minimum
-                ||abs(candidateDistance-GS_BOUNDARY_HIT_T)>tolerance||candidateDistance>=nearest)continue;
+                ||(other!=primitive&&abs(candidateDistance-GS_BOUNDARY_HIT_T)>tolerance)
+                ||candidateDistance>=nearest)continue;
         found=true;nearest=candidateDistance;repairedPrimitive=other;repairedBary=candidateBary;repairedDistance=candidateDistance;
     }
     return found;

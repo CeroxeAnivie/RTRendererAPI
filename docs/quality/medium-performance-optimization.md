@@ -1778,3 +1778,11 @@ X18逐事件定位完成：首个聚光灯表面事件（sequence1/path649733，
 X19针对这个生产边界修复：所有带表面语义的事件（普通表面或表面介质边界）直接调用原ordered trace/closest-hit，沿用原alpha、masked、overlay和non-shadow规则，不在新callable重新生成材质。最近N批次继续保留；下一minimum排除原trace已经消费/跳过的事件。纯不可见介质边界仍按批次消费，共用原重构公式的小型callable；从generic材质求值中抽出原不可见分支，让该阶段不再携带普通材质/纹理程序。这是完整保留原生产者的确定性执行边界修复，不能以忽略属性、近似opacity或放宽HDR替代。原closest-hit源码/SPIR-V不改。生成后先原场景两帧严格HDR与目标路径，再做完整连接/功能/性能验收；尚无通过或FPS结论。
 
 X19严格门槛通过：表面事件回到原closest-hit后，候选与关闭collected的控制两帧1080p RGBA16F逐字节一致（2×2,073,600像素，RMS/能量/最大误差均0）；控制哈希分别为U的`6d370a...8695cf`、`94b919...23639`。候选连接管线冷启动峰值2.376 GB、wall29.499s，未超过3 GB总/2.5 GB执行树预算；普通控制峰值1.927 GB。此修复只证明正确性和资源门槛，尚未证明稳态FPS，也没有把诊断step模式算进性能。保留X18逐事件证据，后续先做120组/240帧严格连接与生产回归，再做空闲GPU整帧验收。[严格HDR证据](../../build/medium-micro-all-20261031/collected-connections-v19-original-surface/strict.json)
+
+## 2026-10-31 X20：复测暴露共同的边界入口错误
+
+X19的两帧严格HDR已通过，但新建正反序吞吐窗口在sequence100024/path1600481抓到错误38。关闭/开启collected都在同一帧、同一像素和同一连接失败，不能把它归因于collected数值差异，也不能跳过失败帧继续报FPS。主机逐事件捕获确认：连接栈初始为空，真实入口被过滤，出口正常返回后被严格栈校验拒绝。
+
+独立硬件ray-query回归重现：图元10的硬件t=0.4719546437263489，双精度slab入口=0.47195353843408044；原谓词拒绝入口，却接受图元7出口t=1.3665012121200562。根因是近边精确求交分支对原图元也套用了固定8*epsilon*max(1,abs(t))硬件距离容差。实例变换误差不由t的固定ULP数控制。[NVIDIA self-intersection-avoidance固定commit 5a5c45bc61aca5d095032860058481e0497350e0](https://github.com/NVIDIA/self-intersection-avoidance/blob/5a5c45bc61aca5d095032860058481e0497350e0/SelfIntersectionAvoidance.glsl)中safeSpawnOffset明确按顶点、三角形extent和双向实例变换估算误差；这里参考其误差来源分析，没有复制其源码，也没有盲目扩大容差。
+
+修复原图元的确定性错误否决：已经通过wide精确内外测试的原图元，直接使用其修正距离；替代邻面仍受原nearby限制，minimum、最近事件、薄层包围、介质栈严格拒绝与采样预算不变。硬件遍历独立回归保留原失败射线与双精度slab oracle。先失败帧、边界谓词、严格HDR与完整连接验证，再恢复吞吐对照；当前没有新的性能收益结论。
