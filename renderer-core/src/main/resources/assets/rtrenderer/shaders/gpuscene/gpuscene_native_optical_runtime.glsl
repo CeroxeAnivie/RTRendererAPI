@@ -235,9 +235,13 @@ GpuScenePayload gsOpticalConnectionHit(vec3 origin,vec3 direction,uvec4 launch,f
     }
     return hit;
 }
+#include "gpuscene_optical_connection_transport.glsl"
 void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 launch,uint epoch,bool initialize,uint hitOffset) {
     GS_DETAIL_BEGIN(168u);
     uint base=gsOptical.storage.lanes[4u].z/16u+item*22u;
+    bool vertexDirect=(gsOptical.storage.lanes[11u].w&16384u)!=0u;
+    vec3 vertexPosition=position;
+    for(;;) {
     if(initialize) {
         uvec4 control=gsOptical.storage.lanes[base+5u];
         // PBRT SpawnRayTo: offset the source first, then aim at the finite light endpoint.
@@ -355,6 +359,40 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
         hit.transmissionIor=vec4(0);hit.state=uvec4(0);hit.surfaceState=uvec4(0);hit.compositeState=vec4(0);
         hit.launchInfo=launch;hit.mediumBoundary=uvec4(0);}
     GS_DETAIL_END();
+    if(vertexDirect) {
+        if(gsOptical.storage.lanes[base+2u].w==1u)
+            gsOpticalCompleteConnection(base,item,launch,maximum,hit,epoch);
+        uint mode=gsOptical.storage.lanes[base+2u].w;
+        if(mode!=1u&&mode<=3u) {
+            float phase=1.0;vec3 source=uintBitsToFloat(gsOptical.storage.lanes[base+2u]).xyz;
+            // A near-singular phase is consumed once by the original CUDA code.
+            if(max(source.x,max(source.y,source.z))<=0.0||gsVertexDirectPhase(item,base,phase)) {
+                precise vec3 incoming=uintBitsToFloat(gsOptical.storage.lanes[base+4u]).xyz;
+                if(max(source.x,max(source.y,source.z))>0.0) {
+                    precise vec3 contribution=source*uintBitsToFloat(gsOptical.storage.lanes[base+3u]).xyz;
+                    contribution*=phase;incoming+=contribution;
+                }
+                if(gsConnectionFinite(incoming)) {
+                    gsOptical.storage.lanes[base+4u]=floatBitsToUint(vec4(incoming,0));
+                    uvec4 control=gsOptical.storage.lanes[base+5u];++control.x;
+                    gsOptical.storage.lanes[base+5u]=control;
+                    if(control.x<control.y) {
+                        gsVertexRestoreConnectionStack(item,base);
+                        uvec4 stateControl=gsOpticalStateRead(item,2u);stateControl.x=2u;++stateControl.w;
+                        epoch=stateControl.w;gsOpticalStateWrite(item,2u,stateControl);
+                        position=vertexPosition;initialize=true;
+                        GS_DETAIL_BEGIN(168u);continue;
+                    }
+                    // All ordinals and their contributions are complete. CUDA owns
+                    // the single final main-path addition and continuation only.
+                    gsOptical.storage.lanes[base+2u].w=12u;
+                }
+            }
+        }
+        gsOpticalStore(hitOffset,item,hit,uvec4(globalPath/gsOptical.storage.lanes[0u].w,
+            globalPath%gsOptical.storage.lanes[0u].w,epoch,epoch));
+        return;
+    }
     bool batched=(gsOptical.storage.lanes[11u].w&8192u)!=0u;
     float firstDistance=hit.worldPositionAndDistance.w;
     bool nextSegment=batched&&gsOptical.storage.lanes[base+2u].w==1u&&hit.state.x!=0u
@@ -376,6 +414,8 @@ void gsOpticalConnectionTrace(uint item,uint globalPath,vec3 position,uvec4 laun
         uint stride=transposed?gsOptical.storage.lanes[0u].z:1u;
         uint identity=hitOffset/16u+item*(transposed?1u:compact?6u:13u)+(compact?5u:12u)*stride;
         gsOptical.storage.lanes[identity].z=2u;
+    }
+    return;
     }
 }
 // Light paths use the camera pipeline's geometric hit ABI, with native medium state.

@@ -35,8 +35,10 @@ public final class CudaOpticalMediumAbi {
     public static final String BOUND_CONNECTION_RAYS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalBoundConnectionRays";
     public static final String REUSE_DUPLICATE_BRANCHES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalReuseDuplicateBranches";
     public static final String BATCH_CONNECTION_HITS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalBatchConnectionHits";
+    public static final String VERTEX_DIRECT_LIGHTING_PROPERTY="top.ceroxe.rt.medium.cuda.opticalVertexDirectLighting";
     public static final long RESOLVED_RADIANCE_FLAG=1L;
     private CudaOpticalMediumAbi() { }
+    public static boolean vertexDirectLighting(){return !OpticalFrameTimings.KERNEL_PHASES&&Boolean.parseBoolean(System.getProperty(VERTEX_DIRECT_LIGHTING_PROPERTY,"true"));}
     public record Plan(int pixels,int samples,int tilePixels,int boundaryCount,int stateOffset,int hitOffset,
             int evaluationOffset,int primaryOffset,int transmittanceOffset,int emissionOffset,int priorityOffset,
             int sceneBytes,long bytes,boolean externalPrimary,boolean directPrimary,boolean compactHits,boolean compactStates,boolean transposedHits,boolean transposedStates,boolean transposedPrimary,
@@ -113,7 +115,7 @@ public final class CudaOpticalMediumAbi {
         int hitBytes=compactHits?COMPACT_HIT_BYTES:HIT_BYTES;
         int stateBytes=compactStates?COMPACT_STATE_BYTES:STATE_BYTES;
         boolean activeQueues=useActiveQueues(boundaries,connectionTransport);
-        int connectionBatchSize=connectionTransport&&!OpticalFrameTimings.KERNEL_PHASES
+        int connectionBatchSize=connectionTransport&&!vertexDirectLighting()&&!OpticalFrameTimings.KERNEL_PHASES
                 &&Boolean.parseBoolean(System.getProperty(BATCH_CONNECTION_HITS_PROPERTY,"true"))?2:1;
         int tilePixels=Math.toIntExact(Math.min(pixels,(available-(activeQueues?32L:0L))/((long)samples*(stateBytes+(long)hitBytes*connectionBatchSize+COLOR_BYTES
                 +(externalPrimary&&!directPrimary?HIT_BYTES:0)+(connectionTransport?CONNECTION_BYTES:0)+(activeQueues?8:0)))));
@@ -169,7 +171,7 @@ public final class CudaOpticalMediumAbi {
                         |(Boolean.parseBoolean(System.getProperty(SKIP_EMPTY_CONNECTIONS_PROPERTY,"true"))?512:0)
                         |(Boolean.parseBoolean(System.getProperty(BOUND_CONNECTION_RAYS_PROPERTY,"true"))?2048:0)
                         |(Boolean.parseBoolean(System.getProperty(REUSE_DUPLICATE_BRANCHES_PROPERTY,"true"))?4096:0)
-                        |(plan.connectionBatchSize()==2?8192:0));
+                        |(plan.connectionBatchSize()==2?8192:0)|(plan.connectionTransport()&&vertexDirectLighting()?16384:0));
         packed.putInt(200,Math.toIntExact(plan.firstQueueOffset())).putInt(204,Math.toIntExact(plan.secondQueueOffset()));
         // These words share the opt-in clock sampling area, which disables batching.
         packed.putInt(228,plan.secondConnectionHitOffset()).putInt(232,plan.connectionBatchSize());

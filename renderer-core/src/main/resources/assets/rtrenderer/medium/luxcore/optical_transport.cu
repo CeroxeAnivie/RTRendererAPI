@@ -578,10 +578,13 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
         Connection*c=connections(b)+i;
         HitView<Compact,Transposed> connectionView={(const unsigned int*)(b+h[10]),h[2],(unsigned int)i};
         if(connectionView.u(Compact?23:51)!=s->control.w){finish(b,i,s,statistics,17);return;}
+        const unsigned int connectionMode=__float_as_uint(c->source.w);
+        const bool vertexComplete=(h[47]&16384u)!=0u&&connectionMode==12u;
+        if((h[47]&16384u)!=0u&&connectionMode>=5u&&connectionMode<=11u){finish(b,i,s,statistics,32u+connectionMode-4u);return;}
         int continuation=0;
         // Mode 2 is an unshadowed light: preserve unit visibility and skip the
         // complete surface/medium connection, matching direct-volume transport.
-        if(__float_as_uint(c->source.w)==1u){
+        if(connectionMode==1u){
             const bool batched=(h[47]&8192u)!=0u;
             const unsigned int count=batched?connectionView.u(Compact?22:50):1u;
             if(batched&&(h[58]!=2u||h[57]==0u||count<1u||count>2u)){finish(b,i,s,statistics,40u);return;}
@@ -599,14 +602,14 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
         if(continuation<0){finish(b,i,s,statistics,32u+(unsigned int)(-continuation));return;}
         if(continuation>0){s->control.x=3u;increment(b,statistics,0u);return;}
         float3 incoming=rgb(c->lighting);
-        if(peak(rgb(c->source))>0.f){
+        if(!vertexComplete&&peak(rgb(c->source))>0.f){
             const float phase=c->control.w!=0u?1.f:rtr_medium::hgEvaluate(dot(rgb(s->direction),rgb(c->direction)),anisotropy(b,selectedVolume(s)));
             incoming=incoming+rgb(c->source)*rgb(c->transport)*phase;
         }
         if(!finite3(incoming)){finish(b,i,s,statistics,19);return;}
         c->lighting=make_float4(incoming.x,incoming.y,incoming.z,0.f);
-        ++c->control.x;
-        if(c->control.x<c->control.y){
+        if(!vertexComplete)++c->control.x;
+        if(!vertexComplete&&c->control.x<c->control.y){
             if constexpr(Small)rtr_medium::PathVolumeInfo_Init(&c->volumes);else c->volumes=s->volumes;
             s->control.x=2u;++s->control.w;increment(b,statistics,0u);return;
         }
