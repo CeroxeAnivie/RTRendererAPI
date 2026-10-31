@@ -38,6 +38,11 @@ public final class OpticalDetailedProfile {
     public static int shaderBytes(int paths){return SHADERS?Math.toIntExact(((long)paths+STRIDE-1)/STRIDE*STAGES*16):0;}
     public static int cameraScatteringShaderBytes(int paths){return CAMERA_SCATTERING_SHADERS
             ?Math.toIntExact(((long)paths+CAMERA_SCATTERING_STRIDE-1)/CAMERA_SCATTERING_STRIDE*CAMERA_SCATTERING_STAGES*16):0;}
+    public static boolean cameraScatteringProfileFrame(long frameSequence){
+        // Keep all eight bucket phases together, then use production shaders for
+        // three groups. A single full-image tile must not be instrumented every frame.
+        return CAMERA_SCATTERING_SHADERS&&Math.floorMod(Math.floorDiv(frameSequence,8L),4L)==0L;
+    }
     public static void shaderSamples(MemorySegment values,int paths){
         for(int sample=0;sample<(paths+STRIDE-1)/STRIDE;sample++)for(int stage=0;stage<STAGES;stage++){
             long at=((long)sample*STAGES+stage)*16,ticks=values.get(ValueLayout.JAVA_LONG,at),calls=values.get(ValueLayout.JAVA_LONG,at+8);

@@ -123,13 +123,14 @@ final class CudaCameraScatteringManager implements AutoCloseable {
         long address=storage.deviceAddress();
         try(Arena arena=Arena.ofConfined()) {
             var failed=arena.allocate(4,4);
-            int diagnosticBytes=OpticalDetailedProfile.cameraScatteringShaderBytes(plan.paths());
-            var diagnosticHost=OpticalDetailedProfile.CAMERA_SCATTERING_SHADERS
+            int diagnosticBytes=OpticalDetailedProfile.cameraScatteringProfileFrame(frame.sequence())
+                    ?OpticalDetailedProfile.cameraScatteringShaderBytes(plan.paths()):0;
+            var diagnosticHost=diagnosticBytes!=0
                     ?arena.allocate(diagnosticBytes,16):null;
             for(int first=0;first<plan.pixels();) {
                 int tileFirst=first,pixels=Math.min(plan.tilePixels(),plan.pixels()-first);
                 long diagnosticAddress=diagnosticBytes==0?0:address+plan.bytes();
-                boolean profileTile=diagnosticProducer!=null&&profileTile(plan,tileFirst,pixels,frame.sequence());
+                boolean profileTile=diagnosticBytes!=0&&diagnosticProducer!=null&&profileTile(plan,tileFirst,pixels,frame.sequence());
                 boolean initial=first==0,last=first+pixels==plan.pixels();
                 byte[] header=CudaCameraScatteringAbi.header(plan,frame,first,pixels,includeMediumEmission);
                 boolean splitPrimary=plan.compactContribution()&&primaryTarget!=null&&primaryProducer!=null;
