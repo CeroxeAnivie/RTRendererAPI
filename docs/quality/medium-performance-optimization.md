@@ -1460,3 +1460,12 @@ header188 bit4096 / top.ceroxe.rt.medium.cuda.opticalLeanConnectionHits（默认
 已连同共享源拆分、SBT路由、生成二进制与关联测试完整恢复到原方案，保留设备预算队列的已验收优化。静态模块缩小与成熟项目的结构依据都不能替代本项目净吞吐验证；仍未证明实际寄存器/栈溢出根因，不编造原因。
 
 [完整证据与哈希](data/medium-specialized-connection-sbt-rejected-20261031.json)。
+
+
+## 2026-10-31 候选 L：只搬运介质栈有效前缀（待验收）
+
+对照仓库固定的 LuxCore commit `b872186d2fe995a762f73708c606847eed55843e`（Apache-2.0），`include/slg/utils/pathvolumeinfo_funcs.cl` 的 `PathVolumeInfo_Init`、`AddVolume`、`RemoveVolume`（本地固定摘录 `upstream-pathvolumeinfo-functions.cl` 25–89 行）：初始化只置长度/当前介质/scatteredStart，添加写入 `list[size++]`，删除和优先级重选仅读取 `[0,size)`。这里引用的是有效前缀语义，不能声称 LuxCore 已采用本项目这项复制优化。
+
+本项目的确定性候选在 optical transport 的9处相机/连接/候选状态交接只复制三个头字段和有效槽位，删除无读者的尾部搬运；栈仍为144字节、32槽，保持顺序、优先级、进出栈、拒绝行为及全部预算。坏长度仍保留并由原验证拒绝，复制最多32项。`top.ceroxe.rt.medium.cuda.opticalActiveVolumeCopies=false` 可用同制品回到完整结构复制。没有改着色器、同步流程、采样或任何输运近似。
+
+专用真实CUDA检查两种复制模式各136种输入，覆盖长度0至32、坏长度33、两种槽顺序、scatteredStart、容量溢出、缺失删除、删除重选优先级、删空再填、有效顺序和两侧内存守卫，五个变更检查点由独立Java列表/优先级模型验证。随后核对ABI、生产native与validation、两个1080p HDR帧及关闭诊断正反序整帧速度。少搬运不是已确认收益；动态循环可能抵消节省，负优化完整撤回。

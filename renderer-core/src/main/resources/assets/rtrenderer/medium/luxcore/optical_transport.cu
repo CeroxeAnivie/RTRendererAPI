@@ -58,6 +58,21 @@ static_assert(sizeof(Connection)==352,"native optical connection ABI");
 static_assert(sizeof(State<false>)==256,"native optical state ABI");
 static_assert(sizeof(State<true>)==112,"native optical boundary-free state ABI");
 static_assert(sizeof(Boundary)==64,"native optical boundary ABI");
+// Upstream Init/Add/Remove define only [0, volumeIndexListSize) as live.
+// Keep its order, current selection and scatteredStart; unused capacity has no
+// reader and need not be moved on each camera/connection transition.
+__device__ __forceinline__ void copyVolumes(rtr_medium::PathVolumeInfo*destination,const rtr_medium::PathVolumeInfo*source){
+#ifdef RTR_OPTICAL_ACTIVE_VOLUME_COPIES
+    const unsigned int count=source->volumeIndexListSize;
+    destination->currentVolumeIndex=source->currentVolumeIndex;
+    destination->volumeIndexListSize=count;
+    destination->scatteredStart=source->scatteredStart;
+    // Corrupt sizes still reach the original validation without copying OOB.
+    for(unsigned int j=0;j<count&&j<32u;++j)destination->volumeIndexList[j]=source->volumeIndexList[j];
+#else
+    *destination=*source;
+#endif
+}
 __device__ float3 rgb(float4 v){return make_float3(v.x,v.y,v.z);}
 __device__ float peak(float3 v){return fmaxf(v.x,fmaxf(v.y,v.z));}
 __device__ bool finite3(float3 v){return isfinite(v.x)&&isfinite(v.y)&&isfinite(v.z);}
@@ -258,7 +273,7 @@ template<class S> __device__ __forceinline__ bool segment(unsigned char*b,S*s,fl
             if(((unsigned int*)b)[19]!=0u){
                 Connection*c=connections(b)+(s->control.z-((unsigned int*)b)[4]*((unsigned int*)b)[3]);
                 c->lighting=make_float4(0.f);c->control=make_uint4(0u,0u,0u,0u);
-                if constexpr(S::SMALL)rtr_medium::PathVolumeInfo_Init(&c->volumes);else c->volumes=s->volumes;
+                if constexpr(S::SMALL)rtr_medium::PathVolumeInfo_Init(&c->volumes);else copyVolumes(&c->volumes,&s->volumes);
             }
 #endif
             *collision=true;return true;
@@ -391,7 +406,7 @@ template<bool Compact,class S,class V> __device__ int prepareSurfaceContinuation
                 index=boundaryIndex(b,view.u(Compact?16:44));if(index<0)return -2;
                 const Boundary entry=table(b)[index];
                 if(view.u(Compact?17:45)!=(unsigned int)entry.priority||view.u(Compact?18:46)!=entry.orientation||flags!=entry.flags)return -2;
-                auto candidate=s->volumes;entering=(view.u(Compact?15:29)==2u)==(entry.orientation!=0u);
+                rtr_medium::PathVolumeInfo candidate;copyVolumes(&candidate,&s->volumes);entering=(view.u(Compact?15:29)==2u)==(entry.orientation!=0u);
                 if(entering)for(unsigned int j=0;j<candidate.volumeIndexListSize;++j)if(candidate.volumeIndexList[j]==(unsigned int)index)return -2;
                 const auto status=entering?rtr_medium::add(&candidate,index,priorities(b),h[7]):rtr_medium::remove(&candidate,index,priorities(b),h[7]);
                 if(status!=rtr_medium::OK)return -2;
@@ -485,7 +500,7 @@ template<bool Compact,bool Transposed> __device__ int connectionStep(unsigned ch
     if(++c->control.z>=((unsigned int*)b)[6]){c->transport.x=c->transport.y=c->transport.z=0.f;return 0;}
     const unsigned int flags=view.u(Compact?19:47);
     const bool volumeOnly=(flags&2u)!=0u;
-    rtr_medium::PathVolumeInfo candidate=c->volumes;
+    rtr_medium::PathVolumeInfo candidate;copyVolumes(&candidate,&c->volumes);
     if(flags){
         const int index=boundaryIndex(b,view.u(Compact?16:44));if(index<0)return -3;
         const Boundary entry=table(b)[index];
@@ -511,7 +526,7 @@ template<bool Compact,bool Transposed> __device__ int connectionStep(unsigned ch
         const float3 factor=make_float3(1.f-opacity)+tint*(opacity*transmission*(1.f-fresnel));
         const float3 weight=rgb(c->transport)*factor;c->transport.x=weight.x;c->transport.y=weight.y;c->transport.z=weight.z;
     }
-    c->volumes=candidate;
+    copyVolumes(&c->volumes,&candidate);
     if(peak(rgb(c->transport))<=((float*)b)[32]){c->transport.x=c->transport.y=c->transport.z=0.f;return 0;}
     // The geometric hit point may include barycentric edge repair, and a
     // normal offset can cross another volume at a grazing/shared edge. Neither
@@ -583,7 +598,7 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
         c->lighting=make_float4(incoming.x,incoming.y,incoming.z,0.f);
         ++c->control.x;
         if(c->control.x<c->control.y){
-            if constexpr(Small)rtr_medium::PathVolumeInfo_Init(&c->volumes);else c->volumes=s->volumes;
+            if constexpr(Small)rtr_medium::PathVolumeInfo_Init(&c->volumes);else copyVolumes(&c->volumes,&s->volumes);
             s->control.x=2u;++s->control.w;increment(b,statistics,0u);return;
         }
         if(c->control.w!=0u)incoming=surfaceShading(c,incoming);
@@ -661,7 +676,7 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
             finish(b,i,s,statistics);return;
         }
         c->lighting=make_float4(evaluation.x,evaluation.y,evaluation.z,0.f);c->control=make_uint4(0u,0u,0u,1u);
-        if constexpr(Small)rtr_medium::PathVolumeInfo_Init(&c->volumes);else c->volumes=s->volumes;
+        if constexpr(Small)rtr_medium::PathVolumeInfo_Init(&c->volumes);else copyVolumes(&c->volumes,&s->volumes);
         s->origin=c->surfacePoint;s->control.x=2u;++s->control.w;increment(b,statistics,0u);return;
     }
     float3 local=rgb(s->terminal)*rgb(s->throughput)*evaluation*(opacity*(1.f-transmission));
@@ -671,7 +686,7 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
     if(s->counters.x>=h[6]){finish(b,i,s,statistics);return;}
     RTR_PHASE_NEXT(3u);
     int compact=-1;bool entering=false;rtr_medium::PathVolumeInfo candidate;
-    if constexpr(!Small)candidate=s->volumes;
+    if constexpr(!Small)copyVolumes(&candidate,&s->volumes);
     if(flags){
         if constexpr(Small){finish(b,i,s,statistics,6);return;}else{
         compact=boundaryIndex(b,view.u(Compact?16:44));if(compact<0){finish(b,i,s,statistics,6);return;}
@@ -684,7 +699,7 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
         }
     }
     float3 direction=rgb(s->direction);
-    if(volumeOnly){if constexpr(!Small)s->volumes=candidate;}else{
+    if(volumeOnly){if constexpr(!Small)copyVolumes(&s->volumes,&candidate);}else{
         float exterior=ior(b,selectedVolume(s));
         float n1=view.u(Compact?15:29)==2u?view.f(Compact?13:25):exterior,n2=view.u(Compact?15:29)==2u?exterior:view.f(Compact?13:25);
         if constexpr(!Small)if(flags){n1=ior(b,s->volumes.currentVolumeIndex);n2=ior(b,candidate.currentVolumeIndex);}
@@ -721,7 +736,7 @@ template<bool Compact,bool Small,bool Transposed=false,bool TransposedState=fals
             if(peak(outer)<=0.f){finish(b,i,s,statistics);return;}}
         if(!finite3(weight)){finish(b,i,s,statistics,11);return;}
         if(peak(weight)<=((float*)b)[32]){finish(b,i,s,statistics);return;}
-        direction=nextDirection;if constexpr(!Small)if(!reflection&&flags)s->volumes=candidate;
+        direction=nextDirection;if constexpr(!Small)if(!reflection&&flags)copyVolumes(&s->volumes,&candidate);
         s->throughput.x=weight.x;s->throughput.y=weight.y;s->throughput.z=weight.z;
         increment(b,statistics,2u);
     }
