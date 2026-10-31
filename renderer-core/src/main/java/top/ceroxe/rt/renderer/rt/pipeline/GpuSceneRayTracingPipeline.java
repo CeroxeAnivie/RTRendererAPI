@@ -939,9 +939,12 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             throw new IllegalArgumentException("invalid optical task queue dispatch");
         diagnosticOpticalTaskQueueDispatches.add(2);
         for(int kind=0;kind<2;++kind){
-            var push=stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-            push.putLong(storageAddress).putInt(firstPixel).putInt(pathCapacity).putLong(4L+kind).putLong(primaryAddress).flip();
             GpuSceneRayTracingPipeline selected=kind==1&&connectionTracer!=null?connectionTracer:this;
+            // Collected-only private ABI: material record 0, gather record 1.
+            // Keep targets runtime-selected as in NVIDIA's callable material dispatch.
+            long mode=4L+kind+(selected==this?0L:1L<<32);
+            var push=stack.malloc(GpuScenePrimaryQueue.PUSH_BYTES).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            push.putLong(storageAddress).putInt(firstPixel).putInt(pathCapacity).putLong(mode).putLong(primaryAddress).flip();
             VK10.vkCmdPushConstants(command,selected.pipelineLayout,KHRRayTracingPipeline.VK_SHADER_STAGE_RAYGEN_BIT_KHR
                     |KHRRayTracingPipeline.VK_SHADER_STAGE_ANY_HIT_BIT_KHR,0,push);
             // Layouts have identical descriptor/push definitions. Consume the parent's

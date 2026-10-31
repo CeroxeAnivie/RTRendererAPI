@@ -4,6 +4,13 @@ layout(buffer_reference,std430,buffer_reference_align=16) buffer GsOpticalStorag
 layout(push_constant) uniform GsOpticalDispatch {
     GsOpticalStorage storage;uint firstPixel;uint pixelCount;uint64_t initialize;uint64_t primaryAddress;
 } gsOptical;
+#ifdef RTRENDERER_COLLECTED_CONNECTIONS
+// Low word is the existing dispatch mode. The high word selects the two SBT
+// callable records at runtime, so the driver need not clone them into raygen.
+#define GS_OPTICAL_MODE (gsOptical.initialize&0xfffffffful)
+#else
+#define GS_OPTICAL_MODE gsOptical.initialize
+#endif
 #include "gpuscene_photon_emission.glsl"
 vec3 gsOpticalBeer(float distance,vec3 extinction,float limit) {
     return exp(-extinction*min(max(distance,0.0),limit));
@@ -55,7 +62,7 @@ GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,f
 }
 GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch,float minimum) {
     return gsTraceOpticalRadiance(origin,direction,launch,minimum,
-            (gsOptical.initialize==2ul||gsOptical.initialize==3ul)?GS_PAYLOAD_PHOTON_QUERY:GS_PAYLOAD_RADIANCE_QUERY);
+            (GS_OPTICAL_MODE==2ul||GS_OPTICAL_MODE==3ul)?GS_PAYLOAD_PHOTON_QUERY:GS_PAYLOAD_RADIANCE_QUERY);
 }
 GpuScenePayload gsTraceOpticalRadiance(vec3 origin,vec3 direction,uvec4 launch) {
     return gsTraceOpticalRadiance(origin,direction,launch,gsRayEpsilon(origin));
@@ -455,7 +462,7 @@ void gsOpticalPhotonTrace() {
 #ifdef RTRENDERER_OPTICAL_PROFILE
     payload.diagnosticAddress=0ul;payload.diagnosticRecord=0u;
 #endif
-    if(gsOptical.initialize==2ul) {
+    if(GS_OPTICAL_MODE==2ul) {
         for(uint lane=0u;lane<17u;++lane)photons.lanes[state+lane]=uvec4(0u);
         vec3 origin,direction,flux;float range;uint row;
         gsEmitPhoton(item,gsOptical.pixelCount,origin,direction,flux,range,row);
@@ -494,7 +501,7 @@ void gsOpticalPhotonTrace() {
 // Wavefront responsibility split: connection work does not carry the camera,
 // primary-cache, photon or terminal-surface programs through this entry point.
 void main() {
-    if(gsOptical.initialize!=5ul)return;
+    if(GS_OPTICAL_MODE!=5ul)return;
     uint slot=gl_LaunchIDEXT.x;
     uint control=gsOptical.storage.lanes[14u].w/16u;
     if(slot>=gsOptical.storage.lanes[control+2u].x)return;
@@ -515,9 +522,9 @@ void main() {
 }
 #else
 void main() {
-    if(gsOptical.initialize==2ul||gsOptical.initialize==3ul){gsOpticalPhotonTrace();return;}
-    bool splitTasks=gsOptical.initialize==4ul||gsOptical.initialize==5ul;
-    bool initializing=gsOptical.initialize==1ul;
+    if(GS_OPTICAL_MODE==2ul||GS_OPTICAL_MODE==3ul){gsOpticalPhotonTrace();return;}
+    bool splitTasks=GS_OPTICAL_MODE==4ul||GS_OPTICAL_MODE==5ul;
+    bool initializing=GS_OPTICAL_MODE==1ul;
     if(gl_LaunchIDEXT.x>=gsOptical.pixelCount)return;
     bool fusedInitialization=(gsOptical.storage.lanes[11u].w&128u)!=0u;
     // Only CUDA consumes this marker, after the complete Vulkan dispatch retires.
@@ -545,7 +552,7 @@ void main() {
             uint index=item;
             if(splitTasks){
                 uint control=gsOptical.storage.lanes[14u].w/16u;
-                bool connection=gsOptical.initialize==5ul;
+                bool connection=GS_OPTICAL_MODE==5ul;
                 uint count=gsOptical.storage.lanes[control+(connection?2u:1u)].x;
                 if(item>=count)continue;
                 if(connection)index=gsOptical.storage.lanes[0u].z-1u-item;

@@ -31,7 +31,7 @@ bool gsCollectedFill(vec3 origin,vec3 direction,float minimum,float maximum) {
     gsCollectedBatch.diagnosticAddress=payload.diagnosticAddress;
     gsCollectedBatch.diagnosticRecord=payload.diagnosticRecord;
 #endif
-    executeCallableEXT(1u,1);
+    executeCallableEXT(uint(gsOptical.initialize>>32u)&0xffffu,1);
     return !gsCollectedFallback;
 }
 
@@ -75,7 +75,7 @@ bool gsCollectedConnectionHit(vec3 origin,vec3 direction,uvec4 launch,float mini
         gsCollectedMaterial.identity=event.identity;
         gsCollectedMaterial.originAndDistance=vec4(origin,event.distance.y);
         gsCollectedMaterial.direction=direction;
-        executeCallableEXT(0u,0);
+        executeCallableEXT(uint(gsOptical.initialize>>48u),0);
         hit=gsCollectedMaterial.hit;
         GS_DETAIL_END();
         uint blend=(hit.state.z>>1u)&0x7u;

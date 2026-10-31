@@ -76,19 +76,23 @@ public final class RtPrecompiledShaderSelfTest {
       var words = java.nio.ByteBuffer.wrap(spirv).order(java.nio.ByteOrder.LITTLE_ENDIAN).asIntBuffer();
       int traces = 0, queries = 0; boolean callableEntry = false;
       var constants = new java.util.HashMap<Integer,Integer>();
-      var callableTargets = new java.util.HashSet<Integer>();
+      int dynamicCalls = 0, constantCalls = 0;
       for (int at = 5; at < words.limit();) {
          int instruction = words.get(at), count = instruction >>> 16, opcode = instruction & 0xffff;
          if (count == 0 || count > words.limit() - at) throw new AssertionError("invalid SPIR-V instruction");
          if (opcode == 43 && count == 4) constants.put(words.get(at + 2),words.get(at + 3));
-         if (opcode == 4446) callableTargets.add(constants.get(words.get(at + 1))); // OpExecuteCallableKHR
+         if (opcode == 4446) { // OpExecuteCallableKHR
+            if (constants.containsKey(words.get(at + 1))) constantCalls++;
+            else dynamicCalls++;
+         }
          if (opcode == 4445) traces++; // OpTraceRayKHR
          if (opcode == 4473) queries++; // OpRayQueryInitializeKHR
          if (opcode == 15 && words.get(at + 1) == 5318) callableEntry = true;
          at += count;
       }
-      if (connection && (queries != 0 || !callableTargets.equals(java.util.Set.of(0,1))))
-         throw new AssertionError("connection must call separate material/gather stages without embedding traversal: " + callableTargets);
+      if (connection && (queries != 0 || dynamicCalls != 2 || constantCalls != 0))
+         throw new AssertionError("connection requires two runtime callable targets and no embedded traversal: dynamic="
+                 + dynamicCalls + ", constant=" + constantCalls);
       if ((material || gather) && (!callableEntry || traces != 0))
          throw new AssertionError("material/gather must remain non-tracing callable stages");
       if (gather && queries != 1)throw new AssertionError("gather must contain one traversal loop: " + queries);
