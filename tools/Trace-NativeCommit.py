@@ -1,7 +1,8 @@
 """Opt-in Windows native commit attribution; never use its run for FPS acceptance.
 
-Requires Frida in the selected Python environment. Hooks virtual commit/release,
-not Vulkan entry points or the process heap. Records releases as well as commits;
+Requires Frida in the selected Python environment. Hooks every virtual allocation
+size, release, and section mapping, including Ex variants. This is page backing,
+not individual process-heap object accounting. Records failures and releases;
 allocation traffic must not be reported as retained memory. Full x64 unwinding
 uses the OS unwind tables, beyond Frida's short default backtrace.
 """
@@ -111,7 +112,8 @@ typedef struct {
 } Record;
 typedef struct {void* base;void* allocation_base;uint32_t allocation_protect;uint32_t partition;
  uint64_t region_size;uint32_t state,protect,type,padding;} MemoryInfo;
-typedef struct {void**base;uint64_t*size;uint32_t flags,keep,count;void*frames[96];} Call;
+typedef struct {void**base;uint64_t*size;uint64_t input_size,address,allocation;
+ uint32_t flags,keep,count,kind;void*frames[96];} Call;
 extern void* trace_file;
 extern uint32_t write_file(void*,const void*,uint32_t,uint32_t*,void*);
 extern void* lookup_function(uint64_t,uint64_t*,void*);
@@ -137,44 +139,85 @@ uint32_t capture_context(GumCpuContext*cpu,void**frames){
 extern uint64_t virtual_query(void*,MemoryInfo*,uint64_t);
 extern uint32_t thread_id(void);
 extern uint32_t tick_count(void);
-void allocation_enter(GumInvocationContext*ic){
+extern uint32_t current_process_id(void);
+extern uint32_t process_id(void*);
+int current(void*p){return p==(void*)(intptr_t)-1||process_id(p)==current_process_id();}
+void allocation_common(GumInvocationContext*ic,int extended){
  Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
+ c->keep=current(gum_invocation_context_get_nth_argument(ic,0));if(!c->keep)return;
  c->base=gum_invocation_context_get_nth_argument(ic,1);
- c->size=gum_invocation_context_get_nth_argument(ic,3);
- c->flags=(uint32_t)(uintptr_t)gum_invocation_context_get_nth_argument(ic,4);
- c->keep=(c->flags&0x1000)&&*c->size>=65536;
- if(c->keep)c->count=capture_context(ic->cpu_context,c->frames);
+ c->size=gum_invocation_context_get_nth_argument(ic,extended?2:3);
+ c->flags=(uint32_t)(uintptr_t)gum_invocation_context_get_nth_argument(ic,extended?3:4);
+ c->kind=(c->flags&0x1000)?1:5;c->input_size=*c->size;
+ c->count=capture_context(ic->cpu_context,c->frames);
 }
+void allocation_enter(GumInvocationContext*ic){allocation_common(ic,0);}
+void allocation_ex_enter(GumInvocationContext*ic){allocation_common(ic,1);}
 void allocation_leave(GumInvocationContext*ic){
  Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
  int32_t status=(int32_t)(uintptr_t)gum_invocation_context_get_return_value(ic);
- if(!c->keep||status)return;
+ if(!c->keep)return;
  Record r={0}; MemoryInfo m={0};uint32_t written=0;
- r.kind=1;r.tid=thread_id();r.reserved=tick_count();r.flags=c->flags;r.base=(uint64_t)(uintptr_t)*c->base;r.size=*c->size;
- virtual_query(*c->base,&m,sizeof(m));r.allocation_base=(uint64_t)(uintptr_t)m.allocation_base;r.frame_count=c->count;
+ r.kind=c->kind;r.status=status;r.tid=thread_id();r.reserved=tick_count();r.flags=c->flags;r.base=(uint64_t)(uintptr_t)*c->base;
+ r.size=status<0?c->input_size:*c->size;
+ if(status>=0)virtual_query(*c->base,&m,sizeof(m));
+ r.allocation_base=(uint64_t)(uintptr_t)m.allocation_base;r.frame_count=c->count;
  for(uint32_t i=0;i<c->count;i++)r.frames[i]=c->frames[i];
  write_file(trace_file,&r,sizeof(r),&written,0);
 }
 void free_enter(GumInvocationContext*ic){
  Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
- c->base=(void**)*((void**)gum_invocation_context_get_nth_argument(ic,1));
- c->size=(uint64_t*)(uintptr_t)*((uint64_t*)gum_invocation_context_get_nth_argument(ic,2));
+ c->keep=current(gum_invocation_context_get_nth_argument(ic,0));if(!c->keep)return;
+ c->address=(uint64_t)(uintptr_t)*((void**)gum_invocation_context_get_nth_argument(ic,1));
+ c->input_size=*((uint64_t*)gum_invocation_context_get_nth_argument(ic,2));
  c->flags=(uint32_t)(uintptr_t)gum_invocation_context_get_nth_argument(ic,3);
+ c->kind=2;c->count=capture_context(ic->cpu_context,c->frames);
 }
 void free_leave(GumInvocationContext*ic){
- int32_t status=(int32_t)(uintptr_t)gum_invocation_context_get_return_value(ic);if(status)return;
+ int32_t status=(int32_t)(uintptr_t)gum_invocation_context_get_return_value(ic);
  Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
- Record r={0};uint32_t written=0;r.kind=2;r.tid=thread_id();r.reserved=tick_count();r.flags=c->flags;
- r.base=(uint64_t)(uintptr_t)c->base;r.size=(uint64_t)(uintptr_t)c->size;
+ if(!c->keep)return;
+ Record r={0};uint32_t written=0;r.kind=c->kind;r.status=status;r.tid=thread_id();r.reserved=tick_count();r.flags=c->flags;
+ r.base=c->address;r.size=c->input_size;r.allocation_base=c->allocation;r.frame_count=c->count;
+ for(uint32_t i=0;i<c->count;i++)r.frames[i]=c->frames[i];
  write_file(trace_file,&r,sizeof(r),&written,0);
 }
+void map_common(GumInvocationContext*ic,int extended){
+ Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
+ c->keep=current(gum_invocation_context_get_nth_argument(ic,1));if(!c->keep)return;
+ c->base=gum_invocation_context_get_nth_argument(ic,2);
+ c->size=gum_invocation_context_get_nth_argument(ic,extended?4:6);
+ c->input_size=*c->size;c->flags=(uint32_t)(uintptr_t)gum_invocation_context_get_nth_argument(ic,extended?5:8);
+ c->kind=3;c->count=capture_context(ic->cpu_context,c->frames);
+}
+void map_enter(GumInvocationContext*ic){map_common(ic,0);}
+void map_ex_enter(GumInvocationContext*ic){map_common(ic,1);}
+void unmap_enter(GumInvocationContext*ic){
+ Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
+ c->keep=current(gum_invocation_context_get_nth_argument(ic,0));if(!c->keep)return;
+ c->address=(uint64_t)(uintptr_t)gum_invocation_context_get_nth_argument(ic,1);
+ MemoryInfo m={0};virtual_query((void*)(uintptr_t)c->address,&m,sizeof(m));
+ c->allocation=(uint64_t)(uintptr_t)m.allocation_base;c->input_size=0;c->flags=0;
+ c->kind=4;c->count=capture_context(ic->cpu_context,c->frames);
+}
 `,{trace_file:cell,write_file:k.getExportByName('WriteFile'),lookup_function:nt.getExportByName('RtlLookupFunctionEntry'),virtual_unwind:nt.getExportByName('RtlVirtualUnwind'),stack_limits:k.getExportByName('GetCurrentThreadStackLimits'),
- virtual_query:k.getExportByName('VirtualQuery'),thread_id:k.getExportByName('GetCurrentThreadId'),tick_count:k.getExportByName('GetTickCount')});
-Interceptor.attach(nt.getExportByName('NtAllocateVirtualMemory'),{onEnter:native.allocation_enter,onLeave:native.allocation_leave});
-Interceptor.attach(nt.getExportByName('NtFreeVirtualMemory'),{onEnter:native.free_enter,onLeave:native.free_leave});
+ virtual_query:k.getExportByName('VirtualQuery'),thread_id:k.getExportByName('GetCurrentThreadId'),tick_count:k.getExportByName('GetTickCount'),
+ current_process_id:k.getExportByName('GetCurrentProcessId'),process_id:k.getExportByName('GetProcessId')});
+const hooks=[];
+for(const [name,enter,leave] of [
+ ['NtAllocateVirtualMemory','allocation_enter','allocation_leave'],
+ ['NtAllocateVirtualMemoryEx','allocation_ex_enter','allocation_leave'],
+ ['NtFreeVirtualMemory','free_enter','free_leave'],
+ ['NtMapViewOfSection','map_enter','allocation_leave'],
+ ['NtMapViewOfSectionEx','map_ex_enter','allocation_leave'],
+ ['NtUnmapViewOfSection','unmap_enter','free_leave'],
+ ['NtUnmapViewOfSectionEx','unmap_enter','free_leave']]){
+ const address=nt.findExportByName(name);
+ if(address){Interceptor.attach(address,{onEnter:native[enter],onLeave:native[leave]});hooks.push(name);}
+}
 function modules(){send({kind:'modules',modules:Process.enumerateModules().map(m=>({name:m.name,base:m.base.toString(),size:m.size}))});}
 const tick=new NativeFunction(k.getExportByName('GetTickCount'),'uint32',[]);
-modules();setInterval(modules,1000);send({kind:'ready',recordBytes:816,tick:tick(),epochMillis:Date.now()});
+modules();setInterval(modules,1000);send({kind:'ready',recordBytes:816,tick:tick(),epochMillis:Date.now(),hooks,minimumCommitBytes:0});
 '''
 
 if __name__ == "__main__":

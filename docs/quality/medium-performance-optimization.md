@@ -1806,3 +1806,9 @@ X23直接CUBIN在光学大源的ptxas阶段同样达到2.501GB并失败，69.329
 继续消除实际可见编译冗余：当前仅按需cuModuleGetFunction，但原source仍同时实例化九种布局以及包含全部布局的generic入口。新增编译期layout选择，生产只生成当前所需入口，reset独立编译不实例化输运；测试generic入口及九种布局仍可用。保留原模板函数、数学、采样与布局ABI。先同预算长窗/JFR证实，再严格HDR和全布局回归；未证明内存根因已完全解决，未声称吞吐收益。
 
 any-hit拆分候选已完成4+64帧，但退出阶段仍在2.516GB提交上限失败，四窗约2.60–2.80FPS，无收益，完整撤回。禁止将64帧完成当成资源修复通过。随后沿真实管线创建调用者核对，发现内置shader带application data时，admission与frame submit的validateShaderData通过forFrame(SURFACE)创建整条SURFACE管线，仅用于校验binding count和maxStorageBufferRange；micro-all实际消费SURFACE_PRIMARY_SHADE。改为只查询一次物理设备限制、复用相同数据校验，不创建闲置GPU程序。减少的是整个无用管线及编译生命周期，不改帧/样本/光路工作。继续同预算JFR长窗验证，而非单凭代码宣布内存修复。
+
+## 2026-11-01 运行时内存增长复现与覆盖核对
+
+此前原生探针只记录 attach 后至少64 KiB的虚拟提交，漏掉小提交及section映射，不能据此把模块增长直接认定为完整根因。新增同进程联合观察：每0.2秒进程private commit、每秒VirtualQueryEx全部已提交区域及映射文件、七类NtAllocate/Free/Map/Unmap普通与Ex API的全尺寸分配/释放/失败申请与96层原生栈、JFR业务阶段及调用栈、每5秒NMT分类与交替JFR检查点。JFR/NMT转储在外部后台线程进行，不阻塞进程内存采样。可选ready文件只在显式开启内存诊断时等待观察器，避免渲染启动早于挂钩。
+
+汇总必须区分进程private commit、MEM_PRIVATE、MEM_MAPPED、MEM_IMAGE、观察到的存活区间、首次扫描时已存在的地址、之后未归因区域；保留process private commit与MEM_PRIVATE之差的符号，不把映射总字节与private commit相加。堆内部逐对象尚未记录，不能宣称覆盖所有malloc。只在同一复现中核对过覆盖率、增长调用栈与本项目触发操作后才允许下根因结论；本次先运行上述粒度，不继续扩充工具、不提前宣布修好。仍遵守3 GB总预算、2.5 GB执行树上限，诊断运行不用于FPS验收。

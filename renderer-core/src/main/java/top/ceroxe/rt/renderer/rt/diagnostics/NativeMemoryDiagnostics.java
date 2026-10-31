@@ -13,11 +13,30 @@ import jdk.jfr.StackTrace;
 
 /** Opt-in phase attribution for driver/compiler memory outside HotSpot NMT. */
 public final class NativeMemoryDiagnostics {
-    public static final boolean ENABLED = Boolean.getBoolean("top.ceroxe.rt.nativeMemoryDiagnostics");
+    public static final boolean ENABLED = initialize();
     private static final Scope NOOP = new Scope(null, 0, 0, 0);
     private static final AtomicLong IDS = new AtomicLong();
 
     private NativeMemoryDiagnostics() { }
+
+    private static boolean initialize() {
+        if (!Boolean.getBoolean("top.ceroxe.rt.nativeMemoryDiagnostics")) return false;
+        String readyFile = System.getProperty("top.ceroxe.rt.nativeMemoryProbeReady");
+        if (readyFile != null) {
+            var ready = java.nio.file.Path.of(readyFile);
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
+            while (!java.nio.file.Files.exists(ready)) {
+                if (System.nanoTime() >= deadline)
+                    throw new IllegalStateException("Native memory observer did not become ready: " + ready);
+                try { Thread.sleep(10); }
+                catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted waiting for native memory observer", exception);
+                }
+            }
+        }
+        return true;
+    }
 
     private static final class Metrics {
         static final com.sun.management.OperatingSystemMXBean OS =

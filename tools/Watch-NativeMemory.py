@@ -1,15 +1,19 @@
-"""Bounded Java run with external process memory sampling and pre-OOM JFR dumps.
+"""Bounded runtime memory census, optional native stacks, and pre-OOM JFR/NMT.
 
-No injected code, native hooks, or renderer synchronization. Runtime arguments
-are read from a JSON manifest and never interpolated into a shell command.
+Runtime arguments remain data. Native hooks are explicitly opt-in; none of this
+tool's diagnostic work is part of a production or FPS acceptance run.
 """
 import argparse
+import concurrent.futures
 import csv
 import ctypes
+import gzip
+import importlib.util
 import json
 import pathlib
 import re
 import subprocess
+import sys
 import time
 
 
@@ -20,10 +24,66 @@ class Counters(ctypes.Structure):
             "quotaPeakNonPaged", "quotaNonPaged", "pagefile", "peakPagefile", "private")]
 
 
+class Region(ctypes.Structure):
+    _fields_ = [("base", ctypes.c_void_p), ("allocation", ctypes.c_void_p),
+                ("allocationProtect", ctypes.c_uint32), ("partition", ctypes.c_uint16),
+                ("size", ctypes.c_size_t), ("state", ctypes.c_uint32),
+                ("protect", ctypes.c_uint32), ("type", ctypes.c_uint32)]
+
+
+def census(kernel, psapi, handle, names):
+    started = time.time()
+    address = 0
+    regions = []
+    groups = {}
+    totals = {"private": 0, "mapped": 0, "image": 0}
+    error = 0
+    while True:
+        value = Region()
+        if not kernel.VirtualQueryEx(handle, ctypes.c_void_p(address), ctypes.byref(value), ctypes.sizeof(value)):
+            error = ctypes.get_last_error()
+            if not address:
+                raise ctypes.WinError(error)
+            break
+        base, allocation, size = value.base or 0, value.allocation or 0, value.size
+        if value.state == 0x1000:  # Every committed virtual region, including guard/no-access pages.
+            kind = {0x20000: "private", 0x40000: "mapped", 0x1000000: "image"}.get(value.type, "unknown")
+            totals[kind] = totals.get(kind, 0) + size
+            regions.append([base, allocation, size, value.type, value.protect])
+            key = (allocation, value.type)
+            groups[key] = groups.get(key, 0) + size
+            if value.type in (0x40000, 0x1000000) and key not in names:
+                text = ctypes.create_unicode_buffer(32768)
+                count = psapi.GetMappedFileNameW(handle, ctypes.c_void_p(base), text, len(text))
+                names[key] = text.value if count else ""
+        next_address = base + size
+        if next_address <= address:
+            break
+        address = next_address
+    counters = Counters()
+    counters.cb = ctypes.sizeof(counters)
+    if not psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return {"epochSeconds": time.time(), "scanStartedEpochSeconds": started,
+            "scanDurationSeconds": time.time() - started, "terminalQueryError": error,
+            "processPrivateCommit": counters.private,
+            "virtualCommitByType": totals,
+            # Keep the signed difference visible. Kernel/driver charges and image
+            # COW are not equivalent to MEM_PRIVATE virtual regions; do not label
+            # this residual as a leak or silently force it to zero.
+            "processCommitMinusPrivateVirtual": counters.private - totals["private"],
+            "allocations": [{"base": base, "type": kind, "bytes": size,
+                             "file": names.get((base, kind), "")}
+                            for (base, kind), size in sorted(groups.items(), key=lambda item: item[1], reverse=True)],
+            "regions": regions}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=pathlib.Path)
     parser.add_argument("--timeout", type=float, default=180)
+    parser.add_argument("--native-stacks", action="store_true")
+    parser.add_argument("--frida-directory", type=pathlib.Path)
     args = parser.parse_args()
     root = pathlib.Path(__file__).resolve().parent.parent
     directory = args.directory.resolve()
@@ -42,15 +102,24 @@ def main():
     kernel.OpenProcess.restype = ctypes.c_void_p
     kernel.CloseHandle.argtypes = [ctypes.c_void_p]
     psapi.GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.POINTER(Counters), ctypes.c_ulong]
+    psapi.GetMappedFileNameW.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_ulong]
+    kernel.VirtualQueryEx.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(Region), ctypes.c_size_t]
+    kernel.VirtualQueryEx.restype = ctypes.c_size_t
     handle = None
+    session = script = records = None
+    diagnostics = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    dump = None
+    names = {}
     with (directory / "run.log").open("w", encoding="utf-8") as log, \
-            (directory / "process-memory.csv").open("w", encoding="utf-8", newline="") as memory:
+            (directory / "process-memory.csv").open("w", encoding="utf-8", newline="") as memory, \
+            gzip.open(directory / "virtual-memory.jsonl.gz", "wt", encoding="utf-8") as virtual:
         writer = csv.writer(memory)
         writer.writerow(["epochSeconds", "elapsedSeconds", "privateCommitBytes", "workingSetBytes"])
         process = subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(directory / "run.ps1")],
                                    cwd=root, stdout=log, stderr=subprocess.STDOUT)
         start = time.monotonic()
         next_dump = start + 5
+        next_census = start
         dump_number = 0
         target = None
         try:
@@ -62,29 +131,73 @@ def main():
                     match = re.search(r"Use jcmd (\d+) JFR", (directory / "run.log").read_text(encoding="utf-8", errors="replace"))
                     if match:
                         target = int(match.group(1))
-                        handle = kernel.OpenProcess(0x1000 | 0x10, False, target)
+                        # VirtualQueryEx/GetMappedFileName require QUERY_INFORMATION,
+                        # not just QUERY_LIMITED_INFORMATION.
+                        handle = kernel.OpenProcess(0x400 | 0x10, False, target)
                         if not handle:
                             raise ctypes.WinError(ctypes.get_last_error())
                         print("Watching native commit, PID", target, flush=True)
+                        if args.native_stacks:
+                            if args.frida_directory:
+                                sys.path.insert(0, str(args.frida_directory.resolve()))
+                            import frida
+                            specification = importlib.util.spec_from_file_location("native_commit", root / "tools/Trace-NativeCommit.py")
+                            module = importlib.util.module_from_spec(specification)
+                            specification.loader.exec_module(module)
+                            records = (directory / "allocations.jsonl").open("w", encoding="utf-8")
+                            def receive(message, data):
+                                records.write(json.dumps({"time": time.time(), "message": message}) + "\n")
+                                records.flush()
+                            session = frida.attach(target)
+                            script = session.create_script(module.SOURCE.replace("__TRACE_FILE__", json.dumps(str(directory / "native-commit.bin"))))
+                            script.on("message", receive)
+                            script.load()
+                        virtual.write(json.dumps(census(kernel, psapi, handle, names)) + "\n")
+                        virtual.flush()
+                        (directory / "probe-ready").touch()
                 if handle:
                     counters = Counters()
                     counters.cb = ctypes.sizeof(counters)
                     if psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
                         writer.writerow([time.time(), now - start, counters.private, counters.workingSet])
                         memory.flush()
-                    if now >= next_dump:
+                    if now >= next_census:
+                        virtual.write(json.dumps(census(kernel, psapi, handle, names)) + "\n")
+                        virtual.flush()
+                        next_census = time.monotonic() + 1
+                    if script and "GalleryPerf warmupFrames=" in (directory / "run.log").read_text(encoding="utf-8", errors="replace"):
+                        script.unload()
+                        session.detach()
+                        session = script = None
+                    if now >= next_dump and (dump is None or dump.done()):
+                        if dump is not None:
+                            dump.result()
                         checkpoint = directory / f"checkpoint-{dump_number % 2}.jfr"
-                        subprocess.run(["jcmd", str(target), "JFR.dump", "name=1", "filename=" + str(checkpoint)],
-                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+                        command_file = directory / f"checkpoint-{dump_number % 2}.commands"
+                        command_file.write_text("JFR.dump name=1 filename=" + str(checkpoint)
+                                                + "\nVM.native_memory summary scale=KB\n", encoding="utf-8")
+                        def checkpoint_dump(command_file=command_file, number=dump_number):
+                            with (directory / f"nmt-{number:04d}.txt").open("w", encoding="utf-8") as output:
+                                subprocess.run(["jcmd", str(target), "-f", str(command_file)],
+                                               stdout=output, stderr=subprocess.STDOUT, timeout=15)
+                        dump = diagnostics.submit(checkpoint_dump)
                         dump_number += 1
                         next_dump = time.monotonic() + 5
                 time.sleep(0.2)
         finally:
+            if session:
+                try:
+                    session.detach()
+                except Exception:
+                    pass
+            if records:
+                records.close()
             if handle:
                 kernel.CloseHandle(handle)
             if process.poll() is None:
                 process.terminate()
                 process.wait(timeout=10)
+            diagnostics.shutdown(wait=True)
     print((directory / "run.log").read_text(encoding="utf-8", errors="replace")[-2400:])
     return process.returncode
 

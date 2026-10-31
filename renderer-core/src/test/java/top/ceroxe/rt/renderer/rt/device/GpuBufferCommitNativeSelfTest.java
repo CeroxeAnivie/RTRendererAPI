@@ -16,13 +16,13 @@ public final class GpuBufferCommitNativeSelfTest {
              var stack = MemoryStack.stackPush()) {
             NativeMemoryDiagnostics.checkpoint("isolation.device", 0, 0);
             if (mode.equals("vma")) {
+                RtGpuBuffer buffer;
                 try (var scope = NativeMemoryDiagnostics.begin("isolation.buffer." + mode, bytes)) {
-                    var buffer = RtGpuBuffer.createDeviceAddressBuffer(runtime.device(), runtime.allocator(), bytes,
+                    buffer = RtGpuBuffer.createDeviceAddressBuffer(runtime.device(), runtime.allocator(), bytes,
                             VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
                     NativeMemoryDiagnostics.checkpoint("isolation.allocated." + mode, buffer.buffer(), bytes);
-                    scope.close();
-                    buffer.close();
                 }
+                buffer.close();
             } else {
                 boolean exported = mode.equals("exported");
                 long buffer = 0, memory = 0;
