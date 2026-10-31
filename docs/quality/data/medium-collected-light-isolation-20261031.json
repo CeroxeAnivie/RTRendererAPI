@@ -1,0 +1,1136 @@
+{
+  "sourceCommit": "c7aaa21ed991bd8b7ca70fc79597b4e314e4e0e1",
+  "gpuProgramsUnchanged": true,
+  "scope": "sequence1/path649733; full HDR acceptance still failed",
+  "maxProcessTreeCommitGB": 2.393,
+  "results": [
+    {
+      "mask": 0,
+      "firstScope": {
+        "scope": "sequence-1-sample-0-branch-0",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 0,
+            "first": null
+          }
+        ]
+      },
+      "allScopeFirst": [
+        {
+          "scope": "sequence-1-sample-0-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-0-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        }
+      ],
+      "hdrExact": [
+        true,
+        true
+      ]
+    },
+    {
+      "mask": 1,
+      "firstScope": {
+        "scope": "sequence-1-sample-0-branch-0",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 0,
+            "first": null
+          }
+        ]
+      },
+      "allScopeFirst": [
+        {
+          "scope": "sequence-1-sample-0-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-0-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        }
+      ],
+      "hdrExact": [
+        false,
+        false
+      ]
+    },
+    {
+      "mask": 2,
+      "firstScope": {
+        "scope": "sequence-1-sample-0-branch-0",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 0,
+            "first": null
+          }
+        ]
+      },
+      "allScopeFirst": [
+        {
+          "scope": "sequence-1-sample-0-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-0-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        }
+      ],
+      "hdrExact": [
+        true,
+        true
+      ]
+    },
+    {
+      "mask": 4,
+      "firstScope": {
+        "scope": "sequence-1-sample-0-branch-0",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 59,
+            "first": {
+              "record": "0005-cuda.bin",
+              "changes": [
+                {
+                  "word": 17,
+                  "uint": [
+                    1050438043,
+                    1050438044
+                  ],
+                  "float": [
+                    0.30549320578575134,
+                    0.30549323558807373
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 60,
+            "first": {
+              "record": "0004-vulkan.bin",
+              "changes": [
+                {
+                  "word": 16,
+                  "uint": [
+                    1020807590,
+                    1020807592
+                  ],
+                  "float": [
+                    0.0264023058116436,
+                    0.0264023095369339
+                  ]
+                },
+                {
+                  "word": 17,
+                  "uint": [
+                    1026938116,
+                    1026938118
+                  ],
+                  "float": [
+                    0.044392600655555725,
+                    0.04439260810613632
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "allScopeFirst": [
+        {
+          "scope": "sequence-1-sample-0-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 59,
+              "first": {
+                "record": "0005-cuda.bin",
+                "changes": [
+                  {
+                    "word": 17,
+                    "uint": [
+                      1050438043,
+                      1050438044
+                    ],
+                    "float": [
+                      0.30549320578575134,
+                      0.30549323558807373
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 60,
+              "first": {
+                "record": "0004-vulkan.bin",
+                "changes": [
+                  {
+                    "word": 16,
+                    "uint": [
+                      1020807590,
+                      1020807592
+                    ],
+                    "float": [
+                      0.0264023058116436,
+                      0.0264023095369339
+                    ]
+                  },
+                  {
+                    "word": 17,
+                    "uint": [
+                      1026938116,
+                      1026938118
+                    ],
+                    "float": [
+                      0.044392600655555725,
+                      0.04439260810613632
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-0-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 60,
+              "first": {
+                "record": "0000-vulkan.bin",
+                "changes": [
+                  {
+                    "word": 17,
+                    "uint": [
+                      1050438043,
+                      1050438044
+                    ],
+                    "float": [
+                      0.30549320578575134,
+                      0.30549323558807373
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 60,
+              "first": {
+                "record": "0000-vulkan.bin",
+                "changes": [
+                  {
+                    "word": 16,
+                    "uint": [
+                      1020807590,
+                      1020807592
+                    ],
+                    "float": [
+                      0.0264023058116436,
+                      0.0264023095369339
+                    ]
+                  },
+                  {
+                    "word": 17,
+                    "uint": [
+                      1026938116,
+                      1026938118
+                    ],
+                    "float": [
+                      0.044392600655555725,
+                      0.04439260810613632
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 52,
+              "first": {
+                "record": "0000-vulkan.bin",
+                "changes": [
+                  {
+                    "word": 17,
+                    "uint": [
+                      1050438043,
+                      1050438044
+                    ],
+                    "float": [
+                      0.30549320578575134,
+                      0.30549323558807373
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 55,
+              "first": {
+                "record": "0000-vulkan.bin",
+                "changes": [
+                  {
+                    "word": 16,
+                    "uint": [
+                      1020807590,
+                      1020807592
+                    ],
+                    "float": [
+                      0.0264023058116436,
+                      0.0264023095369339
+                    ]
+                  },
+                  {
+                    "word": 17,
+                    "uint": [
+                      1026938116,
+                      1026938118
+                    ],
+                    "float": [
+                      0.044392600655555725,
+                      0.04439260810613632
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 60,
+              "first": {
+                "record": "0000-vulkan.bin",
+                "changes": [
+                  {
+                    "word": 17,
+                    "uint": [
+                      1050438043,
+                      1050438044
+                    ],
+                    "float": [
+                      0.30549320578575134,
+                      0.30549323558807373
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 60,
+              "first": {
+                "record": "0000-vulkan.bin",
+                "changes": [
+                  {
+                    "word": 16,
+                    "uint": [
+                      1020807590,
+                      1020807592
+                    ],
+                    "float": [
+                      0.0264023058116436,
+                      0.0264023095369339
+                    ]
+                  },
+                  {
+                    "word": 17,
+                    "uint": [
+                      1026938116,
+                      1026938118
+                    ],
+                    "float": [
+                      0.044392600655555725,
+                      0.04439260810613632
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "hdrExact": [
+        true,
+        true
+      ]
+    },
+    {
+      "mask": 8,
+      "firstScope": {
+        "scope": "sequence-1-sample-0-branch-0",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 0,
+            "first": null
+          }
+        ]
+      },
+      "allScopeFirst": [
+        {
+          "scope": "sequence-1-sample-0-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-0-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        }
+      ],
+      "hdrExact": [
+        true,
+        true
+      ]
+    },
+    {
+      "mask": 3,
+      "firstScope": {
+        "scope": "sequence-1-sample-0-branch-0",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 0,
+            "first": null
+          }
+        ]
+      },
+      "allScopeFirst": [
+        {
+          "scope": "sequence-1-sample-0-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-0-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 0,
+              "first": null
+            }
+          ]
+        }
+      ],
+      "hdrExact": [
+        true,
+        true
+      ]
+    },
+    {
+      "mask": 7,
+      "firstScope": {
+        "scope": "sequence-1-sample-0-branch-0",
+        "parts": [
+          {
+            "part": "state",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "hit",
+            "differentRecords": 0,
+            "first": null
+          },
+          {
+            "part": "connection",
+            "differentRecords": 44,
+            "first": {
+              "record": "0004-vulkan.bin",
+              "changes": [
+                {
+                  "word": 17,
+                  "uint": [
+                    1047416031,
+                    1047416032
+                  ],
+                  "float": [
+                    0.23271511495113373,
+                    0.23271512985229492
+                  ]
+                },
+                {
+                  "word": 18,
+                  "uint": [
+                    1046004621,
+                    1046004622
+                  ],
+                  "float": [
+                    0.2116834670305252,
+                    0.2116834819316864
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "allScopeFirst": [
+        {
+          "scope": "sequence-1-sample-0-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 44,
+              "first": {
+                "record": "0004-vulkan.bin",
+                "changes": [
+                  {
+                    "word": 17,
+                    "uint": [
+                      1047416031,
+                      1047416032
+                    ],
+                    "float": [
+                      0.23271511495113373,
+                      0.23271512985229492
+                    ]
+                  },
+                  {
+                    "word": 18,
+                    "uint": [
+                      1046004621,
+                      1046004622
+                    ],
+                    "float": [
+                      0.2116834670305252,
+                      0.2116834819316864
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-0-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 60,
+              "first": {
+                "record": "0000-vulkan.bin",
+                "changes": [
+                  {
+                    "word": 17,
+                    "uint": [
+                      1047416031,
+                      1047416032
+                    ],
+                    "float": [
+                      0.23271511495113373,
+                      0.23271512985229492
+                    ]
+                  },
+                  {
+                    "word": 18,
+                    "uint": [
+                      1046004621,
+                      1046004622
+                    ],
+                    "float": [
+                      0.2116834670305252,
+                      0.2116834819316864
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-0",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 59,
+              "first": {
+                "record": "0000-vulkan.bin",
+                "changes": [
+                  {
+                    "word": 17,
+                    "uint": [
+                      1047416031,
+                      1047416032
+                    ],
+                    "float": [
+                      0.23271511495113373,
+                      0.23271512985229492
+                    ]
+                  },
+                  {
+                    "word": 18,
+                    "uint": [
+                      1046004621,
+                      1046004622
+                    ],
+                    "float": [
+                      0.2116834670305252,
+                      0.2116834819316864
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "scope": "sequence-1-sample-1-branch-1",
+          "parts": [
+            {
+              "part": "state",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "hit",
+              "differentRecords": 0,
+              "first": null
+            },
+            {
+              "part": "connection",
+              "differentRecords": 64,
+              "first": {
+                "record": "0000-vulkan.bin",
+                "changes": [
+                  {
+                    "word": 17,
+                    "uint": [
+                      1047416031,
+                      1047416032
+                    ],
+                    "float": [
+                      0.23271511495113373,
+                      0.23271512985229492
+                    ]
+                  },
+                  {
+                    "word": 18,
+                    "uint": [
+                      1046004621,
+                      1046004622
+                    ],
+                    "float": [
+                      0.2116834670305252,
+                      0.2116834819316864
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "hdrExact": [
+        false,
+        true
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v16-initial-light-mask/mask-0-paths.json",
+      "sha256": "690dbffb25341a16b106d14f00522f342b3b30be4e675abf135d2decbdd224f7"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v16-initial-light-mask/mask-1-paths.json",
+      "sha256": "690dbffb25341a16b106d14f00522f342b3b30be4e675abf135d2decbdd224f7"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v16-initial-light-mask/mask-2-paths.json",
+      "sha256": "690dbffb25341a16b106d14f00522f342b3b30be4e675abf135d2decbdd224f7"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v16-initial-light-mask/mask-3-paths.json",
+      "sha256": "690dbffb25341a16b106d14f00522f342b3b30be4e675abf135d2decbdd224f7"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v16-initial-light-mask/mask-4-paths.json",
+      "sha256": "f4371ed81cbac6b7857dcac1a382460f2d7a7f4cfc83a297cea8fc7a2361b22f"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v16-initial-light-mask/mask-7-paths.json",
+      "sha256": "56d592b2e410aefb43bd005a4e331a74ea218bf45854d9b19851b1fefa202146"
+    },
+    {
+      "path": "build/medium-micro-all-20261031/collected-connections-v16-initial-light-mask/mask-8-paths.json",
+      "sha256": "690dbffb25341a16b106d14f00522f342b3b30be4e675abf135d2decbdd224f7"
+    }
+  ]
+}

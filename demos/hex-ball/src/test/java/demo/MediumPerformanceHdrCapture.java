@@ -25,12 +25,14 @@ public final class MediumPerformanceHdrCapture {
         Path output=Path.of(args[1]).toAbsolutePath();
         int width=Integer.parseInt(args[2]),height=Integer.parseInt(args[3]),frames=Integer.parseInt(args[4]);
         int lightMask=Integer.getInteger("top.ceroxe.rt.medium.hdrCaptureLightMask",-1);
+        long unshadowedLight=Long.getLong("top.ceroxe.rt.medium.hdrCaptureUnshadowedLightId",-1L);
         require(lightMask>=-1,"invalid diagnostic light mask");
+        require(unshadowedLight>=-1,"invalid diagnostic unshadowed light ID");
         require(width>0&&height>0&&frames>0,"positive HDR extent and frames required");
         Files.createDirectories(output);
         for(var workload:workloads) {
             try(var renderer=Renderer.open(workload.config().copyBuilder().cpuFrameReadbackEnabled(true).build())) {
-                renderer.apply(maskedTransaction(workload.transaction(),lightMask));
+                renderer.apply(maskedTransaction(workload.transaction(),lightMask,unshadowedLight));
                 for(int frame=0;frame<frames;frame++) {
                     var request=workload.frame(frame,width,height);
                     // The all-on control must submit the exact original request and transaction.
@@ -59,21 +61,29 @@ public final class MediumPerformanceHdrCapture {
             System.out.println("MatrixHDR case="+workload.id()+" frames="+frames+" extent="+width+"x"+height);
         }
     }
-    private static SceneTransaction maskedTransaction(SceneTransaction original,int mask) {
-        if(mask<0)return original;
+    private static SceneTransaction maskedTransaction(SceneTransaction original,int mask,long unshadowedLight) {
+        if(mask<0&&unshadowedLight<0)return original;
         boolean changed=false;
+        boolean foundUnshadowed=unshadowedLight<0;
         for(var light:original.upserts().lights()) {
             require(light.id()>0&&light.id()<31,"light-mask diagnostic requires IDs 1..30");
-            changed|=(mask&(1<<light.id()))==0&&light.intensity()!=0;
+            changed|=mask>=0&&(mask&(1<<light.id()))==0&&light.intensity()!=0;
+            if(light.id()==unshadowedLight){foundUnshadowed=true;changed|=light.castsShadow();}
         }
+        require(foundUnshadowed,"unknown diagnostic unshadowed light ID");
         if(!changed)return original;
         // Mask before the initial publish: no extra generation, revision or apply/admission race.
         var copy=SceneTransaction.builder(original.revision());
         if(original.reset())copy.resetScene();
         copy.upsertTextures(original.upserts().textures()).upsertMaterials(original.upserts().materials())
                 .upsertMeshes(original.upserts().meshes()).upsertInstances(original.upserts().instances());
-        for(var light:original.upserts().lights())
-            copy.upsert((mask&(1<<light.id()))!=0||light.intensity()==0?light:light.toBuilder().intensity(0).build());
+        for(var light:original.upserts().lights()) {
+            boolean disabled=mask>=0&&(mask&(1<<light.id()))==0&&light.intensity()!=0;
+            boolean unshadowed=light.id()==unshadowedLight&&light.castsShadow();
+            if(!disabled&&!unshadowed)copy.upsert(light);
+            else copy.upsert(light.toBuilder().intensity(disabled?0:light.intensity())
+                    .castsShadow(light.castsShadow()&&!unshadowed).build());
+        }
         for(var ids=original.removals().textureIds();ids.hasRemaining();)copy.removeTexture(ids.get());
         for(var ids=original.removals().materialIds();ids.hasRemaining();)copy.removeMaterial(ids.get());
         for(var ids=original.removals().meshIds();ids.hasRemaining();)copy.removeMesh(ids.get());

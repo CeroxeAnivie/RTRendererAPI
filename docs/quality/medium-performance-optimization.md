@@ -1768,3 +1768,5 @@ X13实际完成两帧：连接管线驱动编译14919.841ms，进程树峰值提
 X14全开fixture门槛失败：关闭collected两帧仍与U一致，但开启时第0帧由X13差异hash变成U，第1帧仍有原蓝通道差异；已停止后续单灯试验。原工具对所有灯重新upsert并强制revision2，不能把该结果直接当作未改场景内部算术证据。修正为仅upsert确实被关闭的非零灯光，仅有实际场景变更才增加revision；全开保留原transaction和原FrameRequest对象，太阳开启时不重建environment。GPU资源不改。先做原fixture/全开及重复运行稳定性，稳定后才继续分离灯光；仍未确定内部第一处运算，不归因于FMA或材质，不放宽严格HDR。
 
 X15实际四次运行：原fixture两次第0帧均与U相同，全开no-op一次为X13差异hash；第1帧三次均稳定复现原蓝通道差异；关闭候选两帧均与U相同。因此第0帧变化不能归因于额外revision或光源重建，重复性问题单独保留；只对已验证稳定的sequence1/path649733继续单灯定位，不能以此接受整个HDR。单灯补丁的第二次apply另遇previous scene generation is still converging，改为初次提交前复制原transaction并仅将禁用灯强度置零，保持revision、顺序、所有资产/移除和选中光源对象不变；全开直接返回原对象，无额外apply。这是诊断工具修复，未改GPU程序，未宣称主根因已解决。
+
+X16完成7组灯光mask的关闭/开启候选两帧捕获（14次运行）。目标sequence1/path649733首sample/branch：mask0、1太阳、2点光、8无阴影方向光、3太阳+点光的state/hit/connection捕获一致；mask4仅聚光灯的第0004-vulkan连接lighting.r/g相差2个float ULP，mask7前三灯的lighting.g/b相差1个ULP。目标捕获hit仍一致，但未捕获dispatch内部所有交点，不能声称内部几何已经排除。由此将稳定差异缩至聚光灯连接路径。新增测试专用hdrCaptureUnshadowedLightId，仅在初次提交前关闭指定光源castsShadow，保留它的方向/强度/锥角等参数及原SPIR-V；用仅聚光灯mask4的有/无阴影对照，下一步区分光源/BRDF源项与连接输运。此诊断改变光源可见性，仅用于定位，不替代原场景严格HDR。[逐scope原始数值与哈希](data/medium-collected-light-isolation-20261031.json)。
