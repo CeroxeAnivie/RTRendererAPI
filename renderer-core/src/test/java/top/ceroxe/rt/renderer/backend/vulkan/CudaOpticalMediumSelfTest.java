@@ -319,10 +319,10 @@ public final class CudaOpticalMediumSelfTest {
         try {
             for(int samples:new int[]{1,2,8})for(int boundaries:new int[]{1,32}) {
                 System.setProperty(property,"false");
-                var original=CudaOpticalMediumAbi.plan(137,101,samples,boundaries,CudaMediumDensityAbi.Scene.empty(),3L*1024*1024,
+                var original=CudaOpticalMediumAbi.plan(137,101,samples,boundaries,CudaMediumDensityAbi.Scene.empty(),8L*1024*1024,
                         true,true,true,true,true,true,true,true);
                 System.setProperty(property,"true");
-                var hybrid=CudaOpticalMediumAbi.plan(137,101,samples,boundaries,CudaMediumDensityAbi.Scene.empty(),3L*1024*1024,
+                var hybrid=CudaOpticalMediumAbi.plan(137,101,samples,boundaries,CudaMediumDensityAbi.Scene.empty(),8L*1024*1024,
                         true,true,true,true,true,true,true,true);
                 require(!original.transposedStates()&&hybrid.transposedStates()&&!hybrid.compactStates(),"hybrid full-stack storage has an independent rollback switch");
                 require(original.bytes()==hybrid.bytes()&&original.tilePixels()==hybrid.tilePixels()
