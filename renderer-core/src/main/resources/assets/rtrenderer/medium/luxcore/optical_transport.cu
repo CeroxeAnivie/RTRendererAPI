@@ -449,7 +449,7 @@ template<bool Compact,bool Transposed> __device__ int connectionStep(unsigned ch
     const bool found=view.u(Compact?14:28)!=0u;
     const float distance=found?view.f(3):c->origin.w;
 #ifdef RTR_OPTICAL_TRACE_PATH
-    if(view.u(Compact?20:48)==RTR_OPTICAL_TRACE_PATH)printf("OPTICAL_CONNECTION seed=%u sample=%u branch=%u ordinal=%u events=%u previousT=%.9g hitT=%.9g boundary=%u side=%u flags=%u volume=%u stackSize=%u origin=[%.9g,%.9g,%.9g] direction=[%.9g,%.9g,%.9g] point=[%.9g,%.9g,%.9g]\n",
+    if((view.u(Compact?20:48)-((unsigned int*)b)[4])*((unsigned int*)b)[3]+view.u(Compact?21:49)==RTR_OPTICAL_TRACE_PATH)printf("OPTICAL_CONNECTION seed=%u sample=%u branch=%u ordinal=%u events=%u previousT=%.9g hitT=%.9g boundary=%u side=%u flags=%u volume=%u stackSize=%u origin=[%.9g,%.9g,%.9g] direction=[%.9g,%.9g,%.9g] point=[%.9g,%.9g,%.9g]\n",
             ((unsigned int*)b)[36],((unsigned int*)b)[34],((unsigned int*)b)[35],c->control.x,c->control.z,
             c->direction.w,distance,view.u(Compact?16:44),view.u(Compact?15:29),view.u(Compact?19:47),
             c->volumes.currentVolumeIndex,c->volumes.volumeIndexListSize,c->origin.x,c->origin.y,c->origin.z,
