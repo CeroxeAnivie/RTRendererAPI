@@ -454,6 +454,9 @@ template<bool Compact,bool Transposed> __device__ int connectionStep(unsigned ch
             c->direction.w,distance,view.u(Compact?16:44),view.u(Compact?15:29),view.u(Compact?19:47),
             c->volumes.currentVolumeIndex,c->volumes.volumeIndexListSize,c->origin.x,c->origin.y,c->origin.z,
             c->direction.x,c->direction.y,c->direction.z,view.f(0),view.f(1),view.f(2));
+    if((view.u(Compact?20:48)-((unsigned int*)b)[4])*((unsigned int*)b)[3]+view.u(Compact?21:49)==RTR_OPTICAL_TRACE_PATH
+            &&(view.u(Compact?19:47)&2u)!=0u)printf("BOUNDARY_CANDIDATE rawPrimitive=%u repairedPrimitive=%u bary=[%.9g,%.9g] hardwareT=%.9g scale=%.9g translateY=%.9g\n",
+            view.u(Compact?12:24),view.u(Compact?13:25),view.f(Compact?8:16),view.f(Compact?9:17),view.f(Compact?10:18),view.f(Compact?7:15),view.f(Compact?11:19));
 #endif
     if(!isfinite(distance)||distance<c->direction.w)return -1;
     const float travel=fminf(distance,c->origin.w)-c->direction.w;
