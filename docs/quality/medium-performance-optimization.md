@@ -1312,3 +1312,9 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | CUDA 同步/整帧耗时降幅及 FPS 提升 | — | — | **待空闲复测** |
 
 测前 GPU40%，32 帧排名中 CUDA 同步仍第一（69.1179%），kernel 入队第二（7.6809%），release 录制第三（4.8129%）。互斥墙钟记录合计 795.613441 ms/帧，归一每秒 1000ms；该绝对数不用于与旧窗比较。同步减少和空尾轮增加均须计入验收，不将前者单独包装成净收益。[完整正确性与成本](data/medium-optical-batch4-20261031.json)、[带待复测降幅字段的完整排名](data/medium-optical-batch4-loaded-ranked-20261031.json)。
+
+### 实际工作候选：首段不透明遮挡直接结束连接
+
+PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/wavefront/intersect.h::TraceTransmittance` 在命中不透明材质时直接将 `T_ray` 清零并退出，发生在介质积分之前。本项目只采用零贡献提前终止：Vulkan 已排除不投影阴影/overlay，首段命中在光源之前、确实不透明且零透射、无介质边界时，跳过已确定为零的连接及其 Vulkan→CUDA 轮次。中间 ordinal 和 epoch 精确推进，保留累计 lighting/首连接焦散；最后一个连接仍交 CUDA 做相函数/表面累计与 continuation。每个新光源从原始源位置重新偏移，避免累计位置偏移。后续穿越介质边界的连接继续由 CUDA 原路径处理，不能在这里擅自改其介质栈。
+
+属性 `top.ceroxe.rt.medium.cuda.opticalSkipBlockedConnections=false` 回到同制品原路径。没有非零贡献阈值或采样/预算削减。HDR 使用前文预先固定的 RMS/能量 0.1%、P99×0.5%+1e-5 通道界限，同时记录逐字节一致性；原生解析/边界/失效/生命周期、固定57、完整窗口和全介质组合检查照常执行。实际 step/trace 数必须下降；耗时/FPS仍需干净 GPU 对照，不能只凭删轮次数报净收益。

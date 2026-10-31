@@ -30,6 +30,7 @@ public final class CudaOpticalMediumAbi {
     public static final String RESOLVED_PUBLICATION_PROPERTY="top.ceroxe.rt.medium.cuda.opticalResolvedPublication";
     public static final String ACTIVE_QUEUES_PROPERTY="top.ceroxe.rt.medium.cuda.opticalActiveQueues";
     public static final String SKIP_EMPTY_CONNECTIONS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalSkipEmptyConnections";
+    public static final String SKIP_BLOCKED_CONNECTIONS_PROPERTY="top.ceroxe.rt.medium.cuda.opticalSkipBlockedConnections";
     public static final long RESOLVED_RADIANCE_FLAG=1L;
     private CudaOpticalMediumAbi() { }
     public record Plan(int pixels,int samples,int tilePixels,int boundaryCount,int stateOffset,int hitOffset,
@@ -157,7 +158,8 @@ public final class CudaOpticalMediumAbi {
                 .putFloat(172,frame.environment().cameraMedium().anisotropy()).putInt(176,frame.mediumTransport().scatteringBounces())
                 .putInt(180,plan.directPrimary()?1:0)
                 .putInt(184,reducedCounters()?1:0).putInt(188,(plan.compactHits()?1:0)|(plan.compactStates()?2:0)|(minimalStateWrites()?4:0)|(plan.transposedHits()?8:0)|(plan.transposedStates()?16:0)|(plan.transposedPrimary()?32:0)|(fusedInitialization()?128:0)|(plan.activeQueues()?256:0)
-                        |(Boolean.parseBoolean(System.getProperty(SKIP_EMPTY_CONNECTIONS_PROPERTY,"true"))?512:0));
+                        |(Boolean.parseBoolean(System.getProperty(SKIP_EMPTY_CONNECTIONS_PROPERTY,"true"))?512:0)
+                        |(Boolean.parseBoolean(System.getProperty(SKIP_BLOCKED_CONNECTIONS_PROPERTY,"true"))?1024:0));
         packed.putInt(200,Math.toIntExact(plan.firstQueueOffset())).putInt(204,Math.toIntExact(plan.secondQueueOffset()));
         var boundaries=new ArrayList<>(source);boundaries.sort((a,b)->Integer.compareUnsigned(a.slot(),b.slot()));
         var compact=new HashMap<Integer,Integer>();
