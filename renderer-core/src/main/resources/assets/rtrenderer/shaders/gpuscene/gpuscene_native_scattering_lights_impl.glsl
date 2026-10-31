@@ -334,7 +334,9 @@ void main() {
             uint localPath=gl_LaunchIDEXT.x*samples+sampleIndex;
             // The shared uniform arena stores interval planes. Adjacent Vulkan
             // producers and CUDA consumers access contiguous paths in each plane.
-            bool planarSources=(dispatch.storage.lanes[1u].w&2u)!=0u;
+            // Multiple-scattering headers reuse this word for the bounce budget.
+            // Layout flags belong exclusively to the direct-scattering ABI.
+            bool planarSources=directPacket&&(dispatch.storage.lanes[1u].w&2u)!=0u;
             uint outLane=dispatch.sourceOffset/16u+(planarSources
                 ?j*dispatch.storage.lanes[0u].z+localPath:localPath*steps+j);
             GS_SCATTER_DETAIL_NEXT(11u);

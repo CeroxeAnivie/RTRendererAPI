@@ -1,5 +1,5 @@
 {
-  "status": "candidate-not-yet-validated",
+  "status": "candidate-mode-guard-fixed-awaiting-regression",
   "scope": "Shared strict uniform arena only: store incoming samples in step planes (j * actualTilePathCount + localPath), with identical values and integration order. General paths retain original AoS layout.",
   "reference": {
     "repository": "mmp/pbrt-v4",
@@ -12,6 +12,13 @@
   "correctnessRequirement": "Byte-identical linear HDR plus unchanged independent references, malformed-source rejection and partial final-tile native test.",
   "artifacts": {
     "control": "ddb51e973bd955219c953d2eeefcfda0a85262bfba6fd2357be4b91db137935f",
-    "candidate": "d7a73579b10bd49f02d8ed987e6a1a33c3d5ce68f26dc02763a648a2ea71b9d3"
+    "candidate": "4ed178137a72375030c1470d924b0f4fb2e5eecf401c5253adc1e20525027b85",
+    "candidateBeforeModeGuard": "d7a73579b10bd49f02d8ed987e6a1a33c3d5ce68f26dc02763a648a2ea71b9d3"
+  },
+  "regressionFinding": {
+    "failedSuite": "CudaPbrMediumProductionNativeSelfTest scatteringTransportMatrix, multiple scattering bounces=2",
+    "cause": "Shared shader interpreted the multiple-scattering bounce budget bit 1 as the direct-layout flag. Require direct ABI magic before reading layout flags.",
+    "failedEvidence": "build/scattering-source-planes/native-pbr-candidate/run.log",
+    "fixedRegression": "pending"
   }
 }
