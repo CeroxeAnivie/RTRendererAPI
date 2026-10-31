@@ -15,8 +15,8 @@ vec2 gsBoundaryWideMultiply(vec2 a,vec2 b) {
     precise float p=a.x*b.x;
     // Dekker's split product keeps the residual explicit. Some shader targets
     // evaluate fma(a,b,-roundedProduct) without preserving that residual.
-    precise float asplit=4097.0*a.x,bsplit=4097.0*b.x;
-    precise float ahi=asplit-(asplit-a.x),bhi=bsplit-(bsplit-b.x);
+    precise float ahi=uintBitsToFloat(floatBitsToUint(a.x)&0xfffff000u);
+    precise float bhi=uintBitsToFloat(floatBitsToUint(b.x)&0xfffff000u);
     precise float alo=a.x-ahi,blo=b.x-bhi;
     precise float error=((ahi*bhi-p)+ahi*blo+alo*bhi)+alo*blo;
     precise float e=error+a.x*b.y+a.y*b.x+a.y*b.y;
