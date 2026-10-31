@@ -1,0 +1,189 @@
+{
+  "interpretation": "Diagnostic JFR only. Recording includes warmup, one completed 64-frame window, and a later sequence133 correctness rejection. Sample counts are not wall milliseconds; failure-report allocation is not steady-state cost.",
+  "recording": "medium-host.jfr",
+  "eventCounts": {
+    "jdk.ObjectAllocationSample": 1378,
+    "jdk.NativeMethodSample": 4284,
+    "jdk.ExecutionSample": 139,
+    "jdk.JavaMonitorEnter": 1,
+    "jdk.ThreadPark": 206,
+    "jdk.GCPhasePause": 21
+  },
+  "opticalNativeSampleStacks": [
+    {
+      "stack": "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi.call -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi.checked -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntime.synchronizeStream",
+      "samples": 3555
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi.call -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi.checked -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntime.lambda$external$0",
+      "samples": 67
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi.call -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi.checked -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntime.lambda$launchBlocking$0",
+      "samples": 65
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSync.submit -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.produceThenExchangePairBlocking -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.produceThenExchangePairBlocking",
+      "samples": 48
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.produceThenExchangePairBlocking -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.produceThenExchangePairBlocking -> top.ceroxe.rt.renderer.backend.vulkan.CudaOpticalMediumManager.exchangePair",
+      "samples": 40
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi.call -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi.checked -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntime.lambda$download$0",
+      "samples": 34
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.lambda$exchangeBlocking$0 -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame$$Lambda.0x00000000292464f0.run -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.exchangeBlocking",
+      "samples": 25
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.rt.pipeline.RtFrameDispatchCommands.recordTraceRays -> top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.recordTrace -> top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.recordNativeOpticalTrace",
+      "samples": 21
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSync.submit -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.lambda$produceThenExchangePairBlocking$0 -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame$$Lambda.0x0000000029266d00.run",
+      "samples": 18
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi.call -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi.checked -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntime.lambda$downloadAsync$0",
+      "samples": 15
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.backend.vulkan.CudaOpticalMediumManager.rejectionDetails -> top.ceroxe.rt.renderer.backend.vulkan.CudaOpticalMediumManager.prepareOnNative -> top.ceroxe.rt.renderer.backend.vulkan.CudaOpticalMediumManager.lambda$prepare$0",
+      "samples": 8
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSync.submit -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.lambda$exchangeBlocking$0 -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame$$Lambda.0x00000000292464f0.run",
+      "samples": 5
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.barrier -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.produceThenExchangePairBlocking -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.produceThenExchangePairBlocking",
+      "samples": 5
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.rt.device.VulkanQueueHostSync.submit -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.exchangeBlocking -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.exchangeBlocking",
+      "samples": 3
+    },
+    {
+      "stack": "top.ceroxe.rt.renderer.rt.device.RtGpuTimestampPool$Capture.resolve -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.produceThenExchangePairBlocking -> top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaSharedRayFrame.produceThenExchangePairBlocking",
+      "samples": 3
+    }
+  ],
+  "gcPauseCount": 21,
+  "gcPauseTotalMs": 35.7114,
+  "gcPauseMaximumMs": 6.7421,
+  "sampledAllocationWeights": [
+    {
+      "type": "top/ceroxe/rt/renderer/rt/device/VulkanDeviceRuntime$ManagedPresentationSignal",
+      "estimatedBytes": 209543112
+    },
+    {
+      "type": "[I",
+      "estimatedBytes": 140745496
+    },
+    {
+      "type": "java/lang/invoke/BoundMethodHandle$Species_L",
+      "estimatedBytes": 80218016
+    },
+    {
+      "type": "[Ljava/lang/Class;",
+      "estimatedBytes": 58185912
+    },
+    {
+      "type": "java/lang/invoke/MethodType",
+      "estimatedBytes": 45030000
+    },
+    {
+      "type": "jdk/internal/foreign/SegmentFactories$1",
+      "estimatedBytes": 21669768
+    },
+    {
+      "type": "[J",
+      "estimatedBytes": 21246384
+    },
+    {
+      "type": "[Ljava/lang/Object;",
+      "estimatedBytes": 19200456
+    },
+    {
+      "type": "[Ljava/lang/foreign/MemoryLayout;",
+      "estimatedBytes": 17978696
+    },
+    {
+      "type": "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNativeApi$$Lambda/0x000000002920f6f0",
+      "estimatedBytes": 14215352
+    }
+  ],
+  "monitorEnters": [
+    {
+      "thread": "JFR Periodic Tasks",
+      "duration": "PT0.0062555S",
+      "stack": [
+        "jdk.jfr.internal.PlatformRecorder.periodicTask",
+        "jdk.jfr.internal.PlatformRecorder.lambda$startDiskMonitor$0",
+        "jdk.jfr.internal.PlatformRecorder$$Lambda.0x0000000029061788.run",
+        "java.lang.Thread.runWith",
+        "java.lang.Thread.run"
+      ]
+    }
+  ],
+  "fixed133WithoutJfr": "reproduced",
+  "sourceCommit": "e9a0a34",
+  "frozenRenderer": "accepted N",
+  "evidence": [
+    {
+      "file": "artifacts.json",
+      "sha256": "909d9a3ddcb42209c72cc71e882340682458de5de897f1526007c7ab41c02604"
+    },
+    {
+      "file": "events.json",
+      "sha256": "2f29a0bfeee13629ec47e237ee46739ad23d29e4ad0b0ba85a1b25b8819a430f"
+    },
+    {
+      "file": "initial-gpu.csv",
+      "sha256": "2d9ceb38b38f7bf5886d99a39b38e263516d3d49393d80a7c0a7f08445bb20bc"
+    },
+    {
+      "file": "medium-host.jfc",
+      "sha256": "10f04c958780999c6fa6f14906a2dc2b719425f7668a4f3ab0498ae4a8214b5a"
+    },
+    {
+      "file": "medium-host.jfr",
+      "sha256": "4668790ba7e895aeb4bf129435c8d67bae090be1c5d85d97b8ba775dbc84a22f"
+    },
+    {
+      "file": "micro-all-1080p-gpu-stages-round-1.json",
+      "sha256": "c03660681c5b62586b2a7afcab6eb5788ced6c19f7ef328487278ca479269795"
+    },
+    {
+      "file": "micro-all-1080p-profiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "file": "micro-all-1080p-profiled.csv",
+      "sha256": "2f5543213a33679fc7614d42d69cfc2b91cc6cbb3f43df4da3c91d729aba45fd"
+    },
+    {
+      "file": "micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "633cedc5bc3d35776fee0279eda60c63e4e263c722fb27e27be69c6fa9cfd0ed"
+    },
+    {
+      "file": "micro-profiled-coverage.json",
+      "sha256": "e586bbb97372ca9e0c41f40d8f637ea044b1ddd17b30066b53fc66b5452db547"
+    },
+    {
+      "file": "run.log",
+      "sha256": "7335e4b75687e204189e46b664c1b62a0901308c16a72d1a2269de1a5531e612"
+    },
+    {
+      "file": "source-commit.txt",
+      "sha256": "d2dcafbf1dbcdaae69284046889373ac587bf3aae2bedbcc675d9553ebbbe240"
+    },
+    {
+      "file": "summary.txt",
+      "sha256": "ee541c6d9cfb93da9eaa1da7b318ba0a487470e06d5898007856919de5857091"
+    }
+  ]
+}

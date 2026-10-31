@@ -47,6 +47,21 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                 """+helper+"""
                 void main(){
                     uint i=gl_GlobalInvocationID.x; gsMeshes.words[17]=12u;
+                    if(i>=104u){
+                        uint test=(i-104u)/8u,outputIndex=(i-104u)%8u;
+                        vertexOrder=test%6u;inward=(test/6u)%2u!=0u;bool mirror=test/12u!=0u;
+                        objectToWorld=mat4x3(mirror?-.8:.8,0,0,0,.8,0,0,0,.8,mirror?-1.5:1.5,-2,0);
+                        rayOrigin=vec3(mirror?-1.24285126:1.24285126,-3.42999697,-1.29998982)+inputs.bias.xyz;
+                        rayDirection=vec3(mirror?.0953462571:-.0953462571,.286038786,.953462601)+inputs.bias.xyz;
+                        hitDistance=2.20248795;
+                        uint firstPrimitive,secondPrimitive,lastPrimitive;vec2 firstBary,secondBary,lastBary;float firstT,secondT,lastT;
+                        bool first=gsBoundaryConnectionHit(0u,2u,vec2(.2,0),0,firstPrimitive,firstBary,firstT);
+                        bool second=gsBoundaryConnectionHit(0u,2u,vec2(.2,0),uintBitsToFloat(floatBitsToUint(firstT)+1u),secondPrimitive,secondBary,secondT);
+                        bool last=gsBoundaryConnectionHit(0u,2u,vec2(.2,0),uintBitsToFloat(floatBitsToUint(secondT)+1u),lastPrimitive,lastBary,lastT);
+                        if(outputIndex==0u||outputIndex==2u||outputIndex==4u)imageStore(target,ivec2(i,0),vec4((outputIndex==0u?first:outputIndex==2u?second:last)?1:0,float(outputIndex==0u?firstPrimitive:secondPrimitive)/255.0,0,1));
+                        else {uint bits=floatBitsToUint(outputIndex==1u?firstT:secondT);imageStore(target,ivec2(i,0),vec4(uvec4(bits,bits>>8,bits>>16,bits>>24)&255u)/255.0);}
+                        return;
+                    }
                     if(i>=56u){
                         vertexOrder=(i-56u)/8u;uint outputIndex=56u+(i-56u)%8u;
                         inward=true;
@@ -126,7 +141,7 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
         var input=new BufferResource(new RenderResourceId(951004),ResourceVersion.initial(),16,
                 Set.of(BufferUsage.UNIFORM,BufferUsage.COPY_DESTINATION));
         var target=new TextureResource(new RenderResourceId(951003),ResourceVersion.initial(),TextureDimension.TEXTURE_2D,
-                104,1,1,1,1,1,TextureFormat.RGBA8_UNORM,Set.of(TextureUsage.STORAGE_READ_WRITE,TextureUsage.COLOR_ATTACHMENT,TextureUsage.COPY_DESTINATION));
+                296,1,1,1,1,1,TextureFormat.RGBA8_UNORM,Set.of(TextureUsage.STORAGE_READ_WRITE,TextureUsage.COLOR_ATTACHMENT,TextureUsage.COPY_DESTINATION));
         var range=new TextureSubresourceRange(TextureAspect.COLOR,0,1,0,1);
         var view=new TextureView(target,TextureViewDimension.TEXTURE_2D,range);
         try(var device=VulkanDeviceRuntime.open(VulkanRtCapabilityProbe.capture(),RendererRtDiagnostics.noop(),true,true,
@@ -139,10 +154,10 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
             var submitted=session.submit(new RenderCommandTransaction(1,List.of(new WriteBufferCommand(
                     new ResourceSlice.BufferSlice(input,new ByteRange(0,16)),new ResourceData(java.nio.ByteBuffer.allocateDirect(16))),
                     new ClearColorCommand(new ResourceSlice.TextureSlice(target,range),new ClearColorValue(0,0,0,1)),new BindComputePipelineCommand(new ComputePipelineState(program)),
-                    BindBindingSetCommand.fixed(bindings),new DispatchCommand(104,1,1))));
+                    BindBindingSetCommand.fixed(bindings),new DispatchCommand(296,1,1))));
             require(submitted.outcome().recorded(),"predicate dispatch rejected: "+submitted.reason()+" "+submitted.detail());
             VulkanGenericCommandNativeSelfTest.await(session,1,CommandExecutionEvidence.Outcome.GPU_COMPLETED);
-            var pass=RenderPassDescriptor.color(104,1,List.of(RenderAttachment.of(view,LoadOp.LOAD,StoreOp.STORE)));
+            var pass=RenderPassDescriptor.color(296,1,List.of(RenderAttachment.of(view,LoadOp.LOAD,StoreOp.STORE)));
             require(session.submit(new RenderCommandTransaction(2,List.of(new BeginRenderPassCommand(pass),new EndRenderPassCommand())))
                     .outcome().recorded(),"predicate readback rejected");
             VulkanGenericCommandNativeSelfTest.await(session,2,CommandExecutionEvidence.Outcome.OUTPUT_PRODUCED);
@@ -185,6 +200,19 @@ public final class BoundaryIntersectionPredicatesNativeSelfTest {
                     permutationErrors.append(" order=").append(order);
             }
             require(permutationErrors.isEmpty(),"inward interval differs from independently rounded slab oracle:"+permutationErrors);
+            double subEntry=(-2.0-(double).8f-(-3.42999697f))/(double).286038786f;
+            double subExit=((double).8f-(-1.29998982f))/(double).953462601f;
+            require(subEntry<subExit&&(float)subEntry==(float)subExit,"sub-ULP fixture lost its collapsed float interval");
+            float lower=(float)subEntry;if(lower>subEntry)lower=Math.nextDown(lower);
+            float upper=(float)subExit;if(upper<subExit)upper=Math.nextUp(upper);
+            for(int test=0;test<24;test++){
+                int base=104+test*8,first=Byte.toUnsignedInt(pixels.get(base*4+1)),second=Byte.toUnsignedInt(pixels.get((base+2)*4+1));
+                require(Byte.toUnsignedInt(pixels.get(base*4))==255&&Byte.toUnsignedInt(pixels.get((base+2)*4))==255
+                        &&pixels.get((base+4)*4)==0&&first>=4&&first<=5&&second>=2&&second<=3
+                        &&unpack(pixels,base+1)==lower&&unpack(pixels,base+3)==upper,
+                        "sub-ULP interval lost or reordered a crossing: case="+test+" primitives="+first+","+second+" t="+unpack(pixels,base+1)+","+unpack(pixels,base+3));
+            }
+            System.out.println("Sub-ULP intervals passed: 24 vertex-order/orientation/mirror cases, oracle=["+subEntry+","+subExit+"] enclosure=["+lower+","+upper+"]");
         }
     }
     private static float unpack(java.nio.ByteBuffer pixels,int pixel){int bits=0;for(int lane=0;lane<4;lane++)bits|=Byte.toUnsignedInt(pixels.get(pixel*4+lane))<<(lane*8);return Float.intBitsToFloat(bits);}
