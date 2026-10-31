@@ -52,7 +52,7 @@ vec3 gsScatteringShadowProfile(vec3 position,vec3 direction,float distance,vec3 
     gsScatteringProfileAdd(record,6u,started);
     return surface*attenuation;
 }
-vec3 gsScatteringLightProfile(uint slot,vec3 position,vec3 rayDirection,float g,vec3 sigma,float integrationLimit,uint record,bool profileActive){
+vec3 gsScatteringLightProfile(uint slot,vec3 position,vec3 rayDirection,float g,vec3 sigma,float integrationLimit,uint record,bool profileActive,float maximumCameraWeight,float contributionTolerance){
     uint64_t started=gsScatteringProfileStart(profileActive);
     uint base=slot*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[base+GPU_SCENE_LIGHT_FLAGS_WORD],type=(flags>>1u)&7u;
     vec3 color=vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD]),
@@ -76,6 +76,17 @@ vec3 gsScatteringLightProfile(uint slot,vec3 position,vec3 rayDirection,float g,
     }
     if(attenuation<=0.0||intensity<=0.0){gsScatteringProfileAdd(record,7u,started);return vec3(0);}
     gsScatteringProfileAdd(record,7u,started);
+    // OSPRay's minContribution principle, adapted to a bound on this complete
+    // camera estimator contribution rather than an unweighted source threshold.
+    if(maximumCameraWeight>0.0&&(flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u) {
+        started=gsScatteringProfileStart(profileActive);
+        float shadowDistance=max(distance-2.0*gsRayEpsilon(position),gsRayEpsilon(position));
+        vec3 unoccluded=color*intensity*attenuation*exp(-sigma*min(shadowDistance,integrationLimit))
+            *gsScatteringPhase(dot(rayDirection,direction),g);
+        bool negligible=max(unoccluded.x,max(unoccluded.y,unoccluded.z))*maximumCameraWeight<=contributionTolerance;
+        gsScatteringProfileAdd(record,8u,started);
+        if(negligible)return vec3(0);
+    }
     vec3 visibility=vec3(1);
     if((flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u){
         float shadowDistance=max(distance-2.0*gsRayEpsilon(position),gsRayEpsilon(position));
@@ -97,6 +108,9 @@ vec3 gsScatteringLightProfile(uint slot,vec3 position,vec3 rayDirection,float g,
     gsScatteringProfileAdd(record,8u,started);
     return result;
 }
+vec3 gsScatteringLightProfile(uint slot,vec3 position,vec3 rayDirection,float g,vec3 sigma,float integrationLimit,uint record,bool profileActive){
+    return gsScatteringLightProfile(slot,position,rayDirection,g,sigma,integrationLimit,record,profileActive,0.0,0.0);
+}
 #endif
 float gsScatteringLightWeight(uint slot,vec3 origin,vec3 direction,float distance) {
     uint base=slot*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[base+GPU_SCENE_LIGHT_FLAGS_WORD];
@@ -112,7 +126,7 @@ float gsScatteringLightWeight(uint slot,vec3 origin,vec3 direction,float distanc
         uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+2u]));
     return gsLuminance(color)*uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_INTENSITY_WORD]);
 }
-vec3 gsScatteringLight(uint slot,vec3 position,vec3 rayDirection,float g,vec3 sigma,float integrationLimit) {
+vec3 gsScatteringLight(uint slot,vec3 position,vec3 rayDirection,float g,vec3 sigma,float integrationLimit,float maximumCameraWeight,float contributionTolerance) {
     uint base=slot*GPU_SCENE_LIGHT_RECORD_WORDS,flags=gsLights.words[base+GPU_SCENE_LIGHT_FLAGS_WORD],type=(flags>>1u)&7u;
     vec3 color=vec3(uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD]),
         uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+1u]),uintBitsToFloat(gsLights.words[base+GPU_SCENE_LIGHT_COLOR_WORD+2u]));
@@ -134,9 +148,18 @@ vec3 gsScatteringLight(uint slot,vec3 position,vec3 rayDirection,float g,vec3 si
         }
     }
     if(attenuation<=0.0||intensity<=0.0)return vec3(0);
+    if(maximumCameraWeight>0.0&&(flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u) {
+        float shadowDistance=max(distance-2.0*gsRayEpsilon(position),gsRayEpsilon(position));
+        vec3 unoccluded=color*intensity*attenuation*exp(-sigma*min(shadowDistance,integrationLimit))
+            *gsScatteringPhase(dot(rayDirection,direction),g);
+        if(max(unoccluded.x,max(unoccluded.y,unoccluded.z))*maximumCameraWeight<=contributionTolerance)return vec3(0);
+    }
     vec3 visibility=(flags&GPU_SCENE_FLAG_CASTS_SHADOW)!=0u
         ?gsScatteringShadow(position,direction,max(distance-2.0*gsRayEpsilon(position),gsRayEpsilon(position)),sigma,integrationLimit):vec3(1);
     return color*intensity*attenuation*visibility*gsScatteringPhase(dot(rayDirection,direction),g);
+}
+vec3 gsScatteringLight(uint slot,vec3 position,vec3 rayDirection,float g,vec3 sigma,float integrationLimit) {
+    return gsScatteringLight(slot,position,rayDirection,g,sigma,integrationLimit,0.0,0.0);
 }
 vec2 gsScatteringSampleOffset(uint sampleIndex,uint samples) {
     if(samples<=1u)return vec2(.5);

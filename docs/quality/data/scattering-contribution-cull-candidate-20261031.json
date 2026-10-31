@@ -1,0 +1,30 @@
+{
+  "status": "candidate-not-yet-validated",
+  "scope": "Only exhaustive opaque cached uniform ray-query scattering. Omit negligible shadowed local-light connections before ray query; all other paths remain strict.",
+  "reference": {
+    "repository": "RenderKit/ospray",
+    "commit": "1fc364776c5cbbf8b1100dbf321cc3d40da41311",
+    "files": [
+      "modules/cpu/render/Renderer.cpp:43",
+      "modules/cpu/render/scivis/volumes.ispc:225,276,343"
+    ],
+    "license": "Apache-2.0",
+    "logic": "Renderer minContribution defaults to .001 and volume traversal terminates below that contribution. Adopt the bounded low-contribution omission principle, independently adapted to weighted direct-light connections, not the same upstream estimator."
+  },
+  "bound": {
+    "maxOmittedLinearHdrPerPathPerChannel": 0.001,
+    "perConnection": ".001 / (steps * (lightUpperBound + 1))",
+    "cameraWeightUpperBound": "1.0001 * max(scatteringRGB) * exp(-min(extinctionRGB) * absoluteDistance) * inversePDF",
+    "lightUpperBound": "unoccluded light radiance * attenuation * medium Beer factor * HG phase; opaque surface visibility is in [0,1]",
+    "sampling": "Unchanged sample locations, RNG, steps, selection, integration, and all non-negligible queries"
+  },
+  "predeclaredErrorLimits": {
+    "relativeRms": 0.001,
+    "luminanceEnergyRelativeError": 0.001,
+    "maxAbsoluteChannelError": "reference absolute P99 * .005 + 1e-5"
+  },
+  "artifacts": {
+    "control": "ddb51e973bd955219c953d2eeefcfda0a85262bfba6fd2357be4b91db137935f",
+    "candidate": "3effe5b40fd48fc35e80be8743ee0b46b4e9e43aa43e225c25a3a52d766535cc"
+  }
+}
