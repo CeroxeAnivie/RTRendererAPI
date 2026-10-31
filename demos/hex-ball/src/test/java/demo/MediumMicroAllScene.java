@@ -85,7 +85,7 @@ final class MediumMicroAllScene {
                 CameraState.lookAt(0,0,18,0,0,0).verticalFieldOfViewDegrees(36).aspectRatio(width/(double)height).build())
                 .minimumSceneRevision(1).antiAliasing(new AntiAliasingState(1)).primitiveBatch(batch).lightmap(lightmap).shaderData(List.of(data))
                 .environment(EnvironmentState.builder().skyRadiance(.08f,.1f,.15f).ambientIntensity(.16f)
-                        .sunDirection(.1f,-.3f,-1).sunIntensity(.6f)
+                        .sunDirection(.09534626f,-.2860388f,-.9534626f).sunIntensity(.6f)
                         .cameraMedium(new Medium(new Rgb(.001f,.0015f,.002f),new Rgb(.002f,.003f,.004f),Rgb.ZERO,1,1,.2f)).build())
                 .mediumTransport(new MediumTransport(24,2,8,0,32,1e-4f,2))
                 .fog(DistanceFogState.builder().color(.08f,.1f,.15f).opacity(.05f).sphericalRange(12,35).build())
