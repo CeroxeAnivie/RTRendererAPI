@@ -55,6 +55,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
     private final CudaMediumRuntime.BatchKernel resolve;
     private final CudaMediumRuntime.BatchKernel uniformResolve;
     private CudaMediumRuntime.BatchKernel scatteringResolve;
+    private CudaMediumRuntime.BatchKernel sharedUniformResolve;
     private CudaSharedRayFrame storage;
     private CudaMediumRuntime.HostMemory statistics;
     private RtGpuBuffer primary;
@@ -148,7 +149,7 @@ final class CudaPbrMediumManager implements AutoCloseable {
         long started=OpticalFrameTimings.ENABLED?System.nanoTime():0L;
         try{return onNative(()->{
             ensureCapacity(scene);
-            if(scatteringResolve==null)scatteringResolve=cuda.compileBatchKernel(CudaCameraScatteringSource.source(),"camera_scattering_resolve");
+            if(scatteringResolve==null)scatteringResolve=cuda.compileBatchKernel(CudaCameraScatteringSource.source(),"camera_scattering_resolve",true);
             CudaCameraScatteringManager.resolveSharedOnNative(device,cuda,scatteringResolve,storage,frame,scene.transportPlan.direct(),
                     Objects.requireNonNull(primaryProducer,"primaryProducer"),lightProducer,diagnosticProducer,slot,buildPlan,false,primary);
             return new RadianceContribution(storage.buffer(),scene.plan.emissionOffset(),Math.multiplyExact((long)scene.plan.paths(),16),false,
@@ -185,7 +186,10 @@ final class CudaPbrMediumManager implements AutoCloseable {
         if(sharedRadiance&&(!colorEndpoints||scene.transportPlan==null||!scene.transportPlan.sharedDirectArena()
                 ||additionalRadiance.offset()!=plan.emissionOffset()))
             throw new IllegalArgumentException("PBR radiance aliases storage without the serial arena proof");
-        var selectedResolve=plan.boundaryCount()==0&&scene.assets.density.environmentOffset()<0?uniformResolve:resolve;
+        if(sharedRadiance&&sharedUniformResolve==null)
+            sharedUniformResolve=cuda.compileBatchKernel(CudaPbrMediumSource.source(),"native_pbr_medium_uniform_resolve",true);
+        var selectedResolve=sharedRadiance?sharedUniformResolve
+                :plan.boundaryCount()==0&&scene.assets.density.environmentOffset()<0?uniformResolve:resolve;
         if(statistics==null)statistics=cuda.allocateHost(CudaPbrMediumAbi.STATISTICS_BYTES);
         if(additionalRadiance!=null&&additionalRadiance.bytes()!=Math.multiplyExact((long)plan.paths(),16))
             throw new IllegalArgumentException("PBR/scattering complete-frame radiance extent mismatch");

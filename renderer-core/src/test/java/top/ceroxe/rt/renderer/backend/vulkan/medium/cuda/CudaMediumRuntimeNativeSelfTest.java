@@ -18,6 +18,7 @@ public final class CudaMediumRuntimeNativeSelfTest {
             try (CudaMediumRuntime runtime = CudaMediumRuntime.open(0); Arena arena = Arena.ofConfined()) {
                 verifySharedCompilation(runtime);
                 verifySharedModuleLifetime(runtime);
+                verifyArithmeticModuleIsolation(runtime);
                 MemorySegment input = arena.allocate(CudaMediumAbi.inputBytes(segments));
                 MemorySegment output = arena.allocate(CudaMediumAbi.outputBytes(segments));
                 for (int i = 0; i < segments; i++) {
@@ -80,6 +81,24 @@ public final class CudaMediumRuntimeNativeSelfTest {
                     throw new AssertionError("external semaphore non-value byte is not zero: offset=" + offset);
             }
         }
+    }
+    private static void verifyArithmeticModuleIsolation(CudaMediumRuntime runtime) {
+        String wrapper="__device__ int sharedValue=3;\n"
+                +"extern \"C\" __global__ void store(int *p,int n){if(threadIdx.x==0&&blockIdx.x==0){sharedValue+=n;p[0]=sharedValue;}}\n"
+                +"extern \"C\" __global__ void read(int *p,int n){if(threadIdx.x==0&&blockIdx.x==0)p[0]=sharedValue*n;}";
+        try(var memory=runtime.allocate(4);Arena arena=Arena.ofConfined();
+                var strict=runtime.compileBatchKernel(wrapper,"store");
+                var fast=runtime.compileBatchKernel(wrapper,"read",true)) {
+            var value=arena.allocate(4);var slice=memory.slice(0,4);
+            runtime.launchBlocking(strict,slice,2,1);
+            runtime.launchBlocking(fast,slice,2,1);runtime.download(slice,value);
+            if(value.get(JAVA_INT,0)!=6)throw new AssertionError("fast math reused strict module state");
+            try(var read=runtime.compileBatchKernel(wrapper,"read")) {
+                runtime.launchBlocking(read,slice,2,1);runtime.download(slice,value);
+                if(value.get(JAVA_INT,0)!=10)throw new AssertionError("strict math lost its own module state");
+            }
+        }
+        if(runtime.diagnosticLiveBatchModules!=0)throw new AssertionError("arithmetic module isolation leaked a module");
     }
     private static void verifySharedCompilation(CudaMediumRuntime runtime) {
         String wrapper = "extern \"C\" __global__ void first(int *p,int n){if(threadIdx.x==0&&blockIdx.x==0)p[0]+=n;}\n"

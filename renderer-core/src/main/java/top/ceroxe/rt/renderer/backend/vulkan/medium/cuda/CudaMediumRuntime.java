@@ -38,6 +38,7 @@ public final class CudaMediumRuntime implements AutoCloseable {
     // Entry points from one continuation source share PTX. Keep only the last successful
     // compilation, bounded to 8 MiB, within this thread-confined runtime/device/compiler.
     private String lastCompiledSource;
+    private boolean lastCompiledFastMath;
     private byte[] lastCompiledPtx;
     int diagnosticCompilationCount;
     // A continuation has several entry points. Keep its code module alive exactly while those
@@ -123,7 +124,10 @@ public final class CudaMediumRuntime implements AutoCloseable {
         }
     }
     private byte[] compile(String source) {
-        if (source.equals(lastCompiledSource)) return lastCompiledPtx;
+        return compile(source,false);
+    }
+    private byte[] compile(String source,boolean fastMath) {
+        if (source.equals(lastCompiledSource)&&fastMath==lastCompiledFastMath) return lastCompiledPtx;
         try (Arena scratch = Arena.ofConfined()) {
             MemorySegment programSlot = scratch.allocate(ADDRESS);
             api.checked("nvrtcCreateProgram", args(ADDRESS, ADDRESS, ADDRESS, JAVA_INT, ADDRESS, ADDRESS),
@@ -132,7 +136,7 @@ public final class CudaMediumRuntime implements AutoCloseable {
             try {
                 MemorySegment program = programSlot.get(ADDRESS, 0);
                 String[] options = {"--gpu-architecture=compute_" + computeMajor + computeMinor,
-                        "--std=c++17", "--device-as-default-execution-space", "--fmad=false"};
+                        "--std=c++17", "--device-as-default-execution-space", fastMath?"--use_fast_math":"--fmad=false"};
                 MemorySegment optionPointers = scratch.allocate(ADDRESS, options.length);
                 for (int i = 0; i < options.length; i++)
                     optionPointers.setAtIndex(ADDRESS, i, scratch.allocateFrom(options[i]));
@@ -153,6 +157,7 @@ public final class CudaMediumRuntime implements AutoCloseable {
                 byte[] ptx = image.toArray(JAVA_BYTE);
                 if ((long) source.length() * 2 + ptx.length <= 8L * 1024 * 1024) {
                     lastCompiledSource = source;
+                    lastCompiledFastMath = fastMath;
                     lastCompiledPtx = ptx;
                 } else {
                     lastCompiledSource = null;
@@ -370,20 +375,26 @@ public final class CudaMediumRuntime implements AutoCloseable {
     }
     /** Compiles an internal continuation wrapper together with the pinned upstream medium implementation. */
     public BatchKernel compileBatchKernel(String wrapper, String entryPoint) {
+        return compileBatchKernel(wrapper,entryPoint,false);
+    }
+    /** Opt-in only: CUDA fast intrinsics/FMA follow PBRT-v4's GPU build policy.
+     * The caller must validate the transport's numerical error separately. */
+    public BatchKernel compileBatchKernel(String wrapper,String entryPoint,boolean fastMath) {
         checkOpen(); Objects.requireNonNull(wrapper, "wrapper");
         if (entryPoint == null || !entryPoint.matches("[A-Za-z_][A-Za-z_0-9]*"))
             throw new IllegalArgumentException("invalid kernel entry point");
         String source = CudaMediumSource.source() + "\n" + wrapper;
+        String moduleKey=(fastMath?"fast\n":"strict\n")+source;
         try (Arena scratch = Arena.ofConfined()) {
             MemorySegment output = scratch.allocate(ADDRESS);
-            BatchModule existing = batchModules.get(source);
+            BatchModule existing = batchModules.get(moduleKey);
             final BatchModule[] selected = {existing};
             final MemorySegment[] function = new MemorySegment[1];
-            byte[] ptx = existing == null ? compile(source) : null;
+            byte[] ptx = existing == null ? compile(source,fastMath) : null;
             inContext(() -> {
                 if (selected[0] == null) {
                     api.checked("cuModuleLoadData", args(ADDRESS, ADDRESS), output, scratch.allocateFrom(JAVA_BYTE, ptx));
-                    selected[0] = new BatchModule(source, output.get(ADDRESS, 0));
+                    selected[0] = new BatchModule(moduleKey, output.get(ADDRESS, 0));
                     diagnosticBatchModuleLoads++;
                 }
                 try {
@@ -399,7 +410,7 @@ public final class CudaMediumRuntime implements AutoCloseable {
             });
             BatchModule module = selected[0];
             if (existing == null) {
-                batchModules.put(source, module);
+                batchModules.put(moduleKey, module);
                 diagnosticLiveBatchModules++;
             }
             module.references++;
