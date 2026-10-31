@@ -229,8 +229,12 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     &&checkedRuntime.traceRaysIndirectEnabled()
                     &&Boolean.parseBoolean(System.getProperty(
                         top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY,"true"))
-                    &&Boolean.parseBoolean(System.getProperty(
+                    &&(Boolean.parseBoolean(System.getProperty(
                         top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY,"true"))
+                        // Correctness-only stepping uses the same compiled stages, with CUDA
+                        // consuming one event at a time so host capture can expose each hit.
+                        ||(System.getProperty("top.ceroxe.rt.medium.opticalCaptureDirectory")!=null
+                            &&Boolean.getBoolean("top.ceroxe.rt.medium.opticalCaptureStepConnections")))
                     &&Boolean.parseBoolean(System.getProperty(
                         top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.COLLECTED_CONNECTIONS_PROPERTY,"false"));
             String raygenSource=program.source;
