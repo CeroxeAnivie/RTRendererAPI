@@ -316,6 +316,22 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 System.out.printf(java.util.Locale.ROOT,
                         "GPUScene pipeline handles program=%s pipeline=0x%x device=0x%x visibility=%s%n",
                         program, pipeline, device.address(), visibility);
+            if (Boolean.getBoolean("top.ceroxe.rt.pipeline.stackDiagnostics")) {
+                int groupCount = RtRayTracingPipelineFactory.GROUP_COUNT + (visibility ? 2 : 0)
+                        + (collectedConnections ? 2 : 0);
+                for (int group = 0; group < groupCount; group++) {
+                    boolean hitGroup = group == (visibility ? 3 : 2) || (visibility && group == 4);
+                    long general = hitGroup ? 0 : KHRRayTracingPipeline.vkGetRayTracingShaderGroupStackSizeKHR(
+                            device, pipeline, group, KHRRayTracingPipeline.VK_SHADER_GROUP_SHADER_GENERAL_KHR);
+                    long closest = !hitGroup ? 0 : KHRRayTracingPipeline.vkGetRayTracingShaderGroupStackSizeKHR(
+                            device, pipeline, group, KHRRayTracingPipeline.VK_SHADER_GROUP_SHADER_CLOSEST_HIT_KHR);
+                    long anyHit = !hitGroup ? 0 : KHRRayTracingPipeline.vkGetRayTracingShaderGroupStackSizeKHR(
+                            device, pipeline, group, KHRRayTracingPipeline.VK_SHADER_GROUP_SHADER_ANY_HIT_KHR);
+                    System.out.printf(java.util.Locale.ROOT,
+                            "GPUScene pipeline stack program=%s group=%d general=%d closest=%d anyHit=%d%n",
+                            program, group, general, closest, anyHit);
+                }
+            }
             byte[] groupHandles = RtRayTracingPipelineFactory.queryShaderGroupHandles(properties, device, pipeline,
                     RtRayTracingPipelineFactory.GROUP_COUNT + (visibility ? 2 : 0) + (collectedConnections ? 2 : 0));
             RtRayTracingPipelineProperties.ShaderBindingTableData packed = properties.packShaderGroupHandles(
