@@ -58,7 +58,7 @@ def main():
                 def receive(message, data):
                     records.write(json.dumps({"time": time.time(), "message": message}) + "\n")
                     records.flush()
-                script = session.create_script(SOURCE)
+                script = session.create_script(SOURCE.replace("__TRACE_FILE__", json.dumps(str(out / "native-commit.bin"))))
                 script.on("message", receive)
                 script.load()
                 print("Observing native commit/release, PID", target, flush=True)
@@ -85,45 +85,65 @@ def main():
 
 
 SOURCE = r'''
-const nt = Process.getModuleByName('ntdll.dll');
-const lookup = new NativeFunction(nt.getExportByName('RtlLookupFunctionEntry'), 'pointer', ['uint64','pointer','pointer']);
-const unwind = new NativeFunction(nt.getExportByName('RtlVirtualUnwind'), 'pointer',
-  ['uint32','uint64','uint64','pointer','pointer','pointer','pointer','pointer']);
-const query = new NativeFunction(Process.getModuleByName('kernel32.dll').getExportByName('VirtualQuery'),
-  'uint64', ['pointer','pointer','uint64']);
-const registers = {rax:120,rcx:128,rdx:136,rbx:144,rsp:152,rbp:160,rsi:168,rdi:176,
-  r8:184,r9:192,r10:200,r11:208,r12:216,r13:224,r14:232,r15:240,rip:248};
-function stack(context) {
-  const c=Memory.alloc(1232), base=Memory.alloc(8), data=Memory.alloc(8), frame=Memory.alloc(8);
-  c.add(48).writeU32(0x10000b);
-  for(const [name,offset] of Object.entries(registers))c.add(offset).writePointer(context[name]);
-  const result=[];
-  for(let i=0;i<96;i++) {
-    const pc=c.add(248).readPointer(), sp=c.add(152).readPointer();
-    if(pc.isNull()||sp.isNull())break;
-    const m=Process.findModuleByAddress(pc);
-    result.push(m?m.name+'+'+pc.sub(m.base).toString():pc.toString());
-    try {
-      const entry=lookup(uint64(pc.toString()),base,NULL);
-      if(entry.isNull()){c.add(248).writePointer(sp.readPointer());c.add(152).writePointer(sp.add(8));}
-      else unwind(0,base.readU64(),uint64(pc.toString()),entry,c,data,frame,NULL);
-      if(c.add(248).readPointer().equals(pc)&&c.add(152).readPointer().equals(sp))break;
-    } catch(e){result.push('unwind-stop:'+e);break;}
-  }
-  return result;
+const nt=Process.getModuleByName('ntdll.dll'), k=Process.getModuleByName('kernel32.dll');
+const open=new NativeFunction(k.getExportByName('CreateFileW'),'pointer',['pointer','uint32','uint32','pointer','uint32','uint32','pointer']);
+const handle=open(Memory.allocUtf16String(__TRACE_FILE__),0x40000000,3,NULL,2,0,NULL);
+if(handle.equals(ptr(-1)))throw new Error('Cannot open native allocation trace');
+const cell=Memory.alloc(Process.pointerSize);cell.writePointer(handle);
+// Allocation callbacks execute entirely in C. JS and JSON allocation inside a
+// native allocator callback can perturb that allocator, especially at shutdown.
+const native=new CModule(`
+#include <gum/guminterceptor.h>
+#include <stdint.h>
+typedef struct {
+ uint32_t kind,tid; int32_t status; uint32_t flags;
+ uint64_t base,size,allocation_base; uint32_t frame_count,reserved; void* frames[96];
+} Record;
+typedef struct {void* base;void* allocation_base;uint32_t allocation_protect;uint32_t partition;
+ uint64_t region_size;uint32_t state,protect,type,padding;} MemoryInfo;
+typedef struct {void**base;uint64_t*size;uint32_t flags,keep,count;void*frames[96];} Call;
+extern void* trace_file;
+extern uint32_t write_file(void*,const void*,uint32_t,uint32_t*,void*);
+extern uint16_t capture_stack(uint32_t,uint32_t,void**,uint32_t*);
+extern uint64_t virtual_query(void*,MemoryInfo*,uint64_t);
+extern uint32_t thread_id(void);
+void allocation_enter(GumInvocationContext*ic){
+ Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
+ c->base=gum_invocation_context_get_nth_argument(ic,1);
+ c->size=gum_invocation_context_get_nth_argument(ic,3);
+ c->flags=(uint32_t)(uintptr_t)gum_invocation_context_get_nth_argument(ic,4);
+ c->keep=(c->flags&0x1000)&&*c->size>=65536;
+ if(c->keep)c->count=capture_stack(0,96,c->frames,0);
 }
-Interceptor.attach(nt.getExportByName('NtAllocateVirtualMemory'), {
-  onEnter(a){this.base=a[1];this.size=a[3];this.flags=a[4].toUInt32();
-    if((this.flags&0x1000)&&Number(this.size.readU64())>=65536)this.stack=stack(this.context);},
-  onLeave(r){if(this.stack&&r.toInt32()===0){const b=this.base.readPointer(),info=Memory.alloc(48);
-    query(b,info,48);send({kind:'commit',tid:Process.getCurrentThreadId(),base:b.toString(),
-      allocationBase:info.add(8).readPointer().toString(),size:Number(this.size.readU64()),flags:this.flags,stack:this.stack});}}
-});
-Interceptor.attach(nt.getExportByName('NtFreeVirtualMemory'), {
-  onEnter(a){this.base=a[1].readPointer().toString();this.size=Number(a[2].readU64());this.flags=a[3].toUInt32();},
-  onLeave(r){if(r.toInt32()===0)send({kind:'free',tid:Process.getCurrentThreadId(),base:this.base,size:this.size,flags:this.flags});}
-});
-send({kind:'ready',modules:Process.enumerateModules().map(m=>({name:m.name,base:m.base.toString(),size:m.size}))});
+void allocation_leave(GumInvocationContext*ic){
+ Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
+ int32_t status=(int32_t)(uintptr_t)gum_invocation_context_get_return_value(ic);
+ if(!c->keep||status)return;
+ Record r={0}; MemoryInfo m={0};uint32_t written=0;
+ r.kind=1;r.tid=thread_id();r.flags=c->flags;r.base=(uint64_t)(uintptr_t)*c->base;r.size=*c->size;
+ virtual_query(*c->base,&m,sizeof(m));r.allocation_base=(uint64_t)(uintptr_t)m.allocation_base;r.frame_count=c->count;
+ for(uint32_t i=0;i<c->count;i++)r.frames[i]=c->frames[i];
+ write_file(trace_file,&r,sizeof(r),&written,0);
+}
+void free_enter(GumInvocationContext*ic){
+ Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
+ c->base=(void**)*((void**)gum_invocation_context_get_nth_argument(ic,1));
+ c->size=(uint64_t*)(uintptr_t)*((uint64_t*)gum_invocation_context_get_nth_argument(ic,2));
+ c->flags=(uint32_t)(uintptr_t)gum_invocation_context_get_nth_argument(ic,3);
+}
+void free_leave(GumInvocationContext*ic){
+ int32_t status=(int32_t)(uintptr_t)gum_invocation_context_get_return_value(ic);if(status)return;
+ Call*c=gum_invocation_context_get_listener_invocation_data(ic,sizeof(Call));
+ Record r={0};uint32_t written=0;r.kind=2;r.tid=thread_id();r.flags=c->flags;
+ r.base=(uint64_t)(uintptr_t)c->base;r.size=(uint64_t)(uintptr_t)c->size;
+ write_file(trace_file,&r,sizeof(r),&written,0);
+}
+`,{trace_file:cell,write_file:k.getExportByName('WriteFile'),capture_stack:nt.getExportByName('RtlCaptureStackBackTrace'),
+ virtual_query:k.getExportByName('VirtualQuery'),thread_id:k.getExportByName('GetCurrentThreadId')});
+Interceptor.attach(nt.getExportByName('NtAllocateVirtualMemory'),{onEnter:native.allocation_enter,onLeave:native.allocation_leave});
+Interceptor.attach(nt.getExportByName('NtFreeVirtualMemory'),{onEnter:native.free_enter,onLeave:native.free_leave});
+function modules(){send({kind:'modules',modules:Process.enumerateModules().map(m=>({name:m.name,base:m.base.toString(),size:m.size}))});}
+modules();setInterval(modules,1000);send({kind:'ready',recordBytes:816});
 '''
 
 if __name__ == "__main__":
