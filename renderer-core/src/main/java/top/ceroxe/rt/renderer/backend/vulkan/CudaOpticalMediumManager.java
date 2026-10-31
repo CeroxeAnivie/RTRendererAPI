@@ -45,6 +45,8 @@ final class CudaOpticalMediumManager implements AutoCloseable {
     private final CudaMediumRuntime.BatchKernel reset;
     private final CudaMediumRuntime.BatchKernel[] steps;
     private final CudaMediumRuntime.HostMemory firstStatistics,secondStatistics;
+    private CudaMediumRuntime.HostMemory firstShaderSamples,secondShaderSamples;
+    private long shaderSampleOffset;
     private CudaSharedRayFrame storage;
     private RtGpuBuffer primary;
     private CudaOpticalPhotonPass photonPass;
@@ -157,7 +159,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         int opticalSamples=frame.mediumTransport().opticalSamples();
         int branches=frame.mediumTransport().firstInterfaceSampling()==top.ceroxe.rt.renderer.api.MediumTransport.FirstInterfaceSampling.DETERMINISTIC_SPLIT?2:1;
         boolean queued=Boolean.parseBoolean(System.getProperty("top.ceroxe.rt.medium.cuda.opticalQueuedRounds","true"))
-                &&device.timelineSemaphoreEnabled()&&!OpticalDetailedProfile.SHADERS&&!OpticalFrameTimings.KERNEL_PHASES;
+                &&device.timelineSemaphoreEnabled()&&!OpticalFrameTimings.KERNEL_PHASES;
         boolean uploadAssets=!scene.assets.equals(uploadedAssets);
         try(Arena arena=Arena.ofConfined()){
             int firstUploadBytes=uploadAssets?plan.sceneBytes():CudaOpticalMediumAbi.HEADER_BYTES;
@@ -168,7 +170,7 @@ final class CudaOpticalMediumManager implements AutoCloseable {
                 if(OpticalFrameTimings.KERNEL_PHASES)throw new IllegalStateException("shader and CUDA clock sampling must run separately");
                 metadata.set(ValueLayout.JAVA_LONG,192,address+plan.bytes());
             }
-            var shaderHost=OpticalDetailedProfile.SHADERS?arena.allocate(OpticalDetailedProfile.shaderBytes(plan.tilePaths()),16):null;
+            var shaderHost=OpticalDetailedProfile.SHADERS&&!queued?arena.allocate(OpticalDetailedProfile.shaderBytes(plan.tilePaths()),16):null;
             var counters=arena.allocate(CudaOpticalMediumAbi.STATISTICS_BYTES,16);
             var phaseCycles=OpticalFrameTimings.KERNEL_PHASES?arena.allocate(64,16):null;boolean buildPending=buildPlan!=null&&!nativePhotons;
             boolean photonsPending=photonPlan!=null&&photonPlan.photons()>0&&!nativePhotons;
@@ -343,11 +345,19 @@ final class CudaOpticalMediumManager implements AutoCloseable {
             cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
             cuda.launchBlocking(step,input,paths,1);
             cuda.downloadAsync(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),firstStatistics);
+            if(firstShaderSamples!=null)cuda.downloadAsync(input.slice(shaderSampleOffset,firstShaderSamples.byteSize()),firstShaderSamples);
         },continuation,input->{
             cuda.launchBlocking(reset,input,1,CudaOpticalMediumAbi.HEADER_BYTES);
             cuda.launchBlocking(step,input,paths,1);
             cuda.downloadAsync(input.slice(CudaOpticalMediumAbi.STATISTICS_OFFSET,CudaOpticalMediumAbi.STATISTICS_BYTES),secondStatistics);
+            if(secondShaderSamples!=null)cuda.downloadAsync(input.slice(shaderSampleOffset,secondShaderSamples.byteSize()),secondShaderSamples);
         });
+        if(firstShaderSamples!=null){
+            long diagnosticStarted=OpticalDetailedProfile.start();
+            OpticalDetailedProfile.shaderSamples(firstShaderSamples.segment(),paths);
+            OpticalDetailedProfile.shaderSamples(secondShaderSamples.segment(),paths);
+            OpticalDetailedProfile.elapsed("diagnosticReadbackAndAggregationNanos",diagnosticStarted);
+        }
         if(OpticalDetailedProfile.ENABLED) {
             recordPairStep("cuda/pairStep0",queries,firstStatistics);
             recordPairStep("cuda/pairStep1",firstStatistics.getInt(0),secondStatistics);
@@ -394,6 +404,13 @@ final class CudaOpticalMediumManager implements AutoCloseable {
         diagnosticUploadedBytes.add(bytes);
     }
     private void ensureCapacity(CudaOpticalMediumAbi.Plan plan){
+        shaderSampleOffset=plan.bytes();
+        int shaderBytes=OpticalDetailedProfile.shaderBytes(plan.tilePaths());
+        if(shaderBytes>0&&(firstShaderSamples==null||firstShaderSamples.byteSize()!=shaderBytes)) {
+            if(firstShaderSamples!=null)firstShaderSamples.close();
+            if(secondShaderSamples!=null)secondShaderSamples.close();
+            firstShaderSamples=cuda.allocateHost(shaderBytes);secondShaderSamples=cuda.allocateHost(shaderBytes);
+        }
         long sharedBytes=plan.bytes()+OpticalDetailedProfile.shaderBytes(plan.tilePaths());
         if(storage==null||storage.byteSize()<sharedBytes) {
             if(sharedBytes+CudaOpticalMediumAbi.ALLOCATION_ALLOWANCE>Math.min(cuda.maxResidentBytes(),CudaOpticalMediumAbi.DEFAULT_RESIDENT_BYTES))

@@ -54,6 +54,10 @@ public final class MediumGalleryPerformanceBenchmark {
         int rounds = integer(values, "rounds", 3, 1, 100);
         boolean profile = bool(values, "profile", false);
         boolean shaderProfile=bool(values,"shaderProfile",false);
+        boolean opticalShaderProfile=bool(values,"opticalShaderProfile",false);
+        int opticalShaderGroup=integer(values,"opticalShaderGroup",0,0,7);
+        require(!opticalShaderProfile||profile,"optical shader sampling requires --profile=true");
+        require(!opticalShaderProfile||!shaderProfile,"camera and optical shader sampling must run separately");
         boolean wallProfile=bool(values,"wallProfile",false);
         if(wallProfile) System.setProperty("top.ceroxe.rt.medium.opticalWallTimeline","true");
         else System.clearProperty("top.ceroxe.rt.medium.opticalWallTimeline");
@@ -63,6 +67,10 @@ public final class MediumGalleryPerformanceBenchmark {
             System.setProperty("top.ceroxe.rt.medium.cameraScatteringShaderProfile","true");}
         else {System.clearProperty("top.ceroxe.rt.medium.opticalDetailedProfile");
             System.clearProperty("top.ceroxe.rt.medium.cameraScatteringShaderProfile");}
+        if(opticalShaderProfile){System.setProperty("top.ceroxe.rt.medium.opticalDetailedProfile","true");
+            System.setProperty("top.ceroxe.rt.medium.opticalShaderProfile","true");
+            System.setProperty("top.ceroxe.rt.medium.opticalShaderProfileGroup",Integer.toString(opticalShaderGroup));}
+        else System.clearProperty("top.ceroxe.rt.medium.opticalShaderProfile");
 
         if(!Set.of("all","focused","micro","micro-checks").contains(suite))
             throw new IllegalArgumentException("suite must be all, focused, micro or micro-checks");
@@ -163,6 +171,14 @@ public final class MediumGalleryPerformanceBenchmark {
                             +(round+1)+".json").toAbsolutePath();
                     Files.writeString(shaderReport,shaderSummary,StandardCharsets.UTF_8);
                     System.out.println("GalleryPerf shaderStageReport="+shaderReport+" stages="+shaderSummary.replace('\n',' '));
+                }
+                if(top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.SHADERS){
+                    String opticalSummary=top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.deltaJson(detailedBefore);
+                    detailedBefore=top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.snapshot();
+                    Path opticalReport=reportDirectory.resolve(stem+"-optical-shader-group-"
+                            +top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfile.GROUP+"-round-"+(round+1)+".json");
+                    Files.writeString(opticalReport,opticalSummary,StandardCharsets.UTF_8);
+                    System.out.println("GalleryPerf opticalShaderReport="+opticalReport);
                 }
                 if (result.timeline() != null) {
                     Path timelineReport = report.resolveSibling(stem+"-wall-timeline-round-" + (round + 1) + ".json");
@@ -321,7 +337,7 @@ public final class MediumGalleryPerformanceBenchmark {
         for (String arg : args) {
             int at = arg.indexOf('=');
             if (!arg.startsWith("--") || at < 3) throw new IllegalArgumentException("expected --name=value: " + arg);
-            if(!Set.of("width","height","warmup","frames","rounds","profile","shaderProfile","wallProfile","suite","cases","output")
+            if(!Set.of("width","height","warmup","frames","rounds","profile","shaderProfile","opticalShaderProfile","opticalShaderGroup","wallProfile","suite","cases","output")
                     .contains(arg.substring(2,at)))throw new IllegalArgumentException("unknown benchmark option: "+arg);
             if (values.put(arg.substring(2, at), arg.substring(at + 1)) != null)
                 throw new IllegalArgumentException("duplicate option: " + arg);

@@ -1,6 +1,8 @@
 param([Parameter(Mandatory=$true)][string]$TrialDirectory,
       [Parameter(Mandatory=$true)][string]$RuntimeClasspathFile,
-      [ValidateSet('off','timings')][string]$Mode='timings',
+      [ValidateSet('off','timings','optical')][string]$Mode='timings',
+      [ValidateRange(0,7)][int]$OpticalShaderGroup=0,
+      [ValidateSet('normal','stable')][string]$JvmMode='normal',
       [ValidateSet('micro','micro-checks','all','focused')][string]$Suite='micro',
       [string]$Label='first',[string]$Cases='',
       [ValidateRange(0,2147483647)][long]$FirstSequence=0,
@@ -26,8 +28,8 @@ nvidia-smi --query-gpu=index,name,utilization.gpu,power.draw,clocks.gr,temperatu
 $runtime=(Get-Content -Raw -Encoding UTF8 $RuntimeClasspathFile).Trim()
 $runtime=($runtime.Split(';') | Where-Object { [IO.Path]::GetFileName($_) -notlike 'renderer-core-*.jar' }) -join ';'
 $matrixClasspath=$matrixJar+';'+$coreJar+';'+$runtime
-$enabled=($Mode -eq 'timings').ToString().ToLowerInvariant()
-$matrixArguments=@('-Xmx768m','-XX:-UseJVMCICompiler','--enable-native-access=ALL-UNNAMED',
+$enabled=($Mode -ne 'off').ToString().ToLowerInvariant()
+$matrixArguments=@('-Xmx768m','--enable-native-access=ALL-UNNAMED',
     '--sun-misc-unsafe-memory-access=allow','-Dfile.encoding=UTF-8','-Dstdout.encoding=UTF-8','-Dstderr.encoding=UTF-8',
     '-Dtop.ceroxe.rt.medium.scatteringInlineQuery=true',
     "-Dtop.ceroxe.rt.medium.benchmarkFirstSequence=$FirstSequence",
@@ -35,6 +37,12 @@ $matrixArguments=@('-Xmx768m','-XX:-UseJVMCICompiler','--enable-native-access=AL
     "--warmup=$Warmup","--frames=$Frames","--rounds=$Rounds","--profile=$enabled","--wallProfile=$enabled",
     "--output=$runDir")
 if($Cases){$matrixArguments+="--cases=$Cases"}
+if($Mode -eq 'optical'){$matrixArguments+='--opticalShaderProfile=true';$matrixArguments+="--opticalShaderGroup=$OpticalShaderGroup"}
+if($JvmMode -eq 'stable'){$matrixArguments=@('-XX:ReservedCodeCacheSize=256m','-XX:-UseJVMCICompiler',
+    '-XX:ActiveProcessorCount=4','-XX:TieredStopAtLevel=1')+$matrixArguments}
+@{jvmMode=$JvmMode;arguments=$matrixArguments;inheritedJavaToolOptions=$env:JAVA_TOOL_OPTIONS;
+    javaVersion=(& java -version 2>&1 | Out-String)} | ConvertTo-Json -Depth 4 |
+    Set-Content -Encoding UTF8 (Join-Path $runDir 'runtime.json')
 Push-Location (Join-Path $repoRoot 'demos/hex-ball')
 try {
     $ErrorActionPreference='Continue'
@@ -42,7 +50,7 @@ try {
     $runCode=$LASTEXITCODE
     $ErrorActionPreference='Stop'
     if($runCode -ne 0){Get-Content (Join-Path $runDir 'run.log') -Tail 30;throw "Medium feature matrix failed: exit $runCode"}
-    $suffix=if($Mode -eq 'timings'){'profiled'}else{'unprofiled'}
+    $suffix=if($Mode -ne 'off'){'profiled'}else{'unprofiled'}
     $coverage=Get-Content -Raw -Encoding UTF8 (Join-Path $runDir "$Suite-$suffix-coverage.json") | ConvertFrom-Json
     if(!$Cases -and $Suite -in @('all','micro-checks') -and !$coverage.complete){throw 'Full medium matrix did not establish complete feature coverage'}
     Write-Output "Matrix completed: mode=$Mode cases=$($coverage.cases.Count) complete=$($coverage.complete)"

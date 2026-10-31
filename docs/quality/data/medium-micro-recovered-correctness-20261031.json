@@ -1,0 +1,91 @@
+{
+  "sourceCommit": "9a9c753",
+  "scope": "Correctness recovery and baseline only; no performance optimization or complete API revalidation claimed",
+  "scene": {
+    "scene": "micro-all",
+    "width": 1920,
+    "height": 1080,
+    "spp": 1,
+    "maxEvents": 24,
+    "opticalSamples": 2,
+    "scatteringSteps": 8,
+    "lightSamples": 0,
+    "maxDistance": 32.0,
+    "transmittanceCutoff": 0.0001,
+    "scatteringBounces": 2,
+    "firstInterfaceSampling": "DETERMINISTIC_SPLIT"
+  },
+  "jvm": "ReservedCodeCacheSize=256m; -UseJVMCICompiler; ActiveProcessorCount=4; TieredStopAtLevel=1; UTF-8",
+  "initialGpu": "0, NVIDIA GeForce RTX 5080 Laptop GPU, 2 %, 28.04 W, 1537 MHz, 54",
+  "artifacts": [
+    {
+      "Algorithm": "SHA256",
+      "Hash": "02E7FFDD728985940E33D5087717A7E2440E971249BB1C5685359E4022590B19",
+      "Path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\interior-scatter-origin\\candidate-core.jar"
+    },
+    {
+      "Algorithm": "SHA256",
+      "Hash": "52E81F76F326A1E70D4561B85E1467A9A1F4838AB40CA78B39799A995C531DEB",
+      "Path": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\medium-micro-all-20261031\\interior-scatter-origin\\matrix-test-classes.jar"
+    }
+  ],
+  "correctness": {
+    "scatterOriginNativeRegression": "passed",
+    "fixedFrame57": "passed",
+    "fullWindowTotalFrames": 72,
+    "boundaryNativeComparisons": 27,
+    "opticalNativeComparisons": 46,
+    "opticalNativeFrames": 152,
+    "microChecksCases": 7,
+    "microChecksFeatures": 46,
+    "microChecksComplete": true
+  },
+  "measurements": {
+    "extended-correctness-matrix-off": {
+      "frames": 64,
+      "wallMs": 37848.9745,
+      "msPerFrame": 591.3902265625,
+      "fps": 1.6909308863837251,
+      "sha256": "a5cd58b36994d8ba13bf0b18b17a5cc3cbc6f05478c7e7448b9fde24a03e1608"
+    },
+    "fresh-rank-matrix-timings": {
+      "frames": 64,
+      "wallMs": 39146.9204,
+      "msPerFrame": 611.67063125,
+      "fps": 1.6348667876311413,
+      "sha256": "b9b8c442be3d7784e295f5ce1d5f5b4c3c81d4d9e3ec6b7ce9672732c1d45955"
+    }
+  },
+  "observationOverheadPct": 3.4292762674455135,
+  "rawLogs": {
+    "spawn-regression-retry.log": {
+      "sha256": "6e775fb02ebb8df9af691eb3778ef60b91b9e0c1ed345f22a5215919f0c0b1a5",
+      "bytes": 476
+    },
+    "CudaBoundaryMediumProductionNativeSelfTest.log": {
+      "sha256": "f9ea8c36d31440b243ff1774aaba05fbfcd0f2079a524e948c19b3488e4121ea",
+      "bytes": 3428
+    },
+    "CudaOpticalMediumProductionNativeSelfTest.log": {
+      "sha256": "da4f3beda52982e46c5f12ff974dd55cb9999b7b0442cae820d2ddaadedcea0b",
+      "bytes": 962
+    },
+    "fixed-seed-57-matrix-off/run.log": {
+      "sha256": "d4356217bb6ff4209c253c6b711b96ec05824b6372b9046c56f062b688d58771",
+      "bytes": 1531
+    },
+    "extended-correctness-matrix-off/run.log": {
+      "sha256": "60d5d325db3ccdd11e1a28b6e0a282d7967a6ef6f9ae391fb0b0ecea0bac908b",
+      "bytes": 2211
+    },
+    "correctness-matrix-off/run.log": {
+      "sha256": "696e5bd933f96bd04f5705483ef77a6e88983286580d5d03514fab7a08675b74",
+      "bytes": 8281
+    },
+    "fresh-rank-matrix-timings/run.log": {
+      "sha256": "66e5aadcf321835126dcc6ee61d0b202edeb49151b76967f578c376ea0ef98f6",
+      "bytes": 9449
+    }
+  },
+  "rankFile": "medium-micro-recovered-ranked-20261031.json"
+}

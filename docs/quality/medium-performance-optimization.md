@@ -2,6 +2,8 @@
 
 本规范用于持续优化内置介质渲染路径，并作为后续性能工作的交接记录。优化由单一执行线程顺序推进，任何性能结论都绑定到固定场景、画质、GPU、驱动和制品。
 
+最新恢复记录见文末“重启后正确性恢复与 micro-all 新基线”。此前默认均匀场景的高帧率不适用于新的全路径 micro-all 场景；当前主目标仍是后者的原生 180 FPS。
+
 每次上传必须包含当前全部源码、测试、文档及生成的着色器改动，统一提交并推送到 `main`，上传后确认 `git status --porcelain` 为空。构建产物和 Python 字节码缓存按仓库忽略规则处理，不把源码改动留在工作区等待后续上传。
 
 ## 目标场景与优化终点
@@ -1171,3 +1173,29 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 正确性：CPU ABI 精确预算/低预算回退/相对偏移和非法布局通过；CUDA component 包含 SPP2、1/8/64 步、514 条非整 block 路径、camera lane 不可变和非法 flag 拒绝。1080p 8 帧、query/no-query 灯光及 cached-primary 矩阵 90 帧，共 98 帧 HDR 全字节一致。PBR 31 项/43 帧、组合 15 项、camera 独立参考 17 项、多次散射解析回归通过；13 份 validation 日志会话均关闭，零 warning/error/drop。完整 API 门禁尚未重新执行，不能把此前全门禁套用到本提交。
 
 [冻结制品、正反序窗口与正确性证据](data/scattering-joint-batch-20261031.json)、[完整互斥墙钟排名](data/scattering-joint-batch-ranked-20261031.json)。
+
+
+### 重启后正确性恢复与 micro-all 新基线
+
+生产修复 `741ac22` 保留边界行列式求和与除法中的低位残差，避免三角形顶点排列改变入/出界事件次序；`71e4e47` 在几何误差带内沿入射线段保守构造散射起点，避免精确内点舍入到体积外后重复入栈。严格栈检查、散射预算、PDF 和贡献权重均保留。依据固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`shapes.cpp` 的稳健交点与 `ray.h` 的误差界/舍入原则独立适配；不能声称 PBRT 原样采用本项目散射起点实现。
+
+重启后重建有效制品，并重新通过六种顶点排列边界回归、CUDA 散射起点独立回归、固定帧 57、72 帧 micro-all 完整窗口、边界原生 HDR 27 组、光学原生 HDR 46 组/152 帧，以及 micro-checks 七场景/46 功能检查。这里仅声明本轮相关路径通过，不代表完整 API 门禁已重新运行。
+
+`9a9c753` 制品，1920×1080、1 SPP、maxEvents=24、opticalSamples=2、scatteringSteps=8、scatteringBounces=2、photons=65536；关闭 FG、降噪、重建、时域和 CPU 读回。两窗均 8 帧预热、4×16 测量。稳定诊断 JVM 为 `ReservedCodeCacheSize=256m -UseJVMCICompiler ActiveProcessorCount=4 TieredStopAtLevel=1`，因此以下不能充当正常生产 JIT 最终验收。初始 GPU0 占用 2%。关闭观测 591.390227 ms/帧、1.690931 FPS；开启观测 611.670631 ms/帧、1.634867 FPS，开销 3.4293%。1,643,763 条区间零丢样。
+
+| 排名 | 互斥 host 阶段 | ms/帧 | 每秒累计 ms | 占比 |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | Vulkan 完成 fence 等待 | 304.600523 | 497.981279 | 49.7981% |
+| 2 | CUDA stream 同步 | 194.902239 | 318.639197 | 31.8639% |
+| 3 | CUDA kernel 入队 | 25.064188 | 40.976608 | 4.0977% |
+| 4 | Vulkan release 录制 | 16.248348 | 26.563885 | 2.6564% |
+| 5 | CUDA semaphore 等待入队 | 11.666298 | 19.072844 | 1.9073% |
+| 6 | Vulkan consumer 提交 | 11.470927 | 18.753437 | 1.8753% |
+| | 其余 64 项 | 47.718108 | 78.012750 | 7.8013% |
+| | **互斥求和** | **611.670631** | **1000.000000** | **100.0000%** |
+
+同窗嵌套 GPU 证据：continuation trace 174.093372 ms/帧、923.656 次/帧；CUDA optical step 149.104245 ms/帧、939.656 次/帧。它们不能再加进上表。第一名内部前五项的互斥 shader 排名尚待采集，不以这些嵌套项凑数。
+
+恢复 opt-in shader 观测时保留两轮 queued 调度，将两份采样数据异步下载到预分配 pinned host 内存，在原有同步之后汇总；记录偏移取当前 `plan.bytes()`。主机仅遍历所选组并按 stage 汇总，避免逐样本字符串和锁。默认关闭，无新增生产观测工作。工具支持独立 `normal/stable` JVM 模式并记录实参；冻结 benchmark 必须同时包含 demo main 与 test 类。后续先测观测开销，再对照 PBRT wavefront 活跃队列检查全尺寸 inactive 调度，不能提前宣布性能收益。
+
+[本轮正确性、制品哈希和观测开销](data/medium-micro-recovered-correctness-20261031.json)、[完整互斥排名](data/medium-micro-recovered-ranked-20261031.json)。

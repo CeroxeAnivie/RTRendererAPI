@@ -24,6 +24,7 @@ public final class OpticalDetailedProfile {
         static final ThreadLocal<String> scope=ThreadLocal.withInitial(()->"unscoped");
         static final Map<String,Long> totals=new TreeMap<>();
         static final ThreadLocal<java.util.List<Pending>> pending=ThreadLocal.withInitial(java.util.ArrayList::new);
+        static final ThreadLocal<long[]> shaderAggregation=ThreadLocal.withInitial(()->new long[STAGES*2]);
     }
     private record Pending(String scope,String name,RtGpuTimestampPool.Capture capture){}
     public static void scope(int tile,int sample,int branch,int round){
@@ -45,10 +46,17 @@ public final class OpticalDetailedProfile {
         return CAMERA_SCATTERING_SHADERS&&Math.floorMod(Math.floorDiv(frameSequence,8L),4L)==0L;
     }
     public static void shaderSamples(MemorySegment values,int paths){
-        for(int sample=0;sample<(paths+STRIDE-1)/STRIDE;sample++)for(int stage=0;stage<STAGES;stage++){
+        if(!SHADERS)return;
+        int first=switch(GROUP){case 0->0;case 1->24;case 2->48;case 3->64;case 4->96;case 5->124;case 6->152;case 7->160;
+            default->throw new IllegalArgumentException("optical shader group must be between 0 and 7");};
+        int end=switch(GROUP){case 0->24;case 1->48;case 2->64;case 3->96;case 4->124;case 5->152;case 6->160;default->STAGES;};
+        long[] totals=Records.shaderAggregation.get();java.util.Arrays.fill(totals,first*2,end*2,0L);
+        for(int sample=0;sample<Math.ceilDiv((long)paths,STRIDE);sample++)for(int stage=first;stage<end;stage++){
             long at=((long)sample*STAGES+stage)*16,ticks=values.get(ValueLayout.JAVA_LONG,at),calls=values.get(ValueLayout.JAVA_LONG,at+8);
-            if(calls!=0){add("shader/"+stage+"/ticks",ticks);add("shader/"+stage+"/calls",calls);}
+            if(calls!=0){totals[stage*2]=Math.addExact(totals[stage*2],ticks);totals[stage*2+1]=Math.addExact(totals[stage*2+1],calls);}
         }
+        for(int stage=first;stage<end;stage++)if(totals[stage*2+1]!=0){
+            add("shader/"+stage+"/ticks",totals[stage*2]);add("shader/"+stage+"/calls",totals[stage*2+1]);}
     }
     public static void cameraScatteringShaderSamples(MemorySegment values,int paths,long frameSequence){
         long records=(paths+(long)CAMERA_SCATTERING_STRIDE-1)/CAMERA_SCATTERING_STRIDE;
