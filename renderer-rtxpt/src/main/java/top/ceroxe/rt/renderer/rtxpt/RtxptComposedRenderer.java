@@ -50,14 +50,19 @@ public final class RtxptComposedRenderer implements Renderer {
                 ||legacyConfiguration.frameGeneration().preference().requested()
                 ||legacyConfiguration.lowLatency().preference().requested())
             throw new IllegalArgumentException("Only RTXPT owns Streamline in composed mode; legacy SR/NIS/FG/Reflex must be disabled");
-        Renderer legacy=Renderer.open("vulkan-rt",legacyConfiguration);
+        // RTXPT must load its pinned Streamline modules before the optional legacy provider's
+        // bridge DLL; Windows reuses modules by basename within one process.
+        RtxptRenderer rtxpt=new RtxptRenderer(rtxptConfiguration,true);
+        Renderer legacy=null;
         VulkanFramePresenter presenter=null;
         try {
+            legacy=Renderer.open("vulkan-rt",legacyConfiguration);
             presenter=VulkanFramePresenter.open(legacy,window);
-            return new RtxptComposedRenderer(policy,legacy,new RtxptRenderer(rtxptConfiguration,true),presenter);
+            return new RtxptComposedRenderer(policy,legacy,rtxpt,presenter);
         } catch(RuntimeException|Error failure) {
             if(presenter!=null)try{presenter.close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
-            try{legacy.close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
+            if(legacy!=null)try{legacy.close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
+            try{rtxpt.close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
             throw failure;
         }
     }
@@ -158,7 +163,13 @@ public final class RtxptComposedRenderer implements Renderer {
     @Override public Optional<FrameSnapshot> awaitFrame(Duration timeout){ready();Objects.requireNonNull(timeout);return pollFrame();}
     @Override public ResourceTransactionEvidence submitResources(RenderResourceTransaction tx){ready();return legacy.submitResources(tx);}
     @Override public Optional<ResourceResidencyEvidence> resourceResidencyEvidence(ResourceGenerationKey key){ready();return legacy.resourceResidencyEvidence(key);}
-    @Override public RenderingSemanticCapabilities renderingSemanticCapabilities(){return legacy.renderingSemanticCapabilities();}
+    @Override public RenderingSemanticCapabilities renderingSemanticCapabilities(){
+        var builder=RenderingSemanticCapabilities.builder();
+        legacy.renderingSemanticCapabilities().entries().forEach(builder::feature);
+        return builder.feature(RenderingSemanticCapabilities.Feature.COMBINED_WORKLOADS,
+            new RenderingSemanticCapabilities.Entry(RenderingSemanticCapabilities.Status.UNSUPPORTED,
+                "Use explicit legacy commands and overlays; a legacy combined workload cannot inject commands into RTXPT light transport")).build();
+    }
     @Override public CommandExecutionEvidence submitCommands(RenderCommandTransaction tx){ready();return legacy.submitCommands(tx);}
     @Override public Optional<CommandExecutionEvidence> commandExecutionEvidence(long id){ready();return legacy.commandExecutionEvidence(id);}
     @Override public void close(){
