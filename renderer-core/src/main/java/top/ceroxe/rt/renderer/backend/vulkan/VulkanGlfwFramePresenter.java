@@ -712,6 +712,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         retireAllFrameContexts();
         for(var frame:d3d12Frames.values())frame.close();
         d3d12Frames.clear();
+        if(d3d12Composition!=null){d3d12Composition.close();d3d12Composition=null;}
         lastD3D12Sequence=-1;
     }
 

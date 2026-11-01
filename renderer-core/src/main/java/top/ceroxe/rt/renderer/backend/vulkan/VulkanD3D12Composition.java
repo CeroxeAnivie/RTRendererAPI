@@ -4,6 +4,7 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 import top.ceroxe.rt.renderer.rt.device.RtGpuImage;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
+import top.ceroxe.rt.renderer.rt.diagnostics.NativeMemoryDiagnostics;
 import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameCompositionPipeline;
 
 /** Reuses the existing premultiplied-alpha composition shader; no new lighting or UI shader. */
@@ -26,6 +27,7 @@ final class VulkanD3D12Composition implements AutoCloseable {
         try {
             bases[slot]=RtGpuImage.createStorageImage(runtime.device(),runtime.allocator(),width,height,VK10.VK_FORMAT_R8G8B8A8_UNORM);
             outputs[slot]=RtGpuImage.createStorageImage(runtime.device(),runtime.allocator(),width,height,VK10.VK_FORMAT_R8G8B8A8_UNORM);
+            NativeMemoryDiagnostics.checkpoint("vulkan.d3d12-composition.allocate",slot,bases[slot].allocationSize()+outputs[slot].allocationSize());
         } catch(RuntimeException|Error failure) {
             if(bases[slot]!=null)bases[slot].close();bases[slot]=null;
             if(outputs[slot]!=null)outputs[slot].close();outputs[slot]=null;
@@ -73,8 +75,10 @@ final class VulkanD3D12Composition implements AutoCloseable {
         VK10.vkCmdPipelineBarrier(commands,srcStage,dstStage,0,null,null,barrier);
     }
     @Override public void close() {
-        for(var image:bases)if(image!=null)image.close();
-        for(var image:outputs)if(image!=null)image.close();
+        long released=0;
+        for(var image:bases)if(image!=null){released+=image.allocationSize();image.close();}
+        for(var image:outputs)if(image!=null){released+=image.allocationSize();image.close();}
+        NativeMemoryDiagnostics.checkpoint("vulkan.d3d12-composition.release",0,released);
         pipeline.close();
     }
 }

@@ -48,6 +48,8 @@ try (var renderer = RtxptComposedRenderer.openRtxptPresentation(legacy, rtxpt, "
 
 每次 resize、重建、关闭或完整 3D 切换，先 `retireD3D12SharedFrames()` 等已有消费者完成，再退休生产槽／句柄。消费者退休失败则保留生产资源供重试，不能直接销毁。拒收的新 descriptor 由生产侧在消费者成功退休后按队列顺序回收，避免孤立 ready 值卡住后续工作。
 
+原生最终呈现把叠层改为空列表时，同样先排空消费者，然后立即释放三槽共享图和 Vulkan 合成临时图／管线；不把已停用的显存留到 renderer 关闭。重新启用叠层按需重建。此等待只发生在显式停用或退休边界，不放进正常帧循环。
+
 内存采用 dedicated import，fence 采用 [Khronos 推荐的 timeline semaphore 方式](https://docs.vulkan.org/refpages/latest/refpages/source/VkD3D12FenceSubmitInfoKHR.html)。[规范明确忽略 D3D12_RESOURCE 的 allocationSize 输入](https://docs.vulkan.org/refpages/latest/refpages/source/VkMemoryAllocateInfo.html)，由驱动查询 OS 分配；不能拿普通 Vulkan image requirement 大小否决 D3D12 纹理。共享颜色纹理保留 NVRHI 的默认 shader-resource 标志，不设置仅供深度模板使用的 [DENY_SHADER_RESOURCE](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_resource_flags)；不因此创建额外 SRV。
 
 ## 颜色、叠层和高级能力边界

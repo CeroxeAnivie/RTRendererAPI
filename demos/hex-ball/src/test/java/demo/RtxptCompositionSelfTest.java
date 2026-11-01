@@ -170,7 +170,8 @@ public final class RtxptCompositionSelfTest {
         try(var renderer=RtxptComposedRenderer.openRtxptPresentation(
                 RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),config,"RTRendererAPI - Medium Demo")) {
             renderer.apply(RtxptMediumScene.create(1,"mixed"));
-            if(!mode.equals("return-no-overlay"))renderer.overlays(List.of(createOverlay(renderer)));
+            FrameCompositionPlan.Layer layer=null;
+            if(!mode.equals("return-no-overlay")){layer=createOverlay(renderer);renderer.overlays(List.of(layer));}
             renderer.submit(RtxptMediumDemo.frameRequest(sequence++,1,WIDTH,HEIGHT));
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
             for(int i=0;i<90;i++)require(host.renderFrame(),"Native final viewport stays open");
@@ -210,6 +211,16 @@ public final class RtxptCompositionSelfTest {
             host.setOverlayText("");require(host.renderFrame(),"Capture frame");
             host.capture(output.resolve("native-ui-final.png"));renderer.captureRtxptSource(output.resolve("native-ui-source.png"));
             compare(output.resolve("native-ui-source.png"),output.resolve("native-ui-final.png"),true);
+            renderer.overlays(List.of());
+            for(int i=0;i<3;i++)require(host.renderFrame(),"Overlay disabled without retaining shared frames");
+            host.capture(output.resolve("native-overlay-disabled.png"));
+            renderer.captureRtxptSource(output.resolve("native-overlay-disabled-source.png"));
+            compare(output.resolve("native-overlay-disabled-source.png"),output.resolve("native-overlay-disabled.png"),false);
+            renderer.overlays(List.of(java.util.Objects.requireNonNull(layer)));
+            for(int i=0;i<3;i++)require(host.renderFrame(),"Overlay recreated after freeing temporary images");
+            host.capture(output.resolve("native-overlay-restored.png"));
+            renderer.captureRtxptSource(output.resolve("native-overlay-restored-source.png"));
+            compare(output.resolve("native-overlay-restored-source.png"),output.resolve("native-overlay-restored.png"),true);
             require(renderer.workSnapshot().presentation().presentSamples()==0,"Hidden Vulkan compositor never presented a frame");
             require(renderer.workSnapshot().legacyFrames()==0,"Vulkan did not duplicate complete 3D tracing");
             host.setOverlayText("RTRendererAPI 7.0.0 - MEDIUM DEMO\nRTXPT: RR / FG / MFG / REFLEX | VULKAN: GPU UI");

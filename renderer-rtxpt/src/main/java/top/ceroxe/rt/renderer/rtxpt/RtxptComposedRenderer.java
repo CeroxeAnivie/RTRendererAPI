@@ -115,6 +115,9 @@ public final class RtxptComposedRenderer implements Renderer {
     public void overlays(List<FrameCompositionPlan.Layer> layers){
         ready();var next=List.copyOf(Objects.requireNonNull(layers,"layers"));
         if(next.size()>7)throw new IllegalArgumentException("At most seven overlays after the RTXPT base layer");
+        // A disabled returning compositor has no consumer left to reuse these allocations.
+        // Drain before dropping the callback or freeing either API's shared resources.
+        if(nativePresentation&&next.isEmpty()&&!overlays.isEmpty())retireExternalFrames();
         if(nativePresentation)rtxpt.compositor(next.isEmpty()?null:values->{
             try{presenter.composeD3D12SharedFrame(new top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame(
                 values[0],values[1],values[2],(int)values[3],(int)values[4],values[5],values[6],values[7],values[8],values[9]),overlays);}

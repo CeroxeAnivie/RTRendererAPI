@@ -70,6 +70,7 @@ public final class RtxptMediumDemoSelfTest {
                 host.capture(output.resolve(name+".png"));
                 Files.writeString(output.resolve(name+"-hud.txt"),hud);
                 var image=ImageIO.read(output.resolve(name+".png").toFile());
+                RtxptCompositionSelfTest.requireVisibleHud(output.resolve(name+".png"));
                 require(image!=null&&image.getWidth()==display.outputWidth()&&image.getHeight()==display.outputHeight(),"Capture matches actual window extent");
                 int low=255,high=0;
                 for(int y=image.getHeight()/2;y<image.getHeight()*9/10;y+=7)
