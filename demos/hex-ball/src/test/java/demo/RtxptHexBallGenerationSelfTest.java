@@ -9,6 +9,7 @@ import top.ceroxe.rt.renderer.rtxpt.RtxptAccess;
 /** Measures SDK delivery counters, never infers generated frames from requested settings. */
 public final class RtxptHexBallGenerationSelfTest {
     private static long sequence;
+    private static long revision;
     private static FramePrimitiveBatch previous=FramePrimitiveBatch.empty();
     public static void main(String[] args) throws Exception {
         Path output=Path.of(args[0]).toAbsolutePath();
@@ -19,7 +20,7 @@ public final class RtxptHexBallGenerationSelfTest {
         var config=DemoRendererProfile.rtxptInteractive();
         var csv=new StringBuilder("stage,width,height,native_frames,actual_presented,actual_generated,ratio,wall_ms,native_fps,actual_presented_fps,query_failures,status\n");
         try(var renderer=Renderer.open("rtxpt",config)) {
-            renderer.apply(scene.initialTransaction());
+            revision=renderer.apply(scene.initialTransaction()).acceptedSceneRevision();
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
             var controller=renderer.extension(RendererFeatureController.class).orElseThrow();
             for(int multiplier:new int[]{1,2,3,4,1}) {
@@ -79,7 +80,7 @@ public final class RtxptHexBallGenerationSelfTest {
         for(int step=0;step<4;step++)physics.stepForTesting();
         var batch=scene.primitiveBatch(physics,previous);
         renderer.submit(DemoRendererProfile.frame(sequence++,width,height,DemoRendererProfile.camera(width,height,15.4))
-            .minimumSceneRevision(1).primitiveBatch(batch).environment(DemoRendererProfile.environment())
+            .minimumSceneRevision(revision).primitiveBatch(batch).environment(DemoRendererProfile.environment())
             .antiAliasing(DemoRendererProfile.antiAliasing(1)).build());
         previous=batch;
     }

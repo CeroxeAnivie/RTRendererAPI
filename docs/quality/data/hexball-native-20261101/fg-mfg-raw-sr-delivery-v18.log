@@ -1,0 +1,5 @@
+Exception in thread "main" java.lang.IllegalArgumentException: Scene revision is not resident
+	at top.ceroxe.rt.renderer.rtxpt.RtxptRenderer.submit(RtxptRenderer.java:90)
+	at demo.RtxptHexBallGenerationSelfTest.frame(RtxptHexBallGenerationSelfTest.java:81)
+	at demo.RtxptHexBallGenerationSelfTest.measure(RtxptHexBallGenerationSelfTest.java:49)
+	at demo.RtxptHexBallGenerationSelfTest.main(RtxptHexBallGenerationSelfTest.java:35)
