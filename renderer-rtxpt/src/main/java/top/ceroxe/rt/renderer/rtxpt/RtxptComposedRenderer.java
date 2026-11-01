@@ -112,6 +112,12 @@ public final class RtxptComposedRenderer implements Renderer {
         var result=rtxpt.commitScene(prepared);routing=candidate;sceneRevision=tx.revision();return result;
     }
     @Override public FrameSubmissionResult submit(RenderFrameRequest frame){
+        var attempt=trySubmit(frame);
+        if(attempt instanceof FrameSubmitted accepted)return accepted.submission();
+        var deferred=(FrameSubmissionDeferred)attempt;
+        throw new SubmissionRejectedException(deferred.deferralReason(),deferred.detail());
+    }
+    @Override public FrameSubmissionAttempt trySubmit(RenderFrameRequest frame){
         ready();Objects.requireNonNull(frame,"frame");
         if(frame.sequence()<=sequence)throw new IllegalArgumentException("Frame sequence must increase across backend switches");
         if(routing==null)routing=new RendererSceneRouting(rtxpt.sceneSnapshot());
@@ -139,13 +145,17 @@ public final class RtxptComposedRenderer implements Renderer {
                 legacy.apply(snapshot);legacyRevision=snapshot.revision();legacyScenePublished=true;
             }
             var submitted=switched?frame.toBuilder().resetTemporalHistory(HistoryResetReason.EXPLICIT_RESET).build():frame;
-            result=legacy.submit(submitted);presenter.presentLatestFrame(overlays);legacyFrames++;
+            // Retire completed presents before testing admission; preserve the legacy bounded
+            // queue contract instead of converting recoverable backpressure into a hard failure.
+            presenter.presentLatestFrame(overlays);
+            var attempt=legacy.trySubmit(submitted);
+            if(attempt instanceof FrameSubmissionDeferred)return attempt;
+            result=((FrameSubmitted)attempt).submission();presenter.presentLatestFrame(overlays);legacyFrames++;
         }
         width=frame.width();height=frame.height();sequence=frame.sequence();selection=wanted;
-        return result;
+        return new FrameSubmitted(result);
     }
     private void retireExternalFrames(){presenter.retireD3D12SharedFrames();rtxpt.retireSharedFrames();}
-    @Override public FrameSubmissionAttempt trySubmit(RenderFrameRequest frame){return new FrameSubmitted(submit(frame));}
     @Override public <T> Optional<T> extension(Class<T> type){
         ready();Objects.requireNonNull(type,"extensionType");
         if(type.isInstance(this))return Optional.of(type.cast(this));

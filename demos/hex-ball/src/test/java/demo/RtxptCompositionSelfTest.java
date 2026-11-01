@@ -87,7 +87,12 @@ public final class RtxptCompositionSelfTest {
     private static void submit(RtxptComposedRenderer renderer,long revision,int width,int height){
         renderer.presenter().pollEvents();
         require(!renderer.presenter().windowState().closeRequested(),"Visible viewport stays open");
-        renderer.submit(RtxptMediumDemo.frameRequest(sequence++,revision,width,height));
+        var frame=RtxptMediumDemo.frameRequest(sequence++,revision,width,height);
+        long deadline=System.nanoTime()+10_000_000_000L;
+        while(renderer.trySubmit(frame) instanceof Renderer.FrameSubmissionDeferred){
+            require(System.nanoTime()<deadline,"Bounded Vulkan admission makes progress");
+            renderer.presenter().pollEvents();Thread.onSpinWait();
+        }
     }
     private static SceneTransaction ordinary(long revision){
         return SceneTransaction.builder(revision).resetScene()
