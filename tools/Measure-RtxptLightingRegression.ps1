@@ -8,9 +8,11 @@ param(
     [switch]$Reuse,
     [switch]$DisableResidualPointSampling,
     [switch]$ExactMis,
-    [switch]$DirectOnly
+    [switch]$DirectOnly,
+    [switch]$Relax
 )
 $ErrorActionPreference='Stop'
+if($Relax -and ($Reuse -or $DirectOnly)){throw 'RELAX comparison uses the full path without ReSTIR DI or direct-only rendering.'}
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
@@ -30,10 +32,11 @@ $settings=[ordered]@{
     Jvm=@('-Dfile.encoding=UTF-8','--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow',
         '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath)
     Entry=$(if($Suite -eq 'Generation'){'demo.RtxptHexBallGenerationSelfTest'}else{'top.ceroxe.rt.renderer.rtxpt.RtxptLightingNativeSelfTest'})
-    Arguments=@(if($Suite -eq 'Generation'){$output}else{$output;$Scene;[string]$Spp;$(if($Reuse){'reuse'}elseif($DirectOnly){'direct'}else{'raw'})})
+    Arguments=@(if($Suite -eq 'Generation'){$output}else{$output;$Scene;[string]$Spp;$(if($Reuse){'reuse'}elseif($DirectOnly){'direct'}else{'raw'});$(if($Relax){'relax'}else{'none'})})
     RuntimeSource='PackagedJar';JarSha256=(Get-FileHash -LiteralPath $jar).Hash
     ControlLighting=[bool]$ControlLighting;ControlDirectional=[bool]$ControlDirectional;Reuse=[bool]$Reuse
     DisableResidualPointSampling=[bool]$DisableResidualPointSampling;ExactMis=[bool]$ExactMis;DirectOnly=[bool]$DirectOnly
+    Relax=[bool]$Relax
     Spp=$Spp;StartedAt=(Get-Date -Format o)
 }
 $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
