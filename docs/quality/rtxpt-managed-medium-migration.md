@@ -94,4 +94,6 @@ RTXPT 弹球沿用原场景、相机及物理运动，三颗球改为透射率 1
 
 完整技术 HUD 使用上游 ImGui 绘制，显示实际输出尺寸、内部尺寸、原生帧率及技术状态。HUD 开启时使用异步 GPU 时间查询，不逐帧等待查询结果。颜色保留 RTXPT 默认光照、ACES、曝光及 bloom，不修改上游着色算法来追平旧 Vulkan 画面；两者的光源衰减和色调映射本来不同。
 
-弹球入口的功能开关直接复用 `DemoRendererProfile.interactive`，与原弹球 Demo 使用同一配置，包括默认 2× FG、DLSS SR、Reflex 和 SER。默认降噪关闭，因此此入口采用 DLSS 而非 DLSS-RR；SHaRC 沿用原配置关闭，不额外添加开关。窗口默认限制在 1920×1080 及屏幕可容纳范围内，显式宽高仍生效。HUD 的 FG 交付计数累计上游已有 `slDLSSGGetState` 查询的真实结果，不额外查询，也不将设定的 2× 直接当成实际交付帧率。
+弹球窗口默认限制在 1920×1080 及屏幕可容纳范围内，显式宽高仍生效。普通 Vulkan Demo 保留原金属球和原有默认配置；玻璃材质与封闭内部介质只在 RTXPT 入口启用，`--original-balls` 可在 RTXPT 中运行原金属球场景对照。HUD 的 FG 交付计数累计上游已有 `slDLSSGGetState` 查询的真实结果，不额外查询，也不将设定的 2× 直接当成实际交付帧率。
+
+直接照搬 Vulkan 的“无降噪＋DLSS SR”到 1 SPP 完整路径追踪，实测会产生明显噪点和拖尾，因此 RTXPT 入口恢复上游实时推荐的 DLSS-RR＋SHaRC，并继续共用原 Demo 的默认 2× FG、显式关闭 FG 和倍率控制。`--original-settings` 仅用于复现原错误配置、比较差异。原始 FG 关闭、各 30 秒对照证据保存在 `data/hexball-native-20261101/`，修复后的测量必须另列，不能覆盖基线。

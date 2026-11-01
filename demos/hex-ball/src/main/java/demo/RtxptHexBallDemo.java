@@ -16,7 +16,8 @@ public final class RtxptHexBallDemo {
         Path capture=Arrays.stream(args).filter(a->a.startsWith("--capture="))
             .map(a->Path.of(a.substring("--capture=".length()))).findFirst().orElse(null);
         boolean originalBalls=Arrays.asList(args).contains("--original-balls");
-        var demoArgs=DemoApiControls.parse(Arrays.stream(args).filter(a->!a.startsWith("--capture=")&&!a.equals("--original-balls")).toArray(String[]::new));
+        boolean originalSettings=Arrays.asList(args).contains("--original-settings");
+        var demoArgs=DemoApiControls.parse(Arrays.stream(args).filter(a->!a.startsWith("--capture=")&&!a.equals("--original-balls")&&!a.equals("--original-settings")).toArray(String[]::new));
         var config=DemoConfig.parse(demoArgs);
         if(config.windowed() && Arrays.stream(demoArgs).noneMatch(a->a.startsWith("--width="))) {
             config=new DemoConfig(Math.min(1920,Math.max(1,config.width()-160)),Math.min(1080,Math.max(1,config.height()-160)),
@@ -27,7 +28,7 @@ public final class RtxptHexBallDemo {
         var camera=DemoRendererProfile.camera(config.width(),config.height(),15.4);
         var environment=DemoRendererProfile.environment();
         var stats=new RenderStats();
-        try(var renderer=Renderer.open("rtxpt",DemoRendererProfile.interactive(config))) {
+        try(var renderer=Renderer.open("rtxpt",originalSettings?DemoRendererProfile.interactive(config):DemoRendererProfile.rtxptInteractive())) {
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
             long revision=renderer.apply(scene.initialTransaction()).acceptedSceneRevision();
             var physics=new HexPhysics();

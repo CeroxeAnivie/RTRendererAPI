@@ -1,0 +1,21 @@
+{
+  "SourceCommit": "5b29f277185da33f524f621c49da728144c1e107",
+  "OutputWidth": 2560,
+  "OutputHeight": 1440,
+  "SamplesPerPixel": 1,
+  "RequestedSeconds": 30,
+  "Windowed": true,
+  "FrameGeneration": false,
+  "Scene": "DemoScene(false), original metal balls",
+  "Java": "graalvm-jdk-25.0.5.0.2+1.1",
+  "JvmArgs": [
+    "-Ddemo.disable-fg=true",
+    "-Xmx3g",
+    "-XX:-UseJVMCICompiler"
+  ],
+  "Classpath": "demos/hex-ball/build/classes/java/main;demos/hex-ball/build/resources/main;renderer-api/build/classes/java/main;renderer-core/build/libs/renderer-core-7.0.0.jar;renderer-nvidia/build/libs/renderer-nvidia-7.0.0.jar;renderer-rtxpt/build/libs/renderer-rtxpt-7.0.0.jar;demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar",
+  "Entries": [
+    "demo.HexBallDemo",
+    "demo.RtxptHexBallDemo --original-balls"
+  ]
+}

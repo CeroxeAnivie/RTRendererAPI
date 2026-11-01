@@ -30,6 +30,13 @@ final class DemoRendererProfile {
         return DemoApiControls.configure(baseConfig(config.cpuPresentation() ? 4 : 3, config.cpuPresentation()));
     }
 
+    static RendererConfig rtxptInteractive() {
+        // RTXPT's 1-SPP realtime signal needs its native denoising/reconstruction pipeline.
+        // Keep the demo's FG controls, without importing Vulkan's surface-only no-denoiser policy.
+        return DemoApiControls.configure(RendererConfig.pathTracedPresentation().copyBuilder()
+                .frameGeneration(configuredGenerationPolicy()).gpuTimingsEnabled(true).build());
+    }
+
     static RendererConfig benchmark() {
         return RendererConfig.builder()
                 .maxFramesInFlight(8)

@@ -41,7 +41,22 @@ public final class DemoFeatureIntegrationSelfTest {
         boundsBlockedReasonsAndHandlesMissingCapabilityExtension();
         independentPublicApiControls();
         glassBallsHavePhysicalReflectionAndClosedInteriors();
+        rtxptRealtimeRetainsDenoisingAndDemoFgControl();
         System.out.println("DemoFeatureIntegrationSelfTest passed");
+    }
+    private static void rtxptRealtimeRetainsDenoisingAndDemoFgControl() {
+        String property=DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY;
+        String previous=System.getProperty(property);
+        try {
+            System.clearProperty(property);
+            var profile=DemoRendererProfile.rtxptInteractive();
+            require(profile.denoising().preference().requested(),"Realtime RTXPT must retain native denoising");
+            require(profile.pathTracing().radianceCache().requested(),"Realtime RTXPT must retain native radiance cache");
+            require(profile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X
+                &&profile.frameGeneration().preference().requested(),"Default demo FG remains 2x");
+            System.setProperty(property,"true");
+            require(DemoRendererProfile.rtxptInteractive().frameGeneration().equals(FrameGenerationOptions.disabled()),"Explicit FG-off remains effective");
+        } finally { restoreProperty(property,previous); }
     }
     private static void glassBallsHavePhysicalReflectionAndClosedInteriors() {
         var original=new DemoScene();var originalBatch=original.primitiveBatch(new HexPhysics(),top.ceroxe.rt.renderer.api.FramePrimitiveBatch.empty());
