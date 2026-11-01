@@ -94,7 +94,7 @@ if (m_ui.RealtimeAA != 3 && !m_ui.ActualUseStandaloneDenoiser()
             && !m_ui.ActualUseRTXDIPasses()) // RTR preserve RTXDI accumulated radiance
 '@ 'RTR preserve RTXDI accumulated radiance'
 # The filtered hit-distance texture is consumed by NRD, RR guides and debug views.
-# Opt-in quality/performance candidate: reuse native point sampling and shadow/BSDF
+# Scene-selected quality/performance policy: reuse native point sampling and shadow/BSDF
 # processing, while avoiding random selection between a handful of delta lights.
 [IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSmallPointNee.hlsli'),
     [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrSmallPointNee.hlsli')),$utf8)
@@ -118,6 +118,19 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            // this c
             #endif
             // this computes the BSDF throughput and (if throughput>0) then casts shadow ray and handles radiance summing up & weighted averaging for 'sample distance' used by denoiser
 '@ 'RTR avoid double-counting exact point contributions'
+# DirectionalLight::CalcSample returns a to-light direction, not a world position.
+# Match the pinned upstream IntroRTXDIBridge::RAB_GetLightDirDistance convention.
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidateSample.Direction = surfToLight / max( candidateSample.Distance, 1e-7 );' @'
+            candidateSample.Direction = surfToLight / max( candidateSample.Distance, 1e-7 );
+            // RTR directional samples carry directions, not world positions.
+            #if !defined(RTR_ORIGINAL_DIRECTIONAL_POSITION)
+            if (PolymorphicLight::DecodeType(packedLightInfo) == PolymorphicLightType::kDirectional)
+            {
+                candidateSample.Direction = lightSample.Position;
+                candidateSample.Distance = 1e6;
+            }
+            #endif
+'@ 'RTR directional samples carry directions'
 # Raw SR/TAA/reference output does not read it; retain upstream filtering for every consumer.
 Patch-Once 'Rtxpt/AdvancedSample.cpp' '        m_denoisingGuidesBaker->DenoiseSpecHitT(m_commandList, m_bindingSet);' @'
         // RTR filter hit distance only when a consumer is active

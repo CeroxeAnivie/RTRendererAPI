@@ -24,6 +24,10 @@ pathtrace=advanced.split("void AdvancedPathTracer::PathTrace(",1)[1]
 assert pathtrace.count("PostProcess::ComputePassType::NoDenoiserFinalMerge")==1
 assert pathtrace.index("PostProcess::ComputePassType::NoDenoiserFinalMerge")<pathtrace.index("m_rtxdiPass->Execute("), "Initialize raw color before RTXDI adds lighting"
 assert "!m_ui.ActualUseStandaloneDenoiser() && m_ui.ActualUseRTXDIPasses()" in pathtrace
+nee=args.source.parent.joinpath("Shaders/PathTracer/PathTracerNEE.hlsli").read_text(encoding="utf-8-sig")
+assert "candidateSample.Direction = lightSample.Position;" in nee
+assert "candidateSample.Distance = 1e6;" in nee
+assert "PolymorphicLightType::kDirectional" in nee, "General NEE must match upstream directional sample semantics"
 result={"source_contract":"PASS","gpu_contract":"not_requested"}
 if args.profile:
     frames=defaultdict(dict)

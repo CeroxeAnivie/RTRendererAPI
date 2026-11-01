@@ -54,3 +54,17 @@ Demo 默认改回上游联合降噪/重建 **DLSS RR**，不叠加 standalone RE
 - 复用 RTXPT 的 `PolymorphicLight::CalcSample` 与 `ProcessLightSample`，不另写 BRDF、阴影、介质可见性或合成算法。
 - 同时使用已有原生 power sampler，避免为这个少量灯的场景维护整套屏幕反馈采样；不会启用 NRD/RR/ReSTIR/SHaRC。
 - 不以删减反弹、降低内部尺寸、改变 1 SPP、降低输出分辨率换成绩。必须图像正确且整帧性能不降才可成为默认；失败保留证据并撤候选。
+
+## 已测候选收益与通用范围修正
+
+v16 对照两轮初始 GPU 都为 0%。2560×1440 输出、1485×835 输入、1 SPP、纯 SR、FG off，30 秒完整窗口平均：原始路径 212.953667 FPS，点光候选 242.158915 FPS，增加 13.71%。v15 同一确定性画质序列静止 ROI 帧间 RGB MAE 从 2.741416/255 降到 0.779824/255，减少 71.55%。这些数字是弹球场景的实测，不能当成全场景收益。
+
+用户要求是渲染器级通用修复。现在按内容自动选择：原始 1-SPP SR、无降噪/重采样/缓存、至多四个解析光、有零半径点光或聚光、没有发光材质时使用原生 power sampler 与 delta 求和；环境光不计入解析光上限。其余场景保留上游可扩展采样，不能把 fallback 说成噪声已经解决。场景加载时重算资格，退出分支恢复原 NEE 策略，不在每帧扫描材质。不再依赖 Demo 名称或材质数量特判。诊断开关 `0` 可强制原始对照，未设置时自动选择。
+
+### 更广泛的明确错误：方向光样本语义
+
+固定版本 `PolymorphicLight.hlsli::DirectionalLight::CalcSample` 将光线方向直接存入 `Position`；普通 `PathTracerNEE.hlsli::GenerateLightSample` 却一律执行 `Position - shadingData.posW`，把它当世界坐标。这样光照方向与遮挡射线长度错误地依赖物体世界位置。官方同版本 `IntroRTXDIBridge.hlsli::RAB_GetLightDirDistance` 已有正确逻辑：方向直接使用样本向量，阴影距离为 1e6。
+
+桥接构建脚本据此修正普通 NEE 的方向光分支，点光、聚光、面积光、环境光的坐标处理保持原生。`RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_CONTROL=1` 仅用于复现错误的 A/B 对照。通用回归覆盖四点灯、聚光、多灯、发光网格、环境、方向光、玻璃/嵌套吸收混合；整体平移场景和相机检查方向光不变性，并留四帧截图与 32-SPP 独立参照。此处是待实测的验证设计，不提前宣称通过。
+
+FG/MFG 新增交付验证在实际打包 JAR 上运行：OFF→2×→3×→4×→OFF，4× 期间来回 resize；每阶段预热后测 360 个原生帧，读取 SDK 的实际呈现计数差，不能把请求倍率当结果。沿用纯 SR，无 NRD/RR/SHaRC。质量测试中的截图读回时间不作为正常游戏 FPS。

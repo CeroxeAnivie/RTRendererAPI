@@ -27,13 +27,62 @@ extern SampleUIData g_sampleUIData;
 
 namespace {
 class HostPathTracer final : public AdvancedPathTracer {
+    bool smallPointLighting=false;
+    bool lightingSceneDirty=true;
+    bool eligibleLightingScene=false;
+    int previousNeeType=2;
+    bool smallPointScene() const {
+        if(!GetScene())return false;
+        const auto graph=GetScene()->GetSceneGraph();
+        const auto& lights=graph->GetLights();
+        size_t analyticCount=0;
+        bool pointFound=false;
+        for(const auto& light:lights) {
+            const auto type=light->GetLightType();
+            if(type==LightType_Point || type==LightType_Spot || type==LightType_Directional)++analyticCount;
+            if(type==LightType_Point
+                && static_cast<const donut::engine::PointLight*>(light.get())->radius==0.f)
+                pointFound=true;
+            if(type==LightType_Spot
+                && static_cast<const donut::engine::SpotLight*>(light.get())->radius==0.f)
+                pointFound=true;
+        }
+        if(!pointFound || analyticCount>4)return false;
+        for(const auto& material:graph->GetMaterials())
+            if(material->emissiveColor.x!=0.f || material->emissiveColor.y!=0.f || material->emissiveColor.z!=0.f)
+                return false;
+        return true;
+    }
 public:
     using AdvancedPathTracer::AdvancedPathTracer;
+    void SceneLoaded() override {
+        AdvancedPathTracer::SceneLoaded();
+        lightingSceneDirty=true;
+    }
+    void UpdateLightingPolicy() {
+        if(lightingSceneDirty) {
+            eligibleLightingScene=smallPointScene();
+            lightingSceneDirty=!GetScene();
+        }
+        const char* overrideValue=std::getenv("RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS");
+        const bool rawPolicy=g_sampleUIData.RealtimeMode && g_sampleUIData.RealtimeAA==2
+            && !g_sampleUIData.StandaloneDenoiser && !g_sampleUIData.ActualUseRTXDIPasses()
+            && g_sampleUIData.ActualRadianceCacheMode()==0 && g_sampleUIData.ActualSamplesPerPixel()==1;
+        const bool enabled=eligibleLightingScene && rawPolicy && !(overrideValue && std::string(overrideValue)=="0");
+        if(enabled==smallPointLighting)return;
+        if(enabled) {previousNeeType=g_sampleUIData.NEEType;g_sampleUIData.NEEType=1;}
+        else g_sampleUIData.NEEType=previousNeeType;
+        smallPointLighting=enabled;
+        donut::log::info("RTXPT native small-point lighting %s; standalone denoising unchanged",enabled?"ACTIVE":"DISABLED");
+    }
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
-        const char* candidate=std::getenv("RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS");
-        if(candidate && std::string(candidate)=="1")
+        if(smallPointLighting)
             macros.push_back({"RTR_EXACT_SMALL_POINTS","1"});
+        // Measurement control only: reproduce the pinned general-NEE directional bug.
+        const char* directionalControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_CONTROL");
+        if(directionalControl && std::string(directionalControl)=="1")
+            macros.push_back({"RTR_ORIGINAL_DIRECTIONAL_POSITION","1"});
     }
     bool Capture(const char* path) {
         if(!m_renderTargets || !m_renderTargets->LdrColor) return false;
@@ -256,6 +305,7 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     try {
         auto& s = session(h); auto dm = s.app->HostDeviceManager();
         if (glfwWindowShouldClose(dm->GetWindow())) return 0;
+        static_cast<HostPathTracer*>(s.app->HostRenderPass())->UpdateLightingPolicy();
         auto before=s.presented;
         if (!dm->HostFrame()) throw std::runtime_error("RTXPT render/present failed");
         return s.presented>before ? 2 : 1;
@@ -373,7 +423,6 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         if(const char* candidate=std::getenv("RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS"); candidate && std::string(candidate)=="1") {
             if(standaloneDenoiser || realtimeAa!=2 || restirDi || restirGi || sharc || samplesPerPixel!=1)
                 throw std::invalid_argument("Small-point diagnostic requires the unchanged raw 1-SPP SR policy");
-            g_sampleUIData.NEEType=1; // Native power sampling; no screen-feedback machinery for this small-light candidate.
             donut::log::info("RTXPT diagnostic: native power sampling + exact small delta-light sum; no denoiser added");
         }
         g_sampleUIData.UseReSTIRDI=restirDi;

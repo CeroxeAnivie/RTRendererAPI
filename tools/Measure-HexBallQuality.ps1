@@ -3,9 +3,11 @@ param(
     [Parameter(Mandatory)][string]$Tag,
     [switch]$Glass,
     [switch]$PackagedRuntime,
-    [switch]$SmallPointCandidate
+    [switch]$SmallPointCandidate,
+    [switch]$ControlLighting
 )
 $ErrorActionPreference='Stop'
+if($SmallPointCandidate -and $ControlLighting){throw 'Choose candidate or original lighting control, not both.'}
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
@@ -39,6 +41,7 @@ $settings=[ordered]@{
     Width=2560;Height=1440;Spp=$(if($Mode -eq 'reference'){32}else{1});FrameGeneration=$false;StageProfile=$false
     RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
     SmallPointCandidate=[bool]$SmallPointCandidate
+    ControlLighting=[bool]$ControlLighting
 }
 if($PackagedRuntime) {
     $settings.Jvm=@($settings.Jvm | Where-Object {$_ -notlike '-Dtop.ceroxe.rt.rtxpt.runtime=*'})
@@ -50,7 +53,7 @@ $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
 $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
-    $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($SmallPointCandidate){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     Get-Content -LiteralPath ($prefix+'.log') -Tail 5

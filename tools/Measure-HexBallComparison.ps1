@@ -6,12 +6,14 @@ param(
     [int]$Height=1440,
     [switch]$StageProfile,
     [switch]$SmallPointCandidate,
+    [switch]$ControlLighting,
     [ValidateSet('Upstream','D','E','F')][string]$RrPreset='Upstream',
     [ValidateSet('Upstream','On','Off')][string]$AsyncPrefix='Upstream',
     [string[]]$ExtraArguments=@(),
     [string]$OutputDirectory='docs/quality/data/hexball-native-20261101'
 )
 $ErrorActionPreference='Stop'
+if($SmallPointCandidate -and $ControlLighting){throw 'Choose candidate or original lighting control, not both.'}
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
@@ -50,13 +52,14 @@ try {
     $env:RTR_RTXPT_GPU_PROFILE=if($StageProfile){$prefix+'-gpu.csv'}else{$null}
     $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=switch($AsyncPrefix){'On'{'1'} 'Off'{'0'} default{$null}}
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=if($RrPreset -eq 'Upstream'){$null}else{$RrPreset}
-    $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($SmallPointCandidate){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     & nvidia-smi --query-gpu=name,driver_version,utilization.gpu,memory.used,power.draw,clocks.current.graphics,temperature.gpu --format=csv > ($prefix+'-initial-gpu.csv')
     $settings=[ordered]@{
         SourceCommit=(& git rev-parse HEAD).Trim();Backend=$Backend;Entry=$entry;
         Width=$Width;Height=$Height;Spp=1;FrameGeneration=$false;StageProfile=[bool]$StageProfile;
         RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;
         SmallPointCandidate=[bool]$SmallPointCandidate;
+        ControlLighting=[bool]$ControlLighting;
         Java=$java;Jvm=$jvm;Arguments=$demo;StartedAt=(Get-Date -Format o);
         NativeSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll' -Algorithm SHA256).Hash
     }
