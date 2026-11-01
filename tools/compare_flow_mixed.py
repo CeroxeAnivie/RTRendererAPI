@@ -49,7 +49,11 @@ class GL:
 def run():
     parser=argparse.ArgumentParser();parser.add_argument('--fixture',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True);parser.add_argument('--device',type=int,required=True)
-    parser.add_argument('--seconds',type=float,default=3);a=parser.parse_args(sys.argv[sys.argv.index('--')+1:])
+    parser.add_argument('--seconds',type=float,default=3)
+    parser.add_argument('--rounds',type=int,default=3)
+    parser.add_argument('--warmup-seconds',type=float,default=3)
+    a=parser.parse_args(sys.argv[sys.argv.index('--')+1:])
+    assert a.seconds>0 and a.rounds>0 and a.warmup_seconds>=0
     out=a.output.resolve();out.mkdir(parents=True,exist_ok=True)
     # Reuse the existing exact geometry/material/light adapter; the rendering is all upstream.
     namespace={'__name__':'flow_surface_importer'}
@@ -176,15 +180,23 @@ def run():
     for _ in range(8):frame(True)
     rows=[]
     for refresh in [False,True]:
-        samples=[]
-        start=time.perf_counter()
-        while len(samples)<60 or time.perf_counter()-start<a.seconds:samples.append(frame(refresh))
-        total=sum(s[0] for s in samples)
+        warmup=time.perf_counter()
+        while time.perf_counter()-warmup<a.warmup_seconds:frame(refresh)
+        samples=[];rounds=[]
+        for round_index in range(a.rounds):
+            current=[];start=time.perf_counter()
+            while len(current)<60 or time.perf_counter()-start<a.seconds:current.append(frame(refresh))
+            wall_ms=(time.perf_counter()-start)*1000
+            rounds.append({'round':round_index+1,'frames':len(current),'wallMs':wall_ms,'fps':len(current)*1000/wall_ms})
+            samples.extend(current)
+        total=sum(r['wallMs'] for r in rounds)
         row={'renderer':'Native Blender EEVEE + NVIDIA Flow','width':W,'height':H,'fg':False,
              'mode':'per-frame density/shadow refresh' if refresh else 'static density/shadow cache',
              'fps':len(samples)*1000/total,'meanMs':total/len(samples),
              'surfaceAndGPUHandoffMs':statistics.mean(s[1] for s in samples),
              'flowIncludingInputCopyMs':statistics.mean(s[2] for s in samples),'frames':len(samples),
+             'loopOverheadMs':total/len(samples)-statistics.mean(s[0] for s in samples),
+             'rounds':rounds,'warmupSeconds':a.warmup_seconds,
              'frameMs':samples,'surfaceDevice':renderer,'gpuUUID':bytes(uuid).hex(),'fixtureSha256':hashlib.sha256(a.fixture.read_bytes()).hexdigest(),
              'triangles':fixture['triangleCount'],'objects':len(fixture['objects']),
              'metric':'Fresh native EEVEE surface/depth + GPU shared-memory handoff + native Flow volume composite + completion fence; no presentation',
@@ -195,8 +207,7 @@ def run():
                  'Synchronous GL/Vulkan GPU handoff included; no per-frame CPU pixel readback or cached surface image.',
                  'Built-in Blender opaque depth prepass is included each frame; glass and alpha surfaces do not occlude Flow (no refractive volume coupling).',
                  'No frame generation. 1 SPP is not a Flow ray-marching parameter.']}
-        rows.append(row);print('FLOW_MIXED RESULT',json.dumps({k:v for k,v in row.items() if k!='frameMs'}),flush=True)
-    (out/'result.json').write_text(json.dumps(rows,indent=2),encoding='utf-8')
+        rows.append(row);print('FLOW_MIXED MEASURED (pending image verification)',json.dumps({k:v for k,v in row.items() if k!='frameMs'}),flush=True)
     # Evidence only, after all timing: preserve the exact surface input used by Flow.
     pixels=(C.c_uint16*(W*H*4))()
     depth_pixels=(C.c_float*(W*H))()
@@ -223,6 +234,9 @@ def run():
                   'depthMin':min(depth_pixels),'depthMax':max(depth_pixels),'depthPrepassTriangles':len(depth_vertices)//3}
     (out/'verification.json').write_text(json.dumps(verification,indent=2),encoding='utf-8')
     assert verification['finite'] and changed>1000,'No visible Flow contribution; timing rejected: '+str(verification)
+    for row in rows:row['imageVerification']=verification
+    (out/'result.json').write_text(json.dumps(rows,indent=2),encoding='utf-8')
+    print('FLOW_MIXED VERIFIED',json.dumps(verification),flush=True)
     gl.fn('glFinish',None)()
     for buf in buffers:
         v=U(buf);gl.fn('glDeleteBuffers',None,I,C.POINTER(U))(1,C.byref(v))
