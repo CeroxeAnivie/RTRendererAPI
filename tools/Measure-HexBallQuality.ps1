@@ -7,6 +7,7 @@ param(
     [switch]$ControlLighting,
     [switch]$SplitPointEnvironment,
     [switch]$ExactMis,
+    [switch]$PreserveNeeAt,
     [ValidateSet('none','original-lights','quarter-lights','no-sun','no-sky','no-environment')][string]$LightingProbe='none'
 )
 $ErrorActionPreference='Stop'
@@ -47,6 +48,7 @@ $settings=[ordered]@{
     ControlLighting=[bool]$ControlLighting
     SplitPointEnvironment=[bool]$SplitPointEnvironment
     ExactMis=[bool]$ExactMis
+    PreserveNeeAt=[bool]$PreserveNeeAt
     LightingProbe=$LightingProbe
 }
 if($PackagedRuntime) {
@@ -59,11 +61,13 @@ $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
 $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 $oldSplit=$env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
+$oldNeeAt=$env:RTR_RTXPT_DIAGNOSTIC_KEEP_NEEAT
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$(if($SplitPointEnvironment){'1'}else{'0'})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_KEEP_NEEAT=$(if($PreserveNeeAt){'1'}else{$null})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     Get-Content -LiteralPath ($prefix+'.log') -Tail 5
@@ -73,4 +77,5 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
     $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$oldSplit
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
+    $env:RTR_RTXPT_DIAGNOSTIC_KEEP_NEEAT=$oldNeeAt
 }

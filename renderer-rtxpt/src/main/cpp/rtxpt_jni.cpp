@@ -72,7 +72,14 @@ public:
             && g_sampleUIData.ActualRadianceCacheMode()==0 && g_sampleUIData.ActualSamplesPerPixel()==1;
         const bool enabled=eligibleLightingScene && rawPolicy && !(overrideValue && std::string(overrideValue)=="0");
         if(enabled==smallPointLighting)return;
-        if(enabled) {previousNeeType=g_sampleUIData.NEEType;g_sampleUIData.NEEType=1;}
+        if(enabled) {
+            previousNeeType=g_sampleUIData.NEEType;
+            const char* preserveFeedback=std::getenv("RTR_RTXPT_DIAGNOSTIC_KEEP_NEEAT");
+            const bool keepNeeeAtFeedback=rawPolicy && preserveFeedback && std::string(preserveFeedback)=="1";
+            g_sampleUIData.NEEType=keepNeeeAtFeedback?previousNeeType:1;
+            if(keepNeeeAtFeedback)
+                donut::log::info("RTXPT diagnostic: exact point sum keeps native NEE-AT temporal light feedback");
+        }
         else g_sampleUIData.NEEType=previousNeeType;
         smallPointLighting=enabled;
         donut::log::info("RTXPT native small-point lighting %s; standalone denoising unchanged",enabled?"ACTIVE":"DISABLED");

@@ -28,6 +28,15 @@ nee=args.source.parent.joinpath("Shaders/PathTracer/PathTracerNEE.hlsli").read_t
 assert "candidateSample.Direction = lightSample.Position;" in nee
 assert "candidateSample.Distance = 1e6;" in nee
 assert "PolymorphicLightType::kDirectional" in nee, "General NEE must match upstream directional sample semantics"
+strata=Path("renderer-rtxpt/src/main/cpp/RtrLightSamplerStrata.hlsli").read_text(encoding="utf-8-sig")
+assert "ControlBuffer[0].TriangleLightCount != 0" in strata
+assert "ControlBuffer[0].LightClusterCount != 0" in strata
+assert "RtrEnvironmentLocalProxyCount" in strata and "RtrSampleEnvironmentLocal" in strata
+assert "proxyCountPerLight / float(totalProxyCount)" in args.source.parent.joinpath(
+    "Shaders/PathTracer/Lighting/LightSampler.hlsli").read_text(encoding="utf-8-sig")
+assert "localEnvironmentProxyCount == 0" in nee and "globalCount += localCount" in nee
+assert "environmentLightProxies) / float(environmentProxyCount)" in args.source.parent.joinpath(
+    "Shaders/PathTracer/Lighting/LightSampler.hlsli").read_text(encoding="utf-8-sig")
 result={"source_contract":"PASS","gpu_contract":"not_requested"}
 if args.profile:
     frames=defaultdict(dict)

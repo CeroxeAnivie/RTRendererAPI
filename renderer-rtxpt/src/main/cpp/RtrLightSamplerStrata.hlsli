@@ -26,4 +26,45 @@ uint RtrEnvironmentProxyCount()
     // quads are its contiguous prefix, followed by all analytic delta lights.
     return count;
 }
+
+uint RtrEnvironmentLocalProxyCount()
+{
+    uint count = 0;
+    const uint environmentLights = ControlBuffer[0].EnvmapQuadNodeCount;
+    for (uint i = 0; i < RTXPT_LIGHTING_LOCAL_PROXY_COUNT; ++i)
+    {
+        uint lightIndex, proxyCount;
+        ReadLocal(i, lightIndex, proxyCount);
+        if (lightIndex < environmentLights)
+            count += proxyCount;
+    }
+    return count;
+}
+
+uint RtrSampleEnvironmentLocal(const float rnd, out float pdf)
+{
+    const uint total = RtrEnvironmentLocalProxyCount();
+    if (total == 0)
+    {
+        pdf = 0;
+        return NEEAT_INVALID_LIGHT_INDEX;
+    }
+    uint remaining = min(uint(rnd * total), total - 1u);
+    const uint environmentLights = ControlBuffer[0].EnvmapQuadNodeCount;
+    for (uint i = 0; i < RTXPT_LIGHTING_LOCAL_PROXY_COUNT; ++i)
+    {
+        uint lightIndex, proxyCount;
+        ReadLocal(i, lightIndex, proxyCount);
+        if (lightIndex >= environmentLights || proxyCount == 0)
+            continue;
+        if (remaining < proxyCount)
+        {
+            pdf = float(proxyCount) / float(total);
+            return lightIndex;
+        }
+        remaining -= proxyCount;
+    }
+    pdf = 0;
+    return NEEAT_INVALID_LIGHT_INDEX;
+}
 #endif

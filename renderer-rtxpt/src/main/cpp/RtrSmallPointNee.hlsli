@@ -1,7 +1,7 @@
 // Small delta-light sum; BSDF evaluation, visibility, MIS and accumulation remain RTXPT's.
 // Reference: PBRT-v3 UniformSampleAllLights / EstimateDirect (delta light branch).
-// Only zero-radius point lights are covered. Area lights and environment retain
-// the original sampled estimator, with its original PDFs and BSDF MIS weights.
+// Only zero-radius point lights are summed. When the residual environment is
+// stratified, RTXPT retains its sampler and uses matching conditional PDFs/MIS.
 #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS
 bool RtrSmallPointSet(const LightSampler sampler)
 {

@@ -94,8 +94,8 @@ if (m_ui.RealtimeAA != 3 && !m_ui.ActualUseStandaloneDenoiser()
             && !m_ui.ActualUseRTXDIPasses()) // RTR preserve RTXDI accumulated radiance
 '@ 'RTR preserve RTXDI accumulated radiance'
 # The filtered hit-distance texture is consumed by NRD, RR guides and debug views.
-# Scene-selected quality/performance policy: reuse native point sampling and shadow/BSDF
-# processing, while avoiding random selection between a handful of delta lights.
+# Scene-selected quality path: reuse RTXPT point sampling/shadow/BSDF and keep
+# the residual-light PDFs and candidate budget coherent with exact delta sums.
 [IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/Shaders/PathTracer/Lighting/RtrLightSamplerStrata.hlsli'),
     [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrLightSamplerStrata.hlsli')),$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '    // returned value is in [0, ControlBuffer[0].TotalLightCount) range used to read from LightsBuffer' @'
@@ -108,6 +108,17 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        uint 
         if (RtrSplitPointEnvironment()) totalProxyCount = RtrEnvironmentProxyCount(); // RTR conditional proxy range
         #endif
 '@ 'RTR conditional proxy range'
+Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        ReadLocal(indexInIndex, lightIndex, proxyCount);' @'
+        #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
+        if (RtrSplitPointEnvironment())
+        {
+            if (RtrEnvironmentLocalProxyCount() == 0) { pdf = 0; return NEEAT_INVALID_LIGHT_INDEX; }
+            lightIndex = RtrSampleEnvironmentLocal(rnd, pdf); // RTR conditional NEE-AT local stratum
+            return lightIndex;
+        }
+        #endif
+        ReadLocal(indexInIndex, lightIndex, proxyCount);
+'@ 'RTR conditional NEE-AT local stratum'
 Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float pdf = proxyCountPerLight / float(float(ControlBuffer[0].SamplingProxyCount));' @'
         uint totalProxyCount = ControlBuffer[0].SamplingProxyCount;
         #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
@@ -119,6 +130,22 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float
         #endif
         float pdf = totalProxyCount > 0 ? proxyCountPerLight / float(totalProxyCount) : 0; // RTR matching conditional BSDF PDF
 '@ 'RTR matching conditional BSDF PDF'
+Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        uint packedValue = LocalLightBinarySearch( LocalSamplingBuffer, LocalSamplingTilePos, lightIndex, localProxyCount, RTXPT_LIGHTING_LOCAL_PROXY_BINARY_SEARCH_STEPS );' @'
+        #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
+        if (RtrSplitPointEnvironment())
+        {
+            if (lightIndex >= ControlBuffer[0].EnvmapQuadNodeCount) return 0;
+            const uint environmentProxyCount = RtrEnvironmentLocalProxyCount();
+            if (environmentProxyCount == 0) return 0;
+            uint environmentPacked = LocalLightBinarySearch(LocalSamplingBuffer, LocalSamplingTilePos,
+                lightIndex, RTXPT_LIGHTING_LOCAL_PROXY_COUNT, RTXPT_LIGHTING_LOCAL_PROXY_BINARY_SEARCH_STEPS);
+            if (environmentPacked == NEEAT_INVALID_LIGHT_INDEX) return 0;
+            uint environmentIndex, environmentLightProxies;
+            NEEAT::UnpackMiniListLightAndCount(environmentPacked, environmentIndex, environmentLightProxies);
+            return float(environmentLightProxies) / float(environmentProxyCount);
+        }
+        #endif
+'@ 'RTR conditional local MIS PDF'
 [IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSmallPointNee.hlsli'),
     [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrSmallPointNee.hlsli')),$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    inline NEEResult HandleNEE_MultipleSamples(' @'
@@ -134,10 +161,23 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        [unroll] for 
         #endif
         [unroll] for (uint sampleIndex = 0; sampleIndex < fullSamples; sampleIndex++)
 '@ 'RTR deterministic delta contributions'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        lightSampler.GetCandidateSampleCounts(candidateSampleCount, localCount, globalCount);' @'
+        lightSampler.GetCandidateSampleCounts(candidateSampleCount, localCount, globalCount);
+        #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
+        if (RtrSplitPointEnvironment())
+        {
+            const uint environmentProxyCount = RtrEnvironmentProxyCount();
+            const uint localEnvironmentProxyCount = RtrEnvironmentLocalProxyCount();
+            if (localEnvironmentProxyCount == 0) { globalCount += localCount; localCount = 0; }
+            else if (environmentProxyCount == 0) { localCount += globalCount; globalCount = 0; }
+        }
+        #endif
+'@ 'RTR conditional NEE sample budget'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            RtrSumPointLights(result, lightSampler, shadingData, bsdf, preScatterPath, sampleGenerator, workingContext);' @'
             RtrSumPointLights(result, lightSampler, shadingData, bsdf, preScatterPath, sampleGenerator, workingContext);
         #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
-        if (rtrSmallPoints && lightSampler.RtrSplitPointEnvironment() && lightSampler.RtrEnvironmentProxyCount() == 0)
+        if (rtrSmallPoints && lightSampler.RtrSplitPointEnvironment()
+            && lightSampler.RtrEnvironmentProxyCount() == 0 && lightSampler.RtrEnvironmentLocalProxyCount() == 0)
             return result; // RTR no stochastic stratum: avoid zero-sized proxy lookup
         #endif
 '@ 'RTR no stochastic stratum'
