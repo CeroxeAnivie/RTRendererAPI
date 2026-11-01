@@ -82,7 +82,7 @@ Java 只负责公共接口、场景事务、窗口控制和薄的原生资源桥
 
 损耗定义为 `(JAR ms / 原生 ms − 1) × 100%`。本场景通过 ≤5% 门槛；负数属于这次测量波动，不能解释为 JNI 让上游变快。此结果是上述静态混合场景、推荐重建模式下的完成帧效率，不是原生 1080p 内部分辨率或持续结构更新场景的成绩。
 
-复现：先执行 `:renderer-rtxpt:check`、`:renderer-rtxpt:rtxptNativeSelfTest`、`:renderer-rtxpt:rtxptPackagedNativeSelfTest`、`:renderer-rtxpt:rtxptAdvancedNativeSelfTest`，再执行 `tools/Test-RtxptParity.ps1`。原始测量、逐轮日志、正确性记录及场景画面保存在 [验收数据](data/rtxpt-final-20261101/result.json)。待办清单见 [最终验收 TODO](rtxpt-final-acceptance-todo.md)。
+复现：先执行 `:renderer-rtxpt:check`、`:renderer-rtxpt:rtxptNativeSelfTest`、`:renderer-rtxpt:rtxptPackagedNativeSelfTest`、`:renderer-rtxpt:rtxptAdvancedNativeSelfTest`，再执行 `tools/Test-RtxptParity.ps1`。原始测量、逐轮日志、正确性记录及场景画面保存在 [验收数据](data/rtxpt-final-20261101/result.json)。
 
 ### main 与旧 worktree
 

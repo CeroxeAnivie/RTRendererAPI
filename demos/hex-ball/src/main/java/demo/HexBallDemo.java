@@ -40,6 +40,10 @@ public final class HexBallDemo {
     }
 
     public static void main(String[] arguments) throws Exception {
+        if (java.util.Arrays.asList(arguments).contains("--rtxpt")) {
+            RtxptHexBallDemo.main(java.util.Arrays.stream(arguments).filter(arg -> !arg.equals("--rtxpt")).toArray(String[]::new));
+            return;
+        }
         if (java.util.Arrays.asList(arguments).contains("--medium-certification")) {
             RtxptMediumDemo.main(java.util.Arrays.stream(arguments)
                     .filter(arg -> !arg.equals("--medium-certification")).toArray(String[]::new));

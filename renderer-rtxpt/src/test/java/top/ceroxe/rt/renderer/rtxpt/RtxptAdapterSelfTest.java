@@ -82,6 +82,16 @@ public final class RtxptAdapterSelfTest {
                 "Fixed DLSS FG applies through the expert controller");
             require(Medium.class.getRecordComponents().length==2,"No unsupported medium knobs");
             require(MediumBoundary.class.getRecordComponents().length==2,"No invisible/inward compatibility knobs");
+            var colored=new RtxptScene();colored.retain(scene(1));
+            colored.retain(SceneTransaction.builder(2).upsert(MaterialAsset.builder(1)
+                .baseColorRgba8(0xff0000ff).emissive(0xffff0000,2).build())
+                .upsert(SceneLight.point(9,1,2,3).range(10.5f).intensity(310).build()).build());
+            Path colorDir=dir.resolve("rgba-contract");
+            String lightJson=Files.readString(colored.export(colorDir,frame,colored.items(frame)));
+            String colorJson=Files.readString(colorDir.resolve("content.gltf"));
+            require(colorJson.contains("\"baseColorFactor\":[1.0,0.0,0.0,1.0]"),"RGBA8 low byte is red, matching Vulkan");
+            require(colorJson.contains("\"emissiveFactor\":[0.0,0.0,1.0]"),"Emissive RGBA8 keeps red/blue channel order");
+            require(lightJson.contains("\"radius\":0,\"range\":10.5"),"Point light keeps the authored range and zero emitter radius");
         } finally {try(var walk=Files.walk(dir)){for(var p:walk.sorted(Comparator.reverseOrder()).toList())Files.delete(p);}}
         System.out.println("RTXPT adapter contracts PASS");
     }

@@ -13,6 +13,8 @@
 
 ```powershell
 .\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=1"
+# 同一 DemoScene、相机、灯光和 HexPhysics，改由 RTXPT 原生窗口呈现；默认高级设置、1 SPP
+.\gradlew.bat :demos:hex-ball:rtxptHexBallDemo --args="--width=2560 --height=1440 --spp=1"
 .\gradlew.bat :demos:hex-ball:shadowJar
 .\gradlew.bat :demos:hex-ball:programmableSceneDemo
 java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `

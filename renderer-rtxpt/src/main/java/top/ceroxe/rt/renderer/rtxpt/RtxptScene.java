@@ -98,7 +98,7 @@ final class RtxptScene {
             if(data.uvs().hasRemaining())attr.put("TEXCOORD_0",accessor(bin,views,accessors,data.uvs(),2,data.vertexCount(),false));
             if(data.colors().hasRemaining()) {
                 var colors=data.colors();var fs=FloatBuffer.allocate(data.vertexCount()*4);
-                while(colors.hasRemaining()){int c=colors.get();fs.put(((c>>>16)&255)/255f).put(((c>>>8)&255)/255f).put((c&255)/255f).put((c>>>24)/255f);}fs.flip();
+                while(colors.hasRemaining()){int c=colors.get();fs.put((c&255)/255f).put(((c>>>8)&255)/255f).put(((c>>>16)&255)/255f).put((c>>>24)/255f);}fs.flip();
                 attr.put("COLOR_0",accessor(bin,views,accessors,fs,4,data.vertexCount(),false));
             }
             geometry.put(mesh.id(),attr);
@@ -133,7 +133,7 @@ final class RtxptScene {
         for(var l:lights.values()) {
             var light=object("name","l"+l.id(),"type",switch(l.type()){case POINT->"PointLight";case SPOT->"SpotLight";case DIRECTIONAL->"DirectionalLight";},
                 "translation",List.of(l.x(),l.y(),l.z()),"rotation",aim(l.directionX(),l.directionY(),l.directionZ()),"color",List.of(l.red(),l.green(),l.blue()));
-            if(l.type()==SceneLight.Type.DIRECTIONAL)light.put("irradiance",l.intensity());else {light.put("intensity",l.intensity());light.put("radius",.03);light.put("range",0);}
+            if(l.type()==SceneLight.Type.DIRECTIONAL)light.put("irradiance",l.intensity());else {light.put("intensity",l.intensity());light.put("radius",0);light.put("range",l.range());}
             if(l.type()==SceneLight.Type.SPOT){light.put("innerAngle",Math.toDegrees(Math.acos(l.innerConeCosine())));light.put("outerAngle",Math.toDegrees(Math.acos(l.outerConeCosine())));}
             graph.add(light);
         }
@@ -181,12 +181,12 @@ final class RtxptScene {
         }
     }
     private static Map<String,Object> material(String name,MaterialAsset m,MediumBoundary b,float visibility,Map<Long,Integer> textures) {
-        int c=m.baseColorRgba8();var pbr=object("baseColorFactor",List.of(((c>>>16)&255)/255f,((c>>>8)&255)/255f,(c&255)/255f,((c>>>24)&255)/255f*visibility),"roughnessFactor",m.roughness(),"metallicFactor",m.metallic());
+        int c=m.baseColorRgba8();var pbr=object("baseColorFactor",List.of((c&255)/255f,((c>>>8)&255)/255f,((c>>>16)&255)/255f,((c>>>24)&255)/255f*visibility),"roughnessFactor",m.roughness(),"metallicFactor",m.metallic());
         slot(pbr,"baseColorTexture",m.baseColorTextureId(),textures);slot(pbr,"metallicRoughnessTexture",m.metallicRoughnessTextureId(),textures);
         var extensions=object("KHR_materials_ior",object("ior",b==null?m.indexOfRefraction():b.medium().indexOfRefraction()),"KHR_materials_transmission",object("transmissionFactor",m.transmission()));
         var result=object("name",name,"pbrMetallicRoughness",pbr,"doubleSided",m.doubleSided(),"alphaMode",switch(m.blendMode()){case OPAQUE->"OPAQUE";case MASKED->"MASK";case TRANSLUCENT->"BLEND";},"alphaCutoff",m.alphaCutoff(),"extensions",extensions);
         slot(result,"normalTexture",m.normalTextureId(),textures);slot(result,"emissiveTexture",m.emissiveTextureId(),textures);
-        int ec=m.emissiveColorRgba8();result.put("emissiveFactor",List.of(((ec>>>16)&255)/255f,((ec>>>8)&255)/255f,(ec&255)/255f));
+        int ec=m.emissiveColorRgba8();result.put("emissiveFactor",List.of((ec&255)/255f,((ec>>>8)&255)/255f,((ec>>>16)&255)/255f));
         extensions.put("KHR_materials_emissive_strength",object("emissiveStrength",m.emissiveStrength()));return result;
     }
     private static void slot(Map<String,Object> out,String key,long id,Map<Long,Integer> textures){if(id>=0)out.put(key,object("index",Objects.requireNonNull(textures.get(id))));}

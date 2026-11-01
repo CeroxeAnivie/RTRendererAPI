@@ -206,3 +206,12 @@ tasks.register<JavaExec>("rtxptMediumDemo") {
     mainClass.set("demo.RtxptMediumDemo")
     providers.gradleProperty("rtxptArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
 }
+tasks.register<JavaExec>("rtxptHexBallDemo") {
+    group = "application"
+    description = "Runs the unchanged hex-ball scene and physics in RTXPT's native window at 1 SPP."
+    dependsOn(tasks.classes)
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("demo.RtxptHexBallDemo")
+    workingDir(rootProject.projectDir)
+    jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
+}
