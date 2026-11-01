@@ -9,28 +9,51 @@ import top.ceroxe.rt.renderer.api.*;
 /** One resident upstream renderer. Static resources are exported only on structural edits. */
 final class RtxptRenderer implements Renderer,RtxptAccess {
     private final Thread owner=Thread.currentThread();
+    private final boolean externalPresentation;
     private RtxptScene scene=new RtxptScene();
     private RtxptOptions options;
     private RendererFeatureProfile requestedProfile;
     private final RtxptFeatureController features;
     private long handle,revision,submitted=-1,completed=-1,frames,frameNs,exports,exportNs,batches,transformNs;
-    private boolean closed,dirty=true,windowClosed,scenePublished;
+    private boolean closed,dirty=true,windowClosed,scenePublished,nativeContractPending;
     private int width,height;
     private Path directory,nativeScene;
     private List<RtxptScene.Item> previous=List.of();
     private CameraState camera;
     private EnvironmentState environment;
-    RtxptRenderer(RendererConfig config){
+    RtxptRenderer(RendererConfig config){this(config,false);}
+    RtxptRenderer(RendererConfig config,boolean externalPresentation){
+        this.externalPresentation=externalPresentation;
         RtxptInputContract.validateConfiguration(config);requestedProfile=RtxptOptions.profile(config);options=RtxptOptions.resolve(requestedProfile);
+        validatePresentationProfile(requestedProfile);
         features=new RtxptFeatureController(new RtxptFeatureController.Host(){
             public boolean initialized(){return handle!=0;}
             public void ready(){RtxptRenderer.this.ready();}
-            public void apply(RendererFeatureProfile profile){requestedProfile=profile;options=RtxptOptions.resolve(profile);if(handle!=0)applyNativeSettings();}
+            public void apply(RendererFeatureProfile profile){validatePresentationProfile(profile);requestedProfile=profile;options=RtxptOptions.resolve(profile);if(handle!=0)applyNativeSettings();}
             public RendererFeatureProfile effective(RendererFeatureProfile profile){return effectiveProfile(profile);}
             public RendererFeatureProfile normalize(RendererFeatureProfile profile){return RtxptOptions.normalize(profile);}
         },RtxptOptions.normalize(RtxptOptions.profile(config)));
         RtxptNative.load();
     }
+    private void validatePresentationProfile(RendererFeatureProfile profile) {
+        if(externalPresentation&&profile.frameGeneration().preference().requested())
+            throw new IllegalArgumentException("Vulkan composition accepts native RTXPT frames; DXGI FG/MFG is only supported with native RTXPT presentation");
+        if(externalPresentation&&profile.lowLatency().preference().requested())
+            throw new IllegalArgumentException("RTXPT Reflex markers do not manage the final Vulkan swapchain; disable lowLatency in composed mode");
+    }
+    SceneTransaction sceneSnapshot() {
+        ready();var tx=SceneTransaction.builder(revision).resetScene();
+        scene.textures.values().forEach(tx::upsert);scene.materials.values().forEach(tx::upsert);
+        scene.meshes.values().forEach(tx::upsert);scene.instances.values().forEach(tx::upsert);scene.lights.values().forEach(tx::upsert);
+        return tx.build();
+    }
+    top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame sharedFrame(long sequence) {
+        ready();if(handle==0||!externalPresentation)throw new IllegalStateException("No external RTXPT frame");
+        var f=RtxptNative.sharedFrame(handle,sequence);
+        return new top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame(f[0],f[1],f[2],(int)f[3],(int)f[4],f[5],f[6],f[7],f[8],f[9]);
+    }
+    void retireSharedFrames(){ready();if(handle!=0)RtxptNative.retireSharedFrames(handle);}
+    void resetHistory(){ready();if(handle!=0)RtxptNative.resetHistory(handle);}
     @Override public <T> Optional<T> extension(Class<T> type){
         Objects.requireNonNull(type);
         if(type.isInstance(features))return Optional.of(type.cast(features));
@@ -44,7 +67,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         .latestSubmittedFrameSequence(submitted).latestCompletedFrameSequence(completed).residentMeshes(scene.meshes.size()).residentInstances(scene.instances.size())
         .frameGpuTiming(gpuTiming()).frameGenerationEvidence(generationEvidence()).build();}
     private FrameGenerationEvidence generationEvidence(){
-        if(handle==0||closed)return FrameGenerationEvidence.unavailable();
+        if(handle==0||closed||externalPresentation)return FrameGenerationEvidence.unavailable();
         var t=RtxptNative.generationTelemetry(handle);var s=runtimeStatus();
         int requested=options.frameGeneration().preference().requested()?options.generatedFrames():0;
         long generated=Math.max(0,t[1]-t[0]);
@@ -66,15 +89,30 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
             .enabled(true).completedSamples(t[0]).averagePostTraceNanos(t[1]).averageTotalNanos(t[1]).maxTotalNanos(t[2]).build();
     }
     @Override public SceneUpdateResult apply(SceneTransaction tx){
+        return applyRetained(tx,true);
+    }
+    // The composed viewport retains Vulkan-only attributes unchanged and checks the native
+    // contract only when that whole scene is actually selected for RTXPT rendering.
+    SceneUpdateResult applyComposed(SceneTransaction tx){return applyRetained(tx,false);}
+    private SceneUpdateResult applyRetained(SceneTransaction tx,boolean nativeContract){
+        return commitScene(prepareScene(tx,nativeContract));
+    }
+    record PreparedScene(SceneTransaction transaction,RtxptScene value,boolean transformsOnly,boolean nativeContract) { }
+    PreparedScene prepareScene(SceneTransaction tx,boolean nativeContract){
         ready();Objects.requireNonNull(tx);if(nativeScene!=null)throw new IllegalStateException("Choose retained API scenes or a native scene explicitly");
         RtxptInputContract.requireAdvancingRevision(tx.revision(),revision,scenePublished);
-        var next=new RtxptScene(scene);next.retain(tx);
+        var next=new RtxptScene(scene);next.retain(tx,nativeContract);
         boolean transformsOnly=!tx.reset() && tx.upserts().textures().isEmpty() && tx.upserts().materials().isEmpty() && tx.upserts().meshes().isEmpty() && tx.upserts().lights().isEmpty()
             && !tx.removals().textureIds().hasRemaining() && !tx.removals().materialIds().hasRemaining() && !tx.removals().meshIds().hasRemaining() && !tx.removals().lightIds().hasRemaining() && !tx.removals().instanceIds().hasRemaining();
         if(transformsOnly)for(var i:tx.upserts().instances()) {
             var old=scene.instances.get(i.id());if(old==null || old.meshAssetId()!=i.meshAssetId() || !old.mediumBoundary().equals(i.mediumBoundary()) || old.surfaceVisibility()!=i.surfaceVisibility()) {transformsOnly=false;break;}
         }
-        scene=next;dirty|=tx.hasChanges()&&!transformsOnly;revision=tx.revision();scenePublished=true;return new SceneUpdateResult(revision);
+        return new PreparedScene(tx,next,transformsOnly,nativeContract);
+    }
+    SceneUpdateResult commitScene(PreparedScene prepared){
+        var tx=prepared.transaction();scene=prepared.value();dirty|=tx.hasChanges()&&!prepared.transformsOnly();
+        nativeContractPending=!prepared.nativeContract();
+        revision=tx.revision();scenePublished=true;return new SceneUpdateResult(revision);
     }
     @Override public void loadNativeScene(Path value){
         ready();if(!scene.meshes.isEmpty())throw new IllegalStateException("Cannot replace retained API geometry with an unrelated native scene");
@@ -88,6 +126,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     @Override public FrameSubmissionResult submit(RenderFrameRequest f){
         ready();Objects.requireNonNull(f);if(f.sequence()<=submitted)throw new IllegalArgumentException("Frame sequence must increase");
         RtxptInputContract.validateFrame(f);
+        if(nativeContractPending&&nativeScene==null){scene.validate();nativeContractPending=false;}
         if(f.minimumSceneRevision()>revision)throw new IllegalArgumentException("Scene revision is not resident");
         var items=nativeScene==null?scene.items(f):List.<RtxptScene.Item>of();
         boolean rebuild=nativeScene==null && (dirty || !RtxptScene.sameStructure(items,previous) || !Objects.equals(environment,f.environment()));
@@ -98,7 +137,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         }catch(IOException e){throw new IllegalStateException("RTXPT asset translation failed",e);}exportNs+=System.nanoTime()-begin;exports++;}
         if(handle==0){
             if(path==null)throw new IllegalStateException("Submit a populated scene");
-            handle=RtxptNative.create(RtxptNative.runtime().toString(),path.toString(),f.width(),f.height(),options.arguments());
+            handle=RtxptNative.create(RtxptNative.runtime().toString(),path.toString(),f.width(),f.height(),externalPresentation,options.arguments());
             applyNativeSettings();
             if(nativeScene==null)scene.uploadInteriors(handle);
         }else if(rebuild){RtxptNative.loadScene(handle,path.toString());applyNativeSettings();scene.uploadInteriors(handle);}

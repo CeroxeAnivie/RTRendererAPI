@@ -80,6 +80,18 @@ tasks.register<JavaExec>("rtxptMediumBenchmark") {
     jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
 }
 
+tasks.register<JavaExec>("rtxptCompositionSelfTest") {
+    group = "verification"
+    description = "Checks actual RTXPT-to-Vulkan pixels, UI, backend switching, lifecycle and final-frame throughput."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    workingDir(rootProject.projectDir)
+    mainClass.set("demo.RtxptCompositionSelfTest")
+    jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
+    args(rootProject.layout.buildDirectory.dir("reports/rtxpt-composition").get().asFile.absolutePath,
+        providers.systemProperty("top.ceroxe.rt.rtxpt.compositionTestMode").orElse("acceptance").get())
+}
+
 tasks.withType<AbstractArchiveTask>().configureEach {
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true

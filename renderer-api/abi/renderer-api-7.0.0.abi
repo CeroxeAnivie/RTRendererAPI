@@ -6486,6 +6486,18 @@ public interface top.ceroxe.rt.renderer.api.RendererSceneAccess {
     descriptor: (Ltop/ceroxe/rt/renderer/api/RenderFrameRequest;)Ltop/ceroxe/rt/renderer/api/Renderer$FrameSubmissionAttempt;
 }
 
+Compiled from "RendererSceneRouting.java"
+public final class top.ceroxe.rt.renderer.api.RendererSceneRouting {
+  public top.ceroxe.rt.renderer.api.RendererSceneRouting(top.ceroxe.rt.renderer.api.SceneTransaction);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/SceneTransaction;)V
+
+  public top.ceroxe.rt.renderer.api.RendererSceneRouting updated(top.ceroxe.rt.renderer.api.SceneTransaction);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/SceneTransaction;)Ltop/ceroxe/rt/renderer/api/RendererSceneRouting;
+
+  public top.ceroxe.rt.renderer.api.RendererBackendPolicy$Selection select(top.ceroxe.rt.renderer.api.RendererBackendPolicy, top.ceroxe.rt.renderer.api.RenderFrameRequest);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RendererBackendPolicy;Ltop/ceroxe/rt/renderer/api/RenderFrameRequest;)Ltop/ceroxe/rt/renderer/api/RendererBackendPolicy$Selection;
+}
+
 Compiled from "RendererSceneSession.java"
 public final class top.ceroxe.rt.renderer.api.RendererSceneSession implements top.ceroxe.rt.renderer.api.Renderer {
   public static top.ceroxe.rt.renderer.api.RendererSceneSession open(top.ceroxe.rt.renderer.api.RendererBackendPolicy, top.ceroxe.rt.renderer.api.SceneTransaction, top.ceroxe.rt.renderer.api.RenderFrameRequest);
@@ -10401,6 +10413,51 @@ public final class top.ceroxe.rt.renderer.api.interop.SynchronizationPrimitiveKi
     descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/interop/SynchronizationPrimitiveKind;
 }
 
+Compiled from "D3D12SharedFrame.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame(long, long, long, int, int, long, long, long, long, long);
+    descriptor: (JJJIIJJJJJ)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public long resourceId();
+    descriptor: ()J
+
+  public long frameSequence();
+    descriptor: ()J
+
+  public long adapterLuid();
+    descriptor: ()J
+
+  public int width();
+    descriptor: ()I
+
+  public int height();
+    descriptor: ()I
+
+  public long allocationSize();
+    descriptor: ()J
+
+  public long memoryHandle();
+    descriptor: ()J
+
+  public long fenceHandle();
+    descriptor: ()J
+
+  public long readyValue();
+    descriptor: ()J
+
+  public long completionValue();
+    descriptor: ()J
+}
+
 Compiled from "GpuFrameLease.java"
 public interface top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease extends java.lang.AutoCloseable {
   public abstract top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor descriptor();
@@ -11024,8 +11081,23 @@ public interface top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter 
   public abstract java.util.Optional<top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$PresentationResult> presentLatestFrame();
     descriptor: ()Ljava/util/Optional;
 
+  public default java.util.Optional<top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$PresentationResult> presentLatestFrame(java.util.List<top.ceroxe.rt.renderer.api.FrameCompositionPlan$Layer>);
+    descriptor: (Ljava/util/List;)Ljava/util/Optional;
+
   public abstract top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$PresentationResult presentAndRelease(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease);
     descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenter$PresentationResult;
+
+  public default top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$PresentationResult presentD3D12SharedFrame(top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/D3D12SharedFrame;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenter$PresentationResult;
+
+  public default top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$PresentationResult presentD3D12SharedFrame(top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame, java.util.List<top.ceroxe.rt.renderer.api.FrameCompositionPlan$Layer>);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/D3D12SharedFrame;Ljava/util/List;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenter$PresentationResult;
+
+  public default void captureNextPresentedFrame(java.nio.file.Path);
+    descriptor: (Ljava/nio/file/Path;)V
+
+  public default void retireD3D12SharedFrames();
+    descriptor: ()V
 
   public abstract void close();
     descriptor: ()V

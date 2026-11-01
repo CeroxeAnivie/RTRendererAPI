@@ -24,7 +24,10 @@ final class RtxptNative {
         for(String dependency:new String[]{"sl.interposer.dll","NRD.dll","omm-lib.dll"})System.load(root.resolve(dependency).toString());
         System.load(dll.toString()); loaded=true;
     }
-    static native long create(String runtime,String scene,int width,int height,String[] options);
+    static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,String[] options);
+    static native long[] sharedFrame(long handle,long sequence);
+    static native void retireSharedFrames(long handle);
+    static native void resetHistory(long handle);
     static native int frame(long handle);
     static native void awaitIdle(long handle);
     static native int[] runtimeStatus(long handle);

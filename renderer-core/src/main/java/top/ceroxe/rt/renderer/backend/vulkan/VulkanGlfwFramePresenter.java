@@ -7,6 +7,8 @@ import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 import top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease;
+import top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame;
+import top.ceroxe.rt.renderer.api.FrameCompositionPlan;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
 import top.ceroxe.rt.renderer.feature.VulkanSwapchainInterceptor;
@@ -18,6 +20,7 @@ import top.ceroxe.rt.renderer.rt.device.RtCommandContext;
 
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +57,13 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     private final LongConsumer frameRetiredCallback;
     private final Supplier<GpuFrameLease> managedFrameSupplier;
     private final Map<Long, ImportedFrame> importedFrames = new HashMap<>();
+    private final Map<Long,VulkanD3D12ImportedFrame> d3d12Frames = new HashMap<>();
+    private long lastD3D12Sequence = -1;
+    private boolean timelineSemaphoreEnabled;
+    private VulkanD3D12CompositionInputs.Resolver d3d12CompositionResolver;
+    private VulkanD3D12Composition d3d12Composition;
+    private Path pendingCapture;
+    private boolean swapchainCaptureSupported;
 
     private long window;
     private VkInstance instance;
@@ -210,6 +220,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
          */
         queue = sharedRuntime.presentationQueue();
         sharedDeviceFastPath = true;
+        timelineSemaphoreEnabled = sharedRuntime.timelineSemaphoreEnabled();
         fullScreenExclusiveAvailable = sharedRuntime.fullScreenExclusivePresentationEnabled();
         try (MemoryStack stack = MemoryStack.stackPush()) {
             createSurface(stack);
@@ -307,17 +318,28 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     }
 
     private void createLogicalDevice(MemoryStack stack) {
-        PointerBuffer extensions = stack.pointers(
-                stack.UTF8(KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME),
-                stack.UTF8(KHRExternalMemoryWin32.VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME),
-                stack.UTF8(KHRExternalSemaphoreWin32.VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME)
-        );
+        var timeline = VkPhysicalDeviceTimelineSemaphoreFeatures.calloc(stack).sType$Default();
+        VK11.vkGetPhysicalDeviceFeatures2(physicalDevice,VkPhysicalDeviceFeatures2.calloc(stack)
+                .sType$Default().pNext(timeline.address()));
+        IntBuffer extensionCount=stack.ints(0);
+        checkVk(VK10.vkEnumerateDeviceExtensionProperties(physicalDevice,(String)null,extensionCount,null),"vkEnumerateDeviceExtensionProperties.presenter");
+        var advertised=VkExtensionProperties.calloc(extensionCount.get(0),stack);
+        checkVk(VK10.vkEnumerateDeviceExtensionProperties(physicalDevice,(String)null,extensionCount,advertised),"vkEnumerateDeviceExtensionProperties.presenter");
+        for(var extension:advertised)if(extension.extensionNameString().equals(KHRTimelineSemaphore.VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME))
+            timelineSemaphoreEnabled=timeline.timelineSemaphore();
+        PointerBuffer extensions = stack.mallocPointer(timelineSemaphoreEnabled?4:3);
+        extensions.put(stack.UTF8(KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME));
+        extensions.put(stack.UTF8(KHRExternalMemoryWin32.VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME));
+        extensions.put(stack.UTF8(KHRExternalSemaphoreWin32.VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME));
+        if(timelineSemaphoreEnabled)extensions.put(stack.UTF8(KHRTimelineSemaphore.VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME));
+        extensions.flip();
         VkDeviceQueueCreateInfo.Buffer queues = VkDeviceQueueCreateInfo.calloc(1, stack)
                 .sType$Default()
                 .queueFamilyIndex(queueFamilyIndex)
                 .pQueuePriorities(stack.floats(1.0F));
         VkDeviceCreateInfo deviceInfo = VkDeviceCreateInfo.calloc(stack)
                 .sType$Default()
+                .pNext(timelineSemaphoreEnabled?timeline.address():0L)
                 .pQueueCreateInfos(queues)
                 .ppEnabledExtensionNames(extensions);
         PointerBuffer deviceHandle = stack.mallocPointer(1);
@@ -484,23 +506,157 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     }
 
     @Override
-    public Optional<PresentationResult> presentLatestFrame() {
+    public void captureNextPresentedFrame(Path png) {
         requireOwnerAndOpen();
+        if(sharedRuntime==null)throw new UnsupportedOperationException("Final-frame capture requires the renderer-bound Vulkan presenter");
+        if(!swapchainCaptureSupported)throw new UnsupportedOperationException("This surface does not support diagnostic swapchain readback");
+        if(pendingCapture!=null)throw new IllegalStateException("A final-frame capture request is already pending");
+        pendingCapture=Objects.requireNonNull(png,"png").toAbsolutePath();
+    }
+
+    @Override
+    public Optional<PresentationResult> presentLatestFrame() {
+        return presentLatestFrame(List.of());
+    }
+
+    @Override
+    public Optional<PresentationResult> presentLatestFrame(List<FrameCompositionPlan.Layer> overlays) {
+        requireOwnerAndOpen();
+        var layers=checkedCompositionLayers(overlays);
         pollCompletedManagedRetirements();
         GpuFrameLease lease = managedFrameSupplier.get();
         return lease == null
                 ? Optional.empty()
-                : Optional.of(presentAndRelease(lease, true));
+                : Optional.of(presentAndRelease(lease, true, layers));
     }
 
     @Override
     public PresentationResult presentAndRelease(GpuFrameLease lease) {
-        return presentAndRelease(lease, false);
+        return presentAndRelease(lease, false, List.of());
+    }
+
+    @Override
+    public PresentationResult presentD3D12SharedFrame(D3D12SharedFrame frame) {
+        return presentD3D12SharedFrame(frame,List.of());
+    }
+
+    void attachD3D12CompositionResolver(VulkanD3D12CompositionInputs.Resolver resolver) {
+        requireOwnerAndOpen();
+        d3d12CompositionResolver=Objects.requireNonNull(resolver,"resolver");
+    }
+
+    @Override
+    public PresentationResult presentD3D12SharedFrame(D3D12SharedFrame frame,List<FrameCompositionPlan.Layer> overlays) {
+        requireOwnerAndOpen();
+        Objects.requireNonNull(frame,"frame");
+        var layers=checkedCompositionLayers(overlays);
+        if(!timelineSemaphoreEnabled)throw new UnsupportedOperationException("D3D12 fence import requires Vulkan timeline semaphores");
+        if(proxySwapchainActive())throw new UnsupportedOperationException("D3D12 shared-frame composition requires Vulkan frame generation disabled");
+        if(frame.frameSequence()<=lastD3D12Sequence)throw new IllegalArgumentException("External frame sequence must strictly advance");
+        var imported=d3d12Frames.get(frame.resourceId());
+        if(imported==null) {
+            imported=VulkanD3D12ImportedFrame.open(physicalDevice,device,frame);
+            d3d12Frames.put(frame.resourceId(),imported);
+        }
+        imported.requireNext(frame);
+        var state=windowState();
+        if(state.drawable())ensureSwapchain(state.framebufferWidth(),state.framebufferHeight());
+        FrameContext context=frameContexts[nextFrameContext];
+        nextFrameContext=(nextFrameContext+1)%frameContexts.length;
+        awaitFrameContext(context);
+        boolean submitted=false;
+        int imageIndex=-1;
+        try(MemoryStack stack=MemoryStack.stackPush()) {
+            if(!state.drawable()) {
+                submitD3D12Frame(stack,context,imported,frame,-1,false);
+                submitted=true;
+                return d3d12Result(frame,Outcome.SKIPPED_MINIMIZED);
+            }
+            prepareComposition(context,layers,frame.width(),frame.height(),VK10.VK_FORMAT_R8G8B8A8_UNORM);
+            IntBuffer index=stack.ints(0);
+            int acquire=acquireNextImage(device,swapchain,UINT64_MAX,context.acquireSemaphore,0L,index);
+            if(acquire==KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR) {
+                submitD3D12Frame(stack,context,imported,frame,-1,false);
+                submitted=true;
+                recreateSwapchain();
+                return d3d12Result(frame,Outcome.RETIRED_FOR_RECREATE);
+            }
+            if(acquire!=VK10.VK_SUCCESS&&acquire!=KHRSwapchain.VK_SUBOPTIMAL_KHR)checkVk(acquire,"vkAcquireNextImageKHR.d3d12");
+            imageIndex=index.get(0);
+            prepareOverlay(context);
+            recordCopy(context.commandBuffer,imported.image(),VK10.VK_FORMAT_R8G8B8A8_UNORM,
+                frame.width(),frame.height(),swapchainImages[imageIndex],true,context);
+            submitD3D12Frame(stack,context,imported,frame,imageIndex,true);
+            submitted=true;
+            if(context.d3d12Inputs!=null)context.d3d12Inputs.submitted();
+            var present=VkPresentInfoKHR.calloc(stack).sType$Default()
+                .pWaitSemaphores(stack.longs(presentSemaphore(context,imageIndex))).swapchainCount(1)
+                .pSwapchains(stack.longs(swapchain)).pImageIndices(stack.ints(imageIndex));
+            var timing=VulkanQueueHostSync.presentTimed(queue,present,
+                (target,info)->KHRSwapchain.vkQueuePresentKHR(target,info));
+            presentSamples++;presentQueueLockNanos+=timing.queueLockWaitNanos();
+            presentNativeCallNanos+=timing.nativeCallNanos();
+            presentNanos+=timing.queueLockWaitNanos()+timing.nativeCallNanos();
+            int result=timing.result();
+            if(result==KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR||result==KHRSwapchain.VK_SUBOPTIMAL_KHR||acquire==KHRSwapchain.VK_SUBOPTIMAL_KHR) {
+                recreateSwapchain();
+                return d3d12Result(frame,Outcome.RETIRED_FOR_RECREATE);
+            }
+            checkVk(result,"vkQueuePresentKHR.d3d12");
+            if(context.captureReadback!=null)awaitFrameContext(context);
+            return d3d12Result(frame,Outcome.PRESENTED);
+        } catch(RuntimeException|Error failure) {
+            if(!submitted) {
+                try(MemoryStack cleanup=MemoryStack.stackPush()) {
+                    // Retire an accepted producer slot even if recording/acquisition failed.
+                    submitD3D12Frame(cleanup,context,imported,frame,imageIndex,false);
+                    // No present was queued for this acquired WSI image. Rebuild after retiring
+                    // the empty submission so a recoverable recording error cannot leak images.
+                    if(imageIndex>=0)recreateSwapchain();
+                } catch(RuntimeException|Error releaseFailure) { failure.addSuppressed(releaseFailure); }
+            }
+            throw failure;
+        }
+    }
+
+    private void submitD3D12Frame(MemoryStack stack,FrameContext context,VulkanD3D12ImportedFrame imported,
+            D3D12SharedFrame frame,int imageIndex,boolean copy) {
+        boolean acquired=imageIndex>=0;
+        LongBuffer waits=acquired?stack.longs(imported.semaphore(),context.acquireSemaphore):stack.longs(imported.semaphore());
+        LongBuffer signals=copy?stack.longs(imported.semaphore(),presentSemaphore(context,imageIndex)):stack.longs(imported.semaphore());
+        var values=VkTimelineSemaphoreSubmitInfo.calloc(stack).sType$Default()
+            .pWaitSemaphoreValues(acquired?stack.longs(frame.readyValue(),0L):stack.longs(frame.readyValue()))
+            .pSignalSemaphoreValues(copy?stack.longs(frame.completionValue(),0L):stack.longs(frame.completionValue()));
+        var submit=VkSubmitInfo.calloc(1,stack).sType$Default().pNext(values.address()).waitSemaphoreCount(waits.remaining())
+            .pWaitSemaphores(waits).pWaitDstStageMask(acquired
+                ?stack.ints(VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)
+                :stack.ints(VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)).pSignalSemaphores(signals);
+        if(copy)submit.pCommandBuffers(stack.pointers(context.commandBuffer.address()));
+        checkVk(VK10.vkResetFences(device,context.fence),"vkResetFences.d3d12Consumer");
+        checkVk(VulkanQueueHostSync.submit(queue,submit,context.fence),"vkQueueSubmit.d3d12Consumer");
+        context.fencePending=true;context.d3d12Frame=imported;
+        if(copy&&context.captureReadback!=null)context.captureReadback.submitted();
+        imported.submitted(frame.readyValue());
+        lastD3D12Sequence=frame.frameSequence();
+    }
+
+    private static PresentationResult d3d12Result(D3D12SharedFrame frame,Outcome outcome) {
+        return new PresentationResult(frame.frameSequence(),frame.width(),frame.height(),outcome);
+    }
+
+    @Override
+    public void retireD3D12SharedFrames() {
+        requireOwnerAndOpen();
+        retireAllFrameContexts();
+        for(var frame:d3d12Frames.values())frame.close();
+        d3d12Frames.clear();
+        lastD3D12Sequence=-1;
     }
 
     private PresentationResult presentAndRelease(
             GpuFrameLease lease,
-            boolean allowDeferredManagedRetirement
+            boolean allowDeferredManagedRetirement,
+            List<FrameCompositionPlan.Layer> overlays
     ) {
         requireOwnerAndOpen();
         retryPendingTagRetirement();
@@ -517,7 +673,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 result = result(descriptor, Outcome.SKIPPED_MINIMIZED);
             } else {
                 ensureSwapchain(state.framebufferWidth(), state.framebufferHeight());
-                result = presentDrawable(checkedLease, descriptor);
+                result = presentDrawable(checkedLease, descriptor, overlays);
                 if (result.outcome() == Outcome.RETIRED_FOR_RECREATE) recreateSwapchain();
             }
         } catch (Throwable presentFailure) {
@@ -611,23 +767,25 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
 
     private PresentationResult presentDrawable(
             GpuFrameLease lease,
-            GpuFrameLease.FrameDescriptor descriptor
+            GpuFrameLease.FrameDescriptor descriptor,
+            List<FrameCompositionPlan.Layer> overlays
     ) {
         if (sharedDeviceFastPath && lease instanceof VulkanManagedFrameLease managedLease) {
             VulkanManagedFrameLease.NativeFrame nativeFrame = managedLease.managedNativeFrame();
             if (nativeFrame.device().address() == device.address()
                     && nativeFrame.queueFamilyIndex() == queueFamilyIndex) {
-                return presentManagedDrawable(lease, managedLease, nativeFrame, descriptor);
+                return presentManagedDrawable(lease, managedLease, nativeFrame, descriptor, overlays);
             }
         }
-        return presentExternalDrawable(lease, descriptor);
+        return presentExternalDrawable(lease, descriptor, overlays);
     }
 
     private PresentationResult presentManagedDrawable(
             GpuFrameLease lease,
             VulkanManagedFrameLease managedLease,
             VulkanManagedFrameLease.NativeFrame source,
-            GpuFrameLease.FrameDescriptor descriptor
+            GpuFrameLease.FrameDescriptor descriptor,
+            List<FrameCompositionPlan.Layer> overlays
     ) {
         requireImportable(descriptor);
         /*
@@ -637,7 +795,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
          * trace naturally gives the presentation engine time to release an image before this
          * demand-driven acquire, matching a conventional RHI frame boundary.
          */
-        ManagedAcquisition acquisition = acquireManagedImage();
+        ManagedAcquisition acquisition = acquireManagedImage(overlays,descriptor);
         if (acquisition.result == KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR) {
             return result(descriptor, Outcome.RETIRED_FOR_RECREATE);
         }
@@ -685,8 +843,10 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                                     )
                             );
                     context.managedSubmission = managedSubmission;
+                    if (context.captureReadback != null) context.captureReadback.submitted();
                     submitted = true;
                 }
+                if (context.d3d12Inputs != null) context.d3d12Inputs.submitted();
 
                 /*
                  * VkSwapchainKHR is externally synchronized. In particular, vkQueuePresentKHR
@@ -719,6 +879,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                         )
                 );
                 presentSamples = Math.incrementExact(presentSamples);
+                if (context.captureReadback != null) awaitFrameContext(context);
                 if (presented == KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR
                         || presented == KHRSwapchain.VK_SUBOPTIMAL_KHR
                         || acquisition.result == KHRSwapchain.VK_SUBOPTIMAL_KHR) {
@@ -772,6 +933,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 VulkanQueueHostSync.submit(queue, submit, VK10.VK_NULL_HANDLE),
                 "vkQueueSubmit.managedPresenterDedicated"
         );
+        if (context.captureReadback != null) context.captureReadback.submitted();
     }
 
     /**
@@ -822,10 +984,12 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         return false;
     }
 
-    private ManagedAcquisition acquireManagedImage() {
+    private ManagedAcquisition acquireManagedImage(List<FrameCompositionPlan.Layer> overlays,
+            GpuFrameLease.FrameDescriptor descriptor) {
         FrameContext context = frameContexts[nextFrameContext];
         nextFrameContext = (nextFrameContext + 1) % frameContexts.length;
         awaitFrameContext(context);
+        prepareComposition(context,overlays,descriptor.width(),descriptor.height(),descriptor.format().value());
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer imageIndexBuffer = stack.ints(0);
             long acquireStart = System.nanoTime();
@@ -935,11 +1099,13 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
 
     private PresentationResult presentExternalDrawable(
             GpuFrameLease lease,
-            GpuFrameLease.FrameDescriptor descriptor
+            GpuFrameLease.FrameDescriptor descriptor,
+            List<FrameCompositionPlan.Layer> overlays
     ) {
         FrameContext context = frameContexts[nextFrameContext];
         nextFrameContext = (nextFrameContext + 1) % frameContexts.length;
         awaitFrameContext(context);
+        prepareComposition(context,overlays,descriptor.width(),descriptor.height(),descriptor.format().value());
 
         ImportedFrame imported = importOrReuse(lease);
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -985,10 +1151,12 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 );
                 context.fencePending = true;
                 submitted = true;
+                if (context.captureReadback != null) context.captureReadback.submitted();
                 imported.inFlightUses++;
                 context.importedFrame = imported;
                 context.completionSemaphore = completion;
                 completion = null;
+                if (context.d3d12Inputs != null) context.d3d12Inputs.submitted();
 
                 try {
                     lease.release(new GpuFrameLease.ExternalSemaphoreSignal(
@@ -1018,6 +1186,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                         queue, present, (targetQueue, presentInfo) ->
                                 queuePresent(targetQueue, presentInfo, descriptor.frameSequence())
                 );
+                if (context.captureReadback != null) awaitFrameContext(context);
                 if (presented == KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR
                         || presented == KHRSwapchain.VK_SUBOPTIMAL_KHR
                         || acquire == KHRSwapchain.VK_SUBOPTIMAL_KHR) {
@@ -1134,6 +1303,10 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 );
                 displayFormat = VK10.VK_FORMAT_R8G8B8A8_UNORM;
             }
+            if(context.d3d12Inputs!=null) {
+                displayImage=d3d12Composition.record(commandBuffer,stack,context.slot,displayImage,sourceWidth,sourceHeight,context.d3d12Inputs);
+                displayFormat=VK10.VK_FORMAT_R8G8B8A8_UNORM;
+            }
             if (displayFormat == swapchainFormat
                     && sourceWidth == swapchainWidth
                     && sourceHeight == swapchainHeight) {
@@ -1201,6 +1374,14 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     VK10.VK_QUEUE_FAMILY_IGNORED
             );
             recordOverlayCommands(commandBuffer, stack, destinationImage, context);
+            if(context.captureReadback!=null) {
+                imageBarrier(stack,commandBuffer,destinationImage,
+                    VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    VK10.VK_ACCESS_TRANSFER_WRITE_BIT,VK10.VK_ACCESS_TRANSFER_READ_BIT,
+                    VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK10.VK_QUEUE_FAMILY_IGNORED,VK10.VK_QUEUE_FAMILY_IGNORED);
+                context.captureReadback.record(commandBuffer,stack,destinationImage);
+            }
             /* Streamline intercepts the ordinary Vulkan WSI calls; it does not replace the host
              * image-layout contract. Every image named by VkPresentInfoKHR therefore enters
              * PRESENT_SRC_KHR before either the native or intercepted vkQueuePresentKHR call. */
@@ -1208,9 +1389,9 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     stack,
                     commandBuffer,
                     destinationImage,
-                    VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    context.captureReadback!=null?VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                    VK10.VK_ACCESS_TRANSFER_WRITE_BIT,
+                    context.captureReadback!=null?VK10.VK_ACCESS_TRANSFER_READ_BIT:VK10.VK_ACCESS_TRANSFER_WRITE_BIT,
                     0,
                     VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
                     VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
@@ -1236,7 +1417,30 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             );
     }
 
+    private static List<FrameCompositionPlan.Layer> checkedCompositionLayers(List<FrameCompositionPlan.Layer> overlays) {
+        var layers=List.copyOf(Objects.requireNonNull(overlays,"overlays"));
+        if(layers.size()>7)throw new IllegalArgumentException("Scene presentation supports at most seven Vulkan overlay layers");
+        return layers;
+    }
+
+    private void prepareComposition(FrameContext context,List<FrameCompositionPlan.Layer> layers,
+            int width,int height,int sourceFormat) {
+        if(layers.isEmpty())return;
+        if(d3d12CompositionResolver==null||sharedRuntime==null)
+            throw new UnsupportedOperationException("This presenter has no renderer-bound Vulkan composition sources");
+        if(sourceFormat!=VK10.VK_FORMAT_R8G8B8A8_UNORM&&sourceFormat!=VK10.VK_FORMAT_R16G16B16A16_SFLOAT)
+            throw new UnsupportedOperationException("Scene composition requires RGBA8 display or RGBA16F linear scene input");
+        if(d3d12Composition==null)d3d12Composition=new VulkanD3D12Composition(sharedRuntime,FRAME_CONTEXT_COUNT);
+        d3d12Composition.prepare(context.slot,width,height);
+        context.d3d12Inputs=d3d12CompositionResolver.resolve(layers,width,height);
+    }
+
     private void prepareOverlay(FrameContext context) {
+        if(pendingCapture!=null) {
+            if(!swapchainCaptureSupported)throw new UnsupportedOperationException("Resized surface cannot capture the final frame");
+            context.captureReadback=new VulkanPresentedFrameCapture(sharedRuntime,swapchainWidth,swapchainHeight,swapchainFormat,pendingCapture);
+            pendingCapture=null;
+        }
         int availableWidth = Math.max(0, swapchainWidth - OVERLAY_MARGIN * 2);
         int availableHeight = Math.max(0, swapchainHeight - OVERLAY_MARGIN * 2);
         if (context.overlayRevision == overlayRevision
@@ -1541,6 +1745,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 default -> throw new IllegalStateException("unsupported selected present mode: " + presentMode);
             };
             int imageCount = capabilities.minImageCount() + 1;
+            swapchainCaptureSupported=(capabilities.supportedUsageFlags()&VK10.VK_IMAGE_USAGE_TRANSFER_SRC_BIT)!=0;
             if (capabilities.maxImageCount() > 0) imageCount = Math.min(imageCount, capabilities.maxImageCount());
             VkSwapchainCreateInfoKHR createInfo = VkSwapchainCreateInfoKHR.calloc(stack)
                     .sType$Default()
@@ -1553,6 +1758,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     // composition. COLOR_ATTACHMENT makes those views legal while TRANSFER_DST
                     // remains the renderer's only direct use of the backbuffer.
                     .imageUsage(VK10.VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                            | (swapchainCaptureSupported?VK10.VK_IMAGE_USAGE_TRANSFER_SRC_BIT:0)
                             | VK10.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
                     .imageSharingMode(VK10.VK_SHARING_MODE_EXCLUSIVE)
                     .preTransform(capabilities.currentTransform())
@@ -1693,6 +1899,19 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             context.completionSemaphore.close();
             context.completionSemaphore = null;
         }
+        if(context.d3d12Frame!=null) {
+            context.d3d12Frame.retired();
+            context.d3d12Frame=null;
+        }
+        if(context.d3d12Inputs!=null) {
+            context.d3d12Inputs.close();
+            context.d3d12Inputs=null;
+        }
+        if(context.captureReadback!=null) {
+            var capture=context.captureReadback;
+            context.captureReadback=null;
+            try { capture.finish(); } finally { capture.close(); }
+        }
         if (context.importedFrame != null) {
             context.importedFrame.inFlightUses--;
             if (context.importedFrame.inFlightUses < 0) {
@@ -1764,12 +1983,20 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             }
         }
         // Queue completion, tag release, and imported-memory retirement are ownership proofs.
+        var d3d12Iterator=d3d12Frames.entrySet().iterator();
+        while(d3d12Iterator.hasNext()) {
+            try { d3d12Iterator.next().getValue().close();d3d12Iterator.remove(); }
+            catch(RuntimeException closeFailure) { failure=accumulate(failure,closeFailure); }
+        }
         // Never destroy their device/session below after one of those proofs failed.
         if (failure != null) throw failure;
         destroySwapchain();
         if (displayTransform != null) {
             displayTransform.close();
             displayTransform = null;
+        }
+        if(d3d12Composition!=null) {
+            d3d12Composition.close();d3d12Composition=null;
         }
         if (managedPresentationRegistered) {
             sharedRuntime.endManagedPresentation();
@@ -1979,6 +2206,9 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         private final VulkanTextOverlayUpload overlayUpload;
         private VulkanWin32ExternalSemaphoreProbe.ExportedSemaphore completionSemaphore;
         private ImportedFrame importedFrame;
+        private VulkanD3D12ImportedFrame d3d12Frame;
+        private VulkanD3D12CompositionInputs d3d12Inputs;
+        private VulkanPresentedFrameCapture captureReadback;
         private RtCommandContext.AsyncSubmission managedSubmission;
         private GpuFrameLease retainedManagedLease;
         private boolean fencePending;

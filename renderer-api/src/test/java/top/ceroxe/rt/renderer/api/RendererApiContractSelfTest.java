@@ -120,6 +120,7 @@ public final class RendererApiContractSelfTest {
       assertExportedHandleLifecycle();
       assertProviderSelection();
       RendererSceneRoutingSelfTest.main(args);
+      D3D12SharedFrameContractSelfTest.main(args);
       System.out.println("RendererApiContractSelfTest passed");
    }
 

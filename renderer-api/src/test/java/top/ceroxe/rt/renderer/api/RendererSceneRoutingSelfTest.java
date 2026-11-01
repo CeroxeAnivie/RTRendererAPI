@@ -13,11 +13,43 @@ public final class RendererSceneRoutingSelfTest {
 
     public static void main(String[] args) {
         selectsOnlyActualOpticalWork();
+        reusesClassificationAndStagesSceneUpdates();
         opensOnlyChosenProviderAndConfig();
         cleansUpFailedInitialization();
         rejectsCategoryChangesBeforeMutation();
         delegatesExpertExtensionsAndLifecycle();
         System.out.println("RendererSceneRoutingSelfTest passed");
+    }
+
+    private static void reusesClassificationAndStagesSceneUpdates() {
+        var policy=RendererBackendPolicy.RTXPT_FOR_MEDIA;
+        var original=new RendererSceneRouting(scene(false,false));
+        require(!original.select(policy,frame(0)).mediaPresent(),"Initial surface classification");
+        var same=original.updated(SceneTransaction.builder(2).upsert(SceneInstance.builder(1,1).build()).build());
+        require(same==original,"Unchanged routing dependencies reuse the same classification cache");
+        var candidate=original.updated(SceneTransaction.builder(3).upsert(SceneInstance.builder(1,2).build()).build());
+        require(candidate.select(policy,frame(1)).mediaPresent(),"Candidate observes changed referenced mesh");
+        require(!original.select(policy,frame(1)).mediaPresent(),"Preparing a candidate never changes the published classification");
+        var optical=FramePrimitiveBatch.of(List.of(PrimitiveInstance.builder(2).build()));
+        for(int i=0;i<3;i++) {
+            require(original.select(policy,frame(2+i,optical)).mediaPresent(),"Cached local optical primitives participate");
+            require(!original.select(policy,frame(2+i)).mediaPresent(),"A different batch cannot retain the prior optical result");
+        }
+        expect(IllegalArgumentException.class,()->original.updated(SceneTransaction.builder(4).removeMaterial(1).build()));
+        require(!original.select(policy,frame(5)).mediaPresent(),"Failed candidate leaves the original cache intact");
+        expect(IllegalArgumentException.class,()->new RendererSceneRouting(SceneTransaction.empty(1)));
+        var missing=frame(6,FramePrimitiveBatch.of(List.of(PrimitiveInstance.builder(99).build())));
+        expect(IllegalArgumentException.class,()->candidate.select(RendererBackendPolicy.RTXPT_ONLY,missing));
+
+        var fake=new FakeRenderer();
+        try(var session=open(policy,scene(true,false),fake)) {
+            fake.failApply=true;
+            expect(IllegalStateException.class,()->session.apply(SceneTransaction.builder(2)
+                .upsert(MaterialAsset.opaque(1,0xffffffff)).build()));
+            fake.failApply=false;
+            session.submit(frame(1));
+            require(fake.frames==2,"Provider publication failure never commits the staged routing candidate");
+        }
     }
 
     private static MaterialAsset glass(long id) {
@@ -144,13 +176,16 @@ public final class RendererSceneRoutingSelfTest {
     }
 
     private static final class FakeRenderer implements Renderer {
-        boolean closed,failSubmit;
+        boolean closed,failSubmit,failApply;
         int applies,frames;
         long revision;
         @Override public Status status() { return closed?Status.CLOSED:Status.READY; }
         @Override public RendererHealth health() { return new RendererHealth(status(),Optional.empty(),RendererHealth.ResourceObligations.none()); }
         @Override public RendererDiagnostics diagnostics() { return RendererDiagnostics.builder().status(status()).build(); }
-        @Override public SceneUpdateResult apply(SceneTransaction transaction) { applies++;revision=transaction.revision();return new SceneUpdateResult(revision); }
+        @Override public SceneUpdateResult apply(SceneTransaction transaction) {
+            if(failApply)throw new IllegalStateException("Synthetic scene publication failure");
+            applies++;revision=transaction.revision();return new SceneUpdateResult(revision);
+        }
         @Override public FrameSubmissionResult submit(RenderFrameRequest request) {
             if(failSubmit)throw new IllegalStateException("Synthetic initial admission failure");
             frames++;return FrameSubmissionResult.accepted(request.sequence(),revision,Set.of());

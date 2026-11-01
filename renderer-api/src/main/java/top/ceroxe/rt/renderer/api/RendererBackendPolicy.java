@@ -21,11 +21,10 @@ public enum RendererBackendPolicy {
      * @return immutable exact-provider decision; opening never falls back to another provider
      */
     public Selection select(SceneTransaction initialScene, RenderFrameRequest firstFrame) {
-        return select(SceneRoutingState.initial(initialScene), Objects.requireNonNull(firstFrame,"firstFrame"));
+        return new RendererSceneRouting(initialScene).select(this,firstFrame);
     }
 
     Selection select(SceneRoutingState state, RenderFrameRequest frame) {
-        state.validatePrimitiveReferences(frame.primitiveBatch());
         boolean media = state.hasMedia(frame.primitiveBatch());
         Backend backend = backendFor(media);
         String reason = switch(this) {

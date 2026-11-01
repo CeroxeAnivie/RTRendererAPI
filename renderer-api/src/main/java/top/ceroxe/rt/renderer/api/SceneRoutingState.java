@@ -75,8 +75,9 @@ final class SceneRoutingState {
         while(ids.hasRemaining())remove.accept(ids.get());
     }
 
-    boolean hasMedia(FramePrimitiveBatch primitives) {
+    synchronized boolean hasMedia(FramePrimitiveBatch primitives) {
         if(primitives==lastPrimitives)return lastFrameMedia;
+        validatePrimitiveReferences(primitives);
         boolean media=persistentMedia||!primitives.mediumBoundaryIndices().isEmpty();
         if(!media&&hasTransmissiveMeshes) {
             for(var primitive:primitives.primitives()) {
@@ -87,7 +88,7 @@ final class SceneRoutingState {
         return media;
     }
 
-    void validatePrimitiveReferences(FramePrimitiveBatch primitives) {
+    private void validatePrimitiveReferences(FramePrimitiveBatch primitives) {
         for(var primitive:primitives.primitives())if(!meshes.containsKey(primitive.meshAssetId()))
             throw new IllegalArgumentException("Routing cannot resolve mesh "+primitive.meshAssetId()+" in the complete scene");
     }

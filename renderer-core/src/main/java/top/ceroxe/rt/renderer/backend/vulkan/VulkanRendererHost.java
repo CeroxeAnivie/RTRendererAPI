@@ -537,6 +537,8 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, top.cero
         );
         boolean published = false;
         try {
+            if(presenter instanceof VulkanGlfwFramePresenter nativePresenter&&genericCommands!=null&&presentationRuntime!=null)
+                nativePresenter.attachD3D12CompositionResolver(this::prepareD3D12Composition);
             int backendProducerLeadLimit = session.managedPresentationProducerLeadLimit();
             if (backendProducerLeadLimit <= 0) {
                 throw new IllegalStateException("backend managed-presentation producer lead must be positive");
@@ -563,6 +565,30 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, top.cero
         return session instanceof VulkanGpuSceneRenderingSession gpuSession
                 ? gpuSession.deviceForAcceptance()
                 : null;
+    }
+
+    private VulkanD3D12CompositionInputs prepareD3D12Composition(
+            java.util.List<top.ceroxe.rt.renderer.api.FrameCompositionPlan.Layer> layers,int width,int height) {
+        return withLifecycleLock(()-> {
+            requireReady("compose D3D12 external scene");
+            if(genericCommands==null)throw new UnsupportedOperationException("Generic Vulkan UI composition is unavailable");
+            if(layers.isEmpty()||layers.size()>=top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameCompositionPipeline.MAX_LAYERS)
+                throw new IllegalArgumentException("External scene supports one to seven Vulkan overlay layers");
+            var sources=new VulkanGenericCompositionSource[layers.size()];
+            var layouts=new int[layers.size()];var operations=new int[layers.size()];
+            var updates=genericCommands.beginCompositionLayoutUpdates();
+            for(int i=0;i<layers.size();i++) {
+                var layer=layers.get(i);var source=genericCommands.requireCompositionSource(layer.source());
+                if(source.width()!=width||source.height()!=height||source.format()!=top.ceroxe.rt.renderer.api.TextureFormat.RGBA8_UNORM)
+                    throw new IllegalArgumentException("Vulkan overlay must match the external scene's RGBA8 extent");
+                sources[i]=source;layouts[i]=genericCommands.stageCompositionRead(source,updates);
+                operations[i]=switch(layer.operation()) { case REPLACE->0;case ALPHA_OVER->1;case ADDITIVE->2; };
+            }
+            var pins=genericCommands.pinComposition(sources);
+            return new VulkanD3D12CompositionInputs(sources,layouts,operations,
+                ()->withLifecycleLock(()-> { genericCommands.commitCompositionLayoutUpdates(updates);return null; }),
+                ()->withLifecycleLock(()-> { pins.close();return null; }));
+        });
     }
 
     private void onManagedFrameRetired(long frameSequence) {

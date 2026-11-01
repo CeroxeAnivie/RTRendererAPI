@@ -23,6 +23,7 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #include "rtxpt_shutdown.h"
+#include "rtxpt_shared_frames.h"
 extern SampleUIData g_sampleUIData;
 
 namespace {
@@ -55,6 +56,7 @@ class HostPathTracer final : public AdvancedPathTracer {
     }
 public:
     using AdvancedPathTracer::AdvancedPathTracer;
+    nvrhi::ITexture* HostDisplayColor() const { return m_renderTargets ? m_renderTargets->LdrColor.Get() : nullptr; }
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();
         lightingSceneDirty=true;
@@ -110,6 +112,9 @@ struct Session {
     int requestedGeneratedFrames = 1;
     sl::Result shutdownResult = sl::Result::eOk;
     nvrhi::TextureHandle lastPresentedTexture;
+    SharedFrameProducer sharedFrames;
+    bool externalPresentation=false;
+    uint64_t rendered=0;
     struct GpuSample { nvrhi::TimerQueryHandle query; bool pending=false; };
     std::array<GpuSample,8> gpuSamples;
     nvrhi::CommandListHandle timerCommands;
@@ -153,6 +158,7 @@ struct Session {
             }
             dm->m_callbacks={};
             lastPresentedTexture=nullptr;timerCommands=nullptr;
+            sharedFrames.clear();
             for(auto& sample:gpuSamples)sample.query=nullptr;
             app->End();
         }
@@ -208,7 +214,7 @@ void configureAgility(const std::filesystem::path& runtime) {
 }
 
 extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(
-    JNIEnv* e, jclass, jstring runtime, jstring scene, jint width, jint height, jobjectArray options) {
+    JNIEnv* e, jclass, jstring runtime, jstring scene, jint width, jint height, jboolean externalPresentation, jobjectArray options) {
     std::lock_guard lock(lifecycle);
     try {
         if (active) throw std::runtime_error("The upstream RTXPT core supports one resident session per process");
@@ -233,20 +239,24 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         }
         std::vector<const char*> argv; for (const auto& a : args) argv.push_back(a.c_str());
         auto s = std::make_unique<Session>();
+        s->externalPresentation=externalPresentation;
         donut::log::ConsoleApplicationMode();
         g_sampleUIData = SampleUIData{};
         s->app = std::make_unique<HostApp>();
+        s->app->HostDeviceManager()->HostExternalPresentation=externalPresentation;
         auto status = s->app->Init(static_cast<int>(argv.size()), argv.data());
         if (status != SampleBaseApp::InitReturnCodes::Success)
             throw std::runtime_error("RTXPT initialization failed with status " + std::to_string(static_cast<int>(status)));
         s->initialized = true;
+        s->app->HostDeviceManager()->HostExternalPresentation=externalPresentation;
+        if(externalPresentation)glfwHideWindow(s->app->HostDeviceManager()->GetWindow());
         donut::app::StreamlineIntegration::Get().hostFrameGeneration={};
         if(!s->app->HostRenderPass()->GetScene()) throw std::runtime_error("RTXPT scene failed to load");
         auto& afterPresent=s->app->HostDeviceManager()->m_callbacks.afterPresent;
         auto upstreamAfterPresent=afterPresent;
         afterPresent = [ptr=s.get(),upstreamAfterPresent](auto& dm, uint32_t index) {
             if(upstreamAfterPresent)upstreamAfterPresent(dm,index);
-            ++ptr->presented;
+            if(!ptr->externalPresentation)++ptr->presented;
         };
         auto& beforeRender=s->app->HostDeviceManager()->m_callbacks.beforeRender;
         auto upstreamBeforeRender=beforeRender;
@@ -265,6 +275,9 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         afterRender=[ptr=s.get(),upstreamAfterRender](auto& dm,uint32_t index) {
             if(upstreamAfterRender)upstreamAfterRender(dm,index);
             ptr->endGpuSample();ptr->lastPresentedTexture=dm.GetCurrentBackBuffer();
+            if(ptr->externalPresentation)ptr->sharedFrames.publish(dm.GetDevice(),
+                static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->HostDisplayColor());
+            ++ptr->rendered;
         };
         indexNodes(*s);
         s->app->HostDeviceManager()->SetWindowTitle("RTRenderer 7 - NVIDIA RTXPT");
@@ -275,6 +288,27 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_overlay(
     JNIEnv* e,jclass,jlong h,jstring text) {
     try { session(h);g_sampleUIData.HostOverlayText=utf8(e,text); }
+    catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_sharedFrame(
+    JNIEnv* e,jclass,jlong h,jlong sequence) {
+    try {
+        auto& s=session(h);
+        if(!s.externalPresentation)throw std::runtime_error("This RTXPT session owns native window presentation");
+        const auto values=s.sharedFrames.descriptor(sequence);
+        auto result=e->NewLongArray(jsize(values.size()));
+        if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));
+        return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_retireSharedFrames(
+    JNIEnv* e,jclass,jlong h) {
+    try{auto& s=session(h);s.sharedFrames.retire(s.app->HostDeviceManager()->GetDevice());}
+    catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resetHistory(
+    JNIEnv* e,jclass,jlong h) {
+    try{session(h);g_sampleUIData.ResetAccumulation=true;g_sampleUIData.ResetRealtimeCaches=true;}
     catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_overlayChoices(
@@ -328,9 +362,9 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         auto& s = session(h); auto dm = s.app->HostDeviceManager();
         if (glfwWindowShouldClose(dm->GetWindow())) return 0;
         static_cast<HostPathTracer*>(s.app->HostRenderPass())->UpdateLightingPolicy();
-        auto before=s.presented;
+        auto before=s.externalPresentation?s.rendered:s.presented;
         if (!dm->HostFrame()) throw std::runtime_error("RTXPT render/present failed");
-        return s.presented>before ? 2 : 1;
+        return (s.externalPresentation?s.rendered:s.presented)>before ? 2 : 1;
     } catch (const std::exception& x) { fail(e, x); return 0; }
 }
 

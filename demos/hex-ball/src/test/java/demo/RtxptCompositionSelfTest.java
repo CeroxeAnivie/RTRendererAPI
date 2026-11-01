@@ -1,0 +1,165 @@
+package demo;
+
+import java.awt.image.BufferedImage;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Locale;
+import javax.imageio.ImageIO;
+import top.ceroxe.rt.renderer.api.*;
+import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
+import top.ceroxe.rt.renderer.rtxpt.RtxptAccess;
+import top.ceroxe.rt.renderer.rtxpt.RtxptComposedRenderer;
+
+/** End-to-end GPU sharing, exact display colors, legacy UI, switching and completed throughput. */
+public final class RtxptCompositionSelfTest {
+    private static final int WIDTH=1920,HEIGHT=1080;
+    private static long sequence;
+    private RtxptCompositionSelfTest() { }
+    public static void main(String[] args) throws Exception {
+        Path output=Path.of(args[0]).toAbsolutePath();Files.createDirectories(output);
+        String mode=args.length>1?args[1]:"acceptance";
+        if(mode.equals("native")){nativeBenchmark(output);return;}
+        var config=configuration();
+        try(var renderer=RtxptComposedRenderer.open(RendererBackendPolicy.RTXPT_ONLY,
+                RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),config,
+                VulkanFramePresenterConfig.builder().title("RTRendererAPI - RTXPT + Vulkan composition")
+                    .initialExtent(WIDTH,HEIGHT).presentMode(VulkanFramePresenterConfig.PresentMode.UNCAPPED).build())) {
+            renderer.apply(RtxptMediumScene.create(1,"mixed"));
+            for(int i=0;i<90;i++)submit(renderer,1,WIDTH,HEIGHT);
+            require(renderer.rtxptStatus().reconstruction()==RtxptAccess.Reconstruction.DLSS_RR,"Native RR remains active");
+            if(mode.equals("acceptance")) {
+                renderer.presenter().captureNextPresentedFrame(output.resolve("base-final.png"));
+                submit(renderer,1,WIDTH,HEIGHT);
+                renderer.captureRtxptSource(output.resolve("base-source.png"));
+                compare(output.resolve("base-source.png"),output.resolve("base-final.png"),false);
+            }
+            var layer=createOverlay(renderer);
+            if(mode.equals("overlay")||mode.equals("acceptance"))renderer.overlays(List.of(layer));
+            if(!mode.equals("acceptance")){benchmark(renderer,output,mode);return;}
+            renderer.presenter().captureNextPresentedFrame(output.resolve("ui-final.png"));
+            submit(renderer,1,WIDTH,HEIGHT);
+            renderer.captureRtxptSource(output.resolve("ui-source.png"));
+            compare(output.resolve("ui-source.png"),output.resolve("ui-final.png"),true);
+            require(renderer.workSnapshot().legacyFrames()==0,"Vulkan did not duplicate the RTXPT 3D scene");
+            require(renderer.extension(RtxptAccess.class).isEmpty(),"Hidden producer cannot bypass its consumption lifecycle");
+
+            renderer.backendPolicy(RendererBackendPolicy.VULKAN_ONLY);
+            expectFailure(()->submit(renderer,1,WIDTH,HEIGHT),"Media cannot silently lose its optical contract");
+            renderer.backendPolicy(RendererBackendPolicy.RTXPT_ONLY);
+            renderer.overlays(List.of(new FrameCompositionPlan.Layer(
+                new ResourceMutationKey(layer.source().generation(),9999),FrameCompositionPlan.Operation.ALPHA_OVER)));
+            expectFailure(()->submit(renderer,1,WIDTH,HEIGHT),"Reject a nonexistent UI mutation after a source frame");
+            renderer.overlays(List.of(layer));
+            submit(renderer,1,WIDTH,HEIGHT);
+            System.out.println("COMPOSITION_REJECT_AND_RECOVER PASS");
+
+            renderer.apply(ordinary(2));
+            for(int i=0;i<8;i++)submit(renderer,2,WIDTH,HEIGHT);
+            var sameWindow=renderer.presenter();
+            renderer.backendPolicy(RendererBackendPolicy.VULKAN_ONLY);
+            for(int i=0;i<16;i++)submit(renderer,2,WIDTH,HEIGHT);
+            renderer.presenter().captureNextPresentedFrame(output.resolve("vulkan-ui.png"));
+            submit(renderer,2,WIDTH,HEIGHT);
+            require(renderer.selection().orElseThrow().backend()==RendererBackendPolicy.Backend.VULKAN,"Actual Vulkan 3D selection");
+            require(renderer.workSnapshot().legacyFrames()>0,"Actual Vulkan 3D work occurred");
+            renderer.backendPolicy(RendererBackendPolicy.RTXPT_ONLY);
+            renderer.presenter().captureNextPresentedFrame(output.resolve("rtxpt-return-ui.png"));
+            submit(renderer,2,WIDTH,HEIGHT);
+            renderer.captureRtxptSource(output.resolve("rtxpt-return-source.png"));
+            compare(output.resolve("rtxpt-return-source.png"),output.resolve("rtxpt-return-ui.png"),true);
+            require(renderer.presenter()==sameWindow,"Switching preserved the presenter/window owner");
+            renderer.overlays(List.of());
+            for(int i=0;i<4;i++)submit(renderer,2,960,540);
+            for(int i=0;i<4;i++)submit(renderer,2,WIDTH,HEIGHT);
+            renderer.presenter().setOverlayText("RTXPT 3D + VULKAN UI | GPU SHARING VERIFIED\nSAME WINDOW / BACKEND SWITCH VERIFIED | FG OFF");
+            renderer.presenter().captureNextPresentedFrame(output.resolve("final-hud.png"));
+            submit(renderer,2,WIDTH,HEIGHT);
+            System.out.println("COMPOSITION_SCENE_SWITCH_RESIZE_AND_HUD PASS "+renderer.workSnapshot());
+        }
+        System.out.println("RTXPT_VULKAN_COMPOSITION PASS");
+    }
+    private static RendererConfig configuration(){
+        return RendererConfig.pathTracedPresentation().copyBuilder().lowLatency(LowLatencyOptions.disabled())
+            .frameGeneration(FrameGenerationOptions.disabled()).build();
+    }
+    private static void submit(RtxptComposedRenderer renderer,long revision,int width,int height){
+        renderer.presenter().pollEvents();
+        require(!renderer.presenter().windowState().closeRequested(),"Visible viewport stays open");
+        renderer.submit(RtxptMediumDemo.frameRequest(sequence++,revision,width,height));
+    }
+    private static SceneTransaction ordinary(long revision){
+        return SceneTransaction.builder(revision).resetScene()
+            .upsert(MaterialAsset.builder(1).baseColorRgba8(0xff3060d0).roughness(.5f).build())
+            .upsert(RtxptMediumScene.cube(1,1)).upsert(SceneInstance.builder(1,1).build()).build();
+    }
+    private static FrameCompositionPlan.Layer createOverlay(RtxptComposedRenderer renderer) throws Exception {
+        var texture=new TextureResource(new RenderResourceId(700),ResourceVersion.initial(),TextureDimension.TEXTURE_2D,
+            WIDTH,HEIGHT,1,1,1,1,TextureFormat.RGBA8_UNORM,EnumSet.of(TextureUsage.COLOR_ATTACHMENT,TextureUsage.STORAGE_READ));
+        var commands=renderer.legacyCommands();
+        require(commands.submitResources(new RenderResourceTransaction(0,List.of(),List.of(texture),List.of())).outcome()
+            ==ResourceTransactionEvidence.Outcome.ACCEPTED,"Vulkan UI resource is accepted");
+        var view=new TextureView(texture,TextureViewDimension.TEXTURE_2D,new TextureSubresourceRange(TextureAspect.COLOR,0,1,0,1));
+        var pass=RenderPassDescriptor.color(WIDTH,HEIGHT,List.of(RenderAttachment.cleared(view,StoreOp.STORE,
+            new ClearValue.Color(.25f,.0625f,0,.5f))));
+        require(commands.submitCommands(new RenderCommandTransaction(0,List.of(new BeginRenderPassCommand(pass),new EndRenderPassCommand())))
+            .outcome()==CommandExecutionEvidence.Outcome.RECORDED,"Vulkan UI draw recorded");
+        long deadline=System.nanoTime()+10_000_000_000L;
+        while(System.nanoTime()<deadline){
+            var evidence=commands.commandExecutionEvidence(0).orElseThrow();
+            if(evidence.outcome().gpuCompleted())return new FrameCompositionPlan.Layer(
+                new ResourceMutationKey(ResourceGenerationKey.of(texture),0),FrameCompositionPlan.Operation.ALPHA_OVER);
+            require(evidence.outcome()==CommandExecutionEvidence.Outcome.RECORDED,"UI draw failed: "+evidence);Thread.sleep(1);
+        }
+        throw new AssertionError("Vulkan UI draw timed out");
+    }
+    private static void compare(Path sourceFile,Path finalFile,boolean overlay) throws Exception {
+        BufferedImage source=ImageIO.read(sourceFile.toFile()),target=ImageIO.read(finalFile.toFile());
+        require(source!=null&&target!=null&&source.getWidth()==target.getWidth()&&source.getHeight()==target.getHeight(),"Matching final dimensions");
+        long samples=0,total=0;int maximum=0;
+        for(int y=8;y<source.getHeight()-8;y+=3)for(int x=8;x<source.getWidth()-8;x+=3){
+            int a=source.getRGB(x,y),b=target.getRGB(x,y);
+            for(int c=0;c<3;c++){
+                int shift=16-c*8,value=(a>>>shift)&255,actual=(b>>>shift)&255;
+                int expected=overlay?(int)Math.round(value*(1-128/255.0)+new int[]{64,16,0}[c]):value;
+                int error=Math.abs(expected-actual);maximum=Math.max(maximum,error);total+=error;samples++;
+            }
+        }
+        double mean=(double)total/samples;
+        System.out.printf(Locale.ROOT,"COMPOSITION_PIXELS overlay=%s max=%d mean=%.6f%n",overlay,maximum,mean);
+        require(maximum<=2,"GPU copy/alpha composition changed source SDR values; maximum="+maximum+", mean="+mean);
+    }
+    private static void benchmark(RtxptComposedRenderer renderer,Path output,String mode) throws Exception {
+        renderer.presenter().retireD3D12SharedFrames();
+        var before=renderer.workSnapshot();long start=System.nanoTime();int frames=360;
+        for(int i=0;i<frames;i++)submit(renderer,1,WIDTH,HEIGHT);
+        renderer.presenter().retireD3D12SharedFrames();
+        double elapsed=(System.nanoTime()-start)/1e6;var after=renderer.workSnapshot();
+        long completed=after.presentation().presentSamples()-before.presentation().presentSamples();
+        require(completed==frames,"Only actual Vulkan final presents count");
+        double copy=(after.presentation().managedCopyGpuNanos()-before.presentation().managedCopyGpuNanos())/1e6/
+            Math.max(1,after.presentation().managedCopyGpuSamples()-before.presentation().managedCopyGpuSamples());
+        String row=String.format(Locale.ROOT,"%s,%d,%.6f,%.6f,%.6f%n",mode,completed,elapsed/completed,completed*1000/elapsed,copy);
+        Files.writeString(output.resolve(mode+".csv"),"mode,completed_frames,ms,fps,copy_gpu_ms\n"+row);System.out.print(row);
+    }
+    private static void nativeBenchmark(Path output) throws Exception {
+        try(var renderer=Renderer.open("rtxpt",configuration())){
+            renderer.apply(RtxptMediumScene.create(1,"mixed"));
+            var host=renderer.extension(RtxptAccess.class).orElseThrow();
+            for(int i=0;i<90;i++)renderer.submit(RtxptMediumDemo.frameRequest(sequence++,1,WIDTH,HEIGHT));
+            host.awaitIdle();long start=System.nanoTime(),before=host.bridgeTimings().frames();int frames=360;
+            for(int i=0;i<frames;i++)renderer.submit(RtxptMediumDemo.frameRequest(sequence++,1,WIDTH,HEIGHT));
+            host.awaitIdle();double elapsed=(System.nanoTime()-start)/1e6;long completed=host.bridgeTimings().frames()-before;
+            require(completed==frames,"Actual upstream rendered frames");
+            String row=String.format(Locale.ROOT,"native,%d,%.6f,%.6f,0%n",completed,elapsed/completed,completed*1000/elapsed);
+            Files.writeString(output.resolve("native.csv"),"mode,completed_frames,ms,fps,copy_gpu_ms\n"+row);System.out.print(row);
+            System.out.println(host.runtimeStatus()+" "+host.presentationStatus());
+        }
+    }
+    private static void expectFailure(Runnable action,String reason){
+        try{action.run();}catch(IllegalArgumentException|IllegalStateException expected){System.out.println("EXPECTED_REJECTION "+expected.getMessage());return;}
+        throw new AssertionError(reason);
+    }
+    private static void require(boolean value,String message){if(!value)throw new AssertionError(message);}
+}

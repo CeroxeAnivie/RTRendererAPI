@@ -18,10 +18,10 @@ public final class RendererSceneSession implements Renderer {
     private final RendererBackendPolicy.Selection selection;
     private final FrameSubmissionResult initialSubmission;
     private final Thread owner=Thread.currentThread();
-    private SceneRoutingState routing;
+    private RendererSceneRouting routing;
 
     private RendererSceneSession(Renderer delegate,RendererBackendPolicy.Selection selection,
-            SceneRoutingState routing,FrameSubmissionResult initialSubmission) {
+            RendererSceneRouting routing,FrameSubmissionResult initialSubmission) {
         this.delegate=delegate;this.selection=selection;this.routing=routing;this.initialSubmission=initialSubmission;
     }
 
@@ -59,10 +59,10 @@ public final class RendererSceneSession implements Renderer {
         Objects.requireNonNull(policy,"policy");Objects.requireNonNull(firstFrame,"firstFrame");
         Objects.requireNonNull(vulkanConfiguration,"vulkanConfiguration");Objects.requireNonNull(rtxptConfiguration,"rtxptConfiguration");
         Objects.requireNonNull(factory,"factory");
-        var state=SceneRoutingState.initial(initialScene);
+        var state=new RendererSceneRouting(initialScene);
         if(firstFrame.minimumSceneRevision()>initialScene.revision())
             throw new IllegalArgumentException("The complete initial scene does not satisfy the first frame's minimum revision");
-        var selected=policy.select(state,firstFrame);
+        var selected=state.select(policy,firstFrame);
         var config=selected.backend()==RendererBackendPolicy.Backend.RTXPT?rtxptConfiguration:vulkanConfiguration;
         var renderer=Objects.requireNonNull(factory.apply(selected.backend().providerId(),config),"opened renderer");
         try {
@@ -98,7 +98,7 @@ public final class RendererSceneSession implements Renderer {
         requireSubmissionThread();
         Objects.requireNonNull(frame,"frame");
         if(selection.policy()==RendererBackendPolicy.RTXPT_FOR_MEDIA) {
-            var wanted=selection.policy().backendFor(routing.hasMedia(frame.primitiveBatch()));
+            var wanted=routing.select(selection.policy(),frame).backend();
             if(wanted!=selection.backend())throw categoryChange(wanted);
         }
     }

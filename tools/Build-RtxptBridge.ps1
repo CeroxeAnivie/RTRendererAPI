@@ -299,6 +299,29 @@ bool DeviceManager::HostFrame() {
 }
 void DeviceManager::RunMessageLoop()
 '@ 'bool DeviceManager::HostFrame()'
+Patch-Once 'External/Donut/include/donut/app/DeviceManager.h' 'bool HostFrame();' @'
+bool HostFrame();
+        bool HostExternalPresentation = false; // RTR external GPU compositor
+'@ 'RTR external GPU compositor'
+Patch-Once 'External/Donut/src/app/DeviceManager.cpp' "    glfwShowWindow(m_Window);`r`n    glfwFocusWindow(m_Window);" @'
+    // RTR compositor keeps the upstream host hidden from its creation onward.
+    if (!HostExternalPresentation) { glfwShowWindow(m_Window); glfwFocusWindow(m_Window); }
+'@ 'RTR compositor keeps the upstream host hidden'
+Patch-Once 'External/Donut/src/app/DeviceManager.cpp' '            return AnimateRenderPresent();' @'
+            // RTR external compositor owns the visible window; the hidden host still renders.
+            if (HostExternalPresentation) { m_windowVisible=true; m_windowIsInFocus=true; }
+            return AnimateRenderPresent();
+'@ 'RTR external compositor owns'
+Patch-Once 'External/Donut/src/app/dx12/DeviceManager_DX12.cpp' "bool DeviceManager_DX12::BeginFrame()`r`n{" @'
+bool DeviceManager_DX12::BeginFrame()
+{
+    if (HostExternalPresentation) return true; // RTR external timeline owns frame retirement
+'@ 'RTR external timeline owns'
+Patch-Once 'External/Donut/src/app/dx12/DeviceManager_DX12.cpp' "bool DeviceManager_DX12::Present()`r`n{" @'
+bool DeviceManager_DX12::Present()
+{
+    if (HostExternalPresentation) return true; // RTR external compositor presents, not DXGI
+'@ 'RTR external compositor presents'
 $function="std::filesystem::path donut::app::GetDirectoryWithExecutable()`r`n{"
 $path=Join-Path $sdk 'External/Donut/src/app/ApplicationBase.cpp'
 $text=[IO.File]::ReadAllText($path)

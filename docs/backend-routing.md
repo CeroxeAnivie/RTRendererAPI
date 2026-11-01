@@ -4,6 +4,8 @@
 
 新的普通入口 `Renderer.openForScene(policy, initialScene, firstFrame)` 在打开设备前分析完整场景，并返回实现 `Renderer` 的 `RendererSceneSession`。高级功能、专家扩展、资源和命令仍由原后端执行，没有新增渲染算法或逐帧图像搬运层。
 
+需要 RTXPT 完整 3D 与旧 Vulkan UI、最终呈现一起工作时，使用另外的 [D3D12→Vulkan GPU 组合接口](d3d12-vulkan-composition.md)。它接收真正的共享 GPU 纹理；这里的固定场景策略只负责选后端，不代替图像组合。
+
 | 策略 | 普通表面场景 | 吸收／玻璃／混合场景 |
 |---|---|---|
 | `VULKAN_ONLY` | Vulkan | 仍指定 Vulkan；不支持的介质请求由该后端明确拒绝 |
@@ -59,6 +61,19 @@ try (var renderer = Renderer.openForScene(RendererBackendPolicy.RTXPT_FOR_MEDIA,
 会话只打开一个 provider。`apply`／`submit` 在创建线程执行；状态观察和关闭遵循所选后端合同。实例变换、灯光和吸收系数的普通变化不会改换后端。光学分类在场景依赖变化时缓存，同一个不可变 primitive batch 可复用结果；不会每帧重新扫描三角形材质。
 
 `RTXPT_FOR_MEDIA` 下，若更新后应使用另一个 provider，会在把该帧交给错误后端前明确抛错，要求关闭会话并用完整场景重新打开。不会在窗口、GPU consumer、功能控制器或专家扩展背后偷偷换设备。Vulkan 会话新增持久介质在 `apply` 前就拒绝；RTXPT 会话去掉介质后，在提交下一个无介质帧时要求重开。`RTXPT_ONLY` 始终保持 RTXPT，不受场景类别变化影响。
+
+需要自己管理组合会话／切换时，复用公共 `RendererSceneRouting`，不要每帧把完整场景再传给一次性 `policy.select(...)`：
+
+```java
+var routing = new RendererSceneRouting(initialScene); // 一次扫描持久场景的材质依赖
+var decision = routing.select(policy, firstFrame);    // 后续帧复用分类
+
+var candidate = routing.updated(delta);              // 只准备，不改变原 routing
+renderer.apply(delta);                              // 失败时继续保留原 routing
+routing = candidate;                                // 后端成功发布才提交分类
+```
+
+分类器只保存路由所需的不可变资产依赖；变换、灯光与不改变边界有无的实例系数更新可直接复用缓存。相同不可变 `FramePrimitiveBatch` 的依赖校验和光学分类也会缓存。候选状态与旧状态相互独立，固定 `RendererSceneSession` 也使用同一个分类实现。它不代替后端的场景 revision／GPU 发布验证。
 
 打开过程中如果首次 `apply`／`submit` 失败，已打开的 provider 会关闭；失败不会再尝试另一后端。已有单 provider 入口完全保留，熟悉原调用方式的应用不必改用会话入口。
 

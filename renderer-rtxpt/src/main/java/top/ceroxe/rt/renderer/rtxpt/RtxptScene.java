@@ -24,20 +24,28 @@ final class RtxptScene {
     }
     static <T> void remove(Map<Long,T> m,LongBuffer ids){while(ids.hasRemaining())m.remove(ids.get());}
     void retain(SceneTransaction tx) {
+        retain(tx,true);
+    }
+    void retain(SceneTransaction tx,boolean nativeContract) {
         if(tx.reset()){textures.clear();materials.clear();meshes.clear();instances.clear();lights.clear();}
         var r=tx.removals();remove(textures,r.textureIds());remove(materials,r.materialIds());remove(meshes,r.meshIds());remove(instances,r.instanceIds());remove(lights,r.lightIds());
         var u=tx.upserts();u.textures().forEach(t->textures.put(t.id(),t));u.materials().forEach(m->materials.put(m.id(),m));
         u.meshes().forEach(m->meshes.put(m.id(),m));u.instances().forEach(i->instances.put(i.id(),i));u.lights().forEach(l->lights.put(l.id(),l));
-        validate();
+        validateReferences();
+        if(nativeContract)validate();
     }
-    void validate() {
+    private void validateReferences() {
         for(var m:materials.values()) {
-            if(m.shadingModel()!=MaterialAsset.ShadingModel.PHYSICALLY_BASED || m.surfaceOverlay().enabled())
-                throw new IllegalArgumentException("RTXPT uses native physical materials; custom surface equations/overlays belong to Vulkan");
             for(long t:new long[]{m.baseColorTextureId(),m.normalTextureId(),m.metallicRoughnessTextureId(),m.emissiveTextureId()})
                 if(t>=0 && !textures.containsKey(t))throw new IllegalArgumentException("Missing texture "+t);
         }
         for(var m:meshes.values()){var ids=m.triangleMaterialIds();while(ids.hasRemaining())if(!materials.containsKey(ids.get()))throw new IllegalArgumentException("Missing triangle material");}
+        for(var i:instances.values())if(!meshes.containsKey(i.meshAssetId()))throw new IllegalArgumentException("Missing mesh "+i.meshAssetId());
+    }
+    void validate() {
+        for(var m:materials.values())
+            if(m.shadingModel()!=MaterialAsset.ShadingModel.PHYSICALLY_BASED || m.surfaceOverlay().enabled())
+                throw new IllegalArgumentException("RTXPT uses native physical materials; custom surface equations/overlays belong to Vulkan");
         for(var i:instances.values())validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.renderState(),i.castsShadow(),i.visibilityMask());
     }
     void validateInstance(long id,AffineTransform transform,MediumBoundary b,InstanceRenderState state,boolean shadow,int mask) {

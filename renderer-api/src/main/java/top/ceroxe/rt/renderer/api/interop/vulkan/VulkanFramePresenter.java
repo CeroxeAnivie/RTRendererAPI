@@ -94,6 +94,21 @@ public interface VulkanFramePresenter extends AutoCloseable {
     Optional<PresentationResult> presentLatestFrame();
 
     /**
+     * Presents the next ordinary Vulkan scene with the same GPU overlay operations as the
+     * external-scene path. Up to seven completed full-size RGBA8_UNORM storage-readable layers
+     * are applied after the scene's display transform and before the text HUD. ALPHA_OVER uses
+     * premultiplied alpha. Unsupported composition is rejected rather than dropping layers.
+     *
+     * @param overlays exact generic resource mutations in final composition order
+     * @return presentation evidence, or empty when no submitted scene frame is available
+     */
+    default Optional<PresentationResult> presentLatestFrame(
+            java.util.List<top.ceroxe.rt.renderer.api.FrameCompositionPlan.Layer> overlays) {
+        if (Objects.requireNonNull(overlays,"overlays").isEmpty()) return presentLatestFrame();
+        throw new UnsupportedOperationException("This presenter cannot compose managed scenes with Vulkan layers");
+    }
+
+    /**
      * Imports, copies, presents, GPU-signals producer completion, and closes one active lease.
      * Ownership transfers even when this method throws.
      *
@@ -101,6 +116,56 @@ public interface VulkanFramePresenter extends AutoCloseable {
      * @return immutable evidence of the consumed frame and presentation outcome
      */
     PresentationResult presentAndRelease(GpuFrameLease lease);
+
+    /**
+     * GPU-imports a borrowed D3D12 texture/fence and presents through the existing Vulkan display
+     * and HUD passes. The source is upstream tone-mapped RGBA8; no extra tone mapping is applied.
+     * All producer waits and consumer completion signals occur on GPU queues. Minimized and
+     * recreation outcomes still consume the ready signal and publish completion so no slot stalls.
+     * Frame generation is not provided by this external-source path.
+     * @param frame per-slot shared image and synchronization values, retained by its producer
+     * @return outcome of this complete source frame
+     */
+    default PresentationResult presentD3D12SharedFrame(D3D12SharedFrame frame) {
+        throw new UnsupportedOperationException("This presenter cannot import D3D12 shared frames");
+    }
+
+    /**
+     * Composes the external scene with up to seven exact GPU textures produced by this Vulkan
+     * renderer's ordinary/expert command lane. Uses its existing composition pipeline; sources
+     * must be completed RGBA8_UNORM storage-readable full-size textures. ALPHA_OVER consumes
+     * premultiplied alpha. Pins remain held until the consuming Vulkan submission completes.
+     * Empty overlays use the direct-copy path. All layers are applied in listed order after the
+     * external base image; no CPU scene readback is involved.
+     * @param frame borrowed external complete-scene frame
+     * @param overlays exact generic resource mutations and existing composition operations
+     * @return final presentation outcome
+     */
+    default PresentationResult presentD3D12SharedFrame(D3D12SharedFrame frame,
+            java.util.List<top.ceroxe.rt.renderer.api.FrameCompositionPlan.Layer> overlays) {
+        if(java.util.Objects.requireNonNull(overlays,"overlays").isEmpty())return presentD3D12SharedFrame(frame);
+        throw new UnsupportedOperationException("This presenter cannot compose external scenes with Vulkan layers");
+    }
+
+    /**
+     * Requests one diagnostic PNG of the next visible final frame, including composition and HUD.
+     * Readback is performed only for this explicit request, before handing that image to WSI;
+     * the visible-frame present waits for its capture to complete before returning. The request
+     * stays pending while minimized. This is never part of production per-frame delivery.
+     * @param png destination path for the one-shot final RGBA/BGRA-to-PNG capture
+     */
+    default void captureNextPresentedFrame(java.nio.file.Path png) {
+        throw new UnsupportedOperationException("This presenter does not expose final-frame diagnostic capture");
+    }
+
+    /**
+     * Drains previously submitted external-source work and releases cached D3D12 imports while
+     * preserving the Vulkan window. Call before a source resize, backend switch or handle close.
+     * This is a lifecycle boundary, not a per-frame operation. Borrowed handles are never closed.
+     */
+    default void retireD3D12SharedFrames() {
+        throw new UnsupportedOperationException("This presenter cannot import D3D12 shared frames");
+    }
 
     /** Releases swapchain, imported images, device, surface, window, and GLFW ownership. */
     @Override
