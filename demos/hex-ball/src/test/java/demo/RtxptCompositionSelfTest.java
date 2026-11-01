@@ -186,6 +186,8 @@ public final class RtxptCompositionSelfTest {
                 Files.writeString(output.resolve(mode+".csv"),"mode,completed_frames,ms,fps,copy_gpu_ms\n"+row);System.out.print(row);return;
             }
             var controller=renderer.extension(RendererFeatureController.class).orElseThrow();
+            if(checkGeneration)require(new DemoWindowKeys(host.windowHandle()).focused(),
+                "FG/MFG acceptance paused: test window must own the foreground; do not infer delivery from an enabled option");
             var csv=new StringBuilder("multiplier,native_frames,presented_frames,ratio,native_ms,output_fps,query_failures\n");
             for(var multiplier:checkGeneration?FrameGenerationOptions.Multiplier.values():new FrameGenerationOptions.Multiplier[0]) {
                 var fg=FrameGenerationOptions.builder().preference(RendererFeaturePreference.REQUIRED)
@@ -224,6 +226,7 @@ public final class RtxptCompositionSelfTest {
             compare(output.resolve("native-overlay-restored-source.png"),output.resolve("native-overlay-restored.png"),true);
             require(renderer.workSnapshot().presentation().presentSamples()==0,"Hidden Vulkan compositor never presented a frame");
             require(renderer.workSnapshot().legacyFrames()==0,"Vulkan did not duplicate complete 3D tracing");
+            renderer.overlays(List.of()); // Normal-color HUD evidence, without the orange test layer.
             host.setOverlayText("RTRendererAPI 7.0.0 - MEDIUM DEMO\nRTXPT: RR | VULKAN: GPU UI\nHUD / SCENE SELECTOR / OVERLAY LIFECYCLE VERIFIED");
             host.setOverlayChoices(RtxptMediumScene.LABELS,0);
             // ImGui measures a newly appearing auto-sized window before it draws its contents.

@@ -29,12 +29,17 @@ final class DemoWindowKeys {
 
     DemoWindowKeys(long window) { this.window=window; }
 
+    boolean focused() {
+        try { return ((MemorySegment)FOREGROUND.invokeExact()).address()==window; }
+        catch(Throwable failure) { throw new IllegalStateException("Demo window focus query failed",failure); }
+    }
+
     String pollCommand() {
         long now=System.nanoTime();
         if(now-lastPoll<25_000_000L)return null;
         lastPoll=now;
         try {
-            if(((MemorySegment)FOREGROUND.invokeExact()).address()!=window) { held=0;return null; }
+            if(!focused()) { held=0;return null; }
             int down=0;
             for(int i=0;i<KEYS.length;i++)if(((short)KEY_STATE.invokeExact(KEYS[i])&0x8000)!=0)down|=1<<i;
             int pressed=down&~held;
