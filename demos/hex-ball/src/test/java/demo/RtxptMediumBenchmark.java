@@ -8,13 +8,21 @@ public final class RtxptMediumBenchmark {
     public static void main(String[] args) throws Exception {
         boolean raw=Arrays.asList(args).contains("--native");
         try(Renderer r=Renderer.open("rtxpt",RendererConfig.builder().cpuFrameReadbackEnabled(false).build())) {
-            var host=r.extension(RtxptAccess.class).orElseThrow();host.configure(raw?RtxptOptions.nativeOneSample():RtxptOptions.recommended());
+            var host=r.extension(RtxptAccess.class).orElseThrow();
+            var options=raw?RtxptOptions.nativeOneSample():RtxptOptions.recommended();host.configure(options);
             r.apply(RtxptMediumScene.create(1,"mixed"));r.submit(RenderFrameRequest.builder(0,1920,1080,RtxptMediumScene.camera(1920,1080)).minimumSceneRevision(1).environment(RtxptMediumScene.environment()).build());
             for(int i=0;i<120;i++)if(!host.renderFrame())throw new IllegalStateException("Window closed during warmup");
-            long start=System.nanoTime(),end=start+5_000_000_000L;int frames=0;var times=new ArrayList<Double>();
-            do {long begin=System.nanoTime();if(!host.renderFrame())throw new IllegalStateException("Window closed during benchmark");times.add((System.nanoTime()-begin)/1e6);frames++;}while(System.nanoTime()<end);
-            double elapsed=(System.nanoTime()-start)/1e9;times.sort(Comparator.naturalOrder());
-            System.out.printf(Locale.ROOT,"RTXPT JNI mixed: output=1920x1080, spp=1, FG=off, mode=%s, frames=%d, fps=%.2f, mean=%.3f ms, p50=%.3f ms, p95=%.3f ms%n",raw?"native":"DLSS-RR Balanced",frames,frames/elapsed,elapsed*1000/frames,times.get(times.size()/2),times.get((int)(times.size()*.95)));
+            host.awaitIdle();
+            long firstPresent=host.bridgeTimings().frames();
+            long start=System.nanoTime(),deadline=start+5_000_000_000L;var callTimes=new ArrayList<Double>();
+            do {long begin=System.nanoTime();if(!host.renderFrame())throw new IllegalStateException("Window closed during benchmark");callTimes.add((System.nanoTime()-begin)/1e6);}while(System.nanoTime()<deadline);
+            host.awaitIdle();
+            long finish=System.nanoTime(),frames=host.bridgeTimings().frames()-firstPresent;
+            if(frames==0)throw new IllegalStateException("No native presentations were counted");
+            double elapsed=(finish-start)/1e9;callTimes.sort(Comparator.naturalOrder());
+            var actual=host.runtimeStatus();
+            System.out.printf(Locale.ROOT,"RTXPT JNI mixed: output=1920x1080, internal=%dx%d, spp=%d, reconstruction=%s, requestedDLSSQuality=%s, standaloneDenoiser=%s, ReSTIR(DI/GI)=%s/%s, SHaRC=%s, FG=%s, elapsedWithGPUDrain=%.3fs, presents=%d, fps=%.2f, wallMsPerPresentedFrame=%.3f, renderFrameCallP50=%.3fms, renderFrameCallP95=%.3fms%n",
+                actual.renderWidth(),actual.renderHeight(),options.samplesPerPixel(),actual.reconstruction(),options.dlssQuality(),actual.standaloneDenoiser(),actual.restirDi(),actual.restirGi(),actual.sharc(),actual.frameGeneration(),elapsed,frames,frames/elapsed,elapsed*1000/frames,callTimes.get(callTimes.size()/2),callTimes.get(Math.min(callTimes.size()-1,(int)(callTimes.size()*.95))));
             System.out.println("Bridge: "+host.bridgeTimings());
         }
     }
