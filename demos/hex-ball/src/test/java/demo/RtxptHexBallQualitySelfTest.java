@@ -16,6 +16,7 @@ public final class RtxptHexBallQualitySelfTest {
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
         var base=DemoRendererProfile.interactive(config);
         boolean reference=mode.equals("reference");
+        boolean rr=mode.equals("rr");
         boolean denoise=!mode.equals("raw")&&!mode.equals("reuse-raw")&&!reference;
         boolean reuse=mode.startsWith("reuse-");
         var policy=switch(mode) {
@@ -24,7 +25,8 @@ public final class RtxptHexBallQualitySelfTest {
                 .preference(RendererFeaturePreference.REQUIRED).strategy(DenoisingOptions.Strategy.RESPONSIVE)
                 .builtInTemporalFallback(false).build()).build();
             case "default" -> DemoRendererProfile.rtxptInteractive();
-            default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw, reuse-relax or reference");
+            case "rr" -> base.copyBuilder().denoising(DenoisingOptions.recommended()).build();
+            default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw, reuse-relax, rr or reference");
         };
         if(reference) {
             var path=policy.pathTracing();
@@ -57,9 +59,9 @@ public final class RtxptHexBallQualitySelfTest {
                     previous=batch;
                     if(sequence==1) {
                         var status=host.runtimeStatus();
-                        require(status.reconstruction()==RtxptAccess.Reconstruction.DLSS,"Actual SR, not RR/TAA");
-                        require(status.standaloneDenoiser()==denoise,"Actual denoiser policy");
-                        require(status.relaxDenoiser()==denoise,"Actual native RELAX");
+                        require(status.reconstruction()==(rr?RtxptAccess.Reconstruction.DLSS_RR:RtxptAccess.Reconstruction.DLSS),"Actual requested SR/RR, not TAA");
+                        require(status.standaloneDenoiser()==(denoise&&!rr),"Actual standalone denoiser policy");
+                        require(status.relaxDenoiser()==(denoise&&!rr),"Actual native RELAX");
                         require(status.restirDi()==reuse,"Actual upstream direct-light reuse");
                         require(!status.frameGeneration(),"FG off for quality evidence");
                         require(status.renderWidth()==1485&&status.renderHeight()==835,"Balanced input unchanged");

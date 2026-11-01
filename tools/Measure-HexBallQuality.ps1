@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory)][ValidateSet('raw','relax','default','reuse-raw','reuse-relax','reference')][string]$Mode,
+    [Parameter(Mandatory)][ValidateSet('raw','relax','default','reuse-raw','reuse-relax','rr','reference')][string]$Mode,
     [Parameter(Mandatory)][string]$Tag,
     [switch]$Glass
 )
