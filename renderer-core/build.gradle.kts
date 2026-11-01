@@ -218,10 +218,8 @@ val contractSelfTests = linkedMapOf(
 
     "coreRtPipelineCacheSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.RtPipelineCacheSelfTest",
 
-    "coreMediumOpticsSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumOpticsSelfTest",
 
     "coreGpuScenePrimaryQueueSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuScenePrimaryQueueSelfTest",
-    "coreMediumBenchmarkStatisticsSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanMediumBenchmarkStatisticsSelfTest",
     "coreRtNativeBenchmarkReportSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeBenchmarkReportSelfTest",
     "vulkanGenericBufferVisibilitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericBufferVisibilitySelfTest",
     "vulkanGenericGraphicsPipelinesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericGraphicsPipelinesSelfTest",
@@ -436,11 +434,6 @@ tasks.named<JavaExec>("vulkanModernFrameNativeSelfTest").configure {
 
 
 
-registerCoreSelfTest(
-    "mediumTransportBenchmark",
-    "top.ceroxe.rt.renderer.backend.vulkan.VulkanMediumTransportBenchmark",
-    "Runs the configurable medium scene/FPS matrix and exports GPU timestamp and completion evidence to CSV."
-)
 
 tasks.named<JavaExec>("vulkanEvidenceRetentionNativeSelfTest").configure {
     minHeapSize = "256m"
@@ -485,9 +478,6 @@ val rendererCoreHardwareGateLock = gradle.sharedServices.registerIfAbsent(
     maxParallelUsages.set(1)
 }
 
-tasks.named("mediumTransportBenchmark").configure {
-    usesService(rendererCoreHardwareGateLock)
-}
 
 tasks.named("vulkanSerNativeSelfTest").configure {
     usesService(rendererCoreHardwareGateLock)

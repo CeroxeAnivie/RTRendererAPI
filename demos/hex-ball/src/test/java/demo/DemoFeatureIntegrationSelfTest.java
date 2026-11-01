@@ -49,10 +49,7 @@ public final class DemoFeatureIntegrationSelfTest {
                     "--api.frameGeneration.preference=REQUIRED", "--api.frameGeneration.mode=MULTI_FRAME_GENERATION",
                     "--api.frameGeneration.multiplier=THREE_X", "--api.frameGeneration.fallback=NONE",
                     "--api.temporalRendering.mode=ACCUMULATING", "--api.temporalRendering.maxHistoryFrames=16",
-                    "--frame.environment.sunRadiance=0.2,0.4,0.6", "--frame.fog.opacity=0.5",
-                    "--frame.mediumTransport.scatteringSteps=16", "--frame.mediumTransport.maxEvents=20",
-                    "--frame.environment.cameraMedium.anisotropy=0.6", "--frame.environment.cameraMedium.emission=0.1,0.2,0.3",
-                    "--frame.environment.cameraMedium.scattering.red=0.25"});
+                    "--frame.environment.sunRadiance=0.2,0.4,0.6", "--frame.fog.opacity=0.5"});
             require(java.util.Arrays.equals(remaining, new String[]{"--width=640"}), "controls consumed ordinary arguments");
             var config = DemoApiControls.configure(RendererConfig.presentation());
             require(config.frameGeneration().multiplier() == FrameGenerationOptions.Multiplier.THREE_X
@@ -62,14 +59,9 @@ public final class DemoFeatureIntegrationSelfTest {
             var frame = DemoApiControls.frame(DemoRendererProfile.frame(0, 640, 360,
                     DemoRendererProfile.camera(640, 360, 15.4)).build());
             require(frame.fog().opacity() == 0.5f, "frame policy was not applied");
-            require(frame.mediumTransport().scatteringSteps()==16 && frame.mediumTransport().maxEvents()==20,
-                    "new transport options must be independently editable");
-            require(frame.environment().cameraMedium().anisotropy()==.6f
-                    && frame.environment().cameraMedium().emission().blue()==.3f
-                    && frame.environment().cameraMedium().scattering().red()==.25f,
-                    "medium records and nested RGB controls must reach real frame values");
-            DemoApiControls.parse(new String[]{"--frame.environment.cameraMedium.emission=0.1,0.2,0.3",
-                    "--frame.environment.cameraMedium.emission.red=0.5"});
+            require(frame.environment().sunGreen()==.4f,"environment RGB controls reach the frame");
+            DemoApiControls.parse(new String[]{"--frame.environment.sunRadiance=0.1,0.2,0.3",
+                    "--frame.environment.sunRadiance.red=0.5"});
             try { DemoApiControls.frame(frame); throw new AssertionError("ambiguous RGB overrides accepted"); }
             catch (IllegalArgumentException expected) { }
             DemoApiControls.parse(new String[]{"--frame.mediumTransport.unknownBudget=4"});

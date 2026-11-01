@@ -35,12 +35,16 @@ class HostApp final : public AdvancedSample {
     }
 };
 struct Session {
+    donut::log::Callback previousLog = donut::log::GetCallback();
     std::unique_ptr<HostApp> app;
     std::thread::id owner = std::this_thread::get_id();
     bool initialized = false;
+    uint64_t presented = 0;
     std::unordered_map<std::string, donut::engine::SceneGraphNode*> nodes;
     ~Session() {
         if (initialized) { app->HostDeviceManager()->GetDevice()->waitForIdle(); app->End(); }
+        app.reset();
+        donut::log::SetCallback(previousLog);
     }
 };
 void indexNodes(Session& s) {
@@ -90,25 +94,46 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         }
         std::vector<const char*> argv; for (const auto& a : args) argv.push_back(a.c_str());
         auto s = std::make_unique<Session>();
+        g_sampleUIData = SampleUIData{};
         s->app = std::make_unique<HostApp>();
         auto status = s->app->Init(static_cast<int>(argv.size()), argv.data());
         if (status != SampleBaseApp::InitReturnCodes::Success)
             throw std::runtime_error("RTXPT initialization failed with status " + std::to_string(static_cast<int>(status)));
         s->initialized = true;
+        if(!s->app->HostRenderPass()->GetScene()) throw std::runtime_error("RTXPT scene failed to load");
+        s->app->HostDeviceManager()->m_callbacks.afterPresent = [ptr=s.get()](auto&, uint32_t) { ++ptr->presented; };
         indexNodes(*s);
         s->app->HostDeviceManager()->SetWindowTitle("RTRenderer 7 - NVIDIA RTXPT");
         active = s.release(); return reinterpret_cast<jlong>(active);
     } catch (const std::exception& x) { fail(e, x); return 0; }
 }
 
-extern "C" JNIEXPORT jboolean JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_frame(
+extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_frame(
     JNIEnv* e, jclass, jlong h) {
     try {
         auto& s = session(h); auto dm = s.app->HostDeviceManager();
-        if (glfwWindowShouldClose(dm->GetWindow())) return false;
+        if (glfwWindowShouldClose(dm->GetWindow())) return 0;
+        auto before=s.presented;
         if (!dm->HostFrame()) throw std::runtime_error("RTXPT render/present failed");
-        return true;
-    } catch (const std::exception& x) { fail(e, x); return false; }
+        return s.presented>before ? 2 : 1;
+    } catch (const std::exception& x) { fail(e, x); return 0; }
+}
+
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_awaitIdle(
+    JNIEnv* e, jclass, jlong h) {
+    try { session(h).app->HostDeviceManager()->GetDevice()->waitForIdle(); }
+    catch(const std::exception& x) { fail(e,x); }
+}
+
+extern "C" JNIEXPORT jintArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_runtimeStatus(
+    JNIEnv* e, jclass, jlong h) {
+    try {
+        auto size=session(h).app->HostRenderPass()->GetRenderSize();
+        jint values[]={jint(size.x),jint(size.y),g_sampleUIData.RealtimeAA,
+            g_sampleUIData.ActualUseStandaloneDenoiser(),g_sampleUIData.ActualUseReSTIRDI(),
+            g_sampleUIData.ActualUseReSTIRGI(),g_sampleUIData.ActualRadianceCacheMode(),g_sampleUIData.ActualDLSSFGMode()};
+        auto result=e->NewIntArray(8); if(result)e->SetIntArrayRegion(result,0,8,values);return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_camera(

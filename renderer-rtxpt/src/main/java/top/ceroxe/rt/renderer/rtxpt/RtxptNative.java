@@ -18,7 +18,9 @@ final class RtxptNative {
         System.load(dll.toString()); loaded=true;
     }
     static native long create(String runtime,String scene,int width,int height,String[] options);
-    static native boolean frame(long handle);
+    static native int frame(long handle);
+    static native void awaitIdle(long handle);
+    static native int[] runtimeStatus(long handle);
     static native void camera(long handle,String pose,float verticalFovRadians);
     static native void loadScene(long handle,String path);
     static native long window(long handle);

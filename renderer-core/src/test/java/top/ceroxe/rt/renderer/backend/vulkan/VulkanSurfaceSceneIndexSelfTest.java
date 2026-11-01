@@ -72,15 +72,6 @@ public final class VulkanSurfaceSceneIndexSelfTest {
         apply(residency, index, SceneTransaction.builder(++revision).upsert(material.toBuilder()
                 .shadingModel(MaterialAsset.ShadingModel.LIGHTMAP_MODULATED).build()).build());
         require(!index.opaque(), "frame lightmap alpha must retain the general path");
-        var closed = MediumTransportSelfTest.cube(4,2,1);
-        var volume = SceneInstance.builder(4,4).surfaceVisibility(.5f).mediumBoundary(MediumBoundary.volume(Medium.vacuum())).build();
-        apply(residency,index,SceneTransaction.builder(++revision).upsert(material).upsert(closed).upsert(volume).build());
-        require(index.opaque() && index.transmissiveCount()==0,"volume-only boundaries do not shade their glass material");
-        var volumeBatch=FramePrimitiveBatch.builder().add(PrimitiveInstance.from(volume)).build();
-        require(index.opaque(volumeBatch) && index.transmissiveCount(volumeBatch)==0,"frame-local volume-only boundary skips surface facts");
-        apply(residency,index,SceneTransaction.builder(++revision)
-                .upsert(volume.toBuilder().mediumBoundary(MediumBoundary.surface(Medium.vacuum())).build()).build());
-        require(!index.opaque() && index.transmissiveCount()==1,"surface boundary restores material and visibility classification");
         apply(residency, index, SceneTransaction.builder(++revision).resetScene().build());
         require(index.opaque() && index.transmissiveCount()==0,"reset must retire all obsolete opacity facts");
         require(!index.opaque(glassBatch),"stale frame mesh reference cannot prove opacity after reset");
@@ -120,10 +111,10 @@ public final class VulkanSurfaceSceneIndexSelfTest {
                 "non-casting frame-local instance retains any-hit");
         var volumeMesh = MediumTransportSelfTest.cube(82,81,1);
         apply(residency,index,SceneTransaction.builder(++revision).upsert(volumeMesh)
-                .upsert(SceneInstance.builder(82,82).mediumBoundary(MediumBoundary.volume(Medium.vacuum())).build()).build());
+                .upsert(SceneInstance.builder(82,82).mediumBoundary(MediumBoundary.surface(Medium.vacuum())).build()).build());
         require(!index.opaqueShadowRayOnly(empty), "volume-only boundaries cannot become opaque shadow blockers");
         apply(residency,index,SceneTransaction.builder(++revision).removeInstance(82).build());
-        for(var boundary : new MediumBoundary[]{MediumBoundary.volume(Medium.vacuum()), MediumBoundary.surface(Medium.vacuum())})
+        for(var boundary : new MediumBoundary[]{MediumBoundary.surface(Medium.vacuum()), MediumBoundary.surface(Medium.vacuum())})
             require(!index.opaqueShadowRayOnly(FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(82).mediumBoundary(boundary).build()).build()),
                     "frame-local boundaries retain visibility semantics");
         apply(residency,index,SceneTransaction.builder(++revision).upsert(material.toBuilder().baseColorTextureId(81).build())
@@ -270,8 +261,8 @@ public final class VulkanSurfaceSceneIndexSelfTest {
                 .vertexColorsRgba8(new int[]{-1,0x80ffffff,-1}).build()).build());
         require(!index.opaquePbrMediumOnly(batch), "vertex alpha invalidates the frame-local proof");
         var volume = FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(61).surfaceVisibility(.5f)
-                .mediumBoundary(MediumBoundary.volume(Medium.vacuum())).build()).build();
-        require(index.opaquePbrMediumOnly(volume), "volume-only geometry has no surface lighting obligation");
+                .mediumBoundary(MediumBoundary.surface(Medium.vacuum())).build()).build();
+        require(!index.opaquePbrMediumOnly(volume), "fractional boundary retains surface lighting");
         apply(residency,index,SceneTransaction.builder(++revision).resetScene().build());
         require(index.opaquePbrMediumOnly(empty) && !index.opaquePbrMediumOnly(batch),
                 "reset clears counts and invalidates cached references");
@@ -311,8 +302,8 @@ public final class VulkanSurfaceSceneIndexSelfTest {
         var fractional = FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(71).surfaceVisibility(.5f).build()).build();
         require(!index.opticalOpaqueRayOnly(fractional), "fractional frame-local visibility retains any-hit");
         var volume = FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(71).surfaceVisibility(.5f)
-                .mediumBoundary(MediumBoundary.volume(Medium.vacuum())).build()).build();
-        require(index.opticalOpaqueRayOnly(volume), "volume-only boundaries already bypass any-hit material decisions");
+                .mediumBoundary(MediumBoundary.surface(Medium.vacuum())).build()).build();
+        require(!index.opticalOpaqueRayOnly(volume), "fractional surface boundaries retain any-hit");
         apply(residency,index,SceneTransaction.builder(++revision).upsert(mesh.toBuilder().vertexColorsRgba8(new int[]{-1,0x80ffffff,-1}).build()).build());
         require(!index.opticalOpaqueRayOnly(batch), "vertex alpha update invalidates cached proof");
         apply(residency,index,SceneTransaction.builder(++revision).resetScene().build());

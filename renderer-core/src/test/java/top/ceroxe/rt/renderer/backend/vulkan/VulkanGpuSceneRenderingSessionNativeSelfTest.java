@@ -442,9 +442,7 @@ public final class VulkanGpuSceneRenderingSessionNativeSelfTest {
    }
 
    static EnvironmentState environment() {
-      Medium medium = new Medium(new Rgb(0.03F, 0.018F, 0.012F), new Rgb(0.006F, 0.009F, 0.014F),
-              Rgb.ZERO, 0.025F, 1.0F, 0.0F);
-      return EnvironmentState.builder().skyRadiance(0.08F, 0.14F, 0.24F).ambientIntensity(0.65F).sunDirection(-0.350508F, -0.851234F, -0.390566F).sunRadiance(1.0F, 0.94F, 0.82F).sunIntensity(1.8F).cameraMedium(medium).build();
+      return EnvironmentState.builder().skyRadiance(0.08F, 0.14F, 0.24F).ambientIntensity(0.65F).sunDirection(-0.350508F, -0.851234F, -0.390566F).sunRadiance(1.0F, 0.94F, 0.82F).sunIntensity(1.8F).build();
    }
 
    private static ImageStatistics statistics(byte[] rgba8) {

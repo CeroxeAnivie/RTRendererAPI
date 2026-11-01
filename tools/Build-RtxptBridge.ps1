@@ -79,6 +79,6 @@ if($StreamlineSdk){
 if($LASTEXITCODE -ne 0){throw 'RTXPT native configure failed'}
 if($ConfigureOnly){return}
 & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath $cmake `
-    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','--parallel','1','--',('/bl:'+(Join-Path $build 'build.binlog'))) `
+    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','--parallel','1','--',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
     -WorkingDirectory $sdk -MemoryLimitGB $MemoryLimitGB
 if($LASTEXITCODE -ne 0){throw 'RTXPT JNI bridge build failed'}

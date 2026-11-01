@@ -76,7 +76,10 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         RtxptNative.transforms(handle,changed.stream().map(RtxptScene.Item::name).toArray(String[]::new),data.flip());batches++;transformNs+=System.nanoTime()-begin;
     }
     @Override public boolean renderFrame(){ready();if(handle==0)throw new IllegalStateException("Submit a scene first");if(windowClosed)return false;
-        long begin=System.nanoTime();boolean rendered=RtxptNative.frame(handle);frameNs+=System.nanoTime()-begin;if(rendered)frames++;else windowClosed=true;return rendered;}
+        long begin=System.nanoTime();int result=RtxptNative.frame(handle);frameNs+=System.nanoTime()-begin;if(result==2)frames++;else if(result==0)windowClosed=true;return result!=0;}
+    @Override public void awaitIdle(){ready();if(handle!=0)RtxptNative.awaitIdle(handle);}
+    @Override public RuntimeStatus runtimeStatus(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.runtimeStatus(handle);
+        return new RuntimeStatus(s[0],s[1],RtxptOptions.Reconstruction.values()[s[2]],s[3]!=0,s[4]!=0,s[5]!=0,s[6]==1,s[7]!=0);}
     @Override public long windowHandle(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptNative.window(handle);}
     @Override public void capture(Path png){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.capture(handle,Objects.requireNonNull(png).toAbsolutePath().toString());}
     @Override public BridgeTimings bridgeTimings(){return new BridgeTimings(frames,frameNs,exports,exportNs,batches,transformNs);}

@@ -11,6 +11,12 @@ public interface RtxptAccess {
     long windowHandle();
     /** GPU render/present of the resident scene; false means the user closed the window. */
     boolean renderFrame();
+    /** Explicit GPU drain for completed-frame measurement, outside the normal frame loop. */
+    void awaitIdle();
+    /** Actual native settings and internal resolution after rendering, including upstream fallbacks. */
+    RuntimeStatus runtimeStatus();
+    record RuntimeStatus(int renderWidth,int renderHeight,RtxptOptions.Reconstruction reconstruction,
+        boolean standaloneDenoiser,boolean restirDi,boolean restirGi,boolean sharc,boolean frameGeneration) { }
     /** Explicit one-shot readback. Never called in the presentation or benchmark frame loop. */
     void capture(Path png);
     BridgeTimings bridgeTimings();

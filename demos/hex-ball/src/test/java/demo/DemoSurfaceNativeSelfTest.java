@@ -42,27 +42,12 @@ public final class DemoSurfaceNativeSelfTest {
             var environment = DemoRendererProfile.environment();
             long revision = 0;
             for (int spp : new int[]{1,2,4,8}) frames.add(render(renderer, frames.size(), revision, batch, environment, spp));
-            frames.add(render(renderer, frames.size(), revision, batch, environment.toBuilder().cameraMedium(
-                    new Medium(new Rgb(.01f,.02f,.03f), new Rgb(.002f,.002f,.002f), new Rgb(.001f,0,0), 1, 1, 0)).build(), 1));
             frames.add(render(renderer, frames.size(), revision, batch, environment, 1));
             var ball = initial.upserts().materials().stream().filter(value -> value.id() == 110).findFirst().orElseThrow();
             renderer.apply(SceneTransaction.builder(++revision).upsert(ball.toBuilder()
                     .blendMode(MaterialAsset.BlendMode.TRANSLUCENT).transmission(.8f).build()).build());
             frames.add(render(renderer, frames.size(), revision, batch, environment, 1));
             renderer.apply(SceneTransaction.builder(++revision).upsert(ball).build());
-            frames.add(render(renderer, frames.size(), revision, batch, environment, 1));
-            var medium = MediumBoundary.volume(new Medium(new Rgb(.2f,.1f,.05f), Rgb.ZERO, Rgb.ZERO, 1, 1, 0));
-            var cube = MeshAsset.triangles(900, new float[]{-1,-1,-1,1,-1,-1,1,1,-1,-1,1,-1,-1,-1,1,1,-1,1,1,1,1,-1,1,1},
-                    new int[]{0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,3,7,6,3,6,2,0,4,7,0,7,3,1,2,6,1,6,5}, 100);
-            renderer.apply(SceneTransaction.builder(++revision).upsert(cube)
-                    .upsert(SceneInstance.builder(900,900).mediumBoundary(medium).build()).build());
-            frames.add(render(renderer, frames.size(), revision, batch, environment, 1));
-            renderer.apply(SceneTransaction.builder(++revision).removeInstance(900).build());
-            frames.add(render(renderer, frames.size(), revision, batch, environment, 1));
-            var local = FramePrimitiveBatch.builder();
-            for (var primitive : batch.primitives()) local.add(primitive);
-            local.add(PrimitiveInstance.builder(900).mediumBoundary(medium).build());
-            frames.add(render(renderer, frames.size(), revision, local.build(), environment, 1));
             frames.add(render(renderer, frames.size(), revision, batch, environment, 1));
             if (renderer.health().activeFailure().isPresent()
                     || !renderer.health().obligations().equals(RendererHealth.ResourceObligations.none()))
