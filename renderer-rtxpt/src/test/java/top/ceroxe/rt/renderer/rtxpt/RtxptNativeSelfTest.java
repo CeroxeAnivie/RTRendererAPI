@@ -8,6 +8,13 @@ public final class RtxptNativeSelfTest {
     public static void main(String[] args) throws Exception {
         var output=Path.of(System.getProperty("top.ceroxe.rt.rtxpt.testOutput","build/reports/rtxpt-native")).toAbsolutePath();
         Files.createDirectories(output);
+        // Keep the exact adapter assets for a standalone upstream A/B run.
+        // This happens outside the frame loop and never changes the rendered scene.
+        var controlScene=new RtxptScene();controlScene.retain(RtxptAdapterSelfTest.scene(1));
+        var controlFrame=RtxptAdapterSelfTest.frame(0);
+        var controlFile=controlScene.export(output.resolve("native-control"),controlFrame,controlScene.items(controlFrame));
+        System.out.println("RTXPT standalone control scene: "+controlFile);
+        if(java.util.Arrays.asList(args).contains("--export-only"))return;
         try(Renderer r=Renderer.open("rtxpt",RendererConfig.pathTracedPresentation())) {
             var nativeHost=r.extension(RtxptAccess.class).orElseThrow();
             var control=r.extension(RendererFeatureController.class).orElseThrow();
