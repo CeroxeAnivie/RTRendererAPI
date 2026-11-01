@@ -1,0 +1,43 @@
+{
+  "renderer": "Mitsuba",
+  "version": "3.9.1",
+  "variant": "cuda_ad_rgb",
+  "device": "NVIDIA GeForce RTX 5080 Laptop GPU",
+  "scene": "mixed",
+  "width": 1920,
+  "height": 1080,
+  "spp": 1,
+  "pathDepth": 5,
+  "filter": "box",
+  "denoiser": "OptiX",
+  "initialGpu": "2026/11/01 13:50:31.613, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 17.32 W, 1492 MHz",
+  "fg": false,
+  "mode": "Native CUDA forward integrator, opaque seeds, OptiX denoising",
+  "metric": "independent completed 1-SPP render calls, CPU+GPU after JIT warmup; no display upload",
+  "frameMs": [
+    220.9495999995852,
+    228.84690000500996,
+    224.46289999061264,
+    239.07760001020506,
+    236.47030000574887,
+    230.1929000095697,
+    229.96369999600574,
+    227.19429999415297,
+    218.35760000976734,
+    217.3328000062611,
+    218.47089999937452,
+    223.5415000031935,
+    224.7895000036806,
+    216.31360000174027
+  ],
+  "fps": 4.43604539096156,
+  "meanMs": 225.42600714535052,
+  "comparisonScope": "Same fixture geometry, transforms, homogeneous/grid coefficients and lights; common physical subset, NOT full API equivalence.",
+  "semanticDifferences": [
+    "No volumetric emission in stock Mitsuba volpath; surface emission retained.",
+    "No LuxCore priority or per-volume single/multiple switch; standard nested medium tracking and multiple scattering.",
+    "Vertex color/alpha factors are unity in baked material textures; material and image alpha retained.",
+    "Native BSDF, density grid interpolation and sampling differ."
+  ],
+  "triangleCount": 1440
+}

@@ -1,0 +1,14 @@
+{
+  "scene": "rtr-game-medium-on.scene.json",
+  "objects": 120,
+  "triangles": 1440,
+  "fixtureSha256": "8a687bbb9b81c36aeb01b503dfecc8560c4506b333f41cc16d702558c49a8c18",
+  "semanticDifferences": [
+    "RTXPT sample bridge sets sigmaS=0: no volume scattering, HG or multiple scattering.",
+    "Heterogeneous density and volume emission are unsupported and are omitted, not replaced with custom shaders.",
+    "Camera-inside tiny absorbing boundary remains geometry; automatic initial volume state is not guaranteed.",
+    "Native standard BSDF and mixed transmission differ from original LuxCore BSDF mixtures.",
+    "Native alpha testing is used for source transparency; continuous alpha and vertex factors are not transport-equivalent.",
+    "Full original geometry, object transforms, lights and constant environment are retained."
+  ]
+}
