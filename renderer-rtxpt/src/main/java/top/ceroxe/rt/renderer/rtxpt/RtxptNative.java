@@ -5,7 +5,13 @@ import java.nio.file.*;
 /** JNI declarations and runtime loading only. */
 final class RtxptNative {
     static Path runtime() {
-        Path p=Path.of(System.getProperty("top.ceroxe.rt.rtxpt.runtime","build/rtxpt-sdk/bin")).toAbsolutePath().normalize();
+        return RuntimePath.VALUE;
+    }
+    private static final class RuntimePath { static final Path VALUE=resolveRuntime(); }
+    private static Path resolveRuntime() {
+        String override=System.getProperty("top.ceroxe.rt.rtxpt.runtime");
+        Path p=override!=null?Path.of(override):RtxptRuntimeBundle.packaged()?RtxptRuntimeBundle.extract():Path.of("build/rtxpt-sdk/bin");
+        p=p.toAbsolutePath().normalize();
         if(!Files.isDirectory(p.resolve("ShaderPrecompiled"))) throw new IllegalStateException("RTXPT runtime assets missing: "+p);
         return p;
     }

@@ -1,3 +1,6 @@
+import java.security.MessageDigest
+import java.util.HexFormat
+
 plugins { `java-library` }
 description = "Thin in-process JNI host for NVIDIA RTXPT managed rendering."
 dependencies { compileOnly(project(":renderer-api")); testImplementation(project(":renderer-api")) }
@@ -25,3 +28,43 @@ tasks.register<JavaExec>("rtxptNativeSelfTest") {
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptNativeSelfTest")
 }
 tasks.named("check") { dependsOn("rtxptAdapterSelfTest") }
+
+val nativeRuntime = rootProject.layout.buildDirectory.dir("rtxpt-sdk/bin")
+val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
+    group = "distribution"
+    description = "Packages the pinned RTXPT native renderer, runtime shaders and upstream licenses."
+    archiveFileName.set("rtxpt-runtime.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("native-bundle"))
+    from(nativeRuntime) {
+        include("*.dll", "sl.*.json", "D3D12/D3D12Core.dll", "Assets/**", "ThirdPartyLicenses/**",
+            "ShaderPrecompiled/**", "ShaderDynamic/Source/**", "ShaderDynamic/Tools/d3d12/x64/*.dll",
+            "ShaderDynamic/Tools/d3d12/x64/dxc.exe")
+        exclude("**/*.pdb", "**/.gitkeep")
+    }
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+    doFirst {
+        listOf("rtrenderer_rtxpt.dll", "ThirdPartyLicenses/RTXPT.txt").forEach {
+            check(nativeRuntime.get().file(it).asFile.isFile) { "Build the native runtime first: tools/Build-RtxptBridge.ps1 (missing $it)" }
+        }
+    }
+}
+val runtimeDigest = tasks.register("hashRtxptRuntime") {
+    dependsOn(runtimeArchive)
+    val archive = runtimeArchive.flatMap { it.archiveFile }
+    val output = layout.buildDirectory.file("native-bundle/rtxpt-runtime.sha256")
+    inputs.file(archive); outputs.file(output)
+    doLast {
+        val hash = MessageDigest.getInstance("SHA-256")
+        archive.get().asFile.inputStream().use { input ->
+            val buffer = ByteArray(65536)
+            while (true) { val n=input.read(buffer); if (n<0) break; hash.update(buffer,0,n) }
+        }
+        output.get().asFile.writeText(HexFormat.of().formatHex(hash.digest()) + "\n", Charsets.US_ASCII)
+    }
+}
+tasks.named<Jar>("jar") {
+    dependsOn(runtimeDigest)
+    from(runtimeArchive.flatMap { it.archiveFile }) { into("META-INF/native/windows-x86_64") }
+    from(layout.buildDirectory.file("native-bundle/rtxpt-runtime.sha256")) { into("META-INF/native/windows-x86_64") }
+}
