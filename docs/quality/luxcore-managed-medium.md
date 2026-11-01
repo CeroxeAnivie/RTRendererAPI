@@ -31,3 +31,37 @@ LuxCore 2.11.2，commit `b872186d2fe995a762f73708c606847eed55843e`，Apache-2.0�
 
 正在接入与验证；本文件不声明功能已全部完成。旧 54 个场景及 micro-all 场景继续保留，
 用于新的场景映射和混合功能验证。任何无法对应的语义必须明确报告，不静默丢弃。
+
+## 2026-11-01 官方独立进程对照
+
+通过上游 `RenderConfig::Export` 导出轻量混合场景的完整配置、网格和纹理，然后退出
+Java。独立运行 SDK 内未经修改的 `luxcoreconsole.exe`；该进程不加载 Java、JNI 桥或
+本项目渲染模块。导出入口只在计时外使用，不增加正常提交/渲染路径开销。
+
+两条路径均为 1920×1080、RTPATHOCL、TILEPATHSAMPLER、AA=1、原尺寸、无过滤、
+无降噪、无帧生成，756 个三角形；实际设备为 RTX 5080 Laptop GPU CUDA/OptiX。
+FPS 以真实完成采样量除以 2,073,600 像素换算，表示每帧 1 SPP 的渲染量；不把
+Film 显示刷新算作独立渲染帧。
+
+| 路径 | FPS | 每帧 1 SPP 渲染量耗时 |
+|---|---:|---:|
+| 纯官方 LuxCore console，最后报告的累计吞吐 | 6.68 | 149.61 ms |
+| 本项目薄桥接，三轮采样增量/总时间 | 6.55 | 152.56 ms |
+
+桥接三轮分别为 6.00 / 6.33 / 7.33 FPS；官方 console 最后十次累计吞吐报告约为
+6.65～6.68 FPS。两者起测 GPU 占用分别为 43% / 38%，存在其他任务；本次能看到
+两条路径都处于 6～7 FPS 的档位，不能据此计算隔离的 JNI 开销或空闲 GPU 提升率。
+绕过项目并未出现数量级加速；当前应继续检查上游渲染配置和实际工作量。
+
+官方 console 会固定设置 `screen.refresh.interval=2500`，该入口差异已记入证据。
+RTPATHOCL 在达到 `batch.halttime=12` 后仍持续渲染，本次收集到第 58 秒后停止该
+自有进程。导出的完整场景、配置、官方日志、桥接原始结果和资产 SHA-256 均保存在
+[`data/luxcore-official-control-20261101`](data/luxcore-official-control-20261101/comparison.json)。
+
+官方入口复现（在仓库根目录执行；RTPATHOCL 需要手动或外部限时结束）：
+
+```powershell
+& build/luxcore-full/LuxCore/bin/luxcoreconsole.exe -s `
+  -D batch.halttime 12 -D batch.haltspp 0 `
+  docs/quality/data/luxcore-official-control-20261101/scene/render.cfg
+```

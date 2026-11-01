@@ -1,0 +1,583 @@
+{
+  "date": "2026-11-01",
+  "gpu": "NVIDIA GeForce RTX 5080 Laptop GPU",
+  "luxcoreVersion": "2.11.2",
+  "upstreamCommit": "b872186d2fe995a762f73708c606847eed55843e",
+  "width": 1920,
+  "height": 1080,
+  "engine": "RTPATHOCL",
+  "tileAA": 1,
+  "resolutionReduction": 1,
+  "filter": "NONE",
+  "frameGeneration": false,
+  "denoiser": false,
+  "metric": "completed native progressive sample throughput / 2073600 pixels; 1-SPP frame-equivalent FPS, not independent reset frames",
+  "official": {
+    "executable": "build/luxcore-full/LuxCore/bin/luxcoreconsole.exe",
+    "sha256": "137D3BE23A32FEF9D40C48F6F9BF36C40D5FBB1F09EFA7C6B1DAAAACDFAFFA71",
+    "initialGpuUtilizationPercent": 38,
+    "javaJniOrRendererProjectLoaded": false,
+    "lastReportedFps": 6.684027777777778,
+    "msPerOneSppFrame": 149.6103896103896,
+    "progress": [
+      {
+        "elapsedSeconds": 1,
+        "completedPasses": 6,
+        "samplesPerSecond": 9950000.0,
+        "fps": 4.7984182098765435
+      },
+      {
+        "elapsedSeconds": 2,
+        "completedPasses": 12,
+        "samplesPerSecond": 10990000.0,
+        "fps": 5.299961419753086
+      },
+      {
+        "elapsedSeconds": 3,
+        "completedPasses": 19,
+        "samplesPerSecond": 12070000.0,
+        "fps": 5.82079475308642
+      },
+      {
+        "elapsedSeconds": 4,
+        "completedPasses": 26,
+        "samplesPerSecond": 12590000.0,
+        "fps": 6.0715663580246915
+      },
+      {
+        "elapsedSeconds": 5,
+        "completedPasses": 33,
+        "samplesPerSecond": 12920000.0,
+        "fps": 6.23070987654321
+      },
+      {
+        "elapsedSeconds": 6,
+        "completedPasses": 40,
+        "samplesPerSecond": 13140000.0,
+        "fps": 6.336805555555555
+      },
+      {
+        "elapsedSeconds": 7,
+        "completedPasses": 47,
+        "samplesPerSecond": 13330000.0,
+        "fps": 6.4284336419753085
+      },
+      {
+        "elapsedSeconds": 8,
+        "completedPasses": 54,
+        "samplesPerSecond": 13450000.0,
+        "fps": 6.486304012345679
+      },
+      {
+        "elapsedSeconds": 9,
+        "completedPasses": 61,
+        "samplesPerSecond": 13540000.0,
+        "fps": 6.5297067901234565
+      },
+      {
+        "elapsedSeconds": 10,
+        "completedPasses": 67,
+        "samplesPerSecond": 13410000.0,
+        "fps": 6.467013888888889
+      },
+      {
+        "elapsedSeconds": 11,
+        "completedPasses": 74,
+        "samplesPerSecond": 13510000.0,
+        "fps": 6.515239197530864
+      },
+      {
+        "elapsedSeconds": 12,
+        "completedPasses": 81,
+        "samplesPerSecond": 13570000.0,
+        "fps": 6.544174382716049
+      },
+      {
+        "elapsedSeconds": 13,
+        "completedPasses": 87,
+        "samplesPerSecond": 13470000.0,
+        "fps": 6.495949074074074
+      },
+      {
+        "elapsedSeconds": 14,
+        "completedPasses": 94,
+        "samplesPerSecond": 13530000.0,
+        "fps": 6.5248842592592595
+      },
+      {
+        "elapsedSeconds": 15,
+        "completedPasses": 101,
+        "samplesPerSecond": 13580000.0,
+        "fps": 6.548996913580247
+      },
+      {
+        "elapsedSeconds": 16,
+        "completedPasses": 107,
+        "samplesPerSecond": 13510000.0,
+        "fps": 6.515239197530864
+      },
+      {
+        "elapsedSeconds": 17,
+        "completedPasses": 115,
+        "samplesPerSecond": 13680000.0,
+        "fps": 6.597222222222222
+      },
+      {
+        "elapsedSeconds": 18,
+        "completedPasses": 121,
+        "samplesPerSecond": 13600000.0,
+        "fps": 6.558641975308642
+      },
+      {
+        "elapsedSeconds": 19,
+        "completedPasses": 127,
+        "samplesPerSecond": 13530000.0,
+        "fps": 6.5248842592592595
+      },
+      {
+        "elapsedSeconds": 20,
+        "completedPasses": 134,
+        "samplesPerSecond": 13560000.0,
+        "fps": 6.539351851851852
+      },
+      {
+        "elapsedSeconds": 21,
+        "completedPasses": 141,
+        "samplesPerSecond": 13610000.0,
+        "fps": 6.563464506172839
+      },
+      {
+        "elapsedSeconds": 22,
+        "completedPasses": 147,
+        "samplesPerSecond": 13550000.0,
+        "fps": 6.534529320987654
+      },
+      {
+        "elapsedSeconds": 23,
+        "completedPasses": 153,
+        "samplesPerSecond": 13490000.0,
+        "fps": 6.505594135802469
+      },
+      {
+        "elapsedSeconds": 24,
+        "completedPasses": 160,
+        "samplesPerSecond": 13530000.0,
+        "fps": 6.5248842592592595
+      },
+      {
+        "elapsedSeconds": 25,
+        "completedPasses": 168,
+        "samplesPerSecond": 13640000.0,
+        "fps": 6.577932098765432
+      },
+      {
+        "elapsedSeconds": 26,
+        "completedPasses": 174,
+        "samplesPerSecond": 13590000.0,
+        "fps": 6.553819444444445
+      },
+      {
+        "elapsedSeconds": 27,
+        "completedPasses": 182,
+        "samplesPerSecond": 13690000.0,
+        "fps": 6.60204475308642
+      },
+      {
+        "elapsedSeconds": 28,
+        "completedPasses": 189,
+        "samplesPerSecond": 13710000.0,
+        "fps": 6.611689814814815
+      },
+      {
+        "elapsedSeconds": 29,
+        "completedPasses": 195,
+        "samplesPerSecond": 13660000.0,
+        "fps": 6.587577160493828
+      },
+      {
+        "elapsedSeconds": 30,
+        "completedPasses": 202,
+        "samplesPerSecond": 13680000.0,
+        "fps": 6.597222222222222
+      },
+      {
+        "elapsedSeconds": 31,
+        "completedPasses": 209,
+        "samplesPerSecond": 13710000.0,
+        "fps": 6.611689814814815
+      },
+      {
+        "elapsedSeconds": 32,
+        "completedPasses": 216,
+        "samplesPerSecond": 13730000.0,
+        "fps": 6.62133487654321
+      },
+      {
+        "elapsedSeconds": 33,
+        "completedPasses": 223,
+        "samplesPerSecond": 13750000.0,
+        "fps": 6.630979938271605
+      },
+      {
+        "elapsedSeconds": 34,
+        "completedPasses": 230,
+        "samplesPerSecond": 13760000.0,
+        "fps": 6.635802469135802
+      },
+      {
+        "elapsedSeconds": 35,
+        "completedPasses": 237,
+        "samplesPerSecond": 13780000.0,
+        "fps": 6.645447530864198
+      },
+      {
+        "elapsedSeconds": 36,
+        "completedPasses": 244,
+        "samplesPerSecond": 13790000.0,
+        "fps": 6.650270061728395
+      },
+      {
+        "elapsedSeconds": 37,
+        "completedPasses": 251,
+        "samplesPerSecond": 13800000.0,
+        "fps": 6.655092592592593
+      },
+      {
+        "elapsedSeconds": 38,
+        "completedPasses": 258,
+        "samplesPerSecond": 13820000.0,
+        "fps": 6.664737654320987
+      },
+      {
+        "elapsedSeconds": 39,
+        "completedPasses": 265,
+        "samplesPerSecond": 13830000.0,
+        "fps": 6.669560185185185
+      },
+      {
+        "elapsedSeconds": 40,
+        "completedPasses": 271,
+        "samplesPerSecond": 13800000.0,
+        "fps": 6.655092592592593
+      },
+      {
+        "elapsedSeconds": 41,
+        "completedPasses": 278,
+        "samplesPerSecond": 13810000.0,
+        "fps": 6.65991512345679
+      },
+      {
+        "elapsedSeconds": 42,
+        "completedPasses": 285,
+        "samplesPerSecond": 13820000.0,
+        "fps": 6.664737654320987
+      },
+      {
+        "elapsedSeconds": 43,
+        "completedPasses": 292,
+        "samplesPerSecond": 13840000.0,
+        "fps": 6.674382716049383
+      },
+      {
+        "elapsedSeconds": 44,
+        "completedPasses": 299,
+        "samplesPerSecond": 13850000.0,
+        "fps": 6.67920524691358
+      },
+      {
+        "elapsedSeconds": 45,
+        "completedPasses": 305,
+        "samplesPerSecond": 13810000.0,
+        "fps": 6.65991512345679
+      },
+      {
+        "elapsedSeconds": 46,
+        "completedPasses": 310,
+        "samplesPerSecond": 13730000.0,
+        "fps": 6.62133487654321
+      },
+      {
+        "elapsedSeconds": 47,
+        "completedPasses": 317,
+        "samplesPerSecond": 13740000.0,
+        "fps": 6.626157407407407
+      },
+      {
+        "elapsedSeconds": 48,
+        "completedPasses": 325,
+        "samplesPerSecond": 13800000.0,
+        "fps": 6.655092592592593
+      },
+      {
+        "elapsedSeconds": 49,
+        "completedPasses": 332,
+        "samplesPerSecond": 13810000.0,
+        "fps": 6.65991512345679
+      },
+      {
+        "elapsedSeconds": 50,
+        "completedPasses": 338,
+        "samplesPerSecond": 13780000.0,
+        "fps": 6.645447530864198
+      },
+      {
+        "elapsedSeconds": 51,
+        "completedPasses": 345,
+        "samplesPerSecond": 13790000.0,
+        "fps": 6.650270061728395
+      },
+      {
+        "elapsedSeconds": 52,
+        "completedPasses": 352,
+        "samplesPerSecond": 13800000.0,
+        "fps": 6.655092592592593
+      },
+      {
+        "elapsedSeconds": 53,
+        "completedPasses": 359,
+        "samplesPerSecond": 13810000.0,
+        "fps": 6.65991512345679
+      },
+      {
+        "elapsedSeconds": 54,
+        "completedPasses": 366,
+        "samplesPerSecond": 13830000.0,
+        "fps": 6.669560185185185
+      },
+      {
+        "elapsedSeconds": 55,
+        "completedPasses": 373,
+        "samplesPerSecond": 13830000.0,
+        "fps": 6.669560185185185
+      },
+      {
+        "elapsedSeconds": 56,
+        "completedPasses": 380,
+        "samplesPerSecond": 13840000.0,
+        "fps": 6.674382716049383
+      },
+      {
+        "elapsedSeconds": 57,
+        "completedPasses": 387,
+        "samplesPerSecond": 13850000.0,
+        "fps": 6.67920524691358
+      },
+      {
+        "elapsedSeconds": 58,
+        "completedPasses": 394,
+        "samplesPerSecond": 13860000.0,
+        "fps": 6.684027777777778
+      }
+    ],
+    "termination": "Stopped the owned console process after 58 seconds of reported rendering. RTPATHOCL kept rendering after batch.halttime=12.",
+    "consoleConfigDifference": "Official console unconditionally sets screen.refresh.interval=2500. No change to resolution, sampler, path depths, scene, or device selection."
+  },
+  "bridge": {
+    "initialGpuUtilizationPercent": 43,
+    "aggregateFps": 6.55467861238698,
+    "msPerOneSppFrame": 152.56278135593223,
+    "rounds": [
+      {
+        "round": 1,
+        "wallMs": 3000.1664,
+        "completedSampleDelta": 37324800,
+        "sppDelta": 18.0,
+        "sppPerSecond": 5.999667,
+        "msPerSpp": 166.675911,
+        "readFilmMs": 9.8889,
+        "filmSamples": 51840000
+      },
+      {
+        "round": 2,
+        "wallMs": 3000.993,
+        "completedSampleDelta": 39398400,
+        "sppDelta": 19.0,
+        "sppPerSecond": 6.331238,
+        "msPerSpp": 157.947,
+        "readFilmMs": 10.2451,
+        "filmSamples": 91238400
+      },
+      {
+        "round": 3,
+        "wallMs": 3000.0447,
+        "completedSampleDelta": 45619200,
+        "sppDelta": 22.0,
+        "sppPerSecond": 7.333224,
+        "msPerSpp": 136.365668,
+        "readFilmMs": 11.5289,
+        "filmSamples": 136857600
+      }
+    ]
+  },
+  "comparison": "Both initial GPU utilization values exceeded 10%; do not calculate an isolated bridge-overhead percentage or clean-GPU speedup from this run.",
+  "sceneFiles": [
+    {
+      "name": "imagemap-00001.exr",
+      "sha256": "915AC38219C5FF33D2670D6255828848F2B646C4AAE89FA6C68968563951D81D"
+    },
+    {
+      "name": "imagemap-00002.exr",
+      "sha256": "AC40F00C803668089EBB48B40CEB0B6244B64721399F604B311B3D0AE4ACA048"
+    },
+    {
+      "name": "imagemap-00003.exr",
+      "sha256": "73A01EE2A4439A61B47A70CE710C47F82D93D691C8B0F99EC039AA9B29D29289"
+    },
+    {
+      "name": "imagemap-00004.exr",
+      "sha256": "10BCC0C981BDFE6B03333CB4494E3A1E6607285761C9FE4208095FFD7DA259AC"
+    },
+    {
+      "name": "imagemap-00005.exr",
+      "sha256": "AF6C14C0989CC9755248816FAEACFD9E7EA2963F952ADB647FC96598C941F20C"
+    },
+    {
+      "name": "imagemap-00006.exr",
+      "sha256": "AF6C14C0989CC9755248816FAEACFD9E7EA2963F952ADB647FC96598C941F20C"
+    },
+    {
+      "name": "imagemap-00007.exr",
+      "sha256": "AF6C14C0989CC9755248816FAEACFD9E7EA2963F952ADB647FC96598C941F20C"
+    },
+    {
+      "name": "imagemap-00008.exr",
+      "sha256": "AF6C14C0989CC9755248816FAEACFD9E7EA2963F952ADB647FC96598C941F20C"
+    },
+    {
+      "name": "imagemap-00009.exr",
+      "sha256": "AF6C14C0989CC9755248816FAEACFD9E7EA2963F952ADB647FC96598C941F20C"
+    },
+    {
+      "name": "imagemap-00010.exr",
+      "sha256": "AF6C14C0989CC9755248816FAEACFD9E7EA2963F952ADB647FC96598C941F20C"
+    },
+    {
+      "name": "imagemap-00011.exr",
+      "sha256": "AF6C14C0989CC9755248816FAEACFD9E7EA2963F952ADB647FC96598C941F20C"
+    },
+    {
+      "name": "imagemap-00012.exr",
+      "sha256": "AF6C14C0989CC9755248816FAEACFD9E7EA2963F952ADB647FC96598C941F20C"
+    },
+    {
+      "name": "mesh-00000.ply",
+      "sha256": "438393E14981C0D78CF0486FDC74053CDA4B3FABE5F1A9FCF8A238BDF70F2780"
+    },
+    {
+      "name": "mesh-00001.ply",
+      "sha256": "4AD33C018B59BCCAF053ED506404285132ADB839CD89270661799FADCB89278F"
+    },
+    {
+      "name": "mesh-00002.ply",
+      "sha256": "6BFB6EACCD7B87D0822F4669FC2E2D0007902DBD4B7E901EA1A86A05BE6A12CE"
+    },
+    {
+      "name": "mesh-00003.ply",
+      "sha256": "BE9A807FE7AFBEF92B21D9CC876688E63421CD107AE8D435906B055E72EF5AAF"
+    },
+    {
+      "name": "mesh-00004.ply",
+      "sha256": "CC2A2F47E89A69FA7349CE50E5C3BC1A3C50FDDBF7F6E895E7B5F358B4E1FAE5"
+    },
+    {
+      "name": "mesh-00005.ply",
+      "sha256": "50A1547B7235A8C7C502AFFB89A2EA1F7173F6441C204C9F0050E8A93F873AFA"
+    },
+    {
+      "name": "mesh-00006.ply",
+      "sha256": "602405DF7C1019D28B27849BBB1BA52C5A417784E3C8040D51D5BB0A699A863C"
+    },
+    {
+      "name": "mesh-00007.ply",
+      "sha256": "CEF4C09255C40490C42571E1FFB698FFFF17F085688B0EA8BD9E906F9E865845"
+    },
+    {
+      "name": "mesh-00008.ply",
+      "sha256": "D4D65C398CF8BFC98031855582CE6F190553BB181E4281305A2563C5456E588E"
+    },
+    {
+      "name": "mesh-00009.ply",
+      "sha256": "435DC0A034C811F620F97C8B692F8420C1396DA00E3CCC241EBC8FC03B720F71"
+    },
+    {
+      "name": "mesh-00010.ply",
+      "sha256": "44BE58626E0C5DE3B0A5BC0C6226C691B88E3EA7CD159B8794607F9B53E11771"
+    },
+    {
+      "name": "mesh-00011.ply",
+      "sha256": "F097CACEE1E47855DBAC4FD28C07623AAA9CB8FC6283F83973D97082E5BC2EEA"
+    },
+    {
+      "name": "mesh-00012.ply",
+      "sha256": "BCCA2E6395B89AB1B38C90BBA8A4E01D5FAE959D3B70B54266707B78CD20F0D3"
+    },
+    {
+      "name": "mesh-00013.ply",
+      "sha256": "ADA6986408E3C6D3D40D234F8284BA3B6A5F108F67A028C00EF964159B659A18"
+    },
+    {
+      "name": "mesh-00014.ply",
+      "sha256": "3A3C2BF415F1FE3BC514281FC61B6482D090091FFD0D4B8916C2B8163CACBFF6"
+    },
+    {
+      "name": "mesh-00015.ply",
+      "sha256": "E2AC73C0CCFDA713C96A215B3AB00D28C947B84B5D5832585C043F794458EC0A"
+    },
+    {
+      "name": "mesh-00016.ply",
+      "sha256": "863CF73954BE4AAC3B9D0677CB4901E5F6058578A564F8F5EA92E9025FD1D88F"
+    },
+    {
+      "name": "mesh-00017.ply",
+      "sha256": "48E0498632B4EE03918FC32D16FD663790D4A186398AB104C0FF92DA1CEEAE7D"
+    },
+    {
+      "name": "mesh-00018.ply",
+      "sha256": "68A58B6C93477473CE4603449E1F42F4F041AD0660CCCB05AA29E0EED54CDCAD"
+    },
+    {
+      "name": "mesh-00019.ply",
+      "sha256": "83B703ACD042764EB0D91F6D90AC622BAD6D91ABB056CE13BEFAD23C5A75442D"
+    },
+    {
+      "name": "mesh-00020.ply",
+      "sha256": "246F929FFD50F35B96E81468298E1A017CFCADC09B79E699CF8570CD633E1B7D"
+    },
+    {
+      "name": "mesh-00021.ply",
+      "sha256": "0407A08AED756BBD2E6DFA755A3E52C2A3C938FDA372A527E2DEC5CC3891D998"
+    },
+    {
+      "name": "mesh-00022.ply",
+      "sha256": "AD268FDBBEA44C2FE3A958ACF1076C41AF5EDAB3AB50EE94FA05D16119A54B86"
+    },
+    {
+      "name": "mesh-00023.ply",
+      "sha256": "AF07DA5FE715FE52256917A11434EF05C1403B2E648F0EA593BE3624515DEAC4"
+    },
+    {
+      "name": "mesh-00024.ply",
+      "sha256": "98FC61FDDA57B2607EC687FB21FA7E594985852EF97B3DFE046CB2A3F109BC8C"
+    },
+    {
+      "name": "mesh-00025.ply",
+      "sha256": "6698F19D9AC4232203AC7804215C1D7AB441DC8601F52C400A5F4968D9FAEE3C"
+    },
+    {
+      "name": "mesh-00026.ply",
+      "sha256": "68958DAAE56539CDEF01DA59B433F006ABA6B00932BC1F5E3C775E529F6E6851"
+    },
+    {
+      "name": "mesh-00027.ply",
+      "sha256": "27AFEB9F921BD159512DF2A9A4B335CFB157C6E0D495537205FBB58CDA6D65F0"
+    },
+    {
+      "name": "render.cfg",
+      "sha256": "480DCEA983BB3D417E3A8B8A1627A539822BFF822E140CDB06BE5FFC2D155647"
+    },
+    {
+      "name": "scene.scn",
+      "sha256": "98B2F0B2826765BF3AAED4A43DA8263E633E2DA9247195945AAC18272A8D927C"
+    }
+  ]
+}
