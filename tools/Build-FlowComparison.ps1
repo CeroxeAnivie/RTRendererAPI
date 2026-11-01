@@ -37,6 +37,7 @@ if(Test-Path -LiteralPath $generated){
     }
 }
 $benchmark=(Join-Path $PSScriptRoot 'flow_native_benchmark.cpp').Replace('\','/')
+$mixed=(Join-Path $PSScriptRoot 'flow_mixed_bridge.cpp').Replace('\','/')
 $lua=@"
 include("premake5.lua")
 project "flow_native_benchmark"
@@ -50,6 +51,17 @@ project "flow_native_benchmark"
     files { "$benchmark" }
     defines { "NOMINMAX", "_CRT_SECURE_NO_WARNINGS" }
     disablewarnings { "4127", "4267", "4244", "4996" }
+project "flow_mixed_bridge"
+    kind "SharedLib"
+    dependson { "nvflowext" }
+    location("_compiler/" .. (_ACTION or "build") .. "/%{prj.name}")
+    language "C++"
+    cppdialect "C++17"
+    exceptionhandling "On"
+    includedirs { "include/nvflowext" }
+    files { "$mixed" }
+    defines { "NOMINMAX", "_CRT_SECURE_NO_WARNINGS" }
+    disablewarnings { "4127", "4267", "4244", "4996" }
 "@
 [IO.File]::WriteAllText((Join-Path $flow '_flow_benchmark.lua'),$lua,[Text.UTF8Encoding]::new($false))
 Push-Location $flow
@@ -58,6 +70,6 @@ try {
     if($LASTEXITCODE -ne 0){throw 'Flow project generation failed'}
 } finally {Pop-Location}
 & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath (Join-Path $env:MSBUILD_DIR 'MSBuild.exe') -ArgumentList @(
-    (Join-Path $flow '_compiler/vs2022/nvflow.sln'),'/t:flow_native_benchmark',
+    (Join-Path $flow '_compiler/vs2022/nvflow.sln'),'/t:flow_native_benchmark;flow_mixed_bridge',
     '/p:Configuration=release','/p:Platform=x64','/p:BuildInParallel=false','/m:1','/nologo','/v:minimal'
 ) -WorkingDirectory $flow -MemoryLimitGB $MemoryLimitGB

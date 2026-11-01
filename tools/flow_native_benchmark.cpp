@@ -70,11 +70,11 @@ struct Host {
         cp.dst=ctx.registerTextureAsTransient(context,tex);cp.debugLabel="FixtureUpload";
         ctx.addPassCopyBufferToTexture(context,&cp);flush();ctx.destroyBuffer(context,buf);return tex;
     }
-    void init(const char* fixture,float cellSize,unsigned deviceIndex) {
+    void init(const char* fixture,float cellSize,unsigned deviceIndex,bool externalUsage=false) {
         NvFlowLoaderInit(&loader,loadError,nullptr);
         require(loader.module_nvflow&&loader.module_nvflowext,"Flow DLL loading failed");
         manager=loader.deviceInterface.createDeviceManager(NV_FLOW_FALSE,nullptr,2);
-        NvFlowDeviceDesc dd{};dd.deviceIndex=deviceIndex;dd.enableExternalUsage=NV_FLOW_FALSE;dd.logPrint=logPrint;
+        NvFlowDeviceDesc dd{};dd.deviceIndex=deviceIndex;dd.enableExternalUsage=externalUsage?NV_FLOW_TRUE:NV_FLOW_FALSE;dd.logPrint=logPrint;
         NvFlowPhysicalDeviceDesc physical{};
         require(loader.deviceInterface.enumerateDevices(manager,deviceIndex,&physical),"Selected GPU is unavailable");
         fprintf(stderr,"Flow Vulkan deviceIndex=%u uuid=",deviceIndex);
@@ -169,6 +169,7 @@ struct Host {
         if(loader.module_nvflow)NvFlowLoaderDestroy(&loader);
     }
 };
+#ifndef FLOW_LIBRARY
 int main(int argc,char** argv) {
     try {
         require(argc>=7,"Usage: flow_native_benchmark fixture.bin output.json cellSize refresh seconds verifiedVulkanDeviceIndex");
@@ -196,3 +197,4 @@ int main(int argc,char** argv) {
         return 0;
     } catch(const std::exception& e) {fprintf(stderr,"Flow benchmark failed: %s\n",e.what());return 1;}
 }
+#endif
