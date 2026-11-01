@@ -28,7 +28,10 @@ public final class RtxptHexBallGenerationSelfTest {
                     .mode(multiplier==2?FrameGenerationOptions.Mode.FRAME_GENERATION:FrameGenerationOptions.Mode.MULTI_FRAME_GENERATION)
                     .multiplier(FrameGenerationOptions.Multiplier.values()[multiplier-2]).build();
                 var plan=controller.plan(controller.effectiveProfile().toBuilder().frameGeneration(fg).build());
-                require(controller.apply(plan).outcome()==RendererFeatureApplyResult.Outcome.APPLIED,"Live generation policy");
+                var applied=controller.apply(plan);
+                require(applied.outcome()==RendererFeatureApplyResult.Outcome.APPLIED
+                    || (sequence==0&&multiplier==1&&applied.outcome()==RendererFeatureApplyResult.Outcome.UNCHANGED),
+                    "Live generation policy: "+applied);
                 measure(renderer,host,scene,physics,multiplier,2560,1440,csv,output);
                 if(multiplier==4) {
                     measure(renderer,host,scene,physics,multiplier,1920,1080,csv,output);

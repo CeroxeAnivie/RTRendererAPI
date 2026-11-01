@@ -1,0 +1,3 @@
+Exception in thread "main" java.lang.AssertionError: Live generation policy
+	at demo.RtxptHexBallGenerationSelfTest.require(RtxptHexBallGenerationSelfTest.java:83)
+	at demo.RtxptHexBallGenerationSelfTest.main(RtxptHexBallGenerationSelfTest.java:31)

@@ -4,7 +4,8 @@ param(
     [ValidateSet('all','points','spots','many','area','environment','sun','mixed')][string]$Scene='all',
     [ValidateRange(1,64)][int]$Spp=1,
     [switch]$ControlLighting,
-    [switch]$ControlDirectional
+    [switch]$ControlDirectional,
+    [switch]$Reuse
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -26,9 +27,9 @@ $settings=[ordered]@{
     Jvm=@('-Dfile.encoding=UTF-8','--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow',
         '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath)
     Entry=$(if($Suite -eq 'Generation'){'demo.RtxptHexBallGenerationSelfTest'}else{'top.ceroxe.rt.renderer.rtxpt.RtxptLightingNativeSelfTest'})
-    Arguments=@(if($Suite -eq 'Generation'){$output}else{$output;$Scene;[string]$Spp})
+    Arguments=@(if($Suite -eq 'Generation'){$output}else{$output;$Scene;[string]$Spp;$(if($Reuse){'reuse'}else{'raw'})})
     RuntimeSource='PackagedJar';JarSha256=(Get-FileHash -LiteralPath $jar).Hash
-    ControlLighting=[bool]$ControlLighting;ControlDirectional=[bool]$ControlDirectional
+    ControlLighting=[bool]$ControlLighting;ControlDirectional=[bool]$ControlDirectional;Reuse=[bool]$Reuse
     Spp=$Spp;StartedAt=(Get-Date -Format o)
 }
 $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
@@ -45,6 +46,9 @@ try {
     Get-Content -LiteralPath ($prefix+'.log') -Tail 8
     if(Test-Path -LiteralPath (Join-Path $output 'generation.csv')) {
         Copy-Item -LiteralPath (Join-Path $output 'generation.csv') -Destination ($prefix+'-generation.csv')
+    }
+    if(Test-Path -LiteralPath (Join-Path $output 'timings.csv')) {
+        Copy-Item -LiteralPath (Join-Path $output 'timings.csv') -Destination ($prefix+'-timings.csv')
     }
     if($code -ne 0){throw "Native regression exited $code; inspect $prefix.log"}
 } finally {

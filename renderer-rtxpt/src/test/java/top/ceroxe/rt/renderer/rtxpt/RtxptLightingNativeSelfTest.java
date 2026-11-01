@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import top.ceroxe.rt.renderer.api.*;
 
 /** Renderer-wide light families plus scene reloads; captures are excluded from FPS evidence. */
@@ -14,10 +15,12 @@ public final class RtxptLightingNativeSelfTest {
         Files.createDirectories(output);
         String selected=args.length>1?args[1]:"all";
         int spp=args.length>2?Integer.parseInt(args[2]):1;
+        boolean reuse=args.length>3&&args[3].equals("reuse");
+        var timings=new StringBuilder("scene,pose,spp,reuse,native_frames,wall_ms,ms_per_native_frame,native_fps\n");
         var policy=RendererConfig.presentation().copyBuilder().denoising(DenoisingOptions.disabled())
             .frameGeneration(FrameGenerationOptions.disabled())
             .pathTracing(new PathTracingOptions(spp,20,2,RendererFeaturePreference.DISABLED,
-                RendererFeaturePreference.DISABLED,RendererFeaturePreference.DISABLED)).build();
+                reuse?RendererFeaturePreference.REQUIRED:RendererFeaturePreference.DISABLED,RendererFeaturePreference.DISABLED)).build();
         long sequence=0,revision=0;
         try(var renderer=Renderer.open("rtxpt",policy)) {
             for(String name:CASES) {
@@ -37,9 +40,19 @@ public final class RtxptLightingNativeSelfTest {
                     }
                     var status=host.runtimeStatus();
                     require(status.reconstruction()==RtxptAccess.Reconstruction.DLSS&&!status.denoising()
-                        &&!status.sharc()&&!status.restirDi()&&!status.restirGi()&&!status.frameGeneration(),"Raw SR policy "+status);
+                        &&!status.sharc()&&status.restirDi()==reuse&&!status.restirGi()&&!status.frameGeneration(),"Requested SR policy "+status);
                     Files.writeString(output.resolve(name+"-pose"+pose+"-runtime.txt"),status+"\n"+policy+"\n");
                     System.out.println("LIGHT_FAMILY_CAPTURE "+name+" pose="+pose+" spp="+spp+" "+status);
+                    if(pose==0&&spp==1) {
+                        host.awaitIdle();
+                        long before=System.nanoTime();
+                        for(int i=0;i<240;i++)renderer.submit(RenderFrameRequest.builder(sequence++,1920,1080,c)
+                            .minimumSceneRevision(revision).environment(env).build());
+                        host.awaitIdle();
+                        double ms=(System.nanoTime()-before)/1e6;
+                        timings.append(String.format(Locale.ROOT,"%s,%d,%d,%s,240,%.6f,%.6f,%.6f%n",name,pose,spp,reuse,ms,ms/240,240000/ms));
+                        Files.writeString(output.resolve("timings.csv"),timings);
+                    }
                 }
             }
             require(renderer.health().activeFailure().isEmpty(),"Healthy scene transitions");
