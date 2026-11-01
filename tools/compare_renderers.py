@@ -87,7 +87,7 @@ def prepare(source, output):
     print('Prepared', len(groups['objects']), 'objects,', groups['triangleCount'], 'triangles:', output, flush=True)
 
 
-def mitsuba_minimal(fixture, output, rounds):
+def mitsuba_minimal(fixture, output, rounds, seconds):
     import mitsuba as mi
     import drjit as dr
     import numpy as np
@@ -115,14 +115,18 @@ def mitsuba_minimal(fixture, output, rounds):
         dr.eval(image)
         dr.sync_thread()
     frames = []
-    for seed in range(2, rounds+2):
+    loop_start = time.perf_counter()
+    seed = 2
+    while len(frames) < rounds or time.perf_counter()-loop_start < seconds:
         start = time.perf_counter()
         image = mi.render(scene, spp=1, seed=seed)
         dr.eval(image)
         dr.sync_thread()
         elapsed = time.perf_counter()-start
         frames.append(elapsed*1000)
-        print('Mitsuba 1spp frame', seed-1, 'ms', round(elapsed*1000, 3), flush=True)
+        if len(frames) <= 3 or len(frames) % 100 == 0:
+            print('Mitsuba 1spp frame', seed-1, 'ms', round(elapsed*1000, 3), flush=True)
+        seed += 1
     pixels = np.array(image, copy=True)
     assert np.isfinite(pixels).all() and pixels.max() > 0
     output.mkdir(parents=True, exist_ok=True)
@@ -145,8 +149,9 @@ if __name__ == '__main__':
     parser.add_argument('--fixture', type=Path, default=Path('build/reports/renderer-comparison/fixture.json'))
     parser.add_argument('--output', type=Path, default=Path('build/reports/renderer-comparison/mitsuba'))
     parser.add_argument('--rounds', type=int, default=20)
+    parser.add_argument('--seconds', type=float, default=3)
     args = parser.parse_args()
     if args.prepare:
         prepare(args.source, args.fixture)
     else:
-        mitsuba_minimal(json.loads(args.fixture.read_text(encoding='utf-8')), args.output, args.rounds)
+        mitsuba_minimal(json.loads(args.fixture.read_text(encoding='utf-8')), args.output, args.rounds, args.seconds)

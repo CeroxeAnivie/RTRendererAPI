@@ -2,6 +2,7 @@ param(
     [string]$Sdk = 'build/luxcore-full/LuxCore',
     [string]$SourceScene = 'docs/quality/data/luxcore-official-control-20261101/scene',
     [string]$Output = 'build/reports/luxcore-light-controls',
+    [ValidateSet('RTPATHOCL','PATHOCL','TILEPATHOCL')][string]$Engine = 'RTPATHOCL',
     [ValidateSet('minimal','no-camera','full')][string[]]$Cases = @('minimal','no-camera','full'),
     [ValidateRange(5,120)][int]$RenderSeconds = 12
 )
@@ -13,6 +14,11 @@ $null = New-Item -ItemType Directory -Path $Output -Force
 $outputDirectory = (Resolve-Path $Output).Path
 $originalScene = Get-Content -LiteralPath (Join-Path $source 'scene.scn')
 $originalConfig = Get-Content -LiteralPath (Join-Path $source 'render.cfg')
+$originalConfig = $originalConfig | ForEach-Object {
+    if ($_ -match '^renderengine\.type\s*=') { 'renderengine.type = "'+$Engine+'"' }
+    elseif ($_ -match '^sampler\.type\s*=') { 'sampler.type = "'+$(if($Engine -eq 'PATHOCL'){'SOBOL'}else{'TILEPATHSAMPLER'})+'"' }
+    else { $_ }
+}
 $rows = @()
 foreach ($case in $Cases) {
     $directory = Join-Path $outputDirectory $case
@@ -72,7 +78,7 @@ scene.objects.cube.transformation = 0.28 0 0 0 0 0.28 0 0 0 0 0.28 0 0 0 0 1
         }
         if ($measurements.Count -eq 0) { throw "Native $case produced no throughput data; inspect $directory" }
         $latest = $measurements[-1]
-        $row = [ordered]@{case=$case;initialGpu=$gpuBefore;engine='RTPATHOCL';width=1920;height=1080;nativeConsole=$nativeConsole;fps=$latest.fps;msPerOneSppFrame=1000/$latest.fps;progress=$measurements}
+        $row = [ordered]@{case=$case;initialGpu=$gpuBefore;engine=$Engine;width=1920;height=1080;nativeConsole=$nativeConsole;fps=$latest.fps;msPerOneSppFrame=1000/$latest.fps;progress=$measurements}
         $rows += $row
         $row | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $directory 'result.json') -Encoding utf8
     } finally {
