@@ -153,13 +153,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    inline NEEResult 
     #include "RtrSmallPointNee.hlsli" // RTR opt-in exact small-point sum
     inline NEEResult HandleNEE_MultipleSamples(
 '@ 'RTR opt-in exact small-point sum'
-Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' @'
-    void ProcessLightSample(inout NEEResult accum, LightSample lightSample, uint candidateSampleCount, uint fullSamples, uint localCount, uint globalCount,
-                                const ShadingData shadingData, const ActiveBSDF bsdf, const PathState preScatterPath, LightSampler lightSampler,
-                                inout UniformSampleSequenceGenerator sampleGenerator, const WorkingContext workingContext)
-'@ @'
-    void ProcessLightSample(inout NEEResult accum, LightSample lightSample, uint candidateSampleCount, uint fullSamples, uint localCount, uint globalCount,
-                                const ShadingData shadingData, const ActiveBSDF bsdf, const PathState preScatterPath, LightSampler lightSampler,
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '                                inout UniformSampleSequenceGenerator sampleGenerator, const WorkingContext workingContext)' @'
                                 inout UniformSampleSequenceGenerator sampleGenerator, const WorkingContext workingContext, const bool updateNeeAtFeedback) // RTR feedback policy parameter
 '@ 'RTR feedback policy parameter'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            if( lightSample.LightIndex != NEEAT_INVALID_LIGHT_INDEX && lightSampler.IsTemporalFeedbackRequired() )' @'
