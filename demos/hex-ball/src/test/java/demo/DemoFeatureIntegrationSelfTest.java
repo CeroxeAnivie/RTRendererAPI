@@ -88,9 +88,9 @@ public final class DemoFeatureIntegrationSelfTest {
         var original=new DemoScene();var originalBatch=original.primitiveBatch(new HexPhysics(),top.ceroxe.rt.renderer.api.FramePrimitiveBatch.empty());
         require(originalBatch.primitives().stream().noneMatch(p->p.mediumBoundary().isPresent()),"Ordinary Vulkan balls must retain their surface-only path");
         var scene=new DemoScene(true);var initial=scene.initialTransaction();
-        var glassProfile=DemoRendererProfile.rtxptGlassInteractive();
-        require(glassProfile.denoising().preference().requested()
-            &&glassProfile.pathTracing().radianceCache().requested(),"Default glass uses upstream path-traced reconstruction and caching");
+        var glassProfile=DemoRendererProfile.rtxptInteractive();
+        require(!glassProfile.denoising().preference().requested()
+            &&!glassProfile.pathTracing().radianceCache().requested(),"Glass keeps the accepted SR fast policy without adding RR or SHaRC");
         require(glassProfile.frameGeneration().preference().requested()
             &&glassProfile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X,"Glass defaults to 2x FG");
         var oldLights=original.initialTransaction().upserts().lights();

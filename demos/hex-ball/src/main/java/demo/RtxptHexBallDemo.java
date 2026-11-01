@@ -28,8 +28,7 @@ public final class RtxptHexBallDemo {
         var camera=DemoRendererProfile.camera(config.width(),config.height(),15.4);
         var environment=DemoRendererProfile.environment();
         var stats=new RenderStats();
-        var policy=originalSettings?DemoRendererProfile.interactive(config)
-            :originalBalls?DemoRendererProfile.rtxptInteractive():DemoRendererProfile.rtxptGlassInteractive();
+        var policy=originalSettings?DemoRendererProfile.interactive(config):DemoRendererProfile.rtxptInteractive();
         try(var renderer=Renderer.open("rtxpt",policy)) {
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
             long revision=renderer.apply(scene.initialTransaction()).acceptedSceneRevision();

@@ -27,7 +27,7 @@ java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxp
 java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
 ```
 
-**HexBall JAR 不带参数会打开 API 工作台。** 看原弹球请带 `--windowed`，看新弹球请带 `--rtxpt`。不指定时限会持续运行，关闭渲染窗口正常退出。新弹球复用球场几何与物理，默认使用专门调整的玻璃材质和光照，以及 RR＋SHaRC 质量配置。旧金属球默认使用 SR；工作负载不同，不能拿两者默认 FPS 直接认定后端快慢，也不承诺逐像素一致。
+**HexBall JAR 不带参数会打开 API 工作台。** 看原弹球请带 `--windowed`，看新弹球请带 `--rtxpt`。不指定时限会持续运行，关闭渲染窗口正常退出。两条弹球路线默认采用 SR 和 2× FG，不自动增加 RR、SHaRC 或独立降噪。新弹球复用球场几何与物理，使用专门调整的玻璃材质和光照；旧弹球使用金属材质。工作负载不同，不能拿两者默认 FPS 直接认定后端快慢，也不承诺逐像素一致。
 
 也可以通过 Gradle 直接启动：
 
