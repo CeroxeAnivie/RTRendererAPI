@@ -34,6 +34,9 @@ assert "ControlBuffer[0].LightClusterCount != 0" in strata
 assert "RtrEnvironmentLocalProxyCount" in strata and "RtrSampleEnvironmentLocal" in strata
 assert "proxyCountPerLight / float(totalProxyCount)" in args.source.parent.joinpath(
     "Shaders/PathTracer/Lighting/LightSampler.hlsli").read_text(encoding="utf-8-sig")
+light_sampler=args.source.parent.joinpath("Shaders/PathTracer/Lighting/LightSampler.hlsli").read_text(encoding="utf-8-sig")
+assert "RTR conditional local MIS PDF fallback" in light_sampler
+assert "uint packedValue = LocalLightBinarySearch" in light_sampler
 assert "localEnvironmentProxyCount == 0" in nee and "globalCount += localCount" in nee
 assert "environmentLightProxies) / float(environmentProxyCount)" in args.source.parent.joinpath(
     "Shaders/PathTracer/Lighting/LightSampler.hlsli").read_text(encoding="utf-8-sig")
