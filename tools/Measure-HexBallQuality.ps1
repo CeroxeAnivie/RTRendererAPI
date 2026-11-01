@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory)][ValidateSet('raw','relax','default','reuse-raw','reuse-relax','rr','reference')][string]$Mode,
     [Parameter(Mandatory)][string]$Tag,
-    [switch]$Glass
+    [switch]$Glass,
+    [switch]$PackagedRuntime
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -23,6 +24,9 @@ $classpath=@(
     'renderer-rtxpt/build/classes/java/main','renderer-rtxpt/build/resources/main',
     'demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar'
 ) -join ';'
+if($PackagedRuntime) {
+    $classpath='demos/hex-ball/build/classes/java/test;demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar'
+}
 $settings=[ordered]@{
     SourceCommit=(& git rev-parse HEAD).Trim();
     Java='C:\Program Files\Java\graalvm-jdk-25.0.5.0.2+1.1\bin\java.exe';
@@ -32,6 +36,11 @@ $settings=[ordered]@{
     Entry='demo.RtxptHexBallQualitySelfTest';Arguments=@($Mode,$(if($Glass){'glass'}else{'metal'}),$images);
     StartedAt=(Get-Date -Format o);NativeSha256=(Get-FileHash 'build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll').Hash;
     Width=2560;Height=1440;Spp=$(if($Mode -eq 'reference'){32}else{1});FrameGeneration=$false;StageProfile=$false
+    RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
+}
+if($PackagedRuntime) {
+    $settings.Jvm=@($settings.Jvm | Where-Object {$_ -notlike '-Dtop.ceroxe.rt.rtxpt.runtime=*'})
+    $settings.JarSha256=(Get-FileHash 'demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar').Hash
 }
 $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
 & nvidia-smi --query-gpu=name,utilization.gpu,memory.used --format=csv > ($prefix+'-initial-gpu.csv')

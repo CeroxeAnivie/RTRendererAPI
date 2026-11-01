@@ -31,11 +31,11 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig rtxptInteractive() {
-        // Match the accepted non-blurry native RELAX -> SR path. RR remains an explicit API choice.
-        // A raw stochastic 1-SPP path-tracing signal is not a denoised SR input.
+        // Use upstream joint denoising/reconstruction. Standalone RELAX erases the
+        // demo's hard colored shadow boundaries even when its noise metric is good.
         return DemoApiControls.configure(RendererConfig.pathTracedPresentation().copyBuilder()
                 .denoising(DenoisingOptions.builder().preference(RendererFeaturePreference.PREFERRED)
-                        .strategy(DenoisingOptions.Strategy.RESPONSIVE).builtInTemporalFallback(false).build())
+                        .strategy(DenoisingOptions.Strategy.BALANCED).builtInTemporalFallback(false).build())
                 .frameGeneration(configuredGenerationPolicy()).gpuTimingsEnabled(true).build());
     }
 

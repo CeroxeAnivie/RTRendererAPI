@@ -16,7 +16,7 @@ public final class RtxptHexBallQualitySelfTest {
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
         var base=DemoRendererProfile.interactive(config);
         boolean reference=mode.equals("reference");
-        boolean rr=mode.equals("rr");
+        boolean rr=mode.equals("rr")||mode.equals("default");
         boolean denoise=!mode.equals("raw")&&!mode.equals("reuse-raw")&&!reference;
         boolean reuse=mode.startsWith("reuse-");
         var policy=switch(mode) {
@@ -62,7 +62,9 @@ public final class RtxptHexBallQualitySelfTest {
                         require(status.reconstruction()==(rr?RtxptAccess.Reconstruction.DLSS_RR:RtxptAccess.Reconstruction.DLSS),"Actual requested SR/RR, not TAA");
                         require(status.standaloneDenoiser()==(denoise&&!rr),"Actual standalone denoiser policy");
                         require(status.relaxDenoiser()==(denoise&&!rr),"Actual native RELAX");
+                        require(status.denoising()==denoise,"Actual native denoising, including RR");
                         require(status.restirDi()==reuse,"Actual upstream direct-light reuse");
+                        require(status.sharc()==mode.equals("default"),"Explicit native radiance-cache policy");
                         require(!status.frameGeneration(),"FG off for quality evidence");
                         require(status.renderWidth()==1485&&status.renderHeight()==835,"Balanced input unchanged");
                         Files.writeString(output.resolve("runtime.txt"),"mode="+mode+" glass="+glass+"\n"+status+"\n"+policy+"\n");
