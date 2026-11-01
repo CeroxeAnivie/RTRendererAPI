@@ -10,7 +10,7 @@ public final class RtxptAdapterSelfTest {
         float[] p={-1,-1,-1,1,-1,-1,1,1,-1,-1,1,-1,-1,-1,1,1,-1,1,1,1,1,-1,1,1};
         int[] idx={4,5,6,4,6,7,0,2,1,0,3,2,0,4,7,0,7,3,1,2,6,1,6,5,3,7,6,3,6,2,0,1,5,0,5,4};
         long[] materials=new long[12];Arrays.fill(materials,1);
-        return SceneTransaction.builder(revision).reset(true).upsert(material).upsert(MeshAsset.builder(1,p,idx,materials).build())
+        return SceneTransaction.builder(revision).resetScene().upsert(material).upsert(MeshAsset.builder(1,p,idx,materials).build())
             .upsert(SceneInstance.builder(1,1).mediumBoundary(MediumBoundary.surface(new Medium(new Rgb(.2f,.6f,.8f),1.5f)).withPriority(4)).build()).build();
     }
     static CameraState camera(){return CameraState.lookAt(0,1,6,0,0,0).verticalFieldOfViewDegrees(55).aspectRatio(16d/9).build();}

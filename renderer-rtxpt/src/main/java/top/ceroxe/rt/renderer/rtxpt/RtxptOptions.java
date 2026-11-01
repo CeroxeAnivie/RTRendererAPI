@@ -30,8 +30,8 @@ public record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounc
     }
     String[] arguments() {
         var a=new java.util.ArrayList<>(List.of("--realtimeSamplesPerPixel",Integer.toString(samplesPerPixel),
-            "--realtimeAA",Integer.toString(reconstruction.ordinal()),"--standaloneDenoiser",Boolean.toString(standaloneDenoiser),
-            "--useReSTIRDI",Boolean.toString(restirDi),"--useReSTIRGI",Boolean.toString(restirGi),
+            "--realtimeAA",Integer.toString(reconstruction.ordinal()),"--standaloneDenoiser="+standaloneDenoiser,
+            "--useReSTIRDI="+restirDi,"--useReSTIRGI="+restirGi,
             "--overrideRadianceCacheMode",sharc?"1":"0","--overrideDLSSMode",Integer.toString(dlssQuality.nativeValue),
             "--overrideSubSamplingMode","0","--overrideAutoexposureOff"));
         if(!ser) a.add("--disableSER");

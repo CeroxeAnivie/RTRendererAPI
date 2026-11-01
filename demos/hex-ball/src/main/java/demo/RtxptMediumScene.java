@@ -6,7 +6,7 @@ import top.ceroxe.rt.renderer.api.*;
 final class RtxptMediumScene {
     static SceneTransaction create(long revision,String preset) {
         if(!java.util.Set.of("mixed","glass","nested").contains(preset))throw new IllegalArgumentException("scene must be mixed, glass or nested");
-        var tx=SceneTransaction.builder(revision).reset(true);
+        var tx=SceneTransaction.builder(revision).resetScene();
         tx.upsert(MaterialAsset.builder(1).baseColorRgba8(0xffb8c8df).roughness(.65f).build());
         tx.upsert(MaterialAsset.builder(2).baseColorRgba8(0xffffffff).blendMode(MaterialAsset.BlendMode.TRANSLUCENT).transmission(1).roughness(.02f).indexOfRefraction(1.5f).build());
         tx.upsert(MaterialAsset.builder(3).baseColorRgba8(0xffe0bd75).metallic(1).roughness(.14f).build());
