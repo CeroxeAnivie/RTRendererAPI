@@ -1,6 +1,7 @@
 import java.security.MessageDigest
 import java.util.HexFormat
 import java.nio.file.Files
+import org.gradle.api.tasks.Sync
 
 plugins { `java-library` }
 description = "Thin in-process JNI host for NVIDIA RTXPT managed rendering."
@@ -55,9 +56,21 @@ tasks.register<JavaExec>("rtxptPackagedNativeSelfTest") {
 tasks.named("check") { dependsOn("rtxptAdapterSelfTest") }
 
 val nativeRuntime = rootProject.layout.buildDirectory.dir("rtxpt-sdk/bin")
+val rtxptShaderSource = rootProject.layout.buildDirectory.dir("rtxpt-sdk/Rtxpt/Shaders")
+val syncRtxptRuntimeShaders = tasks.register<Sync>("syncRtxptRuntimeShaders") {
+    from(rtxptShaderSource)
+    into(nativeRuntime.map { it.dir("ShaderDynamic/Source/Rtxpt") })
+    doFirst {
+        val nee = rtxptShaderSource.get().file("PathTracer/PathTracerNEE.hlsli").asFile
+        check(nee.isFile && nee.readText(Charsets.UTF_8).contains("RtrSmallPointNee.hlsli")) {
+            "Build the patched RTXPT shader source first: tools/Build-RtxptBridge.ps1"
+        }
+    }
+}
 val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
     group = "distribution"
     description = "Packages the pinned RTXPT native renderer, runtime shaders and upstream licenses."
+    dependsOn(syncRtxptRuntimeShaders)
     archiveFileName.set("rtxpt-runtime.zip")
     destinationDirectory.set(layout.buildDirectory.dir("native-bundle"))
     from(nativeRuntime) {
