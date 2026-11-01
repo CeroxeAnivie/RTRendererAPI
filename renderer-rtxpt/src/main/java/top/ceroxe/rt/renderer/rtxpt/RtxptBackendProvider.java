@@ -12,8 +12,6 @@ public final class RtxptBackendProvider implements RendererBackendProvider {
         if(!System.getProperty("os.name","").startsWith("Windows"))return ProbeResult.unsupported("RTXPT managed D3D12 requires Windows");
         try {
             if(!Files.isRegularFile(RtxptNative.bridge()))return ProbeResult.unsupported("Build RTXPT JNI host first");
-            if(config.frameGeneration().preference()==RendererFeaturePreference.REQUIRED)
-                return ProbeResult.unsupported("Frame generation is not exposed by the managed host");
             if(config.cpuFrameReadbackEnabled())return ProbeResult.unsupported("Managed presentation is GPU-native; CPU readback is not exposed");
             return ProbeResult.compatible("NVIDIA RTXPT 1.9.0 in-process D3D12 managed rendering");
         }catch(IllegalStateException e){return ProbeResult.unsupported(e.getMessage());}

@@ -37,6 +37,32 @@ Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '#inclu
 #include <donut/app/ApplicationBase.h>
 '@ '#include <donut/app/ApplicationBase.h>'
 Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' 'auto basePath = std::filesystem::path(path).parent_path();' 'auto basePath = donut::app::GetDirectoryWithExecutable(); // RTR signed runtime root' 'RTR signed runtime root'
+# RTXPT selects Streamline manual hooking. Upgrade the DXGI factory before any
+# swapchain calls so Streamline can observe CreateSwapChainForHwnd and own Present.
+$swapchainPath=Join-Path $sdk 'External/Donut/src/app/dx12/DeviceManager_DX12.cpp'
+$swapchainText=[IO.File]::ReadAllText($swapchainPath)
+if($swapchainText.Contains('RTR manual-hook present path')) {
+    $swapchainText=[regex]::Replace($swapchainText,'(?m)^\s*#if DONUT_WITH_STREAMLINE\r?\n\s*if \(!StreamlineIntegration::UpgradeInterface\(pSwapChain1\)\) return false; // RTR manual-hook present path\r?\n\s*#endif\r?\n','')
+    [IO.File]::WriteAllText($swapchainPath,$swapchainText,$utf8)
+}
+Patch-Once 'External/Donut/src/app/dx12/DeviceManager_DX12.cpp' 'HRESULT hres = CreateDXGIFactory2(m_DeviceParams.enableDebugRuntime ? DXGI_CREATE_FACTORY_DEBUG : 0, IID_PPV_ARGS(&m_DxgiFactory2));' @'
+HRESULT hres = CreateDXGIFactory2(m_DeviceParams.enableDebugRuntime ? DXGI_CREATE_FACTORY_DEBUG : 0, IID_PPV_ARGS(&m_DxgiFactory2));
+#if DONUT_WITH_STREAMLINE
+        if (hres == S_OK && !StreamlineIntegration::UpgradeInterface(m_DxgiFactory2)) return false; // RTR manual-hook factory path
+#endif
+'@ 'RTR manual-hook factory path'
+# The public API can request 3x/4x MFG on devices with a lower Streamline limit.
+# Follow RTXPT's UI negotiation: keep native presentation when the requested count is unavailable.
+Patch-Once 'Rtxpt/Sample.cpp' 'm_ui.DLSSFGMaxNumFramesToGenerate = state.numFramesToGenerateMax;' @'
+m_ui.DLSSFGMaxNumFramesToGenerate = state.numFramesToGenerateMax;
+            // RTR bounded DLSS frame-generation cadence
+            if (dlssgOptions.mode != StreamlineInterface::DLSSGMode::eOff
+                && dlssgOptions.numFramesToGenerate > state.numFramesToGenerateMax) {
+                log::warning("Requested DLSS frame generation cadence is unavailable; keeping native presentation.");
+                dlssgOptions.mode = StreamlineInterface::DLSSGMode::eOff;
+                m_ui.DLSSFGMode = StreamlineInterface::DLSSGMode::eOff;
+            }
+'@ 'RTR bounded DLSS frame-generation cadence'
 # The embedded host shuts SL down while its tagged render targets are still alive.
 # The sample's later device teardown calls Shutdown again; it must not call unloaded plugins.
 $slPath=Join-Path $sdk 'External/Donut/src/app/streamline/StreamlineIntegration.cpp'
@@ -47,6 +73,18 @@ if(!$slText.Contains('RTR idempotent embedded teardown')){
     if(!$slText.Contains('RTR idempotent embedded teardown')){throw 'Pinned Streamline shutdown anchor changed'}
     [IO.File]::WriteAllText($slPath,$slText,$utf8)
 }
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.h' 'void Shutdown();' @'
+void Shutdown();
+    sl::Result HostShutdownResult() const { return m_hostShutdownResult; }
+private:
+    sl::Result m_hostShutdownResult = sl::Result::eOk;
+public:
+'@ 'HostShutdownResult()'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' 'successCheck(slShutdown(), "slShutdown");' @'
+m_hostShutdownResult = slShutdown(); // RTR observable embedded shutdown
+        successCheck(m_hostShutdownResult, "slShutdown");
+        log::info("RTXPT Streamline shutdown result=%d", int(m_hostShutdownResult));
+'@ 'RTR observable embedded shutdown'
 Patch-Once 'Rtxpt/Sample.cpp' 'if (available.empty())' 'if (std::filesystem::path(preferred).is_absolute() && std::filesystem::is_regular_file(preferred)) return preferred; // RTR absolute host scene
     if (available.empty())' 'RTR absolute host scene'
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.h' 'private:' @'

@@ -18,15 +18,45 @@ public final class RtxptNativeSelfTest {
         try(Renderer r=Renderer.open("rtxpt",RendererConfig.pathTracedPresentation())) {
             var nativeHost=r.extension(RtxptAccess.class).orElseThrow();
             var control=r.extension(RendererFeatureController.class).orElseThrow();
-            r.apply(RtxptAdapterSelfTest.scene(1));r.submit(RtxptAdapterSelfTest.frame(0));
+            r.apply(RtxptAdapterSelfTest.scene(1));var initialFrame=RtxptAdapterSelfTest.frame(0);r.submit(initialFrame);
             RtxptAdapterSelfTest.require(nativeHost.windowHandle()!=0,"Project-controlled native window");
             for(int i=0;i<12;i++)RtxptAdapterSelfTest.require(nativeHost.renderFrame(),"Native render/present");
             var status=nativeHost.runtimeStatus();
             RtxptAdapterSelfTest.require(status.reconstruction()==RtxptAccess.Reconstruction.DLSS_RR,"DLSS-RR must actually be active: "+status);
             RtxptAdapterSelfTest.require(!status.frameGeneration(),"Frame generation disabled");
             System.out.println("RTXPT actual native settings: "+status);
+            nativeHost.awaitIdle();
+            int measuredFrames=120;
+            long benchmarkStart=System.nanoTime();
+            for(int i=0;i<measuredFrames;i++)RtxptAdapterSelfTest.require(nativeHost.renderFrame(),"Steady-state native benchmark frame");
+            nativeHost.awaitIdle();
+            double benchmarkSeconds=(System.nanoTime()-benchmarkStart)/1_000_000_000.0;
+            System.out.printf(java.util.Locale.ROOT,
+                "RTXPT steady-state: output=%dx%d, input=%dx%d, FG=off, frames=%d, wall=%.3fs, %.2f FPS (%.3f ms/frame)%n",
+                initialFrame.width(),initialFrame.height(),status.renderWidth(),status.renderHeight(),measuredFrames,benchmarkSeconds,
+                measuredFrames/benchmarkSeconds,benchmarkSeconds*1000/measuredFrames);
             var t=nativeHost.bridgeTimings();RtxptAdapterSelfTest.require(t.sceneExports()==1,"Static assets exported once");
-            RtxptAdapterSelfTest.require(t.frames()>=13,"Presented native frames");
+            RtxptAdapterSelfTest.require(t.frames()>=133,"Presented native frames including the steady-state measurement");
+            RtxptAdapterSelfTest.require(r.diagnostics().latestCompletedFrameSequence()==0,"Only a genuinely presented frame is marked complete");
+            var frameGeneration=FrameGenerationOptions.builder().preference(RendererFeaturePreference.PREFERRED)
+                .mode(FrameGenerationOptions.Mode.FRAME_GENERATION).multiplier(FrameGenerationOptions.Multiplier.TWO_X)
+                .fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES).build();
+            var fgPlan=control.plan(control.effectiveProfile().toBuilder().frameGeneration(frameGeneration).build());
+            RtxptAdapterSelfTest.require(fgPlan.disposition()==RendererFeaturePlan.Disposition.APPLICABLE,"DLSS-FG changes at the Streamline frame boundary");
+            RtxptAdapterSelfTest.require(control.apply(fgPlan).outcome()==RendererFeatureApplyResult.Outcome.APPLIED,"DLSS-FG policy accepted");
+            RtxptAdapterSelfTest.require(nativeHost.renderFrame(),"Render after enabling DLSS-FG");
+            status=nativeHost.runtimeStatus();
+            if(status.frameGenerationSupported()) {
+                RtxptAdapterSelfTest.require(status.frameGeneration(),"Supported DLSS-FG request must activate in RTXPT: "+status);
+                RtxptAdapterSelfTest.require(status.generatedFramesPerNativeFrame()==1,"2x FG requests one generated frame: "+status);
+                RtxptAdapterSelfTest.require(status.maxGeneratedFrames()>=1,"RTXPT reports the negotiated FG multiplier: "+status);
+            } else RtxptAdapterSelfTest.require(!status.frameGeneration(),"Unsupported DLSS-FG must stay on native presentation");
+            boolean frameGenerationActive=status.frameGeneration();
+            var capabilities=r.extension(RenderingFeatureCapabilities.class).orElseThrow();
+            RtxptAdapterSelfTest.require(capabilities.feature(RenderingFeatureCapabilities.Feature.FRAME_GENERATION).status()
+                ==(frameGenerationActive?RenderingFeatureCapabilities.Status.ACTIVE:RenderingFeatureCapabilities.Status.FALLBACK),
+                "Generic capability snapshot matches the native FG negotiation: "+capabilities);
+            System.out.println("RTXPT DLSS-FG negotiation: "+status);
             var initial=output.resolve("absorbing.png");nativeHost.capture(initial);
             ((RtxptRenderer)r).snapshotMaterials(output.resolve("native-control/Materials"));
             var image=ImageIO.read(initial.toFile());
@@ -38,6 +68,8 @@ public final class RtxptNativeSelfTest {
                 .transform(new AffineTransform(new float[]{1,0,0,.75f,0,1,0,0,0,0,1,0}))
                 .mediumBoundary(MediumBoundary.surface(new Medium(new Rgb(.2f,.6f,.8f),1.5f)).withPriority(4)).build()).build());
             r.submit(RtxptAdapterSelfTest.frame(1));
+            RtxptAdapterSelfTest.require(nativeHost.runtimeStatus().frameGeneration()==frameGenerationActive,
+                "Scene reload restores the requested DLSS-FG state");
             RtxptAdapterSelfTest.require(nativeHost.bridgeTimings().sceneExports()==1 && nativeHost.bridgeTimings().transformBatches()==1,"Transform-only edit uses one native batch without scene export");
             r.apply(RtxptAdapterSelfTest.scene(3,new Medium(new Rgb(.8f,.1f,.04f),1.33f)));
             r.submit(RtxptAdapterSelfTest.frame(2));
@@ -47,10 +79,18 @@ public final class RtxptNativeSelfTest {
             r.submit(RenderFrameRequest.builder(3,960,540,RtxptAdapterSelfTest.camera()).minimumSceneRevision(3)
                 .environment(RtxptAdapterSelfTest.frame(0).environment()).build());
             RtxptAdapterSelfTest.require(nativeHost.renderFrame(),"Render after resize");
+            RtxptAdapterSelfTest.require(nativeHost.runtimeStatus().frameGeneration()==frameGenerationActive,
+                "Swapchain resize disables and restores DLSS-FG around the resize frame");
             nativeHost.capture(output.resolve("resized.png"));
             var resized=ImageIO.read(output.resolve("resized.png").toFile());
             RtxptAdapterSelfTest.require(resized.getWidth()==960 && resized.getHeight()==540,"Native window/output resize");
             nativeHost.awaitIdle();
+            if(frameGenerationActive) {
+                var offPlan=control.plan(control.effectiveProfile().toBuilder().frameGeneration(FrameGenerationOptions.disabled()).build());
+                RtxptAdapterSelfTest.require(offPlan.disposition()==RendererFeaturePlan.Disposition.APPLICABLE,"DLSS-FG can be turned off live");
+                RtxptAdapterSelfTest.require(control.apply(offPlan).outcome()==RendererFeatureApplyResult.Outcome.APPLIED,"DLSS-FG disable accepted");
+                RtxptAdapterSelfTest.require(nativeHost.renderFrame()&&!nativeHost.runtimeStatus().frameGeneration(),"DLSS-FG shuts down on the next native frame");
+            }
             System.out.println("RTXPT in-process native smoke PASS: "+t);
             System.out.println("RTXPT scene switch, transform batch, capture and resize PASS; evidence="+output);
         }

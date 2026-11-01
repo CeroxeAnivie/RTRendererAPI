@@ -46,13 +46,40 @@ public final class RtxptAdapterSelfTest {
             var profile=RtxptOptions.profile(RendererConfig.pathTracedPresentation());
             require(RtxptOptions.resolve(profile).reconstruction()==RtxptAccess.Reconstruction.DLSS_RR,"Ordinary API selects native ray reconstruction");
             require(RtxptOptions.resolve(RendererFeatureProfile.disabled()).reconstruction()==RtxptAccess.Reconstruction.NONE,"Disabled common features stay disabled");
+            for(var multiplier:FrameGenerationOptions.Multiplier.values()) {
+                var fg=FrameGenerationOptions.builder().preference(RendererFeaturePreference.PREFERRED)
+                    .mode(multiplier==FrameGenerationOptions.Multiplier.TWO_X?FrameGenerationOptions.Mode.FRAME_GENERATION:FrameGenerationOptions.Mode.MULTI_FRAME_GENERATION)
+                    .multiplier(multiplier).fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES).build();
+                var resolved=RtxptOptions.resolve(RendererFeatureProfile.disabled().toBuilder().frameGeneration(fg).build());
+                require(resolved.frameGeneration().equals(fg)&&resolved.generatedFrames()==multiplier.presentedFramesPerNativeFrame()-1,
+                    "Fixed DLSS FG cadence maps to RTXPT's native control");
+            }
+            var adaptive=FrameGenerationOptions.builder().preference(RendererFeaturePreference.PREFERRED)
+                .mode(FrameGenerationOptions.Mode.ADAPTIVE).multiplier(FrameGenerationOptions.Multiplier.FOUR_X)
+                .fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES).build();
+            require(RtxptOptions.normalize(RendererFeatureProfile.disabled().toBuilder().frameGeneration(adaptive).build())
+                .frameGeneration().preference()==RendererFeaturePreference.DISABLED,"Unsupported adaptive cadence falls back to native presents");
+            var requiredAdaptive=FrameGenerationOptions.builder().preference(RendererFeaturePreference.REQUIRED)
+                .mode(FrameGenerationOptions.Mode.ADAPTIVE).multiplier(FrameGenerationOptions.Multiplier.FOUR_X).build();
+            boolean rejectedAdaptive=false;
+            try { RtxptOptions.resolve(RendererFeatureProfile.disabled().toBuilder().frameGeneration(requiredAdaptive).build()); }
+            catch(IllegalArgumentException expected) { rejectedAdaptive=true; }
+            require(rejectedAdaptive,"Required adaptive MFG is rejected instead of being misreported as fixed-rate generation");
             var live=new boolean[1];var applies=new int[1];
-            var control=new RtxptFeatureController(new RtxptFeatureController.Host(){public boolean initialized(){return live[0];}public void ready(){}public void apply(RendererFeatureProfile p){applies[0]++;}},profile);
+            var control=new RtxptFeatureController(new RtxptFeatureController.Host(){public boolean initialized(){return live[0];}public void ready(){}public void apply(RendererFeatureProfile p){applies[0]++;}
+                public RendererFeatureProfile effective(RendererFeatureProfile p){return p;}public RendererFeatureProfile normalize(RendererFeatureProfile p){return RtxptOptions.normalize(p);}},RtxptOptions.normalize(profile));
             var off=control.plan(RendererFeatureProfile.disabled());require(control.apply(off).outcome()==RendererFeatureApplyResult.Outcome.APPLIED,"Expert API applies the same policy before initialization");
             require(control.apply(off).outcome()==RendererFeatureApplyResult.Outcome.STALE_PLAN,"Expert plans are single-use");
             live[0]=true;var rebuild=control.plan(profile);require(control.apply(rebuild).outcome()==RendererFeatureApplyResult.Outcome.REQUIRES_RENDERER_REBUILD,"No hidden upstream pipeline rebuild");
             var latency=control.plan(control.effectiveProfile().toBuilder().lowLatency(LowLatencyOptions.recommended()).build());
             require(control.apply(latency).outcome()==RendererFeatureApplyResult.Outcome.APPLIED&&applies[0]==2,"Live expert latency control uses the common protocol");
+            var fixedFg=FrameGenerationOptions.builder().preference(RendererFeaturePreference.PREFERRED)
+                .mode(FrameGenerationOptions.Mode.MULTI_FRAME_GENERATION).multiplier(FrameGenerationOptions.Multiplier.THREE_X)
+                .fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES).build();
+            var fgPlan=control.plan(control.effectiveProfile().toBuilder().frameGeneration(fixedFg).build());
+            require(fgPlan.disposition()==RendererFeaturePlan.Disposition.APPLICABLE,"Fixed DLSS FG is a live Streamline control");
+            require(control.apply(fgPlan).outcome()==RendererFeatureApplyResult.Outcome.APPLIED&&applies[0]==3,
+                "Fixed DLSS FG applies through the expert controller");
             require(Medium.class.getRecordComponents().length==2,"No unsupported medium knobs");
             require(MediumBoundary.class.getRecordComponents().length==2,"No invisible/inward compatibility knobs");
         } finally {try(var walk=Files.walk(dir)){for(var p:walk.sorted(Comparator.reverseOrder()).toList())Files.delete(p);}}

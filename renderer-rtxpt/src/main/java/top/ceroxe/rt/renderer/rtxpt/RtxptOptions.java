@@ -8,7 +8,8 @@ import top.ceroxe.rt.renderer.rtxpt.RtxptAccess.Reconstruction;
 /** Native RTXPT controls, applied before the first frame. No second transport implementation. */
 record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
         Reconstruction reconstruction, DlssQuality dlssQuality, boolean standaloneDenoiser,
-        boolean restirDi, boolean restirGi, boolean sharc, boolean ser, boolean reflex) {
+        boolean restirDi, boolean restirGi, boolean sharc, boolean ser, boolean reflex,
+        FrameGenerationOptions frameGeneration) {
     public enum DlssQuality {
         PERFORMANCE(1), BALANCED(2), QUALITY(3), ULTRA_PERFORMANCE(4), ULTRA_QUALITY(5), DLAA(6);
         final int nativeValue;
@@ -16,6 +17,7 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
     }
     public RtxptOptions {
         Objects.requireNonNull(reconstruction); Objects.requireNonNull(dlssQuality);
+        Objects.requireNonNull(frameGeneration);
         if(samplesPerPixel<1 || samplesPerPixel>64) throw new IllegalArgumentException("samplesPerPixel must be in [1,64]");
         if(maxBounces<1 || maxBounces>64 || diffuseBounces<0 || diffuseBounces>maxBounces)
             throw new IllegalArgumentException("Invalid native path depth");
@@ -24,15 +26,15 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
     }
     /** Official realtime path: 1 SPP, DLSS-RR Balanced, SHaRC, SER and Reflex, FG off. */
     public static RtxptOptions recommended() {
-        return new RtxptOptions(1,20,2,Reconstruction.DLSS_RR,DlssQuality.BALANCED,true,false,false,true,true,true);
+        return new RtxptOptions(1,20,2,Reconstruction.DLSS_RR,DlssQuality.BALANCED,true,false,false,true,true,true,
+            FrameGenerationOptions.disabled());
     }
     public static RtxptOptions nativeOneSample() {
-        return new RtxptOptions(1,20,2,Reconstruction.NONE,DlssQuality.DLAA,false,false,false,false,true,false);
+        return new RtxptOptions(1,20,2,Reconstruction.NONE,DlssQuality.DLAA,false,false,false,false,true,false,
+            FrameGenerationOptions.disabled());
     }
     static RendererFeatureProfile profile(RendererConfig c){return new RendererFeatureProfile(c.frameReconstruction(),c.frameGeneration(),c.lowLatency(),c.denoising(),c.rayTracingOptimizations(),c.pathTracing());}
     static RtxptOptions resolve(RendererFeatureProfile p) {
-        if(p.frameGeneration().preference()==RendererFeaturePreference.REQUIRED)
-            throw new IllegalArgumentException("RTXPT frame generation is not exposed by this host");
         if(p.rayTracingOptimizations().memoryOptimization()==RendererFeaturePreference.REQUIRED)
             throw new IllegalArgumentException("RTXMU memory optimization belongs to the Vulkan backend");
         var r=p.frameReconstruction();
@@ -49,8 +51,24 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
             case PERFORMANCE->DlssQuality.PERFORMANCE;case ULTRA_PERFORMANCE->DlssQuality.ULTRA_PERFORMANCE;
             case ULTRA_QUALITY->DlssQuality.ULTRA_QUALITY;
         };
+        var frameGeneration=p.frameGeneration();
+        if(frameGeneration.mode()==FrameGenerationOptions.Mode.ADAPTIVE) {
+            if(frameGeneration.preference()==RendererFeaturePreference.REQUIRED)
+                throw new IllegalArgumentException("RTXPT exposes fixed DLSS Frame Generation multipliers, not the API's capped adaptive MFG mode");
+            frameGeneration=FrameGenerationOptions.disabled();
+        }
         return new RtxptOptions(path.samplesPerPixel(),path.maxBounces(),path.diffuseBounces(),aa,quality,denoise,di,gi,
-            path.radianceCache().requested(),p.rayTracingOptimizations().shaderExecutionReordering().requested(),p.lowLatency().preference().requested());
+            path.radianceCache().requested(),p.rayTracingOptimizations().shaderExecutionReordering().requested(),p.lowLatency().preference().requested(),frameGeneration);
+    }
+    int frameGenerationMode(){return frameGeneration.preference().requested()?1:0;}
+    int generatedFrames(){return frameGeneration.preference().requested()?frameGeneration.multiplier().presentedFramesPerNativeFrame()-1:1;}
+    static RendererFeatureProfile normalize(RendererFeatureProfile p) {
+        var resolved=resolve(p);
+        var optimizations=p.rayTracingOptimizations().toBuilder().memoryOptimization(RendererFeaturePreference.DISABLED).build();
+        var reconstruction=p.frameReconstruction().mode()==FrameReconstructionOptions.Mode.SPATIAL_UPSCALING
+            ?FrameReconstructionOptions.disabled():p.frameReconstruction();
+        return p.toBuilder().frameGeneration(resolved.frameGeneration()).rayTracingOptimizations(optimizations)
+            .frameReconstruction(reconstruction).build();
     }
     String[] arguments() {
         var a=new java.util.ArrayList<>(List.of("--realtimeSamplesPerPixel",Integer.toString(samplesPerPixel),

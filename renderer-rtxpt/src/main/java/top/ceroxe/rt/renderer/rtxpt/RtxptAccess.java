@@ -15,8 +15,11 @@ public interface RtxptAccess {
     RuntimeStatus runtimeStatus();
     enum Reconstruction { NONE, TAA, DLSS, DLSS_RR }
     record RuntimeStatus(int renderWidth,int renderHeight,Reconstruction reconstruction,
-        boolean standaloneDenoiser,boolean restirDi,boolean restirGi,boolean sharc,boolean frameGeneration,
-        boolean shaderExecutionReordering,boolean lowLatency) { }
+        boolean standaloneDenoiser,boolean denoising,boolean restirDi,boolean restirGi,boolean sharc,
+        boolean frameGeneration,boolean shaderExecutionReordering,boolean lowLatency,
+        int dlssMode,int generatedFramesPerNativeFrame,int maxGeneratedFrames,
+        boolean dlssSupported,boolean dlssRrSupported,boolean frameGenerationSupported,
+        boolean reflexSupported,boolean shaderExecutionReorderingSupported) { }
     /** Explicit one-shot readback. Never called in the presentation or benchmark frame loop. */
     void capture(Path png);
     BridgeTimings bridgeTimings();

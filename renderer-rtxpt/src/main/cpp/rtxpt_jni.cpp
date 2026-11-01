@@ -21,8 +21,27 @@
 #include <Materials/MaterialsBaker.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
+extern SampleUIData g_sampleUIData;
 
 namespace {
+// SL 2.14 queues RR resource-destruction functors in sl.common. Keep their
+// defining module loaded until common has drained them during slShutdown.
+// Resolve the actual plugin (including NGX updates) via SL's public API.
+class ShutdownModuleReference {
+    HMODULE module = nullptr;
+public:
+    ShutdownModuleReference() {
+        void* callback = nullptr;
+        if (slGetFeatureFunction(sl::kFeatureDLSS_RR, "slDLSSDGetState", callback) == sl::Result::eOk && callback) {
+            if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                    reinterpret_cast<LPCWSTR>(callback), &module))
+                throw std::runtime_error("Cannot retain Streamline RR module for shutdown");
+        }
+    }
+    ~ShutdownModuleReference() { if (module) FreeLibrary(module); }
+    ShutdownModuleReference(const ShutdownModuleReference&) = delete;
+    ShutdownModuleReference& operator=(const ShutdownModuleReference&) = delete;
+};
 class HostPathTracer final : public AdvancedPathTracer {
 public:
     using AdvancedPathTracer::AdvancedPathTracer;
@@ -47,14 +66,23 @@ struct Session {
     std::thread::id owner = std::this_thread::get_id();
     bool initialized = false;
     uint64_t presented = 0;
+    bool restoreFrameGenerationBeforeRender = false;
+    int requestedFrameGenerationMode = 0;
+    int requestedGeneratedFrames = 1;
+    sl::Result shutdownResult = sl::Result::eOk;
     std::unordered_map<std::string, donut::engine::SceneGraphNode*> nodes;
-    ~Session() {
+    void shutdown() {
         if (app) {
             auto* dm=app->HostDeviceManager();
             if(auto* device=dm->GetDevice())device->waitForIdle();
             // Streamline ProgrammingGuideManualHooking 3.0 and DLSS-RR 1.0:
             // stop SDK work and release its tags before destroying tagged render targets.
-            donut::app::StreamlineIntegration::Get().Shutdown();
+            {
+                ShutdownModuleReference retainCallbacks;
+                auto& streamline=donut::app::StreamlineIntegration::Get();
+                streamline.Shutdown();
+                shutdownResult=streamline.HostShutdownResult();
+            }
             dm->m_callbacks={};
             app->End();
         }
@@ -62,6 +90,7 @@ struct Session {
         donut::log::SetCallback(previousLog);
         app.reset();
     }
+    ~Session() { if(app) { try { shutdown(); } catch (const std::exception& x) { donut::log::error("RTXPT shutdown: %s",x.what()); } } }
 };
 void indexNodes(Session& s) {
     s.nodes.clear();
@@ -141,6 +170,17 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
             if(upstreamAfterPresent)upstreamAfterPresent(dm,index);
             ++ptr->presented;
         };
+        auto& beforeRender=s->app->HostDeviceManager()->m_callbacks.beforeRender;
+        auto upstreamBeforeRender=beforeRender;
+        beforeRender=[ptr=s.get(),upstreamBeforeRender](auto& dm,uint32_t index) {
+            if(ptr->restoreFrameGenerationBeforeRender) {
+                g_sampleUIData.DLSSFGMode=ptr->requestedFrameGenerationMode
+                    ? SI::DLSSGMode::eOn : SI::DLSSGMode::eOff;
+                g_sampleUIData.DLSSFGNumFramesToGenerate=ptr->requestedGeneratedFrames;
+                ptr->restoreFrameGenerationBeforeRender=false;
+            }
+            if(upstreamBeforeRender)upstreamBeforeRender(dm,index);
+        };
         indexNodes(*s);
         s->app->HostDeviceManager()->SetWindowTitle("RTRenderer 7 - NVIDIA RTXPT");
         active = s.release(); return reinterpret_cast<jlong>(active);
@@ -168,11 +208,16 @@ extern "C" JNIEXPORT jintArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNa
     JNIEnv* e, jclass, jlong h) {
     try {
         auto size=session(h).app->HostRenderPass()->GetRenderSize();
+        const auto mode=g_sampleUIData.ActualDLSSFGMode();
         jint values[]={jint(size.x),jint(size.y),g_sampleUIData.RealtimeAA,
-            g_sampleUIData.ActualUseStandaloneDenoiser(),g_sampleUIData.ActualUseReSTIRDI(),
-            g_sampleUIData.ActualUseReSTIRGI(),g_sampleUIData.ActualRadianceCacheMode(),jint(g_sampleUIData.ActualDLSSFGMode()),
-            jint(g_sampleUIData.DXHitObjectExtension||g_sampleUIData.NVAPIHitObjectExtension),jint(g_sampleUIData.ActualReflexMode()!=SI::ReflexMode::eOff)};
-        auto result=e->NewIntArray(10); if(result)e->SetIntArrayRegion(result,0,10,values);return result;
+            jint(g_sampleUIData.ActualUseStandaloneDenoiser()),jint(g_sampleUIData.RealtimeAA==3||g_sampleUIData.ActualUseStandaloneDenoiser()),
+            jint(g_sampleUIData.ActualUseReSTIRDI()),jint(g_sampleUIData.ActualUseReSTIRGI()),g_sampleUIData.ActualRadianceCacheMode(),
+            jint(mode),jint(g_sampleUIData.DXHitObjectExtension||g_sampleUIData.NVAPIHitObjectExtension),
+            jint(g_sampleUIData.ActualReflexMode()!=SI::ReflexMode::eOff),jint(g_sampleUIData.DLSSMode),
+            jint(g_sampleUIData.DLSSFGNumFramesToGenerate),jint(g_sampleUIData.DLSSFGMaxNumFramesToGenerate),
+            jint(g_sampleUIData.IsDLSSSuported),jint(g_sampleUIData.IsDLSSRRSupported),
+            jint(g_sampleUIData.IsDLSSFGSupported),jint(g_sampleUIData.IsReflexSupported),jint(session(h).app->IsSERSupported())};
+        auto result=e->NewIntArray(19); if(result)e->SetIntArrayRegion(result,0,19,values);return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 
@@ -189,11 +234,20 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_loadScene(
     JNIEnv* e, jclass, jlong h, jstring path) {
-    try { auto& s=session(h); s.app->HostRenderPass()->SetCurrentScene(utf8(e, path), true); indexNodes(s); }
+    try {
+        auto& s=session(h);
+        if(g_sampleUIData.ActualDLSSFGMode()!=SI::DLSSGMode::eOff) {
+            auto options=donut::app::StreamlineInterface::DLSSGOptions{};
+            options.mode=SI::DLSSGMode::eOff;
+            s.app->HostDeviceManager()->GetStreamline().SetDLSSGOptions(options);
+            g_sampleUIData.DLSSFGMode=SI::DLSSGMode::eOff;
+            s.restoreFrameGenerationBeforeRender=true;
+        }
+        s.app->HostRenderPass()->SetCurrentScene(utf8(e, path), true); indexNodes(s);
+    }
     catch (const std::exception& x) { fail(e, x); }
 }
 
-extern SampleUIData g_sampleUIData;
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_snapshotMaterials(
     JNIEnv* e, jclass, jlong h, jstring directory) {
     try {
@@ -217,17 +271,38 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     } catch(const std::exception& x) { fail(e,x); }
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_settings(
-    JNIEnv* e, jclass, jlong h, jint depth, jint diffuse, jboolean reflex) {
+    JNIEnv* e, jclass, jlong h, jint depth, jint diffuse, jboolean reflex,
+    jint frameGenerationMode, jint generatedFrames, jint samplesPerPixel, jint realtimeAa,
+    jint dlssMode, jboolean standaloneDenoiser, jboolean restirDi, jboolean restirGi, jboolean sharc) {
     try {
-        session(h);
+        auto& s=session(h);
+        if(frameGenerationMode<0 || frameGenerationMode>1 || generatedFrames<1 || generatedFrames>3)
+            throw std::invalid_argument("Invalid fixed DLSS frame-generation configuration");
+        if(depth<1 || depth>64 || diffuse<0 || diffuse>depth || samplesPerPixel<1 || samplesPerPixel>64
+            || realtimeAa<0 || realtimeAa>3 || dlssMode<1 || dlssMode>6)
+            throw std::invalid_argument("Invalid RTXPT render settings");
+        s.requestedFrameGenerationMode=frameGenerationMode;
+        s.requestedGeneratedFrames=generatedFrames;
+        g_sampleUIData.RealtimeMode=true;
+        g_sampleUIData.RealtimeSamplesPerPixel=samplesPerPixel;
+        g_sampleUIData.RealtimeAA=realtimeAa;
+        g_sampleUIData.StandaloneDenoiser=standaloneDenoiser;
+        g_sampleUIData.UseReSTIRDI=restirDi;
+        g_sampleUIData.UseReSTIRGI=restirGi;
+        g_sampleUIData.RadianceCacheMode=sharc?1:0;
+        g_sampleUIData.DLSSMode=static_cast<SI::DLSSMode>(dlssMode);
+        g_sampleUIData.DLSSLastRealtimeAA=realtimeAa;
         g_sampleUIData.BounceCount=depth;
         g_sampleUIData.DiffuseBounceCount=diffuse;
+        g_sampleUIData.ResetAccumulation=true;
         g_sampleUIData.ShowUI=false;
         g_sampleUIData.RenderWhenOutOfFocus=true;
         g_sampleUIData.EnableVsync=false;
         g_sampleUIData.FPSLimiter=0;
         g_sampleUIData.ReflexMode=reflex ? SI::ReflexMode::eLowLatency : SI::ReflexMode::eOff;
-        g_sampleUIData.DLSSFGMode=SI::DLSSGMode::eOff;
+        if(!s.restoreFrameGenerationBeforeRender)
+            g_sampleUIData.DLSSFGMode=frameGenerationMode?SI::DLSSGMode::eOn:SI::DLSSGMode::eOff;
+        g_sampleUIData.DLSSFGNumFramesToGenerate=generatedFrames;
     } catch (const std::exception& x) { fail(e,x); }
 }
 
@@ -291,13 +366,34 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     JNIEnv* e, jclass, jlong h, jint w, jint height) {
     try {
         if(w < 1 || height < 1) throw std::invalid_argument("Invalid output dimensions");
-        glfwSetWindowSize(session(h).app->HostDeviceManager()->GetWindow(), w, height);
+        auto& s=session(h);
+        if(g_sampleUIData.ActualDLSSFGMode()!=SI::DLSSGMode::eOff) {
+            auto options=donut::app::StreamlineInterface::DLSSGOptions{};
+            options.mode=SI::DLSSGMode::eOff;
+            s.app->HostDeviceManager()->GetStreamline().SetDLSSGOptions(options);
+            g_sampleUIData.DLSSFGMode=SI::DLSSGMode::eOff;
+            s.restoreFrameGenerationBeforeRender=true;
+        }
+        glfwSetWindowSize(s.app->HostDeviceManager()->GetWindow(), w, height);
     } catch (const std::exception& x) { fail(e, x); }
 }
 
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_close(
     JNIEnv* e, jclass, jlong h) {
     std::lock_guard lock(lifecycle);
-    try { auto& s=session(h); active=nullptr; delete &s; }
+    try {
+        auto& s=session(h);
+        if(s.app && g_sampleUIData.ActualDLSSFGMode()!=SI::DLSSGMode::eOff) {
+            auto options=donut::app::StreamlineInterface::DLSSGOptions{};
+            options.mode=SI::DLSSGMode::eOff;
+            s.app->HostDeviceManager()->GetStreamline().SetDLSSGOptions(options);
+            g_sampleUIData.DLSSFGMode=SI::DLSSGMode::eOff;
+        }
+        s.shutdown();
+        auto shutdownResult=s.shutdownResult;
+        active=nullptr; delete &s;
+        if(shutdownResult!=sl::Result::eOk)
+            throw std::runtime_error("Streamline shutdown failed, result="+std::to_string(static_cast<int>(shutdownResult)));
+    }
     catch (const std::exception& x) { fail(e, x); }
 }
