@@ -24,6 +24,8 @@ Patch-Once 'External/Donut/compileshaders.cmake' 'set(compilerCommand ${SHADERMA
 Patch-Once 'External/Nrd/CMakeLists.txt' 'set(SHADERMAKE_GENERAL_ARGS' "set(SHADERMAKE_GENERAL_ARGS --jobs 1" 'SHADERMAKE_GENERAL_ARGS --jobs 1'
 # Only expose host control and runtime file roots. Rendering, scheduling and shaders stay upstream.
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.cpp' 'm_CmdLine.InitFromCommandLine(__argc, __argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)'
+Patch-Once 'Rtxpt/Sample.cpp' 'if (available.empty())' 'if (std::filesystem::path(preferred).is_absolute() && std::filesystem::is_regular_file(preferred)) return preferred; // RTR absolute host scene
+    if (available.empty())' 'RTR absolute host scene'
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.h' 'private:' @'
 public:
     donut::app::DeviceManager* HostDeviceManager() { return m_DeviceManager.get(); }
