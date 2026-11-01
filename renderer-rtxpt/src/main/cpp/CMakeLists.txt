@@ -1,5 +1,6 @@
 # Included at the end of the pinned upstream RTXPT configure, preserving its SDK integration.
 find_package(JNI REQUIRED COMPONENTS JVM)
+target_include_directories(RtxptCore PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 # Keep embedded-host symbols separate from previous standalone sample builds.
 if(MSVC)
     foreach(host_tool ShaderMake ShaderMakeBlob NRD)

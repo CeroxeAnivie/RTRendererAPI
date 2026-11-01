@@ -23,6 +23,39 @@ function Patch-Once([string]$Relative,[string]$Anchor,[string]$Replacement,[stri
 Patch-Once 'External/Donut/compileshaders.cmake' 'set(compilerCommand ${SHADERMAKE_PATH}' 'set(compilerCommand ${SHADERMAKE_PATH} --jobs 1' '${SHADERMAKE_PATH} --jobs 1'
 Patch-Once 'External/Nrd/CMakeLists.txt' 'set(SHADERMAKE_GENERAL_ARGS' "set(SHADERMAKE_GENERAL_ARGS --jobs 1" 'SHADERMAKE_GENERAL_ARGS --jobs 1'
 # Only expose host control and runtime file roots. Rendering, scheduling and shaders stay upstream.
+# Observe existing upstream GPU scopes without enabling Tracy or disabling async prefix.
+Patch-Once 'Rtxpt/SampleCommon/GpuProfiler.cpp' '#include "GpuProfiler.h"' @'
+#include "GpuProfiler.h"
+#include "rtxpt_gpu_profile.h" // RTR sampled per-queue timestamp export
+'@ 'RTR sampled per-queue timestamp export'
+Patch-Once 'Rtxpt/SampleCommon/GpuProfiler.cpp' 'bool                    EmitMarker;' @'
+bool                    EmitMarker;
+        RtrGpuProfile::Token HostToken; // RTR sampled scope token
+'@ 'RTR sampled scope token'
+Patch-Once 'Rtxpt/SampleCommon/GpuProfiler.cpp' '        t_openZones.push_back(zone);' @'
+        int hostParent=-1;
+        for(auto it=t_openZones.rbegin();it!=t_openZones.rend();++it)
+            if(it->HostToken.queue>=0 && it->CommandList->getDesc().queueType==commandList->getDesc().queueType) {
+                hostParent=int(it->HostToken.zone); break;
+            }
+        zone.HostToken=RtrGpuProfile::Begin(commandList,name,hostParent); // RTR sampled scope begin
+        t_openZones.push_back(zone);
+'@ 'RTR sampled scope begin'
+Patch-Once 'Rtxpt/SampleCommon/GpuProfiler.cpp' '    t_openZones.pop_back();' @'
+    t_openZones.pop_back();
+    RtrGpuProfile::End(commandList,zone.HostToken); // RTR sampled scope end
+'@ 'RTR sampled scope end'
+$profilerPath=Join-Path $sdk 'Rtxpt/SampleCommon/GpuProfiler.cpp'
+$profilerText=[IO.File]::ReadAllText($profilerPath)
+foreach($entry in @(@('Init(nvrhi::IDevice* device)','RtrGpuProfile::Init(device);'),@('Shutdown()','RtrGpuProfile::Shutdown();'),@('AfterPresent()','RtrGpuProfile::AfterPresent();'))){
+    $tag='// RTR host '+$entry[0]
+    if(!$profilerText.Contains($tag)){
+        $pattern='(void GpuProfiler::'+[regex]::Escape($entry[0])+'\s*\{)'
+        if(![regex]::IsMatch($profilerText,$pattern)){throw ('GPU profiler lifecycle anchor changed: '+$entry[0])}
+        $profilerText=[regex]::Replace($profilerText,$pattern,('$1'+"`n    "+$entry[1]+' '+$tag),1)
+    }
+}
+[IO.File]::WriteAllText($profilerPath,$profilerText,$utf8)
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.cpp' 'm_CmdLine.InitFromCommandLine(__argc, __argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)'
 Patch-Once 'Rtxpt/SampleCommon/SampleCommon.cpp' '    // progress bar currently interfering with fullscreen so disable' @'
     // RTR embedded host: compilation/loading progress belongs in the host log.
