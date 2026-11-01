@@ -1,0 +1,254 @@
+[
+  {
+    "case": "minimal",
+    "initialGpu": "2026/11/01 11:07:45.829, NVIDIA GeForce RTX 5080 Laptop GPU, 36 %, 50.09 W, 1155 MHz",
+    "engine": "RTPATHOCL",
+    "width": 1920,
+    "height": 1080,
+    "nativeConsole": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\luxcore-full\\LuxCore\\bin\\luxcoreconsole.exe",
+    "fps": 11.202739197530864,
+    "msPerOneSppFrame": 89.26388291003013,
+    "progress": [
+      {
+        "elapsedSeconds": 1,
+        "passes": 11,
+        "samplesPerSecond": 17590000.0,
+        "fps": 8.482831790123457
+      },
+      {
+        "elapsedSeconds": 2,
+        "passes": 24,
+        "samplesPerSecond": 21530000.0,
+        "fps": 10.382908950617283
+      },
+      {
+        "elapsedSeconds": 3,
+        "passes": 37,
+        "samplesPerSecond": 23170000.0,
+        "fps": 11.173804012345679
+      },
+      {
+        "elapsedSeconds": 4,
+        "passes": 49,
+        "samplesPerSecond": 23480000.0,
+        "fps": 11.323302469135802
+      },
+      {
+        "elapsedSeconds": 5,
+        "passes": 60,
+        "samplesPerSecond": 23350000.0,
+        "fps": 11.260609567901234
+      },
+      {
+        "elapsedSeconds": 6,
+        "passes": 71,
+        "samplesPerSecond": 23270000.0,
+        "fps": 11.222029320987655
+      },
+      {
+        "elapsedSeconds": 7,
+        "passes": 82,
+        "samplesPerSecond": 23160000.0,
+        "fps": 11.168981481481481
+      },
+      {
+        "elapsedSeconds": 8,
+        "passes": 93,
+        "samplesPerSecond": 23070000.0,
+        "fps": 11.125578703703704
+      },
+      {
+        "elapsedSeconds": 9,
+        "passes": 105,
+        "samplesPerSecond": 23220000.0,
+        "fps": 11.197916666666666
+      },
+      {
+        "elapsedSeconds": 10,
+        "passes": 115,
+        "samplesPerSecond": 22950000.0,
+        "fps": 11.067708333333334
+      },
+      {
+        "elapsedSeconds": 11,
+        "passes": 127,
+        "samplesPerSecond": 23120000.0,
+        "fps": 11.149691358024691
+      },
+      {
+        "elapsedSeconds": 12,
+        "passes": 139,
+        "samplesPerSecond": 23230000.0,
+        "fps": 11.202739197530864
+      }
+    ]
+  },
+  {
+    "case": "no-camera",
+    "initialGpu": "2026/11/01 11:08:00.162, NVIDIA GeForce RTX 5080 Laptop GPU, 33 %, 74.81 W, 1612 MHz",
+    "engine": "RTPATHOCL",
+    "width": 1920,
+    "height": 1080,
+    "nativeConsole": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\luxcore-full\\LuxCore\\bin\\luxcoreconsole.exe",
+    "fps": 6.905864197530864,
+    "msPerOneSppFrame": 144.80446927374302,
+    "progress": [
+      {
+        "elapsedSeconds": 1,
+        "passes": 7,
+        "samplesPerSecond": 11320000.0,
+        "fps": 5.459104938271605
+      },
+      {
+        "elapsedSeconds": 2,
+        "passes": 14,
+        "samplesPerSecond": 12640000.0,
+        "fps": 6.095679012345679
+      },
+      {
+        "elapsedSeconds": 3,
+        "passes": 21,
+        "samplesPerSecond": 13210000.0,
+        "fps": 6.370563271604938
+      },
+      {
+        "elapsedSeconds": 4,
+        "passes": 28,
+        "samplesPerSecond": 13460000.0,
+        "fps": 6.491126543209877
+      },
+      {
+        "elapsedSeconds": 5,
+        "passes": 35,
+        "samplesPerSecond": 13620000.0,
+        "fps": 6.568287037037037
+      },
+      {
+        "elapsedSeconds": 6,
+        "passes": 43,
+        "samplesPerSecond": 14090000.0,
+        "fps": 6.794945987654321
+      },
+      {
+        "elapsedSeconds": 7,
+        "passes": 50,
+        "samplesPerSecond": 14090000.0,
+        "fps": 6.794945987654321
+      },
+      {
+        "elapsedSeconds": 8,
+        "passes": 57,
+        "samplesPerSecond": 14110000.0,
+        "fps": 6.804591049382716
+      },
+      {
+        "elapsedSeconds": 9,
+        "passes": 65,
+        "samplesPerSecond": 14380000.0,
+        "fps": 6.934799382716049
+      },
+      {
+        "elapsedSeconds": 10,
+        "passes": 72,
+        "samplesPerSecond": 14350000.0,
+        "fps": 6.9203317901234565
+      },
+      {
+        "elapsedSeconds": 11,
+        "passes": 79,
+        "samplesPerSecond": 14340000.0,
+        "fps": 6.9155092592592595
+      },
+      {
+        "elapsedSeconds": 12,
+        "passes": 86,
+        "samplesPerSecond": 14320000.0,
+        "fps": 6.905864197530864
+      }
+    ]
+  },
+  {
+    "case": "full",
+    "initialGpu": "2026/11/01 11:08:13.885, NVIDIA GeForce RTX 5080 Laptop GPU, 66 %, 78.01 W, 1695 MHz",
+    "engine": "RTPATHOCL",
+    "width": 1920,
+    "height": 1080,
+    "nativeConsole": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\luxcore-full\\LuxCore\\bin\\luxcoreconsole.exe",
+    "fps": 6.1390817901234565,
+    "msPerOneSppFrame": 162.89080911233307,
+    "progress": [
+      {
+        "elapsedSeconds": 1,
+        "passes": 5,
+        "samplesPerSecond": 8090000.0,
+        "fps": 3.9014274691358026
+      },
+      {
+        "elapsedSeconds": 2,
+        "passes": 12,
+        "samplesPerSecond": 10910000.0,
+        "fps": 5.261381172839506
+      },
+      {
+        "elapsedSeconds": 3,
+        "passes": 18,
+        "samplesPerSecond": 11320000.0,
+        "fps": 5.459104938271605
+      },
+      {
+        "elapsedSeconds": 4,
+        "passes": 24,
+        "samplesPerSecond": 11580000.0,
+        "fps": 5.5844907407407405
+      },
+      {
+        "elapsedSeconds": 5,
+        "passes": 30,
+        "samplesPerSecond": 11710000.0,
+        "fps": 5.6471836419753085
+      },
+      {
+        "elapsedSeconds": 6,
+        "passes": 36,
+        "samplesPerSecond": 11830000.0,
+        "fps": 5.705054012345679
+      },
+      {
+        "elapsedSeconds": 7,
+        "passes": 42,
+        "samplesPerSecond": 11880000.0,
+        "fps": 5.729166666666667
+      },
+      {
+        "elapsedSeconds": 8,
+        "passes": 49,
+        "samplesPerSecond": 12180000.0,
+        "fps": 5.873842592592593
+      },
+      {
+        "elapsedSeconds": 9,
+        "passes": 56,
+        "samplesPerSecond": 12430000.0,
+        "fps": 5.994405864197531
+      },
+      {
+        "elapsedSeconds": 10,
+        "passes": 62,
+        "samplesPerSecond": 12410000.0,
+        "fps": 5.984760802469136
+      },
+      {
+        "elapsedSeconds": 11,
+        "passes": 69,
+        "samplesPerSecond": 12600000.0,
+        "fps": 6.076388888888889
+      },
+      {
+        "elapsedSeconds": 12,
+        "passes": 76,
+        "samplesPerSecond": 12730000.0,
+        "fps": 6.1390817901234565
+      }
+    ]
+  }
+]

@@ -3,7 +3,7 @@ package demo;
 import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
-/** Small bounded feature cells in a vacuum, rather than full-screen long-distance fog. */
+/** Bounded feature-coverage candidate. Fast-scene qualification has not passed; see native controls. */
 final class LuxCoreLightMixedScene {
     static final List<String> COVERAGE=List.of("absorption","emission","homogeneous single scattering","homogeneous multiple scattering",
         "heterogeneous single scattering","heterogeneous multiple scattering","density grid","zero density","forward HG","backward HG",

@@ -34,6 +34,9 @@ LuxCore 2.11.2，commit `b872186d2fe995a762f73708c606847eed55843e`，Apache-2.0�
 
 ## 2026-11-01 官方独立进程对照
 
+状态纠正：`light` 目前只是几何较少的全覆盖候选，**没有通过“本来就应该很快”的
+轻量场景验收**。官方入口同样慢，不能替代这项验收，也不能证明 6～7 FPS 合理。
+
 通过上游 `RenderConfig::Export` 导出轻量混合场景的完整配置、网格和纹理，然后退出
 Java。独立运行 SDK 内未经修改的 `luxcoreconsole.exe`；该进程不加载 Java、JNI 桥或
 本项目渲染模块。导出入口只在计时外使用，不增加正常提交/渲染路径开销。
@@ -65,3 +68,19 @@ RTPATHOCL 在达到 `batch.halttime=12` 后仍持续渲染，本次收集到第 
   -D batch.halttime 12 -D batch.haltspp 0 `
   docs/quality/data/luxcore-official-control-20261101/scene/render.cfg
 ```
+
+随后用 `tools/Measure-LuxCoreLightControls.ps1` 追加独立原生对照，保留相同分辨率、
+引擎和采样配置；最小场景只有一个漫反射立方体和环境光，完全没有介质。
+
+| 对照 | FPS | 每帧 1 SPP 渲染量耗时 | 起测 GPU 占用 |
+|---|---:|---:|---:|
+| 最小原生场景：12 三角形，无介质 | 11.20 | 89.26 ms | 36% |
+| 全覆盖候选移除相机周围介质盒 | 6.91 | 144.80 ms | 33% |
+| 原全覆盖候选 | 6.14 | 162.89 ms | 66% |
+
+不同外部负载下不计算跨场景降幅，也不据此归因各个功能的精确成本。最小场景同样
+慢，说明必须先检查原生引擎模式/配置的基础成本，不能直接把低帧率归咎于全覆盖内容。
+上游 `src/slg/engines/tilepathocl/tilepathoclthread.cpp` 的 `RenderTileWork` 固定执行
+`2 * pathDepth - 1` 轮完整任务池求交/推进；RTPATHOCL 默认深度为 5，即 9 轮。
+这是已确认的执行机制，尚不是对全部耗时的归因证明。
+结果和最小场景保存在 [`data/luxcore-light-controls-20261101`](data/luxcore-light-controls-20261101/result.json)。
