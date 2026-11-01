@@ -73,24 +73,27 @@ public:
         }
         const char* overrideValue=std::getenv("RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS");
         const bool standaloneDenoisingActive=g_sampleUIData.ActualUseStandaloneDenoiser();
-        const bool rawPolicy=g_sampleUIData.RealtimeMode
+        // This light estimator is upstream of both RR and NRD; denoising does not change its PDF.
+        const bool supportedRealtimePolicy=g_sampleUIData.RealtimeMode
             && (g_sampleUIData.RealtimeAA==2 || g_sampleUIData.RealtimeAA==3)
-            && !standaloneDenoisingActive && !g_sampleUIData.ActualUseRTXDIPasses()
+            && !g_sampleUIData.ActualUseRTXDIPasses()
             && g_sampleUIData.ActualRadianceCacheMode()==0 && g_sampleUIData.ActualSamplesPerPixel()==1;
         if(!lightingPolicyLogged && GetScene()) {
             donut::log::info("RTXPT small-point policy: realtime=%d aa=%d standaloneRequested=%d standaloneActive=%d rtxdi=%d sharc=%d spp=%u eligible=%d override=%s accepted=%d",
                 int(g_sampleUIData.RealtimeMode),g_sampleUIData.RealtimeAA,int(g_sampleUIData.StandaloneDenoiser),
                 int(standaloneDenoisingActive),int(g_sampleUIData.ActualUseRTXDIPasses()),
                 g_sampleUIData.ActualRadianceCacheMode(),g_sampleUIData.ActualSamplesPerPixel(),
-                int(eligibleLightingScene),overrideValue?overrideValue:"default",int(rawPolicy));
+                int(eligibleLightingScene),overrideValue?overrideValue:"default",int(supportedRealtimePolicy));
             lightingPolicyLogged=true;
         }
-        const bool enabled=eligibleLightingScene && rawPolicy && !(overrideValue && std::string(overrideValue)=="0");
+        const bool enabled=eligibleLightingScene && supportedRealtimePolicy
+            && !(overrideValue && std::string(overrideValue)=="0");
         if(enabled==smallPointLighting)return;
         if(enabled) {
             previousNeeType=g_sampleUIData.NEEType;
             const char* preserveFeedback=std::getenv("RTR_RTXPT_DIAGNOSTIC_KEEP_NEEAT");
-            const bool keepNeeeAtFeedback=rawPolicy && preserveFeedback && std::string(preserveFeedback)=="1";
+            const bool keepNeeeAtFeedback=supportedRealtimePolicy && preserveFeedback
+                && std::string(preserveFeedback)=="1";
             g_sampleUIData.NEEType=keepNeeeAtFeedback?previousNeeType:1;
             if(keepNeeeAtFeedback)
                 donut::log::info("RTXPT diagnostic: exact point sum keeps native NEE-AT temporal light feedback");
