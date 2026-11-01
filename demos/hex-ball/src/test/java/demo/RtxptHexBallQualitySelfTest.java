@@ -12,8 +12,12 @@ public final class RtxptHexBallQualitySelfTest {
         boolean glass=args.length>1&&args[1].equals("glass");
         Path output=Path.of(args.length>2?args[2]:"build/reports/hexball-quality/"+mode).toAbsolutePath();
         String probe=args.length>3?args[3]:"none";
+        String cacheMode=args.length>4?args[4]:"none";
+        boolean sharc=cacheMode.equals("sharc");
         if(!java.util.Set.of("none","original-lights","quarter-lights","no-sun","no-sky","no-environment").contains(probe))
             throw new IllegalArgumentException("Unknown lighting probe: "+probe);
+        if(!java.util.Set.of("none","sharc").contains(cacheMode))
+            throw new IllegalArgumentException("Unknown radiance cache mode: "+cacheMode);
         Files.createDirectories(output);
         System.setProperty(DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY,"true");
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
@@ -31,6 +35,12 @@ public final class RtxptHexBallQualitySelfTest {
             case "rr" -> base.copyBuilder().denoising(DenoisingOptions.recommended()).build();
             default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw, reuse-relax, rr, reference or direct");
         };
+        if(sharc) {
+            var path=policy.pathTracing();
+            policy=policy.copyBuilder().pathTracing(new PathTracingOptions(path.samplesPerPixel(),path.maxBounces(),
+                path.diffuseBounces(),RendererFeaturePreference.REQUIRED,path.directLightResampling(),
+                path.indirectLightResampling())).build();
+        }
         if(reference) {
             var path=policy.pathTracing();
             policy=policy.copyBuilder().pathTracing(new PathTracingOptions(32,path.maxBounces(),path.diffuseBounces(),
@@ -92,7 +102,7 @@ public final class RtxptHexBallQualitySelfTest {
                         require(status.relaxDenoiser()==(denoise&&!rr),"Actual native RELAX");
                         require(status.denoising()==denoise,"Actual native denoising, including RR");
                         require(status.restirDi()==reuse,"Actual upstream direct-light reuse");
-                        require(!status.sharc(),"Do not add a cache to the accepted SR policy");
+                        require(status.sharc()==sharc,"Actual requested SHaRC state");
                         require(!status.frameGeneration(),"FG off for quality evidence");
                         require(status.renderWidth()==1485&&status.renderHeight()==835,"Balanced input unchanged");
                         float expectedExposure=glass&&probe.equals("none")?DemoScene.GLASS_EXPOSURE_COMPENSATION:0;
