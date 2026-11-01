@@ -16,6 +16,55 @@ import subprocess
 import sys
 import time
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+
+def focus_owned_viewport(pid):
+    """Explicit acceptance option: activate only this child process's visible window."""
+    user = ctypes.WinDLL("user32", use_last_error=True)
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    callback_type = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_ssize_t)
+    user.EnumWindows.argtypes = [callback_type, ctypes.c_ssize_t]
+    user.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+    user.GetForegroundWindow.restype = ctypes.c_void_p
+    for name in ("IsWindowVisible", "IsIconic", "SetForegroundWindow", "BringWindowToTop"):
+        getattr(user, name).argtypes = [ctypes.c_void_p]
+    user.ShowWindowAsync.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    windows = []
+
+    @callback_type
+    def visit(window, _):
+        owner = ctypes.c_ulong()
+        user.GetWindowThreadProcessId(window, ctypes.byref(owner))
+        if owner.value == pid and user.IsWindowVisible(window):
+            windows.append(window)
+        return 1
+
+    user.EnumWindows(visit, 0)
+    if not windows:
+        return False
+    window = windows[0]
+    if user.IsIconic(window):
+        user.ShowWindowAsync(window, 9)
+    foreground = user.GetForegroundWindow()
+    current = kernel.GetCurrentThreadId()
+    threads = {user.GetWindowThreadProcessId(w, None) for w in (window, foreground) if w}
+    attached = []
+    # Ensure this observer owns an input queue before the brief focus handoff.
+    message = ctypes.create_string_buffer(64)
+    user.PeekMessageW(message, None, 0, 0, 0)
+    try:
+        for thread in threads:
+            if thread != current and user.AttachThreadInput(current, thread, True):
+                attached.append(thread)
+        user.BringWindowToTop(window)
+        user.SetForegroundWindow(window)
+        return user.GetForegroundWindow() == window
+    finally:
+        for thread in reversed(attached):
+            user.AttachThreadInput(current, thread, False)
+
 
 class Counters(ctypes.Structure):
     _fields_ = [("cb", ctypes.c_ulong), ("pageFaults", ctypes.c_ulong)] + [
@@ -148,6 +197,7 @@ def main():
     parser.add_argument("--frida-directory", type=pathlib.Path)
     parser.add_argument("--lightweight", action="store_true", help="Only process/GPU counters; no census, hooks or jcmd dumps")
     parser.add_argument("--memory-limit-gb", type=float, default=10)
+    parser.add_argument("--foreground", action="store_true", help="Activate this run's visible viewport once for explicit FG acceptance")
     args = parser.parse_args()
     if args.native_heaps and not args.native_stacks:
         parser.error("--native-heaps requires --native-stacks")
@@ -170,6 +220,8 @@ def main():
         "$java=if($meta.executable){$meta.executable}else{'java'}\n"
         f"& tools/Invoke-BoundedBuild.ps1 -FilePath $java -ArgumentList $meta.arguments -MemoryLimitGB {args.memory_limit_gb}\n",
         encoding="utf-8")
+    with (directory / "run.ps1").open("a", encoding="utf-8") as launcher:
+        launcher.write("exit $LASTEXITCODE\n")
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     psapi = ctypes.WinDLL("psapi", use_last_error=True)
     kernel.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
@@ -202,6 +254,7 @@ def main():
         next_census = start
         dump_number = 0
         target = None
+        focused = False
         try:
             while process.poll() is None:
                 now = time.monotonic()
@@ -240,6 +293,10 @@ def main():
                             virtual.flush()
                         (directory / "probe-ready").touch()
                 if handle:
+                    if args.foreground and not focused:
+                        focused = focus_owned_viewport(target)
+                        if focused:
+                            print("Acceptance viewport owns the foreground, PID", target, flush=True)
                     counters = Counters()
                     counters.cb = ctypes.sizeof(counters)
                     if psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
