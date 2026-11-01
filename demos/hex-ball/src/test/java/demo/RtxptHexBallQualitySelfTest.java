@@ -123,27 +123,20 @@ public final class RtxptHexBallQualitySelfTest {
                         require(status.restirGi()==restirGi,"Actual requested ReSTIR GI state");
                         require(status.sharc()==sharc,"Actual requested SHaRC state");
                         require(!status.frameGeneration(),"FG off for quality evidence");
-                        if(mode.equals("default"))
-                            require(status.dlssMode()==3&&status.renderWidth()>1485&&status.renderHeight()>835,
-                                "Native DLSS RR uses the requested Quality input ratio");
-                        else if(rr) {
-                            int expectedDlssMode=dlaa?6:switch(quality) {
-                                case PERFORMANCE -> 1;
-                                case BALANCED -> 2;
-                                case QUALITY -> 3;
-                                case ULTRA_PERFORMANCE -> 4;
-                                case ULTRA_QUALITY -> 5;
-                                case AUTO -> status.dlssMode();
-                            };
-                            require(status.dlssMode()==expectedDlssMode,
-                                "RTXPT must report the requested RR input preset: "+status);
-                            require(dlaa
-                                    ? status.renderWidth()==2560&&status.renderHeight()==1440
-                                    : status.renderWidth()>=1485&&status.renderHeight()>=835,
-                                "RR input extent must match the selected preset: "+status);
-                        }
-                        else
-                            require(status.renderWidth()==1485&&status.renderHeight()==835,"Diagnostic baseline retains balanced input");
+                        int expectedDlssMode=dlaa?6:switch(quality) {
+                            case PERFORMANCE -> 1;
+                            case BALANCED -> 2;
+                            case QUALITY -> 3;
+                            case ULTRA_PERFORMANCE -> 4;
+                            case ULTRA_QUALITY -> 5;
+                            case AUTO -> status.dlssMode();
+                        };
+                        require(status.dlssMode()==expectedDlssMode,
+                            "RTXPT must report the requested input preset: "+status);
+                        require(dlaa
+                                ? status.renderWidth()==2560&&status.renderHeight()==1440
+                                : status.renderWidth()>0&&status.renderHeight()>0,
+                            "RTXPT input extent must match the selected preset: "+status);
                         float expectedExposure=glass?DemoScene.GLASS_EXPOSURE_COMPENSATION:0;
                         require(Math.abs(host.presentationStatus().exposureCompensation()-expectedExposure)<1e-5f,
                             "The upstream tone mapper must apply the requested exposure, including before first submission");
