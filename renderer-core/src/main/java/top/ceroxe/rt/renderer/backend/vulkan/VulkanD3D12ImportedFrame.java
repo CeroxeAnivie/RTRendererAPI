@@ -40,8 +40,9 @@ final class VulkanD3D12ImportedFrame implements AutoCloseable {
             image=handle.get(0);
             var requirements=VkMemoryRequirements.calloc(stack);
             VK10.vkGetImageMemoryRequirements(device,image,requirements);
-            if(frame.allocationSize()<requirements.size())
-                throw new IllegalArgumentException("D3D12 dedicated allocation is smaller than Vulkan image requirements");
+            // Vulkan VkMemoryAllocateInfo explicitly ignores allocationSize for D3D12_RESOURCE
+            // imports and queries the OS allocation itself. Its image requirement can differ
+            // from GetResourceAllocationInfo; comparing the two rejects valid shared textures.
             var properties=VkMemoryWin32HandlePropertiesKHR.calloc(stack).sType$Default();
             check(KHRExternalMemoryWin32.vkGetMemoryWin32HandlePropertiesKHR(device,
                 VK11.VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,frame.memoryHandle(),properties),

@@ -45,6 +45,8 @@ try (var renderer = RtxptComposedRenderer.open(VulkanFramePresenterConfig.builde
 
 内存导入使用 dedicated allocation，fence 导入使用 Vulkan timeline semaphore 和 `VkTimelineSemaphoreSubmitInfo`。这是 [Khronos 推荐的 D3D12 fence 互操作方式](https://docs.vulkan.org/refpages/latest/refpages/source/VkD3D12FenceSubmitInfoKHR.html)。Vulkan 只释放自己创建的 image、memory 和 semaphore，**不关闭生产侧借出的 NT handle**。
 
+`D3D12_RESOURCE` 导入的 `allocationSize` 由驱动从 OS 查询，[Vulkan 规范明确忽略此输入值](https://docs.vulkan.org/refpages/latest/refpages/source/VkMemoryAllocateInfo.html)。不能用 Vulkan 普通 image 的 memory requirement 大小去否决 D3D12 专用纹理；两边的分配元数据可能不同。共享颜色纹理保留 NVRHI 默认 shader-resource 标志，不设置仅允许与深度模板资源配合的 [`DENY_SHADER_RESOURCE`](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_resource_flags)。这不会创建额外 SRV 或逐帧 shader 工作。
+
 ## 旧 Vulkan UI 纹理
 
 ```java
