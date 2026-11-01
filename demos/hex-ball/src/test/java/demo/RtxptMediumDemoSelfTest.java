@@ -5,6 +5,8 @@ import java.nio.file.Path;
 import java.util.Locale;
 import javax.imageio.ImageIO;
 import top.ceroxe.rt.renderer.api.Renderer;
+import top.ceroxe.rt.renderer.api.RendererBackendPolicy;
+import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.rtxpt.RtxptAccess;
 
 /** Packaged demo HUD, supported scene transitions and real SDK FG delivery. */
@@ -15,13 +17,20 @@ public final class RtxptMediumDemoSelfTest {
         Path output=Path.of(args[0]).toAbsolutePath();
         Files.createDirectories(output);
         var csv=new StringBuilder("scene,input_width,input_height,output_width,output_height,native_frames,presented_frames,generated_frames,native_ms,native_fps,output_fps,query_failures\n");
-        try(var renderer=Renderer.open("rtxpt",DemoRendererProfile.rtxptMediumInteractive(false))) {
+        try(var renderer=Renderer.openForScene(RendererBackendPolicy.RTXPT_FOR_MEDIA,
+                RtxptMediumScene.create(1,"mixed"),RtxptMediumDemo.frameRequest(0,1,1920,1080),
+                RendererConfig.presentation(),DemoRendererProfile.rtxptMediumInteractive(false))) {
+            require(renderer.selection().backend()==RendererBackendPolicy.Backend.RTXPT&&renderer.selection().mediaPresent(),"Actual media routing selects RTXPT");
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
-            long revision=0,sequence=0;
-            for(String scene:new String[]{"mixed","glass","nested","mixed"}) {
+            long revision=1,sequence=1;
+            for(String scene:new String[]{"mixed","glass","nested","absorption","rough","ior","mixed"}) {
                 var stats=new RenderStats();
-                renderer.apply(RtxptMediumScene.create(++revision,scene));
-                RtxptMediumDemo.submit(renderer,sequence++,revision,1920,1080);
+                if(sequence>1) {
+                    renderer.apply(RtxptMediumScene.create(++revision,scene));
+                    RtxptMediumDemo.submit(renderer,sequence++,revision,1920,1080);
+                } else sequence++;
+                host.setOverlayChoices(RtxptMediumScene.LABELS,RtxptMediumScene.PRESETS.indexOf(scene));
+                require(host.overlaySelection()==RtxptMediumScene.PRESETS.indexOf(scene),"Native scene selector state");
                 var keys=new DemoWindowKeys(host.windowHandle());
                 keys.pollCommand();
                 for(int i=0;i<180;i++) {
@@ -56,9 +65,10 @@ public final class RtxptMediumDemoSelfTest {
                 host.capture(output.resolve(name+".png"));
                 Files.writeString(output.resolve(name+"-hud.txt"),hud);
                 var image=ImageIO.read(output.resolve(name+".png").toFile());
-                require(image!=null&&image.getWidth()==1920&&image.getHeight()==1080,"Output capture extent");
+                require(image!=null&&image.getWidth()==display.outputWidth()&&image.getHeight()==display.outputHeight(),"Capture matches actual window extent");
                 int low=255,high=0;
-                for(int y=450;y<1000;y+=7)for(int x=300;x<1800;x+=7) {
+                for(int y=image.getHeight()/2;y<image.getHeight()*9/10;y+=7)
+                    for(int x=image.getWidth()/6;x<image.getWidth()*9/10;x+=7) {
                     int c=image.getRGB(x,y),l=(((c>>16)&255)+((c>>8)&255)+(c&255))/3;
                     low=Math.min(low,l);high=Math.max(high,l);
                 }
@@ -69,7 +79,9 @@ public final class RtxptMediumDemoSelfTest {
                 Files.writeString(output.resolve("acceptance.csv"),csv);
                 System.out.println("MEDIUM_SCENE PASS "+name+" "+actual);
             }
-            require(host.bridgeTimings().sceneExports()==4,"Exactly one scene export per switch");
+            require(host.bridgeTimings().sceneExports()==7,"Exactly one scene export per switch");
+            host.setOverlayChoices(java.util.List.of(),-1);
+            require(host.overlaySelection()==-1,"Selector can be hidden");
             require(renderer.health().activeFailure().isEmpty(),"Healthy lifecycle");
         }
         System.out.println("MEDIUM_DEMO_HUD_FG_AND_SCENES PASS");

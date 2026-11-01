@@ -190,6 +190,33 @@ void SampleUI::buildUI(void)
         ImGui::PopFont();
     }
 '@ 'RTR GPU-native host HUD:'
+Patch-Once 'Rtxpt/SampleUI.h' 'std::string                         HostOverlayText; // RTR GPU-native host HUD' @'
+std::string                         HostOverlayText; // RTR GPU-native host HUD
+    std::vector<std::string>             HostOverlayChoices; // RTR host choice selector
+    int                                 HostOverlayChoice = -1;
+'@ 'RTR host choice selector'
+$hostUiPath=Join-Path $sdk 'Rtxpt/SampleUI.cpp'
+$hostUiText=[IO.File]::ReadAllText($hostUiPath)
+$hostUiText=$hostUiText.Replace('ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing',
+    'ImGuiWindowFlags_NoSavedSettings | (m_ui.HostOverlayChoices.empty() ? ImGuiWindowFlags_NoInputs : 0) | ImGuiWindowFlags_NoFocusOnAppearing')
+[IO.File]::WriteAllText($hostUiPath,$hostUiText,$utf8)
+Patch-Once 'Rtxpt/SampleUI.cpp' 'ImGui::TextUnformatted(m_ui.HostOverlayText.c_str());' @'
+ImGui::TextUnformatted(m_ui.HostOverlayText.c_str());
+        // RTR host choice selector: upstream input, drawing and GPU composition.
+        if (!m_ui.HostOverlayChoices.empty()) {
+            ImGui::SetNextItemWidth(330.f);
+            const auto& labels=m_ui.HostOverlayChoices;
+            if (ImGui::BeginCombo("Scene", labels.at(m_ui.HostOverlayChoice).c_str())) {
+                for (int i=0; i<int(labels.size()); ++i) {
+                    ImGui::PushID(i);
+                    if (ImGui::Selectable(labels[i].c_str(), i==m_ui.HostOverlayChoice)) m_ui.HostOverlayChoice=i;
+                    if (i==m_ui.HostOverlayChoice) ImGui::SetItemDefaultFocus();
+                    ImGui::PopID();
+                }
+                ImGui::EndCombo();
+            }
+        }
+'@ 'RTR host choice selector:'
 # The public API can request 3x/4x MFG on devices with a lower Streamline limit.
 # Follow RTXPT's UI negotiation: keep native presentation when the requested count is unavailable.
 Patch-Once 'Rtxpt/Sample.cpp' 'm_ui.DLSSFGMaxNumFramesToGenerate = state.numFramesToGenerateMax;' @'

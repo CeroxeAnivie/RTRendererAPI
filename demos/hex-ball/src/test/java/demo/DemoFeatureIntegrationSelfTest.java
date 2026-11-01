@@ -57,7 +57,7 @@ public final class DemoFeatureIntegrationSelfTest {
                 &&profile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X,"Medium defaults to 2x FG");
             System.setProperty(property,"true");
             require(DemoRendererProfile.rtxptMediumInteractive(false).frameGeneration().equals(FrameGenerationOptions.disabled()),"Medium explicit FG off");
-            int[] expected={6,4,5};
+            int[] expected={6,4,5,5,5,5};
             for(int i=0;i<RtxptMediumScene.PRESETS.size();i++) {
                 var scene=RtxptMediumScene.create(1,RtxptMediumScene.PRESETS.get(i));
                 require(scene.upserts().instances().size()==expected[i],"Distinct supported medium presets");

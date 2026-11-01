@@ -21,6 +21,7 @@ public final class RtxptAdapterSelfTest {
         .environment(EnvironmentState.builder().skyRadiance(.4f,.6f,.9f).ambientIntensity(1).sunDirection(0,-1,0).sunIntensity(4).build()).build();}
     public static void main(String[] args) throws Exception {
         inputContractRejectsIgnoredControls();
+        featureFallbackRecoversWithoutLosingIntent();
         var s=new RtxptScene();s.retain(scene(1));var frame=frame(0);var items=s.items(frame);
         var mesh=s.meshes.get(1L);var expanded=RtxptScene.ExportGeometry.from(mesh);
         require(expanded.vertexCount()==36&&expanded.normals().remaining()==108,"Missing normals become flat triangle-corner normals");
@@ -161,6 +162,54 @@ public final class RtxptAdapterSelfTest {
     private static void rejected(Runnable action,String message) {
         try { action.run();throw new AssertionError(message); }
         catch(IllegalArgumentException expected) { }
+    }
+    private static void featureFallbackRecoversWithoutLosingIntent() {
+        boolean[] fallback={false};
+        var controller=new RtxptFeatureController(new RtxptFeatureController.Host() {
+            public boolean initialized(){return true;}
+            public void ready(){ }
+            public void apply(RendererFeatureProfile profile){ }
+            public RendererFeatureProfile normalize(RendererFeatureProfile profile){return RtxptOptions.normalize(profile);}
+            public RendererFeatureProfile effective(RendererFeatureProfile profile){
+                return fallback[0]?profile.toBuilder().frameGeneration(FrameGenerationOptions.disabled()).build():profile;
+            }
+        },RendererFeatureProfile.disabled());
+        var enabled=RendererFeatureProfile.disabled().toBuilder().frameGeneration(FrameGenerationOptions.recommended()).build();
+        var enable=controller.plan(enabled);
+        require(controller.apply(enable).outcome()==RendererFeatureApplyResult.Outcome.APPLIED,"Initial FG enable applies");
+        require(controller.featureControlDiagnostics().latestResult().isPresent(),"Applied result is observable at its generation");
+        fallback[0]=true;
+        require(!controller.effectiveProfile().frameGeneration().preference().requested(),"Native fallback is reported honestly");
+        var diagnostics=controller.featureControlDiagnostics();
+        require(diagnostics.effectiveProfile().equals(controller.effectiveProfile())&&diagnostics.latestResult().isEmpty(),
+            "Diagnostics remain valid after runtime state changes instead of retaining a mismatched result");
+        fallback[0]=false;
+        require(controller.effectiveProfile().equals(enabled),"Recovery resolves committed intent, not the disabled fallback snapshot");
+        var pending=controller.plan(enabled);
+        fallback[0]=true;
+        require(controller.apply(pending).outcome()==RendererFeatureApplyResult.Outcome.STALE_PLAN,
+            "A runtime state change between plan and apply invalidates the old generation");
+        var disable=controller.plan(RendererFeatureProfile.disabled());
+        require(disable.disposition()==RendererFeaturePlan.Disposition.APPLICABLE,
+            "Explicit disable while temporarily off still updates the configured intent");
+        require(controller.apply(disable).outcome()==RendererFeatureApplyResult.Outcome.APPLIED,"Explicit disable applies during fallback");
+        fallback[0]=false;
+        require(!controller.effectiveProfile().frameGeneration().preference().requested(),"Disabled intent stays disabled when native fallback ends");
+        require(controller.featureControlDiagnostics().latestResult().isPresent(),"Stable generation keeps its terminal result");
+        var autoQuality=RendererFeatureProfile.disabled().toBuilder().frameReconstruction(FrameReconstructionOptions.recommended()).build();
+        var negotiated=new RtxptFeatureController(new RtxptFeatureController.Host() {
+            public boolean initialized(){return true;}
+            public void ready(){ }
+            public void apply(RendererFeatureProfile profile){ }
+            public RendererFeatureProfile normalize(RendererFeatureProfile profile){return RtxptOptions.normalize(profile);}
+            public RendererFeatureProfile effective(RendererFeatureProfile profile){
+                return profile.toBuilder().frameReconstruction(profile.frameReconstruction().toBuilder()
+                    .quality(FrameReconstructionOptions.Quality.BALANCED).build()).build();
+            }
+        },autoQuality);
+        var target=negotiated.effectiveProfile().toBuilder().frameGeneration(FrameGenerationOptions.recommended()).build();
+        require(negotiated.plan(target).disposition()==RendererFeaturePlan.Disposition.APPLICABLE,
+            "Actual AUTO-to-BALANCED negotiation must not force a renderer rebuild for a live FG change");
     }
     static void require(boolean value,String message){if(!value)throw new AssertionError(message);}
 }

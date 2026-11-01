@@ -29,6 +29,8 @@ final class RtxptNative {
     static native void awaitIdle(long handle);
     static native int[] runtimeStatus(long handle);
     static native void overlay(long handle,String text);
+    static native void overlayChoices(long handle,String[] labels,int selectedIndex);
+    static native int overlaySelection(long handle);
     static native long[] gpuTiming(long handle);
     static native long[] generationTelemetry(long handle);
     static native double[] presentationStatus(long handle);

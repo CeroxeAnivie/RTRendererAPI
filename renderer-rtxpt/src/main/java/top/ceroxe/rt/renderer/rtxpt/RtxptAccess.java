@@ -15,6 +15,10 @@ public interface RtxptAccess {
     RuntimeStatus runtimeStatus();
     /** Text drawn by the upstream GPU UI pass; empty text disables the host HUD and its timer queries. */
     void setOverlayText(String text);
+    /** Optional selector drawn inside the same native HUD; an empty list hides it. */
+    void setOverlayChoices(java.util.List<String> labels, int selectedIndex);
+    /** Current native selector index, or -1 when no choices are configured. */
+    int overlaySelection();
     /** Actual client output size and upstream exposure/post-process settings. */
     PresentationStatus presentationStatus();
     record PresentationStatus(int outputWidth,int outputHeight,float exposureCompensation,float exposureValue,boolean bloom) { }

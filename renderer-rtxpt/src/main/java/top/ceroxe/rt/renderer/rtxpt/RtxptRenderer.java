@@ -268,6 +268,15 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         long begin=System.nanoTime();int result=RtxptNative.frame(handle);frameNs+=System.nanoTime()-begin;if(result==2){frames++;completed=submitted;}else if(result==0)windowClosed=true;return result!=0;}
     @Override public void awaitIdle(){ready();if(handle!=0)RtxptNative.awaitIdle(handle);}
     @Override public void setOverlayText(String text){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.overlay(handle,Objects.requireNonNull(text));}
+    @Override public void setOverlayChoices(List<String> labels,int selectedIndex){
+        ready();if(handle==0)throw new IllegalStateException("Submit first");
+        labels=List.copyOf(Objects.requireNonNull(labels,"labels"));
+        if(labels.size()>64 || (labels.isEmpty()?selectedIndex!=-1:selectedIndex<0||selectedIndex>=labels.size()))
+            throw new IllegalArgumentException("Select an existing overlay choice; use -1 for an empty list (maximum 64)");
+        for(String label:labels)if(label.isBlank())throw new IllegalArgumentException("Overlay labels must not be blank");
+        RtxptNative.overlayChoices(handle,labels.toArray(String[]::new),selectedIndex);
+    }
+    @Override public int overlaySelection(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptNative.overlaySelection(handle);}
     @Override public PresentationStatus presentationStatus(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.presentationStatus(handle);
         return new PresentationStatus((int)s[0],(int)s[1],(float)s[2],(float)s[3],s[4]!=0);}
     @Override public RuntimeStatus runtimeStatus(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.runtimeStatus(handle);
@@ -282,8 +291,18 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     @Override public Optional<FrameSnapshot> pollFrame(){ready();throw new UnsupportedOperationException("RTXPT GPU-native presentation");}
     @Override public Optional<FrameSnapshot> awaitFrame(Duration timeout){Objects.requireNonNull(timeout);return pollFrame();}
     @Override public void close(){
-        if(closed)return;ready();try{if(handle!=0)RtxptNative.close(handle);}finally{handle=0;closed=true;}
-        if(directory!=null)try(var files=Files.walk(directory)){for(var p:files.sorted(Comparator.reverseOrder()).toList())Files.delete(p);}catch(IOException e){throw new IllegalStateException("Failed to remove temporary scene assets",e);}
+        if(closed)return;ready();Throwable failure=null;
+        try{if(handle!=0)RtxptNative.close(handle);}
+        catch(RuntimeException|Error e){failure=e;throw e;}
+        finally {
+            handle=0;closed=true;
+            if(directory!=null)try(var files=Files.walk(directory)){
+                for(var p:files.sorted(Comparator.reverseOrder()).toList())Files.delete(p);
+            }catch(IOException e){
+                var cleanup=new IllegalStateException("Failed to remove temporary scene assets",e);
+                if(failure!=null)failure.addSuppressed(cleanup);else throw cleanup;
+            }
+        }
     }
     @Override public ResourceTransactionEvidence submitResources(RenderResourceTransaction tx){ready();Objects.requireNonNull(tx,"transaction");return new ResourceTransactionEvidence(tx.revision(),ResourceTransactionEvidence.Outcome.REJECTED,List.of(),"General GPU resource commands belong to Vulkan");}
     @Override public Optional<ResourceResidencyEvidence> resourceResidencyEvidence(ResourceGenerationKey key){ready();Objects.requireNonNull(key,"key");return Optional.empty();}

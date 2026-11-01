@@ -119,6 +119,7 @@ public final class RendererApiContractSelfTest {
       assertSubmissionDeferralAndCloseContract();
       assertExportedHandleLifecycle();
       assertProviderSelection();
+      RendererSceneRoutingSelfTest.main(args);
       System.out.println("RendererApiContractSelfTest passed");
    }
 

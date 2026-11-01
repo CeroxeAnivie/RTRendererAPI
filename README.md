@@ -333,4 +333,4 @@ A：不能把它们视为 `7.0.0` 的受支持目标。当前兼容范围只包�
 
 本项目基于 [Apache License 2.0](LICENSE) 开源发布。
 
-7.0.0 的[介质演示](docs/medium-gallery.md)改用 RTXPT 混合、玻璃与嵌套场景。旧密度、体积散射和光子图展厅属于历史实现，当前范围以[版本说明](docs/7.0.0.md)为准。
+7.0.0 的[介质演示](docs/medium-gallery.md)改用 RTXPT 混合、玻璃与嵌套场景。旧密度、体积散射和光子图展厅属于历史实现，当前范围以[版本说明](docs/7.0.0.md)为准。应用可以选择[全 RTXPT、仅介质场景使用 RTXPT，或显式使用 Vulkan](docs/backend-routing.md)，每个完整场景只由一个后端负责。

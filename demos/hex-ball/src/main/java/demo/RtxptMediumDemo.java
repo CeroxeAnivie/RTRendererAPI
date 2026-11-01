@@ -9,6 +9,9 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import top.ceroxe.rt.renderer.api.Renderer;
+import top.ceroxe.rt.renderer.api.RendererBackendPolicy;
+import top.ceroxe.rt.renderer.api.RendererConfig;
+import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.rtxpt.RtxptAccess;
 
 /** Resident GPU presentation; the upstream UI draws the HUD without CPU image copies. */
@@ -19,9 +22,10 @@ public final class RtxptMediumDemo {
         Map<String,String> values = new HashMap<>();
         for (String argument : DemoApiControls.parse(args)) {
             if (argument.equals("--help")) {
-                System.out.println("--width=1920 --height=1080 --scene=mixed|glass|nested --native=false --seconds=0 --capture=file.png\n"
-                    + "Default: windowed, 1 SPP, DLSS-RR + SHaRC, 2x FG. Keys: 1 mixed / 2 glass / 3 nested / Esc quit.\n"
-                    + "Console: mixed / glass / nested / quit. -Ddemo.disable-fg=true disables FG.");
+                System.out.println("--width=1920 --height=1080 --scene=" + String.join("|",RtxptMediumScene.PRESETS)
+                    + " --native=false --seconds=0 --capture=file.png\n"
+                    + "Default: windowed, 1 SPP, DLSS-RR + SHaRC, 2x FG. HUD selector or keys 1-6; Esc quits.\n"
+                    + "Console accepts scene names and quit. -Ddemo.disable-fg=true disables FG.");
                 return;
             }
             String[] pair = argument.replaceFirst("^--", "").split("=", 2);
@@ -45,27 +49,31 @@ public final class RtxptMediumDemo {
         });
         var config = DemoRendererProfile.rtxptMediumInteractive(Boolean.parseBoolean(values.getOrDefault("native", "false")));
         var stats = new RenderStats();
-        try (Renderer renderer = Renderer.open("rtxpt", config)) {
+        try (var renderer = Renderer.openForScene(RendererBackendPolicy.RTXPT_ONLY,
+                RtxptMediumScene.create(1,scene),frameRequest(0,1,width,height),RendererConfig.presentation(),config)) {
             var host = renderer.extension(RtxptAccess.class).orElseThrow();
-            long revision = 1, sequence = 0;
-            renderer.apply(RtxptMediumScene.create(revision, scene));
-            submit(renderer,sequence++,revision,width,height);
+            long revision = 1, sequence = 1;
             recordPresented(host,stats,0);
             var keys = new DemoWindowKeys(host.windowHandle());
             host.setOverlayText(overlay(renderer,host,stats,scene));
-            System.out.println("RTXPT MEDIUM READY: scene=" + scene + "; keys 1/2/3, Esc; " + host.runtimeStatus());
+            host.setOverlayChoices(RtxptMediumScene.LABELS,RtxptMediumScene.PRESETS.indexOf(scene));
+            System.out.println("RTXPT MEDIUM READY: scene=" + scene + "; HUD selector / keys 1-6, Esc; " + host.runtimeStatus());
             long start = System.nanoTime(), report = start, hudUpdate = start;
             long reportFrames = host.bridgeTimings().frames();
             boolean captured = false;
             while (true) {
                 String key = keys.pollCommand();
                 String command = key != null ? key : commands.poll();
+                int selected=host.overlaySelection();
+                if(command==null && selected>=0 && !scene.equals(RtxptMediumScene.PRESETS.get(selected)))
+                    command=RtxptMediumScene.PRESETS.get(selected);
                 if ("quit".equals(command)) break;
                 long before = host.bridgeTimings().frames();
                 if (command != null && RtxptMediumScene.PRESETS.contains(command) && !scene.equals(command)) {
                     scene = command;
                     renderer.apply(RtxptMediumScene.create(++revision,scene));
                     submit(renderer,sequence++,revision,width,height);
+                    host.setOverlayChoices(RtxptMediumScene.LABELS,RtxptMediumScene.PRESETS.indexOf(scene));
                     hudUpdate = 0;
                     System.out.println("RTXPT MEDIUM SCENE: " + scene);
                 } else if (!host.renderFrame()) break;
@@ -101,8 +109,12 @@ public final class RtxptMediumDemo {
     }
 
     static void submit(Renderer renderer,long sequence,long revision,int width,int height) {
-        renderer.submit(DemoRendererProfile.frame(sequence,width,height,RtxptMediumScene.camera(width,height))
-            .minimumSceneRevision(revision).environment(RtxptMediumScene.environment()).build());
+        renderer.submit(frameRequest(sequence,revision,width,height));
+    }
+
+    static RenderFrameRequest frameRequest(long sequence,long revision,int width,int height) {
+        return DemoRendererProfile.frame(sequence,width,height,RtxptMediumScene.camera(width,height))
+            .minimumSceneRevision(revision).environment(RtxptMediumScene.environment()).build();
     }
 
     static void recordPresented(RtxptAccess host,RenderStats stats,long previousFrames) {
@@ -119,7 +131,7 @@ public final class RtxptMediumDemo {
         var extent = new DemoConfig(display.outputWidth(),display.outputHeight(),1,true,false,false,0,0,Duration.ZERO);
         stats.observeGpuTiming(diagnostics.frameGpuTiming());
         return DemoTechnologyHud.capture(renderer,extent,stats,diagnostics).text()
-            + String.format(Locale.ROOT,"%nBACKEND RTXPT 1.9.0 | D3D12 | WINDOWED%nINPUT %dx%d -> OUTPUT %dx%d%nSHaRC %s | ReSTIR DI/GI %s/%s%nSCENE %s | %s%n[1] Mixed  [2] Glass  [3] Nested  [Esc] Quit",
+            + String.format(Locale.ROOT,"%nBACKEND RTXPT 1.9.0 | D3D12 | WINDOWED%nINPUT %dx%d -> OUTPUT %dx%d%nSHaRC %s | ReSTIR DI/GI %s/%s%nSCENE %s | %s%n[1] Mixed [2] Glass [3] Nested [4] Absorption [5] Rough [6] IOR [Esc] Quit",
                 actual.renderWidth(),actual.renderHeight(),display.outputWidth(),display.outputHeight(),
                 actual.sharc()?"ACTIVE":"DISABLED",actual.restirDi()?"ACTIVE":"DISABLED",actual.restirGi()?"ACTIVE":"DISABLED",
                 scene.toUpperCase(Locale.ROOT),RtxptMediumScene.description(scene));

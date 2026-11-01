@@ -277,6 +277,28 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     try { session(h);g_sampleUIData.HostOverlayText=utf8(e,text); }
     catch(const std::exception& x){fail(e,x);}
 }
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_overlayChoices(
+    JNIEnv* e,jclass,jlong h,jobjectArray labels,jint selected) {
+    try {
+        session(h);
+        if(!labels)throw std::invalid_argument("Overlay labels must not be null");
+        const auto count=e->GetArrayLength(labels);
+        if(count>64 || (count==0?selected!=-1:selected<0||selected>=count))
+            throw std::invalid_argument("Invalid overlay selection");
+        std::vector<std::string> choices;
+        for(jsize i=0;i<count;i++) {
+            auto label=static_cast<jstring>(e->GetObjectArrayElement(labels,i));
+            choices.push_back(utf8(e,label));e->DeleteLocalRef(label);
+        }
+        g_sampleUIData.HostOverlayChoices=std::move(choices);
+        g_sampleUIData.HostOverlayChoice=selected;
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_overlaySelection(
+    JNIEnv* e,jclass,jlong h) {
+    try{session(h);return g_sampleUIData.HostOverlayChoice;}
+    catch(const std::exception& x){fail(e,x);return -1;}
+}
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_gpuTiming(
     JNIEnv* e,jclass,jlong h) {
     try { auto& s=session(h);jlong values[]={jlong(s.gpuSampleCount),jlong(s.gpuAverageNs),jlong(s.gpuMaxNs)};

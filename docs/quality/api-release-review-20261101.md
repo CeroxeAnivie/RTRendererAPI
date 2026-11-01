@@ -37,5 +37,7 @@
 3. 场景 revision 曾允许重复，现在按公共合同严格递增，首次 revision 0 仍可发布。首次帧之后也不能重新提交旧 revision 0。
 4. 通用命令/证据入口补齐 creating-thread、关闭状态和空参数检查，不再在关闭后伪装正常拒绝结果。
 5. `FrameOutputFormat` 的过期 Javadoc 已纠正：HDR 快照保留半浮点格式，不会自动转成 RGBA8。Java 指南去掉旧 CUDA 介质程序选择描述，并标明 Vulkan 专家配置适用后端。
+6. RTXPT 专家控制器分开保存“已提交的请求”和“实际执行快照”。临时 FG 暂停/回退后恢复不会丢失请求；观察到新执行状态时旧计划失效、旧结果不会与新快照混装。修复了 `effectiveProfile()` 后再取 `featureControlDiagnostics()` 可能抛出 profile 不一致异常的问题；模拟回归覆盖启用→回退→恢复、计划后状态变化、回退期间主动关闭。
+7. 发布供应链任务仍强制从 core JAR 读取已撤下的 NVRTC manifest，会阻塞干净构建或把旧缓存当成依赖。已删除旧下载/打包助手和虚构的 CUDA 清单条目，只从当前 runtime graph 生成 SBOM/许可证清单，并校验不再出现旧 NVRTC 模块。RTXPT 适配模块纳入许可证策略；原生运行时继续携带各上游原始许可。
 
 CPU 证据由 `RtxptAdapterSelfTest`、`RendererApiContractSelfTest` 和 API 边界检查提供；GPU 画面、功能组合和吞吐证据仍分别以已有原生验收与本次 Demo 验收为准。上述修复不表示所有硬件、所有组合与所有公开方法都经过穷尽验证；“收缩后的介质合同闭合”和“RTXPT 可替代整个通用图形 API”是两件事。
