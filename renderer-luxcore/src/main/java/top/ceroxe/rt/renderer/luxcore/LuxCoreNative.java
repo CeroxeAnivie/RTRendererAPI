@@ -47,4 +47,5 @@ final class LuxCoreNative {
     static native double readFilm(long handle, ByteBuffer rgba32f);
     static native double readDisplay(long handle, ByteBuffer rgba8);
     static native String statistics(long handle);
+    static native void exportScene(long handle, byte[] directoryUtf8);
 }

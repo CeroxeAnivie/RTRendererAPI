@@ -14,6 +14,8 @@ public interface LuxCoreAccess {
     double totalSamples();
     /** Upstream statistics, including actual selected devices and engine. */
     String nativeStatistics();
+    /** Export the complete upstream config, scene, meshes and images for independent LuxCore rendering. */
+    void exportScene(java.nio.file.Path directory);
     /** Lifetime bridge counters; phases overlap asynchronous upstream rendering and must not be added to GPU time. */
     Timings bridgeTimings();
     record Timings(long sceneEdits, long sceneEditNanos, long submits, long submitNanos,

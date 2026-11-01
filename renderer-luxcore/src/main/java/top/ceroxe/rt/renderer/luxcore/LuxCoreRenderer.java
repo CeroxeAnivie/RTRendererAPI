@@ -126,6 +126,7 @@ final class LuxCoreRenderer implements Renderer, LuxCoreAccess {
     @Override public synchronized double readLinearRgba(ByteBuffer target){ready();if(!started)throw new IllegalStateException("Submit first");long begin=System.nanoTime();double samples=LuxCoreNative.readFilm(handle,target);readNs+=System.nanoTime()-begin;reads++;return samples;}
     @Override public synchronized double totalSamples(){ready();return started?LuxCoreNative.samples(handle):0;}
     @Override public synchronized String nativeStatistics(){ready();return started?LuxCoreNative.statistics(handle):"";}
+    @Override public synchronized void exportScene(java.nio.file.Path directory){ready();if(!started)throw new IllegalStateException("Submit first");LuxCoreNative.exportScene(handle,LuxCoreScene.bytes(Objects.requireNonNull(directory).toAbsolutePath().toString()));}
     @Override public synchronized Timings bridgeTimings(){return new Timings(edits,editNs,submits,submitNs,reads,readNs,scene.uploads,scene.imageUploads);}
     @Override public synchronized void close(){if(closed)return;ready();try{LuxCoreNative.close(handle);}finally{handle=0;closed=true;display=null;}}
     @Override public ResourceTransactionEvidence submitResources(RenderResourceTransaction tx){return new ResourceTransactionEvidence(tx.revision(),ResourceTransactionEvidence.Outcome.REJECTED,List.of(),"Use retained LuxCore scenes; general commands belong to Vulkan");}

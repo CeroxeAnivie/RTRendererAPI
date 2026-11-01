@@ -188,3 +188,9 @@ JNI(jstring) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_statistics(JNIEnv
         return env->NewStringUTF(text.c_str());
     } CATCH_RETURN(nullptr)
 }
+JNI(void) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_exportScene(JNIEnv* env, jclass, jlong handle, jbyteArray directory) {
+    TRY { auto& c = context(handle);
+        if (!c.config) throw std::logic_error("submit a scene before exporting");
+        c.config->Export(utf8(env, directory));
+    } CATCH_VOID
+}

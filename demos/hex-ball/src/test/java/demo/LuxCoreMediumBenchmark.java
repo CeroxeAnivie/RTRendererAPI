@@ -24,6 +24,11 @@ public final class LuxCoreMediumBenchmark {
             var access=renderer.extension(LuxCoreAccess.class).orElseThrow();long opened=System.nanoTime();
             if(selected.equals("light"))access.sceneProperties("scene.volumes.v101.multiscattering = 0\nscene.volumes.v102.multiscattering = 1\nscene.volumes.v104.multiscattering = 0\nscene.volumes.v105.multiscattering = 1\n");
             renderer.apply(fixture);long uploaded=System.nanoTime();renderer.submit(frame);long started=System.nanoTime();
+            if(options.containsKey("export")) {
+                Path export=Path.of(options.get("export")).toAbsolutePath();Files.createDirectories(export);access.exportScene(export);
+                System.out.println("LuxCorePerf exported="+export);
+                if(Boolean.parseBoolean(options.getOrDefault("exportOnly","false")))return;
+            }
             waitSamples(access,0,30);LockSupport.parkNanos(1_000_000_000L);
             System.out.println("LuxCorePerf native-semantics scene="+selected+" width="+width+" height="+height+" tileAA=1 filter=NONE resolutionReduction=1 FG=false denoiser=false");
             System.out.printf(Locale.ROOT,"LuxCorePerf openMs=%.3f uploadMs=%.3f sessionStartMs=%.3f%n",(opened-start)/1e6,(uploaded-opened)/1e6,(started-uploaded)/1e6);
