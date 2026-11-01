@@ -1,5 +1,11 @@
 # Included at the end of the pinned upstream RTXPT configure, preserving its SDK integration.
 find_package(JNI REQUIRED COMPONENTS JVM)
+# Keep embedded-host symbols separate from previous standalone sample builds.
+if(MSVC)
+    set_target_properties(ShaderMake ShaderMakeBlob PROPERTIES
+        PDB_NAME "$<TARGET_PROPERTY:NAME>-host"
+        COMPILE_PDB_NAME "$<TARGET_PROPERTY:NAME>-host")
+endif()
 add_library(rtrenderer_rtxpt SHARED "${CMAKE_CURRENT_LIST_DIR}/rtxpt_jni.cpp")
 target_link_libraries(rtrenderer_rtxpt PRIVATE RtxptCore ${JNI_LIBRARIES})
 target_include_directories(rtrenderer_rtxpt PRIVATE ${JNI_INCLUDE_DIRS})

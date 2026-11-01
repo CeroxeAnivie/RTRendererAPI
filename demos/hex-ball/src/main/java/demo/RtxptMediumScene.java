@@ -10,7 +10,7 @@ final class RtxptMediumScene {
         tx.upsert(MaterialAsset.builder(1).baseColorRgba8(0xffb8c8df).roughness(.65f).build());
         tx.upsert(MaterialAsset.builder(2).baseColorRgba8(0xffffffff).blendMode(MaterialAsset.BlendMode.TRANSLUCENT).transmission(1).roughness(.02f).indexOfRefraction(1.5f).build());
         tx.upsert(MaterialAsset.builder(3).baseColorRgba8(0xffe0bd75).metallic(1).roughness(.14f).build());
-        tx.upsert(MaterialAsset.builder(4).baseColorRgba8(0xfff0f0f0).emissiveColorRgba8(0xffffe7b0).emissiveStrength(2).roughness(.3f).build());
+        tx.upsert(MaterialAsset.builder(4).baseColorRgba8(0xfff0f0f0).emissive(0xffffe7b0,2).roughness(.3f).build());
         tx.upsert(cube(1,1));tx.upsert(cube(2,2));tx.upsert(cube(3,3));tx.upsert(cube(4,4));
         tx.upsert(SceneInstance.builder(1,1).transform(transform(0,-.15f,0,10,.2f,8)).build());
         tx.upsert(SceneInstance.builder(2,2).transform(transform(-1.2f,.9f,0,1.3f,1.8f,1.3f))
