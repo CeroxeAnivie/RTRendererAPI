@@ -78,6 +78,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     @Override public boolean renderFrame(){ready();if(handle==0)throw new IllegalStateException("Submit a scene first");if(windowClosed)return false;
         long begin=System.nanoTime();boolean rendered=RtxptNative.frame(handle);frameNs+=System.nanoTime()-begin;if(rendered)frames++;else windowClosed=true;return rendered;}
     @Override public long windowHandle(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptNative.window(handle);}
+    @Override public void capture(Path png){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.capture(handle,Objects.requireNonNull(png).toAbsolutePath().toString());}
     @Override public BridgeTimings bridgeTimings(){return new BridgeTimings(frames,frameNs,exports,exportNs,batches,transformNs);}
     @Override public FrameSubmissionAttempt trySubmit(RenderFrameRequest f){return new FrameSubmitted(submit(f));}
     @Override public boolean readFrame(FrameConsumer consumer){ready();Objects.requireNonNull(consumer);throw new UnsupportedOperationException("RTXPT presents GPU frames directly; CPU readback is not exposed");}

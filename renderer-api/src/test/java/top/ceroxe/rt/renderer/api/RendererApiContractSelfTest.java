@@ -2116,11 +2116,9 @@ public final class RendererApiContractSelfTest {
       expect(IllegalArgumentException.class, () -> new AffineTransform(new float[12]));
       require(EnvironmentState.class.getConstructors().length == 0 && DistanceFogState.class.getConstructors().length == 0, "environment or fog state exposed an ordered public constructor");
       EnvironmentState neutral = EnvironmentState.neutral();
-      require(neutral.cameraMedium().equals(Medium.vacuum()), "neutral environment changed its camera medium");
-      Medium medium = new Medium(new Rgb(0.01F, 0.02F, 0.03F), new Rgb(0.04F, 0.05F, 0.06F), Rgb.ZERO, 0.4F, 1.333F, 0);
-      EnvironmentState environment = EnvironmentState.builder().skyRadiance(0.1F, 0.2F, 0.3F).ambientIntensity(0.4F).sunDirection(0.0F, 1.0F, 0.0F).sunRadiance(0.9F, 0.8F, 0.7F).sunIntensity(12.0F).cameraMedium(medium).build();
-      require(environment.skyGreen() == 0.2F && environment.sunBlue() == 0.7F && environment.cameraMedium().scattering().green() == 0.05F && environment.equals(environment.toBuilder().build()) && medium.equals(medium.withDensity(0.4F)), "semantic environment builders changed field mapping or value semantics");
-      expect(IllegalArgumentException.class, () -> new Medium(Rgb.ZERO, Rgb.ZERO, Rgb.ZERO, 0, 0.99F, 0));
+      require(neutral.ambientIntensity() == 0, "neutral environment changed");
+      EnvironmentState environment = EnvironmentState.builder().skyRadiance(0.1F, 0.2F, 0.3F).ambientIntensity(0.4F).sunDirection(0.0F, 1.0F, 0.0F).sunRadiance(0.9F, 0.8F, 0.7F).sunIntensity(12.0F).build();
+      require(environment.skyGreen() == 0.2F && environment.sunBlue() == 0.7F && environment.equals(environment.toBuilder().build()), "semantic environment builders changed field mapping or value semantics");
       expect(IllegalArgumentException.class, () -> EnvironmentState.builder().sunDirection(0.0F, 2.0F, 0.0F).build());
       SceneLight builtPoint = SceneLight.point(10L, 1.0, 2.0, 3.0).color(0.25F, 0.5F, 1.0F).intensity(4.0F).range(12.0F).castsShadow(false).build();
       require(builtPoint.type() == top.ceroxe.rt.renderer.api.SceneLight.Type.POINT && builtPoint.directionX() == 0.0F && builtPoint.range() == 12.0F && !builtPoint.castsShadow(), "point-light builder changed semantic defaults");

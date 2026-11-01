@@ -16,7 +16,19 @@
 #include <GLFW/glfw3native.h>
 
 namespace {
+class HostPathTracer final : public AdvancedPathTracer {
+public:
+    using AdvancedPathTracer::AdvancedPathTracer;
+    bool Capture(const char* path) {
+        if(!m_renderTargets || !m_renderTargets->LdrColor) return false;
+        return donut::engine::SaveTextureToFile(GetDevice(),GetCommonPasses().get(),
+            m_renderTargets->LdrColor,nvrhi::ResourceStates::ShaderResource,path);
+    }
+};
 class HostApp final : public AdvancedSample {
+    std::unique_ptr<Sample> CreateMainRenderPass(donut::app::DeviceManager& dm,const CommandLineOptions& options) override {
+        return std::make_unique<HostPathTracer>(dm,options);
+    }
     void ConfigureDefaultDeviceParams(donut::app::DeviceCreationParameters& p) const override {
         p.vsyncEnabled = false;
     }
@@ -114,6 +126,14 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 }
 
 extern SampleUIData g_sampleUIData;
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_capture(
+    JNIEnv* e, jclass, jlong h, jstring path) {
+    try {
+        auto& s=session(h);
+        if(!static_cast<HostPathTracer*>(s.app->HostRenderPass())->Capture(utf8(e,path).c_str()))
+            throw std::runtime_error("RTXPT capture failed");
+    } catch(const std::exception& x) { fail(e,x); }
+}
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_settings(
     JNIEnv* e, jclass, jlong h, jint depth, jint diffuse, jboolean reflex) {
     try {

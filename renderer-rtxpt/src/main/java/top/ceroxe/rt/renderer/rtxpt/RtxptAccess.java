@@ -11,6 +11,8 @@ public interface RtxptAccess {
     long windowHandle();
     /** GPU render/present of the resident scene; false means the user closed the window. */
     boolean renderFrame();
+    /** Explicit one-shot readback. Never called in the presentation or benchmark frame loop. */
+    void capture(Path png);
     BridgeTimings bridgeTimings();
     record BridgeTimings(long frames, long frameNanos, long sceneExports, long sceneExportNanos,
             long transformBatches, long transformNanos) { }
