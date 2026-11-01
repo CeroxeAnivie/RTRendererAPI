@@ -31,3 +31,14 @@ target_link_libraries(rtrenderer_luxcore PRIVATE "${LUXCORE_SDK}/lib/luxcore.lib
 target_link_options(rtrenderer_luxcore PRIVATE /DELAYLOAD:luxcore.dll)
 set_target_properties(rtrenderer_luxcore PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}/../native")
+
+add_executable(luxcore_native_benchmark "${CMAKE_CURRENT_LIST_DIR}/../../../../tools/luxcore_native_benchmark.cpp"
+    "${LUXCORE_SOURCE}/src/luxrays/utils/properties.cpp"
+    "${LUXCORE_SOURCE}/src/luxrays/core/geometry/matrix4x4.cpp")
+target_compile_features(luxcore_native_benchmark PRIVATE cxx_std_20)
+target_compile_definitions(luxcore_native_benchmark PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN BOOST_ALL_NO_LIB)
+target_include_directories(luxcore_native_benchmark PRIVATE "${LUXCORE_SOURCE}/include" "${CMAKE_CURRENT_BINARY_DIR}/generated" "${BOOST_INCLUDE}")
+target_compile_options(luxcore_native_benchmark PRIVATE /O2 /EHsc /utf-8)
+target_link_libraries(luxcore_native_benchmark PRIVATE "${LUXCORE_SDK}/lib/luxcore.lib" delayimp)
+target_link_options(luxcore_native_benchmark PRIVATE /DELAYLOAD:luxcore.dll)
+set_target_properties(luxcore_native_benchmark PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}/../native")
