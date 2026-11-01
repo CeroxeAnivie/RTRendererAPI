@@ -22,7 +22,6 @@ import top.ceroxe.rt.renderer.feature.VulkanFeatureSession;
 import top.ceroxe.rt.renderer.feature.VulkanFeatureFallbackException;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.device.RtCommandContext;
-import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents;
 import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameCompositionPipeline;
 import org.lwjgl.system.MemoryStack;
@@ -44,7 +43,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     private final RendererConfig configuration;
     private final String gpuStableId;
     private final VulkanSceneRuntime scene;
-    private final GpuSceneRayTracingPipeline pipeline;
+    private final VulkanGpuScenePipelines pipeline;
     private final VulkanGpuSceneFrameRing frameRing;
     private final VulkanFrameAdmissionLimits frameAdmissionLimits;
     private final VulkanGpuSceneTemporalCoordinator temporalCoordinator;
@@ -77,7 +76,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     ) {
         RendererConfig checkedConfiguration = Objects.requireNonNull(configuration, "configuration");
         VulkanSceneRuntime scene = null;
-        GpuSceneRayTracingPipeline pipeline = null;
+        VulkanGpuScenePipelines pipeline = null;
         VulkanGpuSceneTemporalCoordinator temporalCoordinator = null;
         VulkanGpuSceneFrameRing frameRing = null;
         VulkanGpuSceneFeatureComposition featureComposition = null;
@@ -102,11 +101,10 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             temporalCoordinator = new VulkanGpuSceneTemporalCoordinator(device, checkedConfiguration);
             VulkanGpuSceneFeatureComposition.Selection featureSelection =
                     VulkanGpuSceneFeatureComposition.select(device.featureCapabilities());
-            pipeline = GpuSceneRayTracingPipeline.open(
+            pipeline = new VulkanGpuScenePipelines(
                     device,
-                    checkedConfiguration.maxFramesInFlight(),
-                    frameOutput.linearHdr() || featureSelection.denoising() || featureSelection.reconstruction(),
-                    checkedConfiguration.sceneShaders()
+                    checkedConfiguration,
+                    frameOutput.linearHdr() || featureSelection.denoising() || featureSelection.reconstruction()
             );
             // The monolithic GPUScene descriptor layout always declares both NRD and
             // reconstruction bindings. These sentinels supply whichever optional feature is
@@ -160,7 +158,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
             RendererConfig configuration,
             String gpuStableId,
             VulkanSceneRuntime scene,
-            GpuSceneRayTracingPipeline pipeline,
+            VulkanGpuScenePipelines pipeline,
             VulkanGpuSceneTemporalCoordinator temporalCoordinator,
             VulkanGpuSceneFrameRing frameRing,
             VulkanGpuSceneFeatureComposition featureComposition,
@@ -576,7 +574,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
     public synchronized FrameAdmissionAttempt trySubmit(FrameSubmission submission) {
         requireReady("submit frame");
         FrameSubmission checked = Objects.requireNonNull(submission, "submission");
-        pipeline.validateShaderData(checked.request().shaderData());
+        pipeline.primary().validateShaderData(checked.request().shaderData());
         try {
             pump();
             // Capability probing and extent negotiation can cross the JNI boundary. A saturated

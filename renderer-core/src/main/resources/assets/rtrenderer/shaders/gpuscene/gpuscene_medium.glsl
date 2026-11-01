@@ -35,7 +35,8 @@ GsMediumCoefficients gsInstanceMedium(uint instanceIndex) {
 
 GsMediumCoefficients gsCurrentMedium(GsMediumPath path) {
 #ifdef RTRENDERER_SURFACE_ONLY
-    return gsFrameMedium();
+    // The CPU admits this variant only for a vacuum camera medium and no boundaries.
+    return GsMediumCoefficients(vec3(0.0),vec3(0.0),vec3(0.0),0.0,1.0,0.0);
 #else
     uint instanceIndex = gsCurrentMediumInstance(path);
     return instanceIndex == GS_INVALID_SLOT ? gsFrameMedium() : gsInstanceMedium(instanceIndex);

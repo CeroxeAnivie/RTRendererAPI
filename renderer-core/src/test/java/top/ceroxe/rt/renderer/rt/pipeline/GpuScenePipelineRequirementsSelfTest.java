@@ -24,6 +24,9 @@ public final class GpuScenePipelineRequirementsSelfTest {
         byte[] builtin = RtShaderModuleCompiler.compileForVerification(
                 "assets/rtrenderer/shaders/gpuscene/gpuscene.rgen", Shaderc.shaderc_raygen_shader, false);
         require(required(builtin,empty,empty,empty), "full built-in transport must retain service");
+        byte[] surface = RtShaderModuleCompiler.compileForVerification(
+                "assets/rtrenderer/shaders/gpuscene/gpuscene_surface.rgen", Shaderc.shaderc_raygen_shader, false);
+        require(!required(surface,empty,empty,empty), "proven opaque vacuum variant must omit the transport service");
         System.out.println("GpuScenePipelineRequirementsSelfTest passed: primary, service, dynamic, nested, built-in");
     }
 

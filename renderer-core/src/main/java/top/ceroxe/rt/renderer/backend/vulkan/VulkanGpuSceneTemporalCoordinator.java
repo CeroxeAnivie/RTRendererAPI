@@ -18,6 +18,7 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
     private final TemporalHistoryTracker sourceHistory;
     private final VulkanTemporalHistory gpuHistory;
     private final VulkanMediumBoundaryIndex mediumBoundaries = new VulkanMediumBoundaryIndex();
+    private final VulkanSurfaceSceneIndex surfaceScene = new VulkanSurfaceSceneIndex();
 
     VulkanGpuSceneTemporalCoordinator(VulkanDeviceRuntime device, RendererConfig configuration) {
         this.configuration = Objects.requireNonNull(configuration, "configuration");
@@ -32,6 +33,15 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
     void sceneApplied(VulkanSceneResidency.SceneChangeSet changes) {
         sourceHistory.sceneApplied(changes);
         mediumBoundaries.sceneApplied(changes);
+        surfaceScene.sceneApplied(changes);
+    }
+
+    boolean surfaceOnly(RenderFrameRequest request) {
+        return surfaceScene.opaque() && mediumBoundaries.boundaryCount() == 0
+                && mediumBoundaries.transmissiveCount() == 0
+                && request.primitiveBatch().mediumBoundaryIndices().isEmpty()
+                && request.environment().cameraMedium().equals(
+                        top.ceroxe.rt.renderer.api.EnvironmentState.Medium.vacuum());
     }
 
     long requiredGrowthBytes(int width, int height) {

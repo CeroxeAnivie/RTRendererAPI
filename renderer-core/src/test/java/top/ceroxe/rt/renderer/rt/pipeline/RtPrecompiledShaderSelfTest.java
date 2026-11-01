@@ -85,6 +85,7 @@ public final class RtPrecompiledShaderSelfTest {
       stages.put("bootstrap.rchit", 16);
       stages.put("bootstrap.rahit", 15);
       stages.put("gpuscene/gpuscene.rgen", 14);
+      stages.put("gpuscene/gpuscene_surface.rgen", 14);
       stages.put("gpuscene/gpuscene.rmiss", 17);
       stages.put("gpuscene/gpuscene.rchit", 16);
       stages.put("gpuscene/gpuscene.rahit", 15);
@@ -96,7 +97,7 @@ public final class RtPrecompiledShaderSelfTest {
    }
 
    private static boolean[] hdrVariants(String stage) {
-      return "gpuscene/gpuscene.rgen".equals(stage)
+      return "gpuscene/gpuscene.rgen".equals(stage) || "gpuscene/gpuscene_surface.rgen".equals(stage)
               || "gpuscene/gpuscene_nrd_compose.comp".equals(stage)
               || "gpuscene/generic_frame_composition.comp".equals(stage)
               ? new boolean[]{false, true} : new boolean[]{false};
@@ -107,7 +108,7 @@ public final class RtPrecompiledShaderSelfTest {
    }
 
    private static boolean[] serVariants(String stage) {
-      return "gpuscene/gpuscene.rgen".equals(stage)
+      return "gpuscene/gpuscene.rgen".equals(stage) || "gpuscene/gpuscene_surface.rgen".equals(stage)
               ? new boolean[]{false, true} : new boolean[]{false};
    }
 

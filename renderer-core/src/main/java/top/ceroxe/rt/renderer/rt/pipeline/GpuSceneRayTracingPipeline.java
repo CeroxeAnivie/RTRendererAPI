@@ -99,6 +99,17 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
      */
     public static GpuSceneRayTracingPipeline open(VulkanDeviceRuntime runtime, int descriptorSetCount,
             boolean linearHdrOutput, SceneShaderProgram sceneShaders) {
+        return open(runtime, descriptorSetCount, linearHdrOutput, sceneShaders, false);
+    }
+
+    /** Opens the built-in vacuum surface variant; the session must prove its frame eligibility. */
+    public static GpuSceneRayTracingPipeline openSurface(
+            VulkanDeviceRuntime runtime, int descriptorSetCount, boolean linearHdrOutput) {
+        return open(runtime, descriptorSetCount, linearHdrOutput, SceneShaderProgram.builtIn(), true);
+    }
+
+    private static GpuSceneRayTracingPipeline open(VulkanDeviceRuntime runtime, int descriptorSetCount,
+            boolean linearHdrOutput, SceneShaderProgram sceneShaders, boolean surfaceOnly) {
         Objects.requireNonNull(sceneShaders, "sceneShaders");
         VulkanDeviceRuntime checkedRuntime = Objects.requireNonNull(runtime, "runtime");
         boolean shaderExecutionReorderingEnabled = checkedRuntime.shaderExecutionReorderingEnabled()
@@ -134,7 +145,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             descriptors = GpuSceneDescriptorLayout.create(stack, device, descriptorSetCount, sceneShaders.dataBindingCount());
             pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout());
             byte[] raygenCode = loadStageCode(
-                    "gpuscene.rgen", Shaderc.shaderc_raygen_shader,
+                    surfaceOnly ? "gpuscene_surface.rgen" : "gpuscene.rgen", Shaderc.shaderc_raygen_shader,
                     linearHdrOutput, shaderExecutionReorderingEnabled, sceneShaders
             );
             byte[] missCode = loadStageCode("gpuscene.rmiss", Shaderc.shaderc_miss_shader, false, false, sceneShaders);

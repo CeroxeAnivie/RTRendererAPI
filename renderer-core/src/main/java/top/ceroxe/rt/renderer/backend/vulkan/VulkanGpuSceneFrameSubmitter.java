@@ -13,7 +13,7 @@ import java.util.Objects;
 /** Records and publishes one GPUScene frame as an atomic submission transaction. */
 final class VulkanGpuSceneFrameSubmitter {
     private final VulkanSceneRuntime scene;
-    private final GpuSceneRayTracingPipeline pipeline;
+    private final VulkanGpuScenePipelines pipelines;
     private final VulkanGpuSceneFrameRing frameRing;
     private final VulkanGpuSceneTemporalCoordinator temporal;
     private final VulkanGpuSceneFeatureComposition features;
@@ -23,7 +23,7 @@ final class VulkanGpuSceneFrameSubmitter {
 
     VulkanGpuSceneFrameSubmitter(
             VulkanSceneRuntime scene,
-            GpuSceneRayTracingPipeline pipeline,
+            VulkanGpuScenePipelines pipelines,
             VulkanGpuSceneFrameRing frameRing,
             VulkanGpuSceneTemporalCoordinator temporal,
             VulkanGpuSceneFeatureComposition features,
@@ -31,7 +31,7 @@ final class VulkanGpuSceneFrameSubmitter {
             String timingLabel
     ) {
         this.scene = Objects.requireNonNull(scene, "scene");
-        this.pipeline = Objects.requireNonNull(pipeline, "pipeline");
+        this.pipelines = Objects.requireNonNull(pipelines, "pipelines");
         this.frameRing = Objects.requireNonNull(frameRing, "frameRing");
         this.temporal = Objects.requireNonNull(temporal, "temporal");
         this.features = Objects.requireNonNull(features, "features");
@@ -97,6 +97,7 @@ final class VulkanGpuSceneFrameSubmitter {
                     "all bounded frame slots are retained or in flight"
             );
         }
+        GpuSceneRayTracingPipeline pipeline = pipelines.forFrame(temporal.surfaceOnly(checked.request()));
         // Presentation-time feature work may outlive proxy present. Establish resource ownership
         // before reconfiguration, extent replacement, or any writes to this free slot.
         VulkanFeatureSession.InputCompletion inputCompletion =

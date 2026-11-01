@@ -252,6 +252,7 @@ val contractSelfTests = linkedMapOf(
     "coreVulkanFrameReconstructionResourcesSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameReconstructionResourcesSelfTest",
     "coreVulkanGpuSceneShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.VulkanGpuSceneShaderSelfTest",
     "coreGpuScenePipelineRequirementsSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuScenePipelineRequirementsSelfTest",
+    "coreVulkanSurfaceSceneIndexSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSurfaceSceneIndexSelfTest",
     "coreGpuScenePrecompiledProgramSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuScenePrecompiledProgramSelfTest",
     "coreRtPrecompiledShaderSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.RtPrecompiledShaderSelfTest",
     "coreVulkanFramePixelCodecSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDiagnosticReadbackSelfTest",

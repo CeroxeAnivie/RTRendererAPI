@@ -193,7 +193,17 @@ GpuScenePayload gsTraceRadiance(vec3 origin, vec3 direction, uvec4 launchInfo, G
     payload.mediumBoundary = uvec4(0u);
     traceRayEXT(sceneTlas, gl_RayFlagsNoneEXT, 0xff, 0, 0, 0,
         origin, 1.0e-3, direction, 1.0e20, 0);
+#ifdef RTRENDERER_SURFACE_ONLY
+    // Carry the CPU's scene proof across the trace boundary. Otherwise the compiler must
+    // retain optical branches for payload values written by the shared closest-hit stage.
+    GpuScenePayload result = payload;
+    result.mediumBoundary = uvec4(0u);
+    result.transmissionIor.x = 0.0;
+    result.baseColorAndOpacity.a = 1.0;
+    return result;
+#else
     return payload;
+#endif
 }
 
 vec3 gsEvaluateTerminalRadiance(GpuScenePayload surfaceSample, vec3 rayOrigin, vec3 rayDirection)
@@ -436,6 +446,18 @@ vec3 gsOpticalContinuation(vec3 origin,vec3 direction,uvec4 launchInfo,GsMediumP
 vec3 gsEvaluateSecondaryTransport(GpuScenePayload surfaceSample,vec3 incidentDirection,uvec4 launchInfo,
         GsMediumPath incidentPath,uint primarySampleIndex,uint primarySampleCount,out float reflectionHitDistance) {
     reflectionHitDistance=0.0;
+#ifdef RTRENDERER_SURFACE_ONLY
+    // Accepted material, vertex and texture alpha prove opaque receivers. The full optical
+    // continuation reduces exactly to one GGX reflection and terminal surface evaluation.
+    vec3 outgoing;
+    vec3 weight=gsOpaqueMetallicReflectionWeight(surfaceSample,incidentDirection,launchInfo,
+        primarySampleIndex,primarySampleCount,outgoing);
+    if(max(weight.r,max(weight.g,weight.b))<=1.0e-6) return vec3(0.0);
+    vec3 origin=surfaceSample.worldPositionAndDistance.xyz+outgoing*.001;
+    GpuScenePayload hit=gsTraceRadiance(origin,outgoing,launchInfo,incidentPath);
+    reflectionHitDistance=hit.state.x==0u?65504.0:max(hit.worldPositionAndDistance.w,0.0);
+    return weight*(hit.state.x==0u?gsSkyRadiance(outgoing):gsOpticalSurface(hit,origin));
+#else
     bool volumeOnly=(surfaceSample.mediumBoundary.w&2u)!=0u;
     bool optical=volumeOnly || surfaceSample.transmissionIor.x>1.0e-4;
     if(!optical && surfaceSample.emissiveAndMetallic.a<=1.0e-4) return vec3(0.0);
@@ -482,6 +504,7 @@ vec3 gsEvaluateSecondaryTransport(GpuScenePayload surfaceSample,vec3 incidentDir
         }
     }
     return total/float(samples);
+#endif
 }
 
 vec2 gsSubpixelOffset(uint sampleIndex, uint sampleCount)
