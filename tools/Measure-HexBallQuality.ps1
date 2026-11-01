@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory)][ValidateSet('raw','relax','default','reuse-raw','reuse-relax')][string]$Mode,
+    [Parameter(Mandatory)][ValidateSet('raw','relax','default','reuse-raw','reuse-relax','reference')][string]$Mode,
     [Parameter(Mandatory)][string]$Tag,
     [switch]$Glass
 )
@@ -31,7 +31,7 @@ $settings=[ordered]@{
         '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath);
     Entry='demo.RtxptHexBallQualitySelfTest';Arguments=@($Mode,$(if($Glass){'glass'}else{'metal'}),$images);
     StartedAt=(Get-Date -Format o);NativeSha256=(Get-FileHash 'build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll').Hash;
-    Width=2560;Height=1440;Spp=1;FrameGeneration=$false;StageProfile=$false
+    Width=2560;Height=1440;Spp=$(if($Mode -eq 'reference'){32}else{1});FrameGeneration=$false;StageProfile=$false
 }
 $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
 & nvidia-smi --query-gpu=name,utilization.gpu,memory.used --format=csv > ($prefix+'-initial-gpu.csv')

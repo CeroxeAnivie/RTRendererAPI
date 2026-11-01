@@ -17,7 +17,13 @@ assert merge<function.index("TemporalResolve("), "TAA must read current merged c
 assert merge<function.index("TagResourcesDLSSNIS("), "SR tags must follow current-color production"
 assert merge<function.index("EvaluateDLSS("), "SR must read current merged color"
 assert function.count("PostProcess::ComputePassType::NoDenoiserFinalMerge")==1, "Only one merge is allowed"
-assert "if (m_ui.RealtimeAA != 3 && !m_ui.ActualUseStandaloneDenoiser())" in function
+assert "if (m_ui.RealtimeAA != 3 && !m_ui.ActualUseStandaloneDenoiser()" in function
+assert "!m_ui.ActualUseRTXDIPasses()" in function, "A late merge must not erase RTXDI's accumulated light"
+advanced=args.source.with_name("AdvancedSample.cpp").read_text(encoding="utf-8-sig")
+pathtrace=advanced.split("void AdvancedPathTracer::PathTrace(",1)[1]
+assert pathtrace.count("PostProcess::ComputePassType::NoDenoiserFinalMerge")==1
+assert pathtrace.index("PostProcess::ComputePassType::NoDenoiserFinalMerge")<pathtrace.index("m_rtxdiPass->Execute("), "Initialize raw color before RTXDI adds lighting"
+assert "!m_ui.ActualUseStandaloneDenoiser() && m_ui.ActualUseRTXDIPasses()" in pathtrace
 result={"source_contract":"PASS","gpu_contract":"not_requested"}
 if args.profile:
     frames=defaultdict(dict)

@@ -72,6 +72,27 @@ if(!$sampleText.Contains('RTR current radiance before temporal reconstruction'))
     $sampleText=[regex]::Replace($sampleText,$anchor,$insert,1)
     [IO.File]::WriteAllText($samplePath,$sampleText,$utf8)
 }
+# RTXDI writes directly into OutputColor when no denoiser is active. Initialize
+# that color from the current path-tracing layers BEFORE RTXDI adds its lighting;
+# merging afterwards discards the entire direct/indirect reuse contribution.
+Patch-Once 'Rtxpt/AdvancedSample.cpp' '    // this is a performance optimization where final 2 passes from ReSTIR DI and ReSTIR GI are combined to avoid loading GBuffer twice' @'
+    // RTR initialize raw radiance before RTXDI accumulation
+    if (m_ui.RealtimeMode && m_ui.RealtimeAA != 3
+        && !m_ui.ActualUseStandaloneDenoiser() && m_ui.ActualUseRTXDIPasses())
+    {
+        GpuProfiler::Begin(m_commandList, "NoDenoiserFinalMerge");
+        const auto& desc = m_renderTargets->OutputColor->getDesc();
+        m_postProcess->Apply(m_commandList, PostProcess::ComputePassType::NoDenoiserFinalMerge,
+            m_constantBuffer, miniConstants, m_bindingSet, m_bindingLayout, desc.width, desc.height);
+        GpuProfiler::End(m_commandList);
+    }
+
+    // this is a performance optimization where final 2 passes from ReSTIR DI and ReSTIR GI are combined to avoid loading GBuffer twice
+'@ 'RTR initialize raw radiance before RTXDI accumulation'
+Patch-Once 'Rtxpt/Sample.cpp' 'if (m_ui.RealtimeAA != 3 && !m_ui.ActualUseStandaloneDenoiser())' @'
+if (m_ui.RealtimeAA != 3 && !m_ui.ActualUseStandaloneDenoiser()
+            && !m_ui.ActualUseRTXDIPasses()) // RTR preserve RTXDI accumulated radiance
+'@ 'RTR preserve RTXDI accumulated radiance'
 # The filtered hit-distance texture is consumed by NRD, RR guides and debug views.
 # Raw SR/TAA/reference output does not read it; retain upstream filtering for every consumer.
 Patch-Once 'Rtxpt/AdvancedSample.cpp' '        m_denoisingGuidesBaker->DenoiseSpecHitT(m_commandList, m_bindingSet);' @'

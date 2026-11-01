@@ -15,16 +15,22 @@ public final class RtxptHexBallQualitySelfTest {
         System.setProperty(DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY,"true");
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
         var base=DemoRendererProfile.interactive(config);
-        boolean denoise=!mode.equals("raw")&&!mode.equals("reuse-raw");
+        boolean reference=mode.equals("reference");
+        boolean denoise=!mode.equals("raw")&&!mode.equals("reuse-raw")&&!reference;
         boolean reuse=mode.startsWith("reuse-");
         var policy=switch(mode) {
-            case "raw", "reuse-raw" -> base.copyBuilder().denoising(DenoisingOptions.disabled()).build();
+            case "raw", "reuse-raw", "reference" -> base.copyBuilder().denoising(DenoisingOptions.disabled()).build();
             case "relax", "reuse-relax" -> base.copyBuilder().denoising(DenoisingOptions.builder()
                 .preference(RendererFeaturePreference.REQUIRED).strategy(DenoisingOptions.Strategy.RESPONSIVE)
                 .builtInTemporalFallback(false).build()).build();
             case "default" -> DemoRendererProfile.rtxptInteractive();
-            default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw or reuse-relax");
+            default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw, reuse-relax or reference");
         };
+        if(reference) {
+            var path=policy.pathTracing();
+            policy=policy.copyBuilder().pathTracing(new PathTracingOptions(32,path.maxBounces(),path.diffuseBounces(),
+                path.radianceCache(),path.directLightResampling(),path.indirectLightResampling())).build();
+        }
         if(reuse) {
             var path=policy.pathTracing();
             policy=policy.copyBuilder().pathTracing(new PathTracingOptions(path.samplesPerPixel(),path.maxBounces(),
