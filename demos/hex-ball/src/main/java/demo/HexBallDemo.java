@@ -273,7 +273,8 @@ public final class HexBallDemo {
                         config, running, stats, renderer, renderExtent, submissionFailure
                 ));
         presenter.setOverlayText(DemoTechnologyHud.capture(renderer, config, stats).text());
-        long runDeadline = runDeadline(config);
+        long runDeadline = Long.MAX_VALUE;
+        boolean presentationStarted = false;
         long nextTitleUpdate = 0L;
         try {
             while (running.get() && !runLimitReached(config, stats, runDeadline)) {
@@ -289,6 +290,10 @@ public final class HexBallDemo {
                 }
                 renderExtent.set(packExtent(window.framebufferWidth(), window.framebufferHeight()));
                 boolean presented = presentReadyFrame(presenter, stats);
+                if(presented && !presentationStarted) {
+                    runDeadline=runDeadline(config);
+                    presentationStarted=true;
+                }
                 long now = System.nanoTime();
                 if (now >= nextTitleUpdate) {
                     // Diagnostics acquires the renderer lifecycle lock and pumps session
