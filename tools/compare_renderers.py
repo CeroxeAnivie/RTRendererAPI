@@ -139,7 +139,7 @@ def mitsuba_minimal(fixture, output, rounds, seconds):
               'frameMs': frames, 'fps': len(frames)*1000/sum(frames), 'meanMs': sum(frames)/len(frames),
               'comparisonScope': 'Same single cube mesh, transform, camera, diffuse reflectance and environment as LuxCore minimal. Does not test the mixed-medium fixture.'}
     (output/'minimal.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
-    print(json.dumps(result), flush=True)
+    print(json.dumps({k:v for k,v in result.items() if k!='frameMs'}), flush=True)
 
 
 if __name__ == '__main__':

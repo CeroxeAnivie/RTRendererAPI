@@ -224,14 +224,21 @@ def setup(fixture,case):
 def benchmark(fixture,case,output):
     initial=gpu();print('CyclesControl',case,'initialGpu',initial,flush=True)
     scene,devices=setup(fixture,case)
-    scene.cycles.samples=1;bpy.ops.render.render()
+    def render(samples,seed):
+        scene.cycles.samples=samples;scene.cycles.seed=seed
+        bpy.context.view_layer.samples=0
+        scene.update_tag();bpy.context.view_layer.update()
+        evaluated=bpy.context.evaluated_depsgraph_get().scene_eval
+        assert evaluated.cycles.samples==samples, (evaluated.cycles.samples,samples)
+        print('CyclesRequestedSamples',case,samples,'scene',scene.cycles.samples,'layer',bpy.context.view_layer.samples,flush=True)
+        bpy.ops.render.render(scene=scene.name)
+    render(1,0)
     frames=[]
     for i in range(4):
-        scene.cycles.seed=i+1;start=time.perf_counter();bpy.ops.render.render();frames.append((time.perf_counter()-start)*1000)
+        start=time.perf_counter();render(1,i+1);frames.append((time.perf_counter()-start)*1000)
     batches=[]
     for samples in (16,64,16,64):
-        scene.cycles.samples=samples;scene.cycles.seed=samples
-        start=time.perf_counter();bpy.ops.render.render();elapsed=(time.perf_counter()-start)*1000
+        start=time.perf_counter();render(samples,samples);elapsed=(time.perf_counter()-start)*1000
         batches.append({'spp':samples,'wallMs':elapsed,'sppPerSecond':samples*1000/elapsed})
         print('CyclesControl',case,'batch',samples,'ms',elapsed,flush=True)
     low=statistics.mean(x['wallMs'] for x in batches if x['spp']==16);high=statistics.mean(x['wallMs'] for x in batches if x['spp']==64)
