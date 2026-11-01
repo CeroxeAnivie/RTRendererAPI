@@ -130,6 +130,14 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float
         #endif
         float pdf = totalProxyCount > 0 ? proxyCountPerLight / float(totalProxyCount) : 0; // RTR matching conditional BSDF PDF
 '@ 'RTR matching conditional BSDF PDF'
+Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float globalPDFModifier = clamp( globalPdf, 1e-6, 1e6 );' @'
+        float feedbackPdf = globalPdf;
+        #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
+        if (RtrSplitPointEnvironment() && lightIndex < ControlBuffer[0].EnvmapQuadNodeCount)
+            feedbackPdf = RtrNativeGlobalPdfForFeedback(lightIndex);
+        #endif
+        float globalPDFModifier = clamp( feedbackPdf, 1e-6, 1e6 ); // RTR preserve native feedback PDF semantics
+'@ 'RTR preserve native feedback PDF semantics'
 Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        uint packedValue = LocalLightBinarySearch( LocalSamplingBuffer, LocalSamplingTilePos, lightIndex, localProxyCount, RTXPT_LIGHTING_LOCAL_PROXY_BINARY_SEARCH_STEPS );' @'
         #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
         if (RtrSplitPointEnvironment())

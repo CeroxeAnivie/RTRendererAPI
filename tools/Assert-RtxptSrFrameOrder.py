@@ -37,6 +37,8 @@ assert "proxyCountPerLight / float(totalProxyCount)" in args.source.parent.joinp
 light_sampler=args.source.parent.joinpath("Shaders/PathTracer/Lighting/LightSampler.hlsli").read_text(encoding="utf-8-sig")
 assert "RTR conditional local MIS PDF fallback" in light_sampler
 assert "uint packedValue = LocalLightBinarySearch" in light_sampler
+assert "RTR preserve native feedback PDF semantics" in light_sampler
+assert "feedbackPdf = RtrNativeGlobalPdfForFeedback(lightIndex)" in light_sampler
 assert "localEnvironmentProxyCount == 0" in nee and "globalCount += localCount" in nee
 assert "if (lightSampler.RtrSplitPointEnvironment())" in nee
 assert "lightSampler.RtrEnvironmentProxyCount()" in nee

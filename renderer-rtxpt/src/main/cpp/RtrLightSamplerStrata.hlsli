@@ -27,6 +27,12 @@ uint RtrEnvironmentProxyCount()
     return count;
 }
 
+float RtrNativeGlobalPdfForFeedback(uint lightIndex)
+{
+    const uint totalProxyCount = ControlBuffer[0].SamplingProxyCount;
+    return totalProxyCount > 0 ? float(ProxyCounters[lightIndex]) / float(totalProxyCount) : 0;
+}
+
 uint RtrEnvironmentLocalProxyCount()
 {
     uint count = 0;
