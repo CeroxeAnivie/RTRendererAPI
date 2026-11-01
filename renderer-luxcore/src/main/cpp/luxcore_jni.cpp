@@ -58,10 +58,11 @@ JNI(void) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_initialize(JNIEnv* e
         env->ReleaseStringChars(bin, chars);
         std::call_once(initialized, [&] {
             // Explicit DLL paths keep the SDK independent of PATH and the working directory.
-            for (const wchar_t* name : {L"nvrtc-builtins64_128.dll", L"nvrtc64_120_0.dll", L"luxcore.dll"}) {
+            for (const wchar_t* name : {L"nvrtc-builtins64_128.dll", L"nvrtc64_120_0.dll", L"tbb12.dll", L"tbbmalloc.dll",
+                    L"embree4.dll", L"LuxOpenImageDenoise_core.dll", L"LuxOpenImageDenoise.dll", L"luxcore.dll"}) {
                 const auto path = directory + L"/" + name;
                 if (!LoadLibraryExW(path.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS))
-                    throw std::runtime_error("Cannot load the pinned LuxCore runtime; Windows error=" + std::to_string(GetLastError()));
+                    throw std::runtime_error("Cannot load LuxCore dependency " + std::string(name, name+wcslen(name)) + "; Windows error=" + std::to_string(GetLastError()));
             }
             luxcore::Init(quietLog);
         });
