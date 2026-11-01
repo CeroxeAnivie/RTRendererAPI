@@ -1,0 +1,32 @@
+{
+  "SourceCommit": "7545ead3af668ee564cabe478de40bfa1f29c377",
+  "Java": "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+  "Jvm": [
+    "-Dfile.encoding=UTF-8",
+    "--enable-native-access=ALL-UNNAMED",
+    "--sun-misc-unsafe-memory-access=allow",
+    "-Xmx3g",
+    "-XX:-UseJVMCICompiler",
+    "-cp",
+    "demos/hex-ball/build/classes/java/test;demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar"
+  ],
+  "Entry": "demo.RtxptHexBallQualitySelfTest",
+  "Arguments": [
+    "default",
+    "glass",
+    "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\sr-glass-exposure-v24",
+    "none"
+  ],
+  "StartedAt": "2026-11-02T01:06:40.3912830+08:00",
+  "NativeSha256": "517E3EE58FCF3121CB76AC4A4C3AF6B8B25FC14829F85251F5E6535E4D64FD9A",
+  "Width": 2560,
+  "Height": 1440,
+  "Spp": 1,
+  "FrameGeneration": false,
+  "StageProfile": false,
+  "RuntimeSource": "PackagedJar",
+  "SmallPointCandidate": false,
+  "ControlLighting": false,
+  "LightingProbe": "none",
+  "JarSha256": "D71B0F81878D769D39D1BF489FC12F26F094E1F7944088F85B2118723FE9B7EF"
+}

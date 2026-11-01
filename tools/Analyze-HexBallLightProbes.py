@@ -24,8 +24,11 @@ def measure(directory):
         average_rgb = [statistics.mean(ImageStat.Stat(crop).mean[channel] for crop in crops) for channel in range(3)]
         mae = statistics.mean(statistics.mean(ImageStat.Stat(ImageChops.difference(a, b)).mean)
                               for a, b in zip(crops, crops[1:]))
-        clipping = statistics.mean(sum(1 for pixel in crop.getdata() if max(pixel) >= 250) / (crop.width * crop.height)
-                                   for crop in crops)
+        def bright_fraction(crop):
+            red, green, blue = crop.split()
+            maximum = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+            return sum(maximum.histogram()[250:]) / (crop.width * crop.height)
+        clipping = statistics.mean(bright_fraction(crop) for crop in crops)
         result[name] = {"roi": roi, "consecutiveRgbMae255": mae, "meanRgb255": average_rgb,
                         "highChannelFraction": clipping}
     return result
