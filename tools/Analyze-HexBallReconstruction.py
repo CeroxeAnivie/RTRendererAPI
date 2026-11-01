@@ -1,7 +1,7 @@
-"""Compare detail against a separate 32-SPP reference, not just noise suppression.
+"""Compare HexBall detail against a separate 32-SPP reference, not just noise suppression.
 
 Usage: python tools/Analyze-HexBallReconstruction.py reference baseline candidate output_prefix
-Captures must use the deterministic metal-ball quality scene and identical SR input size.
+Captures must use the same deterministic HexBall material, camera and SR input size.
 The measured edge is the right boundary of the static upper ball's cyan shadow.
 This local regression does not certify every material or all motion artifacts.
 """
@@ -13,7 +13,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageStat
 
 directories = [Path(arg) for arg in sys.argv[1:4]]
 prefix = Path(sys.argv[4])
-labels = ["REFERENCE 32 SPP (quality only)", "BEFORE: RELAX + SR, 1 SPP", "AFTER: native RR, 1 SPP"]
+labels = ["REFERENCE 32 SPP (quality only)", "BASELINE: SR, 1 SPP", "CANDIDATE: native DLSS RR, 1 SPP"]
 canvas = Image.new("RGB", (1500, 720), "#20242a")
 draw = ImageDraw.Draw(canvas)
 results = []
@@ -64,7 +64,7 @@ candidate, reference = results[2], results[0]
 passed = candidate["shadow_edge_10_90_output_pixels"] <= reference["shadow_edge_10_90_output_pixels"] * 2
 passed &= candidate["shadow_red_channel_contrast_8bit"] >= reference["shadow_red_channel_contrast_8bit"] * .8
 passed &= candidate["static_temporal_rgb_mae_8bit"] <= 1.0
-report = {"scope": "Static metal-ball cyan shadow detail; not a universal blur/ghosting certificate",
+report = {"scope": "Static HexBall cyan shadow detail; not a universal blur/ghosting certificate",
     "results": results, "detail_regression": "PASS" if passed else "FAIL"}
 prefix.parent.mkdir(parents=True, exist_ok=True)
 prefix.with_suffix(".json").write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")

@@ -41,7 +41,7 @@ public final class DemoFeatureIntegrationSelfTest {
         boundsBlockedReasonsAndHandlesMissingCapabilityExtension();
         independentPublicApiControls();
         glassBallsHavePhysicalReflectionAndClosedInteriors();
-        rtxptRealtimeRetainsFastSrAndDemoFgControl();
+        rtxptRealtimeEnablesNativeRrAndDemoFgControl();
         rtxptMediumHasSupportedDistinctScenesAndDefaultFg();
         System.out.println("DemoFeatureIntegrationSelfTest passed");
     }
@@ -69,15 +69,14 @@ public final class DemoFeatureIntegrationSelfTest {
             }
         } finally { restoreProperty(property,previous); }
     }
-    private static void rtxptRealtimeRetainsFastSrAndDemoFgControl() {
+    private static void rtxptRealtimeEnablesNativeRrAndDemoFgControl() {
         String property=DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY;
         String previous=System.getProperty(property);
         try {
             System.clearProperty(property);
             var profile=DemoRendererProfile.rtxptInteractive();
-            require(!profile.denoising().preference().requested(),"Do not add NRD/RR to the accepted pure SR comparison");
-            require(!profile.denoising().builtInTemporalFallback(),"No hidden temporal fallback in native quality preset");
-            require(!profile.pathTracing().radianceCache().requested(),"Do not add a cache to the accepted pure SR comparison");
+            require(profile.denoising().equals(DenoisingOptions.recommended()),"RTXPT demo uses native recommended RR denoising");
+            require(!profile.pathTracing().radianceCache().requested(),"Keep SHaRC disabled in the lightweight ball demo");
             require(profile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X
                 &&profile.frameGeneration().preference().requested(),"Default demo FG remains 2x");
             System.setProperty(property,"true");
@@ -89,8 +88,8 @@ public final class DemoFeatureIntegrationSelfTest {
         require(originalBatch.primitives().stream().noneMatch(p->p.mediumBoundary().isPresent()),"Ordinary Vulkan balls must retain their surface-only path");
         var scene=new DemoScene(true);var initial=scene.initialTransaction();
         var glassProfile=DemoRendererProfile.rtxptInteractive();
-        require(!glassProfile.denoising().preference().requested()
-            &&!glassProfile.pathTracing().radianceCache().requested(),"Glass keeps the accepted SR fast policy without adding RR or SHaRC");
+        require(glassProfile.denoising().equals(DenoisingOptions.recommended())
+            &&!glassProfile.pathTracing().radianceCache().requested(),"Glass uses native RR without adding SHaRC");
         require(glassProfile.frameGeneration().preference().requested()
             &&glassProfile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X,"Glass defaults to 2x FG");
         var oldLights=original.initialTransaction().upserts().lights();

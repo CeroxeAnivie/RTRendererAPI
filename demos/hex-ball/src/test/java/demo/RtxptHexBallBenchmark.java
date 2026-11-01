@@ -22,6 +22,7 @@ public final class RtxptHexBallBenchmark {
         if(width<1||height<1||seconds<1)throw new IllegalArgumentException("Invalid benchmark dimensions or duration");
         System.setProperty(DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY,"true");
         var config=DemoRendererProfile.rtxptInteractive();
+        if(reconstruction.equals("sr"))config=config.copyBuilder().denoising(DenoisingOptions.disabled()).build();
         if(rr)config=config.copyBuilder().denoising(DenoisingOptions.recommended()).build();
         if(relax)config=config.copyBuilder().denoising(DenoisingOptions.builder()
             .preference(RendererFeaturePreference.REQUIRED).strategy(DenoisingOptions.Strategy.RESPONSIVE)

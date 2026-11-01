@@ -15,13 +15,14 @@ public final class RtxptHexBallGenerationSelfTest {
         Path output=Path.of(args[0]).toAbsolutePath();
         Files.createDirectories(output);
         System.setProperty(DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY,"true");
-        var scene=new DemoScene(false);
+        var scene=new DemoScene(true);
         var physics=new HexPhysics();
         var config=DemoRendererProfile.rtxptInteractive();
         var csv=new StringBuilder("stage,width,height,native_frames,actual_presented,actual_generated,ratio,wall_ms,native_fps,actual_presented_fps,query_failures,status\n");
         try(var renderer=Renderer.open("rtxpt",config)) {
             revision=renderer.apply(scene.initialTransaction()).acceptedSceneRevision();
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
+            host.setExposureCompensation(DemoScene.GLASS_EXPOSURE_COMPENSATION);
             var controller=renderer.extension(RendererFeatureController.class).orElseThrow();
             for(int multiplier:new int[]{1,2,3,4,1}) {
                 var fg=multiplier==1?FrameGenerationOptions.disabled():FrameGenerationOptions.builder()
@@ -67,8 +68,8 @@ public final class RtxptHexBallGenerationSelfTest {
         csv.append(row);
         Files.writeString(output.resolve("generation.csv"),csv);
         System.out.print("GENERATION_DELIVERY "+row);
-        require(status.reconstruction()==RtxptAccess.Reconstruction.DLSS&&!status.denoising()&&!status.sharc()
-            &&!status.restirDi()&&!status.restirGi(),"Unchanged raw SR rendering policy");
+        require(status.reconstruction()==RtxptAccess.Reconstruction.DLSS_RR&&status.denoising()&&!status.sharc()
+            &&!status.restirDi()&&!status.restirGi(),"Native RR remains active while generation settings change");
         require(status.frameGeneration()==(multiplier>1),"Actual FG activation");
         require(nativeFrames==360,"Native presentation count");
         require(failures==0&&after.latestQuerySucceeded(),"SDK query succeeded");

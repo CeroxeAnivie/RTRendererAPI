@@ -26,7 +26,7 @@ public final class RtxptHexBallQualitySelfTest {
         var base=DemoRendererProfile.interactive(config);
         boolean reference=mode.equals("reference")||mode.equals("direct-reference");
         boolean directOnly=mode.equals("direct")||mode.equals("direct-reference");
-        boolean rr=mode.equals("rr");
+        boolean rr=mode.equals("rr")||mode.equals("default");
         boolean denoise=mode.equals("relax")||mode.equals("reuse-relax")||rr;
         boolean reuse=mode.startsWith("reuse-");
         var policy=switch(mode) {

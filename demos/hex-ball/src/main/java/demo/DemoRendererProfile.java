@@ -31,10 +31,9 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig rtxptInteractive() {
-        // Keep the accepted fast SR policy. Additional denoisers/cache/RR are explicit
-        // API choices, not a hidden quality fix that invalidates the FPS comparison.
+        // RTXPT's native RR removes 1-SPP lighting noise while preserving upstream SR and FG.
         return DemoApiControls.configure(RendererConfig.presentation().copyBuilder()
-                .denoising(DenoisingOptions.disabled())
+                .denoising(DenoisingOptions.recommended())
                 .frameGeneration(configuredGenerationPolicy()).gpuTimingsEnabled(true).build());
     }
 
