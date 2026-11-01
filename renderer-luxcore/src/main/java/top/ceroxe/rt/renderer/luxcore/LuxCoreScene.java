@@ -25,6 +25,7 @@ final class LuxCoreScene {
     }
     static void property(StringBuilder out, String key, Object value) { out.append(key).append(" = ").append(value).append('\n'); }
     static String rgb(Rgb c) { return c.red()+" "+c.green()+" "+c.blue(); }
+    static String gain(float v) { return v+" "+v+" "+v; }
     static String color(int c) { return ((c>>>16)&255)/255f+" "+((c>>>8)&255)/255f+" "+(c&255)/255f; }
     static String matrix(AffineTransform t) {
         var b=new StringBuilder();
@@ -89,9 +90,9 @@ final class LuxCoreScene {
         for(var l:lights.values()) light(out,l);
         var e=frame.environment();
         property(out,"scene.lights.sky.type","constantinfinite");property(out,"scene.lights.sky.color",e.skyRed()+" "+e.skyGreen()+" "+e.skyBlue());
-        property(out,"scene.lights.sky.gain",Math.max(0,e.ambientIntensity()));
+        property(out,"scene.lights.sky.gain",gain(Math.max(0,e.ambientIntensity())));
         property(out,"scene.lights.sun.type","sharpdistant");property(out,"scene.lights.sun.direction",e.sunDirectionX()+" "+e.sunDirectionY()+" "+e.sunDirectionZ());
-        property(out,"scene.lights.sun.color",e.sunRed()+" "+e.sunGreen()+" "+e.sunBlue());property(out,"scene.lights.sun.gain",e.sunIntensity());
+        property(out,"scene.lights.sun.color",e.sunRed()+" "+e.sunGreen()+" "+e.sunBlue());property(out,"scene.lights.sun.gain",gain(e.sunIntensity()));
         camera(out,frame.camera());return out.toString();
     }
     void medium(StringBuilder out,String name,Medium m,int priority,MediumTransport budget,boolean local) {
@@ -143,7 +144,7 @@ final class LuxCoreScene {
                     disney(out,name+"base",m,base);property(out,p+".type","mix");property(out,p+".material1",name+"base");property(out,p+".material2",glass);property(out,p+".amount",m.transmission());
                 } else {property(out,p+".type",m.roughness()<.001f?"glass":"roughglass");property(out,p+".kr","1 1 1");property(out,p+".kt",base);property(out,p+".interiorior",m.indexOfRefraction());property(out,p+".uroughness",Math.max(.001f,m.roughness()));property(out,p+".vroughness",Math.max(.001f,m.roughness()));}
             } else disney(out,name,m,base);
-            if(m.emissiveStrength()>0) {property(out,p+".emission",m.emissiveTextureId()<0?color(m.emissiveColorRgba8()):"tex"+m.emissiveTextureId());property(out,p+".emission.gain",m.emissiveStrength());}
+            if(m.emissiveStrength()>0) {property(out,p+".emission",m.emissiveTextureId()<0?color(m.emissiveColorRgba8()):"tex"+m.emissiveTextureId());property(out,p+".emission.gain",gain(m.emissiveStrength()));}
             float alpha=((m.baseColorRgba8()>>>24)&255)/255f*visibility;
             if(m.blendMode()!=MaterialAsset.BlendMode.OPAQUE)property(out,p+".transparency",1-alpha);
             if(m.normalTextureId()>=0) {String n="normal"+name;property(out,"scene.textures."+n+".type","normalmap");property(out,"scene.textures."+n+".texture","tex"+m.normalTextureId());property(out,p+".bumptex",n);}
@@ -166,7 +167,7 @@ final class LuxCoreScene {
         String p="scene.lights.l"+l.id();property(out,p+".type",switch(l.type()){case POINT->"point";case SPOT->"spot";case DIRECTIONAL->"sharpdistant";});
         property(out,p+".position",l.x()+" "+l.y()+" "+l.z());property(out,p+".direction",l.directionX()+" "+l.directionY()+" "+l.directionZ());
         property(out,p+".target",(l.x()+l.directionX())+" "+(l.y()+l.directionY())+" "+(l.z()+l.directionZ()));
-        property(out,p+".color",l.red()+" "+l.green()+" "+l.blue());property(out,p+".gain",l.intensity());
+        property(out,p+".color",l.red()+" "+l.green()+" "+l.blue());property(out,p+".gain",gain(l.intensity()));
         property(out,p+".coneangle",Math.toDegrees(Math.acos(l.outerConeCosine())));property(out,p+".conedeltaangle",Math.toDegrees(Math.acos(l.outerConeCosine())-Math.acos(l.innerConeCosine())));
     }
 }
