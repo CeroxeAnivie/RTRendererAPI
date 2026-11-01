@@ -70,14 +70,20 @@ final class LuxCoreScene {
         for(int t:triangles) {indices.putInt(source.get(t*3));indices.putInt(source.get(t*3+(reverse?2:1)));indices.putInt(source.get(t*3+(reverse?1:2)));}
         var normals=floats(mesh.normals());
         if(reverse&&normals!=null)for(int i=0;i<normals.capacity();i+=4)normals.putFloat(i,-normals.getFloat(i));
-        LuxCoreNative.defineMesh(h,bytes(name),mesh.vertexCount(),triangles.size(),floats(mesh.positions()),indices.clear(),normals,floats(mesh.textureCoordinates()));uploads++;
+        ByteBuffer colors=null,alphas=null;var packed=mesh.vertexColorsRgba8();
+        if(packed.hasRemaining()) {colors=buffer(mesh.vertexCount()*12);alphas=buffer(mesh.vertexCount()*4);
+            while(packed.hasRemaining()){int c=packed.get();colors.putFloat(((c>>>16)&255)/255f).putFloat(((c>>>8)&255)/255f).putFloat((c&255)/255f);alphas.putFloat((c>>>24)/255f);}
+            colors.clear();alphas.clear();}
+        LuxCoreNative.defineMesh(h,bytes(name),mesh.vertexCount(),triangles.size(),floats(mesh.positions()),indices.clear(),normals,floats(mesh.textureCoordinates()),colors,alphas);uploads++;
     }
     String scene(RenderFrameRequest frame) {
         var out=new StringBuilder();
         for(var t:textures.values()) {
             String p="scene.textures.tex"+t.id();property(out,p+".type","imagemap");property(out,p+".file","\"image"+t.id()+"\"");property(out,p+".gamma",1);
             property(out,p+".wrap",t.addressU()==TextureAsset.AddressMode.REPEAT?"repeat":"clamp");
+            property(out,p+"alpha.type","imagemap");property(out,p+"alpha.file","\"image"+t.id()+"\"");property(out,p+"alpha.channel","alpha");property(out,p+"alpha.gamma",1);
         }
+        property(out,"scene.textures.vertexColor.type","hitpointcolor");property(out,"scene.textures.vertexAlpha.type","hitpointalpha");
         var transport=frame.mediumTransport();
         medium(out,"world",frame.environment().cameraMedium(),0,transport,false);
         property(out,"scene.world.volume.default","world");
@@ -93,7 +99,7 @@ final class LuxCoreScene {
         property(out,"scene.lights.sky.gain",gain(Math.max(0,e.ambientIntensity())));
         property(out,"scene.lights.sun.type","sharpdistant");property(out,"scene.lights.sun.direction",e.sunDirectionX()+" "+e.sunDirectionY()+" "+e.sunDirectionZ());
         property(out,"scene.lights.sun.color",e.sunRed()+" "+e.sunGreen()+" "+e.sunBlue());property(out,"scene.lights.sun.gain",gain(e.sunIntensity()));
-        camera(out,frame.camera());return out.toString();
+        camera(out,frame.camera());property(out,"scene.camera.autovolume.enable",e.cameraMedium().isVacuum());return out.toString();
     }
     void medium(StringBuilder out,String name,Medium m,int priority,MediumTransport budget,boolean local) {
         String p="scene.volumes."+name;boolean grid=!m.densityField().isUniform();
@@ -126,16 +132,18 @@ final class LuxCoreScene {
         var list=Objects.requireNonNull(parts.get(mesh),"Missing mesh "+mesh);
         int k=0;for(var part:list) {
             String object=name+"p"+k++,mat="mat"+object;
-            material(out,mat,Objects.requireNonNull(materials.get(part.material()),"Missing material "+part.material()),boundary,volume,shadow,visibility);
+            material(out,mat,Objects.requireNonNull(materials.get(part.material()),"Missing material "+part.material()),boundary,volume,shadow,visibility,meshes.get(mesh).vertexColorsRgba8().hasRemaining());
             String p="scene.objects."+object;property(out,p+".shape",part.shape()+(boundary!=null&&boundary.orientation()==MediumBoundary.Orientation.INWARD?"in":""));
             property(out,p+".material",mat);property(out,p+".transformation",matrix(transform));names.add(object);
         }
     }
-    static void material(StringBuilder out,String name,MaterialAsset m,MediumBoundary boundary,String volume,boolean shadow,float visibility) {
+    static void material(StringBuilder out,String name,MaterialAsset m,MediumBoundary boundary,String volume,boolean shadow,float visibility,boolean vertexColor) {
         String p="scene.materials."+name;
         if(boundary!=null&&!boundary.surfaceInteraction())property(out,p+".type","null");
         else {
-            String base=m.baseColorTextureId()<0?color(m.baseColorRgba8()):"tex"+m.baseColorTextureId();
+            String base=color(m.baseColorRgba8());
+            if(m.baseColorTextureId()>=0)base=texture(out,name+"base","scale","tex"+m.baseColorTextureId(),base);
+            if(vertexColor)base=texture(out,name+"color","scale","vertexColor",base);
             if(m.transmission()>0) {
                 String glass=name+"glass",g="scene.materials."+glass;
                 property(out,g+".type",m.roughness()<.001f?"glass":"roughglass");property(out,g+".kr","1 1 1");property(out,g+".kt",base);
@@ -146,11 +154,20 @@ final class LuxCoreScene {
             } else disney(out,name,m,base);
             if(m.emissiveStrength()>0) {property(out,p+".emission",m.emissiveTextureId()<0?color(m.emissiveColorRgba8()):"tex"+m.emissiveTextureId());property(out,p+".emission.gain",gain(m.emissiveStrength()));}
             float alpha=((m.baseColorRgba8()>>>24)&255)/255f*visibility;
-            if(m.blendMode()!=MaterialAsset.BlendMode.OPAQUE)property(out,p+".transparency",1-alpha);
+            if(m.blendMode()!=MaterialAsset.BlendMode.OPAQUE||visibility<1) {
+                String opacity=Float.toString(alpha);
+                if(m.baseColorTextureId()>=0)opacity=texture(out,name+"opacity","scale","tex"+m.baseColorTextureId()+"alpha",opacity);
+                if(vertexColor)opacity=texture(out,name+"valpha","scale","vertexAlpha",opacity);
+                if(m.blendMode()==MaterialAsset.BlendMode.MASKED)opacity=texture(out,name+"mask","greaterthan",opacity,Float.toString(m.alphaCutoff()));
+                property(out,p+".transparency",texture(out,name+"through","subtract","1",opacity));
+            }
             if(m.normalTextureId()>=0) {String n="normal"+name;property(out,"scene.textures."+n+".type","normalmap");property(out,"scene.textures."+n+".texture","tex"+m.normalTextureId());property(out,p+".bumptex",n);}
         }
         if(!shadow) {property(out,p+".transparency.shadow","1 1 1");property(out,p+".transparency.shadowoverride",true);}
         if(boundary!=null)property(out,p+".volume.interior",volume);
+    }
+    static String texture(StringBuilder out,String name,String type,String first,String second) {
+        String p="scene.textures."+name;property(out,p+".type",type);property(out,p+".texture1",first);property(out,p+".texture2",second);return name;
     }
     static void disney(StringBuilder out,String name,MaterialAsset m,String base) {
         String p="scene.materials."+name;property(out,p+".type","disney");property(out,p+".basecolor",base);property(out,p+".roughness",m.roughness());property(out,p+".metallic",m.metallic());

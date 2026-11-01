@@ -101,24 +101,30 @@ JNI(void) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_deleteLights(JNIEnv*
     } CATCH_VOID
 }
 JNI(void) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_defineMesh(JNIEnv* env, jclass, jlong handle,
-        jbyteArray name, jint vertices, jint triangles, jobject positions, jobject indices, jobject normals, jobject uvs) {
+        jbyteArray name, jint vertices, jint triangles, jobject positions, jobject indices, jobject normals, jobject uvs, jobject colors, jobject alphas) {
     TRY {
         if (vertices < 1 || triangles < 1) throw std::invalid_argument("empty mesh");
         const size_t vb = static_cast<size_t>(vertices)*3*sizeof(float), ib = static_cast<size_t>(triangles)*3*sizeof(unsigned int);
         auto* sourceP = direct(env, positions, vb); auto* sourceI = direct(env, indices, ib);
         auto* sourceN = normals ? direct(env, normals, vb) : nullptr;
         auto* sourceUV = uvs ? direct(env, uvs, static_cast<size_t>(vertices)*2*sizeof(float)) : nullptr;
+        auto* sourceC = colors ? direct(env, colors, vb) : nullptr;
+        auto* sourceA = alphas ? direct(env, alphas, static_cast<size_t>(vertices)*sizeof(float)) : nullptr;
         auto p = std::unique_ptr<float[]>(luxcore::Scene::AllocVerticesBuffer(vertices));
         auto i = std::unique_ptr<unsigned int[]>(luxcore::Scene::AllocTrianglesBuffer(triangles));
         auto n = sourceN ? std::make_unique<float[]>(vertices*3) : nullptr;
         auto uv = sourceUV ? std::make_unique<float[]>(vertices*2) : nullptr;
+        auto cols = sourceC ? std::make_unique<float[]>(vertices*3) : nullptr;
+        auto alpha = sourceA ? std::make_unique<float[]>(vertices) : nullptr;
         std::memcpy(p.get(), sourceP, vb); std::memcpy(i.get(), sourceI, ib);
         if (sourceN) std::memcpy(n.get(), sourceN, vb);
         if (sourceUV) std::memcpy(uv.get(), sourceUV, static_cast<size_t>(vertices)*2*sizeof(float));
+        if (sourceC) std::memcpy(cols.get(), sourceC, vb);
+        if (sourceA) std::memcpy(alpha.get(), sourceA, static_cast<size_t>(vertices)*sizeof(float));
         auto& scene = *context(handle).scene;
         scene.SetDeleteMeshData(true);
-        scene.DefineMesh(utf8(env, name), vertices, triangles, p.get(), i.get(), n.get(), uv.get(), nullptr, nullptr);
-        p.release(); i.release(); n.release(); uv.release();
+        scene.DefineMesh(utf8(env, name), vertices, triangles, p.get(), i.get(), n.get(), uv.get(), cols.get(), alpha.get());
+        p.release(); i.release(); n.release(); uv.release(); cols.release(); alpha.release();
     } CATCH_VOID
 }
 JNI(void) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_defineImage(JNIEnv* env, jclass, jlong handle,

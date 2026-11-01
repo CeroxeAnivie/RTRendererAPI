@@ -11,6 +11,7 @@ description = "Interactive hex-ball sample and GPU smoke workload for RTRenderer
 
 dependencies {
     implementation(project(":renderer-api"))
+    implementation(project(":renderer-luxcore"))
     runtimeOnly(project(":renderer-nvidia"))
     // The test-only gallery profiler reads core counters; the demo artifact stays API-only.
     testImplementation(project(":renderer-core"))
@@ -60,6 +61,7 @@ tasks.withType<JavaExec>().configureEach {
         "--enable-native-access=ALL-UNNAMED"
     )
     unsafeAccessJvmArg?.let { jvmArgs(it) }
+    systemProperties(System.getProperties().stringPropertyNames().filter { it.startsWith("top.ceroxe.rt.luxcore.") }.associateWith(System::getProperty))
     // Process isolation does not inherit Gradle JVM system properties. Forward only the three
     // reviewed demo controls so :run and the executable JAR expose the same feature policy.
     listOf("demo.feature-profile", "demo.disable-fg", "demo.fg-multiplier").forEach { propertyName ->
@@ -67,6 +69,15 @@ tasks.withType<JavaExec>().configureEach {
             systemProperty(propertyName, propertyValue)
         }
     }
+}
+
+tasks.register<JavaExec>("luxcoreMediumBenchmark") {
+    group = "verification"
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    workingDir(rootProject.projectDir)
+    mainClass.set("demo.LuxCoreMediumBenchmark")
+    jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
 }
 
 tasks.withType<AbstractArchiveTask>().configureEach {
