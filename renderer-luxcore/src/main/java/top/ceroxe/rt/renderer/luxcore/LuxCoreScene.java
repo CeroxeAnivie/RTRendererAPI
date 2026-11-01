@@ -113,8 +113,8 @@ final class LuxCoreScene {
             property(out,t+".type","densitygrid");property(out,t+".nx",nx);property(out,t+".ny",ny);property(out,t+".nz",nz);property(out,t+".wrap","black");property(out,t+".storage","float");
             property(out,t+".mapping.type",local?"localmapping3d":"globalmapping3d");property(out,t+".mapping.transformation",matrix(f.transform()));
             out.append(t).append(".data = ");var data=texture.rgba8();for(int i=0;i<nx*ny*nz;i++)out.append((data.get(i*4)&255)/255f).append(' ');out.append('\n');
-            property(out,p+".steps.size",System.getProperty("top.ceroxe.rt.luxcore.volumeStep","0.05"));
-            property(out,p+".steps.maxcount",Math.max(64,budget.scatteringSteps()*64));
+            // Leave step size/count at the official defaults (1 world unit / 32 steps).
+            // Advanced quality tuning goes through native sceneProperties, without a second budget model.
         }
         coefficient(out,p,"absorption",m.absorption().multiply(m.density()),density,name);
         coefficient(out,p,"scattering",m.scattering().multiply(m.density()),density,name);

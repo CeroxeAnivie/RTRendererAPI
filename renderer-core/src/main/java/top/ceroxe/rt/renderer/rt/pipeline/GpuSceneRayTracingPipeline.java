@@ -201,7 +201,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             descriptors = GpuSceneDescriptorLayout.create(stack, device, descriptorSetCount, sceneShaders.dataBindingCount());
             pipelineLayout = RtRayTracingPipelineFactory.createPipelineLayout(stack, device, descriptors.layout(),
                     program.primaryQueue() ? GpuScenePrimaryQueue.PUSH_BYTES : 0);
-            boolean opticalDiagnostic=false, collectedConnections=false;
+            boolean opticalDiagnostic=false, scatteringDiagnostic=false, collectedConnections=false;
             String raygenSource=program.source;
             byte[] raygenCode=loadStageCode(raygenSource, Shaderc.shaderc_raygen_shader,
                     linearHdrOutput, shaderExecutionReorderingEnabled, sceneShaders);

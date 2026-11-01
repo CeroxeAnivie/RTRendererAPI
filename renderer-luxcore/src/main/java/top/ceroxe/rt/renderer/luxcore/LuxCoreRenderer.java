@@ -76,7 +76,6 @@ final class LuxCoreRenderer implements Renderer, LuxCoreAccess {
             +"film.width = "+f.width()+"\nfilm.height = "+f.height()+"\n"
             +"rtpath.resolutionreduction = 1\nrtpath.resolutionreduction.preview = 1\nrtpath.resolutionreduction.preview.step = 1\n"
             +"sampler.type = TILEPATHSAMPLER\ntilepath.sampling.aa.size = 1\nfilm.filter.type = NONE\nfilm.opencl.enable = 0\n"
-            +"path.pathdepth.total = "+f.mediumTransport().maxEvents()+"\n"
             +"film.imagepipelines.0.0.type = TONEMAP_LINEAR\nfilm.imagepipelines.0.0.scale = 1\nfilm.imagepipelines.0.1.type = GAMMA_CORRECTION\n"
             +"film.outputs.0.type = RGBA\nfilm.outputs.0.filename = unused.exr\n"
             +"film.outputs.1.type = RGBA_IMAGEPIPELINE\nfilm.outputs.1.filename = unused.png\n";

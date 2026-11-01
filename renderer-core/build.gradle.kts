@@ -83,6 +83,9 @@ val retiredMediumExecutors = listOf(
 )
 tasks.withType<org.gradle.jvm.tasks.Jar>().configureEach {
     exclude(retiredMediumExecutors)
+    exclude("assets/rtrenderer/medium/**", "assets/rtrenderer/cuda/**",
+        "assets/rtrenderer/shaders/gpuscene/gpuscene_native*", "assets/rtrenderer/shaders/gpuscene/gpuscene_collected*",
+        "assets/rtrenderer/shaders/spv/gpuscene_gpuscene_native*", "assets/rtrenderer/shaders/spv/gpuscene_gpuscene_collected*")
 }
 
 // Package generated shader binaries only when their source stage still exists. Regeneration
@@ -372,9 +375,6 @@ tasks.named("check") {
 val nativeSelfTests = linkedMapOf(
     "vulkanFrameDisplayTransformNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDisplayTransformNativeSelfTest",
 
-    "cudaMetallicMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaMetallicMediumProductionNativeSelfTest",
-    "cudaCompositeMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCompositeMediumProductionNativeSelfTest",
-    "cudaBuiltinShaderDataNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaBuiltinShaderDataNativeSelfTest",
 
     "boundaryRadianceTraversalNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.BoundaryRadianceTraversalNativeSelfTest",
 
