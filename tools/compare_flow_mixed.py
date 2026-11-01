@@ -164,8 +164,18 @@ def run():
                  'Synchronous GL/Vulkan GPU handoff included; no per-frame CPU pixel readback or cached surface image.',
                  'No frame generation. 1 SPP is not a Flow ray-marching parameter.']}
         rows.append(row);print('FLOW_MIXED RESULT',json.dumps({k:v for k,v in row.items() if k!='frameMs'}),flush=True)
-    assert lib.flowMixedCapture(host,str(out/'mixed.rgba16f').encode())==0,lib.flowMixedError().decode()
     (out/'result.json').write_text(json.dumps(rows,indent=2),encoding='utf-8')
+    # Evidence only, after all timing: preserve the exact surface input used by Flow.
+    pixels=(C.c_uint16*(W*H*4))()
+    with offscreen.bind():
+        original=gl.get(0x8CA6)
+        gl.fn('glBindFramebuffer',None,U,U)(0x8CA8,flip)
+        gl.fn('glReadBuffer',None,U)(0x8CE0)
+        gl.fn('glReadPixels',None,I,I,I,I,U,U,P)(0,0,W,H,0x1908,0x140B,C.cast(pixels,P))
+        gl.fn('glBindFramebuffer',None,U,U)(0x8D40,original)
+    gl.check('Surface evidence capture')
+    (out/'surface.rgba16f').write_bytes(bytes(pixels))
+    assert lib.flowMixedCapture(host,str(out/'mixed.rgba16f').encode())==0,lib.flowMixedError().decode()
     gl.fn('glFinish',None)()
     for buf in buffers:
         v=U(buf);gl.fn('glDeleteBuffers',None,I,C.POINTER(U))(1,C.byref(v))
@@ -178,7 +188,9 @@ def entry():
     try:run()
     except Exception:
         traceback.print_exc();sys.stdout.flush();sys.stderr.flush();os._exit(1)
-    sys.stdout.flush();sys.stderr.flush();bpy.ops.wm.quit_blender()
+    # Factory-reset windows invalidate the timer's original UI exit context.
+    # All resources and evidence have already been released/saved above.
+    sys.stdout.flush();sys.stderr.flush();os._exit(0)
 
 # OpenGL context and VIEW_3D exist after Blender's first event-loop tick.
 bpy.app.timers.register(entry,first_interval=1.)
