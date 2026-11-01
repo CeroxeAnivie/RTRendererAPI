@@ -11,6 +11,9 @@ public final class RtxptHexBallQualitySelfTest {
         String mode=args.length>0?args[0]:"relax";
         boolean glass=args.length>1&&args[1].equals("glass");
         Path output=Path.of(args.length>2?args[2]:"build/reports/hexball-quality/"+mode).toAbsolutePath();
+        String probe=args.length>3?args[3]:"none";
+        if(!java.util.Set.of("none","original-lights","quarter-lights","no-sun","no-sky","no-environment").contains(probe))
+            throw new IllegalArgumentException("Unknown lighting probe: "+probe);
         Files.createDirectories(output);
         System.setProperty(DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY,"true");
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
@@ -48,10 +51,29 @@ public final class RtxptHexBallQualitySelfTest {
         var physics=new HexPhysics();
         var camera=DemoRendererProfile.camera(2560,1440,15.4);
         var environment=DemoRendererProfile.environment();
+        // Diagnostic isolation only. These light-removal cases are not accepted
+        // rendering fixes or production performance configurations.
+        if(probe.equals("no-sun")||probe.equals("no-sky")||probe.equals("no-environment")) {
+            var source=environment;
+            environment=EnvironmentState.builder()
+                .skyRadiance(source.skyRed(),source.skyGreen(),source.skyBlue())
+                .ambientIntensity(probe.equals("no-sun")?source.ambientIntensity():0)
+                .sunDirection(source.sunDirectionX(),source.sunDirectionY(),source.sunDirectionZ())
+                .sunRadiance(source.sunRed(),source.sunGreen(),source.sunBlue())
+                .sunIntensity(probe.equals("no-sky")?source.sunIntensity():0).build();
+        }
+        var initial=scene.initialTransaction();
+        if(probe.equals("original-lights")||probe.equals("quarter-lights")) {
+            float scale=probe.equals("original-lights")?4f:.25f;
+            var lights=initial.upserts().lights().stream().map(light->SceneLight.point(light.id(),light.x(),light.y(),light.z())
+                .color(light.red(),light.green(),light.blue()).intensity(light.intensity()*scale).range(light.range()).build()).toList();
+            initial=SceneTransaction.builder(0).resetScene().upsertMaterials(initial.upserts().materials())
+                .upsertMeshes(initial.upserts().meshes()).upsertInstances(initial.upserts().instances()).upsertLights(lights).build();
+        }
         FramePrimitiveBatch previous=FramePrimitiveBatch.empty();
         long sequence=0;
         try(var renderer=Renderer.open("rtxpt",policy)) {
-            long revision=renderer.apply(scene.initialTransaction()).acceptedSceneRevision();
+            long revision=renderer.apply(initial).acceptedSceneRevision();
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
             for(int phase=0;phase<3;phase++) {
                 int count=phase==0?164:phase==1?120:80;
@@ -72,7 +94,7 @@ public final class RtxptHexBallQualitySelfTest {
                         require(!status.sharc(),"Do not add a cache to the accepted SR policy");
                         require(!status.frameGeneration(),"FG off for quality evidence");
                         require(status.renderWidth()==1485&&status.renderHeight()==835,"Balanced input unchanged");
-                        Files.writeString(output.resolve("runtime.txt"),"mode="+mode+" glass="+glass+"\n"+status+"\n"+policy+"\n");
+                        Files.writeString(output.resolve("runtime.txt"),"mode="+mode+" glass="+glass+" probe="+probe+"\n"+status+"\n"+policy+"\n");
                         System.out.println("QUALITY_ACTUAL "+status);
                     }
                     if(phase==0&&f>=160 || phase==1&&f>=116 || phase==2&&(f==0||f==3||f==15||f==79)) {

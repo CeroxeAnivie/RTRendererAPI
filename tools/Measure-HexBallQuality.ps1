@@ -4,7 +4,8 @@ param(
     [switch]$Glass,
     [switch]$PackagedRuntime,
     [switch]$SmallPointCandidate,
-    [switch]$ControlLighting
+    [switch]$ControlLighting,
+    [ValidateSet('none','original-lights','quarter-lights','no-sun','no-sky','no-environment')][string]$LightingProbe='none'
 )
 $ErrorActionPreference='Stop'
 if($SmallPointCandidate -and $ControlLighting){throw 'Choose candidate or original lighting control, not both.'}
@@ -36,12 +37,13 @@ $settings=[ordered]@{
     Jvm=@('-Dfile.encoding=UTF-8',('-Dtop.ceroxe.rt.rtxpt.runtime='+(Join-Path $repo 'build/rtxpt-sdk/bin')),
         '--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow',
         '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath);
-    Entry='demo.RtxptHexBallQualitySelfTest';Arguments=@($Mode,$(if($Glass){'glass'}else{'metal'}),$images);
+    Entry='demo.RtxptHexBallQualitySelfTest';Arguments=@($Mode,$(if($Glass){'glass'}else{'metal'}),$images,$LightingProbe);
     StartedAt=(Get-Date -Format o);NativeSha256=(Get-FileHash 'build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll').Hash;
     Width=2560;Height=1440;Spp=$(if($Mode -eq 'reference'){32}else{1});FrameGeneration=$false;StageProfile=$false
     RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
     SmallPointCandidate=[bool]$SmallPointCandidate
     ControlLighting=[bool]$ControlLighting
+    LightingProbe=$LightingProbe
 }
 if($PackagedRuntime) {
     $settings.Jvm=@($settings.Jvm | Where-Object {$_ -notlike '-Dtop.ceroxe.rt.rtxpt.runtime=*'})
