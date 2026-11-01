@@ -1,0 +1,58 @@
+{
+  "area": {
+    "translation_mae_255": 0.45100441575050354,
+    "static_interframe_mae_255": 0.19509178400039673,
+    "mean_rgb_255": 15.20481014251709,
+    "spatial_std_255": 28.375347137451172,
+    "reference_mae_255": 1.6187770366668701,
+    "reference_mean_rgb_255": 15.546797752380371
+  },
+  "environment": {
+    "translation_mae_255": 2.374850034713745,
+    "static_interframe_mae_255": 0.5309712886810303,
+    "mean_rgb_255": 126.28849792480469,
+    "spatial_std_255": 22.79652214050293,
+    "reference_mae_255": 3.619936943054199,
+    "reference_mean_rgb_255": 128.30770874023438
+  },
+  "many": {
+    "translation_mae_255": 1.1657524108886719,
+    "static_interframe_mae_255": 0.656655490398407,
+    "mean_rgb_255": 23.45846939086914,
+    "spatial_std_255": 28.70968246459961,
+    "reference_mae_255": 2.020120620727539,
+    "reference_mean_rgb_255": 23.732423782348633
+  },
+  "mixed": {
+    "translation_mae_255": 3.0008318424224854,
+    "static_interframe_mae_255": 0.7806047201156616,
+    "mean_rgb_255": 145.62855529785156,
+    "spatial_std_255": 21.263532638549805,
+    "reference_mae_255": 5.565153121948242,
+    "reference_mean_rgb_255": 150.12335205078125
+  },
+  "points": {
+    "translation_mae_255": 0.31259170174598694,
+    "static_interframe_mae_255": 0.3752816915512085,
+    "mean_rgb_255": 14.09622573852539,
+    "spatial_std_255": 22.117088317871094,
+    "reference_mae_255": 1.4519380331039429,
+    "reference_mean_rgb_255": 14.273415565490723
+  },
+  "spots": {
+    "translation_mae_255": 0.06029345095157623,
+    "static_interframe_mae_255": 0.16937044262886047,
+    "mean_rgb_255": 8.458270072937012,
+    "spatial_std_255": 17.155540466308594,
+    "reference_mae_255": 0.9246612787246704,
+    "reference_mean_rgb_255": 8.653641700744629
+  },
+  "sun": {
+    "translation_mae_255": 0.024150872603058815,
+    "static_interframe_mae_255": 0.22258278727531433,
+    "mean_rgb_255": 53.713157653808594,
+    "spatial_std_255": 65.54389953613281,
+    "reference_mae_255": 1.573781132698059,
+    "reference_mean_rgb_255": 54.014068603515625
+  }
+}

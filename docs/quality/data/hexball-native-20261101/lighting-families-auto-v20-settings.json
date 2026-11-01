@@ -1,0 +1,27 @@
+{
+  "SourceCommit": "a4a52b15e87055f50ac50c4430f090709578093d",
+  "Java": "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+  "Jvm": [
+    "-Dfile.encoding=UTF-8",
+    "--enable-native-access=ALL-UNNAMED",
+    "--sun-misc-unsafe-memory-access=allow",
+    "-Xmx3g",
+    "-XX:-UseJVMCICompiler",
+    "-cp",
+    "demos/hex-ball/build/classes/java/test;renderer-rtxpt/build/classes/java/test;D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\libs\\RTRendererAPI-HexBallDemo-7.0.0.jar"
+  ],
+  "Entry": "top.ceroxe.rt.renderer.rtxpt.RtxptLightingNativeSelfTest",
+  "Arguments": [
+    "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\rtxpt-lighting\\lighting-families-auto-v20",
+    "all",
+    "1",
+    "raw"
+  ],
+  "RuntimeSource": "PackagedJar",
+  "JarSha256": "CD9F4E9C358FBF9D3699E59DE2E94EC17DA9C6D95CC99643710F7F7D16341EDB",
+  "ControlLighting": false,
+  "ControlDirectional": false,
+  "Reuse": false,
+  "Spp": 1,
+  "StartedAt": "2026-11-01T21:21:23.2902485+08:00"
+}

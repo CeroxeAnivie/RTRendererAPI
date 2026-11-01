@@ -1,6 +1,7 @@
 // Small delta-light sum; BSDF evaluation, visibility, MIS and accumulation remain RTXPT's.
 // Reference: PBRT-v3 UniformSampleAllLights / EstimateDirect (delta light branch).
-// Only zero-radius point lights are covered. Area lights and environment retain
+// Zero-radius point and spot lights share the upstream kPoint representation.
+// Area lights and environment retain
 // the original sampled estimator, with its original PDFs and BSDF MIS weights.
 #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS
 bool RtrSmallPointSet(const LightSampler sampler)
@@ -41,7 +42,7 @@ void RtrSumPointLights(inout NEEResult result, const LightSampler sampler,
         light.LightSampleableByBSDF = false; // A point light has delta support.
         light.FromLocalDistribution = false;
         ProcessLightSample(result, light, 1, 1, 0, 1, shading, bsdf, path,
-            sampler, generator, context);
+            sampler, generator, context, false); // Exact contributions need no sampling feedback.
     }
 }
 #endif

@@ -30,9 +30,13 @@ class HostPathTracer final : public AdvancedPathTracer {
     bool smallPointLighting=false;
     bool lightingSceneDirty=true;
     bool eligibleLightingScene=false;
+    bool eligiblePowerScene=false;
+    bool powerLighting=false;
     int previousNeeType=2;
-    bool smallPointScene() const {
-        if(!GetScene())return false;
+    void AnalyzeLightingScene() {
+        eligibleLightingScene=false;
+        eligiblePowerScene=false;
+        if(!GetScene())return;
         const auto graph=GetScene()->GetSceneGraph();
         const auto& lights=graph->GetLights();
         size_t analyticCount=0;
@@ -47,11 +51,12 @@ class HostPathTracer final : public AdvancedPathTracer {
                 && static_cast<const donut::engine::SpotLight*>(light.get())->radius==0.f)
                 pointFound=true;
         }
-        if(!pointFound || analyticCount>4)return false;
+        if(!pointFound || analyticCount>4)return;
+        eligibleLightingScene=true;
+        eligiblePowerScene=true;
         for(const auto& material:graph->GetMaterials())
             if(material->emissiveColor.x!=0.f || material->emissiveColor.y!=0.f || material->emissiveColor.z!=0.f)
-                return false;
-        return true;
+                eligiblePowerScene=false;
     }
 public:
     using AdvancedPathTracer::AdvancedPathTracer;
@@ -61,7 +66,7 @@ public:
     }
     void UpdateLightingPolicy() {
         if(lightingSceneDirty) {
-            eligibleLightingScene=smallPointScene();
+            AnalyzeLightingScene();
             lightingSceneDirty=!GetScene();
         }
         const char* overrideValue=std::getenv("RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS");
@@ -69,11 +74,13 @@ public:
             && !g_sampleUIData.StandaloneDenoiser && !g_sampleUIData.ActualUseRTXDIPasses()
             && g_sampleUIData.ActualRadianceCacheMode()==0 && g_sampleUIData.ActualSamplesPerPixel()==1;
         const bool enabled=eligibleLightingScene && rawPolicy && !(overrideValue && std::string(overrideValue)=="0");
-        if(enabled==smallPointLighting)return;
-        if(enabled) {previousNeeType=g_sampleUIData.NEEType;g_sampleUIData.NEEType=1;}
-        else g_sampleUIData.NEEType=previousNeeType;
+        const bool powerEnabled=enabled && eligiblePowerScene;
+        if(enabled==smallPointLighting && powerEnabled==powerLighting)return;
+        if(powerEnabled && !powerLighting) {previousNeeType=g_sampleUIData.NEEType;g_sampleUIData.NEEType=1;}
+        else if(!powerEnabled && powerLighting) g_sampleUIData.NEEType=previousNeeType;
         smallPointLighting=enabled;
-        donut::log::info("RTXPT native small-point lighting %s; standalone denoising unchanged",enabled?"ACTIVE":"DISABLED");
+        powerLighting=powerEnabled;
+        donut::log::info("RTXPT native small-point lighting %s; sampler=%d; standalone denoising unchanged",enabled?"ACTIVE":"DISABLED",g_sampleUIData.NEEType);
     }
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
