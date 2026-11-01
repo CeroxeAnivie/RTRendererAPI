@@ -19,5 +19,28 @@
     "sharc": true,
     "ser": true
   },
-  "exclusions": "Round 1 before Java classpath had a missing subdirectory; round 1 is excluded as a whole. Later baseline class locations verified. Do not compare the early unpaired baseline to paired candidates."
+  "exclusions": "All of round 1 excluded because the first baseline Java classpath was incomplete. Paired round 5 static overlay excluded because after completed 901/1800 frames. Other frame counts and pre-run 0% GPU checks passed.",
+  "afterNativeSha256": "c01b1db01951c0998e4d20794b7aa1a86d77d942baac951ebe44163a8d822e77",
+  "packagedAcceptance": {
+    "executable": "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+    "arguments": [
+      "-Xms32m",
+      "-Xmx512m",
+      "-XX:-UseJVMCICompiler",
+      "--enable-native-access=ALL-UNNAMED",
+      "--sun-misc-unsafe-memory-access=allow",
+      "-Dfile.encoding=UTF-8",
+      "-cp",
+      "D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\classes\\java\\test;D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\libs\\RTRendererAPI-MediumDemo-7.0.0.jar",
+      "demo.RtxptCompositionSelfTest",
+      "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\rtxpt-memory\\packaged-final",
+      "rtxpt-final"
+    ],
+    "commit": "c1c037d6bd26e39dc38ee59167eb2b5f0d48749e",
+    "initialGpuPercent": 0,
+    "purpose": "packaged native runtime correctness, actual FG/MFG delivery, and low-frequency memory counters",
+    "jarSha256": "A38D276A2F41D69FF231A6D7CB8DD405D1993AA01D27EEAB45A51C76D1FA75BF",
+    "exitCode": 0
+  },
+  "bundledNativeSha256": "c01b1db01951c0998e4d20794b7aa1a86d77d942baac951ebe44163a8d822e77"
 }

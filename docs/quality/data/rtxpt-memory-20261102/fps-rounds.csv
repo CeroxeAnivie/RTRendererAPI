@@ -1,20 +1,21 @@
-run,mode,completed_frames,ms,fps,copy_gpu_ms,initial_gpu_percent,eligible,before_or_after
-paired-1-return-overlay-after,return-overlay,1800,6.060536,165.001904,0,0,False,after
-paired-1-return-overlay-before,return-overlay,1800,5.990362,166.934817,0,0,False,before
-paired-1-return-toggle-after,return-toggle,600,5.890386,169.768152,0,0,False,after
-paired-1-return-toggle-before,return-toggle,600,5.859785,170.654725,0,0,False,before
-paired-2-return-overlay-after,return-overlay,1800,6.582890,151.908954,0,0,True,after
-paired-2-return-overlay-before,return-overlay,1800,6.023158,166.025855,0,0,True,before
-paired-2-return-toggle-after,return-toggle,600,6.014451,166.266210,0,0,True,after
-paired-2-return-toggle-before,return-toggle,600,6.007877,166.448139,0,0,True,before
-paired-3-return-overlay-after,return-overlay,1800,6.089227,164.224459,0,0,True,after
-paired-3-return-overlay-before,return-overlay,1800,6.046049,165.397284,0,0,True,before
-paired-3-return-toggle-after,return-toggle,600,6.113567,163.570638,0,0,True,after
-paired-3-return-toggle-before,return-toggle,600,6.403138,156.173430,0,0,True,before
-paired-4-return-overlay-after,return-overlay,1800,5.900139,169.487532,0,0,True,after
-paired-4-return-overlay-before,return-overlay,1800,6.003084,166.581055,0,0,True,before
-paired-4-return-toggle-after,return-toggle,600,6.043098,165.478052,0,0,True,after
-paired-4-return-toggle-before,return-toggle,600,6.032305,165.774116,0,0,True,before
-paired-5-return-overlay-after,return-overlay,901,6.077830,164.532396,0,0,True,after
-paired-5-return-overlay-before,return-overlay,1800,5.982408,167.156784,0,0,True,before
-paired-5-return-toggle-before,return-toggle,600,6.106046,163.772095,0,0,True,before
+run,mode,completed_frames,ms,fps,copy_gpu_ms,initial_gpu_percent,eligible,exclusion_reason,before_or_after
+paired-1-return-overlay-before,return-overlay,1800,5.990362,166.934817,0,0,False,round-1 baseline classpath was incomplete,before
+paired-1-return-overlay-after,return-overlay,1800,6.060536,165.001904,0,0,False,round-1 baseline classpath was incomplete,after
+paired-2-return-overlay-before,return-overlay,1800,6.023158,166.025855,0,0,True,,before
+paired-2-return-overlay-after,return-overlay,1800,6.582890,151.908954,0,0,True,,after
+paired-3-return-overlay-before,return-overlay,1800,6.046049,165.397284,0,0,True,,before
+paired-3-return-overlay-after,return-overlay,1800,6.089227,164.224459,0,0,True,,after
+paired-4-return-overlay-before,return-overlay,1800,6.003084,166.581055,0,0,True,,before
+paired-4-return-overlay-after,return-overlay,1800,5.900139,169.487532,0,0,True,,after
+paired-5-return-overlay-before,return-overlay,1800,5.982408,167.156784,0,0,False,incomplete requested frame count,before
+paired-5-return-overlay-after,return-overlay,901,6.077830,164.532396,0,0,False,incomplete requested frame count,after
+paired-1-return-toggle-before,return-toggle,600,5.859785,170.654725,0,0,False,round-1 baseline classpath was incomplete,before
+paired-1-return-toggle-after,return-toggle,600,5.890386,169.768152,0,0,False,round-1 baseline classpath was incomplete,after
+paired-2-return-toggle-before,return-toggle,600,6.007877,166.448139,0,0,True,,before
+paired-2-return-toggle-after,return-toggle,600,6.014451,166.266210,0,0,True,,after
+paired-3-return-toggle-before,return-toggle,600,6.403138,156.173430,0,0,True,,before
+paired-3-return-toggle-after,return-toggle,600,6.113567,163.570638,0,0,True,,after
+paired-4-return-toggle-before,return-toggle,600,6.032305,165.774116,0,0,True,,before
+paired-4-return-toggle-after,return-toggle,600,6.043098,165.478052,0,0,True,,after
+paired-5-return-toggle-before,return-toggle,600,6.106046,163.772095,0,0,True,,before
+paired-5-return-toggle-after,return-toggle,600,6.137443,162.934308,0,0,True,,after
