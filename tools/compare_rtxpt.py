@@ -195,10 +195,14 @@ def main():
             import csv
             rows=list(csv.DictReader(present.open(encoding='utf-8-sig')))
             assert len(rows)>10, 'No native completed/presented frames'
-            intervals=[float(r['CPUFrameTime']) for r in rows[2:] if r.get('CPUFrameTime') and float(r['CPUFrameTime'])>0]
+            interval_key='FrameTime' if 'FrameTime' in rows[0] else 'CPUFrameTime'
+            intervals=[float(r[interval_key]) for r in rows[2:] if r.get(interval_key) and float(r[interval_key])>0]
+            assert intervals, 'PresentMon returned no valid frame intervals'
+            pass_rows=list(csv.DictReader(perf.open(encoding='utf-8-sig')))
+            dimensions=sorted({(int(r['renderWidth']),int(r['renderHeight'])) for r in pass_rows[-120:]})
             result={'renderer':'Official RTXPT 1.9.0','width':1920,'height':1080,'fg':False,
                     'mode':'Native realtime, DLSS-RR Balanced, default upstream light sampling/cache/filter settings',
-                    'internalResolution':'DLSS Balanced; verify actual dimensions in application evidence',
+                    'internalResolution':dimensions,'subSamplingModes':sorted({int(r['subSamplingMode']) for r in pass_rows[-120:]}),
                     'fps':len(intervals)*1000/sum(intervals),'meanMs':sum(intervals)/len(intervals),
                     'metric':'Native application frame cadence from ETW PresentMon; full renderer, reconstruction, postprocess and presentation',
                     'frames':len(intervals),'initialGpu':initial,**metadata}
@@ -208,6 +212,16 @@ def main():
             process.terminate()
             try:process.wait(timeout=10)
             except subprocess.TimeoutExpired:process.kill();process.wait()
+    # Native screenshot is outside the timing run; it is evidence, not a per-frame disk cost.
+    capture_args=args+['--captureSimple','--capturePath',str(out/'native-frame.png')]
+    with (out/'capture.log').open('w',encoding='utf-8') as log:
+        subprocess.run(capture_args,cwd=executable.parent,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=180)
+    with Image.open(out/'native-frame.png') as im:
+        assert im.size==(1920,1080), im.size
+        pixels=np.asarray(im.convert('RGB'))
+        assert pixels.std()>3, 'RTXPT produced a flat/empty capture'
+        result['verifiedOutputSize']=list(im.size)
+    (out/'result.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
 
 
 if __name__=='__main__':main()
