@@ -15,14 +15,22 @@ public final class RtxptHexBallQualitySelfTest {
         System.setProperty(DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY,"true");
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
         var base=DemoRendererProfile.interactive(config);
+        boolean denoise=!mode.equals("raw")&&!mode.equals("reuse-raw");
+        boolean reuse=mode.startsWith("reuse-");
         var policy=switch(mode) {
-            case "raw" -> base.copyBuilder().denoising(DenoisingOptions.disabled()).build();
-            case "relax" -> base.copyBuilder().denoising(DenoisingOptions.builder()
+            case "raw", "reuse-raw" -> base.copyBuilder().denoising(DenoisingOptions.disabled()).build();
+            case "relax", "reuse-relax" -> base.copyBuilder().denoising(DenoisingOptions.builder()
                 .preference(RendererFeaturePreference.REQUIRED).strategy(DenoisingOptions.Strategy.RESPONSIVE)
                 .builtInTemporalFallback(false).build()).build();
             case "default" -> DemoRendererProfile.rtxptInteractive();
-            default -> throw new IllegalArgumentException("Expected raw, relax or default");
+            default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw or reuse-relax");
         };
+        if(reuse) {
+            var path=policy.pathTracing();
+            policy=policy.copyBuilder().pathTracing(new PathTracingOptions(path.samplesPerPixel(),path.maxBounces(),
+                path.diffuseBounces(),path.radianceCache(),RendererFeaturePreference.REQUIRED,
+                path.indirectLightResampling())).build();
+        }
         var scene=new DemoScene(glass);
         var physics=new HexPhysics();
         var camera=DemoRendererProfile.camera(2560,1440,15.4);
@@ -44,8 +52,9 @@ public final class RtxptHexBallQualitySelfTest {
                     if(sequence==1) {
                         var status=host.runtimeStatus();
                         require(status.reconstruction()==RtxptAccess.Reconstruction.DLSS,"Actual SR, not RR/TAA");
-                        require(status.standaloneDenoiser()==!mode.equals("raw"),"Actual denoiser policy");
-                        require(status.relaxDenoiser()==!mode.equals("raw"),"Actual native RELAX");
+                        require(status.standaloneDenoiser()==denoise,"Actual denoiser policy");
+                        require(status.relaxDenoiser()==denoise,"Actual native RELAX");
+                        require(status.restirDi()==reuse,"Actual upstream direct-light reuse");
                         require(!status.frameGeneration(),"FG off for quality evidence");
                         require(status.renderWidth()==1485&&status.renderHeight()==835,"Balanced input unchanged");
                         Files.writeString(output.resolve("runtime.txt"),"mode="+mode+" glass="+glass+"\n"+status+"\n"+policy+"\n");
