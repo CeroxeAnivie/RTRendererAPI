@@ -63,7 +63,8 @@ def run():
         if hasattr(scene.eevee,key):setattr(scene.eevee,key,1)
     renderer=gpu.platform.renderer_get();print('FLOW MIXED OpenGL device:',renderer,flush=True)
     assert '5080' in renderer,'OpenGL surface renderer selected wrong GPU: '+renderer
-    area=next(x for x in bpy.context.screen.areas if x.type=='VIEW_3D')
+    window=bpy.context.window_manager.windows[0];window.scene=scene
+    area=next(x for x in window.screen.areas if x.type=='VIEW_3D')
     space=area.spaces.active;region=next(x for x in area.regions if x.type=='WINDOW')
     space.overlay.show_overlays=False;space.shading.type='RENDERED'
     space.shading.use_scene_world_render=True;space.shading.use_scene_lights_render=True
@@ -72,7 +73,8 @@ def run():
     projection=scene.camera.calc_matrix_camera(depsgraph,x=W,y=H,scale_x=1,scale_y=1)
     offscreen=gpu.types.GPUOffScreen(W,H,format='RGBA16F')
     def surface():
-        offscreen.draw_view3d(scene,bpy.context.view_layer,space,region,view,projection,do_color_management=False)
+        with bpy.context.temp_override(window=window,area=area,region=region):
+            offscreen.draw_view3d(scene,scene.view_layers[0],space,region,view,projection,do_color_management=False)
     surface()
     gl=GL()
     with offscreen.bind():
@@ -99,7 +101,8 @@ def run():
         assert gl.fn('glCheckFramebufferStatus',U,U)(0x8D40)==0x8CD5,'Flip framebuffer incomplete'
         gl.fn('glBindFramebuffer',None,U,U)(0x8D40,fb);gl.check('Surface framebuffer setup')
     binary=ROOT/'build/flow-sdk/flow/_build/windows-x86_64/release'
-    os.add_dll_directory(str(binary));lib=C.CDLL(str(binary/'flow_mixed_bridge.dll'))
+    dll_directory=os.add_dll_directory(str(binary));os.environ['PATH']=str(binary)+os.pathsep+os.environ['PATH']
+    lib=C.CDLL(str(binary/'flow_mixed_bridge.dll'))
     lib.flowMixedCreate.argtypes=[C.c_char_p,C.c_float,U];lib.flowMixedCreate.restype=P
     lib.flowMixedError.restype=C.c_char_p
     for name in ['flowMixedHandle','flowMixedAllocationSize']:
