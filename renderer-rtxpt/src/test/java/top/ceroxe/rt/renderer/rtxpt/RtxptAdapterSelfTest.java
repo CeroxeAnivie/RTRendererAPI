@@ -92,6 +92,7 @@ public final class RtxptAdapterSelfTest {
             require(colorJson.contains("\"baseColorFactor\":[1.0,0.0,0.0,1.0]"),"RGBA8 low byte is red, matching Vulkan");
             require(colorJson.contains("\"emissiveFactor\":[0.0,0.0,1.0]"),"Emissive RGBA8 keeps red/blue channel order");
             require(lightJson.contains("\"radius\":0,\"range\":10.5"),"Point light keeps the authored range and zero emitter radius");
+            require(!lightJson.contains("NaN")&&!lightJson.contains("Infinity"),"Directionless point lights export finite identity rotations");
         } finally {try(var walk=Files.walk(dir)){for(var p:walk.sorted(Comparator.reverseOrder()).toList())Files.delete(p);}}
         System.out.println("RTXPT adapter contracts PASS");
     }

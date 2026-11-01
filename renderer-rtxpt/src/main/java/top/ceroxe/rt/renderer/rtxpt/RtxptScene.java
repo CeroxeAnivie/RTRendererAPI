@@ -132,7 +132,7 @@ final class RtxptScene {
         var graph=new ArrayList<Object>();graph.add(object("name","RTRoot","model",0));
         for(var l:lights.values()) {
             var light=object("name","l"+l.id(),"type",switch(l.type()){case POINT->"PointLight";case SPOT->"SpotLight";case DIRECTIONAL->"DirectionalLight";},
-                "translation",List.of(l.x(),l.y(),l.z()),"rotation",aim(l.directionX(),l.directionY(),l.directionZ()),"color",List.of(l.red(),l.green(),l.blue()));
+                "translation",List.of(l.x(),l.y(),l.z()),"rotation",l.type()==SceneLight.Type.POINT?List.of(0,0,0,1):aim(l.directionX(),l.directionY(),l.directionZ()),"color",List.of(l.red(),l.green(),l.blue()));
             if(l.type()==SceneLight.Type.DIRECTIONAL)light.put("irradiance",l.intensity());else {light.put("intensity",l.intensity());light.put("radius",0);light.put("range",l.range());}
             if(l.type()==SceneLight.Type.SPOT){light.put("innerAngle",Math.toDegrees(Math.acos(l.innerConeCosine())));light.put("outerAngle",Math.toDegrees(Math.acos(l.outerConeCosine())));}
             graph.add(light);
