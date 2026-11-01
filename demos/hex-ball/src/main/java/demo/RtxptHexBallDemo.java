@@ -15,14 +15,15 @@ public final class RtxptHexBallDemo {
     public static void main(String[] args) {
         Path capture=Arrays.stream(args).filter(a->a.startsWith("--capture="))
             .map(a->Path.of(a.substring("--capture=".length()))).findFirst().orElse(null);
-        var demoArgs=DemoApiControls.parse(Arrays.stream(args).filter(a->!a.startsWith("--capture=")).toArray(String[]::new));
+        boolean originalBalls=Arrays.asList(args).contains("--original-balls");
+        var demoArgs=DemoApiControls.parse(Arrays.stream(args).filter(a->!a.startsWith("--capture=")&&!a.equals("--original-balls")).toArray(String[]::new));
         var config=DemoConfig.parse(demoArgs);
         if(config.windowed() && Arrays.stream(demoArgs).noneMatch(a->a.startsWith("--width="))) {
             config=new DemoConfig(Math.min(1920,Math.max(1,config.width()-160)),Math.min(1080,Math.max(1,config.height()-160)),
                 config.samplesPerPixel(),true,config.benchmark(),config.cpuPresentation(),config.targetFps(),config.frameLimit(),config.duration());
         }
         if(config.samplesPerPixel()!=1)throw new IllegalArgumentException("This RTXPT comparison uses 1 SPP");
-        var scene=new DemoScene();
+        var scene=new DemoScene(!originalBalls);
         var camera=DemoRendererProfile.camera(config.width(),config.height(),15.4);
         var environment=DemoRendererProfile.environment();
         var stats=new RenderStats();
@@ -60,6 +61,7 @@ public final class RtxptHexBallDemo {
                             actual.renderWidth(),actual.renderHeight(),display.outputWidth(),display.outputHeight(),
                             actual.sharc()?"ACTIVE":"DISABLED",actual.restirDi()?"ACTIVE":"DISABLED",actual.restirGi()?"ACTIVE":"DISABLED",
                             display.exposureCompensation(),display.bloom()?"ON":"OFF",DemoScene.BALL_IOR);
+                    if(originalBalls)text=text.substring(0,text.lastIndexOf("GLASS |"))+"ORIGINAL METAL BALLS";
                     host.setOverlayText(text);hudUpdate=now;
                     if(sequence==1)System.out.println("RTXPT actual presentation: "+display);
                 }
@@ -77,6 +79,11 @@ public final class RtxptHexBallDemo {
                 if(config.frameLimit()>0 && sequence>=config.frameLimit())break;
                 if(!config.duration().isZero() && now-start>=config.duration().toNanos())break;
             }
+            host.awaitIdle();
+            System.out.printf(Locale.ROOT,"RTXPT 30s comparison: seconds=%.6f, presented=%d, meanNativeFPS=%.6f, meanOutputFPS=%.6f, final=%s, bridge=%s%n",
+                (System.nanoTime()-start)/1e9,stats.presentedFrames.get(),stats.totalPresentationFramesPerSecond(),
+                DemoTechnologyHud.presentTotalFps(renderer.diagnostics().frameGenerationEvidence(),stats.totalPresentationFramesPerSecond()),
+                renderer.diagnostics().frameGenerationEvidence(),host.bridgeTimings());
         } catch(IllegalStateException failure) {
             // Closing the GLFW window is normal user control, not a renderer failure.
             if(!"RTXPT window closed".equals(failure.getMessage()))throw failure;

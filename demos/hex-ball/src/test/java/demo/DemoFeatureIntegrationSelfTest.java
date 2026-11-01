@@ -44,7 +44,9 @@ public final class DemoFeatureIntegrationSelfTest {
         System.out.println("DemoFeatureIntegrationSelfTest passed");
     }
     private static void glassBallsHavePhysicalReflectionAndClosedInteriors() {
-        var scene=new DemoScene();var initial=scene.initialTransaction();
+        var original=new DemoScene();var originalBatch=original.primitiveBatch(new HexPhysics(),top.ceroxe.rt.renderer.api.FramePrimitiveBatch.empty());
+        require(originalBatch.primitives().stream().noneMatch(p->p.mediumBoundary().isPresent()),"Ordinary Vulkan balls must retain their surface-only path");
+        var scene=new DemoScene(true);var initial=scene.initialTransaction();
         var balls=scene.primitiveBatch(new HexPhysics(),top.ceroxe.rt.renderer.api.FramePrimitiveBatch.empty());
         require(balls.size()==3,"Three original physics balls");
         for(var ball:balls.primitives()) {

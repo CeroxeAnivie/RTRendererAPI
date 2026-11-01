@@ -49,6 +49,10 @@ final class DemoScene {
     };
 
     private final Geometry sphere = sphereGeometry(64, 128);
+    private final boolean glassBalls;
+
+    DemoScene() { this(false); }
+    DemoScene(boolean glassBalls) { this.glassBalls=glassBalls; }
 
     SceneTransaction initialTransaction() {
         List<MaterialAsset> materials = new ArrayList<>();
@@ -67,14 +71,15 @@ final class DemoScene {
                 .build());
 
         for (int index = 0; index < BALL_COLORS.length; index++) {
-            materials.add(MaterialAsset.builder(BALL_MATERIALS[index])
+            materials.add(glassBalls ? MaterialAsset.builder(BALL_MATERIALS[index])
                     .baseColorRgba8(rgba(255,255,255,255))
                     .blendMode(MaterialAsset.BlendMode.TRANSLUCENT)
                     .metallic(0.0F)
                     .roughness(0.025F)
                     .transmission(1.0F)
                     .indexOfRefraction(BALL_IOR)
-                    .build());
+                    .build() : MaterialAsset.builder(BALL_MATERIALS[index])
+                    .baseColorRgba8(BALL_COLORS[index]).metallic(1.0F).roughness(0.12F).build());
         }
 
         List<MeshAsset> meshes = new ArrayList<>();
@@ -126,11 +131,11 @@ final class DemoScene {
                 }
                 previousTransform = prior.transform();
             }
-            batch.add(PrimitiveInstance.builder(BALL_MESHES[index])
+            var primitive=PrimitiveInstance.builder(BALL_MESHES[index])
                     .transform(transform)
-                    .previousTransform(previousTransform)
-                    .mediumBoundary(MediumBoundary.surface(new Medium(BALL_ABSORPTION[index],BALL_IOR)).withPriority(2))
-                    .build());
+                    .previousTransform(previousTransform);
+            if(glassBalls)primitive.mediumBoundary(MediumBoundary.surface(new Medium(BALL_ABSORPTION[index],BALL_IOR)).withPriority(2));
+            batch.add(primitive.build());
         }
         return batch.build();
     }

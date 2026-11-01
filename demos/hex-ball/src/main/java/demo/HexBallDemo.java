@@ -170,6 +170,9 @@ public final class HexBallDemo {
                     presentTotalFps = DemoTechnologyHud.presentTotalFps(
                             diagnostics.frameGenerationEvidence(), stats.framesPerSecond()
                     );
+                    System.out.printf(Locale.ROOT,"VULKAN 30s comparison: presented=%d, meanNativeFPS=%.6f, meanOutputFPS=%.6f%n",
+                        stats.presentedFrames.get(),stats.totalPresentationFramesPerSecond(),
+                        DemoTechnologyHud.presentTotalFps(diagnostics.frameGenerationEvidence(),stats.totalPresentationFramesPerSecond()));
                 }
                 // The presenter owns deferred proxy-present retirement. Check renderer health only
                 // after presenter.close() has waited those fences and returned every final lease.
