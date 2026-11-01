@@ -21,6 +21,7 @@ struct Context {
 };
 std::once_flag initialized;
 void fail(JNIEnv* env, const char* message) {
+    std::cerr << "[RTRenderer LuxCore JNI] " << message << std::endl;
     env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), message);
 }
 std::string utf8(JNIEnv* env, jbyteArray bytes) {
