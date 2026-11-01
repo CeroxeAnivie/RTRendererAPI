@@ -19,6 +19,9 @@ function Patch-Once([string]$Relative,[string]$Anchor,[string]$Replacement,[stri
     if(!$text.Contains($Anchor)){throw "Pinned host integration anchor changed: $Relative"}
     [IO.File]::WriteAllText($path,$text.Replace($Anchor,$Replacement),$utf8)
 }
+# Bound nested shader compilers as well as the top-level MSBuild process.
+Patch-Once 'External/Donut/compileshaders.cmake' 'set(compilerCommand ${SHADERMAKE_PATH}' 'set(compilerCommand ${SHADERMAKE_PATH} --jobs 1' '${SHADERMAKE_PATH} --jobs 1'
+Patch-Once 'External/Nrd/CMakeLists.txt' 'set(SHADERMAKE_GENERAL_ARGS' "set(SHADERMAKE_GENERAL_ARGS --jobs 1" 'SHADERMAKE_GENERAL_ARGS --jobs 1'
 # Only expose host control and runtime file roots. Rendering, scheduling and shaders stay upstream.
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.h' 'private:' @'
 public:

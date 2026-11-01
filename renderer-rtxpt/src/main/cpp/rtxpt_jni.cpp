@@ -9,6 +9,7 @@
 #include <vector>
 #include <unordered_map>
 #include <cmath>
+#include <donut/engine/TextureCache.h>
 #define WinMain RtrUnusedSampleEntryPoint
 #include RTR_RTXPT_ADVANCED_SOURCE
 #undef WinMain
