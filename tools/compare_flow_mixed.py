@@ -17,6 +17,8 @@ import traceback
 
 import bpy
 import gpu
+from gpu_extras.batch import batch_for_shader
+from mathutils import Vector
 
 ROOT=Path(__file__).resolve().parents[1]
 W,H=1920,1080
@@ -72,9 +74,33 @@ def run():
     view=scene.camera.matrix_world.inverted()
     projection=scene.camera.calc_matrix_camera(depsgraph,x=W,y=H,scale_x=1,scale_y=1)
     offscreen=gpu.types.GPUOffScreen(W,H,format='RGBA16F')
+    # EEVEE resolves color into GPUOffScreen but leaves its depth clear. Use
+    # Blender's built-in opaque depth prepass, including its cost every frame.
+    # Transparent media boundaries and glass must not clip the volume march.
+    depth_surface=gpu.types.GPUOffScreen(W,H,format='RGBA16F')
+    depth_shader=gpu.shader.from_builtin('UNIFORM_COLOR')
+    depth_vertices=[]
+    for name,obj in fixture['objects'].items():
+        material=fixture['materials'][obj['material']]
+        if material['type'] in ('null','glass','roughglass') or 'transparency.front' in material:continue
+        native=bpy.data.objects[name]
+        mesh=fixture['meshes'][obj['ply']]
+        for tri in mesh['triangles']:
+            for index in tri:
+                vertex=mesh['vertices'][index]
+                depth_vertices.append(tuple(native.matrix_world@Vector((vertex['x'],vertex['y'],vertex['z']))))
+    depth_batch=batch_for_shader(depth_shader,'TRIS',{'pos':depth_vertices})
     def surface():
         with bpy.context.temp_override(window=window,area=area,region=region):
             offscreen.draw_view3d(scene,scene.view_layers[0],space,region,view,projection,do_color_management=False)
+    def surface_depth():
+        with depth_surface.bind(),gpu.matrix.push_pop():
+            gpu.state.active_framebuffer_get().clear(depth=1.)
+            gpu.state.depth_test_set('LESS_EQUAL');gpu.state.depth_mask_set(True)
+            gpu.matrix.load_matrix(view);gpu.matrix.load_projection_matrix(projection)
+            depth_shader.bind();depth_shader.uniform_float('color',(0.,0.,0.,1.))
+            depth_batch.draw(depth_shader)
+            gpu.state.depth_mask_set(False);gpu.state.depth_test_set('NONE')
     surface()
     gl=GL()
     with offscreen.bind():
@@ -125,12 +151,16 @@ def run():
         gl.check('Vulkan/OpenGL shared GPU buffer import')
     gl.fn('glBindBuffer',None,U,U)(0x88EB,0)
     def frame(refresh):
-        start=time.perf_counter();surface()
+        start=time.perf_counter();surface();surface_depth()
         # Cross-API handoff is ordered explicitly. Copies remain on the GPU.
         with offscreen.bind():
             original=gl.get(0x8CA6)
             gl.fn('glBindFramebuffer',None,U,U)(0x8CA9,flip)
-            gl.fn('glBlitFramebuffer',None,I,I,I,I,I,I,I,I,U,U)(0,0,W,H,0,H,W,0,0x4000|0x0100,0x2600)
+            gl.fn('glBlitFramebuffer',None,I,I,I,I,I,I,I,I,U,U)(0,0,W,H,0,H,W,0,0x4000,0x2600)
+            with depth_surface.bind():
+                gl.fn('glBindFramebuffer',None,U,U)(0x8CA9,flip)
+                gl.fn('glBlitFramebuffer',None,I,I,I,I,I,I,I,I,U,U)(0,0,W,H,0,H,W,0,0x0100,0x2600)
+            gl.fn('glBindFramebuffer',None,U,U)(0x8CA9,flip)
             gl.fn('glBindFramebuffer',None,U,U)(0x8CA8,flip)
             gl.fn('glReadBuffer',None,U)(0x8CE0)
             for i,(format_,type_) in enumerate([(0x1908,0x140B),(0x1902,0x1406)]):
@@ -163,6 +193,7 @@ def run():
                  'Original geometry, surface materials, textures, lights and 32 bounded volume inputs retained.',
                  'Flow scalar extinction/colormap, native directional volume shadows; no HG, volume priority, refractive coupling or camera-medium state.',
                  'Synchronous GL/Vulkan GPU handoff included; no per-frame CPU pixel readback or cached surface image.',
+                 'Built-in Blender opaque depth prepass is included each frame; glass and alpha surfaces do not occlude Flow (no refractive volume coupling).',
                  'No frame generation. 1 SPP is not a Flow ray-marching parameter.']}
         rows.append(row);print('FLOW_MIXED RESULT',json.dumps({k:v for k,v in row.items() if k!='frameMs'}),flush=True)
     (out/'result.json').write_text(json.dumps(rows,indent=2),encoding='utf-8')
@@ -182,12 +213,22 @@ def run():
     (out/'surface-projection.json').write_text(json.dumps([list(row) for row in projection]),encoding='utf-8')
     assert lib.flowMixedCapture(host,str(out/'mixed.rgba16f').encode())==0,lib.flowMixedError().decode()
     assert lib.flowMixedCaptureFarDepth(host,str(out/'far-depth.rgba16f').encode())==0,lib.flowMixedError().decode()
+    import numpy as np
+    image=np.fromfile(out/'mixed.rgba16f',dtype='<f2').reshape(H,W,4).astype('float32')
+    surface_image=np.frombuffer(bytes(pixels),dtype='<f2').reshape(H,W,4).astype('float32')
+    difference=np.abs(image[:,:,:3]-surface_image[:,:,:3])
+    changed=int((difference.max(axis=2)>1/255).sum())
+    verification={'finite':bool(np.isfinite(image).all()),'changedPixels':changed,
+                  'maxLinearDifference':float(difference.max()),'meanLinearDifference':float(difference.mean()),
+                  'depthMin':min(depth_pixels),'depthMax':max(depth_pixels),'depthPrepassTriangles':len(depth_vertices)//3}
+    (out/'verification.json').write_text(json.dumps(verification,indent=2),encoding='utf-8')
+    assert verification['finite'] and changed>1000,'No visible Flow contribution; timing rejected: '+str(verification)
     gl.fn('glFinish',None)()
     for buf in buffers:
         v=U(buf);gl.fn('glDeleteBuffers',None,I,C.POINTER(U))(1,C.byref(v))
     for mem in memories:
         v=U(mem);gl.fn('glDeleteMemoryObjectsEXT',None,I,C.POINTER(U))(1,C.byref(v))
-    lib.flowMixedDestroy(host);offscreen.free()
+    lib.flowMixedDestroy(host);offscreen.free();depth_surface.free()
 
 
 def entry():
