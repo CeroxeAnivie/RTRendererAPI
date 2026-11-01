@@ -2,7 +2,7 @@
 find_package(JNI REQUIRED COMPONENTS JVM)
 # Keep embedded-host symbols separate from previous standalone sample builds.
 if(MSVC)
-    foreach(host_tool ShaderMake ShaderMakeBlob)
+    foreach(host_tool ShaderMake ShaderMakeBlob NRD)
         set_target_properties(${host_tool} PROPERTIES
             PDB_NAME "${host_tool}-host"
             COMPILE_PDB_NAME "${host_tool}-host")
