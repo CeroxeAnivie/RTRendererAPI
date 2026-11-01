@@ -43,6 +43,11 @@ assert "lightSampler.RtrEnvironmentProxyCount()" in nee
 assert "lightSampler.RtrEnvironmentLocalProxyCount()" in nee
 assert "RTR conditional NEE sample budget" in nee
 assert nee.count("localEnvironmentProxyCount == 0") == 1
+assert "const bool updateNeeAtFeedback" in nee
+assert "updateNeeAtFeedback && lightSample.LightIndex" in nee
+assert "workingContext, true); // RTR sampled candidates train NEE-AT" in nee
+small_nee=args.source.parent.joinpath("Shaders/PathTracer/RtrSmallPointNee.hlsli").read_text(encoding="utf-8-sig")
+assert "context, false); // Exact lights do not train the stochastic sampler." in small_nee
 assert "environmentLightProxies) / float(environmentProxyCount)" in args.source.parent.joinpath(
     "Shaders/PathTracer/Lighting/LightSampler.hlsli").read_text(encoding="utf-8-sig")
 result={"source_contract":"PASS","gpu_contract":"not_requested"}

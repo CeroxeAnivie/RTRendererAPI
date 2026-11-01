@@ -153,6 +153,18 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    inline NEEResult 
     #include "RtrSmallPointNee.hlsli" // RTR opt-in exact small-point sum
     inline NEEResult HandleNEE_MultipleSamples(
 '@ 'RTR opt-in exact small-point sum'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' @'
+    void ProcessLightSample(inout NEEResult accum, LightSample lightSample, uint candidateSampleCount, uint fullSamples, uint localCount, uint globalCount,
+                                const ShadingData shadingData, const ActiveBSDF bsdf, const PathState preScatterPath, LightSampler lightSampler,
+                                inout UniformSampleSequenceGenerator sampleGenerator, const WorkingContext workingContext)
+'@ @'
+    void ProcessLightSample(inout NEEResult accum, LightSample lightSample, uint candidateSampleCount, uint fullSamples, uint localCount, uint globalCount,
+                                const ShadingData shadingData, const ActiveBSDF bsdf, const PathState preScatterPath, LightSampler lightSampler,
+                                inout UniformSampleSequenceGenerator sampleGenerator, const WorkingContext workingContext, const bool updateNeeAtFeedback) // RTR feedback policy parameter
+'@ 'RTR feedback policy parameter'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            if( lightSample.LightIndex != NEEAT_INVALID_LIGHT_INDEX && lightSampler.IsTemporalFeedbackRequired() )' @'
+            if( updateNeeAtFeedback && lightSample.LightIndex != NEEAT_INVALID_LIGHT_INDEX && lightSampler.IsTemporalFeedbackRequired() ) // RTR exact lights do not train NEE-AT
+'@ 'RTR exact lights do not train NEE-AT'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        [unroll] for (uint sampleIndex = 0; sampleIndex < fullSamples; sampleIndex++)' @'
         // RTR deterministic delta contributions; do not add them again below.
         #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS
@@ -190,6 +202,9 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            // this c
             #endif
             // this computes the BSDF throughput and (if throughput>0) then casts shadow ray and handles radiance summing up & weighted averaging for 'sample distance' used by denoiser
 '@ 'RTR avoid double-counting exact point contributions'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            ProcessLightSample(result, lightSample, candidateSampleCount, fullSamples, localCount, globalCount, shadingData, bsdf, preScatterPath, lightSampler, sampleGenerator, workingContext);' @'
+            ProcessLightSample(result, lightSample, candidateSampleCount, fullSamples, localCount, globalCount, shadingData, bsdf, preScatterPath, lightSampler, sampleGenerator, workingContext, true); // RTR sampled candidates train NEE-AT
+'@ 'RTR sampled candidates train NEE-AT'
 # DirectionalLight::CalcSample returns a to-light direction, not a world position.
 # Match the pinned upstream IntroRTXDIBridge::RAB_GetLightDirDistance convention.
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidateSample.Direction = surfToLight / max( candidateSample.Distance, 1e-7 );' @'

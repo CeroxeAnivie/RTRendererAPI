@@ -41,7 +41,7 @@ void RtrSumPointLights(inout NEEResult result, const LightSampler sampler,
         light.LightSampleableByBSDF = false; // A point light has delta support.
         light.FromLocalDistribution = false;
         ProcessLightSample(result, light, 1, 1, 0, 1, shading, bsdf, path,
-            sampler, generator, context);
+            sampler, generator, context, false); // Exact lights do not train the stochastic sampler.
     }
 }
 #endif
