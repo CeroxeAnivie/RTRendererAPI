@@ -17,7 +17,7 @@ param(
 $ErrorActionPreference='Stop'
 if($Relax -and ($Reuse -or $DirectOnly)){throw 'RELAX comparison uses the full path without ReSTIR DI or direct-only rendering.'}
 if($Relax -and $RR){throw 'Choose either NRD RELAX or DLSS Ray Reconstruction.'}
-if(([int]$Reuse+[int]$DirectOnly+[int]$RestirGI+[int]$Sharc) -gt 1){throw 'Choose one light-reuse path.'}
+if(([int][bool]$Reuse+[int][bool]$DirectOnly+[int][bool]$RestirGI+[int][bool]$Sharc) -gt 1){throw 'Choose one light-reuse path.'}
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
