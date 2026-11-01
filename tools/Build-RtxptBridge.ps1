@@ -1,6 +1,7 @@
 param(
     [string]$SdkRoot='build/rtxpt-sdk',
     [string]$CMakeExecutable='build/native-build-tools/cmake-4.1.2-windows-x86_64/bin/cmake.exe',
+    [string]$StreamlineSdk=$env:STREAMLINE_SDK,
     [double]$MemoryLimitGB=10.5,
     [switch]$ConfigureOnly
 )
@@ -54,15 +55,23 @@ if(!$text.Contains('RTR_RTXPT_RUNTIME')){
 }
 $rootCMake=Join-Path $sdk 'CMakeLists.txt'
 $cmakeText=[IO.File]::ReadAllText($rootCMake)
+# The command-line OptiX screenshot utility is not used by the embedded realtime host.
+$cmakeText=$cmakeText.Replace('if (NOT _denoiser_hash STREQUAL RTXPT_OPTIX_DENOISER_SHA256)',
+    'if (RTR_RTXPT_FETCH_CAPTURE_TOOL AND NOT _denoiser_hash STREQUAL RTXPT_OPTIX_DENOISER_SHA256)')
 $marker='# RTR_RTXPT_HOST_TARGET'
 if($cmakeText.Contains($marker)){$cmakeText=$cmakeText.Substring(0,$cmakeText.IndexOf($marker))}
 $hostCMake=(Join-Path $repo 'renderer-rtxpt/src/main/cpp/CMakeLists.txt').Replace('\','/')
 [IO.File]::WriteAllText($rootCMake,$cmakeText+"`n$marker`ninclude(`"$hostCMake`")`n",$utf8)
 $cmake=(Resolve-Path (Join-Path $repo $CMakeExecutable)).Path
 $build=Join-Path $sdk 'build-host'
+$localDependencies=@()
+if($StreamlineSdk){
+    $streamline=(Resolve-Path -LiteralPath $StreamlineSdk).Path.Replace('\','/')
+    $localDependencies+=('-DFETCHCONTENT_SOURCE_DIR_STREAMLINE='+$streamline)
+}
 & $cmake -S $sdk -B $build -G 'Visual Studio 17 2022' -A x64 `
     -DDONUT_WITH_VULKAN=OFF -DDONUT_WITH_KTX=OFF -DDONUT_WITH_AFTERMATH=OFF `
-    -DDONUT_EMBED_SHADER_PDBS=OFF -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF
+    -DDONUT_EMBED_SHADER_PDBS=OFF -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF @localDependencies
 if($LASTEXITCODE -ne 0){throw 'RTXPT native configure failed'}
 if($ConfigureOnly){return}
 & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath $cmake `

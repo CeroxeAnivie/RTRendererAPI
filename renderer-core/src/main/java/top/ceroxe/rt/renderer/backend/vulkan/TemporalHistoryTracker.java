@@ -45,7 +45,6 @@ final class TemporalHistoryTracker {
 
     private static boolean sameShadingState(RenderFrameRequest first, RenderFrameRequest second) {
         return first.environment().equals(second.environment())
-                && first.mediumTransport().equals(second.mediumTransport())
                 && first.caustics().equals(second.caustics())
                 && first.lightmap().revision() == second.lightmap().revision()
                 && first.fog().equals(second.fog())

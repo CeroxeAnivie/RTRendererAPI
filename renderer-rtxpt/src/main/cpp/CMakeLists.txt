@@ -9,3 +9,13 @@ target_compile_definitions(rtrenderer_rtxpt PRIVATE
 set_target_properties(rtrenderer_rtxpt PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+if (RTXPT_D3D_AGILITY_SDK_PATH AND RTXPT_D3D_AGILITY_SDK_VERSION)
+    target_include_directories(rtrenderer_rtxpt PRIVATE ${RTXPT_D3D_AGILITY_SDK_PATH}/build/native/include)
+    target_compile_definitions(rtrenderer_rtxpt PRIVATE
+        NVRHI_D3D12_WITH_DXR12_OPACITY_MICROMAP=$<BOOL:${NVRHI_D3D12_WITH_DXR12_OPACITY_MICROMAP}>)
+    add_custom_command(TARGET rtrenderer_rtxpt POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:rtrenderer_rtxpt>/D3D12/"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${RTXPT_D3D_AGILITY_SDK_PATH}/build/native/bin/${NVRHI_TARGET_ARCH}/D3D12Core.dll
+            "$<TARGET_FILE_DIR:rtrenderer_rtxpt>/D3D12/")
+endif()

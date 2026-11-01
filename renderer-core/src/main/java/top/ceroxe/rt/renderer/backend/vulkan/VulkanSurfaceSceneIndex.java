@@ -78,7 +78,7 @@ final class VulkanSurfaceSceneIndex {
         for (var write : changes.instances().writes()) {
             var source = write.value();
             InstanceFact value = new InstanceFact(source.meshAssetId(), source.surfaceVisibility() == 1,
-                    source.mediumBoundary().map(boundary -> !boundary.surfaceInteraction()).orElse(false),
+                    false,
                     source.castsShadow() && source.mediumBoundary().isEmpty());
             InstanceFact previous = instances.put(write.id(), value);
             if (previous != null) remove(meshInstances, previous.mesh, write.id());
@@ -169,7 +169,7 @@ final class VulkanSurfaceSceneIndex {
         batchMetallicReflections = 0;
         for (PrimitiveInstance primitive : batch.primitives()) {
             int flags = flags(new InstanceFact(primitive.meshAssetId(), primitive.surfaceVisibility() == 1,
-                    primitive.mediumBoundary().map(boundary -> !boundary.surfaceInteraction()).orElse(false),
+                    false,
                     primitive.castsShadow() && primitive.mediumBoundary().isEmpty()));
             if ((flags & OPAQUE) == 0) batchGeneral++;
             if ((flags & TRANSMISSIVE) != 0) batchTransmissive++;
