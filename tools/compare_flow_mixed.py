@@ -109,6 +109,7 @@ def run():
         getattr(lib,name).argtypes=[P,U];getattr(lib,name).restype=Q
     lib.flowMixedFrame.argtypes=[P,I];lib.flowMixedFrame.restype=I
     lib.flowMixedCapture.argtypes=[P,C.c_char_p];lib.flowMixedCapture.restype=I
+    lib.flowMixedCaptureFarDepth.argtypes=[P,C.c_char_p];lib.flowMixedCaptureFarDepth.restype=I
     lib.flowMixedDestroy.argtypes=[P]
     uuid=(C.c_ubyte*16)();gl.fn('glGetUnsignedBytevEXT',None,U,C.POINTER(C.c_ubyte))(0x9597,uuid)
     gl.check('Surface GPU UUID query');print('Surface GPU UUID:',bytes(uuid).hex(),flush=True)
@@ -167,15 +168,20 @@ def run():
     (out/'result.json').write_text(json.dumps(rows,indent=2),encoding='utf-8')
     # Evidence only, after all timing: preserve the exact surface input used by Flow.
     pixels=(C.c_uint16*(W*H*4))()
+    depth_pixels=(C.c_float*(W*H))()
     with offscreen.bind():
         original=gl.get(0x8CA6)
         gl.fn('glBindFramebuffer',None,U,U)(0x8CA8,flip)
         gl.fn('glReadBuffer',None,U)(0x8CE0)
         gl.fn('glReadPixels',None,I,I,I,I,U,U,P)(0,0,W,H,0x1908,0x140B,C.cast(pixels,P))
+        gl.fn('glReadPixels',None,I,I,I,I,U,U,P)(0,0,W,H,0x1902,0x1406,C.cast(depth_pixels,P))
         gl.fn('glBindFramebuffer',None,U,U)(0x8D40,original)
     gl.check('Surface evidence capture')
     (out/'surface.rgba16f').write_bytes(bytes(pixels))
+    (out/'surface.depth32f').write_bytes(bytes(depth_pixels))
+    (out/'surface-projection.json').write_text(json.dumps([list(row) for row in projection]),encoding='utf-8')
     assert lib.flowMixedCapture(host,str(out/'mixed.rgba16f').encode())==0,lib.flowMixedError().decode()
+    assert lib.flowMixedCaptureFarDepth(host,str(out/'far-depth.rgba16f').encode())==0,lib.flowMixedError().decode()
     gl.fn('glFinish',None)()
     for buf in buffers:
         v=U(buf);gl.fn('glDeleteBuffers',None,I,C.POINTER(U))(1,C.byref(v))

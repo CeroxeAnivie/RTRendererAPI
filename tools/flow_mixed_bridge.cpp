@@ -48,4 +48,11 @@ extern "C" __declspec(dllexport) int flowMixedCapture(void* ptr,const char* path
     try {static_cast<MixedHost*>(ptr)->capture(path);return 0;}
     catch(const std::exception& e){lastError=e.what();return -1;}
 }
+extern "C" __declspec(dllexport) int flowMixedCaptureFarDepth(void* ptr,const char* path) {
+    try {
+        auto h=static_cast<MixedHost*>(ptr);std::vector<float> z(size_t(width)*height,1.f);
+        auto farDepth=h->texture(eNvFlowFormat_r32_float,z.data(),4);auto saved=h->depth;h->depth=farDepth;
+        h->capture(path);h->depth=saved;h->ctx.destroyTexture(h->context,farDepth);return 0;
+    } catch(const std::exception& e){lastError=e.what();return -1;}
+}
 extern "C" __declspec(dllexport) void flowMixedDestroy(void* ptr){delete static_cast<MixedHost*>(ptr);}
