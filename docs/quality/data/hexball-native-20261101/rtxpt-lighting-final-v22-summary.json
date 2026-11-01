@@ -1,0 +1,37 @@
+{
+  "scope": "hex-ball same-scene A/B; not a renderer-wide performance result",
+  "fg": false,
+  "spp": 1,
+  "output": [
+    2560,
+    1440
+  ],
+  "input": [
+    1485,
+    835
+  ],
+  "stage_profile": false,
+  "rows": {
+    "control": {
+      "native_fps": 227.50682,
+      "ms_per_completed_frame": 4.395472628029348,
+      "seconds": 30.008506,
+      "native_frames": 6827,
+      "source_commit": "26e79d20c994fa4bdc7b262987541278adb04423",
+      "native_sha256": "25B87D4D786D1B568EE7883D63AC17F7CD5F9AE45C3FD715B5375589E8FB5850",
+      "tag": "rtxpt-fast-sr-control-final-v22"
+    },
+    "automatic": {
+      "native_fps": 249.338277,
+      "ms_per_completed_frame": 4.010615666522794,
+      "seconds": 30.008692,
+      "native_frames": 7482,
+      "source_commit": "26e79d20c994fa4bdc7b262987541278adb04423",
+      "native_sha256": "25B87D4D786D1B568EE7883D63AC17F7CD5F9AE45C3FD715B5375589E8FB5850",
+      "tag": "rtxpt-fast-sr-auto-final-v22"
+    }
+  },
+  "fps_gain_percent": 9.595957167349978,
+  "frame_time_reduction_percent": 8.755758346721876,
+  "packaged_fg_delivery": "OFF/2x/3x/4x/resize/restore/OFF PASS; SDK actual counters; see fg-mfg-raw-sr-final-v22-generation.csv"
+}
