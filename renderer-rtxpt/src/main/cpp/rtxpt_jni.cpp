@@ -208,9 +208,20 @@ void configureAgility(const std::filesystem::path& runtime) {
     auto path = directory.string() + "\\";
     hr = configuration->CreateDeviceFactory(RTXPT_D3D_AGILITY_SDK_VERSION, path.c_str(), IID_PPV_ARGS(&factory));
     if (FAILED(hr)) throw std::runtime_error("CreateDeviceFactory failed: " + std::to_string(static_cast<uint32_t>(hr)) + " path=" + path);
-    factory->ApplyToGlobalState();
+    hr=factory->ApplyToGlobalState();
+    if(FAILED(hr))throw std::runtime_error("ApplyToGlobalState failed: "+std::to_string(static_cast<uint32_t>(hr)));
     selected = directory;
 }
+}
+
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_prepare(
+    JNIEnv* e,jclass,jstring runtime) {
+    std::lock_guard lock(lifecycle);
+    try {
+#if defined(RTXPT_D3D_AGILITY_SDK_VERSION)
+        configureAgility(std::filesystem::u8path(utf8(e,runtime)));
+#endif
+    } catch(const std::exception& x){fail(e,x);}
 }
 
 extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(

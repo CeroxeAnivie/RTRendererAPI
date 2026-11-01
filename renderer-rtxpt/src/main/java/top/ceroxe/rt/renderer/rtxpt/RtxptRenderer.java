@@ -34,6 +34,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
             public RendererFeatureProfile normalize(RendererFeatureProfile profile){return RtxptOptions.normalize(profile);}
         },RtxptOptions.normalize(RtxptOptions.profile(config)));
         RtxptNative.load();
+        if(externalPresentation)RtxptNative.prepare(RtxptNative.runtime().toString());
     }
     private void validatePresentationProfile(RendererFeatureProfile profile) {
         if(externalPresentation&&profile.frameGeneration().preference().requested())

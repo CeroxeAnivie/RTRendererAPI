@@ -25,6 +25,7 @@ final class RtxptNative {
         System.load(dll.toString()); loaded=true;
     }
     static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,String[] options);
+    static native void prepare(String runtime);
     static native long[] sharedFrame(long handle,long sequence);
     static native void retireSharedFrames(long handle);
     static native void resetHistory(long handle);
