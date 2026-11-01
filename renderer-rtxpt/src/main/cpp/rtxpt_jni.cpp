@@ -165,6 +165,13 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
 #endif
         std::vector<std::string> args {"RTRenderer-RTXPT", "--nonInteractive", "--scene", utf8(e, scene),
             "--width", std::to_string(width), "--height", std::to_string(height), "--overrideToRealtimeMode"};
+        // A/B the upstream scheduler without changing its shaders, SPP, or quality policy.
+        if(const char* async=std::getenv("RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX")) {
+            if(std::string(async)!="0" && std::string(async)!="1")
+                throw std::invalid_argument("Diagnostic async prefix must be 0 or 1");
+            args.emplace_back(std::string("--asyncPrefix=")+(async[0]=='1'?"true":"false"));
+            donut::log::info("RTXPT diagnostic upstream asyncPrefix=%s",async);
+        }
         for (jsize i=0; options && i<e->GetArrayLength(options); ++i) {
             auto s = static_cast<jstring>(e->GetObjectArrayElement(options, i));
             args.push_back(utf8(e, s)); e->DeleteLocalRef(s);
@@ -341,6 +348,15 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         s.requestedFrameGenerationMode=frameGenerationMode;
         s.requestedGeneratedFrames=generatedFrames;
         g_sampleUIData.RealtimeMode=true;
+        // Explicit measurement-only model selection; normal callers retain upstream preset F.
+        if(const char* preset=std::getenv("RTR_RTXPT_DIAGNOSTIC_RR_PRESET")) {
+            const std::string selected(preset);
+            if(selected=="D") g_sampleUIData.DLSRRPreset=SI::DLSSRRPreset::ePresetD;
+            else if(selected=="E") g_sampleUIData.DLSRRPreset=SI::DLSSRRPreset::ePresetE;
+            else if(selected=="F") g_sampleUIData.DLSRRPreset=SI::DLSSRRPreset::ePresetF;
+            else throw std::invalid_argument("Diagnostic RR preset must be D, E or F");
+            donut::log::info("RTXPT diagnostic upstream DLSS-RR preset=%s",preset);
+        }
         g_sampleUIData.RealtimeSamplesPerPixel=samplesPerPixel;
         g_sampleUIData.RealtimeAA=realtimeAa;
         g_sampleUIData.StandaloneDenoiser=standaloneDenoiser;

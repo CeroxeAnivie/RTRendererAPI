@@ -5,6 +5,8 @@ param(
     [int]$Width=2560,
     [int]$Height=1440,
     [switch]$StageProfile,
+    [ValidateSet('Upstream','D','E','F')][string]$RrPreset='Upstream',
+    [ValidateSet('Upstream','On','Off')][string]$AsyncPrefix='Upstream',
     [string[]]$ExtraArguments=@(),
     [string]$OutputDirectory='docs/quality/data/hexball-native-20261101'
 )
@@ -35,21 +37,27 @@ $demo=@('--windowed',"--width=$Width","--height=$Height",'--spp=1',"--duration-s
 if($Backend -eq 'Rtxpt'){$demo+='--original-balls'}
 $demo+=$ExtraArguments
 $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
+$oldAsync=$env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX
+$oldPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
 try {
     $env:RTR_RTXPT_GPU_PROFILE=if($StageProfile){$prefix+'-gpu.csv'}else{$null}
+    $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=switch($AsyncPrefix){'On'{'1'} 'Off'{'0'} default{$null}}
+    $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=if($RrPreset -eq 'Upstream'){$null}else{$RrPreset}
     & nvidia-smi --query-gpu=name,driver_version,utilization.gpu,memory.used,power.draw,clocks.current.graphics,temperature.gpu --format=csv > ($prefix+'-initial-gpu.csv')
     $settings=[ordered]@{
         SourceCommit=(& git rev-parse HEAD).Trim();Backend=$Backend;Entry=$entry;
         Width=$Width;Height=$Height;Spp=1;FrameGeneration=$false;StageProfile=[bool]$StageProfile;
+        RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;
         Java=$java;Jvm=$jvm;Arguments=$demo;StartedAt=(Get-Date -Format o);
         NativeSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll' -Algorithm SHA256).Hash
     }
     $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
-    & $java @jvm $entry @demo *> ($prefix+'.log')
+    & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
-    @{ExitCode=$code;EndedAt=(Get-Date -Format o)} | ConvertTo-Json | Set-Content -LiteralPath ($prefix+'-exit.json') -Encoding utf8
     Get-Content -LiteralPath ($prefix+'.log') -Tail 5
     if($code -ne 0){throw "Hex-ball run exited $code; inspect $prefix.log"}
 } finally {
     $env:RTR_RTXPT_GPU_PROFILE=$oldProfile
+    $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=$oldAsync
+    $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$oldPreset
 }

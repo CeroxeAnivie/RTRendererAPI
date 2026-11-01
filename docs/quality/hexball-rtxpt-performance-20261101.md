@@ -52,3 +52,48 @@ not be added to produce frame wall time. `Frame` exclusive time is unscoped work
 or gaps inside the queue's measured frame interval, not a diagnosed shader.
 Only evidence with zero dropped samples and a successful exit can establish the
 first detailed ranking. Final speed acceptance uses diagnostics disabled.
+
+## First measured stage ranking
+
+`rtxpt-profile-v1`: initial GPU 0%, 3351 completed frames / 30.010294 s,
+111.659251 FPS; 195 sampled frames per queue, zero dropped samples, exit 0.
+
+| Queue | Exclusive scope | Mean ms/frame |
+| --- | --- | ---: |
+| Graphics | DLSS-RR | 5.7280 |
+| Compute | PathTrace | 1.7341 |
+| Compute | PathTracePrePass | 0.8827 |
+| Compute | PathTraceSharcUpdate | 0.3110 |
+| Compute | ProcessFeedbackHistoryP3 | 0.2657 |
+| Compute | DLSSRR_PrepareInputs | 0.2642 |
+| Compute | ProcessFeedbackHistoryP2 | 0.2515 |
+| Compute | ProcessFeedbackHistoryP1a | 0.2260 |
+| Compute | DenoiseSpecHitT | 0.2227 |
+| Graphics | All exclusive scopes, sum | 6.0519 |
+| Compute | All exclusive scopes, sum | 5.4166 |
+
+These queue intervals overlap and cannot be summed to wall ms/frame. DLSS-RR
+accounts for 94.65% of the graphics queue interval. Its measured interval alone
+exceeds the old Vulkan pipeline's previously recorded total GPU interval
+(3.413854 ms), but async competition can lengthen an interval: this is not yet
+proof of isolated neural-network execution cost.
+
+The old path uses ordinary DLSS SR, not RR. Both resolve AUTO/BALANCED to the
+SDK's balanced mode. The RTXPT frame reports input 1485x835 and output 2560x1440.
+The old surface-only shader traces primary surfaces, evaluates direct PBR and
+one opaque secondary reflection (`gpuscene_optics.glsl`,
+`gsEvaluateSecondaryTransport`, `RTRENDERER_SURFACE_ONLY`); RTXPT also builds
+denoising layers, updates SHaRC and lighting feedback, then evaluates DLSS-RR.
+Neither rendered pixel count nor `1 SPP` alone describes that full work.
+
+Next controlled comparisons keep scene/output/SPP/path budget fixed: diagnostics
+off baseline; upstream async-prefix off (identical render policy); explicit
+upstream RR model presets D/E/F. Preset changes are diagnostic alternatives, not
+accepted image-quality-preserving optimizations. Default model F stays unchanged.
+Official model source: Streamline 2.14.16 `include/sl_dlss_d.h` and
+`docs/ProgrammingGuideDLSS_RR.md`; RTXPT exposes D/E/F in its native UI.
+
+The runner uses direct log file handles. An NGX updater child inherited the first
+PowerShell capture pipe and delayed the shell's completion despite the renderer
+having exited; `Run-HexBallProcess.py` prevents that harness-only delay. It does
+not change rendering or frame-window timing.
