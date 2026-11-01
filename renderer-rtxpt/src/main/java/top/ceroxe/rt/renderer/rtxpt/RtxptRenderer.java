@@ -23,6 +23,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     private EnvironmentState environment;
     private RtxptNative.Compositor compositor;
     private String title;
+    private Float exposureCompensation;
     RtxptRenderer(RendererConfig config){this(config,false);}
     RtxptRenderer(RendererConfig config,boolean externalPresentation){
         this.externalPresentation=externalPresentation;
@@ -167,7 +168,12 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         return FrameSubmissionResult.accepted(submitted,revision,Set.of());
     }
     private void applyNativeSettings(){RtxptNative.settings(handle,options.maxBounces(),options.diffuseBounces(),options.reflex(),options.frameGenerationMode(),options.generatedFrames(),
-        options.samplesPerPixel(),options.reconstruction().ordinal(),options.dlssQuality().nativeValue,options.standaloneDenoiser(),options.relaxDenoiser(),options.restirDi(),options.restirGi(),options.sharc());}
+        options.samplesPerPixel(),options.reconstruction().ordinal(),options.dlssQuality().nativeValue,options.standaloneDenoiser(),options.relaxDenoiser(),options.restirDi(),options.restirGi(),options.sharc());
+        if(exposureCompensation!=null)RtxptNative.exposureCompensation(handle,exposureCompensation);}
+    @Override public void setExposureCompensation(float stops){
+        ready();if(!Float.isFinite(stops))throw new IllegalArgumentException("Exposure compensation must be finite");
+        exposureCompensation=stops;if(handle!=0)RtxptNative.exposureCompensation(handle,stops);
+    }
     private RendererFeatureProfile effectiveProfile(RendererFeatureProfile requested){
         if(handle==0)return RtxptOptions.normalize(requested);
         var s=runtimeStatus();var p=RtxptOptions.normalize(requested);

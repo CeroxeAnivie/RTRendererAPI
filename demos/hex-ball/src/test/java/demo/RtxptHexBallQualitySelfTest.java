@@ -64,7 +64,7 @@ public final class RtxptHexBallQualitySelfTest {
         }
         var initial=scene.initialTransaction();
         if(probe.equals("original-lights")||probe.equals("quarter-lights")) {
-            float scale=probe.equals("original-lights")?4f:.25f;
+            float scale=probe.equals("original-lights")?1f:.25f;
             var lights=initial.upserts().lights().stream().map(light->SceneLight.point(light.id(),light.x(),light.y(),light.z())
                 .color(light.red(),light.green(),light.blue()).intensity(light.intensity()*scale).range(light.range()).build()).toList();
             initial=SceneTransaction.builder(0).resetScene().upsertMaterials(initial.upserts().materials())
@@ -75,6 +75,7 @@ public final class RtxptHexBallQualitySelfTest {
         try(var renderer=Renderer.open("rtxpt",policy)) {
             long revision=renderer.apply(initial).acceptedSceneRevision();
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
+            if(glass&&probe.equals("none"))host.setExposureCompensation(DemoScene.GLASS_EXPOSURE_COMPENSATION);
             for(int phase=0;phase<3;phase++) {
                 int count=phase==0?164:phase==1?120:80;
                 for(int f=0;f<count;f++) {
@@ -94,6 +95,9 @@ public final class RtxptHexBallQualitySelfTest {
                         require(!status.sharc(),"Do not add a cache to the accepted SR policy");
                         require(!status.frameGeneration(),"FG off for quality evidence");
                         require(status.renderWidth()==1485&&status.renderHeight()==835,"Balanced input unchanged");
+                        float expectedExposure=glass&&probe.equals("none")?DemoScene.GLASS_EXPOSURE_COMPENSATION:0;
+                        require(Math.abs(host.presentationStatus().exposureCompensation()-expectedExposure)<1e-5f,
+                            "The upstream tone mapper must apply the requested exposure, including before first submission");
                         Files.writeString(output.resolve("runtime.txt"),"mode="+mode+" glass="+glass+" probe="+probe+"\n"+status+"\n"+policy+"\n");
                         System.out.println("QUALITY_ACTUAL "+status);
                     }

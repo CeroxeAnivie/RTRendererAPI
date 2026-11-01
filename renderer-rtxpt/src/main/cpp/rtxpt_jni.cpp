@@ -421,6 +421,15 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     } catch (const std::exception& x) { fail(e, x); return 0; }
 }
 
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_exposureCompensation(
+    JNIEnv* e,jclass,jlong h,jfloat stops) {
+    try {
+        session(h);
+        if(!std::isfinite(stops))throw std::invalid_argument("Exposure compensation must be finite");
+        g_sampleUIData.ToneMappingParams.exposureCompensation=stops;
+    } catch(const std::exception& x){fail(e,x);}
+}
+
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_awaitIdle(
     JNIEnv* e, jclass, jlong h) {
     try { session(h).app->HostDeviceManager()->GetDevice()->waitForIdle(); }

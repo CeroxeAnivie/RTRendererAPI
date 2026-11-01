@@ -114,6 +114,8 @@ var config = RendererConfig.pathTracedPresentation().copyBuilder()
 
 实际 SR／RR、SHaRC、ReSTIR、SER 和 FG 状态读取 `host.runtimeStatus()`、`RenderingFeatureCapabilities` 与 `renderer.diagnostics().frameGenerationEvidence()`。请求不等于执行；DLSS-RR 生效时不再叠加独立 NRD。SPP 和路径深度通过 `RendererConfig.Builder.pathTracing(PathTracingOptions)` 设置，不使用每帧的多采样抗锯齿入口。
 
+画面过曝时可用 `host.setExposureCompensation(-1.5F)` 调整上游 tone mapper。该入口也可在首帧提交前调用，场景重载保留，实际值通过 `presentationStatus()` 回读。它只控制显示亮度；SR 本身不替代路径追踪降噪，小灯策略也不覆盖环境光、面积光和间接反弹的全部随机噪声。
+
 `Medium` 只含 `absorption` 和 `[1,4]` 的 IOR；`MediumBoundary` 只含介质和 `[0,14]` 优先级，最多 4 层嵌套内部。需要闭合、朝外且绕序一致的网格。旧体积散射、密度网格、HG、体积发光、无限／相机初始介质和不可见边界已删除，详见[7.0.0 合同](7.0.0.md)。
 
 RTXPT 当前不提供通用 CPU 帧、线性 HDR 导出、任意场景 shader、精确 Vulkan 投影、屏幕雾、旧光子图预算及逐帧纹理／lightmap 覆盖；无效输入在调用边界拒绝。`capture(Path)` 是显式单次诊断捕获，`awaitIdle()` 是显式 GPU 排空，两者都不应放进正常出帧循环。

@@ -97,8 +97,8 @@ public final class DemoFeatureIntegrationSelfTest {
         require(initial.upserts().lights().size()==oldLights.size(),"Glass keeps the original three-light arrangement");
         for(int i=0;i<oldLights.size();i++) {
             var light=initial.upserts().lights().get(i);var oldLight=oldLights.get(i);
-            require(light.id()==oldLight.id()&&light.intensity()==oldLight.intensity()*.25f,
-                "Glass showcase reserves light headroom without changing the original Vulkan lights");
+            require(light.id()==oldLight.id()&&light.intensity()==oldLight.intensity(),
+                "Glass preserves the validated point/environment ratio; exposure controls display brightness");
         }
         var balls=scene.primitiveBatch(new HexPhysics(),top.ceroxe.rt.renderer.api.FramePrimitiveBatch.empty());
         require(balls.size()==3,"Three original physics balls");

@@ -1,0 +1,32 @@
+{
+  "SourceCommit": "9299541c1b0fc409fe7d724dba1e74b10106ce43",
+  "Java": "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+  "Jvm": [
+    "-Dfile.encoding=UTF-8",
+    "--enable-native-access=ALL-UNNAMED",
+    "--sun-misc-unsafe-memory-access=allow",
+    "-Xmx3g",
+    "-XX:-UseJVMCICompiler",
+    "-cp",
+    "demos/hex-ball/build/classes/java/test;demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar"
+  ],
+  "Entry": "demo.RtxptHexBallQualitySelfTest",
+  "Arguments": [
+    "default",
+    "metal",
+    "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\sr-metal-quarter-lights-v23",
+    "quarter-lights"
+  ],
+  "StartedAt": "2026-11-02T00:59:01.6092974+08:00",
+  "NativeSha256": "C01B1DB01951C0998E4D20794B7AA1A86D77D942BAAC951EBE44163A8D822E77",
+  "Width": 2560,
+  "Height": 1440,
+  "Spp": 1,
+  "FrameGeneration": false,
+  "StageProfile": false,
+  "RuntimeSource": "PackagedJar",
+  "SmallPointCandidate": false,
+  "ControlLighting": false,
+  "LightingProbe": "quarter-lights",
+  "JarSha256": "CC6494B12395FA3B7099554AC5A59F97D023FF2D91AE485C5F68376BC2CAAB2F"
+}

@@ -31,6 +31,7 @@ public final class RtxptHexBallDemo {
         var policy=originalSettings?DemoRendererProfile.interactive(config):DemoRendererProfile.rtxptInteractive();
         try(var renderer=Renderer.open("rtxpt",policy)) {
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
+            if(!originalBalls)host.setExposureCompensation(DemoScene.GLASS_EXPOSURE_COMPENSATION);
             long revision=renderer.apply(scene.initialTransaction()).acceptedSceneRevision();
             var physics=new HexPhysics();
             FramePrimitiveBatch previous=FramePrimitiveBatch.empty();

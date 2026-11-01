@@ -214,6 +214,7 @@ public final class RendererConfig
 | `renderer.extension(RtxptAccess.class)` | 借用原生宿主控制接口，不转移 renderer／窗口所有权 |
 | `RtxptAccess.renderFrame()` | 渲染并呈现驻留场景，窗口关闭返回 false |
 | `runtimeStatus()`／`presentationStatus()` | 实际内部／输出尺寸、重建、降噪、复用技术及高级呈现设置 |
+| `setExposureCompensation(float)` | 设置上游 tone mapper 的有限 EV 偏移；-1 表示曝光减半，可在首帧前设置并跨场景重载保留；不增加渲染阶段，也不负责降噪 |
 | `setWindowTitle(String)`／`windowHandle()` | 首帧后管理标题／借用原生 HWND，关闭后失效 |
 | `setOverlayText(String)` | 上游 GPU HUD；空串关闭该 HUD 及其计时查询 |
 | `setOverlayChoices(List<String>, int)`／`overlaySelection()` | 同一原生 HUD 内的选项；空列表隐藏，未配置返回 -1 |

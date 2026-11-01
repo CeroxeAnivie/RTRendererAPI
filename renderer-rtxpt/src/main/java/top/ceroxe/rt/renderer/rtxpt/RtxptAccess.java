@@ -23,6 +23,13 @@ public interface RtxptAccess {
     int overlaySelection();
     /** Actual client output size and upstream exposure/post-process settings. */
     PresentationStatus presentationStatus();
+    /**
+     * Sets the upstream tone mapper's exposure offset in EV; -1 halves displayed exposure.
+     * May be called before the first submission and survives scene reloads. This changes
+     * presentation only, without adding a render pass or changing light intensities.
+     * @param stops finite exposure compensation in stops
+     */
+    void setExposureCompensation(float stops);
     record PresentationStatus(int outputWidth,int outputHeight,float exposureCompensation,float exposureValue,boolean bloom) { }
     enum Reconstruction { NONE, TAA, DLSS, DLSS_RR }
     record RuntimeStatus(int renderWidth,int renderHeight,Reconstruction reconstruction,

@@ -41,6 +41,7 @@ final class RtxptNative {
     static native long[] gpuTiming(long handle);
     static native long[] generationTelemetry(long handle);
     static native double[] presentationStatus(long handle);
+    static native void exposureCompensation(long handle,float stops);
     static native void camera(long handle,String pose,float verticalFovRadians);
     static native void loadScene(long handle,String path);
     static native long window(long handle);

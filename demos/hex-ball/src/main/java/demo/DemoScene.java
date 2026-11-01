@@ -32,6 +32,7 @@ final class DemoScene {
     private static final long RIM_INSTANCE = 301L;
     // Dielectric Fresnel F0=((n-1)/(n+1))^2: 20% reflection at normal incidence.
     static final float BALL_IOR = (float)((1+Math.sqrt(.2))/(1-Math.sqrt(.2)));
+    static final float GLASS_EXPOSURE_COMPENSATION = -1.5f;
     private static final Rgb[] BALL_ABSORPTION = {
             new Rgb(.006f,.045f,.065f),new Rgb(.060f,.006f,.035f),new Rgb(.060f,.030f,.006f)
     };
@@ -93,17 +94,16 @@ final class DemoScene {
         instances.add(SceneInstance.builder(BACK_INSTANCE, BACK_MESH).build());
         instances.add(SceneInstance.builder(RIM_INSTANCE, RIM_MESH).build());
 
-        // These are different integrators. The path-traced glass showcase needs
-        // headroom for real reflected/transmitted light, instead of saturating the
-        // board with the original surface-only demo's three bright colored spots.
-        float lightScale=glassBalls?.25f:1f;
+        // Keep the validated point/environment ratio. The RTXPT showcase controls
+        // display brightness with the upstream exposure offset instead of dimming
+        // only the deterministic point-light contribution.
         List<SceneLight> lights = List.of(
                 SceneLight.point(400L, EMITTER_POSITIONS[0][0], EMITTER_POSITIONS[0][1], EMITTER_POSITIONS[0][2])
-                        .color(1.0F, 0.035F, 0.025F).intensity(310.0F*lightScale).range(10.5F).build(),
+                        .color(1.0F, 0.035F, 0.025F).intensity(310.0F).range(10.5F).build(),
                 SceneLight.point(401L, EMITTER_POSITIONS[1][0], EMITTER_POSITIONS[1][1], EMITTER_POSITIONS[1][2])
-                        .color(0.025F, 1.0F, 0.08F).intensity(300.0F*lightScale).range(10.5F).build(),
+                        .color(0.025F, 1.0F, 0.08F).intensity(300.0F).range(10.5F).build(),
                 SceneLight.point(402L, EMITTER_POSITIONS[2][0], EMITTER_POSITIONS[2][1], EMITTER_POSITIONS[2][2])
-                        .color(0.025F, 0.12F, 1.0F).intensity(340.0F*lightScale).range(11.0F).build()
+                        .color(0.025F, 0.12F, 1.0F).intensity(340.0F).range(11.0F).build()
         );
 
         return SceneTransaction.builder(0L)

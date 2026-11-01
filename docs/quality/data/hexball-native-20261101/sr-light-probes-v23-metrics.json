@@ -1,0 +1,240 @@
+{
+  "sr-glass-current-v23": {
+    "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\sr-glass-current-v23",
+    "runtime": "mode=default glass=true probe=none\nRuntimeStatus[renderWidth=1485, renderHeight=835, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]\nRendererConfig[maxFramesInFlight=3, evidenceRetention=EvidenceRetentionPolicy[commandCapacity=256, retiredResourceCapacity=256, resourceIdentityCapacity=65536, residentGenerationCapacity=16384], validationEnabled=false, gpuTimingsEnabled=true, cpuFrameReadbackEnabled=false, gpuDevice=null, frameOutputFormat=SDR_RGBA8, temporalRendering=TemporalRenderingOptions[mode=BALANCED, maxHistoryFrames=8], frameReconstruction=FrameReconstructionOptions[preference=PREFERRED, mode=SUPER_RESOLUTION, quality=AUTO, fallback=SPATIAL], frameGeneration=FrameGenerationOptions[preference=DISABLED, mode=DISABLED, multiplier=TWO_X, fallback=NONE], lowLatency=LowLatencyOptions[preference=PREFERRED], denoising=DenoisingOptions[preference=DISABLED, strategy=BALANCED, builtInTemporalFallback=false], rayTracingOptimizations=RayTracingOptimizationOptions[shaderExecutionReordering=PREFERRED, memoryOptimization=PREFERRED]]\n",
+    "scene": {
+      "roi": [
+        780,
+        180,
+        1780,
+        1260
+      ],
+      "consecutiveRgbMae255": 1.444203806584362,
+      "meanRgb255": [
+        125.44848958333333,
+        141.4603125,
+        156.5987509259259
+      ],
+      "highChannelFraction": 0.02687824074074074
+    },
+    "upperFloor": {
+      "roi": [
+        1190,
+        280,
+        1370,
+        450
+      ],
+      "consecutiveRgbMae255": 1.6407843137254903,
+      "meanRgb255": [
+        147.0464133986928,
+        154.16932189542484,
+        129.3695343137255
+      ],
+      "highChannelFraction": 0.0
+    }
+  },
+  "sr-metal-quarter-lights-v23": {
+    "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\sr-metal-quarter-lights-v23",
+    "runtime": "mode=default glass=false probe=quarter-lights\nRuntimeStatus[renderWidth=1485, renderHeight=835, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]\nRendererConfig[maxFramesInFlight=3, evidenceRetention=EvidenceRetentionPolicy[commandCapacity=256, retiredResourceCapacity=256, resourceIdentityCapacity=65536, residentGenerationCapacity=16384], validationEnabled=false, gpuTimingsEnabled=true, cpuFrameReadbackEnabled=false, gpuDevice=null, frameOutputFormat=SDR_RGBA8, temporalRendering=TemporalRenderingOptions[mode=BALANCED, maxHistoryFrames=8], frameReconstruction=FrameReconstructionOptions[preference=PREFERRED, mode=SUPER_RESOLUTION, quality=AUTO, fallback=SPATIAL], frameGeneration=FrameGenerationOptions[preference=DISABLED, mode=DISABLED, multiplier=TWO_X, fallback=NONE], lowLatency=LowLatencyOptions[preference=PREFERRED], denoising=DenoisingOptions[preference=DISABLED, strategy=BALANCED, builtInTemporalFallback=false], rayTracingOptimizations=RayTracingOptimizationOptions[shaderExecutionReordering=PREFERRED, memoryOptimization=PREFERRED]]\n",
+    "scene": {
+      "roi": [
+        780,
+        180,
+        1780,
+        1260
+      ],
+      "consecutiveRgbMae255": 1.3634365226337448,
+      "meanRgb255": [
+        125.47150648148148,
+        141.38929560185184,
+        156.4416875
+      ],
+      "highChannelFraction": 0.02736226851851852
+    },
+    "upperFloor": {
+      "roi": [
+        1190,
+        280,
+        1370,
+        450
+      ],
+      "consecutiveRgbMae255": 1.620519244734931,
+      "meanRgb255": [
+        147.20620098039217,
+        154.32964052287582,
+        129.28458333333333
+      ],
+      "highChannelFraction": 0.0
+    }
+  },
+  "sr-glass-no-sun-v23": {
+    "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\sr-glass-no-sun-v23",
+    "runtime": "mode=default glass=true probe=no-sun\nRuntimeStatus[renderWidth=1485, renderHeight=835, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]\nRendererConfig[maxFramesInFlight=3, evidenceRetention=EvidenceRetentionPolicy[commandCapacity=256, retiredResourceCapacity=256, resourceIdentityCapacity=65536, residentGenerationCapacity=16384], validationEnabled=false, gpuTimingsEnabled=true, cpuFrameReadbackEnabled=false, gpuDevice=null, frameOutputFormat=SDR_RGBA8, temporalRendering=TemporalRenderingOptions[mode=BALANCED, maxHistoryFrames=8], frameReconstruction=FrameReconstructionOptions[preference=PREFERRED, mode=SUPER_RESOLUTION, quality=AUTO, fallback=SPATIAL], frameGeneration=FrameGenerationOptions[preference=DISABLED, mode=DISABLED, multiplier=TWO_X, fallback=NONE], lowLatency=LowLatencyOptions[preference=PREFERRED], denoising=DenoisingOptions[preference=DISABLED, strategy=BALANCED, builtInTemporalFallback=false], rayTracingOptimizations=RayTracingOptimizationOptions[shaderExecutionReordering=PREFERRED, memoryOptimization=PREFERRED]]\n",
+    "scene": {
+      "roi": [
+        780,
+        180,
+        1780,
+        1260
+      ],
+      "consecutiveRgbMae255": 1.016070267489712,
+      "meanRgb255": [
+        115.58227824074075,
+        133.8791099537037,
+        151.30101203703703
+      ],
+      "highChannelFraction": 0.026080787037037038
+    },
+    "upperFloor": {
+      "roi": [
+        1190,
+        280,
+        1370,
+        450
+      ],
+      "consecutiveRgbMae255": 1.179727668845316,
+      "meanRgb255": [
+        135.45259803921567,
+        143.6719934640523,
+        113.91368464052287
+      ],
+      "highChannelFraction": 0.0
+    }
+  },
+  "sr-glass-no-env-v23": {
+    "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\sr-glass-no-env-v23",
+    "runtime": "mode=default glass=true probe=no-environment\nRuntimeStatus[renderWidth=1485, renderHeight=835, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]\nRendererConfig[maxFramesInFlight=3, evidenceRetention=EvidenceRetentionPolicy[commandCapacity=256, retiredResourceCapacity=256, resourceIdentityCapacity=65536, residentGenerationCapacity=16384], validationEnabled=false, gpuTimingsEnabled=true, cpuFrameReadbackEnabled=false, gpuDevice=null, frameOutputFormat=SDR_RGBA8, temporalRendering=TemporalRenderingOptions[mode=BALANCED, maxHistoryFrames=8], frameReconstruction=FrameReconstructionOptions[preference=PREFERRED, mode=SUPER_RESOLUTION, quality=AUTO, fallback=SPATIAL], frameGeneration=FrameGenerationOptions[preference=DISABLED, mode=DISABLED, multiplier=TWO_X, fallback=NONE], lowLatency=LowLatencyOptions[preference=PREFERRED], denoising=DenoisingOptions[preference=DISABLED, strategy=BALANCED, builtInTemporalFallback=false], rayTracingOptimizations=RayTracingOptimizationOptions[shaderExecutionReordering=PREFERRED, memoryOptimization=PREFERRED]]\n",
+    "scene": {
+      "roi": [
+        780,
+        180,
+        1780,
+        1260
+      ],
+      "consecutiveRgbMae255": 0.9417939300411523,
+      "meanRgb255": [
+        96.02448981481481,
+        111.59989074074075,
+        123.62104421296296
+      ],
+      "highChannelFraction": 0.03142986111111111
+    },
+    "upperFloor": {
+      "roi": [
+        1190,
+        280,
+        1370,
+        450
+      ],
+      "consecutiveRgbMae255": 0.9405047204066812,
+      "meanRgb255": [
+        132.64996732026145,
+        140.16885620915033,
+        102.54441176470588
+      ],
+      "highChannelFraction": 0.0
+    }
+  },
+  "sr-glass-direct-full-v23": {
+    "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\sr-glass-direct-full-v23",
+    "runtime": "mode=direct glass=true probe=none\nRuntimeStatus[renderWidth=1485, renderHeight=835, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]\nRendererConfig[maxFramesInFlight=3, evidenceRetention=EvidenceRetentionPolicy[commandCapacity=256, retiredResourceCapacity=256, resourceIdentityCapacity=65536, residentGenerationCapacity=16384], validationEnabled=false, gpuTimingsEnabled=true, cpuFrameReadbackEnabled=false, gpuDevice=null, frameOutputFormat=SDR_RGBA8, temporalRendering=TemporalRenderingOptions[mode=BALANCED, maxHistoryFrames=8], frameReconstruction=FrameReconstructionOptions[preference=PREFERRED, mode=SUPER_RESOLUTION, quality=AUTO, fallback=SPATIAL], frameGeneration=FrameGenerationOptions[preference=DISABLED, mode=DISABLED, multiplier=TWO_X, fallback=NONE], lowLatency=LowLatencyOptions[preference=PREFERRED], denoising=DenoisingOptions[preference=DISABLED, strategy=BALANCED, builtInTemporalFallback=false], rayTracingOptimizations=RayTracingOptimizationOptions[shaderExecutionReordering=PREFERRED, memoryOptimization=PREFERRED]]\n",
+    "scene": {
+      "roi": [
+        780,
+        180,
+        1780,
+        1260
+      ],
+      "consecutiveRgbMae255": 1.1320455761316872,
+      "meanRgb255": [
+        111.47273657407408,
+        126.84472152777778,
+        140.54837847222223
+      ],
+      "highChannelFraction": 0.02511851851851852
+    },
+    "upperFloor": {
+      "roi": [
+        1190,
+        280,
+        1370,
+        450
+      ],
+      "consecutiveRgbMae255": 1.5126724763979666,
+      "meanRgb255": [
+        140.48929738562092,
+        146.84303921568628,
+        117.58714869281046
+      ],
+      "highChannelFraction": 0.0
+    }
+  },
+  "sr-glass-direct-no-env-v23": {
+    "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\sr-glass-direct-no-env-v23",
+    "runtime": "mode=direct glass=true probe=no-environment\nRuntimeStatus[renderWidth=1485, renderHeight=835, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]\nRendererConfig[maxFramesInFlight=3, evidenceRetention=EvidenceRetentionPolicy[commandCapacity=256, retiredResourceCapacity=256, resourceIdentityCapacity=65536, residentGenerationCapacity=16384], validationEnabled=false, gpuTimingsEnabled=true, cpuFrameReadbackEnabled=false, gpuDevice=null, frameOutputFormat=SDR_RGBA8, temporalRendering=TemporalRenderingOptions[mode=BALANCED, maxHistoryFrames=8], frameReconstruction=FrameReconstructionOptions[preference=PREFERRED, mode=SUPER_RESOLUTION, quality=AUTO, fallback=SPATIAL], frameGeneration=FrameGenerationOptions[preference=DISABLED, mode=DISABLED, multiplier=TWO_X, fallback=NONE], lowLatency=LowLatencyOptions[preference=PREFERRED], denoising=DenoisingOptions[preference=DISABLED, strategy=BALANCED, builtInTemporalFallback=false], rayTracingOptimizations=RayTracingOptimizationOptions[shaderExecutionReordering=PREFERRED, memoryOptimization=PREFERRED]]\n",
+    "scene": {
+      "roi": [
+        780,
+        180,
+        1780,
+        1260
+      ],
+      "consecutiveRgbMae255": 0.02456522633744856,
+      "meanRgb255": [
+        82.09831597222222,
+        96.71897569444444,
+        106.80927708333333
+      ],
+      "highChannelFraction": 0.02467986111111111
+    },
+    "upperFloor": {
+      "roi": [
+        1190,
+        280,
+        1370,
+        450
+      ],
+      "consecutiveRgbMae255": 0.005330428467683369,
+      "meanRgb255": [
+        127.4228022875817,
+        133.61089869281045,
+        89.51054738562092
+      ],
+      "highChannelFraction": 0.0
+    }
+  },
+  "sr-glass-original-lights-v23": {
+    "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\sr-glass-original-lights-v23",
+    "runtime": "mode=default glass=true probe=original-lights\nRuntimeStatus[renderWidth=1485, renderHeight=835, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]\nRendererConfig[maxFramesInFlight=3, evidenceRetention=EvidenceRetentionPolicy[commandCapacity=256, retiredResourceCapacity=256, resourceIdentityCapacity=65536, residentGenerationCapacity=16384], validationEnabled=false, gpuTimingsEnabled=true, cpuFrameReadbackEnabled=false, gpuDevice=null, frameOutputFormat=SDR_RGBA8, temporalRendering=TemporalRenderingOptions[mode=BALANCED, maxHistoryFrames=8], frameReconstruction=FrameReconstructionOptions[preference=PREFERRED, mode=SUPER_RESOLUTION, quality=AUTO, fallback=SPATIAL], frameGeneration=FrameGenerationOptions[preference=DISABLED, mode=DISABLED, multiplier=TWO_X, fallback=NONE], lowLatency=LowLatencyOptions[preference=PREFERRED], denoising=DenoisingOptions[preference=DISABLED, strategy=BALANCED, builtInTemporalFallback=false], rayTracingOptimizations=RayTracingOptimizationOptions[shaderExecutionReordering=PREFERRED, memoryOptimization=PREFERRED]]\n",
+    "scene": {
+      "roi": [
+        780,
+        180,
+        1780,
+        1260
+      ],
+      "consecutiveRgbMae255": 0.8567274691358024,
+      "meanRgb255": [
+        170.01422546296297,
+        186.39053703703703,
+        198.78695949074074
+      ],
+      "highChannelFraction": 0.27354953703703705
+    },
+    "upperFloor": {
+      "roi": [
+        1190,
+        280,
+        1370,
+        450
+      ],
+      "consecutiveRgbMae255": 0.8370406681190995,
+      "meanRgb255": [
+        211.9508660130719,
+        217.56016339869282,
+        185.43035130718954
+      ],
+      "highChannelFraction": 0.0
+    }
+  }
+}

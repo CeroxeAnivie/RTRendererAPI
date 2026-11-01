@@ -71,14 +71,19 @@ public final class RtxptNativeSelfTest {
             RtxptAdapterSelfTest.require(nativeHost.runtimeStatus().frameGeneration()==frameGenerationActive,
                 "Scene reload restores the requested DLSS-FG state");
             RtxptAdapterSelfTest.require(nativeHost.bridgeTimings().sceneExports()==1 && nativeHost.bridgeTimings().transformBatches()==1,"Transform-only edit uses one native batch without scene export");
+            nativeHost.setExposureCompensation(-.75f);
+            try {nativeHost.setExposureCompensation(Float.NaN);throw new AssertionError("Reject non-finite exposure");}
+            catch(IllegalArgumentException expected) { }
             r.apply(RtxptAdapterSelfTest.scene(3,new Medium(new Rgb(.8f,.1f,.04f),1.33f)));
             r.submit(RtxptAdapterSelfTest.frame(2));
             for(int i=0;i<16;i++)RtxptAdapterSelfTest.require(nativeHost.renderFrame(),"Render after scene switch");
             RtxptAdapterSelfTest.require(nativeHost.bridgeTimings().sceneExports()==2,"Structural scene switch exports once");
+            RtxptAdapterSelfTest.require(nativeHost.presentationStatus().exposureCompensation()==-.75f,"Exposure survives structural reload");
             nativeHost.capture(output.resolve("switched.png"));
             r.submit(RenderFrameRequest.builder(3,960,540,RtxptAdapterSelfTest.camera()).minimumSceneRevision(3)
                 .environment(RtxptAdapterSelfTest.frame(0).environment()).build());
             RtxptAdapterSelfTest.require(nativeHost.renderFrame(),"Render after resize");
+            RtxptAdapterSelfTest.require(nativeHost.presentationStatus().exposureCompensation()==-.75f,"Exposure survives resize");
             RtxptAdapterSelfTest.require(nativeHost.runtimeStatus().frameGeneration()==frameGenerationActive,
                 "Swapchain resize disables and restores DLSS-FG around the resize frame");
             nativeHost.capture(output.resolve("resized.png"));
