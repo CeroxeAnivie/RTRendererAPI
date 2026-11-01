@@ -16,7 +16,7 @@ public final class RtxptHexBallQualitySelfTest {
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
         var base=DemoRendererProfile.interactive(config);
         boolean reference=mode.equals("reference");
-        boolean rr=mode.equals("rr");
+        boolean rr=mode.equals("rr")||(glass&&mode.equals("default"));
         boolean denoise=mode.equals("relax")||mode.equals("reuse-relax")||rr;
         boolean reuse=mode.startsWith("reuse-");
         var policy=switch(mode) {
@@ -24,7 +24,7 @@ public final class RtxptHexBallQualitySelfTest {
             case "relax", "reuse-relax" -> base.copyBuilder().denoising(DenoisingOptions.builder()
                 .preference(RendererFeaturePreference.REQUIRED).strategy(DenoisingOptions.Strategy.RESPONSIVE)
                 .builtInTemporalFallback(false).build()).build();
-            case "default" -> DemoRendererProfile.rtxptInteractive();
+            case "default" -> glass?DemoRendererProfile.rtxptGlassInteractive():DemoRendererProfile.rtxptInteractive();
             case "rr" -> base.copyBuilder().denoising(DenoisingOptions.recommended()).build();
             default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw, reuse-relax, rr, reference or direct");
         };
@@ -69,7 +69,7 @@ public final class RtxptHexBallQualitySelfTest {
                         require(status.relaxDenoiser()==(denoise&&!rr),"Actual native RELAX");
                         require(status.denoising()==denoise,"Actual native denoising, including RR");
                         require(status.restirDi()==reuse,"Actual upstream direct-light reuse");
-                        require(!status.sharc(),"No hidden native radiance cache");
+                        require(status.sharc()==(glass&&mode.equals("default")),"Radiance cache matches the chosen surface/glass policy");
                         require(!status.frameGeneration(),"FG off for quality evidence");
                         require(status.renderWidth()==1485&&status.renderHeight()==835,"Balanced input unchanged");
                         Files.writeString(output.resolve("runtime.txt"),"mode="+mode+" glass="+glass+"\n"+status+"\n"+policy+"\n");

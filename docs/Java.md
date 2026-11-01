@@ -2,32 +2,26 @@
 
 RTRendererAPI 适合嵌入 Java 25 或更高版本的桌面或引擎进程。普通调用方只需要理解场景 revision、帧 sequence 和资源生命周期；Vulkan external memory、semaphore、queue-family ownership 等细节被隔离在显式专家扩展中。
 
-公共模型是厂商中立、宿主无关的渲染契约：场景、相机、exact clip-space projection、资源所有权和能力状态均不包含游戏或引擎专用字段。Windows NVIDIA Vulkan 是当前发布实现，不是公共 API 的身份。
+公共模型是厂商中立、宿主无关的渲染契约：场景、相机、exact clip-space projection、资源所有权和能力状态均不包含游戏或引擎专用字段。当前实现包含 Windows NVIDIA Vulkan 和可选 RTXPT D3D12；它们各自支持的输入与输出不同。
 
-普通 retained-scene 模式提交场景、材质、实例和帧请求。透明介质显式选择可选 `rtxpt` 后端；普通表面与通用命令继续使用 `vulkan-rt`。Vulkan 专家模式通过显式资源/命令事务或 `SceneShaderProgram` 阶段替换表达，自定义阶段不会被普通模式的优化策略覆盖；绑定、同步与资源生命周期保持显式。两者共用 `Renderer` 和 `RendererConfig`，配置对象本身不切换提交语义。后端不是同义替换，具体选择见 [发布前 API 检查](quality/api-release-review-20261101.md)。
+普通模式提交场景、材质、实例和帧请求。`vulkan-rt` 保留普通表面、可编程场景和通用命令；`rtxpt` 可托管完整 PBR／透明介质场景及原生呈现。Vulkan 专家模式通过显式资源／命令事务或 `SceneShaderProgram` 阶段替换表达。两者共用 `Renderer` 和 `RendererConfig`，配置对象本身不切换提交语义；先根据下表选择后端，再学习对应的输出循环。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:7.0.0`。本轮从源码构建到本地 Maven 仓库使用，不上传 Central。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:7.0.0`，默认传递解析 Vulkan 后端、NVIDIA provider 和 native runtime。RTXPT 场景额外添加 `top.ceroxe.rt:renderer-rtxpt:7.0.0`；使用下面的 `RtxptAccess`／组合类时需要编译依赖。本轮从源码构建到本地 Maven 仓库使用，不上传 Central。消费方不需要安装 SDK 或手工复制 DLL。
 
-## 预编译场景 shader
+## 学习顺序与后端选择
 
-生产应用可以在构建阶段编译场景 shader，并通过 `SceneShaderProgram` 携带优化 SPIR-V，避免首次启动
-重复执行 shaderc 优化。所有模块仍须通过 stage、entry point 和 descriptor ABI 校验；错误二进制不会
-悄悄换成内置 shader。raygen 分别注册 SDR 与 HDR，miss/hit 与输出编码无关：
+初次接触先照[三个 Demo 的命令](../demos/hex-ball/README.md)打开窗口，再学习[最小 CPU 帧](#最小调用)或[RTXPT 原生窗口](#rtxpt-透明介质与原生窗口)。之后学习资产、帧级图元、[配置与诊断](#常用配置)、[生命周期](#生命周期与资源所有权)，最后按需阅读通用命令与专家扩展。
 
-```java
-var stages = SceneShaderProgram.builder()
-    .spirv(ShaderStage.RAY_GENERATION, FrameOutputFormat.SDR_RGBA8,
-        Files.readAllBytes(Path.of("scene.rgen.sdr.spv")))
-    .spirv(ShaderStage.RAY_GENERATION, FrameOutputFormat.LINEAR_HDR_RGBA16F,
-        Files.readAllBytes(Path.of("scene.rgen.hdr.spv")))
-    .spirv(ShaderStage.RAY_MISS, Files.readAllBytes(Path.of("scene.rmiss.spv")))
-    .dataBindingCount(1)
-    .build();
-```
+| 需要完成的工作 | 入口 | 输出及限制 |
+| --- | --- | --- |
+| 普通 CPU 帧、HDR／整数数据 | `Renderer.open()` | Vulkan `FrameView`／`FrameSnapshot` |
+| 普通 Vulkan GPU 窗口 | `Renderer.open(RendererConfig.presentation())` | `VulkanFramePresenter`，优选 2× FG |
+| RTXPT 全场景或透明介质 | `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())` | `RtxptAccess` 原生 SDR 窗口，库默认 FG 关闭 |
+| 按场景是否含介质选择后端 | `Renderer.openForScene(policy, scene, firstFrame)` | 为整场景选一个固定后端；首帧已提交 |
+| RTXPT 3D＋Vulkan 独立命令／UI | `RtxptComposedRenderer.open()` | RTXPT 最终呈现；旧设备按需创建 |
+| 自定义 shader、精确投影、通用资源／命令 | 显式选择 `vulkan-rt` | 先查询逐项可执行能力 |
 
-未替换的阶段继续使用内置实现。已替换阶段缺少所需二进制变体时，只有显式提供的 GLSL 可参与编译；
-没有源码则明确拒绝。可同时调用 `shader(stage, glsl)` 保留编辑和源码变体能力。预编译需使用相同版本
-core 中的 `gpuscene_common.glsl`/ABI 头文件。自定义 raygen 的既有 SER 协商策略保持一致。
+`RTXPT_FOR_MEDIA` 是整场景路由：没有介质选 Vulkan，存在介质或透射工作选 RTXPT。不是把一帧中的介质单独交给另一后端。固定会话的场景类别变化需关闭重开；同窗切换完整 3D 后端需要[组合指南](d3d12-vulkan-composition.md)中的显式 Vulkan 最终呈现入口。两个后端的材质、光照与采样不保证逐像素相同。
 
 ## 最小调用
 
@@ -62,91 +56,102 @@ try (Renderer renderer = Renderer.open()) {
 - API 不使用 `null` 表示“暂时无帧”，也不会无限等待。
 - 普通路径的 readback 使用 frame-slot 常驻异步 ring，不会逐帧创建 staging buffer 或执行 queue-idle；但把图像送到 CPU 本身仍有带宽成本。
 
-## 通用命令语义：专家入口
+## RTXPT 透明介质与原生窗口
 
-`Renderer` 是统一公共入口。retained-scene 快速路径与版本化资源、严格有序的
-`RenderCommandTransaction` 共存于同一实例；`RenderWorkload.Mode` 或被直接调用的提交方法明确
-选择语义，两种输入不会相互猜测或转换。普通调用方使用 `Renderer.open()` 与
-`SceneTransaction`。只有需要保留既有图形提交语义的宿主才应使用 command path。完整学习顺序、
-通用 RT 最小事务、SPIR-V/SBT 规则、错误处理和 retirement 边界见
-[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)。
+下面是可放入 `Main.java` 的完整示例，依赖 `renderer-api` 和 `renderer-rtxpt`。它创建一个朝外绕序的封闭玻璃立方体，首帧提交后复用驻留场景出帧，直到关闭窗口。吸收系数以世界单位的倒数计；材质透射控制表面，`MediumBoundary` 控制封闭内部的吸收和折射率。
 
 ```java
-try (Renderer renderer = Renderer.open(
-        RendererConfig.builder().build())) {
-    RenderingSemanticCapabilities capabilities = renderer.renderingSemanticCapabilities();
-    if (!capabilities.feature(RenderingSemanticCapabilities.Feature.BUFFER_UPLOAD).executable()) {
-        throw new IllegalStateException("当前后端不能执行所需的通用 buffer 路径");
-    }
+import top.ceroxe.rt.renderer.api.*;
+import top.ceroxe.rt.renderer.rtxpt.RtxptAccess;
 
-    BufferResource input = new BufferResource(
-            new RenderResourceId(1L), ResourceVersion.initial(), 256,
-            Set.of(BufferUsage.COPY_DESTINATION, BufferUsage.COPY_SOURCE)
-    );
-    ResourceTransactionEvidence published = renderer.submitResources(
-            RenderResourceTransaction.builder(1L).upsert(input).build()
-    );
-    if (published.outcome() != ResourceTransactionEvidence.Outcome.ACCEPTED) {
-        throw new IllegalStateException(published.detail());
+public final class Main {
+    public static void main(String[] args) {
+        var glass = MaterialAsset.builder(1L)
+                .transmission(1.0F).roughness(0.05F)
+                .indexOfRefraction(1.5F).build();
+        var cube = MeshAsset.triangles(2L, new float[]{
+                -.5F,-.5F,-.5F,  .5F,-.5F,-.5F,
+                 .5F, .5F,-.5F, -.5F, .5F,-.5F,
+                -.5F,-.5F, .5F,  .5F,-.5F, .5F,
+                 .5F, .5F, .5F, -.5F, .5F, .5F
+        }, new int[]{
+                0,2,1, 0,3,2, 4,5,6, 4,6,7,
+                0,4,7, 0,7,3, 1,2,6, 1,6,5,
+                0,1,5, 0,5,4, 3,7,6, 3,6,2
+        }, glass.id());
+        var boundary = MediumBoundary.surface(
+                new Medium(new Rgb(.02F, .12F, .20F), 1.5F));
+        var scene = SceneTransaction.builder(0L).resetScene()
+                .upsert(glass).upsert(cube)
+                .upsert(SceneInstance.builder(3L, cube.id())
+                        .mediumBoundary(boundary).build())
+                .upsert(SceneLight.directional(4L, -.4F, -1F, -.2F)
+                        .intensity(3F).build())
+                .build();
+        var camera = CameraState.lookAt(0, .5, 3, 0, 0, 0)
+                .aspectRatio(16.0 / 9.0).build();
+        var frame = RenderFrameRequest.builder(0L, 1920, 1080, camera)
+                .minimumSceneRevision(0L).build();
+        try (var renderer = Renderer.open("rtxpt",
+                RendererConfig.pathTracedPresentation())) {
+            renderer.apply(scene);
+            renderer.submit(frame);
+            var host = renderer.extension(RtxptAccess.class).orElseThrow();
+            while (host.renderFrame()) {
+                // 常驻场景不变；有动画时按递增 sequence 提交新帧。
+            }
+        }
     }
-
-    ResourceData bytes = new ResourceData(ByteBuffer.allocateDirect(256).order(ByteOrder.nativeOrder()));
-    CommandExecutionEvidence submitted = renderer.submitCommands(
-            RenderCommandTransaction.builder(1L)
-                    .add(new WriteBufferCommand(new ResourceSlice.BufferSlice(input, new ByteRange(0, 256)), bytes))
-                    .build()
-    );
-    // RECORDED 只表示已提交；随后用 commandExecutionEvidence(1L) 观察 GPU_COMPLETED。
 }
 ```
 
-能力必须逐项查询。`7.0.0` 的 Vulkan 后端真实执行版本化 buffer/texture、view/sampler、staging upload、buffer/texture copy、buffer-image copy、typed clear/barrier、SPIR-V compute/graphics pipeline、render pass、direct/multi/indirect draw，以及在设备支持时执行通用 BLAS/TLAS build、显式 RT shader group/SBT、AS descriptor 和 trace dispatch，并通过 fence evidence 公开完成状态。逻辑操作和 geometry shader 现在分别受设备 feature capability 约束；RT pipeline/SBT 可通过 `RetireRayTracingPipelineCommand` 按完成序列退休。`BindingType.COMBINED_IMAGE_SAMPLER` 必须使用一个 `BindingSet.CombinedImageSamplerValue`，Vulkan 会将同一 view/sampler 对写入一个 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`。接口布局会在 pipeline 创建前与 SPIR-V 逐项核对；错误的 entry point、stage、set/binding、数组长度或拆分 descriptor 声明均 fail-closed。RT 的 `RECORDED` 或 `OUTPUT_PRODUCED` 都不是显示可见证据；能力未标为 executable 的功能不能根据静态类型推断可用。
+消费者以 Java 25 启动，并为类路径运行启用 `--enable-native-access=ALL-UNNAMED`。这里默认 1 SPP、优选重建／降噪和辐射缓存，FG 关闭。请求 2× FG 可派生配置：
+
+```java
+var config = RendererConfig.pathTracedPresentation().copyBuilder()
+        .frameGeneration(FrameGenerationOptions.recommended()).build();
+```
+
+实际 SR／RR、SHaRC、ReSTIR、SER 和 FG 状态读取 `host.runtimeStatus()`、`RenderingFeatureCapabilities` 与 `renderer.diagnostics().frameGenerationEvidence()`。请求不等于执行；DLSS-RR 生效时不再叠加独立 NRD。SPP 和路径深度通过 `RendererConfig.Builder.pathTracing(PathTracingOptions)` 设置，不使用每帧的多采样抗锯齿入口。
+
+`Medium` 只含 `absorption` 和 `[1,4]` 的 IOR；`MediumBoundary` 只含介质和 `[0,14]` 优先级，最多 4 层嵌套内部。需要闭合、朝外且绕序一致的网格。旧体积散射、密度网格、HG、体积发光、无限／相机初始介质和不可见边界已删除，详见[7.0.0 合同](7.0.0.md)。
+
+RTXPT 当前不提供通用 CPU 帧、线性 HDR 导出、任意场景 shader、精确 Vulkan 投影、屏幕雾、旧光子图预算及逐帧纹理／lightmap 覆盖；无效输入在调用边界拒绝。`capture(Path)` 是显式单次诊断捕获，`awaitIdle()` 是显式 GPU 排空，两者都不应放进正常出帧循环。
+
+## RTXPT 与 Vulkan 独立工作组合
+
+只需 RTXPT 3D 加上旧 Vulkan 的计算、图形或 UI 时，改用同样实现 `Renderer` 的组合入口：
+
+```java
+import top.ceroxe.rt.renderer.rtxpt.RtxptComposedRenderer;
+
+try (var renderer = RtxptComposedRenderer.open()) {
+    renderer.apply(scene);       // 复用上面的完整场景
+    renderer.submit(frame);
+    var host = renderer.extension(RtxptAccess.class).orElseThrow();
+    while (host.renderFrame()) { }
+}
+```
+
+旧独立命令通过借用的 `legacyCommands()` 提交；已完成 GPU 纹理通过 `overlays(layers)` 回交给 RTXPT 最终呈现。无旧工作时不创建旧设备。两边不能分别追踪同一场景的光路，颜色叠层也不补全任意自定义 BSDF。需要叠层资源格式、同步、热切换或空闲内存回收时，继续阅读[组合教程](d3d12-vulkan-composition.md)。
+
+## 生命周期与资源所有权
+
+| 对象／操作 | 调用方责任 |
+| --- | --- |
+| `Renderer`／`RendererSceneSession` | 一次打开对应一次关闭；场景与帧提交保持单写者 |
+| RTXPT／组合会话 | 全部操作在创建线程；一个进程同时只允许一个 RTXPT 会话 |
+| `Renderer.openForScene(...)` | 已发布初始完整 reset 场景和首帧，后续 sequence 必须推进；`selection()` 查看实际选择 |
+| `RtxptAccess`／`legacyCommands()` | 借用接口，不单独关闭拥有者；宿主拥有原生窗口 |
+| Vulkan presenter | 在创建线程泵事件、呈现和关闭；先关闭 presenter，再关闭 renderer |
+| `FrameView` | 只在回调作用域内使用，不保留其字节视图；需要保存显式复制 |
+| 外部 GPU lease／资源 generation | 按完成证据归还、退休，再等待拥有者关闭完成 |
+
+窗口关闭后结束循环并让 try-with-resources 释放。不要跨线程再次驱动已关窗口，或把等待 GPU 空闲当成每帧步骤。初始化接受输入、GPU 完成、真正 Present 是三个独立事实；异常、能力回退与未归还资源通过 typed exception、`health()` 和 diagnostics 检查。
 
 ## 发布一个最小场景
 
 场景聚合使用语义工厂与 Builder；7.0.0 的介质值使用直接 record。调用方提供的数组会在安全工厂中复制；高吞吐路径可以显式使用只读 direct buffer 工厂。
-
-## Exact clip-space projection
-
-Hosts that already own the final projection must use the explicit exact path. It is not inferred
-from a matrix and it never silently falls back to the basis/FOV path. Matrices are validated,
-copied, inverted once, and stored canonically as row-major values. The renderer currently accepts
-the Vulkan forward depth attachment convention (`ZERO_TO_ONE`); other conventions remain
-representable in the API but fail closed at the Vulkan provider boundary.
-
-```java
-double[] cameraToWorld = {
-        1, 0, 0, 3,
-        0, 1, 0, 4,
-        0, 0, 1, 5,
-        0, 0, 0, 1
-};
-double[] clipFromView = {
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, -100.0 / 99.0, -100.0 / 99.0,
-        0, 0, -1, 0
-};
-ExactProjectionState projection = ExactProjectionState.builder(1920, 1080)
-        .matrixLayout(ExactProjectionState.MatrixLayout.ROW_MAJOR)
-        .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
-        .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
-        .jitter(ExactProjectionState.JitterConvention.PIXEL_CENTER_OFFSET, 0.25, -0.25)
-        .cameraToWorld(cameraToWorld)
-        .clipFromView(clipFromView)
-        .build();
-CameraState camera = CameraState.exactProjection(projection);
-```
-
-`CameraState.lookAt(...)` and `explicitBasis(...)` remain the compatible fast path. The exact
-path consumes the inverse clip matrix and camera-to-world rotation in GPU raygen; it is therefore
-safe for rotated, non-uniform, non-16:9 projections. A malformed, singular, non-finite, layout-
-unspecified, or viewport-mismatched mapping is rejected before submission.
-
-The existing `MeshAsset.vertexColorsRgba8()` field is raw authored RGBA8 data normalized by the
-renderer as numeric channels. It is not implicitly decoded as sRGB. Hosts that need authored sRGB
-tints require a separate future semantic field; changing this field would be a color-management
-regression.
 
 ```java
 TextureAsset texture = TextureAsset.color(1L, 1, 1,
@@ -571,7 +576,7 @@ RenderFrameRequest request = RenderFrameRequest.builder(sequence, width, height,
 | 输入 | 说明 |
 | --- | --- |
 | `CameraState` | 使用 `lookAt(...).aspectRatio(...).build()` 构建 |
-| `EnvironmentState` | 天空、太阳、环境光与介质参数 |
+| `EnvironmentState` | 天空、太阳与环境光；不包含相机初始介质 |
 | `LightmapState` | 256 项 packed lightmap；默认 full intensity |
 | `DistanceFogState` | 距离雾与高度雾；默认 disabled |
 | `TextureSamplingState` | pixel-stable、rotated-grid 或显式 anisotropy |
@@ -653,6 +658,109 @@ try (Renderer renderer = Renderer.open(RendererConfig.presentation());
 ```
 
 presenter 的 open、event pump、present、title、overlay 和 close 都绑定创建线程。主推的 `presentLatestFrame()` 直接从 renderer 取得 managed frame，可用内部 timeline 在 CPU fence 观察前建立 GPU 依赖；专家 `VulkanFrameInterop.pollLatestFrame()` 保持 completed external lease 语义。`presentAndRelease(...)` 仍供显式 lease consumer 使用，并在所有结果路径消费/关闭 lease。`maximumFramesQueuedAhead(2)` 允许 renderer 与显示消费重叠，同时阻止生产队列饿死 swapchain；它不锁 FPS。同一 swapchain 的 acquire/present 按 Vulkan 外部同步要求在 presenter 线程串行。显示统计只应在 `Outcome.PRESENTED` 时累计；缺失的 GPU timing 以零样本/`NaN` 表示，绝不估算。
+
+## 预编译场景 shader
+
+生产应用可以在构建阶段编译场景 shader，并通过 `SceneShaderProgram` 携带优化 SPIR-V，避免首次启动
+重复执行 shaderc 优化。所有模块仍须通过 stage、entry point 和 descriptor ABI 校验；错误二进制不会
+悄悄换成内置 shader。raygen 分别注册 SDR 与 HDR，miss/hit 与输出编码无关：
+
+```java
+var stages = SceneShaderProgram.builder()
+    .spirv(ShaderStage.RAY_GENERATION, FrameOutputFormat.SDR_RGBA8,
+        Files.readAllBytes(Path.of("scene.rgen.sdr.spv")))
+    .spirv(ShaderStage.RAY_GENERATION, FrameOutputFormat.LINEAR_HDR_RGBA16F,
+        Files.readAllBytes(Path.of("scene.rgen.hdr.spv")))
+    .spirv(ShaderStage.RAY_MISS, Files.readAllBytes(Path.of("scene.rmiss.spv")))
+    .dataBindingCount(1)
+    .build();
+```
+
+未替换的阶段继续使用内置实现。已替换阶段缺少所需二进制变体时，只有显式提供的 GLSL 可参与编译；
+没有源码则明确拒绝。可同时调用 `shader(stage, glsl)` 保留编辑和源码变体能力。预编译需使用相同版本
+core 中的 `gpuscene_common.glsl`/ABI 头文件。自定义 raygen 的既有 SER 协商策略保持一致。
+
+## 通用命令语义：专家入口
+
+`Renderer` 是统一公共契约；本节使用 Vulkan 后端。retained-scene 快速路径与版本化资源、严格有序的
+`RenderCommandTransaction` 可共存于同一 Vulkan 实例；`RenderWorkload.Mode` 或被直接调用的提交方法明确
+选择语义，两种输入不会相互猜测或转换。普通调用方使用 `Renderer.open()` 与
+`SceneTransaction`。只有需要保留既有图形提交语义的宿主才应使用 command path。完整学习顺序、
+通用 RT 最小事务、SPIR-V/SBT 规则、错误处理和 retirement 边界见
+[通用命令与硬件光线追踪指南](Generic-Commands-and-Ray-Tracing.md)。
+
+```java
+try (Renderer renderer = Renderer.open(
+        RendererConfig.builder().build())) {
+    RenderingSemanticCapabilities capabilities = renderer.renderingSemanticCapabilities();
+    if (!capabilities.feature(RenderingSemanticCapabilities.Feature.BUFFER_UPLOAD).executable()) {
+        throw new IllegalStateException("当前后端不能执行所需的通用 buffer 路径");
+    }
+
+    BufferResource input = new BufferResource(
+            new RenderResourceId(1L), ResourceVersion.initial(), 256,
+            Set.of(BufferUsage.COPY_DESTINATION, BufferUsage.COPY_SOURCE)
+    );
+    ResourceTransactionEvidence published = renderer.submitResources(
+            RenderResourceTransaction.builder(1L).upsert(input).build()
+    );
+    if (published.outcome() != ResourceTransactionEvidence.Outcome.ACCEPTED) {
+        throw new IllegalStateException(published.detail());
+    }
+
+    ResourceData bytes = new ResourceData(ByteBuffer.allocateDirect(256).order(ByteOrder.nativeOrder()));
+    CommandExecutionEvidence submitted = renderer.submitCommands(
+            RenderCommandTransaction.builder(1L)
+                    .add(new WriteBufferCommand(new ResourceSlice.BufferSlice(input, new ByteRange(0, 256)), bytes))
+                    .build()
+    );
+    // RECORDED 只表示已提交；随后用 commandExecutionEvidence(1L) 观察 GPU_COMPLETED。
+}
+```
+
+能力必须逐项查询。`7.0.0` 的 Vulkan 后端真实执行版本化 buffer/texture、view/sampler、staging upload、buffer/texture copy、buffer-image copy、typed clear/barrier、SPIR-V compute/graphics pipeline、render pass、direct/multi/indirect draw，以及在设备支持时执行通用 BLAS/TLAS build、显式 RT shader group/SBT、AS descriptor 和 trace dispatch，并通过 fence evidence 公开完成状态。逻辑操作和 geometry shader 现在分别受设备 feature capability 约束；RT pipeline/SBT 可通过 `RetireRayTracingPipelineCommand` 按完成序列退休。`BindingType.COMBINED_IMAGE_SAMPLER` 必须使用一个 `BindingSet.CombinedImageSamplerValue`，Vulkan 会将同一 view/sampler 对写入一个 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`。接口布局会在 pipeline 创建前与 SPIR-V 逐项核对；错误的 entry point、stage、set/binding、数组长度或拆分 descriptor 声明均 fail-closed。RT 的 `RECORDED` 或 `OUTPUT_PRODUCED` 都不是显示可见证据；能力未标为 executable 的功能不能根据静态类型推断可用。
+
+## Exact clip-space projection
+
+Hosts that already own the final projection must use the explicit exact path. It is not inferred
+from a matrix and it never silently falls back to the basis/FOV path. Matrices are validated,
+copied, inverted once, and stored canonically as row-major values. The renderer currently accepts
+the Vulkan forward depth attachment convention (`ZERO_TO_ONE`); other conventions remain
+representable in the API but fail closed at the Vulkan provider boundary.
+
+```java
+double[] cameraToWorld = {
+        1, 0, 0, 3,
+        0, 1, 0, 4,
+        0, 0, 1, 5,
+        0, 0, 0, 1
+};
+double[] clipFromView = {
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, -100.0 / 99.0, -100.0 / 99.0,
+        0, 0, -1, 0
+};
+ExactProjectionState projection = ExactProjectionState.builder(1920, 1080)
+        .matrixLayout(ExactProjectionState.MatrixLayout.ROW_MAJOR)
+        .coordinateSystem(ExactProjectionState.CoordinateSystem.RIGHT_HANDED_NEGATIVE_Z_FORWARD)
+        .depthConvention(ExactProjectionState.DepthConvention.ZERO_TO_ONE)
+        .jitter(ExactProjectionState.JitterConvention.PIXEL_CENTER_OFFSET, 0.25, -0.25)
+        .cameraToWorld(cameraToWorld)
+        .clipFromView(clipFromView)
+        .build();
+CameraState camera = CameraState.exactProjection(projection);
+```
+
+`CameraState.lookAt(...)` and `explicitBasis(...)` remain the compatible fast path. The exact
+path consumes the inverse clip matrix and camera-to-world rotation in GPU raygen; it is therefore
+safe for rotated, non-uniform, non-16:9 projections. A malformed, singular, non-finite, layout-
+unspecified, or viewport-mismatched mapping is rejected before submission.
+
+The existing `MeshAsset.vertexColorsRgba8()` field is raw authored RGBA8 data normalized by the
+renderer as numeric channels. It is not implicitly decoded as sRGB. Hosts that need authored sRGB
+tints require a separate future semantic field; changing this field would be a color-management
+regression.
 
 ## Vulkan 专家模式
 

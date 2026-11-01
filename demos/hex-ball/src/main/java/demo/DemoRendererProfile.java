@@ -61,6 +61,12 @@ final class DemoRendererProfile {
                 .frameGeneration(configuredGenerationPolicy()).gpuTimingsEnabled(true).build());
     }
 
+    static RendererConfig rtxptGlassInteractive() {
+        // Refracted/transmitted paths need the upstream path-traced reconstruction
+        // guides. Keep the SR-only surface comparison as an explicit metal path.
+        return rtxptMediumInteractive(false);
+    }
+
     static RenderFrameRequest.Builder frame(
             long sequence,
             int width,

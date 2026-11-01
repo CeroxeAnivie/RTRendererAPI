@@ -9,7 +9,16 @@ and compatibility wrappers are absent. Recompile custom retained-scene shaders a
 
 This version is delivered through GitHub source and local Maven artifacts. No remote release
 or Maven Central publication is implied by building the sources. See [7.0.0 migration](7.0.0.md)
-for the exact medium API and this iteration's CPU-only verification boundary.
+for the exact medium API. GPU and packaged-runtime evidence is recorded separately in
+[RTXPT integration](quality/rtxpt-managed-medium-migration.md),
+[advanced-feature audit](quality/rtxpt-advanced-audit-20261101.md), and
+[memory/FPS validation](quality/rtxpt-memory-fps-20261102.md); each result applies to its recorded artifact and settings.
+
+`Renderer.openForScene` owns one fixed backend for the complete scene. `RTXPT_FOR_MEDIA`
+does not split light transport. `RtxptComposedRenderer` separately supports RTXPT final
+presentation plus Vulkan independent work/UI, or explicit Vulkan final presentation with
+whole-3D switching under different feature constraints. See [backend routing](backend-routing.md)
+and [composition](d3d12-vulkan-composition.md). Unsupported inputs are rejected rather than silently dropped.
 
 ## Migration from 4.x
 

@@ -1,12 +1,12 @@
 # 文档清单
 
-本清单覆盖当前源码树中的 **32 份 Markdown**：原有 60 份减去已合并的 29 份质量报告和已移除的 `6.0.4.md`，加上统一质量报告和本清单。排除 `build/`、`generated/`、`.gradle/`、`out/` 等生成目录。正文尽量使用中文；API 符号、命令、路径、许可证名称和实测数值保留原写法。
+本页按学习用途索引当前指南、API 参考、实测证据与历史记录，不用固定文件数量代表文档完整性。排除 `build/`、`generated/`、`.gradle/`、`out/` 等生成目录。初次使用按“Demo → Java 教程 → 后端／组合 → 专家接口”阅读；签名和范围以当前源码、API 参考及版本合同为准。
 
-原 `docs/quality/` 下的 29 份报告现合并至[质量验证与性能报告](quality/verification-report.md)。每个历史记录有稳定章节锚点，保留原测试结果、失败、未完成边界和性能限定；机器可读 `data/` 文件、日志、源码制品和许可证未移动或修改。报告按时间分别记录，不把早期冻结制品结论冒充当前状态。
+早期 29 份报告合并至[历史质量验证与性能报告](quality/verification-report.md)，之后的 RTXPT、组合和内存报告独立保留。每个记录保留测试日期、制品、场景、失败及未完成边界；机器可读 `data/`、日志和许可证不搬入教程。旧 CUDA／LuxCore 结果不代表当前 RTXPT，已实现接口也不等于所有组合都已实机验证。
 
-## 当前文档全集（32 份）
+## 当前学习与查阅入口
 
-### README 与导航（3 份）
+### README 与导航
 
 | 文档 | 摘要 |
 | --- | --- |
@@ -14,29 +14,31 @@
 | [Home.md](Home.md) | 阅读路线、模块边界、使用层级和本地验证入口。 |
 | [_Sidebar.md](_Sidebar.md) | 开发文档导航索引。 |
 
-### 指南（10 份）
+### 指南
 
 | 文档 | 摘要 |
 | --- | --- |
 | [Java.md](Java.md) | Java 场景、帧提交、介质、输出、诊断和生命周期指南。 |
+| [backend-routing.md](backend-routing.md) | 全 RTXPT、显式 Vulkan、按介质整场景选择及部署依赖。 |
+| [d3d12-vulkan-composition.md](d3d12-vulkan-composition.md) | RTXPT 最终呈现、旧 Vulkan 独立工作／UI、同窗完整 3D 切换、同步与限制。 |
 | [Generic-Commands-and-Ray-Tracing.md](Generic-Commands-and-Ray-Tracing.md) | 通用资源、图形命令和硬件 RT 提交流程。 |
 | [Vulkan-Interop.md](Vulkan-Interop.md) | GPU frame lease、外部内存、同步及所有权协议。 |
 | [runtime-distribution.md](runtime-distribution.md) | Windows 候选包、Maven 依赖和启动方式。 |
 | [Programmable-Scenes.md](Programmable-Scenes.md) | retained-scene GLSL/SPIR-V 替换、资源绑定与 ABI。 |
 | [Procedural-Geometry.md](Procedural-Geometry.md) | AABB procedural BLAS 构建、更新、交点 shader 和退休规则。 |
 | [Integer-Textures.md](Integer-Textures.md) | 整数纹理格式、上传、采样、清除和原始输出。 |
-| [medium-gallery.md](medium-gallery.md) | 介质展厅场景、参数、功能消融和验收入口。 |
+| [medium-gallery.md](medium-gallery.md) | 当前 RTXPT 六个光学场景、HUD 切换、默认能力及已删除功能。 |
 | [Evidence-Retention.md](Evidence-Retention.md) | execution evidence 保留预算、lease、查询和背压语义。 |
 | [COMPATIBILITY.md](COMPATIBILITY.md) | major-7 公共契约、兼容策略和迁移边界。 |
 
-### API 参考（2 份）
+### API 参考
 
 | 文档 | 摘要 |
 | --- | --- |
 | [Java-API-Reference.md](Java-API-Reference.md) | 面向消费方的稳定公共 Java 类型与调用参考。 |
 | [Generic-Rendering-Semantics.md](Generic-Rendering-Semantics.md) | retained / command workload、准入、同步和完成 evidence 语义。 |
 
-### 版本说明（11 份）
+### 版本说明
 
 | 文档 | 摘要 |
 | --- | --- |
@@ -50,21 +52,29 @@
 | [6.0.1.md](6.0.1.md) | 内容寻址 GLSL/SPIR-V 缓存和冷启动编译改进。 |
 | [6.0.2.md](6.0.2.md) | 预编译 SPIR-V 场景阶段入口及完整性验证。 |
 | [6.0.3.md](6.0.3.md) | Vulkan pipeline cache 身份与持久化修复。 |
-| [7.0.0.md](7.0.0.md) | 直接介质 records、统一入口、实现范围、预算和迁移要求。 |
+| [7.0.0.md](7.0.0.md) | 当前两字段 Medium、RTXPT 托管范围、删除参数、原生运行时及迁移要求。 |
 
-### 质量记录（1 份）
+### 实测与质量记录
 
 | 文档 | 摘要 |
 | --- | --- |
 | [质量验证与性能报告](quality/verification-report.md) | 合并 29 份历史记录，包含验证事实、失败、未完成边界和限定条件。 |
+| [RTXPT 托管接入](quality/rtxpt-managed-medium-migration.md) | 新后端场景、打包运行时与接入验证；按记录的制品判断。 |
+| [高级能力检查](quality/rtxpt-advanced-audit-20261101.md) | RR、采样、重用及高级能力调用链／运行证据。 |
+| [新旧弹球性能](quality/hexball-rtxpt-performance-20261101.md) | 相应材质、配置、诊断状态下的链路与耗时；不外推到新玻璃质量档。 |
+| [GPU 组合与原始帧复用](quality/rtxpt-raw-reuse-composition-20261101.md) | 组合链和跨 API 工作的验证边界。 |
+| [内存与 FPS 联合验收](quality/rtxpt-memory-fps-20261102.md) | 进程／Java／GPU 内存、会话重开与性能对照。 |
+| [API 发布前检查](quality/api-release-review-20261101.md) | 公开入口、后端差异和检查时点的结论。 |
+| [后端依赖大小](quality/backend-dependency-size-20261101.md) | 指定制品的依赖与打包尺寸。 |
+| [介质优化规范](quality/medium-performance-optimization.md) | 排名、测量、优化与证据保留约定。 |
 
-### 演示文档（1 份）
+### 演示文档
 
 | 文档 | 摘要 |
 | --- | --- |
-| [Hex Ball README.md](../demos/hex-ball/README.md) | Demo 构建、fat JAR、功能配置、GPU smoke 和 FG 验收要求。 |
+| [三个 Demo](../demos/hex-ball/README.md) | 原 Vulkan 弹球、RTXPT 玻璃弹球、介质六场景、参数／时限、工作台和 FG 证据。 |
 
-### 许可证与维护（3 份）
+### 许可证与维护
 
 | 文档 | 摘要 |
 | --- | --- |
@@ -72,7 +82,7 @@
 | [SECURITY.md](../SECURITY.md) | 安全漏洞私密报告、支持版本及依赖风险处置。 |
 | [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) | 发布运行依赖许可归属和 notices 完整性门禁。 |
 
-### 本清单（1 份）
+### 本清单
 
 | 文档 | 摘要 |
 | --- | --- |
@@ -116,26 +126,24 @@
 
 ## 非 Markdown 资源、许可与机器证据
 
-这些资源不计入 Markdown 统计。许可归属和源码原文保持原样；机器数据和日志也不搬入报告正文。
+许可归属和源码原文保持原样；机器数据和日志不搬入报告正文。当前 RTXPT 许可证随实际 runtime 保留。
 
 | 路径 | 用途 |
 | --- | --- |
 | [根 LICENSE](../LICENSE) | RTRendererAPI Apache License 2.0 完整文本。 |
-| [介质 LICENSE.txt](../renderer-core/src/main/resources/assets/rtrenderer/medium/luxcore/LICENSE.txt) | 随上游介质源码分发的 Apache 2.0 许可证。 |
-| [介质 NOTICE.txt](../renderer-core/src/main/resources/assets/rtrenderer/medium/luxcore/NOTICE.txt) | 固定上游来源、版权及原始片段/本项目适配边界。 |
-| [介质 AUTHORS.txt](../renderer-core/src/main/resources/assets/rtrenderer/medium/luxcore/AUTHORS.txt) | 上游作者和贡献者归属。 |
-| [source-manifest.json](../renderer-core/src/main/resources/assets/rtrenderer/medium/luxcore/source-manifest.json) | 固定提交、范围、文件字节数和 SHA-256；不代表功能完整。 |
+| [RTXPT NOTICE](../renderer-rtxpt/NOTICE-RTXPT.txt) | 当前上游、适配边界与 native runtime 许可位置；第三方许可并非统一 Apache 授权。 |
 | [质量 data 目录](quality/data/) | JSON/CSV 等机器可读性能、制品身份、图像差异与测试摘要。数据边界由报告中的日期/源码/制品/场景说明限定。 |
 
 ## 生成的 Javadoc
 
-Javadoc 是构建产物，不纳入源码 Markdown 数量；报告不逐条索引构建日志或 HTML 输出文件。三个发布模块都配置 `javadocJar`，本地生成的 HTML/JAR 随对应构建落在模块 `build/` 和 Maven staging 输出中。
+Javadoc 是构建产物；报告不逐条索引构建日志或 HTML 输出文件。四个发布模块都配置 `javadocJar`，本地生成的 HTML/JAR 随对应构建落在模块 `build/` 和 Maven staging 输出中。
 
 | 模块 | 生成内容 |
 | --- | --- |
 | `renderer-api` | 公共消费方 API 文档及 `renderer-api-7.0.0-javadoc.jar`。 |
 | `renderer-core` | 后端实现文档及 `renderer-core-7.0.0-javadoc.jar`。 |
 | `renderer-nvidia` | NVIDIA provider 文档及 `renderer-nvidia-7.0.0-javadoc.jar`。 |
+| `renderer-rtxpt` | RTXPT 公共宿主／组合入口文档及 `renderer-rtxpt-7.0.0-javadoc.jar`。 |
 
 Javadoc 制品是否存在及具体版本，以对应 Maven staging 或 runtime distribution 验收为准。
 
@@ -144,9 +152,9 @@ Javadoc 制品是否存在及具体版本，以对应 Maven staging 或 runtime 
 | 文档 | 情况 |
 | --- | --- |
 | [SECURITY.md](../SECURITY.md) | 仍将 `3.x` 写为当前稳定 API 线；这是支持政策事实，应由维护者按实际发布承诺确认，本清单不擅自改写支持版本。 |
-| [COMPATIBILITY.md](COMPATIBILITY.md) | 将本轮验证边界称为 CPU-only；之后另有公开 HDR/GPU 记录，应根据当前契约链接适用的新报告章节。 |
+| [COMPATIBILITY.md](COMPATIBILITY.md) | 当前支持边界与逐后端证据入口；不把单机验证外推为全部硬件验证。 |
 | 通用命令与渲染语义、Procedural Geometry、Integer Textures、Evidence Retention | 开篇出现 `4.x/5.x` 初次引入版本；应区分历史功能来源与当前 major-7 消费契约，保留有效历史发布事实。 |
-| [介质展厅](medium-gallery.md) | “这些入口尚未运行”的文字对应编写时点，不能外推为之后从未运行；各组合按报告时间和确切制品分别判断。 |
+| [介质演示](medium-gallery.md) | 现为 RTXPT 六场景；原密度、散射和光子图展厅只存在于历史记录。 |
 | 历史版本说明及本报告旧阶段记录 | 旧冻结候选、失败实验、交接文档中的进度百分比和通过声明均为其原时间/制品的历史记录；不得批量改成当前状态或跨制品套用。 |
 
-本清单只整理导航和待核对项，不更改当前 API 支持声明、支持版本、历史验收结果或许可来源事实。
+历史记录不批量重写为当前结论。新增验证应写明源码／制品身份、配置与实际执行证据，再从本清单链接。

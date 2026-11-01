@@ -1,6 +1,6 @@
 # RTRendererAPI 7.0.0 Windows 候选制品
 
-普通 Vulkan 路径由 renderer-api、renderer-core、renderer-nvidia 提供。renderer-rtxpt 是显式可选的 D3D12 托管透明介质后端，发行目录同时携带这个模块，但 renderer-api 不默认依赖它。
+普通 Vulkan 路径由 renderer-api、renderer-core、renderer-nvidia 提供。renderer-rtxpt 是显式可选的 D3D12 全场景／透明介质托管后端，包含原生最终呈现和 Vulkan GPU 组合入口；发行目录同时携带这个模块，但 renderer-api 不默认依赖它。
 
 ## 使用
 
@@ -12,6 +12,21 @@ java --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow `
 ```
 
 RTXPT JAR 自带 JNI、Streamline/DLSS、Agility、shader 和原始许可证。首次运行校验 SHA-256 并解包至用户缓存，之后复用；不需要安装 CUDA，不从开发机路径取 DLL，不在运行时下载 SDK。首次 shader/PSO 编译可能需要等待，进度写日志，不创建独立弹窗。具体支持范围见 7.0.0.md。
+
+### 三个可执行 Demo
+
+在仓库根目录运行 `./gradlew.bat :demos:hex-ball:shadowJar :demos:hex-ball:mediumShadowJar` 后：
+
+```powershell
+# 原 Vulkan 弹球
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --windowed
+# RTXPT 新路径弹球
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxpt --windowed
+# RTXPT 介质
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
+```
+
+三个交互入口默认请求 2× FG，HexBall JAR 无参数打开 API 工作台。两个弹球使用 `--duration-seconds=30`，介质使用 `--seconds=30`；不传时限持续运行。完整参数和真实交付判断见 [Demo 说明](../demos/hex-ball/README.md)。启动器会为子 JVM 配置 native access，普通库消费者仍自行管理 JVM 参数。
 
 ## 文件与许可证
 

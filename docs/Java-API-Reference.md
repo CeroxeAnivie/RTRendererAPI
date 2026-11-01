@@ -8,8 +8,10 @@
 
 - [通用 command path](#通用-command-path)
 - [External frame composition](#external-frame-composition)
+- [后端与会话](#后端与会话)
 - [Renderer](#renderer)
 - [RendererConfig](#rendererconfig)
+- [RTXPT 与组合入口](#rtxpt-与组合入口)
 - [场景与帧](#场景与帧)
 - [资产与实例](#资产与实例)
 - [设备、诊断与异常](#设备诊断与异常)
@@ -18,7 +20,7 @@
 - [Vulkan 专家扩展](#vulkan-专家扩展)
 - [通用命令与硬件光追](#通用命令与硬件光追)
 
-## Renderer
+## 后端与会话
 
 ```java
 public interface Renderer extends AutoCloseable
@@ -31,7 +33,11 @@ public interface Renderer extends AutoCloseable
 | `open()` | `Renderer` | 简单模式；使用推荐 CPU-readable 配置打开最佳可用后端 |
 | `open(RendererConfig)` | `Renderer` | 使用显式配置打开最佳可用后端；保留普通场景和专家入口 |
 | `open(String, RendererConfig)` | `Renderer` | 按 provider id 与显式配置打开，用于确定性部署或诊断 |
+| `openForScene(RendererBackendPolicy, SceneTransaction, RenderFrameRequest)` | `RendererSceneSession` | 为完整 reset 场景选择固定后端，并发布场景／提交首帧 |
+| `openForScene(policy, scene, firstFrame, vulkanConfig, rtxptConfig)` | `RendererSceneSession` | 同上，分别显式指定两个后端配置，只打开选中的一个 |
 | `devices()` | `List<RendererGpuDevice>` | 返回通过 provider 探测得到的不可变设备列表 |
+
+`RendererBackendPolicy` 包含 `VULKAN_ONLY`、`RTXPT_ONLY` 和 `RTXPT_FOR_MEDIA`；后者为整个场景选择一个后端。`RendererSceneSession.selection()` 返回固定选择，`initialSubmission()` 返回已提交首帧的接受证据。后续帧必须推进 sequence。类别发生变化时显式关闭重开，不偷偷替换窗口、设备或扩展。完整依赖与分类规则见[后端路由](backend-routing.md)。
 
 ## 通用 command path
 
@@ -39,7 +45,7 @@ public interface Renderer extends AutoCloseable
 public interface Renderer extends AutoCloseable
 ```
 
-一个 `Renderer` 同时承载 retained-scene 与通用 command path。`RenderWorkload.Mode` 是工作负载
+Vulkan `Renderer` 同时承载 retained-scene 与通用 command path；RTXPT 原生后端不实现任意 Vulkan 命令。`RenderWorkload.Mode` 是工作负载
 discriminator；直接使用 `apply/trySubmit` 或 `submitCommands` 时，调用的方法本身就是明确模式，
 不会隐式修改或改写另一条路径。
 
@@ -146,7 +152,9 @@ public interface Renderer extends AutoCloseable
 `SubmissionDeferralReason`，用于重试策略和遥测聚合；`detail()` 仅用于人类诊断。所有 provider
 必须提供类型化分类，API 不从自然语言猜测类别。
 
-普通 retained-scene 模式根据实际场景事实与 `MediumTransport` 预算自动分派内置 surface、小容量或通用介质程序。专家模式由显式资源/命令事务或 `SceneShaderProgram` 阶段替换表达；自定义阶段不会被普通模式优化覆盖，绑定、同步和生命周期继续显式管理。配置入口统一使用 `RendererConfig`，不存在独立的 `expertBuilder`。
+普通模式向所选后端提交完整场景和帧。透明介质与透射场景可显式选择 RTXPT，或通过 `RTXPT_FOR_MEDIA` 路由。Vulkan 专家模式由显式资源／命令事务或 `SceneShaderProgram` 阶段替换表达；自定义阶段不会被普通模式优化覆盖。配置入口统一使用 `RendererConfig`，不存在独立的 `expertBuilder`。
+
+CPU 帧方法仅对提供该输出的后端有效：Vulkan 支持原生格式读取；RTXPT 要求关闭 CPU readback，使用原生窗口与 `RtxptAccess`。不能把 GPU 已呈现推导为有 `FrameSnapshot` 可取。
 
 ## RendererConfig
 
@@ -156,6 +164,7 @@ public interface Renderer extends AutoCloseable
 | --- | --- |
 | `RendererConfig.recommended()` | CPU frame 路径；优选重建、SER 与 AS memory optimization，不请求 FG/MFG；NRD 显式启用 |
 | `RendererConfig.presentation()` | 官方 GPU presenter 路径；关闭 CPU readback，并在支持时额外优选普通 FG 2x 与低延迟 pacing；不自动请求 MFG |
+| `RendererConfig.pathTracedPresentation()` | RTXPT GPU 路径；关闭 CPU readback，优选重建、降噪、低延迟与辐射缓存；FG 默认关闭 |
 
 派生配置使用 `copyBuilder()`，并通过
 `Renderer.open(...)` 打开。
@@ -191,7 +200,36 @@ public final class RendererConfig
 | `lowLatency(LowLatencyOptions)` | Reflex/PCL 请求策略 |
 | `denoising(DenoisingOptions)` | NRD 请求与 fallback 策略 |
 | `rayTracingOptimizations(RayTracingOptimizationOptions)` | SER 与 RTXMU 独立策略 |
+| `pathTracing(PathTracingOptions)` | 每像素样本、路径深度、辐射缓存、直接／间接光重采样意图，由支持该配置的后端执行 |
 | `build()` | 验证全部不变量并创建配置 |
+
+`PathTracingOptions` 是 record：`(int samplesPerPixel, int maxBounces, int diffuseBounces, RendererFeaturePreference radianceCache, RendererFeaturePreference directLightResampling, RendererFeaturePreference indirectLightResampling)`。样本与最大深度各为 1–64，漫反射深度为 0–maxBounces；请求光重采样时必须为 1 SPP。`defaults()` 为 `(1,20,2,DISABLED,DISABLED,DISABLED)`，`recommended()` 仅将辐射缓存改为 `PREFERRED`。每帧 `AntiAliasingState` 的多采样不能替代 RTXPT 的这个入口。
+
+## RTXPT 与组合入口
+
+以下公开类型来自可选 `renderer-rtxpt` 模块，包为 `top.ceroxe.rt.renderer.rtxpt`。先提交首帧，再驱动原生窗口；所有操作在创建线程执行，一个进程同时只允许一个 RTXPT 会话。
+
+| 类型／方法 | 说明 |
+| --- | --- |
+| `renderer.extension(RtxptAccess.class)` | 借用原生宿主控制接口，不转移 renderer／窗口所有权 |
+| `RtxptAccess.renderFrame()` | 渲染并呈现驻留场景，窗口关闭返回 false |
+| `runtimeStatus()`／`presentationStatus()` | 实际内部／输出尺寸、重建、降噪、复用技术及高级呈现设置 |
+| `setWindowTitle(String)`／`windowHandle()` | 首帧后管理标题／借用原生 HWND，关闭后失效 |
+| `setOverlayText(String)` | 上游 GPU HUD；空串关闭该 HUD 及其计时查询 |
+| `setOverlayChoices(List<String>, int)`／`overlaySelection()` | 同一原生 HUD 内的选项；空列表隐藏，未配置返回 -1 |
+| `loadNativeScene(Path)` | 加载原生上游场景，绕过 Java retained 适配；与 Java 场景路径二选一 |
+| `capture(Path)`／`awaitIdle()` | 显式单次捕获／GPU 排空；正常帧循环不调用 |
+| `bridgeTimings()` | 驻留渲染、场景导出与变换批次的计数／耗时；不是 FG 交付证据 |
+| `RtxptComposedRenderer.open()` | 默认 RTXPT 完整 3D／最终呈现，旧 Vulkan 独立工作与 UI 按需创建 |
+| `openRtxptPresentation(RendererConfig, RendererConfig, String)` | 专家分别配置旧侧与 RTXPT；RTXPT 唯一拥有 Streamline |
+| `openVulkanPresentation(RendererBackendPolicy, RendererConfig, RendererConfig, VulkanFramePresenterConfig)` | 专家同窗切换完整 3D 后端；RTXPT FG/MFG/Reflex 和旧侧 Streamline 均须关闭 |
+| `legacyCommands()`／`legacyExtension(Class<T>)` | 借用旧侧命令／扩展；不得自行关闭拥有者 |
+| `overlays(List<FrameCompositionPlan.Layer>)` | 最多 7 层已完成、全尺寸 RGBA8_UNORM GPU 纹理 |
+| `trimIdleCompositionResources()` | 原生最终呈现且叠层为空时，在空闲维护窗口排空／回收交接缓存 |
+| `backendPolicy(RendererBackendPolicy)` | 仅 Vulkan 最终呈现入口允许改变完整 3D 选择；原生最终呈现固定 RTXPT |
+| `captureRtxptSource(Path)` | 显式捕获旧侧叠层之前的 RTXPT 源 |
+
+原生 RTXPT 当前只接受 GPU 直显 SDR，不接受 CPU readback、线性 HDR 导出、显式 Vulkan GPU 对象、validation-layer 开关或 `SceneShaderProgram` 替换。帧输入也不接受 exact projection、shader data、屏幕雾、旧焦散预算、逐帧纹理／lightmap 覆盖与历史 reset。任意命令、自定义光传输和两张独立图不能自动合为一个正确的 3D 场景。当前限制、叠层同步和可执行验证见[组合指南](d3d12-vulkan-composition.md)与[版本合同](7.0.0.md)。
 
 ## 场景与帧
 
@@ -222,7 +260,6 @@ RenderFrameRequest.builder(sequence, width, height, camera)
         .fog(fog)
         .textureSampling(sampling)
         .antiAliasing(antiAliasing)
-        .mediumTransport(MediumTransport.balanced())
         .resetTemporalHistory(reason)
         .build();
 ```
@@ -231,21 +268,17 @@ RenderFrameRequest.builder(sequence, width, height, camera)
 
 ### 介质
 
-7.0.0 使用直接 record，不保留 6.x 介质 Builder 或兼容类：
+7.0.0 当前托管合同使用下面三个 record，不保留旧散射／密度 API：
 
 | 类型 | 契约与入口 |
 | --- | --- |
 | `Rgb(float red, float green, float blue)` | 有限非负线性 RGB；`ZERO`、`WHITE`、`add`、`multiply`、`maxComponent`、`isZero` |
-| `Medium(Rgb absorption, Rgb scattering, Rgb emission, float density, float indexOfRefraction, float anisotropy, MediumDensityField densityField)` | RGB 系数与空间密度；消光由吸收与散射相加；`vacuum()`、`extinction()`、`participating()`、`isVacuum()`、`withDensity`、`withDensityField`；六参数构造默认均匀密度 |
-| `MediumDensityField(long textureAssetId, int slices, AffineTransform transform)` | `uniform()` 或 `grid(...)`；LINEAR RGBA8 基础 mip 红通道的竖直 Z 切片图集；域内体素中心三线性插值，域外为零 |
-| `MediumBoundary(Medium medium, int priority, Orientation orientation, boolean surfaceInteraction)` | 封闭网格内部；`volume`、`surface` 与各字段的 `with...` 方法；`Orientation.OUTWARD/INWARD` |
-| `MediumTransport(int maxEvents, int opticalSamples, int scatteringSteps, int lightSamples, float maxDistance, float transmittanceCutoff, int scatteringBounces)` | 每帧预算；`balanced()` 与各字段的 `with...` 方法；六参数构造默认关闭额外体积散射 |
+| `Medium(Rgb absorption, float indexOfRefraction)` | 每世界单位非负有限 RGB 吸收系数；IOR 为 `[1,4]`；`vacuum()`、`isVacuum()` |
+| `MediumBoundary(Medium medium, int priority)` | 封闭、朝外绕序且有表面交互的内部；优先级 `[0,14]`；`surface(medium)` 默认优先级 0，`withMedium`、`withPriority` 派生新值；最多 4 层嵌套内部 |
 
-`MediumTransport` 的事件、光学样本、散射区间与灯光样本范围分别为 1–32、1–8、1–64 与 0–8；额外体积散射次数为 0–8。距离为 `(0, 1_000_000]` 世界单位。灯光样本 0 枚举全部灯光；透射率阈值 0 关闭该截断近似。默认值为 `(12, 1, 8, 4, 512, 1e-4, 0)`。
+通过 `SceneInstance.Builder.mediumBoundary` 或 `PrimitiveInstance.Builder.mediumBoundary` 定义内部，通过材质 `transmission`／`roughness` 定义表面透射。吸收经 Beer 关系交给 RTXPT attenuation；Fresnel、折射、全反射、粗糙透射及嵌套介电由上游执行。
 
-图集 `W × (H*slices)` 对应 `W × H × slices` 网格；边界介质的变换输入对象局部坐标，环境介质输入世界坐标。普通纹理过滤、寻址与 mip 不影响密度采样。正的 `scatteringBounces` 启用有界额外体积碰撞，并以采样的天空/表面照明替代单次散射的平坦环境近似；有限预算不承诺收敛，透明阴影不等于折射焦散。
-
-使用 `EnvironmentState.Builder.cameraMedium` 定义边界外的基础介质，使用 `SceneInstance.Builder.mediumBoundary` 或 `PrimitiveInstance.Builder.mediumBoundary` 定义封闭体内部。重叠体按优先级选择一个生效介质；同优先级选择最近进入的边界，退出后恢复外层。距离以应用世界单位计，发光按单位路径长度定义。范围与迁移说明见 [7.0.0](7.0.0.md)。
+体积单／多次散射、密度网格、HG、体积发光、无限／相机初始介质及不可见边界已删除；不再提供 `MediumDensityField`、`MediumTransport` 或 `cameraMedium`。当前范围见[7.0.0](7.0.0.md)，完整运行示例见[Java 教程](Java.md#rtxpt-透明介质与原生窗口)。
 
 ### FrameSubmissionAttempt
 

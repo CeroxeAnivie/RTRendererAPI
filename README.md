@@ -2,7 +2,7 @@
 
 **由 Java 驱动的硬件光线追踪渲染库**
 
-可编程场景 / 原生格式映射帧 / Vulkan GPU 直显 / 通用图形、计算与硬件 RT
+可编程场景 / Vulkan 通用图形、计算与硬件 RT / RTXPT 托管光学与 GPU 直显
 
 ![Java](https://img.shields.io/badge/Java-25%2B-orange?style=flat-square&logo=openjdk&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-lightgrey?style=flat-square&logo=windows&logoColor=white)
@@ -16,16 +16,18 @@
 > **简介**
 >
 > RTRendererAPI 为 Java 桌面应用与引擎进程提供厂商中立、宿主无关的通用渲染语义契约。公共
-> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段；7.0.0 以单一 retained RT 主路径为核心，
-> 并提供显式资源、shader、binding、pipeline、render-pass、barrier、draw 和 external-frame 语义。
-> 应用只需依赖 `renderer-api`，即可获得后端发现、场景提交、通用 command transaction、异步 CPU 帧、
-> 官方 GPU presenter 与显式 Vulkan 专家互操作。Windows Vulkan 后端、LWJGL、对应 Windows natives
-> 与 NVIDIA provider 均通过 Maven 传递依赖解析，无需手工部署 DLL。
+> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段。保留的 Vulkan 后端提供 retained scene、
+> 显式资源与命令、可编程 shader、异步 CPU 帧和 GPU presenter；可选 `renderer-rtxpt` 将完整 3D 场景
+> 交给 NVIDIA RTXPT，处理吸收、玻璃、嵌套介电材质及其原生高级能力。
+> 两者可通过 GPU 组合入口协作：RTXPT 完整 3D → Vulkan 独立工作／叠层 → RTXPT 最终呈现。
+> 每个后端只执行自己支持的语义，具体选择见[后端路由](docs/backend-routing.md)和[组合指南](docs/d3d12-vulkan-composition.md)。
+> 运行依赖和对应 native runtime 随 Maven 依赖解析，无需手工部署 DLL。
 >
 > **推荐场景**：Java 桌面渲染器、离屏光追、实时 RTX 预览、已有 Vulkan 管线的 GPU 帧集成。
 
 > **7.0.0 候选状态**：RTXPT 托管透明介质已按收缩后的合同验收；它不替代通用 Vulkan 后端。当前支持矩阵、明确拒绝的组合和真实制品验收以
-> [版本说明](docs/7.0.0.md)及[验收记录](docs/quality/verification-report.md#7-0-0-package-validation-20261029)为准。
+> [版本说明](docs/7.0.0.md)、[RTXPT 接入记录](docs/quality/rtxpt-managed-medium-migration.md)及[当前内存与性能记录](docs/quality/rtxpt-memory-fps-20261102.md)为准。
+> 历史 CUDA／LuxCore 报告记录原实现，不作为当前 RTXPT 验收结论。
 
 ---
 
@@ -55,7 +57,7 @@
 | GPU | 兼容目标为 NVIDIA GeForce RTX 20 系或更新架构，并通过运行时能力探测 |
 | 图形 API | Vulkan 1.2 或更高版本，并通过运行时 hardware RT capability probe |
 | 简单输出 | 异步原生格式 `FrameView`，可显式复制为 `FrameSnapshot` |
-| GPU 显示 | 官方 Vulkan swapchain presenter，无 CPU 图像回读 |
+| GPU 显示 | Vulkan swapchain presenter，或 RTXPT 原生 D3D12/DXGI 呈现；正常出帧不回读 CPU 图像 |
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
 > 可选 RTXPT 后端使用 D3D12，普通路径使用 Vulkan。AMD、Intel、Linux、macOS、移动平台、Metal 与软件渲染器不属于当前验收范围。
@@ -84,6 +86,15 @@ dependencies {
     implementation("top.ceroxe.rt:renderer-api:7.0.0")
 }
 ```
+
+上面是普通 Vulkan 路径。需要 RTXPT 全场景、透明介质或 GPU 组合入口时，再添加可选模块：
+
+```kotlin
+implementation("top.ceroxe.rt:renderer-rtxpt:7.0.0")
+```
+
+Maven 同样添加 `top.ceroxe.rt:renderer-rtxpt:7.0.0`。只用公共场景接口时可作为运行依赖；使用
+`RtxptAccess`／`RtxptComposedRenderer` 时需要编译依赖。只部署 RTXPT 的依赖排除方法见[后端路由](docs/backend-routing.md#只部署-rtxpt)。
 
 7.0.0 是重新设计介质模型与执行结构的破坏性主版本，只交付 GitHub 和本地 Maven 制品，不上传 Central。运行
 `publishAllToLocalStagingRepository` 可生成 `build/repository`，供独立消费方验证使用。
@@ -153,6 +164,15 @@ try (Renderer renderer = Renderer.open(RendererConfig.presentation());
 `presentLatestFrame()` 是普通应用的主推入口。`maximumFramesQueuedAhead` 控制尚未被 presenter 消费的生产者领先量，
 不是 FPS 限制器。已有 Vulkan device/queue 的调用方再阅读 [Vulkan 专家互操作](docs/Vulkan-Interop.md)。
 
+### RTXPT 托管场景
+
+使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`，提交完整场景和首帧后，
+通过 `RtxptAccess.renderFrame()` 驱动原生窗口。需要旧 Vulkan 独立命令或 UI 时，使用
+`RtxptComposedRenderer.open()`。可直接照着运行的场景与生命周期示例见 [Java 教程](docs/Java.md#rtxpt-透明介质与原生窗口)。
+
+RTXPT 当前输出 GPU 原生 SDR 画面，不提供普通 `pollFrame()`／`awaitFrame()` CPU 帧，也不接收任意
+Vulkan shader 或通用命令。组合提供独立 GPU 工作和颜色叠层，不能让两套渲染器拆分同一场景的反射／折射。
+
 ---
 
 ## ⚙️ RTX 能力与运行状态
@@ -161,6 +181,9 @@ try (Renderer renderer = Renderer.open(RendererConfig.presentation());
 并以 `PREFERRED` 策略协商重建、SER 与 acceleration-structure memory optimization；NRD 通过配置显式启用。能力不可用时按各自明确
 fallback 保留基础渲染。`RendererConfig.presentation()` 在同一策略上关闭 CPU readback，并在受支持时
 请求普通 FG 2x 与低延迟 pacing。MFG 永不自动开启。安装 vendor runtime 或匹配 GPU 名称本身不能产生 `ACTIVE`。
+
+`RendererConfig.pathTracedPresentation()` 用于 RTXPT，默认关闭 FG；三个交互 Demo 在此之上明确请求
+2× FG。库默认值与 Demo 默认值分别说明，不能用开关状态代替实际生成帧证据。
 
 专家模式仍使用同一个 `RendererConfig.builder()`。Option value 是能力协商的唯一输入：
 
@@ -225,12 +248,14 @@ scene 或 renderer rebuild 永远由结果显式返回，不会被库静默执�
 renderer-api/                    公共 API、不可变模型、异常、SPI 与 Vulkan 专家扩展
 renderer-core/                   Windows NVIDIA Vulkan RT 后端与预编译 SPIR-V
 renderer-nvidia/                 可选 NVIDIA Streamline、NRD、SER 与 RTXMU 集成
+renderer-rtxpt/                  可选 RTXPT D3D12 托管后端、薄 JNI 与 GPU 组合入口
 demos/hex-ball/                  交互 Demo 与有界 GPU 验收入口
 gradle/published-consumer-smoke/ 独立 Maven 消费方编译门禁
 docs/                            指南、API 参考、互操作与支持矩阵
 ```
 
-模块边界是发布契约的一部分：业务代码依赖 `renderer-api`，不直接构造或编译耦合后端实现。
+模块边界是发布契约的一部分：场景代码依赖 `renderer-api`；需要 RTXPT 专家／组合入口时增加
+`renderer-rtxpt`，不直接构造内部后端实现。
 
 ---
 
@@ -260,17 +285,37 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 .\gradlew.bat verifyPublishedMavenConsumer --dependency-verification=strict --no-daemon --console=plain
 ```
 
-### 🎮 运行 Hex Ball Demo
+### 🎮 打开三个 Demo
+
+先在仓库根目录构建两个可执行 JAR；已有 JAR 可跳过构建。运行需要 Java 25 和受支持的 RTX GPU，
+可执行包自带 native runtime，源码重建所需 SDK 见下文。
 
 ```powershell
-.\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=1"
-.\gradlew.bat :demos:hex-ball:shadowJar
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
-  --width=2560 --height=1440 --spp=1
+.\gradlew.bat :demos:hex-ball:shadowJar :demos:hex-ball:mediumShadowJar
+
+# 1. 原 Vulkan 弹球
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --windowed
+
+# 2. RTXPT 新路径弹球
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxpt --windowed
+
+# 3. RTXPT 介质：六个场景，可在 HUD 下拉框或数字键 1–6 切换
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
 ```
 
-使用 `--duration-seconds=90` 可执行有界验收并走正常关闭路径。FG/MFG 的通过条件与证据字段见
-[Demo 说明](demos/hex-ball/README.md)。
+三个入口默认窗口化、1 SPP、请求 2× FG。不带时限会持续运行，手动关闭窗口退出。
+**HexBall JAR 无参数会打开 API 工作台**，直接看球请保留 `--windowed`。
+新路径默认是玻璃球，采用 RR＋SHaRC 质量配置；旧路径是金属球 SR 配置。材质和工作负载不同，默认 FPS 不作为两后端的等条件快慢对照。
+
+| 常用设置 | 两个弹球入口 | 介质入口 |
+| --- | --- | --- |
+| 指定 1080p 输出 | `--width=1920 --height=1080` | `--width=1920 --height=1080` |
+| 运行 30 秒后退出 | `--duration-seconds=30` | `--seconds=30` |
+| 场景切换 | 固定弹球场景 | `--scene=mixed\|glass\|nested\|absorption\|rough\|ior`，或窗口内选择 |
+
+关闭 FG：在 `-jar` **之前**加 `-Ddemo.disable-fg=true`。请求 3×／4× MFG：加
+`-Ddemo.fg-multiplier=3`／`4`；是否实际生效看 HUD 与 `frameGenerationEvidence()`。
+Gradle 启动、完整参数、FG 验收及工作台用法见 [Demo 说明](demos/hex-ball/README.md)。
 
 ### 🔧 构建 NVIDIA 原生发布物
 
@@ -285,7 +330,7 @@ Streamline 与 RTXMU SDK。RTXMU 必须为官方 `v1.4` checkout 的固定 commi
   -PnriSdkRoot='<nri-root>' `
   -PstreamlineSdkRoot='<streamline-root>' `
   -PrtxmuSdkRoot='<rtxmu-root>' `
-  -PjdkHome='<jdk-21-root>' `
+  -PjdkHome='<jdk-25-root>' `
   --no-daemon --console=plain
 ```
 
@@ -297,10 +342,14 @@ Streamline 与 RTXMU SDK。RTXMU 必须为官方 `v1.4` checkout 的固定 commi
 
 - [完整文档清单](docs/documentation-inventory.md)：全部源码文档、许可证、来源清单、质量证据与生成 Javadoc 的分类索引。
 - [Java 开发指南](docs/Java.md)：完整场景、配置、背压、诊断与各 RTX 能力示例。
+- [三个 Demo](demos/hex-ball/README.md)：两个弹球入口、介质六场景、启动参数和默认 FG。
+- [后端选择](docs/backend-routing.md)：固定整场景路由与只部署 RTXPT。
+- [RTXPT 与 Vulkan 组合](docs/d3d12-vulkan-composition.md)：GPU 叠层、最终呈现、热切换和生命周期边界。
+- [介质演示](docs/medium-gallery.md)：当前支持的光学场景及已删除能力。
 - [通用命令与硬件光追](docs/Generic-Commands-and-Ray-Tracing.md)：资源 generation、通用 command transaction、BLAS/TLAS、SPIR-V、SBT、trace、完成证据与回收。
 - [Procedural/AABB 光追](docs/Procedural-Geometry.md)：4.1.0 新增的包围盒布局、intersection/any-hit、BUILD/UPDATE 与生命周期。
 - [整数纹理](docs/Integer-Textures.md)：4.2.0 的 18 种整数格式、类型化清除、shader 图像类型校验与 3D 上传修复。
-- [质量验证与性能报告](docs/quality/verification-report.md#41-0-procedural-validation)：历史程序化几何验证、当前介质范围与性能证据索引。
+- [质量验证与性能报告](docs/quality/verification-report.md#4-1-0-procedural-validation)：历史程序化几何验证、当前介质范围与性能证据索引。
 - [Java API 参考](docs/Java-API-Reference.md)：公共类型与稳定契约。
 - [Vulkan 专家互操作](docs/Vulkan-Interop.md)：external memory、semaphore 与 queue ownership。
 - [兼容性与版本策略](docs/COMPATIBILITY.md)：SemVer、公共 API/SPI 边界、弃用与发布事实。
@@ -311,7 +360,8 @@ Streamline 与 RTXMU SDK。RTXMU 必须为官方 `v1.4` checkout 的固定 commi
 
 **Q：应用需要同时依赖 `renderer-core` 或 `renderer-nvidia` 吗？**
 
-A：不需要。只声明 api 坐标即可，运行时实现与 native 依赖会传递解析。
+A：普通 Vulkan 路径不需要。只声明 api 坐标即可，运行时实现与 native 依赖会传递解析。
+RTXPT 是可选模块，需要另外添加 `renderer-rtxpt`；组合模式仍需保留旧 Vulkan 运行依赖。
 
 **Q：为什么请求了 DLSS、NRD 或 FG，状态却不是 `ACTIVE`？**
 
@@ -332,5 +382,3 @@ A：不能把它们视为 `7.0.0` 的受支持目标。当前兼容范围只包�
 ## 🔐 许可证
 
 本项目基于 [Apache License 2.0](LICENSE) 开源发布。
-
-7.0.0 的[介质演示](docs/medium-gallery.md)改用 RTXPT 混合、玻璃与嵌套场景，独立制品名为 `RTRendererAPI-MediumDemo-7.0.0.jar`。旧密度、体积散射和光子图展厅属于历史实现，当前范围以[版本说明](docs/7.0.0.md)为准。应用可以选择[全 RTXPT、仅介质场景使用 RTXPT，或显式使用 Vulkan](docs/backend-routing.md)，每个完整场景只由一个后端负责。需要同时使用旧 Vulkan 的独立工作与 UI 时，可选 [GPU 组合入口](docs/d3d12-vulkan-composition.md)，由 RTXPT 最终呈现并保留 RR＋FG/MFG。

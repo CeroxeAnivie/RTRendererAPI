@@ -1,124 +1,104 @@
-# Hex Ball Demo
+# 三个交互 Demo
 
-该模块提供 retained-scene 交互示例、可编程场景示例与 GPU smoke workload，直接消费同仓库 API
-及其完整运行时。源码构建需要仓库的 native SDK/toolchain；生成的 fat JAR 自带完整运行时，
-运行时无需安装 SDK。fat JAR 门禁验证打包后的 NVIDIA DLL 清单和 SHA-256。
-独立任务 `verifyPublishedMavenConsumer` 验证本地 Maven 制品，避免与 Demo 自举构建相互依赖。
+本模块提供原 Vulkan 弹球、RTXPT 新路径弹球和 RTXPT 介质演示。三个入口默认窗口化、1 SPP，明确请求 **2× FG**；是否真正生成并呈现看 HUD 的原生／生成／总 FPS 和运行证据。可执行 JAR 自带运行时，需要 Java 25、Windows x64 和通过能力检查的 NVIDIA RTX；运行无需安装 SDK，源码重建需要仓库要求的原生工具链。
 
-它演示普通场景与官方 GPU presenter，不演示 `submitResources(...)`、`submitCommands(...)` 或
-通用 BLAS/TLAS/RT pipeline。需要保留既有资源、shader 与命令顺序的宿主应阅读
-[通用命令与硬件光线追踪指南](../../docs/Generic-Commands-and-Ray-Tracing.md)。
+## 第一步：生成可执行包
 
-在仓库根目录执行：
+在仓库根目录执行；已有对应 JAR 时可以跳过：
 
 ```powershell
-.\gradlew.bat :demos:hex-ball:run --args="--width=2560 --height=1440 --spp=1"
-# 同一 DemoScene、相机、灯光和 HexPhysics，改由 RTXPT 原生窗口呈现；默认高级设置、1 SPP
-.\gradlew.bat :demos:hex-ball:rtxptHexBallDemo --args="--width=2560 --height=1440 --spp=1"
-.\gradlew.bat :demos:hex-ball:shadowJar
-.\gradlew.bat :demos:hex-ball:programmableSceneDemo
+.\gradlew.bat :demos:hex-ball:shadowJar :demos:hex-ball:mediumShadowJar
+```
+
+输出在 `demos/hex-ball/build/libs/`。两个弹球共用 HexBall JAR，介质使用独立 Medium JAR。启动器会为子 JVM 启用 native access、UTF-8 和 `-Xms32m -Xmx512m`；显存及原生内存不包含在 Java 堆上限中。
+
+## 第二步：打开需要的 Demo
+
+以下命令均在仓库根目录执行，单独运行需要的那一条即可。
+
+```powershell
+# 原 Vulkan 弹球
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --windowed
+
+# RTXPT 新路径弹球
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxpt --windowed
+
+# RTXPT 介质，默认 mixed 场景
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
+```
+
+**HexBall JAR 不带参数会打开 API 工作台。** 看原弹球请带 `--windowed`，看新弹球请带 `--rtxpt`。不指定时限会持续运行，关闭渲染窗口正常退出。新弹球复用球场几何与物理，默认使用专门调整的玻璃材质和光照，以及 RR＋SHaRC 质量配置。旧金属球默认使用 SR；工作负载不同，不能拿两者默认 FPS 直接认定后端快慢，也不承诺逐像素一致。
+
+也可以通过 Gradle 直接启动：
+
+```powershell
+.\gradlew.bat :demos:hex-ball:run --args="--windowed"
+.\gradlew.bat :demos:hex-ball:rtxptHexBallDemo --args="--windowed"
+.\gradlew.bat :demos:hex-ball:rtxptMediumDemo '-PrtxptArgs=--scene=nested'
+```
+
+## 输出尺寸和运行时限
+
+| 参数 | 原 Vulkan 弹球 | RTXPT 弹球 | RTXPT 介质 |
+| --- | --- | --- | --- |
+| 输出分辨率 | `--width=1920 --height=1080`，必须一起传 | 同左 | `--width=1920 --height=1080`，默认 1920×1080 |
+| 默认尺寸 | 显示器尺寸，窗口模式 | 按显示器缩小，最大 1920×1080 | 1920×1080，窗口模式 |
+| SPP | `--spp=1\|2\|4\|8`，默认 1 | 仅 `--spp=1` | 固定 1，不接收 `--spp` |
+| 30 秒后退出 | `--duration-seconds=30` | `--duration-seconds=30` | `--seconds=30` |
+| 按基础帧数退出 | `--frames=300`，与时限互斥 | 同左 | 不接收 `--frames` |
+| 一次显式捕获 | 使用 presenter 的诊断接口 | `--capture=画面.png` | `--capture=画面.png` |
+
+例如打开新弹球 30 秒：
+
+```powershell
 java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
-  --width=2560 --height=1440 --spp=1
+  --rtxpt --windowed --width=1920 --height=1080 --spp=1 --duration-seconds=30
 ```
 
-使用 `--duration-seconds=90` 可执行有界验收；进程会通过 presenter 与 renderer 的正常关闭路径
-退出。该参数与 `--frames` 互斥；两者都省略时，交互窗口会持续运行，直到用户主动关闭。
+新弹球的 `--original-balls` 恢复原球材质，`--original-settings` 使用旧 Demo 的配置作为对照输入；这些是专项对照参数。两个后端的采样、材质和后期实现不同，性能比较还需核对真实内部尺寸、重建模式、SPP 和实际出帧。
 
-以下命令定义可复现的 smoke workload，不构成预先通过声明。只有保存了对应提交、硬件、驱动、
-命令输出与结构化证据的实际运行，才能写入版本验收结论。
+## 介质的六个场景
 
-Demo 默认使用 `RendererConfig.presentation()` 推荐模式：GPU 直接呈现、2x 帧生成、
-平衡时域重建、低延迟和 RT 优化均由能力协商决定；NRD 不在默认推荐路径中，必须显式请求。只有技术状态达到 `ACTIVE`，且类型化的
-`RendererDiagnostics.frameGenerationEvidence()` 计数器产生对应证据，才能证明生成帧已经到达
-provider presentation path；仅提出配置请求不构成证据。每个进程只运行一种功能模式：
+窗口内 HUD 的 `Scene` 下拉框、数字键和控制台使用同一组场景：
 
-如需复现实验基线，可显式设置 `-Ddemo.feature-profile=generation-only`；只追加 SR 可使用
-`-Ddemo.feature-profile=generation-and-sr`；推荐配置但禁用 NRD 可使用
-`-Ddemo.feature-profile=recommended-no-nrd`；在此基础上追加 NRD 可使用
-`-Ddemo.feature-profile=generation-sr-nrd`；`all-except-mfg`
-用于只禁用 MFG 的专项验收，不是默认接入路径。
+| 按键 | `--scene` | 展示内容 |
+| --- | --- | --- |
+| `1` | `mixed`（默认） | 吸收、嵌套介电、粗糙透射、金属、表面发光 |
+| `2` | `glass` | 有色吸收玻璃、反射和折射 |
+| `3` | `nested` | 嵌套介电材质与优先级 |
+| `4` | `absorption` | 相同吸收系数，不同厚度 |
+| `5` | `rough` | 不同粗糙度的透射 |
+| `6` | `ior` | 不同折射率 |
+| `Esc` | 退出 | 关闭原生窗口和会话 |
+
+按键需要渲染窗口有焦点；控制台也可输入场景名或 `quit`。`--native=true` 关闭重建、使用原生内部分辨率。默认配置请求 DLSS-RR 和 SHaRC，实际采用的设置显示在 HUD 中。截图是显式单次读回，正常出帧不截图。更多说明见[介质演示](../../docs/medium-gallery.md)。
+
+旧 `--media`／`--medium-gallery`／`--medium-certification` 标志仍转向现在这一个介质演示，不再打开 CUDA 实验室。旧散射、密度、HG、体积发光、相机初始介质、不可见边界及其调节项已删除，没有对应菜单或占位场景。
+
+## FG、MFG 与真实运行证据
+
+系统属性必须放在 `-jar` 之前：
 
 ```powershell
-## 原生基线
-java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
-  --width=2560 --height=1440 --spp=1 --duration-seconds=90
+# 原生出帧对照：明确关闭 FG
+java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxpt --windowed
 
-## FG 2x
-java -Ddemo.fg-multiplier=2 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
-  --width=2560 --height=1440 --spp=1 --duration-seconds=90
-
-## MFG 3x
-java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
-  --width=2560 --height=1440 --spp=1 --duration-seconds=90
+# 请求 3× MFG；4× 使用 -Ddemo.fg-multiplier=4
+java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
 ```
 
-验收记录必须包含：启动 framebuffer 与 SPP、制品 SHA-256、请求/配置的 presentation
-multiplier、proxy present 次数、实际呈现的生成帧数、request miss、state-query failure、native
-status、有效倍率、最终 renderer health/obligations，以及进程退出码。
+Gradle 启动也接受 `-Ddemo.disable-fg=true` 和 `-Ddemo.fg-multiplier=3`／`4`。这些是 Demo 策略，**库的 `RendererConfig.pathTracedPresentation()` 默认 FG 关闭**；`RendererConfig.presentation()` 默认优选 2× FG。MFG 不会由库自动开启。
 
-FG 2x 只有在实际生成输出持续存在、技术状态达到 `ACTIVE`、miss/query failure/native status
-保持健康、关闭时 obligations 为空且进程以退出码 `0` 结束时才算通过。MFG 3x 同样必须证明每个基础帧
-对应两个实际生成帧，配置倍率和无崩溃不能替代输出证据。原生门禁在首个生成帧后继续观察至少 5 秒，
-并要求末尾连续至少 12 次取得请求倍率的真实输出。
+请求倍率和成功交付分别看。记录 `renderer.diagnostics().frameGenerationEvidence()` 中的请求／配置倍率、真实基础帧与生成帧、request miss、state-query failure、native status，再看技术是否达到 `ACTIVE`。2×／3×／4× 分别应有每基础帧 1／2／3 张实际生成帧；仅开关为真或窗口不卡不能证明通过。Windows 后台窗口可能停用生成帧，验收时需保持渲染窗口在前台。
 
-Windows 验收需保持测试窗口处于真实前台。GLFW 的 focus 通知不能替代 `GetForegroundWindow`；
-本次硬件上观察到后台窗口仅呈现基础帧，回到前台后恢复生成。后台零输出标为
-`ENVIRONMENT_NOT_FOREGROUND`，保留非零验收结果，既不算通过，也不判定硬件/API 不支持。
-前台观察充分仍无输出或倍率不稳则维持严格失败。详见 [5.0.0 验证记录](../../docs/5.0.0.md)。
+原生基准 `:demos:hex-ball:rtxptMediumBenchmark` 明确关闭 FG，和交互 Demo 的总输出 FPS 分开报告。诊断、截图、冷启动 shader／PSO 准备不计入稳态吞吐。历史实测只代表记录中的制品与配置，见[性能记录](../../docs/quality/hexball-rtxpt-performance-20261101.md)。
 
-可执行 JAR 会重新启动自身并启用 native access。`:demos:hex-ball:run` 会直接应用同一 native
-access 策略。确定性合同检查分别由 `:demos:hex-ball:physicsSelfTest` 与
-`:demos:hex-ball:featureIntegrationSelfTest` 提供。
-# Feature workbench
+## API 工作台和专家学习入口
 
-Run the executable JAR without arguments, or pass `--controls`, to edit independent renderer
-and frame policies. Recommended spatial sampling is **1 SPP**; 2/4/8 remain explicit alternatives.
-Policy dropdowns expose all public enum values, including required/preferred availability,
-reconstruction quality/fallback, FG/MFG mode/multiplier/fallback, denoising, low latency, SER
-and memory optimization. Invalid combinations report the API's validation error.
+HexBall JAR 无参数或带 `--controls` 打开 API 工作台。普通使用先运行上述三个窗口，再按[Java 教程](../../docs/Java.md)学习场景提交、后端选择、配置和关闭。
 
-`--api.<policy>.<field>=value` reproduces a renderer override; `--frame.<policy>.<field>=value`
-reproduces a frame override. Vector values are comma separated. For example:
+工作台可以独立编辑 renderer 与 frame 策略，非法组合显示实际 API 校验错误。`--api.<policy>.<field>=value`／`--frame.<policy>.<field>=value` 可复现覆盖项，向量用逗号分隔，例如 `--api.frameGeneration.mode=MULTI_FRAME_GENERATION --api.frameGeneration.multiplier=THREE_X`。这些覆盖项仍须符合所选后端的输入合同，不会把 Vulkan 专属属性翻译成 RTXPT 能力。
 
-```text
---spp=1 --api.frameGeneration.multiplier=THREE_X --api.frameGeneration.mode=MULTI_FRAME_GENERATION
---api.denoising.preference=PREFERRED --api.denoising.builtInTemporalFallback=true
---frame.environment.sunRadiance=1,0.9,0.7
-```
+`--programmable` 打开 Vulkan 可编程场景工作台，支持四个场景阶段的 GLSL／SPIR-V、HDR 预览、应用时间轴和只读应用数据。Gradle 的 `programmableSceneDemo` 固定带 `--verify`，执行有界原生 HDR 校验，和交互工作台不同。通用资源、计算、图形与 BLAS/TLAS 命令请按[通用命令教程](../../docs/Generic-Commands-and-Ray-Tracing.md)使用；RTXPT 原生后端不执行任意 Vulkan shader。
 
-`--programmable` opens editable ray-generation/miss/closest-hit/any-hit GLSL, HDR preview,
-timeline pause/seek/rate, and byte-offset float updates to immutable application storage data.
-The preview tone maps explicitly; renderer readback remains native RGBA16F.
-`:demos:hex-ball:programmableSceneDemo` retains the deterministic native HDR acceptance example.
-The interactive programmable workbench also accepts precompiled binaries for all four scene stages,
-with separate SDR/HDR raygen selection, GLSL fallback and the same immutable-buffer/timeline controls.
-
-`--media` opens the medium transport laboratory. It exposes absorption/scattering/emission RGB,
-density, IOR, HG anisotropy, surface transmission/roughness, signed overlap priority, nested glass,
-camera-inside mode, inward winding, invisible volume boundaries and persistent/frame-local lanes.
-Interface events, optical samples, scattering intervals and maximum distance apply at the next
-frame boundary. The default is 1 SPP with balanced transport quality. See [7.0.0 medium verification](../../docs/quality/verification-report.md#7-0-0-medium-design)
-for physical scope, quality limits and shader ABI details.
-
-## 7.0.0 介质展厅
-
-使用可执行包的 `--medium-gallery` 入口，或 Gradle 的 `mediumGalleryDemo` 任务。默认原生 2560×1440、1 spp、请求 2× FG，提供完整单场景和逐项开关；参见[场景与命令](../../docs/medium-gallery.md)。`mediumGallerySceneSelfTest` 仅执行 CPU fixture 检查；`mediumGalleryNativeSelfTest` 会执行 GPU 工作，当前未运行。
-
-## 7.0.0 介质路由认证
-
-介质认证台为每条已实现路由提供独立场景，切换时重建场景并平滑过渡相机；未接入的组合会单独列为待办，不会混入通过场景。GUI 提供场景选择、GPU 完成帧率和整帧 GPU 时间。FG 与时域重建关闭，避免把生成/重建帧混入原生渲染 FPS。启动需要可用的 Vulkan/CUDA GPU。
-
-```powershell
-## GPU 认证台
-.\gradlew.bat :demos:hex-ball:mediumCertificationDemo `
-  -PcertificationArgs="--width=1280 --height=720 --spp=1 --preset=CAMERA_ABSORPTION"
-
-## 已打包的完整运行时
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
-  --medium-certification --width=1280 --height=720 --spp=1 --preset=CAMERA_ABSORPTION
-
-## CPU-only scene / CLI 合同检查，不打开 GPU 或窗口
-.\gradlew.bat :demos:hex-ball:mediumCertificationSceneSelfTest
-```
-
-可选参数：`--width=1280`、`--height=720`、`--spp=1|2|4|8`、`--preset=<名称>`。预设为 `CAMERA_ABSORPTION`、`BOUNDARY_DENSITY`、`CAMERA_SINGLE_SCATTER`、`CAMERA_MULTIPLE_SCATTER`、`HETEROGENEOUS_SINGLE_SCATTER`、`HETEROGENEOUS_MULTIPLE_SCATTER`、`BOUNDARY_SCATTER`、`PBR_SINGLE_SIDED`、`PBR_DOUBLE_SIDED`、`OPTICAL_SMOOTH_NESTED`、`OPTICAL_ROUGH_NESTED`、`SCATTER_GLASS_CAUSTICS`。数字键 `1`-`9`、`0`、`Q`、`W` 直接选择，`←`/`→` 或控制台按钮轮播。`W` 把非零散射介质、IOR-changing 折射玻璃和表面焦散配置到同一帧，供原生 GPU 集成验收；加入场景 fixture 和 CPU 合同测试不代表 GPU 图像验收已通过。
+需要 RTXPT 完整 3D 与 Vulkan 独立工作／UI 协作时，阅读[组合指南](../../docs/d3d12-vulkan-composition.md)。原生 RTXPT 最终呈现保留其请求的 RR＋FG/MFG；同窗热切换完整 3D 后端的 Vulkan 最终呈现是另一个显式入口，能力约束不同。

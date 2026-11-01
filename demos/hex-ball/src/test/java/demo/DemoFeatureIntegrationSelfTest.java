@@ -88,6 +88,18 @@ public final class DemoFeatureIntegrationSelfTest {
         var original=new DemoScene();var originalBatch=original.primitiveBatch(new HexPhysics(),top.ceroxe.rt.renderer.api.FramePrimitiveBatch.empty());
         require(originalBatch.primitives().stream().noneMatch(p->p.mediumBoundary().isPresent()),"Ordinary Vulkan balls must retain their surface-only path");
         var scene=new DemoScene(true);var initial=scene.initialTransaction();
+        var glassProfile=DemoRendererProfile.rtxptGlassInteractive();
+        require(glassProfile.denoising().preference().requested()
+            &&glassProfile.pathTracing().radianceCache().requested(),"Default glass uses upstream path-traced reconstruction and caching");
+        require(glassProfile.frameGeneration().preference().requested()
+            &&glassProfile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X,"Glass defaults to 2x FG");
+        var oldLights=original.initialTransaction().upserts().lights();
+        require(initial.upserts().lights().size()==oldLights.size(),"Glass keeps the original three-light arrangement");
+        for(int i=0;i<oldLights.size();i++) {
+            var light=initial.upserts().lights().get(i);var oldLight=oldLights.get(i);
+            require(light.id()==oldLight.id()&&light.intensity()==oldLight.intensity()*.25f,
+                "Glass showcase reserves light headroom without changing the original Vulkan lights");
+        }
         var balls=scene.primitiveBatch(new HexPhysics(),top.ceroxe.rt.renderer.api.FramePrimitiveBatch.empty());
         require(balls.size()==3,"Three original physics balls");
         for(var ball:balls.primitives()) {
