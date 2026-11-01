@@ -2,9 +2,11 @@
 find_package(JNI REQUIRED COMPONENTS JVM)
 # Keep embedded-host symbols separate from previous standalone sample builds.
 if(MSVC)
-    set_target_properties(ShaderMake ShaderMakeBlob PROPERTIES
-        PDB_NAME "$<TARGET_PROPERTY:NAME>-host"
-        COMPILE_PDB_NAME "$<TARGET_PROPERTY:NAME>-host")
+    foreach(host_tool ShaderMake ShaderMakeBlob)
+        set_target_properties(${host_tool} PROPERTIES
+            PDB_NAME "${host_tool}-host"
+            COMPILE_PDB_NAME "${host_tool}-host")
+    endforeach()
 endif()
 add_library(rtrenderer_rtxpt SHARED "${CMAKE_CURRENT_LIST_DIR}/rtxpt_jni.cpp")
 target_link_libraries(rtrenderer_rtxpt PRIVATE RtxptCore ${JNI_LIBRARIES})
