@@ -34,7 +34,7 @@ public record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounc
             "--useReSTIRDI="+restirDi,"--useReSTIRGI="+restirGi,
             "--overrideRadianceCacheMode",sharc?"1":"0","--overrideDLSSMode",Integer.toString(dlssQuality.nativeValue),
             "--overrideSubSamplingMode","0","--overrideAutoexposureOff"));
-        if(!ser) a.add("--disableSER");
+        if(!ser) a.add("--noSER");
         return a.toArray(String[]::new);
     }
 }

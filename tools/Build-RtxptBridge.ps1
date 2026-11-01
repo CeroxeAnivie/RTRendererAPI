@@ -23,6 +23,7 @@ function Patch-Once([string]$Relative,[string]$Anchor,[string]$Replacement,[stri
 Patch-Once 'External/Donut/compileshaders.cmake' 'set(compilerCommand ${SHADERMAKE_PATH}' 'set(compilerCommand ${SHADERMAKE_PATH} --jobs 1' '${SHADERMAKE_PATH} --jobs 1'
 Patch-Once 'External/Nrd/CMakeLists.txt' 'set(SHADERMAKE_GENERAL_ARGS' "set(SHADERMAKE_GENERAL_ARGS --jobs 1" 'SHADERMAKE_GENERAL_ARGS --jobs 1'
 # Only expose host control and runtime file roots. Rendering, scheduling and shaders stay upstream.
+Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.cpp' 'm_CmdLine.InitFromCommandLine(__argc, __argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)'
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.h' 'private:' @'
 public:
     donut::app::DeviceManager* HostDeviceManager() { return m_DeviceManager.get(); }

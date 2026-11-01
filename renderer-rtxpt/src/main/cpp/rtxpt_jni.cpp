@@ -114,6 +114,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         }
         std::vector<const char*> argv; for (const auto& a : args) argv.push_back(a.c_str());
         auto s = std::make_unique<Session>();
+        donut::log::ConsoleApplicationMode();
         g_sampleUIData = SampleUIData{};
         s->app = std::make_unique<HostApp>();
         auto status = s->app->Init(static_cast<int>(argv.size()), argv.data());
