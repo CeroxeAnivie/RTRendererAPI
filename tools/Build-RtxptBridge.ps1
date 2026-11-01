@@ -165,10 +165,10 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        [unroll] for 
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        lightSampler.GetCandidateSampleCounts(candidateSampleCount, localCount, globalCount);' @'
         lightSampler.GetCandidateSampleCounts(candidateSampleCount, localCount, globalCount);
         #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
-        if (RtrSplitPointEnvironment())
+        if (lightSampler.RtrSplitPointEnvironment())
         {
-            const uint environmentProxyCount = RtrEnvironmentProxyCount();
-            const uint localEnvironmentProxyCount = RtrEnvironmentLocalProxyCount();
+            const uint environmentProxyCount = lightSampler.RtrEnvironmentProxyCount();
+            const uint localEnvironmentProxyCount = lightSampler.RtrEnvironmentLocalProxyCount();
             if (localEnvironmentProxyCount == 0) { globalCount += localCount; localCount = 0; }
             else if (environmentProxyCount == 0) { localCount += globalCount; globalCount = 0; }
         }
