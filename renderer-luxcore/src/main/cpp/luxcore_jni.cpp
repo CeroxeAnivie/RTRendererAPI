@@ -100,6 +100,11 @@ JNI(void) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_deleteLights(JNIEnv*
             if (end > first) scene.DeleteLight(all.substr(first, end-first)); first = end+1; }
     } CATCH_VOID
 }
+JNI(void) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_collectUnused(JNIEnv* env, jclass, jlong handle) {
+    TRY { auto& s=*context(handle).scene;
+        s.RemoveUnusedMaterials(); s.RemoveUnusedTextures(); s.RemoveUnusedImageMaps(); s.RemoveUnusedMeshes();
+    } CATCH_VOID
+}
 JNI(void) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_defineMesh(JNIEnv* env, jclass, jlong handle,
         jbyteArray name, jint vertices, jint triangles, jobject positions, jobject indices, jobject normals, jobject uvs, jobject colors, jobject alphas) {
     TRY {

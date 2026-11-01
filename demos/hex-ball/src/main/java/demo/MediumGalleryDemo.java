@@ -75,6 +75,11 @@ public final class MediumGalleryDemo {
     }
 
     public static void main(String[] arguments) throws Exception {
+        if(Arrays.asList(arguments).contains("--help")) { legacyMain(arguments); return; }
+        NativeMediumGallery.run(Options.parse(arguments));
+    }
+
+    private static void legacyMain(String[] arguments) throws Exception {
         if (Arrays.asList(arguments).contains("--help")) {
             System.out.println("介质验收画廊：2560×1440、1 SPP、FG默认关闭；控制台切换场景，窗口显示真实完成FPS与帧时。");
             System.out.println("--scene=pbr-direct-uniform|pbr-direct-density|pbr-multiple-uniform|pbr-multiple-density|boundary-optical-scatter|absorption-emission|glass-scatter-caustics|glass-density-caustics|boundary-density-caustics|gallery");

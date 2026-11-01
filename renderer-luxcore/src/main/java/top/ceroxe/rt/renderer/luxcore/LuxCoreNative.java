@@ -37,6 +37,7 @@ final class LuxCoreNative {
     static native void parse(long handle, byte[] propertiesUtf8);
     static native void deleteObjects(long handle, byte[] namesUtf8);
     static native void deleteLights(long handle, byte[] namesUtf8);
+    static native void collectUnused(long handle);
     static native void defineMesh(long handle, byte[] name, int vertices, int triangles,
             ByteBuffer positions, ByteBuffer indices, ByteBuffer normals, ByteBuffer uvs, ByteBuffer colors, ByteBuffer alphas);
     static native void defineImage(long handle, byte[] name, int width, int height, ByteBuffer linearRgba);

@@ -171,6 +171,11 @@ final class LuxCoreScene {
     }
     static void disney(StringBuilder out,String name,MaterialAsset m,String base) {
         String p="scene.materials."+name;property(out,p+".type","disney");property(out,p+".basecolor",base);property(out,p+".roughness",m.roughness());property(out,p+".metallic",m.metallic());
+        if(m.metallicRoughnessTextureId()>=0){String t="mr"+name;
+            property(out,"scene.textures."+t+"r.type","splitfloat3");property(out,"scene.textures."+t+"r.texture","tex"+m.metallicRoughnessTextureId());property(out,"scene.textures."+t+"r.channel",1);
+            property(out,"scene.textures."+t+"m.type","splitfloat3");property(out,"scene.textures."+t+"m.texture","tex"+m.metallicRoughnessTextureId());property(out,"scene.textures."+t+"m.channel",2);
+            property(out,p+".roughness",texture(out,t+"rough","scale",t+"r",Float.toString(m.roughness())));property(out,p+".metallic",texture(out,t+"metal","scale",t+"m",Float.toString(m.metallic())));}
+        if(!m.doubleSided())property(out,p+".transparency.back",1);
     }
     static void camera(StringBuilder out,CameraState c) {
         if(c.hasExactProjection())throw new IllegalArgumentException("LuxCore requires a native camera; exact Vulkan projections belong to the Vulkan provider");

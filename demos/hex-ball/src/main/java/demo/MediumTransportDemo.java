@@ -70,12 +70,12 @@ public final class MediumTransportDemo {
         window.add(canvas,BorderLayout.CENTER);window.add(new JScrollPane(form),BorderLayout.EAST);window.add(status,BorderLayout.SOUTH);
         window.pack();window.setLocationRelativeTo(null);window.setVisible(true);publish.run();
         Thread.ofPlatform().name("medium-demo-renderer").start(()->{
-            try(var renderer=Renderer.open(DemoApiControls.configure(RendererConfig.builder()
+            try(var renderer=Renderer.open("luxcore",DemoApiControls.configure(RendererConfig.builder()
                     .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).temporalRendering(TemporalRenderingOptions.disabled()).build()))) {
                 long sequence=0,revision=0;State applied=null;
                 while(running.get()) {
                     State snapshot=state.get();if(snapshot==null){Thread.sleep(10);continue;}
-                    if(snapshot!=applied) {renderer.apply(scene(++revision,snapshot));applied=snapshot;}
+                    if(snapshot!=applied) {renderer.apply(NativeMediumScenes.scene(scene(++revision,snapshot)));applied=snapshot;}
                     var camera=snapshot.inside?CameraState.lookAt(0,0,.4,0,0,-4).aspectRatio(640.0/360).build()
                         :CameraState.lookAt(4,2,9,0,0,0).aspectRatio(640.0/360).build();
                     var request=DemoApiControls.frame(RenderFrameRequest.builder(++sequence,640,360,camera)

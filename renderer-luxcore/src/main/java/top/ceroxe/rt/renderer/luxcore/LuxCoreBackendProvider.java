@@ -17,7 +17,9 @@ public final class LuxCoreBackendProvider implements RendererBackendProvider {
                     "renderer-luxcore/build/native/rtrenderer_luxcore.dll"))))
                 return ProbeResult.unsupported("Build renderer-luxcore JNI bridge first");
             if (config.frameGeneration().preference() == RendererFeaturePreference.REQUIRED
-                    || config.frameReconstruction().preference() == RendererFeaturePreference.REQUIRED)
+                    || config.frameReconstruction().preference() == RendererFeaturePreference.REQUIRED
+                    || config.denoising().preference() == RendererFeaturePreference.REQUIRED
+                    || config.lowLatency().preference() == RendererFeaturePreference.REQUIRED)
                 return ProbeResult.unsupported("LuxCore owns rendering; Vulkan FG/reconstruction are unavailable");
             return ProbeResult.compatible("LuxCore 2.11.2 managed physical rendering");
         } catch (IllegalStateException e) { return ProbeResult.unsupported(e.getMessage()); }

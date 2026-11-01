@@ -239,6 +239,13 @@ public final class MediumCertificationDemo {
     }
 
     public static void main(String[] args) throws Exception {
+        if (Arrays.asList(args).contains("--help")) { legacyMain(args); return; }
+        var values=parseOptions(args);
+        var options=MediumGalleryDemo.Options.parse(new String[]{"--width="+intOption(values,"width",DEFAULT_WIDTH,320,8192),
+                "--height="+intOption(values,"height",DEFAULT_HEIGHT,180,8192),"--fg=false","--animate=false"});
+        NativeMediumGallery.run(options,presetOption(values).ordinal());
+    }
+    private static void legacyMain(String[] args) throws Exception {
         if (Arrays.asList(args).contains("--help")) {
             System.out.println("介质认证演示：每个 preset 配置隔离或集成介质验收场景。启动需 Vulkan/CUDA GPU。\n"
                     + "快捷键 1-9、0、Q、W 选择；←/→ 或控制台按钮轮播。FG 关闭，FPS 来自 GPU 完成 timestamp。\n"

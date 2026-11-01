@@ -13,7 +13,7 @@ public final class LuxCoreMediumBenchmark {
     public static void main(String[] args) throws Exception {
         Map<String,String> options=new HashMap<>();for(String a:args){var p=a.replaceFirst("^--","").split("=",2);if(p.length==2)options.put(p[0],p[1]);}
         String selected=options.getOrDefault("scene","micro");
-        var workload=selected.equals("focused")?MediumPerformanceCases.focused():MediumPerformanceCases.micro();
+        var workload=switch(selected){case "focused"->MediumPerformanceCases.focused();case "light"->LuxCoreLightMixedScene.workload();case "micro"->MediumPerformanceCases.micro();default->throw new IllegalArgumentException("scene must be light, focused or micro");};
         int width=Integer.parseInt(options.getOrDefault("width","1920")),height=Integer.parseInt(options.getOrDefault("height","1080"));
         int rounds=Integer.parseInt(options.getOrDefault("rounds","3"));double seconds=Double.parseDouble(options.getOrDefault("seconds","3"));
         Path output=Path.of(options.getOrDefault("output","build/reports/luxcore-medium/"+selected));Files.createDirectories(output);
@@ -22,6 +22,7 @@ public final class LuxCoreMediumBenchmark {
         long start=System.nanoTime();
         try(var renderer=Renderer.open("luxcore",RendererConfig.recommended())) {
             var access=renderer.extension(LuxCoreAccess.class).orElseThrow();long opened=System.nanoTime();
+            if(selected.equals("light"))access.sceneProperties("scene.volumes.v101.multiscattering = 0\nscene.volumes.v102.multiscattering = 1\nscene.volumes.v104.multiscattering = 0\nscene.volumes.v105.multiscattering = 1\n");
             renderer.apply(fixture);long uploaded=System.nanoTime();renderer.submit(frame);long started=System.nanoTime();
             waitSamples(access,0,30);LockSupport.parkNanos(1_000_000_000L);
             System.out.println("LuxCorePerf native-semantics scene="+selected+" width="+width+" height="+height+" tileAA=1 filter=NONE resolutionReduction=1 FG=false denoiser=false");

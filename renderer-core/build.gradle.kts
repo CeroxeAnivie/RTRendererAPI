@@ -83,7 +83,7 @@ val retiredMediumExecutors = listOf(
 )
 tasks.withType<org.gradle.jvm.tasks.Jar>().configureEach {
     exclude(retiredMediumExecutors)
-    exclude("assets/rtrenderer/medium/**", "assets/rtrenderer/cuda/**",
+    exclude("assets/rtrenderer/medium/**", "assets/rtrenderer/cuda/**", "META-INF/native/cuda/**",
         "assets/rtrenderer/shaders/gpuscene/gpuscene_native*", "assets/rtrenderer/shaders/gpuscene/gpuscene_collected*",
         "assets/rtrenderer/shaders/spv/gpuscene_gpuscene_native*", "assets/rtrenderer/shaders/spv/gpuscene_gpuscene_collected*")
 }
@@ -376,10 +376,6 @@ val nativeSelfTests = linkedMapOf(
     "vulkanFrameDisplayTransformNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDisplayTransformNativeSelfTest",
 
 
-    "boundaryRadianceTraversalNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.BoundaryRadianceTraversalNativeSelfTest",
-
-    "causticVolumeTransportNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CausticVolumeTransportNativeSelfTest",
-
     "vulkanModernFrameNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanModernFrameNativeSelfTest",
     "vulkanGenericIntegerTextureNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericIntegerTextureNativeSelfTest",
     "vulkanGenericProceduralRayTracingNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericProceduralRayTracingNativeSelfTest",
@@ -395,7 +391,7 @@ val nativeSelfTests = linkedMapOf(
     "vulkanSceneRuntimeNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSceneRuntimeNativeSelfTest",
     "gpuSceneRayTracingPipelineNativeSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipelineNativeSelfTest",
     "vulkanGpuSceneRenderingSessionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuSceneRenderingSessionNativeSelfTest",
-    "mediumTransportNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumTransportNativeSelfTest",
+
     "primaryQueueNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.PrimaryQueueNativeSelfTest",
     "vulkanQueuedFrameSlotNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanQueuedFrameSlotNativeSelfTest",
     "vulkanFrameSlotExternalCompletionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameSlotExternalCompletionNativeSelfTest",
@@ -436,9 +432,7 @@ tasks.named<JavaExec>("vulkanModernFrameNativeSelfTest").configure {
     if (providers.gradleProperty("precompiledSceneOnly").isPresent) args("--precompiled-only")
 }
 
-tasks.named<JavaExec>("mediumTransportNativeSelfTest").configure {
-    if (providers.gradleProperty("mediumProfile").isPresent) args("--profile")
-}
+
 
 
 

@@ -11,6 +11,9 @@ final class LuxCoreRenderer implements Renderer, LuxCoreAccess {
     private final RendererConfig configuration;
     private final LuxCoreScene scene=new LuxCoreScene();
     private long handle,revision,submitted=-1,completed=-1;
+    private long scheduledRevision;
+    private final Set<Long> changedMeshes=new LinkedHashSet<>(),changedTextures=new LinkedHashSet<>();
+    private Set<Long> nativeLights=Set.of();
     private boolean started,closed,inRead,dirty=true;
     private RenderFrameRequest previous;
     private int width,height;
@@ -30,15 +33,19 @@ final class LuxCoreRenderer implements Renderer, LuxCoreAccess {
         // Admission validation happens before changing native ownership.
         var nextMeshes=new HashMap<>(scene.meshes);if(tx.reset())nextMeshes.clear();LuxCoreScene.remove(nextMeshes,tx.removals().meshIds());tx.upserts().meshes().forEach(m->nextMeshes.put(m.id(),m));
         for(var i:tx.upserts().instances())if(!nextMeshes.containsKey(i.meshAssetId()))throw new IllegalArgumentException("Missing mesh "+i.meshAssetId());
-        long begin=System.nanoTime();if(started)LuxCoreNative.beginEdit(handle);
-        try {
-            // Remove live objects before a reset or asset replacement; native caches can then retire unused data.
-            if(!scene.objects.isEmpty()){LuxCoreNative.deleteObjects(handle,LuxCoreScene.bytes(String.join("\n",scene.objects)));scene.objects.clear();}
-            if(tx.reset()||tx.removals().lightIds().hasRemaining())LuxCoreNative.deleteLights(handle,LuxCoreScene.bytes(String.join("\n",scene.lights.keySet().stream().map(i->"l"+i).toList())));
-            scene.retain(tx);scene.upload(handle,tx);revision=tx.revision();dirty=true;
-            if(started&&previous!=null){LuxCoreNative.parse(handle,LuxCoreScene.bytes(scene.scene(previous)+extraScene));dirty=false;}
-        } finally {if(started)LuxCoreNative.endEdit(handle);editNs+=System.nanoTime()-begin;edits++;}
+        for(var m:tx.upserts().materials())if(m.surfaceOverlay().enabled()||m.shadingModel()!=MaterialAsset.ShadingModel.PHYSICALLY_BASED)
+            throw new IllegalArgumentException("LuxCore uses native physical materials. Game unlit/lightmap/overlays belong to Vulkan or explicit demo migration.");
+        for(var i:tx.upserts().instances())if(!i.renderState().equals(InstanceRenderState.defaults()))throw new IllegalArgumentException("Custom instance shading belongs to Vulkan; use native LuxCore SDL for managed rendering");
+        long begin=System.nanoTime();
+        if(tx.reset()){changedMeshes.clear();changedTextures.clear();}
+        scene.retain(tx);tx.upserts().meshes().forEach(m->changedMeshes.add(m.id()));tx.upserts().textures().forEach(t->changedTextures.add(t.id()));
+        revision=tx.revision();dirty|=tx.hasChanges();editNs+=System.nanoTime()-begin;edits++;
         return new SceneUpdateResult(revision);
+    }
+    private void uploadChanges() {
+        var tx=SceneTransaction.builder(revision);for(long id:changedTextures){var t=scene.textures.get(id);if(t!=null)tx.upsert(t);}
+        for(long id:changedMeshes){var m=scene.meshes.get(id);if(m!=null)tx.upsert(m);}
+        scene.upload(handle,tx.build());changedMeshes.clear();changedTextures.clear();
     }
     private static boolean sameSceneFrame(RenderFrameRequest a,RenderFrameRequest b) {
         return a!=null&&a.camera().equals(b.camera())&&a.environment().equals(b.environment())
@@ -47,9 +54,12 @@ final class LuxCoreRenderer implements Renderer, LuxCoreAccess {
     @Override public synchronized FrameSubmissionResult submit(RenderFrameRequest request) {
         ready();Objects.requireNonNull(request);if(request.sequence()<=submitted)throw new IllegalArgumentException("Frame sequence must increase");
         if(request.minimumSceneRevision()>revision)throw new IllegalArgumentException("minimum scene revision is not resident");
+        if(!request.shaderData().isEmpty()||request.fog().opacity()>0)throw new IllegalArgumentException("Custom shader data/screen fog belong to Vulkan; use native volumes and SDL with LuxCore");
+        for(var i:request.primitiveBatch().primitives())if(!i.renderState().equals(InstanceRenderState.defaults()))throw new IllegalArgumentException("Custom instance shading belongs to Vulkan");
         long begin=System.nanoTime();
         if(!started) {
             width=request.width();height=request.height();
+            uploadChanges();
             LuxCoreNative.parse(handle,LuxCoreScene.bytes(scene.scene(request)+extraScene));
             LuxCoreNative.start(handle,LuxCoreScene.bytes(config(request)+extraConfig));started=true;dirty=false;
         } else {
@@ -62,20 +72,23 @@ final class LuxCoreRenderer implements Renderer, LuxCoreAccess {
                 LuxCoreNative.beginEdit(handle);
                 try {
                     if(!scene.objects.isEmpty())LuxCoreNative.deleteObjects(handle,LuxCoreScene.bytes(String.join("\n",scene.objects)));
+                    if(dirty) {LuxCoreNative.deleteLights(handle,LuxCoreScene.bytes(String.join("\n",nativeLights.stream().map(i->"l"+i).toList())));uploadChanges();}
                     LuxCoreNative.parse(handle,LuxCoreScene.bytes(scene.scene(request)+extraScene));
+                    LuxCoreNative.collectUnused(handle);
                 }finally {LuxCoreNative.endEdit(handle);}
                 dirty=false;deliveredSamples=0;
             }
         }
-        previous=request;submitted=request.sequence();submitNs+=System.nanoTime()-begin;submits++;
+        nativeLights=Set.copyOf(scene.lights.keySet());previous=request;submitted=request.sequence();scheduledRevision=revision;submitNs+=System.nanoTime()-begin;submits++;
         return FrameSubmissionResult.accepted(submitted,revision,Set.of());
     }
     static String config(RenderFrameRequest f) {
-        return "renderengine.type = "+System.getProperty("top.ceroxe.rt.luxcore.engine","RTPATHOCL")+"\n"
+        String engine=System.getProperty("top.ceroxe.rt.luxcore.engine","RTPATHOCL");
+        return "renderengine.type = "+engine+"\n"
             +"opencl.native.threads.count = 0\nopencl.cpu.use = 0\nopencl.gpu.use = 1\n"
             +"film.width = "+f.width()+"\nfilm.height = "+f.height()+"\n"
             +"rtpath.resolutionreduction = 1\nrtpath.resolutionreduction.preview = 1\nrtpath.resolutionreduction.preview.step = 1\n"
-            +"sampler.type = TILEPATHSAMPLER\ntilepath.sampling.aa.size = 1\nfilm.filter.type = NONE\nfilm.opencl.enable = 0\n"
+            +"sampler.type = "+(engine.contains("TILEPATH")||engine.equals("RTPATHOCL")?"TILEPATHSAMPLER":"SOBOL")+"\ntilepath.sampling.aa.size = 1\nfilm.filter.type = NONE\nfilm.opencl.enable = 0\n"
             +"film.imagepipelines.0.0.type = TONEMAP_LINEAR\nfilm.imagepipelines.0.0.scale = 1\nfilm.imagepipelines.0.1.type = GAMMA_CORRECTION\n"
             +"film.outputs.0.type = RGBA\nfilm.outputs.0.filename = unused.exr\n"
             +"film.outputs.1.type = RGBA_IMAGEPIPELINE\nfilm.outputs.1.filename = unused.png\n";
@@ -87,7 +100,7 @@ final class LuxCoreRenderer implements Renderer, LuxCoreAccess {
         if(display==null)display=LuxCoreScene.buffer(width*height*4);
         long begin=System.nanoTime();double readSamples=LuxCoreNative.readDisplay(handle,display);readNs+=System.nanoTime()-begin;reads++;
         completed=submitted;deliveredSamples=readSamples;
-        inRead=true;try{consumer.accept(new View(completed,revision,width,height,display));}finally{inRead=false;}return true;
+        inRead=true;try{consumer.accept(new View(completed,scheduledRevision,width,height,display));}finally{inRead=false;}return true;
     }
     private record View(long frameSequence,long renderedSceneRevision,int width,int height,ByteBuffer storage) implements FrameView {
         @Override public Optional<RenderResourceId> outputResource(){return Optional.empty();}
@@ -103,7 +116,9 @@ final class LuxCoreRenderer implements Renderer, LuxCoreAccess {
         do {if(Thread.interrupted())throw new InterruptedException();var result=pollFrame();if(result.isPresent())return result;LockSupport.parkNanos(500_000);}while(System.nanoTime()<end);return Optional.empty();
     }
     @Override public synchronized void sceneProperties(String properties) {
-        ready();Objects.requireNonNull(properties);if(started)LuxCoreNative.beginEdit(handle);
+        ready();Objects.requireNonNull(properties);
+        if(!started){extraScene+=properties+"\n";return;}
+        LuxCoreNative.beginEdit(handle);
         try {LuxCoreNative.parse(handle,LuxCoreScene.bytes(properties));extraScene+=properties+"\n";}
         finally {if(started)LuxCoreNative.endEdit(handle);}deliveredSamples=0;
     }
