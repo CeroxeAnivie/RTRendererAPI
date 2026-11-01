@@ -24,6 +24,19 @@ Patch-Once 'External/Donut/compileshaders.cmake' 'set(compilerCommand ${SHADERMA
 Patch-Once 'External/Nrd/CMakeLists.txt' 'set(SHADERMAKE_GENERAL_ARGS' "set(SHADERMAKE_GENERAL_ARGS --jobs 1" 'SHADERMAKE_GENERAL_ARGS --jobs 1'
 # Only expose host control and runtime file roots. Rendering, scheduling and shaders stay upstream.
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.cpp' 'm_CmdLine.InitFromCommandLine(__argc, __argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)'
+Patch-Once 'Rtxpt/SampleCommon/SampleCommon.cpp' '    // progress bar currently interfering with fullscreen so disable' @'
+    // RTR embedded host: compilation/loading progress belongs in the host log.
+    if (HelpersIsNonInteractive()) {
+        donut::log::info("%s", windowText);
+        return -1;
+    }
+    // progress bar currently interfering with fullscreen so disable
+'@ 'RTR embedded host: compilation/loading progress'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '#include <donut/core/log.h>' @'
+#include <donut/core/log.h>
+#include <donut/app/ApplicationBase.h>
+'@ '#include <donut/app/ApplicationBase.h>'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' 'auto basePath = std::filesystem::path(path).parent_path();' 'auto basePath = donut::app::GetDirectoryWithExecutable(); // RTR signed runtime root' 'RTR signed runtime root'
 Patch-Once 'Rtxpt/Sample.cpp' 'if (available.empty())' 'if (std::filesystem::path(preferred).is_absolute() && std::filesystem::is_regular_file(preferred)) return preferred; // RTR absolute host scene
     if (available.empty())' 'RTR absolute host scene'
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.h' 'private:' @'

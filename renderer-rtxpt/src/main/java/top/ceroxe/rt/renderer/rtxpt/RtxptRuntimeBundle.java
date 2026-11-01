@@ -37,7 +37,7 @@ final class RtxptRuntimeBundle {
                 local == null || local.isBlank() ? System.getProperty("java.io.tmpdir") : local))
                 .toAbsolutePath().normalize().resolve("RTRendererAPI/RTXPT");
             Files.createDirectories(base);
-            var target = base.resolve("1.9.0-" + digest);
+            var target = base.resolve("1.9.0-" + digest.substring(0,20));
             try (var channel = FileChannel.open(base.resolve(digest + ".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                     var lock = channel.lock()) {
                 if (complete(target, digest)) return target;
@@ -63,6 +63,8 @@ final class RtxptRuntimeBundle {
                         }
                     }
                     Files.delete(archive);
+                    Files.createDirectories(staging.resolve("Assets/EnvironmentMaps"));
+                    Files.createDirectories(staging.resolve("Assets/Materials"));
                     verify(staging);
                     Files.writeString(staging.resolve(".complete"), digest, US_ASCII);
                     deleteTree(target);

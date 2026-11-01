@@ -1,4 +1,5 @@
 // The host owns lifecycle and presentation. All rendering stays in the pinned RTXPT core.
+// This software contains source code provided by NVIDIA Corporation.
 #include <jni.h>
 #include <atomic>
 #include <memory>
