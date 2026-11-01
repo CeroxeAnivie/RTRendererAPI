@@ -38,20 +38,19 @@ class HostPathTracer final : public AdvancedPathTracer {
         const auto& lights=graph->GetLights();
         size_t analyticCount=0;
         bool pointFound=false;
-        bool supportedAnalyticSet=true;
         for(const auto& light:lights) {
             const auto type=light->GetLightType();
             if(type==LightType_Point) {
                 ++analyticCount;
-                if(static_cast<const donut::engine::PointLight*>(light.get())->radius!=0.f)return false;
-                pointFound=true;
-            } else if(type==LightType_Spot || type==LightType_Directional) {
+                if(static_cast<const donut::engine::PointLight*>(light.get())->radius==0.f)
+                    pointFound=true;
+            } else if(type==LightType_Spot) {
                 ++analyticCount;
-            } else supportedAnalyticSet=false;
+            }
         }
-        const bool eligible=pointFound && analyticCount<=4 && supportedAnalyticSet;
-        donut::log::info("RTXPT exact-point scene gate: lights=%zu analytic=%zu points=%s supportedAnalyticSet=%s eligible=%s",
-            lights.size(),analyticCount,pointFound?"yes":"no",supportedAnalyticSet?"yes":"no",eligible?"yes":"no");
+        const bool eligible=pointFound && analyticCount<=4;
+        donut::log::info("RTXPT exact-point scene gate: graphLights=%zu neeAtAnalytic=%zu zeroRadiusPoints=%s eligible=%s",
+            lights.size(),analyticCount,pointFound?"yes":"no",eligible?"yes":"no");
         return eligible;
     }
 public:

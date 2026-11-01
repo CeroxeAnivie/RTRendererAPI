@@ -74,6 +74,13 @@ try {
     $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
+    $runLog=[IO.File]::ReadAllText($prefix+'.log')
+    if($SmallPointCandidate -and $runLog -notmatch 'RTXPT exact point sum ACTIVE'){
+        throw 'Candidate was not active for this scene; discard this run as invalid evidence.'
+    }
+    if($ControlLighting -and $runLog -match 'RTXPT exact point sum ACTIVE'){
+        throw 'Lighting control unexpectedly enabled exact point sampling.'
+    }
     Get-Content -LiteralPath ($prefix+'.log') -Tail 5
     if($code -ne 0){throw "Hex-ball run exited $code; inspect $prefix.log"}
 } finally {
