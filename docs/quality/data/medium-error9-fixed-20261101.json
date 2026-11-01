@@ -1,0 +1,1777 @@
+{
+  "sourceCommit": "6c6b08a",
+  "baselineArtifactCommit": "4b0a87c",
+  "decision": "Retain correctness fix; no demonstrated performance gain; collected-connections remains disabled.",
+  "coreSha256": "3c37efd90b77a0a1bf925b8ee82f134aad028b304594d1e31ac2adf31e41fb81",
+  "workload": {
+    "scene": "micro-all",
+    "width": 1920,
+    "height": 1080,
+    "spp": 1,
+    "opticalSamples": 2,
+    "maxEvents": 24,
+    "scatteringSteps": 8,
+    "scatteringBounces": 2,
+    "collectedConnections": false,
+    "frameGeneration": false,
+    "denoising": false,
+    "temporal": false,
+    "reconstruction": false,
+    "processTreeCommitCapGB": 3.0
+  },
+  "unprofiled": {
+    "frames": 256,
+    "wallMs": 41313.9442,
+    "msPerFrame": 161.38259453125,
+    "fps": 6.196455094210056,
+    "warmupFrames": 4,
+    "windows": 16,
+    "windowFrames": 16,
+    "exit": 0,
+    "peakProcessTreeCommitGB": 2.886,
+    "initialGpuUtilizationPercent": 0
+  },
+  "matchedFirst160": {
+    "before": {
+      "frames": 160,
+      "wallMs": 25639.2259,
+      "msPerFrame": 160.245161875,
+      "fps": 6.2404380157202795
+    },
+    "after": {
+      "frames": 160,
+      "wallMs": 25974.124499999998,
+      "msPerFrame": 162.338278125,
+      "fps": 6.159976633668634
+    },
+    "latencyReductionPercent": -1.3061962217821854,
+    "note": "Baseline fails sequence 172. Only common completed prefix is compared, not the full fixed window."
+  },
+  "profiled": {
+    "interpretation": "Exclusive host boundary times partition wall; waits enclose GPU work. Do not add GPU work to this table.",
+    "frames": 32,
+    "wallMs": 5229.1755,
+    "msPerFrame": 163.411734375,
+    "fps": 6.119511575008335,
+    "events": 101399,
+    "droppedEvents": 0,
+    "threadsObserved": 2,
+    "coveragePercent": 100,
+    "uncoveredMs": 0,
+    "intervalContainmentAndNonoverlapVerified": true,
+    "rawFiles": [
+      {
+        "file": "micro-all-1080p-wall-timeline-round-1.json",
+        "sha256": "96bac3833bd97abe08cc2753c5ff534eb1ef1f209ec70bddad7258d046b485a8"
+      },
+      {
+        "file": "micro-all-1080p-wall-timeline-round-2.json",
+        "sha256": "2c3c148216e382fc621fe2e0980d5aee833887644d902393a13daa35c6e8e03e"
+      }
+    ],
+    "rankedHostBoundaries": [
+      {
+        "rank": 1,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_STREAM_SYNCHRONIZE",
+        "count": 1826,
+        "selfMsPerFrame": 144.346221875,
+        "selfMsPerSecond": 883.3283755727839,
+        "selfPercentWall": 88.3328375572784,
+        "selfTotalMs": 4619.0791,
+        "inclusiveMsPerFrame": 144.346221875,
+        "selfMeanMs": 2.5296161555312158,
+        "selfP50Ms": 1.6363,
+        "selfP95Ms": 10.6641,
+        "selfMaxMs": 20.4492,
+        "beforeMsPerFrame": 145.224303125,
+        "latencyReductionPercent": 0.6046379504704547
+      },
+      {
+        "rank": 2,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/VULKAN_RELEASE_RECORD",
+        "count": 2082,
+        "selfMsPerFrame": 2.952053125,
+        "selfMsPerSecond": 18.065123268477027,
+        "selfPercentWall": 1.8065123268477028,
+        "selfTotalMs": 94.4657,
+        "inclusiveMsPerFrame": 2.952053125,
+        "selfMeanMs": 0.045372574447646495,
+        "selfP50Ms": 0.0383,
+        "selfP95Ms": 0.0889,
+        "selfMaxMs": 0.6559,
+        "beforeMsPerFrame": 2.844196875,
+        "latencyReductionPercent": -3.7921513432504383
+      },
+      {
+        "rank": 3,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_KERNEL_ENQUEUE",
+        "count": 7304,
+        "selfMsPerFrame": 2.79780625,
+        "selfMsPerSecond": 17.121207731505663,
+        "selfPercentWall": 1.7121207731505665,
+        "selfTotalMs": 89.5298,
+        "inclusiveMsPerFrame": 2.9605125,
+        "selfMeanMs": 0.012257639649507119,
+        "selfP50Ms": 0.0092,
+        "selfP95Ms": 0.0298,
+        "selfMaxMs": 1.4968,
+        "beforeMsPerFrame": 2.5827875,
+        "latencyReductionPercent": -8.3250654573789
+      },
+      {
+        "rank": 4,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/VULKAN_RELEASE_SUBMIT",
+        "count": 2082,
+        "selfMsPerFrame": 1.67691875,
+        "selfMsPerSecond": 10.26192370097351,
+        "selfPercentWall": 1.026192370097351,
+        "selfTotalMs": 53.6614,
+        "inclusiveMsPerFrame": 1.67691875,
+        "selfMeanMs": 0.025773967339097023,
+        "selfP50Ms": 0.0179,
+        "selfP95Ms": 0.0394,
+        "selfMaxMs": 2.1376,
+        "beforeMsPerFrame": 1.74549375,
+        "latencyReductionPercent": 3.928687799655539
+      },
+      {
+        "rank": 5,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_SEMAPHORE_WAIT_ENQUEUE",
+        "count": 3908,
+        "selfMsPerFrame": 1.254953125,
+        "selfMsPerSecond": 7.679700174530383,
+        "selfPercentWall": 0.7679700174530383,
+        "selfTotalMs": 40.1585,
+        "inclusiveMsPerFrame": 1.49856875,
+        "selfMeanMs": 0.010275972364380758,
+        "selfP50Ms": 0.0077,
+        "selfP95Ms": 0.0234,
+        "selfMaxMs": 0.1756,
+        "beforeMsPerFrame": 1.263309375,
+        "latencyReductionPercent": 0.6614571351534537
+      },
+      {
+        "rank": 6,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/VULKAN_CONSUMER_FENCE_WAIT",
+        "count": 256,
+        "selfMsPerFrame": 1.143846875,
+        "selfMsPerSecond": 6.999784191599613,
+        "selfPercentWall": 0.6999784191599613,
+        "selfTotalMs": 36.6031,
+        "inclusiveMsPerFrame": 1.143846875,
+        "selfMeanMs": 0.142980859375,
+        "selfP50Ms": 0.1366,
+        "selfP95Ms": 0.2014,
+        "selfMaxMs": 0.2391,
+        "beforeMsPerFrame": 1.211671875,
+        "latencyReductionPercent": 5.597637561736757
+      },
+      {
+        "rank": 7,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_SEMAPHORE_SIGNAL_ENQUEUE",
+        "count": 3908,
+        "selfMsPerFrame": 0.982390625,
+        "selfMsPerSecond": 6.011750800867173,
+        "selfPercentWall": 0.6011750800867173,
+        "selfTotalMs": 31.4365,
+        "inclusiveMsPerFrame": 1.08946875,
+        "selfMeanMs": 0.00804414022517912,
+        "selfP50Ms": 0.0064,
+        "selfP95Ms": 0.0139,
+        "selfMaxMs": 0.1373,
+        "beforeMsPerFrame": 0.923753125,
+        "latencyReductionPercent": -6.347745778938507
+      },
+      {
+        "rank": 8,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_DOWNLOAD/CUDA_STREAM_SYNCHRONIZE",
+        "count": 256,
+        "selfMsPerFrame": 0.93115,
+        "selfMsPerSecond": 5.698183203069012,
+        "selfPercentWall": 0.5698183203069012,
+        "selfTotalMs": 29.7968,
+        "inclusiveMsPerFrame": 0.93115,
+        "selfMeanMs": 0.11639375,
+        "selfP50Ms": 0.1141,
+        "selfP95Ms": 0.1998,
+        "selfMaxMs": 0.3219,
+        "beforeMsPerFrame": 0.999028125,
+        "latencyReductionPercent": 6.794415822877864
+      },
+      {
+        "rank": 9,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/VULKAN_CONSUMER_SUBMIT",
+        "count": 1826,
+        "selfMsPerFrame": 0.680934375,
+        "selfMsPerSecond": 4.166985789633567,
+        "selfPercentWall": 0.41669857896335666,
+        "selfTotalMs": 21.7899,
+        "inclusiveMsPerFrame": 0.680934375,
+        "selfMeanMs": 0.011933132530120481,
+        "selfP50Ms": 0.0106,
+        "selfP95Ms": 0.0181,
+        "selfMaxMs": 0.1651,
+        "beforeMsPerFrame": 0.68013125,
+        "latencyReductionPercent": -0.11808382573217369
+      },
+      {
+        "rank": 10,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_DOWNLOAD_ASYNC_ENQUEUE",
+        "count": 3652,
+        "selfMsPerFrame": 0.6732875,
+        "selfMsPerSecond": 4.120190649558425,
+        "selfPercentWall": 0.41201906495584245,
+        "selfTotalMs": 21.5452,
+        "inclusiveMsPerFrame": 0.7384375,
+        "selfMeanMs": 0.0058995618838992335,
+        "selfP50Ms": 0.0049,
+        "selfP95Ms": 0.011,
+        "selfMaxMs": 0.0466,
+        "beforeMsPerFrame": 0.675428125,
+        "latencyReductionPercent": 0.3169286147212236
+      },
+      {
+        "rank": 11,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_DOWNLOAD",
+        "count": 256,
+        "selfMsPerFrame": 0.47005,
+        "selfMsPerSecond": 2.876476415832668,
+        "selfPercentWall": 0.28764764158326683,
+        "selfTotalMs": 15.0416,
+        "inclusiveMsPerFrame": 1.412153125,
+        "selfMeanMs": 0.05875625,
+        "selfP50Ms": 0.056,
+        "selfP95Ms": 0.087,
+        "selfMaxMs": 0.5628,
+        "beforeMsPerFrame": 0.383759375,
+        "latencyReductionPercent": -22.48560702914424
+      },
+      {
+        "rank": 12,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION",
+        "count": 32,
+        "selfMsPerFrame": 0.45675625,
+        "selfMsPerSecond": 2.795125158832401,
+        "selfPercentWall": 0.2795125158832401,
+        "selfTotalMs": 14.6162,
+        "inclusiveMsPerFrame": 161.5711,
+        "selfMeanMs": 0.45675625,
+        "selfP50Ms": 0.455,
+        "selfP95Ms": 0.5724,
+        "selfMaxMs": 0.6614,
+        "beforeMsPerFrame": 0.41935,
+        "latencyReductionPercent": -8.920054846786684
+      },
+      {
+        "rank": 13,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_KERNEL_EVENT_RESOLVE",
+        "count": 2082,
+        "selfMsPerFrame": 0.40396875,
+        "selfMsPerSecond": 2.4720914415666484,
+        "selfPercentWall": 0.24720914415666484,
+        "selfTotalMs": 12.927,
+        "inclusiveMsPerFrame": 0.57668125,
+        "selfMeanMs": 0.006208933717579251,
+        "selfP50Ms": 0.0045,
+        "selfP95Ms": 0.0144,
+        "selfMaxMs": 0.1571,
+        "beforeMsPerFrame": 0.414346875,
+        "latencyReductionPercent": 2.5046948887933573
+      },
+      {
+        "rank": 14,
+        "path": "WINDOW/PARK",
+        "count": 11,
+        "selfMsPerFrame": 0.357340625,
+        "selfMsPerSecond": 2.186750090908213,
+        "selfPercentWall": 0.2186750090908213,
+        "selfTotalMs": 11.4349,
+        "inclusiveMsPerFrame": 0.357340625,
+        "selfMeanMs": 1.0395363636363637,
+        "selfP50Ms": 1.1004,
+        "selfP95Ms": 1.8703,
+        "selfMaxMs": 1.8703,
+        "beforeMsPerFrame": 0.322046875,
+        "latencyReductionPercent": -10.959196545533946
+      },
+      {
+        "rank": 15,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_KERNEL_ENQUEUE",
+        "count": 544,
+        "selfMsPerFrame": 0.315003125,
+        "selfMsPerSecond": 1.9276652696012975,
+        "selfPercentWall": 0.19276652696012975,
+        "selfTotalMs": 10.0801,
+        "inclusiveMsPerFrame": 0.330384375,
+        "selfMeanMs": 0.018529595588235293,
+        "selfP50Ms": 0.0131,
+        "selfP95Ms": 0.0487,
+        "selfMaxMs": 0.2127,
+        "beforeMsPerFrame": 0.2334375,
+        "latencyReductionPercent": -34.94109772423026
+      },
+      {
+        "rank": 16,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/FINAL_FRAME_RECORD_AND_SUBMIT",
+        "count": 32,
+        "selfMsPerFrame": 0.30190625,
+        "selfMsPerSecond": 1.8475187914423603,
+        "selfPercentWall": 0.18475187914423602,
+        "selfTotalMs": 9.661,
+        "inclusiveMsPerFrame": 0.30190625,
+        "selfMeanMs": 0.30190625,
+        "selfP50Ms": 0.2812,
+        "selfP95Ms": 0.4335,
+        "selfMaxMs": 0.4892,
+        "beforeMsPerFrame": 0.33631875,
+        "latencyReductionPercent": 10.23210867666463
+      },
+      {
+        "rank": 17,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/TEMPORAL_UNIFORMS_DESCRIPTORS",
+        "count": 32,
+        "selfMsPerFrame": 0.29978125,
+        "selfMsPerSecond": 1.8345148293454676,
+        "selfPercentWall": 0.18345148293454674,
+        "selfTotalMs": 9.593,
+        "inclusiveMsPerFrame": 0.29978125,
+        "selfMeanMs": 0.29978125,
+        "selfP50Ms": 0.1998,
+        "selfP95Ms": 0.3928,
+        "selfMaxMs": 2.9997,
+        "beforeMsPerFrame": 0.21756875,
+        "latencyReductionPercent": -37.78690643762028
+      },
+      {
+        "rank": 18,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/GPU_QUERY_RESOLVE",
+        "count": 2082,
+        "selfMsPerFrame": 0.258075,
+        "selfMsPerSecond": 1.5792929497202761,
+        "selfPercentWall": 0.15792929497202762,
+        "selfTotalMs": 8.2584,
+        "inclusiveMsPerFrame": 0.258075,
+        "selfMeanMs": 0.0039665706051873195,
+        "selfP50Ms": 0.0033,
+        "selfP95Ms": 0.0081,
+        "selfMaxMs": 0.0615,
+        "beforeMsPerFrame": 0.271228125,
+        "latencyReductionPercent": 4.849469427257958
+      },
+      {
+        "rank": 19,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/ROUTE_AND_PIPELINES",
+        "count": 32,
+        "selfMsPerFrame": 0.25455625,
+        "selfMsPerSecond": 1.5577599183657156,
+        "selfPercentWall": 0.15577599183657156,
+        "selfTotalMs": 8.1458,
+        "inclusiveMsPerFrame": 0.25455625,
+        "selfMeanMs": 0.25455625,
+        "selfP50Ms": 0.2313,
+        "selfP95Ms": 0.4282,
+        "selfMaxMs": 0.517,
+        "beforeMsPerFrame": 0.245328125,
+        "latencyReductionPercent": -3.761543850710125
+      },
+      {
+        "rank": 20,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE",
+        "count": 2082,
+        "selfMsPerFrame": 0.247321875,
+        "selfMsPerSecond": 1.5134890768152647,
+        "selfPercentWall": 0.15134890768152648,
+        "selfTotalMs": 7.9143,
+        "inclusiveMsPerFrame": 154.378175,
+        "selfMeanMs": 0.0038012968299711816,
+        "selfP50Ms": 0.0023,
+        "selfP95Ms": 0.01,
+        "selfMaxMs": 0.1098,
+        "beforeMsPerFrame": 0.192146875,
+        "latencyReductionPercent": -28.715012929562356
+      },
+      {
+        "rank": 21,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_UPLOAD/CUDA_STREAM_SYNCHRONIZE",
+        "count": 32,
+        "selfMsPerFrame": 0.213221875,
+        "selfMsPerSecond": 1.3048137321074804,
+        "selfPercentWall": 0.13048137321074804,
+        "selfTotalMs": 6.8231,
+        "inclusiveMsPerFrame": 0.213221875,
+        "selfMeanMs": 0.213221875,
+        "selfP50Ms": 0.2106,
+        "selfP95Ms": 0.3236,
+        "selfMaxMs": 0.338,
+        "beforeMsPerFrame": 0.218134375,
+        "latencyReductionPercent": 2.2520522040599955
+      },
+      {
+        "rank": 22,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_SEMAPHORE_WAIT_ENQUEUE/CUDA_CONTEXT_POP",
+        "count": 3908,
+        "selfMsPerFrame": 0.17568125,
+        "selfMsPerSecond": 1.0750834428869331,
+        "selfPercentWall": 0.10750834428869331,
+        "selfTotalMs": 5.6218,
+        "inclusiveMsPerFrame": 0.17568125,
+        "selfMeanMs": 0.0014385363357215968,
+        "selfP50Ms": 0.0005,
+        "selfP95Ms": 0.0016,
+        "selfMaxMs": 0.1574,
+        "beforeMsPerFrame": 0.08725,
+        "latencyReductionPercent": -101.35386819484245
+      },
+      {
+        "rank": 23,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/VULKAN_COMMAND_REUSE_WAIT",
+        "count": 1826,
+        "selfMsPerFrame": 0.1598,
+        "selfMsPerSecond": 0.977897949686332,
+        "selfPercentWall": 0.0977897949686332,
+        "selfTotalMs": 5.1136,
+        "inclusiveMsPerFrame": 0.1598,
+        "selfMeanMs": 0.0028004381161007667,
+        "selfP50Ms": 0.002,
+        "selfP95Ms": 0.0063,
+        "selfMaxMs": 0.0387,
+        "beforeMsPerFrame": 0.1636,
+        "latencyReductionPercent": 2.3227383863080653
+      },
+      {
+        "rank": 24,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_CONTEXT_POP",
+        "count": 1826,
+        "selfMsPerFrame": 0.149253125,
+        "selfMsPerSecond": 0.913356226043666,
+        "selfPercentWall": 0.09133562260436659,
+        "selfTotalMs": 4.7761,
+        "inclusiveMsPerFrame": 0.149253125,
+        "selfMeanMs": 0.0026156078860898138,
+        "selfP50Ms": 0.0008,
+        "selfP95Ms": 0.0086,
+        "selfMaxMs": 0.2232,
+        "beforeMsPerFrame": 0.132284375,
+        "latencyReductionPercent": -12.827478679927218
+      },
+      {
+        "rank": 25,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/VULKAN_CONSUMER_SUBMIT",
+        "count": 256,
+        "selfMsPerFrame": 0.1461875,
+        "selfMsPerSecond": 0.8945960983715311,
+        "selfPercentWall": 0.0894596098371531,
+        "selfTotalMs": 4.678,
+        "inclusiveMsPerFrame": 0.1461875,
+        "selfMeanMs": 0.0182734375,
+        "selfP50Ms": 0.0156,
+        "selfP95Ms": 0.0267,
+        "selfMaxMs": 0.1673,
+        "beforeMsPerFrame": 0.144403125,
+        "latencyReductionPercent": -1.235690017096247
+      },
+      {
+        "rank": 26,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/VULKAN_CONSUMER_FENCE_WAIT",
+        "count": 32,
+        "selfMsPerFrame": 0.121575,
+        "selfMsPerSecond": 0.7439796197316384,
+        "selfPercentWall": 0.07439796197316384,
+        "selfTotalMs": 3.8904,
+        "inclusiveMsPerFrame": 0.121575,
+        "selfMeanMs": 0.121575,
+        "selfP50Ms": 0.119,
+        "selfP95Ms": 0.1413,
+        "selfMaxMs": 0.1461,
+        "beforeMsPerFrame": 0.13495625,
+        "latencyReductionPercent": 9.915250312601309
+      },
+      {
+        "rank": 27,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE",
+        "count": 2082,
+        "selfMsPerFrame": 0.117278125,
+        "selfMsPerSecond": 0.7176848434327744,
+        "selfPercentWall": 0.07176848434327744,
+        "selfTotalMs": 3.7529,
+        "inclusiveMsPerFrame": 155.890709375,
+        "selfMeanMs": 0.0018025456292026897,
+        "selfP50Ms": 0.0012,
+        "selfP95Ms": 0.0041,
+        "selfMaxMs": 0.11,
+        "beforeMsPerFrame": 0.10853125,
+        "latencyReductionPercent": -8.059314713504184
+      },
+      {
+        "rank": 28,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_KERNEL_EVENT_RESOLVE/CUDA_CONTEXT_POP",
+        "count": 7848,
+        "selfMsPerFrame": 0.113321875,
+        "selfMsPerSecond": 0.6934745257641477,
+        "selfPercentWall": 0.06934745257641477,
+        "selfTotalMs": 3.6263,
+        "inclusiveMsPerFrame": 0.113321875,
+        "selfMeanMs": 0.00046206676860346583,
+        "selfP50Ms": 0.0003,
+        "selfP95Ms": 0.0005,
+        "selfMaxMs": 1.0048,
+        "beforeMsPerFrame": 0.080484375,
+        "latencyReductionPercent": -40.79984469035141
+      },
+      {
+        "rank": 29,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/VULKAN_CONSUMER_RECORD",
+        "count": 256,
+        "selfMsPerFrame": 0.105221875,
+        "selfMsPerSecond": 0.6439064820065802,
+        "selfPercentWall": 0.06439064820065801,
+        "selfTotalMs": 3.3671,
+        "inclusiveMsPerFrame": 0.105221875,
+        "selfMeanMs": 0.013152734375,
+        "selfP50Ms": 0.0095,
+        "selfP95Ms": 0.0301,
+        "selfMaxMs": 0.1009,
+        "beforeMsPerFrame": 0.09054375,
+        "latencyReductionPercent": -16.211085801063028
+      },
+      {
+        "rank": 30,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/SESSION_PUMP",
+        "count": 42,
+        "selfMsPerFrame": 0.10223125,
+        "selfMsPerSecond": 0.6256053177025709,
+        "selfPercentWall": 0.06256053177025708,
+        "selfTotalMs": 3.2714,
+        "inclusiveMsPerFrame": 0.10223125,
+        "selfMeanMs": 0.07789047619047618,
+        "selfP50Ms": 0.0709,
+        "selfP95Ms": 0.176,
+        "selfMaxMs": 0.1944,
+        "beforeMsPerFrame": 0.093925,
+        "latencyReductionPercent": -8.843492147990428
+      },
+      {
+        "rank": 31,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_KERNEL_ENQUEUE/CUDA_CONTEXT_POP",
+        "count": 7304,
+        "selfMsPerFrame": 0.0982375,
+        "selfMsPerSecond": 0.6011655183498813,
+        "selfPercentWall": 0.06011655183498814,
+        "selfTotalMs": 3.1436,
+        "inclusiveMsPerFrame": 0.0982375,
+        "selfMeanMs": 0.00043039430449069005,
+        "selfP50Ms": 0.0003,
+        "selfP95Ms": 0.0006,
+        "selfMaxMs": 0.0416,
+        "beforeMsPerFrame": 0.093203125,
+        "latencyReductionPercent": -5.401508801341159
+      },
+      {
+        "rank": 32,
+        "path": "WINDOW/DIAGNOSTICS",
+        "count": 15,
+        "selfMsPerFrame": 0.088790625,
+        "selfMsPerSecond": 0.5433552574397245,
+        "selfPercentWall": 0.05433552574397245,
+        "selfTotalMs": 2.8413,
+        "inclusiveMsPerFrame": 0.088790625,
+        "selfMeanMs": 0.18942,
+        "selfP50Ms": 0.1873,
+        "selfP95Ms": 0.408,
+        "selfMaxMs": 0.408,
+        "beforeMsPerFrame": 0.0822875,
+        "latencyReductionPercent": -7.902931794014889
+      },
+      {
+        "rank": 33,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_SEMAPHORE_SIGNAL_ENQUEUE/CUDA_CONTEXT_POP",
+        "count": 3908,
+        "selfMsPerFrame": 0.082525,
+        "selfMsPerSecond": 0.5050126927275629,
+        "selfPercentWall": 0.05050126927275629,
+        "selfTotalMs": 2.6408,
+        "inclusiveMsPerFrame": 0.082525,
+        "selfMeanMs": 0.0006757420675537359,
+        "selfP50Ms": 0.0003,
+        "selfP95Ms": 0.0006,
+        "selfMaxMs": 0.1376,
+        "beforeMsPerFrame": 0.04645,
+        "latencyReductionPercent": -77.66415500538213
+      },
+      {
+        "rank": 34,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE",
+        "count": 32,
+        "selfMsPerFrame": 0.076915625,
+        "selfMsPerSecond": 0.4706860574865005,
+        "selfPercentWall": 0.04706860574865005,
+        "selfTotalMs": 2.4613,
+        "inclusiveMsPerFrame": 161.648015625,
+        "selfMeanMs": 0.076915625,
+        "selfP50Ms": 0.0708,
+        "selfP95Ms": 0.1126,
+        "selfMaxMs": 0.2247,
+        "beforeMsPerFrame": 0.073846875,
+        "latencyReductionPercent": -4.155558376708557
+      },
+      {
+        "rank": 35,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION",
+        "count": 42,
+        "selfMsPerFrame": 0.074390625,
+        "selfMsPerSecond": 0.4552342907596045,
+        "selfPercentWall": 0.04552342907596044,
+        "selfTotalMs": 2.3805,
+        "inclusiveMsPerFrame": 162.869515625,
+        "selfMeanMs": 0.056678571428571425,
+        "selfP50Ms": 0.0526,
+        "selfP95Ms": 0.0979,
+        "selfMaxMs": 0.1126,
+        "beforeMsPerFrame": 0.0733125,
+        "latencyReductionPercent": -1.4705882352941124
+      },
+      {
+        "rank": 36,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_SEMAPHORE_WAIT_ENQUEUE/CUDA_CONTEXT_PUSH",
+        "count": 3908,
+        "selfMsPerFrame": 0.067934375,
+        "selfMsPerSecond": 0.4157251941534569,
+        "selfPercentWall": 0.04157251941534569,
+        "selfTotalMs": 2.1739,
+        "inclusiveMsPerFrame": 0.067934375,
+        "selfMeanMs": 0.0005562691914022518,
+        "selfP50Ms": 0.0004,
+        "selfP95Ms": 0.0016,
+        "selfMaxMs": 0.0137,
+        "beforeMsPerFrame": 0.067834375,
+        "latencyReductionPercent": -0.14741788363201724
+      },
+      {
+        "rank": 37,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/RESOURCE_BUDGET_AND_ENSURE/OPTICAL_MEDIUM_NATIVE",
+        "count": 32,
+        "selfMsPerFrame": 0.06706875,
+        "selfMsPerSecond": 0.4104279919463403,
+        "selfPercentWall": 0.04104279919463403,
+        "selfTotalMs": 2.1462,
+        "inclusiveMsPerFrame": 0.07559375,
+        "selfMeanMs": 0.06706875,
+        "selfP50Ms": 0.0645,
+        "selfP95Ms": 0.1105,
+        "selfMaxMs": 0.1145,
+        "beforeMsPerFrame": 0.068353125,
+        "latencyReductionPercent": 1.879028939788785
+      },
+      {
+        "rank": 38,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_KERNEL_ENQUEUE/CUDA_CONTEXT_PUSH",
+        "count": 7304,
+        "selfMsPerFrame": 0.06446875,
+        "selfMsPerSecond": 0.39451726185131863,
+        "selfPercentWall": 0.03945172618513186,
+        "selfTotalMs": 2.063,
+        "inclusiveMsPerFrame": 0.06446875,
+        "selfMeanMs": 0.00028244797371303394,
+        "selfP50Ms": 0.0002,
+        "selfP95Ms": 0.0004,
+        "selfMaxMs": 0.0653,
+        "beforeMsPerFrame": 0.09398125,
+        "latencyReductionPercent": 31.402540400345814
+      },
+      {
+        "rank": 39,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_KERNEL_EVENT_RESOLVE/CUDA_CONTEXT_PUSH",
+        "count": 7848,
+        "selfMsPerFrame": 0.059390625,
+        "selfMsPerSecond": 0.3634416171344794,
+        "selfPercentWall": 0.03634416171344794,
+        "selfTotalMs": 1.9005,
+        "inclusiveMsPerFrame": 0.059390625,
+        "selfMeanMs": 0.00024216360856269114,
+        "selfP50Ms": 0.0002,
+        "selfP95Ms": 0.0007,
+        "selfMaxMs": 0.0374,
+        "beforeMsPerFrame": 0.054096875,
+        "latencyReductionPercent": -9.785685402345322
+      },
+      {
+        "rank": 40,
+        "path": "WINDOW/REQUEST_BUILD",
+        "count": 32,
+        "selfMsPerFrame": 0.050053125,
+        "selfMsPerSecond": 0.3063006778028391,
+        "selfPercentWall": 0.030630067780283907,
+        "selfTotalMs": 1.6017,
+        "inclusiveMsPerFrame": 0.050053125,
+        "selfMeanMs": 0.050053125,
+        "selfP50Ms": 0.0436,
+        "selfP95Ms": 0.0777,
+        "selfMaxMs": 0.1075,
+        "beforeMsPerFrame": 0.053496875,
+        "latencyReductionPercent": 6.43729189789124
+      },
+      {
+        "rank": 41,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/RESOURCE_BUDGET_AND_ENSURE",
+        "count": 32,
+        "selfMsPerFrame": 0.04616875,
+        "selfMsPerSecond": 0.2825302000286661,
+        "selfPercentWall": 0.02825302000286661,
+        "selfTotalMs": 1.4774,
+        "inclusiveMsPerFrame": 0.1217625,
+        "selfMeanMs": 0.04616875,
+        "selfP50Ms": 0.0322,
+        "selfP95Ms": 0.0846,
+        "selfMaxMs": 0.3532,
+        "beforeMsPerFrame": 0.052425,
+        "latencyReductionPercent": 11.93371483071054
+      },
+      {
+        "rank": 42,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_DOWNLOAD_ASYNC_ENQUEUE/CUDA_CONTEXT_POP",
+        "count": 3652,
+        "selfMsPerFrame": 0.043928125,
+        "selfMsPerSecond": 0.26881866940591304,
+        "selfPercentWall": 0.026881866940591304,
+        "selfTotalMs": 1.4057,
+        "inclusiveMsPerFrame": 0.043928125,
+        "selfMeanMs": 0.0003849123767798467,
+        "selfP50Ms": 0.0003,
+        "selfP95Ms": 0.0005,
+        "selfMaxMs": 0.0354,
+        "beforeMsPerFrame": 0.0472625,
+        "latencyReductionPercent": 7.055011901613328
+      },
+      {
+        "rank": 43,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_UPLOAD",
+        "count": 32,
+        "selfMsPerFrame": 0.0431125,
+        "selfMsPerSecond": 0.2638274427775469,
+        "selfPercentWall": 0.026382744277754687,
+        "selfTotalMs": 1.3796,
+        "inclusiveMsPerFrame": 0.273934375,
+        "selfMeanMs": 0.0431125,
+        "selfP50Ms": 0.0332,
+        "selfP95Ms": 0.1143,
+        "selfMaxMs": 0.1249,
+        "beforeMsPerFrame": 0.038153125,
+        "latencyReductionPercent": -12.998607584568745
+      },
+      {
+        "rank": 44,
+        "path": "WINDOW/FRAME_POLL_AND_LEASE",
+        "count": 15,
+        "selfMsPerFrame": 0.03995,
+        "selfMsPerSecond": 0.244474487421583,
+        "selfPercentWall": 0.0244474487421583,
+        "selfTotalMs": 1.2784,
+        "inclusiveMsPerFrame": 0.03995,
+        "selfMeanMs": 0.08522666666666667,
+        "selfP50Ms": 0.0697,
+        "selfP95Ms": 0.2216,
+        "selfMaxMs": 0.2216,
+        "beforeMsPerFrame": 0.039690625,
+        "latencyReductionPercent": -0.6534918510353593
+      },
+      {
+        "rank": 45,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK",
+        "count": 256,
+        "selfMsPerFrame": 0.039153125,
+        "selfMsPerSecond": 0.23959800163524822,
+        "selfPercentWall": 0.023959800163524822,
+        "selfTotalMs": 1.2529,
+        "inclusiveMsPerFrame": 2.055625,
+        "selfMeanMs": 0.004894140625,
+        "selfP50Ms": 0.0026,
+        "selfP95Ms": 0.0132,
+        "selfMaxMs": 0.1094,
+        "beforeMsPerFrame": 0.023828125,
+        "latencyReductionPercent": -64.31475409836065
+      },
+      {
+        "rank": 46,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_SEMAPHORE_SIGNAL_ENQUEUE/CUDA_CONTEXT_PUSH",
+        "count": 3908,
+        "selfMsPerFrame": 0.024553125,
+        "selfMsPerSecond": 0.15025313264012655,
+        "selfPercentWall": 0.015025313264012654,
+        "selfTotalMs": 0.7857,
+        "inclusiveMsPerFrame": 0.024553125,
+        "selfMeanMs": 0.0002010491299897646,
+        "selfP50Ms": 0.0002,
+        "selfP95Ms": 0.0003,
+        "selfMaxMs": 0.0075,
+        "beforeMsPerFrame": 0.02455625,
+        "latencyReductionPercent": 0.012725884448983038
+      },
+      {
+        "rank": 47,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/VULKAN_CONSUMER_SUBMIT",
+        "count": 32,
+        "selfMsPerFrame": 0.02391875,
+        "selfMsPerSecond": 0.1463710674847306,
+        "selfPercentWall": 0.014637106748473062,
+        "selfTotalMs": 0.7654,
+        "inclusiveMsPerFrame": 0.02391875,
+        "selfMeanMs": 0.02391875,
+        "selfP50Ms": 0.0202,
+        "selfP95Ms": 0.0383,
+        "selfMaxMs": 0.0781,
+        "beforeMsPerFrame": 0.025371875,
+        "latencyReductionPercent": 5.7273063185121265
+      },
+      {
+        "rank": 48,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_DOWNLOAD_ASYNC_ENQUEUE/CUDA_CONTEXT_PUSH",
+        "count": 3652,
+        "selfMsPerFrame": 0.021221875,
+        "selfMsPerSecond": 0.12986750970588,
+        "selfPercentWall": 0.012986750970588002,
+        "selfTotalMs": 0.6791,
+        "inclusiveMsPerFrame": 0.021221875,
+        "selfMeanMs": 0.00018595290251916755,
+        "selfP50Ms": 0.0002,
+        "selfP95Ms": 0.0003,
+        "selfMaxMs": 0.0142,
+        "beforeMsPerFrame": 0.019253125,
+        "latencyReductionPercent": -10.225612725206968
+      },
+      {
+        "rank": 49,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/VULKAN_CONSUMER_RECORD",
+        "count": 32,
+        "selfMsPerFrame": 0.018278125,
+        "selfMsPerSecond": 0.11185319750694923,
+        "selfPercentWall": 0.011185319750694924,
+        "selfTotalMs": 0.5849,
+        "inclusiveMsPerFrame": 0.018278125,
+        "selfMeanMs": 0.018278125,
+        "selfP50Ms": 0.0164,
+        "selfP95Ms": 0.0368,
+        "selfMaxMs": 0.0387,
+        "beforeMsPerFrame": 0.0194625,
+        "latencyReductionPercent": 6.085420680796405
+      },
+      {
+        "rank": 50,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/SLOT_PUBLICATION",
+        "count": 32,
+        "selfMsPerFrame": 0.01603125,
+        "selfMsPerSecond": 0.09810341993685237,
+        "selfPercentWall": 0.009810341993685238,
+        "selfTotalMs": 0.513,
+        "inclusiveMsPerFrame": 0.01603125,
+        "selfMeanMs": 0.01603125,
+        "selfP50Ms": 0.012,
+        "selfP95Ms": 0.026,
+        "selfMaxMs": 0.0668,
+        "beforeMsPerFrame": 0.01580625,
+        "latencyReductionPercent": -1.4234875444839812
+      },
+      {
+        "rank": 51,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_UPLOAD/CUDA_CONTEXT_SYNCHRONIZE",
+        "count": 32,
+        "selfMsPerFrame": 0.015884375,
+        "selfMsPerSecond": 0.09720461667427303,
+        "selfPercentWall": 0.009720461667427302,
+        "selfTotalMs": 0.5083,
+        "inclusiveMsPerFrame": 0.015884375,
+        "selfMeanMs": 0.015884375,
+        "selfP50Ms": 0.0109,
+        "selfP95Ms": 0.0318,
+        "selfMaxMs": 0.0416,
+        "beforeMsPerFrame": 0.01156875,
+        "latencyReductionPercent": -37.30415991356024
+      },
+      {
+        "rank": 52,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FEATURE_EXTENT_NEGOTIATION",
+        "count": 32,
+        "selfMsPerFrame": 0.01329375,
+        "selfMsPerSecond": 0.08135125700026706,
+        "selfPercentWall": 0.008135125700026707,
+        "selfTotalMs": 0.4254,
+        "inclusiveMsPerFrame": 0.01329375,
+        "selfMeanMs": 0.01329375,
+        "selfP50Ms": 0.0109,
+        "selfP95Ms": 0.0254,
+        "selfMaxMs": 0.0285,
+        "beforeMsPerFrame": 0.013146875,
+        "latencyReductionPercent": -1.1171856429759819
+      },
+      {
+        "rank": 53,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/FRAME_PRIMITIVES",
+        "count": 32,
+        "selfMsPerFrame": 0.013040625,
+        "selfMsPerSecond": 0.07980225563284307,
+        "selfPercentWall": 0.007980225563284307,
+        "selfTotalMs": 0.4173,
+        "inclusiveMsPerFrame": 0.013040625,
+        "selfMeanMs": 0.013040625,
+        "selfP50Ms": 0.0117,
+        "selfP95Ms": 0.0255,
+        "selfMaxMs": 0.0263,
+        "beforeMsPerFrame": 0.016809375,
+        "latencyReductionPercent": 22.42052426101506
+      },
+      {
+        "rank": 54,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE",
+        "count": 2082,
+        "selfMsPerFrame": 0.013015625,
+        "selfMsPerSecond": 0.07964926784346786,
+        "selfPercentWall": 0.007964926784346786,
+        "selfTotalMs": 0.4165,
+        "inclusiveMsPerFrame": 160.950571875,
+        "selfMeanMs": 0.00020004803073967337,
+        "selfP50Ms": 0.0002,
+        "selfP95Ms": 0.0004,
+        "selfMaxMs": 0.0089,
+        "beforeMsPerFrame": 0.013075,
+        "latencyReductionPercent": 0.45411089866157495
+      },
+      {
+        "rank": 55,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_COMPLETION_CALLBACK",
+        "count": 256,
+        "selfMsPerFrame": 0.011025,
+        "selfMsPerSecond": 0.0674676151144669,
+        "selfPercentWall": 0.00674676151144669,
+        "selfTotalMs": 0.3528,
+        "inclusiveMsPerFrame": 0.025078125,
+        "selfMeanMs": 0.001378125,
+        "selfP50Ms": 0.0008,
+        "selfP95Ms": 0.0023,
+        "selfMaxMs": 0.0251,
+        "beforeMsPerFrame": 0.007371875,
+        "latencyReductionPercent": -49.55489614243325
+      },
+      {
+        "rank": 56,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION",
+        "count": 42,
+        "selfMsPerFrame": 0.010728125,
+        "selfMsPerSecond": 0.0656508851156363,
+        "selfPercentWall": 0.00656508851156363,
+        "selfTotalMs": 0.3433,
+        "inclusiveMsPerFrame": 162.795125,
+        "selfMeanMs": 0.008173809523809524,
+        "selfP50Ms": 0.0075,
+        "selfP95Ms": 0.0123,
+        "selfMaxMs": 0.0161,
+        "beforeMsPerFrame": 0.01055,
+        "latencyReductionPercent": -1.6883886255924185
+      },
+      {
+        "rank": 57,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_KERNEL_ENQUEUE/CUDA_CONTEXT_POP",
+        "count": 544,
+        "selfMsPerFrame": 0.010484375,
+        "selfMsPerSecond": 0.06415925416922802,
+        "selfPercentWall": 0.006415925416922802,
+        "selfTotalMs": 0.3355,
+        "inclusiveMsPerFrame": 0.010484375,
+        "selfMeanMs": 0.0006167279411764706,
+        "selfP50Ms": 0.0004,
+        "selfP95Ms": 0.0007,
+        "selfMaxMs": 0.0413,
+        "beforeMsPerFrame": 0.0076625,
+        "latencyReductionPercent": -36.82707993474714
+      },
+      {
+        "rank": 58,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_CONTEXT_PUSH",
+        "count": 1826,
+        "selfMsPerFrame": 0.010071875,
+        "selfMsPerSecond": 0.06163495564453708,
+        "selfPercentWall": 0.0061634955644537075,
+        "selfTotalMs": 0.3223,
+        "inclusiveMsPerFrame": 0.010071875,
+        "selfMeanMs": 0.00017650602409638555,
+        "selfP50Ms": 0.0002,
+        "selfP95Ms": 0.0003,
+        "selfMaxMs": 0.0058,
+        "beforeMsPerFrame": 0.0095375,
+        "latencyReductionPercent": -5.602883355176913
+      },
+      {
+        "rank": 59,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_COMPLETION_CALLBACK/CUDA_STREAM_SYNCHRONIZE",
+        "count": 256,
+        "selfMsPerFrame": 0.00875,
+        "selfMsPerSecond": 0.05354572628132293,
+        "selfPercentWall": 0.005354572628132294,
+        "selfTotalMs": 0.28,
+        "inclusiveMsPerFrame": 0.00875,
+        "selfMeanMs": 0.00109375,
+        "selfP50Ms": 0.0008,
+        "selfP95Ms": 0.0018,
+        "selfMaxMs": 0.0231,
+        "beforeMsPerFrame": 0.0120875,
+        "latencyReductionPercent": 27.611168562564625
+      },
+      {
+        "rank": 60,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/RESOURCE_BUDGET_AND_ENSURE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION",
+        "count": 32,
+        "selfMsPerFrame": 0.008525,
+        "selfMsPerSecond": 0.05216883617694606,
+        "selfPercentWall": 0.005216883617694606,
+        "selfTotalMs": 0.2728,
+        "inclusiveMsPerFrame": 0.008525,
+        "selfMeanMs": 0.008525,
+        "selfP50Ms": 0.0079,
+        "selfP95Ms": 0.0153,
+        "selfMaxMs": 0.0195,
+        "beforeMsPerFrame": 0.00809375,
+        "latencyReductionPercent": -5.328185328185331
+      },
+      {
+        "rank": 61,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_DOWNLOAD/CUDA_CONTEXT_POP",
+        "count": 256,
+        "selfMsPerFrame": 0.008278125,
+        "selfMsPerSecond": 0.050658081756865876,
+        "selfPercentWall": 0.0050658081756865874,
+        "selfTotalMs": 0.2649,
+        "inclusiveMsPerFrame": 0.008278125,
+        "selfMeanMs": 0.001034765625,
+        "selfP50Ms": 0.0006,
+        "selfP95Ms": 0.0019,
+        "selfMaxMs": 0.0356,
+        "beforeMsPerFrame": 0.004915625,
+        "latencyReductionPercent": -68.40432294977752
+      },
+      {
+        "rank": 62,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE",
+        "count": 32,
+        "selfMsPerFrame": 0.007221875,
+        "selfMsPerSecond": 0.04419434765576332,
+        "selfPercentWall": 0.004419434765576332,
+        "selfTotalMs": 0.2311,
+        "inclusiveMsPerFrame": 161.6552375,
+        "selfMeanMs": 0.007221875,
+        "selfP50Ms": 0.0069,
+        "selfP95Ms": 0.0105,
+        "selfMaxMs": 0.0128,
+        "beforeMsPerFrame": 0.007665625,
+        "latencyReductionPercent": 5.788830004076639
+      },
+      {
+        "rank": 63,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/FEATURE_INPUT_REUSE",
+        "count": 32,
+        "selfMsPerFrame": 0.00561875,
+        "selfMsPerSecond": 0.03438400566207808,
+        "selfPercentWall": 0.0034384005662078084,
+        "selfTotalMs": 0.1798,
+        "inclusiveMsPerFrame": 0.00561875,
+        "selfMeanMs": 0.00561875,
+        "selfP50Ms": 0.0044,
+        "selfP95Ms": 0.0103,
+        "selfMaxMs": 0.0296,
+        "beforeMsPerFrame": 0.00544375,
+        "latencyReductionPercent": -3.214695752009189
+      },
+      {
+        "rank": 64,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_KERNEL_ENQUEUE/CUDA_CONTEXT_PUSH",
+        "count": 544,
+        "selfMsPerFrame": 0.004896875,
+        "selfMsPerSecond": 0.02996648324386894,
+        "selfPercentWall": 0.0029966483243868943,
+        "selfTotalMs": 0.1567,
+        "inclusiveMsPerFrame": 0.004896875,
+        "selfMeanMs": 0.0002880514705882353,
+        "selfP50Ms": 0.0002,
+        "selfP95Ms": 0.0004,
+        "selfMaxMs": 0.0246,
+        "beforeMsPerFrame": 0.00390625,
+        "latencyReductionPercent": -25.360000000000007
+      },
+      {
+        "rank": 65,
+        "path": "WINDOW",
+        "count": 2,
+        "selfMsPerFrame": 0.00446875,
+        "selfMsPerSecond": 0.027346567350818498,
+        "selfPercentWall": 0.00273465673508185,
+        "selfTotalMs": 0.143,
+        "inclusiveMsPerFrame": 163.411734375,
+        "selfMeanMs": 0.0715,
+        "selfP50Ms": 0.065,
+        "selfP95Ms": 0.078,
+        "selfMaxMs": 0.078,
+        "beforeMsPerFrame": 0.00466875,
+        "latencyReductionPercent": 4.283801874163329
+      },
+      {
+        "rank": 66,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_COMPLETION_CALLBACK/CUDA_CONTEXT_POP",
+        "count": 256,
+        "selfMsPerFrame": 0.003459375,
+        "selfMsPerSecond": 0.021169685354794462,
+        "selfPercentWall": 0.002116968535479446,
+        "selfTotalMs": 0.1107,
+        "inclusiveMsPerFrame": 0.003459375,
+        "selfMeanMs": 0.000432421875,
+        "selfP50Ms": 0.0003,
+        "selfP95Ms": 0.0005,
+        "selfMaxMs": 0.0222,
+        "beforeMsPerFrame": 0.002596875,
+        "latencyReductionPercent": -33.21299638989173
+      },
+      {
+        "rank": 67,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_DOWNLOAD/CUDA_CONTEXT_PUSH",
+        "count": 256,
+        "selfMsPerFrame": 0.002675,
+        "selfMsPerSecond": 0.016369693463147296,
+        "selfPercentWall": 0.0016369693463147298,
+        "selfTotalMs": 0.0856,
+        "inclusiveMsPerFrame": 0.002675,
+        "selfMeanMs": 0.000334375,
+        "selfP50Ms": 0.0002,
+        "selfP95Ms": 0.0003,
+        "selfMaxMs": 0.028,
+        "beforeMsPerFrame": 0.001534375,
+        "latencyReductionPercent": -74.33808553971485
+      },
+      {
+        "rank": 68,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_COMPLETION_CALLBACK/CUDA_CONTEXT_PUSH",
+        "count": 256,
+        "selfMsPerFrame": 0.00184375,
+        "selfMsPerSecond": 0.011282849466421618,
+        "selfPercentWall": 0.0011282849466421618,
+        "selfTotalMs": 0.059,
+        "inclusiveMsPerFrame": 0.00184375,
+        "selfMeanMs": 0.00023046875,
+        "selfP50Ms": 0.0002,
+        "selfP95Ms": 0.0004,
+        "selfMaxMs": 0.0029,
+        "beforeMsPerFrame": 0.0017125,
+        "latencyReductionPercent": -7.664233576642321
+      },
+      {
+        "rank": 69,
+        "path": "WINDOW/TRY_SUBMIT",
+        "count": 42,
+        "selfMsPerFrame": 0.001615625,
+        "selfMsPerSecond": 0.009886835888372842,
+        "selfPercentWall": 0.0009886835888372842,
+        "selfTotalMs": 0.0517,
+        "inclusiveMsPerFrame": 162.87113125,
+        "selfMeanMs": 0.001230952380952381,
+        "selfP50Ms": 0.0012,
+        "selfP95Ms": 0.0019,
+        "selfMaxMs": 0.0021,
+        "beforeMsPerFrame": 0.001584375,
+        "latencyReductionPercent": -1.9723865877712132
+      },
+      {
+        "rank": 70,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_UPLOAD/CUDA_CONTEXT_POP",
+        "count": 32,
+        "selfMsPerFrame": 0.001221875,
+        "selfMsPerSecond": 0.00747727820571331,
+        "selfPercentWall": 0.0007477278205713309,
+        "selfTotalMs": 0.0391,
+        "inclusiveMsPerFrame": 0.001221875,
+        "selfMeanMs": 0.001221875,
+        "selfP50Ms": 0.0008,
+        "selfP95Ms": 0.0048,
+        "selfMaxMs": 0.0065,
+        "beforeMsPerFrame": 0.000878125,
+        "latencyReductionPercent": -39.14590747330961
+      },
+      {
+        "rank": 71,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION",
+        "count": 32,
+        "selfMsPerFrame": 0.000828125,
+        "selfMsPerSecond": 0.005067720523053778,
+        "selfPercentWall": 0.0005067720523053778,
+        "selfTotalMs": 0.0265,
+        "inclusiveMsPerFrame": 162.668871875,
+        "selfMeanMs": 0.000828125,
+        "selfP50Ms": 0.0008,
+        "selfP95Ms": 0.0012,
+        "selfMaxMs": 0.0015,
+        "beforeMsPerFrame": 0.00088125,
+        "latencyReductionPercent": 6.028368794326244
+      },
+      {
+        "rank": 72,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/MEDIUM_RESOLVE_PREPARE/OPTICAL_MEDIUM_NATIVE/NATIVE_TASK_EXECUTION/SHARED_EXCHANGE/CUDA_EXCHANGE/CUDA_EXCHANGE/CUDA_NATIVE_CALLBACK/CUDA_UPLOAD/CUDA_CONTEXT_PUSH",
+        "count": 32,
+        "selfMsPerFrame": 0.00049375,
+        "selfMsPerSecond": 0.0030215088401603658,
+        "selfPercentWall": 0.0003021508840160366,
+        "selfTotalMs": 0.0158,
+        "inclusiveMsPerFrame": 0.00049375,
+        "selfMeanMs": 0.00049375,
+        "selfP50Ms": 0.0003,
+        "selfP95Ms": 0.0032,
+        "selfMaxMs": 0.0034,
+        "beforeMsPerFrame": 0.000325,
+        "latencyReductionPercent": -51.92307692307694
+      },
+      {
+        "rank": 73,
+        "path": "WINDOW/TRY_SUBMIT/HOST_ADMISSION/SESSION_ADMISSION/FRAME_PREPARATION/CAMERA_SCATTERING_PREPARE",
+        "count": 32,
+        "selfMsPerFrame": 0.000109375,
+        "selfMsPerSecond": 0.0006693215785165367,
+        "selfPercentWall": 6.693215785165367e-05,
+        "selfTotalMs": 0.0035,
+        "inclusiveMsPerFrame": 0.000109375,
+        "selfMeanMs": 0.000109375,
+        "selfP50Ms": 0.0001,
+        "selfP95Ms": 0.0003,
+        "selfMaxMs": 0.0006,
+        "beforeMsPerFrame": 0.00010625,
+        "latencyReductionPercent": -2.941176470588247
+      }
+    ],
+    "initialGpuUtilizationPercent": 0,
+    "baselineInitialGpuUtilizationPercent": 0,
+    "beforeMsPerFrame": 163.598540625,
+    "latencyReductionPercent": 0.11418576796976554,
+    "gpuStages": {
+      "cuda.entry.native_optical_photon_clear": {
+        "old-control": {
+          "totalMs": 0.817696,
+          "calls": 32,
+          "msPerFrame": 0.025553,
+          "callsPerFrame": 1.0
+        },
+        "v2": {
+          "totalMs": 0.939392,
+          "calls": 32,
+          "msPerFrame": 0.029356,
+          "callsPerFrame": 1.0
+        },
+        "latencyReductionPercent": -14.882792627088804
+      },
+      "cuda.entry.native_optical_photon_reset": {
+        "old-control": {
+          "totalMs": 1.196544,
+          "calls": 256,
+          "msPerFrame": 0.037392,
+          "callsPerFrame": 8.0
+        },
+        "v2": {
+          "totalMs": 1.5072,
+          "calls": 256,
+          "msPerFrame": 0.0471,
+          "callsPerFrame": 8.0
+        },
+        "latencyReductionPercent": -25.9627727856226
+      },
+      "cuda.entry.native_optical_photon_step": {
+        "old-control": {
+          "totalMs": 10.822752,
+          "calls": 256,
+          "msPerFrame": 0.338211,
+          "callsPerFrame": 8.0
+        },
+        "v2": {
+          "totalMs": 10.5936,
+          "calls": 256,
+          "msPerFrame": 0.33105,
+          "callsPerFrame": 8.0
+        },
+        "latencyReductionPercent": 2.117317296007515
+      },
+      "cuda.entry.native_optical_reset": {
+        "old-control": {
+          "totalMs": 19.025664,
+          "calls": 3652,
+          "msPerFrame": 0.594552,
+          "callsPerFrame": 114.125
+        },
+        "v2": {
+          "totalMs": 17.248576,
+          "calls": 3652,
+          "msPerFrame": 0.539018,
+          "callsPerFrame": 114.125
+        },
+        "latencyReductionPercent": 9.340478208802594
+      },
+      "cuda.entry.native_optical_step_4": {
+        "old-control": {
+          "totalMs": 997.91056,
+          "calls": 3652,
+          "msPerFrame": 31.184705,
+          "callsPerFrame": 114.125
+        },
+        "v2": {
+          "totalMs": 995.2597760000001,
+          "calls": 3652,
+          "msPerFrame": 31.101868000000003,
+          "callsPerFrame": 114.125
+        },
+        "latencyReductionPercent": 0.26563342510373955
+      },
+      "vulkan.optical.cameraContinuationTrace/startToend": {
+        "old-control": {
+          "totalMs": 2695.013408,
+          "calls": 3524,
+          "msPerFrame": 84.219169,
+          "callsPerFrame": 110.125
+        },
+        "v2": {
+          "totalMs": 2689.5906880000002,
+          "calls": 3524,
+          "msPerFrame": 84.04970900000001,
+          "callsPerFrame": 110.125
+        },
+        "latencyReductionPercent": 0.20121309912234375
+      },
+      "vulkan.optical.cameraInitialTrace/startToend": {
+        "old-control": {
+          "totalMs": 227.078976,
+          "calls": 128,
+          "msPerFrame": 7.096218,
+          "callsPerFrame": 4.0
+        },
+        "v2": {
+          "totalMs": 229.88400000000001,
+          "calls": 128,
+          "msPerFrame": 7.1838750000000005,
+          "callsPerFrame": 4.0
+        },
+        "latencyReductionPercent": -1.2352636291613317
+      },
+      "vulkan.opticalPhoton.mapCopy/startToend": {
+        "old-control": {
+          "totalMs": 1.9643840000000001,
+          "calls": 32,
+          "msPerFrame": 0.061387000000000004,
+          "callsPerFrame": 1.0
+        },
+        "v2": {
+          "totalMs": 1.9091200000000002,
+          "calls": 32,
+          "msPerFrame": 0.059660000000000005,
+          "callsPerFrame": 1.0
+        },
+        "latencyReductionPercent": 2.813299232736577
+      },
+      "vulkan.opticalPhoton.mapInitialize/startToend": {
+        "old-control": {
+          "totalMs": 0.232992,
+          "calls": 32,
+          "msPerFrame": 0.007281,
+          "callsPerFrame": 1.0
+        },
+        "v2": {
+          "totalMs": 0.232736,
+          "calls": 32,
+          "msPerFrame": 0.007273,
+          "callsPerFrame": 1.0
+        },
+        "latencyReductionPercent": 0.10987501716797077
+      },
+      "vulkan.opticalPhoton.trace/startToend": {
+        "old-control": {
+          "totalMs": 14.37184,
+          "calls": 256,
+          "msPerFrame": 0.44912,
+          "callsPerFrame": 8.0
+        },
+        "v2": {
+          "totalMs": 14.356736000000001,
+          "calls": 256,
+          "msPerFrame": 0.44864800000000005,
+          "callsPerFrame": 8.0
+        },
+        "latencyReductionPercent": 0.1050944068400339
+      },
+      "vulkan.shared.continuation": {
+        "old-control": {
+          "totalMs": 1617.103584,
+          "calls": 2082,
+          "msPerFrame": 50.534487,
+          "callsPerFrame": 65.0625
+        },
+        "v2": {
+          "totalMs": 1615.5548159999998,
+          "calls": 2082,
+          "msPerFrame": 50.486087999999995,
+          "callsPerFrame": 65.0625
+        },
+        "latencyReductionPercent": 0.09577419871701354
+      },
+      "vulkan.shared.producer": {
+        "old-control": {
+          "totalMs": 1327.99152,
+          "calls": 2082,
+          "msPerFrame": 41.499735,
+          "callsPerFrame": 65.0625
+        },
+        "v2": {
+          "totalMs": 1326.964704,
+          "calls": 2082,
+          "msPerFrame": 41.467647,
+          "callsPerFrame": 65.0625
+        },
+        "latencyReductionPercent": 0.0773209756640636
+      }
+    },
+    "note": "Single short paired diagnostic windows; small changes are not accepted as performance gains. GPU work overlaps host waits and must not be added to exclusive host ranking."
+  },
+  "correctness": {
+    "radianceTraversal": {
+      "checks": 288,
+      "failures": 0,
+      "validationErrors": 0
+    },
+    "negativeControl": {
+      "checks": 144,
+      "failures": 48
+    },
+    "fixedSequence21Replay": {
+      "exit": 0,
+      "warmupFrames": 1,
+      "measuredFrames": 2
+    },
+    "fixedSequence172Replay": {
+      "exit": 0,
+      "warmupFrames": 1,
+      "measuredFrames": 2
+    },
+    "opticalProduction": {
+      "passed": true,
+      "nativeFrames": 152,
+      "recoverableRejections": 1,
+      "comparisons": [
+        {
+          "name": "thin-optical1-SPP1",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical1-SPP2",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical1-SPP8",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical2-SPP1",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical2-SPP2",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical2-SPP8",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical8-SPP1",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical8-SPP2",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "thin-optical8-SPP8",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "one-event-no-unbudgeted-continuation"
+        },
+        {
+          "name": "equal-IOR"
+        },
+        {
+          "name": "stochastic-first-interface",
+          "frames": 64,
+          "redMean": 0.426102325,
+          "blueMean": 0.0276929246
+        },
+        {
+          "name": "closed-boundary-inside-TIR"
+        },
+        {
+          "name": "closed-boundary-inside-unit-IOR"
+        },
+        {
+          "name": "nested-priority-inside-HDR"
+        },
+        {
+          "name": "density-glass-generation0-SPP1",
+          "maximumAbsoluteError": 0.000121024413
+        },
+        {
+          "name": "density-glass-generation0-SPP2",
+          "maximumAbsoluteError": 0.00012096559
+        },
+        {
+          "name": "density-glass-generation0-SPP8",
+          "maximumAbsoluteError": 0.000121803891
+        },
+        {
+          "name": "density-cache-generation0",
+          "assetUploads": 0,
+          "metadataBytes": 1536
+        },
+        {
+          "name": "density-glass-generation1-SPP1",
+          "maximumAbsoluteError": 0.000189760575
+        },
+        {
+          "name": "density-glass-generation1-SPP2",
+          "maximumAbsoluteError": 0.000189718711
+        },
+        {
+          "name": "density-glass-generation1-SPP8",
+          "maximumAbsoluteError": 0.000189712536
+        },
+        {
+          "name": "density-cache-generation1",
+          "assetUploads": 0,
+          "metadataBytes": 1536
+        },
+        {
+          "name": "nested-local-density-priority-two-SPP"
+        },
+        {
+          "name": "rough-0.12",
+          "redMean": 0.414983317,
+          "expectedRed": 0.415037079,
+          "blueMean": 0.0261006351,
+          "expectedBlue": 0.0260977352
+        },
+        {
+          "name": "rough-0.45",
+          "redMean": 0.357219373,
+          "expectedRed": 0.357235945,
+          "blueMean": 0.018306046,
+          "expectedBlue": 0.0182924122
+        },
+        {
+          "name": "rough-0.85",
+          "redMean": 0.289888096,
+          "expectedRed": 0.289381785,
+          "blueMean": 0.00857685086,
+          "expectedBlue": 0.00853589564
+        },
+        {
+          "name": "rough-stochastic",
+          "redMean": 0.354685589,
+          "expectedRed": 0.357235943,
+          "blueMean": 0.018384466,
+          "expectedBlue": 0.0182924119
+        },
+        {
+          "name": "rough-black-transmission",
+          "redMean": 2.48800786e-06,
+          "expectedRed": 0.0,
+          "blueMean": 0.0182219094,
+          "expectedBlue": 0.0182924119
+        },
+        {
+          "name": "rough-smooth-limit",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "rough-equal-IOR"
+        },
+        {
+          "name": "scattering-rough-glass",
+          "analyticRedMean": 0.0964482886,
+          "litEnergy": 0.348514269,
+          "darkEnergy": 0.0
+        },
+        {
+          "name": "heterogeneous-scattering-rough-glass",
+          "lateralEnergy": 0.00132907642,
+          "litEnergy": 0.167782089,
+          "darkEnergy": 0.0
+        },
+        {
+          "name": "explicit-IOR-boundary-scattering",
+          "litEnergy": 0.0359992697,
+          "insidePointEnergy": 0.0236763274,
+          "densityRoughEnergy": 0.0656758119,
+          "darkEnergy": 0.0
+        },
+        {
+          "name": "partial-unlit-terminal-color-and-emission"
+        },
+        {
+          "name": "partial-unlit-emission-light-independence"
+        },
+        {
+          "name": "resolved-publication-outline-SPP1"
+        },
+        {
+          "name": "resolved-publication-outline-SPP2"
+        },
+        {
+          "name": "resolved-publication-outline-SPP8"
+        },
+        {
+          "name": "partial-PBR-Snell-Fresnel-emission",
+          "maximumAbsoluteError": 0.0001953125
+        },
+        {
+          "name": "invalid-boundary-rejection-recovery",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "resize-eight-SPP",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "full-HD-multiple-optical-tiles",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "shrink-after-full-HD",
+          "maximumAbsoluteError": 0.000152994792
+        },
+        {
+          "name": "PBR-boundary-density-camera-light-Beer",
+          "maximumAbsoluteError": 6.18522682e-05
+        },
+        {
+          "name": "resolved-publication-temporal-history-three-frames"
+        }
+      ]
+    }
+  },
+  "rawEvidence": [
+    {
+      "path": "build/medium-micro-all-20261101/performance-error9-v2/runtime.json",
+      "sha256": "697e84130e52798499137079b40f5056718527eeb4b527b5df61712e95c95dcc"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/performance-error9-v2/run.log",
+      "sha256": "3e7886b29fdbd2b35f3fc015090c148a263b4a3efa0c8a655a29d2a6e2b3683c"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/performance-error9-v2/gpu-before.csv",
+      "sha256": "fbe966e526e8dc915de328316cc069ebfaf1e32028f4fb8c9cfe079f6890cb7d"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/performance-error9-v2/micro-all-1080p-unprofiled.csv",
+      "sha256": "f2c743926bacdefed0ff3eb09e570cb765db58756ca14b47cd94145b74a9b022"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/performance-error9-v2/micro-all-1080p-unprofiled-workload.json",
+      "sha256": "ca114c8f069900f058e365cb405a4bfcd0b46a8fd48ee293438b88f90dd54fca"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-v2/runtime.json",
+      "sha256": "df4bcc7abd4f7012589de895f5da692171c94a773befeae1c3f1672950aa0784"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-v2/run.log",
+      "sha256": "81600cd35efdf98f136af2e01f8531c0cb5d85950b98cd309577c9b54458b86e"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-v2/gpu-before.csv",
+      "sha256": "45c4f8cd8d43610e8b537495409e3bbc996351c1f6cbb87f99ff9357e82d6c4d"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-v2/micro-all-1080p-profiled.csv",
+      "sha256": "c3c72606c14bef99a22e845ed7905aa6a52e771a06ad1853c825dd717cc6ba19"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-v2/micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "96bac3833bd97abe08cc2753c5ff534eb1ef1f209ec70bddad7258d046b485a8"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-v2/micro-all-1080p-wall-timeline-round-2.json",
+      "sha256": "2c3c148216e382fc621fe2e0980d5aee833887644d902393a13daa35c6e8e03e"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-old-control/runtime.json",
+      "sha256": "8e171ffb4319f06c1f237c32b4864ae7ba5d8c6b8cf067f21b4b9e390086751c"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-old-control/run.log",
+      "sha256": "d4189da8691004d4349f6413feaa8cf8aacd773ae58fad044095e3998a0a3ffd"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-old-control/gpu-before.csv",
+      "sha256": "18484500b9d75c2ea88a0c14322ec4e343720bfb1866a1880d4d4dde6d8ed56f"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-old-control/micro-all-1080p-profiled.csv",
+      "sha256": "760dee7629ca90c4e831dbca2f5aec04315ee94b7444fc242493d0c54062c88a"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-old-control/micro-all-1080p-wall-timeline-round-1.json",
+      "sha256": "9bf8ae951374297233f498e9c39fd502868752d70767b2afc1aab8764cdc0b4b"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/profile-error9-old-control/micro-all-1080p-wall-timeline-round-2.json",
+      "sha256": "93bebd17b6f1c5738a143621c7cfb2d19c79ad5d08bd2928f0ee3d3aabb73ecd"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error9-fixed-v2/runtime.json",
+      "sha256": "bd8cc870c0487386058d14eacf77a1c3c874d064d99d9bc20862d5a8b68cdb42"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error9-fixed-v2/run.log",
+      "sha256": "597ed659500bb4c8dfc2f6eae0d9ce6ae33c3872d368bb07af84e0bcb57593cc"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error9-fixed-v2/radiance-traversal.json",
+      "sha256": "6773e5f86540c57689cb411cbb65376934ac5e41db5560aa4ad57893c8232a1e"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error9-old-control/runtime.json",
+      "sha256": "bd1f7510b20e8edf6ed0180a8f3ece28bd53edb088694eb478f3b39f440e2261"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error9-old-control/run.log",
+      "sha256": "561e115a7c211b8db4d9fd93e795f353ea1d05acc5e43e594561bc76ff83d899"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error9-old-control/radiance-traversal.json",
+      "sha256": "a892b6da443aeb218d0b091c863d6386ac33200b6d7fba06990c7a4cc72c3c6f"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error42-sequence21-v2/runtime.json",
+      "sha256": "0cbc1d5cbbff27a993b1d8f57334cac52eef1ca2183081fe38423dfa48860d36"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error42-sequence21-v2/run.log",
+      "sha256": "f25b3ea5633102c1f8bd9f5e1f2a5f2abd86f865ee94bc19122319b04ffd68b8"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error9-sequence172-v2/runtime.json",
+      "sha256": "165a6bedd0a95f695f0138ce4b380295243d3c571490f5e30018b2300992d396"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error9-sequence172-v2/run.log",
+      "sha256": "ff9e3e155c8433f6ab47b1873e57da53278d198a3d99d120f99730b5e7881e70"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error9-v2-optical-production/runtime.json",
+      "sha256": "6af7ba8c4c6ae1cb54343daf3d0cdc4022dba8ae00427fb8086c285e7b00ddc8"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error9-v2-optical-production/run.log",
+      "sha256": "3b82e3d7545ab7f6d96c1c0e2d25c1432b76ab15d678555c09959691d68bce52"
+    },
+    {
+      "path": "build/medium-micro-all-20261101/error9-v2-optical-production/result.json",
+      "sha256": "43f5b7f2a305e970c73ae47106fc9efde131f5dcb2765c9bb458996334a309d4"
+    }
+  ]
+}
