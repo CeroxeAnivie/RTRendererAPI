@@ -13,6 +13,8 @@
 #include <sstream>
 #include <filesystem>
 #include <donut/engine/TextureCache.h>
+#include <json/json.h>
+#include "StreamlineIntegration.h"
 #define WinMain RtrUnusedSampleEntryPoint
 #include RTR_RTXPT_ADVANCED_SOURCE
 #undef WinMain
@@ -52,7 +54,7 @@ struct Session {
             if(auto* device=dm->GetDevice())device->waitForIdle();
             // Streamline ProgrammingGuideManualHooking 3.0 and DLSS-RR 1.0:
             // stop SDK work and release its tags before destroying tagged render targets.
-            dm->GetStreamline().Shutdown();
+            donut::app::StreamlineIntegration::Get().Shutdown();
             dm->m_callbacks={};
             app->End();
         }
