@@ -70,10 +70,16 @@ struct Host {
         cp.dst=ctx.registerTextureAsTransient(context,tex);cp.debugLabel="FixtureUpload";
         ctx.addPassCopyBufferToTexture(context,&cp);flush();ctx.destroyBuffer(context,buf);return tex;
     }
-    void init(const char* fixture,float cellSize,unsigned deviceIndex,bool externalUsage=false) {
+    void init(const char* fixture,float cellSize,unsigned deviceIndex,bool externalUsage=false,const uint8_t* expectedUUID=nullptr) {
         NvFlowLoaderInit(&loader,loadError,nullptr);
         require(loader.module_nvflow&&loader.module_nvflowext,"Flow DLL loading failed");
         manager=loader.deviceInterface.createDeviceManager(NV_FLOW_FALSE,nullptr,2);
+        if(expectedUUID) {
+            bool matched=false;NvFlowPhysicalDeviceDesc candidate{};
+            for(unsigned i=0;loader.deviceInterface.enumerateDevices(manager,i,&candidate);++i)
+                if(memcmp(candidate.deviceUUID,expectedUUID,16)==0){deviceIndex=i;matched=true;break;}
+            require(matched,"No Vulkan device matches the surface renderer GPU UUID");
+        }
         NvFlowDeviceDesc dd{};dd.deviceIndex=deviceIndex;dd.enableExternalUsage=externalUsage?NV_FLOW_TRUE:NV_FLOW_FALSE;dd.logPrint=logPrint;
         NvFlowPhysicalDeviceDesc physical{};
         require(loader.deviceInterface.enumerateDevices(manager,deviceIndex,&physical),"Selected GPU is unavailable");

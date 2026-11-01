@@ -103,14 +103,16 @@ def run():
     binary=ROOT/'build/flow-sdk/flow/_build/windows-x86_64/release'
     dll_directory=os.add_dll_directory(str(binary));os.environ['PATH']=str(binary)+os.pathsep+os.environ['PATH']
     lib=C.CDLL(str(binary/'flow_mixed_bridge.dll'))
-    lib.flowMixedCreate.argtypes=[C.c_char_p,C.c_float,U];lib.flowMixedCreate.restype=P
+    lib.flowMixedCreate.argtypes=[C.c_char_p,C.c_float,U,C.POINTER(C.c_ubyte)];lib.flowMixedCreate.restype=P
     lib.flowMixedError.restype=C.c_char_p
     for name in ['flowMixedHandle','flowMixedAllocationSize']:
         getattr(lib,name).argtypes=[P,U];getattr(lib,name).restype=Q
     lib.flowMixedFrame.argtypes=[P,I];lib.flowMixedFrame.restype=I
     lib.flowMixedCapture.argtypes=[P,C.c_char_p];lib.flowMixedCapture.restype=I
     lib.flowMixedDestroy.argtypes=[P]
-    host=lib.flowMixedCreate(str(out/'fixture.bin').encode(),.035,a.device)
+    uuid=(C.c_ubyte*16)();gl.fn('glGetUnsignedBytevEXT',None,U,C.POINTER(C.c_ubyte))(0x9597,uuid)
+    gl.check('Surface GPU UUID query');print('Surface GPU UUID:',bytes(uuid).hex(),flush=True)
+    host=lib.flowMixedCreate(str(out/'fixture.bin').encode(),.035,a.device,uuid)
     assert host,lib.flowMixedError().decode()
     memories=[];buffers=[]
     for i,size in enumerate([W*H*8,W*H*4]):
@@ -152,7 +154,7 @@ def run():
              'fps':len(samples)*1000/total,'meanMs':total/len(samples),
              'surfaceAndGPUHandoffMs':statistics.mean(s[1] for s in samples),
              'flowIncludingInputCopyMs':statistics.mean(s[2] for s in samples),'frames':len(samples),
-             'frameMs':samples,'surfaceDevice':renderer,'fixtureSha256':hashlib.sha256(a.fixture.read_bytes()).hexdigest(),
+             'frameMs':samples,'surfaceDevice':renderer,'gpuUUID':bytes(uuid).hex(),'fixtureSha256':hashlib.sha256(a.fixture.read_bytes()).hexdigest(),
              'triangles':fixture['triangleCount'],'objects':len(fixture['objects']),
              'metric':'Fresh native EEVEE surface/depth + GPU shared-memory handoff + native Flow volume composite + completion fence; no presentation',
              'semanticDifferences':[

@@ -34,8 +34,8 @@ struct MixedHost : Host {
 };
 static std::string lastError;
 extern "C" __declspec(dllexport) const char* flowMixedError(){return lastError.c_str();}
-extern "C" __declspec(dllexport) void* flowMixedCreate(const char* fixture,float cell,unsigned deviceIndex) {
-    try {auto h=new MixedHost();h->init(fixture,cell,deviceIndex,true);h->createInputs();return h;}
+extern "C" __declspec(dllexport) void* flowMixedCreate(const char* fixture,float cell,unsigned deviceIndex,const uint8_t* uuid) {
+    try {auto h=new MixedHost();h->init(fixture,cell,deviceIndex,true,uuid);h->createInputs();return h;}
     catch(const std::exception& e){lastError=e.what();return nullptr;}
 }
 extern "C" __declspec(dllexport) uint64_t flowMixedHandle(void* ptr,unsigned i){return static_cast<MixedHost*>(ptr)->handles[i].value;}
