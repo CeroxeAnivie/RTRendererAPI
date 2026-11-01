@@ -1,0 +1,4 @@
+#version 460
+// Used only when the accepted scene proves opaque inputs and the frame has no optical media.
+#define RTRENDERER_SURFACE_ONLY 1
+#include "gpuscene_raygen.glsl"
