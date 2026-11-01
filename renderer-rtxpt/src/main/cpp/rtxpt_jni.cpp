@@ -13,6 +13,7 @@
 #define WinMain RtrUnusedSampleEntryPoint
 #include RTR_RTXPT_ADVANCED_SOURCE
 #undef WinMain
+#include <Materials/MaterialsBaker.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 
@@ -131,7 +132,7 @@ extern "C" JNIEXPORT jintArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNa
         auto size=session(h).app->HostRenderPass()->GetRenderSize();
         jint values[]={jint(size.x),jint(size.y),g_sampleUIData.RealtimeAA,
             g_sampleUIData.ActualUseStandaloneDenoiser(),g_sampleUIData.ActualUseReSTIRDI(),
-            g_sampleUIData.ActualUseReSTIRGI(),g_sampleUIData.ActualRadianceCacheMode(),g_sampleUIData.ActualDLSSFGMode()};
+            g_sampleUIData.ActualUseReSTIRGI(),g_sampleUIData.ActualRadianceCacheMode(),jint(g_sampleUIData.ActualDLSSFGMode())};
         auto result=e->NewIntArray(8); if(result)e->SetIntArrayRegion(result,0,8,values);return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
