@@ -1,6 +1,7 @@
 # Included at the end of the pinned upstream RTXPT configure, preserving its SDK integration.
 find_package(JNI REQUIRED COMPONENTS JVM)
 target_include_directories(RtxptCore PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
+target_include_directories(donut_app PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 # Keep embedded-host symbols separate from previous standalone sample builds.
 if(MSVC)
     foreach(host_tool ShaderMake ShaderMakeBlob NRD)
@@ -11,6 +12,9 @@ if(MSVC)
 endif()
 add_library(rtrenderer_rtxpt SHARED "${CMAKE_CURRENT_LIST_DIR}/rtxpt_jni.cpp")
 add_executable(rtxpt_native_control "${CMAKE_CURRENT_LIST_DIR}/rtxpt_native_control.cpp")
+add_executable(rtxpt_streamline_cache_selftest EXCLUDE_FROM_ALL
+    "${CMAKE_CURRENT_LIST_DIR}/rtxpt_streamline_cache_selftest.cpp")
+target_compile_features(rtxpt_streamline_cache_selftest PRIVATE cxx_std_17)
 target_link_libraries(rtxpt_native_control PRIVATE RtxptCore d3d12)
 target_include_directories(rtxpt_native_control PRIVATE "${CMAKE_SOURCE_DIR}/External/Donut/src/app/streamline")
 target_compile_definitions(rtxpt_native_control PRIVATE RTR_RTXPT_ADVANCED_SOURCE="${CMAKE_SOURCE_DIR}/Rtxpt/AdvancedSample.cpp")

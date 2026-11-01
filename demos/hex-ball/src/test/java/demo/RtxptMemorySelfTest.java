@@ -46,6 +46,8 @@ public final class RtxptMemorySelfTest {
                 }
                 renderer.overlays(List.of());advance(host,90);host.awaitIdle();
                 sample(output,csv,"cycle-"+cycle+"-overlay-off",host.bridgeTimings().frames());
+                renderer.trimIdleCompositionResources();host.awaitIdle();
+                sample(output,csv,"cycle-"+cycle+"-explicit-idle-trim",host.bridgeTimings().frames());
                 renderer.submit(RtxptMediumDemo.frameRequest(sequence++,revision,960,540));advance(host,12);
                 renderer.submit(RtxptMediumDemo.frameRequest(sequence++,revision,1920,1080));advance(host,60);host.awaitIdle();
                 // Explicit full GC belongs only to this memory diagnostic, never FPS acceptance.

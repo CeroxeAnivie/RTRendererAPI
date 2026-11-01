@@ -350,6 +350,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         catch(RuntimeException|Error e){failure=e;throw e;}
         finally {
             handle=0;closed=true;
+            // A caller may retain a closed renderer; do not keep its entire scene or
+            // a compositor closure (and its owner's legacy resources) alive with it.
+            scene=new RtxptScene();previous=List.of();camera=null;environment=null;compositor=null;nativeScene=null;
             if(directory!=null)try(var files=Files.walk(directory)){
                 for(var p:files.sorted(Comparator.reverseOrder()).toList())Files.delete(p);
             }catch(IOException e){

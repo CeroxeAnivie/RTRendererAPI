@@ -28,7 +28,7 @@ try (var renderer = RtxptComposedRenderer.openRtxptPresentation(legacy, rtxpt, "
 
 最终 FPS／FG 交付计数来自 RTXPT 的真实 DXGI／SDK；隐藏的 Vulkan compositor 不 acquire 或 present WSI，也不计作已显示帧。它的 `PerformanceSnapshot.presentSamples` 必须为零。关闭叠层会直接解除回调，不分配共享帧、不复制颜色、不运行合成 shader。
 
-原生最终呈现入口延迟创建旧 Vulkan 设备：只渲染 RTXPT 和上游 HUD 时，不创建旧设备、分配器或隐藏窗口。首次调用 `legacyCommands()`、`legacyExtension(...)`、旧资源／命令接口、旧语义能力查询或启用叠层时才创建，失败时清理本次半成品并保留 RTXPT 会话。已创建的旧资源继续按原合同存活到关闭；停用叠层仅回收交接和合成临时资源，不破坏应用持有的纹理。
+原生最终呈现入口延迟创建旧 Vulkan 设备：只渲染 RTXPT 和上游 HUD 时，不创建旧设备、分配器或隐藏窗口。首次调用 `legacyCommands()`、`legacyExtension(...)`、旧资源／命令接口、旧语义能力查询或启用叠层时才创建，失败时清理本次半成品并保留 RTXPT 会话。已创建的旧资源继续按原合同存活到关闭；停用叠层保留有界交接缓存，避免 UI 开关时反复等待和重建。
 
 ## 3D 后端热切换的专家选项
 
@@ -50,7 +50,7 @@ try (var renderer = RtxptComposedRenderer.openRtxptPresentation(legacy, rtxpt, "
 
 每次 resize、重建、关闭或完整 3D 切换，先 `retireD3D12SharedFrames()` 等已有消费者完成，再退休生产槽／句柄。消费者退休失败则保留生产资源供重试，不能直接销毁。拒收的新 descriptor 由生产侧在消费者成功退休后按队列顺序回收，避免孤立 ready 值卡住后续工作。
 
-原生最终呈现把叠层改为空列表时，同样先排空消费者，然后立即释放三槽共享图和 Vulkan 合成临时图／管线；不把已停用的显存留到 renderer 关闭。重新启用叠层按需重建。此等待只发生在显式停用或退休边界，不放进正常帧循环。
+原生最终呈现把叠层改为空列表时只解除回调，不额外等待 GPU，不释放缓存；重新启用复用有界三槽资源。在菜单／暂停等不要求连续出帧的空闲维护窗口，可显式调用 `trimIdleCompositionResources()`，排空消费者并释放三槽共享图和 Vulkan 合成临时图／管线。该入口只接受原生最终呈现且叠层为空的状态，不破坏应用纹理；之后启用叠层才按需重建。不能把此重型回收塞进逐帧逻辑。
 
 内存采用 dedicated import，fence 采用 [Khronos 推荐的 timeline semaphore 方式](https://docs.vulkan.org/refpages/latest/refpages/source/VkD3D12FenceSubmitInfoKHR.html)。[规范明确忽略 D3D12_RESOURCE 的 allocationSize 输入](https://docs.vulkan.org/refpages/latest/refpages/source/VkMemoryAllocateInfo.html)，由驱动查询 OS 分配；不能拿普通 Vulkan image requirement 大小否决 D3D12 纹理。共享颜色纹理保留 NVRHI 的默认 shader-resource 标志，不设置仅供深度模板使用的 [DENY_SHADER_RESOURCE](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_resource_flags)；不因此创建额外 SRV。
 

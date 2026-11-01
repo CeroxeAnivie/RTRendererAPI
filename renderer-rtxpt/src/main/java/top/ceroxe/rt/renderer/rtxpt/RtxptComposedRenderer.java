@@ -135,9 +135,8 @@ public final class RtxptComposedRenderer implements Renderer {
         ready();var next=List.copyOf(Objects.requireNonNull(layers,"layers"));
         if(next.size()>7)throw new IllegalArgumentException("At most seven overlays after the RTXPT base layer");
         if(!next.isEmpty())ensureLegacy();
-        // A disabled returning compositor has no consumer left to reuse these allocations.
-        // Drain before dropping the callback or freeing either API's shared resources.
-        if(nativePresentation&&next.isEmpty()&&!overlays.isEmpty())retireExternalFrames();
+        // Keep the bounded ring cached across UI toggles. No queue drain or resource
+        // destruction here: applications can explicitly trim during an idle period.
         if(nativePresentation)rtxpt.compositor(next.isEmpty()?null:values->{
             try{presenter.composeD3D12SharedFrame(new top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame(
                 values[0],values[1],values[2],(int)values[3],(int)values[4],values[5],values[6],values[7],values[8],values[9]),overlays);}
@@ -146,6 +145,19 @@ public final class RtxptComposedRenderer implements Renderer {
             }
         });
         overlays=next;
+    }
+    /**
+     * Releases cached cross-API images while native presentation has no overlays.
+     * This explicit idle maintenance call waits for GPU consumers. Ordinary overlay
+     * toggles retain the bounded cache to avoid stalls and repeated allocation.
+     * Re-enabling overlays recreates only these temporary resources on demand.
+     * @throws IllegalStateException if Vulkan owns presentation or overlays are enabled
+     */
+    public void trimIdleCompositionResources(){
+        ready();
+        if(!nativePresentation||!overlays.isEmpty())
+            throw new IllegalStateException("Trim requires native presentation with no overlays; call during an idle period");
+        retireExternalFrames();
     }
     /** Counts actual work per selected 3D backend, independently of final present timing. */
     public WorkSnapshot workSnapshot(){return new WorkSnapshot(rtxpt.bridgeTimings().frames(),legacyFrames,
@@ -247,7 +259,7 @@ public final class RtxptComposedRenderer implements Renderer {
         if(presenter!=null)try{presenter.close();}catch(RuntimeException|Error e){failure=e;}
         try{rtxpt.close();}catch(RuntimeException|Error e){if(failure==null)failure=e;else failure.addSuppressed(e);}
         if(legacy!=null)try{legacy.close();}catch(RuntimeException|Error e){if(failure==null)failure=e;else failure.addSuppressed(e);}
-        closed=true;
+        closed=true;routing=null;overlays=List.of();
         if(failure instanceof RuntimeException e)throw e;if(failure instanceof Error e)throw e;
     }
 }

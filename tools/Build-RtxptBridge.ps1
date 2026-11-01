@@ -153,6 +153,12 @@ Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '#inclu
 #include <donut/app/ApplicationBase.h>
 '@ '#include <donut/app/ApplicationBase.h>'
 Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' 'auto basePath = std::filesystem::path(path).parent_path();' 'auto basePath = donut::app::GetDirectoryWithExecutable(); // RTR signed runtime root' 'RTR signed runtime root'
+# SDK inline helpers retain addresses after slShutdown unloads the plugins.
+# Match sl.h's cached hot path, with lifecycle-only invalidation on embedded close.
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '// Streamline Features' @'
+#include "rtxpt_streamline_cache.h" // RTR session-bound feature function caches
+// Streamline Features
+'@ 'RTR session-bound feature function caches'
 # RTXPT selects Streamline manual hooking. Upgrade the DXGI factory before any
 # swapchain calls so Streamline can observe CreateSwapChainForHwnd and own Present.
 $swapchainPath=Join-Path $sdk 'External/Donut/src/app/dx12/DeviceManager_DX12.cpp'
@@ -274,6 +280,10 @@ m_hostShutdownResult = slShutdown(); // RTR observable embedded shutdown
         successCheck(m_hostShutdownResult, "slShutdown");
         log::info("RTXPT Streamline shutdown result=%d", int(m_hostShutdownResult));
 '@ 'RTR observable embedded shutdown'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' 'm_hostShutdownResult = slShutdown(); // RTR observable embedded shutdown' @'
+m_hostShutdownResult = slShutdown(); // RTR observable embedded shutdown
+        rtr::streamline::FunctionCaches::reset(); // RTR invalidate unloaded plugin addresses
+'@ 'RTR invalidate unloaded plugin addresses'
 Patch-Once 'Rtxpt/Sample.cpp' 'if (available.empty())' 'if (std::filesystem::path(preferred).is_absolute() && std::filesystem::is_regular_file(preferred)) return preferred; // RTR absolute host scene
     if (available.empty())' 'RTR absolute host scene'
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.h' 'private:' @'
@@ -356,9 +366,11 @@ if($StreamlineSdk){
 if($LASTEXITCODE -ne 0){throw 'RTXPT native configure failed'}
 if($ConfigureOnly){return}
 & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath $cmake `
-    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','--parallel','1','--',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
+    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','--parallel','1','--',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
     -WorkingDirectory $sdk -MemoryLimitGB $MemoryLimitGB
 if($LASTEXITCODE -ne 0){throw 'RTXPT JNI bridge build failed'}
+& (Join-Path $sdk 'bin/rtxpt_streamline_cache_selftest.exe')
+if($LASTEXITCODE -ne 0){throw 'Streamline feature function cache lifecycle self-test failed'}
 # Runtime redistribution keeps the exact upstream notices alongside the native payload.
 $licenses=Join-Path $sdk 'bin/ThirdPartyLicenses'
 New-Item -ItemType Directory -Path $licenses -Force | Out-Null

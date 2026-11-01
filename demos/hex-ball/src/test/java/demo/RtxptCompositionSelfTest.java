@@ -221,10 +221,11 @@ public final class RtxptCompositionSelfTest {
             host.capture(output.resolve("native-ui-final.png"));renderer.captureRtxptSource(output.resolve("native-ui-source.png"));
             compare(output.resolve("native-ui-source.png"),output.resolve("native-ui-final.png"),true);
             renderer.overlays(List.of());
-            for(int i=0;i<3;i++)require(host.renderFrame(),"Overlay disabled without retaining shared frames");
+            for(int i=0;i<3;i++)require(host.renderFrame(),"Overlay disabled with no per-frame composition");
             host.capture(output.resolve("native-overlay-disabled.png"));
             renderer.captureRtxptSource(output.resolve("native-overlay-disabled-source.png"));
             compare(output.resolve("native-overlay-disabled-source.png"),output.resolve("native-overlay-disabled.png"),false);
+            renderer.trimIdleCompositionResources();
             renderer.overlays(List.of(java.util.Objects.requireNonNull(layer)));
             for(int i=0;i<3;i++)require(host.renderFrame(),"Overlay recreated after freeing temporary images");
             host.capture(output.resolve("native-overlay-restored.png"));

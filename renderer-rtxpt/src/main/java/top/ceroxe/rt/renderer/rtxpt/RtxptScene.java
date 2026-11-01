@@ -136,7 +136,8 @@ final class RtxptScene {
         root.put("scenes",List.of(object("nodes",java.util.stream.IntStream.range(0,nodes.size()).boxed().toList())));
         root.put("extensionsUsed",List.of("KHR_materials_transmission","KHR_materials_ior","KHR_materials_emissive_strength"));
         if(!tex.isEmpty()){root.put("textures",tex);root.put("images",images);root.put("samplers",samplers);}
-        Files.write(dir.resolve("content.bin"),bin.toByteArray());Files.writeString(dir.resolve("content.gltf"),RtxptJson.encode(root));
+        try(var output=Files.newOutputStream(dir.resolve("content.bin"))){bin.writeTo(output);}
+        Files.writeString(dir.resolve("content.gltf"),RtxptJson.encode(root));
         var graph=new ArrayList<Object>();graph.add(object("name","RTRoot","model",0));
         for(var l:lights.values()) {
             var light=object("name","l"+l.id(),"type",switch(l.type()){case POINT->"PointLight";case SPOT->"SpotLight";case DIRECTIONAL->"DirectionalLight";},
