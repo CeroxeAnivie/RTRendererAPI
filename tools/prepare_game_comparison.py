@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import re
 import shutil
 import struct
 
@@ -117,6 +118,7 @@ def prepare(original, output):
     f['materials']['gameMetal'] = {'type':'disney','basecolor':'.22 .27 .31','roughness':'.32','metallic':'.7'}
     f['materials']['gameCrate'] = {'type':'disney','basecolor':'.36 .19 .08','roughness':'.72','metallic':'0'}
     def solid(name, scale, pos, material):
+        name = re.sub(r'[^a-zA-Z0-9_-]', '_', name)
         f['objects'][name] = {'ply':'game-cube.ply','material':material,
                               'transformation':matrix(scale,*pos)}
     solid('floor', [7,.12,5], [0,-1.43,-.65], 'gameWall')

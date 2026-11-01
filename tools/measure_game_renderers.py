@@ -27,8 +27,10 @@ def main():
     p.add_argument('--output',type=Path,default=ROOT/'build/reports/game-renderer-comparison')
     p.add_argument('--engines',nargs='+',default=['flow','cycles','mitsuba','luxcore'])
     a=p.parse_args();out=a.output.resolve();out.mkdir(parents=True,exist_ok=True)
-    rows=[]
+    rows=json.loads((out/'comparison.json').read_text(encoding='utf-8')) if (out/'comparison.json').exists() else []
     def record(row):
+        rows[:]=[r for r in rows if (r['engine'],r['case'],r.get('mode'),r.get('refreshDensityAndShadowsEachFrame')) !=
+                 (row['engine'],row['case'],row.get('mode'),row.get('refreshDensityAndShadowsEachFrame'))]
         rows.append(row)
         (out/'comparison.json').write_text(json.dumps(rows,indent=2),encoding='utf-8')
         print('GAME RESULT',json.dumps(row),flush=True)
