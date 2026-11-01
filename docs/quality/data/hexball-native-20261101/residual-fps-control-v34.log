@@ -1,0 +1,261 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :buildSrc:compileJava UP-TO-DATE
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+> Task :renderer-api:compileJava UP-TO-DATE
+> Task :renderer-api:processResources NO-SOURCE
+> Task :renderer-api:classes UP-TO-DATE
+> Task :renderer-api:jar UP-TO-DATE
+> Task :renderer-nvidia:processResources UP-TO-DATE
+> Task :renderer-nvidia:clearUnconfiguredPackagedNvidiaRuntime SKIPPED
+> Task :renderer-core:processResources UP-TO-DATE
+> Task :renderer-core:compileJava UP-TO-DATE
+> Task :renderer-core:classes UP-TO-DATE
+> Task :renderer-core:jar UP-TO-DATE
+> Task :renderer-rtxpt:compileJava UP-TO-DATE
+> Task :renderer-rtxpt:processResources UP-TO-DATE
+> Task :renderer-rtxpt:classes UP-TO-DATE
+
+> Task :renderer-nvidia:configureNvidiaBridge
+-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.26300.
+-- NRI_STATIC_LIBRARY
+-- NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS
+-- NRI_ENABLE_VK_SUPPORT
+-- NRI_STREAMER_THREAD_SAFE
+NRI: v180:
+NRI: downloading dependencies:
+-- vulkan_headers;vma ...
+-- NRD_SUPPORTS_CHECKERBOARD
+-- NRD_SUPPORTS_HISTORY_CONFIDENCE
+-- NRD_SUPPORTS_DISOCCLUSION_THRESHOLD_MIX
+-- NRD_SUPPORTS_ANTIFIREFLY
+-- NRD_SUPPORTS_QUAD_INTRINSICS
+-- NRD_NORMAL_ENCODING = 2
+-- NRD_ROUGHNESS_ENCODING = 1
+NRI: output path ''
+NRD: v4.17.4
+-- shadermake;mathlib ...
+NRD: downloading dependencies:
+-- ShaderMake: downloading DXC v1.8.2505...
+-- SHADERMAKE_PATH = 'D:/Engineering/code/APIs/RTRendererAPI/renderer-nvidia/build/cmake/nvidia/_deps/shadermake-build/build/Release/ShaderMake.exe'
+-- SHADERMAKE_FXC_PATH = 'D:/Windows Kits/10/bin/10.0.26100.0/x64/fxc.exe'
+-- SHADERMAKE_DXC_PATH = 'D:/Engineering/code/APIs/RTRendererAPI/renderer-nvidia/build/cmake/nvidia/_deps/dxc-src/bin/x64/dxc.exe'
+-- SHADERMAKE_DXC_VK_PATH = 'D:/VulkanSDK/Bin/dxc.exe'
+-- SHADERMAKE_SLANG_PATH = ''
+NRD: shaders path 'D:/Engineering/code/APIs/RTRendererAPI/renderer-nvidia/build/cmake/nvidia/nrd-shaders'
+-- NRD_EMBEDS_SPIRV_SHADERS
+NRD: output path ''
+NRD: MathLib path 'D:/Engineering/code/APIs/RTRendererAPI/renderer-nvidia/build/cmake/nvidia/_deps/mathlib-src'
+-- Configuring done (0.8s)
+-- Generating done (0.2s)
+-- Build files have been written to: D:/Engineering/code/APIs/RTRendererAPI/renderer-nvidia/build/cmake/nvidia
+
+> Task :renderer-nvidia:compileJava UP-TO-DATE
+> Task :renderer-nvidia:classes UP-TO-DATE
+
+> Task :renderer-nvidia:compileNvidiaBridge
+适用于 .NET Framework MSBuild 版本 17.14.10+8b8e13593
+
+  1>
+  Compiling shaders using: D:/VulkanSDK/Bin/dxc.exe
+  ( 10%) NRD SPIRV
+  ( 20%) NRD SPIRV
+
+> Task :renderer-rtxpt:packageRtxptRuntime
+> Task :renderer-rtxpt:hashRtxptRuntime
+
+> Task :renderer-nvidia:compileNvidiaBridge
+  ( 30%) NRD SPIRV
+
+> Task :renderer-rtxpt:jar
+> Task :demos:hex-ball:compileJava UP-TO-DATE
+> Task :demos:hex-ball:processResources UP-TO-DATE
+> Task :demos:hex-ball:classes UP-TO-DATE
+> Task :demos:hex-ball:compileTestJava UP-TO-DATE
+> Task :demos:hex-ball:processTestResources NO-SOURCE
+> Task :demos:hex-ball:testClasses UP-TO-DATE
+
+> Task :renderer-nvidia:compileNvidiaBridge
+  ( 40%) NRD SPIRV
+  ( 50%) NRD SPIRV
+  ( 60%) NRD SPIRV
+  ( 70%) NRD SPIRV
+  ( 80%) NRD SPIRV
+  ( 90%) NRD SPIRV
+  (100%) NRD SPIRV
+  159 task(s) completed successfully (elapsed time 22194.60 ms)
+  ShaderMakeBlob.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\renderer-nvidia\build\cmake\nvidia\_deps\shadermake-build\Release\ShaderMakeBlob.lib
+  InstanceImpl.cpp
+  Reblur.cpp
+  Reference.cpp
+  Relax.cpp
+  Sigma.cpp
+  Wrapper.cpp
+  正在生成代码...
+  NRD.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\renderer-nvidia\build\cmake\nvidia\nrd\Release\NRD.lib
+  NRI_Shared.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\renderer-nvidia\build\cmake\nvidia\nri\Release\NRI_Shared.lib
+  NRI_VK.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\renderer-nvidia\build\cmake\nvidia\nri\Release\NRI_VK.lib
+  NRI.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\renderer-nvidia\build\cmake\nvidia\nri\Release\NRI.lib
+  rtxmu.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\renderer-nvidia\build\cmake\nvidia\rtxmu\Release\rtxmu.lib
+  正在扫描源以查找模块依赖项...
+    正在创建库 D:/Engineering/code/APIs/RTRendererAPI/renderer-nvidia/build/cmake/nvidia/output/rtrenderer_nvidia.lib 和对象 D:/Engineering/code/APIs/RTRendererAPI/renderer-nvidia/build/cmake/nvidia/output/rtrenderer_nvidia.exp
+  rtrenderer_nvidia.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\renderer-nvidia\build\cmake\nvidia\output\rtrenderer_nvidia.dll
+
+> Task :renderer-nvidia:preparePackagedNvidiaRuntime
+> Task :renderer-nvidia:jar
+
+> Task :demos:hex-ball:rtxptHexBallBenchmark
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+File 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\sl.interposer.dll' is signed by NVIDIA and the signature was verified.
+INFO: Found adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this adapter
+INFO: DLSS_G is supported on this adapter
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is supported on this adapter
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Microsoft Basic Render Driver, DeviceId=0x8C, Vendor: 5140
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Using adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this system.
+INFO: DLSS-G is supported on this system.
+INFO: PCL is supported on this system.
+INFO: Reflex is supported on this system.
+INFO: DLSS-RR is supported on this system.
+INFO: Initializing...
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat4.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat2.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat3.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 5 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: RTXPT small-point scene gate: lights=5 analytic=4 points=yes emissiveMaterials=0 eligible=yes
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 1.0 MB used, over 1 build batches
+INFO: Compiling shaders (16)...
+INFO: Compiling shader 'REF_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerSample_bbaf51309490c4ac12d65932.bin'...
+INFO: Compiling shader 'BUILD_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerSample_0b1e295bfced46f212eb7ec5.bin'...
+INFO: Compiling shader 'EDGY_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\TestRaygenPP_48a4de7ce9cab1639f99763b.bin'...
+INFO: Compiling shader 'SHARC_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerSample_745e618f93478158bd04983d.bin'...
+INFO: Compiling shader 'SHARC_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_c9594c3a2c625d9eb754a55a.bin'...
+INFO: Compiling shader 'BUILD_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_5393f04a906f217bcd259a76.bin'...
+INFO: Compiling shader 'TESTRG_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_36d2c19c765aa69f7eab0b13.bin'...
+INFO: Compiling shader 'REF_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_beda4e0203a57e6595ecd405.bin'...
+INFO: Compiling shader 'BUILD_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_4f1e1154ad2b2f475ed8ed6f.bin'...
+INFO: Compiling shader 'FILL_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_1abb291458c40853b144f168.bin'...
+INFO: Compiling shader 'FILL_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_77b66878ade73ebb5b065b88.bin'...
+INFO: Compiling shader 'TESTRG_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\TestRaygenPP_6eb44cc32a33479a0341e9b4.bin'...
+INFO: Compiling shader 'FILL_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerSample_ac6959eacbe4d6a962d19da8.bin'...
+INFO: Compiling shader 'SHARC_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_b42b1c93ad4b7dae3b86b726.bin'...
+INFO: Compiling shader 'REF_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_9bd5c4dc44446ca3b5c9d9ae.bin'...
+INFO: Compiling shader 'EDGY_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-21f786d2c849fafeee57\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_83f83e94b2e4afc25c3f6165.bin'...
+INFO: Compiling PSOs (6)...
+INFO: Compiling compute shaders (26)...
+INFO: Compiling compute shader 'EnvLightsFillLookupMap'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP0'...
+INFO: Compiling compute shader 'ResetLightProxyCounters'...
+INFO: Compiling compute shader 'ProcessClusters'...
+INFO: Compiling compute shader 'ComputeProxyCounts'...
+INFO: Compiling compute shader 'ExecuteProxyJobs'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP1b'...
+INFO: Compiling compute shader 'EnvLightsBackupPast'...
+INFO: Compiling compute shader 'EnvLightsSubdivideBoost'...
+INFO: Compiling compute shader 'EnvLightsMapPastToCurrent'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP2'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP3'...
+INFO: Compiling compute shader 'EnvLightsSubdivideBase'...
+INFO: Compiling compute shader 'ClearFeedbackHistory'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP1a'...
+INFO: Compiling compute shader 'PatchSubInstanceLightData'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryDebugViz'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryPreFilterA'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryPreFilterB'...
+INFO: Compiling compute shader 'SharcResolve'...
+INFO: Compiling compute shader 'ComputeWeights'...
+INFO: Compiling compute shader 'ResetPastToCurrentHistory'...
+INFO: Compiling compute shader 'ComputeProxyBaselineOffsets'...
+INFO: Compiling compute shader 'BakeEmissiveTriangles'...
+INFO: Compiling compute shader 'CreateProxyJobs'...
+INFO: Compiling compute shader 'DebugDrawLights'...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+IRTXPT_HEXBALL_ACTUAL RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+RTXPT_HEXBALL round=1 output=1920x1080 input=1114x626 spp=1 SR=DLSS FG=off frames=2130 elapsedWithGPUDrain=6.006s fps=354.62 wallMsPerFrame=2.820 renderFrameCalls=2130
+RTXPT_HEXBALL round=2 output=1920x1080 input=1114x626 spp=1 SR=DLSS FG=off frames=2237 elapsedWithGPUDrain=6.006s fps=372.49 wallMsPerFrame=2.685 renderFrameCalls=2237
+RTXPT_HEXBALL round=3 output=1920x1080 input=1114x626 spp=1 SR=DLSS FG=off frames=2274 elapsedWithGPUDrain=6.005s fps=378.65 wallMsPerFrame=2.641 renderFrameCalls=2274
+
+[Incubating] Problems report is available at: file:///D:/Engineering/code/APIs/RTRendererAPI/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 7s
+22 actionable tasks: 8 executed, 14 up-to-date

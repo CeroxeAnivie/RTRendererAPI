@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory)][ValidateSet('raw','relax','default','reuse-raw','reuse-relax','rr','reference','direct')][string]$Mode,
+    [Parameter(Mandatory)][ValidateSet('raw','relax','default','reuse-raw','reuse-relax','rr','reference','direct','direct-reference')][string]$Mode,
     [Parameter(Mandatory)][string]$Tag,
     [switch]$Glass,
     [switch]$PackagedRuntime,
@@ -12,7 +12,7 @@ param(
     [switch]$PreserveNeeAt,
     [switch]$Sharc,
     [switch]$RestirGi,
-    [ValidateSet('none','original-lights','quarter-lights','no-sun','no-sky','no-environment')][string]$LightingProbe='none'
+    [ValidateSet('none','original-lights','quarter-lights','no-points','no-sun','no-sky','no-environment')][string]$LightingProbe='none'
 )
 $ErrorActionPreference='Stop'
 if($SmallPointCandidate -and $ControlLighting){throw 'Choose candidate or original lighting control, not both.'}
@@ -51,7 +51,7 @@ $settings=[ordered]@{
         '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath);
     Entry='demo.RtxptHexBallQualitySelfTest';Arguments=@($Mode,$(if($Glass){'glass'}else{'metal'}),$images,$LightingProbe,$(if($Sharc){'sharc'}elseif($RestirGi){'restirgi'}else{'none'}));
     StartedAt=(Get-Date -Format o);NativeSha256=(Get-FileHash 'build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll').Hash;
-    Width=2560;Height=1440;Spp=$(if($Mode -eq 'reference'){32}else{1});FrameGeneration=$false;StageProfile=$false
+    Width=2560;Height=1440;Spp=$(if($Mode -in @('reference','direct-reference')){32}else{1});FrameGeneration=$false;StageProfile=$false
     RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
     SmallPointCandidate=[bool]$SmallPointCandidate
     ControlLighting=[bool]$ControlLighting

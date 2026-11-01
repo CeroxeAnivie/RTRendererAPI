@@ -15,7 +15,7 @@ public final class RtxptHexBallQualitySelfTest {
         String cacheMode=args.length>4?args[4]:"none";
         boolean sharc=cacheMode.equals("sharc");
         boolean restirGi=cacheMode.equals("restirgi");
-        if(!java.util.Set.of("none","original-lights","quarter-lights","no-sun","no-sky","no-environment").contains(probe))
+        if(!java.util.Set.of("none","original-lights","quarter-lights","no-points","no-sun","no-sky","no-environment").contains(probe))
             throw new IllegalArgumentException("Unknown lighting probe: "+probe);
         if(!java.util.Set.of("none","sharc","restirgi").contains(cacheMode))
             throw new IllegalArgumentException("Unknown indirect lighting mode: "+cacheMode);
@@ -24,18 +24,19 @@ public final class RtxptHexBallQualitySelfTest {
         System.setProperty(DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY,"true");
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
         var base=DemoRendererProfile.interactive(config);
-        boolean reference=mode.equals("reference");
+        boolean reference=mode.equals("reference")||mode.equals("direct-reference");
+        boolean directOnly=mode.equals("direct")||mode.equals("direct-reference");
         boolean rr=mode.equals("rr");
         boolean denoise=mode.equals("relax")||mode.equals("reuse-relax")||rr;
         boolean reuse=mode.startsWith("reuse-");
         var policy=switch(mode) {
-            case "raw", "reuse-raw", "reference", "direct" -> base.copyBuilder().denoising(DenoisingOptions.disabled()).build();
+            case "raw", "reuse-raw", "reference", "direct", "direct-reference" -> base.copyBuilder().denoising(DenoisingOptions.disabled()).build();
             case "relax", "reuse-relax" -> base.copyBuilder().denoising(DenoisingOptions.builder()
                 .preference(RendererFeaturePreference.REQUIRED).strategy(DenoisingOptions.Strategy.RESPONSIVE)
                 .builtInTemporalFallback(false).build()).build();
             case "default" -> DemoRendererProfile.rtxptInteractive();
             case "rr" -> base.copyBuilder().denoising(DenoisingOptions.recommended()).build();
-            default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw, reuse-relax, rr, reference or direct");
+            default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw, reuse-relax, rr, reference, direct or direct-reference");
         };
         if(sharc) {
             var path=policy.pathTracing();
@@ -54,8 +55,8 @@ public final class RtxptHexBallQualitySelfTest {
             policy=policy.copyBuilder().pathTracing(new PathTracingOptions(32,path.maxBounces(),path.diffuseBounces(),
                 path.radianceCache(),path.directLightResampling(),path.indirectLightResampling())).build();
         }
-        if(mode.equals("direct")) {
-            policy=policy.copyBuilder().pathTracing(new PathTracingOptions(1,1,0,
+        if(directOnly) {
+            policy=policy.copyBuilder().pathTracing(new PathTracingOptions(reference?32:1,1,0,
                 RendererFeaturePreference.DISABLED,RendererFeaturePreference.DISABLED,
                 RendererFeaturePreference.DISABLED)).build();
         }
@@ -69,17 +70,9 @@ public final class RtxptHexBallQualitySelfTest {
         var physics=new HexPhysics();
         var camera=DemoRendererProfile.camera(2560,1440,15.4);
         var environment=DemoRendererProfile.environment();
-        // Diagnostic isolation only. These light-removal cases are not accepted
-        // rendering fixes or production performance configurations.
-        if(probe.equals("no-sun")||probe.equals("no-sky")||probe.equals("no-environment")) {
-            var source=environment;
-            environment=EnvironmentState.builder()
-                .skyRadiance(source.skyRed(),source.skyGreen(),source.skyBlue())
-                .ambientIntensity(probe.equals("no-sun")?source.ambientIntensity():0)
-                .sunDirection(source.sunDirectionX(),source.sunDirectionY(),source.sunDirectionZ())
-                .sunRadiance(source.sunRed(),source.sunGreen(),source.sunBlue())
-                .sunIntensity(probe.equals("no-sky")?source.sunIntensity():0).build();
-        }
+        // Diagnostic isolation only. Keep exposure identical across glass probes.
+        environment=lightingProbe(environment,probe);
+        verifyLightingProbeMapping(DemoRendererProfile.environment());
         var initial=scene.initialTransaction();
         if(probe.equals("original-lights")||probe.equals("quarter-lights")) {
             float scale=probe.equals("original-lights")?1f:.25f;
@@ -88,12 +81,16 @@ public final class RtxptHexBallQualitySelfTest {
             initial=SceneTransaction.builder(0).resetScene().upsertMaterials(initial.upserts().materials())
                 .upsertMeshes(initial.upserts().meshes()).upsertInstances(initial.upserts().instances()).upsertLights(lights).build();
         }
+        if(probe.equals("no-points")) {
+            initial=SceneTransaction.builder(0).resetScene().upsertMaterials(initial.upserts().materials())
+                .upsertMeshes(initial.upserts().meshes()).upsertInstances(initial.upserts().instances()).build();
+        }
         FramePrimitiveBatch previous=FramePrimitiveBatch.empty();
         long sequence=0;
         try(var renderer=Renderer.open("rtxpt",policy)) {
             long revision=renderer.apply(initial).acceptedSceneRevision();
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
-            if(glass&&probe.equals("none"))host.setExposureCompensation(DemoScene.GLASS_EXPOSURE_COMPENSATION);
+            if(glass)host.setExposureCompensation(DemoScene.GLASS_EXPOSURE_COMPENSATION);
             for(int phase=0;phase<3;phase++) {
                 int count=phase==0?164:phase==1?120:80;
                 for(int f=0;f<count;f++) {
@@ -114,7 +111,7 @@ public final class RtxptHexBallQualitySelfTest {
                         require(status.sharc()==sharc,"Actual requested SHaRC state");
                         require(!status.frameGeneration(),"FG off for quality evidence");
                         require(status.renderWidth()==1485&&status.renderHeight()==835,"Balanced input unchanged");
-                        float expectedExposure=glass&&probe.equals("none")?DemoScene.GLASS_EXPOSURE_COMPENSATION:0;
+                        float expectedExposure=glass?DemoScene.GLASS_EXPOSURE_COMPENSATION:0;
                         require(Math.abs(host.presentationStatus().exposureCompensation()-expectedExposure)<1e-5f,
                             "The upstream tone mapper must apply the requested exposure, including before first submission");
                         Files.writeString(output.resolve("runtime.txt"),"mode="+mode+" glass="+glass+" probe="+probe+"\n"+status+"\n"+policy+"\n");
@@ -135,5 +132,26 @@ public final class RtxptHexBallQualitySelfTest {
     }
     private static void require(boolean condition,String message) {
         if(!condition)throw new AssertionError(message);
+    }
+
+    private static EnvironmentState lightingProbe(EnvironmentState source,String probe) {
+        return switch(probe) {
+            case "no-sun" -> source.toBuilder().sunIntensity(0).build();
+            case "no-sky" -> source.toBuilder().skyRadiance(0,0,0).build();
+            case "no-environment" -> source.toBuilder().skyRadiance(0,0,0).ambientIntensity(0).sunIntensity(0).build();
+            default -> source;
+        };
+    }
+
+    private static void verifyLightingProbeMapping(EnvironmentState source) {
+        EnvironmentState noSun=lightingProbe(source,"no-sun");
+        EnvironmentState noSky=lightingProbe(source,"no-sky");
+        EnvironmentState noEnvironment=lightingProbe(source,"no-environment");
+        require(noSun.sunIntensity()==0&&noSun.skyRed()==source.skyRed()
+            &&noSun.ambientIntensity()==source.ambientIntensity(),"no-sun must remove only the sun");
+        require(noSky.skyRed()==0&&noSky.sunIntensity()==source.sunIntensity()
+            &&noSky.ambientIntensity()==source.ambientIntensity(),"no-sky must remove only sky radiance");
+        require(noEnvironment.skyRed()==0&&noEnvironment.ambientIntensity()==0
+            &&noEnvironment.sunIntensity()==0,"no-environment must remove sky, ambient and sun");
     }
 }
