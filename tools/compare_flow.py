@@ -4,6 +4,7 @@ The original fixture remains untouched. All rendering stays in the upstream SDK;
 this host only adapts density data to Flow's temperature/smoke representation.
 """
 import argparse
+import ctypes as ct
 import hashlib
 import json
 from pathlib import Path
@@ -67,7 +68,7 @@ def prepare(fixture_path, output):
         inventory.append({'object': name, 'volume': volume_name, 'type': vol['type'],
                           'meanExtinction': float(density.mean()), 'maxExtinction': float(density.max()),
                           'transform': transform})
-    assert len(records) == 32, len(records)
+    assert len(records) < 128, len(records)
     output.mkdir(parents=True, exist_ok=True)
     (output / 'fixture.bin').write_bytes(struct.pack('<II', 0x314f4c46, len(records)) + b''.join(records))
     metadata = {'originalFixture': str(fixture_path.resolve()),
@@ -85,8 +86,41 @@ def gpu():
         '--format=csv,noheader'], text=True).strip()
 
 
+def vulkan_target():
+    """Vulkan enumeration is independent of nvidia-smi/CUDA adapter indices."""
+    vk = ct.WinDLL('vulkan-1.dll')
+    class CreateInfo(ct.Structure):
+        _fields_ = [('type',ct.c_uint32),('next',ct.c_void_p),('flags',ct.c_uint32),
+                    ('app',ct.c_void_p),('layerCount',ct.c_uint32),('layers',ct.c_void_p),
+                    ('extensionCount',ct.c_uint32),('extensions',ct.c_void_p)]
+    vk.vkCreateInstance.argtypes=[ct.c_void_p,ct.c_void_p,ct.c_void_p]
+    vk.vkEnumeratePhysicalDevices.argtypes=[ct.c_void_p,ct.c_void_p,ct.c_void_p]
+    vk.vkGetPhysicalDeviceProperties.argtypes=[ct.c_void_p,ct.c_void_p]
+    vk.vkDestroyInstance.argtypes=[ct.c_void_p,ct.c_void_p]
+    info=CreateInfo();info.type=1;instance=ct.c_void_p()
+    assert vk.vkCreateInstance(ct.byref(info),None,ct.byref(instance))==0
+    try:
+        count=ct.c_uint32()
+        assert vk.vkEnumeratePhysicalDevices(instance,ct.byref(count),None)==0
+        devices=(ct.c_void_p*count.value)()
+        assert vk.vkEnumeratePhysicalDevices(instance,ct.byref(count),devices)==0
+        found=[]
+        for index,device in enumerate(devices):
+            properties=ct.create_string_buffer(4096)
+            vk.vkGetPhysicalDeviceProperties(device,properties)
+            name=properties.raw[20:276].split(b'\0')[0].decode('utf-8')
+            print('Vulkan device:',index,name,flush=True)
+            if 'RTX 5080 Laptop' in name:
+                found.append((index,name))
+        assert len(found)==1, 'RTX 5080 Laptop Vulkan device is not unique'
+        return found[0]
+    finally:
+        vk.vkDestroyInstance(instance,None)
+
+
 def measure(executable, output, seconds, cells):
     rows = []
+    device_index, device_name = vulkan_target()
     for cell_size in cells:
         for refresh in (False, True):
             time.sleep(1.2)
@@ -96,7 +130,7 @@ def measure(executable, output, seconds, cells):
             (output / (name + '.gpu.txt')).write_text(initial, encoding='utf-8')
             print('Flow start:', name, initial, flush=True)
             command = [str(executable), str(output / 'fixture.bin'), str(result_path),
-                       str(cell_size), str(int(refresh)), str(seconds)]
+                       str(cell_size), str(int(refresh)), str(seconds),str(device_index)]
             with (output / (name + '.stdout.log')).open('w', encoding='utf-8') as stdout, \
                  (output / (name + '.stderr.log')).open('w', encoding='utf-8') as stderr:
                 subprocess.run(command, cwd=executable.parent, stdout=stdout, stderr=stderr, check=True, timeout=180)
@@ -106,10 +140,11 @@ def measure(executable, output, seconds, cells):
             rgb = pixels[:, :, :3].astype(np.float32)
             background = np.array([0x2fae, 0x311f, 0x330a], dtype=np.uint16).view(np.float16).astype(np.float32)
             changed = int(np.count_nonzero(np.max(np.abs(rgb - background), axis=-1) > .001))
-            assert changed > 1000, 'Empty volume render rejected'
+            metadata=json.loads((output/'fixture.json').read_text(encoding='utf-8'))
+            assert metadata['volumeCount']==0 or changed > 1000, 'Empty volume render rejected'
             png = np.where(rgb <= .0031308, rgb * 12.92, 1.055 * np.maximum(rgb, 0) ** (1/2.4) - .055)
             Image.fromarray((np.clip(png, 0, 1) * 255).astype(np.uint8)).save(output / (name + '.png'))
-            result.update(initialGpu=initial, verifiedChangedPixels=changed, semanticDifferences=DIFFERENCES)
+            result.update(initialGpu=initial, verifiedChangedPixels=changed, actualDevice=device_name,semanticDifferences=DIFFERENCES)
             result_path.write_text(json.dumps(result, indent=2), encoding='utf-8')
             Path(str(result_path) + '.rgba16f').unlink()  # Derived PNG is retained; not per-frame readback.
             rows.append(result)

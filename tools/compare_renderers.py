@@ -160,7 +160,7 @@ def mitsuba_mixed_scene(f, mi, np):
         'to_world':mi.ScalarTransform4f.look_at(origin=[0,0,7],target=[0,0,0],up=[0,1,0]),
         'sampler':{'type':'independent','sample_count':1},
         'film':{'type':'hdrfilm','width':1920,'height':1080,'pixel_format':'rgb','rfilter':{'type':'box'}},
-        'medium':media['v500']}
+        **({'medium':media['v500']} if 'volume' in f['camera'] and 'v500' in media else {})}
     for name,l in f['lights'].items():
         color=np.asarray(numbers(l.get('color','1 1 1')))*np.asarray(numbers(l.get('gain','1 1 1')))
         if color.max()==0:continue

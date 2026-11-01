@@ -70,17 +70,22 @@ struct Host {
         cp.dst=ctx.registerTextureAsTransient(context,tex);cp.debugLabel="FixtureUpload";
         ctx.addPassCopyBufferToTexture(context,&cp);flush();ctx.destroyBuffer(context,buf);return tex;
     }
-    void init(const char* fixture,float cellSize) {
+    void init(const char* fixture,float cellSize,unsigned deviceIndex) {
         NvFlowLoaderInit(&loader,loadError,nullptr);
         require(loader.module_nvflow&&loader.module_nvflowext,"Flow DLL loading failed");
         manager=loader.deviceInterface.createDeviceManager(NV_FLOW_FALSE,nullptr,2);
-        NvFlowDeviceDesc dd{};dd.deviceIndex=0;dd.enableExternalUsage=NV_FLOW_FALSE;dd.logPrint=logPrint;
+        NvFlowDeviceDesc dd{};dd.deviceIndex=deviceIndex;dd.enableExternalUsage=NV_FLOW_FALSE;dd.logPrint=logPrint;
+        NvFlowPhysicalDeviceDesc physical{};
+        require(loader.deviceInterface.enumerateDevices(manager,deviceIndex,&physical),"Selected GPU is unavailable");
+        fprintf(stderr,"Flow Vulkan deviceIndex=%u uuid=",deviceIndex);
+        for(auto c:physical.deviceUUID)fprintf(stderr,"%02x",c);
+        fputc('\n',stderr);
         device=loader.deviceInterface.createDevice(manager,&dd);require(device!=nullptr,"Vulkan device creation failed");
         queue=loader.deviceInterface.getDeviceQueue(device);context=loader.deviceInterface.getContext(queue);
         NvFlowContextInterface_duplicate(&ctx,loader.deviceInterface.getContextInterface(queue));
         std::ifstream f(fixture,std::ios::binary);require(bool(f),"Cannot open fixture");
         require(read<uint32_t>(f)==0x314f4c46,"Fixture magic mismatch");
-        unsigned n=read<uint32_t>(f);require(n>0&&n<128,"Invalid volume count");
+        unsigned n=read<uint32_t>(f);require(n<128,"Invalid volume count");
         source.resize(n);for(auto& v:source)v=read<Volume>(f);
         sim.resize(n);off.resize(n);ren.resize(n);emit.resize(n);colors.resize(n*2);
         simPtr.resize(n);offPtr.resize(n);renPtr.resize(n);emitPtr.resize(n);
@@ -126,7 +131,7 @@ struct Host {
             loader.gridInterface.simulate(context,grid,&params,NV_FLOW_FALSE);
             loader.gridInterface.offscreen(context,grid,&params);flush();
         }
-        blocks=loader.gridInterface.getActiveBlockCount(grid);require(blocks>0,"No allocated volume blocks");
+        blocks=loader.gridInterface.getActiveBlockCount(grid);require(n==0||blocks>0,"No allocated volume blocks");
         fprintf(stderr,"Flow fixture: volumes=%u blocks=%u cellSize=%.7f\n",n,blocks,cellSize);
     }
     void render(bool refresh) {
@@ -153,7 +158,7 @@ struct Host {
         for(size_t p=0;p<size_t(width)*height;++p)if(pixels[p*4]!=0x2fae||pixels[p*4+1]!=0x311f||pixels[p*4+2]!=0x330a)++changed;
         std::ofstream f(path,std::ios::binary);f.write(reinterpret_cast<char*>(pixels),std::streamsize(bd.sizeInBytes));
         ctx.unmapBuffer(context,rb);ctx.destroyBuffer(context,rb);
-        require(changed>1000,"No visible volume contribution; rejecting empty-frame result");return changed;
+        require(source.empty()||changed>1000,"No visible volume contribution; rejecting empty-frame result");return changed;
     }
     ~Host() {
         if(grid)loader.gridInterface.destroyGrid(context,grid);
@@ -166,14 +171,15 @@ struct Host {
 };
 int main(int argc,char** argv) {
     try {
-        require(argc>=4,"Usage: flow_native_benchmark fixture.bin output.json cellSize [refresh=0] [seconds=2]");
+        require(argc>=7,"Usage: flow_native_benchmark fixture.bin output.json cellSize refresh seconds verifiedVulkanDeviceIndex");
         float cellSize=std::stof(argv[3]);bool refresh=argc>4&&std::atoi(argv[4])!=0;
-        double seconds=argc>5?std::stod(argv[5]):2.;Host h;h.init(argv[1],cellSize);
+        double seconds=std::stod(argv[5]);unsigned deviceIndex=std::stoul(argv[6]);Host h;h.init(argv[1],cellSize,deviceIndex);
         for(unsigned i=0;i<32;++i){h.render(refresh);h.flush();}
         size_t visible=h.capture(std::string(argv[2])+".rgba16f");
         std::vector<double> rounds;
         std::ofstream out(argv[2]);out<<"{\n  \"renderer\":\"NVIDIA Flow Vulkan\",\n  \"width\":1920,\"height\":1080,\n";
         out<<"  \"metric\":\"completed volume-render frames with per-frame GPU fence\",\n";
+        out<<"  \"vulkanDeviceIndex\":"<<deviceIndex<<",\n";
         out<<"  \"fullBenchmarkSupported\":false,\"samplesPerPixel\":null,\"denoising\":false,\"temporalReuse\":false,\"frameGeneration\":false,\n";
         out<<"  \"cellSize\":"<<cellSize<<",\"stepSizeScale\":0.75,\"shadowSteps\":16,\"refreshDensityAndShadowsEachFrame\":"<<(refresh?"true":"false")<<",\n";
         out<<"  \"volumes\":"<<h.source.size()<<",\"activeBlocks\":"<<h.blocks<<",\"visibleChangedPixels\":"<<visible<<",\n  \"rounds\":[\n";
