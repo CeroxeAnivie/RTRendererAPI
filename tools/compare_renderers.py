@@ -109,7 +109,7 @@ def mitsuba_minimal(fixture, output, rounds):
                  'bsdf': {'type': 'diffuse', 'reflectance': {'type': 'rgb', 'value': [.5, .6, .7]}}},
     })
     initial = gpu()
-    print('Mitsuba device', dr.device_name(), 'initialGpu', initial, flush=True)
+    print('Mitsuba CUDA variant', mi.variant(), 'initialGpu', initial, flush=True)
     for seed in range(2):
         image = mi.render(scene, spp=1, seed=seed)
         dr.eval(image)
@@ -128,7 +128,7 @@ def mitsuba_minimal(fixture, output, rounds):
     output.mkdir(parents=True, exist_ok=True)
     mi.util.write_bitmap(str(output/'minimal.png'), image)
     result = {'renderer': 'Mitsuba', 'version': mi.__version__, 'variant': mi.variant(),
-              'device': dr.device_name(), 'scene': 'minimal-exact-geometry-and-diffuse',
+              'device': initial.split(',')[1].strip(), 'scene': 'minimal-exact-geometry-and-diffuse',
               'width': 1920, 'height': 1080, 'spp': 1, 'pathDepth': 5,
               'filter': 'box', 'denoiser': False, 'initialGpu': initial,
               'metric': 'independent completed 1-SPP render calls, CPU+GPU after JIT warmup; no display upload',
