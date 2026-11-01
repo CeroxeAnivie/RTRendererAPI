@@ -1,0 +1,56 @@
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+File 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-6b56eb96ecb2be010de3\sl.interposer.dll' is signed by NVIDIA and the signature was verified.
+INFO: Found adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this adapter
+INFO: DLSS_G is supported on this adapter
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is supported on this adapter
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Microsoft Basic Render Driver, DeviceId=0x8C, Vendor: 5140
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Using adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this system.
+INFO: DLSS-G is supported on this system.
+INFO: PCL is supported on this system.
+INFO: Reflex is supported on this system.
+INFO: DLSS-RR is supported on this system.
+INFO: Initializing...
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat2.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat3.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat4.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 5 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-6b56eb96ecb2be010de3\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-6b56eb96ecb2be010de3\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-6b56eb96ecb2be010de3\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-6b56eb96ecb2be010de3\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-6b56eb96ecb2be010de3\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-6b56eb96ecb2be010de3\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-6b56eb96ecb2be010de3\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-6b56eb96ecb2be010de3\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-6b56eb96ecb2be010de3\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-6b56eb96ecb2be010de3\../Rtxpt/Shaders' not found, trying local 'C:\UserRTXPT_PARITY jar frames=779 seconds=4.008680700 fps=194.328274 ms=5.145931579 input=1114x626 aa=3 sharc=1 fg=0
