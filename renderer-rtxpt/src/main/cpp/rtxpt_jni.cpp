@@ -70,7 +70,8 @@ public:
             lightingSceneDirty=!GetScene();
         }
         const char* overrideValue=std::getenv("RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS");
-        const bool rawPolicy=g_sampleUIData.RealtimeMode && g_sampleUIData.RealtimeAA==2
+        const bool rawPolicy=g_sampleUIData.RealtimeMode
+            && (g_sampleUIData.RealtimeAA==2 || g_sampleUIData.RealtimeAA==3)
             && !g_sampleUIData.StandaloneDenoiser && !g_sampleUIData.ActualUseRTXDIPasses()
             && g_sampleUIData.ActualRadianceCacheMode()==0 && g_sampleUIData.ActualSamplesPerPixel()==1;
         const bool enabled=eligibleLightingScene && rawPolicy && !(overrideValue && std::string(overrideValue)=="0");

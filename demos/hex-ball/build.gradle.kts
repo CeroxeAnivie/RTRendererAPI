@@ -91,7 +91,8 @@ tasks.register<JavaExec>("rtxptHexBallBenchmark") {
     args(
         providers.gradleProperty("hexballWidth").orElse("1920").get(),
         providers.gradleProperty("hexballHeight").orElse("1080").get(),
-        providers.gradleProperty("hexballSeconds").orElse("8").get()
+        providers.gradleProperty("hexballSeconds").orElse("8").get(),
+        providers.gradleProperty("hexballReconstruction").orElse("sr").get()
     )
 }
 
