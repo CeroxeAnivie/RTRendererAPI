@@ -9,10 +9,15 @@ param(
     [switch]$DisableResidualPointSampling,
     [switch]$ExactMis,
     [switch]$DirectOnly,
-    [switch]$Relax
+    [switch]$Relax,
+    [switch]$RR,
+    [switch]$RestirGI,
+    [switch]$Sharc
 )
 $ErrorActionPreference='Stop'
 if($Relax -and ($Reuse -or $DirectOnly)){throw 'RELAX comparison uses the full path without ReSTIR DI or direct-only rendering.'}
+if($Relax -and $RR){throw 'Choose either NRD RELAX or DLSS Ray Reconstruction.'}
+if(([int]$Reuse+[int]$DirectOnly+[int]$RestirGI+[int]$Sharc) -gt 1){throw 'Choose one light-reuse path.'}
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
@@ -32,11 +37,11 @@ $settings=[ordered]@{
     Jvm=@('-Dfile.encoding=UTF-8','--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow',
         '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath)
     Entry=$(if($Suite -eq 'Generation'){'demo.RtxptHexBallGenerationSelfTest'}else{'top.ceroxe.rt.renderer.rtxpt.RtxptLightingNativeSelfTest'})
-    Arguments=@(if($Suite -eq 'Generation'){$output}else{$output;$Scene;[string]$Spp;$(if($Reuse){'reuse'}elseif($DirectOnly){'direct'}else{'raw'});$(if($Relax){'relax'}else{'none'})})
+    Arguments=@(if($Suite -eq 'Generation'){$output}else{$output;$Scene;[string]$Spp;$(if($Reuse){'reuse'}elseif($DirectOnly){'direct'}elseif($RestirGI){'restir-gi'}elseif($Sharc){'sharc'}else{'raw'});$(if($Relax){'relax'}elseif($RR){'rr'}else{'none'})})
     RuntimeSource='PackagedJar';JarSha256=(Get-FileHash -LiteralPath $jar).Hash
     ControlLighting=[bool]$ControlLighting;ControlDirectional=[bool]$ControlDirectional;Reuse=[bool]$Reuse
     DisableResidualPointSampling=[bool]$DisableResidualPointSampling;ExactMis=[bool]$ExactMis;DirectOnly=[bool]$DirectOnly
-    Relax=[bool]$Relax
+    Relax=[bool]$Relax;RayReconstruction=[bool]$RR;RestirGI=[bool]$RestirGI;Sharc=[bool]$Sharc
     Spp=$Spp;StartedAt=(Get-Date -Format o)
 }
 $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
