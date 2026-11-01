@@ -1,0 +1,29 @@
+{
+  "SourceCommit": "0a8b3ecc4cd1c8d5e62dcb09c8e11b01f7ecd685",
+  "Java": "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+  "Jvm": [
+    "-Dfile.encoding=UTF-8",
+    "-Dtop.ceroxe.rt.rtxpt.runtime=D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin",
+    "--enable-native-access=ALL-UNNAMED",
+    "--sun-misc-unsafe-memory-access=allow",
+    "-Xmx3g",
+    "-XX:-UseJVMCICompiler",
+    "-cp",
+    "demos/hex-ball/build/classes/java/test;demos/hex-ball/build/classes/java/main;demos/hex-ball/build/resources/main;renderer-api/build/classes/java/main;renderer-core/build/classes/java/main;renderer-core/build/resources/main;renderer-nvidia/build/libs/renderer-nvidia-7.0.0.jar;renderer-rtxpt/build/classes/java/main;renderer-rtxpt/build/resources/main;demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar"
+  ],
+  "Entry": "demo.RtxptHexBallQualitySelfTest",
+  "Arguments": [
+    "raw",
+    "metal",
+    "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\quality-small-point-candidate-v15"
+  ],
+  "StartedAt": "2026-11-01T20:54:02.0493555+08:00",
+  "NativeSha256": "387B4DC297269F6C61486CE8A3EE33E02E1DBB625CA4C2C6F806DB441C3BA723",
+  "Width": 2560,
+  "Height": 1440,
+  "Spp": 1,
+  "FrameGeneration": false,
+  "StageProfile": false,
+  "RuntimeSource": "BuildDirectory",
+  "SmallPointCandidate": true
+}
