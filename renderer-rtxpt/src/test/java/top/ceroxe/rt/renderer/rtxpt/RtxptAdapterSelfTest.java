@@ -21,12 +21,25 @@ public final class RtxptAdapterSelfTest {
         .environment(EnvironmentState.builder().skyRadiance(.4f,.6f,.9f).ambientIntensity(1).sunDirection(0,-1,0).sunIntensity(4).build()).build();}
     public static void main(String[] args) throws Exception {
         var s=new RtxptScene();s.retain(scene(1));var frame=frame(0);var items=s.items(frame);
+        var mesh=s.meshes.get(1L);var expanded=RtxptScene.ExportGeometry.from(mesh);
+        require(expanded.vertexCount()==36&&expanded.normals().remaining()==108,"Missing normals become flat triangle-corner normals");
+        for(int corner=0;corner<36;corner++) {
+            int original=mesh.triangleIndices().get(corner);
+            require(expanded.indices().get(corner)==corner,"Expanded triangle order is preserved");
+            for(int axis=0;axis<3;axis++)require(expanded.positions().get(corner*3+axis)==mesh.positions().get(original*3+axis),"Expanded positions are unchanged");
+            float nx=expanded.normals().get(corner*3),ny=expanded.normals().get(corner*3+1),nz=expanded.normals().get(corner*3+2);
+            require(Math.abs(nx*nx+ny*ny+nz*nz-1)<1e-6,"Every fallback normal is a unit vector");
+        }
+        require(expanded.normals().get(2)==1&&expanded.normals().get(20)==-1,"Flat normals follow outward triangle winding");
+        float[] authoredNormals=new float[mesh.vertexCount()*3];java.util.Arrays.fill(authoredNormals,1);
+        require(RtxptScene.ExportGeometry.from(mesh.toBuilder().normals(authoredNormals).build()).vertexCount()==mesh.vertexCount(),"Authored normals keep indexed geometry");
         Path dir=Files.createTempDirectory("rtxpt-adapter-test-");try {
             Path file=s.export(dir,frame,items);String json=Files.readString(file),gltf=Files.readString(dir.resolve("content.gltf"));
             require(json.contains("EnvironmentLight")&&json.contains("DirectionalLight"),"Native light graph");
             require(gltf.contains("KHR_materials_transmission")&&gltf.contains("KHR_materials_ior"),"Native transmission and IOR");
             require(gltf.contains("\"name\":\"i1\"")&&s.interiors.size()==1,"Interior assigned to imported material");
             require(Files.size(dir.resolve("content.bin"))>0,"Geometry is exported");
+            require(gltf.contains("\"NORMAL\""),"Donut always receives explicit normals");
             require(RtxptScene.sameStructure(items,items),"Static scene does not reload");
             var moved=List.of(new RtxptScene.Item(items.getFirst().name(),1,new AffineTransform(new float[]{1,0,0,2,0,1,0,0,0,0,1,0}),items.getFirst().boundary(),1));
             require(RtxptScene.sameStructure(items,moved),"Transform edits do not reload assets");

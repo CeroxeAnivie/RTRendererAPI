@@ -89,14 +89,17 @@ final class RtxptScene {
             tex.add(object("source",images.size()-1,"sampler",samplers.size()-1));
         }
         var bin=new ByteArrayOutputStream();var geometry=new HashMap<Long,Map<String,Integer>>();
+        var exportedIndices=new HashMap<Long,IntBuffer>();
         for(var mesh:meshes.values()) {
-            var attr=new LinkedHashMap<String,Integer>();attr.put("POSITION",accessor(bin,views,accessors,mesh.positions(),3,mesh.vertexCount(),true));
-            if(mesh.normals().hasRemaining())attr.put("NORMAL",accessor(bin,views,accessors,mesh.normals(),3,mesh.vertexCount(),false));
-            if(mesh.textureCoordinates().hasRemaining())attr.put("TEXCOORD_0",accessor(bin,views,accessors,mesh.textureCoordinates(),2,mesh.vertexCount(),false));
-            if(mesh.vertexColorsRgba8().hasRemaining()) {
-                var colors=mesh.vertexColorsRgba8();var fs=FloatBuffer.allocate(mesh.vertexCount()*4);
+            var data=ExportGeometry.from(mesh);exportedIndices.put(mesh.id(),data.indices());
+            var attr=new LinkedHashMap<String,Integer>();attr.put("POSITION",accessor(bin,views,accessors,data.positions(),3,data.vertexCount(),true));
+            attr.put("NORMAL",accessor(bin,views,accessors,data.normals(),3,data.vertexCount(),false));
+            if(data.tangents().hasRemaining())attr.put("TANGENT",accessor(bin,views,accessors,data.tangents(),4,data.vertexCount(),false));
+            if(data.uvs().hasRemaining())attr.put("TEXCOORD_0",accessor(bin,views,accessors,data.uvs(),2,data.vertexCount(),false));
+            if(data.colors().hasRemaining()) {
+                var colors=data.colors();var fs=FloatBuffer.allocate(data.vertexCount()*4);
                 while(colors.hasRemaining()){int c=colors.get();fs.put(((c>>>16)&255)/255f).put(((c>>>8)&255)/255f).put((c&255)/255f).put((c>>>24)/255f);}fs.flip();
-                attr.put("COLOR_0",accessor(bin,views,accessors,fs,4,mesh.vertexCount(),false));
+                attr.put("COLOR_0",accessor(bin,views,accessors,fs,4,data.vertexCount(),false));
             }
             geometry.put(mesh.id(),attr);
         }
@@ -105,7 +108,7 @@ final class RtxptScene {
             var mesh=meshes.get(item.mesh);String key=item.mesh+":"+item.boundary+":"+item.visibility;
             Integer meshIndex=variants.get(key);
             if(meshIndex==null) {
-                var groups=new LinkedHashMap<Long,List<Integer>>();var ids=mesh.triangleMaterialIds();var indices=mesh.triangleIndices();
+                var groups=new LinkedHashMap<Long,List<Integer>>();var ids=mesh.triangleMaterialIds();var indices=exportedIndices.get(item.mesh);
                 for(int t=0;t<mesh.triangleCount();t++) {var group=groups.computeIfAbsent(ids.get(t),ignored->new ArrayList<>());for(int j=0;j<3;j++)group.add(indices.get(t*3+j));}
                 var primitives=new ArrayList<Object>();
                 for(var group:groups.entrySet()) {
@@ -140,6 +143,42 @@ final class RtxptScene {
         graph.add(object("name","Sky","type","EnvironmentLight","path",dir.resolve("sky.hdr").toAbsolutePath().toString().replace('\\','/'),"intensity",1,"textureIndex",0,"rotation",0));
         graph.add(object("name","Camera","type","PerspectiveCameraEx","translation",List.of(frame.camera().x(),frame.camera().y(),frame.camera().z()),"verticalFov",2*Math.atan(frame.camera().tanHalfFovY()),"zNear",.001,"enableAutoExposure",false));
         Path scene=dir.resolve("managed.scene.json");Files.writeString(scene,RtxptJson.encode(object("models",List.of("content.gltf"),"graph",graph)));return scene;
+    }
+    /** glTF requires flat normals when NORMAL is absent. Donut does not generate them.
+     * Split triangle corners only at asset export; authored shading and all vertex attributes
+     * stay intact, and there is no additional work in the rendering loop. */
+    record ExportGeometry(FloatBuffer positions,FloatBuffer normals,FloatBuffer tangents,
+                          FloatBuffer uvs,IntBuffer colors,IntBuffer indices,int vertexCount) {
+        static ExportGeometry from(MeshAsset mesh) {
+            var positions=mesh.positions();var normals=mesh.normals();var tangents=mesh.tangents();
+            var uvs=mesh.textureCoordinates();var colors=mesh.vertexColorsRgba8();var indices=mesh.triangleIndices();
+            if(normals.hasRemaining())return new ExportGeometry(positions,normals,tangents,uvs,colors,indices,mesh.vertexCount());
+            int corners=indices.remaining();
+            var p=FloatBuffer.allocate(Math.multiplyExact(corners,3));
+            var n=FloatBuffer.allocate(Math.multiplyExact(corners,3));
+            var t=FloatBuffer.allocate(tangents.hasRemaining()?Math.multiplyExact(corners,4):0);
+            var uv=FloatBuffer.allocate(uvs.hasRemaining()?Math.multiplyExact(corners,2):0);
+            var c=IntBuffer.allocate(colors.hasRemaining()?corners:0);var remapped=IntBuffer.allocate(corners);
+            for(int first=0;first<corners;first+=3) {
+                int a=indices.get(first)*3,b=indices.get(first+1)*3,d=indices.get(first+2)*3;
+                double ux=(double)positions.get(b)-positions.get(a),uy=(double)positions.get(b+1)-positions.get(a+1),uz=(double)positions.get(b+2)-positions.get(a+2);
+                double vx=(double)positions.get(d)-positions.get(a),vy=(double)positions.get(d+1)-positions.get(a+1),vz=(double)positions.get(d+2)-positions.get(a+2);
+                double nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,length=Math.sqrt(nx*nx+ny*ny+nz*nz);
+                // A zero-area primitive cannot be hit; keep its exported attributes finite.
+                if(length==0){nx=0;ny=0;nz=1;length=1;}
+                for(int j=0;j<3;j++) {
+                    int vertex=indices.get(first+j);copyVertex(positions,p,vertex,3);
+                    n.put((float)(nx/length)).put((float)(ny/length)).put((float)(nz/length));
+                    if(t.capacity()!=0)copyVertex(tangents,t,vertex,4);
+                    if(uv.capacity()!=0)copyVertex(uvs,uv,vertex,2);
+                    if(c.capacity()!=0)c.put(colors.get(vertex));remapped.put(first+j);
+                }
+            }
+            return new ExportGeometry(p.flip(),n.flip(),t.flip(),uv.flip(),c.flip(),remapped.flip(),corners);
+        }
+        private static void copyVertex(FloatBuffer source,FloatBuffer target,int vertex,int components) {
+            for(int component=0;component<components;component++)target.put(source.get(vertex*components+component));
+        }
     }
     private static Map<String,Object> material(String name,MaterialAsset m,MediumBoundary b,float visibility,Map<Long,Integer> textures) {
         int c=m.baseColorRgba8();var pbr=object("baseColorFactor",List.of(((c>>>16)&255)/255f,((c>>>8)&255)/255f,(c&255)/255f,((c>>>24)&255)/255f*visibility),"roughnessFactor",m.roughness(),"metallicFactor",m.metallic());
