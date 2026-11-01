@@ -15,9 +15,13 @@ import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
  */
 public final class RtxptComposedRenderer implements Renderer {
     private final Thread owner=Thread.currentThread();
-    private final Renderer legacy;
+    private static final VulkanFramePresenter.PerformanceSnapshot NO_PRESENTS=
+        new VulkanFramePresenter.PerformanceSnapshot(0,0,0,0,0,0,0,0);
+    private final RendererConfig legacyConfiguration;
+    private final VulkanFramePresenterConfig windowConfiguration;
+    private Renderer legacy;
     private final RtxptRenderer rtxpt;
-    private final VulkanFramePresenter presenter;
+    private VulkanFramePresenter presenter;
     private final boolean nativePresentation;
     private RendererBackendPolicy policy;
     private RendererBackendPolicy.Selection selection;
@@ -71,25 +75,40 @@ public final class RtxptComposedRenderer implements Renderer {
         // bridge DLL; Windows reuses modules by basename within one process.
         RtxptRenderer rtxpt=new RtxptRenderer(rtxptConfiguration,!nativePresentation);
         if(nativePresentation)rtxpt.viewportTitle(window.title());
-        Renderer legacy=null;
-        VulkanFramePresenter presenter=null;
+        var renderer=new RtxptComposedRenderer(policy,rtxpt,nativePresentation,legacyConfiguration,window);
         try {
-            legacy=Renderer.open("vulkan-rt",legacyConfiguration);
-            var compositorWindow=nativePresentation?VulkanFramePresenterConfig.builder()
-                .title(window.title()+" [GPU compositor]").initialExtent(window.initialWidth(),window.initialHeight())
-                .visible(false).resizable(false).maximumFramesQueuedAhead(window.maximumFramesQueuedAhead()).build():window;
-            presenter=VulkanFramePresenter.open(legacy,compositorWindow);
-            return new RtxptComposedRenderer(policy,legacy,rtxpt,presenter,nativePresentation);
+            // Native-only frames and upstream HUD need no second device, allocator or window.
+            // An explicit Vulkan-final viewport must create its visible window immediately.
+            if(!nativePresentation)renderer.ensureLegacy();
+            return renderer;
         } catch(RuntimeException|Error failure) {
-            if(presenter!=null)try{presenter.close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
-            if(legacy!=null)try{legacy.close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
             try{rtxpt.close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
             throw failure;
         }
     }
-    private RtxptComposedRenderer(RendererBackendPolicy policy,Renderer legacy,RtxptRenderer rtxpt,VulkanFramePresenter presenter,boolean nativePresentation) {
-        this.policy=policy;this.legacy=legacy;this.rtxpt=rtxpt;this.presenter=presenter;
-        this.nativePresentation=nativePresentation;
+    private RtxptComposedRenderer(RendererBackendPolicy policy,RtxptRenderer rtxpt,boolean nativePresentation,
+            RendererConfig legacyConfiguration,VulkanFramePresenterConfig windowConfiguration) {
+        this.policy=policy;this.rtxpt=rtxpt;this.nativePresentation=nativePresentation;
+        this.legacyConfiguration=legacyConfiguration;this.windowConfiguration=windowConfiguration;
+    }
+    private void ensureLegacy(){
+        if(legacy!=null)return;
+        var opened=Renderer.open("vulkan-rt",legacyConfiguration);
+        try {
+            var window=nativePresentation?VulkanFramePresenterConfig.builder()
+                .title(windowConfiguration.title()+" [GPU compositor]")
+                .initialExtent(windowConfiguration.initialWidth(),windowConfiguration.initialHeight())
+                .visible(false).resizable(false).maximumFramesQueuedAhead(windowConfiguration.maximumFramesQueuedAhead()).build():windowConfiguration;
+            var openedPresenter=VulkanFramePresenter.open(opened,window);
+            // Publish only after both objects exist; a failed first use can be retried safely.
+            legacy=opened;presenter=openedPresenter;
+        } catch(RuntimeException|Error failure) {
+            try{opened.close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
+            throw failure;
+        }
+    }
+    private Renderer legacyRenderer(){
+        ready();ensureLegacy();return legacy;
     }
     private void ready(){if(Thread.currentThread()!=owner)throw new IllegalStateException("Use the composed viewport on its creating thread");if(closed)throw new IllegalStateException("Composed renderer closed");}
     /** Changes the next frame's exact selection policy without replacing the visible window. */
@@ -104,9 +123,9 @@ public final class RtxptComposedRenderer implements Renderer {
     /** Returns actual successful-frame backend selection, empty before the first frame. */
     public Optional<RendererBackendPolicy.Selection> selection(){return Optional.ofNullable(selection);}
     /** Borrowed legacy command lane for independent GPU computation, graphics and UI resources. */
-    public RendererCommandAccess legacyCommands(){ready();return legacy;}
+    public RendererCommandAccess legacyCommands(){return legacyRenderer();}
     /** Discovers a borrowed legacy extension; never close its owning renderer independently. */
-    public <T> Optional<T> legacyExtension(Class<T> type){ready();return legacy.extension(Objects.requireNonNull(type));}
+    public <T> Optional<T> legacyExtension(Class<T> type){Objects.requireNonNull(type);return legacyRenderer().extension(type);}
     /** Borrows the sole visible presenter for events, HUD and explicit diagnostic capture. */
     public VulkanFramePresenter presenter(){
         ready();if(nativePresentation)throw new IllegalStateException("RTXPT owns the visible window; use its RtxptAccess extension");return presenter;
@@ -115,6 +134,7 @@ public final class RtxptComposedRenderer implements Renderer {
     public void overlays(List<FrameCompositionPlan.Layer> layers){
         ready();var next=List.copyOf(Objects.requireNonNull(layers,"layers"));
         if(next.size()>7)throw new IllegalArgumentException("At most seven overlays after the RTXPT base layer");
+        if(!next.isEmpty())ensureLegacy();
         // A disabled returning compositor has no consumer left to reuse these allocations.
         // Drain before dropping the callback or freeing either API's shared resources.
         if(nativePresentation&&next.isEmpty()&&!overlays.isEmpty())retireExternalFrames();
@@ -128,7 +148,8 @@ public final class RtxptComposedRenderer implements Renderer {
         overlays=next;
     }
     /** Counts actual work per selected 3D backend, independently of final present timing. */
-    public WorkSnapshot workSnapshot(){return new WorkSnapshot(rtxpt.bridgeTimings().frames(),legacyFrames,presenter.performanceSnapshot());}
+    public WorkSnapshot workSnapshot(){return new WorkSnapshot(rtxpt.bridgeTimings().frames(),legacyFrames,
+        presenter==null?NO_PRESENTS:presenter.performanceSnapshot());}
     /** Actual upstream rendering configuration; available after the first RTXPT frame. */
     public RtxptAccess.RuntimeStatus rtxptStatus(){ready();return rtxpt.runtimeStatus();}
     /** Explicit diagnostic source capture before Vulkan layers; never part of normal delivery. */
@@ -192,7 +213,7 @@ public final class RtxptComposedRenderer implements Renderer {
         width=frame.width();height=frame.height();sequence=frame.sequence();selection=wanted;
         return new FrameSubmitted(result);
     }
-    private void retireExternalFrames(){presenter.retireD3D12SharedFrames();rtxpt.retireSharedFrames();}
+    private void retireExternalFrames(){if(presenter!=null){presenter.retireD3D12SharedFrames();rtxpt.retireSharedFrames();}}
     @Override public <T> Optional<T> extension(Class<T> type){
         ready();Objects.requireNonNull(type,"extensionType");
         if(type.isInstance(this))return Optional.of(type.cast(this));
@@ -208,24 +229,24 @@ public final class RtxptComposedRenderer implements Renderer {
     @Override public boolean readFrame(FrameConsumer consumer){ready();throw new UnsupportedOperationException("Composed viewport is GPU-native; use explicit presenter capture for diagnostics");}
     @Override public Optional<FrameSnapshot> pollFrame(){ready();throw new UnsupportedOperationException("Composed viewport is GPU-native");}
     @Override public Optional<FrameSnapshot> awaitFrame(Duration timeout){ready();Objects.requireNonNull(timeout);return pollFrame();}
-    @Override public ResourceTransactionEvidence submitResources(RenderResourceTransaction tx){ready();return legacy.submitResources(tx);}
-    @Override public Optional<ResourceResidencyEvidence> resourceResidencyEvidence(ResourceGenerationKey key){ready();return legacy.resourceResidencyEvidence(key);}
+    @Override public ResourceTransactionEvidence submitResources(RenderResourceTransaction tx){Objects.requireNonNull(tx);return legacyRenderer().submitResources(tx);}
+    @Override public Optional<ResourceResidencyEvidence> resourceResidencyEvidence(ResourceGenerationKey key){Objects.requireNonNull(key);return legacyRenderer().resourceResidencyEvidence(key);}
     @Override public RenderingSemanticCapabilities renderingSemanticCapabilities(){
         var builder=RenderingSemanticCapabilities.builder();
-        legacy.renderingSemanticCapabilities().entries().forEach(builder::feature);
+        legacyRenderer().renderingSemanticCapabilities().entries().forEach(builder::feature);
         return builder.feature(RenderingSemanticCapabilities.Feature.COMBINED_WORKLOADS,
             new RenderingSemanticCapabilities.Entry(RenderingSemanticCapabilities.Status.UNSUPPORTED,
                 "Use explicit legacy commands and overlays; a legacy combined workload cannot inject commands into RTXPT light transport")).build();
     }
-    @Override public CommandExecutionEvidence submitCommands(RenderCommandTransaction tx){ready();return legacy.submitCommands(tx);}
-    @Override public Optional<CommandExecutionEvidence> commandExecutionEvidence(long id){ready();return legacy.commandExecutionEvidence(id);}
+    @Override public CommandExecutionEvidence submitCommands(RenderCommandTransaction tx){Objects.requireNonNull(tx);return legacyRenderer().submitCommands(tx);}
+    @Override public Optional<CommandExecutionEvidence> commandExecutionEvidence(long id){return legacyRenderer().commandExecutionEvidence(id);}
     @Override public void close(){
         if(closed)return;ready();Throwable failure=null;
         // A failed consumer drain is retryable: do not free borrowed source handles on failure.
         retireExternalFrames();
-        try{presenter.close();}catch(RuntimeException|Error e){failure=e;}
+        if(presenter!=null)try{presenter.close();}catch(RuntimeException|Error e){failure=e;}
         try{rtxpt.close();}catch(RuntimeException|Error e){if(failure==null)failure=e;else failure.addSuppressed(e);}
-        try{legacy.close();}catch(RuntimeException|Error e){if(failure==null)failure=e;else failure.addSuppressed(e);}
+        if(legacy!=null)try{legacy.close();}catch(RuntimeException|Error e){if(failure==null)failure=e;else failure.addSuppressed(e);}
         closed=true;
         if(failure instanceof RuntimeException e)throw e;if(failure instanceof Error e)throw e;
     }

@@ -28,6 +28,8 @@ try (var renderer = RtxptComposedRenderer.openRtxptPresentation(legacy, rtxpt, "
 
 最终 FPS／FG 交付计数来自 RTXPT 的真实 DXGI／SDK；隐藏的 Vulkan compositor 不 acquire 或 present WSI，也不计作已显示帧。它的 `PerformanceSnapshot.presentSamples` 必须为零。关闭叠层会直接解除回调，不分配共享帧、不复制颜色、不运行合成 shader。
 
+原生最终呈现入口延迟创建旧 Vulkan 设备：只渲染 RTXPT 和上游 HUD 时，不创建旧设备、分配器或隐藏窗口。首次调用 `legacyCommands()`、`legacyExtension(...)`、旧资源／命令接口、旧语义能力查询或启用叠层时才创建，失败时清理本次半成品并保留 RTXPT 会话。已创建的旧资源继续按原合同存活到关闭；停用叠层仅回收交接和合成临时资源，不破坏应用持有的纹理。
+
 ## 3D 后端热切换的专家选项
 
 `openVulkanPresentation(policy, legacyConfig, rtxptConfig, window)` 保留另一条已验证的链：完整 RTXPT 或完整旧 Vulkan 3D → Vulkan 叠层／HUD → 同一 Vulkan 窗口。`backendPolicy(...)` 在共同支持的场景中切换完整 3D，保留场景、相机和叠层；旧侧 `trySubmit` 保留有界背压合同。介质场景不能切旧路线并丢掉光学语义。
