@@ -199,6 +199,13 @@ tasks.check {
 }
 
 // Deliberate GPU launch only: never a dependency of assemble or check.
+val rtxptDemoRuntimeClasspath = configurations.create("rtxptDemoRuntimeClasspath") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    extendsFrom(configurations.implementation.get())
+    attributes.attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+}
+
 tasks.register<JavaExec>("rtxptMediumDemo") {
     group = "application"
     dependsOn(tasks.classes)
@@ -210,7 +217,7 @@ tasks.register<JavaExec>("rtxptHexBallDemo") {
     group = "application"
     description = "Runs the unchanged hex-ball scene and physics in RTXPT's native window at 1 SPP."
     dependsOn(tasks.classes)
-    classpath = sourceSets.main.get().output + configurations.compileClasspath.get()
+    classpath = sourceSets.main.get().output + rtxptDemoRuntimeClasspath
     mainClass.set("demo.RtxptHexBallDemo")
     workingDir(rootProject.projectDir)
     jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
