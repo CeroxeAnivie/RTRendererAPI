@@ -156,6 +156,8 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     private void createWindow() {
         GLFW.glfwDefaultWindowHints();
         GLFW.glfwWindowHint(GLFW.GLFW_CLIENT_API, GLFW.GLFW_NO_API);
+        GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, configuration.visible() ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
+        GLFW.glfwWindowHint(GLFW.GLFW_FOCUSED, configuration.visible() ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
         boolean fullScreen = configuration.windowMode()
                 == VulkanFramePresenterConfig.WindowMode.PRIMARY_MONITOR_FULLSCREEN;
         GLFW.glfwWindowHint(
@@ -548,17 +550,9 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     @Override
     public PresentationResult presentD3D12SharedFrame(D3D12SharedFrame frame,List<FrameCompositionPlan.Layer> overlays) {
         requireOwnerAndOpen();
-        Objects.requireNonNull(frame,"frame");
         var layers=checkedCompositionLayers(overlays);
-        if(!timelineSemaphoreEnabled)throw new UnsupportedOperationException("D3D12 fence import requires Vulkan timeline semaphores");
         if(proxySwapchainActive())throw new UnsupportedOperationException("D3D12 shared-frame composition requires Vulkan frame generation disabled");
-        if(frame.frameSequence()<=lastD3D12Sequence)throw new IllegalArgumentException("External frame sequence must strictly advance");
-        var imported=d3d12Frames.get(frame.resourceId());
-        if(imported==null) {
-            imported=VulkanD3D12ImportedFrame.open(physicalDevice,device,frame);
-            d3d12Frames.put(frame.resourceId(),imported);
-        }
-        imported.requireNext(frame);
+        var imported=importD3D12Frame(frame);
         var state=windowState();
         if(state.drawable())ensureSwapchain(state.framebufferWidth(),state.framebufferHeight());
         FrameContext context=frameContexts[nextFrameContext];
@@ -619,23 +613,91 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         }
     }
 
+    @Override
+    public void composeD3D12SharedFrame(D3D12SharedFrame frame,List<FrameCompositionPlan.Layer> overlays) {
+        requireOwnerAndOpen();
+        var layers=checkedCompositionLayers(overlays);
+        var imported=importD3D12Frame(frame);
+        FrameContext context=frameContexts[nextFrameContext];
+        nextFrameContext=(nextFrameContext+1)%frameContexts.length;
+        awaitFrameContext(context);
+        boolean submitted=false;
+        try(MemoryStack stack=MemoryStack.stackPush()) {
+            if(!layers.isEmpty()) {
+                prepareComposition(context,layers,frame.width(),frame.height(),VK10.VK_FORMAT_R8G8B8A8_UNORM);
+                recordD3D12ComposeBack(context,imported.image(),frame.width(),frame.height());
+            }
+            submitD3D12Frame(stack,context,imported,frame,-1,!layers.isEmpty());
+            submitted=true;
+            if(context.d3d12Inputs!=null)context.d3d12Inputs.submitted();
+        } catch(RuntimeException|Error failure) {
+            if(!submitted) {
+                try(MemoryStack cleanup=MemoryStack.stackPush()) {
+                    submitD3D12Frame(cleanup,context,imported,frame,-1,false);
+                } catch(RuntimeException|Error releaseFailure) { failure.addSuppressed(releaseFailure); }
+            }
+            throw failure;
+        }
+    }
+
+    private VulkanD3D12ImportedFrame importD3D12Frame(D3D12SharedFrame frame) {
+        Objects.requireNonNull(frame,"frame");
+        if(!timelineSemaphoreEnabled)throw new UnsupportedOperationException("D3D12 fence import requires Vulkan timeline semaphores");
+        if(frame.frameSequence()<=lastD3D12Sequence)throw new IllegalArgumentException("External frame sequence must strictly advance");
+        var imported=d3d12Frames.get(frame.resourceId());
+        if(imported==null) {
+            imported=VulkanD3D12ImportedFrame.open(physicalDevice,device,frame);
+            d3d12Frames.put(frame.resourceId(),imported);
+        }
+        imported.requireNext(frame);
+        return imported;
+    }
+
+    private void recordD3D12ComposeBack(FrameContext context,long image,int width,int height) {
+        var commands=context.commandBuffer;
+        checkVk(VK10.vkResetCommandBuffer(commands,0),"vkResetCommandBuffer.composeBack");
+        try(MemoryStack stack=MemoryStack.stackPush()) {
+            checkVk(VK10.vkBeginCommandBuffer(commands,VkCommandBufferBeginInfo.calloc(stack).sType$Default()
+                .flags(VK10.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)),"vkBeginCommandBuffer.composeBack");
+            imageBarrier(stack,commands,image,VK10.VK_IMAGE_LAYOUT_GENERAL,VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                0,VK10.VK_ACCESS_TRANSFER_READ_BIT,VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK11.VK_QUEUE_FAMILY_EXTERNAL,queueFamilyIndex);
+            long output=d3d12Composition.record(commands,stack,context.slot,image,width,height,context.d3d12Inputs);
+            imageBarrier(stack,commands,image,VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK10.VK_ACCESS_TRANSFER_READ_BIT,VK10.VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK10.VK_QUEUE_FAMILY_IGNORED,VK10.VK_QUEUE_FAMILY_IGNORED);
+            var copy=VkImageCopy.calloc(1,stack);
+            copy.srcSubresource().aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT).layerCount(1);
+            copy.dstSubresource().aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT).layerCount(1);
+            copy.extent().set(width,height,1);
+            VK10.vkCmdCopyImage(commands,output,VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,image,
+                VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,copy);
+            imageBarrier(stack,commands,image,VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK10.VK_IMAGE_LAYOUT_GENERAL,
+                VK10.VK_ACCESS_TRANSFER_WRITE_BIT,0,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                queueFamilyIndex,VK11.VK_QUEUE_FAMILY_EXTERNAL);
+            checkVk(VK10.vkEndCommandBuffer(commands),"vkEndCommandBuffer.composeBack");
+        }
+    }
+
     private void submitD3D12Frame(MemoryStack stack,FrameContext context,VulkanD3D12ImportedFrame imported,
-            D3D12SharedFrame frame,int imageIndex,boolean copy) {
+            D3D12SharedFrame frame,int imageIndex,boolean commands) {
         boolean acquired=imageIndex>=0;
+        boolean presents=commands&&acquired;
         LongBuffer waits=acquired?stack.longs(imported.semaphore(),context.acquireSemaphore):stack.longs(imported.semaphore());
-        LongBuffer signals=copy?stack.longs(imported.semaphore(),presentSemaphore(context,imageIndex)):stack.longs(imported.semaphore());
+        LongBuffer signals=presents?stack.longs(imported.semaphore(),presentSemaphore(context,imageIndex)):stack.longs(imported.semaphore());
         var values=VkTimelineSemaphoreSubmitInfo.calloc(stack).sType$Default()
             .pWaitSemaphoreValues(acquired?stack.longs(frame.readyValue(),0L):stack.longs(frame.readyValue()))
-            .pSignalSemaphoreValues(copy?stack.longs(frame.completionValue(),0L):stack.longs(frame.completionValue()));
+            .pSignalSemaphoreValues(presents?stack.longs(frame.completionValue(),0L):stack.longs(frame.completionValue()));
         var submit=VkSubmitInfo.calloc(1,stack).sType$Default().pNext(values.address()).waitSemaphoreCount(waits.remaining())
             .pWaitSemaphores(waits).pWaitDstStageMask(acquired
                 ?stack.ints(VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)
                 :stack.ints(VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)).pSignalSemaphores(signals);
-        if(copy)submit.pCommandBuffers(stack.pointers(context.commandBuffer.address()));
+        if(commands)submit.pCommandBuffers(stack.pointers(context.commandBuffer.address()));
         checkVk(VK10.vkResetFences(device,context.fence),"vkResetFences.d3d12Consumer");
         checkVk(VulkanQueueHostSync.submit(queue,submit,context.fence),"vkQueueSubmit.d3d12Consumer");
         context.fencePending=true;context.d3d12Frame=imported;
-        if(copy&&context.captureReadback!=null)context.captureReadback.submitted();
+        if(presents&&context.captureReadback!=null)context.captureReadback.submitted();
         imported.submitted(frame.readyValue());
         lastD3D12Sequence=frame.frameSequence();
     }

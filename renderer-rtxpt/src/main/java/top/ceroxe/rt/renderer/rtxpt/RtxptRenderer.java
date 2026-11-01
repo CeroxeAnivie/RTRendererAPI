@@ -21,6 +21,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     private List<RtxptScene.Item> previous=List.of();
     private CameraState camera;
     private EnvironmentState environment;
+    private RtxptNative.Compositor compositor;
+    private String title;
     RtxptRenderer(RendererConfig config){this(config,false);}
     RtxptRenderer(RendererConfig config,boolean externalPresentation){
         this.externalPresentation=externalPresentation;
@@ -34,7 +36,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
             public RendererFeatureProfile normalize(RendererFeatureProfile profile){return RtxptOptions.normalize(profile);}
         },RtxptOptions.normalize(RtxptOptions.profile(config)));
         RtxptNative.load();
-        if(externalPresentation)RtxptNative.prepare(RtxptNative.runtime().toString());
+        RtxptNative.prepare(RtxptNative.runtime().toString());
     }
     private void validatePresentationProfile(RendererFeatureProfile profile) {
         if(externalPresentation&&profile.frameGeneration().preference().requested())
@@ -55,6 +57,14 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     }
     void retireSharedFrames(){ready();if(handle!=0)RtxptNative.retireSharedFrames(handle);}
     void resetHistory(){ready();if(handle!=0)RtxptNative.resetHistory(handle);}
+    void compositor(RtxptNative.Compositor callback){
+        ready();if(externalPresentation)throw new IllegalStateException("Only native RTXPT presentation accepts a returning UI compositor");
+        if(handle!=0)RtxptNative.compositor(handle,callback);compositor=callback;
+    }
+    void viewportTitle(String value){
+        ready();Objects.requireNonNull(value,"title");if(value.isBlank())throw new IllegalArgumentException("Window title must not be blank");
+        if(handle!=0)RtxptNative.title(handle,value);title=value;
+    }
     @Override public <T> Optional<T> extension(Class<T> type){
         Objects.requireNonNull(type);
         if(type.isInstance(features))return Optional.of(type.cast(features));
@@ -139,6 +149,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         if(handle==0){
             if(path==null)throw new IllegalStateException("Submit a populated scene");
             handle=RtxptNative.create(RtxptNative.runtime().toString(),path.toString(),f.width(),f.height(),externalPresentation,options.arguments());
+            if(compositor!=null)RtxptNative.compositor(handle,compositor);
+            if(title!=null)RtxptNative.title(handle,title);
             applyNativeSettings();
             if(nativeScene==null)scene.uploadInteriors(handle);
         }else if(rebuild){RtxptNative.loadScene(handle,path.toString());applyNativeSettings();scene.uploadInteriors(handle);}
@@ -323,7 +335,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         return new RuntimeStatus(s[0],s[1],Reconstruction.values()[s[2]],s[3]!=0,s[4]!=0,s[5]!=0,s[6]!=0,s[7]!=0,s[8]!=0,s[9]!=0,s[10]!=0,
             s[11],s[12],s[13],s[14]!=0,s[15]!=0,s[16]!=0,s[17]!=0,s[18]!=0,s[19]!=0);}
     @Override public long windowHandle(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptNative.window(handle);}
+    @Override public void setWindowTitle(String title){viewportTitle(title);}
     @Override public void capture(Path png){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.capture(handle,Objects.requireNonNull(png).toAbsolutePath().toString());}
+    void captureSource(Path png){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.captureSource(handle,Objects.requireNonNull(png).toAbsolutePath().toString());}
     void snapshotMaterials(Path directory){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.snapshotMaterials(handle,directory.toAbsolutePath().toString());}
     @Override public BridgeTimings bridgeTimings(){return new BridgeTimings(frames,frameNs,exports,exportNs,batches,transformNs);}
     @Override public FrameSubmissionAttempt trySubmit(RenderFrameRequest f){return new FrameSubmitted(submit(f));}

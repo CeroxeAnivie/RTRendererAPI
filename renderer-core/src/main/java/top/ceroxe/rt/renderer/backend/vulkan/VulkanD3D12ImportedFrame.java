@@ -9,6 +9,7 @@ import top.ceroxe.rt.renderer.rt.device.VulkanFailures;
 
 /** Dedicated Win32 D3D12 resource and timeline-fence import; never owns the supplied NT handles. */
 final class VulkanD3D12ImportedFrame implements AutoCloseable {
+    private static final int TRANSFER_USAGE=VK10.VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK10.VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     private final VkDevice device;
     private final D3D12SharedFrame allocation;
     private long image,memory,semaphore;
@@ -32,7 +33,7 @@ final class VulkanD3D12ImportedFrame implements AutoCloseable {
             var imageInfo=VkImageCreateInfo.calloc(stack).sType$Default().pNext(external.address())
                 .imageType(VK10.VK_IMAGE_TYPE_2D).format(VK10.VK_FORMAT_R8G8B8A8_UNORM)
                 .mipLevels(1).arrayLayers(1).samples(VK10.VK_SAMPLE_COUNT_1_BIT)
-                .tiling(VK10.VK_IMAGE_TILING_OPTIMAL).usage(VK10.VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
+                .tiling(VK10.VK_IMAGE_TILING_OPTIMAL).usage(TRANSFER_USAGE)
                 .sharingMode(VK10.VK_SHARING_MODE_EXCLUSIVE).initialLayout(VK10.VK_IMAGE_LAYOUT_UNDEFINED);
             imageInfo.extent().set(frame.width(),frame.height(),1);
             LongBuffer handle=stack.longs(0);
@@ -91,7 +92,7 @@ final class VulkanD3D12ImportedFrame implements AutoCloseable {
             .handleType(VK11.VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT);
         var query=VkPhysicalDeviceImageFormatInfo2.calloc(stack).sType$Default().pNext(external.address())
             .format(VK10.VK_FORMAT_R8G8B8A8_UNORM).type(VK10.VK_IMAGE_TYPE_2D)
-            .tiling(VK10.VK_IMAGE_TILING_OPTIMAL).usage(VK10.VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+            .tiling(VK10.VK_IMAGE_TILING_OPTIMAL).usage(TRANSFER_USAGE);
         var support=VkExternalImageFormatProperties.calloc(stack).sType$Default();
         int result=VK11.vkGetPhysicalDeviceImageFormatProperties2(physical,query,
             VkImageFormatProperties2.calloc(stack).sType$Default().pNext(support.address()));

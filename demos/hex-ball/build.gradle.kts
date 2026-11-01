@@ -110,17 +110,17 @@ tasks.jar {
     archiveClassifier.set("thin")
 }
 
-val shadowJar = tasks.register<Jar>("shadowJar") {
+fun Jar.configureDemoArchive(artifactName: String, entry: String) {
     group = "build"
-    description = "Builds the self-contained executable hex-ball demo from the released runtime."
+    description = "Builds the self-contained executable $artifactName demo from the released runtime."
     dependsOn(tasks.classes, configurations.runtimeClasspath)
-    archiveBaseName.set("RTRendererAPI-HexBallDemo")
+    archiveBaseName.set(artifactName)
     archiveClassifier.set("")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     isZip64 = true
     manifest {
         attributes(
-            "Main-Class" to "demo.DemoLauncher",
+            "Main-Class" to entry,
             "Enable-Native-Access" to "ALL-UNNAMED",
             "Implementation-Version" to project.version.toString()
         )
@@ -132,6 +132,13 @@ val shadowJar = tasks.register<Jar>("shadowJar") {
         }
     })
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+}
+
+val shadowJar = tasks.register<Jar>("shadowJar") {
+    configureDemoArchive("RTRendererAPI-HexBallDemo", "demo.DemoLauncher")
+}
+val mediumShadowJar = tasks.register<Jar>("mediumShadowJar") {
+    configureDemoArchive("RTRendererAPI-MediumDemo", "demo.MediumDemoLauncher")
 }
 
 val physicsSelfTest = tasks.register<JavaExec>("physicsSelfTest") {

@@ -103,4 +103,15 @@ public:
             int64_t(reinterpret_cast<uintptr_t>(memory)),int64_t(reinterpret_cast<uintptr_t>(slot.fenceHandle)),
             int64_t(slot.completion-1),int64_t(slot.completion)};
     }
+    void copyBack(nvrhi::IDevice* device,nvrhi::ITexture* backBuffer) {
+        if(latest<0)throw std::runtime_error("No composed display frame");
+        auto& slot=slots[latest];
+        ID3D12CommandQueue* queue=device->getNativeQueue(nvrhi::ObjectTypes::D3D12_CommandQueue,nvrhi::CommandQueue::Graphics);
+        check(queue->Wait(slot.fence.Get(),slot.completion),"Wait for Vulkan UI composition");
+        commands->open();
+        commands->copyTexture(backBuffer,nvrhi::TextureSlice(),slot.texture,nvrhi::TextureSlice());
+        commands->setTextureState(backBuffer,nvrhi::AllSubresources,nvrhi::ResourceStates::Present);
+        commands->commitBarriers();commands->close();device->executeCommandList(commands);
+    }
+    nvrhi::ITexture* latestTexture() const {return latest<0?nullptr:slots[latest].texture.Get();}
 };

@@ -148,6 +148,24 @@ public interface VulkanFramePresenter extends AutoCloseable {
     }
 
     /**
+     * GPU-composes the same external scene and Vulkan layers, then writes the result back to the
+     * borrowed shared image for final presentation by its D3D12 owner. Does not acquire or present
+     * a Vulkan swapchain, draw its text HUD, read pixels on CPU or count a final presented frame.
+     * The producer must GPU-wait completion before consuming the modified image. Its SDR format,
+     * per-slot fence and borrowed-handle lifetime match {@link #presentD3D12SharedFrame}.
+     *
+     * <p>Up to seven exact completed RGBA8_UNORM overlay mutations use the existing composition
+     * operations. Empty layers only hand the slot back through the fence, with no image/shader
+     * work. Call {@link #retireD3D12SharedFrames()} before destroying production resources.</p>
+     * @param frame borrowed complete-scene image to modify and release in GENERAL/EXTERNAL
+     * @param overlays completed Vulkan texture mutations in composition order
+     */
+    default void composeD3D12SharedFrame(D3D12SharedFrame frame,
+            java.util.List<top.ceroxe.rt.renderer.api.FrameCompositionPlan.Layer> overlays) {
+        throw new UnsupportedOperationException("This presenter cannot compose back into D3D12 shared frames");
+    }
+
+    /**
      * Requests one diagnostic PNG of the next visible final frame, including composition and HUD.
      * Readback is performed only for this explicit request, before handing that image to WSI;
      * the visible-frame present waits for its capture to complete before returning. The request

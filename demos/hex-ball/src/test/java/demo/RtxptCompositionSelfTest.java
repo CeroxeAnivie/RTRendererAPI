@@ -21,8 +21,9 @@ public final class RtxptCompositionSelfTest {
         Path output=Path.of(args[0]).toAbsolutePath();Files.createDirectories(output);
         String mode=args.length>1?args[1]:"acceptance";
         if(mode.equals("native")){nativeBenchmark(output);return;}
+        if(mode.equals("rtxpt-final")||mode.startsWith("return-")){nativeFinal(output,mode);return;}
         var config=configuration();
-        try(var renderer=RtxptComposedRenderer.open(RendererBackendPolicy.RTXPT_ONLY,
+        try(var renderer=RtxptComposedRenderer.openVulkanPresentation(RendererBackendPolicy.RTXPT_ONLY,
                 RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),config,
                 VulkanFramePresenterConfig.builder().title("RTRendererAPI - RTXPT + Vulkan composition")
                     .initialExtent(WIDTH,HEIGHT).presentMode(VulkanFramePresenterConfig.PresentMode.UNCAPPED).build())) {
@@ -160,6 +161,57 @@ public final class RtxptCompositionSelfTest {
             String row=String.format(Locale.ROOT,"native,%d,%.6f,%.6f,0%n",completed,elapsed/completed,completed*1000/elapsed);
             Files.writeString(output.resolve("native.csv"),"mode,completed_frames,ms,fps,copy_gpu_ms\n"+row);System.out.print(row);
             System.out.println(host.runtimeStatus()+" "+host.presentationStatus());
+        }
+    }
+    private static void nativeFinal(Path output,String mode) throws Exception {
+        boolean acceptance=mode.equals("rtxpt-final");
+        var config=acceptance?DemoRendererProfile.rtxptMediumInteractive(false):configuration();
+        try(var renderer=RtxptComposedRenderer.openRtxptPresentation(
+                RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),config,"RTRendererAPI - Medium Demo")) {
+            renderer.apply(RtxptMediumScene.create(1,"mixed"));
+            if(!mode.equals("return-no-overlay"))renderer.overlays(List.of(createOverlay(renderer)));
+            renderer.submit(RtxptMediumDemo.frameRequest(sequence++,1,WIDTH,HEIGHT));
+            var host=renderer.extension(RtxptAccess.class).orElseThrow();
+            for(int i=0;i<90;i++)require(host.renderFrame(),"Native final viewport stays open");
+            if(!acceptance) {
+                host.awaitIdle();long before=host.bridgeTimings().frames(),start=System.nanoTime();int frames=360;
+                for(int i=0;i<frames;i++)require(host.renderFrame(),"Native final benchmark frame");
+                host.awaitIdle();double elapsed=(System.nanoTime()-start)/1e6;long completed=host.bridgeTimings().frames()-before;
+                String row=String.format(Locale.ROOT,"%s,%d,%.6f,%.6f,0%n",mode,completed,elapsed/completed,completed*1000/elapsed);
+                Files.writeString(output.resolve(mode+".csv"),"mode,completed_frames,ms,fps,copy_gpu_ms\n"+row);System.out.print(row);return;
+            }
+            var controller=renderer.extension(RendererFeatureController.class).orElseThrow();
+            var csv=new StringBuilder("multiplier,native_frames,presented_frames,ratio,native_ms,output_fps,query_failures\n");
+            for(var multiplier:FrameGenerationOptions.Multiplier.values()) {
+                var fg=FrameGenerationOptions.builder().preference(RendererFeaturePreference.REQUIRED)
+                    .mode(multiplier==FrameGenerationOptions.Multiplier.TWO_X?FrameGenerationOptions.Mode.FRAME_GENERATION:FrameGenerationOptions.Mode.MULTI_FRAME_GENERATION)
+                    .multiplier(multiplier).build();
+                require(controller.apply(controller.plan(controller.effectiveProfile().toBuilder().frameGeneration(fg).build()))
+                    .outcome()==RendererFeatureApplyResult.Outcome.APPLIED,"Upstream advanced profile applied");
+                for(int i=0;i<24;i++)require(host.renderFrame(),"FG warmup");
+                host.awaitIdle();var before=renderer.diagnostics().frameGenerationEvidence();long start=System.nanoTime();
+                for(int i=0;i<180;i++)require(host.renderFrame(),"Native final FG/MFG frame");
+                host.awaitIdle();double elapsed=(System.nanoTime()-start)/1e6;var after=renderer.diagnostics().frameGenerationEvidence();
+                long nativeFrames=after.proxyPresentCalls()-before.proxyPresentCalls();
+                long delivered=after.totalFramesActuallyPresented()-before.totalFramesActuallyPresented();
+                double ratio=(double)delivered/nativeFrames;var status=host.runtimeStatus();
+                require(status.reconstruction()==RtxptAccess.Reconstruction.DLSS_RR&&status.sharc()&&status.shaderExecutionReordering()
+                    &&status.lowLatency()&&status.frameGeneration(),"RR + SHaRC + SER + Reflex + FG active: "+status);
+                require(nativeFrames==180&&Math.abs(ratio-multiplier.presentedFramesPerNativeFrame())<.1,
+                    "Actual final-window FG ratio: native="+nativeFrames+", delivered="+delivered+", ratio="+ratio+", status="+status);
+                require(after.stateQueryFailures()==before.stateQueryFailures()&&after.latestNativeStatus().orElse(-1)==0,"SDK success");
+                csv.append(String.format(Locale.ROOT,"%s,%d,%d,%.6f,%.6f,%.6f,%d%n",multiplier,nativeFrames,delivered,ratio,
+                    elapsed/nativeFrames,delivered*1000/elapsed,after.stateQueryFailures()-before.stateQueryFailures()));
+                Files.writeString(output.resolve("advanced.csv"),csv);System.out.println("NATIVE_FINAL_ADVANCED PASS "+multiplier+" "+status);
+            }
+            host.setOverlayText("");require(host.renderFrame(),"Capture frame");
+            host.capture(output.resolve("native-ui-final.png"));renderer.captureRtxptSource(output.resolve("native-ui-source.png"));
+            compare(output.resolve("native-ui-source.png"),output.resolve("native-ui-final.png"),true);
+            require(renderer.workSnapshot().presentation().presentSamples()==0,"Hidden Vulkan compositor never presented a frame");
+            require(renderer.workSnapshot().legacyFrames()==0,"Vulkan did not duplicate complete 3D tracing");
+            host.setOverlayText("RTRendererAPI 7.0.0 - MEDIUM DEMO\nRTXPT: RR / FG / MFG / REFLEX | VULKAN: GPU UI");
+            require(host.renderFrame(),"Final HUD frame");host.capture(output.resolve("native-final-hud.png"));
+            System.out.println("RTXPT_NATIVE_FINAL_COMPOSITION PASS");
         }
     }
     private static void expectFailure(Runnable action,String reason){

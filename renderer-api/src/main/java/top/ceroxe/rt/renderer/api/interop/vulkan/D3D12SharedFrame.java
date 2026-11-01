@@ -8,7 +8,8 @@ package top.ceroxe.rt.renderer.api.interop.vulkan;
  *
  * <p>Each texture slot owns an independent shared ID3D12Fence. D3D12 releases the texture in
  * COMMON and signals odd {@code readyValue}; Vulkan waits, acquires GENERAL/EXTERNAL, consumes
- * it, releases GENERAL/EXTERNAL and signals the next even {@code completionValue}. The producer
+ * it (optionally writes a composed result back), releases GENERAL/EXTERNAL and signals the next
+ * even {@code completionValue}. The producer
  * must enqueue a queue wait for completion before writing or destroying that slot. CPU waiting
  * is not part of normal frame delivery.</p>
  *

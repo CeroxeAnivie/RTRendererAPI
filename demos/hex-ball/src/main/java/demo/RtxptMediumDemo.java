@@ -13,6 +13,7 @@ import top.ceroxe.rt.renderer.api.RendererBackendPolicy;
 import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.rtxpt.RtxptAccess;
+import top.ceroxe.rt.renderer.rtxpt.RtxptComposedRenderer;
 
 /** Resident GPU presentation; the upstream UI draws the HUD without CPU image copies. */
 public final class RtxptMediumDemo {
@@ -49,9 +50,12 @@ public final class RtxptMediumDemo {
         });
         var config = DemoRendererProfile.rtxptMediumInteractive(Boolean.parseBoolean(values.getOrDefault("native", "false")));
         var stats = new RenderStats();
-        try (var renderer = Renderer.openForScene(RendererBackendPolicy.RTXPT_ONLY,
-                RtxptMediumScene.create(1,scene),frameRequest(0,1,width,height),RendererConfig.presentation(),config)) {
+        try (var renderer = RtxptComposedRenderer.openRtxptPresentation(
+                RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),config,"RTRendererAPI 7.0.0 - Medium Demo")) {
+            renderer.apply(RtxptMediumScene.create(1,scene));
+            renderer.submit(frameRequest(0,1,width,height));
             var host = renderer.extension(RtxptAccess.class).orElseThrow();
+            host.setWindowTitle("RTRendererAPI 7.0.0 - Medium Demo");
             long revision = 1, sequence = 1;
             recordPresented(host,stats,0);
             var keys = new DemoWindowKeys(host.windowHandle());

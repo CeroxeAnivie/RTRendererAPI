@@ -9,7 +9,7 @@ import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter;
 import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
 
 /**
- * One visible Vulkan viewport with either complete RTXPT 3D or complete Vulkan 3D.
+ * Native RTXPT presentation with Vulkan UI, or explicit Vulkan presentation with 3D switching.
  * RTXPT's SDR output crosses shared GPU memory; legacy commands and UI remain Vulkan work.
  * This is stage composition, not split light transport or a union of arbitrary shader semantics.
  */
@@ -18,6 +18,7 @@ public final class RtxptComposedRenderer implements Renderer {
     private final Renderer legacy;
     private final RtxptRenderer rtxpt;
     private final VulkanFramePresenter presenter;
+    private final boolean nativePresentation;
     private RendererBackendPolicy policy;
     private RendererBackendPolicy.Selection selection;
     private RendererSceneRouting routing;
@@ -26,11 +27,23 @@ public final class RtxptComposedRenderer implements Renderer {
     private long sceneRevision,legacyRevision=-1,sequence=-1,rtxptFrames,legacyFrames;
     private int width,height;
 
-    /** Opens one window; default automatic 3D selection, upstream RR and native completed frames. */
-    public static RtxptComposedRenderer open(VulkanFramePresenterConfig window) {
-        return open(RendererBackendPolicy.RTXPT_FOR_MEDIA,
+    /** Opens RTXPT 3D and native presentation, with Vulkan reserved for independent work and UI. */
+    public static RtxptComposedRenderer open() {
+        return openRtxptPresentation(
             RendererConfig.builder().cpuFrameReadbackEnabled(false).gpuTimingsEnabled(true).build(),
-            RendererConfig.pathTracedPresentation().copyBuilder().lowLatency(LowLatencyOptions.disabled()).build(),window);
+            RendererConfig.pathTracedPresentation(),"RTRendererAPI - RTXPT + Vulkan UI");
+    }
+
+    /**
+     * RTXPT owns final DXGI delivery and all requested SR/RR, FG/MFG and Reflex features.
+     * Vulkan layers return through GPU memory before the upstream Present; its depth, motion
+     * vectors and HUD-less source remain upstream-owned. Vulkan never initializes Streamline.
+     */
+    public static RtxptComposedRenderer openRtxptPresentation(RendererConfig legacyConfiguration,
+            RendererConfig rtxptConfiguration,String title) {
+        // Native window extent comes from RenderFrameRequest; its delivery policy is upstream.
+        var hidden=VulkanFramePresenterConfig.builder().title(title).initialExtent(1,1).visible(false).resizable(false).build();
+        return open(true,RendererBackendPolicy.RTXPT_ONLY,legacyConfiguration,rtxptConfiguration,hidden);
     }
 
     /**
@@ -38,12 +51,16 @@ public final class RtxptComposedRenderer implements Renderer {
      * second global SDK beside RTXPT; select its SR/RR on the RTXPT configuration instead. DXGI
      * FG/MFG does not produce frames for this Vulkan swapchain and is rejected, never counted.
      */
-    public static RtxptComposedRenderer open(RendererBackendPolicy policy,RendererConfig legacyConfiguration,
+    public static RtxptComposedRenderer openVulkanPresentation(RendererBackendPolicy policy,RendererConfig legacyConfiguration,
+            RendererConfig rtxptConfiguration,VulkanFramePresenterConfig window) {
+        return open(false,policy,legacyConfiguration,rtxptConfiguration,window);
+    }
+    private static RtxptComposedRenderer open(boolean nativePresentation,RendererBackendPolicy policy,RendererConfig legacyConfiguration,
             RendererConfig rtxptConfiguration,VulkanFramePresenterConfig window) {
         Objects.requireNonNull(policy,"policy");Objects.requireNonNull(legacyConfiguration,"legacyConfiguration");
         Objects.requireNonNull(rtxptConfiguration,"rtxptConfiguration");Objects.requireNonNull(window,"window");
         RtxptInputContract.validateConfiguration(rtxptConfiguration);
-        if(rtxptConfiguration.frameGeneration().preference().requested()||rtxptConfiguration.lowLatency().preference().requested())
+        if(!nativePresentation&&(rtxptConfiguration.frameGeneration().preference().requested()||rtxptConfiguration.lowLatency().preference().requested()))
             throw new IllegalArgumentException("Composed Vulkan presentation requires RTXPT DXGI FG/MFG and Reflex disabled");
         if(legacyConfiguration.cpuFrameReadbackEnabled())throw new IllegalArgumentException("Composition requires GPU-native Vulkan output");
         if(legacyConfiguration.frameReconstruction().preference().requested()
@@ -52,13 +69,17 @@ public final class RtxptComposedRenderer implements Renderer {
             throw new IllegalArgumentException("Only RTXPT owns Streamline in composed mode; legacy SR/NIS/FG/Reflex must be disabled");
         // RTXPT must load its pinned Streamline modules before the optional legacy provider's
         // bridge DLL; Windows reuses modules by basename within one process.
-        RtxptRenderer rtxpt=new RtxptRenderer(rtxptConfiguration,true);
+        RtxptRenderer rtxpt=new RtxptRenderer(rtxptConfiguration,!nativePresentation);
+        if(nativePresentation)rtxpt.viewportTitle(window.title());
         Renderer legacy=null;
         VulkanFramePresenter presenter=null;
         try {
             legacy=Renderer.open("vulkan-rt",legacyConfiguration);
-            presenter=VulkanFramePresenter.open(legacy,window);
-            return new RtxptComposedRenderer(policy,legacy,rtxpt,presenter);
+            var compositorWindow=nativePresentation?VulkanFramePresenterConfig.builder()
+                .title(window.title()+" [GPU compositor]").initialExtent(window.initialWidth(),window.initialHeight())
+                .visible(false).resizable(false).maximumFramesQueuedAhead(window.maximumFramesQueuedAhead()).build():window;
+            presenter=VulkanFramePresenter.open(legacy,compositorWindow);
+            return new RtxptComposedRenderer(policy,legacy,rtxpt,presenter,nativePresentation);
         } catch(RuntimeException|Error failure) {
             if(presenter!=null)try{presenter.close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
             if(legacy!=null)try{legacy.close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
@@ -66,12 +87,18 @@ public final class RtxptComposedRenderer implements Renderer {
             throw failure;
         }
     }
-    private RtxptComposedRenderer(RendererBackendPolicy policy,Renderer legacy,RtxptRenderer rtxpt,VulkanFramePresenter presenter) {
+    private RtxptComposedRenderer(RendererBackendPolicy policy,Renderer legacy,RtxptRenderer rtxpt,VulkanFramePresenter presenter,boolean nativePresentation) {
         this.policy=policy;this.legacy=legacy;this.rtxpt=rtxpt;this.presenter=presenter;
+        this.nativePresentation=nativePresentation;
     }
     private void ready(){if(Thread.currentThread()!=owner)throw new IllegalStateException("Use the composed viewport on its creating thread");if(closed)throw new IllegalStateException("Composed renderer closed");}
     /** Changes the next frame's exact selection policy without replacing the visible window. */
-    public void backendPolicy(RendererBackendPolicy value){ready();policy=Objects.requireNonNull(value,"policy");}
+    public void backendPolicy(RendererBackendPolicy value){
+        ready();Objects.requireNonNull(value,"policy");
+        if(nativePresentation&&value!=RendererBackendPolicy.RTXPT_ONLY)
+            throw new IllegalArgumentException("RTXPT final presentation owns its 3D guides; use the explicit Vulkan-presentation viewport for switching complete 3D backends");
+        policy=value;
+    }
     /** Returns the requested policy; actual selection is available after the next successful submit. */
     public RendererBackendPolicy backendPolicy(){return policy;}
     /** Returns actual successful-frame backend selection, empty before the first frame. */
@@ -81,11 +108,20 @@ public final class RtxptComposedRenderer implements Renderer {
     /** Discovers a borrowed legacy extension; never close its owning renderer independently. */
     public <T> Optional<T> legacyExtension(Class<T> type){ready();return legacy.extension(Objects.requireNonNull(type));}
     /** Borrows the sole visible presenter for events, HUD and explicit diagnostic capture. */
-    public VulkanFramePresenter presenter(){ready();return presenter;}
+    public VulkanFramePresenter presenter(){
+        ready();if(nativePresentation)throw new IllegalStateException("RTXPT owns the visible window; use its RtxptAccess extension");return presenter;
+    }
     /** Existing legacy GPU layers composed after complete RTXPT 3D; at most seven overlays. */
     public void overlays(List<FrameCompositionPlan.Layer> layers){
         ready();var next=List.copyOf(Objects.requireNonNull(layers,"layers"));
         if(next.size()>7)throw new IllegalArgumentException("At most seven overlays after the RTXPT base layer");
+        if(nativePresentation)rtxpt.compositor(next.isEmpty()?null:values->{
+            try{presenter.composeD3D12SharedFrame(new top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame(
+                values[0],values[1],values[2],(int)values[3],(int)values[4],values[5],values[6],values[7],values[8],values[9]),overlays);}
+            catch(RuntimeException|Error failure){
+                try{retireExternalFrames();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}throw failure;
+            }
+        });
         overlays=next;
     }
     /** Counts actual work per selected 3D backend, independently of final present timing. */
@@ -93,7 +129,7 @@ public final class RtxptComposedRenderer implements Renderer {
     /** Actual upstream rendering configuration; available after the first RTXPT frame. */
     public RtxptAccess.RuntimeStatus rtxptStatus(){ready();return rtxpt.runtimeStatus();}
     /** Explicit diagnostic source capture before Vulkan layers; never part of normal delivery. */
-    public void captureRtxptSource(java.nio.file.Path png){ready();rtxpt.capture(Objects.requireNonNull(png,"png"));}
+    public void captureRtxptSource(java.nio.file.Path png){ready();rtxpt.captureSource(Objects.requireNonNull(png,"png"));}
     /** Work counts do not include startup and do not infer frame generation. */
     public record WorkSnapshot(long rtxptFrames,long legacyFrames,VulkanFramePresenter.PerformanceSnapshot presentation) { }
 
@@ -130,11 +166,9 @@ public final class RtxptComposedRenderer implements Renderer {
         FrameSubmissionResult result;
         if(wanted.backend()==RendererBackendPolicy.Backend.RTXPT) {
             if(switched)rtxpt.resetHistory();
-            result=rtxpt.submit(frame);
-            rtxptFrames++;
             try {
-                var shared=rtxpt.sharedFrame(frame.sequence());
-                presenter.presentD3D12SharedFrame(shared,overlays);
+                result=rtxpt.submit(frame);rtxptFrames++;
+                if(!nativePresentation)presenter.presentD3D12SharedFrame(rtxpt.sharedFrame(frame.sequence()),overlays);
             } catch(RuntimeException|Error failure) {
                 try{retireExternalFrames();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
                 throw failure;
@@ -159,10 +193,10 @@ public final class RtxptComposedRenderer implements Renderer {
     @Override public <T> Optional<T> extension(Class<T> type){
         ready();Objects.requireNonNull(type,"extensionType");
         if(type.isInstance(this))return Optional.of(type.cast(this));
-        if(type==VulkanFramePresenter.class)return Optional.of(type.cast(presenter));
+        if(type==VulkanFramePresenter.class)return nativePresentation?Optional.empty():Optional.of(type.cast(presenter));
         // Exposing the hidden host's renderFrame/window controls could publish unconsumed slots
         // or present a second window. The composed owner alone advances the native producer.
-        if(type==RtxptAccess.class)return Optional.empty();
+        if(type==RtxptAccess.class)return nativePresentation?Optional.of(type.cast(rtxpt)):Optional.empty();
         return selection!=null&&selection.backend()==RendererBackendPolicy.Backend.VULKAN?legacy.extension(type):rtxpt.extension(type);
     }
     @Override public Status status(){return closed?Status.CLOSED:selection!=null&&selection.backend()==RendererBackendPolicy.Backend.VULKAN?legacy.status():rtxpt.status();}

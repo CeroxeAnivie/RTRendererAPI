@@ -8,6 +8,7 @@ import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RendererBackendPolicy;
 import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.rtxpt.RtxptAccess;
+import top.ceroxe.rt.renderer.rtxpt.RtxptComposedRenderer;
 
 /** Packaged demo HUD, supported scene transitions and real SDK FG delivery. */
 public final class RtxptMediumDemoSelfTest {
@@ -17,10 +18,12 @@ public final class RtxptMediumDemoSelfTest {
         Path output=Path.of(args[0]).toAbsolutePath();
         Files.createDirectories(output);
         var csv=new StringBuilder("scene,input_width,input_height,output_width,output_height,native_frames,presented_frames,generated_frames,native_ms,native_fps,output_fps,query_failures\n");
-        try(var renderer=Renderer.openForScene(RendererBackendPolicy.RTXPT_FOR_MEDIA,
-                RtxptMediumScene.create(1,"mixed"),RtxptMediumDemo.frameRequest(0,1,1920,1080),
-                RendererConfig.presentation(),DemoRendererProfile.rtxptMediumInteractive(false))) {
-            require(renderer.selection().backend()==RendererBackendPolicy.Backend.RTXPT&&renderer.selection().mediaPresent(),"Actual media routing selects RTXPT");
+        try(var renderer=RtxptComposedRenderer.openRtxptPresentation(
+                RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),DemoRendererProfile.rtxptMediumInteractive(false),"RTRendererAPI - Medium Demo")) {
+            renderer.apply(RtxptMediumScene.create(1,"mixed"));
+            renderer.submit(RtxptMediumDemo.frameRequest(0,1,1920,1080));
+            var selection=renderer.selection().orElseThrow();
+            require(selection.backend()==RendererBackendPolicy.Backend.RTXPT&&selection.mediaPresent(),"Actual media routing selects RTXPT");
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
             long revision=1,sequence=1;
             for(String scene:RtxptMediumScene.PRESETS) {
@@ -53,7 +56,8 @@ public final class RtxptMediumDemoSelfTest {
                 long presented=after.totalFramesActuallyPresented()-before.totalFramesActuallyPresented();
                 long failures=after.stateQueryFailures()-before.stateQueryFailures();
                 require(nativeFrames==360,"360 actual native presents");
-                require(actual.frameGeneration()&&Math.abs((double)presented/nativeFrames-2)<.05,"Actual 2x FG delivery");
+                require(actual.frameGeneration()&&Math.abs((double)presented/nativeFrames-2)<.05,
+                    "Actual 2x FG delivery: native="+nativeFrames+", delivered="+presented+", status="+actual+", evidence="+after);
                 require(actual.reconstruction()==RtxptAccess.Reconstruction.DLSS_RR&&actual.sharc(),"Recommended RR + SHaRC active");
                 require(failures==0&&after.latestQuerySucceeded()&&after.latestNativeStatus().orElse(-1)==0,"SDK success");
                 String hud=RtxptMediumDemo.overlay(renderer,host,stats,scene);

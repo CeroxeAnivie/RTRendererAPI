@@ -2492,16 +2492,18 @@ public final class RendererApiContractSelfTest {
               "managed presenter safe default is no longer FIFO-oriented");
       require(defaults.windowMode() == VulkanFramePresenterConfig.WindowMode.WINDOWED,
               "presenter default window mode changed");
+      require(defaults.visible(), "interactive presenter must remain visible by default");
       require(defaults.maximumFramesQueuedAhead() == 2,
               "managed presenter default producer lead changed");
       VulkanFramePresenterConfig uncapped = VulkanFramePresenterConfig.builder()
               .title("contract")
               .initialExtent(2560, 1600)
               .resizable(false)
+              .visible(false)
               .presentMode(VulkanFramePresenterConfig.PresentMode.UNCAPPED)
               .maximumFramesQueuedAhead(3)
               .build();
-      require(uncapped.title().equals("contract") && !uncapped.resizable()
+      require(uncapped.title().equals("contract") && !uncapped.resizable() && !uncapped.visible()
                       && uncapped.maximumFramesQueuedAhead() == 3,
               "managed presenter builder lost an independent policy");
       expect(IllegalArgumentException.class,
@@ -2510,6 +2512,9 @@ public final class RendererApiContractSelfTest {
               () -> VulkanFramePresenterConfig.builder().maximumFramesQueuedAhead(17));
       expect(IllegalArgumentException.class,
               () -> VulkanFramePresenterConfig.builder().initialExtent(0, 720));
+      expect(IllegalArgumentException.class,
+              () -> VulkanFramePresenterConfig.builder().visible(false)
+                      .windowMode(VulkanFramePresenterConfig.WindowMode.PRIMARY_MONITOR_FULLSCREEN).build());
       expect(IllegalArgumentException.class,
               () -> new VulkanFramePresenter.WindowState(false, 0, 720));
       expect(IllegalArgumentException.class,

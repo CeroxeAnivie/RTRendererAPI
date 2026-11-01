@@ -22,6 +22,6 @@
 
 左上角 HUD 下方提供可点击的 `Scene` 下拉切换器，与数字键共用同一组真实场景。它由上游 ImGui 直接在 GPU 画面内绘制，不启动额外控制窗口。按键仅在本窗口获得焦点时处理，控制台也支持上述场景名与 `quit`。窗口持续运行，除非主动关闭或传入 `--seconds=N`。编译／加载只写日志，不弹独立进度窗。
 
-可执行 JAR：`java -jar demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar --media`。`--capture=文件.png` 在画面稳定后显式捕获一次含 HUD 的最终画面；`--native=true` 改为原生内部分辨率并关闭重建。`-Ddemo.disable-fg=true` 显式关闭 FG，`-Ddemo.fg-multiplier=3`／`4` 请求 MFG，普通／专家 API 控制仍可覆盖对应选项。独立 `rtxptMediumBenchmark` 保持 FG 关闭，不能和 Demo 总输出 FPS 混为一谈。
+可执行 JAR：`java -jar demos/hex-ball/build/libs/RTRendererAPI-MediumDemo-7.0.0.jar`。`--capture=文件.png` 在画面稳定后显式捕获一次含 HUD 的最终画面；`--native=true` 改为原生内部分辨率并关闭重建。`-Ddemo.disable-fg=true` 显式关闭 FG，`-Ddemo.fg-multiplier=3`／`4` 请求 MFG，普通／专家 API 控制仍可覆盖对应选项。独立 `rtxptMediumBenchmark` 保持 FG 关闭，不能和 Demo 总输出 FPS 混为一谈。
 
 六个场景都只展示真实支持的光学能力。展品后侧的面光灯具有深色灯框、支架和底座，发光面是真实表面发光几何，不使用悬空白条或体积自发光。旧密度、体积单／多次散射、HG、体积自发光、初始相机介质及无限介质没有菜单或占位场景；未知场景直接拒绝。见 [版本合同](7.0.0.md)。

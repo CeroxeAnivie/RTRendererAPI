@@ -27,9 +27,15 @@ public final class DemoLauncher {
     }
 
     public static void main(String[] arguments) throws Exception {
+        launch(arguments,HexBallDemo::main);
+    }
+
+    @FunctionalInterface interface Entry { void run(String[] arguments) throws Exception; }
+
+    static void launch(String[] arguments,Entry entry) throws Exception {
         Path codeSource = codeSourcePath();
         if (Boolean.getBoolean(CHILD_PROPERTY) || Files.isDirectory(codeSource)) {
-            HexBallDemo.main(arguments);
+            entry.run(arguments);
             return;
         }
 

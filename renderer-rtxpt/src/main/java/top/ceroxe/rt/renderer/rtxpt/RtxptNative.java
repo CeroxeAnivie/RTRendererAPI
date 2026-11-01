@@ -26,6 +26,9 @@ final class RtxptNative {
     }
     static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,String[] options);
     static native void prepare(String runtime);
+    @FunctionalInterface interface Compositor { void compose(long[] frame); }
+    static native void compositor(long handle,Compositor callback);
+    static native void title(long handle,String text);
     static native long[] sharedFrame(long handle,long sequence);
     static native void retireSharedFrames(long handle);
     static native void resetHistory(long handle);
@@ -46,6 +49,7 @@ final class RtxptNative {
             int frameGenerationMode,int generatedFrames,int samplesPerPixel,int realtimeAa,
             int dlssMode,boolean standaloneDenoiser,boolean relaxDenoiser,boolean restirDi,boolean restirGi,boolean sharc);
     static native void capture(long handle,String path);
+    static native void captureSource(long handle,String path);
     static native void snapshotMaterials(long handle,String directory);
     static native void interiors(long handle,String[] names,FloatBuffer values);
     static native void transforms(long handle,String[] names,FloatBuffer rowMajorMatrices);

@@ -14,6 +14,7 @@ public final class VulkanFramePresenterConfig {
     private final int initialWidth;
     private final int initialHeight;
     private final boolean resizable;
+    private final boolean visible;
     private final WindowMode windowMode;
     private final PresentMode presentMode;
     private final int maximumFramesQueuedAhead;
@@ -23,7 +24,10 @@ public final class VulkanFramePresenterConfig {
         initialWidth = requireDimension(builder.initialWidth, "initialWidth");
         initialHeight = requireDimension(builder.initialHeight, "initialHeight");
         resizable = builder.resizable;
+        visible = builder.visible;
         windowMode = Objects.requireNonNull(builder.windowMode, "windowMode");
+        if (!visible && windowMode != WindowMode.WINDOWED)
+            throw new IllegalArgumentException("Hidden Vulkan composition requires a windowed surface");
         presentMode = Objects.requireNonNull(builder.presentMode, "presentMode");
         maximumFramesQueuedAhead = requireQueuedFrames(builder.maximumFramesQueuedAhead);
     }
@@ -80,6 +84,13 @@ public final class VulkanFramePresenterConfig {
     }
 
     /**
+     * Reports whether the native window is visible from creation. Hidden windowed surfaces can
+     * provide GPU composition without briefly showing or focusing an internal presenter window.
+     * @return initial visibility; true by default
+     */
+    public boolean visible() { return visible; }
+
+    /**
      * Returns whether the presenter creates a normal window or a native monitor window.
      *
      * @return native window attachment policy
@@ -133,6 +144,7 @@ public final class VulkanFramePresenterConfig {
         private int initialWidth = 1280;
         private int initialHeight = 720;
         private boolean resizable = true;
+        private boolean visible = true;
         private WindowMode windowMode = WindowMode.WINDOWED;
         private PresentMode presentMode = PresentMode.VSYNC;
         private int maximumFramesQueuedAhead = 2;
@@ -174,6 +186,18 @@ public final class VulkanFramePresenterConfig {
          */
         public Builder resizable(boolean value) {
             resizable = value;
+            return this;
+        }
+
+        /**
+         * Selects native visibility from window creation, without a show-then-hide transition.
+         * Hidden surfaces require {@link WindowMode#WINDOWED}; direct GPU composition does not
+         * acquire or present their swapchain.
+         * @param value whether to create a visible native window
+         * @return this builder
+         */
+        public Builder visible(boolean value) {
+            visible = value;
             return this;
         }
 

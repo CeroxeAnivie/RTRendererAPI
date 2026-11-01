@@ -52,6 +52,8 @@ public final class D3D12SharedFrameContractSelfTest {
         require(presenter.latestCalls==1,"Unsupported overlays never render an incomplete scene");
         try { presenter.presentD3D12SharedFrame(frame,layers);throw new AssertionError("External overlays were silently dropped"); }
         catch(UnsupportedOperationException expected) { }
+        try { presenter.composeD3D12SharedFrame(frame,layers);throw new AssertionError("Compose-back was silently accepted"); }
+        catch(UnsupportedOperationException expected) { }
     }
 
     private static D3D12SharedFrame frame(long id, long sequence, int width, int height,

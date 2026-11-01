@@ -115,6 +115,10 @@ struct Session {
     SharedFrameProducer sharedFrames;
     bool externalPresentation=false;
     uint64_t rendered=0;
+    JNIEnv* compositorEnv=nullptr;
+    jobject compositor=nullptr;
+    jlongArray compositorFrame=nullptr;
+    jmethodID composeMethod=nullptr;
     struct GpuSample { nvrhi::TimerQueryHandle query; bool pending=false; };
     std::array<GpuSample,8> gpuSamples;
     nvrhi::CommandListHandle timerCommands;
@@ -159,6 +163,9 @@ struct Session {
             dm->m_callbacks={};
             lastPresentedTexture=nullptr;timerCommands=nullptr;
             sharedFrames.clear();
+            if(compositor)compositorEnv->DeleteGlobalRef(compositor);
+            if(compositorFrame)compositorEnv->DeleteGlobalRef(compositorFrame);
+            compositor=nullptr;compositorFrame=nullptr;composeMethod=nullptr;compositorEnv=nullptr;
             for(auto& sample:gpuSamples)sample.query=nullptr;
             app->End();
         }
@@ -288,6 +295,17 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
             ptr->endGpuSample();ptr->lastPresentedTexture=dm.GetCurrentBackBuffer();
             if(ptr->externalPresentation)ptr->sharedFrames.publish(dm.GetDevice(),
                 static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->HostDisplayColor());
+            else if(ptr->compositor) {
+                // Keep RTXPT's upstream depth/MV/PreUIColor tags and its DXGI FG/Reflex path.
+                // Only the final UI image crosses APIs, after all render passes and before Present.
+                ptr->sharedFrames.publish(dm.GetDevice(),dm.GetCurrentBackBuffer());
+                const auto values=ptr->sharedFrames.descriptor(ptr->rendered);
+                auto* env=ptr->compositorEnv;
+                env->SetLongArrayRegion(ptr->compositorFrame,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));
+                if(!env->ExceptionCheck())env->CallVoidMethod(ptr->compositor,ptr->composeMethod,ptr->compositorFrame);
+                if(env->ExceptionCheck())throw std::runtime_error("Vulkan UI composition callback failed");
+                ptr->sharedFrames.copyBack(dm.GetDevice(),dm.GetCurrentBackBuffer());
+            }
             ++ptr->rendered;
         };
         indexNodes(*s);
@@ -299,6 +317,30 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_overlay(
     JNIEnv* e,jclass,jlong h,jstring text) {
     try { session(h);g_sampleUIData.HostOverlayText=utf8(e,text); }
+    catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_compositor(
+    JNIEnv* e,jclass,jlong h,jobject callback) {
+    try {
+        auto& s=session(h);
+        if(s.externalPresentation)throw std::runtime_error("A native-present compositor requires RTXPT presentation");
+        jobject next=nullptr;jlongArray frame=nullptr;jmethodID method=nullptr;
+        if(callback) {
+            auto type=e->GetObjectClass(callback);method=e->GetMethodID(type,"compose","([J)V");e->DeleteLocalRef(type);
+            if(!method)return;
+            next=e->NewGlobalRef(callback);
+            auto local=e->NewLongArray(10);
+            if(local){frame=static_cast<jlongArray>(e->NewGlobalRef(local));e->DeleteLocalRef(local);}
+            if(!next||!frame){if(next)e->DeleteGlobalRef(next);if(frame)e->DeleteGlobalRef(frame);return;}
+        }
+        if(s.compositor)e->DeleteGlobalRef(s.compositor);
+        if(s.compositorFrame)e->DeleteGlobalRef(s.compositorFrame);
+        s.compositorEnv=e;s.compositor=next;s.compositorFrame=frame;s.composeMethod=method;
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_title(
+    JNIEnv* e,jclass,jlong h,jstring title) {
+    try{auto text=utf8(e,title);session(h).app->HostDeviceManager()->SetWindowTitle(text.c_str());}
     catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_sharedFrame(
@@ -450,13 +492,22 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         auto& s=session(h);
         const auto output=utf8(e,path);
         bool saved=false;
-        if(!g_sampleUIData.HostOverlayText.empty() && s.lastPresentedTexture)
+        if(s.compositor&&s.sharedFrames.latestTexture())
+            saved=donut::engine::SaveTextureToFile(s.app->HostDeviceManager()->GetDevice(),
+                s.app->HostRenderPass()->GetCommonPasses().get(),s.sharedFrames.latestTexture(),nvrhi::ResourceStates::Common,output.c_str());
+        else if(!g_sampleUIData.HostOverlayText.empty() && s.lastPresentedTexture)
             saved=donut::engine::SaveTextureToFile(s.app->HostDeviceManager()->GetDevice(),
                 s.app->HostRenderPass()->GetCommonPasses().get(),s.lastPresentedTexture,nvrhi::ResourceStates::Present,output.c_str());
         else saved=static_cast<HostPathTracer*>(s.app->HostRenderPass())->Capture(output.c_str());
         if(!saved)
             throw std::runtime_error("RTXPT capture failed");
     } catch(const std::exception& x) { fail(e,x); }
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_captureSource(
+    JNIEnv* e,jclass,jlong h,jstring path) {
+    try{auto& s=session(h);auto output=utf8(e,path);
+        if(!static_cast<HostPathTracer*>(s.app->HostRenderPass())->Capture(output.c_str()))throw std::runtime_error("RTXPT source capture failed");}
+    catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_settings(
     JNIEnv* e, jclass, jlong h, jint depth, jint diffuse, jboolean reflex,

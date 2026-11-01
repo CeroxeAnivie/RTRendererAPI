@@ -7,6 +7,8 @@ public interface RtxptAccess {
     void loadNativeScene(Path scene);
     /** Native HWND; only valid after the first submission and until close. */
     long windowHandle();
+    /** Sets the native viewport title; requires the first submission. */
+    void setWindowTitle(String title);
     /** GPU render/present of the resident scene; false means the user closed the window. */
     boolean renderFrame();
     /** Explicit GPU drain for completed-frame measurement, outside the normal frame loop. */

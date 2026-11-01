@@ -11093,6 +11093,9 @@ public interface top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter 
   public default top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter$PresentationResult presentD3D12SharedFrame(top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame, java.util.List<top.ceroxe.rt.renderer.api.FrameCompositionPlan$Layer>);
     descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/D3D12SharedFrame;Ljava/util/List;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenter$PresentationResult;
 
+  public default void composeD3D12SharedFrame(top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame, java.util.List<top.ceroxe.rt.renderer.api.FrameCompositionPlan$Layer>);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/D3D12SharedFrame;Ljava/util/List;)V
+
   public default void captureNextPresentedFrame(java.nio.file.Path);
     descriptor: (Ljava/nio/file/Path;)V
 
@@ -11258,6 +11261,9 @@ public final class top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresente
   public boolean resizable();
     descriptor: ()Z
 
+  public boolean visible();
+    descriptor: ()Z
+
   public top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$WindowMode windowMode();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$WindowMode;
 
@@ -11277,6 +11283,9 @@ public final class top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresente
     descriptor: (II)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$Builder;
 
   public top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$Builder resizable(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$Builder visible(boolean);
     descriptor: (Z)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFramePresenterConfig$Builder;
 
   public top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$Builder windowMode(top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig$WindowMode);
