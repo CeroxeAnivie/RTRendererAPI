@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
             if(!visible)throw std::runtime_error("Empty film output");
             out<<"],\"frames\":"<<frames<<",\"fps\":"<<frames*1000./total<<",\"meanMs\":"<<total/frames<<",\"metric\":\"Wait for newly committed native full-frame tile plus upstream RGBA image pipeline and CPU output copy; no presentation\"}\n";
             out.close();
-            film.SaveOutput(std::string(argv[4])+".png",luxcore::Film::OUTPUT_RGBA_IMAGEPIPELINE,luxrays::Properties());
+            film.SaveOutput(std::string(argv[4])+".png",luxcore::Film::OUTPUT_RGBA_IMAGEPIPELINE,nullptr);
             session->UpdateStats();std::ofstream stats(std::string(argv[4])+".stats.txt");stats<<session->GetStats()->ToString();
             std::cout<<"LUXCORE COMPLETE RESULT frames="<<frames<<" fps="<<frames*1000./total<<" meanMs="<<total/frames<<std::endl;
             session->Stop();return 0;
