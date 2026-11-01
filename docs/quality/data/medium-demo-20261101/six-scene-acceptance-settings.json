@@ -1,0 +1,20 @@
+{
+  "SourceCommit": "9d165cc45961482cc8f04d0df77fc73513b510c3",
+  "Java": "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+  "Jvm": [
+    "-Dfile.encoding=UTF-8",
+    "--enable-native-access=ALL-UNNAMED",
+    "--sun-misc-unsafe-memory-access=allow",
+    "-Xmx3g",
+    "-XX:-UseJVMCICompiler",
+    "-cp",
+    "demos/hex-ball/build/classes/java/test;D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\libs\\RTRendererAPI-HexBallDemo-7.0.0.jar"
+  ],
+  "Entry": "demo.RtxptMediumDemoSelfTest",
+  "Arguments": [
+    "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\medium-demo-20261101\\six-scenes"
+  ],
+  "RuntimeSource": "PackagedJar",
+  "JarSha256": "CC76AEDAC6F4A31E37AB947B2FAE458F96D81220D5E9A25AEBF574CE04C8275A",
+  "StartedAt": "2026-11-01T22:22:03.0530055+08:00"
+}

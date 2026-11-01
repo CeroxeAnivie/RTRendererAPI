@@ -35,7 +35,7 @@ final class RtxptMediumScene {
                 .mediumBoundary(MediumBoundary.surface(new Medium(new Rgb(.07f,.55f,.8f),1.5f)).withPriority(2)).build());
             tx.upsert(SceneInstance.builder(3,3).transform(transform(1.3f,.65f,.3f,1.2f,1.3f,1.2f)).build());
         }
-        tx.upsert(SceneInstance.builder(4,4).transform(transform(0,2.6f,-1,1.8f,.12f,1)).build());
+        addStudioLight(tx);
         if(preset.equals("nested") || preset.equals("mixed"))tx.upsert(SceneInstance.builder(5,2).transform(transform(-1.2f,1,0,.55f,.75f,.55f))
             .mediumBoundary(MediumBoundary.surface(new Medium(new Rgb(.7f,.08f,.04f),1.33f)).withPriority(6)).build());
         if(preset.equals("mixed")) {
@@ -58,6 +58,25 @@ final class RtxptMediumScene {
                 .mediumBoundary(MediumBoundary.surface(new Medium(new Rgb(.12f,.65f,.35f),ior)).withPriority(2)).build());
         }
         return tx.build();
+    }
+    private static void addStudioLight(SceneTransaction.Builder tx) {
+        // A recognizable framed area light, rather than an unsupported floating white strip.
+        tx.upsert(MaterialAsset.builder(6).baseColorRgba8(0xff202833).metallic(.65f).roughness(.3f).build());
+        tx.upsert(cube(50,6));
+        tx.upsert(SceneInstance.builder(4,4).transform(transform(2.8f,2.25f,-1.8f,1.2f,1.1f,.06f)).build());
+        float[][] parts={
+            {2.8f,2.25f,-1.88f,1.4f,1.3f,.10f},
+            {2.15f,2.25f,-1.8f,.10f,1.3f,.16f},
+            {3.45f,2.25f,-1.8f,.10f,1.3f,.16f},
+            {2.8f,2.85f,-1.8f,1.4f,.10f,.16f},
+            {2.8f,1.65f,-1.8f,1.4f,.10f,.16f},
+            {2.8f,.8f,-1.88f,.08f,1.7f,.08f},
+            {2.8f,0,-1.88f,.8f,.10f,.65f}
+        };
+        for(int i=0;i<parts.length;i++) {
+            float[] p=parts[i];
+            tx.upsert(SceneInstance.builder(50+i,50).transform(transform(p[0],p[1],p[2],p[3],p[4],p[5])).build());
+        }
     }
     static CameraState camera(int w,int h){return CameraState.lookAt(4,2.7,6,0,.8,0).verticalFieldOfViewDegrees(52).aspectRatio(w/(float)h).build();}
     static EnvironmentState environment(){return EnvironmentState.builder().skyRadiance(.3f,.4f,.6f).ambientIntensity(.5f).sunDirection(.57735026f,-.57735026f,-.57735026f).sunIntensity(3).build();}

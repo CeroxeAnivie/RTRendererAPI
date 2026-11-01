@@ -23,7 +23,7 @@ public final class RtxptMediumDemoSelfTest {
             require(renderer.selection().backend()==RendererBackendPolicy.Backend.RTXPT&&renderer.selection().mediaPresent(),"Actual media routing selects RTXPT");
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
             long revision=1,sequence=1;
-            for(String scene:new String[]{"mixed","glass","nested","absorption","rough","ior","mixed"}) {
+            for(String scene:RtxptMediumScene.PRESETS) {
                 var stats=new RenderStats();
                 if(sequence>1) {
                     renderer.apply(RtxptMediumScene.create(++revision,scene));
@@ -60,6 +60,7 @@ public final class RtxptMediumDemoSelfTest {
                 require(hud.contains("RTRendererAPI 7.0.0")&&hud.contains("DLSS FG: ACTIVE")
                     &&hud.contains("SCENE "+scene.toUpperCase(Locale.ROOT))&&hud.contains("[1] Mixed"),"Full active HUD");
                 host.setOverlayText(hud);
+                host.setOverlayChoices(RtxptMediumScene.LABELS,RtxptMediumScene.PRESETS.indexOf(scene));
                 frame(host,stats);
                 String name=revision+"-"+scene;
                 host.capture(output.resolve(name+".png"));
@@ -79,7 +80,7 @@ public final class RtxptMediumDemoSelfTest {
                 Files.writeString(output.resolve("acceptance.csv"),csv);
                 System.out.println("MEDIUM_SCENE PASS "+name+" "+actual);
             }
-            require(host.bridgeTimings().sceneExports()==7,"Exactly one scene export per switch");
+            require(host.bridgeTimings().sceneExports()==6,"Exactly one scene export per switch");
             host.setOverlayChoices(java.util.List.of(),-1);
             require(host.overlaySelection()==-1,"Selector can be hidden");
             require(renderer.health().activeFailure().isEmpty(),"Healthy lifecycle");
