@@ -47,6 +47,16 @@ public final class RtxptAdapterSelfTest {
             require(RtxptScene.sameStructure(items,moved),"Transform edits do not reload assets");
             var profile=RtxptOptions.profile(RendererConfig.pathTracedPresentation());
             require(RtxptOptions.resolve(profile).reconstruction()==RtxptAccess.Reconstruction.DLSS_RR,"Ordinary API selects native ray reconstruction");
+            var rrUltraQuality=profile.toBuilder().frameReconstruction(profile.frameReconstruction().toBuilder()
+                .quality(FrameReconstructionOptions.Quality.ULTRA_QUALITY).build()).build();
+            rejected(()->RtxptOptions.resolve(rrUltraQuality),
+                "RTXPT RR Ultra Quality is rejected before native pipeline creation");
+            var srUltraQuality=RtxptOptions.resolve(profile.toBuilder().denoising(DenoisingOptions.disabled())
+                .frameReconstruction(profile.frameReconstruction().toBuilder()
+                    .quality(FrameReconstructionOptions.Quality.ULTRA_QUALITY).build()).build());
+            require(srUltraQuality.reconstruction()==RtxptAccess.Reconstruction.DLSS
+                &&srUltraQuality.dlssQuality()==RtxptOptions.DlssQuality.ULTRA_QUALITY,
+                "Ultra Quality remains available for the independent DLSS SR path");
             for(boolean standalone:new boolean[]{false,true}) {
                 var reconstruction=standalone?RtxptAccess.Reconstruction.DLSS:RtxptAccess.Reconstruction.DLSS_RR;
                 var actual=new RtxptAccess.RuntimeStatus(1280,720,reconstruction,standalone,true,false,false,true,

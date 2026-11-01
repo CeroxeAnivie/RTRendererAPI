@@ -42,3 +42,20 @@ Quality 档增加输入像素数，带来约 124 FPS 的原生 1080p 吞吐。�
 ## 验收边界
 
 RR Quality + 1 SPP 通过实际运行时档位检查、静止与移动帧捕获、弹球生命周期检查。它是当前 Demo 的有效缓解，不宣称已经消除任意面积光、环境光和间接反弹场景的采样噪声；那些仍需按统一配置单独验收。帧图实际位于忽略的 `build/reports/hexball-quality/`；参数、日志、GPU 初始占用和分析 JSON/PNG 在 `data/hexball-native-20261101/`。Balanced 与 Quality 的分析为 `residual-glass-rr-quality-v80-analysis`，preset E 对照为 `residual-glass-rr-preset-e-v82-analysis`；实际 FG/MFG 计数为 `residual-glass-rr-quality-generation-v83-generation.csv`。
+
+## 最新重建对照与收口（v86–v89）
+
+统一条件：玻璃弹球、2560×1440 输出、1 SPP、FG 关闭；静态/运动/停止帧序列相同。32 SPP 只作为画质参照。边缘宽度越小越锐，静态时域 MAE 越低代表静止画面越稳定。
+
+| RTXPT 路径 | 阴影边缘 10–90% | 静态时域 MAE /255 | 静态参照 MAE /255 | 运动参照 MAE /255 | 结论 |
+|---|---:|---:|---:|---:|---|
+| RR Quality，1 SPP | 1.991 px | 0.0544 | 3.6679 | 4.1888 | 当前最佳综合默认 |
+| RR + DLAA，1 SPP | 2.068 px | 0.0716 | 3.6230 | 4.2065 | 原生尺寸没有改善整体表现 |
+| RR Quality + SHaRC，1 SPP | 2.039 px | 0.0700 | 3.2096 | 4.0503 | 更接近参照，但时域稳定性较差，综合不替换默认 |
+| DLSS SR Quality + NRD RELAX，1 SPP | 10.769 px | 0.0523 | 3.4561 | 5.0537 | 明显抹宽阴影并损害运动细节，淘汰 |
+
+v89 的 RELAX 结果已由分析器确认不是“只少一点噪声”：边缘宽度是 RR Quality 的 **5.4 倍**，运动参照误差也高约 **20.7%**。静态闪动略低不能抵消细节损失，因此不启用 RELAX。DLAA 与 SHaRC 的数据也没有推翻 RR Quality 作为 Demo 默认的决定。
+
+RTXPT 1.9 的 RR + Ultra Quality 组合曾进入 native 崩溃路径。适配层现在在创建/更新 native renderer 前直接拒绝这一组合，并提示改用 RR Quality 或 DLAA；普通 DLSS SR 的 Ultra Quality 仍保留。CPU-only adapter test 覆盖两边的行为。
+
+结论按实际证据收口：弹球 Demo 当前采用 **RR Quality + 1 SPP**，已把此前严重噪声/拖影压到可用画面，且不再使用会糊边的 RELAX。纯 1-SPP 路径仍存在环境/间接反弹的残余采样误差，RR 也会轻微平滑细节；本轮没有证据支持“所有光照与动态场景的噪声完全消失”，所以不把这个状态写成全场景、零残噪。对应完整对照图和原始运行记录为 `data/hexball-native-20261101/residual-glass-rr-dlaa-v86-*`、`residual-glass-rr-quality-sharc-v87-*`、`residual-glass-relax-quality-v89-*`；多类光源整帧检查为 `rtxpt-rr-quality-v88-*`。
