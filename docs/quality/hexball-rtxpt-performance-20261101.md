@@ -204,3 +204,16 @@ sequences, checks actual SR/RELAX settings, unchanged 1485x835 input for 2560x14
 output, one scene export, FG off, health and lifecycle. Captures are test-only;
 `Measure-HexBallQuality.ps1` does not enable GPU diagnostics or report screenshot
 runs as throughput acceptance. CPU adapter and demo-policy regressions pass.
+
+The raw, native RELAX+SR metal, and default RELAX+SR glass sequences all passed
+364 submitted frames, a single scene export, unchanged render/input extent and
+clean lifecycle. Static consecutive-frame RGB mean absolute difference inside
+the fixed scene ROI was 2.7414/255 raw versus 0.06566/255 RELAX (97.60% lower).
+This measures temporal signal stability, not all image noise or all motion blur.
+The same outer hexagon silhouette's median 10-90% edge transition over twenty
+scanlines was 1.821 versus 1.775 output pixels: the geometric outline did not
+broaden. Lighting/shadow filtering is still a property of native RELAX.
+`Analyze-HexBallQuality.py` reproduces these checks from the deterministic PNGs.
+The captured raw image confirms that disabled-denoiser SR alone retains heavy
+stochastic lighting noise; that explicit raw policy has not been disguised as
+fixed by silently enabling a denoiser. The default quality policy is the change.

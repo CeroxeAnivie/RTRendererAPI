@@ -1,0 +1,50 @@
+{
+  "quality-raw-v8": {
+    "static_consecutive_rgb_mae_8bit": 2.741426440329218,
+    "static_consecutive_rgb_rms_8bit": 5.187023640448505,
+    "samples": 3,
+    "roi": [
+      780,
+      180,
+      1780,
+      1260
+    ],
+    "stopped_vs_settled_mae": {
+      "0": 12.888981790123458,
+      "3": 12.307389814814815,
+      "15": 11.522621296296295
+    }
+  },
+  "quality-relax-v8": {
+    "static_consecutive_rgb_mae_8bit": 0.06566265432098765,
+    "static_consecutive_rgb_rms_8bit": 0.28354528473176804,
+    "samples": 3,
+    "roi": [
+      780,
+      180,
+      1780,
+      1260
+    ],
+    "stopped_vs_settled_mae": {
+      "0": 2.7348253086419754,
+      "3": 2.418362345679012,
+      "15": 1.5751546296296297
+    }
+  },
+  "quality-default-glass-v8": {
+    "static_consecutive_rgb_mae_8bit": 0.0661354938271605,
+    "static_consecutive_rgb_rms_8bit": 0.2834926191080514,
+    "samples": 3,
+    "roi": [
+      780,
+      180,
+      1780,
+      1260
+    ],
+    "stopped_vs_settled_mae": {
+      "0": 2.367891666666667,
+      "3": 2.09759537037037,
+      "15": 1.3934246913580246
+    }
+  }
+}
