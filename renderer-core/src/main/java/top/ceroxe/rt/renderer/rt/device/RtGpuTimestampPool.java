@@ -441,8 +441,8 @@ public final class RtGpuTimestampPool implements AutoCloseable {
         private long acquired;
         private long dropped;
         private long failed;
-        private final long[] segmentTotals = new long[QUERIES_PER_CAPTURE - 1];
-        private final String[] segmentNames = new String[QUERIES_PER_CAPTURE - 1];
+        private long[] segmentTotals;
+        private String[] segmentNames;
         private int segmentCount;
 
         private StageStatistics(String label) {
@@ -462,8 +462,10 @@ public final class RtGpuTimestampPool implements AutoCloseable {
         }
 
         private void recordCompleted(Capture capture, long captureNanos) {
-            if (completed == 0L) {
+            if (completed == 0L && capture.segmentCount() > 1) {
                 segmentCount = capture.segmentCount();
+                segmentTotals = new long[segmentCount];
+                segmentNames = new String[segmentCount];
                 for (int index = 0; index < segmentCount; index++) segmentNames[index] = capture.segmentName(index);
             }
             for (int index = 0; index < segmentCount; index++) {

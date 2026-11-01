@@ -138,6 +138,11 @@ the first 240 frame sequences and samples every 16 sequences. Queries are read
 only after the submission fence has completed, with no query-wait flag. Per-stage
 totals use preallocated arrays and print once at shutdown. The default rendering
 commands and the non-profiled two-checkpoint timing remain unchanged.
+The fine-stage switch is opt-in and defaults off. Without
+`-Dtop.ceroxe.rt.rt.gpuTimestamps.frameStages=true`, there are no fine-stage GPU
+queries, fine-stage readbacks or summary logs, and no per-label segment arrays.
+It remains independent of the existing public `gpuTimingsEnabled` option; callers
+can also disable that option to remove the pre-existing total-frame queries.
 
 Both comparisons use SR, balanced input sizing, 1 SPP and FG disabled. The old
 surface integrator and RTXPT path integrator still differ; their costs are reported
