@@ -9,6 +9,7 @@
 #include <vector>
 #include <unordered_map>
 #include <cmath>
+#include <sstream>
 #include <donut/engine/TextureCache.h>
 #define WinMain RtrUnusedSampleEntryPoint
 #include RTR_RTXPT_ADVANCED_SOURCE
@@ -84,8 +85,14 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         // java.exe has no Agility exports: select the SDK explicitly before upstream creates D3D12.
         Microsoft::WRL::ComPtr<ID3D12SDKConfiguration> sdk;
         HRESULT hr=D3D12GetInterface(CLSID_D3D12SDKConfiguration,IID_PPV_ARGS(&sdk));
-        if(FAILED(hr) || FAILED(sdk->SetSDKVersion(RTXPT_D3D_AGILITY_SDK_VERSION,(root+"/D3D12/").c_str())))
-            throw std::runtime_error("Cannot select the RTXPT D3D12 Agility runtime in the Java process");
+        if(FAILED(hr)) throw std::runtime_error("D3D12GetInterface failed: "+std::to_string(static_cast<uint32_t>(hr)));
+        std::array<char,32768> executable{};
+        auto length=GetModuleFileNameA(nullptr,executable.data(),static_cast<DWORD>(executable.size()));
+        if(length==0 || length>=executable.size()) throw std::runtime_error("Cannot locate the Java executable for Agility SDK selection");
+        auto relative=std::filesystem::relative(std::filesystem::path(root)/"D3D12",
+            std::filesystem::path(executable.data()).parent_path()).string()+"\\";
+        hr=sdk->SetSDKVersion(RTXPT_D3D_AGILITY_SDK_VERSION,relative.c_str());
+        if(FAILED(hr)) throw std::runtime_error("ID3D12SDKConfiguration::SetSDKVersion failed: "+std::to_string(static_cast<uint32_t>(hr))+" path="+relative);
 #endif
         std::vector<std::string> args {"RTRenderer-RTXPT", "--nonInteractive", "--scene", utf8(e, scene),
             "--width", std::to_string(width), "--height", std::to_string(height), "--overrideToRealtimeMode"};

@@ -1,5 +1,7 @@
 # Included at the end of the pinned upstream RTXPT configure, preserving its SDK integration.
 find_package(JNI REQUIRED COMPONENTS JVM)
+# Agility selection is resolved relative to the hosting process executable.
+target_link_libraries(rtrenderer_rtxpt PRIVATE d3d12)
 # Keep embedded-host symbols separate from previous standalone sample builds.
 if(MSVC)
     foreach(host_tool ShaderMake ShaderMakeBlob NRD)
