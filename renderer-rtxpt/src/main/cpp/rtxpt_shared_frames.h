@@ -66,7 +66,9 @@ public:
             nvrhi::TextureDesc desc;
             desc.width=width;desc.height=height;desc.format=nvrhi::Format::RGBA8_UNORM;
             desc.initialState=nvrhi::ResourceStates::Common;desc.keepInitialState=true;
-            desc.isShaderResource=false;desc.sharedResourceFlags=nvrhi::SharedResourceFlags::Shared;
+            // Keep NVRHI's color-texture default: DENY_SHADER_RESOURCE is legal only for
+            // depth/stencil resources in D3D12. No SRV is created for this copy-only texture.
+            desc.isShaderResource=true;desc.sharedResourceFlags=nvrhi::SharedResourceFlags::Shared;
             desc.debugName="RTR D3D12-Vulkan display frame";
             for(auto& slot:slots) {
                 slot.texture=device->createTexture(desc);
