@@ -15,7 +15,7 @@ final class RtxptNative {
         if(loaded)return;
         Path root=runtime(),dll=bridge();
         if(!Files.isRegularFile(dll))throw new IllegalStateException("Build the RTXPT JNI host: tools/Build-RtxptBridge.ps1");
-        for(String dependency:new String[]{"NRD.dll","omm-lib.dll"})System.load(root.resolve(dependency).toString());
+        for(String dependency:new String[]{"sl.interposer.dll","NRD.dll","omm-lib.dll"})System.load(root.resolve(dependency).toString());
         System.load(dll.toString()); loaded=true;
     }
     static native long create(String runtime,String scene,int width,int height,String[] options);
