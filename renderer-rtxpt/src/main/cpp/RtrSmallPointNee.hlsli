@@ -28,14 +28,14 @@ void RtrSumPointLights(inout NEEResult result, const LightSampler sampler,
         uint index = first + i;
         if (!RtrCoveredPoint(sampler, index))
             continue;
-        PolymorphicLightSample point = PolymorphicLight::CalcSample(
+        PolymorphicLightSample pointSample = PolymorphicLight::CalcSample(
             sampler.LoadLight(index), float2(0.5, 0.5), shading.posW);
         LightSample light = LightSample::make();
-        float3 delta = point.Position - shading.posW;
+        float3 delta = pointSample.Position - shading.posW;
         light.Distance = length(delta);
         light.Direction = delta / max(light.Distance, 1e-7);
-        light.Li = point.Radiance / max(point.SolidAnglePdf, 1e-20);
-        light.SolidAnglePdf = point.SolidAnglePdf;
+        light.Li = pointSample.Radiance / max(pointSample.SolidAnglePdf, 1e-20);
+        light.SolidAnglePdf = pointSample.SolidAnglePdf;
         light.LightIndex = index;
         light.SelectionPdf = 1.0; // Every covered point is selected exactly once.
         light.LightSampleableByBSDF = false; // A point light has delta support.
