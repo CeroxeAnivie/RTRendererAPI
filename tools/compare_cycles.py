@@ -222,6 +222,7 @@ def setup(fixture,case):
 
 
 def benchmark(fixture,case,output):
+    time.sleep(1.2)  # Do not mistake the previous test's GPU activity for external load.
     initial=gpu();print('CyclesControl',case,'initialGpu',initial,flush=True)
     scene,devices=setup(fixture,case)
     def render(samples,seed):

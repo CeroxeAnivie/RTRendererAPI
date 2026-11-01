@@ -180,6 +180,8 @@ def mitsuba_benchmark(fixture, output, rounds, seconds, case):
     import mitsuba as mi
     import drjit as dr
     import numpy as np
+    time.sleep(1.2)  # nvidia-smi's utilization window must exclude our previous case.
+    initial = gpu()
     mi.set_variant('cuda_ad_rgb')
     source = Path(fixture['source'])
     scene = mitsuba_mixed_scene(fixture, mi, np) if case=='mixed' else mi.load_dict({
@@ -197,7 +199,6 @@ def mitsuba_benchmark(fixture, output, rounds, seconds, case):
                  'to_world': mi.ScalarTransform4f.scale(.28),
                  'bsdf': {'type': 'diffuse', 'reflectance': {'type': 'rgb', 'value': [.5, .6, .7]}}},
     })
-    initial = gpu()
     print('Mitsuba CUDA variant', mi.variant(), 'initialGpu', initial, flush=True)
     for seed in range(2):
         image = mi.render(scene, spp=1, seed=seed)
