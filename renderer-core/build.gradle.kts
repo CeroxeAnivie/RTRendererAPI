@@ -62,52 +62,7 @@ java {
     withJavadocJar()
 }
 
-// Build-time fetch only: consumers load the verified compiler/builtins from the core JAR.
-// Proxy selection belongs to the invoking process, never to published project configuration.
-val cudaNvrtcResources = layout.buildDirectory.dir("generated/cuda-nvrtc-resources")
-val cudaNvrtcArchive = providers.gradleProperty("cudaNvrtcArchive").map(::file).orElse(
-    rootProject.layout.buildDirectory.file("downloads/${CudaNvrtcRuntime.ARCHIVE}").map { it.asFile }
-)
-val prepareCudaNvrtcRuntime = tasks.register("prepareCudaNvrtcRuntime") {
-    group = "build"
-    description = "Verifies and packages the pinned NVIDIA NVRTC redistributable and license."
-    inputs.property("archiveSha256", CudaNvrtcRuntime.SHA256)
-    // A file collection permits the first online build to fetch a missing archive.
-    inputs.files(cudaNvrtcArchive)
-    outputs.dir(cudaNvrtcResources)
-    doLast {
-        CudaNvrtcRuntime.prepare(cudaNvrtcArchive.get(), cudaNvrtcResources.get().asFile, gradle.startParameter.isOffline)
-    }
-}
-sourceSets.main { resources.srcDir(prepareCudaNvrtcRuntime) }
-
-val verifyLuxCoreSourceManifest = tasks.register("verifyLuxCoreSourceManifest") {
-    group = "verification"
-    description = "Verifies the complete pinned LuxCore/adaptor source inventory and exact bytes."
-    val sourceDirectory = layout.projectDirectory.dir("src/main/resources/assets/rtrenderer/medium/luxcore")
-    inputs.dir(sourceDirectory)
-    doLast {
-        val root = sourceDirectory.asFile
-        val manifest = JsonSlurper().parse(root.resolve("source-manifest.json")) as Map<*, *>
-        if (manifest["commit"] != "b872186d2fe995a762f73708c606847eed55843e")
-            throw GradleException("LuxCore source commit differs from the pinned revision")
-        val names = mutableSetOf<String>()
-        (manifest["files"] as List<*>).forEach { raw ->
-            val entry = raw as Map<*, *>
-            val name = entry["name"].toString()
-            if (!Regex("[A-Za-z0-9._-]+").matches(name) || !names.add(name))
-                throw GradleException("Invalid or duplicate LuxCore source manifest entry: $name")
-            val source = root.resolve(name)
-            if (!source.isFile || source.length() != (entry["bytes"] as Number).toLong())
-                throw GradleException("LuxCore source missing or length differs: $name")
-            val hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source.readBytes()))
-            if (hash != entry["sha256"]) throw GradleException("LuxCore source hash differs: $name")
-        }
-        val actual = root.listFiles()!!.filter { it.isFile && it.name != "source-manifest.json" }.map { it.name }.toSet()
-        if (names != actual) throw GradleException("LuxCore source inventory differs: missing=${actual - names}, stale=${names - actual}")
-    }
-}
-tasks.named("check") { dependsOn(verifyLuxCoreSourceManifest) }
+// Medium transport and its compiler/runtime are provided by renderer-luxcore.
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
@@ -254,30 +209,14 @@ val registerCoreSelfTest =
 
 val contractSelfTests = linkedMapOf(
     "coreVulkanBoundaryTopologySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanBoundaryTopologySelfTest",
-    "coreCudaMediumContractSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumContractSelfTest",
-    "coreCudaNvrtcLibraryLoaderSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaNvrtcLibraryLoaderSelfTest",
-    "coreCudaCameraMediumSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraMediumSelfTest",
-    "coreCudaBoundaryMediumSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaBoundaryMediumSelfTest",
-    "coreCudaCameraScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraScatteringSelfTest",
-    "coreCudaMultipleScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaMultipleScatteringSelfTest",
-    "coreCudaHeterogeneousMultipleScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaHeterogeneousMultipleScatteringSelfTest",
-    "coreCudaDensityScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaDensityScatteringSelfTest",
-    "coreCudaOpticalMediumSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaOpticalMediumSelfTest",
-    "coreCudaPbrMediumAbiSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaPbrMediumAbiSelfTest",
+
     "coreOpticalWallTimelineSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.OpticalWallTimelineSelfTest",
     "coreOpticalDetailedProfileSelfTest" to "top.ceroxe.rt.renderer.rt.diagnostics.OpticalDetailedProfileSelfTest",
-    "coreCudaBoundaryScatteringSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaBoundaryScatteringSelfTest",
-    "corePacketCapacitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.PacketCapacitySelfTest",
-    "coreCudaMediumDensitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensitySelfTest",
-    "coreCudaPrimaryMediumSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryMediumSelfTest",
-    "coreCudaPrimaryEmissionSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryEmissionSelfTest",
-    "coreCudaMediumTransportSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumTransportSelfTest",
-    "coreMediumRayQueryAbiSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.MediumRayQueryAbiSelfTest",
+
     "coreRtPipelineCacheSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.RtPipelineCacheSelfTest",
-    "coreMediumTransportSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumTransportSelfTest",
+
     "coreMediumOpticsSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumOpticsSelfTest",
-    "coreCausticTransportSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CausticTransportSelfTest",
-    "coreMediumDensitySelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.MediumDensitySelfTest",
+
     "coreGpuScenePrimaryQueueSelfTest" to "top.ceroxe.rt.renderer.rt.pipeline.GpuScenePrimaryQueueSelfTest",
     "coreMediumBenchmarkStatisticsSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanMediumBenchmarkStatisticsSelfTest",
     "coreRtNativeBenchmarkReportSelfTest" to "top.ceroxe.rt.renderer.rt.RtNativeBenchmarkReportSelfTest",
@@ -432,35 +371,15 @@ tasks.named("check") {
 
 val nativeSelfTests = linkedMapOf(
     "vulkanFrameDisplayTransformNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDisplayTransformNativeSelfTest",
-    "cudaMediumRuntimeNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumRuntimeNativeSelfTest",
-    "cudaOpticalActiveQueueNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalActiveQueueNativeSelfTest",
-    "cudaCameraMediumNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraMediumNativeSelfTest",
-    "cudaPrimaryMediumNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryMediumNativeSelfTest",
-    "cudaPrimaryEmissionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaPrimaryEmissionNativeSelfTest",
-    "cudaMediumTransportNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumTransportNativeSelfTest",
+
     "cudaMetallicMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaMetallicMediumProductionNativeSelfTest",
     "cudaCompositeMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCompositeMediumProductionNativeSelfTest",
     "cudaBuiltinShaderDataNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaBuiltinShaderDataNativeSelfTest",
-    "cudaCameraMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraMediumProductionNativeSelfTest",
-    "cudaCameraEmissionProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraEmissionProductionNativeSelfTest",
-    "cudaBoundaryMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaBoundaryMediumProductionNativeSelfTest",
+
     "boundaryRadianceTraversalNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.BoundaryRadianceTraversalNativeSelfTest",
-    "cudaCameraScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaCameraScatteringProductionNativeSelfTest",
-    "cudaCameraScatteringNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaCameraScatteringNativeSelfTest",
-    "cudaMultipleScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaMultipleScatteringProductionNativeSelfTest",
-    "cudaHeterogeneousMultipleScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaHeterogeneousMultipleScatteringProductionNativeSelfTest",
-    "cudaPbrMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaPbrMediumProductionNativeSelfTest",
-    "cudaPbrMediumScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaPbrMediumProductionNativeSelfTest",
-    "cudaPbrMediumCausticsProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaPbrMediumProductionNativeSelfTest",
-    "cudaOpticalMediumNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumNativeSelfTest",
-    "cudaDensityScatteringNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaDensityScatteringNativeSelfTest",
-    "cudaOpticalCausticNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalCausticNativeSelfTest",
+
     "causticVolumeTransportNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CausticVolumeTransportNativeSelfTest",
-    "cudaDensityScatteringProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaDensityScatteringProductionNativeSelfTest",
-    "cudaOpticalMediumProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaOpticalMediumProductionNativeSelfTest",
-    "cudaMediumDensityNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaMediumDensityNativeSelfTest",
-    "cudaDensityProductionNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaDensityProductionNativeSelfTest",
-    "cudaSharedMediumRayNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.CudaSharedMediumRayNativeSelfTest",
+
     "vulkanModernFrameNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanModernFrameNativeSelfTest",
     "vulkanGenericIntegerTextureNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericIntegerTextureNativeSelfTest",
     "vulkanGenericProceduralRayTracingNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericProceduralRayTracingNativeSelfTest",
@@ -501,46 +420,17 @@ nativeSelfTests.forEach { (taskName, mainClassName) ->
     )
 }
 
-tasks.named<JavaExec>("cudaMediumRuntimeNativeSelfTest").configure {
-    maxHeapSize = "256m"
-    if (providers.gradleProperty("externalSemaphoreParamsOnly").isPresent) args("--params-only")
-}
+
 
 tasks.named<JavaExec>("coreVulkanGpuSceneShaderSelfTest").configure {
     if (providers.gradleProperty("shaderContractsOnly").isPresent) args("--contracts-only")
 }
 
-tasks.named<JavaExec>("cudaPbrMediumCausticsProductionNativeSelfTest").configure {
-    args("--caustics")
-}
 
-tasks.named<JavaExec>("cudaPbrMediumScatteringProductionNativeSelfTest").configure {
-    args("--scattering")
-}
 
-tasks.named<JavaExec>("cudaOpticalMediumProductionNativeSelfTest").configure {
-    if (providers.gradleProperty("opticalBenchmark").isPresent) args("--benchmark")
-    if (providers.gradleProperty("opticalCaustics").isPresent) args("--caustics")
-    if (providers.gradleProperty("opticalVolumeCaustics").isPresent) args("--volume-caustics")
-    providers.gradleProperty("opticalProductionDirectory").orNull?.let {
-        systemProperty("top.ceroxe.rt.medium.opticalProductionDirectory", it)
-    }
-    providers.gradleProperty("opticalBenchmarkWarmup").orNull?.let {
-        systemProperty("top.ceroxe.rt.medium.opticalBenchmarkWarmup", it)
-    }
-    providers.gradleProperty("opticalBenchmarkFrames").orNull?.let {
-        systemProperty("top.ceroxe.rt.medium.opticalBenchmarkFrames", it)
-    }
-    providers.gradleProperty("opticalFrameProfile").orNull?.let {
-        systemProperty("top.ceroxe.rt.medium.opticalFrameProfile", it)
-    }
-    providers.gradleProperty("opticalDetailedProfile").orNull?.let {
-        systemProperty("top.ceroxe.rt.medium.opticalDetailedProfile", it)
-    }
-    providers.gradleProperty("opticalOnlyThinCase").orNull?.let {
-        systemProperty("top.ceroxe.rt.medium.opticalOnlyThinCase", it)
-    }
-}
+
+
+
 
 tasks.named<JavaExec>("vulkanModernFrameNativeSelfTest").configure {
     if (providers.gradleProperty("precompiledSceneOnly").isPresent) args("--precompiled-only")
@@ -550,14 +440,7 @@ tasks.named<JavaExec>("mediumTransportNativeSelfTest").configure {
     if (providers.gradleProperty("mediumProfile").isPresent) args("--profile")
 }
 
-tasks.named<JavaExec>("cudaCameraMediumProductionNativeSelfTest").configure {
-    if (providers.gradleProperty("productionBenchmark").isPresent) args("--benchmark")
-    if (providers.gradleProperty("productionControl").isPresent) args("--control")
-    providers.gradleProperty("productionControlJar").orNull?.let { controlJar ->
-        // A preserved, fingerprinted old core runs the same public-API test code without rebuilding it.
-        classpath = files(file(controlJar), classpath.filter { !it.name.startsWith("renderer-core-") })
-    }
-}
+
 
 registerCoreSelfTest(
     "mediumTransportBenchmark",
@@ -649,16 +532,7 @@ tasks.register("rendererCoreNativeGate") {
     dependsOn(nativeSelfTests.keys)
 }
 
-val nativeMediumTests = listOf("mediumTransportNativeSelfTest", "primaryQueueNativeSelfTest", "cudaMediumRuntimeNativeSelfTest", "cudaBuiltinShaderDataNativeSelfTest", "cudaMetallicMediumProductionNativeSelfTest", "cudaCompositeMediumProductionNativeSelfTest", "cudaCameraMediumProductionNativeSelfTest",
-    "cudaCameraEmissionProductionNativeSelfTest", "cudaBoundaryMediumProductionNativeSelfTest", "boundaryRadianceTraversalNativeSelfTest",
-    "cudaDensityProductionNativeSelfTest", "cudaCameraScatteringProductionNativeSelfTest",
-    "cudaMultipleScatteringProductionNativeSelfTest", "cudaDensityScatteringProductionNativeSelfTest",
-    "cudaHeterogeneousMultipleScatteringProductionNativeSelfTest", "cudaPbrMediumProductionNativeSelfTest",
-    "cudaPbrMediumScatteringProductionNativeSelfTest",
-    "cudaOpticalCausticNativeSelfTest", "cudaOpticalMediumNativeSelfTest", "cudaOpticalActiveQueueNativeSelfTest",
-    "causticVolumeTransportNativeSelfTest",
-    "cudaPbrMediumCausticsProductionNativeSelfTest",
-    "cudaOpticalMediumProductionNativeSelfTest", "vulkanQueuedFrameSlotNativeSelfTest")
+val nativeMediumTests = listOf("primaryQueueNativeSelfTest", "vulkanQueuedFrameSlotNativeSelfTest")
 
 val unifiedApiNativeTests = listOf("vulkanFrameDisplayTransformNativeSelfTest", "vulkanModernFrameNativeSelfTest", "vulkanGenericIntegerTextureNativeSelfTest",
     "vulkanGenericProceduralRayTracingNativeSelfTest", "vulkanGenericPipelineRetirementNativeSelfTest",
@@ -668,10 +542,7 @@ val unifiedApiNativeTests = listOf("vulkanFrameDisplayTransformNativeSelfTest", 
     "vulkanSceneAccelerationNativeSelfTest", "vulkanSceneRuntimeNativeSelfTest",
     "vulkanFrameSlotExternalCompletionNativeSelfTest", "vulkanQueuedFrameSlotNativeSelfTest")
 
-(nativeMediumTests + unifiedApiNativeTests).distinct().filter {
-    it != "cudaMediumRuntimeNativeSelfTest" && it != "cudaOpticalCausticNativeSelfTest"
-            && it != "cudaOpticalMediumNativeSelfTest"
-}.forEach { taskName ->
+(nativeMediumTests + unifiedApiNativeTests).distinct().forEach { taskName ->
     tasks.named<JavaExec>(taskName).configure {
         val validationLog = layout.buildDirectory.file("reports/vulkan-validation/$taskName.jsonl")
         systemProperty("top.ceroxe.rt.validation.enabled", "true")
@@ -700,6 +571,7 @@ tasks.register("rendererCoreMediumNativeGate") {
     group = "verification"
     description = "Runs supported medium HDR, ownership and queued-frame hardware checks with strict Vulkan validation."
     dependsOn(nativeMediumTests)
+    dependsOn(":renderer-luxcore:luxcoreNativeSelfTest")
 }
 
 tasks.register("rendererCoreUnifiedApiNativeGate") {

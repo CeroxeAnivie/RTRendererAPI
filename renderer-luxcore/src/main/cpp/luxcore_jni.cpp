@@ -137,7 +137,13 @@ JNI(void) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_start(JNIEnv* env, j
     } CATCH_VOID
 }
 JNI(void) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_resize(JNIEnv* env, jclass, jlong handle, jbyteArray text) {
-    TRY { auto& c = context(handle); if (c.session) c.session->Parse(properties(env, text)); } CATCH_VOID
+    TRY { auto& c = context(handle); if (!c.session) return;
+        // The official RTPATHOCL CUDA fast-film-edit path cannot reload all kernels reliably.
+        // Use the public stop/configure/start lifecycle on extent changes, retaining the Scene.
+        c.session->Stop(); c.session.reset();
+        c.config->Parse(properties(env, text));
+        c.session = luxcore::RenderSession::Create(c.config); c.session->Start();
+    } CATCH_VOID
 }
 JNI(jdouble) Java_top_ceroxe_rt_renderer_luxcore_LuxCoreNative_samples(JNIEnv* env, jclass, jlong handle) {
     TRY { auto& c = context(handle); if (!c.session) return 0;

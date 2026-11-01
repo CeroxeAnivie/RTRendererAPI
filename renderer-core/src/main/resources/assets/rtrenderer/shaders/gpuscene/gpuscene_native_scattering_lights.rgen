@@ -1,2 +1,0 @@
-#version 460
-#include "gpuscene_native_scattering_lights_impl.glsl"

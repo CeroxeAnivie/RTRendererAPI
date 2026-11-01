@@ -23,6 +23,7 @@ public final class LuxCoreNativeSelfTest {
             double samples=nativeAccess.readLinearRgba(raw);double sum=0;
             for(int p=0;p<96*64;p++)for(int c=0;c<3;c++){float v=raw.getFloat(p*16+c*4);LuxCoreAdapterSelfTest.require(Float.isFinite(v)&&v>=0,"finite nonnegative radiance");sum+=v;}
             LuxCoreAdapterSelfTest.require(samples>0&&sum>0,"upstream produced real samples and lit pixels");
+            System.out.println("LuxCore first film validated: samples="+samples+" radianceSum="+sum);
             nativeAccess.sceneProperties("scene.lights.sky.gain = 0.5 0.5 0.5\n");
             renderer.submit(RenderFrameRequest.builder(1,80,60,camera).environment(env).build());
             frame=renderer.awaitFrame(Duration.ofSeconds(30)).orElseThrow();LuxCoreAdapterSelfTest.require(frame.width()==80,"native resize");

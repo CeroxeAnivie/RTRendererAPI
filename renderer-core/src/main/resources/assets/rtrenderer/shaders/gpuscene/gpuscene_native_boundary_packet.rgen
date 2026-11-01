@@ -1,2 +1,0 @@
-#version 460
-#include "gpuscene_native_boundary_packet_impl.glsl"
