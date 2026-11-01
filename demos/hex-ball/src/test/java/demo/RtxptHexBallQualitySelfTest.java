@@ -31,7 +31,9 @@ public final class RtxptHexBallQualitySelfTest {
                 :FrameReconstructionOptions.Quality.valueOf(reconstructionQuality.toUpperCase(java.util.Locale.ROOT));
         var reconstruction=base.frameReconstruction().toBuilder()
                 .mode(dlaa?FrameReconstructionOptions.Mode.NATIVE_ANTI_ALIASING:FrameReconstructionOptions.Mode.SUPER_RESOLUTION)
-                .quality(quality).build();
+                .quality(quality)
+                .fallback(dlaa?FrameReconstructionOptions.Fallback.NONE:base.frameReconstruction().fallback())
+                .build();
         base=base.copyBuilder().frameReconstruction(reconstruction).build();
         boolean reference=mode.equals("reference")||mode.equals("direct-reference");
         boolean directOnly=mode.equals("direct")||mode.equals("direct-reference");
