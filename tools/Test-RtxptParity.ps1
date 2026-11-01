@@ -14,8 +14,8 @@ if(!$SkipBuild) {
 }
 $output=[IO.Path]::GetFullPath((Join-Path $repo $OutputDirectory))
 New-Item -ItemType Directory -Path $output -Force | Out-Null
-$api=Get-ChildItem renderer-api/build/libs/renderer-api-*.jar | Where-Object Name -NotMatch 'sources|javadoc' | Select-Object -First 1
-$backend=Get-ChildItem renderer-rtxpt/build/libs/renderer-rtxpt-*.jar | Where-Object Name -NotMatch 'sources|javadoc' | Select-Object -First 1
+$api=Get-ChildItem renderer-api/build/libs/renderer-api-*.jar | Where-Object Name -NotMatch 'sources|javadoc' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$backend=Get-ChildItem renderer-rtxpt/build/libs/renderer-rtxpt-*.jar | Where-Object Name -NotMatch 'sources|javadoc' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if(!$api -or !$backend){throw 'Missing distribution JARs'}
 $classpath=@((Join-Path $repo 'renderer-rtxpt/build/classes/java/test'),$api.FullName,$backend.FullName)-join ';'
 $javaArguments=@('-Xmx512m','-XX:-UseJVMCICompiler','--enable-native-access=ALL-UNNAMED','-Dfile.encoding=UTF-8','-cp',$classpath,'top.ceroxe.rt.renderer.rtxpt.RtxptParityBenchmark')
