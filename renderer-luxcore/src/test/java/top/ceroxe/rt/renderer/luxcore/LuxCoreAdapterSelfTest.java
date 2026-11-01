@@ -15,7 +15,7 @@ public final class LuxCoreAdapterSelfTest {
         new LuxCoreScene().medium(b,"test",medium,7,MediumTransport.balanced().withScatteringBounces(2),true);
         require(b.toString().contains(".type = homogeneous"),"upstream homogeneous volume");
         require(b.toString().contains(".absorption = 0.2 0.4 0.6"),"coefficient scaling");
-        require(b.toString().contains(".multiscattering = true"),"multiple scattering delegated");
+        require(b.toString().contains(".multiscattering = 1"),"multiple scattering delegated");
         require(b.toString().contains(".priority = 7"),"native priority");
         String config=LuxCoreRenderer.config(RenderFrameRequest.builder(0,1920,1080,CameraState.lookAt(0,0,5,0,0,0).build()).build());
         require(config.contains("resolutionreduction = 1"),"full resolution");require(config.contains("film.filter.type = NONE"),"no blur filter");

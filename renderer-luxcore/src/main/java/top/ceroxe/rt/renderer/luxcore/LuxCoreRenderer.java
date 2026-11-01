@@ -72,7 +72,7 @@ final class LuxCoreRenderer implements Renderer, LuxCoreAccess {
     }
     static String config(RenderFrameRequest f) {
         return "renderengine.type = "+System.getProperty("top.ceroxe.rt.luxcore.engine","RTPATHOCL")+"\n"
-            +"opencl.native.threads.count = 0\nopencl.cpu.use = false\nopencl.gpu.use = true\n"
+            +"opencl.native.threads.count = 0\nopencl.cpu.use = 0\nopencl.gpu.use = 1\n"
             +"film.width = "+f.width()+"\nfilm.height = "+f.height()+"\n"
             +"rtpath.resolutionreduction = 1\nrtpath.resolutionreduction.preview = 1\nrtpath.resolutionreduction.preview.step = 1\n"
             +"tilepath.sampling.aa.size = 1\nfilm.filter.type = NONE\n"

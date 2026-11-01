@@ -23,7 +23,7 @@ final class LuxCoreScene {
         if (!data.hasRemaining()) return null;
         var b=buffer(data.remaining()*4); b.asFloatBuffer().put(data.duplicate()); return b;
     }
-    static void property(StringBuilder out, String key, Object value) { out.append(key).append(" = ").append(value).append('\n'); }
+    static void property(StringBuilder out, String key, Object value) { out.append(key).append(" = ").append(value instanceof Boolean b?(b?1:0):value).append('\n'); }
     static String rgb(Rgb c) { return c.red()+" "+c.green()+" "+c.blue(); }
     static String gain(float v) { return v+" "+v+" "+v; }
     static String color(int c) { return ((c>>>16)&255)/255f+" "+((c>>>8)&255)/255f+" "+(c&255)/255f; }
