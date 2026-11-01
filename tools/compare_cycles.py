@@ -221,10 +221,15 @@ def setup(fixture,case):
     return scene,devices
 
 
-def benchmark(fixture,case,output):
+def benchmark(fixture,case,output,recommended=False):
     time.sleep(1.2)  # Do not mistake the previous test's GPU activity for external load.
     initial=gpu();print('CyclesControl',case,'initialGpu',initial,flush=True)
     scene,devices=setup(fixture,case)
+    if recommended:
+        scene.cycles.use_denoising=True
+        scene.cycles.denoiser='OPTIX'
+        scene.cycles.denoising_input_passes='RGB_ALBEDO_NORMAL'
+        if hasattr(scene.cycles,'denoising_use_gpu'):scene.cycles.denoising_use_gpu=True
     def render(samples,seed):
         scene.cycles.samples=samples;scene.cycles.seed=seed
         bpy.context.view_layer.samples=0
@@ -238,15 +243,17 @@ def benchmark(fixture,case,output):
     for i in range(4):
         start=time.perf_counter();render(1,i+1);frames.append((time.perf_counter()-start)*1000)
     batches=[]
-    for samples in (16,64,16,64):
+    for samples in (() if recommended else (16,64,16,64)):
         start=time.perf_counter();render(samples,samples);elapsed=(time.perf_counter()-start)*1000
         batches.append({'spp':samples,'wallMs':elapsed,'sppPerSecond':samples*1000/elapsed})
         print('CyclesControl',case,'batch',samples,'ms',elapsed,flush=True)
-    low=statistics.mean(x['wallMs'] for x in batches if x['spp']==16);high=statistics.mean(x['wallMs'] for x in batches if x['spp']==64)
+    low=statistics.mean(x['wallMs'] for x in batches if x['spp']==16) if batches else 0
+    high=statistics.mean(x['wallMs'] for x in batches if x['spp']==64) if batches else 0
     result={'renderer':'Blender Cycles','version':bpy.app.version_string,'backend':'OPTIX','devices':devices,'scene':case,
-            'width':1920,'height':1080,'pathDepth':5,'denoiser':False,'adaptiveSampling':False,'filter':'BOX','initialGpu':initial,
+            'width':1920,'height':1080,'pathDepth':5,'denoiser':'OptiX GPU' if recommended else False,'adaptiveSampling':False,'filter':'BOX','initialGpu':initial,
+            'fg':False,'mode':'Native OptiX GPU, persistent data, 1 SPP + OptiX denoise' if recommended else 'Native OptiX 1 SPP',
             'independent1SppFrameMs':frames,'independent1SppFps':len(frames)*1000/sum(frames),'batches':batches,
-            'batch64SppPerSecond':64*1000/high,'incrementalSppPerSecond':48000/(high-low) if high>low else None,
+            'batch64SppPerSecond':64*1000/high if high else None,'incrementalSppPerSecond':48000/(high-low) if high>low else None,
             'triangleCount':12 if case=='minimal' else fixture['triangleCount'],
             'semanticDifferences':[] if case=='minimal' else [
                 'Native Cycles BSDFs, sampling and light units rather than LuxCore exact BSDF implementation.',
@@ -262,5 +269,6 @@ def benchmark(fixture,case,output):
 
 args=sys.argv[sys.argv.index('--')+1:]
 parser=argparse.ArgumentParser();parser.add_argument('--fixture',type=Path,default=Path('build/reports/renderer-comparison/fixture.json'));parser.add_argument('--output',type=Path,default=Path('build/reports/renderer-comparison/cycles'));parser.add_argument('--case',choices=['minimal','mixed','both'],default='both')
+parser.add_argument('--recommended',action='store_true')
 options=parser.parse_args(args);fixture=json.loads(options.fixture.read_text(encoding='utf-8'))
-for case in (['minimal','mixed'] if options.case=='both' else [options.case]):benchmark(fixture,case,options.output)
+for case in (['minimal','mixed'] if options.case=='both' else [options.case]):benchmark(fixture,case,options.output,options.recommended)

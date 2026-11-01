@@ -176,7 +176,7 @@ def mitsuba_mixed_scene(f, mi, np):
     return mi.load_dict(scene)
 
 
-def mitsuba_benchmark(fixture, output, rounds, seconds, case):
+def mitsuba_benchmark(fixture, output, rounds, seconds, case, recommended=False):
     import mitsuba as mi
     import drjit as dr
     import numpy as np
@@ -200,16 +200,22 @@ def mitsuba_benchmark(fixture, output, rounds, seconds, case):
                  'bsdf': {'type': 'diffuse', 'reflectance': {'type': 'rgb', 'value': [.5, .6, .7]}}},
     })
     print('Mitsuba CUDA variant', mi.variant(), 'initialGpu', initial, flush=True)
-    for seed in range(2):
-        image = mi.render(scene, spp=1, seed=seed)
+    denoiser = mi.OptixDenoiser([1920,1080]) if recommended else None
+    def render(seed):
+        # Public native forward API; opaque changing seed avoids specializing on literals.
+        image = scene.integrator().render(scene, seed=dr.opaque(mi.UInt32, seed), spp=1,
+                                          develop=True, evaluate=True) if recommended else mi.render(scene,spp=1,seed=seed)
+        return denoiser(image) if denoiser else image
+    for seed in range(3):
+        image = render(seed)
         dr.eval(image)
         dr.sync_thread()
     frames = []
     loop_start = time.perf_counter()
-    seed = 2
+    seed = 3
     while len(frames) < rounds or time.perf_counter()-loop_start < seconds:
         start = time.perf_counter()
-        image = mi.render(scene, spp=1, seed=seed)
+        image = render(seed)
         dr.eval(image)
         dr.sync_thread()
         elapsed = time.perf_counter()-start
@@ -224,10 +230,11 @@ def mitsuba_benchmark(fixture, output, rounds, seconds, case):
     result = {'renderer': 'Mitsuba', 'version': mi.__version__, 'variant': mi.variant(),
               'device': initial.split(',')[1].strip(), 'scene': case,
               'width': 1920, 'height': 1080, 'spp': 1, 'pathDepth': 5,
-              'filter': 'box', 'denoiser': False, 'initialGpu': initial,
+              'filter': 'box', 'denoiser': 'OptiX' if recommended else False, 'initialGpu': initial,
+              'fg': False, 'mode': 'Native CUDA forward integrator, opaque seeds, OptiX denoising' if recommended else 'High-level render',
               'metric': 'independent completed 1-SPP render calls, CPU+GPU after JIT warmup; no display upload',
               'frameMs': frames, 'fps': len(frames)*1000/sum(frames), 'meanMs': sum(frames)/len(frames),
-              'comparisonScope': 'Matched minimal geometry/diffuse' if case=='minimal' else 'Same 756 triangles, transforms, 30 cells, homogeneous/grid coefficients and lights; common physical subset, NOT full API equivalence.',
+              'comparisonScope': 'Matched minimal geometry/diffuse' if case=='minimal' else 'Same fixture geometry, transforms, homogeneous/grid coefficients and lights; common physical subset, NOT full API equivalence.',
               'semanticDifferences': [] if case=='minimal' else ['No volumetric emission in stock Mitsuba volpath; surface emission retained.',
                   'No LuxCore priority or per-volume single/multiple switch; standard nested medium tracking and multiple scattering.',
                   'Vertex color/alpha factors are unity in baked material textures; material and image alpha retained.',
@@ -246,9 +253,10 @@ if __name__ == '__main__':
     parser.add_argument('--rounds', type=int, default=20)
     parser.add_argument('--seconds', type=float, default=3)
     parser.add_argument('--case', choices=['minimal','mixed','both'], default='both')
+    parser.add_argument('--recommended', action='store_true')
     args = parser.parse_args()
     if args.prepare:
         prepare(args.source, args.fixture)
     else:
         for case in (['minimal','mixed'] if args.case=='both' else [args.case]):
-            mitsuba_benchmark(json.loads(args.fixture.read_text(encoding='utf-8')), args.output, args.rounds, args.seconds, case)
+            mitsuba_benchmark(json.loads(args.fixture.read_text(encoding='utf-8')), args.output, args.rounds, args.seconds, case, args.recommended)
