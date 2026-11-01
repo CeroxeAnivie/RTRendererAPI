@@ -96,17 +96,6 @@ if (m_ui.RealtimeAA != 3 && !m_ui.ActualUseStandaloneDenoiser()
 # The filtered hit-distance texture is consumed by NRD, RR guides and debug views.
 # Scene-selected quality/performance policy: reuse native point sampling and shadow/BSDF
 # processing, while avoiding random selection between a handful of delta lights.
-$neePath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli'
-$neeText=[IO.File]::ReadAllText($neePath)
-# Normalize the earlier broad signature patch, then change this function only.
-$neeText=[regex]::Replace($neeText,'const WorkingContext workingContext,\s*const bool emitFeedback = true /\* RTR explicit feedback ownership \*/\)', 'const WorkingContext workingContext)')
-$feedbackSignature='(void ProcessLightSample\([\s\S]*?const WorkingContext workingContext)\)'
-if([regex]::Matches($neeText,$feedbackSignature).Count -ne 1){throw 'Pinned ProcessLightSample signature changed'}
-$neeText=[regex]::Replace($neeText,$feedbackSignature,('$1,'+"`n                                const bool emitFeedback = true /* RTR explicit feedback ownership */)"),1)
-[IO.File]::WriteAllText($neePath,$neeText,$utf8)
-Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' 'if( lightSample.LightIndex != NEEAT_INVALID_LIGHT_INDEX && lightSampler.IsTemporalFeedbackRequired() )' @'
-if( emitFeedback && lightSample.LightIndex != NEEAT_INVALID_LIGHT_INDEX && lightSampler.IsTemporalFeedbackRequired() ) // RTR feedback only for sampled contributions
-'@ 'RTR feedback only for sampled contributions'
 [IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSmallPointNee.hlsli'),
     [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrSmallPointNee.hlsli')),$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    inline NEEResult HandleNEE_MultipleSamples(' @'

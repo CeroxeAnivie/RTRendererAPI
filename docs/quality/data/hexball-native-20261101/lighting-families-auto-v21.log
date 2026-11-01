@@ -1,0 +1,854 @@
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+File 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\sl.interposer.dll' is signed by NVIDIA and the signature was verified.
+INFO: Found adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this adapter
+INFO: DLSS_G is supported on this adapter
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is supported on this adapter
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Microsoft Basic Render Driver, DeviceId=0x8C, Vendor: 5140
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Using adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this system.
+INFO: DLSS-G is supported on this system.
+INFO: PCL is supported on this system.
+INFO: Reflex is supported on this system.
+INFO: DLSS-RR is supported on this system.
+INFO: Initializing...
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 2 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: RTXPT native small-point lighting ACTIVE; sampler=1; standalone denoising unchanged
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling shaders (16)...
+INFO: Compiling shader 'REF_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_8bbc55c8d888f6e61643ce94.bin'...
+INFO: Compiling shader 'FILL_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_a4ccc7b6f0949c65b0bc34ed.bin'...
+INFO: Compiling shader 'EDGY_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_a333d989b19dd786919e12d8.bin'...
+INFO: Compiling shader 'BUILD_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_789ab48b6ddb62e6f945eea9.bin'...
+INFO: Compiling shader 'BUILD_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_cba8ddd5e07157037a6cee27.bin'...
+INFO: Compiling shader 'REF_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_31cba5d24c8787e1ec2fde88.bin'...
+INFO: Compiling shader 'REF_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_b69deb70b893ffd109161bb2.bin'...
+INFO: Compiling shader 'FILL_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_ea1351d455ed17e240c425b3.bin'...
+INFO: Compiling shader 'FILL_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_f48537667406db5290586f16.bin'...
+INFO: Compiling shader 'SHARC_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_48ff1327af3fd1557796551e.bin'...
+INFO: Compiling shader 'BUILD_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_5f097aed05a445650793c95b.bin'...
+INFO: Compiling shader 'SHARC_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_712c97e908f84d5075449bcf.bin'...
+INFO: Compiling shader 'TESTRG_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\TestRaygenPP_c97039c8268c47c6c98e4c8a.bin'...
+INFO: Compiling shader 'SHARC_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_78208de68f92ca460fa94f6d.bin'...
+INFO: Compiling shader 'TESTRG_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_2a3cd3b6bcce6a7a4666c127.bin'...
+INFO: Compiling shader 'EDGY_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\TestRaygenPP_f64d7d8a4ffe7b53f2396981.bin'...
+INFO: Compiling PSOs (6)...
+INFO: Compiling compute shaders (26)...
+INFO: Compiling compute shader 'EnvLightsFillLookupMap'...
+INFO: Compiling compute shader 'PatchSubInstanceLightData'...
+INFO: Compiling compute shader 'ComputeProxyBaselineOffsets'...
+INFO: Compiling compute shader 'EnvLightsBackupPast'...
+INFO: Compiling compute shader 'ResetPastToCurrentHistory'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryPreFilterA'...
+INFO: Compiling compute shader 'BakeEmissiveTriangles'...
+INFO: Compiling compute shader 'EnvLightsSubdivideBoost'...
+INFO: Compiling compute shader 'SharcResolve'...
+INFO: Compiling compute shader 'EnvLightsMapPastToCurrent'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP0'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP1a'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP1b'...
+INFO: Compiling compute shader 'ComputeProxyCounts'...
+INFO: Compiling compute shader 'ClearFeedbackHistory'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP2'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP3'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryDebugViz'...
+INFO: Compiling compute shader 'ResetLightProxyCounters'...
+INFO: Compiling compute shader 'ComputeWeights'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryPreFilterB'...
+INFO: Compiling compute shader 'ProcessClusters'...
+INFO: Compiling compute shader 'EnvLightsSubdivideBase'...
+INFO: Compiling compute shader 'CreateProxyJobs'...
+INFO: Compiling compute shader 'ExecuteProxyJobs'...
+INFO: Compiling compute shader 'DebugDrawLights'...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: SHaRC bindless descriptors: heapBase=64, heapIndex hash/accum/resolved = 64/65/66, tableRelative = 0/1/2
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.LIGHT_FAMILY_CAPTURE points pose=0 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 2 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created computLIGHT_FAMILY_CAPTURE points pose=1 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+e pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 2 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.LIGHT_FAMILY_CAPTURE spots pose=0 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 2 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/LIGHT_FAMILY_CAPTURE spots pose=1 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+sky.hdr
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 2 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: RTXPT native small-point lighting DISABLED; sampler=2; standalone denoising unchanged
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling shaders (16)...
+INFO: Compiling shader 'BUILD_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_c123d7e9c07d7d0f050a1409.bin'...
+INFO: Compiling shader 'FILL_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_54279389c22e81923b54d4e8.bin'...
+INFO: Compiling shader 'TESTRG_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\TestRaygenPP_1b0fdf643c1b579303f47c60.bin'...
+INFO: Compiling shader 'REF_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_ca291a2cf5fcca001da32f96.bin'...
+INFO: Compiling shader 'REF_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_e6c818731cc0e8355ccda3d0.bin'...
+INFO: Compiling shader 'REF_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_8a55b94e345a2ce3b4bf4f97.bin'...
+INFO: Compiling shader 'BUILD_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_67494c3dd702ebb8917fcf64.bin'...
+INFO: Compiling shader 'FILL_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_893846a451384dd29b5096a2.bin'...
+INFO: Compiling shader 'FILL_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_b9deb11422ce11e81f31cf50.bin'...
+INFO: Compiling shader 'SHARC_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_fd6018b22dd26c52a9a8b971.bin'...
+INFO: Compiling shader 'SHARC_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_f4f6d3f27496fff592444409.bin'...
+INFO: Compiling shader 'SHARC_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_52b4bcf7337b130cdcee2271.bin'...
+INFO: Compiling shader 'BUILD_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_4a61c9227e0290ac35b43bbd.bin'...
+INFO: Compiling shader 'EDGY_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_b5f3330f2337e53e28a5e61e.bin'...
+INFO: Compiling shader 'TESTRG_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_b7401d23b0d70d92c607520e.bin'...
+INFO: Compiling shader 'EDGY_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\TestRaygenPP_9c6f59ddc7bf261dd43b06af.bin'...
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessLIGHT_FAMILY_CAPTURE many pose=0 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+FeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 2 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cbLIGHT_FAMILY_CAPTURE many pose=1 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat2.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 3 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: RTXPT capture: meshInstances=4 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=4 camera=4.000000,2.LIGHT_FAMILY_CAPTURE area pose=0 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=4 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=4 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat2.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 3 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully LIGHT_FAMILY_CAPTURE area pose=1 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: RTXPT capture: meshInstances=4 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=4 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=4 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=4 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 2 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRLIGHT_FAMILY_CAPTURE environment pose=0 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+endererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 2 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline foLIGHT_FAMILY_CAPTURE environment pose=1 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+r 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 2 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: SuccessLIGHT_FAMILY_CAPTURE sun pose=0 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+fully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 2 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/SourcLIGHT_FAMILY_CAPTURE sun pose=1 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+e/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=3 camera=12.000000,2.700000,6.000000,-0.536393,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat2.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat3.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat4.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 5 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: RTXPT native small-point lighting ACTIVE; sampler=2; standalone denoising unchanged
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 0.0 MB used, over 1 build batches
+INFO: Compiling shaders (16)...
+INFO: Compiling shader 'REF_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_a09dcb2eb79616d0dec64e31.bin'...
+INFO: Compiling shader 'SHARC_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_7adaf325a84a899808b3cf72.bin'...
+INFO: Compiling shader 'REF_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_512128490ebd4abbe525aa32.bin'...
+INFO: Compiling shader 'FILL_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_ea5d1ad8af996ca68711e483.bin'...
+INFO: Compiling shader 'FILL_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_abe63a27fd32a6b56806769b.bin'...
+INFO: Compiling shader 'BUILD_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_b109388433fcda29a81af3e9.bin'...
+INFO: Compiling shader 'BUILD_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_7d75af15973128993a0d2ba6.bin'...
+INFO: Compiling shader 'SHARC_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_47de43fd65f69cbec191cfa7.bin'...
+INFO: Compiling shader 'BUILD_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_677e341f6ed9380bc4c32855.bin'...
+INFO: Compiling shader 'FILL_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_28103a3aa5c88867510ab237.bin'...
+INFO: Compiling shader 'SHARC_mat0_f011d3e0' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_735de2a417c6e735feee522e.bin'...
+INFO: Compiling shader 'EDGY_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\TestRaygenPP_02956f7072e4161276a28878.bin'...
+INFO: Compiling shader 'TESTRG_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_d9bb4d2de04f9a256e96d119.bin'...
+INFO: Compiling shader 'EDGY_Ubershader' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_3fc1e62d05748c69e5a52df4.bin'...
+INFO: Compiling shader 'REF_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\PathTracerSample_8277cfbb2668ca59f0c218d6.bin'...
+INFO: Compiling shader 'TESTRG_raygen' file 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil\TestRaygenPP_bb6282c3a8fc9212c166b0dc.bin'...
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipelineLIGHT_FAMILY_CAPTURE mixed pose=0 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+ for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-16852084090603097501/sky.hdr
+INFO: RTXPT capture: meshInstances=5 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=5 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=5 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: RTXPT capture: meshInstances=5 camera=4.000000,2.700000,6.000000,-0.536394,-0.254787,-0.804590,-0.141330,0.966997,-0.211996
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat2.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat3.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat4.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 5 materials not found in RTXPT material materials folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: Initializing renderer...
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: Shaders development folder 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\../Rtxpt/Shaders' not found, trying local 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic/Source/Rtxpt'...
+INFO: Shader compiler: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\Rtxpt'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Donut\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External\Rtxdi\Include'
+INFO: Shader include path: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Source\External'
+INFO: Shader binaries output: 'C:\Users\Administrator\AppData\Local\RTRendererAPI\RTXPT\1.9.0-a16bbc57906cb7dd6153\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool]LIGHT_FAMILY_CAPTURE mixed pose=1 spp=1 RuntimeStatus[renderWidth=1114, renderHeight=626, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+LIGHT_FAMILIES_AND_LIFECYCLE PASS spp=1
