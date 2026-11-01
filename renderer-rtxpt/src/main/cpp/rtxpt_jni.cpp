@@ -30,6 +30,7 @@ namespace {
 class HostPathTracer final : public AdvancedPathTracer {
     bool smallPointLighting=false;
     bool lightingSceneDirty=true;
+    bool lightingPolicyLogged=false;
     bool eligibleLightingScene=false;
     int previousNeeType=2;
     bool smallPointScene() const {
@@ -63,6 +64,7 @@ public:
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();
         lightingSceneDirty=true;
+        lightingPolicyLogged=false;
     }
     void UpdateLightingPolicy() {
         if(lightingSceneDirty) {
@@ -70,10 +72,19 @@ public:
             lightingSceneDirty=!GetScene();
         }
         const char* overrideValue=std::getenv("RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS");
+        const bool standaloneDenoisingActive=g_sampleUIData.ActualUseStandaloneDenoiser();
         const bool rawPolicy=g_sampleUIData.RealtimeMode
             && (g_sampleUIData.RealtimeAA==2 || g_sampleUIData.RealtimeAA==3)
-            && !g_sampleUIData.StandaloneDenoiser && !g_sampleUIData.ActualUseRTXDIPasses()
+            && !standaloneDenoisingActive && !g_sampleUIData.ActualUseRTXDIPasses()
             && g_sampleUIData.ActualRadianceCacheMode()==0 && g_sampleUIData.ActualSamplesPerPixel()==1;
+        if(!lightingPolicyLogged && GetScene()) {
+            donut::log::info("RTXPT small-point policy: realtime=%d aa=%d standaloneRequested=%d standaloneActive=%d rtxdi=%d sharc=%d spp=%u eligible=%d override=%s accepted=%d",
+                int(g_sampleUIData.RealtimeMode),g_sampleUIData.RealtimeAA,int(g_sampleUIData.StandaloneDenoiser),
+                int(standaloneDenoisingActive),int(g_sampleUIData.ActualUseRTXDIPasses()),
+                g_sampleUIData.ActualRadianceCacheMode(),g_sampleUIData.ActualSamplesPerPixel(),
+                int(eligibleLightingScene),overrideValue?overrideValue:"default",int(rawPolicy));
+            lightingPolicyLogged=true;
+        }
         const bool enabled=eligibleLightingScene && rawPolicy && !(overrideValue && std::string(overrideValue)=="0");
         if(enabled==smallPointLighting)return;
         if(enabled) {
