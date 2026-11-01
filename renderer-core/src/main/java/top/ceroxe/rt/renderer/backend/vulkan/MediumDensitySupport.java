@@ -27,7 +27,7 @@ final class MediumDensitySupport {
     /** Row-major 3x4 map from absolute world coordinates to the API's density UVW domain. */
     static float[] worldToDensity(MediumDensityField field, AffineTransform objectToWorld) {
         var local = field.transform();
-        var inverse = MediumMeshAcceleration.inverse(objectToWorld);
+        var inverse = inverse(objectToWorld);
         float[] result = new float[12];
         for (int row = 0; row < 3; row++) for (int column = 0; column < 4; column++) {
             double value = column == 3 ? local.element(row * 4 + 3) : 0;
@@ -37,6 +37,18 @@ final class MediumDensitySupport {
                 throw new IllegalArgumentException("world-to-density transform exceeds finite GPU float range");
         }
         return result;
+    }
+
+    private static double[] inverse(AffineTransform t) {
+        double a=t.element(0), b=t.element(1), c=t.element(2), d=t.element(4), e=t.element(5), f=t.element(6);
+        double g=t.element(8), h=t.element(9), i=t.element(10);
+        double det=a*(e*i-f*h)-b*(d*i-f*g)+c*(d*h-e*g);
+        if(det==0)throw new IllegalArgumentException("singular density transform");
+        double[] v={(e*i-f*h)/det,(c*h-b*i)/det,(b*f-c*e)/det,0,
+                (f*g-d*i)/det,(a*i-c*g)/det,(c*d-a*f)/det,0,
+                (d*h-e*g)/det,(b*g-a*h)/det,(a*e-b*d)/det,0};
+        for(int row=0;row<3;row++)v[row*4+3]=-v[row*4]*t.element(3)-v[row*4+1]*t.element(7)-v[row*4+2]*t.element(11);
+        return v;
     }
 
     static void pack(int[] words, int textureWord, Medium medium, AffineTransform objectToWorld,

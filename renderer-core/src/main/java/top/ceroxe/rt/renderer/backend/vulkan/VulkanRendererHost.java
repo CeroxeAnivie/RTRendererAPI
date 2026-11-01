@@ -603,6 +603,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, top.cero
 
     private SceneUpdateResult applyLocked(SceneTransaction transaction) {
         requireReady("apply scene transaction");
+        VulkanMediumPolicy.requireSurfaceScene(transaction);
         PersistentSceneRegistry.PreparedMutation prepared = scene.prepare(transaction);
         VulkanSceneResidency.PreparedUpdate preparedResidency;
         try {

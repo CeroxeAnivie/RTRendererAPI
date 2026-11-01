@@ -228,15 +228,15 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     &&checkedRuntime.enabledExtensions().contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
                     &&checkedRuntime.traceRaysIndirectEnabled()
                     &&Boolean.parseBoolean(System.getProperty(
-                        top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.SPLIT_TASK_QUEUES_PROPERTY,"true"))
+                        "top.ceroxe.rt.medium.cuda.opticalSplitTaskQueues","true"))
                     &&(Boolean.parseBoolean(System.getProperty(
-                        top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.VERTEX_DIRECT_LIGHTING_PROPERTY,"true"))
+                        "top.ceroxe.rt.medium.cuda.opticalVertexDirectLighting","true"))
                         // Correctness-only stepping uses the same compiled stages, with CUDA
                         // consuming one event at a time so host capture can expose each hit.
                         ||(System.getProperty("top.ceroxe.rt.medium.opticalCaptureDirectory")!=null
                             &&Boolean.getBoolean("top.ceroxe.rt.medium.opticalCaptureStepConnections")))
                     &&Boolean.parseBoolean(System.getProperty(
-                        top.ceroxe.rt.renderer.backend.vulkan.medium.cuda.CudaOpticalMediumAbi.COLLECTED_CONNECTIONS_PROPERTY,"false"));
+                        "top.ceroxe.rt.medium.cuda.opticalCollectedConnections","false"));
             String raygenSource=program.source;
             if(inlineScatteringQuery)raygenSource=exhaustiveScattering?"gpuscene_native_scattering_exhaustive_cached_query.rgen"
                     :cachedScattering?"gpuscene_native_scattering_cached_query.rgen":"gpuscene_native_scattering_query.rgen";

@@ -23,16 +23,13 @@ final class CausticSceneIndex {
         generation++;
     }
 
-    CausticPhotonPlan plan(RenderFrameRequest request, MediumSceneIndex media) {
+    CausticPhotonPlan plan(RenderFrameRequest request) {
         var policy = request.caustics();
         if (!policy.enabled()) return CausticPhotonPlan.DISABLED;
-        boolean scattering=!request.environment().cameraMedium().scattering().isZero()
-                ||media.hasScattering(request.primitiveBatch());
-        int depositsPerPath=scattering?Math.min(policy.maxEvents(),request.mediumTransport().scatteringBounces()+2):1;
+        int depositsPerPath = 1;
         if (generation == cachedGeneration && cachedBatch == request.primitiveBatch()
                 && policy.equals(cachedPolicy) && request.environment().equals(cachedEnvironment)
                 &&depositsPerPath==cachedDepositsPerPath)return cachedPlan;
-        media.validateCausticRegion(request.primitiveBatch(), policy);
         var emitters = new ArrayList<CausticPhotonPlan.Emitter>();
         var env = request.environment();
         if (env.sunIntensity() > 0 && Math.max(env.sunRed(), Math.max(env.sunGreen(), env.sunBlue())) > 0)
@@ -45,8 +42,7 @@ final class CausticSceneIndex {
                 double distance = Math.hypot(Math.hypot(light.x()-policy.centerX(), light.y()-policy.centerY()), light.z()-policy.centerZ());
                 if (distance-policy.radius() >= light.range()) return;
             }
-            int[] initial = light.type() == SceneLight.Type.DIRECTIONAL ? new int[0]
-                    : media.containingPoint(request.primitiveBatch(), light.x(), light.y(), light.z());
+            int[] initial = new int[0];
             emitters.add(new CausticPhotonPlan.Emitter(entry.slot, initial));
         });
         var plan = new CausticPhotonPlan(policy.photons(), emitters,depositsPerPath);

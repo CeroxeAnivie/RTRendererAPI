@@ -6,6 +6,7 @@ import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.feature.VulkanTemporalFrameInput;
 import top.ceroxe.rt.renderer.rt.device.VulkanDeviceRuntime;
 import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneTemporalFrameResources;
+import top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline;
 import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents;
 
 import java.util.Objects;
@@ -17,7 +18,6 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
     private final RendererConfig configuration;
     private final TemporalHistoryTracker sourceHistory;
     private final VulkanTemporalHistory gpuHistory;
-    private final MediumSceneIndex mediumBoundaries = new MediumSceneIndex();
     private final VulkanSurfaceSceneIndex surfaceScene = new VulkanSurfaceSceneIndex();
     private final CausticSceneIndex causticScene = new CausticSceneIndex();
 
@@ -33,64 +33,22 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
 
     void sceneApplied(VulkanSceneResidency.SceneChangeSet changes) {
         sourceHistory.sceneApplied(changes);
-        mediumBoundaries.sceneApplied(changes);
         surfaceScene.sceneApplied(changes);
         causticScene.sceneApplied(changes);
     }
 
-    CudaMediumFrameProfile.Selection selectTransport(RenderFrameRequest request) {
-        return CudaMediumFrameProfile.select(request, mediumBoundaries, surfaceScene,
-                builtInMediumTransport(), CudaCameraMediumProfile.requested());
+    GpuSceneRayTracingPipeline.Program selectProgram(RenderFrameRequest request) {
+        VulkanMediumPolicy.requireSurfaceFrame(request);
+        if (request.caustics().enabled()) return GpuSceneRayTracingPipeline.Program.COMPACT_CAUSTICS;
+        return surfaceScene.opaque(request.primitiveBatch()) && surfaceScene.transmissiveCount(request.primitiveBatch()) == 0
+                ? GpuSceneRayTracingPipeline.Program.SURFACE
+                : GpuSceneRayTracingPipeline.Program.COMPACT_PASSIVE;
     }
 
-    top.ceroxe.rt.renderer.api.TextureAsset nativeDensityTexture(long identity) {
-        return mediumBoundaries.densityTexture(identity);
+    CausticPhotonPlan caustics(RenderFrameRequest request) {
+        VulkanMediumPolicy.requireSurfaceFrame(request);
+        return causticScene.plan(request);
     }
-
-    boolean nativeOpticalOpaqueRay(RenderFrameRequest request) {
-        return surfaceScene.opticalOpaqueRayOnly(request.primitiveBatch());
-    }
-    boolean nativeSurfaceContinuation(RenderFrameRequest request) {
-        return surfaceScene.hasMetallicReflection(request.primitiveBatch())||!surfaceScene.opaque(request.primitiveBatch());
-    }
-    boolean reusablePbrPrimary(RenderFrameRequest request) {
-        return surfaceScene.opaqueShadowRayOnly(request.primitiveBatch());
-    }
-
-    private boolean builtInMediumTransport() {
-        return SceneShaderTransportPolicy.usesBuiltInStages(configuration.sceneShaders());
-    }
-
-    static top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program program(RenderFrameRequest request,
-            MediumSceneIndex mediumBoundaries, VulkanSurfaceSceneIndex surfaceScene) {
-        var batch=request.primitiveBatch();
-        int boundaries=mediumBoundaries.frameBoundaryCount(batch);
-        if (request.caustics().enabled()) return boundaries <= 8
-                ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_CAUSTICS
-                : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_CAUSTICS;
-        if(surfaceScene.opaque(batch) && boundaries==0 && surfaceScene.transmissiveCount(batch)==0
-                && request.environment().cameraMedium().isVacuum())
-            return top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.SURFACE;
-        var environment = request.environment().cameraMedium();
-        boolean scattering = environment.density() > 0 && !environment.scattering().isZero()
-                || mediumBoundaries.hasScattering(batch);
-        boolean volume = MediumDensitySupport.heterogeneous(environment) || mediumBoundaries.hasDensityField(batch)
-                || request.mediumTransport().scatteringBounces() > 0 && scattering;
-        if (volume) return boundaries <= 8
-                ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_VOLUME
-                : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_VOLUME;
-        if (!scattering && !mediumBoundaries.hasSurfaceInteraction(batch) && surfaceScene.transmissiveCount(batch) == 0
-                && !Boolean.getBoolean("top.ceroxe.rt.shader.disablePassiveNoDielectric")) return boundaries <= 8
-                ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_PASSIVE_NO_DIELECTRIC
-                : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_PASSIVE_NO_DIELECTRIC;
-        if (!scattering) return boundaries <= 8
-                ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT_PASSIVE
-                : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL_PASSIVE;
-        return boundaries<=8 ? top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.COMPACT
-                : top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program.GENERAL;
-    }
-
-    CausticPhotonPlan caustics(RenderFrameRequest request) { return causticScene.plan(request, mediumBoundaries); }
 
     /** Queue adoption is experimental; the ordinary selector remains the conservative scene proof. */
     static top.ceroxe.rt.renderer.rt.pipeline.GpuSceneRayTracingPipeline.Program primaryQueueProgram(
@@ -149,7 +107,7 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
                 configuration.temporalRendering(),
                 denoisingActive,
                 streamlineResourcesActive,
-                jitterActive, mediumBoundaries::densityTextureSlot
+                jitterActive, ignored -> -1
         );
         var mediumUniforms = java.nio.ByteBuffer.wrap(uniforms).order(java.nio.ByteOrder.LITTLE_ENDIAN);
         if (surfaceScene.opaque(checkedRequest.primitiveBatch())) {
@@ -160,12 +118,8 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
             int offset = VulkanGpuSceneAbi.FRAME_FEATURE_FLAGS_WORD * Integer.BYTES;
             mediumUniforms.putInt(offset, mediumUniforms.getInt(offset) | VulkanGpuSceneAbi.FEATURE_FLAG_OPAQUE_SHADOW_RAY);
         }
-        int[] containingMedia = mediumBoundaries.containing(checkedRequest);
-        mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD * 4, surfaceScene.transmissiveCount(checkedRequest.primitiveBatch()));
-        mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_CAMERA_MEDIUM_COUNT_WORD * 4, containingMedia.length);
-        mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_MEDIUM_BOUNDARY_COUNT_WORD * 4, mediumBoundaries.frameBoundaryCount(checkedRequest.primitiveBatch()));
-        for (int i = 0; i < containingMedia.length; i++)
-            mediumUniforms.putInt((VulkanGpuSceneAbi.FRAME_CAMERA_MEDIUM_SLOTS_WORD + i) * 4, containingMedia[i]);
+        mediumUniforms.putInt(VulkanGpuSceneAbi.FRAME_TRANSMISSIVE_SURFACE_COUNT_WORD * 4,
+                surfaceScene.transmissiveCount(checkedRequest.primitiveBatch()));
         VulkanTemporalHistory.PreparedFrame gpu = gpuHistory.prepareFrame(
                 configuration.temporalRendering().enabled() ? checkedSlot.motionImage() : null,
                 configuration.temporalRendering().enabled() && checkedSlot.motionLayoutInitialized()
@@ -222,7 +176,7 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
 
     @Override
     public void close() {
-        try { gpuHistory.close(); } finally { mediumBoundaries.clear(); }
+        gpuHistory.close();
     }
 
     record Prepared(

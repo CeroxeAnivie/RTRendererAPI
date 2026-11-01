@@ -51,4 +51,5 @@ nmcpSettings {
 include("renderer-api")
 include("renderer-core")
 include("renderer-nvidia")
+include("renderer-luxcore")
 include("demos:hex-ball")
