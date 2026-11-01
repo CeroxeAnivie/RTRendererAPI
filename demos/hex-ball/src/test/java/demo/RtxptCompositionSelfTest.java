@@ -179,8 +179,14 @@ public final class RtxptCompositionSelfTest {
             require(renderer.workSnapshot().rtxptFrames()==host.bridgeTimings().frames(),
                 "Work snapshot includes direct RtxptAccess.renderFrame calls");
             if(!acceptance) {
-                host.awaitIdle();long before=host.bridgeTimings().frames(),start=System.nanoTime();int frames=360;
-                for(int i=0;i<frames;i++)require(host.renderFrame(),"Native final benchmark frame");
+                int frames=Integer.getInteger("top.ceroxe.rt.rtxpt.compositionBenchmarkFrames",1800);
+                if(frames<60)throw new IllegalArgumentException("At least 60 benchmark frames");
+                host.awaitIdle();long before=host.bridgeTimings().frames(),start=System.nanoTime();
+                for(int i=0;i<frames;i++) {
+                    if(mode.equals("return-toggle")&&i%30==0)
+                        renderer.overlays(i%60==0?List.of():List.of(layer));
+                    require(host.renderFrame(),"Native final benchmark frame");
+                }
                 host.awaitIdle();double elapsed=(System.nanoTime()-start)/1e6;long completed=host.bridgeTimings().frames()-before;
                 String row=String.format(Locale.ROOT,"%s,%d,%.6f,%.6f,0%n",mode,completed,elapsed/completed,completed*1000/elapsed);
                 Files.writeString(output.resolve(mode+".csv"),"mode,completed_frames,ms,fps,copy_gpu_ms\n"+row);System.out.print(row);return;
