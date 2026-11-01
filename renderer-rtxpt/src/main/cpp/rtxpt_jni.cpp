@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <cmath>
 #include <sstream>
+#include <filesystem>
 #include <donut/engine/TextureCache.h>
 #define WinMain RtrUnusedSampleEntryPoint
 #include RTR_RTXPT_ADVANCED_SOURCE
@@ -71,6 +72,41 @@ Session& session(jlong h) {
 void fail(JNIEnv* e, const std::exception& x) {
     if (!e->ExceptionCheck()) e->ThrowNew(e->FindClass("java/lang/IllegalStateException"), x.what());
 }
+std::string configureAgility(const std::filesystem::path& runtime) {
+    std::array<wchar_t, 32768> executable{};
+    auto length=GetModuleFileNameW(nullptr,executable.data(),static_cast<DWORD>(executable.size()));
+    if(length==0 || length>=executable.size()) throw std::runtime_error("Cannot locate the Java executable for Agility SDK selection");
+    const auto executableDirectory=std::filesystem::path(executable.data()).parent_path();
+    const auto source=runtime/L"D3D12"/L"D3D12Core.dll";
+    if(!std::filesystem::is_regular_file(source)) throw std::runtime_error("RTXPT Agility runtime is missing: "+source.string());
+
+    auto sdkDirectory=(runtime/L"D3D12").lexically_normal();
+    auto relative=sdkDirectory.lexically_relative(executableDirectory);
+    if(relative.empty()) {
+        std::array<wchar_t, 32768> temporary{};
+        auto temporaryLength=GetTempPathW(static_cast<DWORD>(temporary.size()),temporary.data());
+        if(temporaryLength==0 || temporaryLength>=temporary.size()) throw std::runtime_error("Cannot locate the user temporary directory for the Agility runtime");
+        sdkDirectory=std::filesystem::path(temporary.data())/L"RTRendererAPI"/L"RTXPT"/
+            (L"Agility-"+std::to_wstring(RTXPT_D3D_AGILITY_SDK_VERSION));
+        if(_wcsicmp(sdkDirectory.root_name().c_str(),executableDirectory.root_name().c_str())!=0)
+            throw std::runtime_error("RTXPT Agility runtime and Java executable are on different volumes, and the user temporary directory is not on the Java volume");
+        std::filesystem::create_directories(sdkDirectory);
+        const auto cached=sdkDirectory/L"D3D12Core.dll";
+        if(!std::filesystem::is_regular_file(cached) || std::filesystem::file_size(cached)!=std::filesystem::file_size(source))
+            std::filesystem::copy_file(source,cached,std::filesystem::copy_options::overwrite_existing);
+        relative=sdkDirectory.lexically_relative(executableDirectory);
+    }
+    if(relative.empty() || relative.is_absolute()) throw std::runtime_error("Cannot form an Agility SDK path relative to the Java executable");
+    auto path=relative.string();
+    if(path.empty() || (path.back()!='\\' && path.back()!='/')) path+='\\';
+
+    Microsoft::WRL::ComPtr<ID3D12SDKConfiguration> sdk;
+    HRESULT hr=D3D12GetInterface(CLSID_D3D12SDKConfiguration,IID_PPV_ARGS(&sdk));
+    if(FAILED(hr)) throw std::runtime_error("D3D12GetInterface failed: "+std::to_string(static_cast<uint32_t>(hr)));
+    hr=sdk->SetSDKVersion(RTXPT_D3D_AGILITY_SDK_VERSION,path.c_str());
+    if(FAILED(hr)) throw std::runtime_error("ID3D12SDKConfiguration::SetSDKVersion failed: "+std::to_string(static_cast<uint32_t>(hr))+" path="+path);
+    return path;
+}
 }
 
 extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(
@@ -82,17 +118,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         auto root = utf8(e, runtime);
         if (_putenv_s("RTR_RTXPT_RUNTIME", root.c_str())) throw std::runtime_error("Cannot configure runtime root");
 #if defined(RTXPT_D3D_AGILITY_SDK_VERSION)
-        // java.exe has no Agility exports: select the SDK explicitly before upstream creates D3D12.
-        Microsoft::WRL::ComPtr<ID3D12SDKConfiguration> sdk;
-        HRESULT hr=D3D12GetInterface(CLSID_D3D12SDKConfiguration,IID_PPV_ARGS(&sdk));
-        if(FAILED(hr)) throw std::runtime_error("D3D12GetInterface failed: "+std::to_string(static_cast<uint32_t>(hr)));
-        std::array<char,32768> executable{};
-        auto length=GetModuleFileNameA(nullptr,executable.data(),static_cast<DWORD>(executable.size()));
-        if(length==0 || length>=executable.size()) throw std::runtime_error("Cannot locate the Java executable for Agility SDK selection");
-        auto relative=std::filesystem::relative(std::filesystem::path(root)/"D3D12",
-            std::filesystem::path(executable.data()).parent_path()).string()+"\\";
-        hr=sdk->SetSDKVersion(RTXPT_D3D_AGILITY_SDK_VERSION,relative.c_str());
-        if(FAILED(hr)) throw std::runtime_error("ID3D12SDKConfiguration::SetSDKVersion failed: "+std::to_string(static_cast<uint32_t>(hr))+" path="+relative);
+        configureAgility(std::filesystem::u8path(root));
 #endif
         std::vector<std::string> args {"RTRenderer-RTXPT", "--nonInteractive", "--scene", utf8(e, scene),
             "--width", std::to_string(width), "--height", std::to_string(height), "--overrideToRealtimeMode"};
