@@ -19,8 +19,10 @@ public final class RtxptAdvancedNativeSelfTest {
             recommended.copyBuilder().frameReconstruction(FrameReconstructionOptions.disabled()).build(),
             RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),
             recommended.copyBuilder().frameReconstruction(FrameReconstructionOptions.builder()
-                .preference(RendererFeaturePreference.REQUIRED).mode(FrameReconstructionOptions.Mode.NATIVE_ANTI_ALIASING).build()).build());
-        var names=List.of("rr-sharc-ser-reflex","dlss-nrd-restir-di-gi-sharc","native-nrd-sharc","native-raw","dlaa-rr");
+                .preference(RendererFeaturePreference.REQUIRED).mode(FrameReconstructionOptions.Mode.NATIVE_ANTI_ALIASING).build()).build(),
+            recommended.copyBuilder().denoising(DenoisingOptions.builder().preference(RendererFeaturePreference.REQUIRED)
+                .strategy(DenoisingOptions.Strategy.RESPONSIVE).build()).build());
+        var names=List.of("rr-sharc-ser-reflex","dlss-nrd-restir-di-gi-sharc","native-nrd-sharc","native-raw","dlaa-rr","dlss-relax-sharc");
         for(int i=0;i<configurations.size();i++) {
             try(var renderer=Renderer.open("rtxpt",configurations.get(i))) {
                 var host=renderer.extension(RtxptAccess.class).orElseThrow();
@@ -30,12 +32,14 @@ public final class RtxptAdvancedNativeSelfTest {
                 var expected=RtxptOptions.resolve(RtxptOptions.profile(configurations.get(i)));
                 require(status.reconstruction()==expected.reconstruction(),"Actual reconstruction: "+status);
                 require(status.standaloneDenoiser()==(expected.standaloneDenoiser()&&expected.reconstruction()!=RtxptAccess.Reconstruction.DLSS_RR),"Actual NRD: "+status);
+                require(status.relaxDenoiser()==(status.standaloneDenoiser()&&expected.relaxDenoiser()),"Actual NRD RELAX method: "+status);
                 require(status.restirDi()==expected.restirDi()&&status.restirGi()==expected.restirGi(),"Actual ReSTIR DI/GI: "+status);
                 require(status.sharc()==expected.sharc(),"Actual SHaRC: "+status);
                 require(status.shaderExecutionReordering()==expected.ser(),"Actual SER: "+status);
                 require(status.lowLatency()==expected.reflex(),"Actual Reflex: "+status);
                 require(!status.frameGeneration(),"Starts with FG off");
-                if(i>=2)require(status.renderWidth()==1920&&status.renderHeight()==1080,"Native/DLAA full input size");
+                if(expected.reconstruction()==RtxptAccess.Reconstruction.NONE||expected.dlssQuality()==RtxptOptions.DlssQuality.DLAA)
+                    require(status.renderWidth()==1920&&status.renderHeight()==1080,"Native/DLAA full input size");
                 var png=output.resolve(names.get(i)+".png");host.capture(png);
                 var image=ImageIO.read(png.toFile());int min=765,max=0;
                 for(int y=0;y<image.getHeight();y+=8)for(int x=0;x<image.getWidth();x+=8){int c=image.getRGB(x,y);int v=((c>>>16)&255)+((c>>>8)&255)+(c&255);min=Math.min(min,v);max=Math.max(max,v);}

@@ -578,6 +578,19 @@ public final class RtCommandContext implements AutoCloseable {
             long timelineWaitSemaphore, long timelineWaitValue,
             long timelineSignalSemaphore, long timelineSignalValue, CommandRecorder recorder) {
         Objects.requireNonNull(recorder, "recorder");
+        return submitProfiledExternalSynchronizedOneTimeAsync(timingLabel, binaryWaitSemaphore,
+                binarySignalSemaphore, timelineWaitSemaphore, timelineWaitValue,
+                timelineSignalSemaphore, timelineSignalValue, GPU_WORK_CHECKPOINTS, true,
+                (commandBuffer, stack, capture) -> recorder.record(commandBuffer, stack));
+    }
+
+    /** Records optional internal checkpoints into the same fence-retired query capture. */
+    public AsyncSubmission submitProfiledExternalSynchronizedOneTimeAsync(
+            String timingLabel, long binaryWaitSemaphore, long binarySignalSemaphore,
+            long timelineWaitSemaphore, long timelineWaitValue,
+            long timelineSignalSemaphore, long timelineSignalValue,
+            String[] checkpoints, boolean sample, ProfiledCommandRecorder recorder) {
+        Objects.requireNonNull(recorder, "recorder");
         if (timingLabel == null || timingLabel.isBlank()) {
             throw new IllegalArgumentException("GPU timing label must not be blank");
         }
@@ -589,15 +602,13 @@ public final class RtCommandContext implements AutoCloseable {
                 || timelineSignalValue < 0L) {
             throw new IllegalArgumentException("timeline signal handle and value are inconsistent");
         }
-        RtGpuTimestampPool.Capture capture = acquireGpuTimestampCapture(timingLabel, GPU_WORK_CHECKPOINTS);
+        RtGpuTimestampPool.Capture capture = sample ? acquireGpuTimestampCapture(timingLabel, checkpoints) : null;
         boolean transferred = false;
         try {
-            CommandRecorder timedRecorder = capture == null
-                    ? recorder
-                    : (commandBuffer, stack) -> {
-                capture.begin(commandBuffer, VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
-                recorder.record(commandBuffer, stack);
-                capture.write(commandBuffer, VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+            CommandRecorder timedRecorder = (commandBuffer, stack) -> {
+                if (capture != null) capture.begin(commandBuffer, VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                recorder.record(commandBuffer, stack, capture);
+                if (capture != null) capture.write(commandBuffer, VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
             };
             AsyncSubmission submission = submitOneTimeAsync(
                     timedRecorder,
@@ -1129,6 +1140,11 @@ public final class RtCommandContext implements AutoCloseable {
                 : timestamps.stageSnapshot(label);
     }
 
+    /** Returns a resolved segment average without allocating a per-frame snapshot. */
+    public long gpuStageSegmentAverageNanos(String label, int index) {
+        return gpuTimestamps == null ? 0L : gpuTimestamps.segmentAverageNanos(label, index);
+    }
+
     /**
      * 生成命令池、提交延迟及 GPU 时间戳状态的单行诊断摘要。
      *
@@ -1397,6 +1413,12 @@ public final class RtCommandContext implements AutoCloseable {
          * @param stack         仅在本次调用期间有效的原生临时内存栈
          */
         void record(VkCommandBuffer commandBuffer, MemoryStack stack);
+    }
+
+    /** Optional capture is borrowed for this recording and retired by the submission fence. */
+    @FunctionalInterface
+    public interface ProfiledCommandRecorder {
+        void record(VkCommandBuffer commandBuffer, MemoryStack stack, RtGpuTimestampPool.Capture capture);
     }
 
     static final class QueueSubmitLock {

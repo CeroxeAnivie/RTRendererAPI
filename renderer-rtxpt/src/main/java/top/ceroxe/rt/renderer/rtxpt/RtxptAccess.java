@@ -24,7 +24,7 @@ public interface RtxptAccess {
         boolean frameGeneration,boolean shaderExecutionReordering,boolean lowLatency,
         int dlssMode,int generatedFramesPerNativeFrame,int maxGeneratedFrames,
         boolean dlssSupported,boolean dlssRrSupported,boolean frameGenerationSupported,
-        boolean reflexSupported,boolean shaderExecutionReorderingSupported) { }
+        boolean reflexSupported,boolean shaderExecutionReorderingSupported,boolean relaxDenoiser) { }
     /** Explicit one-shot readback. Never called in the presentation or benchmark frame loop. */
     void capture(Path png);
     BridgeTimings bridgeTimings();

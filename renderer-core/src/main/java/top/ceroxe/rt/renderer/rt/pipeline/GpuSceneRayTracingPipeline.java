@@ -1080,7 +1080,7 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                 acquireExternalOwnership, releaseExternalOwnership, producerQueueFamilyIndex, extents, featureSession,
                 denoisingResources, denoisingLayoutsInitialized, reconstructionResources, reconstructionLayoutsInitialized,
                 reconstructionOutputLayoutInitialized, frameGenerationResources, frameGenerationLayoutsInitialized,
-                temporalInput, frameSequence, sceneRevision, historyReset, postTraceComposition, outputPublication, null);
+                temporalInput, frameSequence, sceneRevision, historyReset, postTraceComposition, outputPublication, null, null);
     }
 
     /** Same frame ownership/layout transaction with an internal multi-stage trace implementation. */
@@ -1113,7 +1113,8 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
             boolean historyReset,
             Runnable postTraceComposition,
             Runnable outputPublication,
-            Runnable traceCommands
+            Runnable traceCommands,
+            top.ceroxe.rt.renderer.rt.device.RtGpuTimestampPool.Capture stageCapture
     ) {
         requireOpen();
         Objects.requireNonNull(commandBuffer, "commandBuffer");
@@ -1298,8 +1299,10 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
         checkedFrameGenerationResources.ifPresent(resources -> prepareFrameGenerationResources(
                 commandBuffer, stack, resources, frameGenerationLayoutsInitialized
         ));
+        if (stageCapture != null) stageCapture.write(commandBuffer, VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
         if (traceCommands == null) recordTrace(commandBuffer, stack, descriptorSetIndex, renderWidth, renderHeight);
         else traceCommands.run();
+        if (stageCapture != null) stageCapture.write(commandBuffer, VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
         checkedDenoisingResources.ifPresent(resources -> makeDenoisingSignalsAvailable(
                 commandBuffer, stack, resources
         ));
@@ -1336,8 +1339,10 @@ public final class GpuSceneRayTracingPipeline implements AutoCloseable {
                     makeDenoisingOutputsAvailableForCompose(commandBuffer, stack, resources));
             checkedPostTraceComposition.run();
         });
+        if (stageCapture != null) stageCapture.write(commandBuffer, VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
         checkedOutputPublication.run();
         checkedFeatureSession.recordFrameGeneration(featureContext);
+        if (stageCapture != null) stageCapture.write(commandBuffer, VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
         int publicationSourceStage = checkedReconstructionResources.isPresent()
                 ? privateReconstructionOutput
                 ? VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT

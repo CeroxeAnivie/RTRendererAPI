@@ -25,6 +25,12 @@ final class VulkanGpuSceneFrameSubmitter {
     private final VulkanGpuSceneFeatureComposition features;
     private final VulkanGpuSceneDescriptorAssembler descriptors;
     private final String timingLabel;
+    private static final boolean STAGE_PROFILE = Boolean.getBoolean("top.ceroxe.rt.rt.gpuTimestamps.frameStages");
+    private static final String[] FRAME_CHECKPOINTS = {
+            "Begin", "AccelerationComplete", "TraceBegin", "TraceComplete",
+            "ReconstructionComplete", "PublicationComplete", "End"
+    };
+    private static final String[] WHOLE_FRAME_CHECKPOINTS = {"start", "end"};
     private long lastSubmittedDescriptorEpoch;
 
     VulkanGpuSceneFrameSubmitter(
@@ -208,9 +214,10 @@ final class VulkanGpuSceneFrameSubmitter {
             VulkanDeviceRuntime.ManagedPresentationSignal readySignal = releaseExternalOwnership
                     ? VulkanDeviceRuntime.ManagedPresentationSignal.disabled()
                     : scene.device().reserveManagedPresentationSignal();
-            RtCommandContext.CommandRecorder recorder = (commandBuffer, stack) -> {
+            RtCommandContext.ProfiledCommandRecorder recorder = (commandBuffer, stack, capture) -> {
                 if (framePrimitives.buildPlan() != null) framePrimitives.buildPlan().record(commandBuffer, stack);
                 photonPlan.record(commandBuffer, stack, slot.causticPhotons(), photonPipeline, slot.index());
+                if (STAGE_PROFILE && capture != null) capture.write(commandBuffer, org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
                 pipeline.recordFrame(
                         commandBuffer,
                         stack,
@@ -243,7 +250,8 @@ final class VulkanGpuSceneFrameSubmitter {
                         ),
                         () -> features.recordPublication(commandBuffer, stack, slot, frameFeatures),
                         primaryQueue == null ? null : () -> GpuScenePrimaryQueue.record(commandBuffer, stack,
-                                primaryProducer, pipeline, slot.index(), slot.primaryQueue(), primaryQueue)
+                                primaryProducer, pipeline, slot.index(), slot.primaryQueue(), primaryQueue),
+                        STAGE_PROFILE ? capture : null
                 );
             };
             nativeSubmission = submitNative(frameSequence, inputCompletion, readySignal, 0L, slot, recorder);
@@ -301,15 +309,17 @@ final class VulkanGpuSceneFrameSubmitter {
             VulkanDeviceRuntime.ManagedPresentationSignal readySignal,
             long nativeWaitSemaphore,
             VulkanFrameSlot deliverySlot,
-            RtCommandContext.CommandRecorder recorder
+            RtCommandContext.ProfiledCommandRecorder recorder
     ) {
         scene.device().featureSession().beginFrameSubmission(frameSequence);
         RtCommandContext.AsyncSubmission nativeSubmission;
         try {
-            nativeSubmission = scene.device().frameCommands().submitTimedExternalSynchronizedOneTimeAsync(
+            nativeSubmission = scene.device().frameCommands().submitProfiledExternalSynchronizedOneTimeAsync(
                     timingLabel, nativeWaitSemaphore, deliverySlot.readyBinarySemaphore(),
                     inputCompletion.semaphore(), inputCompletion.value(),
-                    readySignal.semaphore(), readySignal.value(), recorder);
+                    readySignal.semaphore(), readySignal.value(),
+                    STAGE_PROFILE ? FRAME_CHECKPOINTS : WHOLE_FRAME_CHECKPOINTS,
+                    !STAGE_PROFILE || frameSequence >= 240L && (frameSequence & 15L) == 0L, recorder);
             scene.device().featureSession().commitFrameInputReuse(frameSequence);
         } catch (RuntimeException | Error submissionFailure) {
             try {

@@ -274,8 +274,9 @@ extern "C" JNIEXPORT jintArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNa
             jint(g_sampleUIData.ActualReflexMode()!=SI::ReflexMode::eOff),jint(g_sampleUIData.DLSSMode),
             jint(g_sampleUIData.DLSSFGNumFramesToGenerate),jint(g_sampleUIData.DLSSFGMaxNumFramesToGenerate),
             jint(g_sampleUIData.IsDLSSSuported),jint(g_sampleUIData.IsDLSSRRSupported),
-            jint(g_sampleUIData.IsDLSSFGSupported),jint(g_sampleUIData.IsReflexSupported),jint(session(h).app->IsSERSupported())};
-        auto result=e->NewIntArray(19); if(result)e->SetIntArrayRegion(result,0,19,values);return result;
+            jint(g_sampleUIData.IsDLSSFGSupported),jint(g_sampleUIData.IsReflexSupported),jint(session(h).app->IsSERSupported()),
+            jint(g_sampleUIData.ActualUseStandaloneDenoiser()&&g_sampleUIData.NRDMethod==NrdConfig::DenoiserMethod::RELAX)};
+        auto result=e->NewIntArray(20); if(result)e->SetIntArrayRegion(result,0,20,values);return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 
@@ -337,7 +338,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_settings(
     JNIEnv* e, jclass, jlong h, jint depth, jint diffuse, jboolean reflex,
     jint frameGenerationMode, jint generatedFrames, jint samplesPerPixel, jint realtimeAa,
-    jint dlssMode, jboolean standaloneDenoiser, jboolean restirDi, jboolean restirGi, jboolean sharc) {
+    jint dlssMode, jboolean standaloneDenoiser, jboolean relaxDenoiser, jboolean restirDi, jboolean restirGi, jboolean sharc) {
     try {
         auto& s=session(h);
         if(frameGenerationMode<0 || frameGenerationMode>1 || generatedFrames<1 || generatedFrames>3)
@@ -360,6 +361,9 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         g_sampleUIData.RealtimeSamplesPerPixel=samplesPerPixel;
         g_sampleUIData.RealtimeAA=realtimeAa;
         g_sampleUIData.StandaloneDenoiser=standaloneDenoiser;
+        // Method changes require a host rebuild (RtxptFeatureController), so no per-frame UI
+        // NRDModeChanged latch is needed; leaving it set would rebuild the denoiser every frame.
+        g_sampleUIData.NRDMethod=relaxDenoiser?NrdConfig::DenoiserMethod::RELAX:NrdConfig::DenoiserMethod::REBLUR;
         g_sampleUIData.UseReSTIRDI=restirDi;
         g_sampleUIData.UseReSTIRGI=restirGi;
         g_sampleUIData.RadianceCacheMode=sharc?1:0;

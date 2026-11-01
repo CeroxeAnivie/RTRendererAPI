@@ -24,14 +24,19 @@ if(Test-Path -LiteralPath ($prefix+'.log')){throw 'Use a new evidence tag; do no
 $java='C:\Program Files\Java\graalvm-jdk-25.0.5.0.2+1.1\bin\java.exe'
 $classpath=@(
     'demos/hex-ball/build/classes/java/main','demos/hex-ball/build/resources/main',
-    'renderer-api/build/classes/java/main','renderer-core/build/libs/renderer-core-7.0.0.jar',
-    'renderer-nvidia/build/libs/renderer-nvidia-7.0.0.jar','renderer-rtxpt/build/libs/renderer-rtxpt-7.0.0.jar',
+    'renderer-api/build/classes/java/main',
+    'renderer-core/build/classes/java/main','renderer-core/build/resources/main','renderer-core/build/libs/renderer-core-7.0.0.jar',
+    'renderer-nvidia/build/libs/renderer-nvidia-7.0.0.jar',
+    'renderer-rtxpt/build/classes/java/main','renderer-rtxpt/build/resources/main','renderer-rtxpt/build/libs/renderer-rtxpt-7.0.0.jar',
     'demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar'
 ) -join ';'
 $jvm=@('-Dfile.encoding=UTF-8','-Ddemo.disable-fg=true',
     ('-Dtop.ceroxe.rt.rtxpt.runtime='+(Join-Path $repo 'build/rtxpt-sdk/bin')),
     '--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow',
     '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath)
+if ($Backend -eq 'Vulkan' -and $StageProfile) {
+    $jvm = @('-Dtop.ceroxe.rt.rt.gpuTimestamps.frameStages=true') + $jvm
+}
 $entry=if($Backend -eq 'Rtxpt'){'demo.RtxptHexBallDemo'}else{'demo.HexBallDemo'}
 $demo=@('--windowed',"--width=$Width","--height=$Height",'--spp=1',"--duration-seconds=$Seconds")
 if($Backend -eq 'Rtxpt'){$demo+='--original-balls'}

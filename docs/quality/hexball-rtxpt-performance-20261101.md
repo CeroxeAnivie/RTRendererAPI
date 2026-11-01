@@ -127,3 +127,26 @@ dependency; residual 1-SPP noise and image quality still require visual evidence
 `Assert-RtxptSrFrameOrder.py` checks source order and, with a measured CSV, checks
 merge-end before DLSS-begin in every sampled SR frame, with no RR execution.
 Final throughput is measured again without stage diagnostics.
+
+## Renewed old-path stage comparison and native denoising candidate
+
+The user subsequently authorized another old-path run with internal stage timing.
+`-Backend Vulkan -StageProfile` now reuses the existing fence-retired Vulkan
+timestamp pool with seven checkpoints: frame begin, acceleration complete, trace
+begin/end, reconstruction complete, publication complete and frame end. It skips
+the first 240 frame sequences and samples every 16 sequences. Queries are read
+only after the submission fence has completed, with no query-wait flag. Per-stage
+totals use preallocated arrays and print once at shutdown. The default rendering
+commands and the non-profiled two-checkpoint timing remain unchanged.
+
+Both comparisons use SR, balanced input sizing, 1 SPP and FG disabled. The old
+surface integrator and RTXPT path integrator still differ; their costs are reported
+separately rather than claiming identical shading. Installed DLSS DLL versions
+also differ (old 310.7.0.0, new 310.9.16.0), so model-version isolation is pending.
+
+The advanced API audit adds an explicit upstream RELAX plus SR route through the
+existing RESPONSIVE denoising strategy, without implicitly enabling ReSTIR. This
+is a quality candidate for remaining stochastic noise, not a speed optimization
+or evidence that the residual ghosting is already fixed. JNI settings and runtime
+status were rebuilt together. CPU adapter regressions pass. GPU verification and
+30-second paired measurements follow after the complete source upload.

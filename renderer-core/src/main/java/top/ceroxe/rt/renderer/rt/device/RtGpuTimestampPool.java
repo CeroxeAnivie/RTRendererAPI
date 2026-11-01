@@ -257,6 +257,12 @@ public final class RtGpuTimestampPool implements AutoCloseable {
         return statistics == null ? StageSnapshot.empty(label) : statistics.snapshot();
     }
 
+    public synchronized long segmentAverageNanos(String label, int index) {
+        StageStatistics statistics = stageStatistics.get(requireLabel(label));
+        return statistics == null || statistics.completed == 0L || index < 0
+                || index >= statistics.segmentCount ? 0L : statistics.segmentTotals[index] / statistics.completed;
+    }
+
     private synchronized void recordResolved(Capture capture, long totalCaptureNanos) {
         if (capture.owner != this || totalCaptureNanos < 0L) {
             throw new IllegalArgumentException("resolved timestamp capture does not belong to this pool");
@@ -270,7 +276,7 @@ public final class RtGpuTimestampPool implements AutoCloseable {
         totalNanos = saturatingAdd(totalNanos, totalCaptureNanos);
         totalFirstSegmentNanos = saturatingAdd(totalFirstSegmentNanos, lastFirstSegmentNanos);
         totalSecondSegmentNanos = saturatingAdd(totalSecondSegmentNanos, lastSecondSegmentNanos);
-        stageStatistics.get(capture.label).recordCompleted(totalCaptureNanos);
+        stageStatistics.get(capture.label).recordCompleted(capture, totalCaptureNanos);
     }
 
     private synchronized void recordFailure(Capture capture) {
@@ -311,6 +317,9 @@ public final class RtGpuTimestampPool implements AutoCloseable {
         if (leasedCaptures != 0) {
             throw new IllegalStateException("destroyed GPU timestamp pool with captures still leased"
                     + ", capacity=" + captures.size() + ", leased=" + leasedCaptures);
+        }
+        if (Boolean.getBoolean("top.ceroxe.rt.rt.gpuTimestamps.frameStages")) {
+            System.out.println("VULKAN_GPU_STAGE_SUMMARY " + summary());
         }
     }
 
@@ -432,6 +441,9 @@ public final class RtGpuTimestampPool implements AutoCloseable {
         private long acquired;
         private long dropped;
         private long failed;
+        private final long[] segmentTotals = new long[QUERIES_PER_CAPTURE - 1];
+        private final String[] segmentNames = new String[QUERIES_PER_CAPTURE - 1];
+        private int segmentCount;
 
         private StageStatistics(String label) {
             this.label = label;
@@ -449,7 +461,14 @@ public final class RtGpuTimestampPool implements AutoCloseable {
             failed++;
         }
 
-        private void recordCompleted(long captureNanos) {
+        private void recordCompleted(Capture capture, long captureNanos) {
+            if (completed == 0L) {
+                segmentCount = capture.segmentCount();
+                for (int index = 0; index < segmentCount; index++) segmentNames[index] = capture.segmentName(index);
+            }
+            for (int index = 0; index < segmentCount; index++) {
+                segmentTotals[index] = saturatingAdd(segmentTotals[index], capture.segmentNanos(index));
+            }
             completed++;
             lastNanos = captureNanos;
             maxNanos = Math.max(maxNanos, captureNanos);
@@ -478,8 +497,17 @@ public final class RtGpuTimestampPool implements AutoCloseable {
                     .append(", failed=").append(failed)
                     .append(", lastMicros=").append(lastNanos / 1_000L)
                     .append(", averageMicros=").append(completed == 0L ? 0L : totalNanos / completed / 1_000L)
-                    .append(", maxMicros=").append(maxNanos / 1_000L)
-                    .append('}');
+                    .append(", maxMicros=").append(maxNanos / 1_000L);
+            if (segmentCount > 1) {
+                target.append(", segments=[");
+                for (int index = 0; index < segmentCount; index++) {
+                    if (index != 0) target.append(',');
+                    target.append(segmentNames[index]).append("=meanMs:")
+                            .append(completed == 0L ? 0.0 : (double) segmentTotals[index] / completed / 1_000_000.0);
+                }
+                target.append(']');
+            }
+            target.append('}');
         }
     }
 

@@ -53,13 +53,15 @@ final class VulkanGpuSceneFrameDiagnostics {
         RtGpuTimestampPool.StageSnapshot timing = device.frameCommands()
                 .gpuStageTimestampSnapshot(timingLabel);
         if (!timing.enabled()) return RendererDiagnostics.FrameGpuTiming.unavailable();
+        long trace = Boolean.getBoolean("top.ceroxe.rt.rt.gpuTimestamps.frameStages")
+                ? device.frameCommands().gpuStageSegmentAverageNanos(timingLabel, 2) : timing.averageNanos();
         return RendererDiagnostics.FrameGpuTiming.builder()
                 .enabled(true)
                 .completedSamples(timing.completedCaptures())
                 .droppedSamples(timing.droppedCaptures())
                 .failedSamples(timing.failedCaptures())
-                .averageTraceNanos(timing.averageNanos())
-                .averagePostTraceNanos(0L)
+                .averageTraceNanos(trace)
+                .averagePostTraceNanos(Math.max(0L, timing.averageNanos() - trace))
                 .averageTotalNanos(timing.averageNanos())
                 .maxTotalNanos(timing.maxNanos())
                 .build();

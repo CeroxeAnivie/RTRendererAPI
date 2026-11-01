@@ -7,7 +7,7 @@ import top.ceroxe.rt.renderer.rtxpt.RtxptAccess.Reconstruction;
 
 /** Native RTXPT controls, applied before the first frame. No second transport implementation. */
 record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
-        Reconstruction reconstruction, DlssQuality dlssQuality, boolean standaloneDenoiser,
+        Reconstruction reconstruction, DlssQuality dlssQuality, boolean standaloneDenoiser, boolean relaxDenoiser,
         boolean restirDi, boolean restirGi, boolean sharc, boolean ser, boolean reflex,
         FrameGenerationOptions frameGeneration) {
     public enum DlssQuality {
@@ -26,11 +26,11 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
     }
     /** Official realtime path: 1 SPP, DLSS-RR Balanced, SHaRC, SER and Reflex, FG off. */
     public static RtxptOptions recommended() {
-        return new RtxptOptions(1,20,2,Reconstruction.DLSS_RR,DlssQuality.BALANCED,true,false,false,true,true,true,
+        return new RtxptOptions(1,20,2,Reconstruction.DLSS_RR,DlssQuality.BALANCED,true,false,false,false,true,true,true,
             FrameGenerationOptions.disabled());
     }
     public static RtxptOptions nativeOneSample() {
-        return new RtxptOptions(1,20,2,Reconstruction.NONE,DlssQuality.DLAA,false,false,false,false,true,false,
+        return new RtxptOptions(1,20,2,Reconstruction.NONE,DlssQuality.DLAA,false,false,false,false,false,true,false,
             FrameGenerationOptions.disabled());
     }
     static RendererFeatureProfile profile(RendererConfig c){return new RendererFeatureProfile(c.frameReconstruction(),c.frameGeneration(),c.lowLatency(),c.denoising(),c.rayTracingOptimizations(),c.pathTracing());}
@@ -44,8 +44,10 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
         boolean reconstruct=r.preference().requested()&&!spatial,denoise=p.denoising().preference().requested();
         var path=p.pathTracing();
         boolean di=path.directLightResampling().requested(),gi=path.indirectLightResampling().requested();
-        // Use upstream's supported default combinations. ReSTIR uses standalone NRD + DLSS.
-        var aa=reconstruct?(denoise&&!di&&!gi?Reconstruction.DLSS_RR:Reconstruction.DLSS):Reconstruction.NONE;
+        // RESPONSIVE uses upstream RELAX before DLSS SR/DLAA, without enabling unrelated ReSTIR work.
+        // Balanced/stable retain the upstream RR default; ReSTIR also needs standalone NRD.
+        boolean relax=denoise&&p.denoising().strategy()==DenoisingOptions.Strategy.RESPONSIVE;
+        var aa=reconstruct?(denoise&&!di&&!gi&&!relax?Reconstruction.DLSS_RR:Reconstruction.DLSS):Reconstruction.NONE;
         var quality=r.mode()==FrameReconstructionOptions.Mode.NATIVE_ANTI_ALIASING?DlssQuality.DLAA:switch(r.quality()) {
             case AUTO,BALANCED->DlssQuality.BALANCED;case QUALITY->DlssQuality.QUALITY;
             case PERFORMANCE->DlssQuality.PERFORMANCE;case ULTRA_PERFORMANCE->DlssQuality.ULTRA_PERFORMANCE;
@@ -57,7 +59,7 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
                 throw new IllegalArgumentException("RTXPT exposes fixed DLSS Frame Generation multipliers, not the API's capped adaptive MFG mode");
             frameGeneration=FrameGenerationOptions.disabled();
         }
-        return new RtxptOptions(path.samplesPerPixel(),path.maxBounces(),path.diffuseBounces(),aa,quality,denoise,di,gi,
+        return new RtxptOptions(path.samplesPerPixel(),path.maxBounces(),path.diffuseBounces(),aa,quality,denoise,relax,di,gi,
             path.radianceCache().requested(),p.rayTracingOptimizations().shaderExecutionReordering().requested(),p.lowLatency().preference().requested(),frameGeneration);
     }
     int frameGenerationMode(){return frameGeneration.preference().requested()?1:0;}

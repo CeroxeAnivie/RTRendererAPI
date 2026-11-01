@@ -45,6 +45,41 @@ public final class RtxptAdapterSelfTest {
             require(RtxptScene.sameStructure(items,moved),"Transform edits do not reload assets");
             var profile=RtxptOptions.profile(RendererConfig.pathTracedPresentation());
             require(RtxptOptions.resolve(profile).reconstruction()==RtxptAccess.Reconstruction.DLSS_RR,"Ordinary API selects native ray reconstruction");
+            for(boolean standalone:new boolean[]{false,true}) {
+                var reconstruction=standalone?RtxptAccess.Reconstruction.DLSS:RtxptAccess.Reconstruction.DLSS_RR;
+                var actual=new RtxptAccess.RuntimeStatus(1280,720,reconstruction,standalone,true,false,false,true,
+                    false,true,true,3,1,3,true,true,true,true,true,false);
+                var capabilities=RtxptRenderer.featureCapabilities(profile,actual);
+                String implementation=standalone?"nvidia.nrd":"nvidia.dlss_rr";
+                var denoising=capabilities.feature(RenderingFeatureCapabilities.Feature.DENOISING);
+                require(denoising.status()==RenderingFeatureCapabilities.Status.ACTIVE
+                    &&denoising.implementation().equals(implementation),"Common denoising names the actual NRD/RR implementation");
+                require(capabilities.technology(RenderingFeatureCapabilities.Technology.RAY_TRACING_DENOISING)
+                    .implementation().equals(implementation),"Feature and technology agree on the active denoiser");
+                require(RtxptRenderer.featureCapabilities(RendererFeatureProfile.disabled(),actual)
+                    .feature(RenderingFeatureCapabilities.Feature.DENOISING).status()==RenderingFeatureCapabilities.Status.DISABLED,
+                    "Unrequested denoising remains disabled in the common capability contract");
+            }
+            var responsiveProfile=profile.toBuilder().denoising(profile.denoising().toBuilder()
+                .strategy(DenoisingOptions.Strategy.RESPONSIVE).build()).build();
+            var responsive=RtxptOptions.resolve(responsiveProfile);
+            require(responsive.reconstruction()==RtxptAccess.Reconstruction.DLSS&&responsive.standaloneDenoiser()
+                &&responsive.relaxDenoiser(),"Responsive denoising uses native RELAX followed by DLSS SR");
+            require(!responsive.restirDi()&&!responsive.restirGi(),"RELAX does not silently enable ReSTIR DI/GI");
+            require(RtxptOptions.resolve(responsiveProfile.toBuilder().frameReconstruction(FrameReconstructionOptions.disabled()).build())
+                .reconstruction()==RtxptAccess.Reconstruction.NONE,"Responsive native denoising does not force upscaling");
+            require(!RtxptOptions.resolve(profile).relaxDenoiser(),"Balanced keeps the existing RR/default NRD policy");
+            var taaOnly=new RtxptAccess.RuntimeStatus(1920,1080,RtxptAccess.Reconstruction.TAA,false,false,false,false,false,
+                false,false,false,6,1,1,false,false,false,false,false,false);
+            require(!RtxptRenderer.requestedReconstructionActive(profile.frameReconstruction(),taaOnly),
+                "Upstream TAA fallback must not pass the required DLSS SR execution check");
+            require(RtxptRenderer.featureCapabilities(profile,taaOnly).feature(RenderingFeatureCapabilities.Feature.FRAME_RECONSTRUCTION)
+                .status()==RenderingFeatureCapabilities.Status.NOT_SUPPORTED,"Unavailable DLSS is not mislabeled active");
+            var taaFallback=profile.toBuilder().frameReconstruction(profile.frameReconstruction().toBuilder()
+                .fallback(FrameReconstructionOptions.Fallback.BUILT_IN_TEMPORAL).build()).build();
+            var fallback=RtxptRenderer.featureCapabilities(taaFallback,taaOnly).feature(RenderingFeatureCapabilities.Feature.FRAME_RECONSTRUCTION);
+            require(fallback.status()==RenderingFeatureCapabilities.Status.FALLBACK&&fallback.implementation().equals("nvidia.rtxpt.taa"),
+                "An explicitly allowed TAA fallback reports its actual implementation");
             require(RtxptOptions.resolve(RendererFeatureProfile.disabled()).reconstruction()==RtxptAccess.Reconstruction.NONE,"Disabled common features stay disabled");
             for(var multiplier:FrameGenerationOptions.Multiplier.values()) {
                 var fg=FrameGenerationOptions.builder().preference(RendererFeaturePreference.PREFERRED)

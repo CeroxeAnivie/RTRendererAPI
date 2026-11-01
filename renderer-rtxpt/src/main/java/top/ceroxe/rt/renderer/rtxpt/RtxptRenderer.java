@@ -79,7 +79,11 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     @Override public void loadNativeScene(Path value){
         ready();if(!scene.meshes.isEmpty())throw new IllegalStateException("Cannot replace retained API geometry with an unrelated native scene");
         var path=Objects.requireNonNull(value).toAbsolutePath().normalize();if(!Files.isRegularFile(path))throw new IllegalArgumentException("Missing native scene "+path);
-        if(handle!=0){RtxptNative.loadScene(handle,path.toString());applyNativeSettings();}nativeScene=path;
+        if(handle!=0){RtxptNative.loadScene(handle,path.toString());applyNativeSettings();}
+        nativeScene=path;
+        // Scene loading selects the scene's camera. Reapply the API camera on the next submit,
+        // even if its value equals the camera used before the scene switch.
+        camera=null;
     }
     @Override public FrameSubmissionResult submit(RenderFrameRequest f){
         ready();Objects.requireNonNull(f);if(f.sequence()<=submitted)throw new IllegalArgumentException("Frame sequence must increase");
@@ -111,7 +115,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         return FrameSubmissionResult.accepted(submitted,revision,Set.of());
     }
     private void applyNativeSettings(){RtxptNative.settings(handle,options.maxBounces(),options.diffuseBounces(),options.reflex(),options.frameGenerationMode(),options.generatedFrames(),
-        options.samplesPerPixel(),options.reconstruction().ordinal(),options.dlssQuality().nativeValue,options.standaloneDenoiser(),options.restirDi(),options.restirGi(),options.sharc());}
+        options.samplesPerPixel(),options.reconstruction().ordinal(),options.dlssQuality().nativeValue,options.standaloneDenoiser(),options.relaxDenoiser(),options.restirDi(),options.restirGi(),options.sharc());}
     private RendererFeatureProfile effectiveProfile(RendererFeatureProfile requested){
         if(handle==0)return RtxptOptions.normalize(requested);
         var s=runtimeStatus();var p=RtxptOptions.normalize(requested);
@@ -152,15 +156,22 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         return builder.build();
     }
     private RenderingFeatureCapabilities featureCapabilities(){
-        var p=requestedProfile;var s=runtimeStatus();var b=RenderingFeatureCapabilities.builder();
+        return featureCapabilities(requestedProfile,runtimeStatus());
+    }
+    static RenderingFeatureCapabilities featureCapabilities(RendererFeatureProfile p,RuntimeStatus s){
+        var b=RenderingFeatureCapabilities.builder();
         var reconstruction=p.frameReconstruction();
         var generation=p.frameGeneration();
         boolean fixedGeneration=generation.mode()!=FrameGenerationOptions.Mode.ADAPTIVE;
-        boolean reconstructionSupported=reconstruction.mode()==FrameReconstructionOptions.Mode.SPATIAL_UPSCALING
-            ?false:(reconstruction.mode()==FrameReconstructionOptions.Mode.NATIVE_ANTI_ALIASING?s.dlssSupported():true);
+        boolean reconstructionSupported=reconstruction.mode()!=FrameReconstructionOptions.Mode.SPATIAL_UPSCALING&&s.dlssSupported();
         var reconstructionImpl=s.reconstruction()==Reconstruction.DLSS_RR?"nvidia.streamline.dlss_rr":"nvidia.streamline.dlss";
-        b.feature(RenderingFeatureCapabilities.Feature.FRAME_RECONSTRUCTION,capability(reconstruction.preference().requested(),
-            reconstructionSupported,s.reconstruction()!=Reconstruction.NONE,reconstructionImpl,null,"RTXPT reconstruction negotiation"));
+        var reconstructionEntry=capability(reconstruction.preference().requested(),reconstructionSupported,
+            requestedReconstructionActive(reconstruction,s),reconstructionImpl,null,"RTXPT reconstruction negotiation");
+        if(reconstruction.preference().requested()&&s.reconstruction()==Reconstruction.TAA
+            &&reconstruction.fallback()==FrameReconstructionOptions.Fallback.BUILT_IN_TEMPORAL)
+            reconstructionEntry=RenderingFeatureCapabilities.Entry.of(RenderingFeatureCapabilities.Status.FALLBACK,
+                "nvidia.rtxpt.taa","Requested DLSS unavailable; upstream temporal anti-aliasing fallback is active");
+        b.feature(RenderingFeatureCapabilities.Feature.FRAME_RECONSTRUCTION,reconstructionEntry);
         String generationFallback=generation.fallback()==FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES
             ?"nvidia.rtxpt.native-presentation":null;
         b.feature(RenderingFeatureCapabilities.Feature.FRAME_GENERATION,capability(generation.preference().requested(),
@@ -168,7 +179,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         b.feature(RenderingFeatureCapabilities.Feature.LOW_LATENCY,capability(p.lowLatency().preference().requested(),
             s.reflexSupported(),s.lowLatency(),"nvidia.reflex",null,"RTXPT Reflex state"));
         b.feature(RenderingFeatureCapabilities.Feature.DENOISING,capability(p.denoising().preference().requested(),
-            true,s.denoising(),"nvidia.nrd",null,"RTXPT denoising state"));
+            true,s.denoising(),s.standaloneDenoiser()?"nvidia.nrd":"nvidia.dlss_rr",null,"RTXPT denoising state"));
         b.feature(RenderingFeatureCapabilities.Feature.SHADER_EXECUTION_REORDERING,capability(
             p.rayTracingOptimizations().shaderExecutionReordering().requested(),s.shaderExecutionReorderingSupported(),
             s.shaderExecutionReordering(),"nvidia.rtxpt.ser",null,"RTXPT SER state"));
@@ -177,11 +188,12 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
             "RTXMU is not part of the RTXPT D3D12 path"));
         b.technology(RenderingFeatureCapabilities.Technology.TEMPORAL_SUPER_RESOLUTION,capability(
             reconstruction.preference().requested()&&reconstruction.mode()==FrameReconstructionOptions.Mode.SUPER_RESOLUTION,
-            s.dlssSupported(),s.reconstruction()==Reconstruction.DLSS||s.reconstruction()==Reconstruction.DLSS_RR,
+            s.dlssSupported(),requestedReconstructionActive(reconstruction,s),
             reconstructionImpl,null,"Streamline DLSS super resolution"));
         b.technology(RenderingFeatureCapabilities.Technology.NATIVE_TEMPORAL_ANTI_ALIASING,capability(
             reconstruction.preference().requested()&&reconstruction.mode()==FrameReconstructionOptions.Mode.NATIVE_ANTI_ALIASING,
-            s.dlssSupported(),s.dlssMode()==RtxptOptions.DlssQuality.DLAA.nativeValue,
+            s.dlssSupported(),(s.reconstruction()==Reconstruction.DLSS||s.reconstruction()==Reconstruction.DLSS_RR)
+                &&s.dlssMode()==RtxptOptions.DlssQuality.DLAA.nativeValue,
             "nvidia.streamline.dlaa",null,"Streamline DLAA"));
         b.technology(RenderingFeatureCapabilities.Technology.SPATIAL_UPSCALING,capability(
             reconstruction.mode()==FrameReconstructionOptions.Mode.SPATIAL_UPSCALING
@@ -205,6 +217,14 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
             p.rayTracingOptimizations().memoryOptimization().requested(),false,false,"none",null,"RTXMU belongs to the Vulkan backend"));
         return b.build();
     }
+    static boolean requestedReconstructionActive(FrameReconstructionOptions requested,RuntimeStatus actual){
+        if(actual.reconstruction()!=Reconstruction.DLSS&&actual.reconstruction()!=Reconstruction.DLSS_RR)return false;
+        return switch(requested.mode()) {
+            case SUPER_RESOLUTION -> actual.dlssMode()!=RtxptOptions.DlssQuality.DLAA.nativeValue;
+            case NATIVE_ANTI_ALIASING -> actual.dlssMode()==RtxptOptions.DlssQuality.DLAA.nativeValue;
+            case SPATIAL_UPSCALING -> false;
+        };
+    }
     private static RenderingFeatureCapabilities.Entry capability(boolean requested,boolean supported,boolean active,
             String implementation,String fallbackImplementation,String reason){
         if(!requested)return RenderingFeatureCapabilities.Entry.disabled();
@@ -217,9 +237,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         var p=requestedProfile;var s=runtimeStatus();
         var reconstruction=p.frameReconstruction();
         if(reconstruction.preference()==RendererFeaturePreference.REQUIRED) {
-            boolean active=s.reconstruction()!=Reconstruction.NONE
-                && (reconstruction.mode()!=FrameReconstructionOptions.Mode.NATIVE_ANTI_ALIASING || s.dlssMode()==RtxptOptions.DlssQuality.DLAA.nativeValue);
-            if(!active)throw new IllegalStateException("RTXPT did not activate required frame reconstruction: "+s);
+            if(!requestedReconstructionActive(reconstruction,s))throw new IllegalStateException("RTXPT did not activate required frame reconstruction: "+s);
         }
         var generation=p.frameGeneration();
         if(generation.preference()==RendererFeaturePreference.REQUIRED
@@ -254,7 +272,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         return new PresentationStatus((int)s[0],(int)s[1],(float)s[2],(float)s[3],s[4]!=0);}
     @Override public RuntimeStatus runtimeStatus(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.runtimeStatus(handle);
         return new RuntimeStatus(s[0],s[1],Reconstruction.values()[s[2]],s[3]!=0,s[4]!=0,s[5]!=0,s[6]!=0,s[7]!=0,s[8]!=0,s[9]!=0,s[10]!=0,
-            s[11],s[12],s[13],s[14]!=0,s[15]!=0,s[16]!=0,s[17]!=0,s[18]!=0);}
+            s[11],s[12],s[13],s[14]!=0,s[15]!=0,s[16]!=0,s[17]!=0,s[18]!=0,s[19]!=0);}
     @Override public long windowHandle(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptNative.window(handle);}
     @Override public void capture(Path png){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.capture(handle,Objects.requireNonNull(png).toAbsolutePath().toString());}
     void snapshotMaterials(Path directory){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.snapshotMaterials(handle,directory.toAbsolutePath().toString());}
