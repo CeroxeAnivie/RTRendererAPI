@@ -1,0 +1,70 @@
+{
+  "residual-root-full-v50": {
+    "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-root-full-v50",
+    "runtime": "mode=raw glass=true probe=none\nRuntimeStatus[renderWidth=1485, renderHeight=835, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]\nRendererConfig[maxFramesInFlight=3, evidenceRetention=EvidenceRetentionPolicy[commandCapacity=256, retiredResourceCapacity=256, resourceIdentityCapacity=65536, residentGenerationCapacity=16384], validationEnabled=false, gpuTimingsEnabled=true, cpuFrameReadbackEnabled=false, gpuDevice=null, frameOutputFormat=SDR_RGBA8, temporalRendering=TemporalRenderingOptions[mode=BALANCED, maxHistoryFrames=8], frameReconstruction=FrameReconstructionOptions[preference=PREFERRED, mode=SUPER_RESOLUTION, quality=AUTO, fallback=SPATIAL], frameGeneration=FrameGenerationOptions[preference=DISABLED, mode=DISABLED, multiplier=TWO_X, fallback=NONE], lowLatency=LowLatencyOptions[preference=PREFERRED], denoising=DenoisingOptions[preference=DISABLED, strategy=BALANCED, builtInTemporalFallback=false], rayTracingOptimizations=RayTracingOptimizationOptions[shaderExecutionReordering=PREFERRED, memoryOptimization=PREFERRED]]\n",
+    "scene": {
+      "roi": [
+        780,
+        180,
+        1780,
+        1260
+      ],
+      "consecutiveRgbMae255": 0.7599005144032922,
+      "meanRgb255": [
+        125.60631712962963,
+        141.37160069444445,
+        155.02865694444444
+      ],
+      "highChannelFraction": 0.03938773148148148
+    },
+    "upperFloor": {
+      "roi": [
+        1190,
+        280,
+        1370,
+        450
+      ],
+      "consecutiveRgbMae255": 0.7378213507625272,
+      "meanRgb255": [
+        160.67912581699346,
+        167.5776633986928,
+        135.85420751633987
+      ],
+      "highChannelFraction": 0.0
+    }
+  },
+  "residual-root-sharc-v52": {
+    "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-root-sharc-v52",
+    "runtime": "mode=raw glass=true probe=none\nRuntimeStatus[renderWidth=1485, renderHeight=835, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=true, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]\nRendererConfig[maxFramesInFlight=3, evidenceRetention=EvidenceRetentionPolicy[commandCapacity=256, retiredResourceCapacity=256, resourceIdentityCapacity=65536, residentGenerationCapacity=16384], validationEnabled=false, gpuTimingsEnabled=true, cpuFrameReadbackEnabled=false, gpuDevice=null, frameOutputFormat=SDR_RGBA8, temporalRendering=TemporalRenderingOptions[mode=BALANCED, maxHistoryFrames=8], frameReconstruction=FrameReconstructionOptions[preference=PREFERRED, mode=SUPER_RESOLUTION, quality=AUTO, fallback=SPATIAL], frameGeneration=FrameGenerationOptions[preference=DISABLED, mode=DISABLED, multiplier=TWO_X, fallback=NONE], lowLatency=LowLatencyOptions[preference=PREFERRED], denoising=DenoisingOptions[preference=DISABLED, strategy=BALANCED, builtInTemporalFallback=false], rayTracingOptimizations=RayTracingOptimizationOptions[shaderExecutionReordering=PREFERRED, memoryOptimization=PREFERRED]]\n",
+    "scene": {
+      "roi": [
+        780,
+        180,
+        1780,
+        1260
+      ],
+      "consecutiveRgbMae255": 2.976143724279835,
+      "meanRgb255": [
+        120.81634583333333,
+        131.9459488425926,
+        147.20848541666666
+      ],
+      "highChannelFraction": 0.03408425925925926
+    },
+    "upperFloor": {
+      "roi": [
+        1190,
+        280,
+        1370,
+        450
+      ],
+      "consecutiveRgbMae255": 4.392480029048657,
+      "meanRgb255": [
+        158.59616013071894,
+        155.54129901960783,
+        123.52233660130719
+      ],
+      "highChannelFraction": 0.0
+    }
+  }
+}

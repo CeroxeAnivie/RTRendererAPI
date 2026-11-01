@@ -32,13 +32,13 @@ class HostPathTracer final : public AdvancedPathTracer {
     bool lightingSceneDirty=true;
     bool lightingPolicyLogged=false;
     bool eligibleLightingScene=false;
-    int previousNeeType=2;
     bool smallPointScene() const {
         if(!GetScene())return false;
         const auto graph=GetScene()->GetSceneGraph();
         const auto& lights=graph->GetLights();
         size_t analyticCount=0;
         bool pointFound=false;
+        bool supportedAnalyticSet=true;
         for(const auto& light:lights) {
             const auto type=light->GetLightType();
             if(type==LightType_Point) {
@@ -47,15 +47,11 @@ class HostPathTracer final : public AdvancedPathTracer {
                 pointFound=true;
             } else if(type==LightType_Spot || type==LightType_Directional) {
                 ++analyticCount;
-            }
+            } else supportedAnalyticSet=false;
         }
-        size_t emissiveMaterials=0;
-        for(const auto& material:graph->GetMaterials())
-            if(material->emissiveColor.x!=0.f || material->emissiveColor.y!=0.f || material->emissiveColor.z!=0.f)
-                ++emissiveMaterials;
-        const bool eligible=pointFound && analyticCount<=4 && emissiveMaterials==0;
-        donut::log::info("RTXPT small-point scene gate: lights=%zu analytic=%zu points=%s emissiveMaterials=%zu eligible=%s",
-            lights.size(),analyticCount,pointFound?"yes":"no",emissiveMaterials,eligible?"yes":"no");
+        const bool eligible=pointFound && analyticCount<=4 && supportedAnalyticSet;
+        donut::log::info("RTXPT exact-point scene gate: lights=%zu analytic=%zu points=%s supportedAnalyticSet=%s eligible=%s",
+            lights.size(),analyticCount,pointFound?"yes":"no",supportedAnalyticSet?"yes":"no",eligible?"yes":"no");
         return eligible;
     }
 public:
@@ -89,26 +85,16 @@ public:
         const bool enabled=eligibleLightingScene && supportedRealtimePolicy
             && !(overrideValue && std::string(overrideValue)=="0");
         if(enabled==smallPointLighting)return;
-        if(enabled) {
-            previousNeeType=g_sampleUIData.NEEType;
-            const char* preserveFeedback=std::getenv("RTR_RTXPT_DIAGNOSTIC_KEEP_NEEAT");
-            const bool keepNeeeAtFeedback=supportedRealtimePolicy && preserveFeedback
-                && std::string(preserveFeedback)=="1";
-            g_sampleUIData.NEEType=keepNeeeAtFeedback?previousNeeType:1;
-            if(keepNeeeAtFeedback)
-                donut::log::info("RTXPT diagnostic: exact point sum keeps native NEE-AT temporal light feedback");
-        }
-        else g_sampleUIData.NEEType=previousNeeType;
         smallPointLighting=enabled;
-        donut::log::info("RTXPT native small-point lighting %s; standalone denoising unchanged",enabled?"ACTIVE":"DISABLED");
+        donut::log::info("RTXPT exact point sum %s; native NEE-AT sampling and feedback remain enabled",enabled?"ACTIVE":"INACTIVE");
     }
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
-        const char* splitControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT");
+        const char* residualControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING");
         if(smallPointLighting) {
             macros.push_back({"RTR_EXACT_SMALL_POINTS","1"});
-            if(!splitControl || std::string(splitControl)!="0")
-                macros.push_back({"RTR_SPLIT_POINT_ENVIRONMENT","1"});
+            if(!residualControl || std::string(residualControl)!="1")
+                macros.push_back({"RTR_CONDITIONAL_POINT_SAMPLING","1"});
         }
         const char* misControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_EXACT_MIS");
         const bool approximateMis=misControl && std::string(misControl)=="0";

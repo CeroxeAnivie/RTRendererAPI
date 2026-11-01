@@ -5,18 +5,15 @@ param(
     [switch]$PackagedRuntime,
     [switch]$SmallPointCandidate,
     [switch]$ControlLighting,
-    [switch]$SplitPointEnvironment,
-    [switch]$DisableSplitPointEnvironment,
+    [switch]$DisableResidualPointSampling,
     [switch]$ExactMis,
     [switch]$ApproximateMis,
-    [switch]$PreserveNeeAt,
     [switch]$Sharc,
     [switch]$RestirGi,
     [ValidateSet('none','original-lights','quarter-lights','no-points','no-sun','no-sky','no-environment')][string]$LightingProbe='none'
 )
 $ErrorActionPreference='Stop'
 if($SmallPointCandidate -and $ControlLighting){throw 'Choose candidate or original lighting control, not both.'}
-if($SplitPointEnvironment -and $DisableSplitPointEnvironment){throw 'Choose split or unsplit environment sampling, not both.'}
 if($ExactMis -and $ApproximateMis){throw 'Choose exact or approximate MIS, not both.'}
 if($Sharc -and $Mode -ne 'raw'){throw 'SHaRC isolation requires raw mode.'}
 if($RestirGi -and $Mode -ne 'raw'){throw 'ReSTIR GI isolation requires raw mode.'}
@@ -55,11 +52,9 @@ $settings=[ordered]@{
     RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
     SmallPointCandidate=[bool]$SmallPointCandidate
     ControlLighting=[bool]$ControlLighting
-    SplitPointEnvironment=[bool]$SplitPointEnvironment
-    DisableSplitPointEnvironment=[bool]$DisableSplitPointEnvironment
+    DisableResidualPointSampling=[bool]$DisableResidualPointSampling
     ExactMis=[bool]$ExactMis
     ApproximateMis=[bool]$ApproximateMis
-    PreserveNeeAt=[bool]$PreserveNeeAt
     Sharc=[bool]$Sharc
     RestirGi=[bool]$RestirGi
     LightingProbe=$LightingProbe
@@ -72,15 +67,13 @@ $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settin
 & nvidia-smi --query-gpu=name,utilization.gpu,memory.used --format=csv > ($prefix+'-initial-gpu.csv')
 $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
 $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
-$oldSplit=$env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT
+$oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
-$oldNeeAt=$env:RTR_RTXPT_DIAGNOSTIC_KEEP_NEEAT
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
-    $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$(if($DisableSplitPointEnvironment){'0'}elseif($SplitPointEnvironment){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
-    $env:RTR_RTXPT_DIAGNOSTIC_KEEP_NEEAT=$(if($PreserveNeeAt){'1'}else{$null})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     Get-Content -LiteralPath ($prefix+'.log') -Tail 5
@@ -88,7 +81,6 @@ try {
 } finally {
     $env:RTR_RTXPT_GPU_PROFILE=$oldProfile
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
-    $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$oldSplit
+    $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$oldResidual
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
-    $env:RTR_RTXPT_DIAGNOSTIC_KEEP_NEEAT=$oldNeeAt
 }

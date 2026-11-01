@@ -1,23 +1,16 @@
 // Small delta-light sum; BSDF evaluation, visibility, MIS and accumulation remain RTXPT's.
 // Reference: PBRT-v3 UniformSampleAllLights / EstimateDirect (delta light branch).
-// Only zero-radius point lights are summed. When the residual environment is
-// stratified, RTXPT retains its sampler and uses matching conditional PDFs/MIS.
+// Only zero-radius point lights are summed. Every other light remains in
+// RTXPT's native sampler with matching conditional PDFs and MIS.
 #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS
 bool RtrSmallPointSet(const LightSampler sampler)
 {
-    uint count = sampler.ControlBuffer[0].AnalyticLightCount;
-    if (count == 0 || count > 4 || sampler.ControlBuffer[0].TriangleLightCount != 0
-        || sampler.ControlBuffer[0].LightClusterCount != 0)
-        return false;
-    return true;
+    return sampler.RtrSmallPointSet();
 }
 
 bool RtrCoveredPoint(const LightSampler sampler, uint index)
 {
-    uint first = sampler.ControlBuffer[0].EnvmapQuadNodeCount;
-    uint count = sampler.ControlBuffer[0].AnalyticLightCount;
-    return index >= first && index < first + count
-        && PolymorphicLight::DecodeType(sampler.LoadLight(index)) == PolymorphicLightType::kPoint;
+    return sampler.RtrCoveredPoint(index);
 }
 
 void RtrSumPointLights(inout NEEResult result, const LightSampler sampler,

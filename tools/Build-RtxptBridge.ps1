@@ -16,7 +16,9 @@ function Patch-Once([string]$Relative,[string]$Anchor,[string]$Replacement,[stri
     $path=Join-Path $sdk $Relative
     $text=[IO.File]::ReadAllText($path)
     if($text.Contains($Marker)){return}
-    if(!$text.Contains($Anchor)){throw "Pinned host integration anchor changed: $Relative"}
+    $Anchor=[regex]::Replace($Anchor,"`r?`n","`r`n")
+    $Replacement=[regex]::Replace($Replacement,"`r?`n","`r`n")
+    if(!$text.Contains($Anchor)){throw "Pinned host integration anchor changed: $Relative :: $Anchor"}
     [IO.File]::WriteAllText($path,$text.Replace($Anchor,$Replacement),$utf8)
 }
 # Bound nested shader compilers as well as the top-level MSBuild process.
@@ -207,6 +209,93 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            // this c
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            ProcessLightSample(result, lightSample, candidateSampleCount, fullSamples, localCount, globalCount, shadingData, bsdf, preScatterPath, lightSampler, sampleGenerator, workingContext);' @'
             ProcessLightSample(result, lightSample, candidateSampleCount, fullSamples, localCount, globalCount, shadingData, bsdf, preScatterPath, lightSampler, sampleGenerator, workingContext, true); // RTR sampled candidates train NEE-AT
 '@ 'RTR sampled candidates train NEE-AT'
+# Keep exact delta points out of both NEE-AT strata and use matching conditional PDFs.
+Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        globalCount = totalCandidateSamples - localCount;' @'
+        globalCount = totalCandidateSamples - localCount;
+        #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS && defined(RTR_CONDITIONAL_POINT_SAMPLING) && RTR_CONDITIONAL_POINT_SAMPLING
+        if (RtrSmallPointSet())
+        {
+            const uint residualGlobal = RtrResidualProxyCount();
+            const uint residualLocal = localCount > 0 ? RtrResidualLocalSlotCount() : 0;
+            if (localCount > 0 && residualLocal == 0) { globalCount += localCount; localCount = 0; }
+            if (globalCount > 0 && residualGlobal == 0) { localCount += globalCount; globalCount = 0; }
+        }
+        #endif // RTR residual candidate counts
+'@ 'RTR residual candidate counts'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' 'const LightSampler lightSampler)' @'
+const LightSampler lightSampler, const bool conditionalPointSampling,
+const uint residualGlobalProxyCount, const uint residualLocalSlotCount) // RTR residual sample parameters
+'@ 'RTR residual sample parameters'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' @'
+            if( sampleIsLocal )
+                lightIndex = lightSampler.SampleLocal( rnd, selectionPdf );
+            else
+                lightIndex = lightSampler.SampleGlobal( rnd, selectionPdf );
+'@ @'
+            if( sampleIsLocal )
+            {
+                if (conditionalPointSampling && residualLocalSlotCount < RTXPT_LIGHTING_LOCAL_PROXY_COUNT)
+                    lightIndex = lightSampler.RtrSampleResidualLocal(rnd, residualLocalSlotCount, selectionPdf);
+                else
+                    lightIndex = lightSampler.SampleLocal(rnd, selectionPdf);
+            }
+            else if (conditionalPointSampling && residualGlobalProxyCount < lightSampler.ControlBuffer[0].SamplingProxyCount)
+                lightIndex = lightSampler.RtrSampleResidualGlobal(rnd, residualGlobalProxyCount, selectionPdf);
+            else
+                lightIndex = lightSampler.SampleGlobal(rnd, selectionPdf);
+            // RTR conditional residual selection
+'@ 'RTR conditional residual selection'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            lightSampler.ComputeLightSelectionPdfs(lightSample, localCount, globalCount, thisPdf, otherPdf, thisCount, otherCount);' @'
+            bool conditionalPointSampling = false;
+            #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS && defined(RTR_CONDITIONAL_POINT_SAMPLING) && RTR_CONDITIONAL_POINT_SAMPLING
+            conditionalPointSampling = lightSampler.RtrSmallPointSet();
+            #endif
+            lightSampler.RtrComputeLightSelectionPdfs(lightSample, localCount, globalCount, conditionalPointSampling,
+                thisPdf, otherPdf, thisCount, otherCount); // RTR matching residual NEE MIS PDFs
+'@ 'RTR matching residual NEE MIS PDFs'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        result.BSDFMISInfo.FullSamples          = fullSamples;' @'
+        result.BSDFMISInfo.FullSamples          = fullSamples;
+        bool rtrSmallPoints = false;
+        bool rtrConditionalPointSampling = false;
+        uint rtrResidualGlobalProxyCount = 0;
+        uint rtrResidualLocalSlotCount = 0; // RTR residual sampler state
+'@ 'RTR residual sampler state'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        const bool rtrSmallPoints = RtrSmallPointSet(lightSampler);' @'
+        rtrSmallPoints = RtrSmallPointSet(lightSampler);
+        #if defined(RTR_CONDITIONAL_POINT_SAMPLING) && RTR_CONDITIONAL_POINT_SAMPLING
+        rtrConditionalPointSampling = rtrSmallPoints;
+        if (rtrConditionalPointSampling)
+        {
+            rtrResidualGlobalProxyCount = lightSampler.RtrResidualProxyCount();
+            rtrResidualLocalSlotCount = lightSampler.RtrResidualLocalSlotCount();
+        }
+        #endif // RTR residual point activation
+'@ 'RTR residual point activation'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            RtrSumPointLights(result, lightSampler, shadingData, bsdf, preScatterPath, sampleGenerator, workingContext);' @'
+            RtrSumPointLights(result, lightSampler, shadingData, bsdf, preScatterPath, sampleGenerator, workingContext);
+        if (rtrConditionalPointSampling && rtrResidualGlobalProxyCount == 0 && rtrResidualLocalSlotCount == 0)
+            return result; // RTR every stochastic proxy belongs to an exactly summed point
+'@ 'RTR empty residual stratum'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' 'GenerateLightSample(workingContext, shadingData, bsdf, candidateSampleCount, localCount, globalCount, sampleGenerator, lightSampler);' @'
+GenerateLightSample(workingContext, shadingData, bsdf, candidateSampleCount, localCount, globalCount,
+                sampleGenerator, lightSampler, rtrConditionalPointSampling, rtrResidualGlobalProxyCount, rtrResidualLocalSlotCount); // RTR residual sample call
+'@ 'RTR residual sample call'
+Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float globalPdf = SampleGlobalPDF(lightIndex);' @'
+        bool conditionalPointSampling = false;
+        #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS && defined(RTR_CONDITIONAL_POINT_SAMPLING) && RTR_CONDITIONAL_POINT_SAMPLING
+        conditionalPointSampling = RtrSmallPointSet();
+        #endif
+        float globalPdf = RtrSampleGlobalPDF(lightIndex, conditionalPointSampling); // RTR matching residual BSDF global PDF
+'@ 'RTR matching residual BSDF global PDF'
+Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float localPdf = (localCount>0)?(SampleLocalPDF(lightIndex)):(0);' @'
+        float localPdf = (localCount>0)?(RtrSampleLocalPDF(lightIndex, conditionalPointSampling)):(0); // RTR matching residual BSDF local PDF
+'@ 'RTR matching residual BSDF local PDF'
+Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float feedbackPdf = globalPdf;' @'
+        float feedbackPdf = globalPdf;
+        #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS && defined(RTR_CONDITIONAL_POINT_SAMPLING) && RTR_CONDITIONAL_POINT_SAMPLING
+        if (RtrSmallPointSet()) feedbackPdf = RtrNativeGlobalPdfForFeedback(lightIndex);
+        #endif // RTR restore native NEE-AT feedback weights
+'@ 'RTR native residual feedback weights'
 # DirectionalLight::CalcSample returns a to-light direction, not a world position.
 # Match the pinned upstream IntroRTXDIBridge::RAB_GetLightDirDistance convention.
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidateSample.Direction = surfToLight / max( candidateSample.Distance, 1e-7 );' @'

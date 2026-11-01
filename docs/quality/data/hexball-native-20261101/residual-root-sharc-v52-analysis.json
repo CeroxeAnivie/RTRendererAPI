@@ -1,0 +1,113 @@
+{
+  "reference": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-root-reference-full-v51",
+  "candidates": {
+    "residual-root-full-v50": {
+      "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-root-full-v50",
+      "rois": {
+        "scene": {
+          "roi": [
+            780,
+            180,
+            1780,
+            1260
+          ],
+          "consecutiveRgbMae255": 0.7599005144032921,
+          "referenceRgbMae255": 5.317141358024691,
+          "referenceMeanRgb255": [
+            128.6875175925926,
+            144.74827222222223,
+            158.2341462962963
+          ],
+          "meanRgb255": [
+            125.10535555555556,
+            140.95145185185186,
+            154.59194907407408
+          ],
+          "referenceEdgeMagnitudeMae255": 3.2443732922157733
+        },
+        "upperFloor": {
+          "roi": [
+            1190,
+            280,
+            1370,
+            450
+          ],
+          "consecutiveRgbMae255": 0.7378213507625272,
+          "referenceRgbMae255": 5.020588235294118,
+          "referenceMeanRgb255": [
+            161.96183006535946,
+            169.3164705882353,
+            139.2400980392157
+          ],
+          "meanRgb255": [
+            160.14686274509805,
+            167.1299019607843,
+            135.20143790849673
+          ],
+          "referenceEdgeMagnitudeMae255": 3.5273304366538527
+        }
+      },
+      "singleFrameReferenceError": {
+        "moving-119": 6.1888151234567905,
+        "stopped-0": 6.063083333333334,
+        "stopped-3": 5.846799691358025,
+        "stopped-15": 5.613496913580247,
+        "stopped-79": 5.522314814814815
+      }
+    },
+    "residual-root-sharc-v52": {
+      "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-root-sharc-v52",
+      "rois": {
+        "scene": {
+          "roi": [
+            780,
+            180,
+            1780,
+            1260
+          ],
+          "consecutiveRgbMae255": 2.976143724279835,
+          "referenceRgbMae255": 13.540430864197532,
+          "referenceMeanRgb255": [
+            128.6875175925926,
+            144.74827222222223,
+            158.2341462962963
+          ],
+          "meanRgb255": [
+            120.22415092592593,
+            131.3628,
+            146.62033888888888
+          ],
+          "referenceEdgeMagnitudeMae255": 8.355423636144296
+        },
+        "upperFloor": {
+          "roi": [
+            1190,
+            280,
+            1370,
+            450
+          ],
+          "consecutiveRgbMae255": 4.392480029048657,
+          "referenceRgbMae255": 15.819193899782135,
+          "referenceMeanRgb255": [
+            161.96183006535946,
+            169.3164705882353,
+            139.2400980392157
+          ],
+          "meanRgb255": [
+            157.84849673202615,
+            154.78872549019607,
+            122.76875816993464
+          ],
+          "referenceEdgeMagnitudeMae255": 10.825074473131806
+        }
+      },
+      "singleFrameReferenceError": {
+        "moving-119": 15.29030925925926,
+        "stopped-0": 15.154992592592592,
+        "stopped-3": 14.793179938271606,
+        "stopped-15": 14.204497222222223,
+        "stopped-79": 13.8411237654321
+      }
+    }
+  }
+}
