@@ -736,7 +736,8 @@ tasks.register("verifyRuntimeDistribution") {
     inputs.file(archive)
     val resolvedRuntime = provider {
         project(":renderer-api").configurations.getByName("runtimeClasspath").files +
-            project(":renderer-api").layout.buildDirectory.file("libs/renderer-api-$publishedVersion.jar").get().asFile
+            project(":renderer-api").layout.buildDirectory.file("libs/renderer-api-$publishedVersion.jar").get().asFile +
+            project(":renderer-rtxpt").layout.buildDirectory.file("libs/renderer-rtxpt-$publishedVersion.jar").get().asFile
     }
     inputs.files(resolvedRuntime)
     val checksum = layout.buildDirectory.file("release/rtrenderer-api-$publishedVersion-windows-x86_64-candidate.zip.sha256")
@@ -767,7 +768,7 @@ tasks.register("verifyRuntimeDistribution") {
             }
             val runtimePaths = runtimeFiles.map { "lib/" + it.name }.toSet()
             check(names.filter { it.startsWith("lib/") }.toSet() == runtimePaths) {
-                "Distribution lib/ differs from the complete resolved API runtime graph"
+                "Distribution lib/ differs from the API runtime graph plus optional RTXPT backend"
             }
             runtimeFiles.forEach { dependency ->
                 val digest = MessageDigest.getInstance("SHA-256")
