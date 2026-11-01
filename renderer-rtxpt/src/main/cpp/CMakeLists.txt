@@ -9,6 +9,13 @@ if(MSVC)
     endforeach()
 endif()
 add_library(rtrenderer_rtxpt SHARED "${CMAKE_CURRENT_LIST_DIR}/rtxpt_jni.cpp")
+add_executable(rtxpt_native_control "${CMAKE_CURRENT_LIST_DIR}/rtxpt_native_control.cpp")
+target_link_libraries(rtxpt_native_control PRIVATE RtxptCore d3d12)
+target_include_directories(rtxpt_native_control PRIVATE "${CMAKE_SOURCE_DIR}/External/Donut/src/app/streamline")
+target_compile_definitions(rtxpt_native_control PRIVATE RTR_RTXPT_ADVANCED_SOURCE="${CMAKE_SOURCE_DIR}/Rtxpt/AdvancedSample.cpp")
+set_target_properties(rtxpt_native_control PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 # Agility selection is resolved relative to the hosting process executable.
 target_link_libraries(rtrenderer_rtxpt PRIVATE RtxptCore ${JNI_LIBRARIES} d3d12)
 target_include_directories(rtrenderer_rtxpt PRIVATE ${JNI_INCLUDE_DIRS}

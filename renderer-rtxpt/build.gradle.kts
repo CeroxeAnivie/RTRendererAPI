@@ -28,6 +28,14 @@ tasks.register<JavaExec>("rtxptNativeSelfTest") {
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptNativeSelfTest")
 }
+tasks.register<JavaExec>("rtxptAdvancedNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses, tasks.jar)
+    classpath = sourceSets.test.get().output + configurations.testRuntimeClasspath.get() + files(tasks.jar)
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptAdvancedNativeSelfTest")
+    doFirst { workingDir(Files.createTempDirectory("rtxpt-advanced-consumer-").toFile()) }
+    systemProperty("top.ceroxe.rt.rtxpt.testOutput", rootProject.layout.buildDirectory.dir("reports/rtxpt-advanced").get().asFile.absolutePath)
+    doLast { workingDir.deleteRecursively() }
+}
 
 tasks.register<JavaExec>("rtxptPackagedNativeSelfTest") {
     group = "verification"

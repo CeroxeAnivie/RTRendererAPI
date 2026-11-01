@@ -21,27 +21,10 @@
 #include <Materials/MaterialsBaker.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
+#include "rtxpt_shutdown.h"
 extern SampleUIData g_sampleUIData;
 
 namespace {
-// SL 2.14 queues RR resource-destruction functors in sl.common. Keep their
-// defining module loaded until common has drained them during slShutdown.
-// Resolve the actual plugin (including NGX updates) via SL's public API.
-class ShutdownModuleReference {
-    HMODULE module = nullptr;
-public:
-    ShutdownModuleReference() {
-        void* callback = nullptr;
-        if (slGetFeatureFunction(sl::kFeatureDLSS_RR, "slDLSSDGetState", callback) == sl::Result::eOk && callback) {
-            if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-                    reinterpret_cast<LPCWSTR>(callback), &module))
-                throw std::runtime_error("Cannot retain Streamline RR module for shutdown");
-        }
-    }
-    ~ShutdownModuleReference() { if (module) FreeLibrary(module); }
-    ShutdownModuleReference(const ShutdownModuleReference&) = delete;
-    ShutdownModuleReference& operator=(const ShutdownModuleReference&) = delete;
-};
 class HostPathTracer final : public AdvancedPathTracer {
 public:
     using AdvancedPathTracer::AdvancedPathTracer;

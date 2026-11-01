@@ -174,7 +174,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         b.technology(RenderingFeatureCapabilities.Technology.LOW_LATENCY_MARKERS,capability(
             p.lowLatency().preference().requested(),s.reflexSupported(),s.lowLatency(),"nvidia.reflex",null,"Streamline Reflex markers"));
         b.technology(RenderingFeatureCapabilities.Technology.RAY_TRACING_DENOISING,capability(
-            p.denoising().preference().requested(),true,s.denoising(),"nvidia.nrd",null,"RTXPT NRD path"));
+            p.denoising().preference().requested(),true,s.denoising(),s.standaloneDenoiser()?"nvidia.nrd":"nvidia.dlss_rr",null,"RTXPT native denoising"));
         b.technology(RenderingFeatureCapabilities.Technology.SHADER_EXECUTION_REORDERING,capability(
             p.rayTracingOptimizations().shaderExecutionReordering().requested(),s.shaderExecutionReorderingSupported(),
             s.shaderExecutionReordering(),"nvidia.rtxpt.ser",null,"RTXPT hit-object path"));
