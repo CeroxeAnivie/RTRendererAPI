@@ -38,7 +38,7 @@ public final class BoundaryRadianceTraversalNativeSelfTest {
         float dx=.6562535762786865f,dy=-.2838139832019806f,dz=-.6991286277770996f;
         float length=(float)Math.sqrt(dx*dx+dz*dz),rx=-dz/length,rz=dx/length;
         var camera=CameraState.explicitBasis(-3.2866134643554688,-1.8500804901123047,7.664741039276123)
-                .forward(dx,dy,dz).right(rx,0,rz).up(-rz*dy,rz*dx-rx*dz,rx*dy).build();
+                .forward(dx,dy,dz).right(rx,0,rz).up(-rz*dy,rz*dx-rx*dz,rx*dy).projectionTangents(1,1).build();
         int[][] permutations={{0,1,2},{1,2,0},{2,0,1},{0,2,1},{2,1,0},{1,0,2}};
         int failures=0,checks=0;long revision=0;
         var report=new StringBuilder("{\"sequence\":172,\"path\":1607471,\"cases\":[");
