@@ -97,3 +97,33 @@ The runner uses direct log file handles. An NGX updater child inherited the firs
 PowerShell capture pipe and delayed the shell's completion despite the renderer
 having exited; `Run-HexBallProcess.py` prevents that harness-only delay. It does
 not change rendering or frame-window timing.
+
+## SR comparison correction and concrete input-order defect
+
+The RR result is not a same-technology comparison with the old SR path. The
+requested comparison uses `--original-balls --original-settings`: the exact
+`DemoRendererProfile.interactive(config)` policy shared by the original demo.
+Runtime must report DLSS (SR), balanced, input 1485x835/output 2560x1440, 1 SPP,
+no FG, no NRD, no RR, no SHaRC/ReSTIR, SER and Reflex enabled. After the user's
+instruction, the old demo is not run again; its frozen 230.775737 FPS remains a
+historical reference, not a new contemporaneous paired measurement.
+
+`rtxpt-sr-match-off-v4`: 5678 frames / 30.005992 s, 189.230579 FPS; initial GPU
+0%, exit 0. This is before-fix evidence for the SR image defect, not image-quality
+acceptance. Switching RR to SR must not be called a code optimization.
+
+Confirmed source defect: upstream `Sample::PostProcessAA` called `EvaluateDLSS`
+before `NoDenoiserFinalMerge` when standalone denoising was disabled. The merge
+produces current-frame color: `ProcessingPasses/PostProcess.hlsl`,
+`NO_DENOISER_FINAL_MERGE`, writes `u_OutputColor` from current denoising layers.
+SR read the previous contents with this frame's depth and motion vectors. Old
+Vulkan records surface shading before `recordPostTrace` calls reconstruction.
+
+The host patch moves that single merge before copy/TAA/SR and resource handoff.
+It does not add a pass or modify the upstream path tracer. RR retains its prefix
+guide merge; NRD retains its earlier denoised merge. This fixes the temporal-input
+dependency; residual 1-SPP noise and image quality still require visual evidence.
+
+`Assert-RtxptSrFrameOrder.py` checks source order and, with a measured CSV, checks
+merge-end before DLSS-begin in every sampled SR frame, with no RR execution.
+Final throughput is measured again without stage diagnostics.

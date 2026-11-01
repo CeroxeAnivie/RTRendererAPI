@@ -56,6 +56,22 @@ foreach($entry in @(@('Init(nvrhi::IDevice* device)','RtrGpuProfile::Init(device
     }
 }
 [IO.File]::WriteAllText($profilerPath,$profilerText,$utf8)
+# SR/TAA must consume this frame's merged radiance, not last frame's OutputColor.
+# RR already merges its own guides in the render prefix; NRD already merges before AA.
+$samplePath=Join-Path $sdk 'Rtxpt/Sample.cpp'
+$sampleText=[IO.File]::ReadAllText($samplePath)
+if(!$sampleText.Contains('RTR current radiance before temporal reconstruction')){
+    $lateMerge='(?s)        else if \( !m_ui\.ActualUseStandaloneDenoiser\(\) \)\s*\{\s*// If all denoisers disabled, this is a pass-through that just merges and outputs noisy data\s*SampleMiniConstants miniConstants = \{ uint4\(0, 0, 0, 0\) \};\s*nvrhi::TextureDesc tdesc = m_renderTargets->OutputColor->getDesc\(\);\s*GpuProfiler::Begin\(m_commandList, "NoDenoiserFinalMerge"\);\s*m_postProcess->Apply\(m_commandList, PostProcess::ComputePassType::NoDenoiserFinalMerge, m_constantBuffer, miniConstants, m_bindingSet, m_bindingLayout, tdesc.width, tdesc.height\);\s*GpuProfiler::End\(m_commandList\);\s*\}'
+    $match=[regex]::Match($sampleText,$lateMerge)
+    if(!$match.Success){throw 'Pinned late no-denoiser merge anchor changed'}
+    $body=$match.Value.Substring($match.Value.IndexOf('{'))
+    $sampleText=$sampleText.Remove($match.Index,$match.Length)
+    $anchor='(void Sample::PostProcessAA\(nvrhi::IFramebuffer\* framebuffer, bool reset\)\s*\{\s*ZoneScopedN\("PostProcessAA"\);\s*if \(m_ui.RealtimeMode\)\s*\{)'
+    if(![regex]::IsMatch($sampleText,$anchor)){throw 'Pinned pre-AA merge anchor changed'}
+    $insert='$1'+"`n        // RTR current radiance before temporal reconstruction`n        if (m_ui.RealtimeAA != 3 && !m_ui.ActualUseStandaloneDenoiser())`n        "+$body+"`n"
+    $sampleText=[regex]::Replace($sampleText,$anchor,$insert,1)
+    [IO.File]::WriteAllText($samplePath,$sampleText,$utf8)
+}
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.cpp' 'm_CmdLine.InitFromCommandLine(__argc, __argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)'
 Patch-Once 'Rtxpt/SampleCommon/SampleCommon.cpp' '    // progress bar currently interfering with fullscreen so disable' @'
     // RTR embedded host: compilation/loading progress belongs in the host log.
