@@ -69,6 +69,32 @@ bool gsBoundarySharesEdge(vec3 a,vec3 b,vec3 c,vec3 p,vec3 q,vec3 r) {
             +int(gsBoundarySamePoint(c,p)||gsBoundarySamePoint(c,q)||gsBoundarySamePoint(c,r));
     return matches>=2;
 }
+// An adjacent triangle on the same exact object-space plane has the same ray t.
+// Do not reject its real hit using a bound on hardware t alone: instance/ray
+// transform error can exceed that bound (NVIDIA robust ray tracing, Listing 6).
+// A strict two-float zero test admits only certified coplanar replacements.
+bool gsBoundarySamePlane(vec3 a,vec3 b,vec3 c,vec3 p,vec3 q,vec3 r) {
+    vec2 ex=gsBoundaryWideAdd(vec2(b.x,0),vec2(-a.x,0));
+    vec2 ey=gsBoundaryWideAdd(vec2(b.y,0),vec2(-a.y,0));
+    vec2 ez=gsBoundaryWideAdd(vec2(b.z,0),vec2(-a.z,0));
+    vec2 fx=gsBoundaryWideAdd(vec2(c.x,0),vec2(-a.x,0));
+    vec2 fy=gsBoundaryWideAdd(vec2(c.y,0),vec2(-a.y,0));
+    vec2 fz=gsBoundaryWideAdd(vec2(c.z,0),vec2(-a.z,0));
+    vec2 nx=gsBoundaryWideDifferenceOfProducts(ey,fz,ez,fy);
+    vec2 ny=gsBoundaryWideDifferenceOfProducts(ez,fx,ex,fz);
+    vec2 nz=gsBoundaryWideDifferenceOfProducts(ex,fy,ey,fx);
+    if(all(equal(nx,vec2(0)))&&all(equal(ny,vec2(0)))&&all(equal(nz,vec2(0))))return false;
+    vec3 vertices[3]=vec3[3](p,q,r);
+    for(int i=0;i<3;i++) {
+        vec3 v=vertices[i];
+        vec2 d=gsBoundaryWideAdd(gsBoundaryWideAdd(
+            gsBoundaryWideMultiply(nx,gsBoundaryWideAdd(vec2(v.x,0),vec2(-a.x,0))),
+            gsBoundaryWideMultiply(ny,gsBoundaryWideAdd(vec2(v.y,0),vec2(-a.y,0)))),
+            gsBoundaryWideMultiply(nz,gsBoundaryWideAdd(vec2(v.z,0),vec2(-a.z,0))));
+        if(any(notEqual(d,vec2(0))))return false;
+    }
+    return true;
+}
 precise vec2 gsBoundaryDistanceFromEdges(GsBoundaryWide3 a,GsBoundaryWide3 b,GsBoundaryWide3 c,
         vec2 e0,vec2 e1,vec2 e2) {
     vec2 x=gsBoundaryWideDifferenceOfProducts(b.y,c.z,b.z,c.y);
@@ -164,7 +190,8 @@ bool gsBoundaryConnectionHit(uint mesh,uint primitive,vec2 bary,float minimum,
         // is not bounded by a constant number of ULPs of t alone (NVIDIA SIA).
         // Only an alternative primitive needs the nearby-candidate restriction.
         if(candidateDistance<minimum
-                ||(other!=primitive&&abs(candidateDistance-GS_BOUNDARY_HIT_T)>tolerance)
+                ||(other!=primitive&&abs(candidateDistance-GS_BOUNDARY_HIT_T)>tolerance
+                    &&!gsBoundarySamePlane(a,b,c,p,q,r))
                 ||candidateDistance>=nearest)continue;
         found=true;nearest=candidateDistance;repairedPrimitive=other;repairedBary=candidateBary;repairedDistance=candidateDistance;
     }

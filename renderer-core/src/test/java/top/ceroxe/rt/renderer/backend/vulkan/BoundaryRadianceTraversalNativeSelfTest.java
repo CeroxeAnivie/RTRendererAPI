@@ -37,14 +37,20 @@ public final class BoundaryRadianceTraversalNativeSelfTest {
         var shaders=SceneShaderProgram.builder().shader(ShaderStage.RAY_GENERATION,SOURCE).build();
         float dx=.6562535762786865f,dy=-.2838139832019806f,dz=-.6991286277770996f;
         float length=(float)Math.sqrt(dx*dx+dz*dz),rx=-dz/length,rz=dx/length;
-        var camera=CameraState.explicitBasis(-3.2866134643554688,-1.8500804901123047,7.664741039276123)
+        var edgeCamera=CameraState.explicitBasis(-3.2866134643554688,-1.8500804901123047,7.664741039276123)
                 .forward(dx,dy,dz).right(rx,0,rz).up(-rz*dy,rz*dx-rx*dz,rx*dy).projectionTangents(1,1).build();
+        float ix=-.15008355677127838f,iy=-.0634264275431633f,iz=-.9866366982460022f;
+        float il=(float)Math.sqrt(ix*ix+iz*iz),irx=-iz/il,irz=ix/il;
+        var diagonalCamera=CameraState.explicitBasis(-4.000001430511475,-1.6921095848083496,.7999849319458008)
+                .forward(ix,iy,iz).right(irx,0,irz).up(-irz*iy,irz*ix-irx*iz,irx*iy).projectionTangents(1,1).build();
         int[][] permutations={{0,1,2},{1,2,0},{2,0,1},{0,2,1},{2,1,0},{1,0,2}};
         int failures=0,checks=0;long revision=0;
         var report=new StringBuilder("{\"sequence\":172,\"path\":1607471,\"cases\":[");
         try(var renderer=Renderer.open("vulkan-rt",RendererConfig.builder().validationEnabled(true)
                 .sceneShaders(shaders).temporalRendering(TemporalRenderingOptions.disabled()).build())) {
-            for(int surface=0;surface<2;surface++)for(int mirror=0;mirror<2;mirror++)for(int p=0;p<6;p++) {
+            for(int replay=0;replay<2;replay++)for(int surface=0;surface<2;surface++)for(int mirror=0;mirror<2;mirror++)for(int p=0;p<6;p++) {
+                var camera=replay==0?edgeCamera:diagonalCamera;
+                float scale=replay==0?.85f:.42f,centerX=replay==0?4.5f:-4.5f,centerY=replay==0?-4:-2;
                 var base=MediumTransportSelfTest.cube(1,1,1);
                 int[] original=new int[base.triangleIndices().remaining()];base.triangleIndices().get(original);
                 int[] indices=original.clone();
@@ -57,7 +63,7 @@ public final class BoundaryRadianceTraversalNativeSelfTest {
                         .upsert(MaterialAsset.builder(1).doubleSided(true).build())
                         .upsert(MeshAsset.triangles(1,positions,indices,1))
                         .upsert(SceneInstance.builder(1,1).transform(new AffineTransform(new float[]{
-                                mirror==0?.85f:-.85f,0,0,4.5f,0,.85f,0,-4,0,0,.85f,0}))
+                                mirror==0?scale:-scale,0,0,centerX,0,scale,0,centerY,0,0,scale,0}))
                                 .mediumBoundary(boundary).build()).build());
                 var request=RenderFrameRequest.builder(revision,WIDTH,HEIGHT,camera).minimumSceneRevision(revision).build();
                 long deadline=System.nanoTime()+Duration.ofSeconds(45).toNanos();
@@ -71,10 +77,10 @@ public final class BoundaryRadianceTraversalNativeSelfTest {
                     int side=pixels.getInt(column*4),flags=pixels.getInt(3*frame.rowBytes()+column*4);
                     float normal=pixels.getFloat(frame.rowBytes()+column*4),t=pixels.getFloat(2*frame.rowBytes()+column*4);
                     // The independent slab oracle enters through x=4.5-float(.85), before the y exit.
-                    double entry=(4.5-(double).85f-camera.x())/(double)dx;
-                    boolean passed=side==(p<3?0:2)&&normal<-.99f&&flags!=0&&Math.abs(t-entry)<2*Math.ulp((float)entry);
+                    double entry=(centerX+(replay==0?-(double)scale:(double)scale)-camera.x())/(replay==0?(double)dx:(double)ix);
+                    boolean passed=side==(p<3?0:2)&&(replay==0?normal<-.99f:normal>.99f)&&flags!=0&&Math.abs(t-entry)<2*Math.ulp((float)entry);
                     if(checks++!=0)report.append(',');
-                    report.append("{\"surface\":").append(surface).append(",\"mirror\":").append(mirror)
+                    report.append("{\"replay\":").append(replay).append(",\"surface\":").append(surface).append(",\"mirror\":").append(mirror)
                             .append(",\"permutation\":").append(p).append(",\"query\":").append(column%3)
                             .append(",\"opaque\":").append(column>=3).append(",\"side\":").append(side)
                             .append(",\"normalX\":").append(normal).append(",\"t\":").append(t)

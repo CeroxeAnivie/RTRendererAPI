@@ -20,7 +20,11 @@
 
 参考 PBRT-v4 固定 commit `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0），`src/pbrt/shapes.cpp` 的稳健三角形边测试、`src/pbrt/util/float.h` 的区间向外舍入，以及 `src/pbrt/ray.h` 的误差界起点偏移。PBRT 的原则是正确分类交点并保证跨界继续；本项目必须另外适配 Vulkan float 硬件候选和 CUDA 介质栈，不能直接照搬 CPU double fallback。
 
-新增 `BoundaryRadianceTraversalNativeSelfTest`：运行时相机输入，直接调用生产 any-hit/closest-hit，覆盖三角形六种排列、镜像、volume/surface、相机/光子/光源连接、opaque 与 any-hit 路径，共 144 条断言。固定故障帧重放后，仍须完整重跑 4 帧预热及 16×16 帧正式窗口；不能用缩短窗口代替验证。
+第一版硬件回归 144 条全部通过，旧制品失败 48 条；sequence 172 完整重放通过。但完整窗口在 sequence 21、path=1350333 暴露另一缺口：内层折射盒的入口恰在同一平面的三角形对角线附近，硬件候选来自不包含精确交点的半面；相邻半面是真实入口。其 slab t=0.5330269639295798，硬件 t=0.5330246686935425，差约 0.00000230，超过旧 helper 写死的 0.00000095。候选因此被误拒，后续 exit 无对应 entry，触发 error=42。捕获确认两个制品在此前各事件的起点、方向、栈完全一致。
+
+第二版在几何精确共面时允许同平面替换，不用硬件 t 的固定 ULP 半径拒绝合法邻面。使用现有两段 float 运算严格检查对象空间平面，不加宽所有交点的 epsilon。参考 NVIDIA《Solving Self-Intersection Artifacts in DirectX Raytracing》Listing 6：硬件世界到对象变换误差不由常数 t ULP 限制。同一平面共享相同真实 ray t，此处用几何关系消除错误限制，而非猜更大的容差。
+
+`BoundaryRadianceTraversalNativeSelfTest` 已加入该对角线入口的第二组运行时输入，直接调用生产 any-hit/closest-hit，覆盖三角形六种排列、镜像、volume/surface、相机/光子/光源连接、opaque 与 any-hit 路径，共 288 条断言。固定故障帧重放后，仍须完整重跑 4 帧预热及 16×16 帧正式窗口；不能用缩短窗口代替验证。
 
 ## 验收记录
 
