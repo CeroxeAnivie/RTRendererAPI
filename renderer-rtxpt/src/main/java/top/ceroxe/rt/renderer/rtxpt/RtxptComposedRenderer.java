@@ -24,7 +24,7 @@ public final class RtxptComposedRenderer implements Renderer {
     private RendererSceneRouting routing;
     private List<FrameCompositionPlan.Layer> overlays=List.of();
     private boolean closed,legacyScenePublished;
-    private long sceneRevision,legacyRevision=-1,sequence=-1,rtxptFrames,legacyFrames;
+    private long sceneRevision,legacyRevision=-1,sequence=-1,legacyFrames;
     private int width,height;
 
     /** Opens RTXPT 3D and native presentation, with Vulkan reserved for independent work and UI. */
@@ -125,7 +125,7 @@ public final class RtxptComposedRenderer implements Renderer {
         overlays=next;
     }
     /** Counts actual work per selected 3D backend, independently of final present timing. */
-    public WorkSnapshot workSnapshot(){return new WorkSnapshot(rtxptFrames,legacyFrames,presenter.performanceSnapshot());}
+    public WorkSnapshot workSnapshot(){return new WorkSnapshot(rtxpt.bridgeTimings().frames(),legacyFrames,presenter.performanceSnapshot());}
     /** Actual upstream rendering configuration; available after the first RTXPT frame. */
     public RtxptAccess.RuntimeStatus rtxptStatus(){ready();return rtxpt.runtimeStatus();}
     /** Explicit diagnostic source capture before Vulkan layers; never part of normal delivery. */
@@ -167,7 +167,7 @@ public final class RtxptComposedRenderer implements Renderer {
         if(wanted.backend()==RendererBackendPolicy.Backend.RTXPT) {
             if(switched)rtxpt.resetHistory();
             try {
-                result=rtxpt.submit(frame);rtxptFrames++;
+                result=rtxpt.submit(frame);
                 if(!nativePresentation)presenter.presentD3D12SharedFrame(rtxpt.sharedFrame(frame.sequence()),overlays);
             } catch(RuntimeException|Error failure) {
                 try{retireExternalFrames();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}

@@ -92,6 +92,17 @@ tasks.register<JavaExec>("rtxptCompositionSelfTest") {
         providers.systemProperty("top.ceroxe.rt.rtxpt.compositionTestMode").orElse("acceptance").get())
 }
 
+tasks.register<JavaExec>("rtxptMemorySelfTest") {
+    group = "verification"
+    description = "Separately diagnoses memory across six scenes, overlay toggles, resize and close; never an FPS benchmark."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    workingDir(rootProject.projectDir)
+    mainClass.set("demo.RtxptMemorySelfTest")
+    jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler", "-Dtop.ceroxe.rt.nativeMemoryDiagnostics=true")
+    args(rootProject.layout.buildDirectory.dir("reports/rtxpt-memory").get().asFile.absolutePath)
+}
+
 tasks.withType<AbstractArchiveTask>().configureEach {
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true

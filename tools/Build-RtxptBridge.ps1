@@ -2,7 +2,7 @@ param(
     [string]$SdkRoot='build/rtxpt-sdk',
     [string]$CMakeExecutable='build/native-build-tools/cmake-4.1.2-windows-x86_64/bin/cmake.exe',
     [string]$StreamlineSdk=$env:STREAMLINE_SDK,
-    [double]$MemoryLimitGB=10.5,
+    [double]$MemoryLimitGB=10,
     [switch]$ConfigureOnly
 )
 $ErrorActionPreference='Stop'

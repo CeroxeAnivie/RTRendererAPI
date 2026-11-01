@@ -102,6 +102,7 @@ public static class RendererBoundedBuild {
                 throw new Win32Exception(error);
             }
             Console.WriteLine("Bounded build: process-tree native/heap commit cap={0:F1} GB; host reserve=0.5 GB", memoryLimitGB - 0.5);
+            Console.WriteLine("Bounded build root PID={0}", process.ProcessId);
             var timer = Stopwatch.StartNew();
             if (ResumeThread(process.Thread) == uint.MaxValue) throw new Win32Exception();
             while (WaitForSingleObject(process.Process, 1000) == 258) { }

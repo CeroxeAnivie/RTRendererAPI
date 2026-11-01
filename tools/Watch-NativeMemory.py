@@ -31,6 +31,65 @@ class Region(ctypes.Structure):
                 ("protect", ctypes.c_uint32), ("type", ctypes.c_uint32)]
 
 
+class GpuProcessMemory:
+    """Per-process Windows GPU commit, not unique physical VRAM residency."""
+    class Value(ctypes.Structure):
+        _fields_ = [("status", ctypes.c_ulong), ("value", ctypes.c_double)]
+
+    def __init__(self):
+        class Item(ctypes.Structure):
+            _fields_ = [("name", ctypes.c_wchar_p), ("value", GpuProcessMemory.Value)]
+        self.item_type = Item
+        self.api = ctypes.WinDLL("pdh")
+        self.query = ctypes.c_void_p()
+        self.api.PdhOpenQueryW.argtypes = [ctypes.c_wchar_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_void_p)]
+        self.api.PdhAddEnglishCounterW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_void_p)]
+        self.api.PdhCollectQueryData.argtypes = [ctypes.c_void_p]
+        self.api.PdhGetFormattedCounterArrayW.argtypes = [ctypes.c_void_p, ctypes.c_ulong,
+            ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_ulong), ctypes.c_void_p]
+        self.api.PdhCloseQuery.argtypes = [ctypes.c_void_p]
+        if self.api.PdhOpenQueryW(None, 0, ctypes.byref(self.query)):
+            raise OSError("Cannot open GPU memory counters")
+        self.counters = []
+        try:
+            for name in ("Dedicated Usage", "Shared Usage"):
+                counter = ctypes.c_void_p()
+                status = self.api.PdhAddEnglishCounterW(self.query, "\\GPU Process Memory(*)\\" + name,
+                                                       0, ctypes.byref(counter))
+                if status:
+                    raise OSError("GPU memory counter unavailable: " + name)
+                self.counters.append(counter)
+        except BaseException:
+            self.close()
+            raise
+
+    def sample(self, pid):
+        if self.api.PdhCollectQueryData(self.query):
+            return [None, None]
+        result = []
+        for counter in self.counters:
+            size, count = ctypes.c_ulong(), ctypes.c_ulong()
+            status = self.api.PdhGetFormattedCounterArrayW(counter, 0x200, ctypes.byref(size), ctypes.byref(count), None)
+            if (status & 0xffffffff) != 0x800007d2:  # PDH_MORE_DATA
+                result.append(None)
+                continue
+            buffer = ctypes.create_string_buffer(size.value)
+            status = self.api.PdhGetFormattedCounterArrayW(counter, 0x200, ctypes.byref(size), ctypes.byref(count), buffer)
+            if status:
+                result.append(None)
+                continue
+            items = ctypes.cast(buffer, ctypes.POINTER(self.item_type))
+            values = [items[i].value.value for i in range(count.value)
+                      if items[i].name.startswith(f"pid_{pid}_") and items[i].value.status in (0, 1)]
+            result.append(int(sum(values)) if values else None)
+        return result
+
+    def close(self):
+        if self.query:
+            self.api.PdhCloseQuery(self.query)
+            self.query = None
+
+
 def census(kernel, psapi, handle, names):
     started = time.time()
     address = 0
@@ -87,11 +146,17 @@ def main():
     parser.add_argument("--census-interval", type=float, default=1.0)
     parser.add_argument("--detach-marker", default="GalleryPerf warmupFrames=")
     parser.add_argument("--frida-directory", type=pathlib.Path)
+    parser.add_argument("--lightweight", action="store_true", help="Only process/GPU counters; no census, hooks or jcmd dumps")
+    parser.add_argument("--memory-limit-gb", type=float, default=10)
     args = parser.parse_args()
     if args.native_heaps and not args.native_stacks:
         parser.error("--native-heaps requires --native-stacks")
     if args.census_interval < 0.1:
         parser.error("--census-interval must be at least 0.1 seconds")
+    if args.lightweight and args.native_stacks:
+        parser.error("--lightweight cannot enable native hooks")
+    if args.memory_limit_gb < 1:
+        parser.error("--memory-limit-gb must be at least 1")
     root = pathlib.Path(__file__).resolve().parent.parent
     directory = args.directory.resolve()
     # The manifest must identify the frozen artifact actually used by this run.
@@ -102,7 +167,8 @@ def main():
     (directory / "run.ps1").write_text(
         "$ErrorActionPreference='Stop'\n"
         "$meta=Get-Content (Join-Path $PSScriptRoot 'runtime.json') -Raw|ConvertFrom-Json\n"
-        "& tools/Invoke-BoundedBuild.ps1 -FilePath java -ArgumentList $meta.arguments -MemoryLimitGB 3\n",
+        "$java=if($meta.executable){$meta.executable}else{'java'}\n"
+        f"& tools/Invoke-BoundedBuild.ps1 -FilePath $java -ArgumentList $meta.arguments -MemoryLimitGB {args.memory_limit_gb}\n",
         encoding="utf-8")
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     psapi = ctypes.WinDLL("psapi", use_last_error=True)
@@ -118,11 +184,17 @@ def main():
     diagnostics = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     dump = None
     names = {}
+    gpu = None
+    try:
+        gpu = GpuProcessMemory()
+    except OSError as error:
+        print("GPU process counters unavailable:", error, flush=True)
     with (directory / "run.log").open("w", encoding="utf-8") as log, \
             (directory / "process-memory.csv").open("w", encoding="utf-8", newline="") as memory, \
             gzip.open(directory / "virtual-memory.jsonl.gz", "wt", encoding="utf-8") as virtual:
         writer = csv.writer(memory)
-        writer.writerow(["epochSeconds", "elapsedSeconds", "privateCommitBytes", "workingSetBytes"])
+        writer.writerow(["epochSeconds", "elapsedSeconds", "privateCommitBytes", "workingSetBytes",
+                         "gpuDedicatedCommitBytes", "gpuSharedCommitBytes"])
         process = subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(directory / "run.ps1")],
                                    cwd=root, stdout=log, stderr=subprocess.STDOUT)
         start = time.monotonic()
@@ -136,7 +208,7 @@ def main():
                 if now - start > args.timeout:
                     raise TimeoutError("Memory observation run exceeded its time bound")
                 if target is None:
-                    match = re.search(r"Use jcmd (\d+) JFR", (directory / "run.log").read_text(encoding="utf-8", errors="replace"))
+                    match = re.search(r"(?:Use jcmd |Bounded build root PID=)(\d+)", (directory / "run.log").read_text(encoding="utf-8", errors="replace"))
                     if match:
                         target = int(match.group(1))
                         # VirtualQueryEx/GetMappedFileName require QUERY_INFORMATION,
@@ -163,16 +235,18 @@ def main():
                             script.on("message", receive)
                             script.load()
                             print("Native observer hooks installed", flush=True)
-                        virtual.write(json.dumps(census(kernel, psapi, handle, names)) + "\n")
-                        virtual.flush()
+                        if not args.lightweight:
+                            virtual.write(json.dumps(census(kernel, psapi, handle, names)) + "\n")
+                            virtual.flush()
                         (directory / "probe-ready").touch()
                 if handle:
                     counters = Counters()
                     counters.cb = ctypes.sizeof(counters)
                     if psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
-                        writer.writerow([time.time(), now - start, counters.private, counters.workingSet])
+                        gpu_values = gpu.sample(target) if gpu else [None, None]
+                        writer.writerow([time.time(), now - start, counters.private, counters.workingSet, *gpu_values])
                         memory.flush()
-                    if now >= next_census:
+                    if not args.lightweight and now >= next_census:
                         try:
                             snapshot = census(kernel, psapi, handle, names)
                         except OSError:
@@ -192,7 +266,7 @@ def main():
                         script.unload()
                         session.detach()
                         session = script = None
-                    if now >= next_dump and (dump is None or dump.done()):
+                    if not args.lightweight and now >= next_dump and (dump is None or dump.done()):
                         if dump is not None:
                             dump.result()
                         checkpoint = directory / f"checkpoint-{dump_number % 2}.jfr"
@@ -206,7 +280,7 @@ def main():
                         dump = diagnostics.submit(checkpoint_dump)
                         dump_number += 1
                         next_dump = time.monotonic() + 5
-                time.sleep(0.2)
+                time.sleep(1 if args.lightweight else 0.2)
         finally:
             if session:
                 try:
@@ -226,6 +300,8 @@ def main():
                     process.terminate()
                     process.wait(timeout=10)
             diagnostics.shutdown(wait=True)
+            if gpu:
+                gpu.close()
     print((directory / "run.log").read_text(encoding="utf-8", errors="replace")[-2400:])
     return process.returncode
 

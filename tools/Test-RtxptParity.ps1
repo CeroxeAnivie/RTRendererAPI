@@ -33,6 +33,12 @@ try {
         $order=if($round%2){@('native','jar')}else{@('jar','native')}
         foreach($mode in $order) {
             $gpu=(& nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits --id=0).Trim()
+            if($LASTEXITCODE -ne 0 -or $gpu -notmatch '^\d+$'){throw 'Cannot verify GPU idle state; benchmark was not started'}
+            if([int]$gpu -ne 0){
+                [pscustomobject]@{status='WAITING_FOR_IDLE_GPU';round=$round;mode=$mode;initialGpuPercent=[int]$gpu;rows=@($rows.ToArray())} |
+                    ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $output 'paused.json') -Encoding utf8
+                throw "GPU baseline is $gpu%; benchmark paused until GPU baseline is 0%"
+            }
             $log=Join-Path $output ("round-$round-$mode.log")
             if($mode -eq 'native'){& $native @nativeArguments *> $log}
             else{& $JavaExecutable @javaArguments benchmark $fixture *> $log}
@@ -63,7 +69,7 @@ function Median($values){$sorted=@($values|Sort-Object);if($sorted.Count%2){$sor
 $nativeMs=Median @($rows|Where-Object mode -EQ 'native'|ForEach-Object ms)
 $jarMs=Median @($rows|Where-Object mode -EQ 'jar'|ForEach-Object ms)
 $loss=100*($jarMs/$nativeMs-1)
-$comparable=@($rows|Where-Object initialGpuPercent -GT 10).Count -eq 0
+$comparable=@($rows|Where-Object initialGpuPercent -NE 0).Count -eq 0
 $summary=[ordered]@{commit=(& git -C $repo rev-parse HEAD).Trim();rounds=$Rounds;outputWidth=1920;outputHeight=1080;spp=1;fg=$false;
     nativeMedianMs=$nativeMs;jarMedianMs=$jarMs;nativeFps=1000/$nativeMs;jarFps=1000/$jarMs;
     overheadPercent=$loss;absoluteComparable=$comparable;pass=$comparable -and $loss -le 5;rows=@($rows.ToArray());

@@ -20,6 +20,7 @@ public final class RtxptCompositionSelfTest {
     public static void main(String[] args) throws Exception {
         Path output=Path.of(args[0]).toAbsolutePath();Files.createDirectories(output);
         String mode=args.length>1?args[1]:"acceptance";
+        if(mode.equals("native")||mode.startsWith("return-")||mode.equals("overlay")||mode.equals("no-overlay"))requireIdleGpu();
         if(mode.equals("native")){nativeBenchmark(output);return;}
         if(mode.equals("rtxpt-final")||mode.startsWith("return-")){nativeFinal(output,mode);return;}
         var config=configuration();
@@ -100,7 +101,7 @@ public final class RtxptCompositionSelfTest {
             .upsert(MaterialAsset.builder(1).baseColorRgba8(0xff3060d0).roughness(.5f).build())
             .upsert(RtxptMediumScene.cube(1,1)).upsert(SceneInstance.builder(1,1).build()).build();
     }
-    private static FrameCompositionPlan.Layer createOverlay(RtxptComposedRenderer renderer) throws Exception {
+    static FrameCompositionPlan.Layer createOverlay(RtxptComposedRenderer renderer) throws Exception {
         var texture=new TextureResource(new RenderResourceId(700),ResourceVersion.initial(),TextureDimension.TEXTURE_2D,
             WIDTH,HEIGHT,1,1,1,1,TextureFormat.RGBA8_UNORM,EnumSet.of(TextureUsage.COLOR_ATTACHMENT,TextureUsage.STORAGE_READ));
         var commands=renderer.legacyCommands();
@@ -173,6 +174,8 @@ public final class RtxptCompositionSelfTest {
             renderer.submit(RtxptMediumDemo.frameRequest(sequence++,1,WIDTH,HEIGHT));
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
             for(int i=0;i<90;i++)require(host.renderFrame(),"Native final viewport stays open");
+            require(renderer.workSnapshot().rtxptFrames()==host.bridgeTimings().frames(),
+                "Work snapshot includes direct RtxptAccess.renderFrame calls");
             if(!acceptance) {
                 host.awaitIdle();long before=host.bridgeTimings().frames(),start=System.nanoTime();int frames=360;
                 for(int i=0;i<frames;i++)require(host.renderFrame(),"Native final benchmark frame");
@@ -210,9 +213,31 @@ public final class RtxptCompositionSelfTest {
             require(renderer.workSnapshot().presentation().presentSamples()==0,"Hidden Vulkan compositor never presented a frame");
             require(renderer.workSnapshot().legacyFrames()==0,"Vulkan did not duplicate complete 3D tracing");
             host.setOverlayText("RTRendererAPI 7.0.0 - MEDIUM DEMO\nRTXPT: RR / FG / MFG / REFLEX | VULKAN: GPU UI");
-            require(host.renderFrame(),"Final HUD frame");host.capture(output.resolve("native-final-hud.png"));
+            host.setOverlayChoices(RtxptMediumScene.LABELS,0);
+            // ImGui measures a newly appearing auto-sized window before it draws its contents.
+            for(int i=0;i<3;i++)require(host.renderFrame(),"Final HUD frame");
+            host.capture(output.resolve("native-final-hud.png"));
+            requireVisibleHud(output.resolve("native-final-hud.png"));
+            require(renderer.workSnapshot().rtxptFrames()==host.bridgeTimings().frames(),"Final actual work count");
             System.out.println("RTXPT_NATIVE_FINAL_COMPOSITION PASS");
         }
+    }
+    static void requireVisibleHud(Path path) throws Exception {
+        var image=ImageIO.read(path.toFile());int brightPixels=0;
+        // White text in the dark HUD at (14,14), where this scene has only a flat background.
+        for(int y=20;y<Math.min(105,image.getHeight());y++)for(int x=20;x<Math.min(650,image.getWidth());x++) {
+            int c=image.getRGB(x,y);
+            if(((c>>>16)&255)>170&&((c>>>8)&255)>170&&(c&255)>170)brightPixels++;
+        }
+        require(brightPixels>300,"HUD text is visible in final pixels; bright pixels="+brightPixels);
+    }
+    private static void requireIdleGpu() throws Exception {
+        var process=new ProcessBuilder("nvidia-smi","--id=0","--query-gpu=utilization.gpu","--format=csv,noheader,nounits")
+            .redirectErrorStream(true).start();
+        String value=new String(process.getInputStream().readAllBytes(),java.nio.charset.StandardCharsets.UTF_8).trim();
+        if(process.waitFor()!=0||!value.equals("0"))throw new IllegalStateException(
+            "Performance run paused: GPU 0 baseline must be 0%, actual="+value);
+        System.out.println("PERFORMANCE_BASELINE_GPU_PERCENT=0");
     }
     private static void expectFailure(Runnable action,String reason){
         try{action.run();}catch(IllegalArgumentException|IllegalStateException expected){System.out.println("EXPECTED_REJECTION "+expected.getMessage());return;}

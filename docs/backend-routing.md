@@ -4,7 +4,7 @@
 
 新的普通入口 `Renderer.openForScene(policy, initialScene, firstFrame)` 在打开设备前分析完整场景，并返回实现 `Renderer` 的 `RendererSceneSession`。高级功能、专家扩展、资源和命令仍由原后端执行，没有新增渲染算法或逐帧图像搬运层。
 
-需要 RTXPT 完整 3D 与旧 Vulkan UI、最终呈现一起工作时，使用另外的 [D3D12→Vulkan GPU 组合接口](d3d12-vulkan-composition.md)。它接收真正的共享 GPU 纹理；这里的固定场景策略只负责选后端，不代替图像组合。
+需要 RTXPT 完整 3D 与旧 Vulkan UI 一起工作时，使用另外的 [D3D12↔Vulkan GPU 组合接口](d3d12-vulkan-composition.md)。推荐由 RTXPT 最终呈现以保留 RR＋FG/MFG，旧 Vulkan 负责独立工作与叠层；专家也可明确选择 Vulkan 最终窗口与完整 3D 后端热切换。这里的固定场景策略只负责选后端，不代替图像组合。
 
 | 策略 | 普通表面场景 | 吸收／玻璃／混合场景 |
 |---|---|---|
