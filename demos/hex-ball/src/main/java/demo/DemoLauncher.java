@@ -55,6 +55,10 @@ public final class DemoLauncher {
                 arguments.length + FORWARDED_SYSTEM_PROPERTIES.size() + 8
         );
         command.add(javaExecutable().toString());
+        // These demos retain a small Java scene; GPU/driver allocations are outside this heap.
+        // Do not commit a machine-sized default initial heap just to host the native renderer.
+        command.add("-Xms32m");
+        command.add("-Xmx512m");
         command.add("--enable-native-access=ALL-UNNAMED");
         command.add("-Dfile.encoding=UTF-8");
         command.add("-D" + CHILD_PROPERTY + "=true");

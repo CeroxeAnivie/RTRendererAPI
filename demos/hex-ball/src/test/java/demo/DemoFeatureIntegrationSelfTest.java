@@ -230,6 +230,9 @@ public final class DemoFeatureIntegrationSelfTest {
             String forwarded = "-D" + property + "=true";
             int propertyIndex = command.indexOf(forwarded);
             int jarIndex = command.indexOf("-jar");
+            require(command.indexOf("-Xms32m")>0&&command.indexOf("-Xms32m")<jarIndex
+                    &&command.indexOf("-Xmx512m")>0&&command.indexOf("-Xmx512m")<jarIndex,
+                    "Demo child keeps a small initial heap and bounded growth without changing native budgets");
             require(propertyIndex >= 0, "the executable-JAR child must receive the baseline property");
             require(propertyIndex < jarIndex, "the baseline property must be a child JVM argument");
             require(command.subList(command.size() - 2, command.size())
