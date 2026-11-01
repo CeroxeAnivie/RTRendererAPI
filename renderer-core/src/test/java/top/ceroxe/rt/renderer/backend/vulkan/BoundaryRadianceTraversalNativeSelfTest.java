@@ -50,7 +50,7 @@ public final class BoundaryRadianceTraversalNativeSelfTest {
                 int[] indices=original.clone();
                 float[] positions=new float[base.positions().remaining()];base.positions().get(positions);
                 for(int i=0;i<indices.length;i+=3)for(int j=0;j<3;j++)indices[i+j]=original[i+permutations[p][j]];
-                var medium=new Medium(new Rgb(.1f,.1f,.1f),Rgb.ZERO,Rgb.ZERO,0,1,1);
+                var medium=new Medium(new Rgb(.1f,.1f,.1f),Rgb.ZERO,Rgb.ZERO,1,1,0);
                 var boundary=new MediumBoundary(medium,2,p<3?MediumBoundary.Orientation.OUTWARD:
                         MediumBoundary.Orientation.INWARD,surface!=0);
                 renderer.apply(SceneTransaction.builder(++revision).resetScene()
