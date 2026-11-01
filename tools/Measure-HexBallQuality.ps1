@@ -11,6 +11,7 @@ param(
     [switch]$ApproximateMis,
     [switch]$PreserveNeeAt,
     [switch]$Sharc,
+    [switch]$RestirGi,
     [ValidateSet('none','original-lights','quarter-lights','no-sun','no-sky','no-environment')][string]$LightingProbe='none'
 )
 $ErrorActionPreference='Stop'
@@ -18,6 +19,8 @@ if($SmallPointCandidate -and $ControlLighting){throw 'Choose candidate or origin
 if($SplitPointEnvironment -and $DisableSplitPointEnvironment){throw 'Choose split or unsplit environment sampling, not both.'}
 if($ExactMis -and $ApproximateMis){throw 'Choose exact or approximate MIS, not both.'}
 if($Sharc -and $Mode -ne 'raw'){throw 'SHaRC isolation requires raw mode.'}
+if($RestirGi -and $Mode -ne 'raw'){throw 'ReSTIR GI isolation requires raw mode.'}
+if($Sharc -and $RestirGi){throw 'Choose SHaRC or ReSTIR GI for isolated testing.'}
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
@@ -46,7 +49,7 @@ $settings=[ordered]@{
     Jvm=@('-Dfile.encoding=UTF-8',('-Dtop.ceroxe.rt.rtxpt.runtime='+(Join-Path $repo 'build/rtxpt-sdk/bin')),
         '--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow',
         '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath);
-    Entry='demo.RtxptHexBallQualitySelfTest';Arguments=@($Mode,$(if($Glass){'glass'}else{'metal'}),$images,$LightingProbe,$(if($Sharc){'sharc'}else{'none'}));
+    Entry='demo.RtxptHexBallQualitySelfTest';Arguments=@($Mode,$(if($Glass){'glass'}else{'metal'}),$images,$LightingProbe,$(if($Sharc){'sharc'}elseif($RestirGi){'restirgi'}else{'none'}));
     StartedAt=(Get-Date -Format o);NativeSha256=(Get-FileHash 'build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll').Hash;
     Width=2560;Height=1440;Spp=$(if($Mode -eq 'reference'){32}else{1});FrameGeneration=$false;StageProfile=$false
     RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
@@ -58,6 +61,7 @@ $settings=[ordered]@{
     ApproximateMis=[bool]$ApproximateMis
     PreserveNeeAt=[bool]$PreserveNeeAt
     Sharc=[bool]$Sharc
+    RestirGi=[bool]$RestirGi
     LightingProbe=$LightingProbe
 }
 if($PackagedRuntime) {

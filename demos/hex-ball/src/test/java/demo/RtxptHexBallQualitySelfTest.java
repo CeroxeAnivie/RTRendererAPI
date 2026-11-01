@@ -14,10 +14,12 @@ public final class RtxptHexBallQualitySelfTest {
         String probe=args.length>3?args[3]:"none";
         String cacheMode=args.length>4?args[4]:"none";
         boolean sharc=cacheMode.equals("sharc");
+        boolean restirGi=cacheMode.equals("restirgi");
         if(!java.util.Set.of("none","original-lights","quarter-lights","no-sun","no-sky","no-environment").contains(probe))
             throw new IllegalArgumentException("Unknown lighting probe: "+probe);
-        if(!java.util.Set.of("none","sharc").contains(cacheMode))
-            throw new IllegalArgumentException("Unknown radiance cache mode: "+cacheMode);
+        if(!java.util.Set.of("none","sharc","restirgi").contains(cacheMode))
+            throw new IllegalArgumentException("Unknown indirect lighting mode: "+cacheMode);
+        if(sharc&&restirGi)throw new IllegalArgumentException("Choose SHaRC or ReSTIR GI for isolated testing.");
         Files.createDirectories(output);
         System.setProperty(DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY,"true");
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
@@ -40,6 +42,12 @@ public final class RtxptHexBallQualitySelfTest {
             policy=policy.copyBuilder().pathTracing(new PathTracingOptions(path.samplesPerPixel(),path.maxBounces(),
                 path.diffuseBounces(),RendererFeaturePreference.REQUIRED,path.directLightResampling(),
                 path.indirectLightResampling())).build();
+        }
+        if(restirGi) {
+            var path=policy.pathTracing();
+            policy=policy.copyBuilder().pathTracing(new PathTracingOptions(path.samplesPerPixel(),path.maxBounces(),
+                path.diffuseBounces(),path.radianceCache(),path.directLightResampling(),
+                RendererFeaturePreference.REQUIRED)).build();
         }
         if(reference) {
             var path=policy.pathTracing();
@@ -102,6 +110,7 @@ public final class RtxptHexBallQualitySelfTest {
                         require(status.relaxDenoiser()==(denoise&&!rr),"Actual native RELAX");
                         require(status.denoising()==denoise,"Actual native denoising, including RR");
                         require(status.restirDi()==reuse,"Actual upstream direct-light reuse");
+                        require(status.restirGi()==restirGi,"Actual requested ReSTIR GI state");
                         require(status.sharc()==sharc,"Actual requested SHaRC state");
                         require(!status.frameGeneration(),"FG off for quality evidence");
                         require(status.renderWidth()==1485&&status.renderHeight()==835,"Balanced input unchanged");
