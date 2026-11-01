@@ -1,0 +1,13 @@
+RTRendererAPI RTXPT backend
+
+The Java adapter and host integration are distributed under the project's Apache-2.0 license.
+This software contains source code provided by NVIDIA Corporation.
+The embedded runtime is built from NVIDIA RTXPT v1.9.0, commit
+303b408ab81790a5051abd7573830b7a4112eb8e, with the host-only patches in
+tools/Build-RtxptBridge.ps1. Rendering algorithms remain upstream.
+
+NVIDIA and third-party components retain their respective licenses. The runtime ZIP
+inside this JAR includes their original notices under ThirdPartyLicenses/.
+Streamline, DLSS and DirectX binaries are not relicensed under Apache-2.0.
+
+Source: https://github.com/NVIDIA-RTX/RTXPT

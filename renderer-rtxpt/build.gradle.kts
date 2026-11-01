@@ -65,6 +65,7 @@ val runtimeDigest = tasks.register("hashRtxptRuntime") {
 }
 tasks.named<Jar>("jar") {
     dependsOn(runtimeDigest)
+    from("NOTICE-RTXPT.txt") { into("META-INF") }
     from(runtimeArchive.flatMap { it.archiveFile }) { into("META-INF/native/windows-x86_64") }
     from(layout.buildDirectory.file("native-bundle/rtxpt-runtime.sha256")) { into("META-INF/native/windows-x86_64") }
 }

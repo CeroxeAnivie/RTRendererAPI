@@ -106,6 +106,7 @@ subprojects {
                             "renderer-api" -> "RTRendererAPI"
                             "renderer-core" -> "RTRendererAPI Vulkan Backend"
                             "renderer-nvidia" -> "RTRendererAPI NVIDIA Features"
+                            "renderer-rtxpt" -> "RTRendererAPI RTXPT Managed Backend"
                             else -> project.name
                         })
                         description.set(when (project.name) {
@@ -175,7 +176,7 @@ subprojects {
 
 val projectLicenseName = "Apache License, Version 2.0"
 val projectLicenseUrl = "https://www.apache.org/licenses/LICENSE-2.0.txt"
-val publishedModuleNames = listOf("renderer-api", "renderer-core", "renderer-nvidia")
+val publishedModuleNames = listOf("renderer-api", "renderer-core", "renderer-nvidia", "renderer-rtxpt")
 
 val verifyProjectLicenseConsistency = tasks.register("verifyProjectLicenseConsistency") {
     group = "verification"
@@ -234,11 +235,11 @@ val verifyProjectLicenseConsistency = tasks.register("verifyProjectLicenseConsis
 }
 
 tasks.named("assemble") {
-    dependsOn(":renderer-api:assemble", ":renderer-core:assemble", ":renderer-nvidia:assemble")
+    dependsOn(publishedModuleNames.map { ":$it:assemble" })
 }
 
 tasks.named("check") {
-    dependsOn(":renderer-api:check", ":renderer-core:check", ":renderer-nvidia:check")
+    dependsOn(publishedModuleNames.map { ":$it:check" })
     dependsOn(verifyProjectLicenseConsistency)
 }
 
@@ -350,6 +351,7 @@ val publishAllToLocalStagingRepository = tasks.register("publishAllToLocalStagin
     dependsOn(":renderer-api:publishMavenJavaPublicationToLocalStagingRepository")
     dependsOn(":renderer-core:publishMavenJavaPublicationToLocalStagingRepository")
     dependsOn(":renderer-nvidia:publishMavenJavaPublicationToLocalStagingRepository")
+    dependsOn(":renderer-rtxpt:publishMavenJavaPublicationToLocalStagingRepository")
 }
 
 val verifyPublishedNvidiaRuntimeClosure = tasks.register("verifyPublishedNvidiaRuntimeClosure") {
@@ -380,6 +382,7 @@ tasks.register<Zip>("centralPortalBundle") {
         include("top/ceroxe/rt/renderer-api/$publishedVersion/**")
         include("top/ceroxe/rt/renderer-core/$publishedVersion/**")
         include("top/ceroxe/rt/renderer-nvidia/$publishedVersion/**")
+        include("top/ceroxe/rt/renderer-rtxpt/$publishedVersion/**")
     }
     archiveFileName.set("rtrenderer-api-$publishedVersion-central-bundle.zip")
     destinationDirectory.set(layout.buildDirectory.dir("release"))
@@ -409,7 +412,7 @@ tasks.register("verifyCentralPortalBundle") {
     inputs.file(centralPortalBundleFile)
 
     doLast {
-        val requiredArtifacts = listOf("renderer-api", "renderer-core", "renderer-nvidia").flatMap { module ->
+        val requiredArtifacts = publishedModuleNames.flatMap { module ->
             val prefix = "top/ceroxe/rt/$module/$publishedVersion/$module-$publishedVersion"
             listOf(
                 "$prefix.pom",
@@ -651,9 +654,10 @@ val runtimeDistributionContents = tasks.register<Sync>("prepareRuntimeDistributi
     into(layout.buildDirectory.dir("distribution/rtrenderer-api-$publishedVersion-windows-x86_64"))
     from(provider { project(":renderer-api").configurations.getByName("runtimeClasspath") }) { into("lib") }
     from(project(":renderer-api").layout.buildDirectory.file("libs/renderer-api-$publishedVersion.jar")) { into("lib") }
+    from(project(":renderer-rtxpt").layout.buildDirectory.file("libs/renderer-rtxpt-$publishedVersion.jar")) { into("lib") }
     from(publishedRepository) {
         include("top/ceroxe/rt/renderer-api/$publishedVersion/**", "top/ceroxe/rt/renderer-core/$publishedVersion/**",
-            "top/ceroxe/rt/renderer-nvidia/$publishedVersion/**")
+            "top/ceroxe/rt/renderer-nvidia/$publishedVersion/**", "top/ceroxe/rt/renderer-rtxpt/$publishedVersion/**")
         into("maven")
     }
     from(layout.projectDirectory.dir("docs")) { into("docs") }
@@ -664,6 +668,7 @@ val runtimeDistributionContents = tasks.register<Sync>("prepareRuntimeDistributi
             "renderer-api/build.gradle.kts", "renderer-api/abi/**", "renderer-api/src/**",
             "renderer-core/build.gradle.kts", "renderer-core/gradle.lockfile", "renderer-core/src/**",
             "renderer-nvidia/build.gradle.kts", "renderer-nvidia/src/**", "tools/**",
+            "renderer-rtxpt/build.gradle.kts", "renderer-rtxpt/src/**", "renderer-rtxpt/NOTICE-RTXPT.txt",
             "demos/hex-ball/build.gradle.kts", "demos/hex-ball/src/**")
         into("source")
     }
@@ -819,7 +824,7 @@ tasks.register("verifyRuntimeDistribution") {
                 }
                 check(HexFormat.of().formatHex(digest.digest()) == expectedHash) { "Maven hash mismatch: $relative" }
             }
-            for (module in listOf("renderer-api", "renderer-core", "renderer-nvidia")) {
+            for (module in publishedModuleNames) {
                 check(names.contains("lib/$module-$publishedVersion.jar")) { "Missing runtime module: $module" }
                 val prefix = "maven/top/ceroxe/rt/$module/$publishedVersion/$module-$publishedVersion"
                 check(names.containsAll(listOf("$prefix.jar", "$prefix-sources.jar", "$prefix-javadoc.jar", "$prefix.pom", "$prefix.module"))) {

@@ -32,7 +32,7 @@
 ### ✨ 核心亮点
 
 - 🚀 **硬件光线追踪**：基于 Vulkan RT 的三角形与 procedural/AABB BLAS、TLAS、GPUScene 与预编译 SPIR-V 管线。
-- 💧 **介质传输**：直接 record 模型、封闭与嵌套体积、均质/密度网格吸收与发光、HG 散射及可选多次散射、Fresnel/Snell/全反射；支持逐帧预算，详见 [7.0.0](docs/7.0.0.md)。
+- 💧 **托管透明介质**：可选 `renderer-rtxpt` 使用 NVIDIA RTXPT 处理均匀吸收、嵌套介电材质、粗糙折射与全反射；旧散射和密度参数已删除，详见 [7.0.0](docs/7.0.0.md)。
 - 🧩 **可编程场景**：四个 RT 场景阶段支持 GLSL 或预编译 SPIR-V，raygen 支持独立 SDR/HDR 变体；复用 `ResourceData` 提交应用缓冲区。
 - ☕ **现代 Java API**：以 Java 25 为基线，提供不可变模型、Builder、类型化异常和确定性生命周期。
 - 🖼️ **两类托管输出**：作用域映射 `FrameView` 与显式 `FrameSnapshot` 保留原始 HDR/整数格式；官方 GPU presenter 无需 CPU 回读。
@@ -58,7 +58,7 @@
 | GPU 显示 | 官方 Vulkan swapchain presenter，无 CPU 图像回读 |
 | 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
 
-> AMD、Intel、Linux、macOS、移动平台、D3D12、Metal 与软件渲染器不属于 `7.0.0` 当前后端实现范围。
+> 可选 RTXPT 后端使用 D3D12，普通路径使用 Vulkan。AMD、Intel、Linux、macOS、移动平台、Metal 与软件渲染器不属于当前验收范围。
 > 兼容目标不是跨硬件验收结论；本轮真实 GPU 测试范围见版本说明与验收记录。
 
 ---
@@ -333,4 +333,4 @@ A：不能把它们视为 `7.0.0` 的受支持目标。当前兼容范围只包�
 
 本项目基于 [Apache License 2.0](LICENSE) 开源发布。
 
-7.0.0 的[介质展厅](docs/medium-gallery.md)包含异质密度、有限阶多次散射、嵌套折射与表面光子焦散的组合场景。部分组合仍处于实现和验收中；请以版本说明和验收记录列出的支持范围为准。
+7.0.0 的[介质演示](docs/medium-gallery.md)改用 RTXPT 混合、玻璃与嵌套场景。旧密度、体积散射和光子图展厅属于历史实现，当前范围以[版本说明](docs/7.0.0.md)为准。
