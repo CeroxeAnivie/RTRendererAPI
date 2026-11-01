@@ -12,12 +12,13 @@ param(
     [switch]$Relax,
     [switch]$RR,
     [switch]$RestirGI,
-    [switch]$Sharc
+    [switch]$Sharc,
+    [ValidateSet('AUTO','ULTRA_QUALITY','QUALITY','BALANCED','PERFORMANCE','ULTRA_PERFORMANCE')]
+    [string]$DLSSQuality='AUTO'
 )
 $ErrorActionPreference='Stop'
-if($Relax -and ($Reuse -or $DirectOnly)){throw 'RELAX comparison uses the full path without ReSTIR DI or direct-only rendering.'}
 if($Relax -and $RR){throw 'Choose either NRD RELAX or DLSS Ray Reconstruction.'}
-if(([int][bool]$Reuse+[int][bool]$DirectOnly+[int][bool]$RestirGI+[int][bool]$Sharc) -gt 1){throw 'Choose one light-reuse path.'}
+if($DirectOnly -and ($Reuse -or $RestirGI -or $Sharc)){throw 'Direct-only cannot be combined with light reuse.'}
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
@@ -31,17 +32,23 @@ if(Test-Path -LiteralPath ($prefix+'.log')){throw 'Use a new evidence tag.'}
 $output=Join-Path $repo ('build/reports/rtxpt-lighting/'+$Tag)
 $jar=Join-Path $repo 'demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar'
 $classpath='demos/hex-ball/build/classes/java/test;renderer-rtxpt/build/classes/java/test;'+$jar
+$lightingFeatures=@()
+if($Reuse){$lightingFeatures+='reuse'}
+if($RestirGI){$lightingFeatures+='restir-gi'}
+if($Sharc){$lightingFeatures+='sharc'}
+if($DirectOnly){$lightingFeatures+='direct'}
+$lightingMode=if($lightingFeatures.Count){$lightingFeatures -join '+'}else{'raw'}
 $settings=[ordered]@{
     SourceCommit=(& git rev-parse HEAD).Trim()
     Java='C:\Program Files\Java\graalvm-jdk-25.0.5.0.2+1.1\bin\java.exe'
     Jvm=@('-Dfile.encoding=UTF-8','--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow',
         '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath)
     Entry=$(if($Suite -eq 'Generation'){'demo.RtxptHexBallGenerationSelfTest'}else{'top.ceroxe.rt.renderer.rtxpt.RtxptLightingNativeSelfTest'})
-    Arguments=@(if($Suite -eq 'Generation'){$output}else{$output;$Scene;[string]$Spp;$(if($Reuse){'reuse'}elseif($DirectOnly){'direct'}elseif($RestirGI){'restir-gi'}elseif($Sharc){'sharc'}else{'raw'});$(if($Relax){'relax'}elseif($RR){'rr'}else{'none'})})
+    Arguments=@(if($Suite -eq 'Generation'){$output}else{$output;$Scene;[string]$Spp;$lightingMode;$(if($Relax){'relax'}elseif($RR){'rr'}else{'none'});$DLSSQuality})
     RuntimeSource='PackagedJar';JarSha256=(Get-FileHash -LiteralPath $jar).Hash
     ControlLighting=[bool]$ControlLighting;ControlDirectional=[bool]$ControlDirectional;Reuse=[bool]$Reuse
     DisableResidualPointSampling=[bool]$DisableResidualPointSampling;ExactMis=[bool]$ExactMis;DirectOnly=[bool]$DirectOnly
-    Relax=[bool]$Relax;RayReconstruction=[bool]$RR;RestirGI=[bool]$RestirGI;Sharc=[bool]$Sharc
+    Relax=[bool]$Relax;RayReconstruction=[bool]$RR;RestirGI=[bool]$RestirGI;Sharc=[bool]$Sharc;DLSSQuality=$DLSSQuality
     Spp=$Spp;StartedAt=(Get-Date -Format o)
 }
 $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8

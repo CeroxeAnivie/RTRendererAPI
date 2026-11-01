@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import top.ceroxe.rt.renderer.api.*;
 
 /** Renderer-wide light families plus scene reloads; captures are excluded from FPS evidence. */
@@ -16,19 +17,28 @@ public final class RtxptLightingNativeSelfTest {
         Files.createDirectories(output);
         String selected=args.length>1?args[1]:"all";
         int spp=args.length>2?Integer.parseInt(args[2]):1;
-        boolean reuse=args.length>3&&args[3].equals("reuse");
-        boolean direct=args.length>3&&args[3].equals("direct");
+        Set<String> features=args.length>3&&!args[3].equals("raw")
+            ?Set.of(args[3].split("\\+")):Set.of();
+        boolean reuse=features.contains("reuse");
+        boolean direct=features.contains("direct");
+        boolean restirGi=features.contains("restir-gi");
+        boolean sharc=features.contains("sharc");
+        if(!Set.of("reuse","direct","restir-gi","sharc").containsAll(features)
+                ||(direct&&features.size()>1))
+            throw new IllegalArgumentException("Unknown or incompatible lighting feature set: "+features);
         boolean relax=args.length>4&&args[4].equals("relax");
         boolean rr=args.length>4&&args[4].equals("rr");
-        boolean restirGi=args.length>3&&args[3].equals("restir-gi");
-        boolean sharc=args.length>3&&args[3].equals("sharc");
-        if((reuse?1:0)+(restirGi?1:0)+(sharc?1:0)+(direct?1:0)>1)
-            throw new IllegalArgumentException("Choose one path-tracing variant");
-        var timings=new StringBuilder("scene,pose,spp,reuse,native_frames,wall_ms,ms_per_native_frame,native_fps\n");
+        if(relax&&rr)throw new IllegalArgumentException("Choose RELAX or DLSS Ray Reconstruction");
+        FrameReconstructionOptions.Quality quality=args.length>5
+            ?FrameReconstructionOptions.Quality.valueOf(args[5].toUpperCase(Locale.ROOT))
+            :FrameReconstructionOptions.Quality.AUTO;
+        var timings=new StringBuilder("scene,pose,spp,features,denoiser,dlss_quality,native_frames,wall_ms,ms_per_native_frame,native_fps\n");
         var denoising=relax||rr?DenoisingOptions.builder().preference(RendererFeaturePreference.REQUIRED)
             .strategy(relax?DenoisingOptions.Strategy.RESPONSIVE:DenoisingOptions.Strategy.BALANCED)
             .builtInTemporalFallback(false).build():DenoisingOptions.disabled();
-        var policy=RendererConfig.presentation().copyBuilder().denoising(denoising)
+        var base=RendererConfig.presentation();
+        var reconstruction=base.frameReconstruction().toBuilder().quality(quality).build();
+        var policy=base.copyBuilder().frameReconstruction(reconstruction).denoising(denoising)
             .frameGeneration(FrameGenerationOptions.disabled())
                 .pathTracing(new PathTracingOptions(spp,direct?1:20,direct?0:2,
                     sharc?RendererFeaturePreference.REQUIRED:RendererFeaturePreference.DISABLED,
@@ -52,9 +62,11 @@ public final class RtxptLightingNativeSelfTest {
                         if(i>=128)host.capture(output.resolve(name+"-pose"+pose+"-static"+i+".png"));
                     }
                     var status=host.runtimeStatus();
-                    require(status.reconstruction()==(rr?RtxptAccess.Reconstruction.DLSS_RR:RtxptAccess.Reconstruction.DLSS)
-                        &&status.denoising()==(relax||rr)&&status.standaloneDenoiser()==relax
-                        &&status.relaxDenoiser()==relax
+                    boolean rrActive=rr&&!reuse&&!restirGi&&!relax;
+                    require(status.reconstruction()==(rrActive?RtxptAccess.Reconstruction.DLSS_RR:RtxptAccess.Reconstruction.DLSS)
+                        &&status.denoising()==(relax||rr)
+                        &&status.standaloneDenoiser()==((relax||rr)&&!rrActive)
+                        &&status.relaxDenoiser()==(relax&&!rrActive)
                         &&status.sharc()==sharc&&status.restirDi()==reuse&&status.restirGi()==restirGi
                         &&!status.frameGeneration(),"Requested SR policy "+status);
                     Files.writeString(output.resolve(name+"-pose"+pose+"-runtime.txt"),status+"\n"+policy+"\n"+policy.pathTracing()+"\n");
@@ -66,7 +78,8 @@ public final class RtxptLightingNativeSelfTest {
                             .minimumSceneRevision(revision).environment(env).build());
                         host.awaitIdle();
                         double ms=(System.nanoTime()-before)/1e6;
-                        timings.append(String.format(Locale.ROOT,"%s,%d,%d,%s,240,%.6f,%.6f,%.6f%n",name,pose,spp,reuse,ms,ms/240,240000/ms));
+                        timings.append(String.format(Locale.ROOT,"%s,%d,%d,%s,%s,%s,240,%.6f,%.6f,%.6f%n",name,pose,spp,
+                            String.join("+",features),rrActive?"DLSS_RR":relax?"NRD_RELAX":rr?"NRD": "none",quality,ms,ms/240,240000/ms));
                         Files.writeString(output.resolve("timings.csv"),timings);
                     }
                 }
