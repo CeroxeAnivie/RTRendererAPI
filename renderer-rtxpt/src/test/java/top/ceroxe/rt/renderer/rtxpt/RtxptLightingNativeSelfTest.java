@@ -9,17 +9,19 @@ import top.ceroxe.rt.renderer.api.*;
 
 /** Renderer-wide light families plus scene reloads; captures are excluded from FPS evidence. */
 public final class RtxptLightingNativeSelfTest {
-    private static final List<String> CASES=List.of("points","spots","many","area","environment","sun","mixed");
+    private static final List<String> CASES=List.of("points","spots","many","area","environment","sun","mixed",
+        "points-environment","points-sun","point-dominated","environment-dominated");
     public static void main(String[] args) throws Exception {
         Path output=Path.of(args[0]).toAbsolutePath();
         Files.createDirectories(output);
         String selected=args.length>1?args[1]:"all";
         int spp=args.length>2?Integer.parseInt(args[2]):1;
         boolean reuse=args.length>3&&args[3].equals("reuse");
+        boolean direct=args.length>3&&args[3].equals("direct");
         var timings=new StringBuilder("scene,pose,spp,reuse,native_frames,wall_ms,ms_per_native_frame,native_fps\n");
         var policy=RendererConfig.presentation().copyBuilder().denoising(DenoisingOptions.disabled())
             .frameGeneration(FrameGenerationOptions.disabled())
-            .pathTracing(new PathTracingOptions(spp,20,2,RendererFeaturePreference.DISABLED,
+            .pathTracing(new PathTracingOptions(spp,direct?1:20,direct?0:2,RendererFeaturePreference.DISABLED,
                 reuse?RendererFeaturePreference.REQUIRED:RendererFeaturePreference.DISABLED,RendererFeaturePreference.DISABLED)).build();
         long sequence=0,revision=0;
         try(var renderer=Renderer.open("rtxpt",policy)) {
@@ -41,7 +43,7 @@ public final class RtxptLightingNativeSelfTest {
                     var status=host.runtimeStatus();
                     require(status.reconstruction()==RtxptAccess.Reconstruction.DLSS&&!status.denoising()
                         &&!status.sharc()&&status.restirDi()==reuse&&!status.restirGi()&&!status.frameGeneration(),"Requested SR policy "+status);
-                    Files.writeString(output.resolve(name+"-pose"+pose+"-runtime.txt"),status+"\n"+policy+"\n");
+                    Files.writeString(output.resolve(name+"-pose"+pose+"-runtime.txt"),status+"\n"+policy+"\n"+policy.pathTracing()+"\n");
                     System.out.println("LIGHT_FAMILY_CAPTURE "+name+" pose="+pose+" spp="+spp+" "+status);
                     if(pose==0&&spp==1) {
                         host.awaitIdle();
@@ -77,20 +79,24 @@ public final class RtxptLightingNativeSelfTest {
         if(emitter)tx.upsert(SceneInstance.builder(4,4).transform(transform(offset,2.6,-1,1.8,.12,1)).build());
         if(glass)tx.upsert(SceneInstance.builder(5,3).transform(transform(offset-1.2,1,0,.55,.75,.55))
             .mediumBoundary(MediumBoundary.surface(new Medium(new Rgb(.7f,.08f,.04f),1.33f)).withPriority(6)).build());
-        int count=name.equals("many")?12:name.equals("points")?4:name.equals("spots")||name.equals("mixed")?2:0;
+        boolean pointEnvironment=name.equals("points-environment")||name.equals("points-sun")
+            ||name.equals("point-dominated")||name.equals("environment-dominated");
+        int count=name.equals("many")?12:name.equals("points")?4:name.equals("spots")||name.equals("mixed")?2:pointEnvironment?3:0;
         for(int i=0;i<count;i++) {
             double x=offset-2.4+(i%4)*1.6,z=-2+(i/4)*1.8;
             var light=name.equals("spots")?SceneLight.spot(100+i,x,3,z,0,-1,0).coneDegrees(18,40)
                 :SceneLight.point(100+i,x,3,z);
-            tx.upsert(light.color(i%3==0?1:.3f,i%3==1?1:.3f,i%3==2?1:.3f).intensity(12f/Math.max(1,count)).range(30).build());
+            float scale=name.equals("point-dominated")?32:name.equals("environment-dominated")?1f/32:1;
+            tx.upsert(light.color(i%3==0?1:.3f,i%3==1?1:.3f,i%3==2?1:.3f).intensity(scale*12f/Math.max(1,count)).range(30).build());
         }
-        if(name.equals("sun")||name.equals("mixed"))tx.upsert(SceneLight.directional(200,.57735026f,-.57735026f,-.57735026f).intensity(3).build());
+        if(name.equals("sun")||name.equals("mixed")||name.equals("points-sun"))tx.upsert(SceneLight.directional(200,.57735026f,-.57735026f,-.57735026f).intensity(3).build());
         return tx.build();
     }
     private static CameraState camera(double offset){return CameraState.lookAt(offset+4,2.7,6,offset,.8,0)
         .verticalFieldOfViewDegrees(52).aspectRatio(16d/9).build();}
     private static EnvironmentState environment(String name) {
-        boolean sky=name.equals("environment")||name.equals("mixed");
+        boolean sky=name.equals("environment")||name.equals("mixed")||name.equals("points-environment")
+            ||name.equals("points-sun")||name.equals("point-dominated")||name.equals("environment-dominated");
         return EnvironmentState.builder().skyRadiance(.3f,.4f,.6f).ambientIntensity(sky?.5f:0).sunIntensity(0).build();
     }
     private static AffineTransform transform(double x,double y,double z,double sx,double sy,double sz){

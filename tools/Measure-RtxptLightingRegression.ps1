@@ -1,11 +1,14 @@
 param(
     [Parameter(Mandatory)][ValidateSet('Lighting','Generation')][string]$Suite,
     [Parameter(Mandatory)][string]$Tag,
-    [ValidateSet('all','points','spots','many','area','environment','sun','mixed')][string]$Scene='all',
+    [ValidateSet('all','points','spots','many','area','environment','sun','mixed','points-environment','points-sun','point-dominated','environment-dominated')][string]$Scene='all',
     [ValidateRange(1,64)][int]$Spp=1,
     [switch]$ControlLighting,
     [switch]$ControlDirectional,
-    [switch]$Reuse
+    [switch]$Reuse,
+    [switch]$SplitPointEnvironment,
+    [switch]$ExactMis,
+    [switch]$DirectOnly
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -27,9 +30,10 @@ $settings=[ordered]@{
     Jvm=@('-Dfile.encoding=UTF-8','--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow',
         '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath)
     Entry=$(if($Suite -eq 'Generation'){'demo.RtxptHexBallGenerationSelfTest'}else{'top.ceroxe.rt.renderer.rtxpt.RtxptLightingNativeSelfTest'})
-    Arguments=@(if($Suite -eq 'Generation'){$output}else{$output;$Scene;[string]$Spp;$(if($Reuse){'reuse'}else{'raw'})})
+    Arguments=@(if($Suite -eq 'Generation'){$output}else{$output;$Scene;[string]$Spp;$(if($Reuse){'reuse'}elseif($DirectOnly){'direct'}else{'raw'})})
     RuntimeSource='PackagedJar';JarSha256=(Get-FileHash -LiteralPath $jar).Hash
     ControlLighting=[bool]$ControlLighting;ControlDirectional=[bool]$ControlDirectional;Reuse=[bool]$Reuse
+    SplitPointEnvironment=[bool]$SplitPointEnvironment;ExactMis=[bool]$ExactMis;DirectOnly=[bool]$DirectOnly
     Spp=$Spp;StartedAt=(Get-Date -Format o)
 }
 $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
@@ -37,10 +41,14 @@ $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settin
 $oldPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 $oldDirectional=$env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_CONTROL
 $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
+$oldSplit=$env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT
+$oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
 try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_CONTROL=$(if($ControlDirectional){'1'}else{$null})
     $env:RTR_RTXPT_GPU_PROFILE=$null
+    $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$(if($SplitPointEnvironment){'1'}else{'0'})
+    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}else{$null})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     Get-Content -LiteralPath ($prefix+'.log') -Tail 8
@@ -55,4 +63,6 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldPoints
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_CONTROL=$oldDirectional
     $env:RTR_RTXPT_GPU_PROFILE=$oldProfile
+    $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$oldSplit
+    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
 }

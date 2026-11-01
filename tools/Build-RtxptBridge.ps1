@@ -418,5 +418,11 @@ $noticeFiles=@{
 }
 foreach($entry in $noticeFiles.GetEnumerator()){Copy-Item -LiteralPath (Join-Path $sdk $entry.Key) -Destination (Join-Path $licenses $entry.Value) -Force}
 $streamlineRoot=if($StreamlineSdk){(Resolve-Path -LiteralPath $StreamlineSdk).Path}else{Join-Path $build '_deps/streamline-src'}
+if(!(Test-Path -LiteralPath (Join-Path $streamlineRoot 'license.txt'))) {
+    # Reuse CMake's resolved dependency when this invocation omits the optional
+    # SDK argument. Never embed a machine-specific SDK path in the project.
+    $configured=Select-String -LiteralPath (Join-Path $build 'CMakeCache.txt') -Pattern '^FETCHCONTENT_SOURCE_DIR_STREAMLINE:PATH=(.+)$'
+    if($configured){$streamlineRoot=$configured.Matches[0].Groups[1].Value}
+}
 Copy-Item -LiteralPath (Join-Path $streamlineRoot 'license.txt') -Destination (Join-Path $licenses 'Streamline.txt') -Force
 Copy-Item -LiteralPath (Join-Path $streamlineRoot '3rd-party-licenses.md') -Destination (Join-Path $licenses 'Streamline-ThirdParty.md') -Force

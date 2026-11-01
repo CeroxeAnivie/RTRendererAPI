@@ -1,0 +1,34 @@
+{
+  "SourceCommit": "ec196d95069e4c1cf12654cf25739e011e6b2c76",
+  "Java": "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+  "Jvm": [
+    "-Dfile.encoding=UTF-8",
+    "-Dtop.ceroxe.rt.rtxpt.runtime=D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin",
+    "--enable-native-access=ALL-UNNAMED",
+    "--sun-misc-unsafe-memory-access=allow",
+    "-Xmx3g",
+    "-XX:-UseJVMCICompiler",
+    "-cp",
+    "demos/hex-ball/build/classes/java/test;demos/hex-ball/build/classes/java/main;demos/hex-ball/build/resources/main;renderer-api/build/classes/java/main;renderer-core/build/classes/java/main;renderer-core/build/resources/main;renderer-nvidia/build/libs/renderer-nvidia-7.0.0.jar;renderer-rtxpt/build/classes/java/main;renderer-rtxpt/build/resources/main;demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar"
+  ],
+  "Entry": "demo.RtxptHexBallQualitySelfTest",
+  "Arguments": [
+    "raw",
+    "glass",
+    "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-combined-v25",
+    "none"
+  ],
+  "StartedAt": "2026-11-02T01:18:31.8960788+08:00",
+  "NativeSha256": "FCFC93A2AA701CA43DDFABC204AE7907CDE0114D36D6A44F0ACFEEEF1360CD43",
+  "Width": 2560,
+  "Height": 1440,
+  "Spp": 1,
+  "FrameGeneration": false,
+  "StageProfile": false,
+  "RuntimeSource": "BuildDirectory",
+  "SmallPointCandidate": false,
+  "ControlLighting": false,
+  "SplitPointEnvironment": true,
+  "ExactMis": true,
+  "LightingProbe": "none"
+}
