@@ -40,13 +40,13 @@ class HostPathTracer final : public AdvancedPathTracer {
         bool pointFound=false;
         for(const auto& light:lights) {
             const auto type=light->GetLightType();
-            if(type==LightType_Point || type==LightType_Spot || type==LightType_Directional)++analyticCount;
-            if(type==LightType_Point
-                && static_cast<const donut::engine::PointLight*>(light.get())->radius==0.f)
+            if(type==LightType_Point) {
+                ++analyticCount;
+                if(static_cast<const donut::engine::PointLight*>(light.get())->radius!=0.f)return false;
                 pointFound=true;
-            if(type==LightType_Spot
-                && static_cast<const donut::engine::SpotLight*>(light.get())->radius==0.f)
-                pointFound=true;
+            } else if(type==LightType_Spot || type==LightType_Directional) {
+                return false;
+            }
         }
         if(!pointFound || analyticCount>4)return false;
         for(const auto& material:graph->GetMaterials())
@@ -86,13 +86,16 @@ public:
     }
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
-        if(smallPointLighting)
-            macros.push_back({"RTR_EXACT_SMALL_POINTS","1"});
         const char* splitControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT");
-        if(smallPointLighting && splitControl && std::string(splitControl)=="1")
-            macros.push_back({"RTR_SPLIT_POINT_ENVIRONMENT","1"});
+        if(smallPointLighting) {
+            macros.push_back({"RTR_EXACT_SMALL_POINTS","1"});
+            if(!splitControl || std::string(splitControl)!="0")
+                macros.push_back({"RTR_SPLIT_POINT_ENVIRONMENT","1"});
+        }
         const char* misControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_EXACT_MIS");
-        if(misControl && std::string(misControl)=="1") {
+        const bool approximateMis=misControl && std::string(misControl)=="0";
+        const bool exactMis=!approximateMis && (smallPointLighting || (misControl && std::string(misControl)=="1"));
+        if(exactMis) {
             for(auto& macro:macros)
                 if(macro.name=="RTXPT_USE_APPROXIMATE_MIS")macro.definition="0";
         }

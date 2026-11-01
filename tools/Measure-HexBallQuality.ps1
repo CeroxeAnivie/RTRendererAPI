@@ -6,13 +6,17 @@ param(
     [switch]$SmallPointCandidate,
     [switch]$ControlLighting,
     [switch]$SplitPointEnvironment,
+    [switch]$DisableSplitPointEnvironment,
     [switch]$ExactMis,
+    [switch]$ApproximateMis,
     [switch]$PreserveNeeAt,
     [switch]$Sharc,
     [ValidateSet('none','original-lights','quarter-lights','no-sun','no-sky','no-environment')][string]$LightingProbe='none'
 )
 $ErrorActionPreference='Stop'
 if($SmallPointCandidate -and $ControlLighting){throw 'Choose candidate or original lighting control, not both.'}
+if($SplitPointEnvironment -and $DisableSplitPointEnvironment){throw 'Choose split or unsplit environment sampling, not both.'}
+if($ExactMis -and $ApproximateMis){throw 'Choose exact or approximate MIS, not both.'}
 if($Sharc -and $Mode -ne 'raw'){throw 'SHaRC isolation requires raw mode.'}
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -49,7 +53,9 @@ $settings=[ordered]@{
     SmallPointCandidate=[bool]$SmallPointCandidate
     ControlLighting=[bool]$ControlLighting
     SplitPointEnvironment=[bool]$SplitPointEnvironment
+    DisableSplitPointEnvironment=[bool]$DisableSplitPointEnvironment
     ExactMis=[bool]$ExactMis
+    ApproximateMis=[bool]$ApproximateMis
     PreserveNeeAt=[bool]$PreserveNeeAt
     Sharc=[bool]$Sharc
     LightingProbe=$LightingProbe
@@ -68,8 +74,8 @@ $oldNeeAt=$env:RTR_RTXPT_DIAGNOSTIC_KEEP_NEEAT
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
-    $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$(if($SplitPointEnvironment){'1'}else{'0'})
-    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$(if($DisableSplitPointEnvironment){'0'}elseif($SplitPointEnvironment){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_KEEP_NEEAT=$(if($PreserveNeeAt){'1'}else{$null})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE

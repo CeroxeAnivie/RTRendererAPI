@@ -1,0 +1,93 @@
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\sl.interposer.dll' is signed by NVIDIA and the signature was verified.
+INFO: Found adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this adapter
+INFO: DLSS_G is supported on this adapter
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is supported on this adapter
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Microsoft Basic Render Driver, DeviceId=0x8C, Vendor: 5140
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Using adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this system.
+INFO: DLSS-G is supported on this system.
+INFO: PCL is supported on this system.
+INFO: Reflex is supported on this system.
+INFO: DLSS-RR is supported on this system.
+INFO: Initializing...
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat2.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat3.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat4.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 5 materials not found in RTXPT material materials folder 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: RTXPT native small-point lighting ACTIVE; standalone denoising unchanged
+INFO: Initializing renderer...
+INFO: Shader compiler: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\Rtxpt\Shaders'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Donut\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Rtxdi\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External'
+INFO: Shader binaries output: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil'
+INFO: Shader compiler: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\Rtxpt\Shaders'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Donut\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Rtxdi\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External'
+INFO: Shader binaries output: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 1.0 MB used, over 1 build batches
+INFO: Compiling shaders (16)...
+INFO: Compiling shader 'REF_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_679e0ed1007aa651220d2627.bin'...
+INFO: Compiling shader 'REF_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_d99664db14cc2f3399ff2059.bin'...
+INFO: Compiling shader 'REF_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_cc323b8af4c5da4426967a21.bin'...
+INFO: Compiling shader 'BUILD_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_fb81e3f79155305c182e0027.bin'...
+INFO: Compiling shader 'FILL_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_b1a6570bcdf78b0a50eeea3f.bin'...
+INFO: Compiling shader 'BUILD_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_9a36f85312821aaaa9448ba1.bin'...
+INFO: Compiling shader 'FILL_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_046cb14d177a5b5f171868d3.bin'...
+INFO: Compiling shader 'BUILD_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_a1acd7ce3c16da225fef39a7.bin'...
+INFO: Compiling shader 'SHARC_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_80ae3d270ca61298f9921fad.bin'...
+INFO: Compiling shader 'SHARC_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_da7d8ef468d93e46bfcaf3c5.bin'...
+INFO: Compiling shader 'SHARC_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_482d3eb9363c5620dd006bdd.bin'...
+INFO: Compiling shader 'FILL_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_fc8fa61a0f742841c1d77540.bin'...
+INFO: Compiling shader 'TESTRG_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_71333265c469e5852ad9323f.bin'...
+INFO: Compiling shader 'EDGY_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\TestRaygenPP_47d1204b467f700f07a104ab.bin'...
+INFO: Compiling shader 'TESTRG_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\TestRaygenPP_70b888fa8a11a0c0827177b6.bin'...
+INFO: Compiling shader 'EDGY_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_10976b1e1e4fef540db828c0.bin'...
+WARNING: ERROR compiling shader, command
+   "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Tools\d3d12\x64\dxc.exe" "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\Rtxpt\Shaders\PathTracerMaterialSpecializations.hlsl" -Zi -Qembed_debug -Zsb -O3 -enable-16bit-types -WX -all_resources_bound -T lib_6_9 -D ENABLE_DEBUG_PRINT -D RTXPT_SHADER_DEBUG=0 -D ENABLE_DEBUG_SURFACE_VIZ=0 -D ENABLE_DEBUG_LINES_VIZ=0 -D USE_NVAPI_HIT_OBJECT_EXTENSION=0 -D USE_NVAPI_REORDER_THREADS=0 -D USE_DX_HIT_OBJECT_EXTENSION=1 -D USE_DX_MAYBE_REORDER_THREADS=1 -D PT_ENABLE_RUSSIAN_ROULETTE=1 -D PT_NEE_ENABLED=1 -D PT_USE_RESTIR_DI=0 -D PT_USE_RESTIR_GI=0 -D RTXPT_USE_APPROXIMATE_MIS=1 -D RTXPT_NEE_FULL_SAMPLE_COUNT=1 -D RTXPT_NEE_LOCAL_CANDIDATE_SAMPLE_COUNT=0 -D RTXPT_NEE_GLOBAL_CANDIDATE_SAMPLE_COUNT=5 -D RTXPT_NEE_TOTAL_CANDIDATE_SAMPLE_COUNT=5 -D RTXPT_DISABLE_SER_TERMINATION_HINT=0 -D RTXERROR: ERROR compiling shader, command
+   "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Tools\d3d12\x64\dxc.exe" "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\Rtxpt\Shaders\PathTracerMaterialSpecializations.hlsl" -Zi -Qembed_debug -Zsb -O3 -enable-16bit-types -WX -all_resources_bound -T lib_6_9 -D ENABLE_DEBUG_PRINT -D RTXPT_SHADER_DEBUG=0 -D ENABLE_DEBUG_SURFACE_VIZ=0 -D ENABLE_DEBUG_LINES_VIZ=0 -D USE_NVAPI_HIT_OBJECT_EXTENSION=0 -D USE_NVAPI_REORDER_THREADS=0 -D USE_DX_HIT_OBJECT_EXTENSION=1 -D USE_DX_MAYBE_REORDER_THREADS=1 -D PT_ENABLE_RUSSIAN_ROULETTE=1 -D PT_NEE_ENABLED=1 -D PT_USE_RESTIR_DI=0 -D PT_USE_RESTIR_GI=0 -D RTXPT_USE_APPROXIMATE_MIS=1 -D RTXPT_NEE_FULL_SAMPLE_COUNT=1 -D RTXPT_NEE_LOCAL_CANDIDATE_SAMPLE_COUNT=0 -D RTXPT_NEE_GLOBAL_CANDIDATE_SAMPLE_COUNT=5 -D RTXPT_NEE_TOTAL_CANDIDATE_SAMPLE_COUNT=5 -D RTXPT_DISABLE_SER_TERMINATION_HINT=0 -D RTXPT_DISCARD_NON_NEE_LIGHTING=0 -D RTXPT_DISCARD_NEE_LIGHTING=0 -D RTXPT_FIREFLY_FILTER=1 -D RTXPT_ACTIVE_DENOISING_LAYER_COUNT=3 -D RTXPT_NESTED_DIELECTRICS_QUALITY=1 -D RTXPT_LP_TYPES_USE_16BIT_PRECISION=0 -D RTXPT_ENABLE_LOW_DISCREPANCY_SAMPLER_FOR_BSDF=1 -D NEE_AT_SAMPLE_BAKED_ENVIRONMENT=1 -D RTXPT_LIGHTING_ENABLE_BSDF_FEEDBACK=1 -D NEEAT_QUALITY_PRESET=0 -D RTR_EXACT_SMALL_POINTS=1 -D PATH_TRACER_MODE=PT_DENOISING_LAYERS_FILL -D RTXPT_SUB_SAMPLING_SCALE_X=1 -D RTXPT_SUB_SAMPLING_SCALE_Y=1 -D RTXPT_SUB_SAMPLING_RATE_NUM=1 -D RTXPT_SUB_SAMPLING_PATTERN=0 -D RTXPT_SUB_SAMPLING_BLOCK_SIZE=8 -D RTXPT_MATERIAL_PERMUTATIONS_ENABLED=1 -D ActiveBSDF=StandardBSDF -D RTXPT_MATERIAL_PERMUTATION_NAME=FILL_mat0_f011d3e0 -D RTXPT_SHADER_ID=0 -I "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Donut\Include" -I "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Rtxdi\Include" -I "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External" -D TARGET_D3D12 -Fo "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_fc8fa61a0f742841c1d77540.bin"
+ result:
+   Internal compiler error: Terminal Error 0x80000003
+
+
+PT_DISCARD_NON_NEE_LIGHTING=0 -D RTXPT_DISCARD_NEE_LIGHTING=0 -D RTXPT_FIREFLY_FILTER=1 -D RTXPT_ACTIVE_DENOISING_LAYER_COUNT=3 -D RTXPT_NESTED_DIELECTRICS_QUALITY=1 -D RTXPT_LP_TYPES_USE_16BIT_PRECISION=0 -D RTXPT_ENABLE_LOW_DISCREPANCY_SAMPLER_FOR_BSDF=1 -D NEE_AT_SAMPLE_BAKED_ENVIRONMENT=1 -D RTXPT_LIGHTING_ENABLE_BSDF_FEEDBACK=1 -D NEEAT_QUALITY_PRESET=0 -D RTR_EXACT_SMALL_POINTS=1 -D PATH_TRACER_MODE=PT_DENOISING_LAYERS_FILL -D RTXPT_SUB_SAMPLING_SCALE_X=1 -D RTXPT_SUB_SAMPLING_SCALE_Y=1 -D RTXPT_SUB_SAMPLING_RATE_NUM=1 -D RTXPT_SUB_SAMPLING_PATTERN=0 -D RTXPT_SUB_SAMPLING_BLOCK_SIZE=8 -D RTXPT_MATERIAL_PERMUTATIONS_ENABLED=1 -D ActiveBSDF=StandardBSDF -D RTXPT_MATERIAL_PERMUTATION_NAME=FILL_mat0_f011d3e0 -D RTXPT_SHADER_ID=0 -I "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Donut\Include" -I "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Rtxdi\Include" -I "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External" -D TARGET_D3D12 -Fo "D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_fc8fa61a0f742841c1d77540.bin"
+ result:
+   Internal compiler error: Terminal Error 0x80000003
+
+
+INFO: Compiling PSOs (6)...

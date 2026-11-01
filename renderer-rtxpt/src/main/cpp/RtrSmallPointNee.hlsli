@@ -6,7 +6,14 @@
 bool RtrSmallPointSet(const LightSampler sampler)
 {
     uint count = sampler.ControlBuffer[0].AnalyticLightCount;
-    return count > 0 && count <= 4;
+    if (count == 0 || count > 4 || sampler.ControlBuffer[0].TriangleLightCount != 0
+        || sampler.ControlBuffer[0].LightClusterCount != 0)
+        return false;
+    uint first = sampler.ControlBuffer[0].EnvmapQuadNodeCount;
+    for (uint i = 0; i < count; ++i)
+        if (PolymorphicLight::DecodeType(sampler.LoadLight(first + i)) != PolymorphicLightType::kPoint)
+            return false;
+    return true;
 }
 
 bool RtrCoveredPoint(const LightSampler sampler, uint index)

@@ -80,6 +80,21 @@ tasks.register<JavaExec>("rtxptMediumBenchmark") {
     jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
 }
 
+tasks.register<JavaExec>("rtxptHexBallBenchmark") {
+    group = "verification"
+    description = "Measures full RTXPT presentation throughput for the glass HexBall scene."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    workingDir(rootProject.projectDir)
+    mainClass.set("demo.RtxptHexBallBenchmark")
+    jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
+    args(
+        providers.gradleProperty("hexballWidth").orElse("1920").get(),
+        providers.gradleProperty("hexballHeight").orElse("1080").get(),
+        providers.gradleProperty("hexballSeconds").orElse("8").get()
+    )
+}
+
 tasks.register<JavaExec>("rtxptCompositionSelfTest") {
     group = "verification"
     description = "Checks actual RTXPT-to-Vulkan pixels, UI, backend switching, lifecycle and final-frame throughput."
