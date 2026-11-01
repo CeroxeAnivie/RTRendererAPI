@@ -16,22 +16,27 @@ public final class RtxptHexBallQualitySelfTest {
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
         var base=DemoRendererProfile.interactive(config);
         boolean reference=mode.equals("reference");
-        boolean rr=mode.equals("rr")||mode.equals("default");
-        boolean denoise=!mode.equals("raw")&&!mode.equals("reuse-raw")&&!reference;
+        boolean rr=mode.equals("rr");
+        boolean denoise=mode.equals("relax")||mode.equals("reuse-relax")||rr;
         boolean reuse=mode.startsWith("reuse-");
         var policy=switch(mode) {
-            case "raw", "reuse-raw", "reference" -> base.copyBuilder().denoising(DenoisingOptions.disabled()).build();
+            case "raw", "reuse-raw", "reference", "direct" -> base.copyBuilder().denoising(DenoisingOptions.disabled()).build();
             case "relax", "reuse-relax" -> base.copyBuilder().denoising(DenoisingOptions.builder()
                 .preference(RendererFeaturePreference.REQUIRED).strategy(DenoisingOptions.Strategy.RESPONSIVE)
                 .builtInTemporalFallback(false).build()).build();
             case "default" -> DemoRendererProfile.rtxptInteractive();
             case "rr" -> base.copyBuilder().denoising(DenoisingOptions.recommended()).build();
-            default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw, reuse-relax, rr or reference");
+            default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw, reuse-relax, rr, reference or direct");
         };
         if(reference) {
             var path=policy.pathTracing();
             policy=policy.copyBuilder().pathTracing(new PathTracingOptions(32,path.maxBounces(),path.diffuseBounces(),
                 path.radianceCache(),path.directLightResampling(),path.indirectLightResampling())).build();
+        }
+        if(mode.equals("direct")) {
+            policy=policy.copyBuilder().pathTracing(new PathTracingOptions(1,1,0,
+                RendererFeaturePreference.DISABLED,RendererFeaturePreference.DISABLED,
+                RendererFeaturePreference.DISABLED)).build();
         }
         if(reuse) {
             var path=policy.pathTracing();
@@ -64,7 +69,7 @@ public final class RtxptHexBallQualitySelfTest {
                         require(status.relaxDenoiser()==(denoise&&!rr),"Actual native RELAX");
                         require(status.denoising()==denoise,"Actual native denoising, including RR");
                         require(status.restirDi()==reuse,"Actual upstream direct-light reuse");
-                        require(status.sharc()==mode.equals("default"),"Explicit native radiance-cache policy");
+                        require(!status.sharc(),"No hidden native radiance cache");
                         require(!status.frameGeneration(),"FG off for quality evidence");
                         require(status.renderWidth()==1485&&status.renderHeight()==835,"Balanced input unchanged");
                         Files.writeString(output.resolve("runtime.txt"),"mode="+mode+" glass="+glass+"\n"+status+"\n"+policy+"\n");

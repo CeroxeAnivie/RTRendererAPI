@@ -31,11 +31,10 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig rtxptInteractive() {
-        // Use upstream joint denoising/reconstruction. Standalone RELAX erases the
-        // demo's hard colored shadow boundaries even when its noise metric is good.
-        return DemoApiControls.configure(RendererConfig.pathTracedPresentation().copyBuilder()
-                .denoising(DenoisingOptions.builder().preference(RendererFeaturePreference.PREFERRED)
-                        .strategy(DenoisingOptions.Strategy.BALANCED).builtInTemporalFallback(false).build())
+        // Keep the accepted fast SR policy. Additional denoisers/cache/RR are explicit
+        // API choices, not a hidden quality fix that invalidates the FPS comparison.
+        return DemoApiControls.configure(RendererConfig.presentation().copyBuilder()
+                .denoising(DenoisingOptions.disabled())
                 .frameGeneration(configuredGenerationPolicy()).gpuTimingsEnabled(true).build());
     }
 

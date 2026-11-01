@@ -41,20 +41,18 @@ public final class DemoFeatureIntegrationSelfTest {
         boundsBlockedReasonsAndHandlesMissingCapabilityExtension();
         independentPublicApiControls();
         glassBallsHavePhysicalReflectionAndClosedInteriors();
-        rtxptRealtimeRetainsDenoisingAndDemoFgControl();
+        rtxptRealtimeRetainsFastSrAndDemoFgControl();
         System.out.println("DemoFeatureIntegrationSelfTest passed");
     }
-    private static void rtxptRealtimeRetainsDenoisingAndDemoFgControl() {
+    private static void rtxptRealtimeRetainsFastSrAndDemoFgControl() {
         String property=DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY;
         String previous=System.getProperty(property);
         try {
             System.clearProperty(property);
             var profile=DemoRendererProfile.rtxptInteractive();
-            require(profile.denoising().preference().requested(),"Realtime RTXPT must retain native denoising");
-            require(profile.denoising().strategy()==DenoisingOptions.Strategy.BALANCED,
-                "Realtime demo must use native RR to preserve hard colored shadow boundaries");
+            require(!profile.denoising().preference().requested(),"Do not add NRD/RR to the accepted pure SR comparison");
             require(!profile.denoising().builtInTemporalFallback(),"No hidden temporal fallback in native quality preset");
-            require(profile.pathTracing().radianceCache().requested(),"Realtime RTXPT must retain native radiance cache");
+            require(!profile.pathTracing().radianceCache().requested(),"Do not add a cache to the accepted pure SR comparison");
             require(profile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X
                 &&profile.frameGeneration().preference().requested(),"Default demo FG remains 2x");
             System.setProperty(property,"true");
