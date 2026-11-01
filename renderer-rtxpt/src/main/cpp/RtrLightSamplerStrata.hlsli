@@ -20,8 +20,7 @@ bool RtrSmallPointSet()
         const PolymorphicLightType type = PolymorphicLight::DecodeType(LoadLight(first + i));
         if (type == PolymorphicLightType::kPoint)
             pointFound = true;
-        else if (type != PolymorphicLightType::kSphere && type != PolymorphicLightType::kDirectional
-            && type != PolymorphicLightType::kSpot)
+        else if (type != PolymorphicLightType::kSphere && type != PolymorphicLightType::kDirectional)
             return false;
     }
     return pointFound;
