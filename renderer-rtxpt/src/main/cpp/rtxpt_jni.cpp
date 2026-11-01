@@ -47,9 +47,18 @@ struct Session {
     uint64_t presented = 0;
     std::unordered_map<std::string, donut::engine::SceneGraphNode*> nodes;
     ~Session() {
-        if (initialized) { app->HostDeviceManager()->GetDevice()->waitForIdle(); app->End(); }
-        app.reset();
+        if (app) {
+            auto* dm=app->HostDeviceManager();
+            if(auto* device=dm->GetDevice())device->waitForIdle();
+            // Streamline ProgrammingGuideManualHooking 3.0 and DLSS-RR 1.0:
+            // stop SDK work and release its tags before destroying tagged render targets.
+            dm->GetStreamline().Shutdown();
+            dm->m_callbacks={};
+            app->End();
+        }
+        // Never leave the sample's [this] log callback installed during member teardown.
         donut::log::SetCallback(previousLog);
+        app.reset();
     }
 };
 void indexNodes(Session& s) {
@@ -124,7 +133,12 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
             throw std::runtime_error("RTXPT initialization failed with status " + std::to_string(static_cast<int>(status)));
         s->initialized = true;
         if(!s->app->HostRenderPass()->GetScene()) throw std::runtime_error("RTXPT scene failed to load");
-        s->app->HostDeviceManager()->m_callbacks.afterPresent = [ptr=s.get()](auto&, uint32_t) { ++ptr->presented; };
+        auto& afterPresent=s->app->HostDeviceManager()->m_callbacks.afterPresent;
+        auto upstreamAfterPresent=afterPresent;
+        afterPresent = [ptr=s.get(),upstreamAfterPresent](auto& dm, uint32_t index) {
+            if(upstreamAfterPresent)upstreamAfterPresent(dm,index);
+            ++ptr->presented;
+        };
         indexNodes(*s);
         s->app->HostDeviceManager()->SetWindowTitle("RTRenderer 7 - NVIDIA RTXPT");
         active = s.release(); return reinterpret_cast<jlong>(active);
@@ -178,6 +192,20 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 }
 
 extern SampleUIData g_sampleUIData;
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_snapshotMaterials(
+    JNIEnv* e, jclass, jlong h, jstring directory) {
+    try {
+        auto path=std::filesystem::u8path(utf8(e,directory));
+        std::filesystem::create_directories(path);
+        for(auto& material:session(h).app->HostRenderPass()->GetScene()->GetSceneGraph()->GetMaterials()) {
+            auto* m=PTMaterial::SafeCast(material);
+            Json::Value json;m->Write(json);
+            auto name=m->ModelName+"."+m->Name+".material.json";
+            if(std::filesystem::path(name).filename()!=name)throw std::runtime_error("Invalid diagnostic material name");
+            if(!SaveJsonToFile(path/name,json))throw std::runtime_error("Failed to snapshot native material: "+name);
+        }
+    }catch(const std::exception& x){fail(e,x);}
+}
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_capture(
     JNIEnv* e, jclass, jlong h, jstring path) {
     try {

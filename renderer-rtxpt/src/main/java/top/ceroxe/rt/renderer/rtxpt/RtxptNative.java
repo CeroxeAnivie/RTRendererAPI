@@ -34,6 +34,7 @@ final class RtxptNative {
     static native void resize(long handle,int width,int height);
     static native void settings(long handle,int maxBounces,int diffuseBounces,boolean reflex);
     static native void capture(long handle,String path);
+    static native void snapshotMaterials(long handle,String directory);
     static native void interiors(long handle,String[] names,FloatBuffer values);
     static native void transforms(long handle,String[] names,FloatBuffer rowMajorMatrices);
     static native void close(long handle);

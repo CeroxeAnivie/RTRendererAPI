@@ -28,6 +28,7 @@ public final class RtxptNativeSelfTest {
             var t=nativeHost.bridgeTimings();RtxptAdapterSelfTest.require(t.sceneExports()==1,"Static assets exported once");
             RtxptAdapterSelfTest.require(t.frames()>=13,"Presented native frames");
             var initial=output.resolve("absorbing.png");nativeHost.capture(initial);
+            ((RtxptRenderer)r).snapshotMaterials(output.resolve("native-control/Materials"));
             var image=ImageIO.read(initial.toFile());
             RtxptAdapterSelfTest.require(image!=null && image.getWidth()==1920 && image.getHeight()==1080,"Full output screenshot");
             int min=765,max=0;

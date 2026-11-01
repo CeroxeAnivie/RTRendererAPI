@@ -37,6 +37,16 @@ Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '#inclu
 #include <donut/app/ApplicationBase.h>
 '@ '#include <donut/app/ApplicationBase.h>'
 Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' 'auto basePath = std::filesystem::path(path).parent_path();' 'auto basePath = donut::app::GetDirectoryWithExecutable(); // RTR signed runtime root' 'RTR signed runtime root'
+# The embedded host shuts SL down while its tagged render targets are still alive.
+# The sample's later device teardown calls Shutdown again; it must not call unloaded plugins.
+$slPath=Join-Path $sdk 'External/Donut/src/app/streamline/StreamlineIntegration.cpp'
+$slText=[IO.File]::ReadAllText($slPath)
+if(!$slText.Contains('RTR idempotent embedded teardown')){
+    $slText=[regex]::Replace($slText,'void StreamlineIntegration::Shutdown\(\)\s*\{',
+        "void StreamlineIntegration::Shutdown()`n{`n    if (!m_slInitialized) return; // RTR idempotent embedded teardown",1)
+    if(!$slText.Contains('RTR idempotent embedded teardown')){throw 'Pinned Streamline shutdown anchor changed'}
+    [IO.File]::WriteAllText($slPath,$slText,$utf8)
+}
 Patch-Once 'Rtxpt/Sample.cpp' 'if (available.empty())' 'if (std::filesystem::path(preferred).is_absolute() && std::filesystem::is_regular_file(preferred)) return preferred; // RTR absolute host scene
     if (available.empty())' 'RTR absolute host scene'
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.h' 'private:' @'
