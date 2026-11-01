@@ -1,0 +1,42 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :buildSrc:compileJava UP-TO-DATE
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+> Task :renderer-api:compileJava UP-TO-DATE
+> Task :renderer-api:processResources NO-SOURCE
+> Task :renderer-api:classes UP-TO-DATE
+> Task :renderer-api:jar UP-TO-DATE
+> Task :renderer-core:compileJava UP-TO-DATE
+> Task :renderer-core:prepareCudaNvrtcRuntime UP-TO-DATE
+> Task :renderer-core:processResources
+> Task :renderer-core:classes
+> Task :renderer-core:compileTestJava
+> Task :renderer-core:jar
+> Task :renderer-core:processTestResources UP-TO-DATE
+> Task :renderer-core:testClasses
+
+> Task :renderer-core:cudaCompositeMediumProductionNativeSelfTest
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+Oct 31, 2026 2:23:18 AM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=C:\Users\Administrator\.codex\worktrees\medium-capability-closure\RTRendererAPI\renderer-core\build\reports\vulkan-validation\cudaCompositeMediumProductionNativeSelfTest.jsonl
+CudaCompositeMediumProductionNativeSelfTest passed: checks=29, nativeFrames=37
+
+> Task :renderer-core:cudaMetallicMediumProductionNativeSelfTest
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+Oct 31, 2026 2:23:41 AM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=C:\Users\Administrator\.codex\worktrees\medium-capability-closure\RTRendererAPI\renderer-core\build\reports\vulkan-validation\cudaMetallicMediumProductionNativeSelfTest.jsonl
+CudaMetallicMediumProductionNativeSelfTest passed: comparisons=40, nativeFrames=25
+
+> Task :renderer-core:cudaOpticalMediumProductionNativeSelfTest
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+Oct 31, 2026 2:24:06 AM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=C:\Users\Administrator\.codex\worktrees\medium-capability-closure\RTRendererAPI\renderer-core\build\reports\vulkan-validation\cudaOpticalMediumProductionNativeSelfTest.jsonl
+CudaOpticalMediumProductionNativeSelfTest density/boundary caustics passed
+
+BUILD SUCCESSFUL in 1m 8s
+13 actionable tasks: 6 executed, 7 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.2/userguide/configuration_cache_enabling.html

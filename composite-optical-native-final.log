@@ -1,0 +1,92 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :buildSrc:compileJava UP-TO-DATE
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+> Task :renderer-api:compileJava UP-TO-DATE
+> Task :renderer-api:processResources NO-SOURCE
+> Task :renderer-api:classes UP-TO-DATE
+> Task :renderer-api:jar UP-TO-DATE
+> Task :renderer-core:compileJava UP-TO-DATE
+> Task :renderer-core:prepareCudaNvrtcRuntime UP-TO-DATE
+> Task :renderer-core:processResources
+> Task :renderer-core:classes
+> Task :renderer-core:compileTestJava
+> Task :renderer-core:jar
+> Task :renderer-core:processTestResources UP-TO-DATE
+> Task :renderer-core:testClasses
+
+> Task :renderer-core:generateRtPrecompiledShaders
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+RT compiler workers=1, processors=24, requestedLimit=1
+Distinct source/options compilations=4, packaged variants=8
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base, seconds=0.770, bytes=172976
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-ser
+Generated gpuscene/gpuscene_native_optical_trace.rgen base bytes=172976
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer bytes=172976
+Compiled RT variants: 2/8
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-ser, seconds=0.768, bytes=172976
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr
+Generated gpuscene/gpuscene_native_optical_trace.rgen base-ser bytes=172976
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer-ser bytes=172976
+Compiled RT variants: 4/8
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr, seconds=0.773, bytes=172976
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr-ser
+Generated gpuscene/gpuscene_native_optical_trace.rgen base-hdr bytes=172976
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer-hdr bytes=172976
+Compiled RT variants: 6/8
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr-ser, seconds=0.749, bytes=172976
+Generated gpuscene/gpuscene_native_optical_trace.rgen base-hdr-ser bytes=172976
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer-hdr-ser bytes=172976
+Compiled RT variants: 8/8
+Generated 8 pinned RT SPIR-V variants under C:\Users\Administrator\.codex\worktrees\medium-capability-closure\RTRendererAPI\renderer-core\src\main\resources\assets\rtrenderer\shaders\spv
+
+> Task :renderer-core:coreMediumDensitySelfTest
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+MediumDensitySelfTest passed: stable ABI prefix, atlas references/replacement, coordinate composition, frame validation, cached specialization
+
+> Task :renderer-core:verifyLuxCoreSourceManifest
+
+> Task :renderer-core:cudaOpticalMediumNativeSelfTest
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+CudaOpticalMediumNativeSelfTest passed: smooth/rough glass, selected-medium light connections, independent attenuation, priority transitions and TIR
+
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+> Task :renderer-core:cudaOpticalCausticNativeSelfTest
+optical caustic gather launch
+CudaOpticalCausticNativeSelfTest passed: importance eta, normalized surface/volume kernel, strict photon source compilation
+
+> Task :renderer-core:cudaCompositeMediumProductionNativeSelfTest
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Oct 31, 2026 2:22:20 AM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=C:\Users\Administrator\.codex\worktrees\medium-capability-closure\RTRendererAPI\renderer-core\build\reports\vulkan-validation\cudaCompositeMediumProductionNativeSelfTest.jsonl
+Exception in thread "main" java.lang.IllegalArgumentException: opaque material must not transmit light
+
+> Task :renderer-core:cudaCompositeMediumProductionNativeSelfTest FAILED
+	at top.ceroxe.rt.renderer.api.MaterialAsset.<init>(MaterialAsset.java:82)
+	at top.ceroxe.rt.renderer.api.MaterialAsset$Builder.build(MaterialAsset.java:695)
+	at top.ceroxe.rt.renderer.backend.vulkan.CudaCompositeMediumProductionNativeSelfTest.verifyPbrWeights(CudaCompositeMediumProductionNativeSelfTest.java:141)
+	at top.ceroxe.rt.renderer.backend.vulkan.CudaCompositeMediumProductionNativeSelfTest.main(CudaCompositeMediumProductionNativeSelfTest.java:69)
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':renderer-core:cudaCompositeMediumProductionNativeSelfTest' (registered in build file 'renderer-core\build.gradle.kts').
+16 actionable tasks: 9 executed, 7 up-to-date
+> Process 'command 'C:\Program Files\Java\graalvm-jdk-25.0.5.0.2+1.1\bin\java.exe'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 1m 40s

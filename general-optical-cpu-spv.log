@@ -1,0 +1,54 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :buildSrc:compileJava UP-TO-DATE
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+> Task :renderer-api:compileJava UP-TO-DATE
+> Task :renderer-core:compileJava UP-TO-DATE
+> Task :renderer-core:prepareCudaNvrtcRuntime
+> Task :renderer-core:processResources
+> Task :renderer-core:classes
+> Task :renderer-core:compileTestJava
+> Task :renderer-api:processResources NO-SOURCE
+> Task :renderer-api:classes UP-TO-DATE
+> Task :renderer-api:jar UP-TO-DATE
+> Task :renderer-core:jar
+> Task :renderer-core:processTestResources UP-TO-DATE
+> Task :renderer-core:testClasses
+
+> Task :renderer-core:generateRtPrecompiledShaders
+RT compiler workers=1, processors=24, requestedLimit=1
+Distinct source/options compilations=4, packaged variants=8
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base, seconds=0.823, bytes=172716
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-ser
+Generated gpuscene/gpuscene_native_optical_trace.rgen base bytes=172716
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer bytes=172716
+Compiled RT variants: 2/8
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-ser, seconds=0.808, bytes=172716
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr
+Generated gpuscene/gpuscene_native_optical_trace.rgen base-ser bytes=172716
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer-ser bytes=172716
+Compiled RT variants: 4/8
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr, seconds=0.801, bytes=172716
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr-ser
+Generated gpuscene/gpuscene_native_optical_trace.rgen base-hdr bytes=172716
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer-hdr bytes=172716
+Compiled RT variants: 6/8
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr-ser, seconds=0.807, bytes=172716
+Generated gpuscene/gpuscene_native_optical_trace.rgen base-hdr-ser bytes=172716
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer-hdr-ser bytes=172716
+Compiled RT variants: 8/8
+Generated 8 pinned RT SPIR-V variants under C:\Users\Administrator\.codex\worktrees\medium-capability-closure\RTRendererAPI\renderer-core\src\main\resources\assets\rtrenderer\shaders\spv
+
+BUILD SUCCESSFUL in 22s
+11 actionable tasks: 5 executed, 6 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.2/userguide/configuration_cache_enabling.html

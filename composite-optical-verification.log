@@ -1,0 +1,177 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :buildSrc:compileJava UP-TO-DATE
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+> Task :renderer-api:compileJava UP-TO-DATE
+> Task :renderer-api:processResources NO-SOURCE
+> Task :renderer-api:classes UP-TO-DATE
+> Task :renderer-api:jar UP-TO-DATE
+> Task :renderer-core:compileJava UP-TO-DATE
+> Task :renderer-core:prepareCudaNvrtcRuntime UP-TO-DATE
+> Task :renderer-core:processResources UP-TO-DATE
+> Task :renderer-core:classes UP-TO-DATE
+> Task :renderer-core:compileTestJava UP-TO-DATE
+> Task :renderer-core:jar UP-TO-DATE
+> Task :renderer-core:processTestResources UP-TO-DATE
+> Task :renderer-core:testClasses UP-TO-DATE
+
+> Task :renderer-core:coreVulkanSurfaceSceneIndexSelfTest
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+VulkanSurfaceSceneIndexSelfTest passed
+
+> Task :renderer-core:coreMediumDensitySelfTest
+MediumDensitySelfTest passed: stable ABI prefix, atlas references/replacement, coordinate composition, frame validation, cached specialization
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+
+> Task :renderer-core:coreCudaOpticalMediumSelfTest
+CudaOpticalMediumSelfTest passed: primary lifetime, SPP/branches/budgets, priority, smooth/rough glass, heterogeneous scattering admission
+
+> Task :renderer-core:verifyLuxCoreSourceManifest
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+
+> Task :renderer-core:coreRtPrecompiledShaderSelfTest
+RT compiler workers=1, processors=24, requestedLimit=1
+Distinct source/options compilations=129, packaged variants=250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiling RT stage=bootstrap.rgen, variant=base
+Compiled RT stage=bootstrap.rgen, variant=base, seconds=0.467, bytes=39424
+Compiling RT stage=bootstrap.rgen, variant=gbuffer
+Compiled RT variants: 1/250
+Compiled RT stage=bootstrap.rgen, variant=gbuffer, seconds=0.443, bytes=41444
+Compiling RT stage=bootstrap.rmiss, variant=base
+Compiled RT variants: 2/250
+Compiled RT stage=bootstrap.rmiss, variant=base, seconds=0.409, bytes=12880
+Compiling RT stage=bootstrap.rmiss, variant=gbuffer
+Compiled RT variants: 3/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=bootstrap.rmiss, variant=gbuffer, seconds=0.412, bytes=13056
+Compiling RT stage=bootstrap.rchit, variant=base
+Compiled RT variants: 4/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=bootstrap.rchit, variant=base, seconds=0.436, bytes=31752
+Compiling RT stage=bootstrap.rchit, variant=gbuffer
+Compiled RT variants: 5/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=bootstrap.rchit, variant=gbuffer, seconds=0.440, bytes=35612
+Compiling RT stage=bootstrap.rahit, variant=base
+Compiled RT variants: 6/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=bootstrap.rahit, variant=base, seconds=0.406, bytes=6928
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiling RT stage=bootstrap.rahit, variant=gbuffer
+Compiled RT variants: 7/250
+Compiled RT stage=bootstrap.rahit, variant=gbuffer, seconds=0.409, bytes=6944
+Compiling RT stage=gpuscene/gpuscene.rgen, variant=base
+Compiled RT variants: 8/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene.rgen, variant=base, seconds=1.771, bytes=445124
+Compiling RT stage=gpuscene/gpuscene.rgen, variant=base-ser
+Compiled RT variants: 10/250
+Compiled RT stage=gpuscene/gpuscene.rgen, variant=base-ser, seconds=1.810, bytes=445740
+Compiling RT stage=gpuscene/gpuscene.rgen, variant=base-hdr
+Compiled RT variants: 12/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene.rgen, variant=base-hdr, seconds=1.756, bytes=444124
+Compiling RT stage=gpuscene/gpuscene.rgen, variant=base-hdr-ser
+Compiled RT variants: 14/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene.rgen, variant=base-hdr-ser, seconds=1.788, bytes=444740
+Compiling RT stage=gpuscene/gpuscene_surface.rgen, variant=base
+Compiled RT variants: 16/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_surface.rgen, variant=base, seconds=0.774, bytes=167548
+Compiling RT stage=gpuscene/gpuscene_surface.rgen, variant=base-ser
+Compiled RT variants: 18/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_surface.rgen, variant=base-ser, seconds=0.782, bytes=168244
+Compiling RT stage=gpuscene/gpuscene_surface.rgen, variant=base-hdr
+Compiled RT variants: 20/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_surface.rgen, variant=base-hdr, seconds=0.782, bytes=166548
+Compiling RT stage=gpuscene/gpuscene_surface.rgen, variant=base-hdr-ser
+Compiled RT variants: 22/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_surface.rgen, variant=base-hdr-ser, seconds=0.763, bytes=167244
+Compiling RT stage=gpuscene/gpuscene_compact.rgen, variant=base
+Compiled RT variants: 24/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_compact.rgen, variant=base, seconds=1.749, bytes=445124
+Compiling RT stage=gpuscene/gpuscene_compact.rgen, variant=base-ser
+Compiled RT variants: 26/250
+Compiled RT stage=gpuscene/gpuscene_compact.rgen, variant=base-ser, seconds=1.767, bytes=445740
+Compiling RT stage=gpuscene/gpuscene_compact.rgen, variant=base-hdr
+Compiled RT variants: 28/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_compact.rgen, variant=base-hdr, seconds=1.825, bytes=444124
+Compiling RT stage=gpuscene/gpuscene_compact.rgen, variant=base-hdr-ser
+Compiled RT variants: 30/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_compact.rgen, variant=base-hdr-ser, seconds=1.801, bytes=444740
+Compiling RT stage=gpuscene/gpuscene_compact_passive.rgen, variant=base
+Compiled RT variants: 32/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_compact_passive.rgen, variant=base, seconds=1.723, bytes=445124
+Compiling RT stage=gpuscene/gpuscene_compact_passive.rgen, variant=base-ser
+Compiled RT variants: 34/250
+Compiled RT stage=gpuscene/gpuscene_compact_passive.rgen, variant=base-ser, seconds=1.777, bytes=445740
+Compiling RT stage=gpuscene/gpuscene_compact_passive.rgen, variant=base-hdr
+Compiled RT variants: 36/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_compact_passive.rgen, variant=base-hdr, seconds=1.719, bytes=444124
+Compiling RT stage=gpuscene/gpuscene_compact_passive.rgen, variant=base-hdr-ser
+Compiled RT variants: 38/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_compact_passive.rgen, variant=base-hdr-ser, seconds=1.734, bytes=444740
+Compiling RT stage=gpuscene/gpuscene_passive.rgen, variant=base
+Compiled RT variants: 40/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_passive.rgen, variant=base, seconds=1.698, bytes=445124
+Compiling RT stage=gpuscene/gpuscene_passive.rgen, variant=base-ser
+Compiled RT variants: 42/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_passive.rgen, variant=base-ser, seconds=1.806, bytes=445740
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiling RT stage=gpuscene/gpuscene_passive.rgen, variant=base-hdr
+Compiled RT variants: 44/250
+Compiled RT stage=gpuscene/gpuscene_passive.rgen, variant=base-hdr, seconds=1.803, bytes=444124
+Compiling RT stage=gpuscene/gpuscene_passive.rgen, variant=base-hdr-ser
+Compiled RT variants: 46/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_passive.rgen, variant=base-hdr-ser, seconds=1.775, bytes=444740
+Compiling RT stage=gpuscene/gpuscene_compact_passive_no_dielectric.rgen, variant=base
+Compiled RT variants: 48/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_compact_passive_no_dielectric.rgen, variant=base, seconds=1.512, bytes=368668
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiling RT stage=gpuscene/gpuscene_compact_passive_no_dielectric.rgen, variant=base-ser
+Compiled RT variants: 50/250
+Compiled RT stage=gpuscene/gpuscene_compact_passive_no_dielectric.rgen, variant=base-ser, seconds=1.584, bytes=369204
+Compiling RT stage=gpuscene/gpuscene_compact_passive_no_dielectric.rgen, variant=base-hdr
+Compiled RT variants: 52/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_compact_passive_no_dielectric.rgen, variant=base-hdr, seconds=1.685, bytes=367668
+Compiling RT stage=gpuscene/gpuscene_compact_passive_no_dielectric.rgen, variant=base-hdr-ser
+Compiled RT variants: 54/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_compact_passive_no_dielectric.rgen, variant=base-hdr-ser, seconds=1.753, bytes=368204
+Compiling RT stage=gpuscene/gpuscene_passive_no_dielectric.rgen, variant=base
+Compiled RT variants: 56/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_passive_no_dielectric.rgen, variant=base, seconds=1.738, bytes=368668
+Compiling RT stage=gpuscene/gpuscene_passive_no_dielectric.rgen, variant=base-ser
+Compiled RT variants: 58/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_passive_no_dielectric.rgen, variant=base-ser, seconds=1.692, bytes=369204
+Compiling RT stage=gpuscene/gpuscene_passive_no_dielectric.rgen, variant=base-hdr
+Compiled RT variants: 60/250
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1

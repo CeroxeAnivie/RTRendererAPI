@@ -1,0 +1,55 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :buildSrc:compileJava UP-TO-DATE
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+> Task :renderer-api:compileJava UP-TO-DATE
+> Task :renderer-api:processResources NO-SOURCE
+> Task :renderer-api:classes UP-TO-DATE
+> Task :renderer-api:jar UP-TO-DATE
+> Task :renderer-core:compileJava UP-TO-DATE
+> Task :renderer-core:prepareCudaNvrtcRuntime UP-TO-DATE
+> Task :renderer-core:processResources
+> Task :renderer-core:classes
+> Task :renderer-core:compileTestJava UP-TO-DATE
+> Task :renderer-core:jar
+> Task :renderer-core:processTestResources UP-TO-DATE
+> Task :renderer-core:testClasses UP-TO-DATE
+
+> Task :renderer-core:cudaOpticalMediumNativeSelfTest
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+CudaOpticalMediumNativeSelfTest passed: smooth/rough glass, selected-medium light connections, independent attenuation, priority transitions and TIR
+
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+> Task :renderer-core:cudaOpticalCausticNativeSelfTest
+optical caustic gather launch
+CudaOpticalCausticNativeSelfTest passed: importance eta, normalized surface/volume kernel, strict photon source compilation
+
+> Task :renderer-core:cudaCompositeMediumProductionNativeSelfTest
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+Oct 31, 2026 2:19:17 AM top.ceroxe.rt.renderer.RendererLog$SystemSink log
+INFO: Vulkan validation enabled; JSONL output=C:\Users\Administrator\.codex\worktrees\medium-capability-closure\RTRendererAPI\renderer-core\build\reports\vulkan-validation\cudaCompositeMediumProductionNativeSelfTest.jsonl
+Exception in thread "main" java.lang.IllegalArgumentException: alpha-blended surface overlay must use TRANSLUCENT blend mode
+	at top.ceroxe.rt.renderer.api.MaterialAsset.<init>(MaterialAsset.java:86)
+	at top.ceroxe.rt.renderer.api.MaterialAsset$Builder.build(MaterialAsset.java:695)
+	at top.ceroxe.rt.renderer.backend.vulkan.CudaCompositeMediumProductionNativeSelfTest.main(CudaCompositeMediumProductionNativeSelfTest.java:58)
+
+> Task :renderer-core:cudaCompositeMediumProductionNativeSelfTest FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':renderer-core:cudaCompositeMediumProductionNativeSelfTest' (registered in build file 'renderer-core\build.gradle.kts').
+> Process 'command 'C:\Program Files\Java\graalvm-jdk-25.0.5.0.2+1.1\bin\java.exe'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2m 16s
+13 actionable tasks: 5 executed, 8 up-to-date

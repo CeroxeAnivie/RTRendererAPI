@@ -1,0 +1,38 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :buildSrc:compileJava UP-TO-DATE
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+> Task :renderer-api:compileJava UP-TO-DATE
+> Task :renderer-api:processResources NO-SOURCE
+> Task :renderer-api:classes UP-TO-DATE
+> Task :renderer-api:jar UP-TO-DATE
+> Task :renderer-core:compileJava
+> Task :renderer-core:prepareCudaNvrtcRuntime
+> Task :renderer-core:processResources
+> Task :renderer-core:classes
+> Task :renderer-core:compileTestJava
+> Task :renderer-core:jar
+> Task :renderer-core:processTestResources UP-TO-DATE
+> Task :renderer-core:testClasses
+
+> Task :renderer-core:coreVulkanSurfaceSceneIndexSelfTest
+VulkanSurfaceSceneIndexSelfTest passed
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+
+> Task :renderer-core:coreMediumDensitySelfTest
+MediumDensitySelfTest passed: stable ABI prefix, atlas references/replacement, coordinate composition, frame validation, cached specialization
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+> Task :renderer-core:coreCudaOpticalMediumSelfTest
+CudaOpticalMediumSelfTest passed: primary lifetime, SPP/branches/budgets, priority, smooth/rough glass, heterogeneous scattering admission
+
+> Task :renderer-core:verifyLuxCoreSourceManifest
+
+BUILD SUCCESSFUL in 20s
+14 actionable tasks: 9 executed, 5 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.2/userguide/configuration_cache_enabling.html

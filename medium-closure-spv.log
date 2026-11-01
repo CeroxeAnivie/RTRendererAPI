@@ -1,0 +1,54 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :buildSrc:compileJava UP-TO-DATE
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:processResources NO-SOURCE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+> Task :renderer-api:compileJava UP-TO-DATE
+> Task :renderer-api:processResources NO-SOURCE
+> Task :renderer-api:classes UP-TO-DATE
+> Task :renderer-api:jar UP-TO-DATE
+> Task :renderer-core:compileJava UP-TO-DATE
+> Task :renderer-core:prepareCudaNvrtcRuntime UP-TO-DATE
+> Task :renderer-core:processResources UP-TO-DATE
+> Task :renderer-core:classes UP-TO-DATE
+> Task :renderer-core:compileTestJava UP-TO-DATE
+> Task :renderer-core:jar UP-TO-DATE
+> Task :renderer-core:processTestResources UP-TO-DATE
+> Task :renderer-core:testClasses UP-TO-DATE
+
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+> Task :renderer-core:generateRtPrecompiledShaders
+RT compiler workers=1, processors=24, requestedLimit=1
+Distinct source/options compilations=4, packaged variants=8
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base, seconds=0.802, bytes=163544
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-ser
+Generated gpuscene/gpuscene_native_optical_trace.rgen base bytes=163544
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer bytes=163544
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT variants: 2/8
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-ser, seconds=0.760, bytes=163544
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr
+Generated gpuscene/gpuscene_native_optical_trace.rgen base-ser bytes=163544
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer-ser bytes=163544
+Compiled RT variants: 4/8
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr, seconds=0.816, bytes=163544
+Compiling RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr-ser
+Generated gpuscene/gpuscene_native_optical_trace.rgen base-hdr bytes=163544
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer-hdr bytes=163544
+Compiled RT variants: 6/8
+Picked up JAVA_TOOL_OPTIONS: -XX:-UseJVMCICompiler -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dtop.ceroxe.rt.shader.compileWorkers=1
+Compiled RT stage=gpuscene/gpuscene_native_optical_trace.rgen, variant=base-hdr-ser, seconds=0.792, bytes=163544
+Generated gpuscene/gpuscene_native_optical_trace.rgen base-hdr-ser bytes=163544
+Generated gpuscene/gpuscene_native_optical_trace.rgen gbuffer-hdr-ser bytes=163544
+Compiled RT variants: 8/8
+Generated 8 pinned RT SPIR-V variants under C:\Users\Administrator\.codex\worktrees\medium-capability-closure\RTRendererAPI\renderer-core\src\main\resources\assets\rtrenderer\shaders\spv
+
+BUILD SUCCESSFUL in 7s
+11 actionable tasks: 1 executed, 10 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.2/userguide/configuration_cache_enabling.html
