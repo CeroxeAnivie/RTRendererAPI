@@ -38,7 +38,6 @@ class HostPathTracer final : public AdvancedPathTracer {
         const auto& lights=graph->GetLights();
         size_t analyticCount=0;
         bool pointFound=false;
-        bool supportedLights=true;
         for(const auto& light:lights) {
             const auto type=light->GetLightType();
             if(type==LightType_Point) {
@@ -47,16 +46,15 @@ class HostPathTracer final : public AdvancedPathTracer {
                 pointFound=true;
             } else if(type==LightType_Spot || type==LightType_Directional) {
                 ++analyticCount;
-                supportedLights=false;
             }
         }
         size_t emissiveMaterials=0;
         for(const auto& material:graph->GetMaterials())
             if(material->emissiveColor.x!=0.f || material->emissiveColor.y!=0.f || material->emissiveColor.z!=0.f)
                 ++emissiveMaterials;
-        const bool eligible=pointFound && supportedLights && analyticCount<=4 && emissiveMaterials==0;
-        donut::log::info("RTXPT small-point scene gate: lights=%zu analytic=%zu points=%s supported=%s emissiveMaterials=%zu eligible=%s",
-            lights.size(),analyticCount,pointFound?"yes":"no",supportedLights?"yes":"no",emissiveMaterials,eligible?"yes":"no");
+        const bool eligible=pointFound && analyticCount<=4 && emissiveMaterials==0;
+        donut::log::info("RTXPT small-point scene gate: lights=%zu analytic=%zu points=%s emissiveMaterials=%zu eligible=%s",
+            lights.size(),analyticCount,pointFound?"yes":"no",emissiveMaterials,eligible?"yes":"no");
         return eligible;
     }
 public:
