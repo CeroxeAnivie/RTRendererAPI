@@ -155,3 +155,31 @@ is a quality candidate for remaining stochastic noise, not a speed optimization
 or evidence that the residual ghosting is already fixed. JNI settings and runtime
 status were rebuilt together. CPU adapter regressions pass. GPU verification and
 30-second paired measurements follow after the complete source upload.
+
+## Paired results after stage instrumentation
+
+All runs output 2560x1440, 1 SPP, FG off. Initial GPU utilization was 0% for all three new runs. No run was repeated to assemble this table.
+
+| Run | Native FPS | Wall ms/frame | Profiling |
+|---|---:|---:|---|
+| vulkan-sr-stages-v6 | 228.088903 | 4.384255 | Vulkan fine stages ON |
+| rtxpt-sr-fixed-off-v6 | 202.957381 | 4.927143 | OFF |
+| rtxpt-relax-sr-profile-v7 | 145.721114 | 6.862424 | RTXPT fine stages ON; upstream RELAX ON |
+
+SR-only throughput difference: -25.131522 FPS (-11.0183%). The RELAX run is a quality candidate with an additional upstream denoising workload, not the SR-only speed acceptance. The user reported that this run was not blurry. Residual ghosting/noise is not declared fully accepted.
+
+The next internal table uses existing v5 SR-only samples (202.015589 FPS), not invented internal values for the v6 diagnostics-off run. Vulkan v6 and RELAX v7 use their own captured timestamps. Stages are exclusive; all queues here are graphics. The two integrators perform different shading work.
+
+| Exclusive category | Vulkan v6 ms/frame | RTXPT SR v5 ms/frame | RTXPT RELAX+SR v7 ms/frame |
+|---|---:|---:|---:|
+| SR 重建段 | 1.722207 | 1.478673 | 1.426997 |
+| 追踪与着色（RTXPT含预处理） | 1.592043 | 1.235675 | 1.222133 |
+| 灯光历史反馈与权重 | 0.000000 | 0.714990 | 0.687171 |
+| 降噪及颜色合并 | 0.000000 | 0.168960 | 1.490936 |
+| SpecHitT 引导滤波 | 0.000000 | 0.188940 | 0.188678 |
+| 其他GPU阶段与已测帧内间隙 | 0.085305 | 0.459616 | 0.477536 |
+| **GPU measured sum** | 3.399555 | 4.246855 | 5.493451 |
+
+The new SR stage is not the measured source of the extra GPU interval: its measured duration is lower than the old reconstruction bracket. The additional light feedback/weights, unconditional SpecHitT filtering and radiance merge total about 1.07 ms/frame in v5. The remainder also includes different whole-frame scheduling/post-processing. The SR bracket in Vulkan includes its surrounding input barriers and post-trace composition; do not claim equal shader-level scopes. No entire 25-FPS difference is attributed to a single kernel.
+
+Fine Vulkan stage profiling is off by default. Only `-StageProfile` turns it on in the measurement runner; public `gpuTimingsEnabled=false` also disables existing total-frame timestamps. All 413 Vulkan and 259 RELAX sampled frames resolved with zero drops/failures.
