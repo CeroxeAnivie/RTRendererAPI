@@ -13,6 +13,9 @@ import top.ceroxe.rt.renderer.api.PrimitiveInstance;
 import top.ceroxe.rt.renderer.api.SceneInstance;
 import top.ceroxe.rt.renderer.api.SceneLight;
 import top.ceroxe.rt.renderer.api.SceneTransaction;
+import top.ceroxe.rt.renderer.api.Medium;
+import top.ceroxe.rt.renderer.api.MediumBoundary;
+import top.ceroxe.rt.renderer.api.Rgb;
 
 final class DemoScene {
     private static final float BACK_Z = 0.0F;
@@ -27,6 +30,11 @@ final class DemoScene {
     private static final long[] BALL_MESHES = {210L, 211L, 212L};
     private static final long BACK_INSTANCE = 300L;
     private static final long RIM_INSTANCE = 301L;
+    // Dielectric Fresnel F0=((n-1)/(n+1))^2: 20% reflection at normal incidence.
+    static final float BALL_IOR = (float)((1+Math.sqrt(.2))/(1-Math.sqrt(.2)));
+    private static final Rgb[] BALL_ABSORPTION = {
+            new Rgb(.015f,.16f,.22f),new Rgb(.20f,.015f,.12f),new Rgb(.20f,.10f,.015f)
+    };
 
     private static final int[] BALL_COLORS = {
             rgba(218, 132, 140, 255),
@@ -60,11 +68,12 @@ final class DemoScene {
 
         for (int index = 0; index < BALL_COLORS.length; index++) {
             materials.add(MaterialAsset.builder(BALL_MATERIALS[index])
-                    .baseColorRgba8(BALL_COLORS[index])
-                    // PVD-colored polished stainless steel: a fully conducting surface avoids
-                    // the dielectric/metal blend that previously read as concentric shells.
-                    .metallic(1.0F)
-                    .roughness(0.12F)
+                    .baseColorRgba8(rgba(255,255,255,255))
+                    .blendMode(MaterialAsset.BlendMode.TRANSLUCENT)
+                    .metallic(0.0F)
+                    .roughness(0.025F)
+                    .transmission(1.0F)
+                    .indexOfRefraction(BALL_IOR)
                     .build());
         }
 
@@ -120,6 +129,7 @@ final class DemoScene {
             batch.add(PrimitiveInstance.builder(BALL_MESHES[index])
                     .transform(transform)
                     .previousTransform(previousTransform)
+                    .mediumBoundary(MediumBoundary.surface(new Medium(BALL_ABSORPTION[index],BALL_IOR)).withPriority(2))
                     .build());
         }
         return batch.build();
@@ -208,9 +218,9 @@ final class DemoScene {
         for (int latitude = 0; latitude <= latitudeSegments; latitude++) {
             double polar = Math.PI * latitude / latitudeSegments;
             double y = Math.cos(polar);
-            double ring = Math.sin(polar);
+            double ring = latitude==0 || latitude==latitudeSegments ? 0.0 : Math.sin(polar);
             for (int longitude = 0; longitude <= longitudeSegments; longitude++) {
-                double azimuth = 2.0 * Math.PI * longitude / longitudeSegments;
+                double azimuth = longitude==longitudeSegments ? 0.0 : 2.0 * Math.PI * longitude / longitudeSegments;
                 float x = (float) (ring * Math.cos(azimuth));
                 float z = (float) (ring * Math.sin(azimuth));
                 int offset = (latitude * stride + longitude) * 3;

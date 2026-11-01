@@ -210,7 +210,7 @@ tasks.register<JavaExec>("rtxptHexBallDemo") {
     group = "application"
     description = "Runs the unchanged hex-ball scene and physics in RTXPT's native window at 1 SPP."
     dependsOn(tasks.classes)
-    classpath = sourceSets.main.get().runtimeClasspath
+    classpath = sourceSets.main.get().output + configurations.compileClasspath.get()
     mainClass.set("demo.RtxptHexBallDemo")
     workingDir(rootProject.projectDir)
     jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")

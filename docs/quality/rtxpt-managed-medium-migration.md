@@ -87,3 +87,9 @@ Java 只负责公共接口、场景事务、窗口控制和薄的原生资源桥
 ### main 与旧 worktree
 
 所有当前实现均位于主 checkout 的 main。旧介质 worktree 和 6.0.4 基线中的未提交内容已做 Git 快照并作为父提交保存在 main 历史，不将已撤下的 API 重新引入 7.0.0。两个非当前 worktree 已删除，仅剩当前聊天绑定的旧 checkout：应用返回 `The task's primary checkout cannot be removed`，且不能把非托管的主 checkout 附加为替代。该目录暂留，内容干净；当前实现和测试均明确使用 `D:/Engineering/code/APIs/RTRendererAPI`。
+
+### 弹球玻璃与 HUD
+
+RTXPT 弹球沿用原场景、相机及物理运动，三颗球改为透射率 1、金属度 0、粗糙度 0.025 的封闭玻璃球。按空气到球体的 Fresnel 公式，正面反射率 20% 对应 IOR 约 2.618；掠射角反射率自然增加，不使用固定 20% 的图像混合。每颗球通过显式内部介质传递 IOR 和轻微吸收色，接缝及极点使用一致位置，保证闭合。CPU 合同检查覆盖闭合性、材质及正面反射率。
+
+完整技术 HUD 使用上游 ImGui 绘制，显示实际输出尺寸、内部尺寸、原生帧率及技术状态。HUD 开启时使用异步 GPU 时间查询，不逐帧等待查询结果。颜色保留 RTXPT 默认光照、ACES、曝光及 bloom，不修改上游着色算法来追平旧 Vulkan 画面；两者的光源衰减和色调映射本来不同。

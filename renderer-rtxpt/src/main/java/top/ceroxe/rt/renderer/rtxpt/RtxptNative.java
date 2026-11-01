@@ -28,6 +28,9 @@ final class RtxptNative {
     static native int frame(long handle);
     static native void awaitIdle(long handle);
     static native int[] runtimeStatus(long handle);
+    static native void overlay(long handle,String text);
+    static native long[] gpuTiming(long handle);
+    static native double[] presentationStatus(long handle);
     static native void camera(long handle,String pose,float verticalFovRadians);
     static native void loadScene(long handle,String path);
     static native long window(long handle);

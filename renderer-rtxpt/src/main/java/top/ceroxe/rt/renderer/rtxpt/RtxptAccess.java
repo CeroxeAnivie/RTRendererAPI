@@ -13,6 +13,11 @@ public interface RtxptAccess {
     void awaitIdle();
     /** Actual native settings and internal resolution after rendering, including upstream fallbacks. */
     RuntimeStatus runtimeStatus();
+    /** Text drawn by the upstream GPU UI pass; empty text disables the host HUD and its timer queries. */
+    void setOverlayText(String text);
+    /** Actual client output size and upstream exposure/post-process settings. */
+    PresentationStatus presentationStatus();
+    record PresentationStatus(int outputWidth,int outputHeight,float exposureCompensation,float exposureValue,boolean bloom) { }
     enum Reconstruction { NONE, TAA, DLSS, DLSS_RR }
     record RuntimeStatus(int renderWidth,int renderHeight,Reconstruction reconstruction,
         boolean standaloneDenoiser,boolean denoising,boolean restirDi,boolean restirGi,boolean sharc,

@@ -12,6 +12,7 @@
 #include <cmath>
 #include <sstream>
 #include <filesystem>
+#include <array>
 #include <donut/engine/TextureCache.h>
 #include <json/json.h>
 #include "StreamlineIntegration.h"
@@ -53,6 +54,35 @@ struct Session {
     int requestedFrameGenerationMode = 0;
     int requestedGeneratedFrames = 1;
     sl::Result shutdownResult = sl::Result::eOk;
+    nvrhi::TextureHandle lastPresentedTexture;
+    struct GpuSample { nvrhi::TimerQueryHandle query; bool pending=false; };
+    std::array<GpuSample,8> gpuSamples;
+    nvrhi::CommandListHandle timerCommands;
+    GpuSample* currentGpuSample=nullptr;
+    uint64_t gpuSampleCount=0,gpuMaxNs=0;
+    double gpuAverageNs=0;
+    void beginGpuSample(uint32_t index) {
+        currentGpuSample=nullptr;
+        if(g_sampleUIData.HostOverlayText.empty())return;
+        auto* device=app->HostDeviceManager()->GetDevice();
+        for(auto& sample:gpuSamples)if(sample.pending && device->pollTimerQuery(sample.query)) {
+            double ns=device->getTimerQueryTime(sample.query)*1e9;
+            ++gpuSampleCount;gpuAverageNs=gpuSampleCount==1?ns:gpuAverageNs*.9+ns*.1;
+            gpuMaxNs=std::max(gpuMaxNs,uint64_t(ns));sample.pending=false;
+        }
+        auto& sample=gpuSamples[index%gpuSamples.size()];if(sample.pending)return;
+        if(!sample.query)sample.query=device->createTimerQuery();
+        if(!timerCommands)timerCommands=device->createCommandList();
+        device->resetTimerQuery(sample.query);
+        timerCommands->open();timerCommands->beginTimerQuery(sample.query);timerCommands->close();
+        device->executeCommandList(timerCommands);currentGpuSample=&sample;
+    }
+    void endGpuSample() {
+        if(!currentGpuSample)return;
+        timerCommands->open();timerCommands->endTimerQuery(currentGpuSample->query);timerCommands->close();
+        app->HostDeviceManager()->GetDevice()->executeCommandList(timerCommands);
+        currentGpuSample->pending=true;currentGpuSample=nullptr;
+    }
     std::unordered_map<std::string, donut::engine::SceneGraphNode*> nodes;
     void shutdown() {
         if (app) {
@@ -67,6 +97,8 @@ struct Session {
                 shutdownResult=streamline.HostShutdownResult();
             }
             dm->m_callbacks={};
+            lastPresentedTexture=nullptr;timerCommands=nullptr;
+            for(auto& sample:gpuSamples)sample.query=nullptr;
             app->End();
         }
         // Never leave the sample's [this] log callback installed during member teardown.
@@ -163,11 +195,38 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
                 ptr->restoreFrameGenerationBeforeRender=false;
             }
             if(upstreamBeforeRender)upstreamBeforeRender(dm,index);
+            ptr->beginGpuSample(index);
+        };
+        auto& afterRender=s->app->HostDeviceManager()->m_callbacks.afterRender;
+        auto upstreamAfterRender=afterRender;
+        afterRender=[ptr=s.get(),upstreamAfterRender](auto& dm,uint32_t index) {
+            if(upstreamAfterRender)upstreamAfterRender(dm,index);
+            ptr->endGpuSample();ptr->lastPresentedTexture=dm.GetCurrentBackBuffer();
         };
         indexNodes(*s);
         s->app->HostDeviceManager()->SetWindowTitle("RTRenderer 7 - NVIDIA RTXPT");
         active = s.release(); return reinterpret_cast<jlong>(active);
     } catch (const std::exception& x) { fail(e, x); return 0; }
+}
+
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_overlay(
+    JNIEnv* e,jclass,jlong h,jstring text) {
+    try { session(h);g_sampleUIData.HostOverlayText=utf8(e,text); }
+    catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_gpuTiming(
+    JNIEnv* e,jclass,jlong h) {
+    try { auto& s=session(h);jlong values[]={jlong(s.gpuSampleCount),jlong(s.gpuAverageNs),jlong(s.gpuMaxNs)};
+        auto result=e->NewLongArray(3);if(result)e->SetLongArrayRegion(result,0,3,values);return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_presentationStatus(
+    JNIEnv* e,jclass,jlong h) {
+    try {auto size=session(h).app->HostRenderPass()->GetDisplaySize();
+        jdouble values[]={double(size.x),double(size.y),g_sampleUIData.ToneMappingParams.exposureCompensation,
+            g_sampleUIData.ToneMappingParams.exposureValue,double(g_sampleUIData.EnableBloom)};
+        auto result=e->NewDoubleArray(5);if(result)e->SetDoubleArrayRegion(result,0,5,values);return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 
 extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_frame(
@@ -249,7 +308,13 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     JNIEnv* e, jclass, jlong h, jstring path) {
     try {
         auto& s=session(h);
-        if(!static_cast<HostPathTracer*>(s.app->HostRenderPass())->Capture(utf8(e,path).c_str()))
+        const auto output=utf8(e,path);
+        bool saved=false;
+        if(!g_sampleUIData.HostOverlayText.empty() && s.lastPresentedTexture)
+            saved=donut::engine::SaveTextureToFile(s.app->HostDeviceManager()->GetDevice(),
+                s.app->HostRenderPass()->GetCommonPasses().get(),s.lastPresentedTexture,nvrhi::ResourceStates::Present,output.c_str());
+        else saved=static_cast<HostPathTracer*>(s.app->HostRenderPass())->Capture(output.c_str());
+        if(!saved)
             throw std::runtime_error("RTXPT capture failed");
     } catch(const std::exception& x) { fail(e,x); }
 }

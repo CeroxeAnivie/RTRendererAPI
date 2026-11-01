@@ -41,7 +41,13 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     @Override public Status status(){return closed?Status.CLOSED:Status.READY;}
     @Override public RendererHealth health(){return new RendererHealth(status(),Optional.empty(),RendererHealth.ResourceObligations.none());}
     @Override public RendererDiagnostics diagnostics(){return RendererDiagnostics.builder().status(status()).latestAcceptedSceneRevision(revision)
-        .latestSubmittedFrameSequence(submitted).latestCompletedFrameSequence(completed).residentMeshes(scene.meshes.size()).residentInstances(scene.instances.size()).build();}
+        .latestSubmittedFrameSequence(submitted).latestCompletedFrameSequence(completed).residentMeshes(scene.meshes.size()).residentInstances(scene.instances.size()).frameGpuTiming(gpuTiming()).build();}
+    private RendererDiagnostics.FrameGpuTiming gpuTiming(){
+        if(handle==0||closed)return RendererDiagnostics.FrameGpuTiming.unavailable();
+        var t=RtxptNative.gpuTiming(handle);
+        return t[0]==0?RendererDiagnostics.FrameGpuTiming.unavailable():RendererDiagnostics.FrameGpuTiming.builder()
+            .enabled(true).completedSamples(t[0]).averagePostTraceNanos(t[1]).averageTotalNanos(t[1]).maxTotalNanos(t[2]).build();
+    }
     @Override public SceneUpdateResult apply(SceneTransaction tx){
         ready();Objects.requireNonNull(tx);if(nativeScene!=null)throw new IllegalStateException("Choose retained API scenes or a native scene explicitly");
         if(tx.revision()<revision)throw new IllegalArgumentException("Scene revision must be monotonic");
@@ -226,6 +232,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     @Override public boolean renderFrame(){ready();if(handle==0)throw new IllegalStateException("Submit a scene first");if(windowClosed)return false;
         long begin=System.nanoTime();int result=RtxptNative.frame(handle);frameNs+=System.nanoTime()-begin;if(result==2){frames++;completed=submitted;}else if(result==0)windowClosed=true;return result!=0;}
     @Override public void awaitIdle(){ready();if(handle!=0)RtxptNative.awaitIdle(handle);}
+    @Override public void setOverlayText(String text){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.overlay(handle,Objects.requireNonNull(text));}
+    @Override public PresentationStatus presentationStatus(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.presentationStatus(handle);
+        return new PresentationStatus((int)s[0],(int)s[1],(float)s[2],(float)s[3],s[4]!=0);}
     @Override public RuntimeStatus runtimeStatus(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.runtimeStatus(handle);
         return new RuntimeStatus(s[0],s[1],Reconstruction.values()[s[2]],s[3]!=0,s[4]!=0,s[5]!=0,s[6]!=0,s[7]!=0,s[8]!=0,s[9]!=0,s[10]!=0,
             s[11],s[12],s[13],s[14]!=0,s[15]!=0,s[16]!=0,s[17]!=0,s[18]!=0);}

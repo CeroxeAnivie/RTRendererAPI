@@ -52,6 +52,29 @@ HRESULT hres = CreateDXGIFactory2(m_DeviceParams.enableDebugRuntime ? DXGI_CREAT
 #endif
 '@ 'RTR manual-hook factory path'
 # The public API can request 3x/4x MFG on devices with a lower Streamline limit.
+Patch-Once 'Rtxpt/SampleUI.h' 'bool                                ShowUI                                  = true;' @'
+std::string                         HostOverlayText; // RTR GPU-native host HUD
+    bool                                ShowUI                                  = true;
+'@ 'RTR GPU-native host HUD'
+Patch-Once 'Rtxpt/SampleUI.cpp' "void SampleUI::buildUI(void)`r`n{" @'
+void SampleUI::buildUI(void)
+{
+    // RTR GPU-native host HUD: same upstream ImGui pass, independent of the settings panel.
+    if (!m_ui.HostOverlayText.empty()) {
+        ImGui::PushFont(m_defaultFont->GetScaledFont());
+        ImGui::SetNextWindowPos(ImVec2(14.f, 14.f), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.69f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.f, 8.f));
+        ImGui::Begin("RTRenderer host HUD", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize
+            | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing
+            | ImGuiWindowFlags_NoNav);
+        ImGui::TextUnformatted(m_ui.HostOverlayText.c_str());
+        ImGui::End();
+        ImGui::PopStyleVar();
+        ImGui::PopFont();
+    }
+'@ 'RTR GPU-native host HUD:'
+# The public API can request 3x/4x MFG on devices with a lower Streamline limit.
 # Follow RTXPT's UI negotiation: keep native presentation when the requested count is unavailable.
 Patch-Once 'Rtxpt/Sample.cpp' 'm_ui.DLSSFGMaxNumFramesToGenerate = state.numFramesToGenerateMax;' @'
 m_ui.DLSSFGMaxNumFramesToGenerate = state.numFramesToGenerateMax;

@@ -40,7 +40,22 @@ public final class DemoFeatureIntegrationSelfTest {
         countsActiveMfgFramesInVisibleFps();
         boundsBlockedReasonsAndHandlesMissingCapabilityExtension();
         independentPublicApiControls();
+        glassBallsHavePhysicalReflectionAndClosedInteriors();
         System.out.println("DemoFeatureIntegrationSelfTest passed");
+    }
+    private static void glassBallsHavePhysicalReflectionAndClosedInteriors() {
+        var scene=new DemoScene();var initial=scene.initialTransaction();
+        var balls=scene.primitiveBatch(new HexPhysics(),top.ceroxe.rt.renderer.api.FramePrimitiveBatch.empty());
+        require(balls.size()==3,"Three original physics balls");
+        for(var ball:balls.primitives()) {
+            var mesh=initial.upserts().meshes().stream().filter(m->m.id()==ball.meshAssetId()).findFirst().orElseThrow();
+            require(mesh.isClosedManifold(),"Glass spheres must be closed, including UV seams and poles");
+            var boundary=ball.mediumBoundary().orElseThrow();double n=boundary.medium().indexOfRefraction();
+            require(Math.abs(Math.pow((n-1)/(n+1),2)-.2)<1e-6,"Normal-incidence reflection is 20%");
+            var material=initial.upserts().materials().stream().filter(m->m.id()==mesh.triangleMaterialIds().get(0)).findFirst().orElseThrow();
+            require(material.metallic()==0 && material.transmission()==1 && material.roughness()<=.03,
+                "Ball material is smooth transmissive dielectric, not metal");
+        }
     }
 
     private static void independentPublicApiControls() {

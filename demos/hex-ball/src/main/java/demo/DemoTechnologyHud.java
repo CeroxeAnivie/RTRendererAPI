@@ -113,6 +113,8 @@ final class DemoTechnologyHud {
                 continue;
             }
             Entry entry = capabilities.orElseThrow().technology(technology.technology());
+            if(technology.technology()==Technology.RAY_TRACING_DENOISING && entry.implementation().equals("nvidia.dlss_rr"))
+                text.append("DLSS-RR / ");
             text.append(entry.status());
             if (technology.technology() == Technology.FRAME_GENERATION
                     || technology.technology() == Technology.MULTI_FRAME_GENERATION) {
