@@ -1,0 +1,216 @@
+{
+  "purpose": "Game performance feasibility; feature-rich, spatially bounded workload, not production AAA artwork.",
+  "width": 1920,
+  "height": 1080,
+  "spp": 1,
+  "maxPathDepth": 5,
+  "objects": 120,
+  "triangles": 1440,
+  "boundedVolumesExcludingCamera": 32,
+  "volumeScreenCoveragePercent": 10.840181327160494,
+  "maxPrimaryVolumeIntersections": 2,
+  "maxPrimaryDistanceInsideLocalVolumesM": 0.4626927375793457,
+  "cameraMedium": "Clear absorption only; 0.004 m bounded cube, maximum primary exit distance <0.003 m.",
+  "gridResolution": "4x4x4 original density grids; original coefficients retained",
+  "coverageObjects": [
+    {
+      "object": "o100p0",
+      "medium": "v100",
+      "type": "clear",
+      "projectedPixels": 8850
+    },
+    {
+      "object": "o101p0",
+      "medium": "v101",
+      "type": "homogeneous",
+      "projectedPixels": 8285
+    },
+    {
+      "object": "o102p0",
+      "medium": "v102",
+      "type": "homogeneous",
+      "projectedPixels": 7506
+    },
+    {
+      "object": "o103p0",
+      "medium": "v103",
+      "type": "homogeneous",
+      "projectedPixels": 7545
+    },
+    {
+      "object": "o104p0",
+      "medium": "v104",
+      "type": "heterogeneous",
+      "projectedPixels": 6840
+    },
+    {
+      "object": "o105p0",
+      "medium": "v105",
+      "type": "heterogeneous",
+      "projectedPixels": 6604
+    },
+    {
+      "object": "o106p0",
+      "medium": "v106",
+      "type": "homogeneous",
+      "projectedPixels": 7545
+    },
+    {
+      "object": "o107p0",
+      "medium": "v107",
+      "type": "clear",
+      "projectedPixels": 7752
+    },
+    {
+      "object": "o108p0",
+      "medium": "v108",
+      "type": "clear",
+      "projectedPixels": 7957
+    },
+    {
+      "object": "o400p0",
+      "medium": "v400",
+      "type": "clear",
+      "projectedPixels": 2622
+    },
+    {
+      "object": "o109p0",
+      "medium": "v109",
+      "type": "homogeneous",
+      "projectedPixels": 8850
+    },
+    {
+      "object": "o401p0",
+      "medium": "v401",
+      "type": "homogeneous",
+      "projectedPixels": 2545
+    },
+    {
+      "object": "o110p0",
+      "medium": "v110",
+      "type": "homogeneous",
+      "projectedPixels": 8083
+    },
+    {
+      "object": "o111p0",
+      "medium": "v111",
+      "type": "homogeneous",
+      "projectedPixels": 7528
+    },
+    {
+      "object": "o112p0",
+      "medium": "v112",
+      "type": "heterogeneous",
+      "projectedPixels": 6910
+    },
+    {
+      "object": "o113p0",
+      "medium": "v113",
+      "type": "heterogeneous",
+      "projectedPixels": 6777
+    },
+    {
+      "object": "o114p0",
+      "medium": "v114",
+      "type": "homogeneous",
+      "projectedPixels": 6081
+    },
+    {
+      "object": "o115p0",
+      "medium": "v115",
+      "type": "clear",
+      "projectedPixels": 6004
+    },
+    {
+      "object": "o116p0",
+      "medium": "v116",
+      "type": "clear",
+      "projectedPixels": 6777
+    },
+    {
+      "object": "o117p0",
+      "medium": "v117",
+      "type": "homogeneous",
+      "projectedPixels": 6994
+    },
+    {
+      "object": "o118p0",
+      "medium": "v118",
+      "type": "homogeneous",
+      "projectedPixels": 7362
+    },
+    {
+      "object": "o119p0",
+      "medium": "v119",
+      "type": "homogeneous",
+      "projectedPixels": 8083
+    },
+    {
+      "object": "o120p0",
+      "medium": "v120",
+      "type": "heterogeneous",
+      "projectedPixels": 8698
+    },
+    {
+      "object": "o121p0",
+      "medium": "v121",
+      "type": "heterogeneous",
+      "projectedPixels": 8136
+    },
+    {
+      "object": "o122p0",
+      "medium": "v122",
+      "type": "homogeneous",
+      "projectedPixels": 7432
+    },
+    {
+      "object": "o123p0",
+      "medium": "v123",
+      "type": "clear",
+      "projectedPixels": 7390
+    },
+    {
+      "object": "o124p0",
+      "medium": "v124",
+      "type": "clear",
+      "projectedPixels": 6689
+    },
+    {
+      "object": "o125p0",
+      "medium": "v125",
+      "type": "homogeneous",
+      "projectedPixels": 6530
+    },
+    {
+      "object": "o126p0",
+      "medium": "v126",
+      "type": "homogeneous",
+      "projectedPixels": 7390
+    },
+    {
+      "object": "o127p0",
+      "medium": "v127",
+      "type": "homogeneous",
+      "projectedPixels": 7601
+    },
+    {
+      "object": "f0p0",
+      "medium": "vf0",
+      "type": "heterogeneous",
+      "projectedPixels": 7885
+    },
+    {
+      "object": "f1p0",
+      "medium": "vf1",
+      "type": "heterogeneous",
+      "projectedPixels": 8698
+    }
+  ],
+  "minProjectedFeaturePixels": 2545,
+  "sourceFixtureSha256": "318d01f2f3ec6662e06a313cbde26b8f85c85c9740da0deff036a99bc4ffd661",
+  "corrections": [
+    "Explicitly initialized all vertex colors/alpha; no undefined PLY attributes.",
+    "Shared native sparse grid layers are allowed; one upstream layer per input object is not required.",
+    "No global scattering fog, no long glass tunnel, no repeated transparent shells across the screen."
+  ]
+}

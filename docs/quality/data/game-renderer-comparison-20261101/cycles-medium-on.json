@@ -1,0 +1,55 @@
+{
+  "renderer": "Blender Cycles",
+  "version": "4.5.9 LTS",
+  "backend": "OPTIX",
+  "devices": [
+    "NVIDIA GeForce RTX 5080 Laptop GPU"
+  ],
+  "scene": "mixed",
+  "width": 1920,
+  "height": 1080,
+  "pathDepth": 5,
+  "denoiser": false,
+  "adaptiveSampling": false,
+  "filter": "BOX",
+  "initialGpu": "2026/11/01 13:08:55.493, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 21.63 W, 180 MHz",
+  "independent1SppFrameMs": [
+    123.63700001151301,
+    119.85160000040196,
+    118.26899999869056,
+    118.25800000224262
+  ],
+  "independent1SppFps": 8.333062508578754,
+  "batches": [
+    {
+      "spp": 16,
+      "wallMs": 1020.4042999976082,
+      "sppPerSecond": 15.680059364741508
+    },
+    {
+      "spp": 64,
+      "wallMs": 3688.7789000029443,
+      "sppPerSecond": 17.34991490000903
+    },
+    {
+      "spp": 16,
+      "wallMs": 1054.2340999963926,
+      "sppPerSecond": 15.176894771336602
+    },
+    {
+      "spp": 64,
+      "wallMs": 3452.327500010142,
+      "sppPerSecond": 18.538218057183737
+    }
+  ],
+  "batch64SppPerSecond": 17.924393340472484,
+  "incrementalSppPerSecond": 18.948111386401408,
+  "triangleCount": 1440,
+  "semanticDifferences": [
+    "Native Cycles BSDFs, sampling and light units rather than LuxCore exact BSDF implementation.",
+    "Cycles overlapping volumes rather than LuxCore explicit volume priority.",
+    "Global multiple scattering rather than LuxCore per-volume single/multiple switches.",
+    "Same 4x4x4 x-gradient density expressed using native Generated-coordinate ColorRamp nodes; edge interpolation differs.",
+    "No claim of pixel-identical cross-engine full API coverage. Geometry, transforms, coefficients, alpha/texture/normal/MR nodes, emission and light types are retained."
+  ]
+}
