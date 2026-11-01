@@ -36,4 +36,54 @@ Java 只负责公共接口、场景事务、窗口控制和薄的原生资源桥
 5. 先通过接口收缩、材质/场景更新、窗口生命周期及正确性测试，再测 1080p 输出、FG 关闭的真实完成帧。内部渲染分辨率和重建模式分别记录。
 6. 仅在实际执行通过后标记功能完成；官方样例的历史 FPS 不能当成本项目新 JNI 后端的验收成绩。
 
-当前状态：迁移实施中，本文件是实施合同，不是已经完成的功能声明。
+## 2026-11-01 最终验收
+
+本次合同内的薄 JNI 托管路径已通过下列验收。未支持的散射等能力仍按上表撤下。
+
+硬件：RTX 5080 Laptop GPU，驱动 616.92。上游 RTXPT 1.9.0，固定源码提交不变。推荐模式输出 1920×1080，内部 1114×626，1 SPP，DLSS-RR Balanced、SHaRC、SER、Reflex，FG 关闭。
+
+### 正确性与关闭异常
+
+适配层合同、场景载入、变换批更新、结构切换、完整截图、窗口缩放、FG 暂停及恢复、关闭均通过。打包 JAR 在源码目录外重复通过。移除未使用的 Tracy 后又运行一轮源码/JAR 完整正确性测试，通过且没有 ERROR 或 exception。
+
+`slShutdown` 异常的确切原因是 Streamline 2.14.16 的插件卸载顺序：`sl.dlss_d` 关闭时将析构回调交给 common 的延迟队列，plugin manager 随即卸载 RR DLL；common 最后清队列时调用已卸载 RR 模块中的函数。运行时捕获到了 common 对已卸载 RR 地址的访问，并验证临时保留 RR 引用后 shutdown 返回 `eOk`。
+
+桥接层通过公开的 `slGetFeatureFunction` 获得当前实际 RR 插件函数地址，用 Windows 模块引用将该 DLL 保留到 `slShutdown` 返回后立即释放。支持 NGX 更新后的插件路径，不硬编码 DLL 名或地址，不永久驻留插件，也不改变渲染算法。原生 shutdown 的失败结果现在会传播为 Java 异常，测试不能靠 exit=0 掩盖它。此修复仅在关闭时运行，普通帧没有新增工作。
+
+另外，DXGI 手动挂钩先升级 factory，由 Streamline 代理拦截 swapchain 创建；此前事后升级 swapchain 的方式已移除。Tracy 与 JVM 对 DbgHelp 重复初始化引起的 `SymInitialize` 错误通过关闭发行构建中未使用的 Tracy 消除。
+
+### 高级能力组合
+
+下表全部由发行 JAR 在源码目录外执行，并回读实际上游状态。五种渲染配置在同一 JVM 连续创建和关闭，生命周期均通过；每种都输出了完整非空白画面。
+
+| 组合 | 内部尺寸 | 实际生效结果 |
+|---|---|---|
+| DLSS-RR＋SHaRC＋SER＋Reflex | 1114×626 | 通过；RR 内含降噪，standalone NRD 关闭 |
+| DLSS＋NRD＋ReSTIR DI/GI＋SHaRC＋SER＋Reflex | 1114×626 | 通过；DI/GI 两者实际打开 |
+| 原生 NRD＋SHaRC＋SER＋Reflex | 1920×1080 | 通过；无超分 |
+| 原生全关闭 | 1920×1080 | 通过；降噪、重建、重采样、缓存、SER、Reflex、FG 关闭 |
+| DLAA/RR＋SHaRC＋SER＋Reflex | 1920×1080 | 通过；DLAA 模式回读为 6 |
+| 推荐组合＋2x/3x/4x FG | 1114×626 | 通过；分别回读每原生帧生成 1/2/3 帧，并与公共能力快照一致 |
+
+测试没有将互斥组合伪报为同时开启：ReSTIR 组合使用上游支持的 DLSS＋NRD，RR 组合不叠 standalone NRD。
+
+### 原生与 JAR 性能
+
+原生对照是独立 C++ 进程，直接运行同一固定版本的 `AdvancedSample` 和同一上游帧执行链，不加载 JVM/JNI。对照驱动只提供与 Java 相同的窗口策略、相机、设置和计时边界。两边加载同一导出场景与原生材质快照，包括地面、金属、发光面、粗糙玻璃及嵌套吸收；两边都在临时消费者目录运行，JAR 使用自身打包运行时。
+
+预热约 180 帧后，每次持续测量 4 秒，计数来自真正的 afterPresent，结束时等待 GPU 完成。三轮顺序为原生/JAR、JAR/原生、原生/JAR；六次初始 GPU 占用均为 0%。下列 ms 为整帧 wall 时间，包含帧循环及 GPU 完成等待。
+
+| 轮次 | 原生 FPS | 原生 ms/帧 | JAR FPS | JAR ms/帧 | JAR 耗时差 |
+|---|---:|---:|---:|---:|---:|
+| 1 | 192.06 | 5.207 | 196.23 | 5.096 | −2.12% |
+| 2 | 192.63 | 5.191 | 193.13 | 5.178 | −0.26% |
+| 3 | 194.98 | 5.129 | 194.33 | 5.146 | +0.34% |
+| 中位数 | **192.63** | **5.191** | **194.33** | **5.146** | **−0.87%** |
+
+损耗定义为 `(JAR ms / 原生 ms − 1) × 100%`。本场景通过 ≤5% 门槛；负数属于这次测量波动，不能解释为 JNI 让上游变快。此结果是上述静态混合场景、推荐重建模式下的完成帧效率，不是原生 1080p 内部分辨率或持续结构更新场景的成绩。
+
+复现：先执行 `:renderer-rtxpt:check`、`:renderer-rtxpt:rtxptNativeSelfTest`、`:renderer-rtxpt:rtxptPackagedNativeSelfTest`、`:renderer-rtxpt:rtxptAdvancedNativeSelfTest`，再执行 `tools/Test-RtxptParity.ps1`。原始测量、逐轮日志、正确性记录及场景画面保存在 [验收数据](data/rtxpt-final-20261101/result.json)。待办清单见 [最终验收 TODO](rtxpt-final-acceptance-todo.md)。
+
+### main 与旧 worktree
+
+所有当前实现均位于主 checkout 的 main。旧介质 worktree 和 6.0.4 基线中的未提交内容已做 Git 快照并作为父提交保存在 main 历史，不将已撤下的 API 重新引入 7.0.0。两个非当前 worktree 已删除，仅剩当前聊天绑定的旧 checkout：应用返回 `The task's primary checkout cannot be removed`，且不能把非托管的主 checkout 附加为替代。该目录暂留，内容干净；当前实现和测试均明确使用 `D:/Engineering/code/APIs/RTRendererAPI`。
