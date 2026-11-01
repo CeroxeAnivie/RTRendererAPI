@@ -10,25 +10,30 @@ from PIL import Image, ImageChops, ImageDraw, ImageStat
 parser = argparse.ArgumentParser()
 parser.add_argument("--full-reference", type=Path, required=True)
 parser.add_argument("--full-sample", type=Path, required=True)
-parser.add_argument("--direct-reference", type=Path, required=True)
-parser.add_argument("--direct-sample", type=Path, required=True)
+parser.add_argument("--direct-reference", type=Path)
+parser.add_argument("--direct-sample", type=Path)
 parser.add_argument("--output", type=Path, required=True)
+parser.add_argument("--scene", default="mixed")
 parser.add_argument("--pose", type=int, default=0)
 args = parser.parse_args()
+
+if (args.direct_reference is None) != (args.direct_sample is None):
+    parser.error("--direct-reference and --direct-sample must be used together")
 
 frame_ids = range(128, 132)
 groups = {
     "fullReference": args.full_reference,
     "fullSample": args.full_sample,
-    "directReference": args.direct_reference,
-    "directSample": args.direct_sample,
 }
+if args.direct_reference is not None:
+    groups["directReference"] = args.direct_reference
+    groups["directSample"] = args.direct_sample
 
 
 def read_stack(directory):
     frames = []
     for frame_id in frame_ids:
-        path = directory / f"mixed-pose{args.pose}-static{frame_id}.png"
+        path = directory / f"{args.scene}-pose{args.pose}-static{frame_id}.png"
         with Image.open(path) as image:
             frames.append(image.convert("RGB"))
     shape = frames[0].size
@@ -103,13 +108,9 @@ report = {
 for name, bounds in regions.items():
     full_reference = region(stacks["fullReference"], bounds)
     full_sample = region(stacks["fullSample"], bounds)
-    direct_reference = region(stacks["directReference"], bounds)
-    direct_sample = region(stacks["directSample"], bounds)
     full_mean = mean_image(full_reference)
-    direct_mean = mean_image(direct_reference)
     sample_mean = mean_image(full_sample)
-    direct_sample_mean = mean_image(direct_sample)
-    report["regions"][name] = {
+    region_report = {
         "bounds": list(bounds),
         "fullSample": {
             "consecutiveRgbMae255": consecutive_mae(full_sample),
@@ -119,30 +120,37 @@ for name, bounds in regions.items():
             "meanRgb255": mean_rgb(sample_mean),
             "referenceMeanRgb255": mean_rgb(full_mean),
         },
-        "directSample": {
+    }
+    if args.direct_reference is not None:
+        direct_reference = region(stacks["directReference"], bounds)
+        direct_sample = region(stacks["directSample"], bounds)
+        direct_mean = mean_image(direct_reference)
+        direct_sample_mean = mean_image(direct_sample)
+        region_report["directSample"] = {
             "consecutiveRgbMae255": consecutive_mae(direct_sample),
             "referenceRgbMae255": mae(direct_sample_mean, direct_mean),
             "edgeMetrics": edge_metrics(direct_sample_mean, direct_mean),
             "singleFrameReferenceMae255": [mae(frame, direct_mean) for frame in direct_sample],
             "meanRgb255": mean_rgb(direct_sample_mean),
             "referenceMeanRgb255": mean_rgb(direct_mean),
-        },
-        "referenceFullVsDirectMae255": mae(full_mean, direct_mean),
-    }
+        }
+        region_report["referenceFullVsDirectMae255"] = mae(full_mean, direct_mean)
+    report["regions"][name] = region_report
 
 args.output.parent.mkdir(parents=True, exist_ok=True)
 args.output.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 panel_width = 640
 panel_height = round(height * panel_width / width)
-labels = ("32-SPP full", "1-SPP full", "32-SPP direct", "1-SPP direct")
-averages = (
+labels = ["32-SPP reference", "sample"]
+averages = [
     mean_image(stacks["fullReference"]),
     mean_image(stacks["fullSample"]),
-    mean_image(stacks["directReference"]),
-    mean_image(stacks["directSample"]),
-)
-canvas = Image.new("RGB", (panel_width * 4, panel_height + 28), "#20242a")
+]
+if args.direct_reference is not None:
+    labels.extend(("32-SPP direct", "1-SPP direct"))
+    averages.extend((mean_image(stacks["directReference"]), mean_image(stacks["directSample"])))
+canvas = Image.new("RGB", (panel_width * len(averages), panel_height + 28), "#20242a")
 draw = ImageDraw.Draw(canvas)
 for index, (label, average) in enumerate(zip(labels, averages)):
     image = average.resize((panel_width, panel_height), Image.Resampling.LANCZOS)

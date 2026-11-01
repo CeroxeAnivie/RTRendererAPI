@@ -1,0 +1,116 @@
+{
+  "pose": 0,
+  "frameIds": [
+    128,
+    129,
+    130,
+    131
+  ],
+  "width": 1920,
+  "height": 1080,
+  "regions": {
+    "whole": {
+      "bounds": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "fullSample": {
+        "consecutiveRgbMae255": 0.02262093835733882,
+        "referenceRgbMae255": 0.48264981995884776,
+        "edgeMetrics": {
+          "sampleMeanGradient255": 0.17580022749523055,
+          "referenceMeanGradient255": 0.6385951992767281,
+          "gradientDifferenceMae255": 0.17773503225991266
+        },
+        "singleFrameReferenceMae255": [
+          0.48799270190329214,
+          0.48942499356995883,
+          0.4896889467592593,
+          0.4882706404320987
+        ],
+        "meanRgb255": [
+          14.28936149691358,
+          16.110024112654322,
+          16.37551456404321
+        ],
+        "referenceMeanRgb255": [
+          14.135687210648149,
+          15.978511284722222,
+          16.326259162808643
+        ]
+      }
+    },
+    "emitterAndObjects": {
+      "bounds": [
+        614,
+        238,
+        1344,
+        821
+      ],
+      "fullSample": {
+        "consecutiveRgbMae255": 0.06072093381475651,
+        "referenceRgbMae255": 1.1891280340233559,
+        "edgeMetrics": {
+          "sampleMeanGradient255": 0.6179390722194463,
+          "referenceMeanGradient255": 1.5950914704307584,
+          "gradientDifferenceMae255": 0.3980793918657053
+        },
+        "singleFrameReferenceMae255": [
+          1.202807083499769,
+          1.2083405781777454,
+          1.2081729677232391,
+          1.203895768227637
+        ],
+        "meanRgb255": [
+          31.487297633872977,
+          35.80631593787448,
+          36.79833877675697
+        ],
+        "referenceMeanRgb255": [
+          31.16233699100073,
+          35.559724147653846,
+          36.61869169858314
+        ]
+      }
+    },
+    "floor": {
+      "bounds": [
+        0,
+        562,
+        1920,
+        1080
+      ],
+      "fullSample": {
+        "consecutiveRgbMae255": 0.03324049495924496,
+        "referenceRgbMae255": 0.8377513674388674,
+        "edgeMetrics": {
+          "sampleMeanGradient255": 0.19637640509690585,
+          "referenceMeanGradient255": 1.066108712709639,
+          "gradientDifferenceMae255": 0.31961264670871603
+        },
+        "singleFrameReferenceMae255": [
+          0.8463816495066495,
+          0.8495542417417417,
+          0.8510631166881167,
+          0.8482903662591162
+        ],
+        "meanRgb255": [
+          24.727420165701417,
+          28.06121098777349,
+          28.53053108912484
+        ],
+        "referenceMeanRgb255": [
+          24.402546854890605,
+          27.765842181467182,
+          28.389489824646073
+        ]
+      }
+    }
+  },
+  "groups": {
+    "fullReference": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\rtxpt-lighting\\lighting-families-reference-v17",
+    "fullSample": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\rtxpt-lighting\\rtxpt-rr-quality-v88"
+  }
+}
