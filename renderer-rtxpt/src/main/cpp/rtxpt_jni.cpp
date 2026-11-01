@@ -29,6 +29,12 @@ namespace {
 class HostPathTracer final : public AdvancedPathTracer {
 public:
     using AdvancedPathTracer::AdvancedPathTracer;
+    void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
+        AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
+        const char* candidate=std::getenv("RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS");
+        if(candidate && std::string(candidate)=="1")
+            macros.push_back({"RTR_EXACT_SMALL_POINTS","1"});
+    }
     bool Capture(const char* path) {
         if(!m_renderTargets || !m_renderTargets->LdrColor) return false;
         donut::log::info("RTXPT capture: meshInstances=%zu camera=%s",GetScene()->GetSceneGraph()->GetMeshInstances().size(),GetCurrentCameraPosDirUp().c_str());
@@ -364,6 +370,12 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         // Method changes require a host rebuild (RtxptFeatureController), so no per-frame UI
         // NRDModeChanged latch is needed; leaving it set would rebuild the denoiser every frame.
         g_sampleUIData.NRDMethod=relaxDenoiser?NrdConfig::DenoiserMethod::RELAX:NrdConfig::DenoiserMethod::REBLUR;
+        if(const char* candidate=std::getenv("RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS"); candidate && std::string(candidate)=="1") {
+            if(standaloneDenoiser || realtimeAa!=2 || restirDi || restirGi || sharc || samplesPerPixel!=1)
+                throw std::invalid_argument("Small-point diagnostic requires the unchanged raw 1-SPP SR policy");
+            g_sampleUIData.NEEType=1; // Native power sampling; no screen-feedback machinery for this small-light candidate.
+            donut::log::info("RTXPT diagnostic: native power sampling + exact small delta-light sum; no denoiser added");
+        }
         g_sampleUIData.UseReSTIRDI=restirDi;
         g_sampleUIData.UseReSTIRGI=restirGi;
         g_sampleUIData.RadianceCacheMode=sharc?1:0;

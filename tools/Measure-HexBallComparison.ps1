@@ -5,6 +5,7 @@ param(
     [int]$Width=2560,
     [int]$Height=1440,
     [switch]$StageProfile,
+    [switch]$SmallPointCandidate,
     [ValidateSet('Upstream','D','E','F')][string]$RrPreset='Upstream',
     [ValidateSet('Upstream','On','Off')][string]$AsyncPrefix='Upstream',
     [string[]]$ExtraArguments=@(),
@@ -44,15 +45,18 @@ $demo+=$ExtraArguments
 $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
 $oldAsync=$env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX
 $oldPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
+$oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 try {
     $env:RTR_RTXPT_GPU_PROFILE=if($StageProfile){$prefix+'-gpu.csv'}else{$null}
     $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=switch($AsyncPrefix){'On'{'1'} 'Off'{'0'} default{$null}}
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=if($RrPreset -eq 'Upstream'){$null}else{$RrPreset}
+    $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($SmallPointCandidate){'1'}else{$null})
     & nvidia-smi --query-gpu=name,driver_version,utilization.gpu,memory.used,power.draw,clocks.current.graphics,temperature.gpu --format=csv > ($prefix+'-initial-gpu.csv')
     $settings=[ordered]@{
         SourceCommit=(& git rev-parse HEAD).Trim();Backend=$Backend;Entry=$entry;
         Width=$Width;Height=$Height;Spp=1;FrameGeneration=$false;StageProfile=[bool]$StageProfile;
         RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;
+        SmallPointCandidate=[bool]$SmallPointCandidate;
         Java=$java;Jvm=$jvm;Arguments=$demo;StartedAt=(Get-Date -Format o);
         NativeSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll' -Algorithm SHA256).Hash
     }
@@ -65,4 +69,5 @@ try {
     $env:RTR_RTXPT_GPU_PROFILE=$oldProfile
     $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=$oldAsync
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$oldPreset
+    $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
 }

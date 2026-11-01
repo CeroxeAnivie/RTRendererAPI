@@ -94,6 +94,30 @@ if (m_ui.RealtimeAA != 3 && !m_ui.ActualUseStandaloneDenoiser()
             && !m_ui.ActualUseRTXDIPasses()) // RTR preserve RTXDI accumulated radiance
 '@ 'RTR preserve RTXDI accumulated radiance'
 # The filtered hit-distance texture is consumed by NRD, RR guides and debug views.
+# Opt-in quality/performance candidate: reuse native point sampling and shadow/BSDF
+# processing, while avoiding random selection between a handful of delta lights.
+[IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSmallPointNee.hlsli'),
+    [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrSmallPointNee.hlsli')),$utf8)
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    inline NEEResult HandleNEE_MultipleSamples(' @'
+    #include "RtrSmallPointNee.hlsli" // RTR opt-in exact small-point sum
+    inline NEEResult HandleNEE_MultipleSamples(
+'@ 'RTR opt-in exact small-point sum'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        [unroll] for (uint sampleIndex = 0; sampleIndex < fullSamples; sampleIndex++)' @'
+        // RTR deterministic delta contributions; do not add them again below.
+        #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS
+        const bool rtrSmallPoints = RtrSmallPointSet(lightSampler);
+        if (rtrSmallPoints)
+            RtrSumPointLights(result, lightSampler, shadingData, bsdf, preScatterPath, sampleGenerator, workingContext);
+        #endif
+        [unroll] for (uint sampleIndex = 0; sampleIndex < fullSamples; sampleIndex++)
+'@ 'RTR deterministic delta contributions'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            // this computes the BSDF throughput and (if throughput>0) then casts shadow ray and handles radiance summing up & weighted averaging for ''sample distance'' used by denoiser' @'
+            #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS
+            if (rtrSmallPoints && lightSample.Valid() && RtrCoveredPoint(lightSampler, lightSample.LightIndex))
+                continue; // RTR avoid double-counting exact point contributions
+            #endif
+            // this computes the BSDF throughput and (if throughput>0) then casts shadow ray and handles radiance summing up & weighted averaging for 'sample distance' used by denoiser
+'@ 'RTR avoid double-counting exact point contributions'
 # Raw SR/TAA/reference output does not read it; retain upstream filtering for every consumer.
 Patch-Once 'Rtxpt/AdvancedSample.cpp' '        m_denoisingGuidesBaker->DenoiseSpecHitT(m_commandList, m_bindingSet);' @'
         // RTR filter hit distance only when a consumer is active

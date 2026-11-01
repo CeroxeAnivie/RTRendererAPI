@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory)][ValidateSet('raw','relax','default','reuse-raw','reuse-relax','rr','reference','direct')][string]$Mode,
     [Parameter(Mandatory)][string]$Tag,
     [switch]$Glass,
-    [switch]$PackagedRuntime
+    [switch]$PackagedRuntime,
+    [switch]$SmallPointCandidate
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -37,6 +38,7 @@ $settings=[ordered]@{
     StartedAt=(Get-Date -Format o);NativeSha256=(Get-FileHash 'build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll').Hash;
     Width=2560;Height=1440;Spp=$(if($Mode -eq 'reference'){32}else{1});FrameGeneration=$false;StageProfile=$false
     RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
+    SmallPointCandidate=[bool]$SmallPointCandidate
 }
 if($PackagedRuntime) {
     $settings.Jvm=@($settings.Jvm | Where-Object {$_ -notlike '-Dtop.ceroxe.rt.rtxpt.runtime=*'})
@@ -45,10 +47,15 @@ if($PackagedRuntime) {
 $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
 & nvidia-smi --query-gpu=name,utilization.gpu,memory.used --format=csv > ($prefix+'-initial-gpu.csv')
 $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
+$oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
+    $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($SmallPointCandidate){'1'}else{$null})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     Get-Content -LiteralPath ($prefix+'.log') -Tail 5
     if($code -ne 0){throw "Quality verification exited $code; inspect $prefix.log"}
-} finally {$env:RTR_RTXPT_GPU_PROFILE=$oldProfile}
+} finally {
+    $env:RTR_RTXPT_GPU_PROFILE=$oldProfile
+    $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
+}

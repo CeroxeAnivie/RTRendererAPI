@@ -42,3 +42,15 @@ Demo 默认改回上游联合降噪/重建 **DLSS RR**，不叠加 standalone RE
 当前 Demo 默认与已取得约 222 FPS 的路线保持同一基础策略：纯 SR、1 SPP、无 standalone NRD、无 RR、无 SHaRC；默认 FG 仍按原 Demo 为 2×，测试明确关闭。渲染 API 仍可显式选择其他高级功能。
 
 后续质量候选必须同时满足画质与该配置的性能要求。保留确定性的 RTXDI 颜色合成修复。增加仅测试用 `direct` 模式（单次表面直接照明、无间接反弹），区分采样噪声来自直接照明还是后续反弹；该删减模式绝不能冒充正常场景性能或画质验收。
+
+硬件结果：默认纯 SR 原配置静态 ROI 帧间 MAE 为 **2.741416/255**；去掉全部间接反弹仍为 **2.980994/255**。直接光本身就足以产生大量颗粒，不能把问题只归给间接反弹。打包 JAR 也已确认实际无 RR、NRD、SHaRC；与此前原始 SR 的同一指标 2.741426/255 一致。
+
+## 当前隔离候选：小规模 delta 点光逐灯求和
+
+只通过诊断开关 `RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=1` 启用，默认不启用。
+
+- 依据 PBRT-v3 的成熟 `UniformSampleAllLights / EstimateDirect` 逻辑：点光源是 delta 分布，逐盏灯求和避免随机抽灯的颜色方差。来源：https://github.com/mmp/pbrt-v3/blob/master/src/core/integrator.cpp 。这不是后处理或降噪。
+- 仅在解析光数量不超过四个时覆盖零半径点光，其余面积光、方向光、环境与间接反弹保留原始估计和 PDF。被覆盖点光不再从随机 NEE 重复加入，保证不重复计能量。
+- 复用 RTXPT 的 `PolymorphicLight::CalcSample` 与 `ProcessLightSample`，不另写 BRDF、阴影、介质可见性或合成算法。
+- 同时使用已有原生 power sampler，避免为这个少量灯的场景维护整套屏幕反馈采样；不会启用 NRD/RR/ReSTIR/SHaRC。
+- 不以删减反弹、降低内部尺寸、改变 1 SPP、降低输出分辨率换成绩。必须图像正确且整帧性能不降才可成为默认；失败保留证据并撤候选。
