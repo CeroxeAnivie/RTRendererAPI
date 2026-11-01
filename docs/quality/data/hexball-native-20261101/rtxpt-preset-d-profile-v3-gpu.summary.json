@@ -1,0 +1,432 @@
+{
+  "source": "docs\\quality\\data\\hexball-native-20261101\\rtxpt-preset-d-profile-v3-gpu.csv",
+  "sampling": "# frames=3396,stride=16,warmup=240,dropped=0",
+  "queues": {
+    "compute": {
+      "sampled_frames": 198,
+      "sum_exclusive_ms": 5.767065696969697,
+      "ranking": [
+        {
+          "name": "PathTrace",
+          "mean_exclusive_ms": 1.260876282828283,
+          "p50_exclusive_ms": 0.9443680000000001,
+          "p95_exclusive_ms": 2.230976,
+          "max_exclusive_ms": 3.12304,
+          "mean_inclusive_ms": 1.260876282828283,
+          "queue_share_percent": 21.86339377910694
+        },
+        {
+          "name": "PathTracePrePass",
+          "mean_exclusive_ms": 1.1327099797979798,
+          "p50_exclusive_ms": 1.4428480000000001,
+          "p95_exclusive_ms": 2.065088,
+          "max_exclusive_ms": 2.424896,
+          "mean_inclusive_ms": 1.1327099797979798,
+          "queue_share_percent": 19.641010512385215
+        },
+        {
+          "name": "ProcessFeedbackHistoryPreFilterA",
+          "mean_exclusive_ms": 0.38779054545454544,
+          "p50_exclusive_ms": 0.265344,
+          "p95_exclusive_ms": 2.325568,
+          "max_exclusive_ms": 4.33216,
+          "mean_inclusive_ms": 0.38779054545454544,
+          "queue_share_percent": 6.724226250072197
+        },
+        {
+          "name": "PathTraceSharcUpdate",
+          "mean_exclusive_ms": 0.36602440404040404,
+          "p50_exclusive_ms": 0.262864,
+          "p95_exclusive_ms": 0.955296,
+          "max_exclusive_ms": 1.47056,
+          "mean_inclusive_ms": 0.36602440404040404,
+          "queue_share_percent": 6.346804827153807
+        },
+        {
+          "name": "ProcessFeedbackHistoryPreFilterB",
+          "mean_exclusive_ms": 0.3291159595959596,
+          "p50_exclusive_ms": 0.268624,
+          "p95_exclusive_ms": 1.3864,
+          "max_exclusive_ms": 2.56704,
+          "mean_inclusive_ms": 0.3291159595959596,
+          "queue_share_percent": 5.706818283150363
+        },
+        {
+          "name": "ProcessFeedbackHistoryP2",
+          "mean_exclusive_ms": 0.2748043636363636,
+          "p50_exclusive_ms": 0.19376,
+          "p95_exclusive_ms": 0.45024,
+          "max_exclusive_ms": 0.719392,
+          "mean_inclusive_ms": 0.2748043636363636,
+          "queue_share_percent": 4.765063865680593
+        },
+        {
+          "name": "ProcessFeedbackHistoryP3",
+          "mean_exclusive_ms": 0.2636791919191919,
+          "p50_exclusive_ms": 0.1904,
+          "p95_exclusive_ms": 0.428512,
+          "max_exclusive_ms": 0.6576,
+          "mean_inclusive_ms": 0.2636791919191919,
+          "queue_share_percent": 4.572155161293586
+        },
+        {
+          "name": "DLSSRR_PrepareInputs",
+          "mean_exclusive_ms": 0.261709898989899,
+          "p50_exclusive_ms": 0.26136000000000004,
+          "p95_exclusive_ms": 0.298048,
+          "max_exclusive_ms": 0.304352,
+          "mean_inclusive_ms": 0.261709898989899,
+          "queue_share_percent": 4.538007935775977
+        },
+        {
+          "name": "ProcessFeedbackHistoryP1a",
+          "mean_exclusive_ms": 0.24384387878787878,
+          "p50_exclusive_ms": 0.244944,
+          "p95_exclusive_ms": 0.379648,
+          "max_exclusive_ms": 0.476256,
+          "mean_inclusive_ms": 0.24384387878787878,
+          "queue_share_percent": 4.2282139930538065
+        },
+        {
+          "name": "DenoiseSpecHitT",
+          "mean_exclusive_ms": 0.21203733333333333,
+          "p50_exclusive_ms": 0.207344,
+          "p95_exclusive_ms": 0.233856,
+          "max_exclusive_ms": 0.819648,
+          "mean_inclusive_ms": 0.21203733333333336,
+          "queue_share_percent": 3.676693564367548
+        },
+        {
+          "name": "ProcessFeedbackHistoryP1b",
+          "mean_exclusive_ms": 0.2068830707070707,
+          "p50_exclusive_ms": 0.16076800000000002,
+          "p95_exclusive_ms": 0.491392,
+          "max_exclusive_ms": 0.543744,
+          "mean_inclusive_ms": 0.2068830707070707,
+          "queue_share_percent": 3.5873194719418118
+        },
+        {
+          "name": "Frame",
+          "mean_exclusive_ms": 0.19891991919191918,
+          "p50_exclusive_ms": 0.17687999999999948,
+          "p95_exclusive_ms": 0.3625279999999993,
+          "max_exclusive_ms": 2.930656000000001,
+          "mean_inclusive_ms": 5.767065696969697,
+          "queue_share_percent": 3.4492396938783196
+        },
+        {
+          "name": "ProcessFeedbackHistoryP0",
+          "mean_exclusive_ms": 0.11974109090909091,
+          "p50_exclusive_ms": 0.118432,
+          "p95_exclusive_ms": 0.390976,
+          "max_exclusive_ms": 0.55728,
+          "mean_inclusive_ms": 0.1197410909090909,
+          "queue_share_percent": 2.076291431394805
+        },
+        {
+          "name": "PathTraceSharcResolve",
+          "mean_exclusive_ms": 0.1170629494949495,
+          "p50_exclusive_ms": 0.08307200000000001,
+          "p95_exclusive_ms": 0.241376,
+          "max_exclusive_ms": 0.275808,
+          "mean_inclusive_ms": 0.1170629494949495,
+          "queue_share_percent": 2.0298528861299467
+        },
+        {
+          "name": "ComputeWeights",
+          "mean_exclusive_ms": 0.08178165656565657,
+          "p50_exclusive_ms": 0.071728,
+          "p95_exclusive_ms": 0.09808,
+          "max_exclusive_ms": 2.357088,
+          "mean_inclusive_ms": 0.08178165656565657,
+          "queue_share_percent": 1.41808089005521
+        },
+        {
+          "name": "TLAS Cull+Build",
+          "mean_exclusive_ms": 0.07804864646464646,
+          "p50_exclusive_ms": 0.068672,
+          "p95_exclusive_ms": 0.14448,
+          "max_exclusive_ms": 0.232448,
+          "mean_inclusive_ms": 0.07804864646464647,
+          "queue_share_percent": 1.3533510898906025
+        },
+        {
+          "name": "ClearFeedbackHistory",
+          "mean_exclusive_ms": 0.03940880808080808,
+          "p50_exclusive_ms": 0.017936,
+          "p95_exclusive_ms": 0.221376,
+          "max_exclusive_ms": 0.234496,
+          "mean_inclusive_ms": 0.03940880808080808,
+          "queue_share_percent": 0.6833424509367984
+        },
+        {
+          "name": "EnvLightsSubdivideBase",
+          "mean_exclusive_ms": 0.02721987878787879,
+          "p50_exclusive_ms": 0.025904,
+          "p95_exclusive_ms": 0.033664,
+          "max_exclusive_ms": 0.1056,
+          "mean_inclusive_ms": 0.027219878787878786,
+          "queue_share_percent": 0.47198835973346837
+        },
+        {
+          "name": "EnvLightsSubdivideBoost",
+          "mean_exclusive_ms": 0.02188913131313131,
+          "p50_exclusive_ms": 0.019872,
+          "p95_exclusive_ms": 0.046784,
+          "max_exclusive_ms": 0.077408,
+          "mean_inclusive_ms": 0.021889131313131315,
+          "queue_share_percent": 0.3795540481640941
+        },
+        {
+          "name": "ShaderDebugEndFrame",
+          "mean_exclusive_ms": 0.021271919191919193,
+          "p50_exclusive_ms": 0.021184,
+          "p95_exclusive_ms": 0.023776,
+          "max_exclusive_ms": 0.040128,
+          "mean_inclusive_ms": 0.02127191919191919,
+          "queue_share_percent": 0.3688516883568106
+        },
+        {
+          "name": "ComputeProxyCounts",
+          "mean_exclusive_ms": 0.02094949494949495,
+          "p50_exclusive_ms": 0.019743999999999998,
+          "p95_exclusive_ms": 0.028768,
+          "max_exclusive_ms": 0.070432,
+          "mean_inclusive_ms": 0.020949494949494947,
+          "queue_share_percent": 0.3632609033828565
+        },
+        {
+          "name": "CreateProxyJobs",
+          "mean_exclusive_ms": 0.018437979797979797,
+          "p50_exclusive_ms": 0.019008,
+          "p95_exclusive_ms": 0.02544,
+          "max_exclusive_ms": 0.034816,
+          "mean_inclusive_ms": 0.0184379797979798,
+          "queue_share_percent": 0.3197116309541615
+        },
+        {
+          "name": "EnvmapAndAnalyticLightBuffers",
+          "mean_exclusive_ms": 0.0180059797979798,
+          "p50_exclusive_ms": 0.014367999999999999,
+          "p95_exclusive_ms": 0.054528,
+          "max_exclusive_ms": 0.097952,
+          "mean_inclusive_ms": 0.0180059797979798,
+          "queue_share_percent": 0.31222081980860794
+        },
+        {
+          "name": "EnvLightFillLookupMap",
+          "mean_exclusive_ms": 0.017536323232323233,
+          "p50_exclusive_ms": 0.000128,
+          "p95_exclusive_ms": 0.000128,
+          "max_exclusive_ms": 2.225856,
+          "mean_inclusive_ms": 0.01753632323232323,
+          "queue_share_percent": 0.3040770498164723
+        },
+        {
+          "name": "EnvLightsMapPastToCurrent",
+          "mean_exclusive_ms": 0.015306989898989898,
+          "p50_exclusive_ms": 0.004704,
+          "p95_exclusive_ms": 0.016384,
+          "max_exclusive_ms": 1.877632,
+          "mean_inclusive_ms": 0.0153069898989899,
+          "queue_share_percent": 0.2654207651394183
+        },
+        {
+          "name": "ExecuteProxyJobs",
+          "mean_exclusive_ms": 0.012277333333333333,
+          "p50_exclusive_ms": 0.010336,
+          "p95_exclusive_ms": 0.021472,
+          "max_exclusive_ms": 0.093888,
+          "mean_inclusive_ms": 0.012277333333333335,
+          "queue_share_percent": 0.2128870031736322
+        },
+        {
+          "name": "ControlDataSetup",
+          "mean_exclusive_ms": 0.008416646464646465,
+          "p50_exclusive_ms": 0.005952,
+          "p95_exclusive_ms": 0.021472,
+          "max_exclusive_ms": 0.072192,
+          "mean_inclusive_ms": 0.008416646464646465,
+          "queue_share_percent": 0.1459433082073088
+        },
+        {
+          "name": "ComputeProxyBaselineOffsets",
+          "mean_exclusive_ms": 0.004712727272727273,
+          "p50_exclusive_ms": 0.003616,
+          "p95_exclusive_ms": 0.018688,
+          "max_exclusive_ms": 0.03328,
+          "mean_inclusive_ms": 0.004712727272727272,
+          "queue_share_percent": 0.0817179397696748
+        },
+        {
+          "name": "LightingUpdateBegin",
+          "mean_exclusive_ms": 0.0037892525252524664,
+          "p50_exclusive_ms": 0.0029439999999998356,
+          "p95_exclusive_ms": 0.008287999999999851,
+          "max_exclusive_ms": 0.05756799999999995,
+          "mean_inclusive_ms": 1.0873486868686868,
+          "queue_share_percent": 0.06570503483675465
+        },
+        {
+          "name": "LightingUpdateEnd",
+          "mean_exclusive_ms": 0.0008066262626262765,
+          "p50_exclusive_ms": 0.0007680000000001019,
+          "p95_exclusive_ms": 0.0010879999999999779,
+          "max_exclusive_ms": 0.0023679999999999257,
+          "mean_inclusive_ms": 1.0294259393939393,
+          "queue_share_percent": 0.01398677082957661
+        },
+        {
+          "name": "UpdateLighting",
+          "mean_exclusive_ms": 0.00049955555555556,
+          "p50_exclusive_ms": 0.00047999999999998044,
+          "p95_exclusive_ms": 0.0008000000000001339,
+          "max_exclusive_ms": 0.0012160000000001059,
+          "mean_inclusive_ms": 1.0878482424242424,
+          "queue_share_percent": 0.008662213711524935
+        },
+        {
+          "name": "PathTraceSharc",
+          "mean_exclusive_ms": 0.0003764040404040392,
+          "p50_exclusive_ms": 0.00038399999999993994,
+          "p95_exclusive_ms": 0.00041600000000008297,
+          "max_exclusive_ms": 0.0009919999999998819,
+          "mean_inclusive_ms": 0.4834637575757576,
+          "queue_share_percent": 0.006526786067337861
+        },
+        {
+          "name": "Denoising Guides Bake",
+          "mean_exclusive_ms": 0.0002503434343434334,
+          "p50_exclusive_ms": 0.0002560000000000062,
+          "p95_exclusive_ms": 0.00028800000000001047,
+          "max_exclusive_ms": 0.00031999999999998696,
+          "mean_inclusive_ms": 0.2122876767676768,
+          "queue_share_percent": 0.004340915250453559
+        },
+        {
+          "name": "EnvLightsBackupPast",
+          "mean_exclusive_ms": 0.00013543434343434344,
+          "p50_exclusive_ms": 0.000128,
+          "p95_exclusive_ms": 0.000128,
+          "max_exclusive_ms": 0.001952,
+          "mean_inclusive_ms": 0.00013543434343434344,
+          "queue_share_percent": 0.0023484099289090357
+        },
+        {
+          "name": "MaterialsBaker",
+          "mean_exclusive_ms": 0.00013284848484848485,
+          "p50_exclusive_ms": 0.000128,
+          "p95_exclusive_ms": 0.00016,
+          "max_exclusive_ms": 0.00016,
+          "mean_inclusive_ms": 0.00013284848484848485,
+          "queue_share_percent": 0.0023035715531780753
+        },
+        {
+          "name": "OMM Updates",
+          "mean_exclusive_ms": 0.00013074747474747474,
+          "p50_exclusive_ms": 0.000128,
+          "p95_exclusive_ms": 0.00016,
+          "max_exclusive_ms": 0.00016,
+          "mean_inclusive_ms": 0.00013074747474747474,
+          "queue_share_percent": 0.0022671403728966705
+        },
+        {
+          "name": "ResetLightProxyCounters",
+          "mean_exclusive_ms": 0.00012363636363636364,
+          "p50_exclusive_ms": 0.000128,
+          "p95_exclusive_ms": 0.000128,
+          "max_exclusive_ms": 0.001504,
+          "mean_inclusive_ms": 0.00012363636363636364,
+          "queue_share_percent": 0.0021438348396365303
+        },
+        {
+          "name": "PreUpdateLighting",
+          "mean_exclusive_ms": 0.00012169696969696969,
+          "p50_exclusive_ms": 0.000128,
+          "p95_exclusive_ms": 0.000128,
+          "max_exclusive_ms": 0.000352,
+          "mean_inclusive_ms": 0.00012169696969696969,
+          "queue_share_percent": 0.00211020605783831
+        },
+        {
+          "name": "ResetPastToCurrentHistory",
+          "mean_exclusive_ms": 0.00011862626262626263,
+          "p50_exclusive_ms": 0.000128,
+          "p95_exclusive_ms": 0.000128,
+          "max_exclusive_ms": 0.000384,
+          "mean_inclusive_ms": 0.00011862626262626261,
+          "queue_share_percent": 0.002056960486657795
+        },
+        {
+          "name": "Skinned BLAS Updates",
+          "mean_exclusive_ms": 0.00011814141414141413,
+          "p50_exclusive_ms": 0.000128,
+          "p95_exclusive_ms": 0.000128,
+          "max_exclusive_ms": 0.00016,
+          "mean_inclusive_ms": 0.00011814141414141413,
+          "queue_share_percent": 0.0020485532912082396
+        }
+      ]
+    },
+    "graphics": {
+      "sampled_frames": 198,
+      "sum_exclusive_ms": 5.747652525252525,
+      "ranking": [
+        {
+          "name": "DLSS-RR",
+          "mean_exclusive_ms": 5.405109818181818,
+          "p50_exclusive_ms": 5.347936000000001,
+          "p95_exclusive_ms": 6.523264,
+          "max_exclusive_ms": 7.53264,
+          "mean_inclusive_ms": 5.405109818181818,
+          "queue_share_percent": 94.04030244407203
+        },
+        {
+          "name": "Frame",
+          "mean_exclusive_ms": 0.17853430303030302,
+          "p50_exclusive_ms": 0.1495040000000003,
+          "p95_exclusive_ms": 0.29619200000000045,
+          "max_exclusive_ms": 0.44409600000000005,
+          "mean_inclusive_ms": 5.7476525252525255,
+          "queue_share_percent": 3.1062125319146547
+        },
+        {
+          "name": "ShaderDebug",
+          "mean_exclusive_ms": 0.0800940606060606,
+          "p50_exclusive_ms": 0.051295999999999994,
+          "p95_exclusive_ms": 0.156992,
+          "max_exclusive_ms": 0.61568,
+          "mean_inclusive_ms": 0.08643119191919191,
+          "queue_share_percent": 1.3935090935675802
+        },
+        {
+          "name": "ToneMapping",
+          "mean_exclusive_ms": 0.042501333333333335,
+          "p50_exclusive_ms": 0.03864,
+          "p95_exclusive_ms": 0.07536,
+          "max_exclusive_ms": 0.186112,
+          "mean_inclusive_ms": 0.042501333333333335,
+          "queue_share_percent": 0.7394555106907064
+        },
+        {
+          "name": "Blit",
+          "mean_exclusive_ms": 0.03507587878787879,
+          "p50_exclusive_ms": 0.030255999999999998,
+          "p95_exclusive_ms": 0.08288,
+          "max_exclusive_ms": 0.106368,
+          "mean_inclusive_ms": 0.03507587878787879,
+          "queue_share_percent": 0.6102644276732391
+        },
+        {
+          "name": "Tris",
+          "mean_exclusive_ms": 0.006337131313131313,
+          "p50_exclusive_ms": 0.00608,
+          "p95_exclusive_ms": 0.009472,
+          "max_exclusive_ms": 0.012032,
+          "mean_inclusive_ms": 0.006337131313131314,
+          "queue_share_percent": 0.11025599208179152
+        }
+      ]
+    }
+  }
+}

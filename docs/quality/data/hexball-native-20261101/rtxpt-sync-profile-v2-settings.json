@@ -1,0 +1,34 @@
+{
+  "SourceCommit": "7dbd0cb2657e6c5c19a54a86f238f580d48ca7f4",
+  "Backend": "Rtxpt",
+  "Entry": "demo.RtxptHexBallDemo",
+  "Width": 2560,
+  "Height": 1440,
+  "Spp": 1,
+  "FrameGeneration": false,
+  "StageProfile": true,
+  "RrPreset": "Upstream",
+  "AsyncPrefix": "Off",
+  "Java": "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+  "Jvm": [
+    "-Dfile.encoding=UTF-8",
+    "-Ddemo.disable-fg=true",
+    "-Dtop.ceroxe.rt.rtxpt.runtime=D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin",
+    "--enable-native-access=ALL-UNNAMED",
+    "--sun-misc-unsafe-memory-access=allow",
+    "-Xmx3g",
+    "-XX:-UseJVMCICompiler",
+    "-cp",
+    "demos/hex-ball/build/classes/java/main;demos/hex-ball/build/resources/main;renderer-api/build/classes/java/main;renderer-core/build/libs/renderer-core-7.0.0.jar;renderer-nvidia/build/libs/renderer-nvidia-7.0.0.jar;renderer-rtxpt/build/libs/renderer-rtxpt-7.0.0.jar;demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar"
+  ],
+  "Arguments": [
+    "--windowed",
+    "--width=2560",
+    "--height=1440",
+    "--spp=1",
+    "--duration-seconds=30",
+    "--original-balls"
+  ],
+  "StartedAt": "2026-11-01T19:44:09.9267349+08:00",
+  "NativeSha256": "0B6DD724BA85D816F9915B3796AB1FC435B7937A8161949265117CF7E79CE6DD"
+}
