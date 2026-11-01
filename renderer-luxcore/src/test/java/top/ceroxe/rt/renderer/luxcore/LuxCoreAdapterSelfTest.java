@@ -6,7 +6,10 @@ import top.ceroxe.rt.renderer.api.*;
 public final class LuxCoreAdapterSelfTest {
     public static void main(String[] args) {
         var transform=new AffineTransform(new float[]{1,0,0,4,0,2,0,5,0,0,3,6});
-        require(LuxCoreScene.matrix(transform).trim().equals("1.0 0.0 0.0 0 0.0 2.0 0.0 0 0.0 0.0 3.0 0 4.0 5.0 6.0 1"),"column-major SDL matrix");
+        var values=LuxCoreScene.matrix(transform).trim().split("\\s+");
+        float[] expected={1,0,0,0,0,2,0,0,0,0,3,0,4,5,6,1};
+        require(values.length==16,"matrix element count");
+        for(int i=0;i<16;i++)require(Float.parseFloat(values[i])==expected[i],"column-major SDL matrix element "+i);
         var provider=new LuxCoreBackendProvider();require(provider.descriptor().priority()<0,"must not replace Vulkan by default");
         var b=new StringBuilder();var medium=new Medium(new Rgb(.1f,.2f,.3f),new Rgb(.2f,.3f,.4f),new Rgb(.01f,.02f,.03f),2,1.4f,.5f);
         new LuxCoreScene().medium(b,"test",medium,7,MediumTransport.balanced().withScatteringBounces(2),true);
