@@ -41,7 +41,24 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     @Override public Status status(){return closed?Status.CLOSED:Status.READY;}
     @Override public RendererHealth health(){return new RendererHealth(status(),Optional.empty(),RendererHealth.ResourceObligations.none());}
     @Override public RendererDiagnostics diagnostics(){return RendererDiagnostics.builder().status(status()).latestAcceptedSceneRevision(revision)
-        .latestSubmittedFrameSequence(submitted).latestCompletedFrameSequence(completed).residentMeshes(scene.meshes.size()).residentInstances(scene.instances.size()).frameGpuTiming(gpuTiming()).build();}
+        .latestSubmittedFrameSequence(submitted).latestCompletedFrameSequence(completed).residentMeshes(scene.meshes.size()).residentInstances(scene.instances.size())
+        .frameGpuTiming(gpuTiming()).frameGenerationEvidence(generationEvidence()).build();}
+    private FrameGenerationEvidence generationEvidence(){
+        if(handle==0||closed)return FrameGenerationEvidence.unavailable();
+        var t=RtxptNative.generationTelemetry(handle);var s=runtimeStatus();
+        int requested=options.frameGeneration().preference().requested()?options.generatedFrames():0;
+        long generated=Math.max(0,t[1]-t[0]);
+        var b=FrameGenerationEvidence.builder().reported(true)
+            .requestedGeneratedFramesPerNativeFrame(requested).lastSubmittedGeneratedFramesPerNativeFrame(s.frameGeneration()?requested:0)
+            .configuredGeneratedFramesPerNativeFrame(s.frameGeneration()?requested:0).proxyPresentCalls(t[0])
+            .stateQueryCalls(t[2]).stateSamples(t[3]).stateQueryFailures(t[4])
+            .totalFramesActuallyPresented(t[1]).generatedFramesActuallyPresented(generated).lastFramesActuallyPresented((int)t[5])
+            .latestQuerySucceeded(t[7]!=0).latestNativeStatus(t[7]!=0?OptionalInt.of((int)t[6]):OptionalInt.empty())
+            .maximumSupportedGeneratedFramesPerNativeFrame((int)t[8]);
+        if(t[0]>0)b.proxyPresentSequenceRange(0,t[0]-1);
+        if(generated>0)b.lastGeneratedObservationSequence(t[0]-1);
+        return b.build();
+    }
     private RendererDiagnostics.FrameGpuTiming gpuTiming(){
         if(handle==0||closed)return RendererDiagnostics.FrameGpuTiming.unavailable();
         var t=RtxptNative.gpuTiming(handle);

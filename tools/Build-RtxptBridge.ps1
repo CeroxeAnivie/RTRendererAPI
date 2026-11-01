@@ -103,6 +103,29 @@ private:
     sl::Result m_hostShutdownResult = sl::Result::eOk;
 public:
 '@ 'HostShutdownResult()'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.h' 'void Shutdown();' @'
+void Shutdown();
+    struct HostFrameGenerationTelemetry {
+        uint64_t queries=0, samples=0, failures=0, presented=0;
+        uint32_t lastPresented=0, status=0, maximumGenerated=0;
+        bool querySucceeded=false;
+    };
+    HostFrameGenerationTelemetry hostFrameGeneration;
+'@ 'HostFrameGenerationTelemetry'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' 'successCheck(slDLSSGGetState(m_viewport, slState, &slOptions), "slDLSSGGetState");' @'
+const auto hostQueryResult = slDLSSGGetState(m_viewport, slState, &slOptions);
+    successCheck(hostQueryResult, "slDLSSGGetState");
+    // RTR observes the existing query: this counter resets on every SDK GetState call.
+    auto& host = hostFrameGeneration;
+    ++host.queries;
+    host.querySucceeded = hostQueryResult == sl::Result::eOk;
+    if (host.querySucceeded) {
+        host.status = static_cast<uint32_t>(slState.status);
+        host.lastPresented = slState.numFramesActuallyPresented;
+        host.maximumGenerated = slState.numFramesToGenerateMax;
+        if (host.lastPresented) { ++host.samples; host.presented += host.lastPresented; }
+    } else { ++host.failures; }
+'@ 'RTR observes the existing query'
 Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' 'successCheck(slShutdown(), "slShutdown");' @'
 m_hostShutdownResult = slShutdown(); // RTR observable embedded shutdown
         successCheck(m_hostShutdownResult, "slShutdown");

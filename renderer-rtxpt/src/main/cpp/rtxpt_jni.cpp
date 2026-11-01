@@ -178,6 +178,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         if (status != SampleBaseApp::InitReturnCodes::Success)
             throw std::runtime_error("RTXPT initialization failed with status " + std::to_string(static_cast<int>(status)));
         s->initialized = true;
+        donut::app::StreamlineIntegration::Get().hostFrameGeneration={};
         if(!s->app->HostRenderPass()->GetScene()) throw std::runtime_error("RTXPT scene failed to load");
         auto& afterPresent=s->app->HostDeviceManager()->m_callbacks.afterPresent;
         auto upstreamAfterPresent=afterPresent;
@@ -218,6 +219,14 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
     JNIEnv* e,jclass,jlong h) {
     try { auto& s=session(h);jlong values[]={jlong(s.gpuSampleCount),jlong(s.gpuAverageNs),jlong(s.gpuMaxNs)};
         auto result=e->NewLongArray(3);if(result)e->SetLongArrayRegion(result,0,3,values);return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_generationTelemetry(
+    JNIEnv* e,jclass,jlong h) {
+    try {auto& s=session(h);const auto& t=donut::app::StreamlineIntegration::Get().hostFrameGeneration;
+        jlong values[]={jlong(s.presented),jlong(t.presented),jlong(t.queries),jlong(t.samples),jlong(t.failures),
+            jlong(t.lastPresented),jlong(t.status),jlong(t.querySucceeded),jlong(t.maximumGenerated)};
+        auto result=e->NewLongArray(9);if(result)e->SetLongArrayRegion(result,0,9,values);return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_presentationStatus(
