@@ -76,7 +76,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
-    $runLog=[IO.File]::ReadAllText($prefix+'.log')
+    $runLog=Get-Content -LiteralPath ($prefix+'.log') -Raw
     if($SmallPointCandidate -and $runLog -notmatch 'RTXPT exact point sum ACTIVE'){
         throw 'Candidate was not active for this scene; discard this run as invalid evidence.'
     }

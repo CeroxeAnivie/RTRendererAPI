@@ -74,7 +74,7 @@ try {
     $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
-    $runLog=[IO.File]::ReadAllText($prefix+'.log')
+    $runLog=Get-Content -LiteralPath ($prefix+'.log') -Raw
     if($SmallPointCandidate -and $runLog -notmatch 'RTXPT exact point sum ACTIVE'){
         throw 'Candidate was not active for this scene; discard this run as invalid evidence.'
     }

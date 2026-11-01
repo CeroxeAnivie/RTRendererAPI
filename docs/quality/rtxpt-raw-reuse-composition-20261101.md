@@ -78,3 +78,5 @@ FG/MFG 新增交付验证在实际打包 JAR 上运行：OFF→2×→3×→4×�
 `residual-root-control-v54` / `residual-root-candidate-v54` 两次 2560×1440、1 SPP、纯 SR 自测均完成 364 帧，但这组不得用于画质或性能结论：候选日志明确记录 `supportedAnalyticSet=no eligible=no`，候选并未启用。根因是桥接层把 RTXPT 场景图中的环境/方向光也按 NEE-AT 解析光计数；上游 `LightsBaker.cpp` 实际只把 Point/Spot 写入该解析采样池。两次日志、设置和 GPU 起始状态保留在 `docs/quality/data/hexball-native-20261101/residual-root-*-v54.*`，作为无效对照证据。后续测量脚本已增加“候选必须记录 exact point sum ACTIVE”的硬检查。
 
 修正方向：资格判断与上游 NEE-AT 输入一致，只统计 Point/Spot；环境、方向光和发光几何继续留在各自原生采样池。半径非零的球形点光也留在随机采样池；仅零半径 delta 点光逐灯求和。运行级画质和 FPS 结果待重新构建后补录。
+
+v55 重测确认门槛修正已生效：金属球日志为 `eligible=yes` 且 `RTXPT exact point sum ACTIVE`。控制组完成；候选组随后暴露 shader 模板分支编译错误（`GetCandidateSampleCounts` 中条件运算符的结果类型），进程退出码为 1，因此 v55 候选没有有效图像。已把该模板表达式改成显式分支，并修正测量脚本的共享日志读取；v55 原始日志和退出码一并保存，待重跑验证。

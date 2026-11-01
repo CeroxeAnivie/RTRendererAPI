@@ -216,7 +216,8 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        globa
         if (RtrSmallPointSet())
         {
             const uint residualGlobal = RtrResidualProxyCount();
-            const uint residualLocal = localCount > 0 ? RtrResidualLocalSlotCount() : 0;
+            uint residualLocal = 0;
+            if (localCount > 0) residualLocal = RtrResidualLocalSlotCount();
             if (residualLocal == 0 && residualGlobal == 0)
             {
                 localCount = 0;
