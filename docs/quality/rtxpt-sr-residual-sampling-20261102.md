@@ -1,0 +1,22 @@
+# SR 剩余光照采样调查
+
+当前默认保持 1 SPP、SR、无 NRD/RR/SHaRC，交互 Demo 默认 2× FG。
+不以改曝光、删环境光、删反弹或增加降噪当作同配置画质修复。
+
+## 已定位的候选浪费
+
+`RtrSumPointLights` 已经计算了少量 delta 点光；`GenerateLightSample` 仍然从包含它们的全局 power 分布生成候选，WRS 选中点光后再 `continue` 丢弃。
+这是实际代码中存在的重复竞争，尤其会在点光强、环境光弱时降低环境样本的有效利用率。噪声最终降幅必须实测，不能从代码提前下结论。
+
+按 PBRT 的 SampleAllLights 分层思想，候选保留原生点光求和，将随机预算条件化到剩余环境光分布。复用 RTXPT 已有、按光索引排序的 power proxy 表；同时修改 NEE 和 BSDF 的选择 PDF，防止只改采样、不改 MIS 而改变能量。
+没有残余 proxy 时直接结束 NEE，避免空分布读越界。解析灯中有非点光、发光三角形或 light cluster 时保持原生分布。
+
+本轮候选仅使用诊断环境变量 `RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=1` 开启；未通过图像与完整帧性能验证前不改变默认。
+`RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=1` 单独对照原生精确 MIS，避免把它与候选的效果混为一谈。
+
+## 验收
+
+- 对照控制、环境独立分层、精确 MIS、两者组合；相同曝光、灯光、分辨率、SPP、反弹和确定性运动。
+- 用 32 SPP 独立参照检查能量、阴影边界和运动残留，同时量化静止波动；截图计时不作为 FPS。
+- 面积光、纯环境、多灯和混合场景分别复核。小规模 delta 分层不能冒充任意场景噪声全部解决。
+- GPU 初始 0% 才比较完整帧绝对性能；测试前提交并推送 main，内存上限 10 GB。

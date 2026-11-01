@@ -5,6 +5,8 @@ param(
     [switch]$PackagedRuntime,
     [switch]$SmallPointCandidate,
     [switch]$ControlLighting,
+    [switch]$SplitPointEnvironment,
+    [switch]$ExactMis,
     [ValidateSet('none','original-lights','quarter-lights','no-sun','no-sky','no-environment')][string]$LightingProbe='none'
 )
 $ErrorActionPreference='Stop'
@@ -43,6 +45,8 @@ $settings=[ordered]@{
     RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
     SmallPointCandidate=[bool]$SmallPointCandidate
     ControlLighting=[bool]$ControlLighting
+    SplitPointEnvironment=[bool]$SplitPointEnvironment
+    ExactMis=[bool]$ExactMis
     LightingProbe=$LightingProbe
 }
 if($PackagedRuntime) {
@@ -53,9 +57,13 @@ $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settin
 & nvidia-smi --query-gpu=name,utilization.gpu,memory.used --format=csv > ($prefix+'-initial-gpu.csv')
 $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
 $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
+$oldSplit=$env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT
+$oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$(if($SplitPointEnvironment){'1'}else{'0'})
+    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}else{$null})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     Get-Content -LiteralPath ($prefix+'.log') -Tail 5
@@ -63,4 +71,6 @@ try {
 } finally {
     $env:RTR_RTXPT_GPU_PROFILE=$oldProfile
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
+    $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$oldSplit
+    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
 }

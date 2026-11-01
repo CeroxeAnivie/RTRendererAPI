@@ -81,6 +81,14 @@ public:
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
         if(smallPointLighting)
             macros.push_back({"RTR_EXACT_SMALL_POINTS","1"});
+        const char* splitControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT");
+        if(smallPointLighting && splitControl && std::string(splitControl)=="1")
+            macros.push_back({"RTR_SPLIT_POINT_ENVIRONMENT","1"});
+        const char* misControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_EXACT_MIS");
+        if(misControl && std::string(misControl)=="1") {
+            for(auto& macro:macros)
+                if(macro.name=="RTXPT_USE_APPROXIMATE_MIS")macro.definition="0";
+        }
         // Measurement control only: reproduce the pinned general-NEE directional bug.
         const char* directionalControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_CONTROL");
         if(directionalControl && std::string(directionalControl)=="1")

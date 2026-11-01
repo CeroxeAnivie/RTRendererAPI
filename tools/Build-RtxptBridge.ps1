@@ -96,6 +96,29 @@ if (m_ui.RealtimeAA != 3 && !m_ui.ActualUseStandaloneDenoiser()
 # The filtered hit-distance texture is consumed by NRD, RR guides and debug views.
 # Scene-selected quality/performance policy: reuse native point sampling and shadow/BSDF
 # processing, while avoiding random selection between a handful of delta lights.
+[IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/Shaders/PathTracer/Lighting/RtrLightSamplerStrata.hlsli'),
+    [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrLightSamplerStrata.hlsli')),$utf8)
+Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '    // returned value is in [0, ControlBuffer[0].TotalLightCount) range used to read from LightsBuffer' @'
+    #include "RtrLightSamplerStrata.hlsli" // RTR conditional environment stratum
+    // returned value is in [0, ControlBuffer[0].TotalLightCount) range used to read from LightsBuffer
+'@ 'RTR conditional environment stratum'
+Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        uint totalProxyCount = ControlBuffer[0].SamplingProxyCount;' @'
+        uint totalProxyCount = ControlBuffer[0].SamplingProxyCount;
+        #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
+        if (RtrSplitPointEnvironment()) totalProxyCount = RtrEnvironmentProxyCount(); // RTR conditional proxy range
+        #endif
+'@ 'RTR conditional proxy range'
+Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float pdf = proxyCountPerLight / float(float(ControlBuffer[0].SamplingProxyCount));' @'
+        uint totalProxyCount = ControlBuffer[0].SamplingProxyCount;
+        #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
+        if (RtrSplitPointEnvironment())
+        {
+            if (lightIndex >= ControlBuffer[0].EnvmapQuadNodeCount) return 0;
+            totalProxyCount = RtrEnvironmentProxyCount();
+        }
+        #endif
+        float pdf = totalProxyCount > 0 ? proxyCountPerLight / float(totalProxyCount) : 0; // RTR matching conditional BSDF PDF
+'@ 'RTR matching conditional BSDF PDF'
 [IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSmallPointNee.hlsli'),
     [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrSmallPointNee.hlsli')),$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    inline NEEResult HandleNEE_MultipleSamples(' @'
@@ -111,6 +134,13 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        [unroll] for 
         #endif
         [unroll] for (uint sampleIndex = 0; sampleIndex < fullSamples; sampleIndex++)
 '@ 'RTR deterministic delta contributions'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            RtrSumPointLights(result, lightSampler, shadingData, bsdf, preScatterPath, sampleGenerator, workingContext);' @'
+            RtrSumPointLights(result, lightSampler, shadingData, bsdf, preScatterPath, sampleGenerator, workingContext);
+        #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
+        if (rtrSmallPoints && lightSampler.RtrSplitPointEnvironment() && lightSampler.RtrEnvironmentProxyCount() == 0)
+            return result; // RTR no stochastic stratum: avoid zero-sized proxy lookup
+        #endif
+'@ 'RTR no stochastic stratum'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            // this computes the BSDF throughput and (if throughput>0) then casts shadow ray and handles radiance summing up & weighted averaging for ''sample distance'' used by denoiser' @'
             #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS
             if (rtrSmallPoints && lightSample.Valid() && RtrCoveredPoint(lightSampler, lightSample.LightIndex))

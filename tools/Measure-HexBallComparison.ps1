@@ -7,6 +7,9 @@ param(
     [switch]$StageProfile,
     [switch]$SmallPointCandidate,
     [switch]$ControlLighting,
+    [switch]$SplitPointEnvironment,
+    [switch]$ExactMis,
+    [switch]$Glass,
     [ValidateSet('Upstream','D','E','F')][string]$RrPreset='Upstream',
     [ValidateSet('Upstream','On','Off')][string]$AsyncPrefix='Upstream',
     [string[]]$ExtraArguments=@(),
@@ -42,17 +45,21 @@ if ($Backend -eq 'Vulkan' -and $StageProfile) {
 }
 $entry=if($Backend -eq 'Rtxpt'){'demo.RtxptHexBallDemo'}else{'demo.HexBallDemo'}
 $demo=@('--windowed',"--width=$Width","--height=$Height",'--spp=1',"--duration-seconds=$Seconds")
-if($Backend -eq 'Rtxpt'){$demo+='--original-balls'}
+if($Backend -eq 'Rtxpt' -and !$Glass){$demo+='--original-balls'}
 $demo+=$ExtraArguments
 $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
 $oldAsync=$env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX
 $oldPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
 $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
+$oldSplit=$env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT
+$oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
 try {
     $env:RTR_RTXPT_GPU_PROFILE=if($StageProfile){$prefix+'-gpu.csv'}else{$null}
     $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=switch($AsyncPrefix){'On'{'1'} 'Off'{'0'} default{$null}}
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=if($RrPreset -eq 'Upstream'){$null}else{$RrPreset}
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$(if($SplitPointEnvironment){'1'}else{'0'})
+    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}else{$null})
     & nvidia-smi --query-gpu=name,driver_version,utilization.gpu,memory.used,power.draw,clocks.current.graphics,temperature.gpu --format=csv > ($prefix+'-initial-gpu.csv')
     $settings=[ordered]@{
         SourceCommit=(& git rev-parse HEAD).Trim();Backend=$Backend;Entry=$entry;
@@ -60,6 +67,7 @@ try {
         RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;
         SmallPointCandidate=[bool]$SmallPointCandidate;
         ControlLighting=[bool]$ControlLighting;
+        SplitPointEnvironment=[bool]$SplitPointEnvironment;ExactMis=[bool]$ExactMis;Glass=[bool]$Glass;
         Java=$java;Jvm=$jvm;Arguments=$demo;StartedAt=(Get-Date -Format o);
         NativeSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll' -Algorithm SHA256).Hash
     }
@@ -73,4 +81,6 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=$oldAsync
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$oldPreset
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
+    $env:RTR_RTXPT_DIAGNOSTIC_SPLIT_POINT_ENVIRONMENT=$oldSplit
+    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
 }
