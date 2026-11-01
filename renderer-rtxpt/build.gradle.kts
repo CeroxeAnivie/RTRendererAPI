@@ -1,5 +1,6 @@
 import java.security.MessageDigest
 import java.util.HexFormat
+import java.nio.file.Files
 
 plugins { `java-library` }
 description = "Thin in-process JNI host for NVIDIA RTXPT managed rendering."
@@ -26,6 +27,22 @@ tasks.register<JavaExec>("rtxptNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptNativeSelfTest")
+}
+
+tasks.register<JavaExec>("rtxptPackagedNativeSelfTest") {
+    group = "verification"
+    description = "Runs the native contract from the bundled JAR outside the source checkout."
+    dependsOn(tasks.testClasses, tasks.jar)
+    classpath = sourceSets.test.get().output + configurations.testRuntimeClasspath.get() + files(tasks.jar)
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptNativeSelfTest")
+    systemProperty("top.ceroxe.rt.rtxpt.testOutput", layout.buildDirectory.dir("reports/packaged-native").get().asFile.absolutePath)
+    doFirst {
+        check(!systemProperties.containsKey("top.ceroxe.rt.rtxpt.runtime") && !systemProperties.containsKey("top.ceroxe.rt.rtxpt.bridge")) {
+            "Packaged acceptance must use the JAR payload, without native overrides"
+        }
+        workingDir(Files.createTempDirectory("rtxpt-packaged-consumer-").toFile())
+    }
+    doLast { workingDir.deleteRecursively() }
 }
 tasks.named("check") { dependsOn("rtxptAdapterSelfTest") }
 
