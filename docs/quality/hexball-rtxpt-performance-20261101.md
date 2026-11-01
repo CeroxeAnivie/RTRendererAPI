@@ -183,3 +183,24 @@ The next internal table uses existing v5 SR-only samples (202.015589 FPS), not i
 The new SR stage is not the measured source of the extra GPU interval: its measured duration is lower than the old reconstruction bracket. The additional light feedback/weights, unconditional SpecHitT filtering and radiance merge total about 1.07 ms/frame in v5. The remainder also includes different whole-frame scheduling/post-processing. The SR bracket in Vulkan includes its surrounding input barriers and post-trace composition; do not claim equal shader-level scopes. No entire 25-FPS difference is attributed to a single kernel.
 
 Fine Vulkan stage profiling is off by default. Only `-StageProfile` turns it on in the measurement runner; public `gpuTimingsEnabled=false` also disables existing total-frame timestamps. All 413 Vulkan and 259 RELAX sampled frames resolved with zero drops/failures.
+
+## Image-quality repair after paired measurements
+
+The displayed RTXPT demo default still selected RR, while the user-confirmed
+non-blurry test selected upstream RELAX followed by SR. The demo preset now uses
+the existing RESPONSIVE strategy to request RELAX plus SR. Explicit API overrides,
+including RR and disabled denoising, still work. The ordinary Vulkan demo is not
+changed. This preset change is reported as a quality-policy change, not a same-policy
+performance optimization. A raw 1-SPP path-tracing input remains explicitly raw.
+
+The host integration also stops the upstream SpecHitT filter only when no NRD,
+RR or debug consumer is active. The filter is retained for the new quality preset.
+Path tracing writes/resets this texture before the filter; its next-frame path
+construction does not consume the previous filtered result. No denoiser math,
+path budget, sample count or render resolution is modified by this elimination.
+
+`RtxptHexBallQualitySelfTest` captures deterministic static, moving and stopped
+sequences, checks actual SR/RELAX settings, unchanged 1485x835 input for 2560x1440
+output, one scene export, FG off, health and lifecycle. Captures are test-only;
+`Measure-HexBallQuality.ps1` does not enable GPU diagnostics or report screenshot
+runs as throughput acceptance. CPU adapter and demo-policy regressions pass.

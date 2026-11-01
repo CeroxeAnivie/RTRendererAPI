@@ -72,6 +72,15 @@ if(!$sampleText.Contains('RTR current radiance before temporal reconstruction'))
     $sampleText=[regex]::Replace($sampleText,$anchor,$insert,1)
     [IO.File]::WriteAllText($samplePath,$sampleText,$utf8)
 }
+# The filtered hit-distance texture is consumed by NRD, RR guides and debug views.
+# Raw SR/TAA/reference output does not read it; retain upstream filtering for every consumer.
+Patch-Once 'Rtxpt/AdvancedSample.cpp' '        m_denoisingGuidesBaker->DenoiseSpecHitT(m_commandList, m_bindingSet);' @'
+        // RTR filter hit distance only when a consumer is active
+        if (m_ui.ActualUseStandaloneDenoiser()
+            || (m_ui.RealtimeMode && m_ui.RealtimeAA == 3)
+            || m_ui.DebugView != DebugViewType::Disabled)
+            m_denoisingGuidesBaker->DenoiseSpecHitT(m_commandList, m_bindingSet);
+'@ 'RTR filter hit distance only when a consumer is active'
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.cpp' 'm_CmdLine.InitFromCommandLine(__argc, __argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)' 'm_CmdLine.InitFromCommandLine(argc, argv)'
 Patch-Once 'Rtxpt/SampleCommon/SampleCommon.cpp' '    // progress bar currently interfering with fullscreen so disable' @'
     // RTR embedded host: compilation/loading progress belongs in the host log.

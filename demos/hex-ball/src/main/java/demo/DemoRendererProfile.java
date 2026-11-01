@@ -31,9 +31,11 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig rtxptInteractive() {
-        // RTXPT's 1-SPP realtime signal needs its native denoising/reconstruction pipeline.
-        // Keep the demo's FG controls, without importing Vulkan's surface-only no-denoiser policy.
+        // Match the accepted non-blurry native RELAX -> SR path. RR remains an explicit API choice.
+        // A raw stochastic 1-SPP path-tracing signal is not a denoised SR input.
         return DemoApiControls.configure(RendererConfig.pathTracedPresentation().copyBuilder()
+                .denoising(DenoisingOptions.builder().preference(RendererFeaturePreference.PREFERRED)
+                        .strategy(DenoisingOptions.Strategy.RESPONSIVE).builtInTemporalFallback(false).build())
                 .frameGeneration(configuredGenerationPolicy()).gpuTimingsEnabled(true).build());
     }
 

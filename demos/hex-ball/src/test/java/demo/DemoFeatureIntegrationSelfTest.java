@@ -51,6 +51,9 @@ public final class DemoFeatureIntegrationSelfTest {
             System.clearProperty(property);
             var profile=DemoRendererProfile.rtxptInteractive();
             require(profile.denoising().preference().requested(),"Realtime RTXPT must retain native denoising");
+            require(profile.denoising().strategy()==DenoisingOptions.Strategy.RESPONSIVE,
+                "Realtime demo must use the accepted native RELAX -> SR route");
+            require(!profile.denoising().builtInTemporalFallback(),"No hidden temporal fallback in native quality preset");
             require(profile.pathTracing().radianceCache().requested(),"Realtime RTXPT must retain native radiance cache");
             require(profile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X
                 &&profile.frameGeneration().preference().requested(),"Default demo FG remains 2x");
