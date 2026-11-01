@@ -22,7 +22,7 @@ public final class RtxptCompositionSelfTest {
         String mode=args.length>1?args[1]:"acceptance";
         if(mode.equals("native")||mode.startsWith("return-")||mode.equals("overlay")||mode.equals("no-overlay"))requireIdleGpu();
         if(mode.equals("native")){nativeBenchmark(output);return;}
-        if(mode.equals("rtxpt-final")||mode.startsWith("return-")){nativeFinal(output,mode);return;}
+        if(mode.equals("rtxpt-final")||mode.equals("rtxpt-hud")||mode.startsWith("return-")){nativeFinal(output,mode);return;}
         var config=configuration();
         try(var renderer=RtxptComposedRenderer.openVulkanPresentation(RendererBackendPolicy.RTXPT_ONLY,
                 RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),config,
@@ -165,8 +165,9 @@ public final class RtxptCompositionSelfTest {
         }
     }
     private static void nativeFinal(Path output,String mode) throws Exception {
-        boolean acceptance=mode.equals("rtxpt-final");
-        var config=acceptance?DemoRendererProfile.rtxptMediumInteractive(false):configuration();
+        boolean checkGeneration=mode.equals("rtxpt-final");
+        boolean acceptance=checkGeneration||mode.equals("rtxpt-hud");
+        var config=checkGeneration?DemoRendererProfile.rtxptMediumInteractive(false):configuration();
         try(var renderer=RtxptComposedRenderer.openRtxptPresentation(
                 RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),config,"RTRendererAPI - Medium Demo")) {
             renderer.apply(RtxptMediumScene.create(1,"mixed"));
@@ -186,7 +187,7 @@ public final class RtxptCompositionSelfTest {
             }
             var controller=renderer.extension(RendererFeatureController.class).orElseThrow();
             var csv=new StringBuilder("multiplier,native_frames,presented_frames,ratio,native_ms,output_fps,query_failures\n");
-            for(var multiplier:FrameGenerationOptions.Multiplier.values()) {
+            for(var multiplier:checkGeneration?FrameGenerationOptions.Multiplier.values():new FrameGenerationOptions.Multiplier[0]) {
                 var fg=FrameGenerationOptions.builder().preference(RendererFeaturePreference.REQUIRED)
                     .mode(multiplier==FrameGenerationOptions.Multiplier.TWO_X?FrameGenerationOptions.Mode.FRAME_GENERATION:FrameGenerationOptions.Mode.MULTI_FRAME_GENERATION)
                     .multiplier(multiplier).build();
@@ -223,14 +224,14 @@ public final class RtxptCompositionSelfTest {
             compare(output.resolve("native-overlay-restored-source.png"),output.resolve("native-overlay-restored.png"),true);
             require(renderer.workSnapshot().presentation().presentSamples()==0,"Hidden Vulkan compositor never presented a frame");
             require(renderer.workSnapshot().legacyFrames()==0,"Vulkan did not duplicate complete 3D tracing");
-            host.setOverlayText("RTRendererAPI 7.0.0 - MEDIUM DEMO\nRTXPT: RR / FG / MFG / REFLEX | VULKAN: GPU UI");
+            host.setOverlayText("RTRendererAPI 7.0.0 - MEDIUM DEMO\nRTXPT: RR | VULKAN: GPU UI\nHUD / SCENE SELECTOR / OVERLAY LIFECYCLE VERIFIED");
             host.setOverlayChoices(RtxptMediumScene.LABELS,0);
             // ImGui measures a newly appearing auto-sized window before it draws its contents.
             for(int i=0;i<3;i++)require(host.renderFrame(),"Final HUD frame");
             host.capture(output.resolve("native-final-hud.png"));
             requireVisibleHud(output.resolve("native-final-hud.png"));
             require(renderer.workSnapshot().rtxptFrames()==host.bridgeTimings().frames(),"Final actual work count");
-            System.out.println("RTXPT_NATIVE_FINAL_COMPOSITION PASS");
+            System.out.println("RTXPT_NATIVE_FINAL_COMPOSITION PASS; generationChecked="+checkGeneration);
         }
     }
     static void requireVisibleHud(Path path) throws Exception {

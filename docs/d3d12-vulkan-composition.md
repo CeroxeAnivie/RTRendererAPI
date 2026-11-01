@@ -66,6 +66,8 @@ RTXPT 原 Depth／MV／PreUIColor（HUDless）保留，不通过 Vulkan 重建�
 
 可执行验证：`:demos:hex-ball:rtxptCompositionSelfTest`；`top.ceroxe.rt.rtxpt.compositionTestMode` 可选 `acceptance`（Vulkan 最终窗口、颜色与热切换）、`rtxpt-final`（回交叠层＋实际 2x/3x/4x FG）、`native`、`return-no-overlay`、`return-overlay`（相同 FG-off 场景稳态吞吐）。2026-11-01 最新要求：性能测试前 GPU 0 基础占用必须为 **0%**；不为零就暂停，等待用户通知空闲后再测，不比较受干扰的绝对值。内存诊断与正确性运行单独标记，不用其耗时认定吞吐收益。
 
+`rtxpt-hud` 单独检查 FG-off 的最终 HUD 像素、切换器和叠层释放／重启，不测吞吐，也不宣称通过 FG/MFG 验收。高级呈现验收同时记录测试窗口是否拥有前台焦点；后台窗口的 1x 交付不能被开关状态掩盖，前台被其他应用占用时保留失败证据并等待可验收窗口。
+
 内存检查入口为 `:demos:hex-ball:rtxptMemorySelfTest`，连续三轮覆盖六个场景、叠层开关、1080p/540p 尺寸变化和关闭，输出带时间戳的 `phases.csv`，记录进程私有提交、Java 堆、非堆、直接缓冲区和实际帧数。可在单独诊断窗口开启 JFR，`top.ceroxe.rt.NativeMemory` 将阶段与调用栈关联。
 
 `python tools/Watch-NativeMemory.py <诊断目录> --lightweight` 读取该目录的 `runtime.json`（`executable`、Java `arguments`），以 1 秒频率记录目标进程私有提交／工作集及 Windows GPU Process Memory 专用／共享提交。后两者是本进程 GPU 记账，不是全局显存或唯一物理驻留量，不能把共享纹理的双 API 记账直接当两份物理内存。完整模式继续支持虚拟分配 census、NMT/JFR 及显式启用的原生栈。构建与诊断进程树上限为 10 GB；JFR、显式 GC 和内存 census 不进入最终 FPS 验收。
