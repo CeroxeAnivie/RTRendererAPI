@@ -75,6 +75,8 @@ public final class DemoFeatureIntegrationSelfTest {
         try {
             System.clearProperty(property);
             var profile=DemoRendererProfile.rtxptInteractive();
+            require(profile.frameReconstruction().quality()==FrameReconstructionOptions.Quality.QUALITY,
+                "RTXPT glass uses the native quality input ratio to retain detail under RR");
             require(profile.denoising().equals(DenoisingOptions.recommended()),"RTXPT demo uses native recommended RR denoising");
             require(!profile.pathTracing().radianceCache().requested(),"Keep SHaRC disabled in the lightweight ball demo");
             require(profile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X

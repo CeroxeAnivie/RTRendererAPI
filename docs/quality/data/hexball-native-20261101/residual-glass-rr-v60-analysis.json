@@ -1,0 +1,51 @@
+{
+  "scope": "Static metal-ball cyan shadow detail; not a universal blur/ghosting certificate",
+  "results": [
+    {
+      "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-glass-reference-v61",
+      "shadow_edge_10_90_output_pixels": 2.395767795778056,
+      "shadow_red_channel_contrast_8bit": 78.7875,
+      "scan_rows": 17,
+      "static_temporal_rgb_mae_8bit": 0.79114670781893,
+      "rgb_mae_vs_32spp_reference_8bit": {
+        "static-163": 0.0,
+        "moving-119": 0.0,
+        "stopped-0": 0.0,
+        "stopped-3": 0.0,
+        "stopped-15": 0.0,
+        "stopped-79": 0.0
+      }
+    },
+    {
+      "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-glass-raw-v59",
+      "shadow_edge_10_90_output_pixels": 2.407914817858682,
+      "shadow_red_channel_contrast_8bit": 78.68333333333334,
+      "scan_rows": 17,
+      "static_temporal_rgb_mae_8bit": 0.7142496913580247,
+      "rgb_mae_vs_32spp_reference_8bit": {
+        "static-163": 4.941891975308642,
+        "moving-119": 5.654316049382716,
+        "stopped-0": 5.53588024691358,
+        "stopped-3": 5.32579012345679,
+        "stopped-15": 5.102338271604938,
+        "stopped-79": 5.041961111111111
+      }
+    },
+    {
+      "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-glass-rr-v60",
+      "shadow_edge_10_90_output_pixels": 2.084249526515123,
+      "shadow_red_channel_contrast_8bit": 71.62083333333332,
+      "scan_rows": 17,
+      "static_temporal_rgb_mae_8bit": 0.07055030864197531,
+      "rgb_mae_vs_32spp_reference_8bit": {
+        "static-163": 3.672020987654321,
+        "moving-119": 4.17841450617284,
+        "stopped-0": 4.085128086419753,
+        "stopped-3": 3.92426512345679,
+        "stopped-15": 3.761362345679012,
+        "stopped-79": 3.759670061728395
+      }
+    }
+  ],
+  "detail_regression": "PASS"
+}

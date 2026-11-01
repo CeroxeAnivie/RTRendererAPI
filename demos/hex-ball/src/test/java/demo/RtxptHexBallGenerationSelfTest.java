@@ -69,6 +69,7 @@ public final class RtxptHexBallGenerationSelfTest {
         Files.writeString(output.resolve("generation.csv"),csv);
         System.out.print("GENERATION_DELIVERY "+row);
         require(status.reconstruction()==RtxptAccess.Reconstruction.DLSS_RR&&status.denoising()&&!status.sharc()
+            &&status.dlssMode()==3
             &&!status.restirDi()&&!status.restirGi(),"Native RR remains active while generation settings change");
         require(status.frameGeneration()==(multiplier>1),"Actual FG activation");
         require(nativeFrames==360,"Native presentation count");

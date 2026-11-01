@@ -13,7 +13,11 @@ from PIL import Image, ImageChops, ImageDraw, ImageStat
 
 directories = [Path(arg) for arg in sys.argv[1:4]]
 prefix = Path(sys.argv[4])
-labels = ["REFERENCE 32 SPP (quality only)", "BASELINE: SR, 1 SPP", "CANDIDATE: native DLSS RR, 1 SPP"]
+labels = [
+    "REFERENCE 32 SPP (quality only)",
+    sys.argv[5] if len(sys.argv) > 5 else "BASELINE: 1 SPP",
+    sys.argv[6] if len(sys.argv) > 6 else "CANDIDATE: 1 SPP",
+]
 canvas = Image.new("RGB", (1500, 720), "#20242a")
 draw = ImageDraw.Draw(canvas)
 results = []
@@ -65,7 +69,7 @@ passed = candidate["shadow_edge_10_90_output_pixels"] <= reference["shadow_edge_
 passed &= candidate["shadow_red_channel_contrast_8bit"] >= reference["shadow_red_channel_contrast_8bit"] * .8
 passed &= candidate["static_temporal_rgb_mae_8bit"] <= 1.0
 report = {"scope": "Static HexBall cyan shadow detail; not a universal blur/ghosting certificate",
-    "results": results, "detail_regression": "PASS" if passed else "FAIL"}
+    "labels": labels, "results": results, "detail_regression": "PASS" if passed else "FAIL"}
 prefix.parent.mkdir(parents=True, exist_ok=True)
 prefix.with_suffix(".json").write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
 canvas.save(prefix.with_suffix(".png"))

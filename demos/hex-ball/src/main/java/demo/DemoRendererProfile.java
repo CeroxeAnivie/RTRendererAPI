@@ -31,8 +31,12 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig rtxptInteractive() {
-        // RTXPT's native RR removes 1-SPP lighting noise while preserving upstream SR and FG.
+        // RR suppresses 1-SPP lighting noise; the Quality input ratio keeps small glass details sharp.
+        var highQualityReconstruction = FrameReconstructionOptions.recommended().toBuilder()
+                .quality(FrameReconstructionOptions.Quality.QUALITY)
+                .build();
         return DemoApiControls.configure(RendererConfig.presentation().copyBuilder()
+                .frameReconstruction(highQualityReconstruction)
                 .denoising(DenoisingOptions.recommended())
                 .frameGeneration(configuredGenerationPolicy()).gpuTimingsEnabled(true).build());
     }

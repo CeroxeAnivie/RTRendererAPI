@@ -1,0 +1,56 @@
+{
+  "scope": "Static HexBall cyan shadow detail; not a universal blur/ghosting certificate",
+  "labels": [
+    "REFERENCE 32 SPP (quality only)",
+    "BALANCED RR, preset F, 1 SPP",
+    "QUALITY RR, preset F, 1 SPP"
+  ],
+  "results": [
+    {
+      "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-glass-reference-v61",
+      "shadow_edge_10_90_output_pixels": 2.395767795778056,
+      "shadow_red_channel_contrast_8bit": 78.7875,
+      "scan_rows": 17,
+      "static_temporal_rgb_mae_8bit": 0.79114670781893,
+      "rgb_mae_vs_32spp_reference_8bit": {
+        "static-163": 0.0,
+        "moving-119": 0.0,
+        "stopped-0": 0.0,
+        "stopped-3": 0.0,
+        "stopped-15": 0.0,
+        "stopped-79": 0.0
+      }
+    },
+    {
+      "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-glass-default-rr-v63",
+      "shadow_edge_10_90_output_pixels": 2.1395800264549507,
+      "shadow_red_channel_contrast_8bit": 71.80416666666666,
+      "scan_rows": 17,
+      "static_temporal_rgb_mae_8bit": 0.07099948559670782,
+      "rgb_mae_vs_32spp_reference_8bit": {
+        "static-163": 3.699243209876543,
+        "moving-119": 4.1822691358024695,
+        "stopped-0": 4.094928703703704,
+        "stopped-3": 3.9294185185185184,
+        "stopped-15": 3.7533632716049383,
+        "stopped-79": 3.7155604938271605
+      }
+    },
+    {
+      "source": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-quality\\residual-glass-rr-quality-v80",
+      "shadow_edge_10_90_output_pixels": 1.9910432548658719,
+      "shadow_red_channel_contrast_8bit": 71.17499999999998,
+      "scan_rows": 17,
+      "static_temporal_rgb_mae_8bit": 0.054366049382716046,
+      "rgb_mae_vs_32spp_reference_8bit": {
+        "static-163": 3.6678895061728394,
+        "moving-119": 4.188763580246913,
+        "stopped-0": 4.0823984567901235,
+        "stopped-3": 3.913851543209877,
+        "stopped-15": 3.735250925925926,
+        "stopped-79": 3.776702777777778
+      }
+    }
+  ],
+  "detail_regression": "PASS"
+}

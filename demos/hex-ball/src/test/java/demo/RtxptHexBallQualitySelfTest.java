@@ -13,6 +13,7 @@ public final class RtxptHexBallQualitySelfTest {
         Path output=Path.of(args.length>2?args[2]:"build/reports/hexball-quality/"+mode).toAbsolutePath();
         String probe=args.length>3?args[3]:"none";
         String cacheMode=args.length>4?args[4]:"none";
+        String reconstructionQuality=args.length>5?args[5]:(mode.equals("default")?"QUALITY":"BALANCED");
         boolean sharc=cacheMode.equals("sharc");
         boolean restirGi=cacheMode.equals("restirgi");
         if(!java.util.Set.of("none","original-lights","quarter-lights","no-points","no-sun","no-sky","no-environment").contains(probe))
@@ -24,6 +25,14 @@ public final class RtxptHexBallQualitySelfTest {
         System.setProperty(DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY,"true");
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
         var base=DemoRendererProfile.interactive(config);
+        boolean dlaa=reconstructionQuality.equalsIgnoreCase("DLAA");
+        FrameReconstructionOptions.Quality quality=dlaa
+                ?FrameReconstructionOptions.Quality.AUTO
+                :FrameReconstructionOptions.Quality.valueOf(reconstructionQuality.toUpperCase(java.util.Locale.ROOT));
+        var reconstruction=base.frameReconstruction().toBuilder()
+                .mode(dlaa?FrameReconstructionOptions.Mode.NATIVE_ANTI_ALIASING:FrameReconstructionOptions.Mode.SUPER_RESOLUTION)
+                .quality(quality).build();
+        base=base.copyBuilder().frameReconstruction(reconstruction).build();
         boolean reference=mode.equals("reference")||mode.equals("direct-reference");
         boolean directOnly=mode.equals("direct")||mode.equals("direct-reference");
         boolean rr=mode.equals("rr")||mode.equals("default");
@@ -38,6 +47,7 @@ public final class RtxptHexBallQualitySelfTest {
             case "rr" -> base.copyBuilder().denoising(DenoisingOptions.recommended()).build();
             default -> throw new IllegalArgumentException("Expected raw, relax, default, reuse-raw, reuse-relax, rr, reference, direct or direct-reference");
         };
+        policy=policy.copyBuilder().frameReconstruction(reconstruction).build();
         if(sharc) {
             var path=policy.pathTracing();
             policy=policy.copyBuilder().pathTracing(new PathTracingOptions(path.samplesPerPixel(),path.maxBounces(),
@@ -102,6 +112,7 @@ public final class RtxptHexBallQualitySelfTest {
                     previous=batch;
                     if(sequence==1) {
                         var status=host.runtimeStatus();
+                        System.out.println("QUALITY_ACTUAL "+status);
                         require(status.reconstruction()==(rr?RtxptAccess.Reconstruction.DLSS_RR:RtxptAccess.Reconstruction.DLSS),"Actual requested SR/RR, not TAA");
                         require(status.standaloneDenoiser()==(denoise&&!rr),"Actual standalone denoiser policy");
                         require(status.relaxDenoiser()==(denoise&&!rr),"Actual native RELAX");
@@ -110,12 +121,31 @@ public final class RtxptHexBallQualitySelfTest {
                         require(status.restirGi()==restirGi,"Actual requested ReSTIR GI state");
                         require(status.sharc()==sharc,"Actual requested SHaRC state");
                         require(!status.frameGeneration(),"FG off for quality evidence");
-                        require(status.renderWidth()==1485&&status.renderHeight()==835,"Balanced input unchanged");
+                        if(mode.equals("default"))
+                            require(status.dlssMode()==3&&status.renderWidth()>1485&&status.renderHeight()>835,
+                                "Native DLSS RR uses the requested Quality input ratio");
+                        else if(rr) {
+                            int expectedDlssMode=dlaa?6:switch(quality) {
+                                case PERFORMANCE -> 1;
+                                case BALANCED -> 2;
+                                case QUALITY -> 3;
+                                case ULTRA_PERFORMANCE -> 4;
+                                case ULTRA_QUALITY -> 5;
+                                case AUTO -> status.dlssMode();
+                            };
+                            require(status.dlssMode()==expectedDlssMode,
+                                "RTXPT must report the requested RR input preset: "+status);
+                            require(dlaa
+                                    ? status.renderWidth()==2560&&status.renderHeight()==1440
+                                    : status.renderWidth()>=1485&&status.renderHeight()>=835,
+                                "RR input extent must match the selected preset: "+status);
+                        }
+                        else
+                            require(status.renderWidth()==1485&&status.renderHeight()==835,"Diagnostic baseline retains balanced input");
                         float expectedExposure=glass?DemoScene.GLASS_EXPOSURE_COMPENSATION:0;
                         require(Math.abs(host.presentationStatus().exposureCompensation()-expectedExposure)<1e-5f,
                             "The upstream tone mapper must apply the requested exposure, including before first submission");
                         Files.writeString(output.resolve("runtime.txt"),"mode="+mode+" glass="+glass+" probe="+probe+"\n"+status+"\n"+policy+"\n");
-                        System.out.println("QUALITY_ACTUAL "+status);
                     }
                     if(phase==0&&f>=160 || phase==1&&f>=116 || phase==2&&(f==0||f==3||f==15||f==79)) {
                         Path png=output.resolve((phase==0?"static":phase==1?"moving":"stopped")+"-"+f+".png");

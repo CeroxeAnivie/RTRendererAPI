@@ -1,0 +1,24 @@
+{
+  "SourceCommit": "7a44213d35542a34a1945c2fa4959c66f37681d5",
+  "Java": "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+  "Entry": "demo.RtxptHexBallGenerationSelfTest",
+  "Arguments": [
+    "build/reports/rtxpt-generation-quality-v64"
+  ],
+  "Scene": "DemoScene(true), glass",
+  "OutputSizes": [
+    "2560x1440",
+    "1920x1080"
+  ],
+  "Spp": 1,
+  "Reconstruction": "DLSS_RR",
+  "Denoising": "DenoisingOptions.recommended",
+  "FrameGenerationMultipliers": [
+    1,
+    2,
+    3,
+    4,
+    1
+  ],
+  "ExposureCompensation": "DemoScene.GLASS_EXPOSURE_COMPENSATION"
+}

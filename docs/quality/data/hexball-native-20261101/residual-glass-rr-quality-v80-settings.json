@@ -1,0 +1,12 @@
+{
+  "SourceCommit": "7a44213d35542a34a1945c2fa4959c66f37681d5",
+  "WorkingTreeCandidate": "DLSS RR Quality input",
+  "Width": 2560,
+  "Height": 1440,
+  "Spp": 1,
+  "FrameGeneration": false,
+  "Denoiser": "DLSS_RR",
+  "InputQuality": "QUALITY",
+  "JarSha256": "ECC4E935373B37F02C69BFBE06C75DBCF132D2CCF74A46BCDEA553CFB835FA14",
+  "StartedAt": "2026-11-02T06:07:32.8587147+08:00"
+}

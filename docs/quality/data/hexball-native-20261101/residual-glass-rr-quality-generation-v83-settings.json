@@ -1,0 +1,16 @@
+{
+  "SourceCommit": "7a44213d35542a34a1945c2fa4959c66f37681d5",
+  "Candidate": "DLSS RR Quality input with live FG/MFG",
+  "Output": "2560x1440 plus 1920x1080 FG4x stage",
+  "Spp": 1,
+  "Denoiser": "DLSS_RR",
+  "InputQuality": "QUALITY",
+  "Multipliers": [
+    1,
+    2,
+    3,
+    4,
+    1
+  ],
+  "StartedAt": "2026-11-02T06:20:30.3897199+08:00"
+}
