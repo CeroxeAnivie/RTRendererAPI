@@ -3,7 +3,7 @@ package top.ceroxe.rt.renderer.backend.vulkan;
 import java.util.Objects;
 import top.ceroxe.rt.renderer.api.*;
 
-/** Keeps the ordinary renderer independent of the optional LuxCore execution lane. */
+/** Keeps the ordinary renderer independent of the optional RTXPT execution lane. */
 final class VulkanMediumPolicy {
     private VulkanMediumPolicy() { }
 
@@ -13,12 +13,11 @@ final class VulkanMediumPolicy {
     }
 
     static void requireSurfaceFrame(RenderFrameRequest request) {
-        if (!request.environment().cameraMedium().isVacuum()
-                || !request.primitiveBatch().mediumBoundaryIndices().isEmpty()) reject();
+        if (!request.primitiveBatch().mediumBoundaryIndices().isEmpty()) reject();
     }
 
     private static void reject() {
         throw new FrameValidationException(FrameValidationException.Reason.UNSUPPORTED_MEDIUM_TRANSPORT,
-                "Medium scenes are owned by LuxCore. Open the explicit luxcore backend for the complete scene.");
+                "Medium scenes are owned by RTXPT. Open the explicit rtxpt backend for the complete scene.");
     }
 }

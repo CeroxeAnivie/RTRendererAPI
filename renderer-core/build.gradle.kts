@@ -62,7 +62,7 @@ java {
     withJavadocJar()
 }
 
-// Medium transport and its compiler/runtime are provided by renderer-luxcore.
+// Medium transport and its compiler/runtime are provided by renderer-rtxpt.
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
@@ -565,7 +565,7 @@ tasks.register("rendererCoreMediumNativeGate") {
     group = "verification"
     description = "Runs supported medium HDR, ownership and queued-frame hardware checks with strict Vulkan validation."
     dependsOn(nativeMediumTests)
-    dependsOn(":renderer-luxcore:luxcoreNativeSelfTest")
+    dependsOn(":renderer-rtxpt:rtxptNativeSelfTest")
 }
 
 tasks.register("rendererCoreUnifiedApiNativeGate") {

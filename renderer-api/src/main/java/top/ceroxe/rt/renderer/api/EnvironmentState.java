@@ -3,7 +3,7 @@ package top.ceroxe.rt.renderer.api;
 import java.util.Objects;
 
 /**
- * Immutable frame-local lighting and camera-medium facts.
+ * Immutable frame-local lighting facts.
  */
 public final class EnvironmentState {
     private final float skyRed;
@@ -17,7 +17,6 @@ public final class EnvironmentState {
     private final float sunGreen;
     private final float sunBlue;
     private final float sunIntensity;
-    private final Medium cameraMedium;
 
     private EnvironmentState(
             float skyRed,
@@ -30,8 +29,7 @@ public final class EnvironmentState {
             float sunRed,
             float sunGreen,
             float sunBlue,
-            float sunIntensity,
-            Medium cameraMedium
+            float sunIntensity
     ) {
         requireNonNegativeFinite(skyRed, "skyRed");
         requireNonNegativeFinite(skyGreen, "skyGreen");
@@ -53,7 +51,6 @@ public final class EnvironmentState {
         this.sunGreen = sunGreen;
         this.sunBlue = sunBlue;
         this.sunIntensity = sunIntensity;
-        this.cameraMedium = Objects.requireNonNull(cameraMedium, "cameraMedium");
     }
 
     /**
@@ -189,14 +186,6 @@ public final class EnvironmentState {
         return sunIntensity;
     }
 
-    /**
-     * Returns the participating medium containing the camera.
-     *
-     * @return non-null immutable camera medium
-     */
-    public Medium cameraMedium() {
-        return cameraMedium;
-    }
 
     /**
      * Starts an independent builder initialized from this complete environment.
@@ -222,7 +211,7 @@ public final class EnvironmentState {
                 && Float.compare(sunGreen, environment.sunGreen) == 0
                 && Float.compare(sunBlue, environment.sunBlue) == 0
                 && Float.compare(sunIntensity, environment.sunIntensity) == 0
-                && cameraMedium.equals(environment.cameraMedium);
+;
     }
 
     @Override
@@ -230,7 +219,7 @@ public final class EnvironmentState {
         return Objects.hash(
                 skyRed, skyGreen, skyBlue, ambientIntensity,
                 sunDirectionX, sunDirectionY, sunDirectionZ,
-                sunRed, sunGreen, sunBlue, sunIntensity, cameraMedium
+                sunRed, sunGreen, sunBlue, sunIntensity
         );
     }
 
@@ -248,7 +237,6 @@ public final class EnvironmentState {
                 + ", sunGreen=" + sunGreen
                 + ", sunBlue=" + sunBlue
                 + ", sunIntensity=" + sunIntensity
-                + ", cameraMedium=" + cameraMedium
                 + ']';
     }
 
@@ -267,7 +255,6 @@ public final class EnvironmentState {
         private float sunGreen = 1.0F;
         private float sunBlue = 1.0F;
         private float sunIntensity;
-        private Medium cameraMedium = Medium.vacuum();
 
         private Builder() {
         }
@@ -284,7 +271,6 @@ public final class EnvironmentState {
             sunGreen = source.sunGreen;
             sunBlue = source.sunBlue;
             sunIntensity = source.sunIntensity;
-            cameraMedium = source.cameraMedium;
         }
 
         /**
@@ -354,17 +340,6 @@ public final class EnvironmentState {
             return this;
         }
 
-        /**
-         * Selects the participating medium containing the camera.
-         *
-         * @param value non-null immutable medium
-         * @return this builder
-         * @throws NullPointerException if {@code value} is {@code null}
-         */
-        public Builder cameraMedium(Medium value) {
-            cameraMedium = Objects.requireNonNull(value, "cameraMedium");
-            return this;
-        }
 
         /**
          * Validates and returns an immutable environment.
@@ -376,7 +351,7 @@ public final class EnvironmentState {
             return new EnvironmentState(
                     skyRed, skyGreen, skyBlue, ambientIntensity,
                     sunDirectionX, sunDirectionY, sunDirectionZ,
-                    sunRed, sunGreen, sunBlue, sunIntensity, cameraMedium
+                    sunRed, sunGreen, sunBlue, sunIntensity
             );
         }
     }
@@ -385,8 +360,7 @@ public final class EnvironmentState {
         private static final EnvironmentState INSTANCE = new EnvironmentState(
                 0.0F, 0.0F, 0.0F, 0.0F,
                 0.0F, 1.0F, 0.0F,
-                1.0F, 1.0F, 1.0F, 0.0F,
-                Medium.vacuum()
+                1.0F, 1.0F, 1.0F, 0.0F
         );
     }
 }

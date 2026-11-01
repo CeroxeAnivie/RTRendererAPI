@@ -11,7 +11,7 @@ description = "Interactive hex-ball sample and GPU smoke workload for RTRenderer
 
 dependencies {
     implementation(project(":renderer-api"))
-    implementation(project(":renderer-luxcore"))
+    implementation(project(":renderer-rtxpt"))
     runtimeOnly(project(":renderer-nvidia"))
     // The test-only gallery profiler reads core counters; the demo artifact stays API-only.
     testImplementation(project(":renderer-core"))
@@ -61,7 +61,7 @@ tasks.withType<JavaExec>().configureEach {
         "--enable-native-access=ALL-UNNAMED"
     )
     unsafeAccessJvmArg?.let { jvmArgs(it) }
-    systemProperties(System.getProperties().stringPropertyNames().filter { it.startsWith("top.ceroxe.rt.luxcore.") }.associateWith(System::getProperty))
+    systemProperties(System.getProperties().stringPropertyNames().filter { it.startsWith("top.ceroxe.rt.rtxpt.") }.associateWith(System::getProperty))
     // Process isolation does not inherit Gradle JVM system properties. Forward only the three
     // reviewed demo controls so :run and the executable JAR expose the same feature policy.
     listOf("demo.feature-profile", "demo.disable-fg", "demo.fg-multiplier").forEach { propertyName ->
@@ -71,12 +71,12 @@ tasks.withType<JavaExec>().configureEach {
     }
 }
 
-tasks.register<JavaExec>("luxcoreMediumBenchmark") {
+tasks.register<JavaExec>("rtxptMediumBenchmark") {
     group = "verification"
     dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath
     workingDir(rootProject.projectDir)
-    mainClass.set("demo.LuxCoreMediumBenchmark")
+    mainClass.set("demo.RtxptMediumBenchmark")
     jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
 }
 
@@ -199,93 +199,10 @@ tasks.check {
 }
 
 // Deliberate GPU launch only: never a dependency of assemble or check.
-tasks.register<JavaExec>("mediumGalleryDemo") {
+tasks.register<JavaExec>("rtxptMediumDemo") {
     group = "application"
-    description = "Runs the 2K/1-spp/2x-FG optical gallery (executes GPU work)."
     dependsOn(tasks.classes)
     classpath = sourceSets.main.get().runtimeClasspath
-    mainClass.set("demo.MediumGalleryDemo")
-    providers.gradleProperty("galleryArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
-}
-
-tasks.register<JavaExec>("mediumGalleryPerformanceBenchmark") {
-    group = "verification"
-    description = "Measures the combined micro-all scene at native 1080p/1 spp by default; --suite=all retains the original matrix and --suite=micro-checks verifies mutually exclusive switches."
-    dependsOn(tasks.testClasses)
-    classpath = files(sourceSets.main.get().output, sourceSets.test.get().output,
-        configurations.testRuntimeClasspath.get().incoming.artifactView {
-            componentFilter { component ->
-                component !is org.gradle.api.artifacts.component.ProjectComponentIdentifier ||
-                    component.projectPath != ":renderer-nvidia"
-            }
-        }.files)
-    mainClass.set("demo.MediumGalleryPerformanceBenchmark")
-    providers.gradleProperty("galleryControlJar").orNull?.let { controlJar ->
-        classpath = files(file(controlJar), classpath.filter { !it.name.startsWith("renderer-core-") })
-    }
-    providers.gradleProperty("galleryPerformanceArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
-}
-
-tasks.register<JavaExec>("mediumCertificationDemo") {
-    group = "application"
-    description = "Runs the selectable 7.0.0 medium route certification lab (executes GPU work)."
-    dependsOn(tasks.classes)
-    classpath = sourceSets.main.get().runtimeClasspath
-    mainClass.set("demo.MediumCertificationDemo")
-    providers.gradleProperty("certificationArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
-}
-
-val mediumCertificationSceneSelfTest = tasks.register<JavaExec>("mediumCertificationSceneSelfTest") {
-    group = "verification"
-    description = "Validates all isolated medium certification fixtures and hotkey mappings without GPU work."
-    dependsOn(tasks.testClasses)
-    classpath = sourceSets.test.get().runtimeClasspath
-    mainClass.set("demo.MediumCertificationSceneSelfTest")
-}
-tasks.check { dependsOn(mediumCertificationSceneSelfTest) }
-
-val mediumGallerySceneSelfTest = tasks.register<JavaExec>("mediumGallerySceneSelfTest") {
-    group = "verification"
-    description = "Validates the optical gallery fixture and defaults without executing GPU work."
-    dependsOn(tasks.testClasses)
-    classpath = sourceSets.test.get().runtimeClasspath
-    mainClass.set("demo.MediumGallerySceneSelfTest")
-}
-tasks.check { dependsOn(mediumGallerySceneSelfTest) }
-
-// Requires explicit approval to execute; kept outside check/assemble.
-tasks.register<JavaExec>("mediumGalleryNativeSelfTest") {
-    group = "verification"
-    description = "Executes the GPU gallery feature/image and representation parity gate."
-    dependsOn(tasks.testClasses)
-    // These image checks disable vendor features and exercise core transport.
-    classpath = files(sourceSets.main.get().output, sourceSets.test.get().output,
-        configurations.testRuntimeClasspath.get().incoming.artifactView {
-            componentFilter { component ->
-                component !is org.gradle.api.artifacts.component.ProjectComponentIdentifier ||
-                    component.projectPath != ":renderer-nvidia"
-            }
-        }.files)
-    mainClass.set("demo.MediumGalleryNativeSelfTest")
-    providers.gradleProperty("galleryControlJar").orNull?.let { controlJar ->
-        classpath = files(file(controlJar), classpath.filter { !it.name.startsWith("renderer-core-") })
-    }
-    providers.gradleProperty("galleryOutput").orNull?.let { systemProperty("top.ceroxe.rt.gallery.output", it) }
-    if (providers.gradleProperty("galleryRawHdr").isPresent) systemProperty("top.ceroxe.rt.gallery.rawHdr", "true")
-    providers.gradleProperty("galleryTestScene").orNull?.let { systemProperty("top.ceroxe.rt.gallery.onlyPreset",it) }
-    val validationLog = layout.buildDirectory.file("reports/medium-gallery/validation.jsonl")
-    systemProperty("top.ceroxe.rt.validation.logPath", validationLog.get().asFile.absolutePath)
-    doFirst {
-        val log = validationLog.get().asFile
-        log.parentFile.mkdirs()
-        log.writeText("", Charsets.UTF_8)
-    }
-    doLast {
-        val events = validationLog.get().asFile.readLines(Charsets.UTF_8)
-            .filter(String::isNotBlank).map { JsonSlurper().parseText(it) as Map<*, *> }
-        check(events.any { it["event"] == "validation" }) { "No Vulkan validation evidence was produced" }
-        check(events.none { it["severity"] == "ERROR" || it["severity"] == "WARNING" || it["event"] == "dropSummary" }) {
-            "Vulkan validation reported warnings, errors or dropped evidence"
-        }
-    }
+    mainClass.set("demo.RtxptMediumDemo")
+    providers.gradleProperty("rtxptArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
 }

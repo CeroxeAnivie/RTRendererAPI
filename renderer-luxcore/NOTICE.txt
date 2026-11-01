@@ -1,9 +1,0 @@
-This module calls the unmodified LuxCoreRender 2.11.2 public C++ API through JNI.
-Upstream: https://github.com/LuxCoreRender/LuxCore
-Commit: b872186d2fe995a762f73708c606847eed55843e
-License: Apache License 2.0, see upstream COPYING.txt and AUTHORS.txt.
-
-The official runtime and matching public headers are downloaded separately by
-tools/Install-LuxCoreSdk.ps1 with pinned SHA-256 digests. They are not copied into
-the renderer-core implementation. Upstream runtime third-party licenses remain
-applicable; redistributors must retain the SDK license notices.

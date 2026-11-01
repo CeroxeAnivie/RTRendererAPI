@@ -41,16 +41,16 @@ public final class HexBallDemo {
 
     public static void main(String[] arguments) throws Exception {
         if (java.util.Arrays.asList(arguments).contains("--medium-certification")) {
-            MediumCertificationDemo.main(java.util.Arrays.stream(arguments)
+            RtxptMediumDemo.main(java.util.Arrays.stream(arguments)
                     .filter(arg -> !arg.equals("--medium-certification")).toArray(String[]::new));
             return;
         }
         if (java.util.Arrays.asList(arguments).contains("--medium-gallery")) {
-            MediumGalleryDemo.main(java.util.Arrays.stream(arguments).filter(arg -> !arg.equals("--medium-gallery")).toArray(String[]::new));
+            RtxptMediumDemo.main(java.util.Arrays.stream(arguments).filter(arg -> !arg.equals("--medium-gallery")).toArray(String[]::new));
             return;
         }
         if (java.util.Arrays.asList(arguments).contains("--media")) {
-            MediumTransportDemo.main(java.util.Arrays.stream(arguments).filter(arg -> !arg.equals("--media")).toArray(String[]::new));
+            RtxptMediumDemo.main(java.util.Arrays.stream(arguments).filter(arg -> !arg.equals("--media")).toArray(String[]::new));
             return;
         }
         if (arguments.length == 0 || java.util.Arrays.asList(arguments).contains("--controls")) {

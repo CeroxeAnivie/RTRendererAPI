@@ -797,28 +797,7 @@ static final int FRAME_MEDIUM_BOUNDARY_COUNT_WORD = 445;
             words[INSTANCE_DIRECTIONAL_DIFFUSE_SECOND_INTENSITY_WORD] =
                     Float.floatToRawIntBits(directionalDiffuse.secondIntensity());
         }
-        if (mediumBoundary != null) {
-            var medium = mediumBoundary.medium();
-            words[INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD] = 1 | (mediumBoundary.surfaceInteraction() ? 0 : 2);
-            words[INSTANCE_MEDIUM_BOUNDARY_PRIORITY_WORD] = mediumBoundary.priority();
-            words[INSTANCE_MEDIUM_BOUNDARY_ORIENTATION_WORD] = mediumBoundary.orientation().ordinal();
-            var extinction = medium.extinction();
-            words[INSTANCE_MEDIUM_EXTINCTION_WORD] = Float.floatToRawIntBits(extinction.red());
-            words[INSTANCE_MEDIUM_EXTINCTION_WORD + 1] = Float.floatToRawIntBits(extinction.green());
-            words[INSTANCE_MEDIUM_EXTINCTION_WORD + 2] = Float.floatToRawIntBits(extinction.blue());
-            words[INSTANCE_MEDIUM_SCATTERING_WORD] = Float.floatToRawIntBits(medium.scattering().red());
-            words[INSTANCE_MEDIUM_SCATTERING_WORD + 1] = Float.floatToRawIntBits(medium.scattering().green());
-            words[INSTANCE_MEDIUM_SCATTERING_WORD + 2] = Float.floatToRawIntBits(medium.scattering().blue());
-            words[INSTANCE_MEDIUM_DENSITY_WORD] = Float.floatToRawIntBits(medium.density());
-            words[INSTANCE_MEDIUM_IOR_WORD] = Float.floatToRawIntBits(medium.indexOfRefraction());
-            words[INSTANCE_MEDIUM_PHASE_ANISOTROPY_WORD] = Float.floatToRawIntBits(medium.anisotropy());
-            words[INSTANCE_MEDIUM_EMISSION_WORD] = Float.floatToRawIntBits(medium.emission().red());
-            words[INSTANCE_MEDIUM_EMISSION_WORD + 1] = Float.floatToRawIntBits(medium.emission().green());
-            words[INSTANCE_MEDIUM_EMISSION_WORD + 2] = Float.floatToRawIntBits(medium.emission().blue());
-        }
-        MediumDensitySupport.pack(words, INSTANCE_MEDIUM_DENSITY_TEXTURE_WORD,
-                mediumBoundary == null ? top.ceroxe.rt.renderer.api.Medium.vacuum() : mediumBoundary.medium(),
-                transform, textureSlots);
+        if (mediumBoundary != null) throw new IllegalArgumentException("Managed medium boundaries require RTXPT");
         return words;
     }
 

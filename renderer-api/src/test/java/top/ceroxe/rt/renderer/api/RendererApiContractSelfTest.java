@@ -2097,88 +2097,13 @@ public final class RendererApiContractSelfTest {
    }
 
    private static void assertMediumRecords() {
-      require(Rgb.class.isRecord() && Medium.class.isRecord() && MediumBoundary.class.isRecord()
-              && MediumTransport.class.isRecord() && MediumDensityField.class.isRecord(),
-              "medium API must expose direct immutable records");
-      require(new Rgb(-0.0f, 0, 0).equals(Rgb.ZERO), "RGB signed zero must be canonical");
-      expect(IllegalArgumentException.class, () -> new Rgb(Float.NaN, 0, 0));
-      expect(IllegalArgumentException.class, () -> new Rgb(-1, 0, 0));
-      expect(IllegalArgumentException.class, () -> new Rgb(Float.MAX_VALUE, 0, 0).multiply(2));
-      var uniform = MediumDensityField.uniform();
-      require(uniform.isUniform() && uniform.textureAssetId() == -1 && uniform.slices() == 1
-                      && uniform.transform().equals(AffineTransform.identity()),
-              "uniform density must not require a texture or coordinate transform");
-      require(uniform.equals(new MediumDensityField(-1, 1, AffineTransform.identity())),
-              "the direct density constructor must preserve uniform value semantics");
-      float[] densityTransform = { 2, 0, 0, .25f, 0, 3, 0, .5f, 0, 0, 4, .75f };
-      var grid = MediumDensityField.grid(Long.MAX_VALUE, 4, new AffineTransform(densityTransform));
-      densityTransform[0] = 99;
-      require(!grid.isUniform() && grid.textureAssetId() == Long.MAX_VALUE && grid.slices() == 4
-                      && grid.transform().element(0) == 2 && grid.transform().element(3) == .25f,
-              "density grids must retain immutable transforms and the full non-negative texture ID range");
-      expect(ReadOnlyBufferException.class, () -> grid.transform().elements().put(0, 99));
-      require(!MediumDensityField.grid(0, 1, AffineTransform.identity()).isUniform(),
-              "one-slice density textures must remain spatial grids");
-      expect(IllegalArgumentException.class, () -> new MediumDensityField(-2, 1, AffineTransform.identity()));
-      expect(IllegalArgumentException.class, () -> MediumDensityField.grid(-1, 1, AffineTransform.identity()));
-      expect(IllegalArgumentException.class, () -> MediumDensityField.grid(0, 0, AffineTransform.identity()));
-      expect(IllegalArgumentException.class, () -> new MediumDensityField(-1, 2, AffineTransform.identity()));
-      expect(IllegalArgumentException.class, () -> new MediumDensityField(-1, 1, grid.transform()));
-      expect(NullPointerException.class, () -> MediumDensityField.grid(0, 1, null));
-      var medium = new Medium(new Rgb(.1f,.2f,.3f), new Rgb(.03f,.04f,.05f), Rgb.ZERO, 2, 1.333f, .5f);
-      require(Math.abs(medium.extinction().red() - .13f) < 1e-7f && medium.participating(),
-              "absorption and scattering must compose into extinction");
-      require(Medium.vacuum().isVacuum() && !Medium.vacuum().participating(), "vacuum classification");
-      require(!new Medium(Rgb.ZERO,Rgb.ZERO,Rgb.ZERO,0,1.5f,0).isVacuum(), "a dielectric must retain its IOR at zero density");
-      require(!medium.withDensity(0).participating(), "zero density must disable coefficient transport");
-      require(medium.densityField().isUniform(), "homogeneous construction must default to uniform density");
-      var heterogeneous = medium.withDensityField(grid);
-      require(heterogeneous.participating() && heterogeneous.densityField().equals(grid)
-                      && heterogeneous.withDensity(3).densityField().equals(grid)
-                      && heterogeneous.withDensity(0).densityField().equals(grid)
-                      && !heterogeneous.withDensity(0).participating()
-                      && heterogeneous.extinction().equals(medium.extinction()),
-              "density changes must preserve the grid and unscaled optical coefficients");
-      require(heterogeneous.withDensityField(uniform).equals(medium),
-              "replacing a density grid with uniform density must restore homogeneous value semantics");
-      require(Medium.vacuum().withDensityField(grid).withDensity(1).isVacuum()
-                      && !Medium.vacuum().withDensityField(grid).withDensity(1).participating(),
-              "a density grid cannot create transport without optical coefficients");
-      require(new Medium(Rgb.ZERO, Rgb.ZERO, Rgb.WHITE, 1, 1, 0, grid).participating(),
-              "heterogeneous emission-only media must retain volume transport");
-      expect(NullPointerException.class, () -> medium.withDensityField(null));
-      expect(IllegalArgumentException.class, () -> new Medium(Rgb.WHITE,Rgb.ZERO,Rgb.ZERO,Float.POSITIVE_INFINITY,1,0));
-      expect(IllegalArgumentException.class, () -> new Medium(new Rgb(Float.MAX_VALUE,0,0),Rgb.WHITE,Rgb.ZERO,2,1,0));
-      expect(IllegalArgumentException.class, () -> new Medium(Rgb.ZERO,Rgb.ZERO,Rgb.ZERO,1,1,1));
-      require(!MediumBoundary.volume(medium).surfaceInteraction() && MediumBoundary.surface(medium).surfaceInteraction(),
-              "boundary kind must be explicit");
-      require(MediumBoundary.volume(medium).withPriority(Integer.MIN_VALUE).priority() == Integer.MIN_VALUE,
-              "signed priorities must be preserved");
-      var exact = MediumTransport.balanced().withLightSamples(0).withTransmittanceCutoff(0);
-      require(exact.lightSamples() == 0 && exact.transmittanceCutoff() == 0, "exact enumeration and disabled cutoff controls");
-      require(exact.withLightSamples(8).lightSamples() == 8, "bounded light sampling must support eight samples");
-      require(exact.scatteringBounces() == 0
-                      && new MediumTransport(12, 1, 8, 4, 512, 1e-4f).equals(MediumTransport.balanced()),
-              "balanced and six-argument budgets must default to direct single scattering");
-      var multiple = exact.withScatteringBounces(MediumTransport.MAX_SCATTERING_BOUNCES);
-      for (MediumTransport changed : new MediumTransport[] {
-              multiple.withMaxEvents(32), multiple.withOpticalSamples(8),
-              multiple.withScatteringSteps(64), multiple.withLightSamples(8),
-              multiple.withMaxDistance(1024), multiple.withTransmittanceCutoff(.01f) }) {
-         require(changed.scatteringBounces() == 8,
-                 "changing another work budget must preserve additional scattering bounces");
-      }
-      require(multiple.withScatteringBounces(0).equals(exact),
-              "disabling additional volume scattering must preserve all other budgets");
-      expect(IllegalArgumentException.class, () -> exact.withScatteringBounces(-1));
-      expect(IllegalArgumentException.class, () -> exact.withScatteringBounces(9));
-      expect(IllegalArgumentException.class, () -> exact.withMaxEvents(33));
-      expect(IllegalArgumentException.class, () -> exact.withOpticalSamples(0));
-      expect(IllegalArgumentException.class, () -> exact.withScatteringSteps(65));
-      expect(IllegalArgumentException.class, () -> exact.withLightSamples(-1));
-      expect(IllegalArgumentException.class, () -> exact.withLightSamples(9));
-      expect(IllegalArgumentException.class, () -> exact.withMaxDistance(Float.NaN));
-      expect(IllegalArgumentException.class, () -> exact.withTransmittanceCutoff(1));
+      var m = new Medium(new Rgb(0.1f, 0.2f, 0.3f), 1.5f);
+      require(Medium.class.getRecordComponents().length == 2, "Managed medium has only absorption and IOR");
+      require(MediumBoundary.surface(m).withPriority(14).priority() == 14, "Native priority range");
+      expect(IllegalArgumentException.class, () -> new MediumBoundary(m, 15));
+      expect(IllegalArgumentException.class, () -> new MediumBoundary(m, -1));
+      expect(IllegalArgumentException.class, () -> new Medium(Rgb.ZERO, 0.9f));
+      require(Medium.vacuum().isVacuum(), "Vacuum contract");
    }
 
    private static void assertTransformAndLightingValidation() {

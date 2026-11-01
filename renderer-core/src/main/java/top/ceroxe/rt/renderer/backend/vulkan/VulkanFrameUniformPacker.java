@@ -158,17 +158,6 @@ final class VulkanFrameUniformPacker {
                 environment.sunRed(), environment.sunGreen(), environment.sunBlue());
         putFloat(words, VulkanGpuSceneAbi.FRAME_SUN_INTENSITY_WORD, environment.sunIntensity());
 
-        top.ceroxe.rt.renderer.api.Medium medium = environment.cameraMedium();
-        var extinction = medium.extinction();
-        putVec3(words, VulkanGpuSceneAbi.FRAME_MEDIUM_EXTINCTION_WORD,
-                extinction.red(), extinction.green(), extinction.blue());
-        putVec3(words, VulkanGpuSceneAbi.FRAME_MEDIUM_SCATTERING_WORD,
-                medium.scattering().red(), medium.scattering().green(), medium.scattering().blue());
-        putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_DENSITY_WORD, medium.density());
-        putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_IOR_WORD, medium.indexOfRefraction());
-        putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_PHASE_ANISOTROPY_WORD, medium.anisotropy());
-        putVec3(words, VulkanGpuSceneAbi.FRAME_MEDIUM_EMISSION_WORD,
-                medium.emission().red(), medium.emission().green(), medium.emission().blue());
         var caustics = frame.caustics();
         putInt(words, VulkanGpuSceneAbi.FRAME_CAUSTIC_PHOTONS_WORD, caustics.photons());
         putInt(words, VulkanGpuSceneAbi.FRAME_CAUSTIC_MAX_EVENTS_WORD, caustics.maxEvents());
@@ -177,16 +166,11 @@ final class VulkanFrameUniformPacker {
                 (float) caustics.centerX(), (float) caustics.centerY(), (float) caustics.centerZ());
         putFloat(words, VulkanGpuSceneAbi.FRAME_CAUSTIC_REGION_RADIUS_WORD, caustics.radius());
         putFloat(words, VulkanGpuSceneAbi.FRAME_CAUSTIC_NORMAL_THRESHOLD_WORD, caustics.normalThreshold());
-        var transport = frame.mediumTransport();
-        putInt(words, VulkanGpuSceneAbi.FRAME_OPTICAL_MAX_EVENTS_WORD, transport.maxEvents());
-        putInt(words, VulkanGpuSceneAbi.FRAME_OPTICAL_SAMPLES_WORD, transport.opticalSamples());
-        putInt(words, VulkanGpuSceneAbi.FRAME_SCATTERING_STEPS_WORD, transport.scatteringSteps());
-        putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_MAX_DISTANCE_WORD, transport.maxDistance());
-        putInt(words, VulkanGpuSceneAbi.FRAME_SCATTERING_LIGHT_SAMPLES_WORD, transport.lightSamples());
-        putFloat(words, VulkanGpuSceneAbi.FRAME_TRANSMITTANCE_CUTOFF_WORD, transport.transmittanceCutoff());
-        putInt(words, VulkanGpuSceneAbi.FRAME_SCATTERING_BOUNCES_WORD, transport.scatteringBounces());
-        MediumDensitySupport.packEnvironment(words, VulkanGpuSceneAbi.FRAME_MEDIUM_DENSITY_TEXTURE_WORD, medium,
-                textureSlots);
+        // Reserved ABI lanes stay zero: managed optical transport no longer executes on Vulkan.
+        putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_IOR_WORD, 1);
+        putInt(words, VulkanGpuSceneAbi.FRAME_OPTICAL_MAX_EVENTS_WORD, 12);
+        putInt(words, VulkanGpuSceneAbi.FRAME_OPTICAL_SAMPLES_WORD, 1);
+        putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_MAX_DISTANCE_WORD, 512);
         putInt(words, VulkanGpuSceneAbi.FRAME_LIGHT_SLOT_UPPER_BOUND_WORD, lightSlotUpperBound);
         putLong(words, VulkanGpuSceneAbi.FRAME_SCENE_REVISION_WORD, activeSceneRevision);
         DistanceFogState fog = frame.fog();
@@ -257,9 +241,6 @@ final class VulkanFrameUniformPacker {
         putDouble(words, VulkanGpuSceneAbi.FRAME_CAMERA_DELTA_WORD + 4,
                 frame.camera().z() - previousCamera.z());
         int featureFlags = denoisingActive ? VulkanGpuSceneAbi.FEATURE_FLAG_DENOISING_ACTIVE : 0;
-        if (frame.mediumTransport().firstInterfaceSampling()
-                == top.ceroxe.rt.renderer.api.MediumTransport.FirstInterfaceSampling.STOCHASTIC_SINGLE_BRANCH)
-            featureFlags |= VulkanGpuSceneAbi.FEATURE_FLAG_STOCHASTIC_DIELECTRIC;
         if (reconstructionActive && !exactProjection) {
             featureFlags |= VulkanGpuSceneAbi.FEATURE_FLAG_RECONSTRUCTION_ACTIVE;
         }
