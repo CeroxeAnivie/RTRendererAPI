@@ -53,6 +53,14 @@ final class DemoRendererProfile {
                 .build();
     }
 
+    static RendererConfig rtxptMediumInteractive(boolean nativeResolution) {
+        var base = nativeResolution
+                ? RendererConfig.builder().cpuFrameReadbackEnabled(false).build()
+                : RendererConfig.pathTracedPresentation();
+        return DemoApiControls.configure(base.copyBuilder()
+                .frameGeneration(configuredGenerationPolicy()).gpuTimingsEnabled(true).build());
+    }
+
     static RenderFrameRequest.Builder frame(
             long sequence,
             int width,

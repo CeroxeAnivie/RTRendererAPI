@@ -42,7 +42,32 @@ public final class DemoFeatureIntegrationSelfTest {
         independentPublicApiControls();
         glassBallsHavePhysicalReflectionAndClosedInteriors();
         rtxptRealtimeRetainsFastSrAndDemoFgControl();
+        rtxptMediumHasSupportedDistinctScenesAndDefaultFg();
         System.out.println("DemoFeatureIntegrationSelfTest passed");
+    }
+    private static void rtxptMediumHasSupportedDistinctScenesAndDefaultFg() {
+        String property=DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY;
+        String previous=System.getProperty(property);
+        try {
+            System.clearProperty(property);
+            var profile=DemoRendererProfile.rtxptMediumInteractive(false);
+            require(profile.denoising().preference().requested(),"Medium retains recommended path-traced reconstruction");
+            require(profile.pathTracing().radianceCache().requested(),"Medium retains upstream cache policy");
+            require(profile.frameGeneration().preference().requested()
+                &&profile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X,"Medium defaults to 2x FG");
+            System.setProperty(property,"true");
+            require(DemoRendererProfile.rtxptMediumInteractive(false).frameGeneration().equals(FrameGenerationOptions.disabled()),"Medium explicit FG off");
+            int[] expected={6,4,5};
+            for(int i=0;i<RtxptMediumScene.PRESETS.size();i++) {
+                var scene=RtxptMediumScene.create(1,RtxptMediumScene.PRESETS.get(i));
+                require(scene.upserts().instances().size()==expected[i],"Distinct supported medium presets");
+                for(var mesh:scene.upserts().meshes())require(mesh.isClosedManifold(),"Closed dielectric geometry");
+            }
+            for(String removed:List.of("scatter","density","emission","infinite","camera-medium")) {
+                try { RtxptMediumScene.create(1,removed);throw new AssertionError("Unsupported preset accepted: "+removed); }
+                catch(IllegalArgumentException expectedFailure) { }
+            }
+        } finally { restoreProperty(property,previous); }
     }
     private static void rtxptRealtimeRetainsFastSrAndDemoFgControl() {
         String property=DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY;

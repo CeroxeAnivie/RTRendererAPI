@@ -4,7 +4,7 @@ RTRendererAPI 适合嵌入 Java 25 或更高版本的桌面或引擎进程。普
 
 公共模型是厂商中立、宿主无关的渲染契约：场景、相机、exact clip-space projection、资源所有权和能力状态均不包含游戏或引擎专用字段。Windows NVIDIA Vulkan 是当前发布实现，不是公共 API 的身份。
 
-普通 retained-scene 模式提交场景和每帧预算，内置后端自动选择 surface、小容量或通用介质程序。专家模式通过显式资源/命令事务或 `SceneShaderProgram` 阶段替换表达，自定义阶段不会被普通模式的优化策略覆盖；绑定、同步与资源生命周期保持显式。两者共用 `Renderer` 和 `RendererConfig`，配置对象本身不切换提交语义。
+普通 retained-scene 模式提交场景、材质、实例和帧请求。透明介质显式选择可选 `rtxpt` 后端；普通表面与通用命令继续使用 `vulkan-rt`。Vulkan 专家模式通过显式资源/命令事务或 `SceneShaderProgram` 阶段替换表达，自定义阶段不会被普通模式的优化策略覆盖；绑定、同步与资源生命周期保持显式。两者共用 `Renderer` 和 `RendererConfig`，配置对象本身不切换提交语义。后端不是同义替换，具体选择见 [发布前 API 检查](quality/api-release-review-20261101.md)。
 
 Maven 坐标是 `top.ceroxe.rt:renderer-api:7.0.0`。本轮从源码构建到本地 Maven 仓库使用，不上传 Central。只声明这一个依赖即可；Windows Vulkan 后端、NVIDIA provider 与经过完整性校验的 native runtime 会传递解析。消费方不需要安装 SDK、配置 SDK root 或手工复制 DLL。
 
@@ -365,7 +365,7 @@ RendererConfig explicitProduction = RendererConfig.builder()
 
 ### 完整专家配置
 
-专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
+本节配置用于 Vulkan 后端；RTXPT 的固定倍率、路径预算和能力边界见 [7.0.0](7.0.0.md)。专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
 显式覆盖 7.0.0 中保留的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
 NRD 不可用时保留内建时域路径，FG/MFG 不可用时继续发布原生帧。SER 和 RTXMU 独立
 协商，某一项不支持不会阻止其他项启用。

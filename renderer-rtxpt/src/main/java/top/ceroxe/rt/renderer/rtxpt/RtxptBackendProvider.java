@@ -10,9 +10,10 @@ public final class RtxptBackendProvider implements RendererBackendProvider {
     @Override public List<RendererGpuDevice> availableGpuDevices(){return List.of();}
     @Override public ProbeResult probe(RendererConfig config){
         if(!System.getProperty("os.name","").startsWith("Windows"))return ProbeResult.unsupported("RTXPT managed D3D12 requires Windows");
+        var issue=RtxptInputContract.configurationIssue(config);
+        if(issue.isPresent())return ProbeResult.unsupported(issue.orElseThrow());
         try {
             if(!Files.isRegularFile(RtxptNative.bridge()))return ProbeResult.unsupported("Build RTXPT JNI host first");
-            if(config.cpuFrameReadbackEnabled())return ProbeResult.unsupported("Managed presentation is GPU-native; CPU readback is not exposed");
             return ProbeResult.compatible("NVIDIA RTXPT 1.9.0 in-process D3D12 managed rendering");
         }catch(IllegalStateException e){return ProbeResult.unsupported(e.getMessage());}
     }

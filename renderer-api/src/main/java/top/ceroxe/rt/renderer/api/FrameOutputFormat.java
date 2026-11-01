@@ -3,9 +3,10 @@ package top.ceroxe.rt.renderer.api;
 /**
  * Renderer-owned native frame encoding selected for the lifetime of a renderer.
  *
- * <p>This policy controls frames obtained through an expert native-interoperability extension.
- * {@link FrameSnapshot} remains a managed, display-ready RGBA8 snapshot for both choices so beginner
- * integrations never need to decode floating-point pixels or perform tone mapping.</p>
+ * <p>This policy controls both managed frames and native-interoperability output. A
+ * {@link FrameSnapshot} preserves the source encoding: inspect {@link FrameView#format()}
+ * before reading pixels. HDR snapshots contain linear half-float channels and are not
+ * implicitly converted to display-ready RGBA8. Use {@link #SDR_RGBA8} for ordinary SDR display.</p>
  */
 public enum FrameOutputFormat {
     /**

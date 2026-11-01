@@ -20,6 +20,7 @@ public final class RtxptAdapterSelfTest {
     static RenderFrameRequest frame(long sequence){return RenderFrameRequest.builder(sequence,1920,1080,camera()).minimumSceneRevision(1)
         .environment(EnvironmentState.builder().skyRadiance(.4f,.6f,.9f).ambientIntensity(1).sunDirection(0,-1,0).sunIntensity(4).build()).build();}
     public static void main(String[] args) throws Exception {
+        inputContractRejectsIgnoredControls();
         var s=new RtxptScene();s.retain(scene(1));var frame=frame(0);var items=s.items(frame);
         var mesh=s.meshes.get(1L);var expanded=RtxptScene.ExportGeometry.from(mesh);
         require(expanded.vertexCount()==36&&expanded.normals().remaining()==108,"Missing normals become flat triangle-corner normals");
@@ -130,6 +131,36 @@ public final class RtxptAdapterSelfTest {
             require(!lightJson.contains("NaN")&&!lightJson.contains("Infinity"),"Directionless point lights export finite identity rotations");
         } finally {try(var walk=Files.walk(dir)){for(var p:walk.sorted(Comparator.reverseOrder()).toList())Files.delete(p);}}
         System.out.println("RTXPT adapter contracts PASS");
+    }
+    private static void inputContractRejectsIgnoredControls() {
+        var config=RendererConfig.pathTracedPresentation();
+        RtxptInputContract.validateConfiguration(config);
+        rejected(()->RtxptInputContract.validateConfiguration(config.copyBuilder()
+            .sceneShaders(SceneShaderProgram.builder().shader(ShaderStage.RAY_MISS,"#version 460\nvoid main() {}").build()).build()),
+            "Custom shaders are rejected before native initialization");
+        rejected(()->RtxptInputContract.validateConfiguration(config.copyBuilder()
+            .frameOutputFormat(FrameOutputFormat.LINEAR_HDR_RGBA16F).build()),"HDR export cannot silently become SDR presentation");
+        rejected(()->RtxptInputContract.validateConfiguration(config.copyBuilder().validationEnabled(true).build()),
+            "Unimplemented validation control is rejected");
+        RtxptInputContract.validateFrame(frame(0));
+        rejected(()->RtxptInputContract.validateFrame(frame(0).toBuilder().antiAliasing(AntiAliasingState.multisampled(4)).build()),
+            "Frame-local deterministic multisampling cannot silently become one sample");
+        rejected(()->RtxptInputContract.validateFrame(frame(0).toBuilder().lightmap(new LightmapState(1,new int[LightmapState.ENTRY_COUNT])).build()),
+            "Authored lightmap cannot silently disappear");
+        rejected(()->RtxptInputContract.validateFrame(frame(0).toBuilder().textureSampling(TextureSamplingState.anisotropic(8)).build()),
+            "Frame-local texture sampling cannot silently disappear");
+        rejected(()->RtxptInputContract.validateFrame(frame(0).toBuilder().resetTemporalHistory(HistoryResetReason.EXPLICIT_RESET).build()),
+            "Unsupported explicit temporal reset cannot be accepted as executed");
+        RtxptInputContract.requireAdvancingRevision(0,0,false);
+        RtxptInputContract.requireAdvancingRevision(1,0,true);
+        try { RtxptInputContract.requireAdvancingRevision(1,1,true);throw new AssertionError("Duplicate scene revision accepted"); }
+        catch(SceneRevisionException expected) { }
+        try { RtxptInputContract.requireAdvancingRevision(0,1,true);throw new AssertionError("Stale scene revision accepted"); }
+        catch(SceneRevisionException expected) { }
+    }
+    private static void rejected(Runnable action,String message) {
+        try { action.run();throw new AssertionError(message); }
+        catch(IllegalArgumentException expected) { }
     }
     static void require(boolean value,String message){if(!value)throw new AssertionError(message);}
 }

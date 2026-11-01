@@ -24,7 +24,7 @@
 >
 > **推荐场景**：Java 桌面渲染器、离屏光追、实时 RTX 预览、已有 Vulkan 管线的 GPU 帧集成。
 
-> **7.0.0 候选状态**：介质功能仍在闭环和验收中。当前支持矩阵、明确拒绝的组合和真实制品验收以
+> **7.0.0 候选状态**：RTXPT 托管透明介质已按收缩后的合同验收；它不替代通用 Vulkan 后端。当前支持矩阵、明确拒绝的组合和真实制品验收以
 > [版本说明](docs/7.0.0.md)及[验收记录](docs/quality/verification-report.md#7-0-0-package-validation-20261029)为准。
 
 ---
@@ -37,7 +37,7 @@
 - ☕ **现代 Java API**：以 Java 25 为基线，提供不可变模型、Builder、类型化异常和确定性生命周期。
 - 🖼️ **两类托管输出**：作用域映射 `FrameView` 与显式 `FrameSnapshot` 保留原始 HDR/整数格式；官方 GPU presenter 无需 CPU 回读。
 - 🔗 **专家级 Vulkan 互操作**：支持 Win32 external memory lease，并可选 linear HDR RGBA16F。
-- 🧠 **分层渲染语义**：普通模式由后端根据实际场景与介质预算自动选择内置程序；专家模式显式控制资源、shader、绑定、pipeline、pass、draw、barrier、BLAS/TLAS、SBT、trace 与外部帧 consumer，自定义阶段不被普通优化覆盖。
+- 🧠 **分层渲染语义**：普通模式使用场景与材质接口，透明介质显式选择 RTXPT；Vulkan 专家模式控制资源、shader、绑定、pipeline、pass、draw、barrier、BLAS/TLAS、SBT、trace 与外部帧 consumer，自定义阶段不被普通优化覆盖。
 - 🧩 **明确 workload discriminator**：`RenderWorkload` 区分 retained RT、generic raster command 和有序 RT/raster 组合，不根据缺失字段猜测意图。
 - 🧠 **显式 RTX 能力协商**：可独立请求 DLSS SR、DLAA、NIS、NRD、FG/MFG、Reflex/PCL、SER 与 RTXMU。
 - 🔎 **分层能力事实**：物理硬件、格式/handle 互操作、session 协商和真实执行状态互不混淆。

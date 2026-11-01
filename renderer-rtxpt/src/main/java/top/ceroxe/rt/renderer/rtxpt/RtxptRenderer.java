@@ -14,14 +14,14 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     private RendererFeatureProfile requestedProfile;
     private final RtxptFeatureController features;
     private long handle,revision,submitted=-1,completed=-1,frames,frameNs,exports,exportNs,batches,transformNs;
-    private boolean closed,dirty=true,windowClosed;
+    private boolean closed,dirty=true,windowClosed,scenePublished;
     private int width,height;
     private Path directory,nativeScene;
     private List<RtxptScene.Item> previous=List.of();
     private CameraState camera;
     private EnvironmentState environment;
     RtxptRenderer(RendererConfig config){
-        Objects.requireNonNull(config);requestedProfile=RtxptOptions.profile(config);options=RtxptOptions.resolve(requestedProfile);
+        RtxptInputContract.validateConfiguration(config);requestedProfile=RtxptOptions.profile(config);options=RtxptOptions.resolve(requestedProfile);
         features=new RtxptFeatureController(new RtxptFeatureController.Host(){
             public boolean initialized(){return handle!=0;}
             public void ready(){RtxptRenderer.this.ready();}
@@ -67,14 +67,14 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     }
     @Override public SceneUpdateResult apply(SceneTransaction tx){
         ready();Objects.requireNonNull(tx);if(nativeScene!=null)throw new IllegalStateException("Choose retained API scenes or a native scene explicitly");
-        if(tx.revision()<revision)throw new IllegalArgumentException("Scene revision must be monotonic");
+        RtxptInputContract.requireAdvancingRevision(tx.revision(),revision,scenePublished);
         var next=new RtxptScene(scene);next.retain(tx);
         boolean transformsOnly=!tx.reset() && tx.upserts().textures().isEmpty() && tx.upserts().materials().isEmpty() && tx.upserts().meshes().isEmpty() && tx.upserts().lights().isEmpty()
             && !tx.removals().textureIds().hasRemaining() && !tx.removals().materialIds().hasRemaining() && !tx.removals().meshIds().hasRemaining() && !tx.removals().lightIds().hasRemaining() && !tx.removals().instanceIds().hasRemaining();
         if(transformsOnly)for(var i:tx.upserts().instances()) {
             var old=scene.instances.get(i.id());if(old==null || old.meshAssetId()!=i.meshAssetId() || !old.mediumBoundary().equals(i.mediumBoundary()) || old.surfaceVisibility()!=i.surfaceVisibility()) {transformsOnly=false;break;}
         }
-        scene=next;dirty|=tx.hasChanges()&&!transformsOnly;revision=tx.revision();return new SceneUpdateResult(revision);
+        scene=next;dirty|=tx.hasChanges()&&!transformsOnly;revision=tx.revision();scenePublished=true;return new SceneUpdateResult(revision);
     }
     @Override public void loadNativeScene(Path value){
         ready();if(!scene.meshes.isEmpty())throw new IllegalStateException("Cannot replace retained API geometry with an unrelated native scene");
@@ -87,9 +87,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     }
     @Override public FrameSubmissionResult submit(RenderFrameRequest f){
         ready();Objects.requireNonNull(f);if(f.sequence()<=submitted)throw new IllegalArgumentException("Frame sequence must increase");
+        RtxptInputContract.validateFrame(f);
         if(f.minimumSceneRevision()>revision)throw new IllegalArgumentException("Scene revision is not resident");
-        if(f.camera().hasExactProjection() || !f.shaderData().isEmpty() || f.fog().opacity()>0 || f.caustics().enabled())
-            throw new IllegalArgumentException("Exact Vulkan projections, custom shaders, screen fog and photon-map budgets are not native RTXPT controls");
         var items=nativeScene==null?scene.items(f):List.<RtxptScene.Item>of();
         boolean rebuild=nativeScene==null && (dirty || !RtxptScene.sameStructure(items,previous) || !Objects.equals(environment,f.environment()));
         Path path=nativeScene;
@@ -111,6 +110,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         previous=items;environment=f.environment();dirty=false;
         submitted=f.sequence();
         if(!renderFrame())throw new IllegalStateException("RTXPT window closed");
+        scenePublished=true;
         verifyRequiredFeatures();
         return FrameSubmissionResult.accepted(submitted,revision,Set.of());
     }
@@ -285,9 +285,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         if(closed)return;ready();try{if(handle!=0)RtxptNative.close(handle);}finally{handle=0;closed=true;}
         if(directory!=null)try(var files=Files.walk(directory)){for(var p:files.sorted(Comparator.reverseOrder()).toList())Files.delete(p);}catch(IOException e){throw new IllegalStateException("Failed to remove temporary scene assets",e);}
     }
-    @Override public ResourceTransactionEvidence submitResources(RenderResourceTransaction tx){return new ResourceTransactionEvidence(tx.revision(),ResourceTransactionEvidence.Outcome.REJECTED,List.of(),"General GPU resource commands belong to Vulkan");}
-    @Override public Optional<ResourceResidencyEvidence> resourceResidencyEvidence(ResourceGenerationKey key){return Optional.empty();}
+    @Override public ResourceTransactionEvidence submitResources(RenderResourceTransaction tx){ready();Objects.requireNonNull(tx,"transaction");return new ResourceTransactionEvidence(tx.revision(),ResourceTransactionEvidence.Outcome.REJECTED,List.of(),"General GPU resource commands belong to Vulkan");}
+    @Override public Optional<ResourceResidencyEvidence> resourceResidencyEvidence(ResourceGenerationKey key){ready();Objects.requireNonNull(key,"key");return Optional.empty();}
     @Override public RenderingSemanticCapabilities renderingSemanticCapabilities(){return RenderingSemanticCapabilities.unsupported();}
-    @Override public CommandExecutionEvidence submitCommands(RenderCommandTransaction tx){return new CommandExecutionEvidence(tx.sequence(),CommandExecutionEvidence.Outcome.REJECTED,CommandExecutionEvidence.Reason.UNSUPPORTED_FEATURE,OptionalLong.empty(),Optional.empty(),0,"General command lane belongs to Vulkan");}
-    @Override public Optional<CommandExecutionEvidence> commandExecutionEvidence(long sequence){return Optional.empty();}
+    @Override public CommandExecutionEvidence submitCommands(RenderCommandTransaction tx){ready();Objects.requireNonNull(tx,"transaction");return new CommandExecutionEvidence(tx.sequence(),CommandExecutionEvidence.Outcome.REJECTED,CommandExecutionEvidence.Reason.UNSUPPORTED_FEATURE,OptionalLong.empty(),Optional.empty(),0,"General command lane belongs to Vulkan");}
+    @Override public Optional<CommandExecutionEvidence> commandExecutionEvidence(long sequence){ready();if(sequence<0)throw new IllegalArgumentException("sequence must be nonnegative");return Optional.empty();}
 }

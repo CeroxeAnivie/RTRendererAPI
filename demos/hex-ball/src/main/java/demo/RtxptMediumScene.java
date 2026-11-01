@@ -4,8 +4,19 @@ import top.ceroxe.rt.renderer.api.*;
 
 /** Small game-scale mixed scene covering the supported native optical contract. */
 final class RtxptMediumScene {
+    static final java.util.List<String> PRESETS = java.util.List.of("mixed", "glass", "nested");
+
+    static String description(String preset) {
+        return switch (preset) {
+            case "mixed" -> "ABSORPTION + NESTED IOR + ROUGH TRANSMISSION + PBR";
+            case "glass" -> "COLORED ABSORPTION + SMOOTH REFLECTION / REFRACTION";
+            case "nested" -> "NESTED DIELECTRICS | IOR 1.50 / 1.33 | PRIORITY 2 / 6";
+            default -> throw new IllegalArgumentException("scene must be mixed, glass or nested");
+        };
+    }
+
     static SceneTransaction create(long revision,String preset) {
-        if(!java.util.Set.of("mixed","glass","nested").contains(preset))throw new IllegalArgumentException("scene must be mixed, glass or nested");
+        description(preset);
         var tx=SceneTransaction.builder(revision).resetScene();
         tx.upsert(MaterialAsset.builder(1).baseColorRgba8(0xffb8c8df).roughness(.65f).build());
         tx.upsert(MaterialAsset.builder(2).baseColorRgba8(0xffffffff).blendMode(MaterialAsset.BlendMode.TRANSLUCENT).transmission(1).roughness(.02f).indexOfRefraction(1.5f).build());
@@ -19,6 +30,14 @@ final class RtxptMediumScene {
         tx.upsert(SceneInstance.builder(4,4).transform(transform(0,2.6f,-1,1.8f,.12f,1)).build());
         if(preset.equals("nested") || preset.equals("mixed"))tx.upsert(SceneInstance.builder(5,2).transform(transform(-1.2f,1,0,.55f,.75f,.55f))
             .mediumBoundary(MediumBoundary.surface(new Medium(new Rgb(.7f,.08f,.04f),1.33f)).withPriority(6)).build());
+        if(preset.equals("mixed")) {
+            tx.upsert(MaterialAsset.builder(5).baseColorRgba8(0xffffffff)
+                .blendMode(MaterialAsset.BlendMode.TRANSLUCENT).transmission(1)
+                .roughness(.22f).indexOfRefraction(1.45f).build());
+            tx.upsert(cube(5,5));
+            tx.upsert(SceneInstance.builder(6,5).transform(transform(.6f,.5f,-1.4f,1,1,1))
+                .mediumBoundary(MediumBoundary.surface(new Medium(new Rgb(.35f,.08f,.25f),1.45f)).withPriority(2)).build());
+        }
         return tx.build();
     }
     static CameraState camera(int w,int h){return CameraState.lookAt(4,2.7,6,0,.8,0).verticalFieldOfViewDegrees(52).aspectRatio(w/(float)h).build();}
