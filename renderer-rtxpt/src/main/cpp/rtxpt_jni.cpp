@@ -26,6 +26,7 @@ public:
     using AdvancedPathTracer::AdvancedPathTracer;
     bool Capture(const char* path) {
         if(!m_renderTargets || !m_renderTargets->LdrColor) return false;
+        donut::log::info("RTXPT capture: meshInstances=%zu camera=%s",GetScene()->GetSceneGraph()->GetMeshInstances().size(),GetCurrentCameraPosDirUp().c_str());
         return donut::engine::SaveTextureToFile(GetDevice(),GetCommonPasses().get(),
             m_renderTargets->LdrColor,nvrhi::ResourceStates::ShaderResource,path);
     }
@@ -153,8 +154,9 @@ extern "C" JNIEXPORT jintArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNa
         auto size=session(h).app->HostRenderPass()->GetRenderSize();
         jint values[]={jint(size.x),jint(size.y),g_sampleUIData.RealtimeAA,
             g_sampleUIData.ActualUseStandaloneDenoiser(),g_sampleUIData.ActualUseReSTIRDI(),
-            g_sampleUIData.ActualUseReSTIRGI(),g_sampleUIData.ActualRadianceCacheMode(),jint(g_sampleUIData.ActualDLSSFGMode())};
-        auto result=e->NewIntArray(8); if(result)e->SetIntArrayRegion(result,0,8,values);return result;
+            g_sampleUIData.ActualUseReSTIRGI(),g_sampleUIData.ActualRadianceCacheMode(),jint(g_sampleUIData.ActualDLSSFGMode()),
+            jint(g_sampleUIData.DXHitObjectExtension||g_sampleUIData.NVAPIHitObjectExtension),jint(g_sampleUIData.ActualReflexMode()!=SI::ReflexMode::eOff)};
+        auto result=e->NewIntArray(10); if(result)e->SetIntArrayRegion(result,0,10,values);return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 
@@ -162,8 +164,10 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     JNIEnv* e, jclass, jlong h, jstring pose, jfloat verticalFov) {
     try {
         auto sample = session(h).app->HostRenderPass();
+        sample->SelectedCameraIndex()=0;
         if (!sample->SetCurrentCameraPosDirUp(utf8(e, pose))) throw std::invalid_argument("Invalid camera pose");
         sample->SetCameraVerticalFOV(verticalFov);
+        g_sampleUIData.ResetAccumulation=true;
     } catch (const std::exception& x) { fail(e, x); }
 }
 

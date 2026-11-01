@@ -20,7 +20,8 @@ public record RendererFeatureProfile(
         FrameGenerationOptions frameGeneration,
         LowLatencyOptions lowLatency,
         DenoisingOptions denoising,
-        RayTracingOptimizationOptions rayTracingOptimizations
+        RayTracingOptimizationOptions rayTracingOptimizations,
+        PathTracingOptions pathTracing
 ) {
     /** Validates and snapshots one complete feature profile. */
     public RendererFeatureProfile {
@@ -31,6 +32,7 @@ public record RendererFeatureProfile(
         rayTracingOptimizations = Objects.requireNonNull(
                 rayTracingOptimizations, "rayTracingOptimizations"
         );
+        pathTracing=Objects.requireNonNull(pathTracing,"pathTracing");
     }
 
     /**
@@ -44,7 +46,7 @@ public record RendererFeatureProfile(
                 FrameGenerationOptions.disabled(),
                 LowLatencyOptions.disabled(),
                 DenoisingOptions.disabled(),
-                RayTracingOptimizationOptions.disabled()
+                RayTracingOptimizationOptions.disabled(),PathTracingOptions.defaults()
         );
     }
 
@@ -68,6 +70,7 @@ public record RendererFeatureProfile(
 
     /** Single-thread-confined builder for one complete runtime profile. */
     public static final class Builder {
+        private PathTracingOptions pathTracing=PathTracingOptions.defaults();
         private FrameReconstructionOptions frameReconstruction =
                 FrameReconstructionOptions.disabled();
         private FrameGenerationOptions frameGeneration = FrameGenerationOptions.disabled();
@@ -85,6 +88,7 @@ public record RendererFeatureProfile(
             lowLatency = source.lowLatency;
             denoising = source.denoising;
             rayTracingOptimizations = source.rayTracingOptimizations;
+            pathTracing = source.pathTracing;
         }
 
         /**
@@ -153,8 +157,10 @@ public record RendererFeatureProfile(
                     frameGeneration,
                     lowLatency,
                     denoising,
-                    rayTracingOptimizations
+                    rayTracingOptimizations,pathTracing
             );
         }
+        /** Selects the same path policy used by ordinary renderer creation. */
+        public Builder pathTracing(PathTracingOptions value){pathTracing=Objects.requireNonNull(value,"pathTracing");return this;}
     }
 }

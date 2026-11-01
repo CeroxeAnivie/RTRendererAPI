@@ -673,7 +673,7 @@ final class VulkanGpuSceneRenderingSession implements VulkanRenderingSession, Vu
                 configuration.frameGeneration(),
                 configuration.lowLatency(),
                 configuration.denoising(),
-                configuration.rayTracingOptimizations()
+                configuration.rayTracingOptimizations(),configuration.pathTracing()
         );
     }
 

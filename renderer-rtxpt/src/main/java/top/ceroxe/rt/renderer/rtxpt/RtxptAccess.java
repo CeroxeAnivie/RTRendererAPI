@@ -3,8 +3,6 @@ import java.nio.file.Path;
 
 /** Expert host boundary. Call on the renderer's creating thread. The host owns window lifetime. */
 public interface RtxptAccess {
-    /** Configure the upstream pipeline before first submission. */
-    void configure(RtxptOptions options);
     /** Load an upstream scene directly, bypassing the Java retained scene adapter. */
     void loadNativeScene(Path scene);
     /** Native HWND; only valid after the first submission and until close. */
@@ -15,8 +13,10 @@ public interface RtxptAccess {
     void awaitIdle();
     /** Actual native settings and internal resolution after rendering, including upstream fallbacks. */
     RuntimeStatus runtimeStatus();
-    record RuntimeStatus(int renderWidth,int renderHeight,RtxptOptions.Reconstruction reconstruction,
-        boolean standaloneDenoiser,boolean restirDi,boolean restirGi,boolean sharc,boolean frameGeneration) { }
+    enum Reconstruction { NONE, TAA, DLSS, DLSS_RR }
+    record RuntimeStatus(int renderWidth,int renderHeight,Reconstruction reconstruction,
+        boolean standaloneDenoiser,boolean restirDi,boolean restirGi,boolean sharc,boolean frameGeneration,
+        boolean shaderExecutionReordering,boolean lowLatency) { }
     /** Explicit one-shot readback. Never called in the presentation or benchmark frame loop. */
     void capture(Path png);
     BridgeTimings bridgeTimings();

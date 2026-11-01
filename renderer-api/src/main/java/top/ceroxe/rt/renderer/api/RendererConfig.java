@@ -33,6 +33,7 @@ public final class RendererConfig {
     private final LowLatencyOptions lowLatency;
     private final DenoisingOptions denoising;
     private final RayTracingOptimizationOptions rayTracingOptimizations;
+    private final PathTracingOptions pathTracing;
 
     private RendererConfig(Builder builder) {
         if (builder.maxFramesInFlight < MIN_MAX_FRAMES_IN_FLIGHT
@@ -58,6 +59,7 @@ public final class RendererConfig {
         rayTracingOptimizations = Objects.requireNonNull(
                 builder.rayTracingOptimizations, "rayTracingOptimizations"
         );
+        pathTracing = Objects.requireNonNull(builder.pathTracing,"pathTracing");
         if (!temporalRendering.enabled()
                 && frameReconstruction.fallback()
                 == FrameReconstructionOptions.Fallback.BUILT_IN_TEMPORAL) {
@@ -84,6 +86,16 @@ public final class RendererConfig {
                 .frameGeneration(FrameGenerationOptions.recommended())
                 .lowLatency(LowLatencyOptions.recommended()).build();
     }
+
+    /** Recommended path-traced GPU presentation; all advanced controls remain in this API. FG is disabled. */
+    public static RendererConfig pathTracedPresentation() {
+        return recommended().copyBuilder().cpuFrameReadbackEnabled(false)
+            .denoising(DenoisingOptions.recommended()).lowLatency(LowLatencyOptions.recommended())
+            .pathTracing(PathTracingOptions.recommended()).build();
+    }
+
+    /** Returns path budgets and light/cache reuse intent. */
+    public PathTracingOptions pathTracing(){return pathTracing;}
 
     /**
      * Creates a configuration builder with optional vendor features disabled.
@@ -237,7 +249,8 @@ public final class RendererConfig {
                 && frameGeneration.equals(config.frameGeneration)
                 && lowLatency.equals(config.lowLatency)
                 && denoising.equals(config.denoising)
-                && rayTracingOptimizations.equals(config.rayTracingOptimizations);
+                && rayTracingOptimizations.equals(config.rayTracingOptimizations)
+                && pathTracing.equals(config.pathTracing);
     }
 
     @Override
@@ -245,7 +258,7 @@ public final class RendererConfig {
         return Objects.hash(
                 sceneShaders, maxFramesInFlight, evidenceRetention, validationEnabled, gpuTimingsEnabled, cpuFrameReadbackEnabled,
                 gpuDevice, frameOutputFormat, temporalRendering, frameReconstruction, denoising,
-                frameGeneration, lowLatency, rayTracingOptimizations
+                frameGeneration, lowLatency, rayTracingOptimizations, pathTracing
         );
     }
 
@@ -270,6 +283,7 @@ public final class RendererConfig {
      * Single-thread-confined builder for one immutable renderer configuration.
      */
     public static final class Builder {
+        private PathTracingOptions pathTracing = PathTracingOptions.defaults();
         private SceneShaderProgram sceneShaders = SceneShaderProgram.builtIn();
         private int maxFramesInFlight = DEFAULT_MAX_FRAMES_IN_FLIGHT;
         private EvidenceRetentionPolicy evidenceRetention = EvidenceRetentionPolicy.bounded();
@@ -304,6 +318,7 @@ public final class RendererConfig {
             lowLatency = source.lowLatency;
             denoising = source.denoising;
             rayTracingOptimizations = source.rayTracingOptimizations;
+            pathTracing = source.pathTracing;
         }
 
         /**
@@ -479,5 +494,8 @@ public final class RendererConfig {
         public RendererConfig build() {
             return new RendererConfig(this);
         }
+
+        /** Selects native path budgets and optional reuse techniques. */
+        public Builder pathTracing(PathTracingOptions value){pathTracing=Objects.requireNonNull(value,"pathTracing");return this;}
     }
 }

@@ -12,8 +12,9 @@ public final class RtxptMediumDemo {
         int w=Integer.parseInt(values.getOrDefault("width","1920")),h=Integer.parseInt(values.getOrDefault("height","1080"));
         double seconds=Double.parseDouble(values.getOrDefault("seconds","0"));String name=values.getOrDefault("scene","mixed");
         var commands=new ConcurrentLinkedQueue<String>();Thread.ofVirtual().name("rtxpt-demo-console").start(()->{var in=new Scanner(System.in);while(in.hasNextLine())commands.add(in.nextLine().strip());});
-        try(Renderer renderer=Renderer.open("rtxpt",RendererConfig.builder().cpuFrameReadbackEnabled(false).build())) {
-            var host=renderer.extension(RtxptAccess.class).orElseThrow();host.configure(Boolean.parseBoolean(values.getOrDefault("native","false"))?RtxptOptions.nativeOneSample():RtxptOptions.recommended());
+        var config=Boolean.parseBoolean(values.getOrDefault("native","false"))?RendererConfig.builder().cpuFrameReadbackEnabled(false).build():RendererConfig.pathTracedPresentation();
+        try(Renderer renderer=Renderer.open("rtxpt",config)) {
+            var host=renderer.extension(RtxptAccess.class).orElseThrow();
             long revision=1,sequence=0;renderer.apply(RtxptMediumScene.create(revision,name));
             renderer.submit(RenderFrameRequest.builder(sequence++,w,h,RtxptMediumScene.camera(w,h)).minimumSceneRevision(revision).environment(RtxptMediumScene.environment()).build());
             System.out.println("RTXPT native window ready; scene="+name+". Console: mixed / glass / nested / quit. FG=off.");

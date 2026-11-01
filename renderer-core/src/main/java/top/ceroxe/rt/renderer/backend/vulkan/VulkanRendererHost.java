@@ -373,7 +373,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, top.cero
                 checked.frameGeneration(),
                 checked.lowLatency(),
                 checked.denoising(),
-                checked.rayTracingOptimizations()
+                checked.rayTracingOptimizations(),checked.pathTracing()
         );
     }
 

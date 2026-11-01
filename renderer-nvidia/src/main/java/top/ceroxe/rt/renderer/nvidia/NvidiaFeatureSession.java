@@ -374,7 +374,7 @@ final class NvidiaFeatureSession implements VulkanFeatureSession {
 
     private RendererFeatureProfile profile() {
         return new RendererFeatureProfile(
-                reconstruction, frameGeneration, lowLatency, denoising, optimizations
+                reconstruction, frameGeneration, lowLatency, denoising, optimizations, top.ceroxe.rt.renderer.api.PathTracingOptions.defaults()
         );
     }
 

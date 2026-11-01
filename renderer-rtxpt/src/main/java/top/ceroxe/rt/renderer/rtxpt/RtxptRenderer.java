@@ -10,7 +10,8 @@ import top.ceroxe.rt.renderer.api.*;
 final class RtxptRenderer implements Renderer,RtxptAccess {
     private final Thread owner=Thread.currentThread();
     private RtxptScene scene=new RtxptScene();
-    private RtxptOptions options=RtxptOptions.recommended();
+    private RtxptOptions options;
+    private final RtxptFeatureController features;
     private long handle,revision,submitted=-1,completed=-1,frames,frameNs,exports,exportNs,batches,transformNs;
     private boolean closed,dirty=true,windowClosed;
     private int width,height;
@@ -18,7 +19,16 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     private List<RtxptScene.Item> previous=List.of();
     private CameraState camera;
     private EnvironmentState environment;
-    RtxptRenderer(RendererConfig config){Objects.requireNonNull(config);RtxptNative.load();}
+    RtxptRenderer(RendererConfig config){
+        Objects.requireNonNull(config);options=RtxptOptions.resolve(RtxptOptions.profile(config));
+        features=new RtxptFeatureController(new RtxptFeatureController.Host(){
+            public boolean initialized(){return handle!=0;}
+            public void ready(){RtxptRenderer.this.ready();}
+            public void apply(RendererFeatureProfile profile){options=RtxptOptions.resolve(profile);if(handle!=0)RtxptNative.settings(handle,options.maxBounces(),options.diffuseBounces(),options.reflex());}
+        },RtxptOptions.profile(config));
+        RtxptNative.load();
+    }
+    @Override public <T> Optional<T> extension(Class<T> type){Objects.requireNonNull(type);if(type.isInstance(features))return Optional.of(type.cast(features));return Renderer.super.extension(type);}
     private void ready(){if(closed)throw new IllegalStateException("RTXPT renderer closed");if(Thread.currentThread()!=owner)throw new IllegalStateException("Call RTXPT on its creating thread");}
     @Override public Status status(){return closed?Status.CLOSED:Status.READY;}
     @Override public RendererHealth health(){return new RendererHealth(status(),Optional.empty(),RendererHealth.ResourceObligations.none());}
@@ -35,7 +45,6 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         }
         scene=next;dirty|=tx.hasChanges()&&!transformsOnly;revision=tx.revision();return new SceneUpdateResult(revision);
     }
-    @Override public void configure(RtxptOptions value){ready();if(handle!=0)throw new IllegalStateException("Configure before first submit");options=Objects.requireNonNull(value);}
     @Override public void loadNativeScene(Path value){
         ready();if(!scene.meshes.isEmpty())throw new IllegalStateException("Cannot replace retained API geometry with an unrelated native scene");
         var path=Objects.requireNonNull(value).toAbsolutePath().normalize();if(!Files.isRegularFile(path))throw new IllegalArgumentException("Missing native scene "+path);
@@ -60,7 +69,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
             if(nativeScene==null)scene.uploadInteriors(handle);
         }else if(rebuild){RtxptNative.loadScene(handle,path.toString());scene.uploadInteriors(handle);}
         if(width!=f.width()||height!=f.height()){RtxptNative.resize(handle,f.width(),f.height());width=f.width();height=f.height();}
-        if(!Objects.equals(camera,f.camera())){
+        if(rebuild || !Objects.equals(camera,f.camera())){
             var c=f.camera();RtxptNative.camera(handle,c.x()+","+c.y()+","+c.z()+","+c.forwardX()+","+c.forwardY()+","+c.forwardZ()+","+c.upX()+","+c.upY()+","+c.upZ(),(float)(2*Math.atan(c.tanHalfFovY())));camera=c;
         }
         if(!rebuild)updateTransforms(items);
@@ -79,7 +88,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         long begin=System.nanoTime();int result=RtxptNative.frame(handle);frameNs+=System.nanoTime()-begin;if(result==2)frames++;else if(result==0)windowClosed=true;return result!=0;}
     @Override public void awaitIdle(){ready();if(handle!=0)RtxptNative.awaitIdle(handle);}
     @Override public RuntimeStatus runtimeStatus(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.runtimeStatus(handle);
-        return new RuntimeStatus(s[0],s[1],RtxptOptions.Reconstruction.values()[s[2]],s[3]!=0,s[4]!=0,s[5]!=0,s[6]==1,s[7]!=0);}
+        return new RuntimeStatus(s[0],s[1],Reconstruction.values()[s[2]],s[3]!=0,s[4]!=0,s[5]!=0,s[6]==1,s[7]!=0,s[8]!=0,s[9]!=0);}
     @Override public long windowHandle(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptNative.window(handle);}
     @Override public void capture(Path png){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.capture(handle,Objects.requireNonNull(png).toAbsolutePath().toString());}
     @Override public BridgeTimings bridgeTimings(){return new BridgeTimings(frames,frameNs,exports,exportNs,batches,transformNs);}
