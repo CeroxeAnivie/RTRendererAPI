@@ -48,7 +48,7 @@ uint RtrResidualLocalSlotCount()
         uint lightIndex, proxyCount;
         ReadLocal(i, lightIndex, proxyCount);
         if (lightIndex != NEEAT_INVALID_LIGHT_INDEX && proxyCount > 0 && !RtrCoveredPoint(lightIndex))
-            ++count;
+            count += proxyCount;
     }
     return count;
 }
@@ -119,12 +119,12 @@ uint RtrSampleResidualLocal(const float rnd, const uint residualSlotCount, out f
         ReadLocal(i, lightIndex, proxyCount);
         if (lightIndex == NEEAT_INVALID_LIGHT_INDEX || proxyCount == 0 || RtrCoveredPoint(lightIndex))
             continue;
-        if (remaining == 0)
+        if (remaining < proxyCount)
         {
             pdf = float(proxyCount) / float(residualSlotCount);
             return lightIndex;
         }
-        --remaining;
+        remaining -= proxyCount;
     }
 
     pdf = 0;

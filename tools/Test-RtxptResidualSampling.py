@@ -17,14 +17,14 @@ def remap_global(proxy_indices, point_lights, residual_rank):
     return proxy_indices[proxy_index]
 
 
-def sample_local(slots, point_lights, residual_rank):
+def sample_local(weighted_lights, point_lights, residual_rank):
     remaining = residual_rank
-    for light_index, proxy_count in slots:
+    for light_index, proxy_count in weighted_lights:
         if proxy_count == 0 or light_index in point_lights:
             continue
-        if remaining == 0:
+        if remaining < proxy_count:
             return light_index
-        remaining -= 1
+        remaining -= proxy_count
     raise AssertionError("residual local rank escaped the slot list")
 
 
@@ -40,27 +40,29 @@ def check_global(proxy_indices, point_lights):
 
 
 def check_local(weighted_lights, point_lights):
-    slots = [
+    residual = [
         (light_index, proxy_count)
         for light_index, proxy_count in weighted_lights
-        for _ in range(proxy_count)
+        if proxy_count > 0 and light_index not in point_lights
     ]
-    residual = [slot for slot in slots if slot[0] not in point_lights]
+    residual_count = sum(proxy_count for _, proxy_count in residual)
     if not residual:
         return
-    samples = [sample_local(slots, point_lights, i) for i in range(len(residual))]
-    assert samples == [light for light, _ in residual], (samples, residual)
+    samples = [sample_local(weighted_lights, point_lights, i) for i in range(residual_count)]
+    expected = [light for light, count in residual for _ in range(count)]
+    assert samples == expected, (samples, expected)
     counts = Counter(samples)
     pdfs = {
-        light_index: proxy_count / len(residual)
-        for light_index, proxy_count in weighted_lights
-        if light_index not in point_lights
+        light_index: proxy_count / residual_count
+        for light_index, proxy_count in residual
     }
     assert abs(sum(pdfs.values()) - 1.0) < 1e-12, pdfs
-    assert all(counts[light] / len(residual) == pdf for light, pdf in pdfs.items())
+    assert all(counts[light] / residual_count == pdf for light, pdf in pdfs.items())
 
 
 def adjust_counts(local_count, global_count, local_residual, global_residual):
+    if local_residual == 0 and global_residual == 0:
+        return 0, 0
     if local_count > 0 and local_residual == 0:
         global_count += local_count
         local_count = 0
@@ -81,7 +83,10 @@ def main():
     check_local([(2, 4), (5, 2)], set())
     assert adjust_counts(3, 5, 0, 11) == (0, 8)
     assert adjust_counts(3, 5, 6, 0) == (8, 0)
-    assert adjust_counts(3, 5, 0, 0) == (8, 0)
+    assert adjust_counts(3, 5, 0, 0) == (0, 0)
+    assert adjust_counts(0, 8, 0, 0) == (0, 0)
+    assert adjust_counts(0, 8, 4, 0) == (8, 0)
+    assert adjust_counts(5, 3, 0, 7) == (0, 8)
     print("RTXPT residual sampling: all discrete PDF and empty-stratum checks passed")
 
 

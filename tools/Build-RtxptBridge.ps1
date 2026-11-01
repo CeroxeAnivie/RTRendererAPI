@@ -217,8 +217,16 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        globa
         {
             const uint residualGlobal = RtrResidualProxyCount();
             const uint residualLocal = localCount > 0 ? RtrResidualLocalSlotCount() : 0;
-            if (localCount > 0 && residualLocal == 0) { globalCount += localCount; localCount = 0; }
-            if (globalCount > 0 && residualGlobal == 0) { localCount += globalCount; globalCount = 0; }
+            if (residualLocal == 0 && residualGlobal == 0)
+            {
+                localCount = 0;
+                globalCount = 0;
+            }
+            else
+            {
+                if (localCount > 0 && residualLocal == 0) { globalCount += localCount; localCount = 0; }
+                if (globalCount > 0 && residualGlobal == 0) { localCount += globalCount; globalCount = 0; }
+            }
         }
         #endif // RTR residual candidate counts
 '@ 'RTR residual candidate counts'
