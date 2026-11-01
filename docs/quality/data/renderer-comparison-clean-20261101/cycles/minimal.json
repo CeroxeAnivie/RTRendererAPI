@@ -1,0 +1,49 @@
+{
+  "renderer": "Blender Cycles",
+  "version": "4.5.9 LTS",
+  "backend": "OPTIX",
+  "devices": [
+    "NVIDIA GeForce RTX 5080 Laptop GPU"
+  ],
+  "scene": "minimal",
+  "width": 1920,
+  "height": 1080,
+  "pathDepth": 5,
+  "denoiser": false,
+  "adaptiveSampling": false,
+  "filter": "BOX",
+  "initialGpu": "2026/11/01 11:48:01.921, NVIDIA GeForce RTX 5080 Laptop GPU, 0 %, 21.55 W, 180 MHz",
+  "independent1SppFrameMs": [
+    29.172800001106225,
+    21.778399997856468,
+    20.89059998979792,
+    20.372800005134195
+  ],
+  "independent1SppFps": 43.377079120495296,
+  "batches": [
+    {
+      "spp": 16,
+      "wallMs": 38.188299993635155,
+      "sppPerSecond": 418.97649286998166
+    },
+    {
+      "spp": 64,
+      "wallMs": 96.84569999808446,
+      "sppPerSecond": 660.8450349500895
+    },
+    {
+      "spp": 16,
+      "wallMs": 40.56510000373237,
+      "sppPerSecond": 394.4277223161745
+    },
+    {
+      "spp": 64,
+      "wallMs": 98.48439999041148,
+      "sppPerSecond": 649.8491132223082
+    }
+  ],
+  "batch64SppPerSecond": 655.300949559431,
+  "incrementalSppPerSecond": 823.4921730269058,
+  "triangleCount": 12,
+  "semanticDifferences": []
+}

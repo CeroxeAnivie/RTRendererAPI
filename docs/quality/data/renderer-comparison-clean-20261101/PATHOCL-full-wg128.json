@@ -1,0 +1,1 @@
+{"engine":"PATHOCL","workgroup":128,"pixels":2073600,"rounds":[{"round":1,"wallMs":2027.4898,"sampleDelta":28248391,"fps":6.71908373899,"ms":148.829816512},{"round":2,"wallMs":2029.3524,"sampleDelta":28224495,"fps":6.70723814473,"ms":149.092663541},{"round":3,"wallMs":2073.6018,"sampleDelta":56283541,"fps":13.0897414161,"ms":76.3957031858}]}

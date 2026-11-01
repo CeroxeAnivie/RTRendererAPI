@@ -32,7 +32,7 @@ target_link_options(rtrenderer_luxcore PRIVATE /DELAYLOAD:luxcore.dll)
 set_target_properties(rtrenderer_luxcore PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}/../native")
 
-add_executable(luxcore_native_benchmark "${CMAKE_CURRENT_LIST_DIR}/../../../../tools/luxcore_native_benchmark.cpp"
+add_executable(luxcore_native_benchmark EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/../../../../tools/luxcore_native_benchmark.cpp"
     "${LUXCORE_SOURCE}/src/luxrays/utils/properties.cpp"
     "${LUXCORE_SOURCE}/src/luxrays/core/geometry/matrix4x4.cpp")
 target_compile_features(luxcore_native_benchmark PRIVATE cxx_std_20)

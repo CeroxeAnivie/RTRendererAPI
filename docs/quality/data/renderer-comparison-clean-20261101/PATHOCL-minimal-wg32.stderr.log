@@ -1,0 +1,705 @@
+[LuxCore][0.000] Configuration: 
+
+
+[LuxCore][0.000]   renderengine.type = "PATHOCL"
+
+
+[LuxCore][0.000]   opencl.native.threads.count = "0"
+
+
+[LuxCore][0.000]   opencl.cpu.use = "0"
+
+
+[LuxCore][0.000]   opencl.gpu.use = "1"
+
+
+[LuxCore][0.000]   film.width = "1920"
+
+
+[LuxCore][0.000]   film.height = "1080"
+
+
+[LuxCore][0.000]   rtpath.resolutionreduction = "1"
+
+
+[LuxCore][0.000]   rtpath.resolutionreduction.preview = "1"
+
+
+[LuxCore][0.000]   rtpath.resolutionreduction.preview.step = "1"
+
+
+[LuxCore][0.000]   sampler.type = "SOBOL"
+
+
+[LuxCore][0.000]   tilepath.sampling.aa.size = "1"
+
+
+[LuxCore][0.000]   film.filter.type = "NONE"
+
+
+[LuxCore][0.000]   film.opencl.enable = "0"
+
+
+[LuxCore][0.000]   film.imagepipelines.0.0.type = "TONEMAP_LINEAR"
+
+
+[LuxCore][0.000]   film.imagepipelines.0.0.scale = "1"
+
+
+[LuxCore][0.000]   film.imagepipelines.0.1.type = "GAMMA_CORRECTION"
+
+
+[LuxCore][0.000]   film.outputs.0.type = "RGBA"
+
+
+[LuxCore][0.000]   film.outputs.0.filename = "unused.exr"
+
+
+[LuxCore][0.000]   film.outputs.1.type = "RGBA_IMAGEPIPELINE"
+
+
+[LuxCore][0.000]   film.outputs.1.filename = "unused.png"
+
+
+[LuxCore][0.000]   scene.file = "scene.scn"
+
+
+[LuxCore][0.000]   opencl.gpu.workgroup.size = 32
+
+
+[LuxCore][0.000] File Name Resolver Configuration: 
+
+
+[LuxCore][0.000]   D:/Engineering/code/APIs/RTRendererAPI/build/reports/luxcore-light-controls/minimal
+
+
+[SDL][0.000] Reading scene: D:/Engineering/code/APIs/RTRendererAPI/build/reports/luxcore-light-controls/minimal/scene.scn
+
+
+[SDL][0.000] Define ImageMap: Random-Image-Map
+
+
+[SDL][0.000] ========================Scene::Parse()=========================
+scene.camera.type = "perspective"
+scene.camera.lookat.orig = "0" "0" "7"
+scene.camera.lookat.target = "0" "0" "0"
+scene.camera.up = "0" "1" "0"
+scene.camera.fieldofview = "30"
+scene.lights.sky.type = "constantinfinite"
+scene.lights.sky.color = "0.12" "0.16" "0.22"
+scene.materials.solid.type = "matte"
+scene.materials.solid.kd = "0.5" "0.6" "0.7"
+scene.objects.cube.ply = "mesh-00000.ply"
+scene.objects.cube.material = "solid"
+scene.objects.cube.transformation = "0.28" "0" "0" "0" "0" "0.28" "0" "0" "0" "0" "0.28" "0" "0" "0" "0" "1"
+
+
+
+[SDL][0.000] ===============================================================
+
+
+[SDL][0.000] Parsing textures
+
+
+[SDL][0.000] Parsing volumes
+
+
+[SDL][0.000] Parsing materials
+
+
+[SDL][0.000] Material definition: solid
+
+
+[SDL][0.000] Parsing cameras
+
+
+[SDL][0.000] Camera type: perspective
+
+
+[SDL][0.000] Camera position: Point[0, 0, 7]
+
+
+[SDL][0.000] Camera target: Point[0, 0, 0]
+
+
+[SDL][0.000] Camera clipping plane disabled
+
+
+[SDL][0.000] Parsing shapes
+
+
+[SDL][0.000] Parsing objects
+
+
+[SDL][0.015] Scene objects count: 1
+
+
+[SDL][0.015] Parsing lights
+
+
+[SDL][0.015] Light definition: sky
+
+
+[SDL][0.015] Creating session
+
+
+[LuxCore][0.015] Film resolution: 1920x1080
+
+
+[SDL][0.015] Film output definition: RGB_IMAGEPIPELINE [image.png]
+
+
+[SDL][0.015] Image pipeline: film.imagepipelines.0
+
+
+[SDL][0.015] Image pipeline step 0: TONEMAP_LINEAR
+
+
+[SDL][0.015] Image pipeline step 1: GAMMA_CORRECTION
+
+
+[SDL][0.015] Film output definition: RGBA [unused.exr]
+
+
+[SDL][0.015] Film output definition: RGBA_IMAGEPIPELINE [unused.png]
+
+
+[LuxRays][0.015] OpenCL support: enabled
+
+
+[LuxRays][0.125] OpenCL Platform 0: NVIDIA CUDA
+
+
+[LuxRays][0.125] OpenCL Platform 1: Intel(R) OpenCL Graphics
+
+
+[LuxRays][0.125] CUDA support: enabled
+
+
+[LuxRays][0.125] CUDA support: available
+
+
+[LuxRays][0.125] CUDA driver version: 13.40
+
+
+[LuxRays][0.125] CUDA device count: 1
+
+
+[LuxRays][0.125] Optix support: available
+
+
+[LuxRays][0.125] Device 0 name: Native
+
+
+[LuxRays][0.125] Device 0 type: NATIVE_THREAD
+
+
+[LuxRays][0.125] Device 0 compute units: 1
+
+
+[LuxRays][0.125] Device 0 preferred float vector width: 4
+
+
+[LuxRays][0.125] Device 0 max allocable memory: 17592186044415MBytes
+
+
+[LuxRays][0.125] Device 0 max allocable memory block size: 17592186044415MBytes
+
+
+[LuxRays][0.125] Device 0 has out of core memory support: 0
+
+
+[LuxRays][0.125] Device 1 name: NVIDIA GeForce RTX 5080 Laptop GPU
+
+
+[LuxRays][0.125] Device 1 type: OPENCL_GPU
+
+
+[LuxRays][0.125] Device 1 compute units: 60
+
+
+[LuxRays][0.125] Device 1 preferred float vector width: 1
+
+
+[LuxRays][0.125] Device 1 max allocable memory: 16275MBytes
+
+
+[LuxRays][0.125] Device 1 max allocable memory block size: 4068MBytes
+
+
+[LuxRays][0.125] Device 1 has out of core memory support: 0
+
+
+[LuxRays][0.125] Device 2 name: Intel(R) Graphics
+
+
+[LuxRays][0.125] Device 2 type: OPENCL_GPU
+
+
+[LuxRays][0.125] Device 2 compute units: 64
+
+
+[LuxRays][0.125] Device 2 preferred float vector width: 1
+
+
+[LuxRays][0.125] Device 2 max allocable memory: 16789MBytes
+
+
+[LuxRays][0.125] Device 2 max allocable memory block size: 4095MBytes
+
+
+[LuxRays][0.125] Device 2 has out of core memory support: 0
+
+
+[LuxRays][0.125] Device 3 name: NVIDIA GeForce RTX 5080 Laptop GPU
+
+
+[LuxRays][0.125] Device 3 type: CUDA_GPU
+
+
+[LuxRays][0.125] Device 3 compute units: 1
+
+
+[LuxRays][0.125] Device 3 preferred float vector width: 1
+
+
+[LuxRays][0.125] Device 3 max allocable memory: 16275MBytes
+
+
+[LuxRays][0.125] Device 3 max allocable memory block size: 17592186044415MBytes
+
+
+[LuxRays][0.125] Device 3 has out of core memory support: 1
+
+
+[LuxRays][0.125] Device 3 CUDA compute capability: 12.0
+
+
+[LuxRays][0.125] Creating 1 intersection device(s)
+
+
+[LuxRays][0.125] Allocating intersection device 0: NVIDIA GeForce RTX 5080 Laptop GPU (Type = CUDA_GPU)
+
+
+[LuxRays][0.203] [Optix][4][KNOBS] All OptiX knobs on default.
+
+
+
+[LuxRays][0.296] [Optix][4][DISKCACHE] Opened database: "C:\Users\Administrator\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+
+
+[LuxRays][0.296] [Optix][4][DISKCACHE]     Cache data size: "503.5 KiB"
+
+
+[LuxCore][0.296] CUDA devices used:
+
+
+[LuxCore][0.296] [NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect (Optix enabled: 1)]
+
+
+[LuxCore][0.296] OpenCL devices used:
+
+
+[LuxCore][0.296] Native devices used: 0
+
+
+[LuxCore][0.296] Configuring 1 OpenCL render threads
+
+
+[LuxCore][0.296] Configuring 0 native render threads
+
+
+[LuxRays][0.296] Preprocessing DataSet
+
+
+[LuxRays][0.296] Total vertex count: 8
+
+
+[LuxRays][0.296] Total triangle count: 12
+
+
+[LuxRays][0.296] Preprocessing DataSet done
+
+
+[LuxRays][0.296] Adding DataSet accelerator: OPTIX
+
+
+[LuxRays][0.296] Total vertex count: 8
+
+
+[LuxRays][0.296] Total triangle count: 12
+
+
+[LuxRays][0.296] Building Optix accelerator
+
+
+[LuxRays][0.296] Optix accelerator leafs: 1
+
+
+[LuxRays][0.296] OptixAccel total build time: 0ms
+
+
+[LuxRays][0.296] [OptixAccel] Compiler options: -D LUXRAYS_OPENCL_KERNEL -D PARAM_RAY_EPSILON_MIN=1e-05f -D PARAM_RAY_EPSILON_MAX=0.1f -D LUXRAYS_CUDA_DEVICE -D LUXRAYS_OS_WINDOWS --use_fast_math
+
+
+[LuxRays][0.296] [OptixAccel] Program cached
+
+
+[LuxRays][0.296] [Optix][4][DISKCACHE] Cache hit for key: ptx-2795-key7f3e840b786209af57bbb71d45af3019-sm_120-rtc1-drv616.92
+
+
+
+[LuxRays][0.296] [Optix][4][COMPILER] 
+
+
+[LuxRays][0.312] [Optix][4][COMPILER] Info: Pipeline statistics
+	module(s)                            :     1
+	entry function(s)                    :     3
+	trace call(s)                        :     1
+	continuation callable call(s)        :     0
+	direct callable call(s)              :     0
+	basic block(s) in entry functions    :     8
+	instruction(s) in entry functions    :    96
+	non-entry function(s)                :     0
+	basic block(s) in non-entry functions:     0
+	instruction(s) in non-entry functions:     0
+	debug information                    :    no
+
+
+
+[LuxRays][0.312] Total Optix memory usage: 2Kbytes
+
+
+[LuxRays][0.312] Adding DataSet accelerator: EMBREE
+
+
+[LuxRays][0.312] Total vertex count: 8
+
+
+[LuxRays][0.312] Total triangle count: 12
+
+
+[LuxRays][0.312] EmbreeAccel build time: 0ms
+
+
+[LuxCore][0.312] Preprocessing light source definitions
+
+
+[LuxCore][0.343] [PathOCLRenderEngine] OpenCL task count: 524288
+
+
+[LuxCore][0.343] [PathOCLBaseRenderEngine] OpenCL max. page memory size: 18014398509481983Kbytes
+
+
+[LuxCore][0.343] Compile Geometry
+
+
+[LuxCore][0.343] Scene geometry compilation time: 0ms
+
+
+[LuxCore][0.343] Compile 1 Textures
+
+
+[LuxCore][0.343] Texture evaluation ops count: 3
+
+
+[LuxCore][0.343] Texture evaluation max. stack size: 3
+
+
+[LuxCore][0.343] Textures compilation time: 0ms
+
+
+[LuxCore][0.343] Compile 1 Materials
+
+
+[LuxCore][0.343] Material evaluation ops count: 7
+
+
+[LuxCore][0.343] Material evaluation max. stack size: 8
+
+
+[LuxCore][0.343] Material compilation time: 0ms
+
+
+[LuxCore][0.343] Compile Lights
+
+
+[LuxCore][0.343] Lights compilation time: 0ms
+
+
+[LuxCore][0.343] Compile ImageMaps
+
+
+[LuxCore][0.343] Image maps page(s) count: 1
+
+
+[LuxCore][0.343]  RGB channel page 0 size: 3072Kbytes
+
+
+[LuxCore][0.343] Image maps compilation time: 0ms
+
+
+[LuxCore][0.343] Always enabled OpenCL code: 
+
+
+[LuxCore][0.343] Compile Geometry
+
+
+[LuxCore][0.343] Scene geometry compilation time: 0ms
+
+
+[LuxCore][0.343] Compile 1 Textures
+
+
+[LuxCore][0.343] Texture evaluation ops count: 3
+
+
+[LuxCore][0.343] Texture evaluation max. stack size: 3
+
+
+[LuxCore][0.343] Textures compilation time: 0ms
+
+
+[LuxCore][0.343] Compile 1 Materials
+
+
+[LuxCore][0.343] Material evaluation ops count: 7
+
+
+[LuxCore][0.343] Material evaluation max. stack size: 8
+
+
+[LuxCore][0.343] Material compilation time: 0ms
+
+
+[LuxCore][0.343] Compile Lights
+
+
+[LuxCore][0.343] Lights compilation time: 0ms
+
+
+[LuxCore][0.343] Compile ImageMaps
+
+
+[LuxCore][0.343] Image maps page(s) count: 1
+
+
+[LuxCore][0.343]  RGB channel page 0 size: 3072Kbytes
+
+
+[LuxCore][0.343] Image maps compilation time: 0ms
+
+
+[LuxCore][0.343] Starting 1 OpenCL render threads
+
+
+[LuxRays][0.375] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] RADIANCE_PER_PIXEL_NORMALIZEDs[0] buffer size: 32400Kbytes
+
+
+[LuxRays][0.375] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] ALPHA buffer size: 16200Kbytes
+
+
+[LuxRays][0.375] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] NOISE buffer size: 8100Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] RADIANCE_PER_PIXEL_NORMALIZEDs[0] buffer size: 32400Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Camera buffer size: 5492bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] UVs buffer size: 64bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Colors buffer size: 96bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Alphas buffer size: 32bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Triangle normals buffer size: 144bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Vertices buffer size: 96bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Triangles buffer size: 144bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Mesh description buffer size: 312bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] ImageMap descriptions buffer size: 40bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] ImageMaps buffer size: 3072Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Textures buffer size: 328bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Texture evaluation ops buffer size: 24bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Texture evaluation stacks buffer size: 6144Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Materials buffer size: 228bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Material evaluation ops buffer size: 84bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Material evaluation stacks buffer size: 16384Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Scene objects buffer size: 24bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Lights buffer size: 344bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Env. light indices buffer size: 4bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Light offsets (Part I) buffer size: 4bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] LightsDistribution buffer size: 16bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] InfiniteLightSourcesDistribution buffer size: 16bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Ray buffer size: 24576Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] RayHit buffer size: 10240Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] GPUTaskConfiguration buffer size: 336bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] GPUTask buffer size: 339968Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] GPUTaskDirectLight buffer size: 30720Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] GPUTaskState buffer size: 200704Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] GPUTask Stats buffer size: 2048Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] SamplerSharedData buffer size: 8108Kbytes
+
+
+[LuxCore][0.421] [PathOCLBaseRenderThread::0] Size of a Sample: 40bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Sample buffer size: 20480Kbytes
+
+
+[LuxCore][0.421] [PathOCLBaseRenderThread::0] Size of a SampleData: 8bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] SampleData buffer size: 4096Kbytes
+
+
+[LuxCore][0.421] [PathOCLBaseRenderThread::0] Size of a SampleResult: 428bytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] SampleResult buffer size: 219136Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] PathInfo buffer size: 55296Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] DirectLightVolumeInfo buffer size: 22528Kbytes
+
+
+[LuxRays][0.421] [Device NVIDIA GeForce RTX 5080 Laptop GPU CUDAIntersect] Pixel Filter Distribution buffer size: 33Kbytes
+
+
+[LuxCore][0.437] [PathOCLBaseRenderThread::0] Compiling kernels 
+
+
+[LuxRays][0.437] [PathOCL kernel] Compiler options: -D LUXRAYS_OPENCL_KERNEL -D SLG_OPENCL_KERNEL -D RENDER_ENGINE_PATHOCL -D PARAM_RAY_EPSILON_MIN=1e-05f -D PARAM_RAY_EPSILON_MAX=0.1f -D LUXRAYS_CUDA_DEVICE -D LUXRAYS_OS_WINDOWS --use_fast_math
+
+
+[LuxRays][0.437] [PathOCL kernel] Compiling kernels
+
+
+[LuxRays][0.437] [PathOCL kernel] Cache directory: "C:\\Temp\\luxcorerender.org\\cuda_kernel_cache\\LUXRAYS_2_11_2"
+
+
+[LuxRays][0.500] [PathOCL kernel] Program cached
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling Film_Clear Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling InitSeed Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling Init Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling AdvancePaths_MK_RT_NEXT_VERTEX Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling AdvancePaths_MK_HIT_NOTHING Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling AdvancePaths_MK_HIT_OBJECT Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling AdvancePaths_MK_RT_DL Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling AdvancePaths_MK_DL_ILLUMINATE Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling AdvancePaths_MK_DL_SAMPLE_BSDF Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling AdvancePaths_MK_GENERATE_NEXT_VERTEX_RAY Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling AdvancePaths_MK_SPLAT_SAMPLE Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling AdvancePaths_MK_NEXT_SAMPLE Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Compiling AdvancePaths_MK_GENERATE_CAMERA_RAY Kernel
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] AdvancePaths_MK_* workgroup size: 32
+
+
+[LuxCore][0.500] [PathOCLBaseRenderThread::0] Kernels compilation time: 78ms
+
+
+[LuxCore][0.500] Starting 0 native render threads
+
+
+[LuxCore][2.562] Noise estimation: first pass
+
+
+[LuxCore][4.640] Noise estimation: Error mean = 2.77972e-05
+
+
+[LuxCore][8.765] Noise estimation: Error mean = 1.63339e-05
+
+
+[LuxCore][8.953] [PathOCLRenderThread::0] Rendering thread halted
+
+
+[LuxRays][8.984] [Optix][4][DISKCACHE] Closed database: "C:\Users\Administrator\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+
+
+[LuxRays][8.984] [Optix][4][DISKCACHE]     Cache data size: "503.5 KiB"
+
+

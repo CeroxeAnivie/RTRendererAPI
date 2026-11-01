@@ -1,0 +1,3 @@
+NativeSdk engine=PATHOCL workgroup=256 round=1 fps=5.07731 ms=196.955
+NativeSdk engine=PATHOCL workgroup=256 round=2 fps=7.56904 ms=132.117
+NativeSdk engine=PATHOCL workgroup=256 round=3 fps=13.7342 ms=72.8108
