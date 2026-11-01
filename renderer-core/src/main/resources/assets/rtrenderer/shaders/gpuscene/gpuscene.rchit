@@ -62,7 +62,9 @@ void main()
     uint boundaryFlags=gsInstanceWord(gl_InstanceCustomIndexEXT,GPU_SCENE_INSTANCE_MEDIUM_BOUNDARY_FLAGS_WORD);
     uint hitPrimitive=gl_PrimitiveID;vec2 hitBary=hitAttributes;float hitDistance=gl_HitTEXT;
     bool connection=payload.state.y==GS_PAYLOAD_OPTICAL_CONNECTION_QUERY;
-    if(connection&&boundaryFlags!=0u){
+    vec3 boundaryWeights=vec3(1.0-hitBary.x-hitBary.y,hitBary);
+    bool boundaryEdge=min(boundaryWeights.x,min(boundaryWeights.y,boundaryWeights.z))<8.0*1.192092896e-7;
+    if(boundaryFlags!=0u&&(connection||boundaryEdge)){
         if(payload.state.z==GS_OPTICAL_BOUNDARY_HIT_REUSE
                 &&all(equal(payload.motionRevision,uvec2(gl_InstanceCustomIndexEXT,gl_PrimitiveID)))) {
             hitPrimitive=floatBitsToUint(payload.previousWorldPosition.w);
