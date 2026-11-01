@@ -8,6 +8,8 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
+#include <cstdlib>
 
 // This file only marshals the public LuxCore API. No renderer, kernels or queue scheduler live here.
 namespace {
@@ -43,7 +45,7 @@ void* direct(JNIEnv* env, jobject buffer, size_t required) {
         throw std::invalid_argument("direct buffer is missing or too small");
     return env->GetDirectBufferAddress(buffer);
 }
-void quietLog(const char*) { }
+void quietLog(const char* text) { if (std::getenv("RTRENDERER_LUXCORE_LOG")) std::clog << text << std::endl; }
 }
 #define JNI(name) extern "C" JNIEXPORT name JNICALL
 #define TRY try
