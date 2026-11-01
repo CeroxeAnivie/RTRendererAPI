@@ -72,40 +72,26 @@ Session& session(jlong h) {
 void fail(JNIEnv* e, const std::exception& x) {
     if (!e->ExceptionCheck()) e->ThrowNew(e->FindClass("java/lang/IllegalStateException"), x.what());
 }
-std::string configureAgility(const std::filesystem::path& runtime) {
-    std::array<wchar_t, 32768> executable{};
-    auto length=GetModuleFileNameW(nullptr,executable.data(),static_cast<DWORD>(executable.size()));
-    if(length==0 || length>=executable.size()) throw std::runtime_error("Cannot locate the Java executable for Agility SDK selection");
-    const auto executableDirectory=std::filesystem::path(executable.data()).parent_path();
-    const auto source=runtime/L"D3D12"/L"D3D12Core.dll";
-    if(!std::filesystem::is_regular_file(source)) throw std::runtime_error("RTXPT Agility runtime is missing: "+source.string());
-
-    auto sdkDirectory=(runtime/L"D3D12").lexically_normal();
-    auto relative=sdkDirectory.lexically_relative(executableDirectory);
-    if(relative.empty()) {
-        std::array<wchar_t, 32768> temporary{};
-        auto temporaryLength=GetTempPathW(static_cast<DWORD>(temporary.size()),temporary.data());
-        if(temporaryLength==0 || temporaryLength>=temporary.size()) throw std::runtime_error("Cannot locate the user temporary directory for the Agility runtime");
-        sdkDirectory=std::filesystem::path(temporary.data())/L"RTRendererAPI"/L"RTXPT"/
-            (L"Agility-"+std::to_wstring(RTXPT_D3D_AGILITY_SDK_VERSION));
-        if(_wcsicmp(sdkDirectory.root_name().c_str(),executableDirectory.root_name().c_str())!=0)
-            throw std::runtime_error("RTXPT Agility runtime and Java executable are on different volumes, and the user temporary directory is not on the Java volume");
-        std::filesystem::create_directories(sdkDirectory);
-        const auto cached=sdkDirectory/L"D3D12Core.dll";
-        if(!std::filesystem::is_regular_file(cached) || std::filesystem::file_size(cached)!=std::filesystem::file_size(source))
-            std::filesystem::copy_file(source,cached,std::filesystem::copy_options::overwrite_existing);
-        relative=sdkDirectory.lexically_relative(executableDirectory);
+void configureAgility(const std::filesystem::path& runtime) {
+    // Microsoft supports this factory path in retail Java hosts, including cross-volume SDKs.
+    // Apply once before Donut/Streamline creates a D3D12 device; keep the factory resident.
+    static Microsoft::WRL::ComPtr<ID3D12DeviceFactory> factory;
+    static std::filesystem::path selected;
+    const auto directory = std::filesystem::canonical(runtime / L"D3D12");
+    if (!std::filesystem::is_regular_file(directory / L"D3D12Core.dll"))
+        throw std::runtime_error("RTXPT Agility runtime is missing D3D12Core.dll");
+    if (factory) {
+        if (directory != selected) throw std::runtime_error("An RTXPT Agility runtime is already selected for this process");
+        return;
     }
-    if(relative.empty() || relative.is_absolute()) throw std::runtime_error("Cannot form an Agility SDK path relative to the Java executable");
-    auto path=relative.string();
-    if(path.empty() || (path.back()!='\\' && path.back()!='/')) path+='\\';
-
-    Microsoft::WRL::ComPtr<ID3D12SDKConfiguration> sdk;
-    HRESULT hr=D3D12GetInterface(CLSID_D3D12SDKConfiguration,IID_PPV_ARGS(&sdk));
-    if(FAILED(hr)) throw std::runtime_error("D3D12GetInterface failed: "+std::to_string(static_cast<uint32_t>(hr)));
-    hr=sdk->SetSDKVersion(RTXPT_D3D_AGILITY_SDK_VERSION,path.c_str());
-    if(FAILED(hr)) throw std::runtime_error("ID3D12SDKConfiguration::SetSDKVersion failed: "+std::to_string(static_cast<uint32_t>(hr))+" path="+path);
-    return path;
+    Microsoft::WRL::ComPtr<ID3D12SDKConfiguration1> configuration;
+    auto hr = D3D12GetInterface(CLSID_D3D12SDKConfiguration, IID_PPV_ARGS(&configuration));
+    if (FAILED(hr)) throw std::runtime_error("D3D12 SDK configuration is unavailable: " + std::to_string(static_cast<uint32_t>(hr)));
+    auto path = directory.string() + "\\";
+    hr = configuration->CreateDeviceFactory(RTXPT_D3D_AGILITY_SDK_VERSION, path.c_str(), IID_PPV_ARGS(&factory));
+    if (FAILED(hr)) throw std::runtime_error("CreateDeviceFactory failed: " + std::to_string(static_cast<uint32_t>(hr)) + " path=" + path);
+    factory->ApplyToGlobalState();
+    selected = directory;
 }
 }
 
