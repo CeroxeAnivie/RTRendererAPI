@@ -163,6 +163,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        [unroll] for 
         [unroll] for (uint sampleIndex = 0; sampleIndex < fullSamples; sampleIndex++)
 '@ 'RTR deterministic delta contributions'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        lightSampler.GetCandidateSampleCounts(candidateSampleCount, localCount, globalCount);' @'
+        // RTR conditional NEE sample budget
         lightSampler.GetCandidateSampleCounts(candidateSampleCount, localCount, globalCount);
         #if defined(RTR_SPLIT_POINT_ENVIRONMENT) && RTR_SPLIT_POINT_ENVIRONMENT
         if (lightSampler.RtrSplitPointEnvironment())

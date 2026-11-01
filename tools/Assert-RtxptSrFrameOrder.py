@@ -41,6 +41,8 @@ assert "localEnvironmentProxyCount == 0" in nee and "globalCount += localCount" 
 assert "if (lightSampler.RtrSplitPointEnvironment())" in nee
 assert "lightSampler.RtrEnvironmentProxyCount()" in nee
 assert "lightSampler.RtrEnvironmentLocalProxyCount()" in nee
+assert "RTR conditional NEE sample budget" in nee
+assert nee.count("localEnvironmentProxyCount == 0") == 1
 assert "environmentLightProxies) / float(environmentProxyCount)" in args.source.parent.joinpath(
     "Shaders/PathTracer/Lighting/LightSampler.hlsli").read_text(encoding="utf-8-sig")
 result={"source_contract":"PASS","gpu_contract":"not_requested"}
