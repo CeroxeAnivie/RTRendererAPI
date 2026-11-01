@@ -1,0 +1,23 @@
+{
+  "commit": "3e03d5c",
+  "beforeCommit": "cd2159a",
+  "beforeNativeSha256": "4D5766F580A7AF2E0D7F3A2A42107F636D41557C463BD2D101A277C6DBAE5D73",
+  "lifecycle": {
+    "cycles": 12,
+    "sceneChecks": 72,
+    "reopenings": 5,
+    "exitCode": 0,
+    "probes": "external 1-second process/GPU counters; no JFR/NMT/Frida"
+  },
+  "fpsSettings": {
+    "width": 1920,
+    "height": 1080,
+    "spp": 1,
+    "reconstruction": "RR Balanced",
+    "input": "1114x626",
+    "frameGeneration": false,
+    "sharc": true,
+    "ser": true
+  },
+  "exclusions": "Round 1 before Java classpath had a missing subdirectory; round 1 is excluded as a whole. Later baseline class locations verified. Do not compare the early unpaired baseline to paired candidates."
+}

@@ -188,6 +188,7 @@ public final class RtxptCompositionSelfTest {
                     require(host.renderFrame(),"Native final benchmark frame");
                 }
                 host.awaitIdle();double elapsed=(System.nanoTime()-start)/1e6;long completed=host.bridgeTimings().frames()-before;
+                require(completed==frames,"Native benchmark must complete every requested frame; viewport may have been minimized or occluded: "+completed+"/"+frames);
                 String row=String.format(Locale.ROOT,"%s,%d,%.6f,%.6f,0%n",mode,completed,elapsed/completed,completed*1000/elapsed);
                 Files.writeString(output.resolve(mode+".csv"),"mode,completed_frames,ms,fps,copy_gpu_ms\n"+row);System.out.print(row);return;
             }
