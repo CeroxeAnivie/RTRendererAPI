@@ -5,6 +5,7 @@ param(
     [int]$Width=2560,
     [int]$Height=1440,
     [switch]$StageProfile,
+    [switch]$FrameGeneration,
     [switch]$SmallPointCandidate,
     [switch]$ControlLighting,
     [switch]$DisableResidualPointSampling,
@@ -29,9 +30,16 @@ param(
 $ErrorActionPreference='Stop'
 if($SmallPointCandidate -and $ControlLighting){throw 'Choose candidate or original lighting control, not both.'}
 if($ExactMis -and $ApproximateMis){throw 'Choose exact or approximate MIS, not both.'}
+if($Backend -ne 'Rtxpt' -and $FrameGeneration){throw 'This FG measurement is for the RTXPT path.'}
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
+$opticalHeader=Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'
+$opticalSource=[IO.File]::ReadAllText($opticalHeader)
+if($Backend -eq 'Rtxpt' -and ($opticalSource -match '#define RTR_LEGACY_TRANSPORT_TRACE 1'
+        -or $opticalSource -match '#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 1')) {
+    throw 'Disable optical tracing and diagnostic roughness controls before measuring FPS: tools/Build-RtxptOpticalTrace.ps1'
+}
 if(!$AllowDirtySource -and (& git status --porcelain | Where-Object {$_ -notmatch '^\?\? docs/quality/data/' -and $_ -notmatch '^.. docs/quality/data/'})) {
     throw 'Commit source changes before measuring hardware.'
 }
@@ -59,7 +67,7 @@ $classpath=@(
     'renderer-rtxpt/build/classes/java/main','renderer-rtxpt/build/resources/main','renderer-rtxpt/build/libs/renderer-rtxpt-7.0.0.jar',
     'demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar'
 ) -join ';'
-$jvm=@('-Dfile.encoding=UTF-8','-Ddemo.disable-fg=true',
+$jvm=@('-Dfile.encoding=UTF-8',('-Ddemo.disable-fg='+(!$FrameGeneration).ToString().ToLowerInvariant()),
     ('-Dtop.ceroxe.rt.rtxpt.runtime='+(Join-Path $repo 'build/rtxpt-sdk/bin')),
     '--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow',
     '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath)
@@ -69,8 +77,10 @@ if ($Backend -eq 'Vulkan' -and $StageProfile) {
 $entry=if($Backend -eq 'Rtxpt'){'demo.RtxptHexBallDemo'}else{'demo.HexBallDemo'}
 $demo=@('--windowed',"--width=$Width","--height=$Height",'--spp=1',"--duration-seconds=$Seconds")
 if($Backend -eq 'Rtxpt' -and !$Glass){$demo+='--original-balls'}
+if($Backend -eq 'Rtxpt' -and !$StageProfile){$demo+='--api.gpuTimingsEnabled=false'}
 $demo+=$ExtraArguments
 $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
+$oldOpticalTrace=$env:RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE
 $oldAsync=$env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX
 $oldPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
 $oldSrPreset=$env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET
@@ -86,6 +96,7 @@ $oldLegacyLighting=$env:RTR_RTXPT_DIAGNOSTIC_LEGACY_LIGHTING
 $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 try {
+    $env:RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE=$null
     $env:RTR_RTXPT_GPU_PROFILE=if($StageProfile){$prefix+'-gpu.csv'}else{$null}
     $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=switch($AsyncPrefix){'On'{'1'} 'Off'{'0'} default{$null}}
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=if($RrPreset -eq 'Upstream'){$null}else{$RrPreset}
@@ -102,6 +113,8 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(switch($LightSampler){'Power'{'power'} 'NeeAt'{'neeat'} default{$null}})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$(if($DisableTransmissionGuides){'1'}else{$null})
     & nvidia-smi --query-gpu=name,driver_version,utilization.gpu,memory.used,power.draw,clocks.current.graphics,temperature.gpu --format=csv > ($prefix+'-initial-gpu.csv')
+    $initialGpu=(& nvidia-smi --id=0 --query-gpu=utilization.gpu --format=csv,noheader,nounits).Trim()
+    if($initialGpu -ne '0'){throw "GPU 0 is busy ($initialGpu%); wait for the user's idle notification before absolute FPS measurement."}
     $settings=[ordered]@{
         SourceCommit=(& git rev-parse HEAD).Trim();Backend=$Backend;Entry=$entry;
         WorkingTreeSourceSha256=$sourceDigest;WorkingTreeSourceFiles=$sourcePaths;
@@ -109,7 +122,12 @@ try {
     CombinedBsdf=[bool]$CombinedBsdf;
     LegacySrHistory=[bool]$LegacySrHistory;
     LegacyLighting=[bool]$LegacyLighting;
-        Width=$Width;Height=$Height;Spp=1;FrameGeneration=$false;StageProfile=[bool]$StageProfile;
+        Width=$Width;Height=$Height;Spp=1;FrameGeneration=[bool]$FrameGeneration;StageProfile=[bool]$StageProfile;
+        OpticalTransportTrace=$false;NativeGpuTimings=[bool]$StageProfile;
+        OpticalTransportTraceSha256=(Get-FileHash -LiteralPath $opticalHeader).Hash;
+        ExactOpticalInterfaces=([regex]::Match($opticalSource,'#define RTR_LEGACY_EXACT_INTERFACE_COUNT (\d+)u')).Groups[1].Value;
+        NativeRoughnessPolicy=($opticalSource -notmatch '#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 1');
+        FinalMergeShaderSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/bin/ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/PostProcess.bin').Hash;
         RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;
         SrPreset=$SrPreset;
         FixedSrExposure=$FixedSrExposure;DisableBloom=[bool]$DisableBloom;
@@ -125,6 +143,9 @@ try {
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     $runLog=Get-Content -LiteralPath ($prefix+'.log') -Raw
+    if($runLog -match '\[unformatted args\]' -or $runLog -match 'single queue to preserve the final SR-input readback'){
+        throw 'Shader diagnostic output was unexpectedly active; discard this FPS run.'
+    }
     if($LegacyLighting -and $runLog -notmatch 'RTXPT legacy lighting inputs ACTIVE'){
         throw 'Requested legacy lighting inputs did not activate.'
     }
@@ -146,6 +167,7 @@ try {
     Get-Content -LiteralPath ($prefix+'.log') -Tail 5
     if($code -ne 0){throw "Hex-ball run exited $code; inspect $prefix.log"}
 } finally {
+    $env:RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE=$oldOpticalTrace
     $env:RTR_RTXPT_GPU_PROFILE=$oldProfile
     $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=$oldAsync
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$oldPreset
