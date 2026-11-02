@@ -12,6 +12,10 @@
 #include <sl_pcl.h>
 #include <sl_reflex.h>
 
+static_assert(SL_VERSION_MAJOR > 2 || (SL_VERSION_MAJOR == 2 &&
+        (SL_VERSION_MINOR > 14 || (SL_VERSION_MINOR == 14 && SL_VERSION_PATCH >= 16))),
+        "Use Streamline 2.14.16 or newer for the current NVIDIA model recommendations");
+
 namespace rtrenderer::nvidia {
 
 struct StreamlineVulkanBinding final {

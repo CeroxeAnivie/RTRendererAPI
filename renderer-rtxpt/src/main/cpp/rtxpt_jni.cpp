@@ -584,11 +584,11 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         s.requestedFrameGenerationMode=frameGenerationMode;
         s.requestedGeneratedFrames=generatedFrames;
         g_sampleUIData.RealtimeMode=true;
-        if(const char* sharpness=std::getenv("RTR_RTXPT_DIAGNOSTIC_NIS_SHARPNESS")) {
-            const float amount=std::stof(sharpness);
-            if(!std::isfinite(amount) || amount<0.f || amount>1.f)
-                throw std::invalid_argument("NIS sharpness must be in [0,1]");
-            g_sampleUIData.HostNisSharpness=amount;
+        if(const char* exposure=std::getenv("RTR_RTXPT_DIAGNOSTIC_SR_EXPOSURE")) {
+            const float value=std::stof(exposure);
+            if(!std::isfinite(value) || value<=0.f)
+                throw std::invalid_argument("Diagnostic SR exposure must be finite and positive");
+            g_sampleUIData.HostDLSSFixedExposure=value;
         }
         if(const char* bloom=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM"); bloom && std::string(bloom)=="1")
             g_sampleUIData.EnableBloom=false;

@@ -29,67 +29,66 @@ Patch-Once 'Rtxpt/SampleUI.h' '    //float                               DLSSSha
 Patch-Once 'Rtxpt/Sample.cpp' '                dlssOptions.preset = StreamlineInterface::DLSSPreset::eDefault;' @'
                 dlssOptions.preset = m_ui.HostDLSSSRPreset; // RTR forward upstream SR model without changing resolution
 '@ 'RTR forward upstream SR model'
+# Isolate the old Vulkan route's documented 1x1 exposure contract without changing
+# the SR model, color, tone mapper, sample count, or render resolution.
 Patch-Once 'Rtxpt/SampleUI.h' '    //float                               DLSSSharpness = 0.f;' @'
-    float                              HostNisSharpness = 0.f; // RTR native NIS output sharpening, disabled by default
+    float                              HostDLSSFixedExposure = 0.f; // RTR isolated SR exposure, zero keeps upstream auto
     //float                               DLSSSharpness = 0.f;
-'@ 'RTR native NIS output sharpening'
+'@ 'RTR isolated SR exposure'
 Patch-Once 'Rtxpt/Sample.h' '    void                                    PostProcessPreToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView);' @'
-    nvrhi::TextureHandle                     m_hostNisOutput; // RTR upstream NIS output
-    nvrhi::ITexture*                         PostProcessPreToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView);
-'@ 'RTR upstream NIS output'
-Patch-Once 'Rtxpt/Sample.cpp' 'void Sample::PostProcessPreToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView)' @'
-nvrhi::ITexture* Sample::PostProcessPreToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView) // RTR select post-process output
-'@ 'RTR select post-process output'
+    nvrhi::TextureHandle                     m_hostDLSSExposure; // RTR optional one-texel exposure
+    void                                    PostProcessPreToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView);
+'@ 'RTR optional one-texel exposure'
+Patch-Once 'Rtxpt/Sample.cpp' 'dlssOptions.useAutoExposure = true;' 'dlssOptions.useAutoExposure = m_ui.HostDLSSFixedExposure <= 0.f || m_ui.RealtimeAA != 2; /* RTR explicit SR exposure contract */' 'RTR explicit SR exposure contract'
+Patch-Once 'External/Donut/include/donut/app/StreamlineInterface.h' '        nvrhi::ITexture* input) = 0;' @'
+        nvrhi::ITexture* input,
+        nvrhi::ITexture* exposure = nullptr) = 0; // RTR optional DLSS exposure tag
+'@ 'RTR optional DLSS exposure tag'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.h' '        nvrhi::ITexture* input) override;' @'
+        nvrhi::ITexture* input,
+        nvrhi::ITexture* exposure = nullptr) override; // RTR optional DLSS exposure tag
+'@ 'RTR optional DLSS exposure tag'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '    nvrhi::ITexture* Input)' @'
+    nvrhi::ITexture* Input,
+    nvrhi::ITexture* Exposure) // RTR optional DLSS exposure tag
+'@ 'RTR optional DLSS exposure tag'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '    sl::ResourceTag inputs[] = { inputResourceTag, outputResourceTag };' @'
+    sl::Resource exposureResource{};
+    sl::Extent exposureExtent{0, 0, 1, 1};
+    if (Exposure) GetSLResource(commandList, exposureResource, Exposure, view);
+    // A null tag removes previous fixed exposure when returning to upstream auto.
+    sl::ResourceTag exposureTag{ Exposure ? &exposureResource : nullptr, sl::kBufferTypeExposure,
+        sl::ResourceLifecycle::eValidUntilPresent, &exposureExtent };
+    sl::ResourceTag inputs[] = { inputResourceTag, outputResourceTag, exposureTag }; // RTR explicit exposure input
+'@ 'RTR explicit exposure input'
 Patch-Once 'Rtxpt/Sample.cpp' @'
-}
-
-void Sample::PostProcessPostToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView)
+        // TAG STREAMLINE RESOURCES
+        GetDeviceManager()->GetStreamline().TagResourcesDLSSNIS(m_commandList,
 '@ @'
-    // RTXPT retains its reconstruction. NIS uses NVIDIA's sharpening-only mode
-    // at the same display dimensions, then feeds tone mapping without a copy.
-    if (m_ui.HostNisSharpness > 0.f && m_ui.RealtimeMode && m_ui.RealtimeAA == 2)
-    {
-        auto& streamline = GetDeviceManager()->GetStreamline();
-        if (!streamline.IsNISAvailable())
-            throw std::runtime_error("Requested native NIS sharpening is unavailable");
-        auto source = m_renderTargets->ProcessedOutputColor;
-        const auto& desc = source->getDesc();
-        if (!m_hostNisOutput || m_hostNisOutput->getDesc().width != desc.width
-            || m_hostNisOutput->getDesc().height != desc.height)
+        if (m_ui.HostDLSSFixedExposure > 0.f && m_ui.RealtimeAA == 2 && !m_hostDLSSExposure)
         {
-            if (m_hostNisOutput) streamline.CleanupNIS(true);
-            auto outputDesc = desc;
-            outputDesc.debugName = "NISSharpenOutput";
-            outputDesc.isRenderTarget = false;
-            outputDesc.isUAV = true;
-            outputDesc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-            m_hostNisOutput = GetDevice()->createTexture(outputDesc);
-            donut::log::info("RTXPT native NIS sharpen: strength=%.3f output=%ux%u", m_ui.HostNisSharpness, desc.width, desc.height);
+            nvrhi::TextureDesc desc;
+            desc.width = desc.height = 1;
+            desc.format = nvrhi::Format::R32_FLOAT;
+            desc.isUAV = true;
+            desc.initialState = nvrhi::ResourceStates::ShaderResource;
+            desc.keepInitialState = true;
+            desc.debugName = "HostDLSSExposure";
+            m_hostDLSSExposure = GetDevice()->createTexture(desc);
+            m_commandList->clearTextureFloat(m_hostDLSSExposure, nvrhi::AllSubresources, nvrhi::Color(m_ui.HostDLSSFixedExposure));
+            log::info("RTXPT explicit SR exposure texture=%.3f (1x1 R32F)", m_ui.HostDLSSFixedExposure);
         }
-        StreamlineInterface::NISOptions options;
-        options.mode = StreamlineInterface::NISMode::eSharpen;
-        options.hdrMode = StreamlineInterface::NISHDR::eLinear;
-        options.sharpness = m_ui.HostNisSharpness;
-        streamline.SetNISOptions(options);
-        GpuProfiler::Begin(commandList, "NIS Sharpen");
-        streamline.TagResourcesDLSSNIS(commandList, fullscreenView.GetChildView(ViewType::PLANAR, 0), m_hostNisOutput, source);
-        commandList->commitBarriers();
-        streamline.EvaluateNIS(commandList);
-        commandList->clearState();
-        GpuProfiler::End(commandList);
-        return m_hostNisOutput;
-    }
-    return m_renderTargets->ProcessedOutputColor; // RTR same-size native NIS result
-}
-
-void Sample::PostProcessPostToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView)
-'@ 'RTR same-size native NIS result'
-Patch-Once 'Rtxpt/Sample.cpp' '        PostProcessPreToneMapping(m_commandList, fullscreenView);   // writing to m_renderTargets->ProcessedOutputColor' @'
-        auto* toneMapInput = PostProcessPreToneMapping(m_commandList, fullscreenView); // RTR no-copy sharpen output
-'@ 'RTR no-copy sharpen output'
-Patch-Once 'Rtxpt/Sample.cpp' 'm_toneMappingPass->Render(m_commandList, GetBindingCache(), fullscreenView, m_renderTargets->ProcessedOutputColor, m_ui.EnableToneMapping)' @'
-m_toneMappingPass->Render(m_commandList, GetBindingCache(), fullscreenView, toneMapInput, m_ui.EnableToneMapping) /* RTR tone-map selected output */
-'@ 'RTR tone-map selected output'
+        // TAG STREAMLINE RESOURCES
+        GetDeviceManager()->GetStreamline().TagResourcesDLSSNIS(m_commandList,
+'@ 'RTXPT explicit SR exposure texture='
+Patch-Once 'Rtxpt/Sample.cpp' @'
+            m_renderTargets->ProcessedOutputColor,
+            m_renderTargets->OutputColor);
+'@ @'
+            m_renderTargets->ProcessedOutputColor,
+            m_renderTargets->OutputColor,
+            m_ui.HostDLSSFixedExposure > 0.f && m_ui.RealtimeAA == 2 ? m_hostDLSSExposure.Get() : nullptr); // RTR tag fixed exposure
+'@ 'RTR tag fixed exposure'
 Patch-Once 'External/Donut/compileshaders.cmake' 'set(compilerCommand ${SHADERMAKE_PATH}' 'set(compilerCommand ${SHADERMAKE_PATH} --jobs 1' '${SHADERMAKE_PATH} --jobs 1'
 Patch-Once 'External/Nrd/CMakeLists.txt' 'set(SHADERMAKE_GENERAL_ARGS' "set(SHADERMAKE_GENERAL_ARGS --jobs 1" 'SHADERMAKE_GENERAL_ARGS --jobs 1'
 # Only expose host control and runtime file roots. Rendering, scheduling and shaders stay upstream.
@@ -627,7 +626,7 @@ if($StreamlineSdk){
 & $cmake -S $sdk -B $build -G 'Visual Studio 17 2022' -A x64 `
     -DDONUT_WITH_VULKAN=OFF -DDONUT_WITH_KTX=OFF -DDONUT_WITH_AFTERMATH=OFF `
     -DDONUT_EMBED_SHADER_PDBS=OFF -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF `
-    -DTRACY_ENABLE=OFF -DSTREAMLINE_FEATURE_NIS=ON `
+    -DTRACY_ENABLE=OFF -DSTREAMLINE_FEATURE_NIS=OFF `
     '-DCMAKE_CXX_FLAGS=/DWIN32 /D_WINDOWS /EHsc /utf-8' '-DCMAKE_C_FLAGS=/DWIN32 /D_WINDOWS /utf-8' @localDependencies
 if($LASTEXITCODE -ne 0){throw 'RTXPT native configure failed'}
 if($ConfigureOnly){return}

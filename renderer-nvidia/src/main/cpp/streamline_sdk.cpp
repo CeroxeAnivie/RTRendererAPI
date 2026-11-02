@@ -120,8 +120,9 @@ public:
             preferences.pathToLogsAndData = diagnosticDirectory.c_str();
             preferences.logLevel = sl::LogLevel::eVerbose;
         }
-        // OTA plugins would make a signed deployment nondeterministically bind a cached version.
-        preferences.flags = sl::PreferenceFlags::eDisableCLStateTracking
+        // Preserve NVIDIA's recommended OTA/model policy, as the RTXPT host does.
+        // Assignment previously cleared eAllowOTA and eAllowDownloadedPlugins.
+        preferences.flags |= sl::PreferenceFlags::eDisableCLStateTracking
                 | sl::PreferenceFlags::eDisableDebugText
                 | sl::PreferenceFlags::eUseManualHooking
                 | sl::PreferenceFlags::eUseFrameBasedResourceTagging;

@@ -1,6 +1,6 @@
 # NVIDIA 运行时与模型核对
 
-2026-11-02 通过官方 GitHub release API 核对：最新发布为 [Streamline 2.14.16](https://github.com/NVIDIA-RTX/Streamline/releases/tag/v2.14.16)，发布时间 2026-10-16。项目已经使用此版本。
+2026-11-02 通过官方 GitHub release API 核对：最新发布为 [Streamline 2.14.16](https://github.com/NVIDIA-RTX/Streamline/releases/tag/v2.14.16)，发布时间 2026-10-16。RTXPT 路径已经使用此版本；旧 Vulkan 路径的补充核对见下文，不能把前者的核对扩大成整个项目。
 
 | 功能 | 运行时版本 | 当前官方模型推荐 |
 | --- | --- | --- |
@@ -18,4 +18,8 @@
 
 下一候选是 [NVIDIA NIS 官方仅锐化模式](https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideNIS.md)。保持 SR 输入尺寸及模型，不实现自制锐化器，不复制整帧回 CPU。它目前只是诊断候选，必须同时检查画面、噪声和 FPS，尚未启用为默认。
 
-NIS 0.15 候选 v124 已完成 364 帧及退出生命周期检查，官方插件实际运行且 `slShutdown=0`。它把局部阴影边缘宽度从 2.407 降到 2.328 px，但静态帧间波动从 0.760 升到 1.418/255，静态参照误差从 5.560 升到 6.627/255；1:1 截图也显示噪声被放大。画质回归不通过，不进入默认配置，也不将更锐的噪声算作细节修复。证据：`data/hexball-native-20261101/sr-balanced-nis015-analysis-v124.json` 及同名 PNG。后续保留已接受的 K 模型画面，独立排查上游后处理是否造成额外的微糊。
+NIS 0.15 候选 v124 已完成 364 帧及退出生命周期检查，官方插件实际运行且 `slShutdown=0`。它把局部阴影边缘宽度从 2.407 降到 2.328 px，但静态帧间波动从 0.760 升到 1.418/255，静态参照误差从 5.560 升到 6.627/255；1:1 截图也显示噪声被放大。画质回归不通过，接入代码已撤回，不进入默认配置，也不将更锐的噪声算作细节修复。证据：`data/hexball-native-20261101/sr-balanced-nis015-analysis-v124.json` 及同名 PNG；需要重现该候选可检出证据记录的提交。
+
+Bloom 隔离 v125 的局部边缘仅从 2.407 变为 2.379 px，静态参照误差略升，不能解释主要差异，也没有改变 Bloom 默认设置。下一项是实际调用链中已确认的曝光差异：旧 Vulkan shader 写入 1x1 的固定曝光 1，RTXPT 原来没有曝光资源且打开内部自动曝光。按照官方指南，只关闭 `useAutoExposure` 但不提供纹理仍会启用自动曝光，因此对照必须同时提供真实 R32F 纹理。此项仍是隔离候选，没有据此宣称根因已确定或微糊已修复。
+
+补充核对发现旧 Vulkan 的打包目录仍是 Streamline 2.12.0、DLSS 310.7.0，且 `streamline_sdk.cpp` 覆盖默认 flags，清掉了 NVIDIA 的 OTA 和已下载插件策略。正在统一其 SDK 发现路径、最低编译版本与官方模型策略。旧路线升级独立于 RTXPT 微糊验收，不能计作微糊修复。

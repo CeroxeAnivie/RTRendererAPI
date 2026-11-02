@@ -103,7 +103,9 @@ val rtxmuSdkRoot = discoveredPath(
 ) { File(it, "include/rtxmu/VkAccelStructManager.h").isFile }
 val rtxmuCommit = "0c9ce1177000d5923e2cc6a35ae9cb7ff03748d2"
 val streamlineSdkRootProperty = discoveredPath(
-    "streamlineSdkRoot", "STREAMLINE_ROOT", listOf("D:/StreamlineSdk")
+    "streamlineSdkRoot", "STREAMLINE_ROOT", listOf(
+        "D:/NVIDIA SDK/Streamline-2.14.16", "D:/StreamlineSdk"
+    )
 ) { File(it, "bin/x64/sl.interposer.dll").isFile }
 val jdkHomeProperty = discoveredPath(
     "jdkHome", "JAVA_HOME", listOf(
