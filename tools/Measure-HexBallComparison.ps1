@@ -36,8 +36,8 @@ $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
 $opticalHeader=Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'
 $opticalSource=[IO.File]::ReadAllText($opticalHeader)
-if($Backend -eq 'Rtxpt' -and ($opticalSource -match '#define RTR_LEGACY_TRANSPORT_TRACE 1'
-        -or $opticalSource -match '#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 1')) {
+if($Backend -eq 'Rtxpt' -and ($opticalSource -match '#define RTR_LEGACY_TRANSPORT_TRACE 1' -or
+        $opticalSource -match '#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 1')) {
     throw 'Disable optical tracing and diagnostic roughness controls before measuring FPS: tools/Build-RtxptOpticalTrace.ps1'
 }
 if(!$AllowDirtySource -and (& git status --porcelain | Where-Object {$_ -notmatch '^\?\? docs/quality/data/' -and $_ -notmatch '^.. docs/quality/data/'})) {
