@@ -28,16 +28,18 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig interactive(DemoConfig config) {
-        return DemoApiControls.configure(baseConfig(config.cpuPresentation() ? 4 : 3, config.cpuPresentation()));
+        return DemoApiControls.configure(baseConfig(RendererConfig.DEFAULT_MAX_FRAMES_IN_FLIGHT, config.cpuPresentation()));
     }
 
     static RendererConfig rtxptInteractive() {
-        // Keep the accepted SR workload; RR/cache remain explicit API choices.
-        var reconstruction = FrameReconstructionOptions.recommended().toBuilder()
-                .quality(FrameReconstructionOptions.Quality.BALANCED)
-                .build();
-        return DemoApiControls.configure(RendererConfig.presentation().copyBuilder()
-                .pathTracing(PathTracingOptions.defaults())
+        // All missing fields inherit the consumer-oriented medium budget.
+        var base=RendererConfig.presentation();
+        var reconstruction = base.frameReconstruction();
+        return DemoApiControls.configure(base.copyBuilder()
+                .pathTracing(PathTracingOptions.defaults().withQuality(
+                    top.ceroxe.rt.renderer.api.PathTracingQualityOptions.defaults().withLighting(
+                        top.ceroxe.rt.renderer.api.PathTracingQualityOptions.LightSampling.defaults().withInput(
+                            top.ceroxe.rt.renderer.api.PathTracingQualityOptions.LightingInput.SCENE_ANALYTIC))))
                 .frameReconstruction(reconstruction)
                 .denoising(DenoisingOptions.disabled())
                 .frameGeneration(configuredGenerationPolicy()).gpuTimingsEnabled(true).build());

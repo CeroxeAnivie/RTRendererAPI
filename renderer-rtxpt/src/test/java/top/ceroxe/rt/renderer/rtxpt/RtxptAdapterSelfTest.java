@@ -40,6 +40,14 @@ public final class RtxptAdapterSelfTest {
             require(json.contains("EnvironmentLight")&&json.contains("DirectionalLight"),"Native light graph");
             require(gltf.contains("KHR_materials_transmission")&&gltf.contains("KHR_materials_ior"),"Native transmission and IOR");
             require(gltf.contains("\"name\":\"i1\"")&&s.interiors.size()==1,"Interior assigned to imported material");
+            require(s.materialIors.equals(Map.of("mat0",1.5f)),"Boundary IOR is retained for native material upload");
+            var opaque=new RtxptScene(s);
+            opaque.retain(SceneTransaction.builder(2)
+                .upsert(MaterialAsset.builder(1).transmission(0).indexOfRefraction(2.618034f).build())
+                .upsert(SceneInstance.builder(1,1).build()).build());
+            opaque.export(dir.resolve("opaque"),frame,opaque.items(frame));
+            require(opaque.interiors.isEmpty(),"Opaque IOR does not invent a medium boundary");
+            require(opaque.materialIors.equals(Map.of("mat0",2.618034f)),"Opaque IOR survives export for native BSDF upload");
             require(Files.size(dir.resolve("content.bin"))>0,"Geometry is exported");
             require(gltf.contains("\"NORMAL\""),"Donut always receives explicit normals");
             require(RtxptScene.sameStructure(items,items),"Static scene does not reload");
@@ -83,7 +91,7 @@ public final class RtxptAdapterSelfTest {
             for(boolean standalone:new boolean[]{false,true}) {
                 var reconstruction=standalone?RtxptAccess.Reconstruction.DLSS:RtxptAccess.Reconstruction.DLSS_RR;
                 var actual=new RtxptAccess.RuntimeStatus(1280,720,reconstruction,standalone,true,false,false,true,
-                    false,true,true,3,1,3,true,true,true,true,true,false);
+                    false,true,true,3,1,3,true,true,true,true,true,false,4,false);
                 var capabilities=RtxptRenderer.featureCapabilities(profile,actual);
                 String implementation=standalone?"nvidia.nrd":"nvidia.dlss_rr";
                 var denoising=capabilities.feature(RenderingFeatureCapabilities.Feature.DENOISING);
@@ -105,7 +113,7 @@ public final class RtxptAdapterSelfTest {
                 .reconstruction()==RtxptAccess.Reconstruction.NONE,"Responsive native denoising does not force upscaling");
             require(!RtxptOptions.resolve(profile).relaxDenoiser(),"Balanced keeps the existing RR/default NRD policy");
             var taaOnly=new RtxptAccess.RuntimeStatus(1920,1080,RtxptAccess.Reconstruction.TAA,false,false,false,false,false,
-                false,false,false,6,1,1,false,false,false,false,false,false);
+                false,false,false,6,1,1,false,false,false,false,false,false,4,false);
             require(!RtxptRenderer.requestedReconstructionActive(profile.frameReconstruction(),taaOnly),
                 "Upstream TAA fallback must not pass the required DLSS SR execution check");
             require(RtxptRenderer.featureCapabilities(profile,taaOnly).feature(RenderingFeatureCapabilities.Feature.FRAME_RECONSTRUCTION)

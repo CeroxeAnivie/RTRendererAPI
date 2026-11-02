@@ -15,6 +15,10 @@ public interface RtxptAccess {
     void awaitIdle();
     /** Actual native settings and internal resolution after rendering, including upstream fallbacks. */
     RuntimeStatus runtimeStatus();
+    /** Actual upstream sampling/quality budgets; no GPU readback or synchronization. */
+    PathQualityStatus pathQualityStatus();
+    record PathQualityStatus(top.ceroxe.rt.renderer.api.PathTracingQualityOptions quality,
+            int actualLightSampler,int allocatedCacheEntries,int maxFramesInFlight,int workerThreads,int shaderCompilerThreads) { }
     /** Text drawn by the upstream GPU UI pass; empty text hides the HUD. GPU timing follows RendererConfig.gpuTimingsEnabled(). */
     void setOverlayText(String text);
     /** Optional selector drawn inside the same native HUD; an empty list hides it. */
@@ -39,7 +43,11 @@ public interface RtxptAccess {
         boolean frameGeneration,boolean shaderExecutionReordering,boolean lowLatency,
         int dlssMode,int generatedFramesPerNativeFrame,int maxGeneratedFrames,
         boolean dlssSupported,boolean dlssRrSupported,boolean frameGenerationSupported,
-        boolean reflexSupported,boolean shaderExecutionReorderingSupported,boolean relaxDenoiser) { }
+        boolean reflexSupported,boolean shaderExecutionReorderingSupported,boolean relaxDenoiser,
+        int exactOpticalInterfaces,boolean sceneLighting) {
+        /** Zero when the scene-lighting transport is not active; otherwise the selected 1..6 budget. */
+        public int activeExactOpticalInterfaces(){return sceneLighting?exactOpticalInterfaces:0;}
+    }
     /** Explicit one-shot readback. Never called in the presentation or benchmark frame loop. */
     void capture(Path png);
     BridgeTimings bridgeTimings();

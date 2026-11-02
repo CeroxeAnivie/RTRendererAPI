@@ -10,6 +10,8 @@ final class RtxptInputContract {
 
     static Optional<String> configurationIssue(RendererConfig configuration) {
         Objects.requireNonNull(configuration, "configuration");
+        if(configuration.maxFramesInFlight()>3)
+            return Optional.of("RTXPT supports two or three frames in flight; larger rings belong to Vulkan");
         if (configuration.cpuFrameReadbackEnabled())
             return Optional.of("RTXPT presents GPU frames directly; CPU frame readback is not exposed");
         if (!configuration.sceneShaders().equals(SceneShaderProgram.builtIn()))

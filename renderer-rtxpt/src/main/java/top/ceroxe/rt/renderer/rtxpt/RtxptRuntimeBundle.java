@@ -59,6 +59,10 @@ final class RtxptRuntimeBundle {
                             else {
                                 Files.createDirectories(output.getParent());
                                 try (var input = zip.getInputStream(entry)) { Files.copy(input, output); }
+                                // RTXPT validates shader caches against source timestamps. The
+                                // reproducible archive gives both the same timestamp, regardless
+                                // of extraction order, so packaged binaries remain reusable.
+                                if(entry.getLastModifiedTime()!=null)Files.setLastModifiedTime(output,entry.getLastModifiedTime());
                             }
                         }
                     }

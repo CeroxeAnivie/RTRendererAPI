@@ -20,6 +20,7 @@ public final class RtxptCompositionSelfTest {
     public static void main(String[] args) throws Exception {
         Path output=Path.of(args[0]).toAbsolutePath();Files.createDirectories(output);
         String mode=args.length>1?args[1]:"acceptance";
+        if(mode.equals("source-reuse")){nativeSourceReuse(output);return;}
         if(mode.equals("native")||mode.startsWith("return-")||mode.equals("overlay")||mode.equals("no-overlay"))requireIdleGpu();
         if(mode.equals("native")){nativeBenchmark(output);return;}
         if(mode.equals("rtxpt-final")||mode.equals("rtxpt-hud")||mode.startsWith("return-")){nativeFinal(output,mode);return;}
@@ -164,6 +165,47 @@ public final class RtxptCompositionSelfTest {
             System.out.println(host.runtimeStatus()+" "+host.presentationStatus());
         }
     }
+    private static void nativeSourceReuse(Path output) throws Exception {
+        try(var renderer=RtxptComposedRenderer.openRtxptPresentation(
+                RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),
+                DemoRendererProfile.rtxptMediumInteractive(false),"RTRendererAPI - composition source reuse test")) {
+            renderer.apply(RtxptMediumScene.create(1,"mixed"));
+            var layer=createOverlay(renderer);
+            renderer.overlays(List.of(layer));
+            renderer.submit(RtxptMediumDemo.frameRequest(sequence++,1,WIDTH,HEIGHT));
+            var commands=renderer.vulkanCommands();
+            var texture=new TextureResource(new RenderResourceId(700),ResourceVersion.initial(),TextureDimension.TEXTURE_2D,
+                WIDTH,HEIGHT,1,1,1,1,TextureFormat.RGBA8_UNORM,EnumSet.of(TextureUsage.COLOR_ATTACHMENT,TextureUsage.STORAGE_READ));
+            var view=new TextureView(texture,TextureViewDimension.TEXTURE_2D,new TextureSubresourceRange(TextureAspect.COLOR,0,1,0,1));
+            int blocked=0;
+            for(long commandSequence=1;commandSequence<=12;commandSequence++) {
+                var pass=RenderPassDescriptor.color(WIDTH,HEIGHT,List.of(RenderAttachment.cleared(view,StoreOp.STORE,
+                    new ClearValue.Color(commandSequence%2==0?.25f:0,.0625f,0,.5f))));
+                var transaction=new RenderCommandTransaction(commandSequence,List.of(new BeginRenderPassCommand(pass),new EndRenderPassCommand()));
+                var result=commands.submitCommands(transaction);
+                if(result.outcome()==CommandExecutionEvidence.Outcome.BLOCKED) {
+                    require(result.reason()==CommandExecutionEvidence.Reason.BOUNDED_BACKPRESSURE,"Retryable source backpressure reason");
+                    renderer.awaitCompositionConsumers();
+                    result=commands.submitCommands(transaction);blocked++;
+                }
+                require(result.outcome()==CommandExecutionEvidence.Outcome.RECORDED,"Same sequence records after consumer retirement: "+result);
+                long deadline=System.nanoTime()+10_000_000_000L;
+                while(!commands.commandExecutionEvidence(commandSequence).orElseThrow().outcome().gpuCompleted()) {
+                    require(System.nanoTime()<deadline,"Source rewrite completion deadline");Thread.sleep(1);
+                }
+                renderer.overlays(List.of(new FrameCompositionPlan.Layer(
+                    new ResourceMutationKey(ResourceGenerationKey.of(texture),commandSequence),FrameCompositionPlan.Operation.ALPHA_OVER)));
+                renderer.submit(RtxptMediumDemo.frameRequest(sequence++,1,WIDTH,HEIGHT));
+            }
+            require(blocked>0,"Test must exercise a genuinely consumer-owned source");
+            var host=renderer.extension(RtxptAccess.class).orElseThrow();
+            require(host.bridgeTimings().sceneExports()==1,"Consumer waits preserve the resident scene");
+            host.capture(output.resolve("source-reuse-final.png"));
+            Files.writeString(output.resolve("source-reuse-result.txt"),"PASS blocked="+blocked+", same-sequence retries=12, actual="+host.runtimeStatus());
+            System.out.println("COMPOSITION_SOURCE_REUSE PASS: blocked="+blocked+"; all 12 rewrites presented");
+        }
+    }
+
     private static void nativeFinal(Path output,String mode) throws Exception {
         boolean checkGeneration=mode.equals("rtxpt-final");
         boolean acceptance=checkGeneration||mode.equals("rtxpt-hud");

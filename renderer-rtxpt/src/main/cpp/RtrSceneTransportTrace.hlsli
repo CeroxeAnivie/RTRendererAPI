@@ -12,9 +12,13 @@
 #ifndef RTR_SCENE_REPLAY_PREFIX_CACHE
 #define RTR_SCENE_REPLAY_PREFIX_CACHE 1
 #endif
-// Six exact junctions suppress the dominant glass branch variance without
-// expanding the native payload. Later transport keeps its existing estimator.
+// Configured before pipeline creation. Later transport keeps its existing estimator.
+#ifndef RTR_SCENE_EXACT_INTERFACE_COUNT
 #define RTR_SCENE_EXACT_INTERFACE_COUNT 6u
+#endif
+#if RTR_SCENE_EXACT_INTERFACE_COUNT < 1 || RTR_SCENE_EXACT_INTERFACE_COUNT > 6
+#error Exact optical interface budget must be in [1,6]
+#endif
 #ifndef RTR_SCENE_WORK_TRACE
 #define RTR_SCENE_WORK_TRACE 0
 #endif

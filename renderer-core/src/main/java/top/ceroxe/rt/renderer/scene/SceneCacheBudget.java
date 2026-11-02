@@ -44,36 +44,38 @@ public record SceneCacheBudget(
     public static final SceneCacheBudget DEFAULT = new SceneCacheBudget(
             positiveLongProperty(
                     MATERIAL_BYTES_PROPERTY,
-                    RendererHeapBudget.defaultBytes(64L * MEBIBYTE, 16L * MEBIBYTE)
+                    RendererHeapBudget.defaultBytes(32L * MEBIBYTE, 8L * MEBIBYTE)
             ),
             positiveLongProperty(
                     GEOMETRY_BYTES_PROPERTY,
-                    RendererHeapBudget.defaultBytes(128L * MEBIBYTE, 32L * MEBIBYTE)
+                    RendererHeapBudget.defaultBytes(64L * MEBIBYTE, 16L * MEBIBYTE)
             ),
             positiveLongProperty(
                     MESH_BYTES_PROPERTY,
-                    RendererHeapBudget.defaultBytes(256L * MEBIBYTE, 64L * MEBIBYTE)
+                    RendererHeapBudget.defaultBytes(128L * MEBIBYTE, 32L * MEBIBYTE)
             ),
             positiveIntProperty(
                     MAX_CPU_BUILDS_IN_FLIGHT_PROPERTY,
-                    RendererHeapBudget.defaultCount(96, 24)
+                    RendererHeapBudget.defaultCount(16, 4)
             ),
             positiveIntProperty(
                     MAX_COMPLETED_BUILDS_WAITING_PROPERTY,
-                    RendererHeapBudget.defaultCount(64, 16)
+                    RendererHeapBudget.defaultCount(16, 4)
             ),
             positiveIntProperty(
                     MAX_RT_PENDING_MESH_SECTIONS_PROPERTY,
-                    RendererHeapBudget.defaultCount(512, 128)
+                    RendererHeapBudget.defaultCount(128, 32)
             ),
             positiveLongProperty(
                     MAX_RT_PENDING_MESH_BYTES_PROPERTY,
-                    RendererHeapBudget.defaultBytes(256L * MEBIBYTE, 64L * MEBIBYTE)
+                    RendererHeapBudget.defaultBytes(64L * MEBIBYTE, 16L * MEBIBYTE)
             ),
-            /* A 32-chunk frustum has several thousand vertical sections. */
-            positiveIntProperty(MAX_RT_CACHED_MESH_SECTIONS_PROPERTY, 4096),
-            positiveLongProperty(MAX_RT_CACHED_BLAS_BYTES_PROPERTY, 1536L * MEBIBYTE)
+            positiveIntProperty(MAX_RT_CACHED_MESH_SECTIONS_PROPERTY, 1024),
+            positiveLongProperty(MAX_RT_CACHED_BLAS_BYTES_PROPERTY, 384L * MEBIBYTE)
     );
+    public static SceneCacheBudget low(){return new SceneCacheBudget(16*MEBIBYTE,32*MEBIBYTE,64*MEBIBYTE,8,8,64,32*MEBIBYTE,512,192*MEBIBYTE);}
+    public static SceneCacheBudget medium(){return new SceneCacheBudget(32*MEBIBYTE,64*MEBIBYTE,128*MEBIBYTE,16,16,128,64*MEBIBYTE,1024,384*MEBIBYTE);}
+    public static SceneCacheBudget high(){return new SceneCacheBudget(64*MEBIBYTE,128*MEBIBYTE,256*MEBIBYTE,48,32,512,256*MEBIBYTE,4096,1536*MEBIBYTE);}
 
     /**
      * 使用兼容的队列与光追缓存默认值创建预算。

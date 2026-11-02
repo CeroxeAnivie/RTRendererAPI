@@ -9,6 +9,8 @@
 
 ## 普通与专家入口
 
+叠层纹理在消费方 GPU fence 完成前仍由组合器借用。复用同一纹理写入时，若 `submitCommands(...)` 返回 `BLOCKED / BOUNDED_BACKPRESSURE`，先调用 `awaitCompositionConsumers()` 等待已提交的消费者释放占用，再以同一个命令序号重试；等待不会销毁导入图像或管线缓存。不要用“已经轮换了几帧”推断借用结束，也不要绕过占用检查。真正非法的命令仍返回拒绝。该等待只用于实际背压，不能每帧调用 `trimIdleCompositionResources()` 代替。
+
 ```java
 try (var renderer = RtxptComposedRenderer.open()) {
     renderer.apply(initialScene);

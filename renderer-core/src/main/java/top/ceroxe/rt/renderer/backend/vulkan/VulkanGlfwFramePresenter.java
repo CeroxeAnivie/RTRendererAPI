@@ -716,6 +716,12 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     }
 
     @Override
+    public void awaitCompositionConsumers() {
+        requireOwnerAndOpen();
+        retireAllFrameContexts();
+    }
+
+    @Override
     public void retireD3D12SharedFrames() {
         requireOwnerAndOpen();
         retireAllFrameContexts();

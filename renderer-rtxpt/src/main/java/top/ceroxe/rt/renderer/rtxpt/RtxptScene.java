@@ -17,6 +17,7 @@ final class RtxptScene {
     final Map<Long,SceneInstance> instances=new LinkedHashMap<>();
     final Map<Long,SceneLight> lights=new LinkedHashMap<>();
     final Map<String,MediumBoundary> interiors=new LinkedHashMap<>();
+    final Map<String,Float> materialIors=new LinkedHashMap<>();
     RtxptScene() { }
     RtxptScene(RtxptScene src) {
         textures.putAll(src.textures);materials.putAll(src.materials);meshes.putAll(src.meshes);
@@ -75,6 +76,11 @@ final class RtxptScene {
     }
     static FloatBuffer floats(int n){return ByteBuffer.allocateDirect(Math.multiplyExact(n,4)).order(ByteOrder.nativeOrder()).asFloatBuffer();}
     void uploadInteriors(long handle) {
+        if(!materialIors.isEmpty()) {
+            var iors=floats(materialIors.size());
+            materialIors.values().forEach(iors::put);
+            RtxptNative.materialIors(handle,materialIors.keySet().toArray(String[]::new),iors.flip());
+        }
         if(interiors.isEmpty())return;
         var data=floats(interiors.size()*5);for(var b:interiors.values()) {
             var m=b.medium();data.put(m.absorption().red()).put(m.absorption().green()).put(m.absorption().blue()).put(m.indexOfRefraction()).put(b.priority());
@@ -82,7 +88,7 @@ final class RtxptScene {
         RtxptNative.interiors(handle,interiors.keySet().toArray(String[]::new),data.flip());
     }
     Path export(Path dir,RenderFrameRequest frame,List<Item> items) throws IOException {
-        Files.createDirectories(dir);interiors.clear();
+        Files.createDirectories(dir);interiors.clear();materialIors.clear();
         var root=object("asset",object("version","2.0","generator","RTRendererAPI 7 RTXPT thin scene adapter"));
         var views=new ArrayList<Object>();var accessors=new ArrayList<Object>();var gm=new ArrayList<Object>();var mats=new ArrayList<Object>();var nodes=new ArrayList<Object>();
         var images=new ArrayList<Object>();var tex=new ArrayList<Object>();var samplers=new ArrayList<Object>();var texIds=new HashMap<Long,Integer>();
@@ -122,6 +128,7 @@ final class RtxptScene {
                 for(var group:groups.entrySet()) {
                     var m=materials.get(group.getKey());String name="mat"+mats.size();
                     mats.add(material(name,m,item.boundary,item.visibility,texIds));if(item.boundary!=null)interiors.put(name,item.boundary);
+                    materialIors.put(name,item.boundary==null?m.indexOfRefraction():item.boundary.medium().indexOfRefraction());
                     int start=bin.size();for(int index:group.getValue())putInt(bin,index);
                     int view=views.size();views.add(object("buffer",0,"byteOffset",start,"byteLength",bin.size()-start));
                     int acc=accessors.size();accessors.add(object("bufferView",view,"componentType",5125,"count",group.getValue().size(),"type","SCALAR"));

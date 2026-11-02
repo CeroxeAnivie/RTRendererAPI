@@ -42,6 +42,7 @@ public final class DemoFeatureIntegrationSelfTest {
         boundsBlockedReasonsAndHandlesMissingCapabilityExtension();
         independentPublicApiControls();
         glassBallsHavePhysicalReflectionAndClosedInteriors();
+        opaqueBallsRemoveInteriorWorkAndPreservePhysics();
         rtxptRealtimePreservesAcceptedSrAndDemoFgControl();
         rtxptMediumHasSupportedDistinctScenesAndDefaultFg();
         System.out.println("DemoFeatureIntegrationSelfTest passed");
@@ -113,6 +114,35 @@ public final class DemoFeatureIntegrationSelfTest {
             require(material.metallic()==0 && material.transmission()==1 && material.roughness()<=.03,
                 "Ball material is smooth transmissive dielectric, not metal");
         }
+    }
+
+    private static void opaqueBallsRemoveInteriorWorkAndPreservePhysics() {
+        var physics=new HexPhysics();
+        var glass=new DemoScene(DemoScene.BallMaterial.GLASS);
+        var opaque=new DemoScene(DemoScene.BallMaterial.OPAQUE_REFLECTIVE);
+        var original=glass.initialTransaction();
+        var opaqueInitial=opaque.initialTransaction();
+        var previous=glass.primitiveBatch(physics,top.ceroxe.rt.renderer.api.FramePrimitiveBatch.empty());
+        var current=opaque.primitiveBatch(physics,previous);
+        var update=opaque.ballMaterialTransaction(1);
+        require(!update.reset()&&update.upserts().materials().size()==3
+            &&update.upserts().meshes().isEmpty()&&update.upserts().instances().isEmpty()
+            &&update.upserts().lights().isEmpty(),"Material switch updates only three materials");
+        require(opaqueInitial.upserts().lights().equals(original.upserts().lights()),"Material switch keeps all lights");
+        for(int i=0;i<current.size();i++) {
+            var ball=current.primitives().get(i);var old=previous.primitives().get(i);
+            require(ball.mediumBoundary().isEmpty(),"Opaque balls must not retain interior tracking");
+            require(ball.meshAssetId()==old.meshAssetId()&&ball.transform().equals(old.transform())
+                &&ball.previousTransform().equals(old.transform()),"Switch preserves ball geometry, position and motion history");
+        }
+        for(var material:update.upserts().materials()) {
+            require(material.blendMode()==top.ceroxe.rt.renderer.api.MaterialAsset.BlendMode.OPAQUE
+                &&material.transmission()==0&&material.metallic()==0,"Low-load material has no transmission or alpha path");
+            double n=material.indexOfRefraction();
+            require(Math.abs(Math.pow((n-1)/(n+1),2)-.2)<1e-6,"Opaque material has 20% normal-incidence reflection");
+        }
+        var restored=glass.primitiveBatch(physics,current);
+        require(restored.primitives().stream().allMatch(p->p.mediumBoundary().isPresent()),"Switching back restores glass interiors");
     }
 
     private static void independentPublicApiControls() {

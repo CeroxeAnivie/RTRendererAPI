@@ -98,6 +98,26 @@ public final class RtxptNativeSelfTest {
             }
             System.out.println("RTXPT in-process native smoke PASS: "+t);
             System.out.println("RTXPT scene switch, transform batch, capture and resize PASS; evidence="+output);
+            // Verify the live PTMaterial, not only glTF text: Donut does not import
+            // KHR_materials_ior into the upstream baker by itself.
+            long materialRevision=4,materialSequence=4;
+            for(float ior:new float[]{1.1f,1.5f,2.618034f}) {
+                r.apply(SceneTransaction.builder(materialRevision)
+                    .upsert(MaterialAsset.builder(1).transmission(0).indexOfRefraction(ior).build())
+                    .upsert(SceneInstance.builder(1,1).build()).build());
+                r.submit(RenderFrameRequest.builder(materialSequence++,960,540,RtxptAdapterSelfTest.camera())
+                    .minimumSceneRevision(materialRevision++).build());
+                var materialsDirectory=output.resolve("opaque-ior-"+ior);
+                ((RtxptRenderer)r).snapshotMaterials(materialsDirectory);
+                try(var files=Files.list(materialsDirectory)) {
+                    var materialFile=files.filter(p->p.toString().endsWith(".material.json")).findFirst().orElseThrow();
+                    var json=Files.readString(materialFile);
+                    var match=java.util.regex.Pattern.compile("\"IoR\"\\s*:\\s*([0-9.eE+-]+)").matcher(json);
+                    RtxptAdapterSelfTest.require(match.find()&&Math.abs(Float.parseFloat(match.group(1))-ior)<1e-5,
+                        "Opaque IOR reaches the live native PTMaterial: "+ior+" in "+materialFile);
+                }
+            }
+            System.out.println("RTXPT opaque material IOR native readback PASS: 1.1, 1.5, 2.618034");
         }
     }
 }

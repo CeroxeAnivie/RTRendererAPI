@@ -24,7 +24,7 @@ final class RtxptNative {
         for(String dependency:new String[]{"sl.interposer.dll","NRD.dll","omm-lib.dll"})System.load(root.resolve(dependency).toString());
         System.load(dll.toString()); loaded=true;
     }
-    static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,boolean gpuTimingsEnabled,String[] options);
+    static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,boolean gpuTimingsEnabled,int maxFramesInFlight,int workerThreads,int shaderCompilerThreads,String[] options);
     static native void prepare(String runtime);
     @FunctionalInterface interface Compositor { void compose(long[] frame); }
     static native void compositor(long handle,Compositor callback);
@@ -35,6 +35,8 @@ final class RtxptNative {
     static native int frame(long handle);
     static native void awaitIdle(long handle);
     static native int[] runtimeStatus(long handle);
+    static native void pathQuality(long handle,int[] values,float[] constants);
+    static native double[] pathQualityStatus(long handle);
     static native void overlay(long handle,String text);
     static native void overlayChoices(long handle,String[] labels,int selectedIndex);
     static native int overlaySelection(long handle);
@@ -49,11 +51,12 @@ final class RtxptNative {
     static native void resize(long handle,int width,int height);
     static native void settings(long handle,int maxBounces,int diffuseBounces,boolean reflex,
             int frameGenerationMode,int generatedFrames,int samplesPerPixel,int realtimeAa,
-            int dlssMode,boolean standaloneDenoiser,boolean relaxDenoiser,boolean restirDi,boolean restirGi,boolean sharc);
+            int dlssMode,boolean standaloneDenoiser,boolean relaxDenoiser,boolean restirDi,boolean restirGi,boolean sharc,int exactOpticalInterfaces);
     static native void capture(long handle,String path);
     static native void captureSource(long handle,String path);
     static native void snapshotMaterials(long handle,String directory);
     static native void interiors(long handle,String[] names,FloatBuffer values);
+    static native void materialIors(long handle,String[] names,FloatBuffer values);
     static native void transforms(long handle,String[] names,FloatBuffer rowMajorMatrices);
     static native void close(long handle);
 }

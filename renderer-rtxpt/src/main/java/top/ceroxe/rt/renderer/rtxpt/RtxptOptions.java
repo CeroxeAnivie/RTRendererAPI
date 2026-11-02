@@ -9,7 +9,7 @@ import top.ceroxe.rt.renderer.rtxpt.RtxptAccess.Reconstruction;
 record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
         Reconstruction reconstruction, DlssQuality dlssQuality, boolean standaloneDenoiser, boolean relaxDenoiser,
         boolean restirDi, boolean restirGi, boolean sharc, boolean ser, boolean reflex,
-        FrameGenerationOptions frameGeneration) {
+        FrameGenerationOptions frameGeneration,int exactOpticalInterfaces,PathTracingQualityOptions quality) {
     public enum DlssQuality {
         PERFORMANCE(1), BALANCED(2), QUALITY(3), ULTRA_PERFORMANCE(4), ULTRA_QUALITY(5), DLAA(6);
         final int nativeValue;
@@ -18,7 +18,9 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
     public RtxptOptions {
         Objects.requireNonNull(reconstruction); Objects.requireNonNull(dlssQuality);
         Objects.requireNonNull(frameGeneration);
+        Objects.requireNonNull(quality);
         if(samplesPerPixel<1 || samplesPerPixel>64) throw new IllegalArgumentException("samplesPerPixel must be in [1,64]");
+        if(exactOpticalInterfaces<1 || exactOpticalInterfaces>6) throw new IllegalArgumentException("exactOpticalInterfaces must be in [1,6]");
         if(maxBounces<1 || maxBounces>64 || diffuseBounces<0 || diffuseBounces>maxBounces)
             throw new IllegalArgumentException("Invalid native path depth");
         if((restirDi || restirGi) && samplesPerPixel!=1)
@@ -27,15 +29,18 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
             throw new IllegalArgumentException("RTXPT 1.9 cannot safely combine DLSS Ray Reconstruction with Ultra Quality; use Quality or DLAA");
         if(restirDi && restirGi && sharc)
             throw new IllegalArgumentException("The pinned RTXPT 1.9 runtime crashes compiling ReSTIR DI + ReSTIR GI + SHaRC together");
+        if(quality.lighting().input()==PathTracingQualityOptions.LightingInput.SCENE_ANALYTIC&&(restirDi||restirGi||sharc))
+            throw new IllegalArgumentException("Scene analytic lighting does not combine with ReSTIR or a radiance cache; choose backend lighting for those features");
+        if(quality.lighting().directionalStrata()&&(restirDi||restirGi||sharc||reconstruction!=Reconstruction.DLSS||standaloneDenoiser))
+            throw new IllegalArgumentException("Directional strata require standalone-denoiser-free DLSS SR without ReSTIR/cache reuse");
     }
     /** Official realtime path: 1 SPP, DLSS-RR Balanced, SHaRC, SER and Reflex, FG off. */
     public static RtxptOptions recommended() {
-        return new RtxptOptions(1,20,2,Reconstruction.DLSS_RR,DlssQuality.BALANCED,true,false,false,false,true,true,true,
-            FrameGenerationOptions.disabled());
+        return resolve(profile(RendererConfig.pathTracedPresentation()));
     }
     public static RtxptOptions nativeOneSample() {
-        return new RtxptOptions(1,20,2,Reconstruction.NONE,DlssQuality.DLAA,false,false,false,false,false,true,false,
-            FrameGenerationOptions.disabled());
+        return new RtxptOptions(1,12,2,Reconstruction.NONE,DlssQuality.DLAA,false,false,false,false,false,true,false,
+            FrameGenerationOptions.disabled(),4,PathTracingQualityOptions.defaults());
     }
     static RendererFeatureProfile profile(RendererConfig c){return new RendererFeatureProfile(c.frameReconstruction(),c.frameGeneration(),c.lowLatency(),c.denoising(),c.rayTracingOptimizations(),c.pathTracing());}
     static RtxptOptions resolve(RendererFeatureProfile p) {
@@ -64,7 +69,7 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
             frameGeneration=FrameGenerationOptions.disabled();
         }
         return new RtxptOptions(path.samplesPerPixel(),path.maxBounces(),path.diffuseBounces(),aa,quality,denoise,relax,di,gi,
-            path.radianceCache().requested(),p.rayTracingOptimizations().shaderExecutionReordering().requested(),p.lowLatency().preference().requested(),frameGeneration);
+            path.radianceCache().requested(),p.rayTracingOptimizations().shaderExecutionReordering().requested(),p.lowLatency().preference().requested(),frameGeneration,path.exactOpticalInterfaces(),path.quality());
     }
     int frameGenerationMode(){return frameGeneration.preference().requested()?1:0;}
     int generatedFrames(){return frameGeneration.preference().requested()?frameGeneration.multiplier().presentedFramesPerNativeFrame()-1:1;}
@@ -81,8 +86,13 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
             "--realtimeAA",Integer.toString(reconstruction.ordinal()),"--standaloneDenoiser="+(standaloneDenoiser?1:0),
             "--useReSTIRDI="+(restirDi?1:0),"--useReSTIRGI="+(restirGi?1:0),
             "--overrideRadianceCacheMode",sharc?"1":"0","--overrideDLSSMode",Integer.toString(dlssQuality.nativeValue),
-            "--overrideSubSamplingMode","0","--overrideAutoexposureOff"));
+            "--overrideSubSamplingMode",Integer.toString(quality.subSampling().ordinal()),"--overrideAutoexposureOff"));
         if(!ser) a.add("--noSER");
         return a.toArray(String[]::new);
     }
+    int[] qualityInts(){var l=quality.lighting();var c=quality.cache();return new int[]{
+        l.input().ordinal(),l.sampler().ordinal(),l.samples(),l.candidates(),l.adaptiveQuality(),l.exactPointLightLimit(),l.directionalStrata()?1:0,
+        c.entries(),c.trainingDownscale(),c.maxBounces(),c.diffuseBounces(),c.directLightSamples(),quality.denoisingLayers(),
+        quality.denoisingLayerMaxDepth(),quality.nestedDielectricsQuality(),quality.subSampling().ordinal(),quality.halfPrecision()?1:0,c.accumulationFrames(),c.staleFrames()};}
+    float[] qualityFloats(){var c=quality.cache();return new float[]{quality.lighting().localCandidateRatio(),c.terminationThreshold(),quality.textureLodBias(),c.textureLodBias(),c.sceneScale(),c.minRoughness()};}
 }

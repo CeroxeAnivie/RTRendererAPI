@@ -29,6 +29,8 @@
 #include "rtxpt_shared_frames.h"
 #include "rtxpt_material_policy.h"
 #include "rtxpt_sr_history.h"
+#include "rtxpt_path_quality.h"
+#include "rtxpt_host_resources.h"
 extern SampleUIData g_sampleUIData;
 
 namespace {
@@ -40,16 +42,14 @@ class HostPathTracer final : public AdvancedPathTracer {
     nvrhi::BufferHandle sceneLightBuffer;
     bool sceneLightsDirty=false;
     bool sceneLightingActive() const {
-        const char* control=std::getenv("RTR_RTXPT_SCENE_LIGHTING");
-        return control && std::string(control)=="1" && !sceneLights.empty()
+        return pathQuality.values[0]==1 && !sceneLights.empty()
             && !g_sampleUIData.ActualUseRTXDIPasses() && g_sampleUIData.ActualRadianceCacheMode()==0;
     }
     std::unique_ptr<RtrPreSrHistory> preSrHistory;
     bool preSrHistoryReset=true;
     bool directionalStrataLogged=false;
     bool useDirectionalStrata() const {
-        const char* control=std::getenv("RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA");
-        if(!control || std::string(control)!="1" || !GetScene()
+        if(!pathQuality.values[6] || !GetScene()
             || !g_sampleUIData.RealtimeMode || g_sampleUIData.RealtimeAA!=2
             || g_sampleUIData.ActualUseStandaloneDenoiser() || g_sampleUIData.ActualUseRTXDIPasses()
             || g_sampleUIData.ActualRadianceCacheMode()!=0)return false;
@@ -81,13 +81,27 @@ class HostPathTracer final : public AdvancedPathTracer {
                 ++analyticCount;
             }
         }
-        const bool eligible=pointFound && analyticCount<=4;
+        const bool eligible=pointFound && analyticCount<=size_t(pathQuality.values[5]);
         donut::log::info("RTXPT exact-point scene gate: graphLights=%zu neeAtAnalytic=%zu zeroRadiusPoints=%s eligible=%s",
             lights.size(),analyticCount,pointFound?"yes":"no",eligible?"yes":"no");
         return eligible;
     }
 public:
     using AdvancedPathTracer::AdvancedPathTracer;
+    int exactOpticalInterfaces=4;
+    RtrPathQuality pathQuality;
+    uint32_t HostRadianceCacheEntries() const override {return uint32_t(pathQuality.values[7]);}
+    void ConfigureHostRadianceCache(SharcSettings& settings) const override {pathQuality.Apply(settings);}
+    void ConfigurePathQuality(const RtrPathQuality& quality) {
+        quality.Validate();pathQuality=quality;pathQuality.Apply(g_sampleUIData);lightingSceneDirty=true;
+        if(auto* cache=GetSharc()) {
+            if(cache->GetEntryCount()!=uint32_t(pathQuality.values[7]))
+                throw std::logic_error("Radiance cache capacity changes require a new renderer");
+            cache->HostSettings()=cache->GetSettings();pathQuality.Apply(cache->HostSettings());
+        }
+    }
+    bool SceneLightingActive() const {return sceneLightingActive();}
+    size_t HostShaderCompilerThreads() const {return GetRTPipelineBaker()?GetRTPipelineBaker()->HostCompilerThreadCount():0;}
     void LoadSceneLighting(const std::string& path) {
         sceneLights.clear();sceneSky={};sceneLightsDirty=true;
         std::ifstream input(std::filesystem::u8path(path));
@@ -215,7 +229,7 @@ public:
         const char* samplerControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER");
         // Retain the accepted SR policy for small, non-emissive scenes. Other
         // content and reconstruction paths keep upstream adaptive sampling.
-        const bool usePower=enabled && (samplerControl
+        const bool usePower=pathQuality.values[1]==0 && enabled && (samplerControl
             ? std::string(samplerControl)=="power"
             : eligiblePowerScene && g_sampleUIData.RealtimeAA==2 && !standaloneDenoisingActive);
         if(enabled==smallPointLighting && usePower==powerSampling)return;
@@ -232,7 +246,10 @@ public:
     }
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
-        if(sceneLightingActive())macros.push_back({"RTR_SCENE_LIGHTING","1"});
+        if(sceneLightingActive()) {
+            macros.push_back({"RTR_SCENE_LIGHTING","1"});
+            macros.push_back({"RTR_SCENE_EXACT_INTERFACE_COUNT",std::to_string(exactOpticalInterfaces)});
+        }
         const char* mixtureBsdf=std::getenv("RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF");
         if(mixtureBsdf && std::string(mixtureBsdf)=="1")
             macros.push_back({"RTR_COMBINED_BSDF_WEIGHT","1"});
@@ -268,11 +285,14 @@ public:
     }
 };
 class HostApp final : public AdvancedSample {
+public:
+    uint32_t framesInFlight=2;
     std::unique_ptr<Sample> CreateMainRenderPass(donut::app::DeviceManager& dm,const CommandLineOptions& options) override {
         return std::make_unique<HostPathTracer>(dm,options);
     }
     void ConfigureDefaultDeviceParams(donut::app::DeviceCreationParameters& p) const override {
         p.vsyncEnabled = false;
+        p.maxFramesInFlight=framesInFlight;
     }
 };
 struct Session {
@@ -442,11 +462,15 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 }
 
 extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(
-    JNIEnv* e, jclass, jstring runtime, jstring scene, jint width, jint height, jboolean externalPresentation, jboolean gpuTimingsEnabled, jobjectArray options) {
+    JNIEnv* e, jclass, jstring runtime, jstring scene, jint width, jint height, jboolean externalPresentation, jboolean gpuTimingsEnabled,jint maxFramesInFlight,jint workerThreads,jint shaderCompilerThreads,jobjectArray options) {
     std::lock_guard lock(lifecycle);
     try {
         if (active) throw std::runtime_error("The upstream RTXPT core supports one resident session per process");
-        if (width < 1 || height < 1) throw std::invalid_argument("Invalid output dimensions");
+        if (width < 1 || height < 1 || maxFramesInFlight<2 || maxFramesInFlight>3
+            ||workerThreads<1||workerThreads>64||shaderCompilerThreads<1||shaderCompilerThreads>16)
+            throw std::invalid_argument("Invalid dimensions, frame budget or CPU concurrency");
+        RtrHostResources::workerThreads=unsigned(workerThreads);
+        RtrHostResources::shaderCompilerThreads=unsigned(shaderCompilerThreads);
         auto root = utf8(e, runtime);
         if (_putenv_s("RTR_RTXPT_RUNTIME", root.c_str())) throw std::runtime_error("Cannot configure runtime root");
 #if defined(RTXPT_D3D_AGILITY_SDK_VERSION)
@@ -474,6 +498,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         donut::log::ConsoleApplicationMode();
         g_sampleUIData = SampleUIData{};
         s->app = std::make_unique<HostApp>();
+        s->app->framesInFlight=uint32_t(maxFramesInFlight);
         s->app->HostDeviceManager()->HostExternalPresentation=externalPresentation;
         s->app->HostDeviceManager()->HostFixedWindowTitle=true;
         auto status = s->app->Init(static_cast<int>(argv.size()), argv.data());
@@ -660,6 +685,46 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     catch(const std::exception& x) { fail(e,x); }
 }
 
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_pathQuality(
+    JNIEnv* e,jclass,jlong h,jintArray integers,jfloatArray constants) {
+    try {
+        if(!integers||!constants||e->GetArrayLength(integers)!=19||e->GetArrayLength(constants)!=6)
+            throw std::invalid_argument("Invalid path quality payload size");
+        RtrPathQuality quality;
+        e->GetIntArrayRegion(integers,0,19,quality.values.data());
+        e->GetFloatArrayRegion(constants,0,6,quality.constants.data());
+        if(e->ExceptionCheck())return;
+        quality.Validate();
+        if(quality.values[0]==1&&(g_sampleUIData.ActualUseRTXDIPasses()||g_sampleUIData.ActualRadianceCacheMode()!=0))
+            throw std::invalid_argument("Scene analytic lighting cannot use native ReSTIR/cache transport");
+        static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->ConfigurePathQuality(quality);
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_pathQualityStatus(
+    JNIEnv* e,jclass,jlong h) {
+    try {
+        auto& s=session(h);auto* host=static_cast<HostPathTracer*>(s.app->HostRenderPass());
+        auto q=host->pathQuality;
+        q.values[2]=g_sampleUIData.NEEFullSamples;q.values[3]=g_sampleUIData.NEECandidateSamples;
+        q.values[4]=g_sampleUIData.NEEAT_QualityPreset;q.constants[0]=g_sampleUIData.NEEAT_LocalToGlobalSampleRatio;
+        q.values[12]=g_sampleUIData.DenoisingLayersActiveCount;q.values[13]=g_sampleUIData.DenoisingLayersMaxVertexDepth;
+        q.values[14]=g_sampleUIData.NestedDielectricsQuality;q.values[15]=g_sampleUIData.RealtimeSubSamplingMode;
+        q.values[16]=g_sampleUIData.UseFp16Types;q.constants[2]=g_sampleUIData.TexLODBias;
+        auto* cache=host->GetSharc();
+        if(cache) {
+            const auto& c=cache->GetSettings();q.values[8]=c.DownScaleFactor;q.values[9]=c.BounceCount;
+            q.values[10]=c.DiffuseBounceCount;q.values[11]=c.NEEFullSamples;q.values[17]=c.AccumulationFrameNum;
+            q.values[18]=c.StaleFrameFrameNum;q.constants[1]=c.TerminateThreshold;
+            q.constants[3]=c.AdditionalTexLODBias;q.constants[4]=c.SceneScale;q.constants[5]=c.MinRoughnessOverride;
+        }
+        jdouble values[30]{};
+        for(size_t i=0;i<q.values.size();++i)values[i]=q.values[i];
+        for(size_t i=0;i<q.constants.size();++i)values[19+i]=q.constants[i];
+        values[25]=g_sampleUIData.NEEType;values[26]=cache?cache->GetEntryCount():0;values[27]=s.app->framesInFlight;
+        values[28]=host->HostWorkerThreadCount();values[29]=host->HostShaderCompilerThreads();
+        auto output=e->NewDoubleArray(30);if(output)e->SetDoubleArrayRegion(output,0,30,values);return output;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
 extern "C" JNIEXPORT jintArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_runtimeStatus(
     JNIEnv* e, jclass, jlong h) {
     try {
@@ -673,8 +738,10 @@ extern "C" JNIEXPORT jintArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNa
             jint(g_sampleUIData.DLSSFGNumFramesToGenerate),jint(g_sampleUIData.DLSSFGMaxNumFramesToGenerate),
             jint(g_sampleUIData.IsDLSSSuported),jint(g_sampleUIData.IsDLSSRRSupported),
             jint(g_sampleUIData.IsDLSSFGSupported),jint(g_sampleUIData.IsReflexSupported),jint(session(h).app->IsSERSupported()),
-            jint(g_sampleUIData.ActualUseStandaloneDenoiser()&&g_sampleUIData.NRDMethod==NrdConfig::DenoiserMethod::RELAX)};
-        auto result=e->NewIntArray(20); if(result)e->SetIntArrayRegion(result,0,20,values);return result;
+            jint(g_sampleUIData.ActualUseStandaloneDenoiser()&&g_sampleUIData.NRDMethod==NrdConfig::DenoiserMethod::RELAX),
+            jint(static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->exactOpticalInterfaces),
+            jint(static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->SceneLightingActive())};
+        auto result=e->NewIntArray(22); if(result)e->SetIntArrayRegion(result,0,22,values);return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 
@@ -763,13 +830,13 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_settings(
     JNIEnv* e, jclass, jlong h, jint depth, jint diffuse, jboolean reflex,
     jint frameGenerationMode, jint generatedFrames, jint samplesPerPixel, jint realtimeAa,
-    jint dlssMode, jboolean standaloneDenoiser, jboolean relaxDenoiser, jboolean restirDi, jboolean restirGi, jboolean sharc) {
+    jint dlssMode, jboolean standaloneDenoiser, jboolean relaxDenoiser, jboolean restirDi, jboolean restirGi, jboolean sharc,jint exactOpticalInterfaces) {
     try {
         auto& s=session(h);
         if(frameGenerationMode<0 || frameGenerationMode>1 || generatedFrames<1 || generatedFrames>3)
             throw std::invalid_argument("Invalid fixed DLSS frame-generation configuration");
         if(depth<1 || depth>64 || diffuse<0 || diffuse>depth || samplesPerPixel<1 || samplesPerPixel>64
-            || realtimeAa<0 || realtimeAa>3 || dlssMode<1 || dlssMode>6)
+            || realtimeAa<0 || realtimeAa>3 || dlssMode<1 || dlssMode>6 || exactOpticalInterfaces<1 || exactOpticalInterfaces>6)
             throw std::invalid_argument("Invalid RTXPT render settings");
         s.requestedFrameGenerationMode=frameGenerationMode;
         s.requestedGeneratedFrames=generatedFrames;
@@ -818,6 +885,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         g_sampleUIData.DLSSLastRealtimeAA=realtimeAa;
         g_sampleUIData.BounceCount=depth;
         g_sampleUIData.DiffuseBounceCount=diffuse;
+        static_cast<HostPathTracer*>(s.app->HostRenderPass())->exactOpticalInterfaces=exactOpticalInterfaces;
         g_sampleUIData.ResetAccumulation=true;
         g_sampleUIData.ShowUI=false;
         g_sampleUIData.RenderWhenOutOfFocus=true;
@@ -853,6 +921,30 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
             m.IoR=p[3]; m.NestedPriority=static_cast<int>(p[4]); m.GPUDataDirty=true;
         }
     } catch (const std::exception& x) { fail(e,x); }
+}
+
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_materialIors(
+    JNIEnv* e, jclass, jlong h, jobjectArray names, jobject values) {
+    try {
+        auto& s=session(h); auto* data=static_cast<float*>(e->GetDirectBufferAddress(values));
+        const auto count=e->GetArrayLength(names);
+        if(!data || e->GetDirectBufferCapacity(values)<count)throw std::invalid_argument("Material IOR buffer too small");
+        std::unordered_map<std::string, PTMaterial*> materials;
+        for(auto& material:s.app->HostRenderPass()->GetScene()->GetSceneGraph()->GetMaterials())
+            materials.emplace(material->name,PTMaterial::SafeCast(material));
+        std::vector<PTMaterial*> checked;
+        for(jsize i=0;i<count;++i) {
+            auto n=static_cast<jstring>(e->GetObjectArrayElement(names,i));
+            auto name=utf8(e,n);e->DeleteLocalRef(n);
+            auto found=materials.find(name);
+            if(found==materials.end())throw std::runtime_error("Missing imported material: "+name);
+            if(!std::isfinite(data[i]) || data[i]<1.f)throw std::invalid_argument("Invalid material IOR");
+            checked.push_back(found->second);
+        }
+        for(jsize i=0;i<count;++i) {
+            checked[i]->IoR=data[i];checked[i]->GPUDataDirty=true;
+        }
+    } catch(const std::exception& x) { fail(e,x); }
 }
 
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_transforms(

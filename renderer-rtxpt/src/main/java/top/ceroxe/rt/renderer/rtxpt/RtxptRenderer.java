@@ -11,6 +11,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     private final Thread owner=Thread.currentThread();
     private final boolean externalPresentation;
     private final boolean gpuTimingsEnabled;
+    private final int maxFramesInFlight;
+    private final RendererResourceOptions resources;
     private RtxptScene scene=new RtxptScene();
     private RtxptOptions options;
     private RendererFeatureProfile requestedProfile;
@@ -29,6 +31,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     RtxptRenderer(RendererConfig config,boolean externalPresentation){
         this.externalPresentation=externalPresentation;
         this.gpuTimingsEnabled=config.gpuTimingsEnabled();
+        this.maxFramesInFlight=config.maxFramesInFlight();
+        this.resources=config.resources();
         RtxptInputContract.validateConfiguration(config);requestedProfile=RtxptOptions.profile(config);options=RtxptOptions.resolve(requestedProfile);
         validatePresentationProfile(requestedProfile);
         features=new RtxptFeatureController(new RtxptFeatureController.Host(){
@@ -116,6 +120,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         ready();Objects.requireNonNull(tx);if(nativeScene!=null)throw new IllegalStateException("Choose retained API scenes or a native scene explicitly");
         RtxptInputContract.requireAdvancingRevision(tx.revision(),revision,scenePublished);
         var next=new RtxptScene(scene);next.retain(tx,nativeContract);
+        resources.validateAssets(next.meshes.values(),next.textures.values());
         boolean transformsOnly=!tx.reset() && tx.upserts().textures().isEmpty() && tx.upserts().materials().isEmpty() && tx.upserts().meshes().isEmpty() && tx.upserts().lights().isEmpty()
             && !tx.removals().textureIds().hasRemaining() && !tx.removals().materialIds().hasRemaining() && !tx.removals().meshIds().hasRemaining() && !tx.removals().lightIds().hasRemaining() && !tx.removals().instanceIds().hasRemaining();
         if(transformsOnly)for(var i:tx.upserts().instances()) {
@@ -151,7 +156,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         }catch(IOException e){throw new IllegalStateException("RTXPT asset translation failed",e);}exportNs+=System.nanoTime()-begin;exports++;}
         if(handle==0){
             if(path==null)throw new IllegalStateException("Submit a populated scene");
-            handle=RtxptNative.create(RtxptNative.runtime().toString(),path.toString(),f.width(),f.height(),externalPresentation,gpuTimingsEnabled,options.arguments());
+            handle=RtxptNative.create(RtxptNative.runtime().toString(),path.toString(),f.width(),f.height(),externalPresentation,gpuTimingsEnabled,
+                maxFramesInFlight,resources.workerThreads(),resources.shaderCompilerThreads(),options.arguments());
             if(compositor!=null)RtxptNative.compositor(handle,compositor);
             if(title!=null)RtxptNative.title(handle,title);
             applyNativeSettings();
@@ -170,7 +176,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         return FrameSubmissionResult.accepted(submitted,revision,Set.of());
     }
     private void applyNativeSettings(){RtxptNative.settings(handle,options.maxBounces(),options.diffuseBounces(),options.reflex(),options.frameGenerationMode(),options.generatedFrames(),
-        options.samplesPerPixel(),options.reconstruction().ordinal(),options.dlssQuality().nativeValue,options.standaloneDenoiser(),options.relaxDenoiser(),options.restirDi(),options.restirGi(),options.sharc());
+        options.samplesPerPixel(),options.reconstruction().ordinal(),options.dlssQuality().nativeValue,options.standaloneDenoiser(),options.relaxDenoiser(),options.restirDi(),options.restirGi(),options.sharc(),options.exactOpticalInterfaces());
+        RtxptNative.pathQuality(handle,options.qualityInts(),options.qualityFloats());
         if(exposureCompensation!=null)RtxptNative.exposureCompensation(handle,exposureCompensation);}
     @Override public void setExposureCompensation(float stops){
         ready();if(!Float.isFinite(stops))throw new IllegalArgumentException("Exposure compensation must be finite");
@@ -209,7 +216,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         builder.pathTracing(new PathTracingOptions(path.samplesPerPixel(),path.maxBounces(),path.diffuseBounces(),
             s.sharc()?path.radianceCache():RendererFeaturePreference.DISABLED,
             s.restirDi()?path.directLightResampling():RendererFeaturePreference.DISABLED,
-            s.restirGi()?path.indirectLightResampling():RendererFeaturePreference.DISABLED));
+            s.restirGi()?path.indirectLightResampling():RendererFeaturePreference.DISABLED,s.exactOpticalInterfaces(),path.quality()));
         var ray=p.rayTracingOptimizations();
         builder.rayTracingOptimizations(ray.toBuilder().shaderExecutionReordering(s.shaderExecutionReordering()
             ?ray.shaderExecutionReordering():RendererFeaturePreference.DISABLED).memoryOptimization(RendererFeaturePreference.DISABLED).build());
@@ -344,7 +351,17 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
             .worldUp(s[6],s[7],s[8]).verticalFieldOfViewDegrees(Math.toDegrees(s[9])).aspectRatio(s[10]/s[11]).build();}
     @Override public RuntimeStatus runtimeStatus(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.runtimeStatus(handle);
         return new RuntimeStatus(s[0],s[1],Reconstruction.values()[s[2]],s[3]!=0,s[4]!=0,s[5]!=0,s[6]!=0,s[7]!=0,s[8]!=0,s[9]!=0,s[10]!=0,
-            s[11],s[12],s[13],s[14]!=0,s[15]!=0,s[16]!=0,s[17]!=0,s[18]!=0,s[19]!=0);}
+            s[11],s[12],s[13],s[14]!=0,s[15]!=0,s[16]!=0,s[17]!=0,s[18]!=0,s[19]!=0,s[20],s[21]!=0);}
+    @Override public PathQualityStatus pathQualityStatus(){
+        ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.pathQualityStatus(handle);
+        var light=new PathTracingQualityOptions.LightSampling(PathTracingQualityOptions.LightingInput.values()[(int)s[0]],
+            PathTracingQualityOptions.LightSampler.values()[(int)s[1]],(int)s[2],(int)s[3],(float)s[19],(int)s[4],(int)s[5],s[6]!=0);
+        var cache=new PathTracingQualityOptions.RadianceCache((int)s[7],(int)s[8],(int)s[9],(int)s[10],(int)s[11],
+            (float)s[20],(float)s[22],(float)s[23],(int)s[17],(int)s[18],(float)s[24]);
+        var actual=new PathTracingQualityOptions(light,cache,(int)s[12],(int)s[13],(int)s[14],
+            PathTracingQualityOptions.SubSampling.values()[(int)s[15]],(float)s[21],s[16]!=0);
+        return new PathQualityStatus(actual,(int)s[25],(int)s[26],(int)s[27],(int)s[28],(int)s[29]);
+    }
     @Override public long windowHandle(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptNative.window(handle);}
     @Override public void setWindowTitle(String title){viewportTitle(title);}
     @Override public void capture(Path png){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.capture(handle,Objects.requireNonNull(png).toAbsolutePath().toString());}

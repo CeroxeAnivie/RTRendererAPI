@@ -167,6 +167,15 @@ public final class RtxptComposedRenderer implements Renderer {
             throw new IllegalStateException("Trim requires native presentation with no overlays; call during an idle period");
         retireExternalFrames();
     }
+    /**
+     * Waits for submitted Vulkan composition consumers without destroying shared resources.
+     * Retry a BLOCKED source-texture write with the same sequence after this call. Future
+     * frames still require new overlay mutation keys after the source has been rewritten.
+     */
+    public void awaitCompositionConsumers(){
+        ready();
+        if(presenter!=null)presenter.awaitCompositionConsumers();
+    }
     /** Counts actual work per selected 3D backend, independently of final present timing. */
     public WorkSnapshot workSnapshot(){return new WorkSnapshot(rtxpt.bridgeTimings().frames(),vulkanFrames,
         presenter==null?NO_PRESENTS:presenter.performanceSnapshot());}

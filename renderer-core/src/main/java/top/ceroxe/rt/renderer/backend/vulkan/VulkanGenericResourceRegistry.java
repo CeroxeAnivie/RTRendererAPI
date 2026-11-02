@@ -703,7 +703,8 @@ final class VulkanGenericResourceRegistry implements AutoCloseable {
 
     private void requireNoCompositionPins(ResourceGenerationKey generation) {
         if (compositionPinCounts.containsKey(generation)) {
-            throw new IllegalStateException("texture mutation is pinned by an unfinished composition: " + generation);
+            throw new VulkanCompositionSourceBusyException(
+                    "texture mutation is pinned by an unfinished composition: " + generation);
         }
     }
 

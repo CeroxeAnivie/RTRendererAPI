@@ -49,11 +49,46 @@ final class DemoScene {
             {0.10, -3.15, 3.45}
     };
 
-    private final Geometry sphere = sphereGeometry(64, 128);
-    private final boolean glassBalls;
+    enum BallMaterial {
+        GLASS("Glass | F0 20%"),
+        OPAQUE_REFLECTIVE("Opaque | F0 20% | low load"),
+        ORIGINAL_METAL("Original metal");
+
+        final String label;
+        BallMaterial(String label) { this.label=label; }
+    }
+
+    private static final Geometry SPHERE = sphereGeometry(64, 128);
+    private final BallMaterial ballMaterial;
 
     DemoScene() { this(false); }
-    DemoScene(boolean glassBalls) { this.glassBalls=glassBalls; }
+    DemoScene(boolean glassBalls) { this(glassBalls?BallMaterial.GLASS:BallMaterial.ORIGINAL_METAL); }
+    DemoScene(BallMaterial ballMaterial) { this.ballMaterial=Objects.requireNonNull(ballMaterial,"ballMaterial"); }
+
+    BallMaterial ballMaterial() { return ballMaterial; }
+
+    /** Only replaces the three ball materials; geometry, lights and physics stay resident. */
+    SceneTransaction ballMaterialTransaction(long revision) {
+        return SceneTransaction.builder(revision).upsertMaterials(ballMaterials()).build();
+    }
+
+    private List<MaterialAsset> ballMaterials() {
+        var materials=new ArrayList<MaterialAsset>();
+        for(int index=0;index<BALL_COLORS.length;index++) {
+            var material=MaterialAsset.builder(BALL_MATERIALS[index]);
+            switch(ballMaterial) {
+                case GLASS -> material.baseColorRgba8(rgba(255,255,255,255))
+                    .blendMode(MaterialAsset.BlendMode.TRANSLUCENT).metallic(0).roughness(.025f)
+                    .transmission(1).indexOfRefraction(BALL_IOR);
+                case OPAQUE_REFLECTIVE -> material.baseColorRgba8(BALL_COLORS[index])
+                    .blendMode(MaterialAsset.BlendMode.OPAQUE).metallic(0).roughness(.12f)
+                    .transmission(0).indexOfRefraction(BALL_IOR);
+                case ORIGINAL_METAL -> material.baseColorRgba8(BALL_COLORS[index]).metallic(1).roughness(.12f);
+            }
+            materials.add(material.build());
+        }
+        return materials;
+    }
 
     SceneTransaction initialTransaction() {
         List<MaterialAsset> materials = new ArrayList<>();
@@ -71,23 +106,13 @@ final class DemoScene {
                 .doubleSided(true)
                 .build());
 
-        for (int index = 0; index < BALL_COLORS.length; index++) {
-            materials.add(glassBalls ? MaterialAsset.builder(BALL_MATERIALS[index])
-                    .baseColorRgba8(rgba(255,255,255,255))
-                    .blendMode(MaterialAsset.BlendMode.TRANSLUCENT)
-                    .metallic(0.0F)
-                    .roughness(0.025F)
-                    .transmission(1.0F)
-                    .indexOfRefraction(BALL_IOR)
-                    .build() : MaterialAsset.builder(BALL_MATERIALS[index])
-                    .baseColorRgba8(BALL_COLORS[index]).metallic(1.0F).roughness(0.12F).build());
-        }
+        materials.addAll(ballMaterials());
 
         List<MeshAsset> meshes = new ArrayList<>();
         meshes.add(backMesh());
         meshes.add(rimMesh());
         for (int index = 0; index < BALL_COLORS.length; index++) {
-            meshes.add(meshWithMaterial(BALL_MESHES[index], sphere, BALL_MATERIALS[index]));
+            meshes.add(meshWithMaterial(BALL_MESHES[index], SPHERE, BALL_MATERIALS[index]));
         }
 
         List<SceneInstance> instances = new ArrayList<>();
@@ -138,7 +163,7 @@ final class DemoScene {
             var primitive=PrimitiveInstance.builder(BALL_MESHES[index])
                     .transform(transform)
                     .previousTransform(previousTransform);
-            if(glassBalls)primitive.mediumBoundary(MediumBoundary.surface(new Medium(BALL_ABSORPTION[index],BALL_IOR)).withPriority(2));
+            if(ballMaterial==BallMaterial.GLASS)primitive.mediumBoundary(MediumBoundary.surface(new Medium(BALL_ABSORPTION[index],BALL_IOR)).withPriority(2));
             batch.add(primitive.build());
         }
         return batch.build();

@@ -72,13 +72,15 @@ public final class VulkanEvidenceRetentionNativeSelfTest {
             var compositionSource = session.requireCompositionSource(mutation);
             var pin1 = session.pinComposition(new VulkanGenericCompositionSource[]{compositionSource});
             var pin2 = session.pinComposition(new VulkanGenericCompositionSource[]{compositionSource});
-            require(session.submit(run.command(source)).outcome() == CommandExecutionEvidence.Outcome.REJECTED,
-                    "pinned mutation was overwritten");
+            var busy = session.submit(run.command(source));
+            require(busy.outcome() == CommandExecutionEvidence.Outcome.BLOCKED
+                    && busy.reason() == CommandExecutionEvidence.Reason.BOUNDED_BACKPRESSURE,
+                    "pinned mutation did not expose retryable consumer backpressure: " + busy);
             require(run.retireAttempt(source).outcome() == ResourceTransactionEvidence.Outcome.REJECTED,
                     "pinned generation retired");
             pin1.close();
             pin1.close();
-            require(session.submit(run.command(source)).outcome() == CommandExecutionEvidence.Outcome.REJECTED,
+            require(session.submit(run.command(source)).outcome() == CommandExecutionEvidence.Outcome.BLOCKED,
                     "one consumer released another consumer's protection");
             pin2.close();
             run.render(source);

@@ -166,6 +166,16 @@ public interface VulkanFramePresenter extends AutoCloseable {
     }
 
     /**
+     * Waits for previously submitted composition consumers and releases their source-texture
+     * pins, preserving cached shared-image imports and pipelines. A producer whose texture
+     * write returned BLOCKED may retry the same command sequence after this call. This is
+     * explicit backpressure handling, not a per-frame requirement or a resource-cache trim.
+     */
+    default void awaitCompositionConsumers() {
+        throw new UnsupportedOperationException("This presenter cannot wait for composition consumers");
+    }
+
+    /**
      * Requests one diagnostic PNG of the next visible final frame, including composition and HUD.
      * Readback is performed only for this explicit request, before handing that image to WSI;
      * the visible-frame present waits for its capture to complete before returning. The request

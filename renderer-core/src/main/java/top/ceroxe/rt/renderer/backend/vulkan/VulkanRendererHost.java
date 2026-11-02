@@ -197,6 +197,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, top.cero
             throw initializationFailure;
         }
         this.configuration = checkedConfiguration;
+        this.residency=new VulkanSceneResidency(checkedConfiguration.resources());
         this.externalFrameConsumer = new VulkanExternalFrameConsumerAdapter(
                 this, checkedConfiguration.frameOutputFormat()
         );
@@ -1539,7 +1540,7 @@ final class VulkanRendererHost implements Renderer, VulkanFrameInterop, top.cero
 
     private VulkanSceneResidency replayCommittedScene(VulkanRenderingSession candidate) {
         PersistentSceneRegistry.Snapshot snapshot = scene.snapshot();
-        VulkanSceneResidency recoveredResidency = new VulkanSceneResidency();
+        VulkanSceneResidency recoveredResidency = new VulkanSceneResidency(configuration.resources());
         if (!snapshot.initialized()) {
             return recoveredResidency;
         }

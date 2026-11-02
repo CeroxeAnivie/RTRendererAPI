@@ -24,6 +24,74 @@ function Patch-Once([string]$Relative,[string]$Anchor,[string]$Replacement,[stri
     if(!$text.Contains($Anchor)){throw "Pinned host integration anchor changed: $Relative :: $Anchor"}
     [IO.File]::WriteAllText($path,$text.Replace($Anchor,$Replacement),$utf8)
 }
+# Retain the upstream pipeline baker; make its binaries relocatable for the JAR
+# and optionally export the exact upstream command for offline six-budget builds.
+Patch-Once 'Rtxpt/SampleCommon/PTPipelineBaker.cpp' '#include "ShaderCompilerUtils.h"' @'
+#include "ShaderCompilerUtils.h"
+#include "rtxpt_shader_bundle.h" // RTR relocatable PT shader cache
+#include "rtxpt_host_resources.h"
+'@ 'RTR relocatable PT shader cache'
+Patch-Once 'Rtxpt/SampleCommon/PTPipelineBaker.cpp' '    , m_hitGroupMacros(std::move(hitGroupMacros))' @'
+    , m_hitGroupMacros(std::move(hitGroupMacros))
+    , m_threadPool(RtrHostResources::shaderCompilerThreads.load()) // RTR bounded PT compile pool
+'@ 'RTR bounded PT compile pool'
+Patch-Once 'Rtxpt/SampleCommon/ComputePipelineBaker.cpp' '#include "ShaderCompilerUtils.h"' @'
+#include "ShaderCompilerUtils.h"
+#include "rtxpt_host_resources.h" // RTR bounded compute compile pool
+'@ 'RTR bounded compute compile pool'
+Patch-Once 'Rtxpt/SampleCommon/ComputePipelineBaker.cpp' '    : m_device(device)' @'
+    : m_device(device), m_threadPool(RtrHostResources::shaderCompilerThreads.load()) // RTR compiler thread count
+'@ 'RTR compiler thread count'
+Patch-Once 'Rtxpt/Sample.cpp' '    , m_ui(g_sampleUIData)' @'
+    , m_ui(g_sampleUIData), m_frameWorkerPool(RtrHostResources::workerThreads.load()) // RTR frame worker count
+'@ 'RTR frame worker count'
+Patch-Once 'Rtxpt/Sample.cpp' '#include "Sample.h"' @'
+#include "Sample.h"
+#include "rtxpt_host_resources.h" // RTR bounded scene CPU pool
+'@ 'RTR bounded scene CPU pool'
+Patch-Once 'External/Donut/include/donut/engine/ThreadPool.h' '    ~ThreadPool();' @'
+    ~ThreadPool();
+    size_t GetThreadCount() const {return m_threads.size();} // RTR actual pool size
+'@ 'RTR actual pool size'
+Patch-Once 'Rtxpt/SampleCommon/PTPipelineBaker.h' '    ~PTPipelineBaker();' @'
+    ~PTPipelineBaker();
+    size_t HostCompilerThreadCount() const {return m_threadPool.GetThreadCount();} // RTR pool readback
+'@ 'RTR pool readback'
+Patch-Once 'Rtxpt/Sample.h' '    mutable donut::engine::ThreadPool           m_frameWorkerPool;' @'
+public:
+    size_t HostWorkerThreadCount() const {return m_frameWorkerPool.GetThreadCount();} // RTR CPU pool readback
+protected:
+    mutable donut::engine::ThreadPool           m_frameWorkerPool;
+'@ 'RTR CPU pool readback'
+Patch-Once 'Rtxpt/SampleCommon/PTPipelineBaker.cpp' '        std::string newHash = ShaderCompilerUtils::ComputeSha256Hex(command);' @'
+        const std::string portableCommand=RtrShaderBundle::PortableCommand(command,srcFullPath,permutation->ShaderSrcFileName,baker->GetIncludePaths());
+        std::string newHash = ShaderCompilerUtils::ComputeSha256Hex(portableCommand); // RTR portable permutation key
+        RtrShaderBundle::Export(permutation->ShaderOutFileName.generic_string(),newHash,command,portableCommand);
+'@ 'RTR portable permutation key'
+Patch-Once 'Rtxpt/Sharc/SharcIntegration.h' 'const std::shared_ptr<donut::engine::DescriptorTableManager>& bindlessHeapTable);' 'const std::shared_ptr<donut::engine::DescriptorTableManager>& bindlessHeapTable,uint32_t entries=4*1024*1024); // RTR public cache capacity' 'RTR public cache capacity'
+Patch-Once 'Rtxpt/Sharc/SharcIntegration.cpp' 'const std::shared_ptr<donut::engine::DescriptorTableManager>& bindlessHeapTable)' 'const std::shared_ptr<donut::engine::DescriptorTableManager>& bindlessHeapTable,uint32_t entries) // RTR configured cache capacity' 'RTR configured cache capacity'
+Patch-Once 'Rtxpt/Sharc/SharcIntegration.cpp' '        m_entriesNum = 4 * 1024 * 1024;' '        m_entriesNum = entries; // RTR allocated cache entry budget' 'RTR allocated cache entry budget'
+Patch-Once 'Rtxpt/Sharc/SharcIntegration.h' '    const SharcSettings& GetSettings() const { return m_settings; }' @'
+    const SharcSettings& GetSettings() const { return m_settings; }
+    SharcSettings& HostSettings() { return m_settings; } // RTR host cache settings
+    uint32_t GetEntryCount() const { return m_entriesNum; }
+'@ 'RTR host cache settings'
+Patch-Once 'Rtxpt/AdvancedSample.cpp' '    void EnsureSharcCreated()' @'
+    virtual uint32_t HostRadianceCacheEntries() const {return 4*1024*1024;} // RTR cache host budget
+    virtual void ConfigureHostRadianceCache(SharcSettings&) const {}
+    void EnsureSharcCreated()
+'@ 'RTR cache host budget'
+Patch-Once 'Rtxpt/AdvancedSample.cpp' @'
+        if (m_sharc == nullptr)
+            m_sharc = std::make_unique<SharcIntegration>(GetDevice(), m_bindingLayout, m_bindlessLayout,
+                                                        m_bindlessHeapLayout, m_bindlessHeapDescriptorTable);
+'@ @'
+        if (m_sharc == nullptr) {
+            m_sharc = std::make_unique<SharcIntegration>(GetDevice(), m_bindingLayout, m_bindlessLayout,
+                m_bindlessHeapLayout, m_bindlessHeapDescriptorTable,HostRadianceCacheEntries()); // RTR allocate requested cache
+            ConfigureHostRadianceCache(m_sharc->HostSettings());
+        }
+'@ 'RTR allocate requested cache'
 # A failed NVRHI map (for example after device removal) must reach the JNI error boundary,
 # rather than dereferencing a null readback pointer and crashing the entire JVM.
 Patch-Once 'Rtxpt/Misc/ShaderDebug.cpp' '#include "ShaderDebug.h"' @'

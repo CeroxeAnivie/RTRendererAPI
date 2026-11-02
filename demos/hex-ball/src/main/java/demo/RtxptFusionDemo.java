@@ -100,8 +100,8 @@ public final class RtxptFusionDemo {
         final RtxptComposedRenderer renderer;
         final RendererCommandAccess commands;
         final GraphicsPipelineState pipeline;
-        // The presenter retains three in-flight composition frames. One extra slot
-        // keeps the next producer independent of all three consumer-owned slots.
+        // A bounded producer ring avoids most reuse waits; skipped native frames can
+        // retain an older slot, so actual consumer ownership still governs reuse.
         final TextureResource[] colors=new TextureResource[4],glows=new TextureResource[4];
         int width,height,lastMode=-1;
         long resourceRevision,draws;
@@ -142,11 +142,17 @@ public final class RtxptFusionDemo {
             bytes.putFloat(a[0]).putFloat(a[1]).putFloat(b[0]).putFloat(b[1])
                 .putFloat(w).putFloat(h).putFloat(t).putFloat(layerIndex).flip();
             var pass=RenderPassDescriptor.color(w,h,List.of(attachment(layerIndex==0?color:glow)));
-            var result=commands.submitCommands(new RenderCommandTransaction(commandSequence,List.of(
+            var transaction=new RenderCommandTransaction(commandSequence,List.of(
                 new BeginRenderPassCommand(pass),new BindGraphicsPipelineCommand(pipeline),
                 new SetViewportCommand(new Viewport(0,0,w,h,0,1)),new SetScissorCommand(new ScissorRectangle(0,0,w,h)),
                 new SetPushConstantsCommand(Set.of(ShaderStage.FRAGMENT),0,new ResourceData(bytes)),
-                new DrawCommand(3,1,0,0),new EndRenderPassCommand())));
+                new DrawCommand(3,1,0,0),new EndRenderPassCommand()));
+            var result=commands.submitCommands(transaction);
+            if(result.outcome()==CommandExecutionEvidence.Outcome.BLOCKED
+                    &&result.reason()==CommandExecutionEvidence.Reason.BOUNDED_BACKPRESSURE) {
+                renderer.awaitCompositionConsumers();
+                result=commands.submitCommands(transaction);
+            }
             if(result.outcome()!=CommandExecutionEvidence.Outcome.RECORDED)throw new IllegalStateException("Vulkan effects draw sequence="+commandSequence+" outcome="+result.outcome()+" reason="+result.reason()+": "+result.detail());
             long deadline=System.nanoTime()+10_000_000_000L;
             while(true) {

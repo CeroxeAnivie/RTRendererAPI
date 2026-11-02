@@ -240,6 +240,8 @@ final class VulkanGenericCommandSession implements AutoCloseable {
             plan = VulkanGenericCommandPlan.compile(
                     resources, computePipelines, graphicsPipelines, rayTracingPipelines, accelerationStructures, checked
             );
+        } catch (VulkanCompositionSourceBusyException busy) {
+            return blocked(checked.sequence(), busy.getMessage());
         } catch (VulkanGenericPipelineLifecycleException lifecycle) {
             return rejected(checked.sequence(), lifecycle.reason(), lifecycle.getMessage());
         } catch (UnsupportedOperationException unsupported) {

@@ -117,7 +117,7 @@ bool RtrSceneMetalSample(const ShadingData sd,const StandardBSDFData data,uint2 
     result.wo=normalize(reflect(-sd.V,h));
     float nl=dot(sd.N,result.wo);
     if(nl<=1e-5) return false;
-    float3 f0=lerp(.04.xxx,RtrSceneBaseColor(sd,data),metallic);
+    float3 f0=float3(data.Specular());
     float3 f=f0+(1-f0)*pow(1-vh,5);
     float nh=max(dot(sd.N,h),1e-5);
     result.weight=metallic*f*RtrSceneGeometry(nv,nl,roughness)*vh/max(nv*nh,1e-5);

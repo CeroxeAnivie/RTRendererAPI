@@ -19,6 +19,9 @@ import java.util.Objects;
  * Aggregates independently uploadable GPUScene domains behind one atomic scene generation.
  */
 final class VulkanSceneResidency {
+    private final top.ceroxe.rt.renderer.api.RendererResourceOptions resourceBudget;
+    VulkanSceneResidency(){this(top.ceroxe.rt.renderer.api.RendererResourceOptions.defaults());}
+    VulkanSceneResidency(top.ceroxe.rt.renderer.api.RendererResourceOptions budget){resourceBudget=Objects.requireNonNull(budget);}
     private final StableIdentitySlots<TextureAsset> textures = new StableIdentitySlots<>(TextureAsset::id);
     private final StableIdentitySlots<MaterialAsset> materials = new StableIdentitySlots<>(MaterialAsset::id);
     private final StableIdentitySlots<MeshAsset> meshes = new StableIdentitySlots<>(MeshAsset::id);
@@ -58,6 +61,15 @@ final class VulkanSceneResidency {
         }
         SceneTransaction.Upserts upserts = checked.upserts();
         SceneTransaction.Removals removals = checked.removals();
+        if(checked.reset()||!upserts.meshes().isEmpty()||!upserts.textures().isEmpty()
+                ||removals.meshIds().hasRemaining()||removals.textureIds().hasRemaining()) {
+            var nextMeshes=new HashMap<Long,MeshAsset>();var nextTextures=new HashMap<Long,TextureAsset>();
+            if(!checked.reset()) {meshes.valuesSnapshot().forEach(m->nextMeshes.put(m.id(),m));textures.valuesSnapshot().forEach(t->nextTextures.put(t.id(),t));}
+            var removedMeshes=removals.meshIds();while(removedMeshes.hasRemaining())nextMeshes.remove(removedMeshes.get());
+            var removedTextures=removals.textureIds();while(removedTextures.hasRemaining())nextTextures.remove(removedTextures.get());
+            upserts.meshes().forEach(m->nextMeshes.put(m.id(),m));upserts.textures().forEach(t->nextTextures.put(t.id(),t));
+            resourceBudget.validateAssets(nextMeshes.values(),nextTextures.values());
+        }
         StableIdentitySlots.Prepared<TextureAsset> preparedTextures =
                 textures.prepare(checked.revision(), checked.reset(), upserts.textures(), removals.textureIds());
         StableIdentitySlots.Prepared<MaterialAsset> preparedMaterials =

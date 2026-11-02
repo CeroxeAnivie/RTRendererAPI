@@ -90,7 +90,7 @@ NEEResult RtrSceneDirect(const PathState path,const ShadingData sd,const ActiveB
         if(max3(radiance)<=0)continue;
         float3 h=normalize(sd.V+direction);
         float nv=max(dot(sd.N,sd.V),0),nh=max(dot(sd.N,h),0),vh=max(dot(sd.V,h),0);
-        float3 f0=lerp(.04.xxx,baseColor,metallic),f=f0+(1-f0)*pow(1-vh,5);
+        float3 f0=float3(bsdf.data.Specular()),f=f0+(1-f0)*pow(1-vh,5);
         float alpha=max(roughness*roughness,.0025),a2=alpha*alpha,denom=nh*nh*(a2-1)+1;
         float distribution=a2/max(K_PI*denom*denom,1e-6);
         float geometry=RtrSceneGeometry(nv,nl,roughness);
