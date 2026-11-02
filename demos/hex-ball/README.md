@@ -102,9 +102,11 @@ HexBall JAR 无参数或带 `--controls` 打开 API 工作台。普通使用先�
 `--programmable` 打开 Vulkan 可编程场景工作台，支持四个场景阶段的 GLSL／SPIR-V、HDR 预览、应用时间轴和只读应用数据。Gradle 的 `programmableSceneDemo` 固定带 `--verify`，执行有界原生 HDR 校验，和交互工作台不同。通用资源、计算、图形与 BLAS/TLAS 命令请按[通用命令教程](../../docs/Generic-Commands-and-Ray-Tracing.md)使用；RTXPT 原生后端不执行任意 Vulkan shader。
 
 需要 RTXPT 完整 3D 与 Vulkan 独立工作／UI 协作时，阅读[组合指南](../../docs/d3d12-vulkan-composition.md)。原生 RTXPT 最终呈现保留其请求的 RR＋FG/MFG；同窗热切换完整 3D 后端的 Vulkan 最终呈现是另一个显式入口，能力约束不同。
-# RTXPT + Vulkan 混合场景验收
+## RTXPT + Vulkan 混合场景验收
+
+> **默认推荐 RTXPT 单后端**完成完整 3D 与最终呈现，显式使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`。
+> **RTXPT＋Vulkan 混合模式不推荐作为默认方案**：它增加整帧复制、跨 API 同步和显存成本，仅供确实需要 Vulkan 独立命令／颜色叠层的专家使用。当前以功能正确、稳定出帧为维护目标，不做混合模式性能优化。
 
 运行 `./gradlew :demos:hex-ball:rtxptFusionDemo`。默认 1080p、1 SPP、2× FG，窗口由用户手动关闭。
 RTXPT 渲染透明介质与完整 3D；Vulkan 实时绘制跟随场景物体的标记、连线和加法光圈，通过 GPU 合成回 RTXPT 最终呈现。
-数字键 1–6 切换光学场景，V 切换混合／仅 RTXPT／隔离 Vulkan，P 暂停相机。两后端共享相机与位置数据，叠层不参与 RTXPT 的三维遮挡、反射、折射或投影。
-
+鼠标左键拖动视角，WASD 移动；默认由 RTXPT 原生控制相机。数字键 1–6 切换光学场景，V 切换混合／仅 RTXPT／隔离 Vulkan，P 开关自动摆动。两后端共享相机与位置数据，叠层不参与 RTXPT 的三维遮挡、反射、折射或投影。

@@ -166,9 +166,12 @@ try (Renderer renderer = Renderer.open(RendererConfig.presentation());
 
 ### RTXPT 托管场景
 
+> **默认推荐 RTXPT 单后端**完成完整 3D 与最终呈现，显式使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`。
+> **RTXPT＋Vulkan 混合模式不推荐作为默认方案**：它增加整帧复制、跨 API 同步和显存成本，仅供确实需要 Vulkan 独立命令／颜色叠层的专家使用。当前以功能正确、稳定出帧为维护目标，不做混合模式性能优化。
+
 使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`，提交完整场景和首帧后，
-通过 `RtxptAccess.renderFrame()` 驱动原生窗口。需要旧 Vulkan 独立命令或 UI 时，使用
-`RtxptComposedRenderer.open()`。可直接照着运行的场景与生命周期示例见 [Java 教程](docs/Java.md#rtxpt-透明介质与原生窗口)。
+通过 `RtxptAccess.renderFrame()` 驱动原生窗口。必须使用 Vulkan 独立命令或颜色叠层时，才考虑专家组合入口
+`RtxptComposedRenderer.open()`，其额外成本及限制见[组合指南](docs/d3d12-vulkan-composition.md)。可直接照着运行的场景与生命周期示例见 [Java 教程](docs/Java.md#rtxpt-透明介质与原生窗口)。
 
 RTXPT 当前输出 GPU 原生 SDR 画面，不提供普通 `pollFrame()`／`awaitFrame()` CPU 帧，也不接收任意
 Vulkan shader 或通用命令。组合提供独立 GPU 工作和颜色叠层，不能让两套渲染器拆分同一场景的反射／折射。

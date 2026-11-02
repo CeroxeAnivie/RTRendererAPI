@@ -6,6 +6,9 @@ RTRendererAPI 是一个以 JDK 25 构建、以 Java 25 字节码与运行时为�
 
 7.0.0 是重新设计介质模型与执行结构的破坏性主版本，本轮只交付 GitHub 源码和本地 Maven 制品，不上传 Central。`publishAllToLocalStagingRepository` 生成完整本地 Maven 制品，并由独立消费方验证。
 
+> **默认推荐 RTXPT 单后端**完成完整 3D 与最终呈现，显式使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`。
+> **RTXPT＋Vulkan 混合模式不推荐作为默认方案**：它增加整帧复制、跨 API 同步和显存成本，仅供确实需要 Vulkan 独立命令／颜色叠层的专家使用。当前以功能正确、稳定出帧为维护目标，不做混合模式性能优化。
+
 ## 阅读路线
 
 先按自己的角色选择一条路径，不需要从头阅读全部文档：

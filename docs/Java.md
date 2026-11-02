@@ -10,6 +10,9 @@ Maven 坐标是 `top.ceroxe.rt:renderer-api:7.0.0`，默认传递解析 Vulkan �
 
 ## 学习顺序与后端选择
 
+> **默认推荐 RTXPT 单后端**完成完整 3D 与最终呈现，显式使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`。
+> **RTXPT＋Vulkan 混合模式不推荐作为默认方案**：它增加整帧复制、跨 API 同步和显存成本，仅供确实需要 Vulkan 独立命令／颜色叠层的专家使用。当前以功能正确、稳定出帧为维护目标，不做混合模式性能优化。
+
 初次接触先照[三个 Demo 的命令](../demos/hex-ball/README.md)打开窗口，再学习[最小 CPU 帧](#最小调用)或[RTXPT 原生窗口](#rtxpt-透明介质与原生窗口)。之后学习资产、帧级图元、[配置与诊断](#常用配置)、[生命周期](#生命周期与资源所有权)，最后按需阅读通用命令与专家扩展。
 
 | 需要完成的工作 | 入口 | 输出及限制 |
@@ -122,7 +125,7 @@ RTXPT 当前不提供通用 CPU 帧、线性 HDR 导出、任意场景 shader、
 
 ## RTXPT 与 Vulkan 独立工作组合
 
-只需 RTXPT 3D 加上Vulkan 的计算、图形或 UI 时，改用同样实现 `Renderer` 的组合入口：
+组合属于不推荐作为默认方案的专家选项。确实需要 RTXPT 3D 加上 Vulkan 独立计算、图形或颜色叠层时，使用同样实现 `Renderer` 的组合入口：
 
 ```java
 import top.ceroxe.rt.renderer.rtxpt.RtxptComposedRenderer;

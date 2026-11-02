@@ -1,6 +1,9 @@
 # RTXPT 与Vulkan 的 GPU 组合
 
-推荐链：**RTXPT 完整 3D → Vulkan GPU 叠层 → RTXPT 最终呈现**。RTXPT 是唯一 Streamline owner，保留其原生 SR／RR、FG／MFG、Reflex、SHaRC、SER、采样和降噪规则；Vulkan 执行独立图形／计算工作，不另启一套 Streamline。普通帧没有 CPU 像素读回。
+> **默认推荐 RTXPT 单后端**完成完整 3D 与最终呈现，显式使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`。
+> **RTXPT＋Vulkan 混合模式不推荐作为默认方案**：它增加整帧复制、跨 API 同步和显存成本，仅供确实需要 Vulkan 独立命令／颜色叠层的专家使用。当前以功能正确、稳定出帧为维护目标，不做混合模式性能优化。
+
+需要组合时的执行链：**RTXPT 完整 3D → Vulkan GPU 叠层 → RTXPT 最终呈现**。RTXPT 是唯一 Streamline owner，保留其原生 SR／RR、FG／MFG、Reflex、SHaRC、SER、采样和降噪规则；Vulkan 执行独立图形／计算工作，不另启一套 Streamline。普通帧没有 CPU 像素读回。
 
 命名按执行职责区分：`vulkanCommands()`、`vulkanExtension(...)` 和 `WorkSnapshot.vulkanFrames()` 指 Vulkan 的独立工作与帧计数；RTXPT 的场景光照输入使用 `SceneLighting`，预 SR 历史使用 `PreSrHistory`。`RTR_RTXPT_SCENE_LIGHTING=1` 选择已验收的场景光照输入算法，`RTR_RTXPT_DIAGNOSTIC_PRE_SR_HISTORY=1` 独立启用预 SR 历史候选。它们不表示后端被淘汰。原始测量日志和外部备份路径保留当时实际记录，当前 API、代码和脚本使用上述名称。
 
@@ -38,7 +41,7 @@ try (var renderer = RtxptComposedRenderer.openRtxptPresentation(vulkan, rtxpt, "
 
 这条 Vulkan 最终呈现链必须关闭 RTXPT FG/MFG/Reflex，也关闭Vulkan 侧 Streamline 请求。官方 [Streamline ProgrammingGuide](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/docs/ProgrammingGuide.md) 明确 `Applications can create multiple devices but SL only works with one.`，`Preferences.renderAPI` 只有一个 API 值。不能让 D3D12 RR 与 Vulkan FG 各自绑定不同设备，再声称这受官方支持。
 
-推荐 RTXPT 最终呈现入口始终保留完整 RTXPT 3D 及其引导，不允许 `backendPolicy` 假切到Vulkan 3D。需要同窗切换完整 3D 时明确选择 Vulkan 最终呈现入口；需要完整 RTXPT 高级呈现时选择 RTXPT 最终呈现入口。
+RTXPT 最终呈现入口始终保留完整 RTXPT 3D 及其引导，不允许 `backendPolicy` 假切到Vulkan 3D。需要同窗切换完整 3D 时明确选择 Vulkan 最终呈现入口；需要完整 RTXPT 高级呈现时选择 RTXPT 最终呈现入口。
 
 ## GPU 交接与资源生命周期
 
@@ -49,6 +52,8 @@ try (var renderer = RtxptComposedRenderer.openRtxptPresentation(vulkan, rtxpt, "
 3. D3D12 queue wait completion，GPU copy 到上游 backbuffer，仍由原 DXGI／FG／MFG／Reflex 完成呈现。
 
 独立 Vulkan 最终窗口入口不回写，而是复制／合成到其 swapchain。最小化／重建跳过显示时仍归还共享槽。跨 API 等待用 GPU timeline；有界队列和设备本身的呈现背压沿用现有实现。
+
+原生窗口在 native frame 内发生尺寸变化时，本帧仍正常消费并归还共享槽，仅暂缓合成与提交尺寸不符的旧叠层；下一帧按新尺寸重建叠层。
 
 每次 resize、重建、关闭或完整 3D 切换，先 `retireD3D12SharedFrames()` 等已有消费者完成，再退休生产槽／句柄。消费者退休失败则保留生产资源供重试，不能直接销毁。拒收的新 descriptor 由生产侧在消费者成功退休后按队列顺序回收，避免孤立 ready 值卡住后续工作。
 

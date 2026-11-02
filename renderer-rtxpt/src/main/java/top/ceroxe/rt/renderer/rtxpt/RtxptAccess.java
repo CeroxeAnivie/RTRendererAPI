@@ -23,6 +23,8 @@ public interface RtxptAccess {
     int overlaySelection();
     /** Actual client output size and upstream exposure/post-process settings. */
     PresentationStatus presentationStatus();
+    /** Actual upstream camera after native mouse/keyboard input; requires the first submission. */
+    top.ceroxe.rt.renderer.api.CameraState cameraState();
     /**
      * Sets the upstream tone mapper's exposure offset in EV; -1 halves displayed exposure.
      * May be called before the first submission and survives scene reloads. This changes

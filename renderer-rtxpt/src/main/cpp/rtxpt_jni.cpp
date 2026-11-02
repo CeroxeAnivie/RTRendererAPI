@@ -678,6 +678,22 @@ extern "C" JNIEXPORT jintArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNa
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 
+extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_cameraState(
+    JNIEnv* e,jclass,jlong h) {
+    try {
+        auto& s=session(h);
+        const auto* sample=static_cast<HostPathTracer*>(s.app->HostRenderPass());
+        const auto& camera=sample->GetCurrentCamera();
+        const auto p=camera.GetPosition(),d=camera.GetDir(),u=camera.GetUp();
+        int width=0,height=0;glfwGetFramebufferSize(s.app->HostDeviceManager()->GetWindow(),&width,&height);
+        const jdouble values[]={p.x,p.y,p.z,d.x,d.y,d.z,u.x,u.y,u.z,sample->GetCameraVerticalFOV(),
+            double(std::max(width,1)),double(std::max(height,1))};
+        auto result=e->NewDoubleArray(12);
+        if(result)e->SetDoubleArrayRegion(result,0,12,values);
+        return result;
+    } catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_camera(
     JNIEnv* e, jclass, jlong h, jstring pose, jfloat verticalFov) {
     try {

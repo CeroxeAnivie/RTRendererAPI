@@ -339,6 +339,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     @Override public int overlaySelection(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptNative.overlaySelection(handle);}
     @Override public PresentationStatus presentationStatus(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.presentationStatus(handle);
         return new PresentationStatus((int)s[0],(int)s[1],(float)s[2],(float)s[3],s[4]!=0);}
+    @Override public CameraState cameraState(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.cameraState(handle);
+        return CameraState.lookAt(s[0],s[1],s[2],s[0]+s[3],s[1]+s[4],s[2]+s[5])
+            .worldUp(s[6],s[7],s[8]).verticalFieldOfViewDegrees(Math.toDegrees(s[9])).aspectRatio(s[10]/s[11]).build();}
     @Override public RuntimeStatus runtimeStatus(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.runtimeStatus(handle);
         return new RuntimeStatus(s[0],s[1],Reconstruction.values()[s[2]],s[3]!=0,s[4]!=0,s[5]!=0,s[6]!=0,s[7]!=0,s[8]!=0,s[9]!=0,s[10]!=0,
             s[11],s[12],s[13],s[14]!=0,s[15]!=0,s[16]!=0,s[17]!=0,s[18]!=0,s[19]!=0);}

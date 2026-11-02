@@ -1,5 +1,8 @@
 # 后端选择：全 RTXPT、仅介质 RTXPT、保留 Vulkan
 
+> **默认推荐 RTXPT 单后端**完成完整 3D 与最终呈现，显式使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`。
+> **RTXPT＋Vulkan 混合模式不推荐作为默认方案**：它增加整帧复制、跨 API 同步和显存成本，仅供确实需要 Vulkan 独立命令／颜色叠层的专家使用。当前以功能正确、稳定出帧为维护目标，不做混合模式性能优化。
+
 `Renderer.open()` 和 `Renderer.open(config)` 保持原有 provider 优先级行为。它们不会因为第一次提交了玻璃就自动重建另一个后端。明确指定时也仍可调用 `Renderer.open("vulkan-rt", config)` 或 `Renderer.open("rtxpt", config)`，不会静默回退。
 
 新的普通入口 `Renderer.openForScene(policy, initialScene, firstFrame)` 在打开设备前分析完整场景，并返回实现 `Renderer` 的 `RendererSceneSession`。高级功能、专家扩展、资源和命令仍由原后端执行，没有新增渲染算法或逐帧图像搬运层。

@@ -22,7 +22,8 @@ public final class RtxptFusionDemo {
             int width=1920,height=1080,mode=0;
             long revision=1,sequence=0,hud=0,report=0,reportFrames=0;
             String scene="mixed";
-            boolean paused=false;
+            boolean autoPan=false;
+            CameraState requestedCamera=RtxptMediumScene.camera(width,height);
             float time=0;
             long previous=System.nanoTime();
             renderer.apply(RtxptMediumScene.create(revision,scene));
@@ -36,7 +37,7 @@ public final class RtxptFusionDemo {
             var effects=new VulkanEffects(renderer);
             while(true) {
                 long now=System.nanoTime();
-                if(!paused)time+=Math.min(.1f,(now-previous)*1e-9f);
+                time+=Math.min(.1f,(now-previous)*1e-9f);
                 previous=now;
                 String command=keys.pollCommand();
                 int selected=host.overlaySelection();
@@ -44,19 +45,23 @@ public final class RtxptFusionDemo {
                     command=RtxptMediumScene.PRESETS.get(selected);
                 if("quit".equals(command))break;
                 if("toggle-vulkan".equals(command))mode=(mode+1)%3;
-                if("pause".equals(command))paused=!paused;
+                if("pause".equals(command)) {
+                    autoPan=!autoPan;
+                    if(!autoPan)requestedCamera=host.cameraState();
+                }
                 if(command!=null&&RtxptMediumScene.PRESETS.contains(command)) {
                     scene=command;renderer.apply(RtxptMediumScene.create(++revision,scene));
                     host.setOverlayChoices(RtxptMediumScene.LABELS,RtxptMediumScene.PRESETS.indexOf(scene));
                 }
                 var display=host.presentationStatus();
                 width=display.outputWidth();height=display.outputHeight();
-                var camera=CameraState.lookAt(4+.35*Math.sin(time*.35),2.7,6,0,.8,0)
+                if(autoPan)requestedCamera=CameraState.lookAt(4+.35*Math.sin(time*.35),2.7,6,0,.8,0)
                     .verticalFieldOfViewDegrees(52).aspectRatio((double)width/height).build();
+                var camera=host.cameraState();
                 float[] a=project(camera,-1.2,.9,0),b=project(camera,1.3,.65,.3);
                 effects.draw(width,height,a,b,time,mode);
                 long before=host.bridgeTimings().frames();
-                renderer.submit(DemoRendererProfile.frame(sequence++,width,height,camera)
+                renderer.submit(DemoRendererProfile.frame(sequence++,width,height,requestedCamera)
                     .minimumSceneRevision(revision).environment(RtxptMediumScene.environment())
                     .antiAliasing(DemoRendererProfile.antiAliasing(1)).build());
                 RtxptMediumDemo.recordPresented(host,stats,before);
@@ -64,7 +69,7 @@ public final class RtxptFusionDemo {
                     var actual=host.runtimeStatus();var diagnostics=renderer.diagnostics();
                     var extent=new DemoConfig(width,height,1,true,false,false,0,0,Duration.ZERO);
                     host.setOverlayText(DemoTechnologyHud.capture(renderer,extent,stats,diagnostics).text()
-                        +String.format(Locale.ROOT,"%nRTXPT 3D OPTICS + VULKAN GRAPHICS | GPU COMPOSITION%nINPUT %dx%d -> OUTPUT %dx%d | SHaRC %s%nVULKAN: %s | draws %d%nCYAN / AMBER: WORLD-ANCHORED TRACKING + ADDITIVE PULSE%n[1-6] Optics  [V] Fusion / RTXPT / Vulkan  [P] Pause camera%nSCENE %s | %s",
+                        +String.format(Locale.ROOT,"%nEXPERT COMPOSITION: NOT RECOMMENDED | DEFAULT: RTXPT%nRTXPT 3D OPTICS + VULKAN GRAPHICS | GPU COMPOSITION%nINPUT %dx%d -> OUTPUT %dx%d | SHaRC %s%nVULKAN: %s | draws %d%nCYAN / AMBER: WORLD-ANCHORED TRACKING + ADDITIVE PULSE%nLEFT DRAG: LOOK | WASD: MOVE | [P] AUTO-PAN%n[1-6] Optics  [V] Fusion / RTXPT / Vulkan%nSCENE %s | %s",
                             actual.renderWidth(),actual.renderHeight(),width,height,actual.sharc()?"ACTIVE":"OFF",
                             new String[]{"ALPHA + ADDITIVE","HIDDEN","ISOLATED REPLACE"}[mode],effects.draws,
                             scene.toUpperCase(Locale.ROOT),RtxptMediumScene.description(scene)));

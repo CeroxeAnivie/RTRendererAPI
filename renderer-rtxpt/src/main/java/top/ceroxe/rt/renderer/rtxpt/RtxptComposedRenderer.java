@@ -10,6 +10,8 @@ import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
 
 /**
  * Native RTXPT presentation with Vulkan UI, or explicit Vulkan presentation with 3D switching.
+ * Expert composition is not the recommended default. Prefer the single RTXPT backend for
+ * supported 3D scenes; composition adds full-frame transfers and cross-API synchronization.
  * RTXPT's SDR output crosses shared GPU memory; Vulkan commands and UI remain Vulkan work.
  * This is stage composition, not split light transport or a union of arbitrary shader semantics.
  */
