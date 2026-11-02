@@ -645,13 +645,13 @@ Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    //float3 lastOrigin = floa
     {
     #endif
     //float3 lastOrigin = float3(1e30f,1e30f,1e30f);
-'@ 'RTR trace both real dielectric branches'
+'@ 'RTR exact first two dielectric junctions'
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    PathTracer::WorkingContext workingContext = Bridge::GetWorkingContext();' @'
     PathTracer::WorkingContext workingContext = Bridge::GetWorkingContext();
     #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
     path.setCounter((PackedCounters)3,rtrFirstBranch+1u); // RTR first-interface selector in ray payload
     #endif
-'@ 'RTR first-interface selector'
+'@ 'RTR two-junction selectors in ray payload'
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    PathTracer::CommitPixel( path, workingContext );' @'
     PathTracer::CommitPixel( path, workingContext );
     #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
@@ -740,6 +740,12 @@ foreach($relative in @('Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli','Rtx
 # repeatedly and counted multiple times. This is a finite Whitted tree prefix.
 $rtrReplayPath=Join-Path $sdk 'Rtxpt/Shaders/PathTracerSample.hlsl'
 $rtrReplayText=[IO.File]::ReadAllText($rtrReplayPath)
+# Remove obsolete scaffolding from SDKs configured by the old non-idempotent
+# migration. The canonical replay loop and selector below replace both blocks.
+$rtrReplayText=[regex]::Replace($rtrReplayText,
+    '(?m)^    #if defined\(RTR_LEGACY_LIGHTING\) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL\r?\n    \[loop\] for\(uint rtrFirstBranch=0;rtrFirstBranch<2;rtrFirstBranch\+\+\) // RTR trace both real dielectric branches\r?\n    \{\r?\n    #endif\r?\n','')
+$rtrReplayText=[regex]::Replace($rtrReplayText,
+    '(?m)^    #if defined\(RTR_LEGACY_LIGHTING\) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL\r?\n    path\.setCounter\(\(PackedCounters\)3,rtrFirstBranch\+1u\); // RTR first-interface selector in ray payload\r?\n    #endif\r?\n','')
 $rtrReplayText=$rtrReplayText.Replace('rtrOpticalReplay<4;','rtrOpticalReplay<(1u<<RTR_LEGACY_EXACT_INTERFACE_COUNT);')
 $rtrReplayText=$rtrReplayText.Replace('((rtrOpticalReplay>>1u)+1u)|((rtrOpticalReplay&1u)<<3u)',
     '((rtrOpticalReplay>>(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))+1u)|((rtrOpticalReplay&((1u<<(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))-1u))<<3u)')
