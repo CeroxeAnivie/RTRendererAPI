@@ -120,8 +120,8 @@ try {
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     $runLog=Get-Content -LiteralPath ($prefix+'.log') -Raw
-    if($DirectionalStrata -and $LightingProbe -notin @('no-sun','no-environment')
-        -and $runLog -notmatch 'RTXPT directional environment strata ACTIVE count=[1-9]'){
+    if($DirectionalStrata -and $LightingProbe -notin @('no-sun','no-environment') -and
+        $runLog -notmatch 'RTXPT directional environment strata ACTIVE count=[1-9]'){
         throw 'Directional strata were requested but not active; discard this run.'
     }
     if($FixedSrExposure -gt 0 -and $runLog -notmatch 'RTXPT explicit SR exposure texture='){
