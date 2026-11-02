@@ -25,7 +25,8 @@ public final class RtxptBallMaterialNativeSelfTest {
             for(var material:new DemoScene.BallMaterial[]{DemoScene.BallMaterial.GLASS,
                     DemoScene.BallMaterial.OPAQUE_REFLECTIVE,DemoScene.BallMaterial.ORIGINAL_METAL,DemoScene.BallMaterial.GLASS}) {
                 if(sequence>0) {
-                    scene=new DemoScene(material);
+                    host.setOverlayChoices(Arrays.stream(DemoScene.BallMaterial.values()).map(m->m.label).toList(),material.ordinal());
+                    scene=new DemoScene(DemoScene.BallMaterial.values()[host.overlaySelection()]);
                     renderer.apply(scene.ballMaterialTransaction(++revision));
                 }
                 long exportsBefore=host.bridgeTimings().sceneExports();
@@ -37,7 +38,7 @@ public final class RtxptBallMaterialNativeSelfTest {
                         .environment(DemoRendererProfile.environment()).build());
                     previous=batch;
                     if(frame==0) {
-                        host.setOverlayChoices(Arrays.stream(DemoScene.BallMaterial.values()).map(m->m.label).toList(),material.ordinal());
+                        if(sequence==1)host.setOverlayChoices(Arrays.stream(DemoScene.BallMaterial.values()).map(m->m.label).toList(),material.ordinal());
                         require(host.overlaySelection()==material.ordinal(),"Native material selector did not retain its choice");
                     }
                 }

@@ -34,7 +34,7 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
         if(quality.lighting().directionalStrata()&&(restirDi||restirGi||sharc||reconstruction!=Reconstruction.DLSS||standaloneDenoiser))
             throw new IllegalArgumentException("Directional strata require standalone-denoiser-free DLSS SR without ReSTIR/cache reuse");
     }
-    /** Official realtime path: 1 SPP, DLSS-RR Balanced, SHaRC, SER and Reflex, FG off. */
+    /** Medium realtime path: 1 SPP, DLSS-RR Performance, SHaRC, SER and Reflex, FG off. */
     public static RtxptOptions recommended() {
         return resolve(profile(RendererConfig.pathTracedPresentation()));
     }

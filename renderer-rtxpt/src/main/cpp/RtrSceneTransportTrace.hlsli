@@ -14,7 +14,7 @@
 #endif
 // Configured before pipeline creation. Later transport keeps its existing estimator.
 #ifndef RTR_SCENE_EXACT_INTERFACE_COUNT
-#define RTR_SCENE_EXACT_INTERFACE_COUNT 6u
+#define RTR_SCENE_EXACT_INTERFACE_COUNT 4u
 #endif
 #if RTR_SCENE_EXACT_INTERFACE_COUNT < 1 || RTR_SCENE_EXACT_INTERFACE_COUNT > 6
 #error Exact optical interface budget must be in [1,6]

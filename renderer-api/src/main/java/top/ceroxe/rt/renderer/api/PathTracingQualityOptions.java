@@ -62,7 +62,8 @@ public record PathTracingQualityOptions(LightSampling lighting,RadianceCache cac
             range(diffuseBounces,0,maxBounces,"cache diffuseBounces");range(directLightSamples,0,63,"cache directLightSamples");
             finite(terminationThreshold,.01f,10,"cache terminationThreshold");finite(textureLodBias,-8,8,"cache textureLodBias");
             finite(sceneScale,.0001f,1e6f,"cache sceneScale");range(accumulationFrames,1,255,"cache accumulationFrames");
-            range(staleFrames,1,255,"cache staleFrames");finite(minRoughness,0,1,"cache minRoughness");
+            // SHaRC clamps values below its eight-frame minimum; reject no-op requests.
+            range(staleFrames,8,128,"cache staleFrames");finite(minRoughness,0,1,"cache minRoughness");
         }
         public static RadianceCache defaults(){return new RadianceCache(2*1024*1024,5,8,4,1,3.5f,1,35,10,64,.4f);}
         public RadianceCache withCapacity(int value){return new RadianceCache(value,trainingDownscale,maxBounces,diffuseBounces,directLightSamples,terminationThreshold,textureLodBias,sceneScale,accumulationFrames,staleFrames,minRoughness);}

@@ -120,7 +120,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         ready();Objects.requireNonNull(tx);if(nativeScene!=null)throw new IllegalStateException("Choose retained API scenes or a native scene explicitly");
         RtxptInputContract.requireAdvancingRevision(tx.revision(),revision,scenePublished);
         var next=new RtxptScene(scene);next.retain(tx,nativeContract);
-        resources.validateAssets(next.meshes.values(),next.textures.values());
+        if(tx.reset() || !tx.upserts().meshes().isEmpty() || !tx.upserts().textures().isEmpty()
+                || tx.removals().meshIds().hasRemaining() || tx.removals().textureIds().hasRemaining())
+            resources.validateAssets(next.meshes.values(),next.textures.values());
         boolean transformsOnly=!tx.reset() && tx.upserts().textures().isEmpty() && tx.upserts().materials().isEmpty() && tx.upserts().meshes().isEmpty() && tx.upserts().lights().isEmpty()
             && !tx.removals().textureIds().hasRemaining() && !tx.removals().materialIds().hasRemaining() && !tx.removals().meshIds().hasRemaining() && !tx.removals().lightIds().hasRemaining() && !tx.removals().instanceIds().hasRemaining();
         if(transformsOnly)for(var i:tx.upserts().instances()) {
@@ -157,7 +159,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         if(handle==0){
             if(path==null)throw new IllegalStateException("Submit a populated scene");
             handle=RtxptNative.create(RtxptNative.runtime().toString(),path.toString(),f.width(),f.height(),externalPresentation,gpuTimingsEnabled,
-                maxFramesInFlight,resources.workerThreads(),resources.shaderCompilerThreads(),options.arguments());
+                maxFramesInFlight,resources.workerThreads(),resources.shaderCompilerThreads(),options.arguments(),options.qualityInts(),options.qualityFloats());
             if(compositor!=null)RtxptNative.compositor(handle,compositor);
             if(title!=null)RtxptNative.title(handle,title);
             applyNativeSettings();
@@ -360,7 +362,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
             (float)s[20],(float)s[22],(float)s[23],(int)s[17],(int)s[18],(float)s[24]);
         var actual=new PathTracingQualityOptions(light,cache,(int)s[12],(int)s[13],(int)s[14],
             PathTracingQualityOptions.SubSampling.values()[(int)s[15]],(float)s[21],s[16]!=0);
-        return new PathQualityStatus(actual,(int)s[25],(int)s[26],(int)s[27],(int)s[28],(int)s[29]);
+        return new PathQualityStatus(actual,(int)s[25],(int)s[26],(int)s[27],(int)s[28],(int)s[29],s[30]!=0,s[31]!=0);
     }
     @Override public long windowHandle(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptNative.window(handle);}
     @Override public void setWindowTitle(String title){viewportTitle(title);}

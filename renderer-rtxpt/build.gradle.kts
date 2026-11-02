@@ -29,6 +29,11 @@ tasks.register<JavaExec>("rtxptNativeSelfTest") {
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptNativeSelfTest")
 }
+tasks.register<JavaExec>("rtxptBudgetNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptBudgetNativeSelfTest")
+}
 tasks.register<JavaExec>("rtxptAdvancedNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses, tasks.jar)
     classpath = sourceSets.test.get().output + configurations.testRuntimeClasspath.get() + files(tasks.jar)

@@ -93,14 +93,17 @@ public:
     uint32_t HostRadianceCacheEntries() const override {return uint32_t(pathQuality.values[7]);}
     void ConfigureHostRadianceCache(SharcSettings& settings) const override {pathQuality.Apply(settings);}
     void ConfigurePathQuality(const RtrPathQuality& quality) {
-        quality.Validate();pathQuality=quality;pathQuality.Apply(g_sampleUIData);lightingSceneDirty=true;
+        quality.Validate();
+        if(auto* cache=GetSharc();cache && cache->GetEntryCount()!=uint32_t(quality.values[7]))
+            throw std::logic_error("Radiance cache capacity changes require a new renderer");
+        pathQuality=quality;pathQuality.Apply(g_sampleUIData);lightingSceneDirty=true;
         if(auto* cache=GetSharc()) {
-            if(cache->GetEntryCount()!=uint32_t(pathQuality.values[7]))
-                throw std::logic_error("Radiance cache capacity changes require a new renderer");
-            cache->HostSettings()=cache->GetSettings();pathQuality.Apply(cache->HostSettings());
+            pathQuality.Apply(cache->HostSettings());
         }
     }
     bool SceneLightingActive() const {return sceneLightingActive();}
+    bool ExactPointLightingActive() const {return smallPointLighting;}
+    bool DirectionalStrataActive() const {return useDirectionalStrata();}
     size_t HostShaderCompilerThreads() const {return GetRTPipelineBaker()?GetRTPipelineBaker()->HostCompilerThreadCount():0;}
     void LoadSceneLighting(const std::string& path) {
         sceneLights.clear();sceneSky={};sceneLightsDirty=true;
@@ -262,6 +265,7 @@ public:
         const char* residualControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING");
         if(smallPointLighting) {
             macros.push_back({"RTR_EXACT_SMALL_POINTS","1"});
+            macros.push_back({"RTR_EXACT_POINT_LIGHT_LIMIT",std::to_string(pathQuality.values[5])});
             if(!residualControl || std::string(residualControl)!="1")
                 macros.push_back({"RTR_CONDITIONAL_POINT_SAMPLING","1"});
         }
@@ -287,8 +291,11 @@ public:
 class HostApp final : public AdvancedSample {
 public:
     uint32_t framesInFlight=2;
+    RtrPathQuality pathQuality;
     std::unique_ptr<Sample> CreateMainRenderPass(donut::app::DeviceManager& dm,const CommandLineOptions& options) override {
-        return std::make_unique<HostPathTracer>(dm,options);
+        auto pass=std::make_unique<HostPathTracer>(dm,options);
+        pass->ConfigurePathQuality(pathQuality);
+        return pass;
     }
     void ConfigureDefaultDeviceParams(donut::app::DeviceCreationParameters& p) const override {
         p.vsyncEnabled = false;
@@ -462,13 +469,20 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 }
 
 extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(
-    JNIEnv* e, jclass, jstring runtime, jstring scene, jint width, jint height, jboolean externalPresentation, jboolean gpuTimingsEnabled,jint maxFramesInFlight,jint workerThreads,jint shaderCompilerThreads,jobjectArray options) {
+    JNIEnv* e, jclass, jstring runtime, jstring scene, jint width, jint height, jboolean externalPresentation, jboolean gpuTimingsEnabled,jint maxFramesInFlight,jint workerThreads,jint shaderCompilerThreads,jobjectArray options,jintArray qualityIntegers,jfloatArray qualityConstants) {
     std::lock_guard lock(lifecycle);
     try {
         if (active) throw std::runtime_error("The upstream RTXPT core supports one resident session per process");
         if (width < 1 || height < 1 || maxFramesInFlight<2 || maxFramesInFlight>3
             ||workerThreads<1||workerThreads>64||shaderCompilerThreads<1||shaderCompilerThreads>16)
             throw std::invalid_argument("Invalid dimensions, frame budget or CPU concurrency");
+        if(!qualityIntegers||!qualityConstants||e->GetArrayLength(qualityIntegers)!=19||e->GetArrayLength(qualityConstants)!=6)
+            throw std::invalid_argument("Invalid initial path quality payload size");
+        RtrPathQuality initialQuality;
+        e->GetIntArrayRegion(qualityIntegers,0,19,initialQuality.values.data());
+        e->GetFloatArrayRegion(qualityConstants,0,6,initialQuality.constants.data());
+        if(e->ExceptionCheck())return 0;
+        initialQuality.Validate();
         RtrHostResources::workerThreads=unsigned(workerThreads);
         RtrHostResources::shaderCompilerThreads=unsigned(shaderCompilerThreads);
         auto root = utf8(e, runtime);
@@ -499,6 +513,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         g_sampleUIData = SampleUIData{};
         s->app = std::make_unique<HostApp>();
         s->app->framesInFlight=uint32_t(maxFramesInFlight);
+        s->app->pathQuality=initialQuality;
         s->app->HostDeviceManager()->HostExternalPresentation=externalPresentation;
         s->app->HostDeviceManager()->HostFixedWindowTitle=true;
         auto status = s->app->Init(static_cast<int>(argv.size()), argv.data());
@@ -717,12 +732,13 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_Rtxp
             q.values[18]=c.StaleFrameFrameNum;q.constants[1]=c.TerminateThreshold;
             q.constants[3]=c.AdditionalTexLODBias;q.constants[4]=c.SceneScale;q.constants[5]=c.MinRoughnessOverride;
         }
-        jdouble values[30]{};
+        jdouble values[32]{};
         for(size_t i=0;i<q.values.size();++i)values[i]=q.values[i];
         for(size_t i=0;i<q.constants.size();++i)values[19+i]=q.constants[i];
         values[25]=g_sampleUIData.NEEType;values[26]=cache?cache->GetEntryCount():0;values[27]=s.app->framesInFlight;
         values[28]=host->HostWorkerThreadCount();values[29]=host->HostShaderCompilerThreads();
-        auto output=e->NewDoubleArray(30);if(output)e->SetDoubleArrayRegion(output,0,30,values);return output;
+        values[30]=host->ExactPointLightingActive();values[31]=host->DirectionalStrataActive();
+        auto output=e->NewDoubleArray(32);if(output)e->SetDoubleArrayRegion(output,0,32,values);return output;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 extern "C" JNIEXPORT jintArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_runtimeStatus(

@@ -1,4 +1,7 @@
 // Conditional residual sampling leaves exact delta points to the deterministic estimator.
+#ifndef RTR_EXACT_POINT_LIGHT_LIMIT
+#define RTR_EXACT_POINT_LIGHT_LIMIT 4u
+#endif
 bool RtrCoveredPoint(uint lightIndex)
 {
     const uint first = ControlBuffer[0].EnvmapQuadNodeCount;
@@ -10,7 +13,7 @@ bool RtrCoveredPoint(uint lightIndex)
 bool RtrSmallPointSet()
 {
     const uint count = ControlBuffer[0].AnalyticLightCount;
-    if (count == 0 || count > 4 || ControlBuffer[0].LightClusterCount != 0)
+    if (count == 0 || count > RTR_EXACT_POINT_LIGHT_LIMIT || ControlBuffer[0].LightClusterCount != 0)
         return false;
 
     bool pointFound = false;

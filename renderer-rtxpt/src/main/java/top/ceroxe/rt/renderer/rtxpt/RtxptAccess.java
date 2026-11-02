@@ -15,10 +15,13 @@ public interface RtxptAccess {
     void awaitIdle();
     /** Actual native settings and internal resolution after rendering, including upstream fallbacks. */
     RuntimeStatus runtimeStatus();
-    /** Actual upstream sampling/quality budgets; no GPU readback or synchronization. */
+    /** Native sampling/quality settings and actual cache/pool allocation; no GPU synchronization.
+     * A setting is used only by its active technique. Guide depth is additionally capped by path depth.
+     */
     PathQualityStatus pathQualityStatus();
     record PathQualityStatus(top.ceroxe.rt.renderer.api.PathTracingQualityOptions quality,
-            int actualLightSampler,int allocatedCacheEntries,int maxFramesInFlight,int workerThreads,int shaderCompilerThreads) { }
+            int actualLightSampler,int allocatedCacheEntries,int maxFramesInFlight,int workerThreads,int shaderCompilerThreads,
+            boolean exactPointLighting,boolean directionalStrata) { }
     /** Text drawn by the upstream GPU UI pass; empty text hides the HUD. GPU timing follows RendererConfig.gpuTimingsEnabled(). */
     void setOverlayText(String text);
     /** Optional selector drawn inside the same native HUD; an empty list hides it. */

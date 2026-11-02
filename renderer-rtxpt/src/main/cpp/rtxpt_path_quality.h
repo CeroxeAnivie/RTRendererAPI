@@ -15,7 +15,7 @@ struct RtrPathQuality {
             ||!range(v[7],65536,16777216)||(v[7]&(v[7]-1))||!range(v[8],2,5)
             ||!range(v[9],1,64)||!range(v[10],0,v[9])||!range(v[11],0,63)
             ||!range(v[12],1,3)||!range(v[13],1,15)||!range(v[14],0,2)
-            ||!range(v[15],0,3)||!range(v[16],0,1)||!range(v[17],1,255)||!range(v[18],1,255))
+            ||!range(v[15],0,3)||!range(v[16],0,1)||!range(v[17],1,255)||!range(v[18],8,128))
             throw std::invalid_argument("Invalid managed path-tracing quality budget");
         for(float x:f)if(!std::isfinite(x))throw std::invalid_argument("Path-tracing quality constants must be finite");
         if(f[0]<0||f[0]>1||f[1]<.01f||f[1]>10||f[2]<-8||f[2]>8||f[3]<-8||f[3]>8
