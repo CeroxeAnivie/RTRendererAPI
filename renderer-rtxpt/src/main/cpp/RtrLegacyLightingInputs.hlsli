@@ -2,6 +2,17 @@
 // gpuscene_optics.glsl. The traversal, material loading and branch queue are RTXPT's.
 #ifndef RTR_LEGACY_LIGHTING_INPUTS
 #define RTR_LEGACY_LIGHTING_INPUTS
+#ifndef RTR_LEGACY_TRANSPORT_TRACE
+#define RTR_LEGACY_TRANSPORT_TRACE 1
+#endif
+
+#if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
+bool RtrLegacyTracePixel(uint2 pixel,uint frame)
+{
+    // One frame and a sparse, scene-independent pixel grid. Compiled out otherwise.
+    return frame==16 && all((pixel&31u)==0);
+}
+#endif
 
 float RtrLegacyRadicalInverse(uint bits)
 {
