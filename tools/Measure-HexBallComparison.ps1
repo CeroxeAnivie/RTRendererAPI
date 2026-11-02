@@ -11,6 +11,7 @@ param(
     [switch]$ExactMis,
     [switch]$DirectionalStrata,
     [switch]$CombinedBsdf,
+    [switch]$LegacySrHistory,
     [switch]$ApproximateMis,
     [ValidateSet('Default','Power','NeeAt')][string]$LightSampler='Default',
     [switch]$Glass,
@@ -79,6 +80,7 @@ $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
 $oldDirectionalStrata=$env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA
 $oldCombinedBsdf=$env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF
+$oldHistory=$env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY
 $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 try {
@@ -91,6 +93,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$(if($DirectionalStrata){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$(if($CombinedBsdf){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY=$(if($LegacySrHistory){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(switch($LightSampler){'Power'{'power'} 'NeeAt'{'neeat'} default{$null}})
@@ -101,6 +104,7 @@ try {
         WorkingTreeSourceSha256=$sourceDigest;WorkingTreeSourceFiles=$sourcePaths;
     DirectionalStrata=[bool]$DirectionalStrata;
     CombinedBsdf=[bool]$CombinedBsdf;
+    LegacySrHistory=[bool]$LegacySrHistory;
         Width=$Width;Height=$Height;Spp=1;FrameGeneration=$false;StageProfile=[bool]$StageProfile;
         RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;
         SrPreset=$SrPreset;
@@ -146,6 +150,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$oldDirectionalStrata
     $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$oldCombinedBsdf
+    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY=$oldHistory
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$oldSampler
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$oldTransmissionGuides
 }

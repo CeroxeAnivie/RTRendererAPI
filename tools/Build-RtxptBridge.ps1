@@ -397,6 +397,22 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidate
             #endif
 '@ 'RTR directional samples carry directions'
 # Match the legacy route's summed continuous surface response without deleting
+# The bounded legacy history runs after current radiance merge, before SR tags.
+[IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/ProcessingPasses/RtrLegacySrHistory.hlsl'),
+    [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrLegacySrHistory.hlsl')),$utf8)
+Patch-Once 'Rtxpt/Shaders.cfg' 'ProcessingPasses/PostProcess.hlsl -T cs -E main -D NO_DENOISER_FINAL_MERGE=1' @'
+ProcessingPasses/PostProcess.hlsl -T cs -E main -D NO_DENOISER_FINAL_MERGE=1
+ProcessingPasses/RtrLegacySrHistory.hlsl -T cs -E main
+'@ 'ProcessingPasses/RtrLegacySrHistory.hlsl'
+Patch-Once 'Rtxpt/Sample.h' '    virtual void UpdateCustomResources() { }' @'
+    virtual void UpdateCustomResources() { }
+    virtual void FilterReconstructionInput(nvrhi::ICommandList*, bool) { } // RTR pre-SR history hook
+'@ 'RTR pre-SR history hook'
+Patch-Once 'Rtxpt/Sample.cpp' '        if (m_ui.RealtimeAA == 0)' @'
+        FilterReconstructionInput(m_commandList, reset); // RTR current radiance bounded history
+        if (m_ui.RealtimeAA == 0)
+'@ 'RTR current radiance bounded history'
+# Match the legacy route's summed continuous surface response without deleting
 # any lobe or bounce. PBRT-v3 BSDF::Sample_f sums f after forming the mixture PDF.
 # Ideal delta events retain native weights; their density is not a finite PDF.
 Patch-Once 'Rtxpt/Shaders/PathTracer/BSDFs/StandardBSDF.hlsli' @'

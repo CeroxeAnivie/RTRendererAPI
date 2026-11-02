@@ -10,6 +10,7 @@ param(
     [switch]$ExactMis,
     [switch]$DirectionalStrata,
     [switch]$CombinedBsdf,
+    [switch]$LegacySrHistory,
     [switch]$DirectOnly,
     [switch]$Relax,
     [switch]$RR,
@@ -53,6 +54,7 @@ $settings=[ordered]@{
     Relax=[bool]$Relax;RayReconstruction=[bool]$RR;RestirGI=[bool]$RestirGI;Sharc=[bool]$Sharc;DLSSQuality=$DLSSQuality
     DirectionalStrata=[bool]$DirectionalStrata;
     CombinedBsdf=[bool]$CombinedBsdf;
+    LegacySrHistory=[bool]$LegacySrHistory;
     Spp=$Spp;StartedAt=(Get-Date -Format o)
 }
 $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
@@ -64,10 +66,12 @@ $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
 $oldDirectionalStrata=$env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA
 $oldCombinedBsdf=$env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF
+$oldHistory=$env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY
 try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$(if($DirectionalStrata){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$(if($CombinedBsdf){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY=$(if($LegacySrHistory){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_CONTROL=$(if($ControlDirectional){'1'}else{$null})
     $env:RTR_RTXPT_GPU_PROFILE=$null
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
@@ -90,4 +94,5 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$oldDirectionalStrata
     $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$oldCombinedBsdf
+    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY=$oldHistory
 }

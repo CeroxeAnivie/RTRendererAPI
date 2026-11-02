@@ -9,6 +9,7 @@ param(
     [switch]$ExactMis,
     [switch]$DirectionalStrata,
     [switch]$CombinedBsdf,
+    [switch]$LegacySrHistory,
     [switch]$ApproximateMis,
     [ValidateSet('Default','Power','NeeAt')][string]$LightSampler='Default',
     [switch]$Sharc,
@@ -75,6 +76,7 @@ $settings=[ordered]@{
     RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
     DirectionalStrata=[bool]$DirectionalStrata;
     CombinedBsdf=[bool]$CombinedBsdf;
+    LegacySrHistory=[bool]$LegacySrHistory;
     SmallPointCandidate=[bool]$SmallPointCandidate
     ControlLighting=[bool]$ControlLighting
     DisableResidualPointSampling=[bool]$DisableResidualPointSampling
@@ -102,6 +104,7 @@ $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
 $oldDirectionalStrata=$env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA
 $oldCombinedBsdf=$env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF
+$oldHistory=$env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY
 $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 $oldRrPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
@@ -113,6 +116,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$(if($DirectionalStrata){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$(if($CombinedBsdf){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY=$(if($LegacySrHistory){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(switch($LightSampler){'Power'{'power'} 'NeeAt'{'neeat'} default{$null}})
@@ -127,6 +131,9 @@ try {
     if($code -ne 0){
         Get-Content -LiteralPath ($prefix+'.log') -Tail 15
         throw "Quality verification exited $code; inspect $prefix.log"
+    }
+    if($LegacySrHistory -and $runLog -notmatch 'RTXPT legacy pre-SR history ACTIVE'){
+        throw 'Requested legacy pre-SR history did not activate.'
     }
     if($DirectionalStrata -and $LightingProbe -notin @('no-sun','no-environment') -and
         $runLog -notmatch 'RTXPT directional environment strata ACTIVE count=[1-9]'){
@@ -156,6 +163,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$oldDirectionalStrata
     $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$oldCombinedBsdf
+    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY=$oldHistory
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$oldSampler
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$oldTransmissionGuides
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$oldRrPreset

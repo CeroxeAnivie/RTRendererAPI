@@ -26,10 +26,13 @@
 #include "rtxpt_shutdown.h"
 #include "rtxpt_shared_frames.h"
 #include "rtxpt_material_policy.h"
+#include "rtxpt_sr_history.h"
 extern SampleUIData g_sampleUIData;
 
 namespace {
 class HostPathTracer final : public AdvancedPathTracer {
+    std::unique_ptr<RtrLegacySrHistory> legacyHistory;
+    bool legacyHistoryReset=true;
     bool directionalStrataLogged=false;
     bool useDirectionalStrata() const {
         const char* control=std::getenv("RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA");
@@ -72,6 +75,20 @@ class HostPathTracer final : public AdvancedPathTracer {
     }
 public:
     using AdvancedPathTracer::AdvancedPathTracer;
+    void FilterReconstructionInput(nvrhi::ICommandList* command, bool reset) override {
+        const char* history=std::getenv("RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY");
+        const bool enabled=history && std::string(history)=="1"
+            && g_sampleUIData.RealtimeMode && g_sampleUIData.RealtimeAA==2
+            && !g_sampleUIData.ActualUseStandaloneDenoiser() && !g_sampleUIData.ActualUseRTXDIPasses()
+            && g_sampleUIData.ActualRadianceCacheMode()==0;
+        if(!enabled) {legacyHistory.reset();legacyHistoryReset=true;return;}
+        if(!legacyHistory)legacyHistory=std::make_unique<RtrLegacySrHistory>();
+        GpuProfiler::Begin(command,"LegacyPreSrHistory");
+        legacyHistory->Apply(GetDevice(),*GetShaderFactory(),command,*m_renderTargets,m_bindingSet,m_bindingLayout,
+            reset||legacyHistoryReset,m_view->GetPixelOffset()-m_viewPrevious->GetPixelOffset());
+        GpuProfiler::End(command);
+        legacyHistoryReset=false;
+    }
     void UpdateCustomConstants(SampleConstants& constants, nvrhi::ICommandList* commandList) override {
         AdvancedPathTracer::UpdateCustomConstants(constants,commandList);
         auto& pt=constants.ptConsts;
@@ -97,6 +114,7 @@ public:
     nvrhi::ITexture* HostDisplayColor() const { return m_renderTargets ? m_renderTargets->LdrColor.Get() : nullptr; }
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();
+        legacyHistoryReset=true;
         directionalStrataLogged=false;
         const char* disableGuides=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES");
         const bool applyGuides=!(disableGuides && std::string(disableGuides)=="1");
