@@ -96,7 +96,7 @@ public final class RtxptFusionDemo {
             (float)(.5-.5*(dx*c.upX()+dy*c.upY()+dz*c.upZ())/(depth*c.tanHalfFovY()))};
     }
 
-    private static final class VulkanEffects {
+    static final class VulkanEffects {
         final RtxptComposedRenderer renderer;
         final RendererCommandAccess commands;
         final GraphicsPipelineState pipeline;

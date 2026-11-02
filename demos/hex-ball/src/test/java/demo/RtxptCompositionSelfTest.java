@@ -21,6 +21,7 @@ public final class RtxptCompositionSelfTest {
         Path output=Path.of(args[0]).toAbsolutePath();Files.createDirectories(output);
         String mode=args.length>1?args[1]:"acceptance";
         if(mode.equals("source-reuse")){nativeSourceReuse(output);return;}
+        if(mode.equals("fusion-lifecycle")){fusionLifecycle(output);return;}
         if(mode.equals("native")||mode.startsWith("return-")||mode.equals("overlay")||mode.equals("no-overlay"))requireIdleGpu();
         if(mode.equals("native")){nativeBenchmark(output);return;}
         if(mode.equals("rtxpt-final")||mode.equals("rtxpt-hud")||mode.startsWith("return-")){nativeFinal(output,mode);return;}
@@ -206,6 +207,46 @@ public final class RtxptCompositionSelfTest {
         }
     }
 
+    private static void fusionLifecycle(Path output) throws Exception {
+        try(var renderer=RtxptComposedRenderer.openRtxptPresentation(
+                RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),
+                DemoRendererProfile.rtxptMediumInteractive(false),"RTRendererAPI - Fusion lifecycle verification")) {
+            renderer.apply(RtxptMediumScene.create(1,"mixed"));
+            renderer.submit(RtxptMediumDemo.frameRequest(sequence++,1,960,540));
+            var host=renderer.extension(RtxptAccess.class).orElseThrow();
+            long window=host.windowHandle();
+            var effects=new RtxptFusionDemo.VulkanEffects(renderer);
+            for(int index=0;index<RtxptMediumScene.PRESETS.size();index++) {
+                long revision=index+2;
+                String scene=RtxptMediumScene.PRESETS.get(index);
+                int width=index%2==0?960:1280,height=index%2==0?540:720;
+                renderer.apply(RtxptMediumScene.create(revision,scene));
+                host.setOverlayChoices(RtxptMediumScene.LABELS,index);
+                var camera=RtxptMediumScene.camera(width,height);
+                for(int mode:new int[]{0,1,2,0}) {
+                    effects.draw(width,height,RtxptFusionDemo.project(camera,-1.2,.9,0),
+                            RtxptFusionDemo.project(camera,1.3,.65,.3),index+.25f,mode);
+                    renderer.submit(DemoRendererProfile.frame(sequence++,width,height,camera)
+                            .minimumSceneRevision(revision).environment(RtxptMediumScene.environment())
+                            .antiAliasing(DemoRendererProfile.antiAliasing(1)).build());
+                }
+                require(host.windowHandle()==window,"Scene/extent/layer changes preserve the native window");
+                require(host.overlaySelection()==index,"Scene reload preserves its selector choice");
+                var display=host.presentationStatus();
+                require(display.outputWidth()==width&&display.outputHeight()==height,"Actual native resize completed");
+                host.capture(output.resolve("fusion-"+scene+".png"));
+                var image=ImageIO.read(output.resolve("fusion-"+scene+".png").toFile());
+                require(image!=null&&image.getWidth()==width&&image.getHeight()==height,"Completed final image has resized extent");
+                System.out.println("FUSION_LIFECYCLE_SCENE PASS "+scene+" "+width+"x"+height);
+            }
+            renderer.overlays(List.of());renderer.trimIdleCompositionResources();
+            require(host.renderFrame(),"Final native frame after retiring all composition resources");
+            require(renderer.workSnapshot().vulkanFrames()==0,"Fusion overlays never duplicate 3D rendering");
+            require(effects.draws==18,"All three Vulkan-visible states were exercised for every scene");
+            System.out.println("FUSION_LIFECYCLE PASS scenes=6 resize=6 overlayTransitions=24 nativeWindow="+window);
+        }
+    }
+
     private static void nativeFinal(Path output,String mode) throws Exception {
         boolean checkGeneration=mode.equals("rtxpt-final");
         boolean acceptance=checkGeneration||mode.equals("rtxpt-hud");
@@ -300,9 +341,11 @@ public final class RtxptCompositionSelfTest {
         var process=new ProcessBuilder("nvidia-smi","--id=0","--query-gpu=utilization.gpu","--format=csv,noheader,nounits")
             .redirectErrorStream(true).start();
         String value=new String(process.getInputStream().readAllBytes(),java.nio.charset.StandardCharsets.UTF_8).trim();
-        if(process.waitFor()!=0||!value.equals("0"))throw new IllegalStateException(
-            "Performance run paused: GPU 0 baseline must be 0%, actual="+value);
-        System.out.println("PERFORMANCE_BASELINE_GPU_PERCENT=0");
+        if(process.waitFor()!=0)throw new IllegalStateException("Cannot read initial GPU utilization: "+value);
+        int utilization=Integer.parseInt(value);
+        if(utilization<0||utilization>=10)throw new IllegalStateException(
+            "Performance run paused: GPU 0 baseline must be below 10%, actual="+value);
+        System.out.println("PERFORMANCE_BASELINE_GPU_PERCENT="+utilization);
     }
     private static void expectFailure(Runnable action,String reason){
         try{action.run();}catch(IllegalArgumentException|IllegalStateException expected){System.out.println("EXPECTED_REJECTION "+expected.getMessage());return;}

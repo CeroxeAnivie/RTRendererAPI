@@ -39,9 +39,14 @@ public final class VulkanSurfaceBudgetNativeSelfTest {
                 .upsert(SceneInstance.builder(1,1).build()).upsert(SceneInstance.builder(2,2).build()).upsert(SceneInstance.builder(3,3).build()).build();
             renderer.apply(tx);
             var camera=CameraState.lookAt(0,0,4,0,0,0).verticalFieldOfViewDegrees(55).aspectRatio((double)WIDTH/HEIGHT).build();
-            renderer.submit(RenderFrameRequest.builder(0,WIDTH,HEIGHT,camera).minimumSceneRevision(0)
+            var request=RenderFrameRequest.builder(0,WIDTH,HEIGHT,camera).minimumSceneRevision(0)
                 .environment(EnvironmentState.builder().skyRadiance(0,0,0).ambientIntensity(0).sunIntensity(0).build())
-                .antiAliasing(AntiAliasingState.disabled()).build());
+                .antiAliasing(AntiAliasingState.disabled()).build();
+            long deadline=System.nanoTime()+Duration.ofMinutes(3).toNanos();
+            while(renderer.trySubmit(request) instanceof Renderer.FrameSubmissionDeferred) {
+                if(System.nanoTime()>deadline)throw new AssertionError("Scene convergence did not complete");
+                Thread.sleep(1);
+            }
             var frame=renderer.awaitFrame(Duration.ofSeconds(45)).orElseThrow();
             byte[] bytes=new byte[frame.byteCount()];frame.pixels().get(bytes);
             var image=new BufferedImage(WIDTH,HEIGHT,BufferedImage.TYPE_INT_ARGB);
