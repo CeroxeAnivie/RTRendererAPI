@@ -120,7 +120,7 @@ public final class RtxptFusionDemo {
                 new SetViewportCommand(new Viewport(0,0,w,h,0,1)),new SetScissorCommand(new ScissorRectangle(0,0,w,h)),
                 new SetPushConstantsCommand(Set.of(ShaderStage.FRAGMENT),0,new ResourceData(bytes)),
                 new DrawCommand(3,1,0,0),new EndRenderPassCommand())));
-            if(result.outcome()!=CommandExecutionEvidence.Outcome.RECORDED)throw new IllegalStateException("Vulkan effects draw: "+result);
+            if(result.outcome()!=CommandExecutionEvidence.Outcome.RECORDED)throw new IllegalStateException("Vulkan effects draw sequence="+commandSequence+" outcome="+result.outcome()+" reason="+result.reason()+": "+result.detail());
             long deadline=System.nanoTime()+10_000_000_000L;
             while(true) {
                 var done=commands.commandExecutionEvidence(commandSequence).orElseThrow();
@@ -168,7 +168,7 @@ public final class RtxptFusionDemo {
                 float alpha=clamp(max(max(c1,c2),max(path,bracket))*.85,0.,1.);
                 vec3 tint=mix(vec3(.04,.85,1.),vec3(1.,.55,.06),step(d2,d1));
                 float pulse=exp(-abs(d1-r*(.8+.6*fract(t*.35)))/(3.*scale))*.22;
-                overlayColor=pc.info.w<.5?vec4(tint,alpha):vec4(vec3(.02,.65,.95)*pulse,0.);
+                overlayColor=pc.info.w<.5?vec4(tint*alpha,alpha):vec4(vec3(.02,.65,.95)*pulse,0.);
             }
             """,32,Shaderc.shaderc_fragment_shader);
         var program=new ShaderProgram(new RenderResourceId(8102),ResourceVersion.initial(),ShaderProgram.Kind.GRAPHICS,
