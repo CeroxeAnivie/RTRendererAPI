@@ -13,8 +13,8 @@ import java.lang.invoke.MethodHandle;
 final class DemoWindowKeys {
     private static final MethodHandle FOREGROUND;
     private static final MethodHandle KEY_STATE;
-    private static final int[] KEYS = {'1','2','3','4','5','6',0x1b};
-    private static final String[] COMMANDS = {"mixed","glass","nested","absorption","rough","ior","quit"};
+    private static final int[] KEYS = {'1','2','3','4','5','6',0x1b,'V','P'};
+    private static final String[] COMMANDS = {"mixed","glass","nested","absorption","rough","ior","quit","toggle-vulkan","pause"};
     static {
         var library = SymbolLookup.libraryLookup("user32.dll",Arena.global());
         var linker = Linker.nativeLinker();

@@ -24,6 +24,17 @@ function Patch-Once([string]$Relative,[string]$Anchor,[string]$Replacement,[stri
     if(!$text.Contains($Anchor)){throw "Pinned host integration anchor changed: $Relative :: $Anchor"}
     [IO.File]::WriteAllText($path,$text.Replace($Anchor,$Replacement),$utf8)
 }
+# A failed NVRHI map (for example after device removal) must reach the JNI error boundary,
+# rather than dereferencing a null readback pointer and crashing the entire JVM.
+Patch-Once 'Rtxpt/Misc/ShaderDebug.cpp' '#include "ShaderDebug.h"' @'
+#include "ShaderDebug.h"
+#include <stdexcept> // RTR failed-map exception boundary
+'@ 'RTR failed-map exception boundary'
+Patch-Once 'Rtxpt/Misc/ShaderDebug.cpp' '    static uint32_t s_breakpointReportCount = 0;' @'
+    if (!pData)
+        throw std::runtime_error("RTXPT shader-debug readback map failed; inspect the preceding device error"); // RTR reject failed readback map
+    static uint32_t s_breakpointReportCount = 0;
+'@ 'RTR reject failed readback map'
 # Bound nested shader compilers as well as the top-level MSBuild process.
 Patch-Once 'Rtxpt/SampleUI.h' '    //float                               DLSSSharpness = 0.f;' @'
     SI::DLSSPreset                      HostDLSSSRPreset = SI::DLSSPreset::eDefault; // RTR explicit upstream SR model

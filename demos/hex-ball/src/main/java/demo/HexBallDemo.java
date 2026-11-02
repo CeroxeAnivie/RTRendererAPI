@@ -170,7 +170,7 @@ public final class HexBallDemo {
                     presentTotalFps = DemoTechnologyHud.presentTotalFps(
                             diagnostics.frameGenerationEvidence(), stats.framesPerSecond()
                     );
-                    System.out.printf(Locale.ROOT,"VULKAN 30s comparison: presented=%d, meanNativeFPS=%.6f, meanOutputFPS=%.6f%n",
+                    System.out.printf(Locale.ROOT,"VULKAN run summary: presented=%d, meanNativeFPS=%.6f, meanOutputFPS=%.6f%n",
                         stats.presentedFrames.get(),stats.totalPresentationFramesPerSecond(),
                         DemoTechnologyHud.presentTotalFps(diagnostics.frameGenerationEvidence(),stats.totalPresentationFramesPerSecond()));
                 }
@@ -304,17 +304,15 @@ public final class HexBallDemo {
                     double presentFps = DemoTechnologyHud.presentTotalFps(
                             diagnostics.frameGenerationEvidence(), stats.framesPerSecond()
                     );
-                    double gpuFrameCapacityFps = stats.gpuCapacityFramesPerSecond();
                     presenter.setTitle(String.format(
                             Locale.ROOT,
-                "RTRendererAPI Hex Ball | %dx%d | %d spp | %s | Output estimate %.1f FPS | GPU frame capacity %.1f FPS (%.2f ms)",
+                "RTRendererAPI Hex Ball | %dx%d | %d spp | %s | Output %.1f FPS | Native %.1f FPS",
                             window.framebufferWidth(),
                             window.framebufferHeight(),
                             config.samplesPerPixel(),
                             presenter.activePresentMode(),
                             presentFps,
-                            gpuFrameCapacityFps,
-                            stats.averageGpuMillis()
+                            stats.framesPerSecond()
                     ));
                     presenter.setOverlayText(
                             DemoTechnologyHud.capture(renderer, config, stats, diagnostics).text()

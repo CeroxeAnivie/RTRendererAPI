@@ -12,6 +12,7 @@ description = "Interactive hex-ball sample and GPU smoke workload for RTRenderer
 dependencies {
     implementation(project(":renderer-api"))
     implementation(project(":renderer-rtxpt"))
+    implementation("org.lwjgl:lwjgl-shaderc:${rootProject.providers.gradleProperty("lwjgl_version").getOrElse("3.4.3")}")
     runtimeOnly(project(":renderer-nvidia"))
     // The test-only gallery profiler reads core counters; the demo artifact stays API-only.
     testImplementation(project(":renderer-core"))
@@ -258,6 +259,15 @@ tasks.register<JavaExec>("rtxptMediumDemo") {
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass.set("demo.RtxptMediumDemo")
     providers.gradleProperty("rtxptArgs").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
+}
+
+tasks.register<JavaExec>("rtxptFusionDemo") {
+    group = "application"
+    description = "RTXPT optics and camera-linked Vulkan alpha/additive graphics, 1 SPP with native 2x FG."
+    dependsOn(tasks.classes)
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("demo.RtxptFusionDemo")
+    jvmArgs("-Xmx3g", "-XX:-UseJVMCICompiler")
 }
 tasks.register<JavaExec>("rtxptHexBallDemo") {
     group = "application"
