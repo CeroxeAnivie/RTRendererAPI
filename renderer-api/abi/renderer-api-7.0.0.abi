@@ -4504,8 +4504,20 @@ public final class top.ceroxe.rt.renderer.api.OutlineStyle {
 
 Compiled from "PathTracingOptions.java"
 public final class top.ceroxe.rt.renderer.api.PathTracingOptions extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.PathTracingOptions(int, int, int, top.ceroxe.rt.renderer.api.RendererFeaturePreference, top.ceroxe.rt.renderer.api.RendererFeaturePreference, top.ceroxe.rt.renderer.api.RendererFeaturePreference, int, top.ceroxe.rt.renderer.api.PathTracingQualityOptions);
+    descriptor: (IIILtop/ceroxe/rt/renderer/api/RendererFeaturePreference;Ltop/ceroxe/rt/renderer/api/RendererFeaturePreference;Ltop/ceroxe/rt/renderer/api/RendererFeaturePreference;ILtop/ceroxe/rt/renderer/api/PathTracingQualityOptions;)V
+
   public top.ceroxe.rt.renderer.api.PathTracingOptions(int, int, int, top.ceroxe.rt.renderer.api.RendererFeaturePreference, top.ceroxe.rt.renderer.api.RendererFeaturePreference, top.ceroxe.rt.renderer.api.RendererFeaturePreference);
     descriptor: (IIILtop/ceroxe/rt/renderer/api/RendererFeaturePreference;Ltop/ceroxe/rt/renderer/api/RendererFeaturePreference;Ltop/ceroxe/rt/renderer/api/RendererFeaturePreference;)V
+
+  public top.ceroxe.rt.renderer.api.PathTracingOptions(int, int, int, top.ceroxe.rt.renderer.api.RendererFeaturePreference, top.ceroxe.rt.renderer.api.RendererFeaturePreference, top.ceroxe.rt.renderer.api.RendererFeaturePreference, int);
+    descriptor: (IIILtop/ceroxe/rt/renderer/api/RendererFeaturePreference;Ltop/ceroxe/rt/renderer/api/RendererFeaturePreference;Ltop/ceroxe/rt/renderer/api/RendererFeaturePreference;I)V
+
+  public top.ceroxe.rt.renderer.api.PathTracingOptions withExactOpticalInterfaces(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/PathTracingOptions;
+
+  public top.ceroxe.rt.renderer.api.PathTracingOptions withQuality(top.ceroxe.rt.renderer.api.PathTracingQualityOptions);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions;)Ltop/ceroxe/rt/renderer/api/PathTracingOptions;
 
   public static top.ceroxe.rt.renderer.api.PathTracingOptions defaults();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingOptions;
@@ -4539,6 +4551,290 @@ public final class top.ceroxe.rt.renderer.api.PathTracingOptions extends java.la
 
   public top.ceroxe.rt.renderer.api.RendererFeaturePreference indirectLightResampling();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererFeaturePreference;
+
+  public int exactOpticalInterfaces();
+    descriptor: ()I
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions quality();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions;
+}
+
+Compiled from "PathTracingQualityOptions.java"
+public final class top.ceroxe.rt.renderer.api.PathTracingQualityOptions extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions(top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling, top.ceroxe.rt.renderer.api.PathTracingQualityOptions$RadianceCache, int, int, int, top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling, float, boolean, top.ceroxe.rt.renderer.api.PathTracingQualityOptions$PostProcessing);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$RadianceCache;IIILtop/ceroxe/rt/renderer/api/PathTracingQualityOptions$SubSampling;FZLtop/ceroxe/rt/renderer/api/PathTracingQualityOptions$PostProcessing;)V
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions(top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling, top.ceroxe.rt.renderer.api.PathTracingQualityOptions$RadianceCache, int, int, int, top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling, float, boolean);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$RadianceCache;IIILtop/ceroxe/rt/renderer/api/PathTracingQualityOptions$SubSampling;FZ)V
+
+  public static top.ceroxe.rt.renderer.api.PathTracingQualityOptions defaults();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions withLighting(top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions withCache(top.ceroxe.rt.renderer.api.PathTracingQualityOptions$RadianceCache);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$RadianceCache;)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions withDenoisingLayers(int, int);
+    descriptor: (II)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions withNestedDielectricsQuality(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions withSubSampling(top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$SubSampling;)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions withTextureLodBias(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions withHalfPrecision(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions withPostProcessing(top.ceroxe.rt.renderer.api.PathTracingQualityOptions$PostProcessing);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$PostProcessing;)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions;
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling lighting();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$RadianceCache cache();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$RadianceCache;
+
+  public int denoisingLayers();
+    descriptor: ()I
+
+  public int denoisingLayerMaxDepth();
+    descriptor: ()I
+
+  public int nestedDielectricsQuality();
+    descriptor: ()I
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling subSampling();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$SubSampling;
+
+  public float textureLodBias();
+    descriptor: ()F
+
+  public boolean halfPrecision();
+    descriptor: ()Z
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$PostProcessing postProcessing();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$PostProcessing;
+}
+
+Compiled from "PathTracingQualityOptions.java"
+public final class top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampler extends java.lang.Enum<top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampler> {
+  public static final top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampler AUTO;
+    descriptor: Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampler;
+  public static final top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampler UNIFORM;
+    descriptor: Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampler;
+  public static final top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampler POWER;
+    descriptor: Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampler;
+  public static final top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampler ADAPTIVE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampler;
+  public static top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampler[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampler;
+
+  public static top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampler valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampler;
+}
+
+Compiled from "PathTracingQualityOptions.java"
+public final class top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling(top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightingInput, top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampler, int, int, float, int, int, boolean);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightingInput;Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampler;IIFIIZ)V
+
+  public static top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling defaults();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling withInput(top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightingInput);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightingInput;)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling withSampler(top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampler);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampler;)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling withSamples(int, int);
+    descriptor: (II)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling withLocalCandidateRatio(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling withAdaptiveQuality(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling withExactPointLightLimit(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampling withDirectionalStrata(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampling;
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightingInput input();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightingInput;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightSampler sampler();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightSampler;
+
+  public int samples();
+    descriptor: ()I
+
+  public int candidates();
+    descriptor: ()I
+
+  public float localCandidateRatio();
+    descriptor: ()F
+
+  public int adaptiveQuality();
+    descriptor: ()I
+
+  public int exactPointLightLimit();
+    descriptor: ()I
+
+  public boolean directionalStrata();
+    descriptor: ()Z
+}
+
+Compiled from "PathTracingQualityOptions.java"
+public final class top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightingInput extends java.lang.Enum<top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightingInput> {
+  public static final top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightingInput BACKEND_DEFAULT;
+    descriptor: Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightingInput;
+  public static final top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightingInput SCENE_ANALYTIC;
+    descriptor: Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightingInput;
+  public static top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightingInput[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightingInput;
+
+  public static top.ceroxe.rt.renderer.api.PathTracingQualityOptions$LightingInput valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$LightingInput;
+}
+
+Compiled from "PathTracingQualityOptions.java"
+public final class top.ceroxe.rt.renderer.api.PathTracingQualityOptions$PostProcessing extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$PostProcessing(boolean, float, float, boolean);
+    descriptor: (ZFFZ)V
+
+  public static top.ceroxe.rt.renderer.api.PathTracingQualityOptions$PostProcessing defaults();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$PostProcessing;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$PostProcessing withBloom(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$PostProcessing;
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public boolean bloom();
+    descriptor: ()Z
+
+  public float bloomRadius();
+    descriptor: ()F
+
+  public float bloomIntensity();
+    descriptor: ()F
+
+  public boolean toneMapping();
+    descriptor: ()Z
+}
+
+Compiled from "PathTracingQualityOptions.java"
+public final class top.ceroxe.rt.renderer.api.PathTracingQualityOptions$RadianceCache extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$RadianceCache(int, int, int, int, int, float, float, float, int, int, float);
+    descriptor: (IIIIIFFFIIF)V
+
+  public static top.ceroxe.rt.renderer.api.PathTracingQualityOptions$RadianceCache defaults();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$RadianceCache;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$RadianceCache withCapacity(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$RadianceCache;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$RadianceCache withTrainingDownscale(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$RadianceCache;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$RadianceCache withPathBudget(int, int, int);
+    descriptor: (III)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$RadianceCache;
+
+  public top.ceroxe.rt.renderer.api.PathTracingQualityOptions$RadianceCache withTerminationThreshold(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$RadianceCache;
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int entries();
+    descriptor: ()I
+
+  public int trainingDownscale();
+    descriptor: ()I
+
+  public int maxBounces();
+    descriptor: ()I
+
+  public int diffuseBounces();
+    descriptor: ()I
+
+  public int directLightSamples();
+    descriptor: ()I
+
+  public float terminationThreshold();
+    descriptor: ()F
+
+  public float textureLodBias();
+    descriptor: ()F
+
+  public float sceneScale();
+    descriptor: ()F
+
+  public int accumulationFrames();
+    descriptor: ()I
+
+  public int staleFrames();
+    descriptor: ()I
+
+  public float minRoughness();
+    descriptor: ()F
+}
+
+Compiled from "PathTracingQualityOptions.java"
+public final class top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling extends java.lang.Enum<top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling> {
+  public static final top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling FULL;
+    descriptor: Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$SubSampling;
+  public static final top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling THREE_QUARTERS;
+    descriptor: Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$SubSampling;
+  public static final top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling HALF;
+    descriptor: Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$SubSampling;
+  public static final top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling QUARTER;
+    descriptor: Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$SubSampling;
+  public static top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$SubSampling;
+
+  public static top.ceroxe.rt.renderer.api.PathTracingQualityOptions$SubSampling valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/PathTracingQualityOptions$SubSampling;
 }
 
 Compiled from "PrimitiveInstance.java"
@@ -5551,7 +5847,7 @@ public interface top.ceroxe.rt.renderer.api.RendererCommandAccess {
 
 Compiled from "RendererConfig.java"
 public final class top.ceroxe.rt.renderer.api.RendererConfig {
-  public static final int DEFAULT_MAX_FRAMES_IN_FLIGHT = 3;
+  public static final int DEFAULT_MAX_FRAMES_IN_FLIGHT = 2;
     descriptor: I
   public static final int MIN_MAX_FRAMES_IN_FLIGHT = 2;
     descriptor: I
@@ -5568,6 +5864,21 @@ public final class top.ceroxe.rt.renderer.api.RendererConfig {
 
   public top.ceroxe.rt.renderer.api.PathTracingOptions pathTracing();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/PathTracingOptions;
+
+  public top.ceroxe.rt.renderer.api.RendererResourceOptions resources();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererResourceOptions;
+
+  public top.ceroxe.rt.renderer.api.SurfaceTransportOptions surfaceTransport();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SurfaceTransportOptions;
+
+  public static top.ceroxe.rt.renderer.api.RendererConfig recommended(top.ceroxe.rt.renderer.api.RendererPerformanceTier);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RendererPerformanceTier;)Ltop/ceroxe/rt/renderer/api/RendererConfig;
+
+  public static top.ceroxe.rt.renderer.api.RendererConfig presentation(top.ceroxe.rt.renderer.api.RendererPerformanceTier);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RendererPerformanceTier;)Ltop/ceroxe/rt/renderer/api/RendererConfig;
+
+  public static top.ceroxe.rt.renderer.api.RendererConfig pathTracedPresentation(top.ceroxe.rt.renderer.api.RendererPerformanceTier);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RendererPerformanceTier;)Ltop/ceroxe/rt/renderer/api/RendererConfig;
 
   public static top.ceroxe.rt.renderer.api.RendererConfig$Builder builder();
     descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererConfig$Builder;
@@ -5679,6 +5990,12 @@ public final class top.ceroxe.rt.renderer.api.RendererConfig$Builder {
 
   public top.ceroxe.rt.renderer.api.RendererConfig$Builder pathTracing(top.ceroxe.rt.renderer.api.PathTracingOptions);
     descriptor: (Ltop/ceroxe/rt/renderer/api/PathTracingOptions;)Ltop/ceroxe/rt/renderer/api/RendererConfig$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererConfig$Builder resources(top.ceroxe.rt.renderer.api.RendererResourceOptions);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RendererResourceOptions;)Ltop/ceroxe/rt/renderer/api/RendererConfig$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererConfig$Builder surfaceTransport(top.ceroxe.rt.renderer.api.SurfaceTransportOptions);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/SurfaceTransportOptions;)Ltop/ceroxe/rt/renderer/api/RendererConfig$Builder;
 }
 
 Compiled from "RendererDeviceException.java"
@@ -6472,6 +6789,87 @@ public interface top.ceroxe.rt.renderer.api.RendererLifecycle extends java.lang.
 
   public default boolean awaitClosed(java.time.Duration) throws java.lang.InterruptedException;
     descriptor: (Ljava/time/Duration;)Z
+}
+
+Compiled from "RendererPerformanceTier.java"
+public final class top.ceroxe.rt.renderer.api.RendererPerformanceTier extends java.lang.Enum<top.ceroxe.rt.renderer.api.RendererPerformanceTier> {
+  public static final top.ceroxe.rt.renderer.api.RendererPerformanceTier LOW;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererPerformanceTier;
+  public static final top.ceroxe.rt.renderer.api.RendererPerformanceTier MEDIUM;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererPerformanceTier;
+  public static final top.ceroxe.rt.renderer.api.RendererPerformanceTier HIGH;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererPerformanceTier;
+  public static top.ceroxe.rt.renderer.api.RendererPerformanceTier[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/RendererPerformanceTier;
+
+  public static top.ceroxe.rt.renderer.api.RendererPerformanceTier valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/RendererPerformanceTier;
+
+  public top.ceroxe.rt.renderer.api.SurfaceTransportOptions surfaceTransport();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SurfaceTransportOptions;
+
+  public top.ceroxe.rt.renderer.api.RendererResourceOptions resources();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererResourceOptions;
+
+  public top.ceroxe.rt.renderer.api.PathTracingOptions pathTracing(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/PathTracingOptions;
+
+  public top.ceroxe.rt.renderer.api.FrameReconstructionOptions$Quality reconstructionQuality();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/FrameReconstructionOptions$Quality;
+}
+
+Compiled from "RendererResourceOptions.java"
+public final class top.ceroxe.rt.renderer.api.RendererResourceOptions extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.RendererResourceOptions(int, int, long, long, long);
+    descriptor: (IIJJJ)V
+
+  public static top.ceroxe.rt.renderer.api.RendererResourceOptions low();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererResourceOptions;
+
+  public static top.ceroxe.rt.renderer.api.RendererResourceOptions medium();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererResourceOptions;
+
+  public static top.ceroxe.rt.renderer.api.RendererResourceOptions high();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererResourceOptions;
+
+  public static top.ceroxe.rt.renderer.api.RendererResourceOptions defaults();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererResourceOptions;
+
+  public top.ceroxe.rt.renderer.api.RendererResourceOptions withThreads(int, int);
+    descriptor: (II)Ltop/ceroxe/rt/renderer/api/RendererResourceOptions;
+
+  public top.ceroxe.rt.renderer.api.RendererResourceOptions withAssetBytes(long, long, long);
+    descriptor: (JJJ)Ltop/ceroxe/rt/renderer/api/RendererResourceOptions;
+
+  public void validateAssets(java.util.Collection<top.ceroxe.rt.renderer.api.MeshAsset>, java.util.Collection<top.ceroxe.rt.renderer.api.TextureAsset>);
+    descriptor: (Ljava/util/Collection;Ljava/util/Collection;)V
+
+  public static long meshBytes(top.ceroxe.rt.renderer.api.MeshAsset);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/MeshAsset;)J
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int workerThreads();
+    descriptor: ()I
+
+  public int shaderCompilerThreads();
+    descriptor: ()I
+
+  public long geometryBytes();
+    descriptor: ()J
+
+  public long textureBytes();
+    descriptor: ()J
+
+  public long totalAssetBytes();
+    descriptor: ()J
 }
 
 Compiled from "RendererSceneAccess.java"
@@ -8421,6 +8819,39 @@ public final class top.ceroxe.rt.renderer.api.SurfaceOverlayState$DepthMode exte
 
   public static top.ceroxe.rt.renderer.api.SurfaceOverlayState$DepthMode valueOf(java.lang.String);
     descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/SurfaceOverlayState$DepthMode;
+}
+
+Compiled from "SurfaceTransportOptions.java"
+public final class top.ceroxe.rt.renderer.api.SurfaceTransportOptions extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.SurfaceTransportOptions(int, int);
+    descriptor: (II)V
+
+  public static top.ceroxe.rt.renderer.api.SurfaceTransportOptions low();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SurfaceTransportOptions;
+
+  public static top.ceroxe.rt.renderer.api.SurfaceTransportOptions medium();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SurfaceTransportOptions;
+
+  public static top.ceroxe.rt.renderer.api.SurfaceTransportOptions high();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SurfaceTransportOptions;
+
+  public static top.ceroxe.rt.renderer.api.SurfaceTransportOptions defaults();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SurfaceTransportOptions;
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int maxEvents();
+    descriptor: ()I
+
+  public int samples();
+    descriptor: ()I
 }
 
 Compiled from "TechnologyExecutionEvidence.java"
@@ -11095,6 +11526,9 @@ public interface top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenter 
 
   public default void composeD3D12SharedFrame(top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame, java.util.List<top.ceroxe.rt.renderer.api.FrameCompositionPlan$Layer>);
     descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/D3D12SharedFrame;Ljava/util/List;)V
+
+  public default void awaitCompositionConsumers();
+    descriptor: ()V
 
   public default void captureNextPresentedFrame(java.nio.file.Path);
     descriptor: (Ljava/nio/file/Path;)V

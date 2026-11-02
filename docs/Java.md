@@ -117,6 +117,18 @@ var config = RendererConfig.pathTracedPresentation().copyBuilder()
 
 实际 SR／RR、SHaRC、ReSTIR、SER 和 FG 状态读取 `host.runtimeStatus()`、`RenderingFeatureCapabilities` 与 `renderer.diagnostics().frameGenerationEvidence()`。请求不等于执行；DLSS-RR 生效时不再叠加独立 NRD。SPP 和路径深度通过 `RendererConfig.Builder.pathTracing(PathTracingOptions)` 设置，不使用每帧的多采样抗锯齿入口。
 
+三个配置工厂都支持 `RendererPerformanceTier.LOW / MEDIUM / HIGH`，无参默认 `MEDIUM`。例如弱 GPU 可以从下面配置开始，再按实际画面与预算调整：
+
+```java
+var base = RendererConfig.pathTracedPresentation(RendererPerformanceTier.LOW);
+var path = base.pathTracing().withExactOpticalInterfaces(2);
+var config = base.copyBuilder()
+        .pathTracing(path.withQuality(path.quality().withDenoisingLayers(2, 5)))
+        .resources(base.resources().withThreads(2, 1)).build();
+```
+
+精确界面预算只在 `SCENE_ANALYTIC` 光照输入下激活；默认介质 RR 路径使用上游原有传输。`host.pathQualityStatus()` 可回读真实缓存容量、线程池、帧环及 sampler，`runtimeStatus()` 区分已请求和已激活。修改路径／质量／资源预算需要重建 renderer，不把它伪装成逐帧热开关。原始资产限额不等于进程／显存总量。完整范围、六档 shader 发行与弱设备建议见[性能档位与资源预算](performance-budgets.md)。
+
 画面过曝时可用 `host.setExposureCompensation(-1.5F)` 调整上游 tone mapper。该入口也可在首帧提交前调用，场景重载保留，实际值通过 `presentationStatus()` 回读。它只控制显示亮度；SR 本身不替代路径追踪降噪，小灯策略也不覆盖环境光、面积光和间接反弹的全部随机噪声。
 
 `Medium` 只含 `absorption` 和 `[1,4]` 的 IOR；`MediumBoundary` 只含介质和 `[0,14]` 优先级，最多 4 层嵌套内部。需要闭合、朝外且绕序一致的网格。旧体积散射、密度网格、HG、体积发光、无限／相机初始介质和不可见边界已删除，详见[7.0.0 合同](7.0.0.md)。

@@ -169,6 +169,8 @@ CPU 帧方法仅对提供该输出的后端有效：Vulkan 支持原生格式读
 派生配置使用 `copyBuilder()`，并通过
 `Renderer.open(...)` 打开。
 
+以上三个工厂均提供 `RendererPerformanceTier` 重载，支持 `LOW / MEDIUM / HIGH`；无参形式与 `builder()` 的工作量／资源预算均从 `MEDIUM` 开始。中档为 1 SPP、12／2 路径深度、4 个精确光学界面预算、Performance 重建、2 在途帧和 4／1 原生 worker／compiler。预设不会覆盖随后显式设置的字段。完整档位、参数范围和生效条件见[性能档位与资源预算](performance-budgets.md)。
+
 ```java
 public final class RendererConfig
 ```
@@ -186,7 +188,7 @@ public final class RendererConfig
 
 | Builder 方法 | 说明 |
 | --- | --- |
-| `maxFramesInFlight(int)` | 帧环深度 |
+| `maxFramesInFlight(int)` | 帧环深度，默认 2；Vulkan 2～16，RTXPT 2～3 |
 | `validationEnabled(boolean)` | Vulkan validation 策略 |
 | `gpuTimingsEnabled(boolean)` | GPU timing 策略 |
 | `cpuFrameReadbackEnabled(boolean)` | 是否准备异步 CPU 帧；默认开启；`readFrame` 无像素所有权复制，快照方法显式复制 |
@@ -200,12 +202,26 @@ public final class RendererConfig
 | `lowLatency(LowLatencyOptions)` | Reflex/PCL 请求策略 |
 | `denoising(DenoisingOptions)` | NRD 请求与 fallback 策略 |
 | `rayTracingOptimizations(RayTracingOptimizationOptions)` | SER 与 RTXMU 独立策略 |
-| `pathTracing(PathTracingOptions)` | 每像素样本、路径深度、辐射缓存、直接／间接光重采样意图，由支持该配置的后端执行 |
+| `pathTracing(PathTracingOptions)` | 每像素样本、路径深度、辐射缓存、直接／间接光重采样意图、精确光学界面与质量预算 |
+| `resources(RendererResourceOptions)` | RTXPT 原生线程池和两后端 retained-scene 原始资产准入；不是总进程／总显存上限 |
+| `surfaceTransport(SurfaceTransportOptions)` | Vulkan 光学表面事件数 1～64、表面样本 1～16；不影响 RTXPT 路径预算 |
 | `build()` | 验证全部不变量并创建配置 |
 
-六界面精确分支数量目前是 shader 编译常量（默认 6），不属于公开运行期参数；`maxBounces` 是总路径深度，不能用它设置精确分支界面数。
+`PathTracingOptions` 当前为八字段 record：
 
-`PathTracingOptions` 是 record：`(int samplesPerPixel, int maxBounces, int diffuseBounces, RendererFeaturePreference radianceCache, RendererFeaturePreference directLightResampling, RendererFeaturePreference indirectLightResampling)`。样本与最大深度各为 1–64，漫反射深度为 0–maxBounces；请求光重采样时必须为 1 SPP。`defaults()` 为 `(1,20,2,DISABLED,DISABLED,DISABLED)`，`recommended()` 仅将辐射缓存改为 `PREFERRED`。每帧 `AntiAliasingState` 的多采样不能替代 RTXPT 的这个入口。
+```java
+(int samplesPerPixel, int maxBounces, int diffuseBounces,
+ RendererFeaturePreference radianceCache,
+ RendererFeaturePreference directLightResampling,
+ RendererFeaturePreference indirectLightResampling,
+ int exactOpticalInterfaces, PathTracingQualityOptions quality)
+```
+
+样本与最大深度各为 1～64，漫反射深度为 0～maxBounces；请求光重采样时必须为 1 SPP。`defaults()` 使用 `(1,12,2,DISABLED,DISABLED,DISABLED,4,中档质量)`，`recommended()` 将辐射缓存改为 `PREFERRED`。六／七参数构造保留并补齐中档缺项。`withExactOpticalInterfaces(1..6)` 是公共配置，仅 `SCENE_ANALYTIC` 输入路径实际使用精确分支；后续界面仍保留随机估计。`maxBounces` 是总路径深度，与精确界面数量不同。每帧 `AntiAliasingState` 的多采样不能替代相机 SPP。
+
+`PathTracingQualityOptions` 为九字段 record：`(lighting, cache, denoisingLayers, denoisingLayerMaxDepth, nestedDielectricsQuality, subSampling, textureLodBias, halfPrecision, postProcessing)`。其嵌套 `LightSampling` 管理输入算法、NEE sampler、样本／候选、局部比例、自适应质量、精确点光上限与方向分层；`RadianceCache` 管理 SHaRC 真正分配的条目容量及训练预算；`PostProcessing` 管理 Bloom 开关／半径／强度与 tone mapping。所有 `with...` 保留其余字段。非有限数、越界值和已知无效组合在 Java／原生调用边界拒绝，详细范围与激活条件见[预算指南](performance-budgets.md#rtxpt-细调与实际回读)。
+
+预算属于生命周期配置；修改时 `RendererFeatureController.plan(...)` 返回 `REQUIRES_RENDERER_REBUILD`。六档已捕获的上游排列随 JAR 预编译发行，未捕获的新组合保留随包上游 DXC fallback，不要求消费者安装 SDK。
 
 ## RTXPT 与组合入口
 
@@ -217,6 +233,9 @@ public final class RendererConfig
 | `RtxptAccess.renderFrame()` | 渲染并呈现驻留场景，窗口关闭返回 false |
 | `RtxptAccess.cameraState()` | 回读原生鼠标／键盘处理后的实际相机，须先提交首帧；供独立工作共享相机状态 |
 | `runtimeStatus()`／`presentationStatus()` | 实际内部／输出尺寸、重建、降噪、复用技术及高级呈现设置 |
+| `runtimeStatus().activeExactOpticalInterfaces()` | 精确光学输入分支实际激活的数量；该算法未激活时返回 0 |
+| `pathQualityStatus()` | 原生质量请求、实际 sampler、真实分配缓存条目、帧环和线程池大小；不做 GPU 同步 |
+| `presentationStatus()` | 另含 Bloom、tone mapping、Bloom 半径／强度的实际原生设置 |
 | `setExposureCompensation(float)` | 设置上游 tone mapper 的有限 EV 偏移；-1 表示曝光减半，可在首帧前设置并跨场景重载保留；不增加渲染阶段，也不负责降噪 |
 | `setWindowTitle(String)`／`windowHandle()` | 首帧后管理标题／借用原生 HWND，关闭后失效 |
 | `setOverlayText(String)` | 上游 GPU HUD；空串关闭该 HUD 及其计时查询 |

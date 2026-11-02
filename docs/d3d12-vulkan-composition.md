@@ -5,7 +5,7 @@
 
 需要组合时的执行链：**RTXPT 完整 3D → Vulkan GPU 叠层 → RTXPT 最终呈现**。RTXPT 是唯一 Streamline owner，保留其原生 SR／RR、FG／MFG、Reflex、SHaRC、SER、采样和降噪规则；Vulkan 执行独立图形／计算工作，不另启一套 Streamline。普通帧没有 CPU 像素读回。
 
-命名按执行职责区分：`vulkanCommands()`、`vulkanExtension(...)` 和 `WorkSnapshot.vulkanFrames()` 指 Vulkan 的独立工作与帧计数；RTXPT 的场景光照输入使用 `SceneLighting`，预 SR 历史使用 `PreSrHistory`。`RTR_RTXPT_SCENE_LIGHTING=1` 选择已验收的场景光照输入算法，`RTR_RTXPT_DIAGNOSTIC_PRE_SR_HISTORY=1` 独立启用预 SR 历史候选。它们不表示后端被淘汰。原始测量日志和外部备份路径保留当时实际记录，当前 API、代码和脚本使用上述名称。
+命名按执行职责区分：`vulkanCommands()`、`vulkanExtension(...)` 和 `WorkSnapshot.vulkanFrames()` 指 Vulkan 的独立工作与帧计数；RTXPT 的场景光照输入使用 `SceneLighting`，预 SR 历史使用 `PreSrHistory`。场景解析光照通过公开的 `pathTracing().quality().lighting().withInput(SCENE_ANALYTIC)` 选择，须关闭 ReSTIR／SHaRC；精确光学界面通过 `withExactOpticalInterfaces(1..6)` 控制。`RTR_RTXPT_DIAGNOSTIC_PRE_SR_HISTORY=1` 仅是诊断候选，不是普通配置。原始测量日志保留当时记录；当前配置见[预算指南](performance-budgets.md)。
 
 ## 普通与专家入口
 

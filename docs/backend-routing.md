@@ -38,6 +38,8 @@ try (var renderer = Renderer.openForScene(policy, initialScene, firstFrame)) {
 
 普通默认配置分开处理：Vulkan 使用 `RendererConfig.recommended()`，提供 CPU 可读帧；RTXPT 使用 `RendererConfig.pathTracedPresentation()`，使用上游 GPU 窗口呈现。两者的输出接口不伪装成相同：先通过 `select` 或会话的 `selection` 选择对应的显示集成。RTXPT preset 的 FG 默认关闭；Demo 的默认 2× FG 属于 Demo 配置。
 
+配置工厂无参均使用 `RendererPerformanceTier.MEDIUM`，也提供 LOW／HIGH 重载。路由两侧可分别设置 `.resources(...)`、Vulkan `.surfaceTransport(...)` 与 RTXPT `.pathTracing(...)`；每项只由支持它的后端执行，不从 GPU 型号推断能力或偷偷升档。资源限额是 retained-scene 原始资产准入，不是总显存上限。详见[性能档位与资源预算](performance-budgets.md)。
+
 ## 专家配置与已有调用链
 
 ```java

@@ -1,7 +1,6 @@
 param([switch]$Enable,[uint32]$BranchSeedXor=0,[switch]$RawOpticalRoughness,
     [switch]$DisableReplayPrefixCache,
     [switch]$WorkTrace,
-    [ValidateRange(1,6)][int]$ExactInterfaceCount=6,
     [int]$PixelX=-1,[int]$PixelY=-1,[uint32]$FirstFrame=160,[uint32]$LastFrame=161)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -12,11 +11,8 @@ if($DisableReplayPrefixCache) {
     $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli'
     [IO.File]::WriteAllText($header,"#define RTR_SCENE_REPLAY_PREFIX_CACHE 0`n"+[IO.File]::ReadAllText($header),[Text.UTF8Encoding]::new($false))
 }
-if($ExactInterfaceCount -ne 6) {
-    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli'
-    $source=[IO.File]::ReadAllText($header).Replace('#define RTR_SCENE_EXACT_INTERFACE_COUNT 6u',"#define RTR_SCENE_EXACT_INTERFACE_COUNT $($ExactInterfaceCount)u")
-    [IO.File]::WriteAllText($header,$source,[Text.UTF8Encoding]::new($false))
-}
+# Optical interface budgets are public lifecycle configuration:
+# PathTracingOptions.withExactOpticalInterfaces(1..6). Host permutation macros own this value.
 if($RawOpticalRoughness) {
     if(!$Enable){throw 'Raw optical roughness is a diagnostic control only'}
     $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli'

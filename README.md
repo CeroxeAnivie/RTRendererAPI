@@ -188,6 +188,8 @@ fallback 保留基础渲染。`RendererConfig.presentation()` 在同一策略上
 `RendererConfig.pathTracedPresentation()` 用于 RTXPT，默认关闭 FG；三个交互 Demo 在此之上明确请求
 2× FG。库默认值与 Demo 默认值分别说明，不能用开关状态代替实际生成帧证据。
 
+三个推荐工厂均支持 `RendererPerformanceTier.LOW / MEDIUM / HIGH`，无参统一中档：1 SPP、RTXPT 12／2 深度、4 个精确界面预算、Performance 重建、2 在途帧与 4／1 原生 worker／compiler。GPU、CPU、缓存和原始资产限额均可经公共 API 调整；更弱设备从 LOW 开始，显式配置保留。具体范围、实际回读和六档预编译 shader 见[性能档位与资源预算](docs/performance-budgets.md)。
+
 专家模式仍使用同一个 `RendererConfig.builder()`。Option value 是能力协商的唯一输入：
 
 - `disabled()`：明确禁用该能力。
@@ -308,7 +310,15 @@ java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
 
 三个入口默认窗口化、1 SPP、请求 2× FG。不带时限会持续运行，手动关闭窗口退出。
 **HexBall JAR 无参数会打开 API 工作台**，直接看球请保留 `--windowed`。
-RTXPT 新弹球默认使用 DLSS SR Balanced、1 SPP 和 2× FG，不自动增加 RR、NRD、SHaRC 或 ReSTIR。符合条件的少量点光场景采用已验收的上游 power sampling；其他场景保留上游自适应采样。新路径默认是玻璃球，以原生曝光补偿控制亮度；旧路径是金属球。材质和工作负载不同，默认 FPS 不作为两后端的等条件快慢对照。纯 SR／1 SPP 仍有残余照明采样噪声；RR 等能力可通过 API 显式启用。
+RTXPT 新弹球默认使用中档 **DLSS SR Performance、1 SPP、2× FG、4 个精确光学界面预算**，通过公共质量 API 请求稳定的 `SCENE_ANALYTIC` 光照输入，不额外开启 RR、NRD、SHaRC 或 ReSTIR。玻璃、不透明 20% 正面反射率球与原金属球可在 HUD 下拉框切换。材质和工作负载不同，默认 FPS 不作为两后端的等条件快慢对照。单独使用 SR 不等于路径追踪降噪。
+
+RTXPT 弹球专用入口无需任何应用参数，窗口、FG 和中档预算由入口默认配置：
+
+```powershell
+java -cp .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar demo.RtxptHexBallDemo
+```
+
+`java -jar ...HexBallDemo-7.0.0.jar` 无参数仍打开 API 工作台；两种入口含义不同。
 
 | 常用设置 | 两个弹球入口 | 介质入口 |
 | --- | --- | --- |

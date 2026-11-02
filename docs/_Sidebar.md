@@ -1,6 +1,7 @@
 * [Home](Home)
 * [Java 开发指南](Java)
 * [三个 Demo 的打开方式](../demos/hex-ball/README.md)
+* [性能档位与资源预算](performance-budgets.md)
 * [后端选择与部署](backend-routing.md)
 * [RTXPT 与 Vulkan GPU 组合](d3d12-vulkan-composition.md)
 * [RTXPT 介质演示](medium-gallery.md)

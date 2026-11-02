@@ -27,7 +27,15 @@ java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxp
 java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
 ```
 
-**HexBall JAR 不带参数会打开 API 工作台。** 看原弹球请带 `--windowed`，看新弹球请带 `--rtxpt`。不指定时限会持续运行，关闭渲染窗口正常退出。RTXPT 新弹球默认采用已验收的 **DLSS SR Balanced、1 SPP、2× FG**，不自动增加 RR、NRD、SHaRC 或 ReSTIR。符合条件的少量点光采用上游 power sampling，其他场景保留上游自适应采样。新弹球复用球场几何、物理与灯光强度，使用玻璃材质和上游 -1.5 EV 曝光补偿；旧弹球使用金属材质。工作负载不同，不能拿两者默认 FPS 直接认定后端快慢。用户已接受这次 SR 画面；残余噪声仍存在，RR 等能力保留为显式 API 选项。实测见[弹球修复报告](../../docs/quality/hexball-noise-fix-20261102.md)。
+**HexBall JAR 不带参数会打开 API 工作台。** 看原弹球请带 `--windowed`，看新弹球可带 `--rtxpt`，或使用下方专用类入口。未指定时限持续运行，关闭渲染窗口正常退出。RTXPT 新弹球默认采用中档 **DLSS SR Performance、1 SPP、2× FG、4 个精确光学界面预算**，通过公共 API 使用稳定的 `SCENE_ANALYTIC` 光照输入，不自动增加 RR、NRD、SHaRC 或 ReSTIR。新弹球复用球场几何、物理与灯光强度，采用上游 -1.5 EV 曝光补偿；HUD 可切玻璃、不透明 20% 正面反射率球和原金属球。原 Vulkan 弹球使用金属材质，默认工作负载不同。历史修复过程见[弹球修复报告](../../docs/quality/hexball-noise-fix-20261102.md)，当前配置以本页和[预算指南](../../docs/performance-budgets.md)为准。
+
+专用 RTXPT 弹球入口**不传任何应用参数**，默认即窗口化、1 SPP、2× FG 和中档：
+
+```powershell
+java -cp .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar demo.RtxptHexBallDemo
+```
+
+三个 Demo 未指定的 API 字段都继承 `MEDIUM`，显式字段只覆盖该项。例如追加 `--api.pathTracing.exactOpticalInterfaces=2` 或 `--api.resources.workerThreads=2` 不重置其他中档值。普通消费者可用 `RendererConfig.pathTracedPresentation(RendererPerformanceTier.LOW)` 选低档，再经 `copyBuilder()` 细调。六界面预算 1～6 对应随 JAR 预编译的已捕获上游排列，未捕获的新组合保留随包 DXC fallback；范围及重建条件见[性能档位与资源预算](../../docs/performance-budgets.md)。
 
 也可以通过 Gradle 直接启动：
 

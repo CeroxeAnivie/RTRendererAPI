@@ -72,19 +72,26 @@ try {
             $destination=[IO.Path]::GetFullPath((Join-Path $stage $relative))
             if(!$destination.StartsWith($stage+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)){throw 'Manifest output path escapes the staging directory'}
             New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($destination)) -Force | Out-Null
-            $start=[Diagnostics.ProcessStartInfo]::new()
-            $start.FileName=$compiler
-            $start.Arguments=$command+' -Fo "'+$destination+'"'
-            $start.WorkingDirectory=$repo
-            $start.UseShellExecute=$false;$start.CreateNoWindow=$true
-            $start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
-            $process=[Diagnostics.Process]::Start($start)
-            $stdout=$process.StandardOutput.ReadToEndAsync();$stderr=$process.StandardError.ReadToEndAsync()
-            $process.WaitForExit();$outText=$stdout.GetAwaiter().GetResult();$errText=$stderr.GetAwaiter().GetResult()
-            if($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $destination)){throw "DXC failed ($($process.ExitCode)) for $relative`n$outText`n$errText"}
+            $cached=Join-Path (Join-Path $runtime 'ShaderDynamic/Bin/dxil') $relative
+            $origin='dxc'
+            if((Test-Path -LiteralPath $cached) -and (Get-Item -LiteralPath $cached).LastWriteTimeUtc -ge $sourceStamp){
+                Copy-Item -LiteralPath $cached -Destination $destination
+                $origin='validated-runtime-cache'
+            } else {
+                $start=[Diagnostics.ProcessStartInfo]::new()
+                $start.FileName=$compiler
+                $start.Arguments=$command+' -Fo "'+$destination+'"'
+                $start.WorkingDirectory=$repo
+                $start.UseShellExecute=$false;$start.CreateNoWindow=$true
+                $start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
+                $process=[Diagnostics.Process]::Start($start)
+                $stdout=$process.StandardOutput.ReadToEndAsync();$stderr=$process.StandardError.ReadToEndAsync()
+                $process.WaitForExit();$outText=$stdout.GetAwaiter().GetResult();$errText=$stderr.GetAwaiter().GetResult()
+                if($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $destination)){throw "DXC failed ($($process.ExitCode)) for $relative`n$outText`n$errText"}
+            }
             [IO.File]::SetLastWriteTimeUtc($destination,$sourceStamp)
-            $entries.Add([ordered]@{path=$relative;exactInterfaces=$budget;commandSha256=$key;sha256=(Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant();bytes=(Get-Item -LiteralPath $destination).Length;canonicalCommand=$canonical})
-            Write-Host "RTXPT offline shader $($entries.Count): optical budget=$budget $relative"
+            $entries.Add([ordered]@{path=$relative;exactInterfaces=$budget;commandSha256=$key;sha256=(Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant();bytes=(Get-Item -LiteralPath $destination).Length;origin=$origin;canonicalCommand=$canonical})
+            Write-Host "RTXPT offline shader $($entries.Count): optical budget=$budget origin=$origin $relative"
         }
     }
     foreach($budget in 1..6){if(!($entries | Where-Object {$_.exactInterfaces -eq $budget})){throw "No compiled optical permutation for budget $budget"}}

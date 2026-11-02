@@ -8,7 +8,9 @@
 ./gradlew.bat :demos:hex-ball:rtxptMediumBenchmark
 ```
 
-默认以窗口模式输出 1920×1080、1 SPP，采用上游 DLSS-RR＋SHaRC，开启 2× FG。左上角完整 HUD 显示实际原生／生成／总 FPS、GPU 帧耗时、内外分辨率及各项技术的运行状态；生成帧来自 SDK 实际交付计数。HUD 每 500 ms 更新，普通帧不做 CPU 图像读回。
+默认以窗口模式输出 1920×1080、1 SPP，统一继承中档：DLSS-RR Performance、2M SHaRC 条目、12／2 路径深度、2 在途帧，Demo 明确开启 2× FG。左上角完整 HUD 显示实际原生／生成／总 FPS、GPU 帧耗时、内外分辨率及各项技术的运行状态；生成帧来自 SDK 实际交付计数。HUD 每 500 ms 更新，普通帧不做 CPU 图像读回。
+
+中档配置含 4 个精确界面预算，但此 Demo 默认走上游 RR＋SHaRC 传输，未启用 `SCENE_ANALYTIC`，因此不能把“请求预算 4”写成该精确分支已经执行；实际激活数从 `runtimeStatus()`／HUD 读取。原 Vulkan、RTXPT 弹球和介质 Demo 的缺省字段都继承中档，显式 API 字段保留；弱 GPU 可调参数及六档发行范围见[预算指南](performance-budgets.md)。
 
 | 窗口按键 | 场景 | 内容 |
 |---|---|---|

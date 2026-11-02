@@ -13,6 +13,8 @@ java --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow `
 
 RTXPT JAR 自带 JNI、Streamline/DLSS、Agility、shader 和原始许可证。首次运行校验 SHA-256 并解包至用户缓存，之后复用；不需要安装 CUDA，不从开发机路径取 DLL，不在运行时下载 SDK。首次 shader/PSO 编译可能需要等待，进度写日志，不创建独立弹窗。具体支持范围见 7.0.0.md。
 
+公共预算支持 LOW／MEDIUM／HIGH，工厂无参与三 Demo 缺省字段统一中档。JAR 内包含已捕获上游动态排列的真实 DXIL，以及每个已捕获场景解析光照排列的 1～6 精确界面六档；未捕获的新组合仍由随包上游 DXC 编译缓存。打包校验源码指纹和二进制哈希，仓库外独立缓存验收使用 `:renderer-rtxpt:rtxptPackagedBudgetNativeSelfTest` 禁止 fallback，检查被测排列均从包加载。构建命令与范围见[预算指南](performance-budgets.md)。
+
 ### 三个可执行 Demo
 
 在仓库根目录运行 `./gradlew.bat :demos:hex-ball:shadowJar :demos:hex-ball:mediumShadowJar` 后：
