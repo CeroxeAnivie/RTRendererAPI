@@ -1,0 +1,570 @@
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\sl.interposer.dll' is signed by NVIDIA and the signature was verified.
+INFO: Found adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this adapter
+INFO: DLSS_G is supported on this adapter
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is supported on this adapter
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Microsoft Basic Render Driver, DeviceId=0x8C, Vendor: 5140
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Using adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this system.
+INFO: DLSS-G is supported on this system.
+INFO: PCL is supported on this system.
+INFO: Reflex is supported on this system.
+INFO: DLSS-RR is supported on this system.
+INFO: Initializing...
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat3.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat4.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat2.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 5 materials not found in RTXPT material materials folder 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: RTXPT transmission denoising guides: transmissiveMaterials=3 decompositionEnabled=3 defaultedToTransmission=3 gpuMaterialsUpdated=3
+INFO: RTXPT legacy lighting inputs ACTIVE lights=4; analytic ambient, exact direct, legacy sky, stable metal, split first interface
+INFO: RTXPT exact-point scene gate: graphLights=5 neeAtAnalytic=3 zeroRadiusPoints=yes eligible=yes
+INFO: RTXPT small-point policy: realtime=1 aa=2 standaloneRequested=0 standaloneActive=0 rtxdi=0 sharc=0 spp=1 eligible=1 override=default accepted=1
+INFO: RTXPT exact point sum ACTIVE; native light sampler=1 (1=power, 2=NEE-AT)
+INFO: Initializing renderer...
+INFO: Shader compiler: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\Rtxpt\Shaders'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Donut\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Rtxdi\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External'
+INFO: Shader binaries output: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil'
+INFO: Shader compiler: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\Rtxpt\Shaders'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Donut\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Rtxdi\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External'
+INFO: Shader binaries output: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 1.0 MB used, over 1 build batches
+INFO: Compiling shaders (16)...
+INFO: Compiling shader 'BUILD_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_e9120a1b8b144b5d297d1be7.bin'...
+INFO: Compiling shader 'SHARC_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_e1a1e72f735b4cd772b2624a.bin'...
+INFO: Compiling shader 'FILL_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_c738c6864a5fccea8d22e692.bin'...
+INFO: Compiling shader 'EDGY_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_ede5b37bcb437c2af1345dee.bin'...
+INFO: Compiling shader 'FILL_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_227d51975e85342735f7673d.bin'...
+INFO: Compiling shader 'BUILD_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_cda77a07aef84b64424e800a.bin'...
+INFO: Compiling shader 'REF_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_bb63fe3e3a1fbe18ef633859.bin'...
+INFO: Compiling shader 'BUILD_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_fa3de49b111da9fe944a1202.bin'...
+INFO: Compiling shader 'REF_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_08b96af7d1a925db4ecf3bfd.bin'...
+INFO: Compiling shader 'SHARC_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_9c4d35ecf3a6a25d5f1cce11.bin'...
+INFO: Compiling shader 'FILL_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_4ca45921410a7da1a75baf6c.bin'...
+INFO: Compiling shader 'SHARC_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_be20b96393cd87fcca78230a.bin'...
+INFO: Compiling shader 'TESTRG_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\TestRaygenPP_84392a858507ea03169f374c.bin'...
+INFO: Compiling shader 'TESTRG_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_f97d16a31b4d55ad4c06f6a8.bin'...
+INFO: Compiling shader 'EDGY_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\TestRaygenPP_efd46c30c0f3089953452ff4.bin'...
+INFO: Compiling shader 'REF_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_d27e4cf09535a18797f29651.bin'...
+INFO: Compiling PSOs (6)...
+INFO: Compiling compute shaders (26)...
+INFO: Compiling compute shader 'EnvLightsBackupPast'...
+INFO: Compiling compute shader 'EnvLightsFillLookupMap'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP1b'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryPreFilterB'...
+INFO: Compiling compute shader 'PatchSubInstanceLightData'...
+INFO: Compiling coRTXPT HEX BALL READY: same DemoScene / HexPhysics / camera / environment; output=2560x1440, 1 SPP; RuntimeStatus[renderWidth=1485, renderHeight=835, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=true, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+RTXPT actual presentation: PresentationStatus[outputWidth=2560, outputHeight=1440, exposureCompensation=-1.5, exposureValue=0.0, bloom=true]
+RTXPT hex-ball: 80.53 native FPS, 12.417 ms/frame; exports=1, transformBatches=81
+RTXPT hex-ball: 105.22 native FPS, 9.504 ms/frame; exports=1, transformBatches=187
+mpute shader 'ClearFeedbackHistory'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP0'...
+INFO: Compiling compute shader 'ResetPastToCurrentHistory'...
+INFO: Compiling compute shader 'EnvLightsSubdivideBase'...
+INFO: Compiling compute shader 'SharcResolve'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP2'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP1a'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP3'...
+INFO: Compiling compute shader 'ComputeWeights'...
+INFO: Compiling compute shader 'EnvLightsMapPastToCurrent'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryDebugViz'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryPreFilterA'...
+INFO: Compiling compute shader 'EnvLightsSubdivideBoost'...
+INFO: Compiling compute shader 'BakeEmissiveTriangles'...
+INFO: Compiling compute shader 'ResetLightProxyCounters'...
+INFO: Compiling compute shader 'ProcessClusters'...
+INFO: Compiling compute shader 'ComputeProxyCounts'...
+INFO: Compiling compute shader 'ComputeProxyBaselineOffsets'...
+INFO: Compiling compute shader 'CreateProxyJobs'...
+INFO: Compiling compute shader 'ExecuteProxyJobs'...
+INFO: Compiling compute shader 'DebugDrawLights'...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Successfully created compute pipeline for 'BakeEmissiveTriangles'
+INFO: Successfully created compute pipeline for 'PatchSubInstanceLightData'
+INFO: Successfully created compute pipeline for 'ResetPastToCurrentHistory'
+INFO: Successfully created compute pipeline for 'EnvLightsBackupPast'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBase'
+INFO: Successfully created compute pipeline for 'EnvLightsSubdivideBoost'
+INFO: Successfully created compute pipeline for 'EnvLightsFillLookupMap'
+INFO: Successfully created compute pipeline for 'EnvLightsMapPastToCurrent'
+INFO: Successfully created compute pipeline for 'ClearFeedbackHistory'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP0'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1a'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP1b'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP2'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryP3'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryDebugViz'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterA'
+INFO: Successfully created compute pipeline for 'ProcessFeedbackHistoryPreFilterB'
+INFO: Successfully created compute pipeline for 'ResetLightProxyCounters'
+INFO: Successfully created compute pipeline for 'ComputeWeights'
+INFO: Successfully created compute pipeline for 'ProcessClusters'
+INFO: Successfully created compute pipeline for 'ComputeProxyCounts'
+INFO: Successfully created compute pipeline for 'ComputeProxyBaselineOffsets'
+INFO: Successfully created compute pipeline for 'CreateProxyJobs'
+INFO: Successfully created compute pipeline for 'ExecuteProxyJobs'
+INFO: Successfully created compute pipeline for 'DebugDrawLights'
+INFO: Loaded 4 x 2, 96 bpp: C:/Temp/rtrenderer-rtxpt-12676811046869392190/sky.hdr
+INFO: SHaRC bindless descriptors: heapBase=64, heapIndex hash/accum/resolved = 64/65/66, tableRelative = 0/1/2
+INFO: RTXPT_FG_TIMELINE seconds=1.006965 native=82 actual=161 intervalNative=81 intervalActual=161 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=5.370651 eventsAnimateBeginMs=0.081158 renderSubmitMs=1.139131 presentMs=5.165660
+INFO: RTXPT_FG_TIMELINE seconds=1.007407 native=188 actual=373 intervalNative=106 intervalActual=212 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=7.311766 eventsAnimateBeginMs=0.055072 renderSubmitMs=0.778565 presentMs=1.158725
+INFO: RTXPT_FG_TIMELINE seconds=1.008744 native=300 actual=597 intervalNative=112 intervalActual=224 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=5.867307 eventsAnimateBeginMs=0.067653 renderSubmitMs=0.729059 presentMsRTXPT hex-ball: 111.03 native FPS, 9.007 ms/frame; exports=1, transformBatches=299
+=2.183812
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 0, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 128, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 128, 320, 1) 2: 1 3: (0.000028, 0.250291, 15.398994) 4: (0.026479, 0.278251, -0.960143) 5: (1, 0, 0, 0) 6: 16.038223 
+INFO: Shader:  [unformatted args] 0: 220 1: (768, 128, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 128, 320, 2) 2: 1 3: (0.424705, 4.712940, 0.000002) 4: (-0.084274, 0.278251, 0.956804) 5: (1, 1, 0, 0) 6: 0.282252 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 256, 320, 1) 2: 1 3: (-0.000109, 0.250155, 15.398997) 4: (-0.106559, 0.151675, -0.982670) 5: (1, 0, 0, 1) 6: 15.670573 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 256, 320, 1) 2: 1 3: (-0.000245, 0.250155, 15.398997) 4: (-0.234894, 0.148276, -0.960645) 5: (1, 0, 0, 1) 6: 16.029850 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 256, 320, 1) 2: 1 3: (0.000028, 0.250155, 15.398997) 4: (0.027307, 0.152487, -0.987928) 5: (1, 0, 0, 0) 6: 15.587162 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 256, 320, 1) 2: 1 3: (0.000164, 0.250155, 15.398997) 4: (0.159727, 0.150585, -0.975608) 5: (1, 0, 0, 0) 6: 15.783998 
+INFO: Shader:  [unformatted args] 0: 220 1: (768, 256, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 256, 320, 2) 2: 1 3: (0.425671, 2.626992, 0.000002) 4: (-0.086064, 0.152487, 0.984551) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 256, 320, 1) 2: 1 3: (0.000301, 0.250155, 15.398997) 4: (0.284083, 0.146259, -0.947579) 5: (1, 1, 0, 10) 6: 15.311366 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (896, 256, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 256, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (512, 256, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 256, 320, 2) 2: 1 3: (2.521287, 2.626992, 0.000002) 4: (0.046092, 0.150585, 0.987522) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 256, 320, 2) 2: 1 3: (-3.765560, 2.626992, 0.000002) 4: (-0.343848, 0.148276, 0.927245) 5: (1, 1, 0, 2) 6: 0.639880 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 256, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 220 1: (1024, 256, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 256, 320, 2) 2: 1 3: (-1.669945, 2.626992, 0.000002) 4: (-0.219784, 0.151675, 0.963685) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 256, 320, 2) 2: 1 3: (4.349998, 2.489578, 0.890275) 4: (-0.236792, 0.214533, -0.947579) 5: (1, 1, 0, 1) 6: 0.281375 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 384, 320, 1) 2: 1 3: (-0.000245, 0.250018, 15.398999) 4: (-0.237993, 0.017753, -0.971105) 5: (1, 0, 0, 2) 6: 15.857198 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 384, 320, 1) 2: 1 3: (0.000028, 0.250018, 15.398999) 4: (0.027689, 0.018271, -0.999450) 5: (1, 0, 0, 0) 6: 15.407480 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 1) 2: 1 3: (-0.000109, 0.250018, 15.398999) 4: (-0.108031, 0.018171, -0.993981) 5: (1, 2, 0, 8145) 6: 14.296967 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 384, 320, 1) 2: 1 3: (0.000164, 0.250018, 15.398999) 4: (0.161902, 0.018037, -0.986642) 5: (1, 0, 0, 5) 6: 15.607484 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 2) 2: (5, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 2) 2: 5 3: (-1.544628, 0.509806, 1.188079) 4: (-0.815436, -0.039821, 0.577475) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 320, 32) 2: 2 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (768, 384, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 384, 320, 2) 2: 1 3: (0.426643, 0.531525, 0.000002) 4: (-0.088205, 0.018271, 0.995935) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (896, 384, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 384, 320, 1) 2: 1 3: (0.000301, 0.250018, 15.398999) 4: (0.287728, 0.017505, -0.957552) 5: (1, 1, 0, 11) 6: 15.117398 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 384, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 1) 2: 2 3: (-0.000109, 0.250018, 15.398999) 4: (-0.108031, 0.018171, -0.993981) 5: (1, 2, 0, 8145) 6: 14.296967 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 384, 320, 2) 2: 1 3: (2.527039, 0.531526, 0.000002) 4: (0.047692, 0.018037, 0.998699) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 220 1: (512, 384, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 384, 320, 2) 2: 1 3: (-3.774150, 0.531526, 0.000002) 4: (-0.348435, 0.017753, 0.937165) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 2) 2: (6, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 2) 2: 6 3: (-1.544627, 0.509806, 1.188078) 4: (0.226069, 0.028859, -0.973684) 5: (1, 2, 0, 8001) 6: 1.137233 
+INFO: Shader:  [unformatted args] 0: 220 1: (1024, 384, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 384, 320, 2) 2: 1 3: (4.349998, 0.514647, 0.923302) 4: (-0.273323, 0.091588, -0.957552) 5: (1, 0, 0, 5) 6: 0.964231 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 3) 2: (6, 1, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 3) 2: 6 3: (-1.287534, 0.542626, 0.080774) 4: (0.164319, -0.012616, 0.986327) 5: (1, 2, 0, 8112) 6: 1.136873 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 512, 320, 1) 2: 1 3: (-0.000109, 0.249882, 15.399001) 4: (-0.107551, -0.116907, -0.987302) 5: (1, 0, 0, 3) 6: 15.597050 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 512, 320, 1) 2: 1 3: (-0.000245, 0.249882, 15.399001) 4: (-0.236982, -0.114240, -0.964774) 5: (1, 0, 0, 2) 6: 15.961253 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 512, 320, 1) 2: 1 3: (0.000028, 0.249882, 15.399001) 4: (0.027564, -0.117544, -0.992685) 5: (1, 0, 0, 4) 6: 15.512473 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 512, 320, 1) 2: 1 3: (0.000164, 0.249882, 15.399001) 4: (0.161192, -0.116051, -0.980076) 5: (1, 0, 0, 4) 6: 15.712046 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 512, 320, 1) 2: 1 3: (0.000301, 0.249882, 15.399001) 4: (0.286540, -0.112658, -0.951422) 5: (1, 1, 0, 11) 6: 15.180100 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 512, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 512, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 220 1: (768, 512, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 220 1: (896, 512, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 512, 320, 2) 2: 1 3: (-1.677581, -1.573524, 0.000002) 4: (-0.220911, -0.116907, 0.968262) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 512, 320, 2) 2: 1 3: (0.427618, -1.573524, 0.000002) 4: (-0.086683, -0.117544, 0.989277) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 512, 320, 2) 2: 1 3: (2.532818, -1.573524, 0.000002) 4: (0.046280, -0.116051, 0.992164) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 220 1: (512, 512, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 512, 320, 2) 2: 1 3: (-3.782780, -1.573524, 0.000002) 4: (-0.345817, -0.114240, 0.931322) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 220 1: (1024, 512, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 512, 320, 2) 2: 1 3: (4.349998, -1.460285, 0.956326) 4: (-0.305871, -0.035211, -0.951422) 5: (1, 0, 0, 5) 6: 1.005154 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 4) 2: (6, 3, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 4) 2: 6 3: (-1.100725, 0.528283, 1.202101) 4: (-0.524477, -0.007112, -0.851395) 5: (1, 2, 0, 8225) 6: 1.138741 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 5) 2: (6, 7, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 5) 2: 6 3: (-1.697967, 0.520184, 0.232584) 4: (0.802437, 0.025023, 0.596212) 5: (1, 2, 0, 7826) 6: 1.138615 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 640, 320, 1) 2: 1 3: (0.000028, 0.249745, 15.399004) 4: (0.026954, -0.247666, -0.968471) 5: (1, 0, 0, 4) 6: 15.900333 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 640, 320, 1) 2: 1 3: (-0.000109, 0.249745, 15.399004) 4: (-0.105193, -0.246381, -0.963447) 5: (1, 0, 0, 3) 6: 15.983233 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 640, 320, 1) 2: 1 3: (0.000164, 0.249745, 15.399004) 4: (0.157708, -0.244655, -0.956699) 5: (1, 1, 0, 8) 6: 15.705917 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (768, 640, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 640, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 640, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 220 1: (896, 640, 320, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 640, 320, 2) 2: 1 3: (0.428598, -3.688222, 0.000002) 4: (-0.085152, -0.247666, 0.965096) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 640, 320, 2) 2: 1 3: (-1.681426, -3.688221, 0.000002) 4: (-0.215247, -0.246381, 0.944968) 5: (1, 1, 0, 7) 6: 0.981925 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 6) 2: (6, 15, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 640, 320, 2) 2: 1 3: (2.477104, -3.592788, 0.373177) 4: (-0.062234, 0.284350, -0.956699) 5: (1, 0, 0, 4) 6: 0.390067 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 6) 2: 6 3: (-0.784301, 0.548676, 0.911439) 4: (-0.966018, -0.036392, -0.255900) 5: (1, 2, 0, 8195) 6: 1.138647 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 768, 320, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 7) 2: 6 3: (-1.884254, 0.507239, 0.620060) 4: (0.991433, 0.038070, -0.124944) 5: (1, 2, 0, 8050) 6: 1.137604 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 8) 2: 6 3: (-0.756396, 0.550547, 0.477923) 4: (0.979074, 0.041226, 0.199282) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 320, 33) 2: 10 
+INFO: Shader:  [unformatted args] 0: 221 1: (640, 384, 320, 6) 2: (33, 32, 31) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 6) 2: (14, 31, 32) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 6) 2: 14 3: (-0.784301, 0.548676, 0.911439) 4: (-0.966018, -0.036392, -0.255900) 5: (1, 2, 0, 8195) 6: 1.138647 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 7) 2: 14 3: (-1.884256, 0.507239, 0.620060) 4: (-0.830511, -0.030663, -0.556157) 5: (1, 0, 0, 2) 6: 1.114900 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 320, 34) 2: 18 
+INFO: Shader:  [unformatted args] 0: 221 1: (640, 384, 320, 5) 2: (34, 33, 31) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 5) 2: (22, 15, 33) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 5) 2: 22 3: (-1.697967, 0.520184, 0.232584) 4: (0.802437, 0.025023, 0.596212) 5: (1, 2, 0, 7826) 6: 1.138615 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 6) 2: (22, 15, 33) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 6) 2: 22 3: (-0.784300, 0.548676, 0.911440) 4: (0.568663, 0.012306, 0.822478) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 320, 36) 2: 34 
+INFO: Shader:  [unformatted args] 0: 221 1: (640, 384, 320, 4) 2: (36, 34, 31) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 4) 2: (38, 7, 34) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 4) 2: 38 3: (-1.100725, 0.528283, 1.202101) 4: (-0.524477, -0.007112, -0.851395) 5: (1, 2, 0, 8225) 6: 1.138741 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 5) 2: (38, 7, 34) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 5) 2: 38 3: (-1.697968, 0.520184, 0.232582) 4: (-0.223559, 0.009215, -0.974646) 5: (1, 0, 0, 2) 6: 0.238633 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 320, 40) 2: 66 
+INFO: Shader:  [unformatted args] 0: 221 1: (640, 384, 320, 3) 2: (40, 36, 15) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 3) 2: (70, 3, 36) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 3) 2: 70 3: (-1.287534, 0.542626, 0.080774) 4: (0.164319, -0.012616, 0.986327) 5: (1, 2, 0, 8112) 6: 1.136873 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 4) 2: (70, 3, 36) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 4) 2: 70 3: (-1.100724, 0.528283, 1.202102) 4: (-0.168160, -0.028239, 0.985354) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 320, 48) 2: 130 
+INFO: Shader:  [unformatted args] 0: 221 1: (640, 384, 320, 2) 2: (48, 40, 7) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 2) 2: (134, 1, 40) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 2) 2: 134 3: (-1.544627, 0.509806, 1.188078) 4: (0.226069, 0.028859, -0.973684) 5: (1, 2, 0, 8001) 6: 1.137233 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 320, 3) 2: (134, 1, 40) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 320, 3) 2: 134 3: (-1.287534, 0.542626, 0.080772) 4: (0.537910, 0.039425, -0.842080) 5: (1, 0, 0, 2) 6: 0.095920 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 0, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 128, 321, 1) 2: 1 3: (0.000028, 0.250292, 15.398994) 4: (0.026731, 0.278561, -0.960047) 5: (1, 0, 0, 0) 6: 16.039843 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 128, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (768, 128, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 128, 321, 2) 2: 1 3: (0.428786, 4.718361, 0.000002) 4: (-0.084013, 0.278561, 0.956737) 5: (1, 1, 0, 0) 6: 0.247880 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 256, 321, 1) 2: 1 3: (-0.000245, 0.250155, 15.398997) 4: (-0.234640, 0.148617, -0.960655) 5: (1, 0, 0, 1) 6: 16.029692 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 256, 321, 1) 2: 1 3: (-0.000108, 0.250155, 15.398997) 4: (-0.106294, 0.152019, -0.982645) 5: (1, 0, 0, 1) 6: 15.670962 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 256, 321, 1) 2: 1 3: (0.000028, 0.250155, 15.398997) 4: (0.027568, 0.152827, -0.987868) 5: (1, 0, 0, 0) 6: 15.588106 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 256, 321, 1) 2: 1 3: (0.000164, 0.250155, 15.398997) 4: (0.159970, 0.150916, -0.975517) 5: (1, 0, 0, 0) 6: 15.785470 
+INFO: Shader:  [unformatted args] 0: 220 1: (768, 256, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (512, 256, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 256, 321, 2) 2: 1 3: (0.429762, 2.632436, 0.000002) 4: (-0.085798, 0.152827, 0.984522) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 256, 321, 1) 2: 1 3: (0.000301, 0.250155, 15.398997) 4: (0.284299, 0.146576, -0.947465) 5: (1, 1, 0, 10) 6: 15.299730 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 256, 321, 2) 2: 1 3: (-3.761446, 2.632436, 0.000002) 4: (-0.343596, 0.148617, 0.927283) 5: (1, 1, 0, 2) 6: 0.630675 
+INFO: Shader:  [unformatted args] 0: 220 1: (896, 256, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 256, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 256, 321, 2) 2: 1 3: (2.525366, 2.632436, 0.000002) 4: (0.046344, 0.150916, 0.987460) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 220 1: (1024, 256, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 256, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 256, 321, 2) 2: 1 3: (4.349998, 2.492733, 0.903042) 4: (-0.236919, 0.214895, -0.947465) 5: (1, 1, 0, 1) 6: 0.239945 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 256, 321, 2) 2: 1 3: (-1.665842, 2.632436, 0.000002) 4: (-0.219518, 0.152019, 0.963692) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 384, 321, 1) 2: 1 3: (0.000028, 0.250019, 15.398999) 4: (0.027954, 0.018625, -0.999436) 5: (1, 0, 0, 0) 6: 15.407695 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 1) 2: 1 3: (-0.000108, 0.250019, 15.398999) 4: (-0.107768, 0.018524, -0.994003) 5: (1, 2, 0, 7633) 6: 14.300171 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 384, 321, 1) 2: 1 3: (0.000164, 0.250019, 15.398999) 4: (0.162155, 0.018386, -0.986594) 5: (1, 0, 0, 5) 6: 15.608246 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 384, 321, 1) 2: 1 3: (-0.000245, 0.250019, 15.398999) 4: (-0.237746, 0.018099, -0.971159) 5: (1, 0, 0, 2) 6: 15.856318 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 2) 2: (5, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 2) 2: 5 3: (-1.541212, 0.514919, 1.184579) 4: (-0.823066, 0.140746, 0.550230) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 321, 32) 2: 2 
+INFO: Shader:  [unformatted args] 0: 220 1: (768, 384, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 384, 321, 1) 2: 1 3: (0.000301, 0.250019, 15.398999) 4: (0.287959, 0.017844, -0.957477) 5: (1, 1, 0, 11) 6: 15.105291 
+INFO: Shader:  [unformatted args] 0: 220 1: (896, 384, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 384, 321, 2) 2: 1 3: (0.430742, 0.536995, 0.000002) 4: (-0.087940, 0.018625, 0.995952) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 384, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 384, 321, 2) 2: 1 3: (2.531127, 0.536994, 0.000002) 4: (0.047950, 0.018386, 0.998680) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 1) 2: 2 3: (-0.000108, 0.250019, 15.398999) 4: (-0.107768, 0.018524, -0.994003) 5: (1, 2, 0, 7633) 6: 14.300171 
+INFO: Shader:  [unformatted args] 0: 220 1: (512, 384, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 220 1: (1024, 384, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 384, 321, 2) 2: 1 3: (-3.770026, 0.536995, 0.000002) 4: (-0.348196, 0.018099, 0.937247) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 384, 321, 2) 2: 1 3: (4.349998, 0.519550, 0.936037) 4: (-0.273458, 0.091975, -0.957477) 5: (1, 0, 0, 5) 6: 0.977608 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 2) 2: (6, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 2) 2: 6 3: (-1.541211, 0.514919, 1.184578) 4: (0.232980, -0.039767, -0.971668) 5: (1, 2, 0, 8256) 6: 1.136181 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 512, 321, 1) 2: 1 3: (-0.000245, 0.249882, 15.399001) 4: (-0.236747, -0.113907, -0.964871) 5: (1, 0, 0, 2) 6: 15.959647 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 512, 321, 1) 2: 1 3: (-0.000108, 0.249882, 15.399001) 4: (-0.107294, -0.116563, -0.987371) 5: (1, 0, 0, 3) 6: 15.595964 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 512, 321, 1) 2: 1 3: (0.000028, 0.249882, 15.399001) 4: (0.027830, -0.117194, -0.992719) 5: (1, 0, 0, 4) 6: 15.511943 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 512, 321, 1) 2: 1 3: (0.000164, 0.249882, 15.399001) 4: (0.161452, -0.115702, -0.980075) 5: (1, 0, 0, 4) 6: 15.712070 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 3) 2: (6, 1, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 3) 2: 6 3: (-1.276504, 0.469736, 0.080587) 4: (0.161948, -0.032494, 0.986264) 5: (1, 2, 0, 8368) 6: 1.135582 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 512, 321, 1) 2: 1 3: (0.000301, 0.249882, 15.399001) 4: (0.286782, -0.112315, -0.951389) 5: (1, 1, 0, 11) 6: 15.167262 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 512, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 512, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (768, 512, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 220 1: (896, 512, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 512, 321, 2) 2: 1 3: (-1.673459, -1.568029, 0.000002) 4: (-0.220664, -0.116563, 0.968360) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 512, 321, 2) 2: 1 3: (0.431727, -1.568029, 0.000002) 4: (-0.086423, -0.117194, 0.989341) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 512, 321, 2) 2: 1 3: (2.536914, -1.568029, 0.000002) 4: (0.046539, -0.115702, 0.992193) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 220 1: (512, 512, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (512, 512, 321, 2) 2: 1 3: (-3.778646, -1.568029, 0.000002) 4: (-0.345594, -0.113907, 0.931445) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 220 1: (1024, 512, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (1024, 512, 321, 2) 2: 1 3: (4.349998, -1.453631, 0.969033) 4: (-0.306017, -0.034817, -0.951389) 5: (1, 0, 0, 5) 6: 1.018545 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 4) 2: (6, 3, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 4) 2: 6 3: (-1.092598, 0.432837, 1.200571) 4: (-0.528166, 0.095740, -0.843726) 5: (1, 2, 0, 7457) 6: 1.136844 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 640, 321, 1) 2: 1 3: (-0.000108, 0.249746, 15.399004) 4: (-0.104946, -0.246063, -0.963555) 5: (1, 0, 0, 3) 6: 15.981441 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 640, 321, 1) 2: 1 3: (0.000028, 0.249746, 15.399004) 4: (0.027215, -0.247338, -0.968547) 5: (1, 0, 0, 4) 6: 15.899077 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 640, 321, 1) 2: 1 3: (0.000164, 0.249746, 15.399004) 4: (0.157969, -0.244323, -0.956740) 5: (1, 1, 0, 8) 6: 15.714393 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 5) 2: (6, 7, 0) 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 5) 2: 6 3: (-1.693041, 0.541678, 0.241387) 4: (0.807282, -0.132937, 0.574999) 5: (1, 2, 0, 8593) 6: 1.137555 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (768, 640, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 640, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (768, 640, 321, 2) 2: 1 3: (0.432717, -3.682701, 0.000002) 4: (-0.084901, -0.247338, 0.965202) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 640, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (896, 640, 321, 2) 2: (1, 0, 0) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 640, 321, 2) 2: 1 3: (-1.677295, -3.682702, 0.000002) 4: (-0.215014, -0.246063, 0.945104) 5: (1, 1, 0, 7) 6: 1.004477 
+INFO: Shader:  [unformatted args] 0: 210 1: (896, 640, 321, 2) 2: 1 3: (2.482558, -3.589639, 0.364413) 4: (-0.061814, 0.284301, -0.956740) 5: (1, 0, 0, 4) 6: 0.380890 
+INFO: Shader:  [unformatted args] 0: 230 1: (0, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 6) 2: (6, 15, 0) 
+INFO: Shader:  [unformatted args] 0: 230 1: (128, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (256, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (384, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (512, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 6) 2: 6 3: (-0.774713, 0.390455, 0.895479) 4: (-0.966319, 0.134549, -0.219372) 5: (1, 2, 0, 7424) 6: 1.136830 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (768, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (896, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1024, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1152, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1408, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 230 1: (1280, 768, 321, 0) 2: 1 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 7) 2: 6 3: (-1.873253, 0.543414, 0.646091) 4: (0.979797, -0.099695, -0.173372) 5: (1, 2, 0, 8560) 6: 1.136324 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 8) 2: 6 3: (-0.759886, 0.430128, 0.449084) 4: (0.976234, -0.141401, 0.164229) 5: (1, 1, 0, 11) 6: 5.234283 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 321, 33) 2: 10 
+INFO: Shader:  [unformatted args] 0: 221 1: (640, 384, 321, 6) 2: (33, 32, 31) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 6) 2: (14, 31, 32) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 6) 2: 14 3: (-0.774713, 0.390455, 0.895479) 4: (-0.966319, 0.134549, -0.219372) 5: (1, 2, 0, 7424) 6: 1.136830 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 7) 2: 14 3: (-1.873254, 0.543414, 0.646091) 4: (-0.832421, 0.147927, -0.534035) 5: (1, 0, 0, 2) 6: 1.209828 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 321, 34) 2: 18 
+INFO: Shader:  [unformatted args] 0: 221 1: (640, 384, 321, 5) 2: (34, 33, 31) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 5) 2: (22, 15, 33) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 5) 2: 22 3: (-1.693041, 0.541678, 0.241387) 4: (0.807282, -0.132937, 0.574999) 5: (1, 2, 0, 8593) 6: 1.137555 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 6) 2: (22, 15, 33) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 6) 2: 22 3: (-0.774712, 0.390454, 0.895480) 4: (0.569696, -0.115196, 0.813741) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 321, 36) 2: 34 
+INFO: Shader:  [unformatted args] 0: 221 1: (640, 384, 321, 4) 2: (36, 34, 31) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 4) 2: (38, 7, 34) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 4) 2: 38 3: (-1.092598, 0.432837, 1.200571) 4: (-0.528166, 0.095740, -RTXPT hex-ball: 114.02 native FPS, 8.771 ms/frame; exports=1, transformBatches=414
+RTXPT hex-ball: 52.90 native FPS, 18.902 ms/frame; exports=1, transformBatches=468
+RTXPT hex-ball: 93.84 native FPS, 10.657 ms/frame; exports=1, transformBatches=562
+RTXPT hex-ball: 109.54 native FPS, 9.129 ms/frame; exports=1, transformBatches=672
+RTXPT hex-ball: 115.93 native FPS, 8.626 ms/frame; exports=1, transformBatches=788
+RTXPT hex-ball: 115.66 native FPS, 8.646 ms/frame; exports=1, transformBatches=904
+RTXPT hex-ball: 118.00 native FPS, 8.475 ms/frame; exports=1, transformBatches=1022
+RTXPT hex-ball: 117.96 native FPS, 8.477 ms/frame; exports=1, transformBatches=1140
+RTXPT hex-ball: 115.32 native FPS, 8.671 ms/frame; exports=1, transformBatches=1256
+0.843726) 5: (1, 2, 0, 7457) 6: 1.136844 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 5) 2: (38, 7, 34) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 5) 2: 38 3: (-1.693042, 0.541678, 0.241385) 4: (-0.220569, 0.051637, -0.974003) 5: (1, 0, 0, 2) 6: 0.247828 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 321, 40) 2: 66 
+INFO: Shader:  [unformatted args] 0: 221 1: (640, 384, 321, 3) 2: (40, 36, 15) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 3) 2: (70, 3, 36) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 3) 2: 70 3: (-1.276504, 0.469736, 0.080587) 4: (0.161948, -0.032494, 0.986264) 5: (1, 2, 0, 8368) 6: 1.135582 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 4) 2: (70, 3, 36) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 4) 2: 70 3: (-1.092598, 0.432837, 1.200572) 4: (-0.178665, 0.026913, 0.983541) 5: (0, 4294967295, 4294967295, 4294967295) 6: 999999986991104.000000 
+INFO: Shader:  [unformatted args] 0: 230 1: (640, 384, 321, 48) 2: 130 
+INFO: Shader:  [unformatted args] 0: 221 1: (640, 384, 321, 2) 2: (48, 40, 7) 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 2) 2: (134, 1, 40) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 2) 2: 134 3: (-1.541211, 0.514919, 1.184578) 4: (0.232980, -0.039767, -0.971668) 5: (1, 2, 0, 8256) 6: 1.136181 
+INFO: Shader:  [unformatted args] 0: 220 1: (640, 384, 321, 3) 2: (134, 1, 40) 
+INFO: Shader:  [unformatted args] 0: 210 1: (640, 384, 321, 3) 2: 134 3: (-1.276504, 0.469736, 0.080586) 4: (0.547641, -0.097718, -0.830987) 5: (1, 0, 0, 2) 6: 0.096976 
+INFO: RTXPT_FG_TIMELINE seconds=1.008646 native=415 actual=827 intervalNative=115 intervalActual=230 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.087583 eventsAnimateBeginMs=0.039879 renderSubmitMs=1.072504 presentMs=1.463722
+INFO: RTXPT_FG_TIMELINE seconds=1.020699 native=469 actual=935 intervalNative=54 intervalActual=108 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=17.788239 eventsAnimateBeginMs=0.077396 renderSubmitMs=0.810515 presentMs=0.092085
+INFO: RTXPT_FG_TIMELINE seconds=1.001756 native=563 actual=1123 intervalNative=94 intervalActual=188 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=7.836577 eventsAnimateBeginMs=0.062641 renderSubmitMs=0.731461 presentMs=1.929424
+INFO: RTXPT_FG_TIMELINE seconds=1.004203 native=673 actual=1343 intervalNative=110 intervalActual=220 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=5.541531 eventsAnimateBeginMs=0.041528 renderSubmitMs=0.699081 presentMs=2.768786
+INFO: RTXPT_FG_TIMELINE seconds=1.000561 native=789 actual=1575 intervalNative=116 intervalActual=232 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=5.788301 eventsAnimateBeginMs=0.065696 renderSubmitMs=0.700403 presentMs=1.997168
+INFO: RTXPT_FG_TIMELINE seconds=1.002972 native=905 actual=1807 intervalNative=116 intervalActual=232 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.120276 eventsAnimateBeginMs=0.051199 renderSubmitMs=0.697380 presentMs=1.702115
+INFO: RTXPT_FG_TIMELINE seconds=1.000020 native=1023 actual=2043 intervalNative=118 intervalActual=236 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.015296 eventsAnimateBeginMs=0.035627 renderSubmitMs=0.716951 presentMs=1.635661
+INFO: RTXPT_FG_TIMELINE seconds=1.000349 native=1141 actual=2279 intervalNative=118 intervalActual=236 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.953011 eventsAnimateBeginMs=0.044788 renderSubmitMs=0.705816 presentMs=0.698908
+INFO: RTXPT_FG_TIMELINE seconds=1.005807 native=1257 actual=2511 intervalNative=116 intervalActual=232 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=7.426738 eventsAnimateBeginMs=0.043710 renderSubmitMs=0.712266 presentMs=0.417314
+INFO: RTXPT_FG_TIMELINE seconds=1RTXPT hex-ball: 113.95 native FPS, 8.776 ms/frame; exports=1, transformBatches=1370
+RTXPT hex-ball: 115.02 native FPS, 8.695 ms/frame; exports=1, transformBatches=1486
+RTXPT hex-ball: 112.66 native FPS, 8.876 ms/frame; exports=1, transformBatches=1599
+RTXPT hex-ball: 114.40 native FPS, 8.741 ms/frame; exports=1, transformBatches=1714
+RTXPT hex-ball: 113.65 native FPS, 8.799 ms/frame; exports=1, transformBatches=1828
+RTXPT hex-ball: 114.16 native FPS, 8.760 ms/frame; exports=1, transformBatches=1943
+RTXPT hex-ball: 121.07 native FPS, 8.260 ms/frame; exports=1, transformBatches=2065
+RTXPT hex-ball: 117.86 native FPS, 8.485 ms/frame; exports=1, transformBatches=2183
+RTXPT hex-ball: 119.38 native FPS, 8.377 ms/frame; exports=1, transformBatches=2303
+RTXPT hex-ball: 119.69 native FPS, 8.355 ms/frame; exports=1, transformBatches=2423
+RTXPT hex-ball: 120.61 native FPS, 8.291 ms/frame; exports=1, transformBatches=2544
+RTXPT hex-ball: 116.31 native FPS, 8.598 ms/frame; exports=1, transformBatches=2661
+RTXPT hex-ball: 118.27 native FPS, 8.455 ms/frame; exports=1, transformBatches=2780
+RTXPT hex-ball: 117.14 native FPS, 8.537 ms/frame; exports=1, transformBatches=2898
+RTXPT hex-ball: 116.35 native FPS, 8.594 ms/frame; exports=1, transformBatches=3015
+.000481 native=1371 actual=2739 intervalNative=114 intervalActual=228 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.637050 eventsAnimateBeginMs=0.043786 renderSubmitMs=0.700863 presentMs=1.322126
+INFO: RTXPT_FG_TIMELINE seconds=1.008582 native=1487 actual=2971 intervalNative=116 intervalActual=232 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.540292 eventsAnimateBeginMs=0.050462 renderSubmitMs=0.688167 presentMs=1.347328
+INFO: RTXPT_FG_TIMELINE seconds=1.003004 native=1600 actual=3197 intervalNative=113 intervalActual=226 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.693719 eventsAnimateBeginMs=0.044512 renderSubmitMs=0.700777 presentMs=1.362338
+INFO: RTXPT_FG_TIMELINE seconds=1.005246 native=1715 actual=3427 intervalNative=115 intervalActual=230 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.669094 eventsAnimateBeginMs=0.058723 renderSubmitMs=0.789401 presentMs=1.137402
+INFO: RTXPT_FG_TIMELINE seconds=1.003067 native=1829 actual=3655 intervalNative=114 intervalActual=228 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=5.634672 eventsAnimateBeginMs=0.046993 renderSubmitMs=0.727993 presentMs=2.314133
+INFO: RTXPT_FG_TIMELINE seconds=1.007368 native=1944 actual=3885 intervalNative=115 intervalActual=230 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=5.212429 eventsAnimateBeginMs=0.045053 renderSubmitMs=0.691544 presentMs=2.745716
+INFO: RTXPT_FG_TIMELINE seconds=1.007692 native=2066 actual=4129 intervalNative=122 intervalActual=244 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.125693 eventsAnimateBeginMs=0.036788 renderSubmitMs=0.698878 presentMs=1.336868
+INFO: RTXPT_FG_TIMELINE seconds=1.001184 native=2184 actual=4365 intervalNative=118 intervalActual=236 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=5.796555 eventsAnimateBeginMs=0.051404 renderSubmitMs=0.689383 presentMs=1.885065
+INFO: RTXPT_FG_TIMELINE seconds=1.005198 native=2304 actual=4605 intervalNative=120 intervalActual=240 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=5.681412 eventsAnimateBeginMs=0.041828 renderSubmitMs=0.696730 presentMs=1.894313
+INFO: RTXPT_FG_TIMELINE seconds=1.002629 native=2424 actual=4845 intervalNative=120 intervalActual=240 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.124537 eventsAnimateBeginMs=0.046389 renderSubmitMs=0.698065 presentMs=1.429138
+INFO: RTXPT_FG_TIMELINE seconds=1.003230 native=2545 actual=5087 intervalNative=121 intervalActual=242 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=5.877202 eventsAnimateBeginMs=0.040100 renderSubmitMs=0.675243 presentMs=1.642163
+INFO: RTXPT_FG_TIMELINE seconds=1.005948 native=2662 actual=5321 intervalNative=117 intervalActual=234 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.286605 eventsAnimateBeginMs=0.046422 renderSubmitMs=0.679106 presentMs=1.527168
+INFO: RTXPT_FG_TIMELINE seconds=1.006157 native=2781 actual=5559 intervalNative=119 intervalActual=238 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.719125 eventsAnimateBeginMs=0.041606 renderSubmitMs=0.683310 presentMs=0.953071
+INFO: RTXPT_FG_TIMELINE seconds=1.007323 native=2899 actual=5795 intervalNative=118 intervalActual=236 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=5.676029 eventsAnimateBeginMs=0.039409 renderSubmitMs=0.736906 presentMs=2.028158
+INFO: RTXPT_FG_TIMELINE seconds=1.005544 native=3016 actual=6029 intervalNative=117 intervalActual=234 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.058028 eventsAnimateBeginMs=0.038801 renderSubmitMs=0.681748 presentMs=1.757409
+INFO: RTXPT_FG_TIMELINE seconds=1.003605 native=3139 actual=6275RTXPT hex-ball: 122.55 native FPS, 8.160 ms/frame; exports=1, transformBatches=3138
+RTXPT hex-ball: 115.93 native FPS, 8.626 ms/frame; exports=1, transformBatches=3254
+RTXPT 30s comparison: seconds=30.015016, presented=3361, meanNativeFPS=111.975072, meanOutputFPS=223.850196, final=FrameGenerationEvidence[reported=true, requestedGeneratedFramesPerNativeFrame=1, lastSubmittedGeneratedFramesPerNativeFrame=1, configuredGeneratedFramesPerNativeFrame=1, proxyPresentCalls=3361, stateSamples=3360, stateQueryCalls=3361, totalFramesActuallyPresented=6719, generatedFramesActuallyPresented=3358, lastFramesActuallyPresented=2, maximumSupportedGeneratedFramesPerNativeFrame=5, stateQueryFailures=0, generationRequestMisses=0, maximumGeneratedFramesObservedPerSample=0, latestNativeStatus=OptionalInt[0], firstProxyPresentSequence=OptionalLong[0], lastProxyPresentSequence=OptionalLong[3360], lastGeneratedObservationSequence=OptionalLong[3360], latestQuerySucceeded=true, resetEpoch=0], bridge=BridgeTimings[frames=3361, frameNanos=32407918000, sceneExports=1, sceneExportNanos=66239400, transformBatches=3360, transformNanos=47068800]
+ intervalNative=123 intervalActual=246 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=5.414977 eventsAnimateBeginMs=0.049281 renderSubmitMs=0.706562 presentMs=1.931548
+INFO: RTXPT_FG_TIMELINE seconds=1.000597 native=3255 actual=6507 intervalNative=116 intervalActual=232 status=0 failures=0 active=1 requested=1 foreground=1 iconic=0 glfwFocus=1 simStartMs=6.469116 eventsAnimateBeginMs=0.044334 renderSubmitMs=0.708779 presentMs=1.339362
+INFO: RTXPT Streamline shutdown result=0

@@ -66,7 +66,7 @@ RTXPT 原 Depth／MV／PreUIColor（HUDless）保留，不通过 Vulkan 重建�
 
 `RtxptAccess.capture(path)` 在回交模式读取最终共享颜色，包含上游 HUD 和旧 GPU 叠层；`captureRtxptSource(path)` 显式读取叠层前 RTXPT 色调映射源。Vulkan 最终窗口用 `captureNextPresentedFrame(path)`，只对指定帧做一次 readback。截图、预热和初始化均不进入稳态性能计时。
 
-可执行验证：`:demos:hex-ball:rtxptCompositionSelfTest`；`top.ceroxe.rt.rtxpt.compositionTestMode` 可选 `acceptance`（Vulkan 最终窗口、颜色与热切换）、`rtxpt-final`（回交叠层＋实际 2x/3x/4x FG）、`native`、`return-no-overlay`、`return-overlay`（相同 FG-off 场景稳态吞吐）。2026-11-01 最新要求：性能测试前 GPU 0 基础占用必须为 **0%**；不为零就暂停，等待用户通知空闲后再测，不比较受干扰的绝对值。内存诊断与正确性运行单独标记，不用其耗时认定吞吐收益。
+可执行验证：`:demos:hex-ball:rtxptCompositionSelfTest`；`top.ceroxe.rt.rtxpt.compositionTestMode` 可选 `acceptance`（Vulkan 最终窗口、颜色与热切换）、`rtxpt-final`（回交叠层＋实际 2x/3x/4x FG）、`native`、`return-no-overlay`、`return-overlay`（历史 FG-off 场景稳态吞吐）。2026-11-02 最新要求：性能测试前 GPU 0 基础占用 **低于 10%** 就视为空闲，可比较绝对性能；达到 10% 则暂停绝对性能测试。之后的渲染运行开启 FG，旧证据仍保留当次实际配置。内存诊断与正确性运行单独标记，不用其耗时认定吞吐收益。
 
 `rtxpt-hud` 单独检查 FG-off 的最终 HUD 像素、切换器和叠层释放／重启，不测吞吐，也不宣称通过 FG/MFG 验收。高级呈现验收同时记录测试窗口是否拥有前台焦点；后台窗口的 1x 交付不能被开关状态掩盖，前台被其他应用占用时保留失败证据并等待可验收窗口。
 
