@@ -584,6 +584,15 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         s.requestedFrameGenerationMode=frameGenerationMode;
         s.requestedGeneratedFrames=generatedFrames;
         g_sampleUIData.RealtimeMode=true;
+        if(const char* preset=std::getenv("RTR_RTXPT_DIAGNOSTIC_SR_PRESET")) {
+            const std::string selected(preset);
+            if(selected=="J")g_sampleUIData.HostDLSSSRPreset=SI::DLSSPreset::ePresetJ;
+            else if(selected=="K")g_sampleUIData.HostDLSSSRPreset=SI::DLSSPreset::ePresetK;
+            // SL 2.14.16 adds M; Donut's enum predates it but forwards the enum value unchanged.
+            else if(selected=="M")g_sampleUIData.HostDLSSSRPreset=static_cast<SI::DLSSPreset>(13);
+            else throw std::invalid_argument("Diagnostic SR preset must be J, K or M");
+            donut::log::info("RTXPT diagnostic upstream DLSS-SR preset=%s",preset);
+        }
         // Explicit measurement-only model selection; normal callers retain upstream preset F.
         if(const char* preset=std::getenv("RTR_RTXPT_DIAGNOSTIC_RR_PRESET")) {
             const std::string selected(preset);

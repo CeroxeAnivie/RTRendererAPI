@@ -1,0 +1,124 @@
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\sl.interposer.dll' is signed by NVIDIA and the signature was verified.
+INFO: Found adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this adapter
+INFO: DLSS_G is supported on this adapter
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is supported on this adapter
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Microsoft Basic Render Driver, DeviceId=0x8C, Vendor: 5140
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Using adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this system.
+INFO: DLSS-G is supported on this system.
+INFO: PCL is supported on this system.
+INFO: Reflex is supported on this system.
+INFO: DLSS-RR is supported on this system.
+INFO: Initializing...
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.mat0.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat1.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat2.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat3.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: No RTXPT material definition file found 'content.mat4.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 5 materials not found in RTXPT material materials folder 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: RTXPT transmission denoising guides: transmissiveMaterials=0 decompositionEnabled=0 defaultedToTransmission=0 gpuMaterialsUpdated=0
+INFO: RTXPT exact-point scene gate: graphLights=5 neeAtAnalytic=3 zeroRadiusPoints=yes eligible=yes
+INFO: RTXPT small-point policy: realtime=1 aa=2 standaloneRequested=0 standaloneActive=0 rtxdi=0 sharc=0 spp=1 eligible=1 override=default accepted=1
+INFO: RTXPT exact point sum ACTIVE; native light sampler=1 (1=power, 2=NEE-AT)
+INFO: Initializing renderer...
+INFO: Shader compiler: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\Rtxpt\Shaders'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Donut\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Rtxdi\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External'
+INFO: Shader binaries output: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil'
+INFO: Shader compiler: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\Rtxpt\Shaders'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Donut\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Rtxdi\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External'
+INFO: Shader binaries output: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: [BlasPool] 1 blocks, 32.0 MB reserved, 1.0 MB used, over 1 build batches
+INFO: Compiling shaders (16)...
+INFO: Compiling shader 'EDGY_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_055c1d224e6f3944616eedf1.bin'...
+INFO: Compiling shader 'BUILD_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_d2c4bdffdc07487de3c44529.bin'...
+INFO: Compiling shader 'SHARC_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_4d4923dd1b73222ff058538b.bin'...
+INFO: Compiling shader 'REF_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_fb5cfe1b5b3ae83fae4eff3b.bin'...
+INFO: Compiling shader 'FILL_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_9cdd9a977dd9e385091b78ca.bin'...
+INFO: Compiling shader 'REF_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_f561b2006d6394382fa75fce.bin'...
+INFO: Compiling shader 'BUILD_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_6d77eb34a81db3d97037b51e.bin'...
+INFO: Compiling shader 'EDGY_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\TestRaygenPP_589f3861c87d0ebfd39a3a4e.bin'...
+INFO: Compiling shader 'REF_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerSample_f2f932f8e78074abdcfe2500.bin'...
+INFO: Compiling shader 'FILL_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_b435b03d59bda534e5d73270.bin'...
+INFO: Compiling shader 'SHARC_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_937de201b1775f784b8aac39.bin'...
+INFO: Compiling shader 'SHARC_mat0_f011d3e0' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_77c9581c533626417173919e.bin'...
+INFO: Compiling shader 'TESTRG_raygen' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\TestRaygenPP_aec2434707a503913d6fa11c.bin'...
+INFO: Compiling shader 'TESTRG_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_4439187c3978cad93f735a07.bin'...
+INFO: Compiling shader 'BUILD_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_101572c88dc4c8bd5b438753.bin'...
+INFO: Compiling shader 'FILL_Ubershader' file 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil\PathTracerMaterialSpecializations_af6b7428aac968c7c43608cf.bin'...
+INFO: Compiling PSOs (6)...
+INFO: Compiling compute shaders (26)...
+INFO: Compiling compute shader 'EnvLightsBackupPast'...
+INFO: Compiling compute shader 'ClearFeedbackHistory'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP2'...
+INFO: Compiling compute shader 'ComputeProxyBaselineOffsets'...
+INFO: Compiling compute shader 'ProcessFeedbackHistoryP0'...
+INFO: Compiling compute shader 'ResetPastToCurrentHistory'...
+INFO: Compiling compute shader 'ResetLightProxyCounters'...
+INFO: Compiling compute shader 'EnvLiRTXPT HEX BALL READY: same DemoScene / HexPhysics / camera / environment; output=2560x1440, 1 SPP; RuntimeStatus[renderWidth=1485, renderHeight=835, reconstruction=DLSS, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=true, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=5, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false]
+RTXPT actual presentation: PresentationStatus[outputWidth=2560, outputHeight=1440, exposureCompensation=0.0, exposureValue=0.0, bloom=true]
+RTXPT hex-ball: 199.05 native FPS, 5.024 ms/frame; exports=1, transformBatches=184
+RTXPT hex-ball: 230.43 native FPS, 4.340 ms/frame; exports=1, transformBatches=400
+RTXPT hex-ball: 234.84 native FPS, 4.258 ms/frame; exports=1, transformBatches=624
+RTXPT hex-ball: 238.62 native FPS, 4.191 ms/frame; exports=1, transformBatches=851
+RTXPT hex-ball: 240.91 native FPS, 4.151 ms/frame; exports=1, transformBatches=1082
+RTXPT hex-ball: 241.52 native FPS, 4.141 ms/frame; exports=1, transformBatches=1315
+RTXPT hex-ball: 240.67 native FPS, 4.155 ms/frame; exports=1, transformBatches=1548
+RTXPT hex-ball: 242.10 native FPS, 4.131 ms/frame; exports=1, transformBatches=1783
+RTXPT hex-ball: 242.46 native FPS, 4.124 ms/frame; exports=1, transformBatches=2019
+RTXPT hex-ball: 241.74 native FPS, 4.137 ms/frame; exports=1, transformBatches=2254
+RTXPT hex-ball: 239.73 native FPS, 4.171 ms/frame; exports=1, transformBatches=2485
+RTXPT hex-ball: 241.04 native FPS, 4.149 ms/frame; exports=1, transformBatches=2720
+RTXPT hex-ball: 241.39 native FPS, 4.143 ms/frame; exports=1, transformBatches=2954
+RTXPT hex-ball: 241.13 native FPS, 4.147 ms/frame; exports=1, transformBatches=3187
+RTXPT hex-ball: 241.65 native FPS, 4.138 ms/frame; exports=1, transformBatches=3424
+RTXPT hex-ball: 241.94 native FPS, 4.133 ms/frame; exports=1, transformBatches=3661
+RTXPT hex-ball: 241.10 native FPS, 4.148 ms/frame; exports=1, transformBatches=3901
+RTXPT hex-ball: 241.07 native FPS, 4.148 ms/frame; exports=1, transformBatches=4139
+RTXPT hex-ball: 242.12 native FPS, 4.130 ms/frame; exports=1, transformBatches=4377
+RTXPT hex-ball: 240.66 native FPS, 4.155 ms/frame; exports=1, transformBatches=4603
+RTXPT hex-ball: 240.90 native FPS, 4.151 ms/frame; exports=1, transformBatches=4833
+RTXPT hex-ball: 240.26 native FPS, 4.162 ms/frame; exports=1, transformBatches=5064
+RTXPT hex-ball: 240.24 native FPS, 4.162 ms/frame; exports=1, transformBatches=5304
+RTXPT hex-ball: 239.83 native FPS, 4.170 ms/frame; exports=1, transformBatches=5539
+RTXPT hex-ball: 240.91 native FPS, 4.151 ms/frame; exports=1, transformBatches=5776
+RTXPT hex-ball: 240.17 native FPS, 4.164 ms/frame; exports=1, transformBatches=6014
+RTXPT hex-ball: 239.79 native FPS, 4.170 ms/frame; exports=1, transformBatches=6251
+RTXPT hex-ball: 240.23 native FPS, 4.163 ms/frame; exports=1, transformBatches=6492
+RTXPT hex-ball: 239.50 native FPS, 4.175 ms/frame; exports=1, transformBatches=6726
+RTXPT 30s comparison: seconds=30.008505, presented=7168, meanNativeFPS=238.871057, meanOutputFPS=238.871057, final=FrameGenerationEvidence[reported=true, requestedGeneratedFramesPerNativeFrame=0, lastSubmittedGeneratedFramesPerNativeFrame=0, configuredGeneratedFramesPerNativeFrame=0, proxyPresentCalls=7168, stateSamples=7167, stateQueryCalls=7168, totalFramesActuallyPresented=7167, generatedFramesActuallyPresented=0, lastFramesActuallyPresented=1, maximumSupportedGeneratedFramesPerNativeFrame=5, stateQueryFailures=0, generationRequestMisses=0, maximumGeneratedFramesObservedPerSample=0, latestNativeStatus=OptionalInt[0], firstProxyPresentSequence=OptionalLong[0], lastProxyPresentSequence=OptionalLong[7167], lastGeneratedObservationSequence=OptionalLong.empty, latestQuerySucceeded=true, resetEpoch=0], bridge=BridgeTimings[frames=7168, frameNanos=33028626300, sceneExports=1, sceneExportNanos=67487900, transformBatches=6942, transformNanos=61988400]

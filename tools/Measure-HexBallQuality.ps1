@@ -13,6 +13,7 @@ param(
     [switch]$RestirGi,
     [ValidateSet('AUTO','ULTRA_QUALITY','QUALITY','BALANCED','PERFORMANCE','ULTRA_PERFORMANCE','DLAA')][string]$Quality='AUTO',
     [ValidateSet('Upstream','D','E','F')][string]$RrPreset='Upstream',
+    [ValidateSet('Upstream','J','K','M')][string]$SrPreset='Upstream',
     [ValidateSet('none','original-lights','quarter-lights','no-points','no-sun','no-sky','no-environment')][string]$LightingProbe='none',
     [switch]$AllowDirtySource,
     [switch]$DisableTransmissionGuides
@@ -79,6 +80,7 @@ $settings=[ordered]@{
     DisableTransmissionGuides=[bool]$DisableTransmissionGuides
     Quality=$effectiveQuality
     RrPreset=$RrPreset
+    SrPreset=$SrPreset
     LightingProbe=$LightingProbe
 }
 if($PackagedRuntime) {
@@ -94,6 +96,7 @@ $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
 $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 $oldRrPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
+$oldSrPreset=$env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
@@ -102,6 +105,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(switch($LightSampler){'Power'{'power'} 'NeeAt'{'neeat'} default{$null}})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$(if($DisableTransmissionGuides){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$(if($RrPreset -eq 'Upstream'){$null}else{$RrPreset})
+    $env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET=$(if($SrPreset -eq 'Upstream'){$null}else{$SrPreset})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     $runLog=Get-Content -LiteralPath ($prefix+'.log') -Raw
@@ -127,4 +131,5 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$oldSampler
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$oldTransmissionGuides
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$oldRrPreset
+    $env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET=$oldSrPreset
 }

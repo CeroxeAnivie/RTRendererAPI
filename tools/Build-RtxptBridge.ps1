@@ -22,6 +22,13 @@ function Patch-Once([string]$Relative,[string]$Anchor,[string]$Replacement,[stri
     [IO.File]::WriteAllText($path,$text.Replace($Anchor,$Replacement),$utf8)
 }
 # Bound nested shader compilers as well as the top-level MSBuild process.
+Patch-Once 'Rtxpt/SampleUI.h' '    //float                               DLSSSharpness = 0.f;' @'
+    SI::DLSSPreset                      HostDLSSSRPreset = SI::DLSSPreset::eDefault; // RTR explicit upstream SR model
+    //float                               DLSSSharpness = 0.f;
+'@ 'RTR explicit upstream SR model'
+Patch-Once 'Rtxpt/Sample.cpp' '                dlssOptions.preset = StreamlineInterface::DLSSPreset::eDefault;' @'
+                dlssOptions.preset = m_ui.HostDLSSSRPreset; // RTR forward upstream SR model without changing resolution
+'@ 'RTR forward upstream SR model'
 Patch-Once 'External/Donut/compileshaders.cmake' 'set(compilerCommand ${SHADERMAKE_PATH}' 'set(compilerCommand ${SHADERMAKE_PATH} --jobs 1' '${SHADERMAKE_PATH} --jobs 1'
 Patch-Once 'External/Nrd/CMakeLists.txt' 'set(SHADERMAKE_GENERAL_ARGS' "set(SHADERMAKE_GENERAL_ARGS --jobs 1" 'SHADERMAKE_GENERAL_ARGS --jobs 1'
 # Only expose host control and runtime file roots. Rendering, scheduling and shaders stay upstream.
