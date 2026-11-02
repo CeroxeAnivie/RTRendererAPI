@@ -468,7 +468,10 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerDenoisingLayersHandleHit.hlsli' '
 '@ 'RTR old first-interface split in native queue'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        NEEBSDFMISInfo misInfo = NEEBSDFMISInfo::Unpack16bit(path.GetPackedMISInfo());' @'
         #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
-        environmentEmission=ToLpRadiance(RtrLegacySky(rayDir,workingContext.PtConsts)); // RTR old horizon and solar sky
+        float horizon=.35+.65*saturate(rayDir.y*.5+.5);
+        RtrLegacyLight sun=t_RtrLegacyLights[0];
+        float disk=smoothstep(.9995,.9999,dot(normalize(rayDir),-normalize(sun.DirectionRange.xyz)));
+        environmentEmission=ToLpRadiance(workingContext.PtConsts.RtrLegacySky.rgb*horizon+sun.ColorIntensity.rgb*sun.ColorIntensity.a*disk); // RTR old horizon and solar sky
         #else
         NEEBSDFMISInfo misInfo = NEEBSDFMISInfo::Unpack16bit(path.GetPackedMISInfo());
 '@ 'RTR old horizon and solar sky'
