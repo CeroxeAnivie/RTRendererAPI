@@ -132,7 +132,7 @@ PBR 终端复用原生灯光连接，按当前介质栈计算相机和灯光两�
 
 ## 2026-10-30 确定同步根因：三处提交没有等待 CUDA
 
-已定位并修复 `CudaSharedRayFrame` 的三处 legacy `VkSubmitInfo`：paired 中间提交、paired 最终 acquire 和普通 acquire 均漏设 `waitSemaphoreCount(1)`。实际使用的 LWJGL 3.4.3 中，`pWaitSemaphores` 与 `pWaitDstStageMask` 不会设置这个独立字段；calloc 后数量为零，Vulkan 实际忽略了 CUDA 等待依赖。此前 binary semaphore 与取消 ownership 的诊断实验均已撤回，保留的是这三处等待数量修正，以及 CUDA 参数结构清零。
+已定位并修复 `CudaSharedRayFrame` 的三处 `VkSubmitInfo`：paired 中间提交、paired 最终 acquire 和普通 acquire 均漏设 `waitSemaphoreCount(1)`。实际使用的 LWJGL 3.4.3 中，`pWaitSemaphores` 与 `pWaitDstStageMask` 不会设置这个独立字段；calloc 后数量为零，Vulkan 实际忽略了 CUDA 等待依赖。此前 binary semaphore 与取消 ownership 的诊断实验均已撤回，保留的是这三处等待数量修正，以及 CUDA 参数结构清零。
 
 无中间主机等待的固定图案及共享射线测试已通过：两 slot、两生命周期、closest/occlusion、epoch、全数组、嵌套交换与异常清理均通过；先前失败的 `thin-optical8-SPP1` 用例也通过。队列提交入口另加零分配 count/pointer 一致性检查及 CPU 防回归测试，避免同类遗漏静默发生。这证明了本轮旧值问题的实际同步错误，不代表全 API、全部介质组合或剩余性能差距都已闭合。
 

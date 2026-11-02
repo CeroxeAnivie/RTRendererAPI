@@ -140,9 +140,13 @@ final class RenderStats {
     }
 
     void observeGpuTiming(RendererDiagnostics.FrameGpuTiming timing) {
-        if (!timing.enabled() || timing.completedSamples() == 0L) return;
+        if (!timing.enabled() || timing.completedSamples() == 0L) {
+            averageTraceMillis = 0.0;
+            averageGpuMillis = 0.0;
+            return;
+        }
         // GPUSceneFrame timing spans TLAS build, trace, post-trace and publication. Keep the
-        // legacy trace field populated for API compatibility, but expose this value to users only
+        // trace field populated for API compatibility, but expose this value to users only
         // as full GPU-frame capacity until true stage checkpoints are added.
         averageTraceMillis = timing.averageTraceNanos() / 1_000_000.0;
         averageGpuMillis = timing.averageTotalNanos() / 1_000_000.0;

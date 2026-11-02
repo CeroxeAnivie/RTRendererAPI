@@ -99,7 +99,7 @@ final class VulkanGpuSceneAbi {
     static final int FRAME_RECONSTRUCTION_NEAR_PLANE_WORD = 349;
     static final int FRAME_RECONSTRUCTION_FAR_PLANE_WORD = 350;
     static final int FRAME_RECONSTRUCTION_PROJECTION_KNOWN_WORD = 351;
-    /** Exact projection tail; the legacy 0..351 prefix remains byte-for-byte stable. */
+    /** Exact projection tail; the existing 0..351 prefix remains byte-for-byte stable. */
     static final int FRAME_PROJECTION_PATH_WORD = 352;
     static final int FRAME_EXACT_VIEWPORT_WIDTH_WORD = 353;
     static final int FRAME_EXACT_VIEWPORT_HEIGHT_WORD = 354;

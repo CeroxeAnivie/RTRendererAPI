@@ -1,8 +1,8 @@
 #pragma once
 #include <cstring>
 
-// Native GPU-only port of the legacy route's bounded pre-SR history.
-class RtrLegacySrHistory {
+// Native GPU-only port of the Vulkan route's bounded pre-SR history.
+class RtrPreSrHistory {
     nvrhi::TextureHandle colors[2], geometry[2];
     nvrhi::BindingSetHandle bindings[2];
     nvrhi::BindingLayoutHandle layout;
@@ -20,12 +20,12 @@ public:
             desc.bindings={nvrhi::BindingLayoutItem::Texture_SRV(0),nvrhi::BindingLayoutItem::Texture_SRV(1),
                 nvrhi::BindingLayoutItem::Texture_UAV(0),nvrhi::BindingLayoutItem::Texture_UAV(1)};
             layout=device->createBindingLayout(desc);
-            auto shader=factory.CreateShader("app/ProcessingPasses/RtrLegacySrHistory.hlsl","main",nullptr,nvrhi::ShaderType::Compute);
-            if(!shader)throw std::runtime_error("Legacy SR history shader unavailable");
+            auto shader=factory.CreateShader("app/ProcessingPasses/RtrPreSrHistory.hlsl","main",nullptr,nvrhi::ShaderType::Compute);
+            if(!shader)throw std::runtime_error("Pre-SR history shader unavailable");
             nvrhi::ComputePipelineDesc pso;
             pso.bindingLayouts={globalLayout,layout};pso.CS=shader;
             pipeline=device->createComputePipeline(pso);
-            if(!pipeline)throw std::runtime_error("Legacy SR history pipeline unavailable");
+            if(!pipeline)throw std::runtime_error("Pre-SR history pipeline unavailable");
         }
         const auto& output=targets.OutputColor->getDesc();
         if(width!=output.width || height!=output.height) {
@@ -34,8 +34,8 @@ public:
                 bindings[i]=nullptr;
                 auto desc=nvrhi::TextureDesc().setWidth(width).setHeight(height).setFormat(nvrhi::Format::RGBA16_FLOAT)
                     .setIsUAV(true).setInitialState(nvrhi::ResourceStates::ShaderResource).setKeepInitialState(true);
-                desc.debugName="LegacySrHistoryColor";colors[i]=device->createTexture(desc);
-                desc.debugName="LegacySrHistoryGeometry";geometry[i]=device->createTexture(desc);
+                desc.debugName="PreSrHistoryColor";colors[i]=device->createTexture(desc);
+                desc.debugName="PreSrHistoryGeometry";geometry[i]=device->createTexture(desc);
             }
             for(uint32_t i=0;i<2;++i) {
                 nvrhi::BindingSetDesc desc;
@@ -45,7 +45,7 @@ public:
                     nvrhi::BindingSetItem::Texture_UAV(1,geometry[i])};
                 bindings[i]=device->createBindingSet(desc,layout);
             }
-            donut::log::info("RTXPT legacy pre-SR history ACTIVE %ux%u maxFrames=8 GPU-only",width,height);
+            donut::log::info("RTXPT pre-SR history ACTIVE %ux%u maxFrames=8 GPU-only",width,height);
         }
         SampleMiniConstants constants={};
         constants.params.x=uint32_t(valid&&!reset);

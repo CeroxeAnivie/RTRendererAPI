@@ -932,9 +932,9 @@ tasks.register("verifyRepositoryNeutrality") {
 
     doLast {
         val forbidden = listOf(
-            "legacy package" to Regex("(?i)\\b${"mc" + "vulkanrt"}\\b"),
-            "legacy product" to Regex("(?i)\\b${"mine" + "craft"}\\b"),
-            "legacy abbreviation" to Regex("(?<![A-Za-z0-9_])${"M" + "C"}(?![A-Za-z0-9_])"),
+            "host-specific package" to Regex("(?i)\\b${"mc" + "vulkanrt"}\\b"),
+            "host-specific product" to Regex("(?i)\\b${"mine" + "craft"}\\b"),
+            "host-specific abbreviation" to Regex("(?<![A-Za-z0-9_])${"M" + "C"}(?![A-Za-z0-9_])"),
             "external engine" to Regex("(?i)\\b${"un" + "real"}(?:\\s+engine)?\\b"),
             "external engine version" to Regex("(?i)\\b${"ue" + "5"}\\b")
         )

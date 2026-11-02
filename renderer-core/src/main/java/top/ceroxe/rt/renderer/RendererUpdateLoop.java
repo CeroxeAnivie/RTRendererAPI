@@ -629,7 +629,7 @@ public final class RendererUpdateLoop implements AutoCloseable {
     }
 
     /**
-     * Accepts one legacy dynamic model instance.
+     * Accepts one procedural dynamic model instance.
      *
      * @param instance observed model instance
      */

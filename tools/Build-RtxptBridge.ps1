@@ -399,41 +399,41 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidate
             }
             #endif
 '@ 'RTR directional samples carry directions'
-# Match the legacy route's summed continuous surface response without deleting
-# Full legacy lighting-input parity uses the same scene values at every receiver.
-foreach($header in @('RtrLegacyLightingInputs.hlsli','RtrLegacyDirect.hlsli','RtrLegacyTransportTrace.hlsli','RtrLegacyReplayCache.hlsli')) {
+# Match the Vulkan route's summed continuous surface response without deleting
+# Full scene lighting-input parity uses the same scene values at every receiver.
+foreach($header in @('RtrSceneLightingInputs.hlsli','RtrSceneDirect.hlsli','RtrSceneTransportTrace.hlsli','RtrSceneReplayCache.hlsli')) {
     $headerText=[IO.File]::ReadAllText((Join-Path $repo ('renderer-rtxpt/src/main/cpp/'+$header)))
-    if($header -eq 'RtrLegacyTransportTrace.hlsli' -and $OpticalTransportTrace) {
-        $headerText="#define RTR_LEGACY_TRANSPORT_TRACE 1 // explicitly enabled by configure`r`n"+$headerText
+    if($header -eq 'RtrSceneTransportTrace.hlsli' -and $OpticalTransportTrace) {
+        $headerText="#define RTR_SCENE_TRANSPORT_TRACE 1 // explicitly enabled by configure`r`n"+$headerText
     }
-    if($header -eq 'RtrLegacyTransportTrace.hlsli' -and $OpticalWorkTrace) {
-        $headerText="#define RTR_LEGACY_WORK_TRACE 1`r`n"+$headerText
+    if($header -eq 'RtrSceneTransportTrace.hlsli' -and $OpticalWorkTrace) {
+        $headerText="#define RTR_SCENE_WORK_TRACE 1`r`n"+$headerText
     }
-    if($header -eq 'RtrLegacyTransportTrace.hlsli' -and $OpticalBranchSeedXor -ne 0) {
+    if($header -eq 'RtrSceneTransportTrace.hlsli' -and $OpticalBranchSeedXor -ne 0) {
         if(!$OpticalTransportTrace){throw 'Optical branch seed control requires explicit transport diagnostics'}
-        $headerText="#define RTR_LEGACY_OPTICAL_BRANCH_SEED_XOR $($OpticalBranchSeedXor)u // diagnostic control only`r`n"+$headerText
+        $headerText="#define RTR_SCENE_OPTICAL_BRANCH_SEED_XOR $($OpticalBranchSeedXor)u // diagnostic control only`r`n"+$headerText
     }
     [IO.File]::WriteAllText((Join-Path $sdk ('Rtxpt/Shaders/PathTracer/'+$header)),$headerText,$utf8)
 }
-# Legacy lighting performs cross-material queries inside a receiver shader. Do
+# Scene lighting performs cross-material queries inside a receiver shader. Do
 # not let future material-specific compile constants discard another hit's data.
 Patch-Once 'Rtxpt/Shaders/PathTracer/Config.h' '#define __CONFIG_H__' @'
 #define __CONFIG_H__
-#if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+#if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
 #undef RTXPT_MATERIAL_HAS_TRANSMISSION
 #undef RTXPT_MATERIAL_USE_NORMAL_TEXTURE
 #endif // RTR cross-material lighting queries require runtime material data
 '@ 'RTR cross-material lighting queries require runtime material data'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerShared.h' '    PathTracerCameraData camera;' @'
-    float4  RtrLegacyAmbient;
-    float4  RtrLegacySky;
-    uint    RtrLegacyLightCount;
-    uint3   RtrLegacyPadding; // RTR complete legacy lighting inputs
+    float4  RtrSceneAmbient;
+    float4  RtrSceneSky;
+    uint    RtrSceneLightCount;
+    uint3   RtrScenePadding; // RTR complete scene lighting inputs
     PathTracerCameraData camera;
-'@ 'RTR complete legacy lighting inputs'
+'@ 'RTR complete scene lighting inputs'
 Patch-Once 'Rtxpt/Shaders/Bindings/ShaderResourceBindings.hlsli' '#endif // #ifndef __SHADER_RESOURCE_BINDINGS_HLSLI__' @'
-struct RtrLegacyLight { float4 PositionType; float4 DirectionRange; float4 ColorIntensity; float4 ConeShadow; };
-StructuredBuffer<RtrLegacyLight> t_RtrLegacyLights : register(t96); // RTR original API light records
+struct RtrSceneLight { float4 PositionType; float4 DirectionRange; float4 ColorIntensity; float4 ConeShadow; };
+StructuredBuffer<RtrSceneLight> t_RtrSceneLights : register(t96); // RTR original API light records
 #endif // #ifndef __SHADER_RESOURCE_BINDINGS_HLSLI__
 '@ 'RTR original API light records'
 Patch-Once 'Rtxpt/Sample.cpp' '    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(95));' @'
@@ -445,32 +445,32 @@ Patch-Once 'Rtxpt/Sample.cpp' '        bindingSetDesc.bindings.push_back(nvrhi::
         bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(95, m_CommonPasses->m_BlackTexture));
 '@ 'RTR original lighting buffer placeholder'
 Patch-Once 'Rtxpt/Shaders/PathTracer/BSDFs/StandardBSDF.hlsli' '#endif // __STANDARD_BSDF_HLSLI__' @'
-#if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
-#include "../RtrLegacyLightingInputs.hlsli" // RTR legacy sampling and sky input
+#if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
+#include "../RtrSceneLightingInputs.hlsli" // RTR scene sampling and sky input
 #endif
 #endif // __STANDARD_BSDF_HLSLI__
-'@ 'RTR legacy sampling and sky input'
+'@ 'RTR scene sampling and sky input'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '#include "PathTracerTypes.hlsli"' @'
 #include "PathTracerTypes.hlsli"
-#if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
-#include "RtrLegacyTransportTrace.hlsli" // RTR shared trace in raygen and hit shaders
+#if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
+#include "RtrSceneTransportTrace.hlsli" // RTR shared trace in raygen and hit shaders
 #endif
 '@ 'RTR shared trace in raygen and hit shaders'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    inline NEEResult HandleNEE(const PathState preScatterPath,' @'
-    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
-    #include "RtrLegacyDirect.hlsli" // RTR legacy direct shading at every receiver
+    #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
+    #include "RtrSceneDirect.hlsli" // RTR scene direct shading at every receiver
     #endif
     inline NEEResult HandleNEE(const PathState preScatterPath,
-'@ 'RTR legacy direct shading at every receiver'
+'@ 'RTR scene direct shading at every receiver'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        LightSampler lightSampler = Bridge::CreateLightSampler( preScatterPath.GetPixelPos(), preScatterPath.rayCone.getWidth(), preScatterPath.GetSceneLength() );' @'
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
-        return RtrLegacyDirect(preScatterPath,shadingData,bsdf,workingContext); // RTR replace complete stochastic light input
+        #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
+        return RtrSceneDirect(preScatterPath,shadingData,bsdf,workingContext); // RTR replace complete stochastic light input
         #endif
         LightSampler lightSampler = Bridge::CreateLightSampler( preScatterPath.GetPixelPos(), preScatterPath.rayCone.getWidth(), preScatterPath.GetSceneLength() );
 '@ 'RTR replace complete stochastic light input'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        // only ActiveBSDF::cRandomNumberCountForSampling are actually used;' @'
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
-        BSDFSample legacySample=(BSDFSample)0;bool legacyValid=false;
+        #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
+        BSDFSample sceneSample=(BSDFSample)0;bool sceneValid=false;
         if(bsdf.data.SpecularTransmission()>0)
         {
             #if PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
@@ -480,49 +480,49 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        // only
                 // PSD queues alone contain guides, not completed lighting paths.
                 path.setCounter((PackedCounters)3,path.getCounter((PackedCounters)3)|4u);
                 DeltaLobe lobes[cMaxDeltaLobes];uint count;float nonDeltaPart;
-                RtrLegacyFirstInterface(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,g_MiniConst.params.x,
+                RtrSceneFirstInterface(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,g_MiniConst.params.x,
                     uint(max(1.0,rcp(workingContext.PtConsts.invSubSampleCount))),lobes,count,nonDeltaPart);
                 uint selected=2u-(path.getCounter((PackedCounters)3)&3u);
-                legacySample=(BSDFSample)0;legacySample.wo=lobes[selected].dir;legacySample.weight=lobes[selected].thp;
-                legacySample.lobe=(uint)(selected==0?LobeType::DeltaTransmission:LobeType::DeltaReflection);
-                legacySample.lobeP=lobes[selected].probability;
-                legacyValid=any(legacySample.weight>0);
+                sceneSample=(BSDFSample)0;sceneSample.wo=lobes[selected].dir;sceneSample.weight=lobes[selected].thp;
+                sceneSample.lobe=(uint)(selected==0?LobeType::DeltaTransmission:LobeType::DeltaReflection);
+                sceneSample.lobeP=lobes[selected].probability;
+                sceneValid=any(sceneSample.weight>0);
             }
             else
             #endif
-                legacyValid=RtrLegacyOpticalSample(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,
-                    path.getVertexIndex(),max(1u,path.getCounter((PackedCounters)3)&3u),legacySample);
+                sceneValid=RtrSceneOpticalSample(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,
+                    path.getVertexIndex(),max(1u,path.getCounter((PackedCounters)3)&3u),sceneSample);
         }
         else if(path.getVertexIndex()==1)
-            legacyValid=RtrLegacyMetalSample(shadingData,bsdf.data,path.GetPixelPos(),g_MiniConst.params.x,
-                uint(max(1.0,rcp(workingContext.PtConsts.invSubSampleCount))),legacySample);
-        return legacyValid && GenerateScatterRay(legacySample,shadingData,bsdf,path,workingContext); // RTR legacy optical continuation
+            sceneValid=RtrSceneMetalSample(shadingData,bsdf.data,path.GetPixelPos(),g_MiniConst.params.x,
+                uint(max(1.0,rcp(workingContext.PtConsts.invSubSampleCount))),sceneSample);
+        return sceneValid && GenerateScatterRay(sceneSample,shadingData,bsdf,path,workingContext); // RTR scene optical continuation
         #endif
         // only ActiveBSDF::cRandomNumberCountForSampling are actually used;
-'@ 'RTR legacy optical continuation'
-Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        return legacyValid && GenerateScatterRay(legacySample,shadingData,bsdf,path,workingContext); // RTR legacy optical continuation' @'
-        #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
-        if(RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && ((path.getCounter((PackedCounters)3)&4u)!=0 || bsdf.data.SpecularTransmission()>0))
+'@ 'RTR scene optical continuation'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        return sceneValid && GenerateScatterRay(sceneSample,shadingData,bsdf,path,workingContext); // RTR scene optical continuation' @'
+        #if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE
+        if(RtrSceneTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && ((path.getCounter((PackedCounters)3)&4u)!=0 || bsdf.data.SpecularTransmission()>0))
         {
-            RtrLegacyTracePrint("scatter",100u,RtrLegacyTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex),
-                float4(shadingData.MaterialID(),shadingData.frontFacing,shadingData.GetEta(),legacyValid),path.GetThp(),shadingData.N,legacySample.wo,legacySample.weight,legacySample.lobe);
+            RtrSceneTracePrint("scatter",100u,RtrSceneTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex),
+                float4(shadingData.MaterialID(),shadingData.frontFacing,shadingData.GetEta(),sceneValid),path.GetThp(),shadingData.N,sceneSample.wo,sceneSample.weight,sceneSample.lobe);
         }
         #endif // RTR optional optical transport trace
-        return legacyValid && GenerateScatterRay(legacySample,shadingData,bsdf,path,workingContext); // RTR legacy optical continuation
+        return sceneValid && GenerateScatterRay(sceneSample,shadingData,bsdf,path,workingContext); // RTR scene optical continuation
 '@ 'RTR optional optical transport trace'
 $rtrTracePath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli'
 $rtrTraceText=[IO.File]::ReadAllText($rtrTracePath)
-$rtrTraceText=$rtrTraceText.Replace('uint4(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex())','RtrLegacyTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex)')
-$rtrTraceText=$rtrTraceText.Replace('BSDFSample legacySample;bool legacyValid=false;','BSDFSample legacySample=(BSDFSample)0;bool legacyValid=false;')
+$rtrTraceText=$rtrTraceText.Replace('uint4(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex())','RtrSceneTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex)')
+$rtrTraceText=$rtrTraceText.Replace('BSDFSample sceneSample;bool sceneValid=false;','BSDFSample sceneSample=(BSDFSample)0;bool sceneValid=false;')
 $rtrTraceText=$rtrTraceText.Replace('(path.getCounter((PackedCounters)3)>0 || bsdf.data.SpecularTransmission()>0)', '((path.getCounter((PackedCounters)3)&4u)!=0 || bsdf.data.SpecularTransmission()>0)')
-$rtrTraceText=$rtrTraceText.Replace('DebugPrint("RTR_TRANSPORT','RtrLegacyTracePrint("RTR_TRANSPORT')
-$rtrTraceText=[regex]::Replace($rtrTraceText,'(?s)            RtrLegacyTracePrint\("RTR_TRANSPORT scatter.*?legacySample\.lobe\);',@'
-            RtrLegacyTracePrint("scatter",100u,RtrLegacyTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex),
-                float4(shadingData.MaterialID(),shadingData.frontFacing,shadingData.GetEta(),legacyValid),path.GetThp(),shadingData.N,legacySample.wo,legacySample.weight,legacySample.lobe);
+$rtrTraceText=$rtrTraceText.Replace('DebugPrint("RTR_TRANSPORT','RtrSceneTracePrint("RTR_TRANSPORT')
+$rtrTraceText=[regex]::Replace($rtrTraceText,'(?s)            RtrSceneTracePrint\("RTR_TRANSPORT scatter.*?sceneSample\.lobe\);',@'
+            RtrSceneTracePrint("scatter",100u,RtrSceneTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex),
+                float4(shadingData.MaterialID(),shadingData.frontFacing,shadingData.GetEta(),sceneValid),path.GetThp(),shadingData.N,sceneSample.wo,sceneSample.weight,sceneSample.lobe);
 '@)
 [IO.File]::WriteAllText($rtrTracePath,$rtrTraceText,$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerDenoisingLayersHandleHit.hlsli' '            surface.bsdf.evalDeltaLobes(surface.shadingData, deltaLobes, deltaLobeCount, nonDeltaPart);' @'
-            #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+            #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
             if(vertexIndex==1 && surface.bsdf.data.SpecularTransmission()>0)
             {
                 deltaLobeCount=0;nonDeltaPart=1; // RTR first interface stays the fill starting point
@@ -536,7 +536,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerDenoisingLayersHandleHit.hlsli' '
 $rtrLayerPath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracerDenoisingLayersHandleHit.hlsli'
 $rtrLayerText=[IO.File]::ReadAllText($rtrLayerPath)
 $rtrLayerBlock=@'
-            #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+            #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
             if(vertexIndex==1 && surface.bsdf.data.SpecularTransmission()>0)
             {
                 deltaLobeCount=0;nonDeltaPart=1; // RTR first interface stays the fill starting point
@@ -550,49 +550,49 @@ while($rtrLayerText.Contains($rtrLayerBlock+$rtrLayerBlock)) {
 }
 [IO.File]::WriteAllText($rtrLayerPath,$rtrLayerText,$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '    workingContext.DenoisingLayers.CommitDenoiserRadiance(path);' @'
-    #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
+    #if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE
     float3 rtrBeforeCommit=0;
-    bool rtrTraceCommit=RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0;
+    bool rtrTraceCommit=RtrSceneTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0;
     if(rtrTraceCommit)rtrBeforeCommit=workingContext.DenoisingLayers.GetAllRadiance(path.GetPixelPos());
     #endif
     workingContext.DenoisingLayers.CommitDenoiserRadiance(path);
-    #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
+    #if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE
     if(rtrTraceCommit)
-        RtrLegacyTracePrint("commit",102u,RtrLegacyTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex),
+        RtrSceneTracePrint("commit",102u,RtrSceneTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex),
             path.getDenoisingLayerIndex(),rtrBeforeCommit,workingContext.DenoisingLayers.GetAllRadiance(path.GetPixelPos()));
     #endif // RTR optional final optical radiance trace
 '@ 'RTR optional final optical radiance trace'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '                path.SetL( L + newL );' @'
                 path.SetL( L + newL );
-                #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
-                if(RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
-                    RtrLegacyTracePrint("accumulate",107u,RtrLegacyTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex),
+                #if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE
+                if(RtrSceneTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
+                    RtrSceneTracePrint("accumulate",107u,RtrSceneTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex),
                         float4(radiance,specularRadianceAvg),L,newL,path.GetL(),uint2(path.flagsAndVertexIndex,path.packedCounters));
                 #endif // RTR optical contribution before and after accumulation
 '@ 'RTR optical contribution before and after accumulation'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        SharcHandleMiss(environmentEmission);' @'
-        #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
-        if(RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
-            RtrLegacyTracePrint("miss",108u,RtrLegacyTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex),
+        #if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE
+        if(RtrSceneTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
+            RtrSceneTracePrint("miss",108u,RtrSceneTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex),
                 rayDir,path.GetThp(),float3(environmentEmission),path.GetL(),uint2(path.flagsAndVertexIndex,path.packedCounters));
         #endif // RTR optical miss emission evidence
         SharcHandleMiss(environmentEmission);
 '@ 'RTR optical miss emission evidence'
 Patch-Once 'Rtxpt/ProcessingPasses/PostProcess.hlsl' '#include "../Shaders/Libraries/ShaderDebug/ShaderDebug.hlsl"' @'
 #include "../Shaders/Libraries/ShaderDebug/ShaderDebug.hlsl"
-#include "../Shaders/PathTracer/RtrLegacyTransportTrace.hlsli" // RTR final merge trace
+#include "../Shaders/PathTracer/RtrSceneTransportTrace.hlsli" // RTR final merge trace
 '@ 'RTR final merge trace'
 Patch-Once 'Rtxpt/ProcessingPasses/PostProcess.hlsl' '    u_OutputColor[pixelPos] = float4(denoisingLayers.GetAllRadiance(pixelPos), 1.0);' @'
     u_OutputColor[pixelPos] = float4(denoisingLayers.GetAllRadiance(pixelPos), 1.0);
-    #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
-    if(g_Const.ptConsts.RtrLegacyLightCount>0 && RtrLegacyTracePixel(pixelPos,g_Const.ptConsts.frameIndex))
-        RtrLegacyTracePrint("merge",109u,RtrLegacyTraceKey(pixelPos,0,0,g_Const.ptConsts.frameIndex),
+    #if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE
+    if(g_Const.ptConsts.RtrSceneLightCount>0 && RtrSceneTracePixel(pixelPos,g_Const.ptConsts.frameIndex))
+        RtrSceneTracePrint("merge",109u,RtrSceneTraceKey(pixelPos,0,0,g_Const.ptConsts.frameIndex),
             denoisingLayers.GetAllRadiance(pixelPos),u_OutputColor[pixelPos],g_Const.ptConsts.invSubSampleCount);
     #endif // RTR final radiance at SR input
 '@ 'RTR final radiance at SR input'
 Patch-Once 'Rtxpt/ProcessingPasses/PostProcess.hlsl' '    #endif // RTR final radiance at SR input' @'
-    if(g_Const.ptConsts.RtrLegacyLightCount>0 && RtrLegacyTracePixel(pixelPos,g_Const.ptConsts.frameIndex))
-        RtrLegacyTracePrint("reconstruction-input",113u,RtrLegacyTraceKey(pixelPos,0,0,g_Const.ptConsts.frameIndex),
+    if(g_Const.ptConsts.RtrSceneLightCount>0 && RtrSceneTracePixel(pixelPos,g_Const.ptConsts.frameIndex))
+        RtrSceneTracePrint("reconstruction-input",113u,RtrSceneTraceKey(pixelPos,0,0,g_Const.ptConsts.frameIndex),
             float4(u_Depth[pixelPos],denoisingLayers.LoadFirstHitRayLength(pixelPos),denoisingLayers.LoadDominantIndex(pixelPos),g_Const.ptConsts.camera.ApertureRadius),
             u_MotionVectors[pixelPos],float4(g_Const.ptConsts.camera.Jitter,g_Const.ptConsts.perPixelJitterAAScale,g_Const.ptConsts.invSubSampleCount),
             cameraRay.dir,u_OutputColor[pixelPos]); // RTR optical reconstruction input evidence
@@ -600,9 +600,9 @@ Patch-Once 'Rtxpt/ProcessingPasses/PostProcess.hlsl' '    #endif // RTR final ra
 '@ 'RTR optical reconstruction input evidence'
 Patch-Once 'Rtxpt/ProcessingPasses/PostProcess.hlsl' '    u_OutputColor[pixelPos] = float4(denoisingLayers.GetAllRadiance(pixelPos), 1.0);' @'
     u_OutputColor[pixelPos] = float4(denoisingLayers.GetAllRadiance(pixelPos), 1.0);
-    #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
+    #if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE
     if(all(pixelPos==uint2(0,0)))
-        RtrLegacyTracePrint("merge-stage",110u,uint4(g_Const.ptConsts.frameIndex,g_Const.ptConsts.imageWidth,g_Const.ptConsts.imageHeight,g_Const.ptConsts.RtrLegacyLightCount),
+        RtrSceneTracePrint("merge-stage",110u,uint4(g_Const.ptConsts.frameIndex,g_Const.ptConsts.imageWidth,g_Const.ptConsts.imageHeight,g_Const.ptConsts.RtrSceneLightCount),
             u_OutputColor[pixelPos],g_Const.ptConsts.invSubSampleCount);
     #endif // RTR verify final merge invocation and constants
 '@ 'RTR verify final merge invocation and constants'
@@ -636,23 +636,23 @@ Patch-Once 'Rtxpt/Sample.cpp' '        PostProcessAA(framebuffer, needNewPasses 
 '@ 'RTR include final merge records in readback'
 $rtrCommitPath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli'
 $rtrCommitText=[IO.File]::ReadAllText($rtrCommitPath)
-$rtrCommitText=$rtrCommitText.Replace('#if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE', '#if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD')
-$rtrCommitText=$rtrCommitText.Replace('uint4(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex())','RtrLegacyTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex)')
+$rtrCommitText=$rtrCommitText.Replace('#if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE', '#if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD')
+$rtrCommitText=$rtrCommitText.Replace('uint4(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex())','RtrSceneTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex)')
 [IO.File]::WriteAllText($rtrCommitPath,$rtrCommitText,$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerTypes.hlsli' '        RWTexture2D<float4>     OutputColor;' @'
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
-        uint RtrLegacyFirstBranch; // RTR actual first-interface branch selector
+        #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
+        uint RtrSceneFirstBranch; // RTR actual first-interface branch selector
         #endif
         RWTexture2D<float4>     OutputColor;
 '@ 'RTR actual first-interface branch selector'
 Patch-Once 'Rtxpt/Shaders/PathTracerBridgeDonut.hlsli' '    ret.PtConsts = g_Const.ptConsts;' @'
-    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
-    ret.RtrLegacyFirstBranch=0; // RTR default branch context
+    #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
+    ret.RtrSceneFirstBranch=0; // RTR default branch context
     #endif
     ret.PtConsts = g_Const.ptConsts;
 '@ 'RTR default branch context'
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    //float3 lastOrigin = float3(1e30f,1e30f,1e30f);' @'
-    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+    #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
     [loop] for(uint rtrFirstBranch=0;rtrFirstBranch<2;rtrFirstBranch++) // RTR trace both real dielectric branches
     {
     #endif
@@ -660,13 +660,13 @@ Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    //float3 lastOrigin = floa
 '@ 'RTR exact first two dielectric junctions'
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    PathTracer::WorkingContext workingContext = Bridge::GetWorkingContext();' @'
     PathTracer::WorkingContext workingContext = Bridge::GetWorkingContext();
-    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+    #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
     path.setCounter((PackedCounters)3,rtrFirstBranch+1u); // RTR first-interface selector in ray payload
     #endif
 '@ 'RTR two-junction selectors in ray payload'
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    PathTracer::CommitPixel( path, workingContext );' @'
     PathTracer::CommitPixel( path, workingContext );
-    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+    #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
     // Counter 3 is unused upstream. Only first-interface dielectrics set it;
     // opaque pixels keep their single path and never repeat direct lighting.
     if((path.getCounter((PackedCounters)3)&4u)==0)break;
@@ -674,7 +674,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    PathTracer::CommitPixel( p
     #endif
 '@ 'RTR first-interface paths committed and summed'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        if (!hasSharcCachedRadiance && any(surfaceEmission>0))' @'
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+        #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
         if(path.getVertexIndex()==1 && (path.getCounter((PackedCounters)3)&3u)==2u)surfaceEmission=0; // RTR shared primary emission once
         #endif
         if (!hasSharcCachedRadiance && any(surfaceEmission>0))
@@ -683,13 +683,13 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        if (!ha
 # only PathPayload survives SER_INVOKE_HIT/TraceRay shader boundaries.
 $rtrPayloadMigrations=@{
     'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli'=@(
-        @('path.setCounter((PackedCounters)3,workingContext.RtrLegacyFirstBranch+1);','path.setCounter((PackedCounters)3,path.getCounter((PackedCounters)3)|4u);'),
-        @('uint selected=1-workingContext.RtrLegacyFirstBranch;','uint selected=2u-(path.getCounter((PackedCounters)3)&3u);'),
-        @('max(1u,path.getCounter((PackedCounters)3)),legacySample);','max(1u,path.getCounter((PackedCounters)3)&3u),legacySample);'),
-        @('workingContext.RtrLegacyFirstBranch>0','(path.getCounter((PackedCounters)3)&3u)==2u'),
-        @('uint4(path.GetPixelPos(),workingContext.RtrLegacyFirstBranch,path.getVertexIndex())','RtrLegacyTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex)'))
+        @('path.setCounter((PackedCounters)3,workingContext.RtrSceneFirstBranch+1);','path.setCounter((PackedCounters)3,path.getCounter((PackedCounters)3)|4u);'),
+        @('uint selected=1-workingContext.RtrSceneFirstBranch;','uint selected=2u-(path.getCounter((PackedCounters)3)&3u);'),
+        @('max(1u,path.getCounter((PackedCounters)3)),sceneSample);','max(1u,path.getCounter((PackedCounters)3)&3u),sceneSample);'),
+        @('workingContext.RtrSceneFirstBranch>0','(path.getCounter((PackedCounters)3)&3u)==2u'),
+        @('uint4(path.GetPixelPos(),workingContext.RtrSceneFirstBranch,path.getVertexIndex())','RtrSceneTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex)'))
     'Rtxpt/Shaders/PathTracerSample.hlsl'=@(
-        @('workingContext.RtrLegacyFirstBranch=rtrFirstBranch; // RTR first-interface selector','path.setCounter((PackedCounters)3,rtrFirstBranch+1u); // RTR first-interface selector in ray payload'),
+        @('workingContext.RtrSceneFirstBranch=rtrFirstBranch; // RTR first-interface selector','path.setCounter((PackedCounters)3,rtrFirstBranch+1u); // RTR first-interface selector in ray payload'),
         @('if(path.getCounter((PackedCounters)3)==0)break;','if((path.getCounter((PackedCounters)3)&4u)==0)break;'))
 }
 foreach($relative in $rtrPayloadMigrations.Keys) {
@@ -708,16 +708,16 @@ Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    if((path.getCounter((Packe
     if((path.getCounter((PackedCounters)3)&16u)==0)rtrOpticalReplay++; // RTR skip absent second junction, no duplicated energy
 '@ 'RTR skip absent second junction, no duplicated energy'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' @'
-                legacyValid=RtrLegacyOpticalSample(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,
-                    path.getVertexIndex(),max(1u,path.getCounter((PackedCounters)3)&3u),legacySample);
+                sceneValid=RtrSceneOpticalSample(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,
+                    path.getVertexIndex(),max(1u,path.getCounter((PackedCounters)3)&3u),sceneSample);
 '@ @'
             {
                 #if PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
                 if(path.getVertexIndex()==2 && (path.getCounter((PackedCounters)3)&4u)!=0)
                     path.setCounter((PackedCounters)3,path.getCounter((PackedCounters)3)|16u);
                 #endif
-                legacyValid=RtrLegacyOpticalSample(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,
-                    path.getVertexIndex(),path.getCounter((PackedCounters)3),legacySample); // RTR exact second-interface conditional expectation
+                sceneValid=RtrSceneOpticalSample(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,
+                    path.getVertexIndex(),path.getCounter((PackedCounters)3),sceneSample); // RTR exact second-interface conditional expectation
             }
 '@ 'RTR exact second-interface conditional expectation'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        if(path.getVertexIndex()==1 && (path.getCounter((PackedCounters)3)&3u)==2u)surfaceEmission=0; // RTR shared primary emission once' @'
@@ -725,18 +725,18 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        if(path
             || (path.getVertexIndex()<=2 && (path.getCounter((PackedCounters)3)&8u)!=0))surfaceEmission=0; // RTR shared replay prefix emission once
 '@ 'RTR shared replay prefix emission once'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        if (!scatterValid)' @'
-        #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
-        if(RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
-            RtrLegacyTracePrint("termination",111u,RtrLegacyTraceKey(path.GetPixelPos(),RtrLegacyTraceBranch(path.getCounter((PackedCounters)3)),path.getVertexIndex(),workingContext.PtConsts.frameIndex),
+        #if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
+        if(RtrSceneTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
+            RtrSceneTracePrint("termination",111u,RtrSceneTraceKey(path.GetPixelPos(),RtrSceneTraceBranch(path.getCounter((PackedCounters)3)),path.getVertexIndex(),workingContext.PtConsts.frameIndex),
                 float4(scatterValid,HasFinishedSurfaceBounces(path.getVertexIndex()+1,path.getCounter(PackedCounters::DiffuseBounces)),bsdf.data.SpecularTransmission(),bsdf.data.Roughness()),
                 path.GetThp(),path.GetL(),path.GetDir(),uint2(path.flagsAndVertexIndex,path.packedCounters));
         #endif // RTR complete scatter rejection and budget evidence
         if (!scatterValid)
 '@ 'RTR complete scatter rejection and budget evidence'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        if (pathStopping)' @'
-        #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
-        if(pathStopping && RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
-            RtrLegacyTracePrint("terminal",112u,RtrLegacyTraceKey(path.GetPixelPos(),RtrLegacyTraceBranch(path.getCounter((PackedCounters)3)),path.getVertexIndex(),workingContext.PtConsts.frameIndex),
+        #if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
+        if(pathStopping && RtrSceneTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
+            RtrSceneTracePrint("terminal",112u,RtrSceneTraceKey(path.GetPixelPos(),RtrSceneTraceBranch(path.getCounter((PackedCounters)3)),path.getVertexIndex(),workingContext.PtConsts.frameIndex),
                 float4(shadingData.MaterialID(),shadingData.frontFacing,shadingData.GetEta(),bsdf.data.SpecularTransmission()),
                 path.GetThp(),path.GetL(),uint2(path.flagsAndVertexIndex,path.packedCounters));
         #endif // RTR terminal receiver before truncation evidence
@@ -744,7 +744,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        if (pat
 '@ 'RTR terminal receiver before truncation evidence'
 foreach($relative in @('Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli','Rtxpt/Shaders/PathTracer/PathTracer.hlsli')) {
     $path=Join-Path $sdk $relative;$text=[IO.File]::ReadAllText($path)
-    $text=$text.Replace('(path.getCounter((PackedCounters)3)&3u)-1u','RtrLegacyTraceBranch(path.getCounter((PackedCounters)3))')
+    $text=$text.Replace('(path.getCounter((PackedCounters)3)&3u)-1u','RtrSceneTraceBranch(path.getCounter((PackedCounters)3))')
     [IO.File]::WriteAllText($path,$text,$utf8)
 }
 # Extend the two-junction fix without increasing PathPayload or borrowing the
@@ -755,28 +755,28 @@ $rtrReplayText=[IO.File]::ReadAllText($rtrReplayPath)
 # Remove obsolete scaffolding from SDKs configured by the old non-idempotent
 # migration. The canonical replay loop and selector below replace both blocks.
 $rtrReplayText=[regex]::Replace($rtrReplayText,
-    '(?m)^    #if defined\(RTR_LEGACY_LIGHTING\) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL\r?\n    \[loop\] for\(uint rtrFirstBranch=0;rtrFirstBranch<2;rtrFirstBranch\+\+\) // RTR trace both real dielectric branches\r?\n    \{\r?\n    #endif\r?\n','')
+    '(?m)^    #if defined\(RTR_SCENE_LIGHTING\) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL\r?\n    \[loop\] for\(uint rtrFirstBranch=0;rtrFirstBranch<2;rtrFirstBranch\+\+\) // RTR trace both real dielectric branches\r?\n    \{\r?\n    #endif\r?\n','')
 $rtrReplayText=[regex]::Replace($rtrReplayText,
-    '(?m)^    #if defined\(RTR_LEGACY_LIGHTING\) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL\r?\n    path\.setCounter\(\(PackedCounters\)3,rtrFirstBranch\+1u\); // RTR first-interface selector in ray payload\r?\n    #endif\r?\n','')
-$rtrReplayText=$rtrReplayText.Replace('rtrOpticalReplay<4;','rtrOpticalReplay<(1u<<RTR_LEGACY_EXACT_INTERFACE_COUNT);')
+    '(?m)^    #if defined\(RTR_SCENE_LIGHTING\) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL\r?\n    path\.setCounter\(\(PackedCounters\)3,rtrFirstBranch\+1u\); // RTR first-interface selector in ray payload\r?\n    #endif\r?\n','')
+$rtrReplayText=$rtrReplayText.Replace('rtrOpticalReplay<4;','rtrOpticalReplay<(1u<<RTR_SCENE_EXACT_INTERFACE_COUNT);')
 $rtrReplayText=$rtrReplayText.Replace('((rtrOpticalReplay>>1u)+1u)|((rtrOpticalReplay&1u)<<3u)',
-    '((rtrOpticalReplay>>(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))+1u)|((rtrOpticalReplay&((1u<<(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))-1u))<<3u)')
+    '((rtrOpticalReplay>>(RTR_SCENE_EXACT_INTERFACE_COUNT-1u))+1u)|((rtrOpticalReplay&((1u<<(RTR_SCENE_EXACT_INTERFACE_COUNT-1u))-1u))<<3u)')
 $rtrReplayText=$rtrReplayText.Replace('if((path.getCounter((PackedCounters)3)&16u)==0)rtrOpticalReplay++; // RTR skip absent second junction, no duplicated energy',
-    'rtrOpticalReplay+=(1u<<(RTR_LEGACY_EXACT_INTERFACE_COUNT-min(rtrOpticalDepth,RTR_LEGACY_EXACT_INTERFACE_COUNT)))-1u; // RTR skip absent second junction, no duplicated energy')
+    'rtrOpticalReplay+=(1u<<(RTR_SCENE_EXACT_INTERFACE_COUNT-min(rtrOpticalDepth,RTR_SCENE_EXACT_INTERFACE_COUNT)))-1u; // RTR skip absent second junction, no duplicated energy')
 [IO.File]::WriteAllText($rtrReplayPath,$rtrReplayText,$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    //float3 lastOrigin = float3(1e30f,1e30f,1e30f);' @'
-    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+    #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
     uint rtrOpticalDepth=0;uint rtrFirstOpticalVertex=0; // RTR visited optical prefix depth
     #endif
     //float3 lastOrigin = float3(1e30f,1e30f,1e30f);
 '@ 'RTR visited optical prefix depth'
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '        nextHit(path, tMinMax, workingContext);' @'
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
-        path.flagsAndVertexIndex&=~RTR_LEGACY_OPTICAL_VERTEX_FLAG;
+        #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+        path.flagsAndVertexIndex&=~RTR_SCENE_OPTICAL_VERTEX_FLAG;
         #endif
         nextHit(path, tMinMax, workingContext);
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
-        if((path.flagsAndVertexIndex&RTR_LEGACY_OPTICAL_VERTEX_FLAG)!=0)
+        #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+        if((path.flagsAndVertexIndex&RTR_SCENE_OPTICAL_VERTEX_FLAG)!=0)
         {
             rtrOpticalDepth=max(rtrOpticalDepth,path.getVertexIndex());
             if(rtrFirstOpticalVertex==0)rtrFirstOpticalVertex=path.getVertexIndex();
@@ -790,7 +790,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' @'
         if(bsdf.data.SpecularTransmission()>0)
         {
             #if PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
-            path.flagsAndVertexIndex|=RTR_LEGACY_OPTICAL_VERTEX_FLAG; // RTR report actual optical junction to raygen
+            path.flagsAndVertexIndex|=RTR_SCENE_OPTICAL_VERTEX_FLAG; // RTR report actual optical junction to raygen
             path.setCounter((PackedCounters)3,path.getCounter((PackedCounters)3)|4u); // RTR glass also reached through a primary metal reflection
             #endif
 '@ 'RTR report actual optical junction to raygen'
@@ -801,42 +801,42 @@ $rtrReplayHitText=[regex]::Replace($rtrReplayHitText,
     '// RTR junction activity is carried in the otherwise unused payload flag.')
 $rtrReplayHitText=[regex]::Replace($rtrReplayHitText,
     'if\(\(path\.getVertexIndex\(\)==1 && \(path\.getCounter\(\(PackedCounters\)3\)&3u\)==2u\)\s*\|\| \(path\.getVertexIndex\(\)<=2 && \(path\.getCounter\(\(PackedCounters\)3\)&8u\)!=0\)\)surfaceEmission=0;',
-    'if(RtrLegacyReplayPrefixDuplicate(path.getCounter((PackedCounters)3),path.getVertexIndex()))surfaceEmission=0;')
+    'if(RtrSceneReplayPrefixDuplicate(path.getCounter((PackedCounters)3),path.getVertexIndex()))surfaceEmission=0;')
 [IO.File]::WriteAllText($rtrReplayHitPath,$rtrReplayHitText,$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    } // RTR first-interface paths committed and summed' @'
     // A non-glass primary has no first-interface glass branch to enumerate.
-    if(rtrFirstOpticalVertex>1 && rtrOpticalReplay>=((1u<<(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))-1u))break;
+    if(rtrFirstOpticalVertex>1 && rtrOpticalReplay>=((1u<<(RTR_SCENE_EXACT_INTERFACE_COUNT-1u))-1u))break;
     } // RTR first-interface paths committed and summed
 '@ 'A non-glass primary has no first-interface glass branch to enumerate.'
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '#include "PathTracer/PathTracer.hlsli"' @'
 #include "PathTracer/PathTracer.hlsli"
-#if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_LEGACY_REPLAY_PREFIX_CACHE
-#include "PathTracer/RtrLegacyReplayCache.hlsli" // RTR shader-local shared optical prefixes
+#if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_SCENE_REPLAY_PREFIX_CACHE
+#include "PathTracer/RtrSceneReplayCache.hlsli" // RTR shader-local shared optical prefixes
 #endif
 '@ 'RTR shader-local shared optical prefixes'
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    [loop] for(uint rtrOpticalReplay=0;' @'
-    #if RTR_LEGACY_REPLAY_PREFIX_CACHE
-    RtrLegacyReplayCache rtrReplayCache;
+    #if RTR_SCENE_REPLAY_PREFIX_CACHE
+    RtrSceneReplayCache rtrReplayCache;
     rtrReplayCache.valid=0;rtrReplayCache.previous=0;rtrReplayCache.firstOpticalVertex=0;
     #endif // RTR initialize shared prefix cache
     [loop] for(uint rtrOpticalReplay=0;
 '@ 'RTR initialize shared prefix cache'
-Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '        path.flagsAndVertexIndex&=~RTR_LEGACY_OPTICAL_VERTEX_FLAG;' @'
-        path.flagsAndVertexIndex&=~RTR_LEGACY_OPTICAL_VERTEX_FLAG;
-        #if RTR_LEGACY_REPLAY_PREFIX_CACHE
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '        path.flagsAndVertexIndex&=~RTR_SCENE_OPTICAL_VERTEX_FLAG;' @'
+        path.flagsAndVertexIndex&=~RTR_SCENE_OPTICAL_VERTEX_FLAG;
+        #if RTR_SCENE_REPLAY_PREFIX_CACHE
         rtrReplayCache.Save(path); // RTR cache native ray state before traversal
         #endif
 '@ 'RTR cache native ray state before traversal'
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    if((path.getCounter((PackedCounters)3)&4u)==0)break;' @'
-    #if RTR_LEGACY_REPLAY_PREFIX_CACHE
+    #if RTR_SCENE_REPLAY_PREFIX_CACHE
     rtrReplayCache.previous=rtrOpticalReplay;
     rtrReplayCache.firstOpticalVertex=rtrFirstOpticalVertex;
     #endif // RTR keep actual previous mask before skipping absent suffixes
     if((path.getCounter((PackedCounters)3)&4u)==0)break;
 '@ 'RTR keep actual previous mask before skipping absent suffixes'
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    SER_HIT_OBJECT hit;' @'
-    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_LEGACY_WORK_TRACE
-    if(RtrLegacyWorkPixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex))
+    #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_SCENE_WORK_TRACE
+    if(RtrSceneWorkPixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex))
     {
         uint4 identity=uint4(rayQuery.CommittedStatus(),0xffffffffu,0xffffffffu,0xffffffffu);
         float distance=kMaxRayTravel;
@@ -844,7 +844,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    SER_HIT_OBJECT hit;' @'
             identity.yzw=uint3(rayQuery.CommittedInstanceIndex(),rayQuery.CommittedGeometryIndex(),rayQuery.CommittedPrimitiveIndex());
             distance=rayQuery.CommittedRayT();
         }
-        RtrLegacyWorkPrint(210u,uint4(path.GetPixelPos(),workingContext.PtConsts.frameIndex,path.getVertexIndex()+1u),
+        RtrSceneWorkPrint(210u,uint4(path.GetPixelPos(),workingContext.PtConsts.frameIndex,path.getVertexIndex()+1u),
             path.getCounter((PackedCounters)3),rayQuery.WorldRayOrigin(),rayQuery.WorldRayDirection(),identity,distance);
     }
     #endif // RTR sampled actual traversal identity
@@ -852,9 +852,9 @@ Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    SER_HIT_OBJECT hit;' @'
 '@ 'RTR sampled actual traversal identity'
 Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    float2 tMinMax = FirstHitFromVBuffer(path, 0, workingContext);' @'
     float2 tMinMax = FirstHitFromVBuffer(path, 0, workingContext);
-    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && RTR_LEGACY_WORK_TRACE
-    if(RtrLegacyWorkPixel(pixelPos,workingContext.PtConsts.frameIndex))
-        RtrLegacyWorkPrint(230u,uint4(pixelPos,workingContext.PtConsts.frameIndex,rtrOpticalReplay),path.getCounter((PackedCounters)3));
+    #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && RTR_SCENE_WORK_TRACE
+    if(RtrSceneWorkPixel(pixelPos,workingContext.PtConsts.frameIndex))
+        RtrSceneWorkPrint(230u,uint4(pixelPos,workingContext.PtConsts.frameIndex,rtrOpticalReplay),path.getCounter((PackedCounters)3));
     #endif // RTR sampled first-hit initialization
 '@ 'RTR sampled first-hit initialization'
 # Migrate existing SDK checkouts as well as fresh ones. Cache hits must not
@@ -879,8 +879,8 @@ if(!$replaySource.Contains('RTR initialize only cache misses')) {
     PathState path;
     PathTracer::WorkingContext workingContext = Bridge::GetWorkingContext();
     float2 tMinMax=float2(0,kMaxRayTravel);
-    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_LEGACY_REPLAY_PREFIX_CACHE
-    uint rtrReplayControl=((rtrOpticalReplay>>(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))+1u)|((rtrOpticalReplay&((1u<<(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))-1u))<<3u);
+    #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_SCENE_REPLAY_PREFIX_CACHE
+    uint rtrReplayControl=((rtrOpticalReplay>>(RTR_SCENE_EXACT_INTERFACE_COUNT-1u))+1u)|((rtrOpticalReplay&((1u<<(RTR_SCENE_EXACT_INTERFACE_COUNT-1u))-1u))<<3u);
     if(rtrReplayCache.Restore(rtrOpticalReplay,rtrReplayControl,path))
     {
         rtrOpticalDepth=path.getVertexIndex();
@@ -891,15 +891,15 @@ if(!$replaySource.Contains('RTR initialize only cache misses')) {
     { // RTR initialize only cache misses
         path=PathTracer::EmptyPathInitialize(pixelPos,g_Const.ptConsts.camera.PixelConeSpreadAngle);
         PathTracer::SetupPathPrimaryRay(path,Bridge::computeCameraRay(pixelPos));
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
-        path.setCounter((PackedCounters)3,((rtrOpticalReplay>>(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))+1u)|((rtrOpticalReplay&((1u<<(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))-1u))<<3u)); // RTR two-junction selectors in ray payload
+        #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+        path.setCounter((PackedCounters)3,((rtrOpticalReplay>>(RTR_SCENE_EXACT_INTERFACE_COUNT-1u))+1u)|((rtrOpticalReplay&((1u<<(RTR_SCENE_EXACT_INTERFACE_COUNT-1u))-1u))<<3u)); // RTR two-junction selectors in ray payload
         #endif
         PathTracer::StartPixel(path,workingContext);
         #if PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
         tMinMax=FirstHitFromVBuffer(path,0,workingContext);
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && RTR_LEGACY_WORK_TRACE
-        if(RtrLegacyWorkPixel(pixelPos,workingContext.PtConsts.frameIndex))
-            RtrLegacyWorkPrint(230u,uint4(pixelPos,workingContext.PtConsts.frameIndex,rtrOpticalReplay),path.getCounter((PackedCounters)3));
+        #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && RTR_SCENE_WORK_TRACE
+        if(RtrSceneWorkPixel(pixelPos,workingContext.PtConsts.frameIndex))
+            RtrSceneWorkPrint(230u,uint4(pixelPos,workingContext.PtConsts.frameIndex,rtrOpticalReplay),path.getCounter((PackedCounters)3));
         #endif // RTR sampled first-hit initialization
         #endif
     }
@@ -909,7 +909,7 @@ if(!$replaySource.Contains('RTR initialize only cache misses')) {
 }
 [IO.File]::WriteAllText($replayRaygen,$replaySource,$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        const float rrVal = sqrt(Luminance(path.GetThp())); // closer to perceptual' @'
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+        #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
         // gsOpticalContinuation uses its event budget, not throughput roulette.
         // Applying roulette to a deterministic split kills dim eta^2 entry
         // branches before the exit interface restores their radiance weight.
@@ -918,20 +918,20 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        const float rrVa
         const float rrVal = sqrt(Luminance(path.GetThp())); // closer to perceptual
 '@ 'RTR bounded optical transport without roulette'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '            SharcHandlePathLimit(surfaceEmission);' @'
-            #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
+            #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
             // gsOpticalContinuation shades the final receiver before ending its budget.
-            NEEResult terminal=RtrLegacyDirect(path,shadingData,bsdf,workingContext);
+            NEEResult terminal=RtrSceneDirect(path,shadingData,bsdf,workingContext);
             float4 terminalRadiance=terminal.GetRadianceAndSpecAvg();
-            AccumulatePathRadiance(workingContext,path,terminalRadiance.rgb,terminalRadiance.w,false,false); // RTR shade final legacy receiver
+            AccumulatePathRadiance(workingContext,path,terminalRadiance.rgb,terminalRadiance.w,false,false); // RTR shade final scene receiver
             #endif
             SharcHandlePathLimit(surfaceEmission);
-'@ 'RTR shade final legacy receiver'
+'@ 'RTR shade final scene receiver'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        NEEBSDFMISInfo misInfo = NEEBSDFMISInfo::Unpack16bit(path.GetPackedMISInfo());' @'
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+        #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
         float horizon=.35+.65*saturate(rayDir.y*.5+.5);
-        RtrLegacyLight sun=t_RtrLegacyLights[0];
+        RtrSceneLight sun=t_RtrSceneLights[0];
         float disk=smoothstep(.9995,.9999,dot(normalize(rayDir),-normalize(sun.DirectionRange.xyz)));
-        environmentEmission=ToLpRadiance(workingContext.PtConsts.RtrLegacySky.rgb*horizon+sun.ColorIntensity.rgb*sun.ColorIntensity.a*disk); // RTR old horizon and solar sky
+        environmentEmission=ToLpRadiance(workingContext.PtConsts.RtrSceneSky.rgb*horizon+sun.ColorIntensity.rgb*sun.ColorIntensity.a*disk); // RTR old horizon and solar sky
         #else
         NEEBSDFMISInfo misInfo = NEEBSDFMISInfo::Unpack16bit(path.GetPackedMISInfo());
 '@ 'RTR old horizon and solar sky'
@@ -939,13 +939,23 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '#if RTXPT_FIREFLY_FILTER
         #endif // RTR old horizon and solar sky
 #if RTXPT_FIREFLY_FILTER && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
 '@ '#endif // RTR old horizon and solar sky'
-# The bounded legacy history runs after current radiance merge, before SR tags.
-[IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/ProcessingPasses/RtrLegacySrHistory.hlsl'),
-    [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrLegacySrHistory.hlsl')),$utf8)
-Patch-Once 'Rtxpt/Shaders.cfg' 'ProcessingPasses/PostProcess.hlsl -T cs -E main -D NO_DENOISER_FINAL_MERGE=1' @'
-ProcessingPasses/PostProcess.hlsl -T cs -E main -D NO_DENOISER_FINAL_MERGE=1
-ProcessingPasses/RtrLegacySrHistory.hlsl -T cs -E main
-'@ 'ProcessingPasses/RtrLegacySrHistory.hlsl'
+# The bounded pre-SR history runs after current radiance merge, before SR tags.
+[IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/ProcessingPasses/RtrPreSrHistory.hlsl'),
+    [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrPreSrHistory.hlsl')),$utf8)
+# Keep exactly one current project-owned history entry. Existing SDK checkouts
+# can contain the same pass under an earlier injected file name; Patch-Once
+# alone would append the renamed pass and leave the missing file in the build.
+$shaderConfigPath=Join-Path $sdk 'Rtxpt/Shaders.cfg'
+$shaderConfig=[IO.File]::ReadAllText($shaderConfigPath)
+$shaderNewline=if($shaderConfig.Contains("`r`n")){"`r`n"}else{"`n"}
+$historyAnchor='ProcessingPasses/PostProcess.hlsl -T cs -E main -D NO_DENOISER_FINAL_MERGE=1'
+if(!$shaderConfig.Contains($historyAnchor)){throw 'Pinned reconstruction shader configuration anchor changed'}
+$normalizedShaderConfig=[regex]::Replace($shaderConfig,'(?m)^ProcessingPasses/Rtr[A-Za-z]*SrHistory\.hlsl -T cs -E main\r?\n?','')
+$normalizedShaderConfig=$normalizedShaderConfig.Replace($historyAnchor,
+    $historyAnchor+$shaderNewline+'ProcessingPasses/RtrPreSrHistory.hlsl -T cs -E main')
+if($normalizedShaderConfig -cne $shaderConfig){
+    [IO.File]::WriteAllText($shaderConfigPath,$normalizedShaderConfig,$utf8)
+}
 Patch-Once 'Rtxpt/Sample.h' '    virtual void UpdateCustomResources() { }' @'
     virtual void UpdateCustomResources() { }
     virtual void FilterReconstructionInput(nvrhi::ICommandList*, bool) { } // RTR pre-SR history hook
@@ -954,7 +964,7 @@ Patch-Once 'Rtxpt/Sample.cpp' '        if (m_ui.RealtimeAA == 0)' @'
         FilterReconstructionInput(m_commandList, reset); // RTR current radiance bounded history
         if (m_ui.RealtimeAA == 0)
 '@ 'RTR current radiance bounded history'
-# Match the legacy route's summed continuous surface response without deleting
+# Match the Vulkan route's summed continuous surface response without deleting
 # any lobe or bounce. PBRT-v3 BSDF::Sample_f sums f after forming the mixture PDF.
 # Ideal delta events retain native weights; their density is not a finite PDF.
 Patch-Once 'Rtxpt/Shaders/PathTracer/BSDFs/StandardBSDF.hlsli' @'
@@ -1226,6 +1236,15 @@ Patch-Once 'External/Donut/include/donut/app/DeviceManager.h' 'bool HostFrame();
 bool HostFrame();
         bool HostExternalPresentation = false; // RTR external GPU compositor
 '@ 'RTR external GPU compositor'
+Patch-Once 'External/Donut/include/donut/app/DeviceManager.h' 'bool HostExternalPresentation = false; // RTR external GPU compositor' @'
+bool HostExternalPresentation = false; // RTR external GPU compositor
+        bool HostFixedWindowTitle = false; // RTR host owns viewport title
+'@ 'RTR host owns viewport title'
+Patch-Once 'External/Donut/src/app/DeviceManager.cpp' "void DeviceManager::SetInformativeWindowTitle(const char* applicationName, bool includeFramerate, const char* extraInfo)`r`n{" @'
+void DeviceManager::SetInformativeWindowTitle(const char* applicationName, bool includeFramerate, const char* extraInfo)
+{
+    if (HostFixedWindowTitle) return; // RTR explicit titles survive automatic sample updates
+'@ 'RTR explicit titles survive automatic sample updates'
 Patch-Once 'External/Donut/src/app/DeviceManager.cpp' "    glfwShowWindow(m_Window);`r`n    glfwFocusWindow(m_Window);" @'
     // RTR compositor keeps the upstream host hidden from its creation onward.
     if (!HostExternalPresentation) { glfwShowWindow(m_Window); glfwFocusWindow(m_Window); }

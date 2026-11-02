@@ -48,7 +48,7 @@ public record RtSectionTlasBuildInput(
         int uncoveredSections
 ) {
     /**
-     * Creates a legacy all-resident input while deriving material and zero-causality metadata.
+     * Creates a all-resident input while deriving material and zero-causality metadata.
      *
      * @param revision             publication revision
      * @param resourceRevision     BLAS resource revision
@@ -98,7 +98,7 @@ public record RtSectionTlasBuildInput(
     }
 
     /**
-     * Creates a legacy exact-section-only input with no far-field coverage metadata.
+     * Creates a exact-section-only input with no far-field coverage metadata.
      *
      * @param revision             publication revision
      * @param resourceRevision     BLAS resource revision

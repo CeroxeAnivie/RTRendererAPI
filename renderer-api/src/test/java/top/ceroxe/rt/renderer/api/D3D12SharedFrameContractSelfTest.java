@@ -42,7 +42,7 @@ public final class D3D12SharedFrameContractSelfTest {
     }
 
     private static void defaultPresenterNeverDropsLayers(D3D12SharedFrame frame) {
-        var presenter=new LegacyOnlyPresenter();
+        var presenter=new BasicPresenter();
         require(presenter.presentLatestFrame(List.of()).isEmpty(),"Empty layers preserve existing presenter implementations");
         require(presenter.latestCalls==1,"Empty-layer overload forwards to the original method");
         var mutation=new ResourceMutationKey(new ResourceGenerationKey(new RenderResourceId(7),ResourceVersion.initial()),1);
@@ -72,7 +72,7 @@ public final class D3D12SharedFrameContractSelfTest {
         if (!condition) throw new AssertionError(message);
     }
 
-    private static final class LegacyOnlyPresenter implements VulkanFramePresenter {
+    private static final class BasicPresenter implements VulkanFramePresenter {
         int latestCalls;
         @Override public void pollEvents() { }
         @Override public WindowState windowState() { return new WindowState(false,32,32); }

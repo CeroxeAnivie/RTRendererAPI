@@ -41,7 +41,7 @@ public final class RtDynamicTriangleMesh {
     private static final int DYNAMIC_DECAL_ENABLED_BIT = 1 << 7;
     private static final int DECAL_UV_BITS = 10;
     private static final int DECAL_UV_MASK = (1 << DECAL_UV_BITS) - 1;
-    private static final DynamicMeshAsset LEGACY_MODEL_CUBE = createLegacyModelCube();
+    private static final DynamicMeshAsset PROCEDURAL_MODEL_CUBE = createProceduralModelCube();
 
     private final long assetId;
     private final long revision;
@@ -112,7 +112,7 @@ public final class RtDynamicTriangleMesh {
     }
 
     /**
-     * Builds the legacy scene-batch geometry owned by the renderer.
+     * Builds the scene-batch scene-batch geometry owned by the renderer.
      *
      * @param scene immutable dynamic scene generation
      * @return a mesh, or {@code null} when no primitive uses generated TLAS geometry
@@ -178,7 +178,7 @@ public final class RtDynamicTriangleMesh {
     }
 
     /**
-     * Creates a triangle-native payload without imposing the legacy two-triangle quad layout.
+     * Creates a triangle-native payload without imposing the scene-batch two-triangle quad layout.
      *
      * <p>Each 12-int record belongs to exactly one indexed triangle. This factory is the native
      * admission boundary used by the generic renderer API; keeping it separate from
@@ -209,7 +209,7 @@ public final class RtDynamicTriangleMesh {
         );
     }
 
-    static DynamicRenderScene.DynamicPrimitive promoteLegacyModelPrimitive(
+    static DynamicRenderScene.DynamicPrimitive promoteProceduralModelPrimitive(
             DynamicRenderScene.DynamicPrimitive primitive
     ) {
         Objects.requireNonNull(primitive, "primitive");
@@ -245,9 +245,9 @@ public final class RtDynamicTriangleMesh {
                 DynamicMeshInstance.FaceMaterial.NO_OVERLAY_COORDS
         );
         DynamicMeshInstance meshInstance = new DynamicMeshInstance(
-                LEGACY_MODEL_CUBE,
+                PROCEDURAL_MODEL_CUBE,
                 transform,
-                java.util.Collections.nCopies(LEGACY_MODEL_CUBE.faceCount(), faceMaterial)
+                java.util.Collections.nCopies(PROCEDURAL_MODEL_CUBE.faceCount(), faceMaterial)
         );
         return new DynamicRenderScene.DynamicPrimitive(
                 primitive.id(),
@@ -271,7 +271,7 @@ public final class RtDynamicTriangleMesh {
         );
     }
 
-    private static DynamicMeshAsset createLegacyModelCube() {
+    private static DynamicMeshAsset createProceduralModelCube() {
         float negative = -0.5F;
         float positive = 0.5F;
         float[] vertices = {

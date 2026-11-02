@@ -272,7 +272,7 @@ public final class VulkanGpuSceneShaderSelfTest {
               "ordinary ray generation must retain surface math and lighting after medium retirement");
       require(readRaw("assets/rtrenderer/medium/luxcore/camera_absorption.cu")
                       .contains("HomogeneousVolume_SegmentScatter"),
-              "the new native medium path must remain available after legacy retirement");
+              "the native medium path must remain available after custom-medium removal");
       require(visibility.contains("struct GsVisibilityPayload")
                       && !visibility.contains("GpuScenePayload") && !visibility.contains("GsMediumPath")
                       && !visibility.contains("GsRadianceSplit") && !visibility.contains("gpuscene_lighting.glsl"),

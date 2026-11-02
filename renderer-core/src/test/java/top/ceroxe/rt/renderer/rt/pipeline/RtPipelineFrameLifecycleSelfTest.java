@@ -252,7 +252,7 @@ public final class RtPipelineFrameLifecycleSelfTest {
          require(defaultVisibleConfig.primaryRayUpscaleFactor() == 1, "visible primary rays must trace at native presentation resolution");
          require(defaultVisibleConfig.resolve(frameState(128L, 2560, 1440)).divideAndRoundUp(defaultVisibleConfig.primaryRayUpscaleFactor()).equals(new RtFrameOutputConfig.Extent(2560, 1440)), "2.5K visible RT must not downscale primary rays before presentation");
          System.setProperty("top.ceroxe.rt.rt.primaryRays.upscaleFactor", "4");
-         require(RtRayTracingPipeline.frameOutputConfigByProperties(true).primaryRayUpscaleFactor() == 1, "visible RT must reject legacy downscale configuration");
+         require(RtRayTracingPipeline.frameOutputConfigByProperties(true).primaryRayUpscaleFactor() == 1, "visible RT must reject the downscale configuration");
          require(expectFailure(() -> RtRayTracingPipeline.frameOutputConfig(0, 0, 3686400, true, 2)) instanceof IllegalArgumentException, "visible RT must reject explicit blurry primary-ray scaling");
       } finally {
          restoreProperty("top.ceroxe.rt.rt.output.width", previousWidth);

@@ -129,7 +129,7 @@ public final class RtNativeDynamicBlasTlasStressSelfTest {
          require(condition10000, "dynamic BLAS/TLAS stress did not produce enough distinct completed frames, distinctChecksums=" + size36 + ", expectedAtLeast=" + MIN_DISTINCT_CHECKSUMS + ", lastSnapshot=" + clearSnapshot.asLogFragment() + ", summary=" + rtCore.summary().asLogFragment());
          rtCore.refreshDiagnosticSummary();
          String summary = rtCore.summary().asLogFragment();
-         require(sumSummaryLong(summary, "submittedBuilds") == 1L, "legacy MODEL replacements must reuse one stable procedural BLAS, dynamicUpdates=" + dynamicUpdates + ", summary=" + summary);
+         require(sumSummaryLong(summary, "submittedBuilds") == 1L, "procedural MODEL replacements must reuse one stable procedural BLAS, dynamicUpdates=" + dynamicUpdates + ", summary=" + summary);
          require(sumSummaryLong(summary, "completedBuilds") == 1L, "stable procedural BLAS must complete exactly once under replacement stress; summary=" + summary);
          require(sumSummaryLong(summary, "clears") > 0L, "dynamic BLAS clear was not observed by the cache; summary=" + summary);
          require(freshCycleSnapshots == (long)REPLACEMENT_CYCLES, "every dynamic replacement must produce a matching completed RT frame, freshCycleSnapshots=" + freshCycleSnapshots + ", replacementCycles=" + REPLACEMENT_CYCLES + ", summary=" + summary);

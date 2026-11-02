@@ -315,6 +315,8 @@ RTXPT 新弹球默认使用 DLSS SR Balanced、1 SPP 和 2× FG，不自动增�
 
 关闭 FG：在 `-jar` **之前**加 `-Ddemo.disable-fg=true`。请求 3×／4× MFG：加
 `-Ddemo.fg-multiplier=3`／`4`；是否实际生效看 HUD 与 `frameGenerationEvidence()`。
+
+RTXPT 窗口标题保留应用名称，API 的 `setWindowTitle` 不会再被上游逐帧改写成临时场景路径或调试信息。原生／生成／总 FPS 以 HUD 为准。`GPU RENDER TIME` 只显示 GPU 渲染计时：未开启时显示 `NOT MEASURED`，启用但尚无样本时显示 `WAITING FOR SAMPLES`；它不包含完整 FG／呈现成本，也不再用倒数冒充帧率上限。
 Gradle 启动、完整参数、FG 验收及工作台用法见 [Demo 说明](demos/hex-ball/README.md)。
 
 ### 🔧 构建 NVIDIA 原生发布物

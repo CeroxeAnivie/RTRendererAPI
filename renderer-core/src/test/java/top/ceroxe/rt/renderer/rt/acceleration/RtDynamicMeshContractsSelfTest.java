@@ -47,12 +47,12 @@ public final class RtDynamicMeshContractsSelfTest {
       admitsTriangleNativeMaterialRecordsWithoutQuadPadding();
       resolvesInstanceRenderLaneBeforeBlasScheduling();
       separatesAssetIdDomains();
-      promotesLegacyModelsIntoStableInstances();
+      promotesProceduralModelsIntoStableInstances();
       preservesFullAffineTransformForTlas();
       sharesGeometryWhileVaryingPerInstanceMaterial();
       keepsOnlyTheNewestQueuedAssetVersion();
       keepsResidentBlasVisibleDuringVersionBuild();
-      separatesLegacyGeometryRevisionFromInstanceRevision();
+      separatesSceneBatchGeometryRevisionFromInstanceRevision();
       separatesDynamicMaterialUploadsFromTlasRefits();
       keepsTlasUpdateEligibleForTransformOnlyChanges();
       coalescesOnlyTransformOnlyTlasUpdates();
@@ -539,16 +539,16 @@ public final class RtDynamicMeshContractsSelfTest {
       expectFailure(() -> DynamicMeshAssetIdAllocator.domain(0L));
    }
 
-   private static void promotesLegacyModelsIntoStableInstances() {
-      DynamicRenderScene.DynamicPrimitive first = new DynamicRenderScene.DynamicPrimitive(51L, PrimitiveKind.ENTITY, PrimitiveGeometryKind.MODEL, 2.0, 3.0, 4.0, 0.0F, 0.0F, 0.0F, 0.8F, -13426159, 7, 15728880, true, "legacy");
+   private static void promotesProceduralModelsIntoStableInstances() {
+      DynamicRenderScene.DynamicPrimitive first = new DynamicRenderScene.DynamicPrimitive(51L, PrimitiveKind.ENTITY, PrimitiveGeometryKind.MODEL, 2.0, 3.0, 4.0, 0.0F, 0.0F, 0.0F, 0.8F, -13426159, 7, 15728880, true, "sceneBatch");
       DynamicRenderScene.DynamicPrimitive moved = new DynamicRenderScene.DynamicPrimitive(51L, first.kind(), first.geometryKind(), 8.0, 3.0, 4.0, first.yaw(), first.pitch(), first.roll(), first.radius(), -10070716, first.textureKey(), first.packedLight(), first.castsShadow(), first.debugName());
-      DynamicRenderScene.DynamicPrimitive firstInstance = RtDynamicTriangleMesh.promoteLegacyModelPrimitive(first);
-      DynamicRenderScene.DynamicPrimitive movedInstance = RtDynamicTriangleMesh.promoteLegacyModelPrimitive(moved);
-      require(firstInstance.meshInstance() != null, "legacy MODEL must become a real mesh instance");
-      require(firstInstance.meshInstance().asset() == movedInstance.meshInstance().asset(), "legacy MODEL frames must share one immutable BLAS asset");
-      requireNear(firstInstance.meshInstance().transform().translateX(), 2.0F, "legacy instance translation must preserve world position");
-      requireNear(movedInstance.meshInstance().transform().translateX(), 8.0F, "legacy movement must update only the instance transform");
-      require(!firstInstance.meshInstance().faceMaterials().equals(movedInstance.meshInstance().faceMaterials()), "legacy color changes must remain per-instance material state");
+      DynamicRenderScene.DynamicPrimitive firstInstance = RtDynamicTriangleMesh.promoteProceduralModelPrimitive(first);
+      DynamicRenderScene.DynamicPrimitive movedInstance = RtDynamicTriangleMesh.promoteProceduralModelPrimitive(moved);
+      require(firstInstance.meshInstance() != null, "procedural MODEL must become a real mesh instance");
+      require(firstInstance.meshInstance().asset() == movedInstance.meshInstance().asset(), "procedural MODEL frames must share one immutable BLAS asset");
+      requireNear(firstInstance.meshInstance().transform().translateX(), 2.0F, "scene-batch instance translation must preserve world position");
+      requireNear(movedInstance.meshInstance().transform().translateX(), 8.0F, "scene-batch movement must update only the instance transform");
+      require(!firstInstance.meshInstance().faceMaterials().equals(movedInstance.meshInstance().faceMaterials()), "scene-batch color changes must remain per-instance material state");
    }
 
    private static void preservesFullAffineTransformForTlas() {
@@ -621,13 +621,13 @@ public final class RtDynamicMeshContractsSelfTest {
       expectFailure(() -> RtDynamicBlasCache.residentAssetUsableDuringReplacement(meshAsset(30L, 1L, 0.5F), resident));
    }
 
-   private static void separatesLegacyGeometryRevisionFromInstanceRevision() {
-      require(RtDynamicBlasCache.shouldSubmitLegacyBuild(7L, 0L, -1L), "first legacy mesh revision must submit");
-      require(!RtDynamicBlasCache.shouldSubmitLegacyBuild(7L, 7L, -1L), "active legacy revision must suppress duplicate builds");
-      require(!RtDynamicBlasCache.shouldSubmitLegacyBuild(8L, 7L, 9L), "newer pending legacy build must suppress an older candidate");
-      require(RtDynamicBlasCache.shouldSubmitLegacyBuild(10L, 7L, 9L), "newest legacy geometry revision must replace an older pending build");
-      expectFailure(() -> RtDynamicBlasCache.shouldSubmitLegacyBuild(0L, 0L, -1L));
-      expectFailure(() -> RtDynamicBlasCache.shouldSubmitLegacyBuild(1L, 0L, -2L));
+   private static void separatesSceneBatchGeometryRevisionFromInstanceRevision() {
+      require(RtDynamicBlasCache.shouldSubmitSceneBatchBuild(7L, 0L, -1L), "first scene-batch mesh revision must submit");
+      require(!RtDynamicBlasCache.shouldSubmitSceneBatchBuild(7L, 7L, -1L), "active scene-batch revision must suppress duplicate builds");
+      require(!RtDynamicBlasCache.shouldSubmitSceneBatchBuild(8L, 7L, 9L), "newer pending scene-batch build must suppress an older candidate");
+      require(RtDynamicBlasCache.shouldSubmitSceneBatchBuild(10L, 7L, 9L), "newest scene-batch geometry revision must replace an older pending build");
+      expectFailure(() -> RtDynamicBlasCache.shouldSubmitSceneBatchBuild(0L, 0L, -1L));
+      expectFailure(() -> RtDynamicBlasCache.shouldSubmitSceneBatchBuild(1L, 0L, -2L));
    }
 
    private static void separatesDynamicMaterialUploadsFromTlasRefits() {

@@ -2,6 +2,8 @@ package top.ceroxe.rt.renderer.nvidia;
 
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.VkDevice;
+import org.lwjgl.vulkan.VkInstance;
+import org.lwjgl.vulkan.VkWin32SurfaceCreateInfoKHR;
 import org.lwjgl.vulkan.VkPresentInfoKHR;
 import org.lwjgl.vulkan.VkQueue;
 import org.lwjgl.vulkan.VkSwapchainCreateInfoKHR;
@@ -15,6 +17,17 @@ import java.util.Optional;
 
 /** Streamline WSI proxies required by the SDK's Vulkan manual-hooking contract. */
 final class NvidiaStreamlineSwapchainInterceptor implements VulkanSwapchainInterceptor {
+    @Override
+    public int createWin32Surface(VkInstance instance, VkWin32SurfaceCreateInfoKHR createInfo, LongBuffer surface) {
+        return NvidiaNativeBridge.nativeStreamlineCreateWin32Surface(
+                instance.address(), createInfo.address(), MemoryUtil.memAddress(surface));
+    }
+
+    @Override
+    public void destroySurface(VkInstance instance, long surface) {
+        NvidiaNativeBridge.nativeStreamlineDestroySurface(instance.address(), surface);
+    }
+
     private final NvidiaStreamlinePresentCircuitBreaker presentCircuitBreaker;
     private volatile boolean swapchainRebuildRequired;
     private volatile boolean proxyActive = true;

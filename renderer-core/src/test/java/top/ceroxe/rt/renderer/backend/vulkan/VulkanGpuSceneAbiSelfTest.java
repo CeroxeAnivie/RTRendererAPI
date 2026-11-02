@@ -53,7 +53,7 @@ public final class VulkanGpuSceneAbiSelfTest {
       require(textureRecord.length == 14, "texture descriptor stride changed");
       require(textureRecord[0] != 0 && textureRecord[1] == 0 && textureRecord[2] == 1, "texture descriptor lost its active flag or 64-bit pixel offset");
       require(textureRecord[3] == 2 && textureRecord[4] == 1 && textureRecord[5] == 8, "texture descriptor lost extent or row stride");
-      require(textureRecord[12] == 1, "legacy texture descriptor must expose one mip level");
+      require(textureRecord[12] == 1, "single-level texture descriptor must expose one mip level");
       MaterialAsset material = MaterialAsset.builder(20L).blendMode(BlendMode.MASKED).baseColorRgba8(-12307678).baseColorTextureId(10L).metallicRoughnessTextureId(11L).emissive(-16711165, 2.0F).alphaCutoff(0.25F).roughness(0.75F).metallic(0.5F).transmission(0.0F).indexOfRefraction(1.45F).doubleSided(true).shadingModel(ShadingModel.LIGHTMAP_MODULATED).build();
       int[] materialRecord = VulkanGpuSceneAbi.packMaterial(material, (id) -> {
          byte value10000;

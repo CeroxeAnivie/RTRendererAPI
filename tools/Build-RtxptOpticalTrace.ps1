@@ -9,23 +9,23 @@ $sdk=Join-Path $repo 'build/rtxpt-sdk'
 & (Join-Path $PSScriptRoot 'Build-RtxptBridge.ps1') -ConfigureOnly -OpticalTransportTrace:$Enable -OpticalWorkTrace:$WorkTrace -OpticalBranchSeedXor $BranchSeedXor
 if($LASTEXITCODE -ne 0){throw 'Shader configuration failed'}
 if($DisableReplayPrefixCache) {
-    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'
-    [IO.File]::WriteAllText($header,"#define RTR_LEGACY_REPLAY_PREFIX_CACHE 0`n"+[IO.File]::ReadAllText($header),[Text.UTF8Encoding]::new($false))
+    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli'
+    [IO.File]::WriteAllText($header,"#define RTR_SCENE_REPLAY_PREFIX_CACHE 0`n"+[IO.File]::ReadAllText($header),[Text.UTF8Encoding]::new($false))
 }
 if($ExactInterfaceCount -ne 6) {
-    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'
-    $source=[IO.File]::ReadAllText($header).Replace('#define RTR_LEGACY_EXACT_INTERFACE_COUNT 6u',"#define RTR_LEGACY_EXACT_INTERFACE_COUNT $($ExactInterfaceCount)u")
+    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli'
+    $source=[IO.File]::ReadAllText($header).Replace('#define RTR_SCENE_EXACT_INTERFACE_COUNT 6u',"#define RTR_SCENE_EXACT_INTERFACE_COUNT $($ExactInterfaceCount)u")
     [IO.File]::WriteAllText($header,$source,[Text.UTF8Encoding]::new($false))
 }
 if($RawOpticalRoughness) {
     if(!$Enable){throw 'Raw optical roughness is a diagnostic control only'}
-    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'
-    [IO.File]::WriteAllText($header,"#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 1`n"+[IO.File]::ReadAllText($header),[Text.UTF8Encoding]::new($false))
+    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli'
+    [IO.File]::WriteAllText($header,"#define RTR_SCENE_RAW_OPTICAL_ROUGHNESS 1`n"+[IO.File]::ReadAllText($header),[Text.UTF8Encoding]::new($false))
 }
 if($PixelX -ge 0 -or $PixelY -ge 0) {
     if(!$Enable -or $PixelX -lt 0 -or $PixelY -lt 0 -or $LastFrame -lt $FirstFrame){throw 'An enabled trace needs both pixel coordinates and an ordered frame range'}
-    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'
-    $prefix="#define RTR_LEGACY_TRACE_ORIGIN uint2($($PixelX)u,$($PixelY)u)`n#define RTR_LEGACY_TRACE_FIRST_FRAME $($FirstFrame)u`n#define RTR_LEGACY_TRACE_LAST_FRAME $($LastFrame)u`n"
+    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli'
+    $prefix="#define RTR_SCENE_TRACE_ORIGIN uint2($($PixelX)u,$($PixelY)u)`n#define RTR_SCENE_TRACE_FIRST_FRAME $($FirstFrame)u`n#define RTR_SCENE_TRACE_LAST_FRAME $($LastFrame)u`n"
     [IO.File]::WriteAllText($header,$prefix+[IO.File]::ReadAllText($header),[Text.UTF8Encoding]::new($false))
 }
 $config=Join-Path $repo 'build/reports/optical-trace-shaders.cfg'

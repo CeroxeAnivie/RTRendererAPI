@@ -221,14 +221,14 @@ public final class RendererConfig
 | `loadNativeScene(Path)` | 加载原生上游场景，绕过 Java retained 适配；与 Java 场景路径二选一 |
 | `capture(Path)`／`awaitIdle()` | 显式单次捕获／GPU 排空；正常帧循环不调用 |
 | `bridgeTimings()` | 驻留渲染、场景导出与变换批次的计数／耗时；不是 FG 交付证据 |
-| `RtxptComposedRenderer.open()` | 默认 RTXPT 完整 3D／最终呈现，旧 Vulkan 独立工作与 UI 按需创建 |
-| `openRtxptPresentation(RendererConfig, RendererConfig, String)` | 专家分别配置旧侧与 RTXPT；RTXPT 唯一拥有 Streamline |
-| `openVulkanPresentation(RendererBackendPolicy, RendererConfig, RendererConfig, VulkanFramePresenterConfig)` | 专家同窗切换完整 3D 后端；RTXPT FG/MFG/Reflex 和旧侧 Streamline 均须关闭 |
-| `legacyCommands()`／`legacyExtension(Class<T>)` | 借用旧侧命令／扩展；不得自行关闭拥有者 |
+| `RtxptComposedRenderer.open()` | 默认 RTXPT 完整 3D／最终呈现，Vulkan 独立工作与 UI 按需创建 |
+| `openRtxptPresentation(RendererConfig, RendererConfig, String)` | 专家分别配置Vulkan 侧与 RTXPT；RTXPT 唯一拥有 Streamline |
+| `openVulkanPresentation(RendererBackendPolicy, RendererConfig, RendererConfig, VulkanFramePresenterConfig)` | 专家同窗切换完整 3D 后端；RTXPT FG/MFG/Reflex 和Vulkan 侧 Streamline 均须关闭 |
+| `vulkanCommands()`／`vulkanExtension(Class<T>)` | 借用Vulkan 侧命令／扩展；不得自行关闭拥有者 |
 | `overlays(List<FrameCompositionPlan.Layer>)` | 最多 7 层已完成、全尺寸 RGBA8_UNORM GPU 纹理 |
 | `trimIdleCompositionResources()` | 原生最终呈现且叠层为空时，在空闲维护窗口排空／回收交接缓存 |
 | `backendPolicy(RendererBackendPolicy)` | 仅 Vulkan 最终呈现入口允许改变完整 3D 选择；原生最终呈现固定 RTXPT |
-| `captureRtxptSource(Path)` | 显式捕获旧侧叠层之前的 RTXPT 源 |
+| `captureRtxptSource(Path)` | 显式捕获Vulkan 侧叠层之前的 RTXPT 源 |
 
 原生 RTXPT 当前只接受 GPU 直显 SDR，不接受 CPU readback、线性 HDR 导出、显式 Vulkan GPU 对象、validation-layer 开关或 `SceneShaderProgram` 替换。帧输入也不接受 exact projection、shader data、屏幕雾、旧焦散预算、逐帧纹理／lightmap 覆盖与历史 reset。任意命令、自定义光传输和两张独立图不能自动合为一个正确的 3D 场景。当前限制、叠层同步和可执行验证见[组合指南](d3d12-vulkan-composition.md)与[版本合同](7.0.0.md)。
 

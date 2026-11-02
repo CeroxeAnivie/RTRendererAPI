@@ -1,13 +1,15 @@
-# RTXPT 与旧 Vulkan 的 GPU 组合
+# RTXPT 与Vulkan 的 GPU 组合
 
-推荐链：**RTXPT 完整 3D → 旧 Vulkan GPU 叠层 → RTXPT 最终呈现**。RTXPT 是唯一 Streamline owner，保留其原生 SR／RR、FG／MFG、Reflex、SHaRC、SER、采样和降噪规则；旧 Vulkan 执行独立图形／计算工作，不另启一套 Streamline。普通帧没有 CPU 像素读回。
+推荐链：**RTXPT 完整 3D → Vulkan GPU 叠层 → RTXPT 最终呈现**。RTXPT 是唯一 Streamline owner，保留其原生 SR／RR、FG／MFG、Reflex、SHaRC、SER、采样和降噪规则；Vulkan 执行独立图形／计算工作，不另启一套 Streamline。普通帧没有 CPU 像素读回。
+
+命名按执行职责区分：`vulkanCommands()`、`vulkanExtension(...)` 和 `WorkSnapshot.vulkanFrames()` 指 Vulkan 的独立工作与帧计数；RTXPT 的场景光照输入使用 `SceneLighting`，预 SR 历史使用 `PreSrHistory`。`RTR_RTXPT_SCENE_LIGHTING=1` 选择已验收的场景光照输入算法，`RTR_RTXPT_DIAGNOSTIC_PRE_SR_HISTORY=1` 独立启用预 SR 历史候选。它们不表示后端被淘汰。原始测量日志和外部备份路径保留当时实际记录，当前 API、代码和脚本使用上述名称。
 
 ## 普通与专家入口
 
 ```java
 try (var renderer = RtxptComposedRenderer.open()) {
     renderer.apply(initialScene);
-    renderer.overlays(uiLayers); // 可省略；精确引用旧 Vulkan 已完成的 GPU 纹理
+    renderer.overlays(uiLayers); // 可省略；精确引用Vulkan 已完成的 GPU 纹理
     renderer.submit(firstFrame); // 窗口尺寸来自 frame
     var host = renderer.extension(RtxptAccess.class).orElseThrow();
     while (host.renderFrame()) { /* 常驻场景，回交叠层与最终出帧仍完整执行 */ }
@@ -17,26 +19,26 @@ try (var renderer = RtxptComposedRenderer.open()) {
 普通配置沿用 `pathTracedPresentation()`，FG 默认关闭。专家显式请求高级能力：
 
 ```java
-var legacy = RendererConfig.builder().cpuFrameReadbackEnabled(false).build();
+var vulkan = RendererConfig.builder().cpuFrameReadbackEnabled(false).build();
 var rtxpt = RendererConfig.pathTracedPresentation().copyBuilder()
     .frameGeneration(FrameGenerationOptions.recommended()).build();
-try (var renderer = RtxptComposedRenderer.openRtxptPresentation(legacy, rtxpt, "My game")) {
-    // legacyCommands() / legacyExtension(type)：旧路线独立工作。
-    // overlays(layers)：旧 GPU 纹理；RTXPT 唯一可见窗口通过 RtxptAccess 管理。
+try (var renderer = RtxptComposedRenderer.openRtxptPresentation(vulkan, rtxpt, "My game")) {
+    // vulkanCommands() / vulkanExtension(type)：Vulkan 独立工作。
+    // overlays(layers)：Vulkan GPU 纹理；RTXPT 唯一可见窗口通过 RtxptAccess 管理。
 }
 ```
 
 最终 FPS／FG 交付计数来自 RTXPT 的真实 DXGI／SDK；隐藏的 Vulkan compositor 不 acquire 或 present WSI，也不计作已显示帧。它的 `PerformanceSnapshot.presentSamples` 必须为零。关闭叠层会直接解除回调，不分配共享帧、不复制颜色、不运行合成 shader。
 
-原生最终呈现入口延迟创建旧 Vulkan 设备：只渲染 RTXPT 和上游 HUD 时，不创建旧设备、分配器或隐藏窗口。首次调用 `legacyCommands()`、`legacyExtension(...)`、旧资源／命令接口、旧语义能力查询或启用叠层时才创建，失败时清理本次半成品并保留 RTXPT 会话。已创建的旧资源继续按原合同存活到关闭；停用叠层保留有界交接缓存，避免 UI 开关时反复等待和重建。
+原生最终呈现入口延迟创建Vulkan 设备：只渲染 RTXPT 和上游 HUD 时，不创建Vulkan 设备、分配器或隐藏窗口。首次调用 `vulkanCommands()`、`vulkanExtension(...)`、Vulkan 资源／命令接口、Vulkan 语义能力查询或启用叠层时才创建，失败时清理本次半成品并保留 RTXPT 会话。已创建的Vulkan 资源继续按原合同存活到关闭；停用叠层保留有界交接缓存，避免 UI 开关时反复等待和重建。
 
 ## 3D 后端热切换的专家选项
 
-`openVulkanPresentation(policy, legacyConfig, rtxptConfig, window)` 保留另一条已验证的链：完整 RTXPT 或完整旧 Vulkan 3D → Vulkan 叠层／HUD → 同一 Vulkan 窗口。`backendPolicy(...)` 在共同支持的场景中切换完整 3D，保留场景、相机和叠层；旧侧 `trySubmit` 保留有界背压合同。介质场景不能切旧路线并丢掉光学语义。
+`openVulkanPresentation(policy, vulkanConfig, rtxptConfig, window)` 保留另一条已验证的链：完整 RTXPT 或完整Vulkan 3D → Vulkan 叠层／HUD → 同一 Vulkan 窗口。`backendPolicy(...)` 在共同支持的场景中切换完整 3D，保留场景、相机和叠层；Vulkan 侧 `trySubmit` 保留有界背压合同。介质场景不能切Vulkan 路线并丢掉光学语义。
 
-这条 Vulkan 最终呈现链必须关闭 RTXPT FG/MFG/Reflex，也关闭旧侧 Streamline 请求。官方 [Streamline ProgrammingGuide](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/docs/ProgrammingGuide.md) 明确 `Applications can create multiple devices but SL only works with one.`，`Preferences.renderAPI` 只有一个 API 值。不能让 D3D12 RR 与 Vulkan FG 各自绑定不同设备，再声称这受官方支持。
+这条 Vulkan 最终呈现链必须关闭 RTXPT FG/MFG/Reflex，也关闭Vulkan 侧 Streamline 请求。官方 [Streamline ProgrammingGuide](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/docs/ProgrammingGuide.md) 明确 `Applications can create multiple devices but SL only works with one.`，`Preferences.renderAPI` 只有一个 API 值。不能让 D3D12 RR 与 Vulkan FG 各自绑定不同设备，再声称这受官方支持。
 
-推荐 RTXPT 最终呈现入口始终保留完整 RTXPT 3D 及其引导，不允许 `backendPolicy` 假切到旧 3D。需要同窗切换完整 3D 时明确选择 Vulkan 最终呈现入口；需要完整 RTXPT 高级呈现时选择 RTXPT 最终呈现入口。
+推荐 RTXPT 最终呈现入口始终保留完整 RTXPT 3D 及其引导，不允许 `backendPolicy` 假切到Vulkan 3D。需要同窗切换完整 3D 时明确选择 Vulkan 最终呈现入口；需要完整 RTXPT 高级呈现时选择 RTXPT 最终呈现入口。
 
 ## GPU 交接与资源生命周期
 
@@ -60,11 +62,11 @@ try (var renderer = RtxptComposedRenderer.openRtxptPresentation(legacy, rtxpt, "
 
 RTXPT 原 Depth／MV／PreUIColor（HUDless）保留，不通过 Vulkan 重建，也不混用 `slSetTag` 与 `slSetTagForFrame`。普通 FG/MFG 沿用上游 HUDless 路径；此桥接未额外启用需要 UIAlpha／UIColorAndAlpha 标签的 UI recomposition 开关，不能把它报成 ACTIVE。
 
-组合覆盖独立 GPU 工作、已完成纹理的叠层和 HUD，**不是任意着色语义的并集**。RTXPT 内部的自定义 BSDF／命中 shader、精确 Vulkan 投影或光传输算法不能靠最后一张颜色图补回来；任意深度／法线／运动后期也没有被这条颜色桥自动接通。Vulkan 专属场景属性会原样保留，只有选择旧完整 3D 时才交其执行；RTXPT 选择仍严格验证原生合同。
+组合覆盖独立 GPU 工作、已完成纹理的叠层和 HUD，**不是任意着色语义的并集**。RTXPT 内部的自定义 BSDF／命中 shader、精确 Vulkan 投影或光传输算法不能靠最后一张颜色图补回来；任意深度／法线／运动后期也没有被这条颜色桥自动接通。Vulkan 专属场景属性会原样保留，只有选择完整 Vulkan 3D 时才交其执行；RTXPT 选择仍严格验证原生合同。
 
 ## 验证与诊断
 
-`RtxptAccess.capture(path)` 在回交模式读取最终共享颜色，包含上游 HUD 和旧 GPU 叠层；`captureRtxptSource(path)` 显式读取叠层前 RTXPT 色调映射源。Vulkan 最终窗口用 `captureNextPresentedFrame(path)`，只对指定帧做一次 readback。截图、预热和初始化均不进入稳态性能计时。
+`RtxptAccess.capture(path)` 在回交模式读取最终共享颜色，包含上游 HUD 和Vulkan GPU 叠层；`captureRtxptSource(path)` 显式读取叠层前 RTXPT 色调映射源。Vulkan 最终窗口用 `captureNextPresentedFrame(path)`，只对指定帧做一次 readback。截图、预热和初始化均不进入稳态性能计时。
 
 可执行验证：`:demos:hex-ball:rtxptCompositionSelfTest`；`top.ceroxe.rt.rtxpt.compositionTestMode` 可选 `acceptance`（Vulkan 最终窗口、颜色与热切换）、`rtxpt-final`（回交叠层＋实际 2x/3x/4x FG）、`native`、`return-no-overlay`、`return-overlay`（历史 FG-off 场景稳态吞吐）。2026-11-02 最新要求：性能测试前 GPU 0 基础占用 **低于 10%** 就视为空闲，可比较绝对性能；达到 10% 则暂停绝对性能测试。之后的渲染运行开启 FG，旧证据仍保留当次实际配置。内存诊断与正确性运行单独标记，不用其耗时认定吞吐收益。
 

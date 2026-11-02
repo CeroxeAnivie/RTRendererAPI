@@ -7,7 +7,7 @@ public interface RtxptAccess {
     void loadNativeScene(Path scene);
     /** Native HWND; only valid after the first submission and until close. */
     long windowHandle();
-    /** Sets the native viewport title; requires the first submission. */
+    /** Sets the native viewport title; persists across frames and scene reloads. Requires the first submission. */
     void setWindowTitle(String title);
     /** GPU render/present of the resident scene; false means the user closed the window. */
     boolean renderFrame();
@@ -15,7 +15,7 @@ public interface RtxptAccess {
     void awaitIdle();
     /** Actual native settings and internal resolution after rendering, including upstream fallbacks. */
     RuntimeStatus runtimeStatus();
-    /** Text drawn by the upstream GPU UI pass; empty text disables the host HUD and its timer queries. */
+    /** Text drawn by the upstream GPU UI pass; empty text hides the HUD. GPU timing follows RendererConfig.gpuTimingsEnabled(). */
     void setOverlayText(String text);
     /** Optional selector drawn inside the same native HUD; an empty list hides it. */
     void setOverlayChoices(java.util.List<String> labels, int selectedIndex);

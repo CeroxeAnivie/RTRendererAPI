@@ -25,6 +25,9 @@ public:
     std::int32_t setVulkanInfo(const StreamlineVulkanBinding& binding);
     std::int32_t executionFeatureMask();
 
+    VkResult createWin32Surface(VkInstance instance, const VkWin32SurfaceCreateInfoKHR* createInfo, VkSurfaceKHR* surface);
+    void destroySurface(VkInstance instance, VkSurfaceKHR surface);
+
     VkResult createSwapchain(VkDevice device, const VkSwapchainCreateInfoKHR* createInfo, VkSwapchainKHR* swapchain);
     void destroySwapchain(VkDevice device, VkSwapchainKHR swapchain);
     VkResult getSwapchainImages(VkDevice device, VkSwapchainKHR swapchain, uint32_t* count, VkImage* images);

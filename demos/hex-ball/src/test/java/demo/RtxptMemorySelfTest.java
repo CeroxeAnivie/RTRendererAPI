@@ -33,7 +33,7 @@ public final class RtxptMemorySelfTest {
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
             advance(host,120);sample(output,csv,"startup-warm",host.bridgeTimings().frames());
             var layer=RtxptCompositionSelfTest.createOverlay(renderer);
-            sample(output,csv,"legacy-first-use",host.bridgeTimings().frames());
+            sample(output,csv,"scene-lighting-first-use",host.bridgeTimings().frames());
             long revision=1,sequence=1;
             for(int cycle=0;cycle<cycles;cycle++) {
                 renderer.overlays(List.of(layer));advance(host,90);host.awaitIdle();

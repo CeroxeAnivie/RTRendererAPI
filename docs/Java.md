@@ -18,7 +18,7 @@ Maven 坐标是 `top.ceroxe.rt:renderer-api:7.0.0`，默认传递解析 Vulkan �
 | 普通 Vulkan GPU 窗口 | `Renderer.open(RendererConfig.presentation())` | `VulkanFramePresenter`，优选 2× FG |
 | RTXPT 全场景或透明介质 | `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())` | `RtxptAccess` 原生 SDR 窗口，库默认 FG 关闭 |
 | 按场景是否含介质选择后端 | `Renderer.openForScene(policy, scene, firstFrame)` | 为整场景选一个固定后端；首帧已提交 |
-| RTXPT 3D＋Vulkan 独立命令／UI | `RtxptComposedRenderer.open()` | RTXPT 最终呈现；旧设备按需创建 |
+| RTXPT 3D＋Vulkan 独立命令／UI | `RtxptComposedRenderer.open()` | RTXPT 最终呈现；Vulkan 设备按需创建 |
 | 自定义 shader、精确投影、通用资源／命令 | 显式选择 `vulkan-rt` | 先查询逐项可执行能力 |
 
 `RTXPT_FOR_MEDIA` 是整场景路由：没有介质选 Vulkan，存在介质或透射工作选 RTXPT。不是把一帧中的介质单独交给另一后端。固定会话的场景类别变化需关闭重开；同窗切换完整 3D 后端需要[组合指南](d3d12-vulkan-composition.md)中的显式 Vulkan 最终呈现入口。两个后端的材质、光照与采样不保证逐像素相同。
@@ -122,7 +122,7 @@ RTXPT 当前不提供通用 CPU 帧、线性 HDR 导出、任意场景 shader、
 
 ## RTXPT 与 Vulkan 独立工作组合
 
-只需 RTXPT 3D 加上旧 Vulkan 的计算、图形或 UI 时，改用同样实现 `Renderer` 的组合入口：
+只需 RTXPT 3D 加上Vulkan 的计算、图形或 UI 时，改用同样实现 `Renderer` 的组合入口：
 
 ```java
 import top.ceroxe.rt.renderer.rtxpt.RtxptComposedRenderer;
@@ -135,7 +135,7 @@ try (var renderer = RtxptComposedRenderer.open()) {
 }
 ```
 
-旧独立命令通过借用的 `legacyCommands()` 提交；已完成 GPU 纹理通过 `overlays(layers)` 回交给 RTXPT 最终呈现。无旧工作时不创建旧设备。两边不能分别追踪同一场景的光路，颜色叠层也不补全任意自定义 BSDF。需要叠层资源格式、同步、热切换或空闲内存回收时，继续阅读[组合教程](d3d12-vulkan-composition.md)。
+Vulkan 独立命令通过借用的 `vulkanCommands()` 提交；已完成 GPU 纹理通过 `overlays(layers)` 回交给 RTXPT 最终呈现。无旧工作时不创建Vulkan 设备。两边不能分别追踪同一场景的光路，颜色叠层也不补全任意自定义 BSDF。需要叠层资源格式、同步、热切换或空闲内存回收时，继续阅读[组合教程](d3d12-vulkan-composition.md)。
 
 ## 生命周期与资源所有权
 
@@ -144,7 +144,7 @@ try (var renderer = RtxptComposedRenderer.open()) {
 | `Renderer`／`RendererSceneSession` | 一次打开对应一次关闭；场景与帧提交保持单写者 |
 | RTXPT／组合会话 | 全部操作在创建线程；一个进程同时只允许一个 RTXPT 会话 |
 | `Renderer.openForScene(...)` | 已发布初始完整 reset 场景和首帧，后续 sequence 必须推进；`selection()` 查看实际选择 |
-| `RtxptAccess`／`legacyCommands()` | 借用接口，不单独关闭拥有者；宿主拥有原生窗口 |
+| `RtxptAccess`／`vulkanCommands()` | 借用接口，不单独关闭拥有者；宿主拥有原生窗口 |
 | Vulkan presenter | 在创建线程泵事件、呈现和关闭；先关闭 presenter，再关闭 renderer |
 | `FrameView` | 只在回调作用域内使用，不保留其字节视图；需要保存显式复制 |
 | 外部 GPU lease／资源 generation | 按完成证据归还、退休，再等待拥有者关闭完成 |

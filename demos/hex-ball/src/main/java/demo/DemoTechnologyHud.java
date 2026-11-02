@@ -51,7 +51,7 @@ final class DemoTechnologyHud {
                 renderer.extension(RenderingFeatureCapabilities.class);
         return snapshot(
                 capabilities,
-                performanceLine(config, stats, generation),
+                performanceLine(config, stats, generation, diagnostics.frameGpuTiming()),
                 stats.framesPerSecond(),
                 generation
         );
@@ -154,23 +154,32 @@ final class DemoTechnologyHud {
     private static String performanceLine(
             DemoConfig config,
             RenderStats stats,
-            FrameGenerationEvidence generation
+            FrameGenerationEvidence generation,
+            RendererDiagnostics.FrameGpuTiming gpuTiming
     ) {
         double nativeFps = stats.framesPerSecond();
         double generatedFps = generatedFps(generation, nativeFps);
         return String.format(
                 Locale.ROOT,
-                "%dx%d | %d SPP | FPS %.1f (native %.1f | gen %.1f)%n"
-                        + "GPU FRAME CAPACITY %.1f FPS (%.2f ms)",
+                "%dx%d | %d SPP | FPS %.1f (native %.1f | gen %.1f)%n%s",
                 config.width(),
                 config.height(),
                 config.samplesPerPixel(),
                 nativeFps + generatedFps,
                 nativeFps,
                 generatedFps,
-                stats.gpuCapacityFramesPerSecond(),
-                stats.averageGpuMillis()
+                gpuTimingLine(gpuTiming)
         );
+    }
+
+    static String gpuTimingLine(RendererDiagnostics.FrameGpuTiming timing) {
+        Objects.requireNonNull(timing, "timing");
+        if (!timing.enabled()) return "GPU RENDER TIME: NOT MEASURED";
+        if (timing.completedSamples() == 0L || timing.averageTotalNanos() == 0L)
+            return "GPU RENDER TIME: WAITING FOR SAMPLES";
+        // The timer covers GPU rendering, not FG/presentation. Its reciprocal is
+        // not an independently measured frame rate or a whole-system FPS limit.
+        return String.format(Locale.ROOT, "GPU RENDER TIME %.2f ms", timing.averageTotalNanos()/1_000_000.0);
     }
 
     private static double generatedFps(

@@ -16,7 +16,7 @@ public final class VulkanQueueHostSyncSelfTest {
       canonicalizesMonitorByQueueHandle();
       isolatesDifferentQueueHandles();
       serializesCompetingOwnersOfOneQueue();
-      validatesLegacyWaitCountWithoutGpu();
+      validatesSubmitInfoWaitCountWithoutGpu();
       System.out.println("VulkanQueueHostSyncSelfTest passed");
    }
 
@@ -64,16 +64,16 @@ public final class VulkanQueueHostSyncSelfTest {
       }
    }
 
-   private static void validatesLegacyWaitCountWithoutGpu() {
+   private static void validatesSubmitInfoWaitCountWithoutGpu() {
       try (var stack = MemoryStack.stackPush()) {
          var submit = VkSubmitInfo.calloc(1, stack).sType$Default();
-         VulkanQueueHostSync.validateLegacyWaits(submit);
+         VulkanQueueHostSync.validateSubmitInfoWaits(submit);
          submit.pWaitSemaphores(stack.longs(17L))
                  .pWaitDstStageMask(stack.ints(VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
          require(submit.waitSemaphoreCount() == 0, "LWJGL wait-array setter contract changed; review explicit count handling");
          expectMalformedWaits(submit, "wait pointers silently lost because count remained zero");
          submit.waitSemaphoreCount(1);
-         VulkanQueueHostSync.validateLegacyWaits(submit);
+         VulkanQueueHostSync.validateSubmitInfoWaits(submit);
 
          var missingStages = VkSubmitInfo.calloc(1, stack).sType$Default().waitSemaphoreCount(1)
                  .pWaitSemaphores(stack.longs(18L));
@@ -91,16 +91,16 @@ public final class VulkanQueueHostSyncSelfTest {
                  .pWaitDstStageMask(stack.ints(VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
          expectMalformedWaits(batch, "all submissions in a batch must be checked");
          batch.get(1).waitSemaphoreCount(1);
-         VulkanQueueHostSync.validateLegacyWaits(batch);
+         VulkanQueueHostSync.validateSubmitInfoWaits(batch);
          batch.get(0).waitSemaphoreCount(1);
          batch.position(1);
-         VulkanQueueHostSync.validateLegacyWaits(batch);
+         VulkanQueueHostSync.validateSubmitInfoWaits(batch);
       }
    }
 
    private static void expectMalformedWaits(VkSubmitInfo.Buffer submit, String message) {
       try {
-         VulkanQueueHostSync.validateLegacyWaits(submit);
+         VulkanQueueHostSync.validateSubmitInfoWaits(submit);
       } catch (IllegalArgumentException expected) {
          require(expected.getMessage().contains("waitSemaphoreCount"), "missing contract diagnostic");
          return;

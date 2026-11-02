@@ -107,7 +107,7 @@ public record SectionFace(
     }
 
     /**
-     * Creates a legacy face with unavailable extended material semantics.
+     * Creates a basic face with unavailable extended material semantics.
      *
      * @param x                    section-local voxel x coordinate
      * @param y                    section-local voxel y coordinate

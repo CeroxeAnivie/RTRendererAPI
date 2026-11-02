@@ -1,6 +1,10 @@
 package top.ceroxe.rt.renderer.feature;
 
 import org.lwjgl.vulkan.VkDevice;
+import org.lwjgl.vulkan.VkInstance;
+import org.lwjgl.vulkan.VkWin32SurfaceCreateInfoKHR;
+import org.lwjgl.vulkan.KHRWin32Surface;
+import org.lwjgl.vulkan.KHRSurface;
 import org.lwjgl.vulkan.VkPresentInfoKHR;
 import org.lwjgl.vulkan.VkQueue;
 import org.lwjgl.vulkan.VkSwapchainCreateInfoKHR;
@@ -12,10 +16,31 @@ import java.nio.LongBuffer;
  * Optional vendor-owned Vulkan WSI proxy used by manual-hooking integrations.
  *
  * <p>The official presenter remains the sole swapchain owner. This boundary only replaces the
- * five WSI entry points that a feature SDK must observe; it neither creates a second presentation
+ * WSI entry points that a feature SDK must observe; it neither creates a second presentation
  * thread nor changes ownership of the application's queues.</p>
  */
 public interface VulkanSwapchainInterceptor {
+    /**
+     * Creates the window surface through the same integration as its swapchain. Streamline uses
+     * this hook to associate a surface with its HWND before frame generation creates a swapchain.
+     * @param instance borrowed Vulkan instance
+     * @param createInfo borrowed Win32 window descriptor
+     * @param surface output surface handle
+     * @return Vulkan result code
+     */
+    default int createWin32Surface(VkInstance instance, VkWin32SurfaceCreateInfoKHR createInfo, LongBuffer surface) {
+        return KHRWin32Surface.vkCreateWin32SurfaceKHR(instance, createInfo, null, surface);
+    }
+
+    /**
+     * Destroys a surface through the integration that created it, including after an FG fallback.
+     * @param instance borrowed Vulkan instance
+     * @param surface surface handle
+     */
+    default void destroySurface(VkInstance instance, long surface) {
+        KHRSurface.vkDestroySurfaceKHR(instance, surface, null);
+    }
+
     /**
      * Reports a one-way vendor failure transition that must rebuild the proxy swapchain before
      * presentation continues. The presenter acknowledges it only after recreation succeeds.

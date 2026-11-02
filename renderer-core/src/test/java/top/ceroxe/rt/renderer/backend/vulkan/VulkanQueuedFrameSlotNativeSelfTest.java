@@ -71,17 +71,17 @@ public final class VulkanQueuedFrameSlotNativeSelfTest {
                     while(!slot.writable()) {slot.pollProducer(); if(System.nanoTime()>until)throw new AssertionError("slot retirement timed out");Thread.sleep(1);}
                     require(slot.readyBinarySemaphore()==ready,"ready semaphore recreated per frame");
                 }
-                // Legacy completed acquire consumes an unclaimed ready exactly once.
+                // Completed acquire consumes an unclaimed ready exactly once.
                 slot.prepare(32,32,new byte[VulkanFrameUniformPacker.BYTE_COUNT]);
-                var legacy=device.frameCommands().submitTimedExternalSynchronizedOneTimeAsync("legacyReady",0L,ready,
+                var completedSubmission=device.frameCommands().submitTimedExternalSynchronizedOneTimeAsync("completedReady",0L,ready,
                         0L,0L,0L,0L,(command,stack)->{});
                 device.featureSession().commitFrameSubmission(21);
-                slot.submitted(legacy,21,0,21,true,VulkanDeviceRuntime.ManagedPresentationSignal.disabled(),false);
+                slot.submitted(completedSubmission,21,0,21,true,VulkanDeviceRuntime.ManagedPresentationSignal.disabled(),false);
                 while(!slot.pollProducer()) Thread.sleep(1);
                 var oldLease=slot.acquire();
-                require(oldLease.acquireSignal().isEmpty(),"legacy poll changed acquire contract");
+                require(oldLease.acquireSignal().isEmpty(),"completed poll changed acquire contract");
                 oldLease.close();
-                require(slot.writable(),"legacy ready drain prevented reuse");
+                require(slot.writable(),"completed ready drain prevented reuse");
                 var discarded=device.frameCommands().submitTimedExternalSynchronizedOneTimeAsync("discardReady",0L,ready,
                         0L,0L,0L,0L,(command,stack)->{});
                 device.featureSession().commitFrameSubmission(22);

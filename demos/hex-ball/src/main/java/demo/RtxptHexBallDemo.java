@@ -50,6 +50,7 @@ public final class RtxptHexBallDemo {
                 previous=batch;sequence++;
                 stats.submittedFrames.incrementAndGet();stats.framePresented();
                 if(start==0) {
+                    host.setWindowTitle("RTRendererAPI "+DemoBuildInfo.version()+" - RTXPT Hex Ball");
                     start=report=System.nanoTime();reportFrames=host.bridgeTimings().frames();
                     System.out.println("RTXPT HEX BALL READY: same DemoScene / HexPhysics / camera / environment; output="
                         +config.width()+"x"+config.height()+", 1 SPP; "+host.runtimeStatus());

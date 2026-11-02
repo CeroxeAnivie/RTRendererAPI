@@ -15,8 +15,8 @@ param(
     [switch]$ExactMis,
     [switch]$DirectionalStrata,
     [switch]$CombinedBsdf,
-    [switch]$LegacySrHistory,
-    [switch]$LegacyLighting,
+    [switch]$PreSrHistory,
+    [switch]$SceneLighting,
     [switch]$ApproximateMis,
     [ValidateSet('Default','Power','NeeAt')][string]$LightSampler='Default',
     [switch]$Glass,
@@ -37,10 +37,10 @@ if($Backend -ne 'Rtxpt' -and $FrameGeneration){throw 'This FG measurement is for
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
-$opticalHeader=Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'
+$opticalHeader=Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli'
 $opticalSource=[IO.File]::ReadAllText($opticalHeader)
-if($Backend -eq 'Rtxpt' -and ($opticalSource -match '#define RTR_LEGACY_TRANSPORT_TRACE 1' -or
-        $opticalSource -match '#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 1')) {
+if($Backend -eq 'Rtxpt' -and ($opticalSource -match '#define RTR_SCENE_TRANSPORT_TRACE 1' -or
+        $opticalSource -match '#define RTR_SCENE_RAW_OPTICAL_ROUGHNESS 1')) {
     throw 'Disable optical tracing and diagnostic roughness controls before measuring FPS: tools/Build-RtxptOpticalTrace.ps1'
 }
 if(!$AllowDirtySource -and (& git status --porcelain | Where-Object {$_ -notmatch '^\?\? docs/quality/data/' -and $_ -notmatch '^.. docs/quality/data/'})) {
@@ -95,14 +95,14 @@ $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
 $oldDirectionalStrata=$env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA
 $oldCombinedBsdf=$env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF
-$oldHistory=$env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY
-$oldLegacyLighting=$env:RTR_RTXPT_DIAGNOSTIC_LEGACY_LIGHTING
+$oldHistory=$env:RTR_RTXPT_DIAGNOSTIC_PRE_SR_HISTORY
+$oldSceneLighting=$env:RTR_RTXPT_SCENE_LIGHTING
 $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 try {
     $env:RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE=$null
     $env:RTR_RTXPT_PRESENTATION_TRACE=$(if($PresentationTrace){'1'}else{$null})
-    if($WorkTrace -ne ($opticalSource -match '#define RTR_LEGACY_WORK_TRACE 1')) {
+    if($WorkTrace -ne ($opticalSource -match '#define RTR_SCENE_WORK_TRACE 1')) {
         throw 'Work-trace option must match the configured shader artifact.'
     }
     $env:RTR_RTXPT_GPU_PROFILE=if($StageProfile){$prefix+'-gpu.csv'}else{$null}
@@ -114,8 +114,8 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$(if($DirectionalStrata){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$(if($CombinedBsdf){'1'}else{$null})
-    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY=$(if($LegacySrHistory){'1'}else{$null})
-    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_LIGHTING=$(if($LegacyLighting){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_PRE_SR_HISTORY=$(if($PreSrHistory){'1'}else{$null})
+    $env:RTR_RTXPT_SCENE_LIGHTING=$(if($SceneLighting){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(switch($LightSampler){'Power'{'power'} 'NeeAt'{'neeat'} default{$null}})
@@ -129,17 +129,17 @@ try {
         WorkingTreeSourceSha256=$sourceDigest;WorkingTreeSourceFiles=$sourcePaths;
     DirectionalStrata=[bool]$DirectionalStrata;
     CombinedBsdf=[bool]$CombinedBsdf;
-    LegacySrHistory=[bool]$LegacySrHistory;
-    LegacyLighting=[bool]$LegacyLighting;
+    PreSrHistory=[bool]$PreSrHistory;
+    SceneLighting=[bool]$SceneLighting;
         Width=$Width;Height=$Height;Spp=1;FrameGeneration=[bool]$FrameGeneration;StageProfile=[bool]$StageProfile;
         OpticalTransportTrace=$false;NativeGpuTimings=[bool]$StageProfile;
         OpticalWorkTrace=[bool]$WorkTrace;PresentationTrace=[bool]$PresentationTrace;
         PresentMon=[bool]$PresentMon;
         OpticalTransportTraceSha256=(Get-FileHash -LiteralPath $opticalHeader).Hash;
-        ExactOpticalInterfaces=([regex]::Match($opticalSource,'#define RTR_LEGACY_EXACT_INTERFACE_COUNT (\d+)u')).Groups[1].Value;
-        ReplayPrefixCache=($opticalSource -notmatch '#define RTR_LEGACY_REPLAY_PREFIX_CACHE 0');
-        ReplayPrefixCacheSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyReplayCache.hlsli').Hash;
-        NativeRoughnessPolicy=($opticalSource -notmatch '#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 1');
+        ExactOpticalInterfaces=([regex]::Match($opticalSource,'#define RTR_SCENE_EXACT_INTERFACE_COUNT (\d+)u')).Groups[1].Value;
+        ReplayPrefixCache=($opticalSource -notmatch '#define RTR_SCENE_REPLAY_PREFIX_CACHE 0');
+        ReplayPrefixCacheSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrSceneReplayCache.hlsli').Hash;
+        NativeRoughnessPolicy=($opticalSource -notmatch '#define RTR_SCENE_RAW_OPTICAL_ROUGHNESS 1');
         FinalMergeShaderSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/bin/ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/PostProcess.bin').Hash;
         RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;
         SrPreset=$SrPreset;
@@ -159,8 +159,8 @@ try {
     if((!$WorkTrace -and $runLog -match '\[unformatted args\]') -or $runLog -match 'single queue to preserve the final SR-input readback'){
         throw 'Shader diagnostic output was unexpectedly active; discard this FPS run.'
     }
-    if($LegacyLighting -and $runLog -notmatch 'RTXPT legacy lighting inputs ACTIVE'){
-        throw 'Requested legacy lighting inputs did not activate.'
+    if($SceneLighting -and $runLog -notmatch 'RTXPT scene lighting inputs ACTIVE'){
+        throw 'Requested scene lighting inputs did not activate.'
     }
     if($FixedSrExposure -gt 0 -and $runLog -notmatch 'RTXPT explicit SR exposure texture='){
         throw 'Fixed SR exposure was requested but was not tagged; discard this run.'
@@ -193,8 +193,8 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$oldDirectionalStrata
     $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$oldCombinedBsdf
-    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY=$oldHistory
-    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_LIGHTING=$oldLegacyLighting
+    $env:RTR_RTXPT_DIAGNOSTIC_PRE_SR_HISTORY=$oldHistory
+    $env:RTR_RTXPT_SCENE_LIGHTING=$oldSceneLighting
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$oldSampler
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$oldTransmissionGuides
 }

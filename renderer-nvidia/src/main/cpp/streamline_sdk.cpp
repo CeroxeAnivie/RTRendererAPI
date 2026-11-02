@@ -1,6 +1,7 @@
 #include "streamline_sdk.hpp"
 
 #include <Windows.h>
+#include <vulkan/vulkan_win32.h>
 
 #include <sstream>
 #include <stdexcept>
@@ -289,6 +290,16 @@ public:
         closeImpl();
     }
 
+    VkResult createWin32Surface(VkInstance instance, const VkWin32SurfaceCreateInfoKHR* createInfo, VkSurfaceKHR* surface) {
+        const auto create = instanceFunction<PFN_vkCreateWin32SurfaceKHR>(instance, "vkCreateWin32SurfaceKHR");
+        return create(instance, createInfo, nullptr, surface);
+    }
+
+    void destroySurface(VkInstance instance, VkSurfaceKHR surface) {
+        const auto destroy = instanceFunction<PFN_vkDestroySurfaceKHR>(instance, "vkDestroySurfaceKHR");
+        destroy(instance, surface, nullptr);
+    }
+
     void releaseResources(const sl::ViewportHandle& viewport) noexcept {
         if (!initialized_ || freeResources_ == nullptr) return;
         // Reflex and PCL are frame-generation dependencies, but they do not own the
@@ -318,6 +329,15 @@ public:
     }
 
 private:
+    template <typename Function>
+    Function instanceFunction(VkInstance instance, const char* name) const {
+        if (!initialized_) throw std::runtime_error("Streamline surface hook requires a live SDK session");
+        const auto get = reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(module_, "vkGetInstanceProcAddr"));
+        const auto function = get == nullptr ? nullptr : reinterpret_cast<Function>(get(instance, name));
+        if (function == nullptr) throw std::runtime_error(std::string("Streamline surface hook unavailable: ") + name);
+        return function;
+    }
+
     void closeImpl() noexcept {
         if (initialized_ && shutdown_ != nullptr) {
             shutdown_();
@@ -528,6 +548,14 @@ std::int32_t StreamlineSdkSession::bindVulkan(
 
 void StreamlineSdkSession::unloadFrameGeneration() {
     impl_->unloadFrameGeneration();
+}
+
+VkResult StreamlineSdkSession::createWin32Surface(VkInstance instance, const VkWin32SurfaceCreateInfoKHR* createInfo, VkSurfaceKHR* surface) {
+    return impl_->createWin32Surface(instance, createInfo, surface);
+}
+
+void StreamlineSdkSession::destroySurface(VkInstance instance, VkSurfaceKHR surface) {
+    impl_->destroySurface(instance, surface);
 }
 
 void StreamlineSdkSession::close() noexcept {

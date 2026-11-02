@@ -78,6 +78,16 @@ VkResult StreamlineRuntime::createSwapchain(
     return frameGeneration_.createSwapchain(device, createInfo, swapchain);
 }
 
+VkResult StreamlineRuntime::createWin32Surface(VkInstance instance, const VkWin32SurfaceCreateInfoKHR* createInfo, VkSurfaceKHR* surface) {
+    std::scoped_lock lock(mutex_);
+    return sdk_.createWin32Surface(instance, createInfo, surface);
+}
+
+void StreamlineRuntime::destroySurface(VkInstance instance, VkSurfaceKHR surface) {
+    std::scoped_lock lock(mutex_);
+    sdk_.destroySurface(instance, surface);
+}
+
 void StreamlineRuntime::destroySwapchain(VkDevice device, VkSwapchainKHR swapchain) {
     std::scoped_lock lock(mutex_);
     frameGeneration_.destroySwapchain(device, swapchain);

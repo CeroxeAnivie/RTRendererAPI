@@ -776,8 +776,8 @@ public final class DynamicRenderSceneCollector {
          */
         selectedPrimitives.sort(Comparator.comparingLong(DynamicRenderScene.DynamicPrimitive::id));
         /*
-         * The legacy MODEL compatibility lane and the persistent model stream
-         * share one Vulkan TLAS instance budget.  Reserve legacy selections
+         * The procedural MODEL compatibility lane and the persistent model stream
+         * share one Vulkan TLAS instance budget.  Reserve procedural selections
          * first so old hook sites retain their established behavior, then admit
          * canonical persistent slots without exceeding the native limit.
          */

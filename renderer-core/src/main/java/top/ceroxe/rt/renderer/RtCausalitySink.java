@@ -15,9 +15,9 @@ public interface RtCausalitySink {
     };
 
     /**
-     * Converts a legacy dispatch-reason string to its typed representation.
+     * Converts a string dispatch-reason string to its typed representation.
      *
-     * @param reason legacy dispatch-reason token; may be {@code null}
+     * @param reason string dispatch-reason token; may be {@code null}
      * @return the matching reason, or {@link Reason#NONE} for an unknown token
      */
     static Reason dispatchReason(String reason) {

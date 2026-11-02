@@ -817,10 +817,10 @@ public final class RtNativeFluidSceneSelfTest {
          for(int z = 0; z < 16; ++z) {
             for(int x = 0; x < 16; ++x) {
                int index = SectionVoxelSnapshot.localBlockIndex(x, y, z);
-               int legacyState = (x + z + y + sectionOrdinal & 1) == 0 ? 91 : 92;
-               int amount = legacyState == 91 ? 8 : 2 + (x + z + sectionOrdinal & 3);
-               voxelTypeIds[index] = legacyState;
-               mediumStateIds[index] = legacyState;
+               int voxelState = (x + z + y + sectionOrdinal & 1) == 0 ? 91 : 92;
+               int amount = voxelState == 91 ? 8 : 2 + (x + z + sectionOrdinal & 3);
+               voxelTypeIds[index] = voxelState;
+               mediumStateIds[index] = voxelState;
                mediumTypeIds[index] = 7;
                mediumAmounts[index] = (byte)amount;
                mapColors[index] = SectionVoxelSnapshot.packMapColorAndLight(2781147, 15, 0);

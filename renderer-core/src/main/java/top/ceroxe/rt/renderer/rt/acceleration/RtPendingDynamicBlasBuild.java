@@ -5,7 +5,7 @@ import top.ceroxe.rt.renderer.RendererFrameCausality;
 import java.util.Objects;
 
 /**
- * Owns one submitted legacy dynamic BLAS build until the cache commits or discards it.
+ * Owns one submitted scene-batch dynamic BLAS build until the cache commits or discards it.
  */
 final class RtPendingDynamicBlasBuild implements AutoCloseable {
     private final RtAccelerationStructure.DynamicBlasBuildSubmission submission;

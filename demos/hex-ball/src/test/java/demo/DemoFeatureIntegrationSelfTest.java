@@ -36,6 +36,7 @@ public final class DemoFeatureIntegrationSelfTest {
         requestsAllExceptMfgAndRejectsContradictoryProperties();
         disablesFgAndForwardsTheBaselineProperty();
         startsPresentationMeasurementAtFirstPresent();
+        gpuHudReportsMeasurementAvailability();
         mapsTechnologyStatusesWithoutHardwareInference();
         countsActiveMfgFramesInVisibleFps();
         boundsBlockedReasonsAndHandlesMissingCapabilityExtension();
@@ -354,6 +355,20 @@ public final class DemoFeatureIntegrationSelfTest {
                 "rolling FPS must use the first-present epoch");
         requireNear(stats.totalPresentationFramesPerSecond(), 10.0, 0.0001,
                 "total FPS must share the first-present epoch");
+    }
+
+    private static void gpuHudReportsMeasurementAvailability() {
+        var unavailable=top.ceroxe.rt.renderer.api.RendererDiagnostics.FrameGpuTiming.unavailable();
+        require(DemoTechnologyHud.gpuTimingLine(unavailable).equals("GPU RENDER TIME: NOT MEASURED"),
+                "Disabled GPU timing must not appear as zero FPS or zero milliseconds");
+        var pending=unavailable.toBuilder().enabled(true).build();
+        require(DemoTechnologyHud.gpuTimingLine(pending).equals("GPU RENDER TIME: WAITING FOR SAMPLES"),
+                "An enabled timer without samples must wait for real measurements");
+        var measured=pending.toBuilder().completedSamples(1).averagePostTraceNanos(2_500_000).averageTotalNanos(2_500_000).maxTotalNanos(2_500_000).build();
+        require(DemoTechnologyHud.gpuTimingLine(measured).equals("GPU RENDER TIME 2.50 ms"),
+                "GPU duration must remain distinct from native/presented FPS");
+        var stats=new RenderStats();stats.observeGpuTiming(measured);stats.observeGpuTiming(unavailable);
+        require(stats.averageGpuMillis()==0.0,"Disabling a timer must clear old retained durations");
     }
 
     private static void mapsTechnologyStatusesWithoutHardwareInference() {

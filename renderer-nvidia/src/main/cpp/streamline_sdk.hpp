@@ -12,6 +12,8 @@
 #include <sl_pcl.h>
 #include <sl_reflex.h>
 
+struct VkWin32SurfaceCreateInfoKHR;
+
 static_assert(SL_VERSION_MAJOR > 2 || (SL_VERSION_MAJOR == 2 &&
         (SL_VERSION_MINOR > 14 || (SL_VERSION_MINOR == 14 && SL_VERSION_PATCH >= 16))),
         "Use Streamline 2.14.16 or newer for the current NVIDIA model recommendations");
@@ -72,6 +74,8 @@ public:
             StreamlineApiBindings& output
     );
     void unloadFrameGeneration();
+    VkResult createWin32Surface(VkInstance instance, const VkWin32SurfaceCreateInfoKHR* createInfo, VkSurfaceKHR* surface);
+    void destroySurface(VkInstance instance, VkSurfaceKHR surface);
     void releaseResources(const sl::ViewportHandle& viewport) noexcept;
     void close() noexcept;
 

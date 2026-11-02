@@ -780,7 +780,7 @@ public final class RtSectionInstanceAdmission {
                  * membership, never host's rotating raster render list.
                  * Keeping that list in this key made yaw-only updates rebuild
                  * an identical Base/FarField plan and allocate its complete
-                 * Set/sort graph. Legacy view-owned admission still needs the
+                 * Set/sort graph. View-owned admission still needs the
                  * list because it deliberately selects only visible sections.
                  */
                 && (persistentResidentCoverage

@@ -97,7 +97,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
             new PersistentSlots<>();
     private RtDynamicTransformSlots activeMeshTransforms = new RtDynamicTransformSlots();
     /*
-     * The collector's physical slots and the legacy full-list bootstrap are
+     * The collector's physical slots and the scene-batch full-list bootstrap are
      * different identity domains. This flag records which domain currently
      * owns the native table; crossing into the collector domain is an explicit
      * snapshot rebase, never an opportunistic allocateAt collision recovery.
@@ -113,7 +113,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
     private List<RtAccelerationStructure.TlasInstance> cachedTlasInstances = List.of();
     private long cachedTlasInstanceRevision = -1L;
     private int[] cachedTlasInstanceDirtySlots = new int[0];
-    private boolean legacyMaterialDirty;
+    private boolean sceneBatchMaterialDirty;
     private long cachedMaterialTopologyRevision = -1L;
     private long cachedMaterialGeometryRevision = -1L;
     private long cachedMaterialRevision = -1L;
@@ -138,8 +138,8 @@ public final class RtDynamicBlasCache implements AutoCloseable {
     private long materialRevision;
     private long latestObservedSceneRevision;
     private RendererFrameCausality latestDynamicCausality = RendererFrameCausality.untraced(0L);
-    private long latestObservedLegacySceneRevision;
-    private long activeLegacyMeshRevision;
+    private long latestObservedSceneBatchRevision;
+    private long activeSceneBatchMeshRevision;
     private long submittedBuilds;
     private long completedBuilds;
     private long buildPollsNotReady;
@@ -150,9 +150,9 @@ public final class RtDynamicBlasCache implements AutoCloseable {
     private long faceCount;
     private long triangleCount;
     private int visibleInstanceCount;
-    private long legacyPrimitiveCount;
-    private long legacyFaceCount;
-    private long legacyTriangleCount;
+    private long sceneBatchPrimitiveCount;
+    private long sceneBatchFaceCount;
+    private long sceneBatchTriangleCount;
     private long totalTrianglesBuilt;
     private long dynamicBlasBytes;
     private long lastBuildLatencyMillis;
@@ -240,7 +240,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         this.inactiveInstance = RtAccelerationStructure.TlasInstance.inactive(placeholderBlasDeviceAddress);
     }
 
-    private static boolean containsLegacyModelInstances(DynamicRenderScene scene) {
+    private static boolean containsProceduralModelInstances(DynamicRenderScene scene) {
         for (DynamicRenderScene.DynamicPrimitive primitive : scene.primitives()) {
             if (primitive.usesTlasGeometry() && primitive.meshInstance() != null) {
                 return true;
@@ -502,16 +502,16 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         return count;
     }
 
-    static boolean shouldSubmitLegacyBuild(
+    static boolean shouldSubmitSceneBatchBuild(
             long candidateRevision,
             long activeRevision,
             long pendingRevision
     ) {
         if (candidateRevision <= 0L) {
-            throw new IllegalArgumentException("candidate legacy mesh revision must be positive");
+            throw new IllegalArgumentException("candidate scene-batch mesh revision must be positive");
         }
         if (activeRevision < 0L || pendingRevision < -1L) {
-            throw new IllegalArgumentException("legacy mesh revisions are outside their valid range");
+            throw new IllegalArgumentException("scene-batch mesh revisions are outside their valid range");
         }
         return candidateRevision > Math.max(activeRevision, pendingRevision);
     }
@@ -665,17 +665,17 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         recordSmokeSceneClassification(change);
 
         RtDynamicTriangleMesh mesh = null;
-        latestObservedLegacySceneRevision = Math.max(latestObservedLegacySceneRevision, scene.revision());
+        latestObservedSceneBatchRevision = Math.max(latestObservedSceneBatchRevision, scene.revision());
         if (mesh == null) {
-            boolean legacyGeometryChanged = clearLegacyDynamicGeometry(scene.revision());
+            boolean sceneBatchGeometryChanged = clearSceneBatchGeometry(scene.revision());
             submitNextAssetBuild();
-            return change.tlasChanged() || legacyGeometryChanged;
+            return change.tlasChanged() || sceneBatchGeometryChanged;
         }
-        long pendingLegacyMeshRevision = pendingBuild == null ? -1L : pendingBuild.mesh().revision();
-        if (!shouldSubmitLegacyBuild(
+        long pendingSceneBatchMeshRevision = pendingBuild == null ? -1L : pendingBuild.mesh().revision();
+        if (!shouldSubmitSceneBatchBuild(
                 mesh.revision(),
-                activeLegacyMeshRevision,
-                pendingLegacyMeshRevision
+                activeSceneBatchMeshRevision,
+                pendingSceneBatchMeshRevision
         )) {
             submitNextAssetBuild();
             return change.tlasChanged();
@@ -702,7 +702,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         if (closed) {
             throw new IllegalStateException("RT dynamic BLAS cache is already closed");
         }
-        processLegacyBuild();
+        processSceneBatchBuild();
         processAssetBuild();
         submitNextAssetBuild();
     }
@@ -711,7 +711,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
             DynamicRenderScene scene,
             RendererFrameCausality causality
     ) {
-        if (scene.modelFrameDelta().isAuthoritative() && !containsLegacyModelInstances(scene)) {
+        if (scene.modelFrameDelta().isAuthoritative() && !containsProceduralModelInstances(scene)) {
             return updateMeshInstancesFromDelta(scene, causality);
         }
         collectorOwnsPhysicalModelSlots = false;
@@ -720,7 +720,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         RtDynamicSlotUpdateSummary updates = new RtDynamicSlotUpdateSummary();
         for (DynamicRenderScene.DynamicPrimitive primitive : scene.primitives()) {
             DynamicRenderScene.DynamicPrimitive instancedPrimitive =
-                    RtDynamicTriangleMesh.promoteLegacyModelPrimitive(primitive);
+                    RtDynamicTriangleMesh.promoteProceduralModelPrimitive(primitive);
             if (instancedPrimitive.meshInstance() == null) {
                 continue;
             }
@@ -1013,7 +1013,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
     }
 
     /**
-     * Both modern model submissions and promoted legacy MODEL primitives own
+     * Both modern model submissions and promoted procedural MODEL primitives own
      * the same persistent asset/instance lifecycle. Keeping BLAS admission in
      * this shared entry prevents one capture representation from publishing a
      * TLAS identity without ever scheduling its geometry.
@@ -1171,7 +1171,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         }
     }
 
-    private void processLegacyBuild() {
+    private void processSceneBatchBuild() {
         RtPendingDynamicBlasBuild pending = pendingBuild;
         if (pending == null) {
             return;
@@ -1183,7 +1183,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         }
         pendingBuild = null;
         recordCompletedBuild(completed);
-        if (completed.mesh().revision() < latestObservedLegacySceneRevision) {
+        if (completed.mesh().revision() < latestObservedSceneBatchRevision) {
             discardedCompletedBuilds++;
             completed.accelerationStructure().close();
             return;
@@ -1195,11 +1195,11 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         }
         dynamicBlas = completed.accelerationStructure();
         dynamicMaterial = completed.mesh().material();
-        legacyMaterialDirty = true;
-        activeLegacyMeshRevision = completed.mesh().revision();
-        legacyPrimitiveCount = completed.mesh().primitiveCount();
-        legacyFaceCount = completed.mesh().faceCount();
-        legacyTriangleCount = completed.mesh().triangleCount();
+        sceneBatchMaterialDirty = true;
+        activeSceneBatchMeshRevision = completed.mesh().revision();
+        sceneBatchPrimitiveCount = completed.mesh().primitiveCount();
+        sceneBatchFaceCount = completed.mesh().faceCount();
+        sceneBatchTriangleCount = completed.mesh().triangleCount();
         totalTrianglesBuilt += completed.mesh().triangleCount();
         revision++;
         geometryRevision++;
@@ -1275,9 +1275,9 @@ public final class RtDynamicBlasCache implements AutoCloseable {
     }
 
     private void recomputeDynamicCounts() {
-        long nextPrimitiveCount = legacyPrimitiveCount + activeMeshInstances.activeCount();
-        long nextFaceCount = legacyFaceCount;
-        long nextTriangleCount = legacyTriangleCount;
+        long nextPrimitiveCount = sceneBatchPrimitiveCount + activeMeshInstances.activeCount();
+        long nextFaceCount = sceneBatchFaceCount;
+        long nextTriangleCount = sceneBatchTriangleCount;
         int nextInactiveAssetSlots = 0;
         int nextReplacementAssetSlots = 0;
         for (DynamicRenderScene.DynamicModelInstance primitive : activeMeshInstances) {
@@ -1399,7 +1399,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         while (cachedTlasInstanceSlots.size() > requiredSlots) {
             cachedTlasInstanceSlots.remove(cachedTlasInstanceSlots.size() - 1);
         }
-        RtAccelerationStructure.TlasInstance legacyInstance = dynamicBlas != null && dynamicMaterial != null
+        RtAccelerationStructure.TlasInstance sceneBatchInstance = dynamicBlas != null && dynamicMaterial != null
                 ? new RtAccelerationStructure.TlasInstance(
                 dynamicBlas.deviceAddress(),
                 DynamicMeshInstance.AffineTransform.identity(),
@@ -1407,14 +1407,14 @@ public final class RtDynamicBlasCache implements AutoCloseable {
                 WORLD_VISIBILITY_MASK
         )
                 : inactiveInstance;
-        boolean legacySlotDirty = tableResized
+        boolean sceneBatchSlotDirty = tableResized
                 || cachedTlasInstances.isEmpty()
-                || !Objects.equals(cachedTlasInstances.get(0), legacyInstance);
-        cachedTlasInstanceSlots.set(0, legacyInstance);
+                || !Objects.equals(cachedTlasInstances.get(0), sceneBatchInstance);
+        cachedTlasInstanceSlots.set(0, sceneBatchInstance);
         BitSet dirtyTableSlots = new BitSet(requiredSlots);
         if (tableResized || cachedTlasInstanceRevision < 0L) {
             dirtyTableSlots.set(0, requiredSlots);
-        } else if (legacySlotDirty) {
+        } else if (sceneBatchSlotDirty) {
             dirtyTableSlots.set(0);
         }
         for (int slot = dirtyMeshTlasSlots.nextSetBit(0);
@@ -1494,7 +1494,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         if (dynamicBlas == null && activeMeshInstances.capacity() == 0) {
             cachedMeshMaterials.clear();
             dirtyMeshMaterialSlots.clear();
-            legacyMaterialDirty = false;
+            sceneBatchMaterialDirty = false;
             cachedMaterialSnapshot = DynamicMaterialSnapshot.empty();
             cachedMaterialTopologyRevision = topologyRevision;
             cachedMaterialGeometryRevision = geometryRevision;
@@ -1522,7 +1522,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         }
         int[] dirtyMaterialSlots = materialDirtySlotsForSnapshot();
         dirtyMeshMaterialSlots.clear();
-        legacyMaterialDirty = false;
+        sceneBatchMaterialDirty = false;
         RtSceneMaterialTable.SectionMaterial[] materials = new RtSceneMaterialTable.SectionMaterial[
                 Math.addExact(1, activeMeshInstances.capacity())
                 ];
@@ -1573,9 +1573,9 @@ public final class RtDynamicBlasCache implements AutoCloseable {
     }
 
     private int[] materialDirtySlotsForSnapshot() {
-        int[] dirtySlots = new int[dirtyMeshMaterialSlots.cardinality() + (legacyMaterialDirty ? 1 : 0)];
+        int[] dirtySlots = new int[dirtyMeshMaterialSlots.cardinality() + (sceneBatchMaterialDirty ? 1 : 0)];
         int cursor = 0;
-        if (legacyMaterialDirty) {
+        if (sceneBatchMaterialDirty) {
             dirtySlots[cursor++] = 0;
         }
         for (int slot = dirtyMeshMaterialSlots.nextSetBit(0);
@@ -1827,8 +1827,8 @@ public final class RtDynamicBlasCache implements AutoCloseable {
                 + ", geometryRevision=" + geometryRevision
                 + ", materialRevision=" + materialRevision
                 + ", latestSceneRevision=" + latestObservedSceneRevision
-                + ", latestLegacySceneRevision=" + latestObservedLegacySceneRevision
-                + ", activeLegacyMeshRevision=" + activeLegacyMeshRevision
+                + ", latestSceneBatchSceneRevision=" + latestObservedSceneBatchRevision
+                + ", activeSceneBatchMeshRevision=" + activeSceneBatchMeshRevision
                 + ", pendingBuild=" + (pendingBuild != null)
                 + ", pendingAssetBuild=" + !pendingAssetBuilds.isEmpty()
                 + ", pendingAssetBuilds=" + pendingAssetBuilds.size()
@@ -2040,18 +2040,18 @@ public final class RtDynamicBlasCache implements AutoCloseable {
         smokeTopologyRemoved += recordKindDifference(previousKinds, currentKinds, smokeTopologyRemovedByKind);
     }
 
-    private boolean clearLegacyDynamicGeometry(long sceneRevision) {
+    private boolean clearSceneBatchGeometry(long sceneRevision) {
         boolean hadPendingBuild = pendingBuild != null;
         replacePendingBuild(null);
         if (dynamicBlas != null) {
             retireDynamicBlas(revision + 1L, dynamicBlas);
             dynamicBlas = null;
             dynamicMaterial = null;
-            legacyMaterialDirty = true;
-            legacyPrimitiveCount = 0L;
-            legacyFaceCount = 0L;
-            legacyTriangleCount = 0L;
-            activeLegacyMeshRevision = sceneRevision;
+            sceneBatchMaterialDirty = true;
+            sceneBatchPrimitiveCount = 0L;
+            sceneBatchFaceCount = 0L;
+            sceneBatchTriangleCount = 0L;
+            activeSceneBatchMeshRevision = sceneRevision;
             revision++;
             geometryRevision++;
             materialRevision++;
@@ -2060,7 +2060,7 @@ public final class RtDynamicBlasCache implements AutoCloseable {
             recomputeDynamicBlasBytes();
             return true;
         } else {
-            activeLegacyMeshRevision = Math.max(activeLegacyMeshRevision, sceneRevision);
+            activeSceneBatchMeshRevision = Math.max(activeSceneBatchMeshRevision, sceneRevision);
             return hadPendingBuild;
         }
     }

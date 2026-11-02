@@ -104,6 +104,10 @@ final class NvidiaNativeBridge {
 
     static native int nativeStreamlineExecutionFeatureMask();
 
+    static native int nativeStreamlineCreateWin32Surface(long instance, long createInfo, long output);
+
+    static native void nativeStreamlineDestroySurface(long instance, long surface);
+
     static native int nativeStreamlineCreateSwapchain(long device, long createInfo, long output);
 
     static native void nativeStreamlineDestroySwapchain(long device, long swapchain);

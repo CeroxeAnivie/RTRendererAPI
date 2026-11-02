@@ -12,7 +12,7 @@ import top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFramePresenterConfig;
 import top.ceroxe.rt.renderer.rtxpt.RtxptAccess;
 import top.ceroxe.rt.renderer.rtxpt.RtxptComposedRenderer;
 
-/** End-to-end GPU sharing, exact display colors, legacy UI, switching and completed throughput. */
+/** End-to-end GPU sharing, exact display colors, Vulkan UI, switching and completed throughput. */
 public final class RtxptCompositionSelfTest {
     private static final int WIDTH=1920,HEIGHT=1080;
     private static long sequence;
@@ -44,7 +44,7 @@ public final class RtxptCompositionSelfTest {
             submit(renderer,1,WIDTH,HEIGHT);
             renderer.captureRtxptSource(output.resolve("ui-source.png"));
             compare(output.resolve("ui-source.png"),output.resolve("ui-final.png"),true);
-            require(renderer.workSnapshot().legacyFrames()==0,"Vulkan did not duplicate the RTXPT 3D scene");
+            require(renderer.workSnapshot().vulkanFrames()==0,"Vulkan did not duplicate the RTXPT 3D scene");
             require(renderer.extension(RtxptAccess.class).isEmpty(),"Hidden producer cannot bypass its consumption lifecycle");
 
             renderer.backendPolicy(RendererBackendPolicy.VULKAN_ONLY);
@@ -65,7 +65,7 @@ public final class RtxptCompositionSelfTest {
             renderer.presenter().captureNextPresentedFrame(output.resolve("vulkan-ui.png"));
             submit(renderer,2,WIDTH,HEIGHT);
             require(renderer.selection().orElseThrow().backend()==RendererBackendPolicy.Backend.VULKAN,"Actual Vulkan 3D selection");
-            require(renderer.workSnapshot().legacyFrames()>0,"Actual Vulkan 3D work occurred");
+            require(renderer.workSnapshot().vulkanFrames()>0,"Actual Vulkan 3D work occurred");
             renderer.backendPolicy(RendererBackendPolicy.RTXPT_ONLY);
             renderer.presenter().captureNextPresentedFrame(output.resolve("rtxpt-return-ui.png"));
             submit(renderer,2,WIDTH,HEIGHT);
@@ -104,7 +104,7 @@ public final class RtxptCompositionSelfTest {
     static FrameCompositionPlan.Layer createOverlay(RtxptComposedRenderer renderer) throws Exception {
         var texture=new TextureResource(new RenderResourceId(700),ResourceVersion.initial(),TextureDimension.TEXTURE_2D,
             WIDTH,HEIGHT,1,1,1,1,TextureFormat.RGBA8_UNORM,EnumSet.of(TextureUsage.COLOR_ATTACHMENT,TextureUsage.STORAGE_READ));
-        var commands=renderer.legacyCommands();
+        var commands=renderer.vulkanCommands();
         require(commands.submitResources(new RenderResourceTransaction(0,List.of(),List.of(texture),List.of())).outcome()
             ==ResourceTransactionEvidence.Outcome.ACCEPTED,"Vulkan UI resource is accepted");
         var view=new TextureView(texture,TextureViewDimension.TEXTURE_2D,new TextureSubresourceRange(TextureAspect.COLOR,0,1,0,1));
@@ -233,7 +233,7 @@ public final class RtxptCompositionSelfTest {
             renderer.captureRtxptSource(output.resolve("native-overlay-restored-source.png"));
             compare(output.resolve("native-overlay-restored-source.png"),output.resolve("native-overlay-restored.png"),true);
             require(renderer.workSnapshot().presentation().presentSamples()==0,"Hidden Vulkan compositor never presented a frame");
-            require(renderer.workSnapshot().legacyFrames()==0,"Vulkan did not duplicate complete 3D tracing");
+            require(renderer.workSnapshot().vulkanFrames()==0,"Vulkan did not duplicate complete 3D tracing");
             renderer.overlays(List.of()); // Normal-color HUD evidence, without the orange test layer.
             host.setOverlayText("RTRendererAPI 7.0.0 - MEDIUM DEMO\nRTXPT: RR | VULKAN: GPU UI\nHUD / SCENE SELECTOR / OVERLAY LIFECYCLE VERIFIED");
             host.setOverlayChoices(RtxptMediumScene.LABELS,0);

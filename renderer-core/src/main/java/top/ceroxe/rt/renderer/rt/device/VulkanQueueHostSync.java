@@ -65,7 +65,7 @@ public final class VulkanQueueHostSync {
     }
 
     /**
-     * Submits legacy {@link VkSubmitInfo} work while holding the queue's process-wide host lock.
+     * Submits {@link VkSubmitInfo} work while holding the queue's process-wide host lock.
      * This is shared by the RT command lanes and the managed swapchain presenter.
      *
      * @param queue destination queue
@@ -74,19 +74,19 @@ public final class VulkanQueueHostSync {
      * @return Vulkan result returned by {@link VK10#vkQueueSubmit}
      */
     public static int submit(VkQueue queue, VkSubmitInfo.Buffer submits, long fence) {
-        validateLegacyWaits(submits);
+        validateSubmitInfoWaits(submits);
         synchronized (monitor(queue)) {
             return VK10.vkQueueSubmit(queue, submits, fence);
         }
     }
 
     /**
-     * Checks the legacy binding's independently configured count and wait-array pointers.
+     * Checks the VkSubmitInfo binding's independently configured count and wait-array pointers.
      * LWJGL does not infer waitSemaphoreCount from either wait-array setter. A non-null
      * pointer with count zero would silently discard the dependency in Vulkan.
      * This allocation-free host check makes that mistake fail before native submission.
      */
-    static void validateLegacyWaits(VkSubmitInfo.Buffer submits) {
+    static void validateSubmitInfoWaits(VkSubmitInfo.Buffer submits) {
         Objects.requireNonNull(submits, "submits");
         long address = submits.address();
         for (int index = 0; index < submits.remaining(); index++, address += VkSubmitInfo.SIZEOF) {

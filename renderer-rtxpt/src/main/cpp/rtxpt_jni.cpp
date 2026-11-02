@@ -33,19 +33,19 @@ extern SampleUIData g_sampleUIData;
 
 namespace {
 class HostPathTracer final : public AdvancedPathTracer {
-    struct LegacyLight { float4 positionType,directionRange,colorIntensity,coneShadow; };
-    static_assert(sizeof(LegacyLight)==64);
-    std::vector<LegacyLight> legacyLights;
-    float4 legacySky={};
-    nvrhi::BufferHandle legacyLightBuffer;
-    bool legacyLightsDirty=false;
-    bool legacyLightingActive() const {
-        const char* control=std::getenv("RTR_RTXPT_DIAGNOSTIC_LEGACY_LIGHTING");
-        return control && std::string(control)=="1" && !legacyLights.empty()
+    struct SceneLight { float4 positionType,directionRange,colorIntensity,coneShadow; };
+    static_assert(sizeof(SceneLight)==64);
+    std::vector<SceneLight> sceneLights;
+    float4 sceneSky={};
+    nvrhi::BufferHandle sceneLightBuffer;
+    bool sceneLightsDirty=false;
+    bool sceneLightingActive() const {
+        const char* control=std::getenv("RTR_RTXPT_SCENE_LIGHTING");
+        return control && std::string(control)=="1" && !sceneLights.empty()
             && !g_sampleUIData.ActualUseRTXDIPasses() && g_sampleUIData.ActualRadianceCacheMode()==0;
     }
-    std::unique_ptr<RtrLegacySrHistory> legacyHistory;
-    bool legacyHistoryReset=true;
+    std::unique_ptr<RtrPreSrHistory> preSrHistory;
+    bool preSrHistoryReset=true;
     bool directionalStrataLogged=false;
     bool useDirectionalStrata() const {
         const char* control=std::getenv("RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA");
@@ -88,66 +88,66 @@ class HostPathTracer final : public AdvancedPathTracer {
     }
 public:
     using AdvancedPathTracer::AdvancedPathTracer;
-    void LoadLegacyLighting(const std::string& path) {
-        legacyLights.clear();legacySky={};legacyLightsDirty=true;
+    void LoadSceneLighting(const std::string& path) {
+        sceneLights.clear();sceneSky={};sceneLightsDirty=true;
         std::ifstream input(std::filesystem::u8path(path));
         Json::Value root;if(!input || !(input>>root))return;
-        const auto& data=root["rtrLegacyLighting"];
+        const auto& data=root["rtrSceneLighting"];
         if(!data.isObject())return;
         const auto& sky=data["sky"];
-        if(sky.size()!=4)throw std::runtime_error("Legacy lighting sky must have four components");
-        for(uint32_t i=0;i<4;i++)legacySky[i]=sky[i].asFloat();
+        if(sky.size()!=4)throw std::runtime_error("Scene lighting sky must have four components");
+        for(uint32_t i=0;i<4;i++)sceneSky[i]=sky[i].asFloat();
         for(const auto& record:data["lights"]) {
-            if(record.size()!=16)throw std::runtime_error("Legacy lighting record must have sixteen components");
-            LegacyLight light{};
+            if(record.size()!=16)throw std::runtime_error("Scene lighting record must have sixteen components");
+            SceneLight light{};
             for(uint32_t i=0;i<4;i++) {
                 light.positionType[i]=record[i].asFloat();light.directionRange[i]=record[i+4].asFloat();
                 light.colorIntensity[i]=record[i+8].asFloat();light.coneShadow[i]=record[i+12].asFloat();
             }
-            legacyLights.push_back(light);
+            sceneLights.push_back(light);
         }
-        legacyHistoryReset=true;
-        if(legacyLightingActive())donut::log::info("RTXPT legacy lighting inputs ACTIVE lights=%zu; analytic ambient, exact direct, legacy sky, stable metal, split first interface",legacyLights.size());
+        preSrHistoryReset=true;
+        if(sceneLightingActive())donut::log::info("RTXPT scene lighting inputs ACTIVE lights=%zu; analytic ambient, exact direct, analytic sky, stable metal, split first interface",sceneLights.size());
     }
     void UpdateCustomResources() override {
         AdvancedPathTracer::UpdateCustomResources();
-        const size_t bytes=std::max<size_t>(sizeof(LegacyLight),legacyLights.size()*sizeof(LegacyLight));
-        if(!legacyLightBuffer || legacyLightBuffer->getDesc().byteSize<bytes) {
-            nvrhi::BufferDesc desc;desc.byteSize=bytes;desc.structStride=sizeof(LegacyLight);
-            desc.debugName="RtrLegacyLightingInputs";desc.initialState=nvrhi::ResourceStates::ShaderResource;desc.keepInitialState=true;
-            legacyLightBuffer=GetDevice()->createBuffer(desc);legacyLightsDirty=true;InvalidateBindingSet();
+        const size_t bytes=std::max<size_t>(sizeof(SceneLight),sceneLights.size()*sizeof(SceneLight));
+        if(!sceneLightBuffer || sceneLightBuffer->getDesc().byteSize<bytes) {
+            nvrhi::BufferDesc desc;desc.byteSize=bytes;desc.structStride=sizeof(SceneLight);
+            desc.debugName="RtrSceneLightingInputs";desc.initialState=nvrhi::ResourceStates::ShaderResource;desc.keepInitialState=true;
+            sceneLightBuffer=GetDevice()->createBuffer(desc);sceneLightsDirty=true;InvalidateBindingSet();
         }
     }
     void AddCustomBindings(nvrhi::BindingSetDesc& desc) override {
         AdvancedPathTracer::AddCustomBindings(desc);
         for(auto& item:desc.bindings)if(item.slot==96 && item.type==nvrhi::ResourceType::StructuredBuffer_SRV)
-            item=nvrhi::BindingSetItem::StructuredBuffer_SRV(96,legacyLightBuffer);
+            item=nvrhi::BindingSetItem::StructuredBuffer_SRV(96,sceneLightBuffer);
     }
     void FilterReconstructionInput(nvrhi::ICommandList* command, bool reset) override {
-        const char* history=std::getenv("RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY");
+        const char* history=std::getenv("RTR_RTXPT_DIAGNOSTIC_PRE_SR_HISTORY");
         const bool enabled=history && std::string(history)=="1"
             && g_sampleUIData.RealtimeMode && g_sampleUIData.RealtimeAA==2
             && !g_sampleUIData.ActualUseStandaloneDenoiser() && !g_sampleUIData.ActualUseRTXDIPasses()
             && g_sampleUIData.ActualRadianceCacheMode()==0;
-        if(!enabled) {legacyHistory.reset();legacyHistoryReset=true;return;}
-        if(!legacyHistory)legacyHistory=std::make_unique<RtrLegacySrHistory>();
-        GpuProfiler::Begin(command,"LegacyPreSrHistory");
+        if(!enabled) {preSrHistory.reset();preSrHistoryReset=true;return;}
+        if(!preSrHistory)preSrHistory=std::make_unique<RtrPreSrHistory>();
+        GpuProfiler::Begin(command,"PreSrHistory");
         // RTXPT traces at pixel center - view jitter. Reproject that sample
         // into the previous raster grid with previous jitter - current jitter.
-        legacyHistory->Apply(GetDevice(),*GetShaderFactory(),command,*m_renderTargets,m_bindingSet,m_bindingLayout,
-            reset||legacyHistoryReset,m_viewPrevious->GetPixelOffset()-m_view->GetPixelOffset());
+        preSrHistory->Apply(GetDevice(),*GetShaderFactory(),command,*m_renderTargets,m_bindingSet,m_bindingLayout,
+            reset||preSrHistoryReset,m_viewPrevious->GetPixelOffset()-m_view->GetPixelOffset());
         GpuProfiler::End(command);
-        legacyHistoryReset=false;
+        preSrHistoryReset=false;
     }
     void UpdateCustomConstants(SampleConstants& constants, nvrhi::ICommandList* commandList) override {
         AdvancedPathTracer::UpdateCustomConstants(constants,commandList);
         auto& pt=constants.ptConsts;
-        pt.RtrLegacyAmbient=float4(legacySky.xyz()*legacySky.w,0);
-        pt.RtrLegacySky=float4(legacySky.xyz()*std::max(legacySky.w,.05f),0);
-        pt.RtrLegacyLightCount=uint32_t(legacyLights.size());
-        if(legacyLightsDirty && legacyLightBuffer && !legacyLights.empty()) {
-            commandList->writeBuffer(legacyLightBuffer,legacyLights.data(),legacyLights.size()*sizeof(LegacyLight));
-            legacyLightsDirty=false;
+        pt.RtrSceneAmbient=float4(sceneSky.xyz()*sceneSky.w,0);
+        pt.RtrSceneSky=float4(sceneSky.xyz()*std::max(sceneSky.w,.05f),0);
+        pt.RtrSceneLightCount=uint32_t(sceneLights.size());
+        if(sceneLightsDirty && sceneLightBuffer && !sceneLights.empty()) {
+            commandList->writeBuffer(sceneLightBuffer,sceneLights.data(),sceneLights.size()*sizeof(SceneLight));
+            sceneLightsDirty=false;
         }
         pt.RtrDirectionalCount=0;
         if(!useDirectionalStrata() || !GetEnvMapBaker())return;
@@ -171,7 +171,7 @@ public:
     nvrhi::ITexture* HostDisplayColor() const { return m_renderTargets ? m_renderTargets->LdrColor.Get() : nullptr; }
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();
-        legacyHistoryReset=true;
+        preSrHistoryReset=true;
         directionalStrataLogged=false;
         const char* disableGuides=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES");
         const bool applyGuides=!(disableGuides && std::string(disableGuides)=="1");
@@ -186,7 +186,7 @@ public:
         lightingPolicyLogged=false;
     }
     void UpdateLightingPolicy() {
-        m_bakeDirectionalLightsIntoEnvMap=!legacyLightingActive();
+        m_bakeDirectionalLightsIntoEnvMap=!sceneLightingActive();
         if(lightingSceneDirty) {
             eligibleLightingScene=smallPointScene();
             eligiblePowerScene=eligibleLightingScene;
@@ -232,7 +232,7 @@ public:
     }
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
-        if(legacyLightingActive())macros.push_back({"RTR_LEGACY_LIGHTING","1"});
+        if(sceneLightingActive())macros.push_back({"RTR_SCENE_LIGHTING","1"});
         const char* mixtureBsdf=std::getenv("RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF");
         if(mixtureBsdf && std::string(mixtureBsdf)=="1")
             macros.push_back({"RTR_COMBINED_BSDF_WEIGHT","1"});
@@ -473,6 +473,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         g_sampleUIData = SampleUIData{};
         s->app = std::make_unique<HostApp>();
         s->app->HostDeviceManager()->HostExternalPresentation=externalPresentation;
+        s->app->HostDeviceManager()->HostFixedWindowTitle=true;
         auto status = s->app->Init(static_cast<int>(argv.size()), argv.data());
         if (status != SampleBaseApp::InitReturnCodes::Success)
             throw std::runtime_error("RTXPT initialization failed with status " + std::to_string(static_cast<int>(status)));
@@ -481,7 +482,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         if(externalPresentation)glfwHideWindow(s->app->HostDeviceManager()->GetWindow());
         donut::app::StreamlineIntegration::Get().hostFrameGeneration={};
         if(!s->app->HostRenderPass()->GetScene()) throw std::runtime_error("RTXPT scene failed to load");
-        static_cast<HostPathTracer*>(s->app->HostRenderPass())->LoadLegacyLighting(utf8(e,scene));
+        static_cast<HostPathTracer*>(s->app->HostRenderPass())->LoadSceneLighting(utf8(e,scene));
         auto& afterPresent=s->app->HostDeviceManager()->m_callbacks.afterPresent;
         auto upstreamAfterPresent=afterPresent;
         afterPresent = [ptr=s.get(),upstreamAfterPresent](auto& dm, uint32_t index) {
@@ -528,7 +529,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
             ++ptr->rendered;
         };
         indexNodes(*s);
-        s->app->HostDeviceManager()->SetWindowTitle("RTRenderer 7 - NVIDIA RTXPT");
+        s->app->HostDeviceManager()->SetWindowTitle("RTRendererAPI | RTXPT (D3D12)");
         active = s.release(); return reinterpret_cast<jlong>(active);
     } catch (const std::exception& x) { fail(e, x); return 0; }
 }
@@ -699,7 +700,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         }
         const auto scenePath=utf8(e,path);
         s.app->HostRenderPass()->SetCurrentScene(scenePath, true);
-        static_cast<HostPathTracer*>(s.app->HostRenderPass())->LoadLegacyLighting(scenePath);indexNodes(s);
+        static_cast<HostPathTracer*>(s.app->HostRenderPass())->LoadSceneLighting(scenePath);indexNodes(s);
     }
     catch (const std::exception& x) { fail(e, x); }
 }

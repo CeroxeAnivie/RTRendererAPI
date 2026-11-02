@@ -84,7 +84,7 @@ public record SectionEncodedSnapshot(
     }
 
     /**
-     * Creates a legacy encoded snapshot with unavailable visual palette fields.
+     * Creates a compact encoded snapshot with unavailable visual palette fields.
      *
      * @param key                 stable section identity
      * @param blockStatePalette   block-state palette
@@ -287,7 +287,7 @@ public record SectionEncodedSnapshot(
         Objects.requireNonNull(blockStatePalette, "blockStatePalette");
         Objects.requireNonNull(mediumAmountPalette, "mediumAmountPalette");
         if (blockStatePalette.length != mediumAmountPalette.length) {
-            throw new IllegalArgumentException("legacy palette arrays must have matching lengths");
+            throw new IllegalArgumentException("derived palette arrays must have matching lengths");
         }
         byte[] flags = new byte[blockStatePalette.length];
         for (int index = 0; index < flags.length; index++) {
@@ -316,7 +316,7 @@ public record SectionEncodedSnapshot(
         Objects.requireNonNull(blockStatePalette, "blockStatePalette");
         Objects.requireNonNull(mediumAmountPalette, "mediumAmountPalette");
         if (blockStatePalette.length != mediumAmountPalette.length) {
-            throw new IllegalArgumentException("legacy palette arrays must have matching lengths");
+            throw new IllegalArgumentException("derived palette arrays must have matching lengths");
         }
         int[] fluidVoxelStatePalette = new int[blockStatePalette.length];
         for (int index = 0; index < fluidVoxelStatePalette.length; index++) {
@@ -331,7 +331,7 @@ public record SectionEncodedSnapshot(
         Objects.requireNonNull(fluidVoxelStatePalette, "fluidVoxelStatePalette");
         Objects.requireNonNull(mediumAmountPalette, "mediumAmountPalette");
         if (fluidVoxelStatePalette.length != mediumAmountPalette.length) {
-            throw new IllegalArgumentException("legacy fluid type palette arrays must have matching lengths");
+            throw new IllegalArgumentException("derived fluid type palette arrays must have matching lengths");
         }
         int[] mediumTypePalette = new int[fluidVoxelStatePalette.length];
         for (int index = 0; index < mediumTypePalette.length; index++) {

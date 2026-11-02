@@ -304,10 +304,10 @@ public final class VulkanRtCapabilityProbe {
     private static PropertyReport queryRtProperties(
             MemoryStack stack,
             VkPhysicalDevice device,
-            VkPhysicalDeviceProperties legacyProperties
+            VkPhysicalDeviceProperties deviceProperties
     ) {
-        if (legacyProperties.apiVersion() < VK11.VK_API_VERSION_1_1) {
-            return PropertyReport.unavailable(hex(legacyProperties.pipelineCacheUUID()));
+        if (deviceProperties.apiVersion() < VK11.VK_API_VERSION_1_1) {
+            return PropertyReport.unavailable(hex(deviceProperties.pipelineCacheUUID()));
         }
         VkPhysicalDeviceIDProperties identity = VkPhysicalDeviceIDProperties.calloc(stack).sType$Default();
         VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracing =

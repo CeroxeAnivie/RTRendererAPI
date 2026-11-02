@@ -2267,7 +2267,7 @@ public final class RendererApiContractSelfTest {
       require(camera().projectionPath() == CameraState.ProjectionPath.BASIS_FOV
                   && !camera().hasExactProjection()
                   && camera().tanHalfFovX() == 1.0F,
-            "legacy CameraState basis/FOV regression detected");
+            "CameraState basis/FOV regression detected");
    }
 
    private static void assertTemporalRenderingContract() {

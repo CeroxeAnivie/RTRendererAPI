@@ -10,8 +10,8 @@ param(
     [switch]$ExactMis,
     [switch]$DirectionalStrata,
     [switch]$CombinedBsdf,
-    [switch]$LegacySrHistory,
-    [switch]$LegacyLighting,
+    [switch]$PreSrHistory,
+    [switch]$SceneLighting,
     [switch]$ApproximateMis,
     [ValidateSet('Default','Power','NeeAt')][string]$LightSampler='Default',
     [switch]$Sharc,
@@ -67,9 +67,9 @@ if($PackagedRuntime) {
 }
 $settings=[ordered]@{
     SourceCommit=(& git rev-parse HEAD).Trim();
-    OpticalShaderSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli').Hash;
-    ReplayPrefixCacheSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyReplayCache.hlsli').Hash;
-    ReplayPrefixCache=([IO.File]::ReadAllText((Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli')) -notmatch '#define RTR_LEGACY_REPLAY_PREFIX_CACHE 0');
+    OpticalShaderSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli').Hash;
+    ReplayPrefixCacheSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrSceneReplayCache.hlsli').Hash;
+    ReplayPrefixCache=([IO.File]::ReadAllText((Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli')) -notmatch '#define RTR_SCENE_REPLAY_PREFIX_CACHE 0');
     Java='C:\Program Files\Java\graalvm-jdk-25.0.5.0.2+1.1\bin\java.exe';
     Jvm=@('-Dfile.encoding=UTF-8',('-Dtop.ceroxe.rt.rtxpt.runtime='+(Join-Path $repo 'build/rtxpt-sdk/bin')),
         '--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow',
@@ -81,8 +81,8 @@ $settings=[ordered]@{
     RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
     DirectionalStrata=[bool]$DirectionalStrata;
     CombinedBsdf=[bool]$CombinedBsdf;
-    LegacySrHistory=[bool]$LegacySrHistory;
-    LegacyLighting=[bool]$LegacyLighting;
+    PreSrHistory=[bool]$PreSrHistory;
+    SceneLighting=[bool]$SceneLighting;
     SmallPointCandidate=[bool]$SmallPointCandidate
     ControlLighting=[bool]$ControlLighting
     DisableResidualPointSampling=[bool]$DisableResidualPointSampling
@@ -97,9 +97,9 @@ $settings=[ordered]@{
     SrPreset=$SrPreset
     FixedSrExposure=$FixedSrExposure;DisableBloom=[bool]$DisableBloom
     LightingProbe=$LightingProbe
-    OpticalTransportTrace=([IO.File]::ReadAllText((Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli')) -match '#define RTR_LEGACY_TRANSPORT_TRACE 1')
-    OpticalTransportTraceSha256=(Get-FileHash 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli').Hash
-    RawOpticalRoughness=([IO.File]::ReadAllText((Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli')) -match '#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 1')
+    OpticalTransportTrace=([IO.File]::ReadAllText((Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli')) -match '#define RTR_SCENE_TRANSPORT_TRACE 1')
+    OpticalTransportTraceSha256=(Get-FileHash 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli').Hash
+    RawOpticalRoughness=([IO.File]::ReadAllText((Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrSceneTransportTrace.hlsli')) -match '#define RTR_SCENE_RAW_OPTICAL_ROUGHNESS 1')
     FinalMergeShaderSha256=(Get-FileHash 'build/rtxpt-sdk/bin/ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/PostProcess.bin').Hash
 }
 if($PackagedRuntime) {
@@ -115,8 +115,8 @@ $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
 $oldDirectionalStrata=$env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA
 $oldCombinedBsdf=$env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF
-$oldHistory=$env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY
-$oldLegacyLighting=$env:RTR_RTXPT_DIAGNOSTIC_LEGACY_LIGHTING
+$oldHistory=$env:RTR_RTXPT_DIAGNOSTIC_PRE_SR_HISTORY
+$oldSceneLighting=$env:RTR_RTXPT_SCENE_LIGHTING
 $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 $oldRrPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
@@ -129,8 +129,8 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$(if($DirectionalStrata){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$(if($CombinedBsdf){'1'}else{$null})
-    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY=$(if($LegacySrHistory){'1'}else{$null})
-    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_LIGHTING=$(if($LegacyLighting){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_PRE_SR_HISTORY=$(if($PreSrHistory){'1'}else{$null})
+    $env:RTR_RTXPT_SCENE_LIGHTING=$(if($SceneLighting){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(switch($LightSampler){'Power'{'power'} 'NeeAt'{'neeat'} default{$null}})
@@ -146,11 +146,11 @@ try {
         Get-Content -LiteralPath ($prefix+'.log') -Tail 15
         throw "Quality verification exited $code; inspect $prefix.log"
     }
-    if($LegacySrHistory -and $runLog -notmatch 'RTXPT legacy pre-SR history ACTIVE'){
-        throw 'Requested legacy pre-SR history did not activate.'
+    if($PreSrHistory -and $runLog -notmatch 'RTXPT pre-SR history ACTIVE'){
+        throw 'Requested pre-SR history did not activate.'
     }
-    if($LegacyLighting -and $runLog -notmatch 'RTXPT legacy lighting inputs ACTIVE'){
-        throw 'Requested legacy lighting inputs did not activate.'
+    if($SceneLighting -and $runLog -notmatch 'RTXPT scene lighting inputs ACTIVE'){
+        throw 'Requested scene lighting inputs did not activate.'
     }
     if($DirectionalStrata -and $LightingProbe -notin @('no-sun','no-environment') -and
         $runLog -notmatch 'RTXPT directional environment strata ACTIVE count=[1-9]'){
@@ -181,8 +181,8 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$oldDirectionalStrata
     $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$oldCombinedBsdf
-    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_SR_HISTORY=$oldHistory
-    $env:RTR_RTXPT_DIAGNOSTIC_LEGACY_LIGHTING=$oldLegacyLighting
+    $env:RTR_RTXPT_DIAGNOSTIC_PRE_SR_HISTORY=$oldHistory
+    $env:RTR_RTXPT_SCENE_LIGHTING=$oldSceneLighting
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$oldSampler
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$oldTransmissionGuides
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$oldRrPreset

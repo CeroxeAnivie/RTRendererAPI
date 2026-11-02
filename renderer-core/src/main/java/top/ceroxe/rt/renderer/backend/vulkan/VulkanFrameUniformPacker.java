@@ -205,7 +205,7 @@ final class VulkanFrameUniformPacker {
                 VulkanGpuSceneAbi.FRAME_PREVIOUS_FOV_WORD);
         putLong(words, VulkanGpuSceneAbi.FRAME_PREVIOUS_SEQUENCE_WORD, temporal.previousSequence());
         boolean exactProjection = camera.hasExactProjection();
-        /* The legacy temporal reprojection shader is FOV/basis based. Keep exact primary rays
+        /* The FOV/basis temporal reprojection shader is FOV/basis based. Keep exact primary rays
          * correct by failing closed for that secondary history path until it has an exact inverse
          * projection contract of its own. */
         int temporalFlags = !exactProjection && temporalPolicy.enabled()

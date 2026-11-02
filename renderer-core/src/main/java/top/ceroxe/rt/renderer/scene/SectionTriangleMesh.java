@@ -854,7 +854,7 @@ public record SectionTriangleMesh(
         Objects.requireNonNull(voxelTypeIds, "voxelTypeIds");
         Objects.requireNonNull(mediumAmounts, "mediumAmounts");
         if (voxelTypeIds.length != mediumAmounts.length) {
-            throw new IllegalArgumentException("legacy face material arrays must have matching lengths");
+            throw new IllegalArgumentException("basic face material arrays must have matching lengths");
         }
         byte[] flags = new byte[voxelTypeIds.length];
         for (int index = 0; index < flags.length; index++) {
@@ -903,7 +903,7 @@ public record SectionTriangleMesh(
         Objects.requireNonNull(faceMapColors, "faceMapColors");
         Objects.requireNonNull(faceDirections, "faceDirections");
         if (faceMapColors.length != faceDirections.length) {
-            throw new IllegalArgumentException("legacy vertex lighting defaults require matching face arrays");
+            throw new IllegalArgumentException("derived vertex lighting defaults require matching face arrays");
         }
         if (vertexIndex < 0 || vertexIndex >= VERTICES_PER_FACE) {
             throw new IllegalArgumentException("vertexIndex outside quad range: " + vertexIndex);

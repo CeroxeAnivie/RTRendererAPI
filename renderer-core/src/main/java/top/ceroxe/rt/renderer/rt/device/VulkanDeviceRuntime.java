@@ -37,8 +37,7 @@ import java.util.Objects;
  * <p>This owner intentionally creates no scene cache, acceleration structure, descriptor set, or
  * shader pipeline. Higher layers construct those resources from explicit contracts while this
  * class enforces the parent lifetime: command lanes close before VMA, the logical device, and the
- * instance. It is the RHI-style root for the new renderer rather than an adapter to the legacy
- * section renderer.</p>
+ * instance. It is the generic renderer's resource and device root.</p>
  */
 public final class VulkanDeviceRuntime implements AutoCloseable {
     private final RtResourceScope resources;

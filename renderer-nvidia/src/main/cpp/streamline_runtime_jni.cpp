@@ -111,6 +111,30 @@ Java_top_ceroxe_rt_renderer_nvidia_NvidiaNativeBridge_nativeStreamlineCreateSwap
     }
 }
 
+extern "C" JNIEXPORT jint JNICALL
+Java_top_ceroxe_rt_renderer_nvidia_NvidiaNativeBridge_nativeStreamlineCreateWin32Surface(
+        JNIEnv* env, jclass, jlong instance, jlong createInfo, jlong output
+) {
+    try {
+        return streamlineRuntime().createWin32Surface(reinterpret_cast<VkInstance>(instance),
+                reinterpret_cast<const VkWin32SurfaceCreateInfoKHR*>(createInfo), reinterpret_cast<VkSurfaceKHR*>(output));
+    } catch (const std::exception& error) {
+        throwIllegalState(env, error.what());
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_top_ceroxe_rt_renderer_nvidia_NvidiaNativeBridge_nativeStreamlineDestroySurface(
+        JNIEnv* env, jclass, jlong instance, jlong surface
+) {
+    try {
+        streamlineRuntime().destroySurface(reinterpret_cast<VkInstance>(instance), reinterpret_cast<VkSurfaceKHR>(surface));
+    } catch (const std::exception& error) {
+        throwIllegalState(env, error.what());
+    }
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_nvidia_NvidiaNativeBridge_nativeStreamlineDestroySwapchain(
         JNIEnv* env, jclass, jlong device, jlong swapchain

@@ -36,7 +36,7 @@ final class RtPersistentTlasInstanceTable
         Objects.requireNonNull(slots, "slots");
         Objects.requireNonNull(dirtyTableSlots, "dirtyTableSlots");
         if (slots.isEmpty()) {
-            throw new IllegalArgumentException("dynamic TLAS slot table must retain its legacy slot");
+            throw new IllegalArgumentException("dynamic TLAS slot table must retain its scene-batch slot");
         }
         if (!(previous instanceof RtPersistentTlasInstanceTable persistent) || persistent.size != slots.size()) {
             return copyOf(slots);

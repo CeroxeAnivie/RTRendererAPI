@@ -68,6 +68,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     private long window;
     private VkInstance instance;
     private long surface;
+    private boolean surfaceIntercepted;
     private VkPhysicalDevice physicalDevice;
     private VkDevice device;
     private int queueFamilyIndex = -1;
@@ -279,10 +280,18 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
 
     private void createSurface(MemoryStack stack) {
         LongBuffer surfaceHandle = stack.longs(0L);
-        checkVk(
-                GLFWVulkan.glfwCreateWindowSurface(instance, window, null, surfaceHandle),
-                "glfwCreateWindowSurface"
-        );
+        if (swapchainInterceptor != null && swapchainInterceptor.proxyActive()) {
+            VkWin32SurfaceCreateInfoKHR createInfo = VkWin32SurfaceCreateInfoKHR.calloc(stack)
+                    .sType$Default()
+                    .hinstance(org.lwjgl.system.windows.WindowsLibrary.HINSTANCE)
+                    .hwnd(org.lwjgl.glfw.GLFWNativeWin32.glfwGetWin32Window(window));
+            checkVk(swapchainInterceptor.createWin32Surface(instance, createInfo, surfaceHandle),
+                    "vkCreateWin32SurfaceKHR.vendor");
+            surfaceIntercepted = true;
+        } else {
+            checkVk(GLFWVulkan.glfwCreateWindowSurface(instance, window, null, surfaceHandle),
+                    "glfwCreateWindowSurface");
+        }
         surface = surfaceHandle.get(0);
     }
 
@@ -2080,8 +2089,12 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         frameContexts = null;
         if (device != null && commandPool != 0L) VK10.vkDestroyCommandPool(device, commandPool, null);
         commandPool = 0L;
-        if (instance != null && surface != 0L) KHRSurface.vkDestroySurfaceKHR(instance, surface, null);
+        if (instance != null && surface != 0L) {
+            if (surfaceIntercepted) swapchainInterceptor.destroySurface(instance, surface);
+            else KHRSurface.vkDestroySurfaceKHR(instance, surface, null);
+        }
         surface = 0L;
+        surfaceIntercepted = false;
         if (!sharedDeviceFastPath && device != null) VK10.vkDestroyDevice(device, null);
         device = null;
         if (!sharedDeviceFastPath && instance != null) VK10.vkDestroyInstance(instance, null);

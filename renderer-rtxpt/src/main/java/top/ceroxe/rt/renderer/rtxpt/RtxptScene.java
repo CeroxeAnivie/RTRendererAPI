@@ -151,17 +151,17 @@ final class RtxptScene {
         writeSky(dir.resolve("sky.hdr"),e);
         graph.add(object("name","Sky","type","EnvironmentLight","path",dir.resolve("sky.hdr").toAbsolutePath().toString().replace('\\','/'),"intensity",1,"textureIndex",0,"rotation",0));
         graph.add(object("name","Camera","type","PerspectiveCameraEx","translation",List.of(frame.camera().x(),frame.camera().y(),frame.camera().z()),"verticalFov",2*Math.atan(frame.camera().tanHalfFovY()),"zNear",.001,"enableAutoExposure",false));
-        // Keep the API's original lighting units for the legacy-input parity path.
+        // Keep the API's original lighting units for the scene-lighting input path.
         // Native scene-graph conversion has different falloff and sky semantics.
-        var legacyLights=new ArrayList<Object>();
-        legacyLights.add(List.of(0,0,0,0,e.sunDirectionX(),e.sunDirectionY(),e.sunDirectionZ(),0,
+        var sceneLights=new ArrayList<Object>();
+        sceneLights.add(List.of(0,0,0,0,e.sunDirectionX(),e.sunDirectionY(),e.sunDirectionZ(),0,
             e.sunRed(),e.sunGreen(),e.sunBlue(),e.sunIntensity(),0,0,1,0));
-        for(var l:lights.values())legacyLights.add(List.of(l.x(),l.y(),l.z(),switch(l.type()){
+        for(var l:lights.values())sceneLights.add(List.of(l.x(),l.y(),l.z(),switch(l.type()){
             case DIRECTIONAL->0;case POINT->1;case SPOT->2;},
             l.directionX(),l.directionY(),l.directionZ(),l.range(),l.red(),l.green(),l.blue(),l.intensity(),
             l.innerConeCosine(),l.outerConeCosine(),l.castsShadow()?1:0,0));
-        var legacyLighting=object("sky",List.of(e.skyRed(),e.skyGreen(),e.skyBlue(),e.ambientIntensity()),"lights",legacyLights);
-        Path scene=dir.resolve("managed.scene.json");Files.writeString(scene,RtxptJson.encode(object("models",List.of("content.gltf"),"graph",graph,"rtrLegacyLighting",legacyLighting)));return scene;
+        var sceneLighting=object("sky",List.of(e.skyRed(),e.skyGreen(),e.skyBlue(),e.ambientIntensity()),"lights",sceneLights);
+        Path scene=dir.resolve("managed.scene.json");Files.writeString(scene,RtxptJson.encode(object("models",List.of("content.gltf"),"graph",graph,"rtrSceneLighting",sceneLighting)));return scene;
     }
     /** glTF requires flat normals when NORMAL is absent. Donut does not generate them.
      * Split triangle corners only at asset export; authored shading and all vertex attributes

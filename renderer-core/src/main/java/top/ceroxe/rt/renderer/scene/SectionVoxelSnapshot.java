@@ -310,7 +310,7 @@ public record SectionVoxelSnapshot(
     }
 
     /**
-     * Creates a legacy snapshot and derives medium types, fluid colors, and shade brightness.
+     * Creates a derived snapshot and derives medium types, fluid colors, and shade brightness.
      *
      * @param key            section identity
      * @param voxelTypeIds   voxel type identifiers
@@ -356,7 +356,7 @@ public record SectionVoxelSnapshot(
     }
 
     /**
-     * Creates a legacy snapshot and derives all medium semantic fields from voxel identifiers.
+     * Creates a derived snapshot and derives all medium semantic fields from voxel identifiers.
      *
      * @param key            section identity
      * @param voxelTypeIds   voxel type identifiers
@@ -400,7 +400,7 @@ public record SectionVoxelSnapshot(
     }
 
     /**
-     * Creates the minimal legacy snapshot, deriving all unavailable visual semantics.
+     * Creates the minimal snapshot, deriving all unavailable visual semantics.
      *
      * @param key           section identity
      * @param voxelTypeIds  voxel type identifiers
@@ -582,7 +582,7 @@ public record SectionVoxelSnapshot(
         Objects.requireNonNull(mapColors, "mapColors");
         Objects.requireNonNull(mediumAmounts, "mediumAmounts");
         if (mapColors.length != BLOCKS_PER_SECTION || mediumAmounts.length != BLOCKS_PER_SECTION) {
-            throw new IllegalArgumentException("legacy fluid map color defaults require full section arrays");
+            throw new IllegalArgumentException("derived fluid map color defaults require full section arrays");
         }
         int[] fluidMapColors = new int[BLOCKS_PER_SECTION];
         for (int index = 0; index < BLOCKS_PER_SECTION; index++) {
@@ -601,7 +601,7 @@ public record SectionVoxelSnapshot(
         Objects.requireNonNull(voxelTypeIds, "voxelTypeIds");
         Objects.requireNonNull(mediumAmounts, "mediumAmounts");
         if (voxelTypeIds.length != BLOCKS_PER_SECTION || mediumAmounts.length != BLOCKS_PER_SECTION) {
-            throw new IllegalArgumentException("legacy shade defaults require full section arrays");
+            throw new IllegalArgumentException("derived shade defaults require full section arrays");
         }
         byte[] shadeBrightnesses = new byte[BLOCKS_PER_SECTION];
         Arrays.fill(shadeBrightnesses, (byte) 255);
@@ -612,7 +612,7 @@ public record SectionVoxelSnapshot(
         Objects.requireNonNull(voxelTypeIds, "voxelTypeIds");
         Objects.requireNonNull(mediumAmounts, "mediumAmounts");
         if (voxelTypeIds.length != BLOCKS_PER_SECTION || mediumAmounts.length != BLOCKS_PER_SECTION) {
-            throw new IllegalArgumentException("legacy fluid defaults require full section arrays");
+            throw new IllegalArgumentException("derived fluid defaults require full section arrays");
         }
         int[] mediumStateIds = new int[BLOCKS_PER_SECTION];
         for (int index = 0; index < BLOCKS_PER_SECTION; index++) {
@@ -627,7 +627,7 @@ public record SectionVoxelSnapshot(
         Objects.requireNonNull(mediumStateIds, "mediumStateIds");
         Objects.requireNonNull(mediumAmounts, "mediumAmounts");
         if (mediumStateIds.length != BLOCKS_PER_SECTION || mediumAmounts.length != BLOCKS_PER_SECTION) {
-            throw new IllegalArgumentException("legacy fluid type defaults require full section arrays");
+            throw new IllegalArgumentException("derived fluid type defaults require full section arrays");
         }
         int[] mediumTypeIds = new int[BLOCKS_PER_SECTION];
         for (int index = 0; index < BLOCKS_PER_SECTION; index++) {
@@ -642,7 +642,7 @@ public record SectionVoxelSnapshot(
         Objects.requireNonNull(voxelTypeIds, "voxelTypeIds");
         Objects.requireNonNull(mediumAmounts, "mediumAmounts");
         if (voxelTypeIds.length != BLOCKS_PER_SECTION || mediumAmounts.length != BLOCKS_PER_SECTION) {
-            throw new IllegalArgumentException("legacy material defaults require full section arrays");
+            throw new IllegalArgumentException("derived material defaults require full section arrays");
         }
         byte[] flags = new byte[BLOCKS_PER_SECTION];
         for (int index = 0; index < BLOCKS_PER_SECTION; index++) {
