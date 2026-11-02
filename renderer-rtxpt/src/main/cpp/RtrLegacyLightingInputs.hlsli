@@ -60,13 +60,29 @@ float RtrLegacyFresnel(float eta,float cosine)
     return .5*(rs*rs+rp*rp);
 }
 
+float RtrLegacyOpticalRoughness(const ShadingData sd,const StandardBSDFData data)
+{
+    float roughness=data.Roughness();
+    #if !RTR_LEGACY_RAW_OPTICAL_ROUGHNESS
+    // Match FalcorBSDF::__init / StandardBSDF::getProperties. Guides and actual
+    // transport must agree on whether this is a smooth (delta) interface.
+    #if EnableDeltaBSDF
+    if(roughness*roughness<kMinGGXAlpha)roughness=0;
+    #else
+    roughness=max(roughness,kMinRoughness);
+    #endif
+    if(sd.GetEta()==1)roughness=0;
+    #endif
+    return roughness;
+}
+
 float3 RtrLegacyDielectricNormal(const ShadingData sd, const StandardBSDFData data, uint2 pixel, uint sequence, uint seed,
     uint sampleIndex=0,uint sampleCount=1)
 {
     float2 u=float2(RtrLegacyOpticalRandom(pixel,seed^sequence^0x1b56c4e9u,0),
         RtrLegacyOpticalRandom(pixel,seed^sequence^0x91e10da5u,0));
     u=float2((sampleIndex+u.x)/max(sampleCount,1u),frac(RtrLegacyRadicalInverse(sampleIndex)+u.y));
-    return RtrLegacyVisibleNormal(sd.N,sd.V,data.Roughness(),u);
+    return RtrLegacyVisibleNormal(sd.N,sd.V,RtrLegacyOpticalRoughness(sd,data),u);
 }
 
 float3 RtrLegacyBaseColor(const ShadingData sd,const StandardBSDFData data)
@@ -123,10 +139,16 @@ void RtrLegacyFirstInterface(const ShadingData sd,const StandardBSDFData data,ui
     lobes[0].transmission=1;lobes[1].transmission=0;
     lobes[0].dir=transmitted;lobes[1].dir=reflected;
     if(dot(sd.N,transmitted)<0 && dot(transmitted,transmitted)>0)
-        lobes[0].thp=transmission*(1-f)*RtrLegacyMaskWeight(dot(sd.N,sd.V),abs(dot(sd.N,transmitted)),data.Roughness())*eta*eta*data.Transmission();
+        lobes[0].thp=transmission*(1-f)*RtrLegacyMaskWeight(dot(sd.N,sd.V),abs(dot(sd.N,transmitted)),RtrLegacyOpticalRoughness(sd,data))*eta*eta*data.Transmission();
     if(dot(sd.N,reflected)>0)
-        lobes[1].thp=transmission*f*RtrLegacyMaskWeight(dot(sd.N,sd.V),dot(sd.N,reflected),data.Roughness());
+        lobes[1].thp=transmission*f*RtrLegacyMaskWeight(dot(sd.N,sd.V),dot(sd.N,reflected),RtrLegacyOpticalRoughness(sd,data));
     lobes[0].probability=1-f;lobes[1].probability=f;
+    #if RTR_LEGACY_TRANSPORT_TRACE
+    if(RtrLegacyTracePixel(pixel,sequence))
+        RtrLegacyTracePrint("interface",106u,RtrLegacyTraceKey(pixel,sampleIndex,1,sequence),
+            float4(data.Roughness(),RtrLegacyOpticalRoughness(sd,data),eta,f),sd.N,h,reflected,transmitted,
+            float4(lobes[1].thp.x,lobes[0].thp.x,sampleIndex,sampleCount));
+    #endif
 }
 
 bool RtrLegacyOpticalSample(const ShadingData sd,const StandardBSDFData data,uint2 pixel,uint sequence,uint vertex,uint branchControl,out BSDFSample result)
@@ -150,7 +172,7 @@ bool RtrLegacyOpticalSample(const ShadingData sd,const StandardBSDFData data,uin
     result.wo=reflection?normalize(reflect(-sd.V,h)):refract(-sd.V,h,eta);
     float nl=dot(sd.N,result.wo);
     bool valid=branchWeight>0 && dot(result.wo,result.wo)>0 && (reflection?nl>0:nl<0);
-    result.weight=branchWeight*data.SpecularTransmission()*RtrLegacyMaskWeight(dot(sd.N,sd.V),abs(nl),data.Roughness());
+    result.weight=branchWeight*data.SpecularTransmission()*RtrLegacyMaskWeight(dot(sd.N,sd.V),abs(nl),RtrLegacyOpticalRoughness(sd,data));
     if(!reflection)result.weight*=eta*eta*data.Transmission();
     result.pdf=0;result.lobeP=reflection?f:1-f;
     result.lobe=(uint)(reflection?LobeType::DeltaReflection:LobeType::DeltaTransmission);

@@ -95,6 +95,7 @@ $settings=[ordered]@{
     LightingProbe=$LightingProbe
     OpticalTransportTrace=([IO.File]::ReadAllText((Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli')) -match '#define RTR_LEGACY_TRANSPORT_TRACE 1')
     OpticalTransportTraceSha256=(Get-FileHash 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli').Hash
+    RawOpticalRoughness=([IO.File]::ReadAllText((Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli')) -match '#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 1')
     FinalMergeShaderSha256=(Get-FileHash 'build/rtxpt-sdk/bin/ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/PostProcess.bin').Hash
 }
 if($PackagedRuntime) {

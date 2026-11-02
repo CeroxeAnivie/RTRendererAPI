@@ -6,6 +6,9 @@
 #ifndef RTR_LEGACY_OPTICAL_BRANCH_SEED_XOR
 #define RTR_LEGACY_OPTICAL_BRANCH_SEED_XOR 0u
 #endif
+#ifndef RTR_LEGACY_RAW_OPTICAL_ROUGHNESS
+#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 0
+#endif
 // Six exact junctions suppress the dominant glass branch variance without
 // expanding the native payload. Later transport keeps its existing estimator.
 #define RTR_LEGACY_EXACT_INTERFACE_COUNT 6u

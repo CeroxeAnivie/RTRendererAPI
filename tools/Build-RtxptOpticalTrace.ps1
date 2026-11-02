@@ -1,10 +1,15 @@
-param([switch]$Enable,[uint32]$BranchSeedXor=0,
+param([switch]$Enable,[uint32]$BranchSeedXor=0,[switch]$RawOpticalRoughness,
     [int]$PixelX=-1,[int]$PixelY=-1,[uint32]$FirstFrame=160,[uint32]$LastFrame=161)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $sdk=Join-Path $repo 'build/rtxpt-sdk'
 & (Join-Path $PSScriptRoot 'Build-RtxptBridge.ps1') -ConfigureOnly -OpticalTransportTrace:$Enable -OpticalBranchSeedXor $BranchSeedXor
 if($LASTEXITCODE -ne 0){throw 'Shader configuration failed'}
+if($RawOpticalRoughness) {
+    if(!$Enable){throw 'Raw optical roughness is a diagnostic control only'}
+    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'
+    [IO.File]::WriteAllText($header,"#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 1`n"+[IO.File]::ReadAllText($header),[Text.UTF8Encoding]::new($false))
+}
 if($PixelX -ge 0 -or $PixelY -ge 0) {
     if(!$Enable -or $PixelX -lt 0 -or $PixelY -lt 0 -or $LastFrame -lt $FirstFrame){throw 'An enabled trace needs both pixel coordinates and an ordered frame range'}
     $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'

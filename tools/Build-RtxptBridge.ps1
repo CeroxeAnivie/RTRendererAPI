@@ -586,6 +586,14 @@ Patch-Once 'Rtxpt/ProcessingPasses/PostProcess.hlsl' '    u_OutputColor[pixelPos
             denoisingLayers.GetAllRadiance(pixelPos),u_OutputColor[pixelPos],g_Const.ptConsts.invSubSampleCount);
     #endif // RTR final radiance at SR input
 '@ 'RTR final radiance at SR input'
+Patch-Once 'Rtxpt/ProcessingPasses/PostProcess.hlsl' '    #endif // RTR final radiance at SR input' @'
+    if(g_Const.ptConsts.RtrLegacyLightCount>0 && RtrLegacyTracePixel(pixelPos,g_Const.ptConsts.frameIndex))
+        RtrLegacyTracePrint("reconstruction-input",113u,RtrLegacyTraceKey(pixelPos,0,0,g_Const.ptConsts.frameIndex),
+            float4(u_Depth[pixelPos],denoisingLayers.LoadFirstHitRayLength(pixelPos),denoisingLayers.LoadDominantIndex(pixelPos),g_Const.ptConsts.camera.ApertureRadius),
+            u_MotionVectors[pixelPos],float4(g_Const.ptConsts.camera.Jitter,g_Const.ptConsts.perPixelJitterAAScale,g_Const.ptConsts.invSubSampleCount),
+            cameraRay.dir,u_OutputColor[pixelPos]); // RTR optical reconstruction input evidence
+    #endif // RTR final radiance at SR input
+'@ 'RTR optical reconstruction input evidence'
 Patch-Once 'Rtxpt/ProcessingPasses/PostProcess.hlsl' '    u_OutputColor[pixelPos] = float4(denoisingLayers.GetAllRadiance(pixelPos), 1.0);' @'
     u_OutputColor[pixelPos] = float4(denoisingLayers.GetAllRadiance(pixelPos), 1.0);
     #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
