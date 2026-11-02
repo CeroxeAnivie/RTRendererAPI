@@ -109,11 +109,13 @@ public final class RtxptFusionDemo {
                 var result=commands.submitResources(new RenderResourceTransaction(resourceRevision++,List.of(),List.of(color,glow),retired));
                 if(result.outcome()!=ResourceTransactionEvidence.Outcome.ACCEPTED)throw new IllegalStateException("Vulkan effects allocation: "+result);
             }
+            for(int layerIndex=0;layerIndex<2;layerIndex++) {
+            long commandSequence=draws*2+layerIndex;
             var bytes=ByteBuffer.allocate(32).order(ByteOrder.nativeOrder());
             bytes.putFloat(a[0]).putFloat(a[1]).putFloat(b[0]).putFloat(b[1])
-                .putFloat(w).putFloat(h).putFloat(t).putFloat(0).flip();
-            var pass=RenderPassDescriptor.color(w,h,List.of(attachment(color),attachment(glow)));
-            var result=commands.submitCommands(new RenderCommandTransaction(draws,List.of(
+                .putFloat(w).putFloat(h).putFloat(t).putFloat(layerIndex).flip();
+            var pass=RenderPassDescriptor.color(w,h,List.of(attachment(layerIndex==0?color:glow)));
+            var result=commands.submitCommands(new RenderCommandTransaction(commandSequence,List.of(
                 new BeginRenderPassCommand(pass),new BindGraphicsPipelineCommand(pipeline),
                 new SetViewportCommand(new Viewport(0,0,w,h,0,1)),new SetScissorCommand(new ScissorRectangle(0,0,w,h)),
                 new SetPushConstantsCommand(Set.of(ShaderStage.FRAGMENT),0,new ResourceData(bytes)),
@@ -121,15 +123,16 @@ public final class RtxptFusionDemo {
             if(result.outcome()!=CommandExecutionEvidence.Outcome.RECORDED)throw new IllegalStateException("Vulkan effects draw: "+result);
             long deadline=System.nanoTime()+10_000_000_000L;
             while(true) {
-                var done=commands.commandExecutionEvidence(draws).orElseThrow();
+                var done=commands.commandExecutionEvidence(commandSequence).orElseThrow();
                 if(done.outcome().gpuCompleted())break;
                 if(done.outcome()!=CommandExecutionEvidence.Outcome.RECORDED||System.nanoTime()>deadline)
                     throw new IllegalStateException("Vulkan effects completion: "+done);
                 Thread.onSpinWait();
             }
-            var layer=new FrameCompositionPlan.Layer(new ResourceMutationKey(ResourceGenerationKey.of(color),draws),
+            }
+            var layer=new FrameCompositionPlan.Layer(new ResourceMutationKey(ResourceGenerationKey.of(color),draws*2),
                 mode==2?FrameCompositionPlan.Operation.REPLACE:FrameCompositionPlan.Operation.ALPHA_OVER);
-            var light=new FrameCompositionPlan.Layer(new ResourceMutationKey(ResourceGenerationKey.of(glow),draws),FrameCompositionPlan.Operation.ADDITIVE);
+            var light=new FrameCompositionPlan.Layer(new ResourceMutationKey(ResourceGenerationKey.of(glow),draws*2+1),FrameCompositionPlan.Operation.ADDITIVE);
             renderer.overlays(mode==1?List.of():List.of(layer,light));draws++;
         }
     }
@@ -150,7 +153,6 @@ public final class RtxptFusionDemo {
             #version 450
             layout(push_constant) uniform Params { vec4 anchors; vec4 info; } pc;
             layout(location=0) out vec4 overlayColor;
-            layout(location=1) out vec4 glowColor;
             float line(vec2 p,vec2 a,vec2 b){vec2 q=p-a,d=b-a;return length(q-d*clamp(dot(q,d)/dot(d,d),0.,1.));}
             void main(){
                 vec2 p=gl_FragCoord.xy, size=pc.info.xy;
@@ -165,16 +167,15 @@ public final class RtxptFusionDemo {
                 bracket*=step(r*.8,min(abs(p.x-a.x),abs(p.y-a.y)));
                 float alpha=clamp(max(max(c1,c2),max(path,bracket))*.85,0.,1.);
                 vec3 tint=mix(vec3(.04,.85,1.),vec3(1.,.55,.06),step(d2,d1));
-                overlayColor=vec4(tint*alpha,alpha);
                 float pulse=exp(-abs(d1-r*(.8+.6*fract(t*.35)))/(3.*scale))*.22;
-                glowColor=vec4(vec3(.02,.65,.95)*pulse,0.);
+                overlayColor=pc.info.w<.5?vec4(tint,alpha):vec4(vec3(.02,.65,.95)*pulse,0.);
             }
             """,32,Shaderc.shaderc_fragment_shader);
         var program=new ShaderProgram(new RenderResourceId(8102),ResourceVersion.initial(),ShaderProgram.Kind.GRAPHICS,
             List.of(vertex,fragment),new BindingLayout(List.of()),32);
         return GraphicsPipelineState.builder(program).vertexLayout(VertexLayout.empty())
             .primitiveAssembly(PrimitiveTopology.TRIANGLE_LIST,false)
-            .colorTargets(List.of(TextureFormat.RGBA8_UNORM,TextureFormat.RGBA8_UNORM),BlendState.replace(2)).build();
+            .colorTargets(List.of(TextureFormat.RGBA8_UNORM),BlendState.replace(1)).build();
     }
     private static ShaderModule module(long id,ShaderStage stage,String source,int pushBytes,int kind) {
         long compiler=Shaderc.shaderc_compiler_initialize(),options=Shaderc.shaderc_compile_options_initialize(),result=0;
@@ -184,8 +185,7 @@ public final class RtxptFusionDemo {
             if(result==0||Shaderc.shaderc_result_get_compilation_status(result)!=Shaderc.shaderc_compilation_status_success)
                 throw new IllegalStateException("Vulkan fusion shader: "+(result==0?"no result":Shaderc.shaderc_result_get_error_message(result)));
             var outputs=stage==ShaderStage.FRAGMENT?List.of(
-                new ShaderInterfaceVariable(0,new ShaderInterfaceType(ShaderInterfaceType.NumericType.FLOATING_POINT,32,4),ShaderInterfaceVariable.Interpolation.SMOOTH),
-                new ShaderInterfaceVariable(1,new ShaderInterfaceType(ShaderInterfaceType.NumericType.FLOATING_POINT,32,4),ShaderInterfaceVariable.Interpolation.SMOOTH)):List.<ShaderInterfaceVariable>of();
+                new ShaderInterfaceVariable(0,new ShaderInterfaceType(ShaderInterfaceType.NumericType.FLOATING_POINT,32,4),ShaderInterfaceVariable.Interpolation.SMOOTH)):List.<ShaderInterfaceVariable>of();
             return new ShaderModule(new RenderResourceId(id),ResourceVersion.initial(),stage,"main",
                 Shaderc.shaderc_result_get_bytes(result).order(ByteOrder.nativeOrder()),new ShaderReflection(List.of(),pushBytes,List.of(),outputs,List.of()));
         } finally {
