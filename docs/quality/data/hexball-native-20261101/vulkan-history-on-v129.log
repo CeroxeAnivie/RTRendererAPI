@@ -1,0 +1,5 @@
+Exception in thread "main" top.ceroxe.rt.renderer.api.RendererUnavailableException: required ray tracing backend is not compatible: vulkan
+	at top.ceroxe.rt.renderer.api.RendererDiscovery.openCandidates(RendererDiscovery.java:159)
+	at top.ceroxe.rt.renderer.api.RendererDiscovery.open(RendererDiscovery.java:44)
+	at top.ceroxe.rt.renderer.api.Renderer.open(Renderer.java:25)
+	at demo.VulkanHexBallTemporalEvidence.main(VulkanHexBallTemporalEvidence.java:27)

@@ -24,7 +24,7 @@ public final class VulkanHexBallTemporalEvidence {
                 .quality(FrameReconstructionOptions.Quality.BALANCED).build()).build();
         var scene=new DemoScene(true);
         var batch=scene.primitiveBatch(new HexPhysics(),FramePrimitiveBatch.empty());
-        try(var renderer=Renderer.open("vulkan",config)) {
+        try(var renderer=Renderer.open("vulkan-rt",config)) {
             long revision=renderer.apply(scene.initialTransaction()).acceptedSceneRevision();
             for(int frame=0;frame<164;frame++) {
                 var request=DemoRendererProfile.frame(frame,2560,1440,DemoRendererProfile.camera(2560,1440,15.4))
