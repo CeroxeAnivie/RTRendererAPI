@@ -11,7 +11,7 @@ import top.ceroxe.rt.renderer.api.*;
 /** Renderer-wide light families plus scene reloads; captures are excluded from FPS evidence. */
 public final class RtxptLightingNativeSelfTest {
     private static final List<String> CASES=List.of("points","spots","many","area","environment","sun","mixed",
-        "points-environment","points-sun","point-dominated","environment-dominated");
+        "points-environment","points-sun","point-dominated","environment-dominated","double-sun","overlapping-suns");
     public static void main(String[] args) throws Exception {
         Path output=Path.of(args[0]).toAbsolutePath();
         Files.createDirectories(output);
@@ -123,6 +123,11 @@ public final class RtxptLightingNativeSelfTest {
             tx.upsert(light.color(i%3==0?1:.3f,i%3==1?1:.3f,i%3==2?1:.3f).intensity(scale*12f/Math.max(1,count)).range(30).build());
         }
         if(name.equals("sun")||name.equals("mixed")||name.equals("points-sun"))tx.upsert(SceneLight.directional(200,.57735026f,-.57735026f,-.57735026f).intensity(3).build());
+        if(name.equals("double-sun")||name.equals("overlapping-suns")) {
+            tx.upsert(SceneLight.directional(200,.57735026f,-.57735026f,-.57735026f).color(1,.7f,.4f).intensity(2).build());
+            tx.upsert(SceneLight.directional(201,name.equals("overlapping-suns")?.57735026f:-.57735026f,
+                -.57735026f,-.57735026f).color(.4f,.7f,1).intensity(1).build());
+        }
         return tx.build();
     }
     private static CameraState camera(double offset){return CameraState.lookAt(offset+4,2.7,6,offset,.8,0)

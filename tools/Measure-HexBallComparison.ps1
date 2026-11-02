@@ -9,7 +9,7 @@ param(
     [switch]$ControlLighting,
     [switch]$DisableResidualPointSampling,
     [switch]$ExactMis,
-    [switch]$LowDiscrepancyNee,
+    [switch]$DirectionalStrata,
     [switch]$ApproximateMis,
     [ValidateSet('Default','Power','NeeAt')][string]$LightSampler='Default',
     [switch]$Glass,
@@ -76,7 +76,7 @@ $oldBloom=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM
 $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
-$oldLdNee=$env:RTR_RTXPT_DIAGNOSTIC_LD_NEE
+$oldDirectionalStrata=$env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA
 $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 try {
@@ -87,7 +87,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SR_EXPOSURE=$(if($FixedSrExposure -gt 0){$FixedSrExposure.ToString([Globalization.CultureInfo]::InvariantCulture)}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM=$(if($DisableBloom){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
-    $env:RTR_RTXPT_DIAGNOSTIC_LD_NEE=$(if($LowDiscrepancyNee){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$(if($DirectionalStrata){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(switch($LightSampler){'Power'{'power'} 'NeeAt'{'neeat'} default{$null}})
@@ -96,7 +96,7 @@ try {
     $settings=[ordered]@{
         SourceCommit=(& git rev-parse HEAD).Trim();Backend=$Backend;Entry=$entry;
         WorkingTreeSourceSha256=$sourceDigest;WorkingTreeSourceFiles=$sourcePaths;
-    LowDiscrepancyNee=[bool]$LowDiscrepancyNee;
+    DirectionalStrata=[bool]$DirectionalStrata;
         Width=$Width;Height=$Height;Spp=1;FrameGeneration=$false;StageProfile=[bool]$StageProfile;
         RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;
         SrPreset=$SrPreset;
@@ -140,7 +140,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$oldResidual
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
-    $env:RTR_RTXPT_DIAGNOSTIC_LD_NEE=$oldLdNee
+    $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$oldDirectionalStrata
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$oldSampler
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$oldTransmissionGuides
 }

@@ -1,0 +1,10 @@
+[
+  {
+    "TimeCreated": "2026-11-02T09:36:38.833536+08:00",
+    "Message": "出错应用程序名称： java.exe，版本： 25.0.5.0，时间戳： 0x79c4f160\r\n出错模块名称： nvgpucomp64.dll， 版本： 32.0.16.1692，时间戳： 0x6a9b31ec\r\n异常代码： 0xc0000005\r\n错误偏移： 0x00000000015c4e01\r\n出错进程 ID： 0x5350\r\n出错应用程序开始时间： 0x1DD6A6A984008E7\r\nFaulting 应用程序路径： C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe\r\nFaulting 模块路径： C:\\WINDOWS\\System32\\DriverStore\\FileRepository\\nvhmi.inf_amd64_a5249427c27fabd2\\nvgpucomp64.dll\r\nReport ID： 87456e76-0476-449a-80ea-1d7db7bc31cd\r\nFaulting 包全名： \r\nFaulting 程序包相对应用程序 ID：  个"
+  },
+  {
+    "TimeCreated": "2026-11-02T09:36:04.1911955+08:00",
+    "Message": "出错应用程序名称： java.exe，版本： 25.0.5.0，时间戳： 0x79c4f160\r\n出错模块名称： nvgpucomp64.dll， 版本： 32.0.16.1692，时间戳： 0x6a9b31ec\r\n异常代码： 0xc0000005\r\n错误偏移： 0x00000000005a2f03\r\n出错进程 ID： 0x22C0\r\n出错应用程序开始时间： 0x1DD6A6A801CBC1A\r\nFaulting 应用程序路径： C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe\r\nFaulting 模块路径： C:\\WINDOWS\\System32\\DriverStore\\FileRepository\\nvhmi.inf_amd64_a5249427c27fabd2\\nvgpucomp64.dll\r\nReport ID： 7af329ce-5eac-46fb-b09b-9ca8bd57b499\r\nFaulting 包全名： \r\nFaulting 程序包相对应用程序 ID：  个"
+  }
+]

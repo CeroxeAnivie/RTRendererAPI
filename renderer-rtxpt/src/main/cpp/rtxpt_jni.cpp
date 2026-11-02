@@ -30,6 +30,18 @@ extern SampleUIData g_sampleUIData;
 
 namespace {
 class HostPathTracer final : public AdvancedPathTracer {
+    bool directionalStrataLogged=false;
+    bool useDirectionalStrata() const {
+        const char* control=std::getenv("RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA");
+        if(!control || std::string(control)!="1" || !GetScene()
+            || !g_sampleUIData.RealtimeMode || g_sampleUIData.RealtimeAA!=2
+            || g_sampleUIData.ActualUseStandaloneDenoiser() || g_sampleUIData.ActualUseRTXDIPasses()
+            || g_sampleUIData.ActualRadianceCacheMode()!=0)return false;
+        for(const auto& light:GetScene()->GetSceneGraph()->GetLights())
+            if(light->GetLightType()==LightType_Directional
+                && static_cast<const donut::engine::DirectionalLight&>(*light).irradiance>0)return true;
+        return false;
+    }
     bool smallPointLighting=false;
     int previousNeeType=2;
     bool powerSampling=false;
@@ -60,9 +72,32 @@ class HostPathTracer final : public AdvancedPathTracer {
     }
 public:
     using AdvancedPathTracer::AdvancedPathTracer;
+    void UpdateCustomConstants(SampleConstants& constants, nvrhi::ICommandList* commandList) override {
+        AdvancedPathTracer::UpdateCustomConstants(constants,commandList);
+        auto& pt=constants.ptConsts;
+        pt.RtrDirectionalCount=0;
+        if(!useDirectionalStrata() || !GetEnvMapBaker())return;
+        const float cubeDim=float(GetEnvMapBaker()->GetTargetCubeResolution());
+        if(cubeDim<=0 || !m_envMapSceneParams.Enabled)return;
+        for(const auto& light:GetScene()->GetSceneGraph()->GetLights()) {
+            if(light->GetLightType()!=LightType_Directional || pt.RtrDirectionalCount>=16)continue;
+            const auto& data=static_cast<const donut::engine::DirectionalLight&>(*light);
+            if(data.irradiance<=0)continue;
+            // Cover the native sun's raster footprint, including cube filtering.
+            // Any energy outside this cap remains in the residual estimator.
+            const float angle=std::min(PI_f*.5f,
+                std::max(radians(std::clamp(data.angularSize,0.f,90.f)),2*PI_f/cubeDim)*.5f+4.f/cubeDim);
+            pt.RtrDirectionalCaps[pt.RtrDirectionalCount++]=float4(float3(-normalize(data.GetDirection())),std::cos(angle));
+        }
+        if(!directionalStrataLogged) {
+            donut::log::info("RTXPT directional environment strata ACTIVE count=%u cubeDim=%.0f; baked illumination retained",pt.RtrDirectionalCount,cubeDim);
+            directionalStrataLogged=true;
+        }
+    }
     nvrhi::ITexture* HostDisplayColor() const { return m_renderTargets ? m_renderTargets->LdrColor.Get() : nullptr; }
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();
+        directionalStrataLogged=false;
         const char* disableGuides=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES");
         const bool applyGuides=!(disableGuides && std::string(disableGuides)=="1");
         const auto guideStats=ApplyDefaultTransmissionDenoisingGuides(GetScene()->GetSceneGraph().get(),applyGuides);
@@ -121,8 +156,12 @@ public:
     }
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
-        const char* ldNee=std::getenv("RTR_RTXPT_DIAGNOSTIC_LD_NEE");
-        if(ldNee && std::string(ldNee)=="1")macros.push_back({"RTR_LOW_DISCREPANCY_NEE","1"});
+        if(useDirectionalStrata()) {
+            macros.push_back({"RTR_DIRECTIONAL_STRATA","1"});
+            for(auto& macro:macros) {
+                if(macro.name=="RTXPT_USE_APPROXIMATE_MIS")macro.definition="0";
+            }
+        }
         const char* residualControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING");
         if(smallPointLighting) {
             macros.push_back({"RTR_EXACT_SMALL_POINTS","1"});
@@ -608,8 +647,6 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
             else throw std::invalid_argument("Diagnostic SR preset must be J, K or M");
             donut::log::info("RTXPT diagnostic upstream DLSS-SR preset=%s",preset);
         }
-        if(const char* ldNee=std::getenv("RTR_RTXPT_DIAGNOSTIC_LD_NEE"))
-            donut::log::info("RTXPT diagnostic NEE sequence=%s",std::string(ldNee)=="1"?"upstream-owen-sobol":"upstream-white");
         // Explicit measurement-only model selection; normal callers retain upstream preset F.
         if(const char* preset=std::getenv("RTR_RTXPT_DIAGNOSTIC_RR_PRESET")) {
             const std::string selected(preset);

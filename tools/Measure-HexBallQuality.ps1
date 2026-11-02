@@ -7,7 +7,7 @@ param(
     [switch]$ControlLighting,
     [switch]$DisableResidualPointSampling,
     [switch]$ExactMis,
-    [switch]$LowDiscrepancyNee,
+    [switch]$DirectionalStrata,
     [switch]$ApproximateMis,
     [ValidateSet('Default','Power','NeeAt')][string]$LightSampler='Default',
     [switch]$Sharc,
@@ -72,7 +72,7 @@ $settings=[ordered]@{
     WorkingTreeSourceSha256=$sourceDigest;WorkingTreeSourceFiles=$sourcePaths;
     Width=2560;Height=1440;Spp=$(if($Mode -in @('reference','direct-reference')){32}else{1});FrameGeneration=$false;StageProfile=$false
     RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
-    LowDiscrepancyNee=[bool]$LowDiscrepancyNee;
+    DirectionalStrata=[bool]$DirectionalStrata;
     SmallPointCandidate=[bool]$SmallPointCandidate
     ControlLighting=[bool]$ControlLighting
     DisableResidualPointSampling=[bool]$DisableResidualPointSampling
@@ -98,7 +98,7 @@ $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
 $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
-$oldLdNee=$env:RTR_RTXPT_DIAGNOSTIC_LD_NEE
+$oldDirectionalStrata=$env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA
 $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 $oldRrPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
@@ -108,7 +108,7 @@ $oldBloom=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
-    $env:RTR_RTXPT_DIAGNOSTIC_LD_NEE=$(if($LowDiscrepancyNee){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$(if($DirectionalStrata){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(switch($LightSampler){'Power'{'power'} 'NeeAt'{'neeat'} default{$null}})
@@ -120,8 +120,9 @@ try {
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     $runLog=Get-Content -LiteralPath ($prefix+'.log') -Raw
-    if($LowDiscrepancyNee -and $runLog -notmatch 'RTXPT diagnostic NEE sequence=upstream-owen-sobol'){
-        throw 'Native low-discrepancy NEE was requested but was not active; discard this run.'
+    if($DirectionalStrata -and $LightingProbe -notin @('no-sun','no-environment')
+        -and $runLog -notmatch 'RTXPT directional environment strata ACTIVE count=[1-9]'){
+        throw 'Directional strata were requested but not active; discard this run.'
     }
     if($FixedSrExposure -gt 0 -and $runLog -notmatch 'RTXPT explicit SR exposure texture='){
         throw 'Fixed SR exposure was requested but was not tagged; discard this run.'
@@ -145,7 +146,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$oldResidual
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
-    $env:RTR_RTXPT_DIAGNOSTIC_LD_NEE=$oldLdNee
+    $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$oldDirectionalStrata
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$oldSampler
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$oldTransmissionGuides
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$oldRrPreset

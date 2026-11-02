@@ -396,37 +396,71 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidate
             }
             #endif
 '@ 'RTR directional samples carry directions'
-# Isolate sampling variance without adding light/visibility samples. The native
-# Owen-Sobol generator and the bounce cutoff already serve RTXPT BSDF sampling.
-Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    // Generates a light sample from all the available lights.' @'
-    #if defined(RTR_LOW_DISCREPANCY_NEE) && RTR_LOW_DISCREPANCY_NEE
-    #define RTR_NEE_GENERATOR SampleSequenceGenerator
-    #else
-    #define RTR_NEE_GENERATOR UniformSampleSequenceGenerator
-    #endif // RTR native NEE sequence type
-    // Generates a light sample from all the available lights.
-'@ 'RTR native NEE sequence type'
-Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' 'uint globalCount, inout UniformSampleSequenceGenerator sampleGenerator, const LightSampler lightSampler' 'uint globalCount, inout RTR_NEE_GENERATOR sampleGenerator, const LightSampler lightSampler' 'inout RTR_NEE_GENERATOR sampleGenerator'
-Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        [unroll] for (uint sampleIndex = 0; sampleIndex < fullSamples; sampleIndex++)' @'
-        #if defined(RTR_LOW_DISCREPANCY_NEE) && RTR_LOW_DISCREPANCY_NEE
-        const SampleGeneratorVertexBase rtrNeeBase = SampleGeneratorVertexBase::make(
-            preScatterPath.GetId(), preScatterPath.getVertexIndex(), Bridge::getSampleIndex());
-        SampleSequenceGenerator rtrNeeGenerator = SampleSequenceGenerator::make(rtrNeeBase,
-            SampleGeneratorEffectSeed::NextEventEstimationLightSampler,
-            preScatterPath.getCounter(PackedCounters::DiffuseBounces) < DisableLowDiscrepancySamplingAfterDiffuseBounceCount,
-            fullSamples * candidateSampleCount); // RTR independent native NEE sequence
-        #endif
-        [unroll] for (uint sampleIndex = 0; sampleIndex < fullSamples; sampleIndex++)
-'@ 'RTR independent native NEE sequence'
-Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '                sampleGenerator, lightSampler, rtrConditionalPointSampling, rtrResidualGlobalProxyCount, rtrResidualLocalSlotCount); // RTR residual sample call' @'
-                #if defined(RTR_LOW_DISCREPANCY_NEE) && RTR_LOW_DISCREPANCY_NEE
-                rtrNeeGenerator,
-                #else
-                sampleGenerator,
-                #endif
-                lightSampler, rtrConditionalPointSampling, rtrResidualGlobalProxyCount, rtrResidualLocalSlotCount); // RTR residual sample call; RTR independent sequence call
-'@ 'RTR independent sequence call'
 # Raw SR/TAA/reference output does not read it; retain upstream filtering for every consumer.
+# Partition the EXISTING baked environment instead of adding duplicate suns or
+# replacing visibility/indirect lighting with a constant ambient approximation.
+foreach($header in @('RtrDirectionalStrata.hlsli','RtrDirectionalNee.hlsli')) {
+    [IO.File]::WriteAllText((Join-Path $sdk ('Rtxpt/Shaders/PathTracer/'+$header)),
+        [IO.File]::ReadAllText((Join-Path $repo ('renderer-rtxpt/src/main/cpp/'+$header))),$utf8)
+}
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerShared.h' '    PathTracerCameraData camera;' @'
+    float4  RtrDirectionalCaps[16];
+    uint    RtrDirectionalCount;
+    uint3   RtrDirectionalPadding; // RTR directional sampling domains
+    PathTracerCameraData camera;
+'@ 'RTR directional sampling domains'
+foreach($header in @('PathTracer.hlsli','PathTracerNEE.hlsli')) {
+    Patch-Once ('Rtxpt/Shaders/PathTracer/'+$header) '#include "PathTracerTypes.hlsli"' @'
+#include "PathTracerTypes.hlsli"
+#include "RtrDirectionalStrata.hlsli" // RTR shared environment partition
+'@ 'RTR shared environment partition'
+}
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    return envMap.EvalLocal(localDir, Bridge::DiffuseEnvironmentMapMIPOffset());' @'
+    #if defined(RTR_DIRECTIONAL_STRATA) && RTR_DIRECTIONAL_STRATA
+    return envMap.EvalLocal(localDir, 0); // RTR one environment target for both estimators
+    #else
+    return envMap.EvalLocal(localDir, Bridge::DiffuseEnvironmentMapMIPOffset());
+    #endif
+'@ 'RTR one environment target for both estimators'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            float wrsWeight = EvalSampleWeight( candidateSample, shadingData, bsdf );' @'
+            #if defined(RTR_DIRECTIONAL_STRATA) && RTR_DIRECTIONAL_STRATA
+            if (workingContext.PtConsts.RtrDirectionalCount > 0
+                && PolymorphicLight::DecodeType(packedLightInfo) == PolymorphicLightType::kEnvironmentQuad)
+            {
+                EnvMap environment = Bridge::CreateEnvMap();
+                candidateSample.Li = environment.Eval(candidateSample.Direction, 0) / pdf;
+                if (RtrDirectionalOwner(candidateSample.Direction, workingContext.PtConsts) != 0xffffffffu)
+                    candidateSample.Li = 0; // RTR residual excludes separately sampled domains
+            }
+            #endif
+            float wrsWeight = EvalSampleWeight( candidateSample, shadingData, bsdf );
+'@ 'RTR residual excludes separately sampled domains'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    #include "RtrSmallPointNee.hlsli"' @'
+    #include "RtrDirectionalNee.hlsli" // RTR native direct-light evaluation for distant strata
+    #include "RtrSmallPointNee.hlsli"
+'@ 'RTR native direct-light evaluation for distant strata'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        // RTR deterministic delta contributions; do not add them again below.' @'
+        #if defined(RTR_DIRECTIONAL_STRATA) && RTR_DIRECTIONAL_STRATA
+        RtrSumDirectionalStrata(result, lightSampler, shadingData, bsdf, preScatterPath, sampleGenerator, workingContext);
+        #endif // RTR sample every distant stratum once
+        // RTR deterministic delta contributions; do not add them again below.
+'@ 'RTR sample every distant stratum once'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '            float3 Le = envMap.EvalLocal(localDir, mipLevel);' @'
+            #if defined(RTR_DIRECTIONAL_STRATA) && RTR_DIRECTIONAL_STRATA
+            if (workingContext.PtConsts.RtrDirectionalCount > 0)
+                mipLevel = 0; // RTR preserve environment target across escape and NEE
+            #endif
+            float3 Le = envMap.EvalLocal(localDir, mipLevel);
+'@ 'RTR preserve environment target across escape and NEE'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '                misWeight = lightSampler.ComputeBSDFMISForEnvironmentQuad(environmentQuadLightIndex, bsdfScatterPdf, misInfo.CandidateSamples, misInfo.FullSamples);' @'
+                misWeight = lightSampler.ComputeBSDFMISForEnvironmentQuad(environmentQuadLightIndex, bsdfScatterPdf, misInfo.CandidateSamples, misInfo.FullSamples);
+                #if defined(RTR_DIRECTIONAL_STRATA) && RTR_DIRECTIONAL_STRATA
+                const uint owner = RtrDirectionalOwner(rayDir, workingContext.PtConsts);
+                if (owner != 0xffffffffu)
+                    misWeight = EvalMIS(RTXPT_NEE_MIS_HEURISTIC, 1, bsdfScatterPdf, 1,
+                        RtrDirectionalPdf(owner, workingContext.PtConsts)); // RTR reciprocal BSDF MIS for distant stratum
+                #endif
+'@ 'RTR reciprocal BSDF MIS for distant stratum'
 Patch-Once 'Rtxpt/AdvancedSample.cpp' '        m_denoisingGuidesBaker->DenoiseSpecHitT(m_commandList, m_bindingSet);' @'
         // RTR filter hit distance only when a consumer is active
         if (m_ui.ActualUseStandaloneDenoiser()
