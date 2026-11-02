@@ -1,0 +1,50 @@
+[
+  {
+    "image": "moving-116.png",
+    "identical": true
+  },
+  {
+    "image": "moving-117.png",
+    "identical": true
+  },
+  {
+    "image": "moving-118.png",
+    "identical": true
+  },
+  {
+    "image": "moving-119.png",
+    "identical": true
+  },
+  {
+    "image": "static-160.png",
+    "identical": true
+  },
+  {
+    "image": "static-161.png",
+    "identical": true
+  },
+  {
+    "image": "static-162.png",
+    "identical": true
+  },
+  {
+    "image": "static-163.png",
+    "identical": true
+  },
+  {
+    "image": "stopped-0.png",
+    "identical": true
+  },
+  {
+    "image": "stopped-15.png",
+    "identical": true
+  },
+  {
+    "image": "stopped-3.png",
+    "identical": true
+  },
+  {
+    "image": "stopped-79.png",
+    "identical": true
+  }
+]
