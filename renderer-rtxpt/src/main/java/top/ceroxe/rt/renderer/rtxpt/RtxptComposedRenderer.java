@@ -29,7 +29,7 @@ public final class RtxptComposedRenderer implements Renderer {
     private List<FrameCompositionPlan.Layer> overlays=List.of();
     private boolean closed,vulkanScenePublished;
     private long sceneRevision,vulkanRevision=-1,sequence=-1,vulkanFrames;
-    private int width,height;
+    private int width,height,submittedWidth,submittedHeight;
 
     /** Opens RTXPT 3D and native presentation, with Vulkan reserved for independent work and UI. */
     public static RtxptComposedRenderer open() {
@@ -130,7 +130,12 @@ public final class RtxptComposedRenderer implements Renderer {
     public VulkanFramePresenter presenter(){
         ready();if(nativePresentation)throw new IllegalStateException("RTXPT owns the visible window; use its RtxptAccess extension");return presenter;
     }
-    /** Vulkan GPU layers composed after complete RTXPT 3D; at most seven overlays. */
+    /**
+     * Vulkan GPU layers composed after complete RTXPT 3D; at most seven overlays.
+     * Layers match the submitted frame extent. If native window events resize RTXPT during
+     * that frame, only the stale overlays are omitted until the caller observes the new extent.
+     * The external frame is still consumed and signalled normally.
+     */
     public void overlays(List<FrameCompositionPlan.Layer> layers){
         ready();var next=List.copyOf(Objects.requireNonNull(layers,"layers"));
         if(next.size()>7)throw new IllegalArgumentException("At most seven overlays after the RTXPT base layer");
@@ -139,7 +144,8 @@ public final class RtxptComposedRenderer implements Renderer {
         // destruction here: applications can explicitly trim during an idle period.
         if(nativePresentation)rtxpt.compositor(next.isEmpty()?null:values->{
             try{presenter.composeD3D12SharedFrame(new top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame(
-                values[0],values[1],values[2],(int)values[3],(int)values[4],values[5],values[6],values[7],values[8],values[9]),overlays);}
+                values[0],values[1],values[2],(int)values[3],(int)values[4],values[5],values[6],values[7],values[8],values[9]),
+                values[3]==submittedWidth&&values[4]==submittedHeight?overlays:List.of());}
             catch(RuntimeException|Error failure){
                 try{retireExternalFrames();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}throw failure;
             }
@@ -203,6 +209,9 @@ public final class RtxptComposedRenderer implements Renderer {
         if(wanted.backend()==RendererBackendPolicy.Backend.RTXPT) {
             if(switched)rtxpt.resetHistory();
             try {
+                // GLFW processes resize events inside the native frame. Preserve the caller's
+                // overlay extent separately from the actual shared-image extent in the callback.
+                submittedWidth=frame.width();submittedHeight=frame.height();
                 result=rtxpt.submit(frame);
                 if(!nativePresentation)presenter.presentD3D12SharedFrame(rtxpt.sharedFrame(frame.sequence()),overlays);
             } catch(RuntimeException|Error failure) {

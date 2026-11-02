@@ -28,6 +28,7 @@ public final class RtxptFusionDemo {
             renderer.apply(RtxptMediumScene.create(revision,scene));
             renderer.submit(RtxptMediumDemo.frameRequest(sequence++,revision,width,height));
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
+            System.out.println("FUSION nativeWindow="+host.windowHandle());
             host.setWindowTitle("RTRendererAPI 7.0.0 - RTXPT + Vulkan Fusion");
             host.setOverlayChoices(RtxptMediumScene.LABELS,0);
             var keys=new DemoWindowKeys(host.windowHandle());
@@ -126,6 +127,7 @@ public final class RtxptFusionDemo {
                 width=w;height=h;
                 var result=commands.submitResources(new RenderResourceTransaction(resourceRevision++,List.of(),allocated,retired));
                 if(result.outcome()!=ResourceTransactionEvidence.Outcome.ACCEPTED)throw new IllegalStateException("Vulkan effects allocation: "+result);
+                System.out.println("FUSION Vulkan overlay extent="+w+"x"+h);
             }
             int slot=(int)(draws%colors.length);
             var color=colors[slot];var glow=glows[slot];
