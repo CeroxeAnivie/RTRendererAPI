@@ -208,6 +208,9 @@ public final class RtxptFusionDemo {
             List.of(vertex,fragment),new BindingLayout(List.of()),32);
         return GraphicsPipelineState.builder(program).vertexLayout(VertexLayout.empty())
             .primitiveAssembly(PrimitiveTopology.TRIANGLE_LIST,false)
+            // A screen-space triangle must survive the positive-height Vulkan viewport winding.
+            .rasterState(new RasterState(false,false,RasterState.PolygonMode.FILL,RasterState.CullMode.NONE,
+                RasterState.FrontFace.COUNTER_CLOCKWISE,false,0,0,0,1))
             .colorTargets(List.of(TextureFormat.RGBA8_UNORM),BlendState.replace(1)).build();
     }
     private static ShaderModule module(long id,ShaderStage stage,String source,int pushBytes,int kind) {
