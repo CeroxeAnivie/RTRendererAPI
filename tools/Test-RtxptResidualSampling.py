@@ -45,6 +45,13 @@ def sample_local(slots, point_lights, residual_rank):
     return slots[index][0]
 
 
+def sample_prefix_fast(slots, point_lights, residual_rank, first_analytic):
+    assert all(light >= first_analytic for light in point_lights)
+    if slots[residual_rank][0] < first_analytic:
+        return slots[residual_rank][0]
+    return sample_local(slots, point_lights, residual_rank)
+
+
 def check_global(proxy_indices, point_lights):
     residual = [light for light in proxy_indices if light not in point_lights]
     if not residual:
@@ -72,6 +79,13 @@ def check_local(weighted_lights, point_lights):
     }
     assert abs(sum(pdfs.values()) - 1.0) < 1e-12, pdfs
     assert all(counts[light] / residual_count == pdf for light, pdf in pdfs.items())
+    # Every legal environment/analytic boundary, including no environment.
+    # Compare every rank with the fully filtered distribution, not just means.
+    for first_analytic in range(min(point_lights, default=0) + 1):
+        fast = [sample_prefix_fast(slots, point_lights, i, first_analytic)
+                for i in range(residual_count)]
+        assert fast == expected
+        assert [pdfs[light] for light in fast] == [pdfs[light] for light in samples]
     # Verify an importance-sampling integral, not only the selected indices.
     estimate = sum((light + 0.5) / pdfs[light] for light in samples) / residual_count
     assert abs(estimate - sum(light + 0.5 for light in counts)) < 1e-9

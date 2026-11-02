@@ -84,6 +84,14 @@ uint RtrSampleResidualGlobal(const float rnd, const uint residualProxyCount, out
 
     uint proxyIndex = min(uint(rnd * residualProxyCount), residualProxyCount - 1u);
     const uint first = ControlBuffer[0].EnvmapQuadNodeCount;
+    // Upstream proxies are sorted: environment precedes every excluded point.
+    // A rank already in that prefix cannot move when point runs are removed.
+    const uint prefixLight = ProxyIndices[proxyIndex];
+    if (prefixLight < first)
+    {
+        pdf = float(ProxyCounters[prefixLight]) / float(residualProxyCount);
+        return prefixLight;
+    }
     for (uint i = 0; i < ControlBuffer[0].AnalyticLightCount; ++i)
     {
         const uint pointIndex = first + i;
@@ -122,6 +130,13 @@ uint RtrSampleResidualLocal(const float rnd, const uint residualSlotCount, out f
     // list. Map a residual rank past the at-most-four excluded contiguous runs.
     uint proxyIndex = min(uint(rnd * residualSlotCount), residualSlotCount - 1u);
     const uint first = ControlBuffer[0].EnvmapQuadNodeCount;
+    uint prefixLight, prefixCount;
+    ReadLocal(proxyIndex, prefixLight, prefixCount);
+    if (prefixLight < first)
+    {
+        pdf = float(prefixCount) / float(residualSlotCount);
+        return prefixLight;
+    }
     for (uint i = 0; i < ControlBuffer[0].AnalyticLightCount; ++i)
     {
         const uint pointIndex = first + i;
