@@ -558,6 +558,15 @@ foreach($relative in $rtrPayloadMigrations.Keys) {
     foreach($pair in $rtrPayloadMigrations[$relative]){$text=$text.Replace($pair[0],$pair[1])}
     [IO.File]::WriteAllText($path,$text,$utf8)
 }
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        const float rrVal = sqrt(Luminance(path.GetThp())); // closer to perceptual' @'
+        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+        // gsOpticalContinuation uses its event budget, not throughput roulette.
+        // Applying roulette to a deterministic split kills dim eta^2 entry
+        // branches before the exit interface restores their radiance weight.
+        if((path.getCounter((PackedCounters)3)&4u)!=0)return false; // RTR bounded optical transport without roulette
+        #endif
+        const float rrVal = sqrt(Luminance(path.GetThp())); // closer to perceptual
+'@ 'RTR bounded optical transport without roulette'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '            SharcHandlePathLimit(surfaceEmission);' @'
             #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
             // gsOpticalContinuation shades the final receiver before ending its budget.

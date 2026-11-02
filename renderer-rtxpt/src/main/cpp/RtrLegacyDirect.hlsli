@@ -1,11 +1,40 @@
 // Direct port of gsEvaluatePbrSurface / gsSceneLight / gsDirectContribution.
 // Called at every shading receiver, including receivers reached through glass.
+float3 RtrLegacyShadowVisibility(const RayDesc inputRay,const PathState source,const WorkingContext context)
+{
+    // Keep the common unblocked case on the native fast visibility query.
+    if(Bridge::traceVisibilityRay(inputRay,source.rayCone,source.getVertexIndex(),source.GetPixelPos(),context.Debug))return 1;
+    PathState shadow=source;shadow.SetOrigin(inputRay.Origin);shadow.SetDir(inputRay.Direction);
+    float remaining=inputRay.TMax;float3 throughput=1;
+    [loop]for(uint event=0;event<Bridge::getMaxBounceLimit();event++)
+    {
+        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES,RAYQUERY_FLAG_ALLOW_OPACITY_MICROMAPS> query;
+        Bridge::traceScatterRay(shadow,query,float2(0,remaining),context.Debug);
+        if(query.CommittedStatus()!=COMMITTED_TRIANGLE_HIT)return throughput;
+        Surface hit=Bridge::loadSurface(query.CommittedInstanceIndex(),query.CommittedGeometryIndex(),query.CommittedPrimitiveIndex(),
+            query.CommittedTriangleBarycentrics(),inputRay.Direction,shadow.rayCone,source.getVertexIndex(),source.GetPixelPos(),context.Debug);
+        float transmission=hit.bsdf.data.SpecularTransmission();
+        if(transmission<=0)return 0;
+        // Same straight-through direct-light approximation as gsShadowVisibilityDetailed.
+        float fresnel=RtrLegacyFresnel(hit.shadingData.GetEta(),abs(dot(inputRay.Direction,hit.shadingData.N)));
+        throughput*=transmission*(1-fresnel)*hit.bsdf.data.Transmission();
+        if(max3(throughput)<=0)return 0;
+        float3 position=hit.shadingData.posW;
+        float epsilon=max(1e-5,max3(abs(position))*2e-7);
+        remaining-=query.CommittedRayT()+epsilon;
+        if(remaining<=0)return throughput;
+        shadow.SetOrigin(position+inputRay.Direction*epsilon);
+    }
+    return 0;
+}
+
 NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const ActiveBSDF bsdf,const WorkingContext context)
 {
     NEEResult result=NEEResult::empty();
     // Shared primary receiver is shaded once; only its optical continuations split.
     if(path.getVertexIndex()==1 && (path.getCounter((PackedCounters)3)&3u)==2u)return result;
     float surfaceWeight=1-bsdf.data.SpecularTransmission();
+    if(surfaceWeight<=0)return result;
     float3 baseColor=RtrLegacyBaseColor(sd,bsdf.data);
     float metallic=saturate(float(bsdf.data.Metallic())),roughness=clamp(float(bsdf.data.Roughness()),.025,1);
     float3 diffuse=baseColor*(1-metallic)*context.PtConsts.RtrLegacyAmbient.rgb;
@@ -35,7 +64,8 @@ NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const Active
         {
             LightSample sample=LightSample::make();sample.Direction=direction;sample.Distance=maximumDistance;
             RayDesc ray=ComputeVisibilityRay(sample,sd);
-            if(!Bridge::traceVisibilityRay(ray,path.rayCone,path.getVertexIndex(),path.GetPixelPos(),context.Debug))continue;
+            radiance*=RtrLegacyShadowVisibility(ray,path,context);
+            if(max3(radiance)<=0)continue;
         }
         float3 h=normalize(sd.V+direction);
         float nv=max(dot(sd.N,sd.V),0),nh=max(dot(sd.N,h),0),vh=max(dot(sd.V,h),0);
