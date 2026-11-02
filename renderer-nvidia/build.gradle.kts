@@ -90,22 +90,22 @@ val nativeBridgeBuildDirectory = layout.dir(
     providers.gradleProperty("nvidiaBridgeBuildDirectory").map { file(it) }
 ).orElse(layout.buildDirectory.dir("cmake/nvidia"))
 val cmakeExecutableProperty = discoveredPath(
-    "cmakeExecutable", "CMAKE_EXECUTABLE", listOf("D:/CMake/bin/cmake.exe")
+    "cmakeExecutable", "CMAKE_EXECUTABLE",
+    System.getenv("PATH").orEmpty().split(File.pathSeparator)
+        .filter { it.isNotBlank() }.map { File(it, "cmake.exe").path }
 ) { it.isFile && it.name.equals("cmake.exe", ignoreCase = true) }
 val nrdSdkRootProperty = discoveredPath(
-    "nrdSdkRoot", "NRD_ROOT", listOf("D:/NRD")
+    "nrdSdkRoot", "NRD_ROOT", emptyList()
 ) { File(it, "CMakeLists.txt").isFile }
 val nriSdkRootProperty = discoveredPath(
-    "nriSdkRoot", "NRI_ROOT", listOf("D:/NRI")
+    "nriSdkRoot", "NRI_ROOT", emptyList()
 ) { File(it, "CMakeLists.txt").isFile }
 val rtxmuSdkRoot = discoveredPath(
-    "rtxmuSdkRoot", "RTXMU_ROOT", listOf("D:/RTXMU")
+    "rtxmuSdkRoot", "RTXMU_ROOT", emptyList()
 ) { File(it, "include/rtxmu/VkAccelStructManager.h").isFile }
 val rtxmuCommit = "0c9ce1177000d5923e2cc6a35ae9cb7ff03748d2"
 val streamlineSdkRootProperty = discoveredPath(
-    "streamlineSdkRoot", "STREAMLINE_ROOT", listOf(
-        "D:/NVIDIA SDK/Streamline-2.14.16", "D:/StreamlineSdk"
-    )
+    "streamlineSdkRoot", "STREAMLINE_ROOT", emptyList()
 ) { File(it, "bin/x64/sl.interposer.dll").isFile }
 val jdkHomeProperty = discoveredPath(
     "jdkHome", "JAVA_HOME", listOf(

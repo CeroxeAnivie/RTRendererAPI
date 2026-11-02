@@ -17,7 +17,7 @@ import java.util.Set;
 import top.ceroxe.rt.renderer.api.CommandExecutionEvidence;
 import top.ceroxe.rt.renderer.api.Medium;
 import top.ceroxe.rt.renderer.api.MediumBoundary;
-import top.ceroxe.rt.renderer.api.MediumTransport;
+import top.ceroxe.rt.renderer.api.PathTracingOptions;
 import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.Rgb;
 import top.ceroxe.rt.renderer.api.SubmissionDeferralReason;
@@ -35,8 +35,9 @@ public final class PublishedApiRuntimeSelfTest {
         requireArtifact(Renderer.class, "renderer-api", version, repository);
         verifyBackendProvider(version, repository);
         verifyFeatureProvider(version, repository);
-        verifyNativeManifest("META-INF/native/cuda/windows-x86_64/", Set.of(
-                "nvrtc64_120_0.dll", "nvrtc-builtins64_129.dll", "LICENSE.txt"));
+        require(PublishedApiRuntimeSelfTest.class.getClassLoader().getResource(
+                "META-INF/native/cuda/windows-x86_64/runtime-files.sha256") == null,
+                "retired CUDA medium runtime must not be published");
         verifyNativeManifest("META-INF/native/windows-x86_64/", Set.of(
                 "rtrenderer_nvidia.dll", "sl.interposer.dll", "sl.common.dll",
                 "sl.dlss.dll", "sl.dlss_g.dll", "sl.nis.dll", "sl.reflex.dll", "sl.pcl.dll"));
@@ -119,14 +120,18 @@ public final class PublishedApiRuntimeSelfTest {
     }
 
     private static void verifyPublicValues() {
-        Medium medium = new Medium(new Rgb(.02f, .01f, .005f), Rgb.ZERO, Rgb.ZERO, 1f, 1f, 0f);
-        require(medium.participating() && !medium.isVacuum() && Medium.vacuum().isVacuum(),
+        Medium medium = new Medium(new Rgb(.02f, .01f, .005f), 1.333f);
+        require(!medium.isVacuum() && Medium.vacuum().isVacuum()
+                        && medium.indexOfRefraction() == 1.333f,
                 "published medium value contract failed");
-        require(MediumBoundary.volume(medium).medium().equals(medium),
+        require(MediumBoundary.surface(medium).withPriority(1).medium().equals(medium)
+                        && MediumBoundary.surface(medium).withPriority(1).priority() == 1,
                 "published medium boundary lost its medium");
-        MediumTransport quality = MediumTransport.balanced().withOpticalSamples(2)
-                .withFirstInterfaceSampling(MediumTransport.FirstInterfaceSampling.STOCHASTIC_SINGLE_BRANCH);
-        require(quality.opticalSamples() == 2 && quality.maxEvents() == MediumTransport.balanced().maxEvents(),
+        PathTracingOptions original = PathTracingOptions.defaults();
+        PathTracingOptions quality = original.withExactOpticalInterfaces(2);
+        require(quality.exactOpticalInterfaces() == 2 && quality.maxBounces() == original.maxBounces()
+                        && quality.samplesPerPixel() == original.samplesPerPixel()
+                        && quality.quality().equals(original.quality()),
                 "published medium budget copy lost an independent field");
         WorkloadExecutionEvidence deferred = WorkloadExecutionEvidence.sceneDeferred(1,
                 SubmissionDeferralReason.DEVICE_RECOVERING, "device recovery");

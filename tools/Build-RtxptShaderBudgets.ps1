@@ -1,20 +1,33 @@
+<#
+.SYNOPSIS
+Build or verify the packaged RTXPT shaders for all six optical interface budgets.
+.DESCRIPTION
+Relative paths resolve from the repository root. Use -VerifyOnly for checksum verification or -CheckPaths
+for dependency-path validation. Neither option starts shader compilation or GPU rendering.
+#>
 param(
     [string]$ManifestDirectory='build/rtxpt-shader-manifests',
     [string]$OutputDirectory='build/rtxpt-six-budget-bundle',
     [string]$RuntimeDirectory='build/rtxpt-sdk/bin',
+    [switch]$CheckPaths,
     [switch]$VerifyOnly
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $utf8=[Text.UTF8Encoding]::new($false)
 $repo=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-function Full-Path([string]$path){[IO.Path]::GetFullPath((Join-Path $repo $path))}
+function Full-Path([string]$path){[IO.Path]::GetFullPath($path,$repo)}
 $runtime=Full-Path $RuntimeDirectory
 $output=Full-Path $OutputDirectory
 if(!$output.StartsWith((Join-Path $repo 'build')+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)){
     throw 'Shader bundle output must stay inside this repository build directory'
 }
 $sourceRoot=Join-Path $runtime 'ShaderDynamic/Source'
+if($CheckPaths){
+    if(!(Test-Path -LiteralPath $sourceRoot -PathType Container)){throw 'Missing RTXPT runtime shader source directory'}
+    [pscustomobject]@{Repository=$repo;Runtime=$runtime;Sources=$sourceRoot;Manifests=(Full-Path $ManifestDirectory);Output=$output}
+    return
+}
 function Hash-Text([string]$text){[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($utf8.GetBytes($text))).ToLowerInvariant()}
 function Source-Inventory {
     @((Get-ChildItem -LiteralPath $sourceRoot -File -Recurse | Sort-Object FullName) | ForEach-Object {

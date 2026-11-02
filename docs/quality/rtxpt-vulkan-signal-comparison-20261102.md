@@ -1,5 +1,7 @@
 # 旧 Vulkan 与 RTXPT 的 SR 输入对照
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 修复对象是渲染器的光照信号与重建契约，不按 Demo 名称、球的位置或灯光比例选择实现。
 输出 2560×1440、输入 1485×835、Balanced SR、1 SPP、FG 关闭。
 

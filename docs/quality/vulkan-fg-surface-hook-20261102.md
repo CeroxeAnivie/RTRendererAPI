@@ -1,5 +1,7 @@
 # Vulkan FG 窗口启动修复
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 Streamline 2.14.16 的 Vulkan 手动接入要求窗口 Surface 的创建和销毁也经过 interposer。项目原先只代理交换链及出帧，GLFW 直接创建 Surface，未登记 Surface 到 HWND 的映射。
 
 实测错误为 `vkCreateSwapchainKHR` 返回 `-3`；SDK 日志明确报告 `Could not find a window corresponding to this application`。官方 `wrapper.cpp` 的 `vkCreateWin32SurfaceKHR` 成功后调用 `setSurfaceWindow`，销毁时调用 `removeSurfaceWindow`。

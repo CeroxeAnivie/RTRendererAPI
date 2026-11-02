@@ -1,5 +1,7 @@
 # RTXPT 高级功能与时域输入审计（2026-11-01）
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 本次针对 RTXPT 弹球 SR 画面的模糊、拖影、噪声和旧路径性能差距复查。只采用仓库实际调用链和本机官方 SDK 的说明；没有把请求开关当作执行证据。审计代理没有运行 GPU 测试、原生构建或旧 Demo，也没有单独提交代码。GPU 验收由主线程串行完成。
 
 ## 本次已落代码

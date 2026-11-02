@@ -1,2 +1,0 @@
-name, driver_version, utilization.gpu [%], memory.used [MiB], power.draw [W], clocks.current.graphics [MHz], temperature.gpu
-NVIDIA GeForce RTX 5080 Laptop GPU, 616.92, 1 %, 137 MiB, 65.35 W, 862 MHz, 65

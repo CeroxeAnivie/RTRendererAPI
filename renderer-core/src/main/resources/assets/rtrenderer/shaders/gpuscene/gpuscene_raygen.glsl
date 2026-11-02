@@ -1,7 +1,7 @@
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_ray_flags_primitive_culling : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
-#if defined(RTRENDERER_PRIMARY_TRACE) || defined(RTRENDERER_PRIMARY_SHADE) || defined(RTRENDERER_NATIVE_OPTICAL_TRACE)
+#if defined(RTRENDERER_PRIMARY_TRACE) || defined(RTRENDERER_PRIMARY_SHADE)
 #extension GL_EXT_buffer_reference : require
 #endif
 #ifdef RTRENDERER_SER
@@ -689,9 +689,7 @@ vec4 gsNrdPackRadianceHitDistance(
     return vec4(ycocg, gsNrdNormalizedHitDistance(hitDistance, viewZ, roughness));
 }
 
-#ifdef RTRENDERER_NATIVE_OPTICAL_TRACE
-#include "gpuscene_native_optical_runtime.glsl"
-#elif defined(RTRENDERER_PRIMARY_TRACE)
+#if defined(RTRENDERER_PRIMARY_TRACE)
 void main() {
     if(gl_LaunchIDEXT.x>=gsPrimaryDispatch.pixelCount) return;
     // The prepass consumes only frame uniforms, TLAS and its shared output buffer.

@@ -2,7 +2,7 @@
 
 本页按学习用途索引当前指南、API 参考、实测证据与历史记录，不用固定文件数量代表文档完整性。排除 `build/`、`generated/`、`.gradle/`、`out/` 等生成目录。初次使用按“Demo → Java 教程 → 后端／组合 → 专家接口”阅读；签名和范围以当前源码、API 参考及版本合同为准。
 
-早期 29 份报告合并至[历史质量验证与性能报告](quality/verification-report.md)，之后的 RTXPT、组合和内存报告独立保留。每个记录保留测试日期、制品、场景、失败及未完成边界；机器可读 `data/`、日志和许可证不搬入教程。旧 CUDA／LuxCore 结果不代表当前 RTXPT，已实现接口也不等于所有组合都已实机验证。
+早期 29 份报告合并至[历史质量验证与性能报告](quality/verification-report.md)，之后的 RTXPT、组合和内存报告独立保留。每个记录保留测试日期、制品、场景、失败及未完成边界；历史实验的 JSON／CSV／JSONL 等原始数据和一次性脚本已清理，可从 Git 历史恢复；保留的汇总报告与截图不搬入教程。旧 CUDA／LuxCore 结果不代表当前 RTXPT，已实现接口也不等于所有组合都已实机验证。
 
 ## 当前学习与查阅入口
 
@@ -31,6 +31,7 @@
 | [medium-gallery.md](medium-gallery.md) | 当前 RTXPT 六个光学场景、HUD 切换、默认能力及已删除功能。 |
 | [Evidence-Retention.md](Evidence-Retention.md) | execution evidence 保留预算、lease、查询和背压语义。 |
 | [COMPATIBILITY.md](COMPATIBILITY.md) | major-7 公共契约、兼容策略和迁移边界。 |
+| [tools/README.md](../tools/README.md) | 三个 PowerShell 构建工具、SDK 配置、路径检查和有界构建方式。 |
 
 ### API 参考
 
@@ -162,70 +163,71 @@ Javadoc 制品是否存在及具体版本，以对应 Maven staging 或 runtime 
 
 ## 全部 Markdown 文件（仓库跟踪文件）
 
-当前共 **63 份**，包括隐藏目录、质量数据说明和归档；不包含下载的第三方源码、构建产物或缓存。
+包含项目根目录、`.github/`、指南、历史报告及用户工具说明；生成目录和第三方依赖文档不属于本表。
 
-| 序号 | 文件 |
+| 序号 | 路径 |
 | --- | --- |
 | 1 | [.github/PULL_REQUEST_TEMPLATE.md](../.github/PULL_REQUEST_TEMPLATE.md) |
 | 2 | [CONTRIBUTING.md](../CONTRIBUTING.md) |
 | 3 | [demos/hex-ball/README.md](../demos/hex-ball/README.md) |
-| 4 | [docs/_Sidebar.md](_Sidebar.md) |
-| 5 | [docs/5.0.0.md](5.0.0.md) |
-| 6 | [docs/5.1.0.md](5.1.0.md) |
-| 7 | [docs/5.1.1.md](5.1.1.md) |
-| 8 | [docs/5.2.0.md](5.2.0.md) |
-| 9 | [docs/5.2.1.md](5.2.1.md) |
-| 10 | [docs/5.2.2.md](5.2.2.md) |
-| 11 | [docs/6.0.0.md](6.0.0.md) |
-| 12 | [docs/6.0.1.md](6.0.1.md) |
-| 13 | [docs/6.0.2.md](6.0.2.md) |
-| 14 | [docs/6.0.3.md](6.0.3.md) |
-| 15 | [docs/7.0.0.md](7.0.0.md) |
-| 16 | [docs/backend-routing.md](backend-routing.md) |
-| 17 | [docs/COMPATIBILITY.md](COMPATIBILITY.md) |
-| 18 | [docs/d3d12-vulkan-composition.md](d3d12-vulkan-composition.md) |
-| 19 | [docs/documentation-inventory.md](documentation-inventory.md) |
-| 20 | [docs/Evidence-Retention.md](Evidence-Retention.md) |
-| 21 | [docs/Generic-Commands-and-Ray-Tracing.md](Generic-Commands-and-Ray-Tracing.md) |
-| 22 | [docs/Generic-Rendering-Semantics.md](Generic-Rendering-Semantics.md) |
-| 23 | [docs/Home.md](Home.md) |
-| 24 | [docs/Integer-Textures.md](Integer-Textures.md) |
-| 25 | [docs/Java-API-Reference.md](Java-API-Reference.md) |
-| 26 | [docs/Java.md](Java.md) |
-| 27 | [docs/medium-gallery.md](medium-gallery.md) |
-| 28 | [docs/performance-budgets.md](performance-budgets.md) |
-| 29 | [docs/Procedural-Geometry.md](Procedural-Geometry.md) |
-| 30 | [docs/Programmable-Scenes.md](Programmable-Scenes.md) |
-| 31 | [docs/quality/api-release-review-20261101.md](quality/api-release-review-20261101.md) |
-| 32 | [docs/quality/archive/api-closure-312147f/docs/quality/verification-report.md](quality/archive/api-closure-312147f/docs/quality/verification-report.md) |
-| 33 | [docs/quality/backend-dependency-size-20261101.md](quality/backend-dependency-size-20261101.md) |
-| 34 | [docs/quality/data/medium-demo-20261101/README.md](quality/data/medium-demo-20261101/README.md) |
-| 35 | [docs/quality/game-renderer-comparison-20261101.md](quality/game-renderer-comparison-20261101.md) |
-| 36 | [docs/quality/glass-transport-fix-20261102.md](quality/glass-transport-fix-20261102.md) |
-| 37 | [docs/quality/hexball-noise-fix-20261102.md](quality/hexball-noise-fix-20261102.md) |
-| 38 | [docs/quality/hexball-rtxpt-performance-20261101.md](quality/hexball-rtxpt-performance-20261101.md) |
-| 39 | [docs/quality/luxcore-managed-medium.md](quality/luxcore-managed-medium.md) |
-| 40 | [docs/quality/medium-collected-rejected-20261101.md](quality/medium-collected-rejected-20261101.md) |
-| 41 | [docs/quality/medium-error9-sequence172.md](quality/medium-error9-sequence172.md) |
-| 42 | [docs/quality/medium-performance-feature-matrix.md](quality/medium-performance-feature-matrix.md) |
-| 43 | [docs/quality/medium-performance-optimization.md](quality/medium-performance-optimization.md) |
-| 44 | [docs/quality/native-recommended-renderer-comparison-20261101.md](quality/native-recommended-renderer-comparison-20261101.md) |
-| 45 | [docs/quality/new-api-timing-coverage.md](quality/new-api-timing-coverage.md) |
-| 46 | [docs/quality/optical-redundancy-audit-20261102.md](quality/optical-redundancy-audit-20261102.md) |
-| 47 | [docs/quality/renderer-comparison-20261101.md](quality/renderer-comparison-20261101.md) |
-| 48 | [docs/quality/rtxpt-advanced-audit-20261101.md](quality/rtxpt-advanced-audit-20261101.md) |
-| 49 | [docs/quality/rtxpt-general-lighting-20261101.md](quality/rtxpt-general-lighting-20261101.md) |
-| 50 | [docs/quality/rtxpt-managed-medium-migration.md](quality/rtxpt-managed-medium-migration.md) |
-| 51 | [docs/quality/rtxpt-memory-fps-20261102.md](quality/rtxpt-memory-fps-20261102.md) |
-| 52 | [docs/quality/rtxpt-model-audit-20261102.md](quality/rtxpt-model-audit-20261102.md) |
-| 53 | [docs/quality/rtxpt-raw-reuse-composition-20261101.md](quality/rtxpt-raw-reuse-composition-20261101.md) |
-| 54 | [docs/quality/rtxpt-sr-light-ratio-20261102.md](quality/rtxpt-sr-light-ratio-20261102.md) |
-| 55 | [docs/quality/rtxpt-sr-residual-sampling-20261102.md](quality/rtxpt-sr-residual-sampling-20261102.md) |
-| 56 | [docs/quality/rtxpt-vulkan-signal-comparison-20261102.md](quality/rtxpt-vulkan-signal-comparison-20261102.md) |
-| 57 | [docs/quality/verification-report.md](quality/verification-report.md) |
-| 58 | [docs/quality/vulkan-fg-surface-hook-20261102.md](quality/vulkan-fg-surface-hook-20261102.md) |
-| 59 | [docs/runtime-distribution.md](runtime-distribution.md) |
-| 60 | [docs/Vulkan-Interop.md](Vulkan-Interop.md) |
+| 4 | [docs/5.0.0.md](../docs/5.0.0.md) |
+| 5 | [docs/5.1.0.md](../docs/5.1.0.md) |
+| 6 | [docs/5.1.1.md](../docs/5.1.1.md) |
+| 7 | [docs/5.2.0.md](../docs/5.2.0.md) |
+| 8 | [docs/5.2.1.md](../docs/5.2.1.md) |
+| 9 | [docs/5.2.2.md](../docs/5.2.2.md) |
+| 10 | [docs/6.0.0.md](../docs/6.0.0.md) |
+| 11 | [docs/6.0.1.md](../docs/6.0.1.md) |
+| 12 | [docs/6.0.2.md](../docs/6.0.2.md) |
+| 13 | [docs/6.0.3.md](../docs/6.0.3.md) |
+| 14 | [docs/7.0.0.md](../docs/7.0.0.md) |
+| 15 | [docs/_Sidebar.md](../docs/_Sidebar.md) |
+| 16 | [docs/backend-routing.md](../docs/backend-routing.md) |
+| 17 | [docs/COMPATIBILITY.md](../docs/COMPATIBILITY.md) |
+| 18 | [docs/d3d12-vulkan-composition.md](../docs/d3d12-vulkan-composition.md) |
+| 19 | [docs/documentation-inventory.md](../docs/documentation-inventory.md) |
+| 20 | [docs/Evidence-Retention.md](../docs/Evidence-Retention.md) |
+| 21 | [docs/Generic-Commands-and-Ray-Tracing.md](../docs/Generic-Commands-and-Ray-Tracing.md) |
+| 22 | [docs/Generic-Rendering-Semantics.md](../docs/Generic-Rendering-Semantics.md) |
+| 23 | [docs/Home.md](../docs/Home.md) |
+| 24 | [docs/Integer-Textures.md](../docs/Integer-Textures.md) |
+| 25 | [docs/Java-API-Reference.md](../docs/Java-API-Reference.md) |
+| 26 | [docs/Java.md](../docs/Java.md) |
+| 27 | [docs/medium-gallery.md](../docs/medium-gallery.md) |
+| 28 | [docs/performance-budgets.md](../docs/performance-budgets.md) |
+| 29 | [docs/Procedural-Geometry.md](../docs/Procedural-Geometry.md) |
+| 30 | [docs/Programmable-Scenes.md](../docs/Programmable-Scenes.md) |
+| 31 | [docs/quality/api-release-review-20261101.md](../docs/quality/api-release-review-20261101.md) |
+| 32 | [docs/quality/archive/api-closure-312147f/docs/quality/verification-report.md](../docs/quality/archive/api-closure-312147f/docs/quality/verification-report.md) |
+| 33 | [docs/quality/backend-dependency-size-20261101.md](../docs/quality/backend-dependency-size-20261101.md) |
+| 34 | [docs/quality/data/medium-demo-20261101/README.md](../docs/quality/data/medium-demo-20261101/README.md) |
+| 35 | [docs/quality/game-renderer-comparison-20261101.md](../docs/quality/game-renderer-comparison-20261101.md) |
+| 36 | [docs/quality/glass-transport-fix-20261102.md](../docs/quality/glass-transport-fix-20261102.md) |
+| 37 | [docs/quality/hexball-noise-fix-20261102.md](../docs/quality/hexball-noise-fix-20261102.md) |
+| 38 | [docs/quality/hexball-rtxpt-performance-20261101.md](../docs/quality/hexball-rtxpt-performance-20261101.md) |
+| 39 | [docs/quality/luxcore-managed-medium.md](../docs/quality/luxcore-managed-medium.md) |
+| 40 | [docs/quality/medium-collected-rejected-20261101.md](../docs/quality/medium-collected-rejected-20261101.md) |
+| 41 | [docs/quality/medium-error9-sequence172.md](../docs/quality/medium-error9-sequence172.md) |
+| 42 | [docs/quality/medium-performance-feature-matrix.md](../docs/quality/medium-performance-feature-matrix.md) |
+| 43 | [docs/quality/medium-performance-optimization.md](../docs/quality/medium-performance-optimization.md) |
+| 44 | [docs/quality/native-recommended-renderer-comparison-20261101.md](../docs/quality/native-recommended-renderer-comparison-20261101.md) |
+| 45 | [docs/quality/new-api-timing-coverage.md](../docs/quality/new-api-timing-coverage.md) |
+| 46 | [docs/quality/optical-redundancy-audit-20261102.md](../docs/quality/optical-redundancy-audit-20261102.md) |
+| 47 | [docs/quality/renderer-comparison-20261101.md](../docs/quality/renderer-comparison-20261101.md) |
+| 48 | [docs/quality/rtxpt-advanced-audit-20261101.md](../docs/quality/rtxpt-advanced-audit-20261101.md) |
+| 49 | [docs/quality/rtxpt-general-lighting-20261101.md](../docs/quality/rtxpt-general-lighting-20261101.md) |
+| 50 | [docs/quality/rtxpt-managed-medium-migration.md](../docs/quality/rtxpt-managed-medium-migration.md) |
+| 51 | [docs/quality/rtxpt-memory-fps-20261102.md](../docs/quality/rtxpt-memory-fps-20261102.md) |
+| 52 | [docs/quality/rtxpt-model-audit-20261102.md](../docs/quality/rtxpt-model-audit-20261102.md) |
+| 53 | [docs/quality/rtxpt-raw-reuse-composition-20261101.md](../docs/quality/rtxpt-raw-reuse-composition-20261101.md) |
+| 54 | [docs/quality/rtxpt-sr-light-ratio-20261102.md](../docs/quality/rtxpt-sr-light-ratio-20261102.md) |
+| 55 | [docs/quality/rtxpt-sr-residual-sampling-20261102.md](../docs/quality/rtxpt-sr-residual-sampling-20261102.md) |
+| 56 | [docs/quality/rtxpt-vulkan-signal-comparison-20261102.md](../docs/quality/rtxpt-vulkan-signal-comparison-20261102.md) |
+| 57 | [docs/quality/verification-report.md](../docs/quality/verification-report.md) |
+| 58 | [docs/quality/vulkan-fg-surface-hook-20261102.md](../docs/quality/vulkan-fg-surface-hook-20261102.md) |
+| 59 | [docs/runtime-distribution.md](../docs/runtime-distribution.md) |
+| 60 | [docs/Vulkan-Interop.md](../docs/Vulkan-Interop.md) |
 | 61 | [README.md](../README.md) |
 | 62 | [SECURITY.md](../SECURITY.md) |
 | 63 | [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) |
+| 64 | [tools/README.md](../tools/README.md) |

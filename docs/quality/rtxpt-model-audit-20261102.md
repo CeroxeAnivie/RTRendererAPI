@@ -1,5 +1,7 @@
 # NVIDIA 运行时与模型核对
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 2026-11-02 通过官方 GitHub release API 核对：最新发布为 [Streamline 2.14.16](https://github.com/NVIDIA-RTX/Streamline/releases/tag/v2.14.16)，发布时间 2026-10-16。RTXPT 路径已经使用此版本；旧 Vulkan 路径的补充核对见下文，不能把前者的核对扩大成整个项目。
 
 | 功能 | 运行时版本 | 当前官方模型推荐 |

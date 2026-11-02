@@ -1433,12 +1433,17 @@ public final class RendererApiContractSelfTest {
    }
 
    private static void assertConfigurationBounds() {
-      require(RendererConfig.recommended().maxFramesInFlight() == 3, "default frame ring changed");
+      require(RendererConfig.DEFAULT_MAX_FRAMES_IN_FLIGHT == 2
+                      && RendererConfig.recommended().maxFramesInFlight() == 2,
+              "the default MEDIUM budget must retain two bounded frames");
       require(RendererConfig.recommended().cpuFrameReadbackEnabled(), "managed CPU readback must remain enabled by default");
       require(RendererConfig.recommended().frameOutputFormat() == FrameOutputFormat.SDR_RGBA8, "default native output must be SDR RGBA8");
       require(RendererConfig.recommended().temporalRendering().equals(TemporalRenderingOptions.balanced()), "production defaults must enable balanced temporal reconstruction");
       require(RendererConfig.recommended().denoising().equals(DenoisingOptions.disabled()), "ordinary defaults must keep NRD opt-in");
-      require(RendererConfig.recommended().frameReconstruction().equals(FrameReconstructionOptions.recommended()), "ordinary defaults must capability-gate reconstruction");
+      FrameReconstructionOptions mediumReconstruction = FrameReconstructionOptions.recommended()
+              .toBuilder().quality(FrameReconstructionOptions.Quality.PERFORMANCE).build();
+      require(RendererConfig.recommended().frameReconstruction().equals(mediumReconstruction),
+              "ordinary MEDIUM defaults must capability-gate Performance reconstruction");
       require(RendererConfig.recommended().frameGeneration().equals(FrameGenerationOptions.disabled()), "CPU-readable defaults must not arm presentation-time generation");
       require(RendererConfig.recommended().lowLatency().equals(LowLatencyOptions.disabled()), "CPU-readable defaults must not arm display pacing");
       require(RendererConfig.recommended().rayTracingOptimizations().equals(RayTracingOptimizationOptions.recommended()), "ordinary defaults must capability-gate SER and RTXMU");
@@ -1450,7 +1455,7 @@ public final class RendererApiContractSelfTest {
               .automaticGpuSelection()
               .frameOutputFormat(FrameOutputFormat.SDR_RGBA8)
               .temporalRendering(TemporalRenderingOptions.balanced())
-              .frameReconstruction(FrameReconstructionOptions.recommended())
+              .frameReconstruction(mediumReconstruction)
               .frameGeneration(FrameGenerationOptions.disabled())
               .lowLatency(LowLatencyOptions.disabled())
               .denoising(DenoisingOptions.disabled())

@@ -1,4 +1,0 @@
-scene,input_width,input_height,output_width,output_height,native_frames,presented_frames,generated_frames,native_ms,native_fps,output_fps,query_failures
-1-mixed,1114,626,1920,1080,360,720,360,7.613859,131.339435,262.678871,0
-2-glass,1114,626,1920,1080,360,720,360,7.398147,135.168973,270.337946,0
-3-nested,1114,626,1920,1080,360,720,360,9.269447,107.881301,215.762603,0

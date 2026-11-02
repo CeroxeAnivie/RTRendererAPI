@@ -1,5 +1,7 @@
 # collected 多交点候选实测与结构问题
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 同一个冻结 core（源码 `6c6b08a`，完整哈希见 JSON），只切换 `top.ceroxe.rt.medium.cuda.opticalCollectedConnections`。场景固定 micro-all、1920×1080、1 SPP、光学样本 2、原事件/散射预算；FG、降噪、时间累积、重建及诊断关闭，进程树上限 3 GB。两边测前 GPU 0%，均完成 4 帧预热及 16×16 个测量帧，exit=0。
 
 | 关闭诊断实测 | 关闭候选 | 开启候选 | 开启后的变化 |
@@ -21,7 +23,7 @@
 | Vulkan 初始射线 | 7.183875 | 7.678897 | 4 | 4 |
 | host CUDA stream 同步 | 144.346222 | 313.087275 | 单独见完整排序 | 单独见完整排序 |
 
-续射线增加 **166.154841 ms/帧**，不是单纯把等待换了位置。跨 API 的推进次数没有减少。完整开关排序、计数和原始区间校验见[精简证据](data/medium-collected-rejected-20261101.json)；开启观测 101409 个区间零丢样、独占求和 1000 ms/秒。
+续射线增加 **166.154841 ms/帧**，不是单纯把等待换了位置。跨 API 的推进次数没有减少。完整开关排序、计数和原始区间校验见[精简证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-collected-rejected-20261101.json)；开启观测 101409 个区间零丢样、独占求和 1000 ms/秒。
 
 ## 为什么批量收集没有变快
 

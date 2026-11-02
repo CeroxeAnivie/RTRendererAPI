@@ -1,5 +1,7 @@
 # 介质性能基准覆盖
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 默认 `MediumGalleryPerformanceBenchmark` 只运行新追加的 `micro-all` 可见组合场景，固定 1920×1080、1 SPP。用户已把后续 180 FPS 目标转到该场景，计数单位是一个完成的原生帧。`--suite=all` 保留原 54 个并追加它，共 55 个场景；`--suite=focused` 仍能单独回测原默认均匀直接散射。
 
 `micro-all` 将玻璃/金属、四种 alpha、LIGHTMAP/visibility、两种叠层的接收与拒绝、均匀/密度介质、正反各向异性、吸收/发光、内向/嵌套/临时边界及表面/体积焦散布置在同一可见的 6×5 展板上，带实际数据绑定及点/聚/方向灯。默认无动画、FG、降噪、重建、时域或 CPU 图像读回；散射步数 8、事件预算 24、额外散射 2 次、首界面光学采样 2、全灯光、光子预算 65536，逐请求保存实际预算，不在优化过程中调低。

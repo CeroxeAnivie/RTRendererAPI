@@ -1,5 +1,7 @@
 # 2026-11-01 干净 GPU 原生引擎对照
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 本轮执行时间：北京时间 11:46～11:48。RTX 5080 Laptop GPU，1920×1080，无降噪、
 无帧生成、无分辨率缩减，最大路径深度 5。14 项的起测 GPU 占用全部为 0%。
 GPU 测试顺序执行；各项之间等待利用率统计窗口清空，避免把自己的上一个任务算成外部负载。
@@ -65,7 +67,7 @@ Cycles 最小场景独立 1 SPP 调用是 43.38 FPS，不能和 655.30 的持续
 - 此前把该混合场景叫作“本来就应当特别快”缺少依据；该验收仍未通过。
 
 原始 JSON、每项起测 GPU 状态、设备统计、实际样本日志及生成图：
-[`data/renderer-comparison-clean-20261101/comparison.json`](data/renderer-comparison-clean-20261101/comparison.json)。
+[`data/renderer-comparison-clean-20261101/comparison.json`](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/renderer-comparison-clean-20261101/comparison.json)。
 
 测量入口：`tools/Measure-CleanRendererComparison.ps1`；原生计数器：
 `tools/luxcore_native_benchmark.cpp`；官方引擎的积分器与调度器均未改动。

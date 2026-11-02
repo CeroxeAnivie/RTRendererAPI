@@ -1,5 +1,7 @@
 # RTXPT 弹球噪声与细节修复
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 ## 当前采用方案（v115/v116，用户视觉验收通过）
 
 用户明确接受本次 power sampling 画面，并要求保留。固化 **SR Balanced、1 SPP、精确 MIS、条件残余采样**；Demo 默认 2× FG，性能测量关闭 FG。不使用随后测试且误差更大的近似 MIS，也不把 RR Quality 重新设为弹球默认。金属球同原配置 30 秒测得 **208.914596 FPS**，玻璃球静止/运动/停止序列完成 364 帧，实际输入 1485×835、输出 2560×1440。

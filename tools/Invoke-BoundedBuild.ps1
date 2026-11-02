@@ -1,11 +1,32 @@
+<#
+.SYNOPSIS
+Run a build command with a Windows process-tree memory limit.
+.DESCRIPTION
+The default working directory is the repository root. Explicit relative working directories resolve
+from that root, and relative executable paths resolve from the selected working directory.
+Use -CheckPaths to resolve the command without launching it.
+#>
 param(
     [Parameter(Mandatory = $true)][string]$FilePath,
     [string[]]$ArgumentList = @(),
-    [string]$WorkingDirectory = (Get-Location).Path,
-    [ValidateRange(1, 1024)][double]$MemoryLimitGB = 10
+    [string]$WorkingDirectory = '',
+    [ValidateRange(1, 1024)][double]$MemoryLimitGB = 10,
+    [switch]$CheckPaths
 )
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$repo=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+$buildDirectory=if($WorkingDirectory){[IO.Path]::GetFullPath($WorkingDirectory,$repo)}else{$repo}
+if(!(Test-Path -LiteralPath $buildDirectory -PathType Container)){throw 'The build working directory does not exist'}
+$executableName=if([IO.Path]::IsPathRooted($FilePath) -or $FilePath.Contains('/') -or $FilePath.Contains('\')){
+    [IO.Path]::GetFullPath($FilePath,$buildDirectory)
+}else{$FilePath}
+$buildExecutable=(Get-Command $executableName -CommandType Application -ErrorAction Stop).Source
+if($CheckPaths){
+    [pscustomobject]@{Repository=$repo;Executable=$buildExecutable;WorkingDirectory=$buildDirectory;MemoryLimitGB=$MemoryLimitGB}
+    return
+}
+
 
 # Leave 0.5 GB for this PowerShell host within the total build budget.
 # A Job Object includes descendants and limits native allocations, unlike Java -Xmx.
@@ -127,5 +148,4 @@ public static class RendererBoundedBuild {
     }
 }
 '@
-$buildExecutable = (Get-Command $FilePath -CommandType Application).Source
-exit [RendererBoundedBuild]::Run($buildExecutable, $ArgumentList, $WorkingDirectory, $MemoryLimitGB)
+exit [RendererBoundedBuild]::Run($buildExecutable, $ArgumentList, $buildDirectory, $MemoryLimitGB)

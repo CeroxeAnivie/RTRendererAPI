@@ -1,5 +1,7 @@
 # 2026-11-01 bounded game workload: completed-image evidence
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 RTX 5080 Laptop; 1920x1080; 1 SPP; no denoising, FG or resolution reduction. All recorded starts had 0% target-GPU utilization. Workload: 120 objects, 1440 triangles; 32 local volumes excluding a tiny bounded camera absorption medium; projected local-volume area 10.8402%, at most two intersected local volumes and 0.4627 m cumulative primary-ray distance. This is a feature-rich lightweight game performance fixture, not production AAA artwork.
 
 The accepted endpoint is a completed whole-scene image. No window-presentation measurement has been made. Functional differences recorded in each engine JSON still apply: these are not full API-equivalent renders.

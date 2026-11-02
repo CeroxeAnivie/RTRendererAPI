@@ -1,4 +1,0 @@
-multiplier,native_frames,presented_frames,ratio,native_ms,output_fps,query_failures
-TWO_X,180,360,2.000000,7.887129,253.577682,0
-THREE_X,180,540,3.000000,9.103324,329.549937,0
-FOUR_X,180,720,4.000000,9.924414,403.046472,0

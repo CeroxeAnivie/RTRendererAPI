@@ -1,5 +1,7 @@
 # RTXPT 托管介质路径替换规范
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 ## 已确定的执行范围
 
 以 NVIDIA RTXPT v1.9.0（提交 `303b408ab81790a5051abd7573830b7a4112eb8e`）替换原来的介质后端。移除原后端模块、JNI、原生依赖、配置入口、专用测试和回退路径。普通 Vulkan／弹球路径保持独立。
@@ -82,11 +84,11 @@ Java 只负责公共接口、场景事务、窗口控制和薄的原生资源桥
 
 损耗定义为 `(JAR ms / 原生 ms − 1) × 100%`。本场景通过 ≤5% 门槛；负数属于这次测量波动，不能解释为 JNI 让上游变快。此结果是上述静态混合场景、推荐重建模式下的完成帧效率，不是原生 1080p 内部分辨率或持续结构更新场景的成绩。
 
-复现：先执行 `:renderer-rtxpt:check`、`:renderer-rtxpt:rtxptNativeSelfTest`、`:renderer-rtxpt:rtxptPackagedNativeSelfTest`、`:renderer-rtxpt:rtxptAdvancedNativeSelfTest`，再执行 `tools/Test-RtxptParity.ps1`。原始测量、逐轮日志、正确性记录及场景画面保存在 [验收数据](data/rtxpt-final-20261101/result.json)。
+复现：先执行 `:renderer-rtxpt:check`、`:renderer-rtxpt:rtxptNativeSelfTest`、`:renderer-rtxpt:rtxptPackagedNativeSelfTest`、`:renderer-rtxpt:rtxptAdvancedNativeSelfTest`，再执行 `tools/Test-RtxptParity.ps1`。原始测量、逐轮日志、正确性记录及场景画面保存在 [验收数据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/rtxpt-final-20261101/result.json)。
 
 ### main 与旧 worktree
 
-所有当前实现均位于主 checkout 的 main。旧介质 worktree 和 6.0.4 基线中的未提交内容已做 Git 快照并作为父提交保存在 main 历史，不将已撤下的 API 重新引入 7.0.0。两个非当前 worktree 已删除，仅剩当前聊天绑定的旧 checkout：应用返回 `The task's primary checkout cannot be removed`，且不能把非托管的主 checkout 附加为替代。该目录暂留，内容干净；当前实现和测试均明确使用 `D:/Engineering/code/APIs/RTRendererAPI`。
+所有当前实现均位于主 checkout 的 main。旧介质 worktree 和 6.0.4 基线中的未提交内容已做 Git 快照并作为父提交保存在 main 历史，不将已撤下的 API 重新引入 7.0.0。两个非当前 worktree 已删除，仅剩当前聊天绑定的旧 checkout：应用返回 `The task's primary checkout cannot be removed`，且不能把非托管的主 checkout 附加为替代。该目录暂留，内容干净；当前实现和测试均明确使用 `.`。
 
 ### 弹球玻璃与 HUD
 

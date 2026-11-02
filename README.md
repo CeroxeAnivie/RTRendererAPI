@@ -96,7 +96,7 @@ implementation("top.ceroxe.rt:renderer-rtxpt:7.0.0")
 Maven 同样添加 `top.ceroxe.rt:renderer-rtxpt:7.0.0`。只用公共场景接口时可作为运行依赖；使用
 `RtxptAccess`／`RtxptComposedRenderer` 时需要编译依赖。只部署 RTXPT 的依赖排除方法见[后端路由](docs/backend-routing.md#只部署-rtxpt)。
 
-7.0.0 是重新设计介质模型与执行结构的破坏性主版本，只交付 GitHub 和本地 Maven 制品，不上传 Central。运行
+7.0.0 是重新设计介质模型与执行结构的破坏性主版本。源码上传 GitHub，JAR 仅发布到 Maven Local，不上传 Central 或 GitHub。运行
 `publishAllToLocalStagingRepository` 可生成 `build/repository`，供独立消费方验证使用。
 同仓库 Demo 直接依赖项目模块，不要求先发布当前版本。
 
@@ -355,6 +355,7 @@ Streamline 与 RTXMU SDK。RTXMU 必须为官方 `v1.4` checkout 的固定 commi
 
 ## 📚 文档
 
+- [用户工具](tools/README.md)：仅供源码构建使用的三个 PowerShell 工具、路径规则与内存上限。
 - [完整文档清单](docs/documentation-inventory.md)：全部源码文档、许可证、来源清单、质量证据与生成 Javadoc 的分类索引。
 - [Java 开发指南](docs/Java.md)：完整场景、配置、背压、诊断与各 RTX 能力示例。
 - [三个 Demo](demos/hex-ball/README.md)：两个弹球入口、介质六场景、启动参数和默认 FG。

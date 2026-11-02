@@ -1,5 +1,7 @@
 # 7.0.0 发布前 API 检查
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 普通和专家模式共用不可变场景、帧和配置模型。普通调用方用 preset、场景事务和帧请求；专家按需发现扩展、规划功能变更或提交通用命令，不需要另一套互不兼容的对象模型。
 
 ## 入口怎么选
@@ -41,3 +43,20 @@
 7. 发布供应链任务仍强制从 core JAR 读取已撤下的 NVRTC manifest，会阻塞干净构建或把旧缓存当成依赖。已删除旧下载/打包助手和虚构的 CUDA 清单条目，只从当前 runtime graph 生成 SBOM/许可证清单，并校验不再出现旧 NVRTC 模块。RTXPT 适配模块纳入许可证策略；原生运行时继续携带各上游原始许可。
 
 CPU 证据由 `RtxptAdapterSelfTest`、`RendererApiContractSelfTest` 和 API 边界检查提供；GPU 画面、功能组合和吞吐证据仍分别以已有原生验收与本次 Demo 验收为准。上述修复不表示所有硬件、所有组合与所有公开方法都经过穷尽验证；“收缩后的介质合同闭合”和“RTXPT 可替代整个通用图形 API”是两件事。
+
+## 2026-11-02 干净构建与发布检查
+
+发布前已执行各模块及 Demo 的 `clean`，删除旧 JAR，再关闭构建缓存重新编译。RTXPT SDK 与已校验的六档 shader 构建输入保留，不把它们当作旧制品删除。
+
+本轮修复的是验证工具与构建配置：
+
+1. 完整 gate 纳入 RTXPT 原生、打包、预算、高级组合、Vulkan 表面 Demo 与跨后端组合测试；GPU 验证串行执行，禁止用子集开关代替完整验收。
+2. 独立 Maven 消费模板同步当前 `Medium`、`MediumBoundary` 和 `PathTracingOptions`，不再依赖已删除的 CUDA manifest。API 单依赖的传递依赖、provider 加载和原生文件哈希检查保留。
+3. 预编译 shader 测试同步当前 16 个 raygen 入口，移除对退役介质 shader 的存在要求。移除源码中引用已删除文件的不可达 include 分支后，158 份固定 SPIR-V 与重新编译结果逐字节一致。
+4. Primary queue 测试正确处理场景收敛期间的背压，核对实际 scene revision，并只在测试内启用队列计数诊断；原始像素一致性断言保留。
+5. RTXPT 高级验收改为实测 DI＋GI、DI＋SHaRC、GI＋SHaRC 三组支持组合；不再请求 API 已拒绝的 DI＋GI＋SHaRC。八组渲染配置、FG/MFG 倍数切换和同 JVM 顺序关闭重开已通过聚焦验收。
+6. 用户 PowerShell 工具集中到 `tools/` 并提供路径检查；本机 SDK 与 CMake 路径改由参数、环境变量或 PATH 提供。一次性脚本和历史原始数据清理后，报告保留到清理前提交的恢复链接。
+
+生成 JAR 通过 Maven Local 交付；GitHub 只提交源码、文档及必要构建输入。`.gitignore` 排除生成 JAR，既有 Gradle Wrapper 保留。
+
+GraalVM 25 在一次吞吐验收中发生 JVM 崩溃；按相同用例重试，测试进程临时使用 `-XX:-UseJVMCICompiler -XX:TieredStopAtLevel=1` 后正常退出，800 个 GPU 计时样本无丢失或失败。这些选项仅用于本轮验证进程，不修改库或 Demo 默认启动配置；本轮 gate 用于正确性与打包验收，不作为新的 FPS 性能基线。

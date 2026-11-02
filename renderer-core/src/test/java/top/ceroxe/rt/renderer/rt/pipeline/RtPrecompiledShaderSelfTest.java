@@ -25,21 +25,7 @@ public final class RtPrecompiledShaderSelfTest {
            "gpuscene/gpuscene.rgen", "gpuscene/gpuscene_surface.rgen", "gpuscene/gpuscene_compact.rgen",
            "gpuscene/gpuscene_compact_passive.rgen", "gpuscene/gpuscene_passive.rgen",
            "gpuscene/gpuscene_compact_passive_no_dielectric.rgen", "gpuscene/gpuscene_passive_no_dielectric.rgen",
-           "gpuscene/gpuscene_primary_trace.rgen", "gpuscene/gpuscene_native_medium_trace.rgen",
-           "gpuscene/gpuscene_native_scattering_lights.rgen",
-           "gpuscene/gpuscene_native_scattering_primary.rgen",
-           "gpuscene/gpuscene_native_scattering_cached_lights.rgen",
-           "gpuscene/gpuscene_native_scattering_cached_query.rgen",
-           "gpuscene/gpuscene_native_scattering_exhaustive_cached_lights.rgen",
-           "gpuscene/gpuscene_native_scattering_exhaustive_cached_query.rgen",
-           "gpuscene/gpuscene_native_scattering_query.rgen",
-           "gpuscene/gpuscene_native_multiple_scattering.rgen", "gpuscene/gpuscene_native_density_scattering_lights.rgen",
-           "gpuscene/gpuscene_native_optical_trace.rgen", "gpuscene/gpuscene_native_optical_collected_trace.rgen", "gpuscene/gpuscene_native_boundary_packet.rgen",
-           "gpuscene/gpuscene_native_boundary_scattering.rgen",
-           "gpuscene/gpuscene_native_pbr_medium_lights.rgen",
-           "gpuscene/gpuscene_native_pbr_medium_query.rgen",
-           "gpuscene/gpuscene_native_pbr_medium_opaque_query.rgen",
-           "gpuscene/gpuscene_native_pbr_primary_cached.rgen",
+           "gpuscene/gpuscene_primary_trace.rgen",
            "gpuscene/gpuscene_surface_primary_shade.rgen",
            "gpuscene/gpuscene_compact_primary_shade.rgen", "gpuscene/gpuscene_primary_shade.rgen",
            "gpuscene/gpuscene_compact_volume.rgen", "gpuscene/gpuscene_volume.rgen",
@@ -47,6 +33,11 @@ public final class RtPrecompiledShaderSelfTest {
    private static final Map<String, Integer> STAGES = stages();
 
    private RtPrecompiledShaderSelfTest() {
+   }
+
+   /** One current built-in catalog shared by compilation and specialization contract tests. */
+   static List<String> sceneRaygens() {
+      return SCENE_RAYGENS;
    }
 
    public static void main(String[] arguments) throws IOException {
@@ -291,14 +282,10 @@ public final class RtPrecompiledShaderSelfTest {
       for (String raygen : SCENE_RAYGENS) stages.put(raygen, Shaderc.shaderc_raygen_shader);
       stages.put("gpuscene/gpuscene.rmiss", 17);
       stages.put("gpuscene/gpuscene.rchit", 16);
-      stages.put("gpuscene/gpuscene_collected_material.rcall", Shaderc.shaderc_callable_shader);
-      stages.put("gpuscene/gpuscene_collected_gather.rcall", Shaderc.shaderc_callable_shader);
       stages.put("gpuscene/gpuscene.rahit", 15);
       stages.put("gpuscene/gpuscene_visibility.rmiss", Shaderc.shaderc_miss_shader);
       stages.put("gpuscene/gpuscene_visibility.rchit", Shaderc.shaderc_closesthit_shader);
       stages.put("gpuscene/gpuscene_visibility.rahit", Shaderc.shaderc_anyhit_shader);
-      stages.put("gpuscene/gpuscene_native_boundary_packet.rahit", Shaderc.shaderc_anyhit_shader);
-      stages.put("gpuscene/gpuscene_native_boundary_scattering.rahit", Shaderc.shaderc_anyhit_shader);
       stages.put("gpuscene/gpuscene_nrd_compose.comp", Shaderc.shaderc_compute_shader);
       stages.put("gpuscene/gpuscene_reconstruction_publish.comp", Shaderc.shaderc_compute_shader);
       stages.put("gpuscene/generic_frame_composition.comp", Shaderc.shaderc_compute_shader);

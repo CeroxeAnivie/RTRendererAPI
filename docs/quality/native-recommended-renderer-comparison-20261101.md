@@ -1,5 +1,7 @@
 # 2026-11-01 原生出帧测试：Flow 完整混合帧补测
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 ## 最终结果
 
 本机 RTX 5080 Laptop，输出 1920×1080，FG 关闭。Flow 本次起测 GPU 占用 0%。下表汇总各引擎当前已有的原生输出测量，模式与支持语义不同，不是相同画质和相同介质能力下的速度排名。RTXPT 包含窗口呈现，其余为完成整幅图像，不包含窗口呈现。
@@ -86,4 +88,4 @@ Flow 89.84/78.86 是整条 EEVEE＋Flow 链的测量，不是 Flow 体积段吞�
 
 `--device 1` 仅为 fallback；正式路径强制按实体绘制 GPU 的 UUID 选择 Vulkan GPU。
 
-原始逐帧阶段数据及三轮数据在 [Flow result.json](data/native-recommended-20261101/flow-mixed/result.json)，画面差异数据在 [verification.json](data/native-recommended-20261101/flow-mixed/verification.json)，初始化/运行输出在 [run.log](data/native-recommended-20261101/flow-mixed/run.log)。其他引擎原生结果、输入 fixture、GPU/驱动记录一并存于 `data/native-recommended-20261101/`。旧报告的纯体积段/旧关闭降噪结果没有覆盖本表。
+原始逐帧阶段数据及三轮数据在 [Flow result.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/native-recommended-20261101/flow-mixed/result.json)，画面差异数据在 [verification.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/native-recommended-20261101/flow-mixed/verification.json)，初始化/运行输出在 [run.log](data/native-recommended-20261101/flow-mixed/run.log)。其他引擎原生结果、输入 fixture、GPU/驱动记录一并存于 `data/native-recommended-20261101/`。旧报告的纯体积段/旧关闭降噪结果没有覆盖本表。

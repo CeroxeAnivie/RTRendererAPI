@@ -1,19 +1,37 @@
+<#
+.SYNOPSIS
+Build the pinned RTXPT JNI runtime from source.
+.DESCRIPTION
+Relative SDK/tool paths resolve from the repository root, regardless of the caller's working directory.
+Use -CheckPaths to validate dependencies without patching sources, configuring CMake, or starting a build.
+#>
 param(
     [string]$SdkRoot='build/rtxpt-sdk',
     [string]$CMakeExecutable='build/native-build-tools/cmake-4.1.2-windows-x86_64/bin/cmake.exe',
     [string]$StreamlineSdk=$env:STREAMLINE_SDK,
     [double]$MemoryLimitGB=10,
     [switch]$ConfigureOnly,
+    [switch]$CheckPaths,
     [switch]$OpticalTransportTrace,
     [switch]$OpticalWorkTrace,
     [uint32]$OpticalBranchSeedXor=0
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
-$repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$sdk=(Resolve-Path (Join-Path $repo $SdkRoot)).Path
+$repo=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+function Resolve-ProjectPath([string]$Value){
+    (Resolve-Path -LiteralPath ([IO.Path]::GetFullPath($Value,$repo))).Path
+}
+$sdk=Resolve-ProjectPath $SdkRoot
+$cmake=Resolve-ProjectPath $CMakeExecutable
+$streamline=if($StreamlineSdk){Resolve-ProjectPath $StreamlineSdk}else{$null}
 $pin='303b408ab81790a5051abd7573830b7a4112eb8e'
-if((& git -C $sdk rev-parse HEAD).Trim() -ne $pin){throw 'RTXPT source must match the pinned 1.9.0 commit'}
+$actualPin=& git -C $sdk rev-parse HEAD
+if($LASTEXITCODE -ne 0 -or ($actualPin -join '').Trim() -ne $pin){throw 'RTXPT source must match the pinned 1.9.0 commit'}
+if($CheckPaths){
+    [pscustomobject]@{Repository=$repo;RtxptSdk=$sdk;CMake=$cmake;StreamlineSdk=$streamline;PinnedCommit=$pin}
+    return
+}
 $utf8=[Text.UTF8Encoding]::new($false)
 function Patch-Once([string]$Relative,[string]$Anchor,[string]$Replacement,[string]$Marker){
     $path=Join-Path $sdk $Relative
@@ -1380,12 +1398,10 @@ $marker='# RTR_RTXPT_HOST_TARGET'
 if($cmakeText.Contains($marker)){$cmakeText=$cmakeText.Substring(0,$cmakeText.IndexOf($marker))}
 $hostCMake=(Join-Path $repo 'renderer-rtxpt/src/main/cpp/CMakeLists.txt').Replace('\','/')
 [IO.File]::WriteAllText($rootCMake,$cmakeText+"`n$marker`ninclude(`"$hostCMake`")`n",$utf8)
-$cmake=(Resolve-Path (Join-Path $repo $CMakeExecutable)).Path
 $build=Join-Path $sdk 'build-host'
 $localDependencies=@()
 if($StreamlineSdk){
-    $streamline=(Resolve-Path -LiteralPath $StreamlineSdk).Path.Replace('\','/')
-    $localDependencies+=('-DFETCHCONTENT_SOURCE_DIR_STREAMLINE='+$streamline)
+    $localDependencies+=('-DFETCHCONTENT_SOURCE_DIR_STREAMLINE='+$streamline.Replace('\','/'))
 }
 & $cmake -S $sdk -B $build -G 'Visual Studio 17 2022' -A x64 `
     -DDONUT_WITH_VULKAN=OFF -DDONUT_WITH_KTX=OFF -DDONUT_WITH_AFTERMATH=OFF `
@@ -1416,7 +1432,7 @@ $noticeFiles=@{
     'External/AgilitySDK/1.619.6/LICENSE.txt'='D3D12.txt'; 'External/AgilitySDK/1.619.6/LICENSE-CODE.txt'='D3D12-Code.txt'
 }
 foreach($entry in $noticeFiles.GetEnumerator()){Copy-Item -LiteralPath (Join-Path $sdk $entry.Key) -Destination (Join-Path $licenses $entry.Value) -Force}
-$streamlineRoot=if($StreamlineSdk){(Resolve-Path -LiteralPath $StreamlineSdk).Path}else{Join-Path $build '_deps/streamline-src'}
+$streamlineRoot=if($StreamlineSdk){$streamline}else{Join-Path $build '_deps/streamline-src'}
 if(!(Test-Path -LiteralPath (Join-Path $streamlineRoot 'license.txt'))) {
     # Reuse CMake's resolved dependency when this invocation omits the optional
     # SDK argument. Never embed a machine-specific SDK path in the project.

@@ -83,4 +83,4 @@ RTXPT 原 Depth／MV／PreUIColor（HUDless）保留，不通过 Vulkan 重建�
 
 直接运行 `demo.RtxptMemorySelfTest output 12 natural 2` 可做 12 轮、72 次场景检查，循环内只使用自然 GC，并在关闭后额外重开两次会话。默认三轮的显式 GC 只用于比较保留量，不能代替这个长窗口检查；最后关闭后的显式 GC 作为 Java 资源退休的检查点。
 
-`python tools/Watch-NativeMemory.py <诊断目录> --lightweight` 读取该目录的 `runtime.json`（`executable`、Java `arguments`），以 1 秒频率记录目标进程私有提交／工作集及 Windows GPU Process Memory 专用／共享提交。后两者是本进程 GPU 记账，不是全局显存或唯一物理驻留量，不能把共享纹理的双 API 记账直接当两份物理内存。完整模式继续支持虚拟分配 census、NMT/JFR 及显式启用的原生栈。构建与诊断进程树上限为 10 GB；JFR、显式 GC 和内存 census 不进入最终 FPS 验收。
+一次性 `Watch-NativeMemory.py` 及其原生栈辅助脚本已于 2026-11-02 清理；当前内存验证使用上面的 Gradle self-test，可配合 JDK 自带的 JFR/NMT。历史报告中的 Windows GPU Process Memory 专用／共享提交是本进程 GPU 记账，不是全局显存或唯一物理驻留量，不能把共享纹理的双 API 记账直接当两份物理内存。构建与诊断进程树上限可由调用方通过[构建工具](../tools/README.md)调整；JFR、显式 GC 和内存 census 不进入最终 FPS 验收。

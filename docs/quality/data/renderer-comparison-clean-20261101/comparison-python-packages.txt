@@ -1,4 +1,0 @@
-drjit==1.5.0
-mitsuba==3.9.1
-numpy==2.5.4
-pillow==13.0.0

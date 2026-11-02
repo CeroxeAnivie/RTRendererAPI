@@ -29,11 +29,15 @@ public final class GpuScenePrecompiledProgramSelfTest {
                 RAYGEN, "binary-test.rgen", Shaderc.shaderc_raygen_shader, false, false);
         byte[] hdr = RtShaderModuleCompiler.compileSceneSource(
                 RAYGEN, "binary-test.rgen", Shaderc.shaderc_raygen_shader, true, false);
-        byte[] scatteringDiagnostic=RtShaderModuleCompiler.compileCameraScatteringDiagnostic(
-                "assets/rtrenderer/shaders/gpuscene/gpuscene_native_scattering_lights.rgen",
-                Shaderc.shaderc_raygen_shader,false,false);
-        require(scatteringDiagnostic.length>4&&ByteBuffer.wrap(scatteringDiagnostic).order(ByteOrder.LITTLE_ENDIAN)
-                .getInt()==0x07230203,"sampled camera-scattering diagnostic raygen did not compile to SPIR-V");
+        for (boolean linearHdr : new boolean[]{false, true}) {
+            byte[] surface = RtShaderModuleCompiler.compileForVerification(
+                    "assets/rtrenderer/shaders/gpuscene/gpuscene_surface.rgen",
+                    Shaderc.shaderc_raygen_shader, false, linearHdr);
+            require(surface.length > 4 && ByteBuffer.wrap(surface).order(ByteOrder.LITTLE_ENDIAN)
+                    .getInt() == 0x07230203, "current surface raygen did not compile to SPIR-V");
+            VulkanSpirvBindingValidator.requireSceneInterface(surface,
+                    ShaderStage.RAY_GENERATION, 0, linearHdr);
+        }
         var program = SceneShaderProgram.builder().spirv(ShaderStage.RAY_GENERATION, sdr)
                 .spirv(ShaderStage.RAY_GENERATION, FrameOutputFormat.LINEAR_HDR_RGBA16F, hdr).build();
         require(Arrays.equals(sdr, load(program, false)), "SDR binary selection changed bytes");
@@ -96,7 +100,7 @@ public final class GpuScenePrecompiledProgramSelfTest {
                         Files.readAllBytes(Path.of(args[0], files[i])), all[i], 4, false);
             }
         }
-        System.out.println("GpuScenePrecompiledProgramSelfTest passed: ownership, SDR/HDR, GLSL fallback, sampled scattering diagnostic, all stages, specialization isolation, rejection");
+        System.out.println("GpuScenePrecompiledProgramSelfTest passed: ownership, SDR/HDR, GLSL fallback, current surface compilation, all stages, specialization isolation, rejection");
     }
 
     private static void preservesExpertStagesAcrossBuiltInCandidates(byte[] sdr, byte[] hdr, int[] kinds,
@@ -105,18 +109,9 @@ public final class GpuScenePrecompiledProgramSelfTest {
                 .spirv(ShaderStage.RAY_GENERATION, FrameOutputFormat.LINEAR_HDR_RGBA16F, hdr);
         for (int i = 0; i < stages.length; i++) builder.spirv(stages[i], stageCode[i]);
         var program = builder.build();
-        String[] candidates = {"gpuscene_surface.rgen", "gpuscene_compact.rgen", "gpuscene.rgen",
-                "gpuscene_compact_passive.rgen", "gpuscene_passive.rgen",
-                "gpuscene_compact_passive_no_dielectric.rgen", "gpuscene_passive_no_dielectric.rgen",
-                "gpuscene_primary_trace.rgen", "gpuscene_native_medium_trace.rgen",
-                "gpuscene_native_scattering_lights.rgen", "gpuscene_native_multiple_scattering.rgen",
-                "gpuscene_native_density_scattering_lights.rgen", "gpuscene_native_optical_trace.rgen",
-                "gpuscene_native_boundary_packet.rgen", "gpuscene_surface_primary_shade.rgen",
-                "gpuscene_compact_primary_shade.rgen", "gpuscene_primary_shade.rgen",
-                "gpuscene_compact_volume.rgen", "gpuscene_volume.rgen",
-                "gpuscene_compact_caustics.rgen", "gpuscene_caustics.rgen", "gpuscene_photons.rgen"};
         String[] stageFiles = {"gpuscene.rmiss", "gpuscene.rchit", "gpuscene.rahit"};
-        for (String candidate : candidates) {
+        for (String resource : RtPrecompiledShaderSelfTest.sceneRaygens()) {
+            String candidate = resource.substring("gpuscene/".length());
             require(Arrays.equals(sdr, GpuSceneRayTracingPipeline.loadStageCode(
                     candidate, Shaderc.shaderc_raygen_shader, false, false, program)),
                     "built-in candidate replaced expert SDR raygen: " + candidate);

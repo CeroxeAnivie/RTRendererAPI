@@ -7,6 +7,10 @@
 /logs/
 /**/logs/
 
+# Generated JARs are published through Maven, never committed to this repository.
+*.jar
+!/gradle/wrapper/gradle-wrapper.jar
+
 /.idea/
 /**/.idea/
 *.iml

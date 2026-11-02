@@ -1,6 +1,8 @@
 # 质量验证与性能报告
 
-2026-11-02 按要求清理了仓库中的全部 `.log` 及轮转日志，包括已追踪的历史日志。本文及其他历史报告中的日志路径保留为历史记录；原始日志可从清理前提交 `e84cd3e3132943a5921b7b4f6a235989b7421df3` 提取。JSON、CSV、截图与源代码未因本次日志清理而删除。
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
+2026-11-02 按要求清理了仓库中的全部 `.log` 及轮转日志，包括已追踪的历史日志。本文及其他历史报告中的日志路径保留为历史记录；原始日志可从清理前提交 `e84cd3e3132943a5921b7b4f6a235989b7421df3` 提取。日志清理未改动源代码；随后清理的实验原始数据见上方说明。
 
 ## 2026-10-31 最终 130 FPS 版本完整 API 验收通过
 
@@ -21,9 +23,9 @@
 
 本轮生产源码与性能验收提交 `05760a9470f328ea39226a4c79142dd1d03518d5` 相同，期间只更新一处测试断言及失败记录。性能验收保持默认均匀直接散射、RTX 5080 Laptop、1920×1080、1 SPP、steps=8、maxEvents=16、lightSamples=4，FG、降噪、重建、时域、动画、焦散与 CPU 回读关闭：预热 1200 帧后连续完成 3000 帧，平均 **130.064872 FPS**；5 轮各 600 帧，最低轮 **129.569156 FPS**。另一次相同长度计时窗口为 128.559342 FPS，观测开销 **1.171078%**。这些数值来自独立性能验收，不使用全量功能门禁的耗时计算 FPS。
 
-首轮发现旧 shader 合同仍把 primary 布局头当作布尔值，现改为检查实际 bit 0，完整焦散 receiver 字段检查全部保留；生产实现未改。另一次 GraalVM `jvmcicompiler.dll` 进程崩溃按本机规则临时关闭 JVMCI 编译器后重试，仅设置验收进程环境，不写入项目配置。最终全量运行没有原生崩溃或测试失败，没有放宽误差阈值。[首轮失败记录](data/api-closure-performance-blockers-20261031.json)单独保留。
+首轮发现旧 shader 合同仍把 primary 布局头当作布尔值，现改为检查实际 bit 0，完整焦散 receiver 字段检查全部保留；生产实现未改。另一次 GraalVM `jvmcicompiler.dll` 进程崩溃按本机规则临时关闭 JVMCI 编译器后重试，仅设置验收进程环境，不写入项目配置。最终全量运行没有原生崩溃或测试失败，没有放宽误差阈值。[首轮失败记录](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/api-closure-performance-blockers-20261031.json)单独保留。
 
-当前源码身份、全部任务原始报告、逐份 validation 统计、完整日志 SHA-256 及实际三模块 JAR/ZIP 哈希已绑定归档：[最终完整验收证据](data/api-closure-performance-final-20261031.json)、[原始任务报告](data/api-closure-performance-final-full-result-20261031.json)、[性能与图像正确性证据](data/pbr-compact-residency-20261031.json)、[最终长窗口延迟排名](data/pbr-compact-residency-acceptance-ranked-20261031.json)。以下记录保留各历史提交的验收范围。
+当前源码身份、全部任务原始报告、逐份 validation 统计、完整日志 SHA-256 及实际三模块 JAR/ZIP 哈希已绑定归档：[最终完整验收证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/api-closure-performance-final-20261031.json)、[原始任务报告](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/api-closure-performance-final-full-result-20261031.json)、[性能与图像正确性证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-compact-residency-20261031.json)、[最终长窗口延迟排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-compact-residency-acceptance-ranked-20261031.json)。以下记录保留各历史提交的验收范围。
 
 ## 2026-10-31 完整 API 验收通过
 
@@ -41,7 +43,7 @@
 | 完整介质展厅 | 13 个预设，每个 8 帧，共 104 帧通过 |
 | 独立 Maven 消费者、发布校验和、完整运行包 | 通过；ZIP 内 2062 个文件逐项验证 |
 
-本轮产生的 34 份 Vulkan validation 日志共 53 次会话，均正常关闭；警告、错误与丢弃汇总均为零。完整任务原始报告原样归档于 [api-closure-full-result-20261031.json](data/api-closure-full-result-20261031.json)；源码身份、完整日志 SHA-256、逐份 validation 统计，以及实际三模块 JAR 和 ZIP 哈希见 [api-closure-final-20261031.json](data/api-closure-final-20261031.json)。记录明确绑定本轮验收源码和制品。
+本轮产生的 34 份 Vulkan validation 日志共 53 次会话，均正常关闭；警告、错误与丢弃汇总均为零。完整任务原始报告原样归档于 [api-closure-full-result-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/api-closure-full-result-20261031.json)；源码身份、完整日志 SHA-256、逐份 validation 统计，以及实际三模块 JAR 和 ZIP 哈希见 [api-closure-final-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/api-closure-final-20261031.json)。记录明确绑定本轮验收源码和制品。
 
 ## 2026-10-31 完整门禁发现的阻断修复
 
@@ -49,13 +51,13 @@
 
 受影响专项现已通过：边界 24 项解析 HDR 对照；介质 26 帧（含镜像、点光、聚光、方向光、环境太阳与 TIR）；队列 11 对逐字节一致 HDR，并逐例核对 2 对普通队列和 9 对原生 PBR/光学路由；动态灯光 96 帧、97 次更新、29 种校验值；吞吐保留原 32 帧预热和三轮各 256 帧、完整序号与 GPU 时间戳检查。散射使用 8 SPP 的中心图像均值，原亮度门槛未降低，额外加入独立均匀平板积分。三组严格 validation 日志均完整关闭，警告、错误、丢弃消息为零。
 
-专项证据见 [api-closure-blockers-20261031.json](data/api-closure-blockers-20261031.json)。完整当前版本结果由 `verifyApiClosure` 成功后生成的 `build/reports/api-closure/result.json` 单独记录，包含全部原生门禁与实际制品哈希。以下各日期段落保留各自验收时的记录。
+专项证据见 [api-closure-blockers-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/api-closure-blockers-20261031.json)。完整当前版本结果由 `verifyApiClosure` 成功后生成的 `build/reports/api-closure/result.json` 单独记录，包含全部原生门禁与实际制品哈希。以下各日期段落保留各自验收时的记录。
 
 ## 2026-10-31 光学无阴影灯与完整门禁回归
 
 修复光学路线把 `castsShadow=false` 灯光仍做介质连接衰减的问题。该标志现与相机直接散射、密度路线一致，跳过整段可见性查询；有阴影灯继续积分其完整连接。语义独立对照 Blender Cycles 固定版本 `a51f293548adba0dda086f5771401e8d8ab66227` 的 `shadow_ray_setup`，未复制实现。原独立等 IOR 散射解析预期及容差保留，8 个 optical-trace SPIR-V 已重建，CUDA 来源清单通过。
 
-完整光学生产测试通过 46 项比较、152 帧原生传输和 1 次无效边界拒绝后恢复，包含新加入的部分 PBR Snell/Fresnel/发光解析对照。PBR 焦散专项通过 5 帧，精确验证关闭时 2 帧原生 PBR、开启时 3 帧原生光学及 3 次光子调度；Beer 比例和实际焦散能量检查保留。两个 Vulkan 日志全部正常关闭，警告、错误和丢弃消息均为零。另修正 PBR 焦散 shader 合同中已过时的 AoS 字符串断言，同时检查平面布局 stride 和完整接收面字段。证据见 [optical-shadow-contract-20261031.json](data/optical-shadow-contract-20261031.json)。完整 CPU、core 原生、NVIDIA 和本轮制品门禁仍在继续，本项不宣称全 API 已闭合。
+完整光学生产测试通过 46 项比较、152 帧原生传输和 1 次无效边界拒绝后恢复，包含新加入的部分 PBR Snell/Fresnel/发光解析对照。PBR 焦散专项通过 5 帧，精确验证关闭时 2 帧原生 PBR、开启时 3 帧原生光学及 3 次光子调度；Beer 比例和实际焦散能量检查保留。两个 Vulkan 日志全部正常关闭，警告、错误和丢弃消息均为零。另修正 PBR 焦散 shader 合同中已过时的 AoS 字符串断言，同时检查平面布局 stride 和完整接收面字段。证据见 [optical-shadow-contract-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/optical-shadow-contract-20261031.json)。完整 CPU、core 原生、NVIDIA 和本轮制品门禁仍在继续，本项不宣称全 API 已闭合。
 
 ## 2026-10-31 覆盖、叠层、LIGHTMAP 与部分透射
 
@@ -65,13 +67,13 @@ LIGHTMAP_MODULATED 保留已有贴图、顶点、帧 lightmap、雾与 surfaceVi
 
 新增 `cudaCompositeMediumProductionNativeSelfTest` 通过 29 项最终 HDR 检查、37 帧原生光学传输。逐像素参考覆盖材质/顶点/纹理 alpha 及乘积、全局/边界密度、逐帧图元、LIGHTMAP 与分数 visibility、叠层两种模式和 mask/深度不匹配；两端画面对照验证 PBR alpha 与部分透射的实际光连接权重。IOR 1.5、透射率 0.2/0.5/0.8 另有 Snell/Fresnel/Beer 解析对照。全组最大绝对误差 `4.87772653e-4`。
 
-同一最终资源通过金属 40 项/25 原生帧回归及 16 帧密度/边界 PBR 和体积焦散回归；独立 CUDA 光学/焦散数值、三个 CPU 合同和来源清单通过。8 个 optical-trace、8 个 photons SPIR-V 已重建。证据见 [composite-medium-closure-20261031.json](data/composite-medium-closure-20261031.json)。新表面能力与散射/焦散的进一步交叉专项、主树集成、完整门禁、展厅及最终制品验证仍待完成；本项不作为全 API 完成率。
+同一最终资源通过金属 40 项/25 原生帧回归及 16 帧密度/边界 PBR 和体积焦散回归；独立 CUDA 光学/焦散数值、三个 CPU 合同和来源清单通过。8 个 optical-trace、8 个 photons SPIR-V 已重建。证据见 [composite-medium-closure-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/composite-medium-closure-20261031.json)。新表面能力与散射/焦散的进一步交叉专项、主树集成、完整门禁、展厅及最终制品验证仍待完成；本项不作为全 API 完成率。
 
 ### 表面合成与散射、焦散交叉专项
 
 随后对新表面路径和参与介质组合做了独立生产验证。透明 alpha、LIGHTMAP_MODULATED、MULTIPLY 叠层及粗糙部分透射玻璃分别与全局均匀介质、显式边界密度和全局密度散射组合。41 项检查执行了 61 帧原生光学传输，12 组均保留有限非负 HDR，散射相对吸收对照产生正增量；玻璃对照保留其太阳圆盘反射基线。
 
-焦散专项将透明 alpha 接收面、IOR 1 的部分透射 PBR、ALPHA_OVER 叠层和 MULTIPLY 叠层分别与显式边界、全局密度及无边界均匀介质组合。52 项检查执行 49 帧原生光学传输；12 个开关对照均观察到正的最终 HDR 焦散增量。无边界均匀介质用来覆盖普通光子路径，其他参与介质帧通过原生光子传输。两个 Vulkan 验证会话各 135 条消息并正常关闭，警告和错误为零。机器记录见 [composite-scattering-caustics-closure-20261031.json](data/composite-scattering-caustics-closure-20261031.json)。完整门禁、展厅和最终制品验收仍待完成。
+焦散专项将透明 alpha 接收面、IOR 1 的部分透射 PBR、ALPHA_OVER 叠层和 MULTIPLY 叠层分别与显式边界、全局密度及无边界均匀介质组合。52 项检查执行 49 帧原生光学传输；12 个开关对照均观察到正的最终 HDR 焦散增量。无边界均匀介质用来覆盖普通光子路径，其他参与介质帧通过原生光子传输。两个 Vulkan 验证会话各 135 条消息并正常关闭，警告和错误为零。机器记录见 [composite-scattering-caustics-closure-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/composite-scattering-caustics-closure-20261031.json)。完整门禁、展厅和最终制品验收仍待完成。
 
 ## 2026-10-31 金属介质反射与焦散路由
 
@@ -79,13 +81,13 @@ LIGHTMAP_MODULATED 保留已有贴图、顶点、帧 lightmap、雾与 surfaceVi
 
 所有启用焦散的参与介质帧统一选择光学执行器。原生光子路径补齐非金属 PBR 的 F0 镜面分支，避免有界介质中只有金属能产生反射光子。最终 HDR 专项通过 40 项检查，25 帧执行原生光学传输；覆盖金属率 0.2/1、单/双面、SPP 1/2/8、反射两段 Beer/发光、密度、零密度、持久/逐帧边界、事件预算、散射和玻璃。三个焦散开关场景分别验证金属边界、非金属边界、非金属全局密度的实际输出贡献。
 
-独立 CUDA 光学数值测试（含 81 组 GGX 方向与 `f*cos/pdf`）、焦散数值测试、三个受影响 CPU 合同与来源清单通过；8 个 optical-trace SPIR-V 变体已重建。证据见 [metallic-medium-closure-20261031.json](data/metallic-medium-closure-20261031.json)。本阶段尚未证明全部组合或最终制品闭合；部分覆盖、叠层、LIGHTMAP_MODULATED 和 PBR 部分透射仍在实现。
+独立 CUDA 光学数值测试（含 81 组 GGX 方向与 `f*cos/pdf`）、焦散数值测试、三个受影响 CPU 合同与来源清单通过；8 个 optical-trace SPIR-V 变体已重建。证据见 [metallic-medium-closure-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/metallic-medium-closure-20261031.json)。本阶段尚未证明全部组合或最终制品闭合；部分覆盖、叠层、LIGHTMAP_MODULATED 和 PBR 部分透射仍在实现。
 
 ## 2026-10-31 内置介质与应用数据布局
 
 仅声明 `dataBindingCount` 曾被当成自定义 shader 程序，因而绕开内置介质执行。现在按实际替换的 GLSL/SPIR-V 阶段判断传输归属，内置特化管线保留应用声明的 descriptor 布局；各介质准入不再把合法应用数据当作未知传输功能拒绝。绑定数量、大小和对齐仍在接纳帧前检查。
 
-`cudaBuiltinShaderDataNativeSelfTest` 在 RTX 5080 Laptop GPU 通过 12 组完整线性 HDR 逐字节对照，共 24 帧，其中 22 帧执行原生介质。组合覆盖吸收/发光、密度、PBR、显式边界、单次与多次散射和玻璃。每组缺失、多余及三字节未对齐绑定均明确拒绝，随后同一序号的有效帧成功；快照跨尺寸变更、slot 复用与 renderer 关闭保持不变。8 个受影响 CPU 合同通过。机器可读记录见 [builtin-medium-shader-data-20261031.json](data/builtin-medium-shader-data-20261031.json)。本项不代表金属、所有交叉组合或最终制品门禁已经闭合。
+`cudaBuiltinShaderDataNativeSelfTest` 在 RTX 5080 Laptop GPU 通过 12 组完整线性 HDR 逐字节对照，共 24 帧，其中 22 帧执行原生介质。组合覆盖吸收/发光、密度、PBR、显式边界、单次与多次散射和玻璃。每组缺失、多余及三字节未对齐绑定均明确拒绝，随后同一序号的有效帧成功；快照跨尺寸变更、slot 复用与 renderer 关闭保持不变。8 个受影响 CPU 合同通过。机器可读记录见 [builtin-medium-shader-data-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/builtin-medium-shader-data-20261031.json)。本项不代表金属、所有交叉组合或最终制品门禁已经闭合。
 
 <a id="api-closure-20261030"></a>
 ## 2026-10-30 当前 API 闭合验收
@@ -178,7 +180,7 @@ PBR 终端复用原生灯光连接，按当前介质栈计算相机和灯光两�
 | 8 | CUDA round 3 kernel | 0.831897 |
 | 9 | CUDA round 1 kernel | 0.648117 |
 
-当前最大单项是首分支首次 Vulkan producer，后续性能工作应沿其 trace/命中存储与整条队列依赖继续拆解。末端栅栏的 9.548 ms 包含实际相交与传输工作，绝非可直接删除的空转。无中间主机等待仍未默认启用：新增显式边界散射测试触发严格介质栈错误，射线生成修正已通过 CUDA 数值回归，但完整生产组合仍在修复与复验。机器可读 ABBA、互斥排名和 Nsight 逐轮数据见 [optical-wait-count-fixed-abba-20261030.json](data/optical-wait-count-fixed-abba-20261030.json)。
+当前最大单项是首分支首次 Vulkan producer，后续性能工作应沿其 trace/命中存储与整条队列依赖继续拆解。末端栅栏的 9.548 ms 包含实际相交与传输工作，绝非可直接删除的空转。无中间主机等待仍未默认启用：新增显式边界散射测试触发严格介质栈错误，射线生成修正已通过 CUDA 数值回归，但完整生产组合仍在修复与复验。机器可读 ABBA、互斥排名和 Nsight 逐轮数据见 [optical-wait-count-fixed-abba-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/optical-wait-count-fixed-abba-20261030.json)。
 
 ## 2026-10-30 时间线等待边界复核：无等待候选失败
 
@@ -197,7 +199,7 @@ PBR 终端复用原生灯光连接，按当前介质栈计算相机和灯光两�
 
 无等待候选在 128-byte 共享缓冲区上做了固定图案检查。默认同步下 32 轮都通过；禁用首轮 host wait 后，第 11 轮 CUDA 首轮检查读回 `0xDEADC0DE`，后续回读也为该哨兵值。CUDA 仅在没有读到 Vulkan producer 写入的 `0x34567890` 时写入哨兵。候选随后在已有共享射线 epoch 测试中也出现 stale epoch。它不具备正确性，未做性能 ABBA，未计入任何优化收益。
 
-因此当前已定位到跨 API timeline/共享内存可见性边界，但尚未修复协议根因。生产默认同步行为保持原样；成熟参考只能说明单设备执行链能避开该互操作边界，不能证明本机无等待 timeline 候选正确。同步基线复验通过 42 项比较、123 个原生帧和 1 次预期拒绝恢复；226 个 pinned SPIR-V 字节核对通过。完整机器可读数据见 [optical-timeline-boundary-reverify-20261030.json](data/optical-timeline-boundary-reverify-20261030.json)。
+因此当前已定位到跨 API timeline/共享内存可见性边界，但尚未修复协议根因。生产默认同步行为保持原样；成熟参考只能说明单设备执行链能避开该互操作边界，不能证明本机无等待 timeline 候选正确。同步基线复验通过 42 项比较、123 个原生帧和 1 次预期拒绝恢复；226 个 pinned SPIR-V 字节核对通过。完整机器可读数据见 [optical-timeline-boundary-reverify-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/optical-timeline-boundary-reverify-20261030.json)。
 
 ## 2026-10-30 光学续接 SER 候选：ABBA 退化并撤回
 
@@ -214,7 +216,7 @@ PBR 终端复用原生灯光连接，按当前介质栈计算相机和灯光两�
 | 两轮均值 | 开 | 14.689076 | 68.077801 | — | — |
 | 两轮均值 | 关 | 13.630620 | 73.364237 | — | — |
 
-启用 SER 后帧时间增加 `7.7653%`、等效 FPS 降低 `7.2057%`，增加 `1.058457 ms/帧`。候选不保留，也不将正确性通过表述成性能收益。完整逐轮数据及限制见 [optical-ser-branch-abba-20261030.json](data/optical-ser-branch-abba-20261030.json)。随后立即对恢复后的默认路径重新采样第一至第三名，见下一节；两种插桩口径不混作收益对比。
+启用 SER 后帧时间增加 `7.7653%`、等效 FPS 降低 `7.2057%`，增加 `1.058457 ms/帧`。候选不保留，也不将正确性通过表述成性能收益。完整逐轮数据及限制见 [optical-ser-branch-abba-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/optical-ser-branch-abba-20261030.json)。随后立即对恢复后的默认路径重新采样第一至第三名，见下一节；两种插桩口径不混作收益对比。
 
 ## 2026-10-30 默认路径当前前三名复核
 
@@ -226,7 +228,7 @@ SER 回滚并重新生成光学 raygen 制品后，以相同 RTX 5080 Laptop、1
 | 2 | CPU 不可变 HDR 快照复制 | 2.044967 | 15.1906% |
 | 3 | Vulkan 后续栅栏等待 | 1.968853 | 14.6252% |
 
-本表是当前阶段累计耗时排序，不是互斥分桶；CUDA 项包含 producer 与设备工作的等待，GPU 时间戳阶段也与墙钟重叠。百分比只表示该阶段值相对整帧均值，不能互相求和。原始采样见 [optical-current-ranking-20261030.json](data/optical-current-ranking-20261030.json)。第一名仍是架构边界：LuxCore 的路径推进在单设备执行链，当前路径每轮跨 Vulkan RT 与 CUDA 交接。此前移除首轮等待的候选已丢失红色分支贡献，所以下一步先把 branch/sample/epoch 级证据补全，再调整交接协议；本轮没有性能修复收益可报告。
+本表是当前阶段累计耗时排序，不是互斥分桶；CUDA 项包含 producer 与设备工作的等待，GPU 时间戳阶段也与墙钟重叠。百分比只表示该阶段值相对整帧均值，不能互相求和。原始采样见 [optical-current-ranking-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/optical-current-ranking-20261030.json)。第一名仍是架构边界：LuxCore 的路径推进在单设备执行链，当前路径每轮跨 Vulkan RT 与 CUDA 交接。此前移除首轮等待的候选已丢失红色分支贡献，所以下一步先把 branch/sample/epoch 级证据补全，再调整交接协议；本轮没有性能修复收益可报告。
 
 ## 2026-10-30 成熟参考对照与当前大头复核
 
@@ -263,7 +265,7 @@ SER 回滚并重新生成光学 raygen 制品后，以相同 RTX 5080 Laptop、1
 
 本轮没有保留新的性能候选，也没有宣称性能收益。此前主命中省略 ABBA 稳定退化 `9.7216% FPS`，专用 closest-hit ABBA 退化 `0.3676% FPS`，均已撤回。下一步需要减少真实 Vulkan/CUDA 轮次或每轮 GPU 工作，并继续以完整 HDR 和无插桩 ABBA 认证；单纯删除正确性所需的同步不算完成。
 
-验证状态：全量生成和逐字节核对 `226/226` 个 pinned SPIR-V 通过，合计 `37,411,992` 字节；shader 目录中 `232` 个物理 SPIR-V 均通过 `spirv-val --target-env vulkan1.2`，合计 `37,862,920` 字节。`coreCudaOpticalMediumSelfTest`、`cudaOpticalMediumNativeSelfTest` 通过；`cudaOpticalMediumProductionNativeSelfTest` 通过 `42` 项比较、`123` 个原生帧和 `1` 次预期拒绝恢复。旧 `43/124` 记录多出的 `resolved-no-outline-primary-omission` 是现已撤回候选专属检查，当前源码已移除该候选和该项检查。机器可读采样与验证摘要见 [optical-mature-reference-handoff-20261030.json](data/optical-mature-reference-handoff-20261030.json)。
+验证状态：全量生成和逐字节核对 `226/226` 个 pinned SPIR-V 通过，合计 `37,411,992` 字节；shader 目录中 `232` 个物理 SPIR-V 均通过 `spirv-val --target-env vulkan1.2`，合计 `37,862,920` 字节。`coreCudaOpticalMediumSelfTest`、`cudaOpticalMediumNativeSelfTest` 通过；`cudaOpticalMediumProductionNativeSelfTest` 通过 `42` 项比较、`123` 个原生帧和 `1` 次预期拒绝恢复。旧 `43/124` 记录多出的 `resolved-no-outline-primary-omission` 是现已撤回候选专属检查，当前源码已移除该候选和该项检查。机器可读采样与验证摘要见 [optical-mature-reference-handoff-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/optical-mature-reference-handoff-20261030.json)。
 
 ## 2026-10-30 主命中队列省略候选：已撤回
 
@@ -280,7 +282,7 @@ SER 回滚并重新生成光学 raygen 制品后，以相同 RTX 5080 Laptop、1
 | 汇总 A | 关 | 1 | **13.306524** | **75.176124** | — | 一致 |
 | 汇总 B | 开 | 2 | **14.734523** | **67.867824** | — | 一致 |
 
-候选增加 `1.427999 ms/帧`（帧时间 `+10.7316%`，FPS `-9.7216%`）。四轮最终 HDR 文件逐字节哈希相同。由于主命中数据仍须按 tile 缓存并写入，外部队列的省略没有减少总路径数据量，只增加了 tile 数和分块调度，因此撤回 proof、ABI 标志、shader fallback 与选择开关。四轮明细和限制见 [optical-primary-omission-abba-20261030.json](data/optical-primary-omission-abba-20261030.json)；设备输出保留于 `renderer-core/build/luxcore-native-optical-20261030/primary-omission-abba/`。
+候选增加 `1.427999 ms/帧`（帧时间 `+10.7316%`，FPS `-9.7216%`）。四轮最终 HDR 文件逐字节哈希相同。由于主命中数据仍须按 tile 缓存并写入，外部队列的省略没有减少总路径数据量，只增加了 tile 数和分块调度，因此撤回 proof、ABI 标志、shader fallback 与选择开关。四轮明细和限制见 [optical-primary-omission-abba-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/optical-primary-omission-abba-20261030.json)；设备输出保留于 `renderer-core/build/luxcore-native-optical-20261030/primary-omission-abba/`。
 
 ## 2026-10-30 首次追踪路径细粒度归因
 
@@ -321,7 +323,7 @@ SER 回滚并重新生成光学 raygen 制品后，以相同 RTX 5080 Laptop、1
 
 每个分支每帧有 `2,073,600` 条输入路径。pair step 0 的输入、输出及界面计数均为 `2,073,600`；step 1 输入及完成计数也均为 `2,073,600`。该单玻璃负载首步所有路径都跨过一个界面，第二步全部完成，没有可通过压缩 inactive path 获得的大头收益。每帧调度 `4,147,200` 个 CUDA path-slot（两个 pair step），但这不是重复完成的逻辑路径数。
 
-固定版本 LuxCore 用于介质数学和路径推进对照，不包含本项目 Vulkan/CUDA 互操作；同步正确性仍以本项目 epoch 和 HDR 回归为准。当前没有从这次归因采样声称性能收益。原同步基线测量及首轮等待候选失败记录继续保留于下节，完整本轮数据见 [optical-active-paths-ranking-20261030.json](data/optical-active-paths-ranking-20261030.json)。
+固定版本 LuxCore 用于介质数学和路径推进对照，不包含本项目 Vulkan/CUDA 互操作；同步正确性仍以本项目 epoch 和 HDR 回归为准。当前没有从这次归因采样声称性能收益。原同步基线测量及首轮等待候选失败记录继续保留于下节，完整本轮数据见 [optical-active-paths-ranking-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/optical-active-paths-ranking-20261030.json)。
 
 ### 专用 closest-hit 架构候选：已撤回
 
@@ -380,7 +382,7 @@ SER 回滚并重新生成光学 raygen 制品后，以相同 RTX 5080 Laptop、1
 
 五种 CUDA enqueue/kernel-launch/readback API 的主机调用时间合计 0.217696 ms/帧（1.6031%）；`cuStreamSynchronize` 的 6.411190 ms 包含 Vulkan producer 等待和实际 CUDA 执行，不能归类成 CUDA API 调用耗时。削减 API 调用本身无法解释约 7 ms 的第一名。
 
-首轮主机等待候选只移除了 round 0/2 的 `cuStreamSynchronize`，保留 Vulkan 对首个 timeline 值的设备等待、round 1/3 的计数读取完成等待及全部事件/样本预算。共享射线原生测试通过两 slot、两次生命周期、4096 条路径、五轮 RT epoch 与失败清理；但这不足以覆盖光学分支。完整光学测试在 `opticalSamples=8`、SPP=1 的确定性双分支 HDR 对照中失败：候选首像素红色为 0.373291，基线为 0.426514，所有 1,073 像素的红色均少 0.053223，其他通道一致。同步基线路径随后通过 43 项比较、124 个原生帧、1 次预期拒绝恢复；验证记录关闭 4 次、0 WARNING、0 dropped messages，唯一 ERROR 是 OBS 隐式层 DLL 加载失败（Win32 error 126），没有项目 Vulkan 资源或同步错误。该形态表明一个分支/样本贡献丢失，但尚未定位更低层的具体 epoch/可见性触发点；候选已撤回，未跑性能 ABBA，也不声称有性能收益。恢复后的当前基线复采均值为 13.580084 ms/帧、73.637 FPS，含 Nsight 插桩，只作排名，不与前一轮计算性能收益；HDR 哈希仍为 943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c。证据见 [optical-async-timeline-continuation-20261030.json](data/optical-async-timeline-continuation-20261030.json)。
+首轮主机等待候选只移除了 round 0/2 的 `cuStreamSynchronize`，保留 Vulkan 对首个 timeline 值的设备等待、round 1/3 的计数读取完成等待及全部事件/样本预算。共享射线原生测试通过两 slot、两次生命周期、4096 条路径、五轮 RT epoch 与失败清理；但这不足以覆盖光学分支。完整光学测试在 `opticalSamples=8`、SPP=1 的确定性双分支 HDR 对照中失败：候选首像素红色为 0.373291，基线为 0.426514，所有 1,073 像素的红色均少 0.053223，其他通道一致。同步基线路径随后通过 43 项比较、124 个原生帧、1 次预期拒绝恢复；验证记录关闭 4 次、0 WARNING、0 dropped messages，唯一 ERROR 是 OBS 隐式层 DLL 加载失败（Win32 error 126），没有项目 Vulkan 资源或同步错误。该形态表明一个分支/样本贡献丢失，但尚未定位更低层的具体 epoch/可见性触发点；候选已撤回，未跑性能 ABBA，也不声称有性能收益。恢复后的当前基线复采均值为 13.580084 ms/帧、73.637 FPS，含 Nsight 插桩，只作排名，不与前一轮计算性能收益；HDR 哈希仍为 943d29327f276420817df19ddd43ed6662aa97b956e44cfc1c2407757ecc630c。证据见 [optical-async-timeline-continuation-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/optical-async-timeline-continuation-20261030.json)。
 
 ## 2026-10-30 CUDA 状态辅助函数内联：消除本次工作负载的局部访存
 
@@ -1251,7 +1253,7 @@ PBR 与异质多散射各自的 Vulkan validation 记录均为 opened=1、closed
 
 光学新布局保持 512 MiB CUDA 上限，额外 Vulkan primary 已计入总 GPU headroom。所有 sample、branch、event、距离和密度积分预算保持原值。内部 `top.ceroxe.rt.medium.cuda.opticalExternalPrimary=false` 保留旧布局以做同制品、同预算比较。完整 primary 仍供 temporal、NRD、outline 使用。
 
-同一冻结 core JAR 在 RTX 5080 Laptop GPU 以 O-N-N-O 顺序完成 ABBA，每臂 12 帧预热、40 个完成帧；1920×1080、SPP1、opticalSamples1、maxEvents16、maxDistance30、cutoff0。新布局平均 27.934 完成 FPS，旧布局 15.253，提升 83.14%；两臂中位完成帧耗时均值 33.321 ms 与 65.224 ms。每臂均处理 331,776,000 个查询路径和 165,888,000 个界面事件；完整 HDR 对同一解析参考最大误差 0.000152995，均低于既有阈值。逐臂耗时和 validation 证据见 [optical-layout-abba.json](data/integrated-20261029-optical-layout-abba.json)。该提升只适用于此 workload/设备与固定制品，不外推到其他 SPP、roughness、场景或显卡。
+同一冻结 core JAR 在 RTX 5080 Laptop GPU 以 O-N-N-O 顺序完成 ABBA，每臂 12 帧预热、40 个完成帧；1920×1080、SPP1、opticalSamples1、maxEvents16、maxDistance30、cutoff0。新布局平均 27.934 完成 FPS，旧布局 15.253，提升 83.14%；两臂中位完成帧耗时均值 33.321 ms 与 65.224 ms。每臂均处理 331,776,000 个查询路径和 165,888,000 个界面事件；完整 HDR 对同一解析参考最大误差 0.000152995，均低于既有阈值。逐臂耗时和 validation 证据见 [optical-layout-abba.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/integrated-20261029-optical-layout-abba.json)。该提升只适用于此 workload/设备与固定制品，不外推到其他 SPP、roughness、场景或显卡。
 
 旧冻结候选在另一组吸收/发光体积场景测得的 1080p +33.97% 收益，仍仅对应旧冻结指纹与原场景。本记录不把该数字作为 PBR、多散射或光学路径的性能结论。
 
@@ -1266,9 +1268,9 @@ PBR 与异质多散射各自的 Vulkan validation 记录均为 opened=1、closed
 本节摘要：归纳早期迁移路线、失败队列、语义差异和完整工作交接。
 
 
-仓库：`D:\Engineering\code\APIs\RTRendererAPI`  
-日期：2026-10-28，Asia/Shanghai  
-当前 HEAD：`fa27dbf210a0c3ac11cd78afe19f395b3a3eff73`  
+仓库：`.`
+日期：2026-10-28，Asia/Shanghai
+当前 HEAD：`fa27dbf210a0c3ac11cd78afe19f395b3a3eff73`
 状态：当前两个执行子代理均完成各自小任务并停止；未创建下一批代理。交接前未发现 Java、javac、nvcc、shader 编译或 bounded build 残留进程。全部工作未提交，必须保留。
 
 **长期目标完成度粗估约 25%，合理区间 20%–30%。这是工程完成程度判断，不是公开 API 支持率、默认渲染迁移率、场景通过率或性能提升百分比。正式公共渲染的原生介质最终 HDR 接入尚未完成，同画质整帧性能收益尚未取得验收结论。**
@@ -1309,7 +1311,7 @@ PBR 与异质多散射各自的 Vulkan validation 记录均为 opened=1、closed
 - Windows / PowerShell；GraalVM Java 25.0.5。
 - GPU：NVIDIA GeForce RTX 5080 Laptop GPU；本轮重新记录的驱动仍是 616.92。
 - 全部文本、源码、日志保持 UTF-8，注意中文乱码。
-- 所有联网使用本机代理 `http://127.0.0.1:14455`，只设当前进程或命令环境，**不得写入项目或全局配置**。
+- 联网代理由使用者通过本机进程环境配置，仓库不保存具体代理地址。
 - 所有构建、shader 编译、NVRTC、原生 GPU 测试都经 `tools/Invoke-BoundedBuild.ps1`。
 - **总预算 10 GB**，不能提高，也不是每个代理各 10 GB；wrapper 内 Job Object 实际给进程树保留 9.5 GB，另留 0.5 GB 给 PowerShell host。
 - OOM 或驱动崩溃先保存证据，不反复重跑相同失败输入。
@@ -1382,7 +1384,7 @@ Vulkan/CUDA 共享显存交接，不能逐射线经 CPU 往返。当前可靠方
 
 项目外目录：
 
-`D:\Engineering\code\APIs\RTRendererAPI-backups\legacy-medium-before-removal-20261028-203236`
+`../RTRendererAPI-backups\legacy-medium-before-removal-20261028-203236`
 
 其中：
 
@@ -1440,7 +1442,7 @@ runtime 基础已验证 Java 25 FFM 调 CUDA Driver/NVRTC、批量 blocking、de
 
 ## 7. 本轮生产小切片：相机吸收基础已完成
 
-文档：`docs/quality/7.0.0-cuda-camera-segment-foundation.md`  
+文档：`docs/quality/7.0.0-cuda-camera-segment-foundation.md`
 证据：`build/luxcore-camera-foundation-20261028/result.json`、`run-1.log`、`validation.jsonl`、`run.ps1`。
 
 修复内容：
@@ -1481,7 +1483,7 @@ runtime 基础已验证 Java 25 FFM 调 CUDA Driver/NVRTC、批量 blocking、de
 
 ### 吸收、发光、优先级、密度
 
-目录：`build/luxcore-complex-scene-validation-20261028`  
+目录：`build/luxcore-complex-scene-validation-20261028`
 报告：`docs/quality/luxcore-complex-scene-validation-20261028.md`。
 
 三个嵌套/重叠闭合介质体、9216 个 box 表面三角形、发光面板、opaque blocker、相机内外/真空/优先级反转、真实 8³ float 密度。64²、256²、1080p 实际运行并检查最终实验 HDR。
@@ -1585,7 +1587,7 @@ volatile、coherent、ALL_COMMANDS wait、nonblocking stream、单次 system fen
 相机基础：
 
 ```powershell
-Set-Location -LiteralPath 'D:\Engineering\code\APIs\RTRendererAPI'
+Set-Location -LiteralPath '.'
 & .\tools\Invoke-BoundedBuild.ps1 `
   -FilePath (Get-Command pwsh.exe).Source `
   -ArgumentList @('-NoProfile','-File','build/luxcore-camera-foundation-20261028/run.ps1') `
@@ -1618,9 +1620,9 @@ Set-Location -LiteralPath 'D:\Engineering\code\APIs\RTRendererAPI'
 本节摘要：记录原生生产接入阶段的代码状态、测试、未完成项及后续入口。
 
 
-日期：2026-10-28，Asia/Shanghai。停止后现场核对时间约 22:05。  
-仓库：D:/Engineering/code/APIs/RTRendererAPI  
-HEAD：fa27dbf210a0c3ac11cd78afe19f395b3a3eff73  
+日期：2026-10-28，Asia/Shanghai。停止后现场核对时间约 22:05。
+仓库：.
+HEAD：fa27dbf210a0c3ac11cd78afe19f395b3a3eff73
 工作状态：全部改动未提交；保留现有工作树、历史实验、失败证据和输出。没有提交、推送或发布。
 
 ## 0. 接手先读：最终停点和容易误判的地方
@@ -2204,7 +2206,7 @@ VulkanGpuSceneShaderSelfTest 新增 --contracts-only，只快速跑源码合同�
 
 删除前项目外快照：
 
-    D:/Engineering/code/APIs/RTRendererAPI-backups/
+    ../RTRendererAPI-backups/
       legacy-medium-before-removal-20261028-203236
 
 含 source、1281 文件 SHA256 manifest、retirement-plan、deletion-completed 等。禁止再次运行其中 prepare_retirement.py --apply。
@@ -2557,11 +2559,11 @@ Fresnel 使用入射与出射介质折射率，Snell 计算区分正常折射与
 本节摘要：审计继承源码/制品身份、留存 GPU 性能和变体缺口。
 
 
-This is a bounded audit of inherited uncommitted changes and retained measurements, followed by fresh CPU checks. It does not implement or benchmark the proposed queue backend. [The one-page execution plan](7.0.0-medium-execution-plan.md) identifies the next slice. [Machine-readable evidence](data/medium-execution-20261028-audit.json) contains full SHA-256 identities, per-image comparisons, per-batch summaries and missing variant paths.
+This is a bounded audit of inherited uncommitted changes and retained measurements, followed by fresh CPU checks. It does not implement or benchmark the proposed queue backend. [The one-page execution plan](7.0.0-medium-execution-plan.md) identifies the next slice. [Machine-readable evidence](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-execution-20261028-audit.json) contains full SHA-256 identities, per-image comparisons, per-batch summaries and missing variant paths.
 
 ## Artifact identity and reproducibility
 
-HEAD is `fa27dbf`. `build/medium-execution-20261028/control/renderer-core-7.0.0.jar` is SHA-256 `e6717cc3e59ad4c7179562472cc4b490f9096bb50feaf165e55180891c832cb4`; its sources JAR is `87d4f026829c06ef78c6a7613110f9a008ceb39e55b5c083e835fe90533f9a9f`. Both match [the existing final audit](data/medium-7.0.0-final-verification.json). This is the retained 7.0.0 passive control, not a new 6.0.4 reconstruction.
+HEAD is `fa27dbf`. `build/medium-execution-20261028/control/renderer-core-7.0.0.jar` is SHA-256 `e6717cc3e59ad4c7179562472cc4b490f9096bb50feaf165e55180891c832cb4`; its sources JAR is `87d4f026829c06ef78c6a7613110f9a008ceb39e55b5c083e835fe90533f9a9f`. Both match [the existing final audit](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-7.0.0-final-verification.json). This is the retained 7.0.0 passive control, not a new 6.0.4 reconstruction.
 
 Before building, the inherited candidate core JAR was `11c9cd7400956b305ddc34bdb4981a81c0655dc1d19ac471b029b07c1726d2d2`. Its 1,145 classes matched the existing main build classes. Twelve of thirteen changed resources matched the working files; `gpuscene_optics.glsl` differed. The working source contains subsequent stochastic-first-interface edits not present in that JAR. The sources JAR was still the old control sources JAR. No recorded manifest binds every retained run to an exact source/SPIR-V pair. Consequently, retained images and timing describe predecessor candidates, not a fully certified current build.
 
@@ -2990,7 +2992,7 @@ API/lease/slot/session/host/submitter/RtCommandContext 的 queued delivery 由�
 
 `check verifyReleaseChecksums verifyPublishedMavenConsumer` 通过：192 个 task，wall 164.365 秒，进程树峰值 commit 3.805 GB。包含 ABI、模块边界、CPU 合同、208 个 shader 变体与 SPIR-V 一致性、完整 LuxCore 源码清单及 SHA-256、供应链清单、独立 Maven 消费者编译。CPU 门禁不替代 GPU 验收。
 
-冻结的三个模块与全部运行依赖以 [fingerprints.json](data/package-20261029/fingerprints.json) 为准。原生测试只加载这组 `lib/*` 加编译后的测试类；没有源 resources、历史 core JAR、NVRTC override 或 CUDA_PATH。每个 Vulkan 测试必须有 JSONL，满足 opened/closed 数相等、最后一条 closed、零 WARNING/ERROR、零丢失消息。纯 CUDA runtime 测试单独验证数值与资源关闭。
+冻结的三个模块与全部运行依赖以 [fingerprints.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/package-20261029/fingerprints.json) 为准。原生测试只加载这组 `lib/*` 加编译后的测试类；没有源 resources、历史 core JAR、NVRTC override 或 CUDA_PATH。每个 Vulkan 测试必须有 JSONL，满足 opened/closed 数相等、最后一条 closed、零 WARNING/ERROR、零丢失消息。纯 CUDA runtime 测试单独验证数值与资源关闭。
 
 ### 介质与帧交付
 
@@ -3011,7 +3013,7 @@ API/lease/slot/session/host/submitter/RtCommandContext 的 queued delivery 由�
 
 另验证 13 个真实硬件入口：自定义 GLSL/SPIR-V 场景、原生格式映射与快照、整数纹理、程序化/AABB 光追、管线回收、几何屏障、逻辑运算、证据保留、资源/命令事务、通用 RT、BLAS、场景加速、场景版本收敛及外部帧完成。
 
-代表性结果：18 种整数纹理格式/54 个精确帧；16 种逻辑运算/384 个精确帧；24 个 transfer/geometry/vertex 屏障帧；2,000 次管线回收后 live=0、SBT bytes=0；长循环后命令证据对象 4→4、资源证据 6→6。完整结果与日志哈希见 [native-summary.json](data/package-20261029/native-summary.json)。这组测试覆盖所列契约，不代表所有硬件、厂商功能及介质组合已验收。
+代表性结果：18 种整数纹理格式/54 个精确帧；16 种逻辑运算/384 个精确帧；24 个 transfer/geometry/vertex 屏障帧；2,000 次管线回收后 live=0、SBT bytes=0；长循环后命令证据对象 4→4、资源证据 6→6。完整结果与日志哈希见 [native-summary.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/package-20261029/native-summary.json)。这组测试覆盖所列契约，不代表所有硬件、厂商功能及介质组合已验收。
 
 本冻结制品当时记录的专项 Gradle 入口为 `rendererCoreLuxCoreNativeGate` 与 `rendererCoreUnifiedApiNativeGate`；其中 `rendererCoreLuxCoreNativeGate` 是历史任务名，后续代码已使用 `rendererCoreMediumNativeGate`。全量 `rendererCoreNativeGate` 仍包含未完成的旧介质组合验收，尚未通过，未删除这些测试或放宽准入来伪造通过。
 
@@ -3021,7 +3023,7 @@ API/lease/slot/session/host/submitter/RtCommandContext 的 queued delivery 由�
 
 终端融合复用已取得的终端辐射，减少适用样本的 208 B primary payload 写读及中间 consumer 工作。temporal、denoising、reconstruction、outline 等不满足资格的样本仍使用完整 payload。事件容量按几何上界打包，预算与样本数保持不变。
 
-数值、逐帧耗时、GPU telemetry 与完整 HDR 差异见 [performance-summary.json](data/package-20261029/performance-summary.json)。两次测量 FPS 的算术均值如下；该数字仅适用于这次制品和场景，其他场景与显卡没有此项保证。GPU timestamp 只覆盖被计量的 Vulkan 区间，CUDA 交接、CPU 等待及完整输出成本以端到端耗时为准。
+数值、逐帧耗时、GPU telemetry 与完整 HDR 差异见 [performance-summary.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/package-20261029/performance-summary.json)。两次测量 FPS 的算术均值如下；该数字仅适用于这次制品和场景，其他场景与显卡没有此项保证。GPU timestamp 只覆盖被计量的 Vulkan 区间，CUDA 交接、CPU 等待及完整输出成本以端到端耗时为准。
 
 | 分辨率 | 完整 primary | 终端融合 | 提升 |
 | --- | ---: | ---: | ---: |
@@ -3085,8 +3087,8 @@ This baseline is retained; it is not repeatedly rerun while optimizing 7.0.0.
 | Homogeneous absorption | 45.96 | 31.32 | −31.9% | 21.7392 | 31.7033 |
 | Absorption and emission | 45.83 | 30.35 | −33.8% | 21.8118 | 32.9212 |
 
-Raw batches: [6.0.4](data/medium-6.0.4-baseline.csv) and
-[original 7.0.0](data/medium-7.0.0-before-fix.csv).
+Raw batches: [6.0.4](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-6.0.4-baseline.csv) and
+[original 7.0.0](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-7.0.0-before-fix.csv).
 
 ## Isolation experiment and repair
 
@@ -3123,7 +3125,7 @@ passive program. Density fields, extra scattering, caustics and explicit expert
 programs retain their respective complete implementations.
 
 The isolation build is diagnostic evidence, not the final performance result.
-Raw batches: [isolation experiment](data/medium-7.0.0-isolation.csv).
+Raw batches: [isolation experiment](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-7.0.0-isolation.csv).
 
 ## Automatic specialization results
 
@@ -3157,7 +3159,7 @@ cross-version ratio is assigned to them. The remaining 13 benchmark scenes,
 gallery ablations, full SDR/HDR surface equivalence and gallery FG presentation
 are not certified by this run.
 
-Raw batches: [repaired 7.0.0](data/medium-7.0.0-after-fix.csv).
+Raw batches: [repaired 7.0.0](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-7.0.0-after-fix.csv).
 The first passive pipeline creation took 123.002 seconds in this run; that host
 cost is recorded separately in `coldFirstBatchMs`. Deferred host operations do not
 make this cold compilation instant. Cached pipeline performance and native
@@ -3185,7 +3187,7 @@ channels and zero maximum absolute error. These checks exercise transitions betw
 passive, scattering and surface programs. The stopped matrix is a partial
 performance run, not a passed full GPU gate.
 
-The [closeout verification manifest](data/medium-7.0.0-final-verification.json)
+The [closeout verification manifest](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-7.0.0-final-verification.json)
 records the CSV, baseline, release-JAR and final-image SHA-256 identities. A final
 audit confirmed that all 110 live SPIR-V resources match both the core JAR and the
 executable demo, the three changed Java sources/classes and three changed GLSL
@@ -3223,7 +3225,7 @@ The failing current surface consumer is 167,876 bytes, SHA-256 `a205d5526093b2e8
 
 ## Evidence and next boundary
 
-[The independent manifest](data/primary-queue-native-repair-20261028.json) records serial image hashes, shader/source/JAR identities, validation scope, host creation times and bounded-run results. Files are retained under `build/primary-queue-native-repair-20261028/`; serial images are in `images/serial/`. Native loading used the source-resource directory first, followed by `build/medium-review/classpath.txt`. Rebuilt core JAR SHA-256 is `d8ea0749520d44422e5eb6d63ec96c716eda742abd8921e1300213d3b966e73b`.
+[The independent manifest](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/primary-queue-native-repair-20261028.json) records serial image hashes, shader/source/JAR identities, validation scope, host creation times and bounded-run results. Files are retained under `build/primary-queue-native-repair-20261028/`; serial images are in `images/serial/`. Native loading used the source-resource directory first, followed by `build/medium-review/classpath.txt`. Rebuilt core JAR SHA-256 is `d8ea0749520d44422e5eb6d63ec96c716eda742abd8921e1300213d3b966e73b`.
 
 The next independent task should inspect and repair consumer creation from static shader/layout/deferred-operation evidence before another native launch. The archived `native-smoke.ps1` now identifies a known blocked build, not a successful invocation. After a corrected consumer works, run it with the existing bounded runner, then require eleven real queue submissions and eleven image pairs. Only after that should same-source serial/queue timing use `VulkanMediumTransportBenchmark` with `-Dtop.ceroxe.rt.medium.primaryQueue=false` / `true`, the same resource overlay, four target scenes and the established 1080p/1-SPP/240-warmup/3×240-frame settings.
 
@@ -3244,7 +3246,7 @@ The old failing surface consumer SHA-256 was `a205d5526093b2e8dbf6358b2f79f18855
 
 Before the user's reboot, the corrected surface consumer and producer had created successfully in 7,004.657 and 3,935.084 ms and one queued opaque image had been read back. That interrupted run's eleven serial images were saved, but its queued result was not: the test previously wrote images only after finishing the whole renderer session. The reboot cause is unknown and is not attributed to this code.
 
-Recovery found no remaining Java/native process and reused those eleven serial files, with their hashes recorded in [the recovery manifest](data/primary-queue-resume-20261028.json). `PrimaryQueueNativeSelfTest` now persists each captured case immediately and accepts `--queued-only` for a retained same-build control. That mode requires the image directory and all eleven serial files; shader/class identities must be checked separately before using a retained control. Production rendering code was unchanged during recovery.
+Recovery found no remaining Java/native process and reused those eleven serial files, with their hashes recorded in [the recovery manifest](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/primary-queue-resume-20261028.json). `PrimaryQueueNativeSelfTest` now persists each captured case immediately and accepts `--queued-only` for a retained same-build control. That mode requires the image directory and all eleven serial files; shader/class identities must be checked separately before using a retained control. Production rendering code was unchanged during recovery.
 
 Test compilation passed under the bounded runner in 7.087 seconds, peak process-tree commit 1.298 GB. All ten stage binaries used by the small test passed `spirv-val --target-env vulkan1.2` again. Native loading used the source-resource overlay followed by the archived runtime classpath, not the stale pinned resources inside the core JAR. The unchanged core JAR SHA-256 is `d8ea0749520d44422e5eb6d63ec96c716eda742abd8921e1300213d3b966e73b`.
 
@@ -3370,7 +3372,7 @@ The retained queued image came from the earlier structured general32 binary, ret
 
 The serial and queued entry points and data flow still differ. The isolated serial run also skips preceding frame submissions. Therefore the equality is useful numerical evidence, not an exclusive causal attribution. Masked/coverage cases, full native correctness, GPU throughput, all shader variants and release packaging remain outside this task. The strict original eleven-pair test is not declared passed.
 
-Detailed hashes, comparisons, validation counts and the bounded invocation are in [the manifest](data/primary-queue-structured-control-20261028.json). Reproducible local scripts, logs and image bytes are under `build/structured-serial-control-20261028/`; `compare-control.ps1` performs whole-image comparisons without rendering.
+Detailed hashes, comparisons, validation counts and the bounded invocation are in [the manifest](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/primary-queue-structured-control-20261028.json). Reproducible local scripts, logs and image bytes are under `build/structured-serial-control-20261028/`; `compare-control.ps1` performs whole-image comparisons without rendering.
 
 ```powershell
 ./tools/Invoke-BoundedBuild.ps1 -FilePath pwsh.exe -ArgumentList @('-NoProfile','-File','build/structured-serial-control-20261028/native.ps1') -MemoryLimitGB 10
@@ -3465,8 +3467,8 @@ No performance run, full matrix, default promotion, commit, push or publication 
 本节摘要：说明原生模块提取路线、许可证、语义适配及阶段门槛。
 
 
-日期：2026-10-28（Asia/Shanghai）  
-仓库：`D:\Engineering\code\APIs\RTRendererAPI`  
+日期：2026-10-28（Asia/Shanghai）
+仓库：`.`
 状态：源码依赖与工具路线已核查；尚未提取、编译或测量独立模块。本文不是已完成迁移或已证明提速的报告。
 
 ## 1. 用户决策与任务边界

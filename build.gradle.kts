@@ -25,6 +25,10 @@ plugins {
 
 abstract class RendererHardwareGateLock : BuildService<BuildServiceParameters.None>
 
+// GPU composition is a native hardware gate even though its public task name omits "Native".
+fun isHardwareAcceptanceTask(task: Task) = task is JavaExec &&
+    (task.name.contains("Native") || task.name == "rtxptCompositionSelfTest")
+
 // Native graphics gates share the physical adapter even when they belong to different modules.
 val rendererHardwareGateLock = gradle.sharedServices.registerIfAbsent(
     "rendererHardwareGateLock", RendererHardwareGateLock::class
@@ -32,7 +36,8 @@ val rendererHardwareGateLock = gradle.sharedServices.registerIfAbsent(
 
 subprojects {
     tasks.withType<JavaExec>().configureEach {
-        if (name.contains("Native")) usesService(rendererHardwareGateLock)
+        jvmArgs("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+        if (isHardwareAcceptanceTask(this)) usesService(rendererHardwareGateLock)
     }
 }
 
@@ -852,7 +857,7 @@ tasks.register<Sync>("preparePublishedMavenConsumer") {
 
 tasks.register<Exec>("verifyPublishedMavenConsumer") {
     group = "verification"
-    description = "Publishes all three modules and executes isolated API/runtime contracts through their Maven POMs."
+    description = "Stages all four modules and executes the ordinary API/runtime consumer through published Maven POMs."
     dependsOn(tasks.named("publishAllToLocalStagingRepository"))
     dependsOn(tasks.named("verifyPublishedMavenTopology"))
     dependsOn(verifyPublishedNvidiaRuntimeClosure)
@@ -985,13 +990,19 @@ tasks.register("strictAcceptanceTest") {
 // gallery or packaged-distribution contracts. Keep its fast entry point and make
 // the complete release scope explicit in a separate, opt-in invocation.
 val apiClosureRequiredTasks = listOf(
-    ":check", ":renderer-api:check", ":renderer-core:check", ":renderer-nvidia:check", ":demos:hex-ball:check",
+    ":check", ":renderer-api:check", ":renderer-core:check", ":renderer-nvidia:check", ":renderer-rtxpt:check", ":demos:hex-ball:check",
     ":renderer-core:rendererCoreGpuSceneNativeGate",
     ":renderer-core:rendererCoreNativeGate",
     ":renderer-core:rendererCoreMediumNativeGate",
     ":renderer-core:rendererCoreUnifiedApiNativeGate",
     ":renderer-nvidia:nvidiaNativeAcceptanceGate",
-    ":demos:hex-ball:mediumGalleryNativeSelfTest",
+    ":renderer-rtxpt:rtxptNativeSelfTest",
+    ":renderer-rtxpt:rtxptBudgetNativeSelfTest",
+    ":renderer-rtxpt:rtxptPackagedNativeSelfTest",
+    ":renderer-rtxpt:rtxptPackagedBudgetNativeSelfTest",
+    ":renderer-rtxpt:rtxptAdvancedNativeSelfTest",
+    ":demos:hex-ball:surfacePathNativeSelfTest",
+    ":demos:hex-ball:rtxptCompositionSelfTest",
     ":verifyPublishedMavenConsumer", ":verifyReleaseChecksums", ":verifyRuntimeDistribution"
 )
 tasks.register("verifyApiClosure") {
@@ -1003,7 +1014,7 @@ tasks.register("verifyApiClosure") {
         val graph = gradle.taskGraph.allTasks
         val omitted = required.filter { !it.state.executed || it.state.failure != null }
         check(omitted.isEmpty()) { "API closure has incomplete required tasks: " + omitted.map { it.path } }
-        val skippedNative = graph.filter { it is JavaExec && it.name.contains("Native")
+        val skippedNative = graph.filter { isHardwareAcceptanceTask(it)
                 && (!it.state.executed || it.state.skipMessage == "SKIPPED" || it.state.skipMessage == "NO-SOURCE") }
         check(skippedNative.isEmpty()) { "API closure cannot skip native evidence: " + skippedNative.map { it.path } }
         val report = layout.buildDirectory.file("reports/api-closure/result.json").get().asFile
@@ -1012,16 +1023,17 @@ tasks.register("verifyApiClosure") {
             "passed" to true,
             "completedAtUtc" to Instant.now().toString(),
             "version" to project.version.toString(),
-            "scope" to "documented Windows x86_64 Vulkan RT and NVIDIA runtime contracts",
+            "scope" to "documented Windows x86_64 Vulkan RT, NVIDIA features and RTXPT native/packaged/composition contracts",
             "requiredTasks" to required.map { task -> linkedMapOf("path" to task.path,
                 "executed" to task.state.executed, "upToDate" to task.state.upToDate) },
-            "nativeTasks" to graph.filter { it is JavaExec && it.name.contains("Native") }.map { task ->
+            "nativeTasks" to graph.filter { isHardwareAcceptanceTask(it) }.map { task ->
                 linkedMapOf("path" to task.path, "executed" to task.state.executed,
                     "upToDate" to task.state.upToDate) },
             "artifacts" to listOf(
                 project(":renderer-api").tasks.named<Jar>("jar").get().archiveFile.get().asFile,
                 project(":renderer-core").tasks.named<Jar>("jar").get().archiveFile.get().asFile,
                 project(":renderer-nvidia").tasks.named<Jar>("jar").get().archiveFile.get().asFile,
+                project(":renderer-rtxpt").tasks.named<Jar>("jar").get().archiveFile.get().asFile,
                 tasks.named<Zip>("runtimeDistribution").get().archiveFile.get().asFile
             ).map { artifact ->
                 val digest = MessageDigest.getInstance("SHA-256")

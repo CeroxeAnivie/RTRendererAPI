@@ -1,5 +1,7 @@
 # LuxCore 托管介质执行约定
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 迁移前完整备份：main `68abf71`。旧实现、测试和性能证据可从 Git 历史恢复。
 
 ## 执行边界
@@ -59,7 +61,7 @@ Film 显示刷新算作独立渲染帧。
 官方 console 会固定设置 `screen.refresh.interval=2500`，该入口差异已记入证据。
 RTPATHOCL 在达到 `batch.halttime=12` 后仍持续渲染，本次收集到第 58 秒后停止该
 自有进程。导出的完整场景、配置、官方日志、桥接原始结果和资产 SHA-256 均保存在
-[`data/luxcore-official-control-20261101`](data/luxcore-official-control-20261101/comparison.json)。
+[`data/luxcore-official-control-20261101`](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/luxcore-official-control-20261101/comparison.json)。
 
 官方入口复现（在仓库根目录执行；RTPATHOCL 需要手动或外部限时结束）：
 
@@ -83,4 +85,4 @@ RTPATHOCL 在达到 `batch.halttime=12` 后仍持续渲染，本次收集到第 
 上游 `src/slg/engines/tilepathocl/tilepathoclthread.cpp` 的 `RenderTileWork` 固定执行
 `2 * pathDepth - 1` 轮完整任务池求交/推进；RTPATHOCL 默认深度为 5，即 9 轮。
 这是已确认的执行机制，尚不是对全部耗时的归因证明。
-结果和最小场景保存在 [`data/luxcore-light-controls-20261101`](data/luxcore-light-controls-20261101/result.json)。
+结果和最小场景保存在 [`data/luxcore-light-controls-20261101`](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/luxcore-light-controls-20261101/result.json)。

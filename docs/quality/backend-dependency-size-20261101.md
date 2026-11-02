@@ -1,5 +1,7 @@
 # 双后端运行依赖体积
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 统计当前 Windows 7.0.0 Demo 的 Gradle `runtimeClasspath` 实际解析文件，单位 MiB（1,048,576 字节）。这是压缩运行 JAR 的文件大小之和，不是显存、运行内存、源码 checkout 或 SDK 大小。不同模块合并为一个 JAR 时会重新压缩，不能把下列和直接当作最终 fat JAR 的精确大小。
 
 | 旧 Vulkan 路线组成 | 字节 | MiB |

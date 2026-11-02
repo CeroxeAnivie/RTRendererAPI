@@ -1,5 +1,7 @@
 # 介质渲染性能优化规范
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 **2026-11-02 内存优化验收：不能牺牲 FPS、画质或能力。相同制品、场景及高级能力配置下，分别检查稳态吞吐与叠层开关等动态路径；不得用额外 GPU idle、逐帧释放重建或降低渲染预算换取内存下降。重型资源回收只允许在显式空闲维护入口执行。内存诊断与关闭诊断的 FPS 对照分开，收益没有同条件证据则不宣称。**
 
 **2026-11-01 最新规则（覆盖下文历史 GPU 门槛）：性能测试前 GPU 0 基础占用必须为 0%。不为零时暂停性能测量，等待用户通知空闲后再测；不能用受干扰的绝对值判断收益。同步监控构建进程树内存、运行时 Java 堆／原生内存和本进程显存。内存诊断单独运行，反复切换场景、尺寸和叠层，按分配调用与释放证据修复增长，不能把一次总量或首次缓存当成泄漏。**
@@ -161,7 +163,7 @@
 
 该 trace-flags 候选已完成闭环并撤回：8 帧 160×90 原始 RGBA16F 逐字节一致，Vulkan 验证 0 警告/0 错误，但三轮阴影残差/其余阶段延迟比从 0.6395–0.6528 上升为 0.7147–0.7844；关闭诊断也没有稳定吞吐收益。不能因为成熟示例使用该模式，就假定迁入本项目一定更快。
 
-以下为该轮对照组的完整互斥叶子排名；90 帧预热，3×120 帧，单位 ms/实际抽样路径。测前 GPU 占用为 38%，因此只按相对排名使用。原始三轮 JSON 和已撤回候选见 [scattering-shadow-traversal-20261030.json](data/scattering-shadow-traversal-20261030.json)。
+以下为该轮对照组的完整互斥叶子排名；90 帧预热，3×120 帧，单位 ms/实际抽样路径。测前 GPU 占用为 38%，因此只按相对排名使用。原始三轮 JSON 和已撤回候选见 [scattering-shadow-traversal-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-shadow-traversal-20261030.json)。
 
 | 排名 | 阶段 | 三轮平均 ms/路径 | 占比 |
 | ---: | --- | ---: | ---: |
@@ -224,7 +226,7 @@ GPU 空闲后重新测试，两个制品测前 GPU 0 占用均为 0%，每组 90
 | 13–15 | 透射回退、any-hit、closest-hit | 0 | 0% |
 | | **互斥延迟求和** | **0.074476** | **100%** |
 
-原始轮次、正确性结果和测前 GPU 状态记录在 [scattering-inline-query-20261030.json](data/scattering-inline-query-20261030.json)。
+原始轮次、正确性结果和测前 GPU 状态记录在 [scattering-inline-query-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-inline-query-20261030.json)。
 
 ### 局部灯坐标解码缓存已验证保留
 
@@ -257,7 +259,7 @@ GPU 空闲后重新测试，两个制品测前 GPU 0 占用均为 0%，每组 90
 
 关闭全部诊断的第一组整帧吞吐为 54.945 → 55.012 FPS，近乎不变；其中对照测前 GPU 占用 7%，绝对数值只作参考。反序复测时两组测前均为 0%，合计吞吐 **52.939 → 55.976 FPS**，帧耗时 **18.890 → 17.865 ms**，该组约 +5.7%。因此保留已证实的热点与 GPU 阶段收益，不把单组 +5.7% 声称为稳定整帧提升。
 
-正确性：8 帧 HDR 全字节一致；14 项生产输运 HDR 检查通过，新增非整数 double 点灯/聚光灯及灯光替换检查；ABI 数值与 shader 契约检查通过；234 组预编译 shader 生成成功；Vulkan validation 0 warning、0 error。原始三轮、制品 SHA-256、测前 GPU 状态和完整排名见 [scattering-light-position-cache-20261030.json](data/scattering-light-position-cache-20261030.json)。下一轮只修新的第一名：灯光范围与权重。
+正确性：8 帧 HDR 全字节一致；14 项生产输运 HDR 检查通过，新增非整数 double 点灯/聚光灯及灯光替换检查；ABI 数值与 shader 契约检查通过；234 组预编译 shader 生成成功；Vulkan validation 0 warning、0 error。原始三轮、制品 SHA-256、测前 GPU 状态和完整排名见 [scattering-light-position-cache-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-light-position-cache-20261030.json)。下一轮只修新的第一名：灯光范围与权重。
 
 ### 当前对外主表：归一到 1 秒墙钟
 
@@ -278,7 +280,7 @@ GPU 空闲后重新测试，两个制品测前 GPU 0 占用均为 0%，每组 90
 
 合计使用未舍入数据。当前默认均匀直接散射路径的生产/CUDA 交接是阻塞串行的，表中只纳入叶子 GPU 工作，不再加上其父 prepare/shared-exchange/host-wait 时间。这是阶段累计工作量相对墙钟的口径，不是硬件利用率或完整关键路径时间线。未归因差额尚未单独拆分，不能直接称为 GPU 空闲，也不能全归给 CPU。对外第一名是 292.66 ms/秒的相机散射灯光阶段；内部再用抽样路径表定位该阶段中的灯光范围与权重。
 
-同轮前后窗口、累计阶段时间、公式与求和检查记录在 [medium-wall-second-budget-20261030.json](data/medium-wall-second-budget-20261030.json)。
+同轮前后窗口、累计阶段时间、公式与求和检查记录在 [medium-wall-second-budget-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-wall-second-budget-20261030.json)。
 
 ### 消除散射区间内重复的选灯权重计算
 
@@ -335,7 +337,7 @@ GPU 空闲后重新测试，两个制品测前 GPU 0 占用均为 0%，每组 90
 
 这一差额仍不能叫 GPU 空闲或 CPU 计算；独立子代理正在用嵌套 host 事件边界补齐整个墙钟，不能将其 host wait 再加到本表 GPU 工作上。下一步须结合完整墙钟表选关键路径，再拆大头；GPU 内部当前第一名是不透明阴影查询残差。
 
-正确性：8×160×90 的 RGBA16F 全帧全字节一致，Vulkan validation 0 warning/0 error，14 项独立生产 HDR 对照全部通过，query/通用 raygen 的 16 个 SPIR-V 变体编译成功。原始轮次、制品 SHA-256、HDR 文件 SHA-256、完整内部排名与同窗口归一化结果见 [scattering-light-proposal-reuse-20261030.json](data/scattering-light-proposal-reuse-20261030.json)。
+正确性：8×160×90 的 RGBA16F 全帧全字节一致，Vulkan validation 0 warning/0 error，14 项独立生产 HDR 对照全部通过，query/通用 raygen 的 16 个 SPIR-V 变体编译成功。原始轮次、制品 SHA-256、HDR 文件 SHA-256、完整内部排名与同窗口归一化结果见 [scattering-light-proposal-reuse-20261030.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-light-proposal-reuse-20261030.json)。
 
 ### 跨线程墙钟观测完成
 
@@ -376,7 +378,7 @@ GPU 空闲后重新测试，两个制品测前 GPU 0 占用均为 0%，每组 90
 
 同窗 GPU 叶子第一名仍是相机散射灯光与可见性 4.368425 ms/帧。所选 GPU 工作合计 13.353433 ms/帧，与墙钟差 3.418312 ms/帧仍是算术值；新的 host 表完整覆盖墙钟调用边界，并不把这一算术差强行唯一分配成 CPU 计算或 GPU idle。
 
-完整运行对照、86 项分布与 GPU 重叠视图见 [medium-wall-attribution-20261031.json](data/medium-wall-attribution-20261031.json)，完整互斥排名见 [medium-wall-attribution-ranked-20261031.csv](data/medium-wall-attribution-ranked-20261031.csv)。构建与覆盖自测通过，子代理已完成并停止。主线完成手头阴影候选后，按用户指定处理 PBR 统计读回前 CUDA 同步；必须比较整个交接和关闭诊断 FPS，不能把等待转移到 fence 就声称收益。
+完整运行对照、86 项分布与 GPU 重叠视图见 [medium-wall-attribution-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-wall-attribution-20261031.json)，完整互斥排名见 [medium-wall-attribution-ranked-20261031.csv](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-wall-attribution-ranked-20261031.csv)。构建与覆盖自测通过，子代理已完成并停止。主线完成手头阴影候选后，按用户指定处理 PBR 统计读回前 CUDA 同步；必须比较整个交接和关闭诊断 FPS，不能把等待转移到 fence 就声称收益。
 
 复现工具：benchmark 增加 `--wallProfile=true`；`--profile=true` 同时采集 GPU timestamp，`--profile=false --shaderProfile=false --wallProfile=false` 为全关验收。`coreOpticalWallTimelineSelfTest` 检查严格覆盖、无关线程隔离、满槽丢样、非法嵌套与真实 executor 父节点传播。独立重算示例：
 
@@ -400,7 +402,7 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 
 内部 shadow/remainder 比三轮由 0.34884/0.34900/0.34810 降至 0.31996/0.32164/0.31781。候选内部新第一名是主射线与命中/缓存读取，不再是不透明阴影；完整 ms/路径排名保留为内部证据。8 帧 HDR 全字节一致，23,083 次阴影 query 对原 traceRay parity 零差异，14 项生产 HDR 验收全部通过，validation 0 warning/0 error。仅这个 query 的 8 个 SPIR-V 变体重编译与校验。
 
-保留三轮正式 GPU 阶段收益，关闭诊断的 FPS 仍按独立观测组报告，不把反序 +6.60% 当作保证。详细轮次与新内部排名见 [scattering-shadow-single-proceed-20261031.json](data/scattering-shadow-single-proceed-20261031.json)。下一候选按用户指定只处理 PBR 统计读回前同步。
+保留三轮正式 GPU 阶段收益，关闭诊断的 FPS 仍按独立观测组报告，不把反序 +6.60% 当作保证。详细轮次与新内部排名见 [scattering-shadow-single-proceed-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-shadow-single-proceed-20261031.json)。下一候选按用户指定只处理 PBR 统计读回前同步。
 
 ### PBR 统计读回与完成边界合并
 
@@ -438,7 +440,7 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 | | 其余 72 项合计 | 0.955 | 67.495 | 6.75% |
 | | **互斥墙钟求和** | **14.148** | **1000.000** | **100.00%** |
 
-新第一名 fence 包含 PBR GPU 生产与解析，不能再加上 GPU 时间；下一次继续优化应拆解其中必要 GPU 工作，而不是把这个 fence 机械删除。原始边界独立重算通过：3 个线程、67,506 个事件、零丢样、严格包含且兄弟不重叠。完整 82 项排名、分布、三轮与制品 hash 见 [pbr-queued-statistics-20261031.json](data/pbr-queued-statistics-20261031.json) 和 [完整排名 CSV](data/pbr-queued-statistics-ranked-20261031.csv)。
+新第一名 fence 包含 PBR GPU 生产与解析，不能再加上 GPU 时间；下一次继续优化应拆解其中必要 GPU 工作，而不是把这个 fence 机械删除。原始边界独立重算通过：3 个线程、67,506 个事件、零丢样、严格包含且兄弟不重叠。完整 82 项排名、分布、三轮与制品 hash 见 [pbr-queued-statistics-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-queued-statistics-20261031.json) 和 [完整排名 CSV](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-queued-statistics-ranked-20261031.csv)。
 
 正确性：8 帧 RGBA16F 与保留对照全字节一致；14 项相机散射独立 HDR 检查、31 项非散射 PBR 检查（43 个 native frames）、15 项介质组合检查全部通过。覆盖 uniform/density/multiple、低 resident budget 跨 tile、resize、资源替换与 rejection；所有四份 validation 日志均零 warning/error。PBR ABI 与跨线程 timeline 契约自测通过。观测子代理仍保持停止，本候选由主线程顺序完成。
 
@@ -462,7 +464,7 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 
 候选同一观测窗口：360 帧、5129.2839 ms，14.248011 ms/帧、70.185236 FPS；观测相对关闭诊断帧时变化 −1.08%，未测到超过 10% 的拖慢。新主表 PBR fence 6.735173 ms/帧（472.710 ms/墙钟秒，47.271%），散射完成同步 4.119540 ms（289.131 ms/秒，28.913%），散射读回前同步 0.812244 ms（57.008 ms/秒，5.701%）。完整互斥表和求和见本轮 JSON/CSV，GPU 工作不与 fence 相加。67,502 事件，零丢样，严格包含与互斥求和检查通过。
 
-8 帧 HDR 与保留对照全字节一致；31 项 PBR 检查（43 native frames）、15 项散射组合检查通过，三份 validation 日志零 warning/error。场景证明和 PBR ABI 自测通过；通用 shader 原有 8 个 SPIR-V 与改前完全相同，新 query 8 个变体已编译。证据：[pbr-light-inline-query-20261031.json](data/pbr-light-inline-query-20261031.json)、[完整排名 CSV](data/pbr-light-inline-query-ranked-20261031.csv)。工具：`tools/RunMediumPbrTrial.ps1`、`tools/AnalyzeMediumPbrTrial.py`。
+8 帧 HDR 与保留对照全字节一致；31 项 PBR 检查（43 native frames）、15 项散射组合检查通过，三份 validation 日志零 warning/error。场景证明和 PBR ABI 自测通过；通用 shader 原有 8 个 SPIR-V 与改前完全相同，新 query 8 个变体已编译。证据：[pbr-light-inline-query-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-light-inline-query-20261031.json)、[完整排名 CSV](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-light-inline-query-ranked-20261031.csv)。工具：`tools/RunMediumPbrTrial.ps1`、`tools/AnalyzeMediumPbrTrial.py`。
 
 
 ### PBR 新第一名：无边界均匀解析移除通用体积状态
@@ -482,7 +484,7 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 
 三轮各 120 帧，360 帧预热，测前 GPU 0 均为 0%。候选观测窗口 14.019467 ms/帧、71.329390 FPS，观测开销 7.71%，在用户允许的 10% 内，最终 FPS 来自关闭全部诊断的独立窗口。墙钟新第一名 PBR fence 6.010726 ms/帧、428.741 ms/秒、42.874%；散射完成同步 4.543996 ms、324.120 ms/秒、32.412%。67,506 事件、零丢样，严格包含和互斥求和通过。GPU 工作不另加到 fence 主表。
 
-正确性：8 帧 HDR 全字节一致，31 项 PBR、15 项介质组合、14 项相机散射检查全部通过，四份 validation 零 warning/error。源码 manifest、PBR ABI 和跨线程 wall timeline 契约通过。正式打包制品仅相对性能制品更新 manifest 中两个适配源的 byte/hash，运行类与 CUDA 源码完全相同，两个 hash 均留档。完整三轮、观测开销和新表：[pbr-uniform-state-20261031.json](data/pbr-uniform-state-20261031.json)、[排名 CSV](data/pbr-uniform-state-ranked-20261031.csv)。
+正确性：8 帧 HDR 全字节一致，31 项 PBR、15 项介质组合、14 项相机散射检查全部通过，四份 validation 零 warning/error。源码 manifest、PBR ABI 和跨线程 wall timeline 契约通过。正式打包制品仅相对性能制品更新 manifest 中两个适配源的 byte/hash，运行类与 CUDA 源码完全相同，两个 hash 均留档。完整三轮、观测开销和新表：[pbr-uniform-state-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-uniform-state-20261031.json)、[排名 CSV](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-uniform-state-ranked-20261031.csv)。
 
 
 ### 限定第三项：主射线 packet 避免冗余 any-hit
@@ -498,7 +500,7 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 
 360 帧预热、3×120 完成帧，测前 GPU 0 均为 0%。候选观测窗口 13.135243 ms/帧，76.131062 FPS；观测开销 0.04%，满足 10% 要求。67,502 事件、零丢样，严格包含和互斥求和通过。最新 GPU 排名：灯光 packet 1.959591 ms、主射线 packet 1.578705 ms、CUDA 解析 1.204716 ms、贡献 restore 0.146380 ms。
 
-8 帧 HDR 与上轮对照全字节一致，31 项 PBR、15 项介质组合检查通过，三份 validation 零 warning/error；8 个受影响 SPIR-V 变体重新编译。保留确定收益并上传；最终合并验收另用本次开始前冻结制品比较，不拼接各轮 FPS 来算总收益。证据：[pbr-primary-opaque-20261031.json](data/pbr-primary-opaque-20261031.json)、[完整排名](data/pbr-primary-opaque-ranked-20261031.csv)。
+8 帧 HDR 与上轮对照全字节一致，31 项 PBR、15 项介质组合检查通过，三份 validation 零 warning/error；8 个受影响 SPIR-V 变体重新编译。保留确定收益并上传；最终合并验收另用本次开始前冻结制品比较，不拼接各轮 FPS 来算总收益。证据：[pbr-primary-opaque-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-primary-opaque-20261031.json)、[完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-primary-opaque-ranked-20261031.csv)。
 
 
 ### 本次 PBR fence 内前三项合并验收
@@ -540,7 +542,7 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 
 观测开销 0.95%，低于用户 10% 接受线；67,502 个事件，零丢样，严格包含、兄弟互斥与精确求和全部通过。原生 FPS 来自关闭诊断窗口，不与观测窗口拼接。8 帧 HDR 全字节一致，31 项 PBR 与 15 项介质组合检查通过，三份 validation 零 warning/error。120 FPS 目标尚未达到，画面模糊问题本轮未修改。
 
-完整证据：[pbr-top3-acceptance-20261031.json](data/pbr-top3-acceptance-20261031.json)、[完整排名 CSV](data/pbr-top3-acceptance-ranked-20261031.csv)。所有确定性优化已保留；此次前三项特例到此闭环，后续仍按当前第一名及其最大内部工作推进。
+完整证据：[pbr-top3-acceptance-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-top3-acceptance-20261031.json)、[完整排名 CSV](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-top3-acceptance-ranked-20261031.csv)。所有确定性优化已保留；此次前三项特例到此闭环，后续仍按当前第一名及其最大内部工作推进。
 
 
 ### 主命中跨阶段复用：PBR fence 已从第一降为第二
@@ -576,12 +578,12 @@ python -X utf8 tools/AnalyzeMediumWallTimeline.py <包含三轮wall-timeline JSO
 | | 其余 74 项合计 | 1.101952 | 87.032 | 8.703% |
 | | **互斥墙钟求和** | **12.661484** | **1000.000** | **100.000%** |
 
-三轮均为散射完成同步第一、PBR fence 第二；每轮独立重算结果见 JSON。68,226 个事件、零丢样，观测开销 0.41%。8 帧 HDR 逐字节一致；31 项 PBR、15 项组合、14 项相机散射验收通过，四份 validation 零 warning/error；PBR ABI、场景 proof 和跨线程 wall 契约通过。完整记录：[pbr-shared-primary-20261031.json](data/pbr-shared-primary-20261031.json)、[排名 CSV](data/pbr-shared-primary-ranked-20261031.csv)。
+三轮均为散射完成同步第一、PBR fence 第二；每轮独立重算结果见 JSON。68,226 个事件、零丢样，观测开销 0.41%。8 帧 HDR 逐字节一致；31 项 PBR、15 项组合、14 项相机散射验收通过，四份 validation 零 warning/error；PBR ABI、场景 proof 和跨线程 wall 契约通过。完整记录：[pbr-shared-primary-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-shared-primary-20261031.json)、[排名 CSV](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-shared-primary-ranked-20261031.csv)。
 
 
 ### 灯光按灯排列候选：确认负优化，已撤回
 
-producer 和 CUDA 同步改用 light-major，连接求和顺序未改；8 帧 HDR 全字节一致，31 项 PBR 与 15 项组合检查通过。但 CUDA resolve 仅降低 7.96%，灯光 packet 三轮增加 37.07% / 41.62% / 38.86%，整条 PBR 从 5.059147 增至 5.739625 ms。关闭诊断 FPS 74.453548→73.510501。源文件和所有相应 SPIR-V 已恢复 `7bb3f53`，未保留该候选。证据：[pbr-light-major-20261031.json](data/pbr-light-major-20261031.json)。
+producer 和 CUDA 同步改用 light-major，连接求和顺序未改；8 帧 HDR 全字节一致，31 项 PBR 与 15 项组合检查通过。但 CUDA resolve 仅降低 7.96%，灯光 packet 三轮增加 37.07% / 41.62% / 38.86%，整条 PBR 从 5.059147 增至 5.739625 ms。关闭诊断 FPS 74.453548→73.510501。源文件和所有相应 SPIR-V 已恢复 `7bb3f53`，未保留该候选。证据：[pbr-light-major-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-light-major-20261031.json)。
 
 ### 共享主命中改用现有平面布局
 
@@ -613,12 +615,12 @@ producer 和 CUDA 同步改用 light-major，连接求和顺序未改；8 帧 HD
 | | 其余 74 项合计 | 1.080971 | 90.659 | 9.066% | — |
 | | **互斥墙钟求和** | **11.923547** | **1000.000** | **100.000%** | **7.04%** |
 
-两项仍居前二，120 FPS 尚未达到，继续优化。8 帧 HDR 全字节一致；31 项 PBR、15 项组合、14 项相机散射检查通过，四份正式 validation 日志零 warning/error；68,226 事件零丢样，区间包含和互斥求和通过。测前 GPU 0 全部为 0%。首轮打包误用旧构建资源，已废弃并保留记录；正式 shader 生成始终将 `renderer-core/src/main/resources` 放在 classpath 最前，随后重新打包、验图和测量。完整记录：[pbr-primary-planar-20261031.json](data/pbr-primary-planar-20261031.json)、[完整排名](data/pbr-primary-planar-ranked-20261031.csv)。
+两项仍居前二，120 FPS 尚未达到，继续优化。8 帧 HDR 全字节一致；31 项 PBR、15 项组合、14 项相机散射检查通过，四份正式 validation 日志零 warning/error；68,226 事件零丢样，区间包含和互斥求和通过。测前 GPU 0 全部为 0%。首轮打包误用旧构建资源，已废弃并保留记录；正式 shader 生成始终将 `renderer-core/src/main/resources` 放在 classpath 最前，随后重新打包、验图和测量。完整记录：[pbr-primary-planar-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-primary-planar-20261031.json)、[完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-primary-planar-ranked-20261031.csv)。
 
 
 ### 两个未保留候选
 
-灯位缓存复用：8 帧 HDR 全字节一致，但目标 PBR 灯光 packet 只降低 0.08%，三轮符号不一致；未将 FPS 的 +1.71% 当作确定收益，源文件和 SPIR-V 已撤回。按像素批处理灯光：8 帧 HDR 全字节一致，但灯光 packet 三轮分别增加 4.13% / 5.20% / 3.60%，已撤回。两轮 31 项 PBR 与 15 项组合检查均通过。证据：[灯位缓存](data/pbr-light-coordinate-cache-20261031.json)、[按像素批处理](data/pbr-pixel-light-batch-20261031.json)。
+灯位缓存复用：8 帧 HDR 全字节一致，但目标 PBR 灯光 packet 只降低 0.08%，三轮符号不一致；未将 FPS 的 +1.71% 当作确定收益，源文件和 SPIR-V 已撤回。按像素批处理灯光：8 帧 HDR 全字节一致，但灯光 packet 三轮分别增加 4.13% / 5.20% / 3.60%，已撤回。两轮 31 项 PBR 与 15 项组合检查均通过。证据：[灯位缓存](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-light-coordinate-cache-20261031.json)、[按像素批处理](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-pixel-light-batch-20261031.json)。
 
 ### 无介质边界 packet 去掉不可能使用的事件槽
 
@@ -649,7 +651,7 @@ producer 和 CUDA 同步改用 light-major，连接求和顺序未改；8 帧 HD
 | | 其余 74 项合计 | 1.048043 | 95.438 | 9.544% | — |
 | | **互斥墙钟求和** | **10.981392** | **1000.000** | **100.000%** | **12.10%** |
 
-散射两个同步边界重新分配了等待：完成同步增加、统计读回前同步减少，不能把单个边界的变化当成散射 GPU 工作增加或减少。原始互斥墙钟和 GPU 时间分别保留，不相加。68,216 个事件、零丢样，严格包含与求和通过。8 帧 HDR 全字节一致，31 项 PBR、15 项组合、ABI 最小分配与 tile 检查、源码 manifest 通过，三份 validation 日志零 warning/error。测前 GPU 0 全部为 0%。一次 native JVM 崩溃后仅调整 code cache 重试成功，失败窗口未参与结果。证据：[pbr-compact-packets-20261031.json](data/pbr-compact-packets-20261031.json)、[完整排名](data/pbr-compact-packets-ranked-20261031.csv)。
+散射两个同步边界重新分配了等待：完成同步增加、统计读回前同步减少，不能把单个边界的变化当成散射 GPU 工作增加或减少。原始互斥墙钟和 GPU 时间分别保留，不相加。68,216 个事件、零丢样，严格包含与求和通过。8 帧 HDR 全字节一致，31 项 PBR、15 项组合、ABI 最小分配与 tile 检查、源码 manifest 通过，三份 validation 日志零 warning/error。测前 GPU 0 全部为 0%。一次 native JVM 崩溃后仅调整 code cache 重试成功，失败窗口未参与结果。证据：[pbr-compact-packets-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-compact-packets-20261031.json)、[完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-compact-packets-ranked-20261031.csv)。
 
 
 ### 主命中 producer 与原生 PBR consumer 按实际需求对齐
@@ -684,13 +686,13 @@ producer 和 CUDA 同步改用 light-major，连接求和顺序未改；8 帧 HD
 
 正确性：展厅 8 帧 HDR 全字节一致；新增 PBR/UNLIT × outline 开关 × SPP 1/2/8 的 12 帧消费者矩阵，冻结对照/候选全字节一致；31 项 PBR、15 项介质组合检查通过，所有正式 validation 零 warning/error。68,223 个墙钟事件零丢样、严格包含与求和通过。测前 GPU 0 全部为 0%。基线 shader 细粒度 profile 单独复测开销约 6.18%，前三稳定为 primary、local geometry、opaque shadow，只用于路径内部排序。没有将抽样 ms 分摊整帧。
 
-100 FPS 里程碑尚未达到，继续性能主线。额外矩阵最初使用 metallic=.2，被冻结对照明确拒绝，已记录为功能闭合子代理的真实缺口；正式兼容矩阵限定当前已支持的非金属 PBR/UNLIT，没有将该拒绝算成验收通过。证据：[pbr-primary-consumer-20261031.json](data/pbr-primary-consumer-20261031.json)、[完整排名](data/pbr-primary-consumer-ranked-20261031.csv)。
+100 FPS 里程碑尚未达到，继续性能主线。额外矩阵最初使用 metallic=.2，被冻结对照明确拒绝，已记录为功能闭合子代理的真实缺口；正式兼容矩阵限定当前已支持的非金属 PBR/UNLIT，没有将该拒绝算成验收通过。证据：[pbr-primary-consumer-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-primary-consumer-20261031.json)、[完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-primary-consumer-ranked-20261031.csv)。
 
 ### 两个撤回候选与成熟实现对照要求
 
-散射 queued 交接：参考 NVIDIA cuda-samples 的 pinned async copy 与 stream-ordered external semaphore，移除散射中的独立 CUDA 主机等待，保留最终 Vulkan fence 与发布前失败检查。8 帧 HDR 全字节一致，31 项 PBR、15 项组合、14 项相机散射参考检查通过。但正序和反序关闭诊断 FPS 分别为 −2.65% 和 +3.75%；合并 720 帧仅约 +0.49%，没有稳定净收益，Java 修改全部撤回。等待从 CUDA 边界迁到 Vulkan fence 不能算性能收益。证据：[scattering-queued-20261031.json](data/scattering-queued-20261031.json)。
+散射 queued 交接：参考 NVIDIA cuda-samples 的 pinned async copy 与 stream-ordered external semaphore，移除散射中的独立 CUDA 主机等待，保留最终 Vulkan fence 与发布前失败检查。8 帧 HDR 全字节一致，31 项 PBR、15 项组合、14 项相机散射参考检查通过。但正序和反序关闭诊断 FPS 分别为 −2.65% 和 +3.75%；合并 720 帧仅约 +0.49%，没有稳定净收益，Java 修改全部撤回。等待从 CUDA 边界迁到 Vulkan fence 不能算性能收益。证据：[scattering-queued-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-queued-20261031.json)。
 
-小灯集合缓存：参考 Falcor `LightData.slang` 的准备数据思路，将灯位、方向与光锥参数保留到各积分区间复用。独立输运参考检查通过，但散射 lights GPU 三轮分别增加 40.89%、5.75%、11.13%，确认没有优化到当前实际成本；源码与全部 SPIR-V 撤回。8 帧总计 460,800 个 HDR 通道中 4 个通道相差一个半精度刻度，原始差异保留，没有称为全字节一致。未把关闭诊断 FPS 的小幅波动作为保留依据。证据：[scattering-prepared-lights-20261031.json](data/scattering-prepared-lights-20261031.json)。
+小灯集合缓存：参考 Falcor `LightData.slang` 的准备数据思路，将灯位、方向与光锥参数保留到各积分区间复用。独立输运参考检查通过，但散射 lights GPU 三轮分别增加 40.89%、5.75%、11.13%，确认没有优化到当前实际成本；源码与全部 SPIR-V 撤回。8 帧总计 460,800 个 HDR 通道中 4 个通道相差一个半精度刻度，原始差异保留，没有称为全字节一致。未把关闭诊断 FPS 的小幅波动作为保留依据。证据：[scattering-prepared-lights-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-prepared-lights-20261031.json)。
 
 用户再次明确：遇到疑惑必须深入对照成熟项目，不能只引用相似模式。后续候选必须写清楚成熟实现实际读取哪些输入、本项目多做了哪些工作、producer/ABI/consumer 如何一起删除冗余；跨 ray query 保存数据还必须审查其生命周期成本。收益必须落到当前大头与整帧，不得靠等待改名、重排排名或单个偶然较快窗口交差。
 
@@ -723,18 +725,18 @@ producer 和 CUDA 同步改用 light-major，连接求和顺序未改；8 帧 HD
 | | 其余 74 项合计 | 1.020972 | 100.040 | 10.004% | — |
 | | **互斥墙钟求和** | **10.205621** | **1000.000** | **100.000%** | **2.09%** |
 
-更大的 tile 将散射等待重新分配到完成同步与最后一次统计读回，不能把第二项单独的下降当作收益。散射 lights GPU 在反序窗口增加约 15.06%，已完整计入整帧结果；本轮保留依据是 PBR 必要工作减少和两种顺序均有正吞吐收益。展厅 8 帧 HDR 全字节一致，31 项 PBR、15 项介质组合、14 项相机散射独立参考检查通过，全部正式 validation 零 warning/error；CPU ABI 最小分配、密度回退、组合 tile、manifest 检查通过。证据：[pbr-endpoint-packets-20261031.json](data/pbr-endpoint-packets-20261031.json)、[完整排名](data/pbr-endpoint-packets-ranked-20261031.csv)。
+更大的 tile 将散射等待重新分配到完成同步与最后一次统计读回，不能把第二项单独的下降当作收益。散射 lights GPU 在反序窗口增加约 15.06%，已完整计入整帧结果；本轮保留依据是 PBR 必要工作减少和两种顺序均有正吞吐收益。展厅 8 帧 HDR 全字节一致，31 项 PBR、15 项介质组合、14 项相机散射独立参考检查通过，全部正式 validation 零 warning/error；CPU ABI 最小分配、密度回退、组合 tile、manifest 检查通过。证据：[pbr-endpoint-packets-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-endpoint-packets-20261031.json)、[完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-endpoint-packets-ranked-20261031.csv)。
 
 
 ### 到达 100 FPS 窗口后的画质插入项
 
-PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 与 15 项组合通过，但正序、反序的目标灯光 packet GPU 时间分别增加 1.78%、2.61%；源文件及 16 个 SPIR-V 均已撤回。反序保留版本关闭诊断对照合计 100.491510 FPS，逐轮约 96.06/99.84/106.08，不称为每轮稳定 100+。依用户约定，先处理未开降噪的画质，再继续总榜前三各自内部前三。证据：[撤回候选](data/pbr-light-cull-rejected-20261031.json)。
+PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 与 15 项组合通过，但正序、反序的目标灯光 packet GPU 时间分别增加 1.78%、2.61%；源文件及 16 个 SPIR-V 均已撤回。反序保留版本关闭诊断对照合计 100.491510 FPS，逐轮约 96.06/99.84/106.08，不称为每轮稳定 100+。依用户约定，先处理未开降噪的画质，再继续总榜前三各自内部前三。证据：[撤回候选](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-light-cull-rejected-20261031.json)。
 
 已修复 GLFW 显示链的确定性错误：线性 RGBA16F 原来直接 blit 成 UNORM SDR，没有色调映射或 gamma；现在窗口复用既有 publication compute 的 ACES-fit + gamma2.2。转换与截图口径一致，不更改线性 HDR 原图、不作邻域滤波或锐化。共享设备和外部导入均经同一转换；每帧槽资源有界，完成后复用，尺寸变化时替换。公开 lease 只保证 TRANSFER_SRC，所以先拷贝到私有 HDR storage，不擅自为借用图创建 storage view。转换增加了必要的显示工作，未宣称是帧率优化；无窗口 benchmark 不经过 presenter。
 
 参考 Falcor commit `759aad033ff610fb0d82c74f7e0a508d0096d5f2`（BSD-3-Clause）`Source/RenderPasses/ToneMapper/ToneMapping.ps.slang` 的显示变换分层和 ACES 曲线，复用本项目已有公式，没有复制外部代码。真实 GPU 12 项覆盖全部 31,744 个非负有限半精度亮度值、单像素黑白边缘、源图不变、帧槽复用、尺寸变化和共享/独立 allocator；RGB 相对独立 double CPU oracle 允许 1 个 SDR 编码刻度，边缘通道和 alpha 完全一致。转换测试、真实 121 帧窗口测试 validation 均为零 warning/error、零丢样，CPU 全半精度显示 oracle 通过。
 
-随后真实可视化运行 FG/降噪/重建/时域均关闭。用户截图窗口为 1920×1080、1 SPP、101.9 FPS、9.81 ms/帧；完整日志还包括启动、窗口尺寸变化和较慢窗口，全部保留，不能把单个 101.9 FPS 当成全程稳定值。用户指出左墙及光束颗粒逐帧闪动，尚未解决；显示修复不能冒充采样噪声已经消失。后续同样保持场景、SPP 和默认 8 段积分，不通过减雾、冻结随机数或暗开降噪交差。此前本段将 maxEvents=16 误记为散射段数，实际场景未变。展示保持 controls=true，保留全部场景切换，不设自动退出上限；用户要求不使用 computer use。证据：[显示链及真实 demo 数据](data/medium-hdr-presentation-20261031.json)。
+随后真实可视化运行 FG/降噪/重建/时域均关闭。用户截图窗口为 1920×1080、1 SPP、101.9 FPS、9.81 ms/帧；完整日志还包括启动、窗口尺寸变化和较慢窗口，全部保留，不能把单个 101.9 FPS 当成全程稳定值。用户指出左墙及光束颗粒逐帧闪动，尚未解决；显示修复不能冒充采样噪声已经消失。后续同样保持场景、SPP 和默认 8 段积分，不通过减雾、冻结随机数或暗开降噪交差。此前本段将 maxEvents=16 误记为散射段数，实际场景未变。展示保持 controls=true，保留全部场景切换，不设自动退出上限；用户要求不使用 computer use。证据：[显示链及真实 demo 数据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-hdr-presentation-20261031.json)。
 
 ### 不开降噪的局部光源闪烁：固定预算下按光源位置采样
 
@@ -768,11 +770,11 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | 其余 74 项 | 0.925293 | 98.278 | 9.828% |
 | | **互斥墙钟求和** | **9.415063** | **1000.000** | **100.000%** |
 
-内部采样路径前三仍为主命中、局部灯几何和 opaque 阴影查询，另一次 shader 时钟窗口仅用于排序。后续继续总榜前三各自内部前三，不能将第二、第三共同等待散射链重复计收益。新的 [逐帧噪声分析工具](../../tools/AnalyzeMediumTemporalNoise.py) 接收紧密 RGBA16F 原图，流式统计 HDR/SDR 方差及相邻帧差值；使用 NumPy，无运行时依赖。完整 [画质及性能证据](data/medium-equiangular-clarity-20261031.json)、[最新完整排名](data/medium-equiangular-ranked-20261031.json)。
+内部采样路径前三仍为主命中、局部灯几何和 opaque 阴影查询，另一次 shader 时钟窗口仅用于排序。后续继续总榜前三各自内部前三，不能将第二、第三共同等待散射链重复计收益。新的 [逐帧噪声分析工具](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21/tools/AnalyzeMediumTemporalNoise.py) 接收紧密 RGBA16F 原图，流式统计 HDR/SDR 方差及相邻帧差值；使用 NumPy，无运行时依赖。完整 [画质及性能证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-equiangular-clarity-20261031.json)、[最新完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-equiangular-ranked-20261031.json)。
 
 ### 撤回：无纹理主命中省略纹理导数
 
-修改当前 shader 子阶段第一名主命中：四个材质纹理槽均无效时，不算 UV 和 footprint；有任意纹理仍保留原采样路径。对照本项目 visibility closest-hit 的按需纹理计算，以及固定 PBRT-v4 `surfscatter.cpp` 的导数用途；PBRT 自身未采用此无纹理快捷分支，不声称照搬了它的优化。8 帧展厅 HDR 字节一致，但三轮散射 producer GPU 合计仅下降 0.22%，关闭诊断 FPS 102.221→98.113（−4.02%），未证明优化到了实际成本，源文件和两个 SPIR-V 立即恢复。额外纹理矩阵在首帧前因 fixture 太阳方向未归一而停止，没有算成正确性通过，也未再为已拒绝候选投入 GPU。证据：[候选原始结果](data/primary-texture-demand-rejected-20261031.json)。
+修改当前 shader 子阶段第一名主命中：四个材质纹理槽均无效时，不算 UV 和 footprint；有任意纹理仍保留原采样路径。对照本项目 visibility closest-hit 的按需纹理计算，以及固定 PBRT-v4 `surfscatter.cpp` 的导数用途；PBRT 自身未采用此无纹理快捷分支，不声称照搬了它的优化。8 帧展厅 HDR 字节一致，但三轮散射 producer GPU 合计仅下降 0.22%，关闭诊断 FPS 102.221→98.113（−4.02%），未证明优化到了实际成本，源文件和两个 SPIR-V 立即恢复。额外纹理矩阵在首帧前因 fixture 太阳方向未归一而停止，没有算成正确性通过，也未再为已拒绝候选投入 GPU。证据：[候选原始结果](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/primary-texture-demand-rejected-20261031.json)。
 
 子代理的 optical 无阴影灯光连接修复合入后，主树重新通过 camera 散射 17 项比较、optical 46 项/152 帧及一次拒绝恢复、PBR 焦散 5 帧和源码清单，日志 `build/scattering-guided/merged-closure-regression.log`。API 的全入口闭合验收由独立子代理继续执行，局部通过不冒充完整闭合。
 
@@ -807,13 +809,13 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 正确性：8 帧展厅 HDR 以及六种纹理组合×SPP 1/2/8×真空/直接介质的 36 帧 HDR，冻结对照与候选均逐字节一致。PBR 31 项/43 帧、PBR 散射组合 15 项、camera 17 项（含两组 128 帧近灯均值）、multiple 解析回归均通过，8 份正式 validation 日志零 warning/error、零丢样且正常关闭；274 个预编译 shader 与源码逐字节匹配。镜像边界的独立 API 闭合修复仍由子代理处理，没有将本轮局部回归冒充完整 API 闭合。
 
-完整 [性能及正确性证据](data/scattering-split-primary-20261031.json)、[最新完整排名](data/scattering-split-primary-ranked-20261031.json)。后续继续总榜前三各自内部前三；当前第一与第三共同等待散射链，不能重复计收益。
+完整 [性能及正确性证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-split-primary-20261031.json)、[最新完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-split-primary-ranked-20261031.json)。后续继续总榜前三各自内部前三；当前第一与第三共同等待散射链，不能重复计收益。
 
 ### 撤回：先选择 proposal 再求逆 CDF
 
 对照固定 Cycles `shade_volume.h` 的先选采样策略、后计算对应分布原则，删除 guided 分支会覆盖的原区间位置/PDF 计算。1080p、连续 8 帧原始 HDR 共 132,710,400 bytes 与冻结对照完全一致，正式 validation 无 warning/error。实际默认预算由真实请求记录：scatteringSteps=8、maxEvents=16、lightSamples=4。
 
-关闭诊断正序 103.816221→103.408107 FPS（−0.39%），反序 102.273032→103.126660 FPS（+0.83%）；散射 producer GPU 分别增加 1.02% 和下降 0.56%。两种顺序没有稳定收益，GLSL 与 40 份 SPIR-V 已精确恢复，不保留看起来更简洁但没有证明性能改善的改动。没有为已拒绝候选继续消耗 GPU 跑完整回归。[两种顺序、制品和完整尺寸 HDR 证据](data/scattering-proposal-branch-rejected-20261031.json)。
+关闭诊断正序 103.816221→103.408107 FPS（−0.39%），反序 102.273032→103.126660 FPS（+0.83%）；散射 producer GPU 分别增加 1.02% 和下降 0.56%。两种顺序没有稳定收益，GLSL 与 40 份 SPIR-V 已精确恢复，不保留看起来更简洁但没有证明性能改善的改动。没有为已拒绝候选继续消耗 GPU 跑完整回归。[两种顺序、制品和完整尺寸 HDR 证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-proposal-branch-rejected-20261031.json)。
 
 ### 缓存散射阴影按已有严格证明编译专用路径
 
@@ -842,19 +844,19 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | 其余 74 项 | 0.813945 | 83.364 | 8.336% | — |
 | | **互斥墙钟求和** | **9.763782** | **1000.000** | **100.000%** | — |
 
-1080p 连续 8 帧共 66,355,200 个原始 RGBA16F 通道中，23 个通道相差 1 个相邻半精度值，其余完全相同，alpha 完全相同；显示映射后 1 个 RGB 通道差 1 个 SDR 编码刻度。没有称为全字节一致，也未放宽独立测试阈值。PBR 31 项/43 帧、散射组合 15 项、camera 17 项独立参考、多次散射解析回归全部通过；两组 128 帧近灯均值相对 RMS 误差为 0.634%/0.841%，六份正式 validation 零 warning/error/drop、会话全部关闭。[完整收益、量化差异和回归证据](data/scattering-opaque-specialization-20261031.json)、[新完整排名](data/scattering-opaque-specialization-ranked-20261031.json)。
+1080p 连续 8 帧共 66,355,200 个原始 RGBA16F 通道中，23 个通道相差 1 个相邻半精度值，其余完全相同，alpha 完全相同；显示映射后 1 个 RGB 通道差 1 个 SDR 编码刻度。没有称为全字节一致，也未放宽独立测试阈值。PBR 31 项/43 帧、散射组合 15 项、camera 17 项独立参考、多次散射解析回归全部通过；两组 128 帧近灯均值相对 RMS 误差为 0.634%/0.841%，六份正式 validation 零 warning/error/drop、会话全部关闭。[完整收益、量化差异和回归证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-opaque-specialization-20261031.json)、[新完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-opaque-specialization-ranked-20261031.json)。
 
 ### 撤回：PBR 遮挡后再算 BRDF
 
 仅把 BRDF 求值移动到现有 shadow query 之后，保留原材质读取、packet 写入、判断及所有数学公式；与本项目普通 `gsDirectContribution` 的求值顺序对齐。也核对固定 PBRT wavefront 实现：其 BRDF-first 后入 shadow queue 的数据寿命不同，不声称该项目直接采用了本候选。1080p 8 帧总共 592 个通道各差一个相邻半精度值，alpha 相同。
 
-正序 PBR light packet GPU 下降 0.68%，关闭诊断 104.962881→104.291611 FPS（−0.64%）；反序 packet 下降 1.14%，关闭诊断 102.863053→102.630426 FPS（−0.23%）。没有稳定端到端收益，GLSL 及 16 份 SPIR-V 已全部恢复；不把单个子阶段的小幅下降作为保留依据。[原始窗口与制品证据](data/pbr-brdf-after-visibility-rejected-20261031.json)。
+正序 PBR light packet GPU 下降 0.68%，关闭诊断 104.962881→104.291611 FPS（−0.64%）；反序 packet 下降 1.14%，关闭诊断 102.863053→102.630426 FPS（−0.23%）。没有稳定端到端收益，GLSL 及 16 份 SPIR-V 已全部恢复；不把单个子阶段的小幅下降作为保留依据。[原始窗口与制品证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-brdf-after-visibility-rejected-20261031.json)。
 
 ### 撤回：散射持久 pinned 异步计数读回
 
 在先前 queued-only 实验之外，这次把每帧失败计数及诊断数据改为持久锁页内存，复制入队后再 signal，完整 fence 返回后才读取/校验，保留原错误发布边界。参考相同 NVIDIA cuda-samples pinned async copy 与 stream-ordered semaphore，并复用已验证的 PBR `HostMemory` 数据流。1080p 8 帧 HDR 全字节一致。
 
-正序关闭诊断 105.143829→104.061151 FPS（−1.03%），反序 105.303441→106.222527 FPS（+0.87%）。仍没有稳定端到端收益，两个 Java 文件已完整恢复。不能把 CUDA 等待迁移到 Vulkan fence 计成收益。[两种顺序、逐帧与制品证据](data/scattering-pinned-readback-rejected-20261031.json)。
+正序关闭诊断 105.143829→104.061151 FPS（−1.03%），反序 105.303441→106.222527 FPS（+0.87%）。仍没有稳定端到端收益，两个 Java 文件已完整恢复。不能把 CUDA 等待迁移到 Vulkan fence 计成收益。[两种顺序、逐帧与制品证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-pinned-readback-rejected-20261031.json)。
 
 ### 全灯枚举专用掩码：保留稳定收益
 
@@ -885,7 +887,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | 其余 74 项 | 0.778829 | 83.064 | 8.306% | — |
 | | **互斥墙钟求和** | **9.376238** | **1000.000** | **100.000%** | **2.44%** |
 
-正确性：1080p 连续 8 帧 HDR 与当前保留基线全字节一致；新增 `CudaPbrMediumProductionNativeSelfTest --light-selection` 33 帧矩阵，覆盖 0～9 灯、预算 0/1/全覆盖、点/聚光/方向光、近灯 guide、投影开关、删除内槽/复用、零强度/黑色/范围外灯。ray-query 与禁用 ray-query 两套冻结对照/候选各 33 帧均全字节一致。原生 PBR 31 项/43 帧、散射组合 15 项、camera 17 项独立参考、多次散射解析回归通过；9 份正式 validation 零 warning/error/drop，所有会话正常关闭。API 完整门禁的既有报告仍绑定 `79a8f20`，不将此次局部回归改称完整门禁重跑。[完整证据](data/scattering-exhaustive-mask-20261031.json)、[最新完整排名](data/scattering-exhaustive-mask-ranked-20261031.json)。
+正确性：1080p 连续 8 帧 HDR 与当前保留基线全字节一致；新增 `CudaPbrMediumProductionNativeSelfTest --light-selection` 33 帧矩阵，覆盖 0～9 灯、预算 0/1/全覆盖、点/聚光/方向光、近灯 guide、投影开关、删除内槽/复用、零强度/黑色/范围外灯。ray-query 与禁用 ray-query 两套冻结对照/候选各 33 帧均全字节一致。原生 PBR 31 项/43 帧、散射组合 15 项、camera 17 项独立参考、多次散射解析回归通过；9 份正式 validation 零 warning/error/drop，所有会话正常关闭。API 完整门禁的既有报告仍绑定 `79a8f20`，不将此次局部回归改称完整门禁重跑。[完整证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-exhaustive-mask-20261031.json)、[最新完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-exhaustive-mask-ranked-20261031.json)。
 
 ### PBR 灯光 packet 按严格证明去除通用 payload
 
@@ -916,41 +918,41 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | 其余 74 项 | 0.751654 | 83.090 | 8.309% | — |
 | | **互斥墙钟求和** | **9.046272** | **1000.000** | **100.000%** | **2.12%** |
 
-正确性：1080p 连续 8 帧共 66,355,200 个 RGBA16F 通道中 592 个各差一个相邻半精度值，alpha 相同，未称为全字节一致；ray-query / 无 ray-query 两套 33 帧灯光矩阵均全字节一致。原生 PBR 31 项/43 帧、组合 15 项、camera 17 项独立参考、多次散射解析回归通过，未放宽阈值；7 份 validation 零 warning/error/drop，全部会话关闭。原完整 API 门禁仍绑定其既有源码，不冒称已随每个候选完整重跑。[完整证据](data/pbr-opaque-specialization-20261031.json)、[新完整排名](data/pbr-opaque-specialization-ranked-20261031.json)。
+正确性：1080p 连续 8 帧共 66,355,200 个 RGBA16F 通道中 592 个各差一个相邻半精度值，alpha 相同，未称为全字节一致；ray-query / 无 ray-query 两套 33 帧灯光矩阵均全字节一致。原生 PBR 31 项/43 帧、组合 15 项、camera 17 项独立参考、多次散射解析回归通过，未放宽阈值；7 份 validation 零 warning/error/drop，全部会话关闭。原完整 API 门禁仍绑定其既有源码，不冒称已随每个候选完整重跑。[完整证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-opaque-specialization-20261031.json)、[新完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-opaque-specialization-ranked-20261031.json)。
 
 ### 撤回：PBR 均匀 kernel 的 block 统计汇总
 
 对照 NVIDIA cuda-samples `5443602d89ed99aede2e4b7bf329daddeadb320e`（BSD-3-Clause）的 `cpp/2_Concepts_and_Techniques/reduction/reduction_kernel.cu` / `reduce7`，以及本仓库 optical block 统计，独立将均匀 PBR 的失败/完成整数计数从每 warp 更新全局改成每 block 汇总；所有尾线程参加 barrier，输运与浮点累计不改。1080p 8 帧 HDR 全字节一致，PBR ABI 与源文件清单通过。
 
-正序 kernel 0.807241→0.797066 ms（下降 1.26%），关闭诊断 111.768264→112.883543 FPS（+1.00%）；反序 kernel 0.805046→0.793753 ms（下降 1.40%），关闭诊断 113.000539→112.040968 FPS（−0.85%）。没有稳定端到端收益，CUDA 源码和 manifest 两个文件均精确恢复；不继续为已拒绝候选追加完整 GPU 回归。[冻结制品与正反序数据](data/pbr-statistics-block-rejected-20261031.json)。
+正序 kernel 0.807241→0.797066 ms（下降 1.26%），关闭诊断 111.768264→112.883543 FPS（+1.00%）；反序 kernel 0.805046→0.793753 ms（下降 1.40%），关闭诊断 113.000539→112.040968 FPS（−0.85%）。没有稳定端到端收益，CUDA 源码和 manifest 两个文件均精确恢复；不继续为已拒绝候选追加完整 GPU 回归。[冻结制品与正反序数据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-statistics-block-rejected-20261031.json)。
 
 ### 撤回：零自发光均匀 PBR 静态专用化
 
 参考固定 PBRT-v4 `media.h` 的 `HomogeneousMedium::IsEmissive` 能力判断，为无边界、无密度且实际打包发射系数全零的 PBR 增加静态零发射类型。host 按实际 packed header 选择，kernel 再验证系数；保留同一 LuxCore 段函数、相同浮点累计与统计。1080p 8 帧 HDR 全字节一致，清单与 PBR ABI 检查通过。
 
-正序关闭诊断 112.953455→114.118927 FPS（+1.03%），反序 113.205625→113.752116 FPS（+0.48%）；但 PBR kernel 分别 0.797154→0.827609 ms、0.803215→0.827964 ms，均未改善目标热点。离线 Driver API 资源查询确认原 kernel 76 个寄存器/线程、专用化 54 个，两者 local memory 均为 0；不能把寄存器减少当作时延下降。这轮没有通过热点验收，源码、选择器和清单已恢复；不宣称端到端的微小变化属于确定优化。[测量、资源与恢复证据](data/pbr-nonemissive-uniform-rejected-20261031.json)。新工具 `tools/CudaKernelResources.java` 可对冻结 core JAR 输出寄存器、local/shared bytes、Driver 建议 block size 及多种 block size 的占用，不渲染帧、不修改生产 kernel 配置。
+正序关闭诊断 112.953455→114.118927 FPS（+1.03%），反序 113.205625→113.752116 FPS（+0.48%）；但 PBR kernel 分别 0.797154→0.827609 ms、0.803215→0.827964 ms，均未改善目标热点。离线 Driver API 资源查询确认原 kernel 76 个寄存器/线程、专用化 54 个，两者 local memory 均为 0；不能把寄存器减少当作时延下降。这轮没有通过热点验收，源码、选择器和清单已恢复；不宣称端到端的微小变化属于确定优化。[测量、资源与恢复证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-nonemissive-uniform-rejected-20261031.json)。新工具 `tools/CudaKernelResources.java` 可对冻结 core JAR 输出寄存器、local/shared bytes、Driver 建议 block size 及多种 block size 的占用，不渲染帧、不修改生产 kernel 配置。
 
 ### 撤回：只遍历有效灯掩码位
 
-参考 Godot 4.4 `4c311cbee68c0b66ff8ebb8b0defdd9979dd2a41`（MIT）`servers/rendering/renderer_rd/shaders/forward_clustered/scene_forward_clustered.glsl` 的有效位遍历。独立把本项目穷举分支从逐槽测试改为 `findLSB` 消费掩码，保持原升序浮点求和；没有搬入 subgroup 行为或增加 feature。1080p 8 帧 HDR 全字节一致。正序关闭诊断 114.094673→113.116613 FPS，散射 producer 3.450299→3.493522 ms；反序 113.881277→112.411592 FPS、3.432177→3.519958 ms。两种顺序均退化，GLSL 和 16 个 SPIR-V 全部恢复，不保留。[两种顺序及制品证据](data/scattering-mask-walk-rejected-20261031.json)。
+参考 Godot 4.4 `4c311cbee68c0b66ff8ebb8b0defdd9979dd2a41`（MIT）`servers/rendering/renderer_rd/shaders/forward_clustered/scene_forward_clustered.glsl` 的有效位遍历。独立把本项目穷举分支从逐槽测试改为 `findLSB` 消费掩码，保持原升序浮点求和；没有搬入 subgroup 行为或增加 feature。1080p 8 帧 HDR 全字节一致。正序关闭诊断 114.094673→113.116613 FPS，散射 producer 3.450299→3.493522 ms；反序 113.881277→112.411592 FPS、3.432177→3.519958 ms。两种顺序均退化，GLSL 和 16 个 SPIR-V 全部恢复，不保留。[两种顺序及制品证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-mask-walk-rejected-20261031.json)。
 
 ### 撤回：独立采样点调度与平面 source 布局
 
 在已拒绝串行拆分之外，单独验收完整的 prepare→独立采样点 query 数据流：每个散射点独立 invocation，source 按 step 分平面，Vulkan 和 CUDA 消费者同时改变布局；保持相同位置、完整 PDF、阴影射线、采样数量和累计顺序。新增阶段 timestamp，并为并行诊断准备独占计数槽，避免原子争用。参考相同固定 PBRT-v4 wavefront 独立工作原则，没有复制外部代码。
 
-1080p 8 帧 HDR 仍全字节一致。关闭诊断 114.130945→88.485387 FPS（−22.47%），散射 producer 3.396093→5.703312 ms；采样准备 0.637356 ms，CUDA 积分 0.661662→0.634317 ms 的下降不足以弥补生产退化。明确拒绝；源码、清单、全部 SPIR-V 和诊断结构均恢复，不保留中间架构，也未为其继续跑全回归。冻结制品与 patch 在 `build/scattering-point-planes`，[测量和恢复证据](data/scattering-point-planes-rejected-20261031.json)。后续不要重复这种每散射点扩展 dispatch；回到当前按像素复用状态的生产路径，以实测继续。
+1080p 8 帧 HDR 仍全字节一致。关闭诊断 114.130945→88.485387 FPS（−22.47%），散射 producer 3.396093→5.703312 ms；采样准备 0.637356 ms，CUDA 积分 0.661662→0.634317 ms 的下降不足以弥补生产退化。明确拒绝；源码、清单、全部 SPIR-V 和诊断结构均恢复，不保留中间架构，也未为其继续跑全回归。冻结制品与 patch 在 `build/scattering-point-planes`，[测量和恢复证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-point-planes-rejected-20261031.json)。后续不要重复这种每散射点扩展 dispatch；回到当前按像素复用状态的生产路径，以实测继续。
 
 ### 撤回：采样准备与阴影查询串行拆分
 
 参考固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/wavefront/surfscatter.cpp` 的阶段划分原则，独立将严格穷举缓存路径的采样/PDF 准备和光源阴影查询分开。复用 source 缓冲和 compact-hit 保留字段，不增加 resident 分配或 CUDA 交接，新增独立 GPU timestamp。光源和采样循环、AoS 布局仍保持原状。
 
-1080p 连续 8 帧 HDR 全字节一致，但关闭诊断 113.984849→95.902910 FPS（−15.86%），散射 producer 3.355643→4.666490 ms；其中新增准备阶段 0.803469 ms。拆分本身不足以抵消额外读写及调度，明确拒绝，全部生产源码及 SPIR-V 已恢复。冻结制品、binary patch、测量在 `build/scattering-sample-visibility-split`；未为明确退化候选跑额外原生回归。[原始证据](data/scattering-sample-visibility-split-rejected-20261031.json)。
+1080p 连续 8 帧 HDR 全字节一致，但关闭诊断 113.984849→95.902910 FPS（−15.86%），散射 producer 3.355643→4.666490 ms；其中新增准备阶段 0.803469 ms。拆分本身不足以抵消额外读写及调度，明确拒绝，全部生产源码及 SPIR-V 已恢复。冻结制品、binary patch、测量在 `build/scattering-sample-visibility-split`；未为明确退化候选跑额外原生回归。[原始证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-sample-visibility-split-rejected-20261031.json)。
 
 ### 撤回：缓存 PBR 连接包按灯分平面
 
 参考固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`src/pbrt/wavefront/workqueue.h` 的 `WorkQueue : SOA<WorkItem>` 数据布局原则，独立把严格 cached-primary 路径的连接 packet/color 改为按灯分平面；producer 和 CUDA 使用相同 tile-local 映射，射线调度、积分和灯光求和顺序不变。1080p 连续 8 帧原始 HDR 与冻结对照全字节一致。
 
-正序 CUDA PBR kernel 下降 5.48%，但 Vulkan 连接包增加 7.63%，关闭诊断 114.808490→114.478445 FPS（−0.29%）；反序 kernel 下降 5.39%、连接包增加 8.58%，关闭诊断 113.770162→115.213332 FPS（+1.27%）。生产端退化稳定，整帧收益方向不一致，未保留。3 个源码、清单及 24 份 SPIR-V 全部恢复 `e0b1dfe`；冻结 JAR、binary patch 和原始窗口保留于 `build/pbr-connection-planes`。未为已拒绝候选继续跑全量原生回归。[测量与恢复证据](data/pbr-connection-planes-rejected-20261031.json)。此候选和此前 light-major 调度均已拒绝，后续不要仅换布局名称重复试验。
+正序 CUDA PBR kernel 下降 5.48%，但 Vulkan 连接包增加 7.63%，关闭诊断 114.808490→114.478445 FPS（−0.29%）；反序 kernel 下降 5.39%、连接包增加 8.58%，关闭诊断 113.770162→115.213332 FPS（+1.27%）。生产端退化稳定，整帧收益方向不一致，未保留。3 个源码、清单及 24 份 SPIR-V 全部恢复 `e0b1dfe`；冻结 JAR、binary patch 和原始窗口保留于 `build/pbr-connection-planes`。未为已拒绝候选继续跑全量原生回归。[测量与恢复证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-connection-planes-rejected-20261031.json)。此候选和此前 light-major 调度均已拒绝，后续不要仅换布局名称重复试验。
 
 ### 不透明 PBR 连接贡献最终一次写回
 
@@ -976,7 +978,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | 其余 74 项 | 0.942333 | 105.637 | 10.564% | — |
 | | **互斥墙钟求和** | **8.920485** | **1000.000** | **100.000%** | **0.84%** |
 
-1080p 8 帧 HDR、ray-query / 无 ray-query 两套各 33 帧矩阵，均与保留基线全字节一致。原生 PBR 31 项/43 帧、组合 15 项、camera 17 项独立参考、多次散射解析通过；7 份 validation 零 warning/error/drop、会话全关闭。全部 298 份 SPIR-V 与源码匹配。[完整证据](data/pbr-connection-single-write-20261031.json)、[新完整排名](data/pbr-connection-single-write-ranked-20261031.json)。
+1080p 8 帧 HDR、ray-query / 无 ray-query 两套各 33 帧矩阵，均与保留基线全字节一致。原生 PBR 31 项/43 帧、组合 15 项、camera 17 项独立参考、多次散射解析通过；7 份 validation 零 warning/error/drop、会话全关闭。全部 298 份 SPIR-V 与源码匹配。[完整证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-connection-single-write-20261031.json)、[新完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-connection-single-write-ranked-20261031.json)。
 
 ### 均匀缓存 PBR 复用颜色中的终点距离
 
@@ -1004,11 +1006,11 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | 其余 74 项 | 0.879731 | 103.533 | 10.353% | — |
 | | **互斥墙钟求和** | **8.497074** | **1000.000** | **100.000%** | **4.09%** |
 
-散射算法本轮未修改，其同窗变化不归功于本候选。正确性：1080p 连续 8 帧 HDR 全字节一致；query/no-query 各 33 帧灯光矩阵、各 12 帧 cached-primary 矩阵（PBR/UNLIT、outline、SPP 1/2/8）均与冻结对照全字节一致。PBR 31 项/43 帧、组合 15 项（含低驻留跨 tile）、camera 17 项独立参考、多次散射解析回归通过；13 份正式 validation 零 warning/error/drop，所有会话关闭。298 份 SPIR-V 精确匹配，冻结 JAR 与本轮源码、class、SPIR-V 内容一致。API 完整门禁仍绑定 `79a8f20`，没有将这些专项回归改称全量重跑。[完整证据](data/pbr-color-endpoints-20261031.json)、[新完整排名](data/pbr-color-endpoints-ranked-20261031.json)。
+散射算法本轮未修改，其同窗变化不归功于本候选。正确性：1080p 连续 8 帧 HDR 全字节一致；query/no-query 各 33 帧灯光矩阵、各 12 帧 cached-primary 矩阵（PBR/UNLIT、outline、SPP 1/2/8）均与冻结对照全字节一致。PBR 31 项/43 帧、组合 15 项（含低驻留跨 tile）、camera 17 项独立参考、多次散射解析回归通过；13 份正式 validation 零 warning/error/drop，所有会话关闭。298 份 SPIR-V 精确匹配，冻结 JAR 与本轮源码、class、SPIR-V 内容一致。API 完整门禁仍绑定 `79a8f20`，没有将这些专项回归改称全量重跑。[完整证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-color-endpoints-20261031.json)、[新完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-color-endpoints-ranked-20261031.json)。
 
 ### 撤回：只把起点有限值检查前移
 
-在 `3286768` 上仅将 connection origin 的有限值检查移到 shadow query 前，尝试缩短起点跨查询的存活范围。首个同参数窗口灯光包 1.153850→1.164648 ms/帧，未降低目标成本；关闭诊断 117.115351→116.135697 FPS。源文件及 24 份 SPIR-V 立即恢复，不为无目标收益的候选追加全量回归，不宣称通过图像或原生验收。冻结 JAR 与 binary patch 留于 `build/pbr-origin-validation`。[原始窗口](data/pbr-origin-validation-rejected-20261031.json)。
+在 `3286768` 上仅将 connection origin 的有限值检查移到 shadow query 前，尝试缩短起点跨查询的存活范围。首个同参数窗口灯光包 1.153850→1.164648 ms/帧，未降低目标成本；关闭诊断 117.115351→116.135697 FPS。源文件及 24 份 SPIR-V 立即恢复，不为无目标收益的候选追加全量回归，不宣称通过图像或原生验收。冻结 JAR 与 binary patch 留于 `build/pbr-origin-validation`。[原始窗口](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-origin-validation-rejected-20261031.json)。
 
 ### opaque 专用 PBR 静态选择颜色终点格式
 
@@ -1037,11 +1039,11 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | 其余 74 项 | 0.773537 | 88.299 | 8.830% | — |
 | | **互斥墙钟求和** | **8.760442** | **1000.000** | **100.000%** | **增加 1.12%** |
 
-1080p 8 帧 HDR、query/no-query 各 33 帧灯光及各 12 帧 cached-primary 矩阵全部与本轮冻结对照全字节一致。四套原生生产回归通过，13 份正式 validation 零 warning/error/drop、会话均正常关闭；全 298 份 shader 与源码精确一致。没有放宽图像或解析误差阈值。[全部窗口和验收证据](data/pbr-static-color-endpoints-20261031.json)、[新完整排名](data/pbr-static-color-endpoints-ranked-20261031.json)。
+1080p 8 帧 HDR、query/no-query 各 33 帧灯光及各 12 帧 cached-primary 矩阵全部与本轮冻结对照全字节一致。四套原生生产回归通过，13 份正式 validation 零 warning/error/drop、会话均正常关闭；全 298 份 shader 与源码精确一致。没有放宽图像或解析误差阈值。[全部窗口和验收证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-static-color-endpoints-20261031.json)、[新完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-static-color-endpoints-ranked-20261031.json)。
 
 ### 撤回：终点携带起点无效标记
 
-在 `1f85c7f` 上用正无穷终点承载非有限起点，交给原 CUDA finite 检查拒绝发布，尝试替代 shader 逐连接原子失败计数。首窗灯光包 1.017657→1.012266 ms/帧，仅变化 0.53%，关闭诊断 117.709364→117.000231 FPS，未证明明确目标收益。GLSL 和 24 份 SPIR-V 全部恢复，没有追加全量回归或宣称正确性通过。冻结制品和 patch 留于 `build/pbr-endpoint-validity`。[原始证据](data/pbr-endpoint-validity-rejected-20261031.json)。
+在 `1f85c7f` 上用正无穷终点承载非有限起点，交给原 CUDA finite 检查拒绝发布，尝试替代 shader 逐连接原子失败计数。首窗灯光包 1.017657→1.012266 ms/帧，仅变化 0.53%，关闭诊断 117.709364→117.000231 FPS，未证明明确目标收益。GLSL 和 24 份 SPIR-V 全部恢复，没有追加全量回归或宣称正确性通过。冻结制品和 patch 留于 `build/pbr-endpoint-validity`。[原始证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-endpoint-validity-rejected-20261031.json)。
 
 冻结 benchmark 工具增加可选 `-Frames`、`-Rounds`，保留原 120 帧×3 轮默认值。长窗口验收可指定 `-Warmup 1200 -Frames 600 -Rounds 5`；仍记录相同 JAR SHA、初始 GPU 状态、真实请求预算和 CSV，禁止覆盖已有标签证据。
 
@@ -1094,7 +1096,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 正确性：1080p 连续 8 帧原始 HDR，query/no-query 各 33 帧灯光矩阵和各 12 帧 cached-primary 矩阵（PBR/UNLIT、outline、SPP 1/2/8）均与冻结对照全字节一致。PBR 31 项/43 帧、散射组合 15 项（含低驻留多块）、camera 17 项独立参考、多散射解析回归通过。新增规划器测试默认 1+2 分块、4 MiB 下 81 组 SPP/灯数/步数、所有输出范围和跨块全局身份；原 ABI 与来源合同通过。13 份正式 validation 日志零 warning/error/drop、会话全关闭；298 份 shader 源码/SPIR-V 一致。冻结 JAR 中改动的源码、SPIR-V 及三个 Java class 与被测构建一致。原 API 全门禁仍绑定既有源码，最终性能版本的全门禁另跑另记。
 
-[完整性能与正确性证据](data/pbr-compact-residency-20261031.json)、[同参降幅表](data/pbr-compact-residency-ranked-20261031.json)、[最终长窗口完整排序](data/pbr-compact-residency-acceptance-ranked-20261031.json)。达到稳定 120 FPS 目标后停止本轮性能改动，继续最终 API 制品门禁。
+[完整性能与正确性证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-compact-residency-20261031.json)、[同参降幅表](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-compact-residency-ranked-20261031.json)、[最终长窗口完整排序](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/pbr-compact-residency-acceptance-ranked-20261031.json)。达到稳定 120 FPS 目标后停止本轮性能改动，继续最终 API 制品门禁。
 
 ### 最终性能版本完整 API 门禁完成
 
@@ -1102,17 +1104,17 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 281 个任务、14 个必需组、76 个实际执行的 Java 原生任务全部通过，未使用子集选择器或排除任务。298 个 shader/SPIR-V、完整介质与统一 API、NVIDIA 功能组合、13 场景/104 帧展厅、独立 Maven 消费者和 2158 文件 ZIP 均通过。35 份本轮 Vulkan validation 日志共 66 次会话全部关闭，warning/error/drop 均为零。遇到的单次 GraalVM 编译器崩溃使用进程级 `-XX:-UseJVMCICompiler` 重试，未修改项目配置，最终全量运行无崩溃。首轮失败另存，不冒充成功。
 
-本轮完成状态：默认均匀直接散射的 3000 帧性能验收为 130.064872 FPS，最低轮 129.569156 FPS；最新生产源码的完整 API 和发布制品门禁也已通过。本轮性能修改停止，后续新改动仍按本规范重新归因和验收。[最终门禁证据与制品哈希](data/api-closure-performance-final-20261031.json)、[完整原始任务报告](data/api-closure-performance-final-full-result-20261031.json)、[首轮失败记录](data/api-closure-performance-blockers-20261031.json)。
+本轮完成状态：默认均匀直接散射的 3000 帧性能验收为 130.064872 FPS，最低轮 129.569156 FPS；最新生产源码的完整 API 和发布制品门禁也已通过。本轮性能修改停止，后续新改动仍按本规范重新归因和验收。[最终门禁证据与制品哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/api-closure-performance-final-20261031.json)、[完整原始任务报告](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/api-closure-performance-final-full-result-20261031.json)、[首轮失败记录](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/api-closure-performance-blockers-20261031.json)。
 
 ### 继续到 180 FPS：观测与首个撤回候选
 
 用户将默认场景下一目标提高到 180 FPS；其余画质、预算、图像与单瓶颈闭环要求不变。当前全尺寸单块让 shader 诊断 pipeline 的覆盖过高，显式诊断现按每 32 帧中的连续 8 帧轮换，保留所有 bucket 相位，其余使用生产 shader，且不清零/读回诊断缓冲。相邻冻结窗口预热 1200 帧、3×240 完成帧：off 132.153392 FPS，细粒度 profile 124.464683 FPS，开销 6.177422%，695 条记录零漏样；三轮内部前三均为 opaque shadow、局部灯几何与衰减、采样位置。此项只是诊断工具调整，不计为渲染提速。
 
-严格 opaque 路径的遮挡连接提前返回零候选：目标散射灯光 GPU 3.144229→3.265265 ms/帧，增加 3.85%；off 129.354390→129.984943 FPS 的 0.49% 波动不算收益。源码及 16 个 SPIR-V 已恢复，没有为已拒绝候选继续跑图像或全量回归。[冻结制品和原始窗口](data/scattering-occluded-return-rejected-20261031.json)。
+严格 opaque 路径的遮挡连接提前返回零候选：目标散射灯光 GPU 3.144229→3.265265 ms/帧，增加 3.85%；off 129.354390→129.984943 FPS 的 0.49% 波动不算收益。源码及 16 个 SPIR-V 已恢复，没有为已拒绝候选继续跑图像或全量回归。[冻结制品和原始窗口](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-occluded-return-rejected-20261031.json)。
 
 ### 撤回：compute ray-query 调度
 
-参考 NVIDIA nvpro-samples/vk_mini_samples 固定 `af5c0a6b63095bb7b84b59dd4f88b718c28206a8`（Apache-2.0）的 ray-query compute 调度，将相同严格 opaque cached-uniform 散射估计器独立适配为 compute；64 线程没有目标收益，256 线程同样负优化。256 线程反序关闭诊断 130.653296→126.499080 FPS，散射 lights 3.195643→3.374146 ms/帧。全部生产 Java/GLSL/SPIR-V 已恢复；冻结 patch、新文件、参考和原始日志留在 build 试验目录。未对失败候选追加完整回归，也未声称其通过图像一致性。详见 [原始窗口](data/scattering-compute-query-rejected-20261031.json)。
+参考 NVIDIA nvpro-samples/vk_mini_samples 固定 `af5c0a6b63095bb7b84b59dd4f88b718c28206a8`（Apache-2.0）的 ray-query compute 调度，将相同严格 opaque cached-uniform 散射估计器独立适配为 compute；64 线程没有目标收益，256 线程同样负优化。256 线程反序关闭诊断 130.653296→126.499080 FPS，散射 lights 3.195643→3.374146 ms/帧。全部生产 Java/GLSL/SPIR-V 已恢复；冻结 patch、新文件、参考和原始日志留在 build 试验目录。未对失败候选追加完整回归，也未声称其通过图像一致性。详见 [原始窗口](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-compute-query-rejected-20261031.json)。
 
 ### 缓存均匀路径共用串行驻留区
 
@@ -1120,15 +1122,15 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 正序 off 127.514190→139.849798 FPS（+9.67%），PBR 整段 2.580339→1.944339 ms（−24.65%）；反序 off 132.066318→137.502640 FPS（+4.12%），PBR 整段 2.492217→1.992112 ms（−20.07%）。各窗预热 1200 帧、3×240 帧；反序计时开销 1.25%。8 帧 1080p HDR、8 帧小图及 query/no-query 两组矩阵共 106 帧逐字节一致；PBR、组合、camera、多次散射专项通过，16 份 validation 零 warning/error。
 
-发现旧采集工具通配符混入此前长窗口 round 4/5；已修工具并按 CSV 的三轮重算墙钟表，原 FPS/GPU 数据未受影响。详见 [完整证据](data/scattering-serial-arena-20261031.json) 和 [修正后的最新排名](data/scattering-serial-arena-ranked-20261031.json)。180 FPS 尚未达到。
+发现旧采集工具通配符混入此前长窗口 round 4/5；已修工具并按 CSV 的三轮重算墙钟表，原 FPS/GPU 数据未受影响。详见 [完整证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-serial-arena-20261031.json) 和 [修正后的最新排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-serial-arena-ranked-20261031.json)。180 FPS 尚未达到。
 
 ### 撤回：PBRT CUDA fast-math 编译策略
 
-参考固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`CMakeLists.txt:249` 的 `--use_fast_math`，只为严格缓存均匀路径的两份 CUDA kernel 启用，并隔离不同算术模式的 PTX/module 缓存。8 帧 1080p 的最大相对 RMS 为 0.000587%，亮度能量偏差 0.00000412%，通过事先固定的误差线；运行时 5376 通道及缓存隔离回归通过。但目标 PBR CUDA 0.586008→0.624507 ms，三轮均慢约 6.6%；散射 CUDA 0.639015→0.632566 ms 仅约 1%，off 139.115187→139.716659 FPS 仅 +0.43%，没有确定性目标收益。已立即恢复全部生产代码，保留误差比较工具和冻结证据，不继续为失败候选跑全量回归。[原始证据](data/scattering-fast-arithmetic-rejected-20261031.json)。
+参考固定 PBRT-v4 `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f`（Apache-2.0）`CMakeLists.txt:249` 的 `--use_fast_math`，只为严格缓存均匀路径的两份 CUDA kernel 启用，并隔离不同算术模式的 PTX/module 缓存。8 帧 1080p 的最大相对 RMS 为 0.000587%，亮度能量偏差 0.00000412%，通过事先固定的误差线；运行时 5376 通道及缓存隔离回归通过。但目标 PBR CUDA 0.586008→0.624507 ms，三轮均慢约 6.6%；散射 CUDA 0.639015→0.632566 ms 仅约 1%，off 139.115187→139.716659 FPS 仅 +0.43%，没有确定性目标收益。已立即恢复全部生产代码，保留误差比较工具和冻结证据，不继续为失败候选跑全量回归。[原始证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-fast-arithmetic-rejected-20261031.json)。
 
 ### 撤回：有界低贡献连接省略
 
-对照 OSPRay `1fc364776c5cbbf8b1100dbf321cc3d40da41311`（Apache-2.0）`Renderer.cpp:43` 默认 minContribution=0.001 和 `scivis/volumes.ispc:225/276/343` 的低贡献终止。独立适配为严格 opaque cached exhaustive 路径的局部灯连接上界：考虑相机 T、散射、inverse PDF、无表面遮挡时的光照和 Beer/phase；将每路径每通道 0.001 分摊给固定步数与连接数。8 帧 1080p 相对 RMS 最大 0.003576%，亮度能量偏差 0.000339%，通过事先误差线。但排除主射线后的 lights 2.474456→2.634219 ms，三轮均退化；散射整段 4.609648→4.715325 ms，off 138.143426→137.802385 FPS。已恢复全部 GLSL/SPIR-V，不继续为失败候选追加全量回归。成熟逻辑和微小误差本身不足以保留负优化。[冻结证据](data/scattering-contribution-cull-rejected-20261031.json)。
+对照 OSPRay `1fc364776c5cbbf8b1100dbf321cc3d40da41311`（Apache-2.0）`Renderer.cpp:43` 默认 minContribution=0.001 和 `scivis/volumes.ispc:225/276/343` 的低贡献终止。独立适配为严格 opaque cached exhaustive 路径的局部灯连接上界：考虑相机 T、散射、inverse PDF、无表面遮挡时的光照和 Beer/phase；将每路径每通道 0.001 分摊给固定步数与连接数。8 帧 1080p 相对 RMS 最大 0.003576%，亮度能量偏差 0.000339%，通过事先误差线。但排除主射线后的 lights 2.474456→2.634219 ms，三轮均退化；散射整段 4.609648→4.715325 ms，off 138.143426→137.802385 FPS。已恢复全部 GLSL/SPIR-V，不继续为失败候选追加全量回归。成熟逻辑和微小误差本身不足以保留负优化。[冻结证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-contribution-cull-rejected-20261031.json)。
 
 补充计时范围：原 cameraScatteringLights capture 在 split primary 前开始，包住 primary 和 lights；同窗细分时必须减去单独的 primary capture，不能将两个 inclusive 项相加。主表互斥墙钟及原生 FPS 不受影响。
 
@@ -1141,17 +1143,17 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 修复后 PBR 31 项/43 帧、组合 15 项、camera 17 项独立参考及多次散射解析通过；query/no-query 灯光与消费者矩阵 90 帧，加 1080p/小图 16 帧，共 106 帧全字节一致。14 份正式 validation 无 warning/error。最终生产提交为 `39fb8cc`；候选制品不与后来未验收的阴影排序改动混用。最近细粒度观测 695 条路径零漏样，阴影、局部灯几何、采样位置三项合计 72.13%。
 
-证据：[性能与正确性](data/scattering-source-planes-20261031.json)、[互斥墙钟排名](data/scattering-source-planes-ranked-20261031.json)、[第一名内部排序](data/scattering-current-internal-ranked-20261031.json)。后续按用户最新授权集中处理总榜第一内部前三，不继续围绕尾部 source 地址与写回做微优化。
+证据：[性能与正确性](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-source-planes-20261031.json)、[互斥墙钟排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-source-planes-ranked-20261031.json)、[第一名内部排序](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-current-internal-ranked-20261031.json)。后续按用户最新授权集中处理总榜第一内部前三，不继续围绕尾部 source 地址与写回做微优化。
 
 
 ### 撤回：阴影查询的屏幕 Morton 排序
 
-针对总榜第一内部第一名，参考固定 Falcor `759aad033ff610fb0d82c74f7e0a508d0096d5f2`（BSD-3-Clause）`Source/RenderPasses/PathTracer/GeneratePaths.cs.slang` 的 16×16 屏幕 Morton 调度。只重排严格穷举 cached query 的像素执行顺序，保留全部像素身份、源索引、随机数与射线；完整 16 行重排，末尾 8 行及非整行 tile 保留原映射。1080p 8 帧 HDR 全字节一致，但灯光 GPU 三轮均增加，均值 2.438277→2.456899 ms（+0.76%）；off 136.693355→137.565750 的 +0.64% 不算目标收益。全部 GLSL/SPIR-V 已恢复，不追加失败候选的完整回归。[冻结证据](data/scattering-shadow-morton-candidate-20261031.json)。
+针对总榜第一内部第一名，参考固定 Falcor `759aad033ff610fb0d82c74f7e0a508d0096d5f2`（BSD-3-Clause）`Source/RenderPasses/PathTracer/GeneratePaths.cs.slang` 的 16×16 屏幕 Morton 调度。只重排严格穷举 cached query 的像素执行顺序，保留全部像素身份、源索引、随机数与射线；完整 16 行重排，末尾 8 行及非整行 tile 保留原映射。1080p 8 帧 HDR 全字节一致，但灯光 GPU 三轮均增加，均值 2.438277→2.456899 ms（+0.76%）；off 136.693355→137.565750 的 +0.64% 不算目标收益。全部 GLSL/SPIR-V 已恢复，不追加失败候选的完整回归。[冻结证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-shadow-morton-candidate-20261031.json)。
 
 
 ### 撤回：缓存单个无阴影方向灯贡献；返回架构审查
 
-针对散射内部第二名，仅将一个有效且不投影阴影的方向灯贡献每路径计算一次，在每个积分点仍按原槽位累加。参考固定 Falcor `759aad033ff610fb0d82c74f7e0a508d0096d5f2`（BSD-3-Clause）`LightHelpers.slang::sampleDirectionalLight` 的位置无关方向与强度。仅保持一个 RGB 和槽号跨阴影查询，区别于已拒绝的整套小灯参数数组缓存。1080p 8 帧 HDR 全字节一致，但散射灯光三轮均慢，均值 2.416707→2.588441 ms（+7.11%）；off 138.053365→137.869682 FPS。全部生产 GLSL/SPIR-V 恢复。[原始证据](data/scattering-directional-invariant-candidate-20261031.json)。
+针对散射内部第二名，仅将一个有效且不投影阴影的方向灯贡献每路径计算一次，在每个积分点仍按原槽位累加。参考固定 Falcor `759aad033ff610fb0d82c74f7e0a508d0096d5f2`（BSD-3-Clause）`LightHelpers.slang::sampleDirectionalLight` 的位置无关方向与强度。仅保持一个 RGB 和槽号跨阴影查询，区别于已拒绝的整套小灯参数数组缓存。1080p 8 帧 HDR 全字节一致，但散射灯光三轮均慢，均值 2.416707→2.588441 ms（+7.11%）；off 138.053365→137.869682 FPS。全部生产 GLSL/SPIR-V 恢复。[原始证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-directional-invariant-candidate-20261031.json)。
 
 用户要求大头失败后先跳出局部，当前暂停继续试细节，检查完整中间 source 数据、Vulkan/CUDA 串行生产消费、shader 跨查询状态与已有真实 GPU 工作成本。不能据“少算几次”或成熟实现采用该逻辑就声称提速；寄存器压力目前只是待查假设，不作已证实根因。
 
@@ -1183,7 +1185,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 正确性：CPU ABI 精确预算/低预算回退/相对偏移和非法布局通过；CUDA component 包含 SPP2、1/8/64 步、514 条非整 block 路径、camera lane 不可变和非法 flag 拒绝。1080p 8 帧、query/no-query 灯光及 cached-primary 矩阵 90 帧，共 98 帧 HDR 全字节一致。PBR 31 项/43 帧、组合 15 项、camera 独立参考 17 项、多次散射解析回归通过；13 份 validation 日志会话均关闭，零 warning/error/drop。完整 API 门禁尚未重新执行，不能把此前全门禁套用到本提交。
 
-[冻结制品、正反序窗口与正确性证据](data/scattering-joint-batch-20261031.json)、[完整互斥墙钟排名](data/scattering-joint-batch-ranked-20261031.json)。
+[冻结制品、正反序窗口与正确性证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-joint-batch-20261031.json)、[完整互斥墙钟排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/scattering-joint-batch-ranked-20261031.json)。
 
 
 ### 重启后正确性恢复与 micro-all 新基线
@@ -1209,7 +1211,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 恢复 opt-in shader 观测时保留两轮 queued 调度，将两份采样数据异步下载到预分配 pinned host 内存，在原有同步之后汇总；记录偏移取当前 `plan.bytes()`。主机仅遍历所选组并按 stage 汇总，避免逐样本字符串和锁。默认关闭，无新增生产观测工作。工具支持独立 `normal/stable` JVM 模式并记录实参；冻结 benchmark 必须同时包含 demo main 与 test 类。后续先测观测开销，再对照 PBRT wavefront 活跃队列检查全尺寸 inactive 调度，不能提前宣布性能收益。
 
-[本轮正确性、制品哈希和观测开销](data/medium-micro-recovered-correctness-20261031.json)、[完整互斥排名](data/medium-micro-recovered-ranked-20261031.json)。
+[本轮正确性、制品哈希和观测开销](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-micro-recovered-correctness-20261031.json)、[完整互斥排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-micro-recovered-ranked-20261031.json)。
 
 
 ### 保留：压缩 optical continuation 活跃路径
@@ -1222,13 +1224,13 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 两帧 1080p HDR 中，一帧逐字节相同，另一帧仅一个 RGB 分量相差一个 half ULP（0.0009765625）；相对 RMS 0.00009648%，亮度能量偏差 0.0000002173%，通过既定微误差线。原版重复与候选关闭队列均逐字节一致；不把结果描述为全字节一致，也不把这点差异归因于尚未证实的具体浮点指令。参考依据是上文 PBRT 的队列重排，误差阈值沿用此前规范，未临时放宽。
 
-[性能、HDR 和原生回归证据](data/medium-optical-active-queue-20261031.json)、[完整新排名](data/medium-optical-active-queue-ranked-20261031.json)。下一候选仍处理第一名：利用一个输入最多一个后继的队列不增性，以前一完成批次的活跃数限制下一对 Vulkan/CUDA 实际 launch 范围；保留完整状态/命中 stride 和诊断记录范围，不新增同步。待独立验证，不预报收益。
+[性能、HDR 和原生回归证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-optical-active-queue-20261031.json)、[完整新排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-optical-active-queue-ranked-20261031.json)。下一候选仍处理第一名：利用一个输入最多一个后继的队列不增性，以前一完成批次的活跃数限制下一对 Vulkan/CUDA 实际 launch 范围；保留完整状态/命中 stride 和诊断记录范围，不新增同步。待独立验证，不预报收益。
 
 ### 保留：按存活路径数缩小实际 launch
 
 `0c14504` 保留完整状态/命中 stride 和诊断范围，只收紧下一对 Vulkan/CUDA 发射数量。对照 PBRT 上述按队列 Size 工作的逻辑，一个输入最多产生一个后继，因此上轮完成计数是安全上界，无新增同步。关闭诊断正序 2.031356→2.069786 FPS（+1.892%），反序 1.996878→2.017533（+1.034%），确定性小收益保留。HDR 通过既定微误差线，固定帧 57、72 帧完整窗口、光学 46 组/152 帧及 micro-checks 7 场景/46 功能通过。
 
-开启计时 497.302294 ms/帧；fence 等待仍第一，251.240531 ms/帧、505.206862 ms/秒；CUDA 同步第二，160.674503 ms/帧。未达到 180 FPS，继续处理第一名。见[本轮独立证据](data/medium-optical-bounded-launch-20261031.json)、[完整排名](data/medium-optical-bounded-launch-ranked-20261031.json)。
+开启计时 497.302294 ms/帧；fence 等待仍第一，251.240531 ms/帧、505.206862 ms/秒；CUDA 同步第二，160.674503 ms/帧。未达到 180 FPS，继续处理第一名。见[本轮独立证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-optical-bounded-launch-20261031.json)、[完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-optical-bounded-launch-ranked-20261031.json)。
 
 ### 保留：把空 acquire 合入真正的生产提交
 
@@ -1258,7 +1260,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | 其余 35 项合计 | 15.153495 | 32.337451 | 3.2337% | — |
 | | **互斥求和** | **468.605123** | **1000.000000** | **100.0000%** | **下降 5.771%** |
 
-[完整证据、制品哈希、正反序原始样本与 validation](data/medium-optical-retained-ownership-20261031.json)、[73 条区间路径及 44 个合并阶段的完整排序](data/medium-optical-retained-ownership-ranked-20261031.json)。该结果仅表示本轮 fence 退出第一且整帧收益通过验收，不表示 shader 内部三个热点已经分别完成全部优化，也不表示原生 180 FPS 达标。
+[完整证据、制品哈希、正反序原始样本与 validation](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-optical-retained-ownership-20261031.json)、[73 条区间路径及 44 个合并阶段的完整排序](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-optical-retained-ownership-ranked-20261031.json)。该结果仅表示本轮 fence 退出第一且整帧收益通过验收，不表示 shader 内部三个热点已经分别完成全部优化，也不表示原生 180 FPS 达标。
 
 ### CUDA 同步主线：删除零贡献连接轮次（候选）
 
@@ -1268,7 +1270,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 验收同时要求：HDR 微误差线、完整窗口和原生功能回归、validation、连接/step 发射次数减少，以及关闭诊断正反序整帧收益。尚未验收，不预报收益。
 
-`5f3bde8` 正确性通过：两帧 HDR 逐字节一致、固定帧 57、72 帧完整窗口、46 组/152 帧光学原生、7 场景/46 功能、3 个 validation 生命周期零 warning/error/drop。同一前 32 帧工作计数：CUDA step 941→871.0625 次/帧，RT continuation 925→855.0625 次/帧，实际删去 69.9375 轮/帧。测前 GPU 占用非零，**不声明净性能收益或负优化**，停止无效绝对 FPS 对照；保留独立开关的候选，继续真实热点主线，待干净 GPU 验收。[工作计数与正确性](data/medium-empty-connections-20261031.json)、[受占用窗口排名（仅占比有效）](data/medium-empty-connections-loaded-ranked-20261031.json)。
+`5f3bde8` 正确性通过：两帧 HDR 逐字节一致、固定帧 57、72 帧完整窗口、46 组/152 帧光学原生、7 场景/46 功能、3 个 validation 生命周期零 warning/error/drop。同一前 32 帧工作计数：CUDA step 941→871.0625 次/帧，RT continuation 925→855.0625 次/帧，实际删去 69.9375 轮/帧。测前 GPU 占用非零，**不声明净性能收益或负优化**，停止无效绝对 FPS 对照；保留独立开关的候选，继续真实热点主线，待干净 GPU 验收。[工作计数与正确性](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-empty-connections-20261031.json)、[受占用窗口排名（仅占比有效）](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-empty-connections-loaded-ranked-20261031.json)。
 
 ### CUDA 同步架构候选：独立二进制信号量串联两轮
 
@@ -1295,7 +1297,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | | 其余 35 项合计 | 34.605622 | 42.594870 | 4.2595% | 待空闲复测 |
 | | **互斥求和** | **812.436384** | **1000.000000** | **100.0000%** | **待空闲复测** |
 
-[正确性与同步次数证据](data/medium-binary-pairs-20261031.json)、[完整本窗排序](data/medium-binary-pairs-loaded-ranked-20261031.json)。CUDA 同步仍为第一，180 FPS 尚未达到。
+[正确性与同步次数证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-binary-pairs-20261031.json)、[完整本窗排序](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-binary-pairs-loaded-ranked-20261031.json)。CUDA 同步仍为第一，180 FPS 尚未达到。
 
 ### 已撤回的 CUDA 同步架构候选：长尾偶数批次
 
@@ -1319,7 +1321,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 | continuation trace 次数/帧（含空尾轮） | 855.0625 | 871.5 | **增加 1.9224%** |
 | CUDA 同步/整帧耗时降幅及 FPS 提升 | — | — | **待空闲复测** |
 
-测前 GPU40%，32 帧排名中 CUDA 同步仍第一（69.1179%），kernel 入队第二（7.6809%），release 录制第三（4.8129%）。互斥墙钟记录合计 795.613441 ms/帧，归一每秒 1000ms；该绝对数不用于与旧窗比较。同步减少和空尾轮增加均须计入验收，不将前者单独包装成净收益。[完整正确性与成本](data/medium-optical-batch4-20261031.json)、[带待复测降幅字段的完整排名](data/medium-optical-batch4-loaded-ranked-20261031.json)。
+测前 GPU40%，32 帧排名中 CUDA 同步仍第一（69.1179%），kernel 入队第二（7.6809%），release 录制第三（4.8129%）。互斥墙钟记录合计 795.613441 ms/帧，归一每秒 1000ms；该绝对数不用于与旧窗比较。同步减少和空尾轮增加均须计入验收，不将前者单独包装成净收益。[完整正确性与成本](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-optical-batch4-20261031.json)、[带待复测降幅字段的完整排名](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-optical-batch4-loaded-ranked-20261031.json)。
 
 
 ### CUDA 同步候选的干净 GPU 正反序验收（2026-10-31）
@@ -1335,7 +1337,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 四轮虽减少 47.2196% 的主光学同步次数，但增加空尾工作且实际更慢；首段遮挡跳过没有缩短长尾。两者均撤回，默认恢复已验收的 binary 双轮链。负降幅表示退化。不同 GPU 负载下的内部排名不能拿来填本表的阶段耗时收益。
 
-[原始窗口、哈希与逐项收益](data/medium-idle-ablation-20261031.json)。
+[原始窗口、哈希与逐项收益](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-idle-ablation-20261031.json)。
 
 
 ### 有限光源连接范围候选（验证中）
@@ -1362,7 +1364,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 必须验证：预算缺失/小显卡、显式小容量、整数偏移上限、自身占用不导致重分块；1080p 两帧 HDR 严格字节一致、固定 sequence57、完整 64 帧窗口、micro-checks、全部生产光学回归和 validation。净性能与同步/trace 次数共同验收，负优化撤回，不只报告循环数减少。有限连接范围的小修单独保留其正确性与未完成的性能验收记录，不把其未验收收益算入本架构候选。
 
 
-有限连接范围候选 cfb4dcf 的真实 RT 20 组/40 帧、镜像顶点序与端点回归、2 个 validation 生命周期和两帧 1080p HDR 均逐字节通过。默认 JVM 正序对旧核心为约 1.07%，但同为 C2 的正序仅约 0.18%，不足以确认稳定收益；默认 JVM 反序遇到 jvmcicompiler.dll 崩溃，C2 反序主动中止以转入架构主线。不把不完整反序窗口当验收，不把 1.07% 报成已确认成果。[完整记录](data/medium-bounded-connections-20261031.json)。
+有限连接范围候选 cfb4dcf 的真实 RT 20 组/40 帧、镜像顶点序与端点回归、2 个 validation 生命周期和两帧 1080p HDR 均逐字节通过。默认 JVM 正序对旧核心为约 1.07%，但同为 C2 的正序仅约 0.18%，不足以确认稳定收益；默认 JVM 反序遇到 jvmcicompiler.dll 崩溃，C2 反序主动中止以转入架构主线。不把不完整反序窗口当验收，不把 1.07% 报成已确认成果。[完整记录](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-bounded-connections-20261031.json)。
 
 **2026-10-31 用户再次明确核心：消除大头里面的大头工作。** 候选进入实测前必须写清实际删除哪些重复工作、保留哪些必要工作，验收同时列真实工作计数和整帧 ms/FPS。代码位于最大热点、同步数量减少、调度方式改变都不能单独证明已消除大头；不能用等待搬家达成排名变化。当前架构候选删除过小 tile 导致的重复长尾轮次、批次初始化及 Vulkan/CUDA 交接；图像、采样、介质事件和灯光预算必须相同。
 
@@ -1395,7 +1397,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 全部门禁已通过；独立完整 64 帧窗口 283.178086ms/帧、3.531347FPS。容量回归的四批到一批是明确布局测试，真实生产的工作计数以上述同步/录制次数为准。注意提高并行工作集会增加暂存显存，仍受设备预算、显式上限和现有 growth admission 约束。180FPS 尚未达到。
 
-[完整正确性、净收益、制品与原始证据哈希](data/medium-budgeted-waves-20261031.json)、[全部44阶段及逐项降幅](data/medium-budgeted-waves-ranked-20261031.json)。
+[完整正确性、净收益、制品与原始证据哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-budgeted-waves-20261031.json)、[全部44阶段及逐项降幅](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-budgeted-waves-ranked-20261031.json)。
 
 
 ### 命中阶段 payload 缓存：负优化，已撤回（f8467e9 → a1f0ab1）
@@ -1409,7 +1411,7 @@ PBR 提前剔除/延后材质读取候选：8 帧 HDR 字节一致，31 项 PBR 
 
 此反序两窗测前 GPU0 均为0%，两轮均变慢，立即完整回滚并推送 main。正序候选测前86%，不得拿其绝对值做收益或退化结论。寄存器/payload 压力只是待证原因，不把猜测记为已定位根因；未继续跑已无采用价值候选的完整验收。保留设备预算队列的已验收成果。
 
-[原始窗口、排除理由、正确性与证据哈希](data/medium-boundary-hit-cache-rejected-20261031.json)。
+[原始窗口、排除理由、正确性与证据哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-boundary-hit-cache-rejected-20261031.json)。
 
 ### 单次边界求交内复用宽精度项（编译检查后放弃）
 
@@ -1440,7 +1442,7 @@ header188 bit4096 / top.ceroxe.rt.medium.cuda.opticalLeanConnectionHits（默认
 
 正序耗时降幅-7.1960%，反序-8.3639%。不声称已定位寄存器溢出；这里只能确认共享shader的动态分支改法没有带来净收益。转向独立连接命中程序的编译期裁剪与SBT路由，在大头的组织方式上解决问题，不继续给通用shader叠加局部特判。
 
-[全部窗口、逐项正确性与原始证据哈希](data/medium-lean-connection-hits-rejected-20261031.json)。
+[全部窗口、逐项正确性与原始证据哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-lean-connection-hits-rejected-20261031.json)。
 
 
 ### 独立连接命中程序与 SBT 路由（已完整撤回）
@@ -1465,7 +1467,7 @@ header188 bit4096 / top.ceroxe.rt.medium.cuda.opticalLeanConnectionHits（默认
 
 已连同共享源拆分、SBT路由、生成二进制与关联测试完整恢复到原方案，保留设备预算队列的已验收优化。静态模块缩小与成熟项目的结构依据都不能替代本项目净吞吐验证；仍未证明实际寄存器/栈溢出根因，不编造原因。
 
-[完整证据与哈希](data/medium-specialized-connection-sbt-rejected-20261031.json)。
+[完整证据与哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-specialized-connection-sbt-rejected-20261031.json)。
 
 
 ## 2026-10-31 撤回候选 L：只搬运介质栈有效前缀
@@ -1479,7 +1481,7 @@ header188 bit4096 / top.ceroxe.rt.medium.cuda.opticalLeanConnectionHits（默认
 
 ABI及两种复制模式各136组真实CUDA输入、合计1360个独立模型检查点通过。但1080p两帧严格HDR未通过：第一帧单个RGB分量差一个half ULP（0.0009765625），第二帧完全一致。同制品关闭候选后两帧均恢复与原版逐字节一致，开关对照仍有该差异。尚无证据判定浮点/编译/队列的具体成因，不临时放宽阈值，不宣称画面完全一致；正确性门槛失败后停止性能验收，完整撤回这项源码、开关及专项测试。原设备预算队列等已验收优化保留，本轮没有新增可报告FPS收益。
 
-已通过本机代理重新下载固定提交的 `include/slg/utils/pathvolumeinfo_funcs.cl`，确认本地固定摘录是上游的连续原文；下载文件SHA-256为 `844b3b0a9266cb0b598b8f06b031d92e7093878e55a441a79bf82936ee2dbe25`。[本轮证据与哈希](data/medium-active-volume-copies-rejected-20261031.json)。下一轮停止栈复制细节变体，先核对整条路径和队列职责中的重复工作及其成熟实现依据。
+已通过本机代理重新下载固定提交的 `include/slg/utils/pathvolumeinfo_funcs.cl`，确认本地固定摘录是上游的连续原文；下载文件SHA-256为 `844b3b0a9266cb0b598b8f06b031d92e7093878e55a441a79bf82936ee2dbe25`。[本轮证据与哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-active-volume-copies-rejected-20261031.json)。下一轮停止栈复制细节变体，先核对整条路径和队列职责中的重复工作及其成熟实现依据。
 
 
 ## 2026-10-31 保留架构优化 M：删除没有光学分支选择的整段重复路径
@@ -1514,7 +1516,7 @@ ABI及两种复制模式各136组真实CUDA输入、合计1360个独立模型检
 
 本轮观测开销1.0043%，满足10%线，不继续打磨观测开销。202206条互斥区间零丢样。上表为32帧观测窗口，整帧净收益以上方关闭诊断24.2499%为准。第一名包住的真实GPU工作：CUDA光学推进109.827868→67.497932 ms/帧，Vulkan续射线91.964671→59.735283 ms/帧；不能再与host等待求和，已证实工作减少而非等待转移。CUDA stream同步仍为第一，原生180FPS目标尚未达到。
 
-[完整验收与原始证据哈希](data/medium-reused-duplicate-branches-20261031.json)。后续主线优先追求能显著降低整帧耗时的架构改动，从最大热点的最大实际工作入手，优先消除整段重复计算、路径或交接；确定性小收益仍保留，但不让细节试探占据主线。连续失败后回看全局，不用静态指令/源码行数减少代替净收益。新候选仍分别验证，不承诺每轮都能达到本轮降幅。
+[完整验收与原始证据哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-reused-duplicate-branches-20261031.json)。后续主线优先追求能显著降低整帧耗时的架构改动，从最大热点的最大实际工作入手，优先消除整段重复计算、路径或交接；确定性小收益仍保留，但不让细节试探占据主线。连续失败后回看全局，不用静态指令/源码行数减少代替净收益。新候选仍分别验证，不承诺每轮都能达到本轮降幅。
 
 
 ## 2026-10-31 架构候选 N：相邻两段连接命中一次消费（待验收）
@@ -1547,7 +1549,7 @@ header188 bit8192守卫新metadata，byte228是第二plane地址，byte232是包
 
 第一名内部真实GPU工作：CUDA推进240.125→179.0625次/帧，耗时67.464853→60.639885 ms/帧（下降10.1163%）；Vulkan续射线236.125→175.0625次/帧，但是耗时58.857951→63.520982 ms/帧（增加7.9225%）。这说明包内预取确有代价，不能只用交接次数减少宣称整段等比例加速；保留依据是关闭诊断的整帧净收益。两项GPU不能再与host等待相加。CUDA stream同步仍为第一，Vulkan续射线和CUDA推进成为相近的两大实际GPU任务；180原生FPS目标尚未达到。
 
-[完整验收、排名与原始证据哈希](data/medium-paired-connection-hits-20261031.json)。后续继续从最大实际工作和数据流架构入手，确定性小收益保留，主线优先追求能消除整段工作的大幅改进。
+[完整验收、排名与原始证据哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-paired-connection-hits-20261031.json)。后续继续从最大实际工作和数据流架构入手，确定性小收益保留，主线优先追求能消除整段工作的大幅改进。
 
 
 ## 2026-10-31 撤回候选 O：完整介质路径的热状态分离
@@ -1558,7 +1560,7 @@ CPU容量布局通过；真实CUDA的1/31/32/33/255/256/257/1069路径、两种�
 
 已完整撤回混合布局、12入口扩展、GLSL/ABI/管理器及关联测试，保留N已验收成果。同制品关闭候选的HDR对照正在后续核实。尚无证据判定这一个分量差异的具体成因，不编造寄存器、FMA或介质栈错误。后续先观察全局数据流和已有两次栈相关候选的差异位置，不继续堆同类局部布局变体。
 
-[失败证据与固定上游文件哈希](data/medium-hybrid-volume-states-rejected-20261031.json)。
+[失败证据与固定上游文件哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-hybrid-volume-states-rejected-20261031.json)。
 
 
 O同制品关闭候选后，两个1080p HDR帧均恢复与N逐字节一致；renderer-core源码及生成二进制已核对完全恢复至N。进一步对照历史L，L与O首帧完整HDR字节及SHA-256完全相同，差异均为像素(245,184)的G：1.43359375→1.4345703125；两份关闭候选结果也逐字节相同。当前只能确认共同输出特征，尚不能确认FMA、介质栈、光子并发或具体数值根因。下一步使用现有单path追踪观察该原始path353525，必须核实追踪制品是否仍重现同一差异，避免把观测改变后的结果当成原问题。
@@ -1595,7 +1597,7 @@ P已完成正确性及净吞吐验证，没有可验收的整帧收益，完整�
 
 同轮已有计时说明主要是工作迁移：CUDA推进61.593873→48.021617 ms/帧，但Vulkan续射线65.146246→81.987196 ms/帧；CUDA调用179.0625→170.6875次/帧、Vulkan175.0625→166.6875次/帧，实际轮数只少约4.7%至4.8%。不能将CUDA少的13.57ms单独报成收益。host同步173.550244→174.515581 ms/帧仍第一，观测整帧197.071434→197.746050 ms/帧。没有证据确认寄存器、占用率等硬件层成因，不编造。撤回完整Vulkan积分、属性/ABI、consumer模式、专项测试和生成SPIR-V，恢复N源码；保留全部测试证据。
 
-下一步先回看整帧全局数据流，以JFR核对主机侧线程、驱动等待与现有GPU计时，不继续叠加同类逐段搬移变体。[本轮完整结果与原始证据哈希](data/medium-gpu-complete-connections-rejected-20261031.json)。
+下一步先回看整帧全局数据流，以JFR核对主机侧线程、驱动等待与现有GPU计时，不继续叠加同类逐段搬移变体。[本轮完整结果与原始证据哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-gpu-complete-connections-rejected-20261031.json)。
 
 
 ## 2026-10-31 正确性修复 Q：保留舍入后重合的极薄连接区间（待验证）
@@ -1606,10 +1608,10 @@ P已完成正确性及净吞吐验证，没有可验收的整帧收益，完整�
 
 新增24组真实GPU谓词检查，覆盖6种顶点排列、两种边界朝向和镜像，使用运行时uniform保持输入不被常量折叠。独立double slab oracle同时检查入口/出口方向、包含端点、事件顺序与恰好两次消费。随后固定133、原57、至少128帧长窗口、生产连接/完整回归和1080p HDR门槛。它是新发现的正确性修复，不拿失败窗口报性能收益。
 
-JFR已实际采集原生/Java执行样本、分配、monitor、park和GC，保留二进制及JSON证据。该录制含预热、完整64帧窗口和之后的拒绝诊断；失败报告栈与分配不能混为稳态开销，样本数不能换算成GPU毫秒。[JFR记录摘要](data/medium-host-jfr-20261031.json)。
+JFR已实际采集原生/Java执行样本、分配、monitor、park和GC，保留二进制及JSON证据。该录制含预热、完整64帧窗口和之后的拒绝诊断；失败报告栈与分配不能混为稳态开销，样本数不能换算成GPU毫秒。[JFR记录摘要](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-host-jfr-20261031.json)。
 
 
-Q完成验收：24组新增GPU排列/朝向/镜像谓词、固定57/133、128测量帧长窗、84组连接批处理对照、46组/152帧完整生产回归、两帧1080p HDR逐字节一致、7场景/46功能检查和6个validation生命周期全部通过。GPU初始全0%的正反序：N 178.555845→Q 197.715077 ms/帧，耗时增加10.7301%。这是必须保留的正确性修复，不算性能收益；此前基线不能完成sequence133。最新观测199.551731 ms/帧，CUDA stream同步176.873697 ms/帧、88.6355%，零丢样。[完整记录](data/medium-sub-ulp-intervals-20261031.json)。
+Q完成验收：24组新增GPU排列/朝向/镜像谓词、固定57/133、128测量帧长窗、84组连接批处理对照、46组/152帧完整生产回归、两帧1080p HDR逐字节一致、7场景/46功能检查和6个validation生命周期全部通过。GPU初始全0%的正反序：N 178.555845→Q 197.715077 ms/帧，耗时增加10.7301%。这是必须保留的正确性修复，不算性能收益；此前基线不能完成sequence133。最新观测199.551731 ms/帧，CUDA stream同步176.873697 ms/帧、88.6355%，零丢样。[完整记录](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-sub-ulp-intervals-20261031.json)。
 
 ## 2026-10-31 从根级输运架构审查并修复
 
@@ -1629,7 +1631,7 @@ Q完成验收：24组新增GPU排列/朝向/镜像谓词、固定57/133、128测
 
 R正确性完成：44组/88帧路径（含8灯、选灯采样、非阴影灯及g=.999999回退）、84组/168帧连接、46组/152帧完整生产、两帧1080p bounded HDR、7场景/46功能、固定133与128帧长窗全部通过；7个validation生命周期关闭且零warning/error/drop。HDR相对RMS最大2.3234897674436277e-6、能量相对差2.440868693793929e-8、最大分量差0.0009765625、alpha一致。
 
-R CUDA推进179.0625→114.1875次/帧，Vulkan续射线175.0625→110.1875次/帧；但四个吞吐窗起始GPU占用49/43/32/46%，按用户规则不计算或认定绝对收益。最新受载观测310.329166ms/帧，CUDA同步270.165275ms/帧仍第一，包住的Vulkan续射线147.947389ms/帧、CUDA推进48.680868ms/帧；不能把它们与host相加，不能与空闲旧窗作绝对比较。R仅通过正确性，性能待验收，不标为保留优化。[证据](data/medium-complete-vertex-direct-lighting-20261031.json)。
+R CUDA推进179.0625→114.1875次/帧，Vulkan续射线175.0625→110.1875次/帧；但四个吞吐窗起始GPU占用49/43/32/46%，按用户规则不计算或认定绝对收益。最新受载观测310.329166ms/帧，CUDA同步270.165275ms/帧仍第一，包住的Vulkan续射线147.947389ms/帧、CUDA推进48.680868ms/帧；不能把它们与host相加，不能与空闲旧窗作绝对比较。R仅通过正确性，性能待验收，不标为保留优化。[证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-complete-vertex-direct-lighting-20261031.json)。
 
 原N同窗两个子步全量输入合计，第5个pair调度轮之后占4.1947%，却占Vulkan续射线GPU时间29.8732%。早先3.7935%仅含pairStep0，后续用双子步4.1947%口径。调度轮不是物理路径深度；该证据解释尾部小队列为何值得整体处理，不保证删除全部对应GPU时间。
 
@@ -1640,7 +1642,7 @@ R CUDA推进179.0625→114.1875次/帧，Vulkan续射线175.0625→110.1875次/�
 
 S完成84组/168帧连接逐字节对照、两帧1080p逐字节HDR、46组/152帧生产回归、7场景/46功能、固定133及128帧长窗口；validation生命周期关闭且零warning/error/drop。Q、R、R+S正反序各64帧、测前GPU0均0%至1%，关闭诊断分别189.579180、189.197184、176.657964 ms/帧。R单独合计仅0.20%且正反序不一致，不认定稳定收益；组合帧时下降6.8157%、原生5.274841→5.660656 FPS，提升7.3143%。保留已验收组合，不将调用数下降冒充收益。
 
-最新32帧观测182.874338 ms/帧，CUDA同步164.967881 ms/帧、90.2083%；内部Vulkan续射线98.434622、CUDA推进33.429399、Vulkan初始7.437551 ms/帧。101466区间零丢样。观测开销3.52%，不继续优化观测。完整新表与原始文件哈希见[data/medium-reused-boundary-hit-20261031.json](data/medium-reused-boundary-hit-20261031.json)。
+最新32帧观测182.874338 ms/帧，CUDA同步164.967881 ms/帧、90.2083%；内部Vulkan续射线98.434622、CUDA推进33.429399、Vulkan初始7.437551 ms/帧。101466区间零丢样。观测开销3.52%，不继续优化观测。完整新表与原始文件哈希见[data/medium-reused-boundary-hit-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-reused-boundary-hit-20261031.json)。
 
 用户恢复后扩大改造范围：从积分器根级职责、单后端阶段组织和完整输运生命周期深度对照成熟实现，允许大手术并保持频繁全量提交推送main。借鉴成熟实现的逻辑和思想，适配本项目，不机械逐字翻译。主线程顺序推进，不开新子代理或worktree。实际工作减少、完整帧净收益与正确性仍是保留标准；禁止把改名、移动等待或调用数减少当作整帧收益。
 
@@ -1649,14 +1651,14 @@ S完成84组/168帧连接逐字节对照、两帧1080p逐字节HDR、46组/152�
 
 主线仍为CUDA同步中最大的Vulkan续射线98.434622ms/帧。重新审视积分器、GPU阶段与几何生产者后，本轮先重做其边界求交子系统：网格静态位置关系在场景生成时准备；逐射线只遍历共享顶点的有序邻面，保留原位置相等语义、原枚举顺序和全部精确谓词。三角形索引前缀保持硬件BLAS原样，私有trailer与同代index allocation一起上传、退休；position-only更新也重建邻接，高度退化网格达到固定存储上限时退回原全mesh扫描，不牺牲功能。
 
-对照固定PBRT-v4 b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f（Apache-2.0）：util/mesh.cpp 23–40将不随射线变化的几何准备放在构建阶段，shapes.cpp 206–260的边函数只生产一次并复用于分类/重心/距离，util/math.h 558–561的TwoProd用FMA残差而非软件拆分乘数。采用这三种职责思想；PBRT没有本项目薄层邻面修复或trailer，不宣称直接照搬其邻接。保留本项目两float扩展、向外舍入薄层顺序、栈校验、优先级与所有预算。FMA残差属于明确算法替换，事前冻结现有bounded HDR线，先尝试严格HDR；独立几何/能量/错误输入断言不放宽。上游文件SHA256见[data/medium-prepared-boundary-candidate-20261031.json](data/medium-prepared-boundary-candidate-20261031.json)。
+对照固定PBRT-v4 b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f（Apache-2.0）：util/mesh.cpp 23–40将不随射线变化的几何准备放在构建阶段，shapes.cpp 206–260的边函数只生产一次并复用于分类/重心/距离，util/math.h 558–561的TwoProd用FMA残差而非软件拆分乘数。采用这三种职责思想；PBRT没有本项目薄层邻面修复或trailer，不宣称直接照搬其邻接。保留本项目两float扩展、向外舍入薄层顺序、栈校验、优先级与所有预算。FMA残差属于明确算法替换，事前冻结现有bounded HDR线，先尝试严格HDR；独立几何/能量/错误输入断言不放宽。上游文件SHA256见[data/medium-prepared-boundary-candidate-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-prepared-boundary-candidate-20261031.json)。
 
 本轮组合不声称完整renderer重构。完整输运仍为混合后端；先验收最大实测GPU任务的几何数据流重组，再由新表决定是否推进整个输运后端/队列分工。测试前全量推送main、冻结制品，依次验证拓扑独立oracle、position-only更新、GPU极薄/镜像/顶点排列、84组连接、1080p HDR，再做关闭诊断正反序整帧。失败保留证据并撤回，不以代码变化规模或调用数充当收益。
 
 
 T正确性回归完成：两个1080p HDR帧及84组/168帧连接开关逐字节一致；拓扑独立oracle、position-only上传、极薄/镜像/排列GPU谓词、46组/152帧光学生产、27组边界解析、7场景/46功能、固定sequence133和128帧长窗全部通过。四份validation日志共生命周期完整关闭，零warning/error/drop；30着色阶段及17 HDR raygen预编译契约通过。确定消除了静态邻接重复搜索和求交边函数重复生产，不以源码变化替代FPS证据。
 
-T正反序四个窗口测前GPU0均超过10%，仅归档实测，不认定绝对净收益。最新受载排名：32完成帧、101449区间零丢样，304.157313ms/帧。CUDA stream同步247.733275ms/帧、每秒814.490610ms、81.4491%；Vulkan release录制9.853797ms、3.2397%；CUDA kernel入队9.722591ms、3.1966%；Vulkan release提交5.300494ms、1.7427%；CUDA semaphore等待4.409941ms、1.4499%；信号3.339775ms、1.0980%；Vulkan consumer提交2.807275ms、0.9230%；park2.719500ms、0.8941%；其余18.270666ms、6.0070%。互斥求和1000ms/秒。空闲净吞吐仍须补验收；180FPS尚未达到。[完整证据](data/medium-prepared-boundary-results-20261031.json)。
+T正反序四个窗口测前GPU0均超过10%，仅归档实测，不认定绝对净收益。最新受载排名：32完成帧、101449区间零丢样，304.157313ms/帧。CUDA stream同步247.733275ms/帧、每秒814.490610ms、81.4491%；Vulkan release录制9.853797ms、3.2397%；CUDA kernel入队9.722591ms、3.1966%；Vulkan release提交5.300494ms、1.7427%；CUDA semaphore等待4.409941ms、1.4499%；信号3.339775ms、1.0980%；Vulkan consumer提交2.807275ms、0.9230%；park2.719500ms、0.8941%；其余18.270666ms、6.0070%。互斥求和1000ms/秒。空闲净吞吐仍须补验收；180FPS尚未达到。[完整证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-prepared-boundary-results-20261031.json)。
 
 
 ## 2026-10-31 候选U：按GPU任务类型生产队列并间接派发
@@ -1695,7 +1697,7 @@ S到U累计帧时下降10.0900%，FPS提升11.2224%；正反序均改善。U每�
 | — | 其余36项合计 | 6.714547 | 40.509198 | 4.0509% | 31.5202% |
 | — | **互斥求和** | **165.753637** | **1000.000000** | **100%** | **8.2958%** |
 
-32帧观测，101453区间零丢样，U初始GPU2%、T为0%。GPU续射线90.069280→83.626682、CUDA推进33.864603→31.552737 ms/帧，二者不能再次与host表求和；没有把等待挪去另一后端。观测开销U约2.23%、T约4.49%，不再打磨观测。180原生FPS目标仍未达到。[完整证据与原始文件哈希](data/medium-task-queues-20261031.json)。
+32帧观测，101453区间零丢样，U初始GPU2%、T为0%。GPU续射线90.069280→83.626682、CUDA推进33.864603→31.552737 ms/帧，二者不能再次与host表求和；没有把等待挪去另一后端。观测开销U约2.23%、T约4.49%，不再打磨观测。180原生FPS目标仍未达到。[完整证据与原始文件哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-task-queues-20261031.json)。
 
 
 ## 2026-10-31 撤回V/W：平面证书与专用连接命中组
@@ -1712,7 +1714,7 @@ V把已证明为坐标平面的内部命中改为两float平面求商并消费�
 
 已经对照固定Intel Embree 82c67a5318c535be94f017b9ec745498b5eb5606（Apache-2.0）tutorials/next_hit/next_hit_device.cpp的single_pass、gather_next_hits及multi_pass：在一次遍历收集多命中、排序去重，或每次消费最近N个事件。适配时必须保留本项目薄层共享边、同距歧义回退、完整介质栈、预算和溢出回退；不能照搬示例截断超额命中的显示策略。拟把收集、完整连接消费和执行阶段分工放在同一批改造中；尚未实现、尚无收益结论。
 
-[完整撤回依据、最新排名和原始证据哈希](data/medium-plane-and-query-rejected-20261031.json)。
+[完整撤回依据、最新排名和原始证据哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-plane-and-query-rejected-20261031.json)。
 
 
 ## 2026-10-31 撤回 X：多命中候选的驱动编译内存严重膨胀
@@ -1761,7 +1763,7 @@ X11关闭多命中两帧恢复与U逐字节一致；开启时单通道差异仍�
 
 后续用可选主机侧定点捕获定位第一处状态分歧：opticalCaptureDirectory、opticalCapturePath及opticalCaptureSequence只选择一个frame/path，在已有CUDA交接回调前后读原始header/state/hit/connection与输出记录。不改任何GLSL、SPIR-V、CUDA源码、样本预算或device allocation；默认静态关闭，不进入读回。与早前会改变CUDA代码的printf追踪分开，先核对观测开启后的完整HDR仍各自复现未观测输出，观测不稳定时不得拿它宣称原根因已证实。该调试读回不用于性能窗口。
 
-定点捕获的396份着色资源未变，关闭/开启多命中各自两帧HDR均与未观测版本逐字节相同。sequence1、path649733首个sample/branch的0003-cuda输入记录中state/hit/connection一致；0004-vulkan输出仅connection.lighting.z从0.29745805263519287变为0.29745808243751526，差1个float ULP，其余connection字段与该交接点state/hit一致。下一CUDA阶段radiance.z随之从0.5727538466453552变为0.57275390625。四组sample/branch的所有捕获hit记录一致。由此确认第一处被捕获的分歧位于完整Vulkan顶点直射光结果，不能归因于之后的CUDA消费；尚未捕获这个dispatch内部逐灯/逐事件数值，不能据此断言具体FMA、求交或材质算术根因。[原始记录与HDR稳定性哈希](data/medium-collected-path-first-divergence-20261031.json)。
+定点捕获的396份着色资源未变，关闭/开启多命中各自两帧HDR均与未观测版本逐字节相同。sequence1、path649733首个sample/branch的0003-cuda输入记录中state/hit/connection一致；0004-vulkan输出仅connection.lighting.z从0.29745805263519287变为0.29745808243751526，差1个float ULP，其余connection字段与该交接点state/hit一致。下一CUDA阶段radiance.z随之从0.5727538466453552变为0.57275390625。四组sample/branch的所有捕获hit记录一致。由此确认第一处被捕获的分歧位于完整Vulkan顶点直射光结果，不能归因于之后的CUDA消费；尚未捕获这个dispatch内部逐灯/逐事件数值，不能据此断言具体FMA、求交或材质算术根因。[原始记录与HDR稳定性哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-collected-path-first-divergence-20261031.json)。
 
 X13同时解决原循环组织与编译资源冲突：按固定NVIDIA 13_callable_shader的多个SBT callable和独立payload组织，将最近N个事件的收集/排序/歧义回退拆成第二个真正callable，材质仍为第一个；raygen只消费批次，恢复X2原始查询/消费循环，不再为了缩小编译体而移动查询到循环头。近N收集算法仍来自固定Embree，容量8、完整refill、共享边和同距回退、输运预算均保留。新遍历阶段含单个ray-query循环、没有traceRay；材质阶段无traceRay；raygen不得嵌入ray-query主体，生成时验证两种callable目标。补齐第二模块缓存身份、SBT组数、派发范围与失败清理。新增的是调用栈数据而非逐path device allocation、CPU计数读回或同步。此候选尚未运行，不声称修复了数值分歧或获得FPS收益；先按既定内存预算和严格HDR验证。
 
@@ -1775,11 +1777,11 @@ X14全开fixture门槛失败：关闭collected两帧仍与U一致，但开启时
 
 X15实际四次运行：原fixture两次第0帧均与U相同，全开no-op一次为X13差异hash；第1帧三次均稳定复现原蓝通道差异；关闭候选两帧均与U相同。因此第0帧变化不能归因于额外revision或光源重建，重复性问题单独保留；只对已验证稳定的sequence1/path649733继续单灯定位，不能以此接受整个HDR。单灯补丁的第二次apply另遇previous scene generation is still converging，改为初次提交前复制原transaction并仅将禁用灯强度置零，保持revision、顺序、所有资产/移除和选中光源对象不变；全开直接返回原对象，无额外apply。这是诊断工具修复，未改GPU程序，未宣称主根因已解决。
 
-X16完成7组灯光mask的关闭/开启候选两帧捕获（14次运行）。目标sequence1/path649733首sample/branch：mask0、1太阳、2点光、8无阴影方向光、3太阳+点光的state/hit/connection捕获一致；mask4仅聚光灯的第0004-vulkan连接lighting.r/g相差2个float ULP，mask7前三灯的lighting.g/b相差1个ULP。目标捕获hit仍一致，但未捕获dispatch内部所有交点，不能声称内部几何已经排除。由此将稳定差异缩至聚光灯连接路径。新增测试专用hdrCaptureUnshadowedLightId，仅在初次提交前关闭指定光源castsShadow，保留它的方向/强度/锥角等参数及原SPIR-V；用仅聚光灯mask4的有/无阴影对照，下一步区分光源/BRDF源项与连接输运。此诊断改变光源可见性，仅用于定位，不替代原场景严格HDR。[逐scope原始数值与哈希](data/medium-collected-light-isolation-20261031.json)。
+X16完成7组灯光mask的关闭/开启候选两帧捕获（14次运行）。目标sequence1/path649733首sample/branch：mask0、1太阳、2点光、8无阴影方向光、3太阳+点光的state/hit/connection捕获一致；mask4仅聚光灯的第0004-vulkan连接lighting.r/g相差2个float ULP，mask7前三灯的lighting.g/b相差1个ULP。目标捕获hit仍一致，但未捕获dispatch内部所有交点，不能声称内部几何已经排除。由此将稳定差异缩至聚光灯连接路径。新增测试专用hdrCaptureUnshadowedLightId，仅在初次提交前关闭指定光源castsShadow，保留它的方向/强度/锥角等参数及原SPIR-V；用仅聚光灯mask4的有/无阴影对照，下一步区分光源/BRDF源项与连接输运。此诊断改变光源可见性，仅用于定位，不替代原场景严格HDR。[逐scope原始数值与哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-collected-light-isolation-20261031.json)。
 
 X17聚光灯关闭castsShadow的开关候选对照：两个完整HDR帧及四个scope的state/hit/connection全部一致。结合X16，有差异的是聚光灯连接输运侧，未看到无阴影源项差异。接续启用只在opticalCaptureDirectory与opticalCaptureStepConnections同时给定时生效的主机管线选择：允许原collected管线在opticalVertexDirectLighting=false、opticalBatchConnectionHits=false下由CUDA逐事件消费，捕获每个原始hit与源项；两边使用相同CUDA消费方式，不改GLSL/SPIR-V。它改变执行边界，只用于区分求交/材质数据与完整Vulkan输运内部运算，不能用这种模式通过代替原生产HDR，默认关闭且不进入性能窗口。
 
-X18逐事件定位完成：首个聚光灯表面事件（sequence1/path649733，0004-vulkan）只有紧凑hit的RGBA四字段不同，其余字段、原点、方向、距离与光源源项一致。原/候选RGBA为(0.2509804368,0.5647059679,0.8784315586,0.5019608140)/(0.2509804070,0.5647059083,0.8784314394,0.5019607544)；下一CUDA消费的透过率三通道随即相差2 ULP。此表面三顶点均0x80ffffff，经顶点色插值与材质色相乘。两份SPIR-V的颜色路径均为unpack→三个加权项→两次相加；未捕获内部原始重心和驱动指令，不能进一步断言某条FMA或重心输入是唯一根因。已经定位到实际首个数据生产差异，不再猜测最终累加。[逐事件数值与哈希](data/medium-collected-material-first-event-20261031.json)。
+X18逐事件定位完成：首个聚光灯表面事件（sequence1/path649733，0004-vulkan）只有紧凑hit的RGBA四字段不同，其余字段、原点、方向、距离与光源源项一致。原/候选RGBA为(0.2509804368,0.5647059679,0.8784315586,0.5019608140)/(0.2509804070,0.5647059083,0.8784314394,0.5019607544)；下一CUDA消费的透过率三通道随即相差2 ULP。此表面三顶点均0x80ffffff，经顶点色插值与材质色相乘。两份SPIR-V的颜色路径均为unpack→三个加权项→两次相加；未捕获内部原始重心和驱动指令，不能进一步断言某条FMA或重心输入是唯一根因。已经定位到实际首个数据生产差异，不再猜测最终累加。[逐事件数值与哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-collected-material-first-event-20261031.json)。
 
 X19针对这个生产边界修复：所有带表面语义的事件（普通表面或表面介质边界）直接调用原ordered trace/closest-hit，沿用原alpha、masked、overlay和non-shadow规则，不在新callable重新生成材质。最近N批次继续保留；下一minimum排除原trace已经消费/跳过的事件。纯不可见介质边界仍按批次消费，共用原重构公式的小型callable；从generic材质求值中抽出原不可见分支，让该阶段不再携带普通材质/纹理程序。这是完整保留原生产者的确定性执行边界修复，不能以忽略属性、近似opacity或放宽HDR替代。原closest-hit源码/SPIR-V不改。生成后先原场景两帧严格HDR与目标路径，再做完整连接/功能/性能验收；尚无通过或FPS结论。
 
@@ -1823,4 +1825,4 @@ any-hit拆分候选已完成4+64帧，但退出阶段仍在2.516GB提交上限�
 
 最后14.375666至21.590326秒，进程增长689.496064 MB，线程31436的已捕获private提交净增684.068864 MB，占99.2129%。该线程的nvgpucomp调用栈在观察结束时存活849.588224 MB；首个失败发生于21.068秒，STATUS_COMMITMENT_LIMIT (0xc000012d)，请求1114112 bytes，原生栈含nvgpucomp64+0x58c801/0x58fe31/0x590c62，外层nvrtum64→nvoglv64后台线程。随后Java C2线程分配失败，不能反过来把C2认作主要增长来源。
 
-这证明后段持续增长和最先申请失败的具体线程/原生栈，尚未证明该异步编译工作对应哪一个shader/哪个编译pass，也未解释启动阶段990.40 MB未归因区间。不得把DLL偏移称为已有符号的函数名，不宣称完整根因已锁定或bug已修复。目标退出后最后一次census收到access denied，已有记录未丢失；不使用这次诊断帧率作性能验收。[精简证据](data/runtime-memory-growth-20261101.json)。
+这证明后段持续增长和最先申请失败的具体线程/原生栈，尚未证明该异步编译工作对应哪一个shader/哪个编译pass，也未解释启动阶段990.40 MB未归因区间。不得把DLL偏移称为已有符号的函数名，不宣称完整根因已锁定或bug已修复。目标退出后最后一次census收到access denied，已有记录未丢失；不使用这次诊断帧率作性能验收。[精简证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/runtime-memory-growth-20261101.json)。

@@ -15,7 +15,6 @@ import top.ceroxe.rt.renderer.api.HistoryResetReason;
 import top.ceroxe.rt.renderer.api.MaterialAsset;
 import top.ceroxe.rt.renderer.api.Medium;
 import top.ceroxe.rt.renderer.api.MediumBoundary;
-import top.ceroxe.rt.renderer.api.MediumTransport;
 import top.ceroxe.rt.renderer.api.MeshAsset;
 import top.ceroxe.rt.renderer.api.PrimitiveInstance;
 import top.ceroxe.rt.renderer.api.Rgb;
@@ -138,28 +137,19 @@ public final class PublishedRendererConsumer {
         return Objects.requireNonNull(renderer, "renderer").pollFrame();
     }
 
-    /** Compile-only proof that the published minor version exposes the complete medium contract. */
+    /** Compile-only proof of the 7.0 closed homogeneous absorber contract for an RTXPT renderer. */
     public static RenderFrameRequest withFrameMedium(RenderFrameRequest frame, MeshAsset closedMesh) {
         Objects.requireNonNull(frame, "frame");
         Objects.requireNonNull(closedMesh, "closedMesh");
         if (!closedMesh.isClosedManifold()) {
             throw new IllegalArgumentException("closed medium mesh required");
         }
-        Medium medium = new Medium(
-                new Rgb(0.04F, 0.015F, 0.008F),
-                new Rgb(0.015F, 0.015F, 0.015F),
-                Rgb.ZERO,
-                1.0F,
-                1.333F,
-                0.2F
-        );
-        MediumBoundary boundary = new MediumBoundary(medium, 1,
-                MediumBoundary.Orientation.OUTWARD, true);
+        Medium medium = new Medium(new Rgb(0.04F, 0.015F, 0.008F), 1.333F);
+        MediumBoundary boundary = MediumBoundary.surface(medium).withPriority(1);
         PrimitiveInstance primitive = PrimitiveInstance.builder(closedMesh.id())
                 .mediumBoundary(boundary)
                 .build();
         return frame.toBuilder()
-                .mediumTransport(MediumTransport.balanced().withOpticalSamples(2))
                 .primitiveBatch(FramePrimitiveBatch.builder().add(primitive).build())
                 .build();
     }

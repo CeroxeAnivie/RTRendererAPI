@@ -1,5 +1,7 @@
 # micro-all sequence 172 边界次序修复
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 ## 故障证据
 
 正式 1080p、1 SPP、关闭诊断的 `micro-all` 在 frameSequence=172、path=1607471、boundary=65 报 optical error=9。CUDA 当前介质栈为空，但 Vulkan 返回了离开边界；`remove()` 拒绝不存在的介质是正确行为，不应吞错或发布不完整辐射。
@@ -34,4 +36,4 @@
 
 另跑同配置 32 帧诊断前后对照，测前 GPU 均 0%。独占 host 区间求和 163.411734 ms/帧、1000 ms/秒，101399 个区间零丢样；CUDA stream 同步 144.346222 ms/帧、88.332838%。它包住的最大 GPU 工作仍是 Vulkan 光学续射线 84.049709 ms/帧，其次 CUDA 光学推进 31.101868、Vulkan 初始射线 7.183875；不得与 host 等待相加。短窗总耗时变化 0.1142%，不认定为性能收益。
 
-[完整排序、前后对照、正确性结果及原始文件哈希](data/medium-error9-fixed-20261101.json)。本次仅完成报错修复，没有证明原生内存增长问题已解决。collected 多交点架构候选在上述所有正式性能窗口中关闭；用户随后授权开启该候选，下一轮将以同一制品、同一完整窗口单独测量收益。
+[完整排序、前后对照、正确性结果及原始文件哈希](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/medium-error9-fixed-20261101.json)。本次仅完成报错修复，没有证明原生内存增长问题已解决。collected 多交点架构候选在上述所有正式性能窗口中关闭；用户随后授权开启该候选，下一轮将以同一制品、同一完整窗口单独测量收益。

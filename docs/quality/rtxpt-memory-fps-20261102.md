@@ -1,5 +1,7 @@
 # RTXPT 内存与 FPS 联合验收
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
+
 用户要求：内存优化不得牺牲 FPS、画质或高级能力。测前 GPU 0 基础占用必须为 0%；否则暂停吞吐测试。JFR、原生栈和虚拟内存 census 独立运行，不用诊断帧率报收益。
 
 ## 已有内存证据
@@ -26,7 +28,7 @@ Streamline 2.14.16 `include/sl.h:40` 的 `SL_FEATURE_FUN_IMPORT_STATIC` 把插�
 
 ## 本轮结果
 
-已保存[原始证据与制品清单](data/rtxpt-memory-20261102/manifest.json)。内存生命周期使用正常 JIT、`-Xms32m -Xmx512m`，不带 JFR／NMT／Frida：12 轮六场景共 72 次检查、24 次尺寸变化、叠层开关和显式空闲回收，之后连续关闭重开 5 次，最终真实退出码为 0。每次 Streamline 关闭返回成功；此前不带观测的重开崩溃本轮没有再出现。
+已保存[原始证据与制品清单](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/rtxpt-memory-20261102/manifest.json)。内存生命周期使用正常 JIT、`-Xms32m -Xmx512m`，不带 JFR／NMT／Frida：12 轮六场景共 72 次检查、24 次尺寸变化、叠层开关和显式空闲回收，之后连续关闭重开 5 次，最终真实退出码为 0。每次 Streamline 关闭返回成功；此前不带观测的重开崩溃本轮没有再出现。
 
 | 检查点 | 实测结果 |
 | --- | ---: |
@@ -64,7 +66,7 @@ Streamline 2.14.16 `include/sl.h:40` 的 `SL_FEATURE_FUN_IMPORT_STATIC` 把插�
 
 ## 消费级预算与组合正确性补验
 
-本节是后续源码检查点 `0613024`／文档与 ABI 检查点 `b2fdd82` 的新验证，不能与上文历史 Balanced／旧缓存容量的 FPS 混算。默认已统一 MEDIUM：Performance 重建、1 SPP、12／2 路径深度、4 个精确光学界面预算、2 在途帧、4／1 worker／compiler、2M SHaRC 条目。光学预算仅 `SCENE_ANALYTIC` 实际激活，介质 RR＋SHaRC 默认不走该分支。完整公开配置见[预算指南](../performance-budgets.md)，[聚合原始证据](data/consumer-budgets-20261102/results.json)保存 DLL 身份、逐项原生读回、截图哈希与退出码。
+本节是后续源码检查点 `0613024`／文档与 ABI 检查点 `b2fdd82` 的新验证，不能与上文历史 Balanced／旧缓存容量的 FPS 混算。默认已统一 MEDIUM：Performance 重建、1 SPP、12／2 路径深度、4 个精确光学界面预算、2 在途帧、4／1 worker／compiler、2M SHaRC 条目。光学预算仅 `SCENE_ANALYTIC` 实际激活，介质 RR＋SHaRC 默认不走该分支。完整公开配置见[预算指南](../performance-budgets.md)，[聚合原始证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/data/consumer-budgets-20261102/results.json)保存 DLL 身份、逐项原生读回、截图哈希与退出码。
 
 原生扩展矩阵在 640×360 输出下逐项生成至少十二帧并检查非空画面，全部十七项通过，进程退出码为 0。它验证参数与执行链，不是吞吐基准。
 

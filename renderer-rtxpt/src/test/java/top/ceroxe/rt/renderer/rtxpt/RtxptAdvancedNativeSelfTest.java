@@ -12,17 +12,24 @@ public final class RtxptAdvancedNativeSelfTest {
         var output=Path.of(System.getProperty("top.ceroxe.rt.rtxpt.testOutput","build/reports/rtxpt-advanced")).toAbsolutePath();
         Files.createDirectories(output);
         var recommended=RendererConfig.pathTracedPresentation();
-        var resampling=new PathTracingOptions(1,20,2,RendererFeaturePreference.REQUIRED,
+        var diGi=new PathTracingOptions(1,20,2,RendererFeaturePreference.DISABLED,
             RendererFeaturePreference.REQUIRED,RendererFeaturePreference.REQUIRED);
+        var diSharc=new PathTracingOptions(1,20,2,RendererFeaturePreference.REQUIRED,
+            RendererFeaturePreference.REQUIRED,RendererFeaturePreference.DISABLED);
+        var giSharc=new PathTracingOptions(1,20,2,RendererFeaturePreference.REQUIRED,
+            RendererFeaturePreference.DISABLED,RendererFeaturePreference.REQUIRED);
         var configurations=List.of(recommended,
-            recommended.copyBuilder().pathTracing(resampling).build(),
+            recommended.copyBuilder().pathTracing(diGi).build(),
+            recommended.copyBuilder().pathTracing(diSharc).build(),
+            recommended.copyBuilder().pathTracing(giSharc).build(),
             recommended.copyBuilder().frameReconstruction(FrameReconstructionOptions.disabled()).build(),
             RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),
             recommended.copyBuilder().frameReconstruction(FrameReconstructionOptions.builder()
                 .preference(RendererFeaturePreference.REQUIRED).mode(FrameReconstructionOptions.Mode.NATIVE_ANTI_ALIASING).build()).build(),
             recommended.copyBuilder().denoising(DenoisingOptions.builder().preference(RendererFeaturePreference.REQUIRED)
                 .strategy(DenoisingOptions.Strategy.RESPONSIVE).build()).build());
-        var names=List.of("rr-sharc-ser-reflex","dlss-nrd-restir-di-gi-sharc","native-nrd-sharc","native-raw","dlaa-rr","dlss-relax-sharc");
+        var names=List.of("rr-sharc-ser-reflex","dlss-nrd-restir-di-gi","dlss-nrd-restir-di-sharc",
+            "dlss-nrd-restir-gi-sharc","native-nrd-sharc","native-raw","dlaa-rr","dlss-relax-sharc");
         for(int i=0;i<configurations.size();i++) {
             try(var renderer=Renderer.open("rtxpt",configurations.get(i))) {
                 var host=renderer.extension(RtxptAccess.class).orElseThrow();

@@ -1,5 +1,7 @@
 # 质量验证与性能报告
 
+> 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../../../../../tools/README.md)。
+
 ## 2026-10-31 完整 API 验收通过
 
 当前声明的 Windows x86_64 Vulkan RT 与 NVIDIA 运行契约已通过完整 `verifyApiClosure`。验收源码为 `79a8f2030aff28563d0fa1d3058d151a8ffdab1e`，Git tree 为 `2334c4887aaf487aff31ba134111c8cd1c579723`；验收开始与结束时 tracked 源树均干净。设备为本机 RTX 5080 Laptop GPU。
@@ -16,7 +18,7 @@
 | 完整介质展厅 | 13 个预设，每个 8 帧，共 104 帧通过 |
 | 独立 Maven 消费者、发布校验和、完整运行包 | 通过；ZIP 内 2062 个文件逐项验证 |
 
-本轮产生的 34 份 Vulkan validation 日志共 53 次会话，均正常关闭；警告、错误与丢弃汇总均为零。完整任务原始报告原样归档于 [api-closure-full-result-20261031.json](data/api-closure-full-result-20261031.json)；源码身份、完整日志 SHA-256、逐份 validation 统计，以及实际三模块 JAR 和 ZIP 哈希见 [api-closure-final-20261031.json](data/api-closure-final-20261031.json)。记录明确绑定本轮验收源码和制品。
+本轮产生的 34 份 Vulkan validation 日志共 53 次会话，均正常关闭；警告、错误与丢弃汇总均为零。完整任务原始报告原样归档于 [api-closure-full-result-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/archive/api-closure-312147f/docs/quality/data/api-closure-full-result-20261031.json)；源码身份、完整日志 SHA-256、逐份 validation 统计，以及实际三模块 JAR 和 ZIP 哈希见 [api-closure-final-20261031.json](https://github.com/CeroxeAnivie/RTRendererAPI/blob/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality/archive/api-closure-312147f/docs/quality/data/api-closure-final-20261031.json)。记录明确绑定本轮验收源码和制品。
 
 ## 2026-10-31 完整门禁发现的阻断修复
 
@@ -1241,9 +1243,9 @@ PBR 与异质多散射各自的 Vulkan validation 记录均为 opened=1、closed
 本节摘要：归纳早期迁移路线、失败队列、语义差异和完整工作交接。
 
 
-仓库：`D:\Engineering\code\APIs\RTRendererAPI`  
-日期：2026-10-28，Asia/Shanghai  
-当前 HEAD：`fa27dbf210a0c3ac11cd78afe19f395b3a3eff73`  
+仓库：`.`
+日期：2026-10-28，Asia/Shanghai
+当前 HEAD：`fa27dbf210a0c3ac11cd78afe19f395b3a3eff73`
 状态：当前两个执行子代理均完成各自小任务并停止；未创建下一批代理。交接前未发现 Java、javac、nvcc、shader 编译或 bounded build 残留进程。全部工作未提交，必须保留。
 
 **长期目标完成度粗估约 25%，合理区间 20%–30%。这是工程完成程度判断，不是公开 API 支持率、默认渲染迁移率、场景通过率或性能提升百分比。正式公共渲染的原生介质最终 HDR 接入尚未完成，同画质整帧性能收益尚未取得验收结论。**
@@ -1284,7 +1286,7 @@ PBR 与异质多散射各自的 Vulkan validation 记录均为 opened=1、closed
 - Windows / PowerShell；GraalVM Java 25.0.5。
 - GPU：NVIDIA GeForce RTX 5080 Laptop GPU；本轮重新记录的驱动仍是 616.92。
 - 全部文本、源码、日志保持 UTF-8，注意中文乱码。
-- 所有联网使用本机代理 `http://127.0.0.1:14455`，只设当前进程或命令环境，**不得写入项目或全局配置**。
+- 联网代理由使用者通过本机进程环境配置，仓库不保存具体代理地址。
 - 所有构建、shader 编译、NVRTC、原生 GPU 测试都经 `tools/Invoke-BoundedBuild.ps1`。
 - **总预算 10 GB**，不能提高，也不是每个代理各 10 GB；wrapper 内 Job Object 实际给进程树保留 9.5 GB，另留 0.5 GB 给 PowerShell host。
 - OOM 或驱动崩溃先保存证据，不反复重跑相同失败输入。
@@ -1357,7 +1359,7 @@ Vulkan/CUDA 共享显存交接，不能逐射线经 CPU 往返。当前可靠方
 
 项目外目录：
 
-`D:\Engineering\code\APIs\RTRendererAPI-backups\legacy-medium-before-removal-20261028-203236`
+`../RTRendererAPI-backups\legacy-medium-before-removal-20261028-203236`
 
 其中：
 
@@ -1415,7 +1417,7 @@ runtime 基础已验证 Java 25 FFM 调 CUDA Driver/NVRTC、批量 blocking、de
 
 ## 7. 本轮生产小切片：相机吸收基础已完成
 
-文档：`docs/quality/7.0.0-cuda-camera-segment-foundation.md`  
+文档：`docs/quality/7.0.0-cuda-camera-segment-foundation.md`
 证据：`build/luxcore-camera-foundation-20261028/result.json`、`run-1.log`、`validation.jsonl`、`run.ps1`。
 
 修复内容：
@@ -1456,7 +1458,7 @@ runtime 基础已验证 Java 25 FFM 调 CUDA Driver/NVRTC、批量 blocking、de
 
 ### 吸收、发光、优先级、密度
 
-目录：`build/luxcore-complex-scene-validation-20261028`  
+目录：`build/luxcore-complex-scene-validation-20261028`
 报告：`docs/quality/luxcore-complex-scene-validation-20261028.md`。
 
 三个嵌套/重叠闭合介质体、9216 个 box 表面三角形、发光面板、opaque blocker、相机内外/真空/优先级反转、真实 8³ float 密度。64²、256²、1080p 实际运行并检查最终实验 HDR。
@@ -1560,7 +1562,7 @@ volatile、coherent、ALL_COMMANDS wait、nonblocking stream、单次 system fen
 相机基础：
 
 ```powershell
-Set-Location -LiteralPath 'D:\Engineering\code\APIs\RTRendererAPI'
+Set-Location -LiteralPath '.'
 & .\tools\Invoke-BoundedBuild.ps1 `
   -FilePath (Get-Command pwsh.exe).Source `
   -ArgumentList @('-NoProfile','-File','build/luxcore-camera-foundation-20261028/run.ps1') `
@@ -1593,9 +1595,9 @@ Set-Location -LiteralPath 'D:\Engineering\code\APIs\RTRendererAPI'
 本节摘要：记录原生生产接入阶段的代码状态、测试、未完成项及后续入口。
 
 
-日期：2026-10-28，Asia/Shanghai。停止后现场核对时间约 22:05。  
-仓库：D:/Engineering/code/APIs/RTRendererAPI  
-HEAD：fa27dbf210a0c3ac11cd78afe19f395b3a3eff73  
+日期：2026-10-28，Asia/Shanghai。停止后现场核对时间约 22:05。
+仓库：.
+HEAD：fa27dbf210a0c3ac11cd78afe19f395b3a3eff73
 工作状态：全部改动未提交；保留现有工作树、历史实验、失败证据和输出。没有提交、推送或发布。
 
 ## 0. 接手先读：最终停点和容易误判的地方
@@ -2179,7 +2181,7 @@ VulkanGpuSceneShaderSelfTest 新增 --contracts-only，只快速跑源码合同�
 
 删除前项目外快照：
 
-    D:/Engineering/code/APIs/RTRendererAPI-backups/
+    ../RTRendererAPI-backups/
       legacy-medium-before-removal-20261028-203236
 
 含 source、1281 文件 SHA256 manifest、retirement-plan、deletion-completed 等。禁止再次运行其中 prepare_retirement.py --apply。
@@ -3440,8 +3442,8 @@ No performance run, full matrix, default promotion, commit, push or publication 
 本节摘要：说明原生模块提取路线、许可证、语义适配及阶段门槛。
 
 
-日期：2026-10-28（Asia/Shanghai）  
-仓库：`D:\Engineering\code\APIs\RTRendererAPI`  
+日期：2026-10-28（Asia/Shanghai）
+仓库：`.`
 状态：源码依赖与工具路线已核查；尚未提取、编译或测量独立模块。本文不是已完成迁移或已证明提速的报告。
 
 ## 1. 用户决策与任务边界
