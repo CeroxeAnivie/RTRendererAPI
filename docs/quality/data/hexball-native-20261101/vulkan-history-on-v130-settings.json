@@ -1,0 +1,23 @@
+{
+  "Java": "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+  "Jvm": [
+    "-Dfile.encoding=UTF-8",
+    "--enable-native-access=ALL-UNNAMED",
+    "--sun-misc-unsafe-memory-access=allow",
+    "-Xmx3g",
+    "-XX:-UseJVMCICompiler",
+    "-cp",
+    "demos/hex-ball/build/classes/java/test;demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar"
+  ],
+  "Entry": "demo.VulkanHexBallTemporalEvidence",
+  "Arguments": [
+    "on",
+    "build/reports/hexball-quality/vulkan-history-on-v130"
+  ],
+  "SourceCommit": "f63fe3112626bfe7b51c2cf3bf0965057dd10e57",
+  "JarSha256": "0E7AB0A04502849316062896FEBFC435F9651053DD453A48A1F7A9F259CD1C6C",
+  "FrameGeneration": false,
+  "Width": 2560,
+  "Height": 1440,
+  "Spp": 1
+}

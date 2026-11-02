@@ -22,7 +22,9 @@ public final class VulkanHexBallTemporalEvidence {
             .frameReconstruction(FrameReconstructionOptions.recommended().toBuilder()
                 .preference(RendererFeaturePreference.REQUIRED).fallback(FrameReconstructionOptions.Fallback.NONE)
                 .quality(FrameReconstructionOptions.Quality.BALANCED).build()).build();
-        var scene=new DemoScene(true);
+        // The original Vulkan demo uses opaque metal balls. Absorbing glass carries
+        // a medium boundary and belongs to RTXPT; never silently drop it to force a comparison.
+        var scene=new DemoScene(false);
         var batch=scene.primitiveBatch(new HexPhysics(),FramePrimitiveBatch.empty());
         try(var renderer=Renderer.open("vulkan-rt",config)) {
             long revision=renderer.apply(scene.initialTransaction()).acceptedSceneRevision();
