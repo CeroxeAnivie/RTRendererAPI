@@ -399,7 +399,13 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidate
 # Match the legacy route's summed continuous surface response without deleting
 # any lobe or bounce. PBRT-v3 BSDF::Sample_f sums f after forming the mixture PDF.
 # Ideal delta events retain native weights; their density is not a finite PDF.
-Patch-Once 'Rtxpt/Shaders/PathTracer/BSDFs/StandardBSDF.hlsli' '        result.wo = shadingData.FromLocal(woLocal);' @'
+Patch-Once 'Rtxpt/Shaders/PathTracer/BSDFs/StandardBSDF.hlsli' @'
+        bool valid = bsdf.sample(wiLocal, woLocal, result.pdf, result.weight, result.lobe, result.lobeP, preGeneratedSamples.xyzw);
+#endif
+        result.wo = shadingData.FromLocal(woLocal);
+'@ @'
+        bool valid = bsdf.sample(wiLocal, woLocal, result.pdf, result.weight, result.lobe, result.lobeP, preGeneratedSamples.xyzw);
+#endif
         #if defined(RTR_COMBINED_BSDF_WEIGHT) && RTR_COMBINED_BSDF_WEIGHT
         if (valid && result.pdf > 0)
         {
