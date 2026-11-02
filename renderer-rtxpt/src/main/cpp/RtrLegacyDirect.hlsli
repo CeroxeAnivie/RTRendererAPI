@@ -26,7 +26,7 @@ float3 RtrLegacyShadowVisibility(const RayDesc inputRay,const PathState source,c
         float fresnel=RtrLegacyFresnel(visibilityEta,cosine);
         #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
         if(RtrLegacyTracePixel(source.GetPixelPos(),context.PtConsts.frameIndex) && (source.getCounter((PackedCounters)3)&4u)!=0)
-            RtrLegacyTracePrint("shadow",104u,RtrLegacyTraceKey(source.GetPixelPos(),(source.getCounter((PackedCounters)3)&3u)-1u,source.getVertexIndex(),context.PtConsts.frameIndex),
+            RtrLegacyTracePrint("shadow",104u,RtrLegacyTraceKey(source.GetPixelPos(),RtrLegacyTraceBranch(source.getCounter((PackedCounters)3)),source.getVertexIndex(),context.PtConsts.frameIndex),
                 float4(event,hit.shadingData.MaterialID(),t_PTMaterialData[hit.shadingData.MaterialID()].TransmissionFactor,transmission),
                 float4(hit.shadingData.frontFacing,hit.shadingData.GetEta(),abs(dot(inputRay.Direction,hit.shadingData.N)),fresnel),
                 inputRay.Direction,hit.shadingData.posW,throughput,
@@ -49,6 +49,8 @@ NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const Active
     NEEResult result=NEEResult::empty();
     // Shared primary receiver is shaded once; only its optical continuations split.
     if(path.getVertexIndex()==1 && (path.getCounter((PackedCounters)3)&3u)==2u)return result;
+    // Second-junction replay shares its prefix lighting with the first replay.
+    if(path.getVertexIndex()<=2 && (path.getCounter((PackedCounters)3)&8u)!=0)return result;
     float surfaceWeight=1-bsdf.data.SpecularTransmission();
     if(surfaceWeight<=0)return result;
     float3 baseColor=RtrLegacyBaseColor(sd,bsdf.data);
@@ -85,7 +87,7 @@ NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const Active
         }
         #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
         if(RtrLegacyTracePixel(path.GetPixelPos(),context.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
-            RtrLegacyTracePrint("light",103u,RtrLegacyTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),context.PtConsts.frameIndex),i,sd.posW,inputRadiance,radiance);
+            RtrLegacyTracePrint("light",103u,RtrLegacyTraceKey(path.GetPixelPos(),RtrLegacyTraceBranch(path.getCounter((PackedCounters)3)),path.getVertexIndex(),context.PtConsts.frameIndex),i,sd.posW,inputRadiance,radiance);
         #endif
         if(max3(radiance)<=0)continue;
         float3 h=normalize(sd.V+direction);
@@ -100,7 +102,7 @@ NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const Active
     float3 weight=path.GetThp()*surfaceWeight;
     #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
     if(RtrLegacyTracePixel(path.GetPixelPos(),context.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
-        RtrLegacyTracePrint("receiver",101u,RtrLegacyTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),context.PtConsts.frameIndex),weight,(diffuse+specular)*weight);
+        RtrLegacyTracePrint("receiver",101u,RtrLegacyTraceKey(path.GetPixelPos(),RtrLegacyTraceBranch(path.getCounter((PackedCounters)3)),path.getVertexIndex(),context.PtConsts.frameIndex),weight,(diffuse+specular)*weight);
     #endif
     result.AccumulateRadiance((diffuse+specular)*weight,Average(specular*weight));
     return result;

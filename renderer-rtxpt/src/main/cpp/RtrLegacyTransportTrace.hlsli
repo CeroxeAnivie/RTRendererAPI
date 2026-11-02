@@ -15,7 +15,16 @@
 } while(false)
 bool RtrLegacyTracePixel(uint2 pixel,uint frame)
 {
+    #ifdef RTR_LEGACY_TRACE_ORIGIN
+    return frame>=RTR_LEGACY_TRACE_FIRST_FRAME && frame<=RTR_LEGACY_TRACE_LAST_FRAME
+        && all(pixel>=RTR_LEGACY_TRACE_ORIGIN) && all(pixel<RTR_LEGACY_TRACE_ORIGIN+4u);
+    #else
     return frame>=16 && frame<=17 && all((pixel&31u)==0);
+    #endif
+}
+uint RtrLegacyTraceBranch(uint control)
+{
+    return ((control&3u)-1u)*2u+((control>>3u)&1u);
 }
 uint4 RtrLegacyTraceKey(uint2 pixel,uint branch,uint vertex,uint frame)
 {

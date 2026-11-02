@@ -685,6 +685,56 @@ foreach($relative in $rtrPayloadMigrations.Keys) {
     foreach($pair in $rtrPayloadMigrations[$relative]){$text=$text.Replace($pair[0],$pair[1])}
     [IO.File]::WriteAllText($path,$text,$utf8)
 }
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    [loop] for(uint rtrFirstBranch=0;rtrFirstBranch<2;rtrFirstBranch++) // RTR trace both real dielectric branches' @'
+    [loop] for(uint rtrOpticalReplay=0;rtrOpticalReplay<4;rtrOpticalReplay++) // RTR exact first two dielectric junctions
+'@ 'RTR exact first two dielectric junctions'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    path.setCounter((PackedCounters)3,rtrFirstBranch+1u); // RTR first-interface selector in ray payload' @'
+    path.setCounter((PackedCounters)3,((rtrOpticalReplay>>1u)+1u)|((rtrOpticalReplay&1u)<<3u)); // RTR two-junction selectors in ray payload
+'@ 'RTR two-junction selectors in ray payload'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    if((path.getCounter((PackedCounters)3)&4u)==0)break;' @'
+    if((path.getCounter((PackedCounters)3)&4u)==0)break;
+    if((path.getCounter((PackedCounters)3)&16u)==0)rtrOpticalReplay++; // RTR skip absent second junction, no duplicated energy
+'@ 'RTR skip absent second junction, no duplicated energy'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' @'
+                legacyValid=RtrLegacyOpticalSample(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,
+                    path.getVertexIndex(),max(1u,path.getCounter((PackedCounters)3)&3u),legacySample);
+'@ @'
+            {
+                #if PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+                if(path.getVertexIndex()==2 && (path.getCounter((PackedCounters)3)&4u)!=0)
+                    path.setCounter((PackedCounters)3,path.getCounter((PackedCounters)3)|16u);
+                #endif
+                legacyValid=RtrLegacyOpticalSample(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,
+                    path.getVertexIndex(),path.getCounter((PackedCounters)3),legacySample); // RTR exact second-interface conditional expectation
+            }
+'@ 'RTR exact second-interface conditional expectation'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        if(path.getVertexIndex()==1 && (path.getCounter((PackedCounters)3)&3u)==2u)surfaceEmission=0; // RTR shared primary emission once' @'
+        if((path.getVertexIndex()==1 && (path.getCounter((PackedCounters)3)&3u)==2u)
+            || (path.getVertexIndex()<=2 && (path.getCounter((PackedCounters)3)&8u)!=0))surfaceEmission=0; // RTR shared replay prefix emission once
+'@ 'RTR shared replay prefix emission once'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        if (!scatterValid)' @'
+        #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
+        if(RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
+            RtrLegacyTracePrint("termination",111u,RtrLegacyTraceKey(path.GetPixelPos(),RtrLegacyTraceBranch(path.getCounter((PackedCounters)3)),path.getVertexIndex(),workingContext.PtConsts.frameIndex),
+                float4(scatterValid,HasFinishedSurfaceBounces(path.getVertexIndex()+1,path.getCounter(PackedCounters::DiffuseBounces)),bsdf.data.SpecularTransmission(),bsdf.data.Roughness()),
+                path.GetThp(),path.GetL(),path.GetDir(),uint2(path.flagsAndVertexIndex,path.packedCounters));
+        #endif // RTR complete scatter rejection and budget evidence
+        if (!scatterValid)
+'@ 'RTR complete scatter rejection and budget evidence'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        if (pathStopping)' @'
+        #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
+        if(pathStopping && RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
+            RtrLegacyTracePrint("terminal",112u,RtrLegacyTraceKey(path.GetPixelPos(),RtrLegacyTraceBranch(path.getCounter((PackedCounters)3)),path.getVertexIndex(),workingContext.PtConsts.frameIndex),
+                float4(shadingData.MaterialID(),shadingData.frontFacing,shadingData.GetEta(),bsdf.data.SpecularTransmission()),
+                path.GetThp(),path.GetL(),uint2(path.flagsAndVertexIndex,path.packedCounters));
+        #endif // RTR terminal receiver before truncation evidence
+        if (pathStopping)
+'@ 'RTR terminal receiver before truncation evidence'
+foreach($relative in @('Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli','Rtxpt/Shaders/PathTracer/PathTracer.hlsli')) {
+    $path=Join-Path $sdk $relative;$text=[IO.File]::ReadAllText($path)
+    $text=$text.Replace('(path.getCounter((PackedCounters)3)&3u)-1u','RtrLegacyTraceBranch(path.getCounter((PackedCounters)3))')
+    [IO.File]::WriteAllText($path,$text,$utf8)
+}
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        const float rrVal = sqrt(Luminance(path.GetThp())); // closer to perceptual' @'
         #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
         // gsOpticalContinuation uses its event budget, not throughput roulette.

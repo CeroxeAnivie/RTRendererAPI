@@ -1,9 +1,16 @@
-param([switch]$Enable,[uint32]$BranchSeedXor=0)
+param([switch]$Enable,[uint32]$BranchSeedXor=0,
+    [int]$PixelX=-1,[int]$PixelY=-1,[uint32]$FirstFrame=160,[uint32]$LastFrame=161)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $sdk=Join-Path $repo 'build/rtxpt-sdk'
 & (Join-Path $PSScriptRoot 'Build-RtxptBridge.ps1') -ConfigureOnly -OpticalTransportTrace:$Enable -OpticalBranchSeedXor $BranchSeedXor
 if($LASTEXITCODE -ne 0){throw 'Shader configuration failed'}
+if($PixelX -ge 0 -or $PixelY -ge 0) {
+    if(!$Enable -or $PixelX -lt 0 -or $PixelY -lt 0 -or $LastFrame -lt $FirstFrame){throw 'An enabled trace needs both pixel coordinates and an ordered frame range'}
+    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'
+    $prefix="#define RTR_LEGACY_TRACE_ORIGIN uint2($($PixelX)u,$($PixelY)u)`n#define RTR_LEGACY_TRACE_FIRST_FRAME $($FirstFrame)u`n#define RTR_LEGACY_TRACE_LAST_FRAME $($LastFrame)u`n"
+    [IO.File]::WriteAllText($header,$prefix+[IO.File]::ReadAllText($header),[Text.UTF8Encoding]::new($false))
+}
 $config=Join-Path $repo 'build/reports/optical-trace-shaders.cfg'
 $permutations=Get-Content -LiteralPath (Join-Path $sdk 'Rtxpt/shaders.cfg') | Where-Object {$_ -like 'ProcessingPasses/PostProcess.hlsl *'}
 [IO.File]::WriteAllText($config,($permutations -join "`n")+"`n",[Text.UTF8Encoding]::new($false))

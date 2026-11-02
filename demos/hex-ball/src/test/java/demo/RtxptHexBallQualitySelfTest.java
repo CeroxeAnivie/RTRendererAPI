@@ -16,6 +16,7 @@ public final class RtxptHexBallQualitySelfTest {
         String reconstructionQuality=args.length>5?args[5]:"BALANCED";
         boolean sharc=cacheMode.equals("sharc");
         boolean restirGi=cacheMode.equals("restirgi");
+        boolean opticalTrace="1".equals(System.getenv("RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE"));
         if(!java.util.Set.of("none","original-lights","quarter-lights","no-points","no-sun","no-sky","no-environment").contains(probe))
             throw new IllegalArgumentException("Unknown lighting probe: "+probe);
         if(!java.util.Set.of("none","sharc","restirgi").contains(cacheMode))
@@ -114,6 +115,10 @@ public final class RtxptHexBallQualitySelfTest {
                         .antiAliasing(DemoRendererProfile.antiAliasing(1)).build());
                     awaitCompletedFrame(host,completedBefore);
                     previous=batch;
+                    if(opticalTrace&&phase==0&&f>=158&&f<160) {
+                        host.capture(output.resolve("trace-completed-"+sequence+".png"));
+                        System.out.println("QUALITY_TRACE_CAPTURE completed="+sequence+" phaseFrame="+f);
+                    }
                     if(sequence==1) {
                         var status=host.runtimeStatus();
                         System.out.println("QUALITY_ACTUAL "+status);

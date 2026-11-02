@@ -129,27 +129,38 @@ void RtrLegacyFirstInterface(const ShadingData sd,const StandardBSDFData data,ui
     lobes[0].probability=1-f;lobes[1].probability=f;
 }
 
-bool RtrLegacyOpticalSample(const ShadingData sd,const StandardBSDFData data,uint2 pixel,uint sequence,uint vertex,uint seed,out BSDFSample result)
+bool RtrLegacyOpticalSample(const ShadingData sd,const StandardBSDFData data,uint2 pixel,uint sequence,uint vertex,uint branchControl,out BSDFSample result)
 {
     result=(BSDFSample)0;
+    uint seed=max(1u,branchControl&3u);
     uint event=vertex>=2?vertex-2:0;
     float3 h=RtrLegacyDielectricNormal(sd,data,pixel,sequence,seed^((event+1u)*0x02e5be93u));
     float eta=sd.GetEta(),f=RtrLegacyFresnel(eta,max(dot(sd.V,h),0));
     float branchRandom=RtrLegacyOpticalRandom(pixel,seed^0xb5297a4du^RTR_LEGACY_OPTICAL_BRANCH_SEED_XOR,event);
     bool reflection=branchRandom<f;
+    bool splitSecond=false;
+    #if PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+    // Conditional expectation at the next junction, extending the exact
+    // first-interface split (PBRT Whitted: SpecularReflect + SpecularTransmit).
+    // All later interfaces retain the existing transport estimator.
+    splitSecond=vertex==2 && (branchControl&4u)!=0;
+    if(splitSecond)reflection=(branchControl&8u)==0;
+    #endif
+    float branchWeight=splitSecond?(reflection?f:1-f):1;
     result.wo=reflection?normalize(reflect(-sd.V,h)):refract(-sd.V,h,eta);
     float nl=dot(sd.N,result.wo);
-    if(reflection?nl<=0:nl>=0) return false;
-    result.weight=data.SpecularTransmission()*RtrLegacyMaskWeight(dot(sd.N,sd.V),abs(nl),data.Roughness());
+    bool valid=branchWeight>0 && dot(result.wo,result.wo)>0 && (reflection?nl>0:nl<0);
+    result.weight=branchWeight*data.SpecularTransmission()*RtrLegacyMaskWeight(dot(sd.N,sd.V),abs(nl),data.Roughness());
     if(!reflection)result.weight*=eta*eta*data.Transmission();
     result.pdf=0;result.lobeP=reflection?f:1-f;
     result.lobe=(uint)(reflection?LobeType::DeltaReflection:LobeType::DeltaTransmission);
     #if RTR_LEGACY_TRANSPORT_TRACE
     if(RtrLegacyTracePixel(pixel,sequence))
-        RtrLegacyTracePrint("choice",105u,RtrLegacyTraceKey(pixel,(seed-1u)&1u,vertex,sequence),
-            float4(f,branchRandom,reflection,data.Roughness()),float4(eta,seed,event,result.lobe),sd.N,h,result.wo);
+        RtrLegacyTracePrint("choice",105u,RtrLegacyTraceKey(pixel,RtrLegacyTraceBranch(branchControl),vertex,sequence),
+            float4(f,branchRandom,reflection,data.Roughness()),float4(eta,seed,event,result.lobe),sd.N,h,result.wo,
+            float4(splitSecond,valid,branchWeight,nl));
     #endif
-    return true;
+    return valid;
 }
 
 float3 RtrLegacySky(float3 direction,const PathTracerConstants constants)
