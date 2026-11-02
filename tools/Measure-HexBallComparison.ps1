@@ -10,6 +10,7 @@ param(
     [switch]$DisableResidualPointSampling,
     [switch]$ExactMis,
     [switch]$DirectionalStrata,
+    [switch]$CombinedBsdf,
     [switch]$ApproximateMis,
     [ValidateSet('Default','Power','NeeAt')][string]$LightSampler='Default',
     [switch]$Glass,
@@ -77,6 +78,7 @@ $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
 $oldDirectionalStrata=$env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA
+$oldCombinedBsdf=$env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF
 $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 try {
@@ -88,6 +90,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM=$(if($DisableBloom){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$(if($DirectionalStrata){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$(if($CombinedBsdf){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(switch($LightSampler){'Power'{'power'} 'NeeAt'{'neeat'} default{$null}})
@@ -97,6 +100,7 @@ try {
         SourceCommit=(& git rev-parse HEAD).Trim();Backend=$Backend;Entry=$entry;
         WorkingTreeSourceSha256=$sourceDigest;WorkingTreeSourceFiles=$sourcePaths;
     DirectionalStrata=[bool]$DirectionalStrata;
+    CombinedBsdf=[bool]$CombinedBsdf;
         Width=$Width;Height=$Height;Spp=1;FrameGeneration=$false;StageProfile=[bool]$StageProfile;
         RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;
         SrPreset=$SrPreset;
@@ -141,6 +145,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$oldResidual
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$oldDirectionalStrata
+    $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$oldCombinedBsdf
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$oldSampler
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$oldTransmissionGuides
 }

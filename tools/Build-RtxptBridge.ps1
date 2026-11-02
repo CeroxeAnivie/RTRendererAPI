@@ -396,6 +396,26 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidate
             }
             #endif
 '@ 'RTR directional samples carry directions'
+# Match the legacy route's summed continuous surface response without deleting
+# any lobe or bounce. PBRT-v3 BSDF::Sample_f sums f after forming the mixture PDF.
+# Ideal delta events retain native weights; their density is not a finite PDF.
+Patch-Once 'Rtxpt/Shaders/PathTracer/BSDFs/StandardBSDF.hlsli' '        result.wo = shadingData.FromLocal(woLocal);' @'
+        #if defined(RTR_COMBINED_BSDF_WEIGHT) && RTR_COMBINED_BSDF_WEIGHT
+        if (valid && result.pdf > 0)
+        {
+            // Only overlapping continuous lobes need another BSDF evaluation.
+            uint overlapping = woLocal.z >= 0
+                ? uint(bsdf.pDiffuseReflection > 0)
+                    + uint(bsdf.pSpecularReflection > 0 && bsdf.specularReflection.alpha > 0)
+                    + uint(bsdf.pSpecularReflectionTransmission > 0 && bsdf.specularReflectionTransmission.alpha > 0)
+                : uint(bsdf.pDiffuseTransmission > 0)
+                    + uint(bsdf.pSpecularReflectionTransmission > 0 && bsdf.specularReflectionTransmission.alpha > 0);
+            if (overlapping > 1)
+                result.weight = bsdf.eval(wiLocal, woLocal).rgb / result.pdf;
+        }
+        #endif // RTR summed continuous BSDF over native mixture PDF
+        result.wo = shadingData.FromLocal(woLocal);
+'@ 'RTR summed continuous BSDF over native mixture PDF'
 # Raw SR/TAA/reference output does not read it; retain upstream filtering for every consumer.
 # Partition the EXISTING baked environment instead of adding duplicate suns or
 # replacing visibility/indirect lighting with a constant ambient approximation.

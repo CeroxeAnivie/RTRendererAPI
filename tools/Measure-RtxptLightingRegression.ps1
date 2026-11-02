@@ -9,6 +9,7 @@ param(
     [switch]$DisableResidualPointSampling,
     [switch]$ExactMis,
     [switch]$DirectionalStrata,
+    [switch]$CombinedBsdf,
     [switch]$DirectOnly,
     [switch]$Relax,
     [switch]$RR,
@@ -51,6 +52,7 @@ $settings=[ordered]@{
     DisableResidualPointSampling=[bool]$DisableResidualPointSampling;ExactMis=[bool]$ExactMis;DirectOnly=[bool]$DirectOnly
     Relax=[bool]$Relax;RayReconstruction=[bool]$RR;RestirGI=[bool]$RestirGI;Sharc=[bool]$Sharc;DLSSQuality=$DLSSQuality
     DirectionalStrata=[bool]$DirectionalStrata;
+    CombinedBsdf=[bool]$CombinedBsdf;
     Spp=$Spp;StartedAt=(Get-Date -Format o)
 }
 $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
@@ -61,9 +63,11 @@ $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
 $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
 $oldDirectionalStrata=$env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA
+$oldCombinedBsdf=$env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF
 try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$(if($DirectionalStrata){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$(if($CombinedBsdf){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_CONTROL=$(if($ControlDirectional){'1'}else{$null})
     $env:RTR_RTXPT_GPU_PROFILE=$null
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
@@ -85,4 +89,5 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$oldResidual
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$oldDirectionalStrata
+    $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$oldCombinedBsdf
 }

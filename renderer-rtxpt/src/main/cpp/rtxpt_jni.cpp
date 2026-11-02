@@ -156,6 +156,9 @@ public:
     }
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
+        const char* mixtureBsdf=std::getenv("RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF");
+        if(mixtureBsdf && std::string(mixtureBsdf)=="1")
+            macros.push_back({"RTR_COMBINED_BSDF_WEIGHT","1"});
         if(useDirectionalStrata()) {
             macros.push_back({"RTR_DIRECTIONAL_STRATA","1"});
             for(auto& macro:macros) {
