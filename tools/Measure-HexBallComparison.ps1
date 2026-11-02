@@ -122,9 +122,10 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$(if($DisableTransmissionGuides){'1'}else{$null})
     & nvidia-smi --query-gpu=name,driver_version,utilization.gpu,memory.used,power.draw,clocks.current.graphics,temperature.gpu --format=csv > ($prefix+'-initial-gpu.csv')
     $initialGpu=(& nvidia-smi --id=0 --query-gpu=utilization.gpu --format=csv,noheader,nounits).Trim()
-    if($initialGpu -ne '0'){throw "GPU 0 is busy ($initialGpu%); wait for the user's idle notification before absolute FPS measurement."}
+    if([int]$initialGpu -ge 10){throw "GPU 0 is busy ($initialGpu%); absolute FPS measurement requires initial utilization below 10%."}
     $settings=[ordered]@{
         SourceCommit=(& git rev-parse HEAD).Trim();Backend=$Backend;Entry=$entry;
+        InitialGpuUtilizationPercent=[int]$initialGpu;IdleUtilizationExclusiveLimit=10;
         WorkingTreeSourceSha256=$sourceDigest;WorkingTreeSourceFiles=$sourcePaths;
     DirectionalStrata=[bool]$DirectionalStrata;
     CombinedBsdf=[bool]$CombinedBsdf;
