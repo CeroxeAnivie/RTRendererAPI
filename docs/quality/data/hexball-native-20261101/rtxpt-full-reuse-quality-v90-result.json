@@ -1,0 +1,22 @@
+{
+  "SourceCommit": "83186f513eb169d2c4e0b03738499004f8d7c14a",
+  "Runtime": "Pinned NVIDIA RTXPT 1.9.0",
+  "RequestedFeatures": [
+    "ReSTIR DI",
+    "ReSTIR GI",
+    "SHaRC",
+    "NRD",
+    "DLSS SR Quality"
+  ],
+  "InitialGpuUtilizationPercent": 0,
+  "ProcessExitCode": 1,
+  "RenderFramesProduced": 0,
+  "FailureStage": "DXC shader compilation",
+  "Shader": "PathTracerMaterialSpecializations.hlsl",
+  "Permutation": {
+    "PT_USE_RESTIR_DI": 1,
+    "PT_USE_RESTIR_GI": 1
+  },
+  "CompilerError": "Internal compiler error: access violation. Attempted to write from address 0x0000000000000000",
+  "Interpretation": "No image or FPS result; follow-up isolated runs showed DI+GI and GI+SHaRC compile independently, while this triple-feature combination fails in the pinned runtime."
+}

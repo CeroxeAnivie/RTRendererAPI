@@ -1,0 +1,37 @@
+{
+  "SourceCommit": "83186f513eb169d2c4e0b03738499004f8d7c14a",
+  "Java": "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+  "Jvm": [
+    "-Dfile.encoding=UTF-8",
+    "--enable-native-access=ALL-UNNAMED",
+    "--sun-misc-unsafe-memory-access=allow",
+    "-Xmx3g",
+    "-XX:-UseJVMCICompiler",
+    "-cp",
+    "demos/hex-ball/build/classes/java/test;renderer-rtxpt/build/classes/java/test;D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\libs\\RTRendererAPI-HexBallDemo-7.0.0.jar"
+  ],
+  "Entry": "top.ceroxe.rt.renderer.rtxpt.RtxptLightingNativeSelfTest",
+  "Arguments": [
+    "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\rtxpt-lighting\\rtxpt-reuse-gi-sharc-mixed-v95",
+    "mixed",
+    "1",
+    "restir-gi+sharc",
+    "rr",
+    "QUALITY"
+  ],
+  "RuntimeSource": "PackagedJar",
+  "JarSha256": "ECC4E935373B37F02C69BFBE06C75DBCF132D2CCF74A46BCDEA553CFB835FA14",
+  "ControlLighting": false,
+  "ControlDirectional": false,
+  "Reuse": false,
+  "DisableResidualPointSampling": false,
+  "ExactMis": false,
+  "DirectOnly": false,
+  "Relax": false,
+  "RayReconstruction": true,
+  "RestirGI": true,
+  "Sharc": true,
+  "DLSSQuality": "QUALITY",
+  "Spp": 1,
+  "StartedAt": "2026-11-02T06:57:45.4184582+08:00"
+}

@@ -1,0 +1,2 @@
+scene,pose,spp,features,denoiser,dlss_quality,native_frames,wall_ms,ms_per_native_frame,native_fps
+mixed,0,1,restir-gi+sharc,NRD,QUALITY,240,1843.853300,7.682722,130.162199

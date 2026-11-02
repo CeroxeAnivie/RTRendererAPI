@@ -280,11 +280,22 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        const bool rt
         }
         #endif // RTR residual point activation
 '@ 'RTR residual point activation'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            rtrResidualLocalSlotCount = lightSampler.RtrResidualLocalSlotCount();' @'
+            // Power sampling has no local table; never read stale NEE-AT slots.
+            if (localCount > 0) rtrResidualLocalSlotCount = lightSampler.RtrResidualLocalSlotCount(); // RTR only active local stratum
+'@ 'RTR only active local stratum'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            RtrSumPointLights(result, lightSampler, shadingData, bsdf, preScatterPath, sampleGenerator, workingContext);' @'
             RtrSumPointLights(result, lightSampler, shadingData, bsdf, preScatterPath, sampleGenerator, workingContext);
         if (rtrConditionalPointSampling && rtrResidualGlobalProxyCount == 0 && rtrResidualLocalSlotCount == 0)
             return result; // RTR every stochastic proxy belongs to an exactly summed point
-'@ 'RTR empty residual stratum'
+'@ 'RTR every stochastic proxy belongs to an exactly summed point'
+# Repair repeated insertions made by the old marker, which was absent from its
+# own replacement. Keep the generated shader stable across repeated builds.
+$neePath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli'
+$neeText=[IO.File]::ReadAllText($neePath)
+$emptyResidual='        if \(rtrConditionalPointSampling && rtrResidualGlobalProxyCount == 0 && rtrResidualLocalSlotCount == 0\)\r?\n            return result; // RTR every stochastic proxy belongs to an exactly summed point'
+$neeText=[regex]::Replace($neeText,'('+ $emptyResidual +')(?:\r?\n'+ $emptyResidual +')+','$1')
+[IO.File]::WriteAllText($neePath,$neeText,$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' 'GenerateLightSample(workingContext, shadingData, bsdf, candidateSampleCount, localCount, globalCount, sampleGenerator, lightSampler);' @'
 GenerateLightSample(workingContext, shadingData, bsdf, candidateSampleCount, localCount, globalCount,
                 sampleGenerator, lightSampler, rtrConditionalPointSampling, rtrResidualGlobalProxyCount, rtrResidualLocalSlotCount); // RTR residual sample call
@@ -553,7 +564,7 @@ if($StreamlineSdk){
 if($LASTEXITCODE -ne 0){throw 'RTXPT native configure failed'}
 if($ConfigureOnly){return}
 & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath $cmake `
-    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','--parallel','1','--',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
+    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','--parallel','1','--','/p:MultiProcessorCompilation=false',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
     -WorkingDirectory $sdk -MemoryLimitGB $MemoryLimitGB
 if($LASTEXITCODE -ne 0){throw 'RTXPT JNI bridge build failed'}
 & (Join-Path $sdk 'bin/rtxpt_streamline_cache_selftest.exe')

@@ -24,11 +24,13 @@
 #include <GLFW/glfw3native.h>
 #include "rtxpt_shutdown.h"
 #include "rtxpt_shared_frames.h"
+#include "rtxpt_material_policy.h"
 extern SampleUIData g_sampleUIData;
 
 namespace {
 class HostPathTracer final : public AdvancedPathTracer {
     bool smallPointLighting=false;
+    int previousNeeType=2;
     bool lightingSceneDirty=true;
     bool lightingPolicyLogged=false;
     bool eligibleLightingScene=false;
@@ -58,6 +60,15 @@ public:
     nvrhi::ITexture* HostDisplayColor() const { return m_renderTargets ? m_renderTargets->LdrColor.Get() : nullptr; }
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();
+        const char* disableGuides=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES");
+        const bool applyGuides=!(disableGuides && std::string(disableGuides)=="1");
+        const auto guideStats=ApplyDefaultTransmissionDenoisingGuides(GetScene()->GetSceneGraph().get(),applyGuides);
+        if(applyGuides) {
+            donut::log::info("RTXPT transmission denoising guides: transmissiveMaterials=%zu decompositionEnabled=%zu defaultedToTransmission=%zu gpuMaterialsUpdated=%zu",
+                guideStats.transmissiveMaterials,guideStats.decompositionEnabled,guideStats.defaultedToTransmission,guideStats.gpuMaterialsUpdated);
+        } else {
+            donut::log::info("RTXPT transmission denoising guides: disabled for diagnostic control");
+        }
         lightingSceneDirty=true;
         lightingPolicyLogged=false;
     }
@@ -84,8 +95,16 @@ public:
         const bool enabled=eligibleLightingScene && supportedRealtimePolicy
             && !(overrideValue && std::string(overrideValue)=="0");
         if(enabled==smallPointLighting)return;
+        const char* samplerControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER");
+        if(enabled) {
+            previousNeeType=g_sampleUIData.NEEType;
+            if(samplerControl && std::string(samplerControl)=="power")g_sampleUIData.NEEType=1;
+        } else {
+            g_sampleUIData.NEEType=previousNeeType;
+        }
         smallPointLighting=enabled;
-        donut::log::info("RTXPT exact point sum %s; native NEE-AT sampling and feedback remain enabled",enabled?"ACTIVE":"INACTIVE");
+        donut::log::info("RTXPT exact point sum %s; native light sampler=%d (1=power, 2=NEE-AT)",
+            enabled?"ACTIVE":"INACTIVE",g_sampleUIData.NEEType);
     }
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);

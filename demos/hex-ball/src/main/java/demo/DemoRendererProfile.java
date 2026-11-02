@@ -8,6 +8,7 @@ import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.DenoisingOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
 import top.ceroxe.rt.renderer.api.LowLatencyOptions;
+import top.ceroxe.rt.renderer.api.PathTracingOptions;
 import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RayTracingOptimizationOptions;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
@@ -31,11 +32,12 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig rtxptInteractive() {
-        // RR suppresses 1-SPP lighting noise; the Quality input ratio keeps small glass details sharp.
+        // Use RTXPT's native SHaRC cache to improve indirect-light convergence before RR.
         var highQualityReconstruction = FrameReconstructionOptions.recommended().toBuilder()
                 .quality(FrameReconstructionOptions.Quality.QUALITY)
                 .build();
         return DemoApiControls.configure(RendererConfig.presentation().copyBuilder()
+                .pathTracing(PathTracingOptions.recommended())
                 .frameReconstruction(highQualityReconstruction)
                 .denoising(DenoisingOptions.recommended())
                 .frameGeneration(configuredGenerationPolicy()).gpuTimingsEnabled(true).build());

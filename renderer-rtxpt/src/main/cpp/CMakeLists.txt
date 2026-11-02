@@ -10,7 +10,9 @@ if(MSVC)
             COMPILE_PDB_NAME "${host_tool}-host")
     endforeach()
 endif()
-add_library(rtrenderer_rtxpt SHARED "${CMAKE_CURRENT_LIST_DIR}/rtxpt_jni.cpp")
+add_library(rtrenderer_rtxpt SHARED
+    "${CMAKE_CURRENT_LIST_DIR}/rtxpt_jni.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/rtxpt_material_policy.cpp")
 add_executable(rtxpt_native_control "${CMAKE_CURRENT_LIST_DIR}/rtxpt_native_control.cpp")
 add_executable(rtxpt_streamline_cache_selftest EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_LIST_DIR}/rtxpt_streamline_cache_selftest.cpp")

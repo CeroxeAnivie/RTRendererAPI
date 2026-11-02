@@ -25,6 +25,8 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
             throw new IllegalArgumentException("RTXPT ReSTIR uses one sample per pixel");
         if(reconstruction==Reconstruction.DLSS_RR && dlssQuality==DlssQuality.ULTRA_QUALITY)
             throw new IllegalArgumentException("RTXPT 1.9 cannot safely combine DLSS Ray Reconstruction with Ultra Quality; use Quality or DLAA");
+        if(restirDi && restirGi && sharc)
+            throw new IllegalArgumentException("The pinned RTXPT 1.9 runtime crashes compiling ReSTIR DI + ReSTIR GI + SHaRC together");
     }
     /** Official realtime path: 1 SPP, DLSS-RR Balanced, SHaRC, SER and Reflex, FG off. */
     public static RtxptOptions recommended() {

@@ -1,5 +1,15 @@
 # RTXPT 弹球噪声与细节修复
 
+## 当前验收状态（v113）
+
+**尚未达到“相同参数、保持旧帧率并消除过度发糊”的要求。** 下文 RR Quality 是历史缓解实验，不能当作 SR Balanced 同配置修复通过。当前锁定 2560×1440 输出、1485×835 输入、1 SPP、SR Balanced、FG 关闭；金属球与玻璃球分开比较。
+
+实际局部灯光表在每个重复槽位存储整段长度。原条件采样重复累加段长，使采样概率与返回的 PDF 不匹配；现按物理槽位计数并使用上游查找恢复概率。CPU 穷举覆盖重复槽位、128/256/512 容量和空残余分布。金属球同配置 v106→v112 为 163.545443→177.551655 FPS（+8.56%），尚未恢复旧 v22 的 249.338277 FPS。
+
+v110→v111 的玻璃球静止帧间 MAE 为 0.714707→0.688227/255，但相对 v113 的 32-SPP exact-MIS 参照，静态误差 4.960173→5.335115、运动误差 6.018126→6.389126，不能宣称画质已改善。阴影边缘检查 PASS 只代表该局部细节未超阈值，不代表整幅画面或拖影验收通过。
+
+v108/v109 GPU 计时确认主要差异在 PathTrace：自定义条件采样 2.9685 ms，上游采样对照 0.9127 ms。下一候选是对照旧快版本使用的上游 power sampling，保持正确的残余采样概率；该候选尚未验收，不改变 Demo 默认值。
+
 ## 结论
 
 噪声来自弹球场景在 1 SPP 下的路径追踪照明方差；原先纯 SR 不做去噪，环境光和间接反射都把采样噪声直接留在画面里。原生 DLSS RR 把静止画面的帧间 RGB MAE 从 0.714 降至约 0.071/255，噪声源得到压制。Balanced 输入档仍会把玻璃内部的小细节轻微抹软，因此弹球 Demo 默认改为 RR + Quality 输入档。没有改灯光能量、材质、场景或 RTXPT 的内部实现。
@@ -59,3 +69,19 @@ v89 的 RELAX 结果已由分析器确认不是“只少一点噪声”：边缘
 RTXPT 1.9 的 RR + Ultra Quality 组合曾进入 native 崩溃路径。适配层现在在创建/更新 native renderer 前直接拒绝这一组合，并提示改用 RR Quality 或 DLAA；普通 DLSS SR 的 Ultra Quality 仍保留。CPU-only adapter test 覆盖两边的行为。
 
 结论按实际证据收口：弹球 Demo 当前采用 **RR Quality + 1 SPP**，已把此前严重噪声/拖影压到可用画面，且不再使用会糊边的 RELAX。纯 1-SPP 路径仍存在环境/间接反弹的残余采样误差，RR 也会轻微平滑细节；本轮没有证据支持“所有光照与动态场景的噪声完全消失”，所以不把这个状态写成全场景、零残噪。对应完整对照图和原始运行记录为 `data/hexball-native-20261101/residual-glass-rr-dlaa-v86-*`、`residual-glass-rr-quality-sharc-v87-*`、`residual-glass-relax-quality-v89-*`；多类光源整帧检查为 `rtxpt-rr-quality-v88-*`。
+
+## 输出合成修复后的 ReSTIR 复核（v90–v96）
+
+在 RTXPT 无降噪合成修复之后，用同一打包 JAR、1920×1080 输出、1 SPP、FG 关闭，复测上游 ReSTIR 路径。画质参考为同一混合玻璃/面积灯场景的 32-SPP 图；参照 MAE 不能单独区分噪声与积分偏差，因此同时保留连续帧差异和平均亮度。默认 RR Quality 的相同场景数据来自 v88。
+
+| 路径 | 重建/去噪 | 整图参照 MAE /255 | 连续静止帧 MAE /255 | 原生 FPS | 对 RR Quality 的判断 |
+|---|---|---:|---:|---:|---|
+| RR Quality | DLSS RR + Quality | 1.2213 | 0.0387 | 136.69 | 基线 |
+| ReSTIR DI | DLSS SR Quality + NRD | 13.7819 | 0.0478 | 108.76 | 明显偏亮、误差大，慢 20.4% |
+| ReSTIR GI | DLSS SR Quality + NRD | 1.4921 | 0.0190 | 134.66 | 连续帧更稳，但参照更差，慢 1.5% |
+| ReSTIR DI + GI | DLSS SR Quality + NRD | 13.8964 | 0.0418 | 93.73 | 偏亮、误差大，慢 31.4% |
+| ReSTIR GI + SHaRC | DLSS SR Quality + NRD | 1.4171 | 0.0185 | 130.16 | 仍比 RR 误差大，慢 4.8% |
+
+这些数据说明低帧间波动不等于画质更正确；当前 RTXPT 1.9 的 ReSTIR 组合没有解决这张混合图的残噪，DI 路径还明显改变了能量。它们不替换 RR Quality 默认，也不把“上游功能状态显示 ACTIVE”当成验收通过。
+
+完整 ReSTIR DI + GI + SHaRC 在 shader 编译期触发 RTXPT 1.9 内置 DXC 访问冲突，没有产出帧或有效 FPS；分拆后 DI+GI、GI+SHaRC 都能完成混合场景。现 `RtxptOptions` 在进入 native 前拒绝三者齐开，CPU adapter test 覆盖被拒组合和仍可用的两组配对。原始记录为 `rtxpt-full-reuse-quality-v90-*`、`rtxpt-reuse-di-mixed-v91-*`、`rtxpt-reuse-gi-mixed-v92-*`、`rtxpt-reuse-di-gi-mixed-v94-*`、`rtxpt-reuse-gi-sharc-mixed-v95-*`；逐帧对照图与指标为 `rtxpt-postmerge-mixed-*-v93/v96.*`。

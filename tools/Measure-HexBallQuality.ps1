@@ -8,10 +8,14 @@ param(
     [switch]$DisableResidualPointSampling,
     [switch]$ExactMis,
     [switch]$ApproximateMis,
+    [ValidateSet('Upstream','Power')][string]$LightSampler='Upstream',
     [switch]$Sharc,
     [switch]$RestirGi,
     [ValidateSet('AUTO','ULTRA_QUALITY','QUALITY','BALANCED','PERFORMANCE','ULTRA_PERFORMANCE','DLAA')][string]$Quality='AUTO',
-    [ValidateSet('none','original-lights','quarter-lights','no-points','no-sun','no-sky','no-environment')][string]$LightingProbe='none'
+    [ValidateSet('Upstream','D','E','F')][string]$RrPreset='Upstream',
+    [ValidateSet('none','original-lights','quarter-lights','no-points','no-sun','no-sky','no-environment')][string]$LightingProbe='none',
+    [switch]$AllowDirtySource,
+    [switch]$DisableTransmissionGuides
 )
 $ErrorActionPreference='Stop'
 if($SmallPointCandidate -and $ControlLighting){throw 'Choose candidate or original lighting control, not both.'}
@@ -23,9 +27,20 @@ $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
 $effectiveQuality=$Quality
 if($effectiveQuality -eq 'AUTO'){$effectiveQuality=if($Mode -eq 'default'){'QUALITY'}else{'BALANCED'}}
-if((& git status --porcelain | Where-Object {$_ -notmatch '^.. docs/quality/data/'})) {
+if(!$AllowDirtySource -and (& git status --porcelain | Where-Object {$_ -notmatch '^.. docs/quality/data/'})) {
     throw 'Commit source changes before hardware verification.'
 }
+$sourcePaths=@((& git diff --name-only HEAD -- . ':(exclude)docs/quality/data/**') +
+    (& git ls-files --others --exclude-standard | Where-Object {$_ -notlike 'docs/quality/data/*'})) | Sort-Object -Unique
+$sourceManifest=@($sourcePaths | ForEach-Object {
+    if(Test-Path -LiteralPath $_ -PathType Leaf){"$_=$((Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash)"}
+})
+$sourceDigestHasher=[Security.Cryptography.SHA256]::Create()
+try {
+    $sourceDigestInput=[Text.Encoding]::UTF8.GetBytes(($sourceManifest -join "`n"))
+    $sourceDigest=([BitConverter]::ToString($sourceDigestHasher.ComputeHash($sourceDigestInput))).Replace('-','')
+}
+finally {$sourceDigestHasher.Dispose()}
 $output=Join-Path $repo 'docs/quality/data/hexball-native-20261101'
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $prefix=Join-Path $output $Tag
@@ -50,6 +65,7 @@ $settings=[ordered]@{
         '-Xmx3g','-XX:-UseJVMCICompiler','-cp',$classpath);
     Entry='demo.RtxptHexBallQualitySelfTest';Arguments=@($Mode,$(if($Glass){'glass'}else{'metal'}),$images,$LightingProbe,$(if($Sharc){'sharc'}elseif($RestirGi){'restirgi'}else{'none'}),$effectiveQuality);
     StartedAt=(Get-Date -Format o);NativeSha256=(Get-FileHash 'build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll').Hash;
+    WorkingTreeSourceSha256=$sourceDigest;WorkingTreeSourceFiles=$sourcePaths;
     Width=2560;Height=1440;Spp=$(if($Mode -in @('reference','direct-reference')){32}else{1});FrameGeneration=$false;StageProfile=$false
     RuntimeSource=$(if($PackagedRuntime){'PackagedJar'}else{'BuildDirectory'})
     SmallPointCandidate=[bool]$SmallPointCandidate
@@ -57,9 +73,12 @@ $settings=[ordered]@{
     DisableResidualPointSampling=[bool]$DisableResidualPointSampling
     ExactMis=[bool]$ExactMis
     ApproximateMis=[bool]$ApproximateMis
+    LightSampler=$LightSampler
     Sharc=[bool]$Sharc
     RestirGi=[bool]$RestirGi
+    DisableTransmissionGuides=[bool]$DisableTransmissionGuides
     Quality=$effectiveQuality
+    RrPreset=$RrPreset
     LightingProbe=$LightingProbe
 }
 if($PackagedRuntime) {
@@ -72,14 +91,26 @@ $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
 $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
+$oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
+$oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
+$oldRrPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(if($LightSampler -eq 'Power'){'power'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$(if($DisableTransmissionGuides){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$(if($RrPreset -eq 'Upstream'){$null}else{$RrPreset})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     $runLog=Get-Content -LiteralPath ($prefix+'.log') -Raw
+    if($Glass -and $DisableTransmissionGuides -and $runLog -notmatch 'disabled for diagnostic control'){
+        throw 'Transmission-guide control was not active; discard this run as invalid evidence.'
+    }
+    if($Glass -and !$DisableTransmissionGuides -and $runLog -notmatch 'defaultedToTransmission=[1-9][0-9]*'){
+        throw 'RTXPT did not configure any transmissive material guide; discard this run as invalid evidence.'
+    }
     if($SmallPointCandidate -and $runLog -notmatch 'RTXPT exact point sum ACTIVE'){
         throw 'Candidate was not active for this scene; discard this run as invalid evidence.'
     }
@@ -93,4 +124,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$oldResidual
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
+    $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$oldSampler
+    $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$oldTransmissionGuides
+    $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$oldRrPreset
 }

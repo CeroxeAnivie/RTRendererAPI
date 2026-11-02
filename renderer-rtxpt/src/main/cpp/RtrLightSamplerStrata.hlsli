@@ -39,16 +39,22 @@ uint RtrResidualProxyCount()
     return count;
 }
 
-// Each compressed NEE-AT entry is repeated proxyCount times in the fixed-size list.
+// LightsBaker::LastScanAndWriteOut stores each run's length in EVERY slot of
+// that run. Subtract each excluded light's length once, using the upstream
+// lookup, instead of re-adding its length at every physical slot.
 uint RtrResidualLocalSlotCount()
 {
-    uint count = 0;
-    for (uint i = 0; i < RTXPT_LIGHTING_LOCAL_PROXY_COUNT; ++i)
+    uint count = RTXPT_LIGHTING_LOCAL_PROXY_COUNT;
+    const uint first = ControlBuffer[0].EnvmapQuadNodeCount;
+    for (uint i = 0; i < ControlBuffer[0].AnalyticLightCount; ++i)
     {
-        uint lightIndex, proxyCount;
-        ReadLocal(i, lightIndex, proxyCount);
-        if (lightIndex != NEEAT_INVALID_LIGHT_INDEX && proxyCount > 0 && !RtrCoveredPoint(lightIndex))
-            count += proxyCount;
+        const uint pointIndex = first + i;
+        if (!RtrCoveredPoint(pointIndex))
+            continue;
+        const uint packed = LocalLightBinarySearch(LocalSamplingBuffer, LocalSamplingTilePos,
+            pointIndex, RTXPT_LIGHTING_LOCAL_PROXY_COUNT, RTXPT_LIGHTING_LOCAL_PROXY_BINARY_SEARCH_STEPS);
+        if (packed != NEEAT_INVALID_LIGHT_INDEX)
+            count -= min(count, NEEAT::UnpackMiniListCount(packed));
     }
     return count;
 }
@@ -112,23 +118,46 @@ uint RtrSampleResidualLocal(const float rnd, const uint residualSlotCount, out f
         return NEEAT_INVALID_LIGHT_INDEX;
     }
 
-    uint remaining = min(uint(rnd * residualSlotCount), residualSlotCount - 1u);
-    for (uint i = 0; i < RTXPT_LIGHTING_LOCAL_PROXY_COUNT; ++i)
+    // The local list is sorted by light index, like the upstream global proxy
+    // list. Map a residual rank past the at-most-four excluded contiguous runs.
+    uint proxyIndex = min(uint(rnd * residualSlotCount), residualSlotCount - 1u);
+    const uint first = ControlBuffer[0].EnvmapQuadNodeCount;
+    for (uint i = 0; i < ControlBuffer[0].AnalyticLightCount; ++i)
     {
-        uint lightIndex, proxyCount;
-        ReadLocal(i, lightIndex, proxyCount);
-        if (lightIndex == NEEAT_INVALID_LIGHT_INDEX || proxyCount == 0 || RtrCoveredPoint(lightIndex))
+        const uint pointIndex = first + i;
+        if (!RtrCoveredPoint(pointIndex))
             continue;
-        if (remaining < proxyCount)
+
+        uint left = 0;
+        uint right = RTXPT_LIGHTING_LOCAL_PROXY_COUNT;
+        while (left < right)
         {
-            pdf = float(proxyCount) / float(residualSlotCount);
-            return lightIndex;
+            const uint middle = left + ((right - left) >> 1);
+            uint lightIndex, proxyCount;
+            ReadLocal(middle, lightIndex, proxyCount);
+            if (lightIndex < pointIndex)
+                left = middle + 1;
+            else
+                right = middle;
         }
-        remaining -= proxyCount;
+        if (left < RTXPT_LIGHTING_LOCAL_PROXY_COUNT && proxyIndex >= left)
+        {
+            uint lightIndex, proxyCount;
+            ReadLocal(left, lightIndex, proxyCount);
+            if (lightIndex == pointIndex)
+                proxyIndex += proxyCount;
+        }
     }
 
-    pdf = 0;
-    return NEEAT_INVALID_LIGHT_INDEX;
+    if (proxyIndex >= RTXPT_LIGHTING_LOCAL_PROXY_COUNT)
+    {
+        pdf = 0;
+        return NEEAT_INVALID_LIGHT_INDEX;
+    }
+    uint lightIndex, proxyCount;
+    ReadLocal(proxyIndex, lightIndex, proxyCount);
+    pdf = float(proxyCount) / float(residualSlotCount);
+    return lightIndex;
 }
 
 float RtrNativeGlobalPdfForFeedback(uint lightIndex)

@@ -78,7 +78,7 @@ public final class DemoFeatureIntegrationSelfTest {
             require(profile.frameReconstruction().quality()==FrameReconstructionOptions.Quality.QUALITY,
                 "RTXPT glass uses the native quality input ratio to retain detail under RR");
             require(profile.denoising().equals(DenoisingOptions.recommended()),"RTXPT demo uses native recommended RR denoising");
-            require(!profile.pathTracing().radianceCache().requested(),"Keep SHaRC disabled in the lightweight ball demo");
+            require(profile.pathTracing().radianceCache().requested(),"RTXPT demo uses the native radiance cache by default");
             require(profile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X
                 &&profile.frameGeneration().preference().requested(),"Default demo FG remains 2x");
             System.setProperty(property,"true");
@@ -91,7 +91,7 @@ public final class DemoFeatureIntegrationSelfTest {
         var scene=new DemoScene(true);var initial=scene.initialTransaction();
         var glassProfile=DemoRendererProfile.rtxptInteractive();
         require(glassProfile.denoising().equals(DenoisingOptions.recommended())
-            &&!glassProfile.pathTracing().radianceCache().requested(),"Glass uses native RR without adding SHaRC");
+            &&glassProfile.pathTracing().radianceCache().requested(),"Glass uses native RR with RTXPT's recommended indirect cache");
         require(glassProfile.frameGeneration().preference().requested()
             &&glassProfile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X,"Glass defaults to 2x FG");
         var oldLights=original.initialTransaction().upserts().lights();

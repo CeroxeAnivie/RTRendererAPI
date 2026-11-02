@@ -121,7 +121,7 @@ public final class RtxptHexBallQualitySelfTest {
                         require(status.denoising()==denoise,"Actual native denoising, including RR");
                         require(status.restirDi()==reuse,"Actual upstream direct-light reuse");
                         require(status.restirGi()==restirGi,"Actual requested ReSTIR GI state");
-                        require(status.sharc()==sharc,"Actual requested SHaRC state");
+                        require(status.sharc()==policy.pathTracing().radianceCache().requested(),"Actual requested SHaRC state");
                         require(!status.frameGeneration(),"FG off for quality evidence");
                         int expectedDlssMode=dlaa?6:switch(quality) {
                             case PERFORMANCE -> 1;

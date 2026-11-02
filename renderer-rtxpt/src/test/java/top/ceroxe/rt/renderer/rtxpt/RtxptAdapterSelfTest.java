@@ -57,6 +57,29 @@ public final class RtxptAdapterSelfTest {
             require(srUltraQuality.reconstruction()==RtxptAccess.Reconstruction.DLSS
                 &&srUltraQuality.dlssQuality()==RtxptOptions.DlssQuality.ULTRA_QUALITY,
                 "Ultra Quality remains available for the independent DLSS SR path");
+            var diGi=new PathTracingOptions(1,20,2,RendererFeaturePreference.DISABLED,
+                RendererFeaturePreference.REQUIRED,RendererFeaturePreference.REQUIRED);
+            var giSharc=new PathTracingOptions(1,20,2,RendererFeaturePreference.REQUIRED,
+                RendererFeaturePreference.DISABLED,RendererFeaturePreference.REQUIRED);
+            var diGiOptions=RtxptOptions.resolve(profile.toBuilder().pathTracing(diGi).build());
+            require(diGiOptions.restirDi()&&diGiOptions.restirGi(),
+                "RTXPT ReSTIR DI and GI remain independently composable without SHaRC");
+            var giSharcOptions=RtxptOptions.resolve(profile.toBuilder().pathTracing(giSharc).build());
+            require(giSharcOptions.restirGi()&&giSharcOptions.sharc(),
+                "RTXPT ReSTIR GI and SHaRC remain independently composable without DI");
+            require(giSharcOptions.reconstruction()==RtxptAccess.Reconstruction.DLSS,
+                "ReSTIR GI retains the tested standalone-NRD and DLSS SR path");
+            var diSharc=new PathTracingOptions(1,20,2,RendererFeaturePreference.REQUIRED,
+                RendererFeaturePreference.REQUIRED,RendererFeaturePreference.DISABLED);
+            var diSharcOptions=RtxptOptions.resolve(profile.toBuilder().pathTracing(diSharc).build());
+            require(diSharcOptions.restirDi()&&diSharcOptions.sharc()
+                &&diSharcOptions.reconstruction()==RtxptAccess.Reconstruction.DLSS
+                &&diSharcOptions.standaloneDenoiser(),
+                "ReSTIR DI plus SHaRC retains the measured standalone-NRD and DLSS SR path");
+            var allReuse=new PathTracingOptions(1,20,2,RendererFeaturePreference.REQUIRED,
+                RendererFeaturePreference.REQUIRED,RendererFeaturePreference.REQUIRED);
+            rejected(()->RtxptOptions.resolve(profile.toBuilder().pathTracing(allReuse).build()),
+                "RTXPT DI+GI+SHaRC is rejected before native shader compilation");
             for(boolean standalone:new boolean[]{false,true}) {
                 var reconstruction=standalone?RtxptAccess.Reconstruction.DLSS:RtxptAccess.Reconstruction.DLSS_RR;
                 var actual=new RtxptAccess.RuntimeStatus(1280,720,reconstruction,standalone,true,false,false,true,
