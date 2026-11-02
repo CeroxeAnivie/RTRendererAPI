@@ -397,6 +397,85 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidate
             #endif
 '@ 'RTR directional samples carry directions'
 # Match the legacy route's summed continuous surface response without deleting
+# Full legacy lighting-input parity uses the same scene values at every receiver.
+foreach($header in @('RtrLegacyLightingInputs.hlsli','RtrLegacyDirect.hlsli')) {
+    [IO.File]::WriteAllText((Join-Path $sdk ('Rtxpt/Shaders/PathTracer/'+$header)),
+        [IO.File]::ReadAllText((Join-Path $repo ('renderer-rtxpt/src/main/cpp/'+$header))),$utf8)
+}
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerShared.h' '    PathTracerCameraData camera;' @'
+    float4  RtrLegacyAmbient;
+    float4  RtrLegacySky;
+    uint    RtrLegacyLightCount;
+    uint3   RtrLegacyPadding; // RTR complete legacy lighting inputs
+    PathTracerCameraData camera;
+'@ 'RTR complete legacy lighting inputs'
+Patch-Once 'Rtxpt/Shaders/Bindings/ShaderResourceBindings.hlsli' '#endif // #ifndef __SHADER_RESOURCE_BINDINGS_HLSLI__' @'
+struct RtrLegacyLight { float4 PositionType; float4 DirectionRange; float4 ColorIntensity; float4 ConeShadow; };
+StructuredBuffer<RtrLegacyLight> t_RtrLegacyLights : register(t96); // RTR original API light records
+#endif // #ifndef __SHADER_RESOURCE_BINDINGS_HLSLI__
+'@ 'RTR original API light records'
+Patch-Once 'Rtxpt/Sample.cpp' '    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(95));' @'
+    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(96)); // RTR original lighting buffer layout
+    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(95));
+'@ 'RTR original lighting buffer layout'
+Patch-Once 'Rtxpt/Sample.cpp' '        bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(95, m_CommonPasses->m_BlackTexture));' @'
+        bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(96, m_lightsBaker->GetLightBuffer())); // RTR original lighting buffer placeholder
+        bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(95, m_CommonPasses->m_BlackTexture));
+'@ 'RTR original lighting buffer placeholder'
+Patch-Once 'Rtxpt/Shaders/PathTracer/BSDFs/StandardBSDF.hlsli' '#endif // __STANDARD_BSDF_HLSLI__' @'
+#if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+#include "../RtrLegacyLightingInputs.hlsli" // RTR legacy sampling and sky input
+#endif
+#endif // __STANDARD_BSDF_HLSLI__
+'@ 'RTR legacy sampling and sky input'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    inline NEEResult HandleNEE(const PathState preScatterPath,' @'
+    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+    #include "RtrLegacyDirect.hlsli" // RTR legacy direct shading at every receiver
+    #endif
+    inline NEEResult HandleNEE(const PathState preScatterPath,
+'@ 'RTR legacy direct shading at every receiver'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        LightSampler lightSampler = Bridge::CreateLightSampler( preScatterPath.GetPixelPos(), preScatterPath.rayCone.getWidth(), preScatterPath.GetSceneLength() );' @'
+        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+        return RtrLegacyDirect(preScatterPath,shadingData,bsdf,workingContext); // RTR replace complete stochastic light input
+        #endif
+        LightSampler lightSampler = Bridge::CreateLightSampler( preScatterPath.GetPixelPos(), preScatterPath.rayCone.getWidth(), preScatterPath.GetSceneLength() );
+'@ 'RTR replace complete stochastic light input'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        // only ActiveBSDF::cRandomNumberCountForSampling are actually used;' @'
+        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+        BSDFSample legacySample;bool legacyValid=false;
+        if(bsdf.data.SpecularTransmission()>0)
+        {
+            // The first rough interface already has both branches in the native PSD queue.
+            if(path.getVertexIndex()==1 && workingContext.PtConsts.GetActiveDenoisingLayerCount()>=3)
+                return false;
+            legacyValid=RtrLegacyOpticalSample(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,path.getVertexIndex(),legacySample);
+        }
+        else if(path.getVertexIndex()==1)
+            legacyValid=RtrLegacyMetalSample(shadingData,bsdf.data,path.GetPixelPos(),g_MiniConst.params.x,
+                uint(max(1.0,rcp(workingContext.PtConsts.invSubSampleCount))),legacySample);
+        return legacyValid && GenerateScatterRay(legacySample,shadingData,bsdf,path,workingContext); // RTR legacy optical continuation
+        #endif
+        // only ActiveBSDF::cRandomNumberCountForSampling are actually used;
+'@ 'RTR legacy optical continuation'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerDenoisingLayersHandleHit.hlsli' '            surface.bsdf.evalDeltaLobes(surface.shadingData, deltaLobes, deltaLobeCount, nonDeltaPart);' @'
+            #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+            if(vertexIndex==1 && surface.bsdf.data.SpecularTransmission()>0 && workingContext.PtConsts.GetActiveDenoisingLayerCount()>=3)
+                RtrLegacyFirstInterface(surface.shadingData,surface.bsdf.data,pixelPos,workingContext.PtConsts.frameIndex,
+                    deltaLobes,deltaLobeCount,nonDeltaPart); // RTR old first-interface split in native queue
+            else
+            #endif
+            surface.bsdf.evalDeltaLobes(surface.shadingData, deltaLobes, deltaLobeCount, nonDeltaPart);
+'@ 'RTR old first-interface split in native queue'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        NEEBSDFMISInfo misInfo = NEEBSDFMISInfo::Unpack16bit(path.GetPackedMISInfo());' @'
+        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+        environmentEmission=ToLpRadiance(RtrLegacySky(rayDir,workingContext.PtConsts)); // RTR old horizon and solar sky
+        #else
+        NEEBSDFMISInfo misInfo = NEEBSDFMISInfo::Unpack16bit(path.GetPackedMISInfo());
+'@ 'RTR old horizon and solar sky'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '#if RTXPT_FIREFLY_FILTER && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD' @'
+        #endif // RTR old horizon and solar sky
+#if RTXPT_FIREFLY_FILTER && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
+'@ '#endif // RTR old horizon and solar sky'
 # The bounded legacy history runs after current radiance merge, before SR tags.
 [IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/ProcessingPasses/RtrLegacySrHistory.hlsl'),
     [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrLegacySrHistory.hlsl')),$utf8)
