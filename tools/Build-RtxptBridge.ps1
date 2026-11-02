@@ -398,7 +398,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidate
 '@ 'RTR directional samples carry directions'
 # Match the legacy route's summed continuous surface response without deleting
 # Full legacy lighting-input parity uses the same scene values at every receiver.
-foreach($header in @('RtrLegacyLightingInputs.hlsli','RtrLegacyDirect.hlsli')) {
+foreach($header in @('RtrLegacyLightingInputs.hlsli','RtrLegacyDirect.hlsli','RtrLegacyTransportTrace.hlsli')) {
     [IO.File]::WriteAllText((Join-Path $sdk ('Rtxpt/Shaders/PathTracer/'+$header)),
         [IO.File]::ReadAllText((Join-Path $repo ('renderer-rtxpt/src/main/cpp/'+$header))),$utf8)
 }
@@ -428,6 +428,12 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/BSDFs/StandardBSDF.hlsli' '#endif // __STAN
 #endif
 #endif // __STANDARD_BSDF_HLSLI__
 '@ 'RTR legacy sampling and sky input'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '#include "PathTracerTypes.hlsli"' @'
+#include "PathTracerTypes.hlsli"
+#if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+#include "RtrLegacyTransportTrace.hlsli" // RTR shared trace in raygen and hit shaders
+#endif
+'@ 'RTR shared trace in raygen and hit shaders'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    inline NEEResult HandleNEE(const PathState preScatterPath,' @'
     #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
     #include "RtrLegacyDirect.hlsli" // RTR legacy direct shading at every receiver

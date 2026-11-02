@@ -14,9 +14,16 @@ float3 RtrLegacyShadowVisibility(const RayDesc inputRay,const PathState source,c
         Surface hit=Bridge::loadSurface(query.CommittedInstanceIndex(),query.CommittedGeometryIndex(),query.CommittedPrimitiveIndex(),
             query.CommittedTriangleBarycentrics(),inputRay.Direction,shadow.rayCone,source.getVertexIndex(),source.GetPixelPos(),context.Debug);
         float transmission=hit.bsdf.data.SpecularTransmission();
-        if(transmission<=0)return 0;
         // Same straight-through direct-light approximation as gsShadowVisibilityDetailed.
         float fresnel=RtrLegacyFresnel(hit.shadingData.GetEta(),abs(dot(inputRay.Direction,hit.shadingData.N)));
+        #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
+        if(RtrLegacyTracePixel(source.GetPixelPos(),context.PtConsts.frameIndex) && (source.getCounter((PackedCounters)3)&4u)!=0)
+            RtrLegacyTracePrint("shadow",104u,uint4(source.GetPixelPos(),(source.getCounter((PackedCounters)3)&3u)-1u,source.getVertexIndex()),
+                float4(event,hit.shadingData.MaterialID(),t_PTMaterialData[hit.shadingData.MaterialID()].TransmissionFactor,transmission),
+                float4(hit.shadingData.frontFacing,hit.shadingData.GetEta(),abs(dot(inputRay.Direction,hit.shadingData.N)),fresnel),
+                inputRay.Direction,hit.shadingData.posW,throughput);
+        #endif
+        if(transmission<=0)return 0;
         throughput*=transmission*(1-fresnel)*hit.bsdf.data.Transmission();
         if(max3(throughput)<=0)return 0;
         float3 position=hit.shadingData.posW;
