@@ -138,15 +138,15 @@ bool RtrLegacyOpticalSample(const ShadingData sd,const StandardBSDFData data,uin
     float eta=sd.GetEta(),f=RtrLegacyFresnel(eta,max(dot(sd.V,h),0));
     float branchRandom=RtrLegacyOpticalRandom(pixel,seed^0xb5297a4du^RTR_LEGACY_OPTICAL_BRANCH_SEED_XOR,event);
     bool reflection=branchRandom<f;
-    bool splitSecond=false;
+    bool exactBranch=false;
     #if PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
-    // Conditional expectation at the next junction, extending the exact
-    // first-interface split (PBRT Whitted: SpecularReflect + SpecularTransmit).
+    // Conditional expectation at the high-contribution junctions, extending
+    // the first-interface split (PBRT Whitted: SpecularReflect + SpecularTransmit).
     // All later interfaces retain the existing transport estimator.
-    splitSecond=vertex==2 && (branchControl&4u)!=0;
-    if(splitSecond)reflection=(branchControl&8u)==0;
+    exactBranch=vertex<=RTR_LEGACY_EXACT_INTERFACE_COUNT && (branchControl&4u)!=0;
+    if(exactBranch)reflection=((branchControl>>(3u+RTR_LEGACY_EXACT_INTERFACE_COUNT-vertex))&1u)==0;
     #endif
-    float branchWeight=splitSecond?(reflection?f:1-f):1;
+    float branchWeight=exactBranch?(reflection?f:1-f):1;
     result.wo=reflection?normalize(reflect(-sd.V,h)):refract(-sd.V,h,eta);
     float nl=dot(sd.N,result.wo);
     bool valid=branchWeight>0 && dot(result.wo,result.wo)>0 && (reflection?nl>0:nl<0);
@@ -158,7 +158,7 @@ bool RtrLegacyOpticalSample(const ShadingData sd,const StandardBSDFData data,uin
     if(RtrLegacyTracePixel(pixel,sequence))
         RtrLegacyTracePrint("choice",105u,RtrLegacyTraceKey(pixel,RtrLegacyTraceBranch(branchControl),vertex,sequence),
             float4(f,branchRandom,reflection,data.Roughness()),float4(eta,seed,event,result.lobe),sd.N,h,result.wo,
-            float4(splitSecond,valid,branchWeight,nl));
+            float4(exactBranch,valid,branchWeight,nl));
     #endif
     return valid;
 }

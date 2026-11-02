@@ -47,10 +47,8 @@ float3 RtrLegacyShadowVisibility(const RayDesc inputRay,const PathState source,c
 NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const ActiveBSDF bsdf,const WorkingContext context)
 {
     NEEResult result=NEEResult::empty();
-    // Shared primary receiver is shaded once; only its optical continuations split.
-    if(path.getVertexIndex()==1 && (path.getCounter((PackedCounters)3)&3u)==2u)return result;
-    // Second-junction replay shares its prefix lighting with the first replay.
-    if(path.getVertexIndex()<=2 && (path.getCounter((PackedCounters)3)&8u)!=0)return result;
+    // Every replay prefix is shaded once, before its weighted branches diverge.
+    if(RtrLegacyReplayPrefixDuplicate(path.getCounter((PackedCounters)3),path.getVertexIndex()))return result;
     float surfaceWeight=1-bsdf.data.SpecularTransmission();
     if(surfaceWeight<=0)return result;
     float3 baseColor=RtrLegacyBaseColor(sd,bsdf.data);

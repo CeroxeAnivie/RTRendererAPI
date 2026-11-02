@@ -735,6 +735,61 @@ foreach($relative in @('Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli','Rtx
     $text=$text.Replace('(path.getCounter((PackedCounters)3)&3u)-1u','RtrLegacyTraceBranch(path.getCounter((PackedCounters)3))')
     [IO.File]::WriteAllText($path,$text,$utf8)
 }
+# Extend the two-junction fix without increasing PathPayload or borrowing the
+# nested-dielectric counters. Unvisited suffixes are skipped, rather than traced
+# repeatedly and counted multiple times. This is a finite Whitted tree prefix.
+$rtrReplayPath=Join-Path $sdk 'Rtxpt/Shaders/PathTracerSample.hlsl'
+$rtrReplayText=[IO.File]::ReadAllText($rtrReplayPath)
+$rtrReplayText=$rtrReplayText.Replace('rtrOpticalReplay<4;','rtrOpticalReplay<(1u<<RTR_LEGACY_EXACT_INTERFACE_COUNT);')
+$rtrReplayText=$rtrReplayText.Replace('((rtrOpticalReplay>>1u)+1u)|((rtrOpticalReplay&1u)<<3u)',
+    '((rtrOpticalReplay>>(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))+1u)|((rtrOpticalReplay&((1u<<(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))-1u))<<3u)')
+$rtrReplayText=$rtrReplayText.Replace('if((path.getCounter((PackedCounters)3)&16u)==0)rtrOpticalReplay++; // RTR skip absent second junction, no duplicated energy',
+    'rtrOpticalReplay+=(1u<<(RTR_LEGACY_EXACT_INTERFACE_COUNT-min(rtrOpticalDepth,RTR_LEGACY_EXACT_INTERFACE_COUNT)))-1u; // RTR skip absent second junction, no duplicated energy')
+[IO.File]::WriteAllText($rtrReplayPath,$rtrReplayText,$utf8)
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    //float3 lastOrigin = float3(1e30f,1e30f,1e30f);' @'
+    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+    uint rtrOpticalDepth=0;uint rtrFirstOpticalVertex=0; // RTR visited optical prefix depth
+    #endif
+    //float3 lastOrigin = float3(1e30f,1e30f,1e30f);
+'@ 'RTR visited optical prefix depth'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '        nextHit(path, tMinMax, workingContext);' @'
+        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+        path.flagsAndVertexIndex&=~RTR_LEGACY_OPTICAL_VERTEX_FLAG;
+        #endif
+        nextHit(path, tMinMax, workingContext);
+        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+        if((path.flagsAndVertexIndex&RTR_LEGACY_OPTICAL_VERTEX_FLAG)!=0)
+        {
+            rtrOpticalDepth=max(rtrOpticalDepth,path.getVertexIndex());
+            if(rtrFirstOpticalVertex==0)rtrFirstOpticalVertex=path.getVertexIndex();
+        } // RTR count actual optical junctions across native hit calls
+        #endif
+'@ 'RTR count actual optical junctions across native hit calls'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' @'
+        if(bsdf.data.SpecularTransmission()>0)
+        {
+'@ @'
+        if(bsdf.data.SpecularTransmission()>0)
+        {
+            #if PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+            path.flagsAndVertexIndex|=RTR_LEGACY_OPTICAL_VERTEX_FLAG; // RTR report actual optical junction to raygen
+            path.setCounter((PackedCounters)3,path.getCounter((PackedCounters)3)|4u); // RTR glass also reached through a primary metal reflection
+            #endif
+'@ 'RTR report actual optical junction to raygen'
+$rtrReplayHitPath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli'
+$rtrReplayHitText=[IO.File]::ReadAllText($rtrReplayHitPath)
+$rtrReplayHitText=[regex]::Replace($rtrReplayHitText,
+    'if\(path\.getVertexIndex\(\)==2 && \(path\.getCounter\(\(PackedCounters\)3\)&4u\)!=0\)\s*path\.setCounter\(\(PackedCounters\)3,path\.getCounter\(\(PackedCounters\)3\)\|16u\);',
+    '// RTR junction activity is carried in the otherwise unused payload flag.')
+$rtrReplayHitText=[regex]::Replace($rtrReplayHitText,
+    'if\(\(path\.getVertexIndex\(\)==1 && \(path\.getCounter\(\(PackedCounters\)3\)&3u\)==2u\)\s*\|\| \(path\.getVertexIndex\(\)<=2 && \(path\.getCounter\(\(PackedCounters\)3\)&8u\)!=0\)\)surfaceEmission=0;',
+    'if(RtrLegacyReplayPrefixDuplicate(path.getCounter((PackedCounters)3),path.getVertexIndex()))surfaceEmission=0;')
+[IO.File]::WriteAllText($rtrReplayHitPath,$rtrReplayHitText,$utf8)
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    } // RTR first-interface paths committed and summed' @'
+    // A non-glass primary has no first-interface glass branch to enumerate.
+    if(rtrFirstOpticalVertex>1 && rtrOpticalReplay>=((1u<<(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))-1u))break;
+    } // RTR first-interface paths committed and summed
+'@ 'A non-glass primary has no first-interface glass branch to enumerate.'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        const float rrVal = sqrt(Luminance(path.GetThp())); // closer to perceptual' @'
         #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
         // gsOpticalContinuation uses its event budget, not throughput roulette.
