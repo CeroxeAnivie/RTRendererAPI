@@ -445,10 +445,25 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        // only
         BSDFSample legacySample;bool legacyValid=false;
         if(bsdf.data.SpecularTransmission()>0)
         {
-            // The first rough interface already has both branches in the native PSD queue.
-            if(path.getVertexIndex()==1 && workingContext.PtConsts.GetActiveDenoisingLayerCount()>=3)
-                return false;
-            legacyValid=RtrLegacyOpticalSample(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,path.getVertexIndex(),legacySample);
+            #if PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+            if(path.getVertexIndex()==1)
+            {
+                // gsEvaluateSecondaryTransport traces both first-interface branches.
+                // PSD queues alone contain guides, not completed lighting paths.
+                path.setCounter((PackedCounters)3,workingContext.RtrLegacyFirstBranch+1);
+                DeltaLobe lobes[cMaxDeltaLobes];uint count;float nonDeltaPart;
+                RtrLegacyFirstInterface(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,g_MiniConst.params.x,
+                    uint(max(1.0,rcp(workingContext.PtConsts.invSubSampleCount))),lobes,count,nonDeltaPart);
+                uint selected=1-workingContext.RtrLegacyFirstBranch;
+                legacySample=(BSDFSample)0;legacySample.wo=lobes[selected].dir;legacySample.weight=lobes[selected].thp;
+                legacySample.lobe=(uint)(selected==0?LobeType::DeltaTransmission:LobeType::DeltaReflection);
+                legacySample.lobeP=lobes[selected].probability;
+                legacyValid=any(legacySample.weight>0);
+            }
+            else
+            #endif
+                legacyValid=RtrLegacyOpticalSample(shadingData,bsdf.data,path.GetPixelPos(),workingContext.PtConsts.frameIndex,
+                    path.getVertexIndex(),max(1u,path.getCounter((PackedCounters)3)),legacySample);
         }
         else if(path.getVertexIndex()==1)
             legacyValid=RtrLegacyMetalSample(shadingData,bsdf.data,path.GetPixelPos(),g_MiniConst.params.x,
@@ -459,13 +474,63 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        // only
 '@ 'RTR legacy optical continuation'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerDenoisingLayersHandleHit.hlsli' '            surface.bsdf.evalDeltaLobes(surface.shadingData, deltaLobes, deltaLobeCount, nonDeltaPart);' @'
             #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
-            if(vertexIndex==1 && surface.bsdf.data.SpecularTransmission()>0 && workingContext.PtConsts.GetActiveDenoisingLayerCount()>=3)
-                RtrLegacyFirstInterface(surface.shadingData,surface.bsdf.data,pixelPos,workingContext.PtConsts.frameIndex,
-                    deltaLobes,deltaLobeCount,nonDeltaPart); // RTR old first-interface split in native queue
+            if(vertexIndex==1 && surface.bsdf.data.SpecularTransmission()>0)
+            {
+                deltaLobeCount=0;nonDeltaPart=1; // RTR first interface stays the fill starting point
+            }
             else
             #endif
             surface.bsdf.evalDeltaLobes(surface.shadingData, deltaLobes, deltaLobeCount, nonDeltaPart);
 '@ 'RTR old first-interface split in native queue'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerTypes.hlsli' '        RWTexture2D<float4>     OutputColor;' @'
+        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+        uint RtrLegacyFirstBranch; // RTR actual first-interface branch selector
+        #endif
+        RWTexture2D<float4>     OutputColor;
+'@ 'RTR actual first-interface branch selector'
+Patch-Once 'Rtxpt/Shaders/PathTracerBridgeDonut.hlsli' '    ret.PtConsts = g_Const.ptConsts;' @'
+    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+    ret.RtrLegacyFirstBranch=0; // RTR default branch context
+    #endif
+    ret.PtConsts = g_Const.ptConsts;
+'@ 'RTR default branch context'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    //float3 lastOrigin = float3(1e30f,1e30f,1e30f);' @'
+    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+    [loop] for(uint rtrFirstBranch=0;rtrFirstBranch<2;rtrFirstBranch++) // RTR trace both real dielectric branches
+    {
+    #endif
+    //float3 lastOrigin = float3(1e30f,1e30f,1e30f);
+'@ 'RTR trace both real dielectric branches'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    PathTracer::WorkingContext workingContext = Bridge::GetWorkingContext();' @'
+    PathTracer::WorkingContext workingContext = Bridge::GetWorkingContext();
+    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+    workingContext.RtrLegacyFirstBranch=rtrFirstBranch; // RTR first-interface selector
+    #endif
+'@ 'RTR first-interface selector'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    PathTracer::CommitPixel( path, workingContext );' @'
+    PathTracer::CommitPixel( path, workingContext );
+    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+    // Counter 3 is unused upstream. Only first-interface dielectrics set it;
+    // opaque pixels keep their single path and never repeat direct lighting.
+    if(path.getCounter((PackedCounters)3)==0)break;
+    } // RTR first-interface paths committed and summed
+    #endif
+'@ 'RTR first-interface paths committed and summed'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        if (!hasSharcCachedRadiance && any(surfaceEmission>0))' @'
+        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+        if(path.getVertexIndex()==1 && workingContext.RtrLegacyFirstBranch>0)surfaceEmission=0; // RTR shared primary emission once
+        #endif
+        if (!hasSharcCachedRadiance && any(surfaceEmission>0))
+'@ 'RTR shared primary emission once'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '            SharcHandlePathLimit(surfaceEmission);' @'
+            #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
+            // gsOpticalContinuation shades the final receiver before ending its budget.
+            NEEResult terminal=RtrLegacyDirect(path,shadingData,bsdf,workingContext);
+            float4 terminalRadiance=terminal.GetRadianceAndSpecAvg();
+            AccumulatePathRadiance(workingContext,path,terminalRadiance.rgb,terminalRadiance.w,false,false); // RTR shade final legacy receiver
+            #endif
+            SharcHandlePathLimit(surfaceEmission);
+'@ 'RTR shade final legacy receiver'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        NEEBSDFMISInfo misInfo = NEEBSDFMISInfo::Unpack16bit(path.GetPackedMISInfo());' @'
         #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
         float horizon=.35+.65*saturate(rayDir.y*.5+.5);

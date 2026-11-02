@@ -59,10 +59,12 @@ float RtrLegacyFresnel(float eta,float cosine)
     return .5*(rs*rs+rp*rp);
 }
 
-float3 RtrLegacyDielectricNormal(const ShadingData sd, const StandardBSDFData data, uint2 pixel, uint sequence, uint seed)
+float3 RtrLegacyDielectricNormal(const ShadingData sd, const StandardBSDFData data, uint2 pixel, uint sequence, uint seed,
+    uint sampleIndex=0,uint sampleCount=1)
 {
     float2 u=float2(RtrLegacyOpticalRandom(pixel,seed^sequence^0x1b56c4e9u,0),
         RtrLegacyOpticalRandom(pixel,seed^sequence^0x91e10da5u,0));
+    u=float2((sampleIndex+u.x)/max(sampleCount,1u),frac(RtrLegacyRadicalInverse(sampleIndex)+u.y));
     return RtrLegacyVisibleNormal(sd.N,sd.V,data.Roughness(),u);
 }
 
@@ -108,14 +110,13 @@ bool RtrLegacyMetalSample(const ShadingData sd,const StandardBSDFData data,uint2
     return true;
 }
 
-// Both first-interface branches enter the upstream PSD queue, using the same
-// sampled micro-normal and the old route's exact Fresnel / G2-over-G1 weights.
-void RtrLegacyFirstInterface(const ShadingData sd,const StandardBSDFData data,uint2 pixel,uint sequence,
+// Both actual fill paths share a micro-normal, matching gsEvaluateSecondaryTransport.
+void RtrLegacyFirstInterface(const ShadingData sd,const StandardBSDFData data,uint2 pixel,uint sequence,uint sampleIndex,uint sampleCount,
     out DeltaLobe lobes[cMaxDeltaLobes],out uint count,out float nonDeltaPart)
 {
     for(uint i=0;i<cMaxDeltaLobes;i++)lobes[i]=DeltaLobe::make();
     count=2;float transmission=data.SpecularTransmission();nonDeltaPart=1-transmission;
-    float3 h=RtrLegacyDielectricNormal(sd,data,pixel,sequence,0);
+    float3 h=RtrLegacyDielectricNormal(sd,data,pixel,sequence,sampleIndex*0x967a889bu,sampleIndex,sampleCount);
     float eta=sd.GetEta(),f=RtrLegacyFresnel(eta,max(dot(sd.V,h),0));
     float3 reflected=normalize(reflect(-sd.V,h)),transmitted=refract(-sd.V,h,eta);
     lobes[0].transmission=1;lobes[1].transmission=0;
@@ -127,12 +128,13 @@ void RtrLegacyFirstInterface(const ShadingData sd,const StandardBSDFData data,ui
     lobes[0].probability=1-f;lobes[1].probability=f;
 }
 
-bool RtrLegacyOpticalSample(const ShadingData sd,const StandardBSDFData data,uint2 pixel,uint sequence,uint vertex,out BSDFSample result)
+bool RtrLegacyOpticalSample(const ShadingData sd,const StandardBSDFData data,uint2 pixel,uint sequence,uint vertex,uint seed,out BSDFSample result)
 {
     result=(BSDFSample)0;
-    float3 h=RtrLegacyDielectricNormal(sd,data,pixel,sequence,(vertex+1u)*0x02e5be93u);
+    uint event=vertex>=2?vertex-2:0;
+    float3 h=RtrLegacyDielectricNormal(sd,data,pixel,sequence,seed^((event+1u)*0x02e5be93u));
     float eta=sd.GetEta(),f=RtrLegacyFresnel(eta,max(dot(sd.V,h),0));
-    bool reflection=RtrLegacyOpticalRandom(pixel,vertex^0xb5297a4du,vertex)<f;
+    bool reflection=RtrLegacyOpticalRandom(pixel,seed^0xb5297a4du,event)<f;
     result.wo=reflection?normalize(reflect(-sd.V,h)):refract(-sd.V,h,eta);
     float nl=dot(sd.N,result.wo);
     if(reflection?nl<=0:nl>=0) return false;

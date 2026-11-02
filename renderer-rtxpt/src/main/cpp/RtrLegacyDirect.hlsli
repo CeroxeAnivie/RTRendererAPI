@@ -3,6 +3,8 @@
 NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const ActiveBSDF bsdf,const WorkingContext context)
 {
     NEEResult result=NEEResult::empty();
+    // Shared primary receiver is shaded once; only its optical continuations split.
+    if(path.getVertexIndex()==1 && context.RtrLegacyFirstBranch>0)return result;
     float surfaceWeight=1-bsdf.data.SpecularTransmission();
     float3 baseColor=RtrLegacyBaseColor(sd,bsdf.data);
     float metallic=saturate(float(bsdf.data.Metallic())),roughness=clamp(float(bsdf.data.Roughness()),.025,1);
