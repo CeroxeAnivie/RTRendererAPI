@@ -1,0 +1,309 @@
+{
+  "source": "docs\\quality\\data\\hexball-native-20261101\\rtxpt-glass-fg-replay-diagnostic-v192-gpu.csv",
+  "sampling": "# frames=3815,stride=16,warmup=240,dropped=0",
+  "queues": {
+    "graphics": {
+      "sampled_frames": 224,
+      "sum_exclusive_ms": 5.084105571428571,
+      "ranking": [
+        {
+          "name": "PathTrace",
+          "mean_exclusive_ms": 2.982258142857143,
+          "p50_exclusive_ms": 2.888672,
+          "p95_exclusive_ms": 3.98064,
+          "max_exclusive_ms": 4.407744,
+          "mean_inclusive_ms": 2.9822581428571424,
+          "queue_share_percent": 58.658462161303326
+        },
+        {
+          "name": "DLSS",
+          "mean_exclusive_ms": 1.2572921428571429,
+          "p50_exclusive_ms": 1.275728,
+          "p95_exclusive_ms": 1.460896,
+          "max_exclusive_ms": 1.8608,
+          "mean_inclusive_ms": 1.2572921428571429,
+          "queue_share_percent": 24.72985907143268
+        },
+        {
+          "name": "PathTracePrePass",
+          "mean_exclusive_ms": 0.30562342857142855,
+          "p50_exclusive_ms": 0.309616,
+          "p95_exclusive_ms": 0.344288,
+          "max_exclusive_ms": 0.430624,
+          "mean_inclusive_ms": 0.3056234285714286,
+          "queue_share_percent": 6.011350950085643
+        },
+        {
+          "name": "Frame",
+          "mean_exclusive_ms": 0.1317922857142856,
+          "p50_exclusive_ms": 0.12921600000000044,
+          "p95_exclusive_ms": 0.1716160000000002,
+          "max_exclusive_ms": 0.20243199999999995,
+          "mean_inclusive_ms": 5.084105571428571,
+          "queue_share_percent": 2.592241326673584
+        },
+        {
+          "name": "NoDenoiserFinalMerge",
+          "mean_exclusive_ms": 0.10626342857142858,
+          "p50_exclusive_ms": 0.105536,
+          "p95_exclusive_ms": 0.113792,
+          "max_exclusive_ms": 0.11824,
+          "mean_inclusive_ms": 0.10626342857142856,
+          "queue_share_percent": 2.090110582451376
+        },
+        {
+          "name": "TLAS Cull+Build",
+          "mean_exclusive_ms": 0.04962428571428571,
+          "p50_exclusive_ms": 0.050255999999999995,
+          "p95_exclusive_ms": 0.057184,
+          "max_exclusive_ms": 0.06768,
+          "mean_inclusive_ms": 0.04962428571428572,
+          "queue_share_percent": 0.9760671767549842
+        },
+        {
+          "name": "ShaderDebug",
+          "mean_exclusive_ms": 0.03543628571428571,
+          "p50_exclusive_ms": 0.036064,
+          "p95_exclusive_ms": 0.04208,
+          "max_exclusive_ms": 0.056032,
+          "mean_inclusive_ms": 0.04033557142857143,
+          "queue_share_percent": 0.6970013745078183
+        },
+        {
+          "name": "ToneMapping",
+          "mean_exclusive_ms": 0.02851542857142857,
+          "p50_exclusive_ms": 0.029216,
+          "p95_exclusive_ms": 0.034592,
+          "max_exclusive_ms": 0.043168,
+          "mean_inclusive_ms": 0.028515428571428574,
+          "queue_share_percent": 0.5608740450174422
+        },
+        {
+          "name": "ComputeWeights",
+          "mean_exclusive_ms": 0.02764485714285714,
+          "p50_exclusive_ms": 0.028032,
+          "p95_exclusive_ms": 0.032864,
+          "max_exclusive_ms": 0.042176,
+          "mean_inclusive_ms": 0.02764485714285714,
+          "queue_share_percent": 0.543750651013513
+        },
+        {
+          "name": "Blit",
+          "mean_exclusive_ms": 0.02268085714285714,
+          "p50_exclusive_ms": 0.023039999999999998,
+          "p95_exclusive_ms": 0.026912,
+          "max_exclusive_ms": 0.035744,
+          "mean_inclusive_ms": 0.02268085714285714,
+          "queue_share_percent": 0.44611302468457786
+        },
+        {
+          "name": "ShaderDebugEndFrame",
+          "mean_exclusive_ms": 0.018885,
+          "p50_exclusive_ms": 0.01672,
+          "p95_exclusive_ms": 0.05536,
+          "max_exclusive_ms": 0.05936,
+          "mean_inclusive_ms": 0.018885000000000002,
+          "queue_share_percent": 0.37145176736944796
+        },
+        {
+          "name": "EnvLightsSubdivideBase",
+          "mean_exclusive_ms": 0.017519714285714284,
+          "p50_exclusive_ms": 0.016816,
+          "p95_exclusive_ms": 0.024288,
+          "max_exclusive_ms": 0.033728,
+          "mean_inclusive_ms": 0.017519714285714284,
+          "queue_share_percent": 0.3445977672881301
+        },
+        {
+          "name": "CreateProxyJobs",
+          "mean_exclusive_ms": 0.015538,
+          "p50_exclusive_ms": 0.014848,
+          "p95_exclusive_ms": 0.024032,
+          "max_exclusive_ms": 0.026016,
+          "mean_inclusive_ms": 0.015538,
+          "queue_share_percent": 0.30561914542687224
+        },
+        {
+          "name": "EnvLightsSubdivideBoost",
+          "mean_exclusive_ms": 0.014571857142857143,
+          "p50_exclusive_ms": 0.013568,
+          "p95_exclusive_ms": 0.02384,
+          "max_exclusive_ms": 0.025216,
+          "mean_inclusive_ms": 0.014571857142857142,
+          "queue_share_percent": 0.286615943318475
+        },
+        {
+          "name": "ComputeProxyCounts",
+          "mean_exclusive_ms": 0.014010857142857143,
+          "p50_exclusive_ms": 0.013344,
+          "p95_exclusive_ms": 0.024096,
+          "max_exclusive_ms": 0.02624,
+          "mean_inclusive_ms": 0.014010857142857143,
+          "queue_share_percent": 0.27558155404157475
+        },
+        {
+          "name": "EnvmapAndAnalyticLightBuffers",
+          "mean_exclusive_ms": 0.013483285714285715,
+          "p50_exclusive_ms": 0.011056,
+          "p95_exclusive_ms": 0.029632,
+          "max_exclusive_ms": 0.03648,
+          "mean_inclusive_ms": 0.013483285714285713,
+          "queue_share_percent": 0.2652046761196007
+        },
+        {
+          "name": "ExecuteProxyJobs",
+          "mean_exclusive_ms": 0.010980428571428572,
+          "p50_exclusive_ms": 0.008416,
+          "p95_exclusive_ms": 0.023872,
+          "max_exclusive_ms": 0.030272,
+          "mean_inclusive_ms": 0.010980428571428572,
+          "queue_share_percent": 0.2159756208277006
+        },
+        {
+          "name": "ComputeProxyBaselineOffsets",
+          "mean_exclusive_ms": 0.007894714285714286,
+          "p50_exclusive_ms": 0.002752,
+          "p95_exclusive_ms": 0.024224,
+          "max_exclusive_ms": 0.02576,
+          "mean_inclusive_ms": 0.007894714285714286,
+          "queue_share_percent": 0.15528226498837175
+        },
+        {
+          "name": "ControlDataSetup",
+          "mean_exclusive_ms": 0.007842142857142857,
+          "p50_exclusive_ms": 0.001392,
+          "p95_exclusive_ms": 0.025184,
+          "max_exclusive_ms": 0.031136,
+          "mean_inclusive_ms": 0.007842142857142857,
+          "queue_share_percent": 0.15424823003703503
+        },
+        {
+          "name": "Tris",
+          "mean_exclusive_ms": 0.0048992857142857145,
+          "p50_exclusive_ms": 0.004736,
+          "p95_exclusive_ms": 0.005472,
+          "max_exclusive_ms": 0.039744,
+          "mean_inclusive_ms": 0.0048992857142857145,
+          "queue_share_percent": 0.09636475178286032
+        },
+        {
+          "name": "EnvLightsMapPastToCurrent",
+          "mean_exclusive_ms": 0.004673714285714285,
+          "p50_exclusive_ms": 0.00208,
+          "p95_exclusive_ms": 0.021696,
+          "max_exclusive_ms": 0.024992,
+          "mean_inclusive_ms": 0.004673714285714286,
+          "queue_share_percent": 0.09192795507590196
+        },
+        {
+          "name": "LightingUpdateBegin",
+          "mean_exclusive_ms": 0.0032780000000000023,
+          "p50_exclusive_ms": 0.002160000000000016,
+          "p95_exclusive_ms": 0.009183999999999984,
+          "max_exclusive_ms": 0.03705599999999998,
+          "mean_inclusive_ms": 0.13802157142857144,
+          "queue_share_percent": 0.06447545106894632
+        },
+        {
+          "name": "OMM Updates",
+          "mean_exclusive_ms": 0.0015527142857142857,
+          "p50_exclusive_ms": 0.001696,
+          "p95_exclusive_ms": 0.00288,
+          "max_exclusive_ms": 0.003648,
+          "mean_inclusive_ms": 0.0015527142857142857,
+          "queue_share_percent": 0.030540559473040053
+        },
+        {
+          "name": "MaterialsBaker",
+          "mean_exclusive_ms": 0.0004534285714285714,
+          "p50_exclusive_ms": 0.000224,
+          "p95_exclusive_ms": 0.001696,
+          "max_exclusive_ms": 0.002656,
+          "mean_inclusive_ms": 0.0004534285714285715,
+          "queue_share_percent": 0.008918551455279155
+        },
+        {
+          "name": "UpdateLighting",
+          "mean_exclusive_ms": 0.00030914285714285755,
+          "p50_exclusive_ms": 0.0003199999999999939,
+          "p95_exclusive_ms": 0.00044800000000000395,
+          "max_exclusive_ms": 0.0008319999999999994,
+          "mean_inclusive_ms": 0.13833071428571428,
+          "queue_share_percent": 0.006080575094273509
+        },
+        {
+          "name": "ResetLightProxyCounters",
+          "mean_exclusive_ms": 0.0002495714285714286,
+          "p50_exclusive_ms": 9.6e-05,
+          "p95_exclusive_ms": 0.000192,
+          "max_exclusive_ms": 0.012928,
+          "mean_inclusive_ms": 0.0002495714285714286,
+          "queue_share_percent": 0.004908856141264235
+        },
+        {
+          "name": "Skinned BLAS Updates",
+          "mean_exclusive_ms": 0.00023028571428571428,
+          "p50_exclusive_ms": 0.000224,
+          "p95_exclusive_ms": 0.000576,
+          "max_exclusive_ms": 0.000736,
+          "mean_inclusive_ms": 0.00023028571428571428,
+          "queue_share_percent": 0.004529522667268431
+        },
+        {
+          "name": "EnvLightsBackupPast",
+          "mean_exclusive_ms": 0.00011871428571428572,
+          "p50_exclusive_ms": 9.6e-05,
+          "p95_exclusive_ms": 0.000192,
+          "max_exclusive_ms": 0.000224,
+          "mean_inclusive_ms": 0.00011871428571428572,
+          "queue_share_percent": 0.002335008273263068
+        },
+        {
+          "name": "ResetPastToCurrentHistory",
+          "mean_exclusive_ms": 0.00011828571428571429,
+          "p50_exclusive_ms": 9.6e-05,
+          "p95_exclusive_ms": 0.000192,
+          "max_exclusive_ms": 0.000224,
+          "mean_inclusive_ms": 0.0001182857142857143,
+          "queue_share_percent": 0.0023265786405076054
+        },
+        {
+          "name": "EnvLightFillLookupMap",
+          "mean_exclusive_ms": 9.742857142857143e-05,
+          "p50_exclusive_ms": 9.6e-05,
+          "p95_exclusive_ms": 0.00016,
+          "max_exclusive_ms": 0.000544,
+          "mean_inclusive_ms": 9.742857142857143e-05,
+          "queue_share_percent": 0.001916336513075105
+        },
+        {
+          "name": "PreUpdateLighting",
+          "mean_exclusive_ms": 8.971428571428571e-05,
+          "p50_exclusive_ms": 9.6e-05,
+          "p95_exclusive_ms": 0.000128,
+          "max_exclusive_ms": 0.000128,
+          "mean_inclusive_ms": 8.971428571428571e-05,
+          "queue_share_percent": 0.001764603123476783
+        },
+        {
+          "name": "Denoising Guides Bake",
+          "mean_exclusive_ms": 8.942857142857142e-05,
+          "p50_exclusive_ms": 9.6e-05,
+          "p95_exclusive_ms": 0.000128,
+          "max_exclusive_ms": 0.000128,
+          "mean_inclusive_ms": 8.942857142857144e-05,
+          "queue_share_percent": 0.0017589833683064745
+        },
+        {
+          "name": "LightingUpdateEnd",
+          "mean_exclusive_ms": 8.871428571428572e-05,
+          "p50_exclusive_ms": 9.6e-05,
+          "p95_exclusive_ms": 0.000128,
+          "max_exclusive_ms": 0.000128,
+          "mean_inclusive_ms": 8.871428571428572e-05,
+          "queue_share_percent": 0.0017449339803807043
+        }
+      ]
+    }
+  }
+}

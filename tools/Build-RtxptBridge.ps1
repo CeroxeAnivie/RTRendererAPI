@@ -858,7 +858,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    float2 tMinMax = FirstHitF
     #endif // RTR sampled first-hit initialization
 '@ 'RTR sampled first-hit initialization'
 # Migrate existing SDK checkouts as well as fresh ones. Cache hits must not
-# reconstruct the primary ray/VBuffer first, and must not retraverse the fork.
+# reconstruct the primary ray/VBuffer first.
 $replayRaygen=Join-Path $sdk 'Rtxpt/Shaders/PathTracerSample.hlsl'
 $replaySource=[IO.File]::ReadAllText($replayRaygen)
 if(!$replaySource.Contains('RTR initialize committed-intersection cache')) {
@@ -867,9 +867,7 @@ if(!$replaySource.Contains('RTR initialize committed-intersection cache')) {
     $newInit=@'
 rtrReplayCache.valid=0;rtrReplayCache.previous=0;rtrReplayCache.firstOpticalVertex=0;
     rtrReplayCache.resumeVertex=0;
-    #if USE_NVAPI_HIT_OBJECT_EXTENSION
-    rtrReplayCache.hitValid=0;
-    #endif // RTR initialize committed-intersection cache
+    // RTR initialize committed-intersection cache
 '@
     $replaySource=$replaySource.Replace($oldInit,([regex]::Replace($newInit,"`r?`n","`r`n")))
 }
@@ -908,46 +906,6 @@ if(!$replaySource.Contains('RTR initialize only cache misses')) {
 
 '@
     $replaySource=$replaySource.Substring(0,$begin)+([regex]::Replace($initializer,"`r?`n","`r`n"))+"`r`n"+$replaySource.Substring($end)
-}
-if(!$replaySource.Contains('RTR reuse native committed intersection')) {
-    $signature='void nextHit(inout PathState path, inout float2 tMinMax, const PathTracer::WorkingContext workingContext)'
-    if(!$replaySource.Contains($signature)){throw 'Native nextHit signature changed'}
-    $signatureReplacement=@'
-void nextHit(inout PathState path, inout float2 tMinMax, const PathTracer::WorkingContext workingContext
-#if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_LEGACY_REPLAY_PREFIX_CACHE
-    , inout RtrLegacyReplayCache rtrReplayCache
-#endif
-)
-'@
-    $replaySource=$replaySource.Replace($signature,([regex]::Replace($signatureReplacement,"`r?`n","`r`n")))
-    $begin=$replaySource.IndexOf('    RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES, RAYQUERY_FLAG_ALLOW_OPACITY_MICROMAPS> rayQuery;',$replaySource.IndexOf('void nextHit('))
-    $end=$replaySource.IndexOf('#if SER_SORT_ENABLED',$begin)
-    if($begin -lt 0 -or $end -lt $begin){throw 'Native traversal region changed'}
-    $traversal=$replaySource.Substring($begin,$end-$begin).Replace('    SER_HIT_OBJECT hit;','')
-    $saveHit=@'
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_LEGACY_REPLAY_PREFIX_CACHE && USE_NVAPI_HIT_OBJECT_EXTENSION
-        rtrReplayCache.SaveHit(path,rayQuery);
-        #endif
-        SER_HIT_OBJECT_INIT_FROM_RAYQ( hit, rayQuery );
-'@
-    $traversal=$traversal.Replace('        SER_HIT_OBJECT_INIT_FROM_RAYQ( hit, rayQuery );',([regex]::Replace($saveHit,"`r?`n","`r`n")))
-    $reuseHit=@'
-    SER_HIT_OBJECT hit;
-    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_LEGACY_REPLAY_PREFIX_CACHE && USE_NVAPI_HIT_OBJECT_EXTENSION
-    if(!rtrReplayCache.RestoreHit(path,hit))
-    #endif
-    { // RTR reuse native committed intersection
-'@
-    $replacement=([regex]::Replace($reuseHit,"`r?`n","`r`n"))+"`r`n"+$traversal+"    }`r`n`r`n"
-    $replaySource=$replaySource.Substring(0,$begin)+$replacement+$replaySource.Substring($end)
-    $call=@'
-        nextHit(path, tMinMax, workingContext
-        #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_LEGACY_REPLAY_PREFIX_CACHE
-            ,rtrReplayCache
-        #endif
-        );
-'@
-    $replaySource=$replaySource.Replace('        nextHit(path, tMinMax, workingContext);',([regex]::Replace($call,"`r?`n","`r`n")))
 }
 [IO.File]::WriteAllText($replayRaygen,$replaySource,$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        const float rrVal = sqrt(Luminance(path.GetThp())); // closer to perceptual' @'

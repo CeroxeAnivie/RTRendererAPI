@@ -12,6 +12,9 @@ def summarize(log):
     source = log.read_text(encoding="utf-8-sig", errors="replace")
     if "INSUFFICIENT SPACE IN SHADER_DEBUG_PRINT_BUFFER" in source:
         raise ValueError("Shader debug records overflowed; sparse work counts are incomplete.")
+    # Java and the native CRT share stdout. Remove Java progress messages which
+    # can interrupt a native record between arguments, preserving its remainder.
+    source = re.sub(r"RTXPT hex-ball:[^\r\n]*\r?\n", "", source)
     records = []
     for match in re.finditer(r"\[unformatted args\] 0: (210|211|220|221|230) ([^\r\n]*)", source):
         fields = dict(re.findall(r"(\d+): (\([^)]*\)|[^\s]+)", match[2]))
