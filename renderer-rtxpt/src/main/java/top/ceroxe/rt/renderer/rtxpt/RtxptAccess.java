@@ -64,6 +64,22 @@ public interface RtxptAccess {
     default LightingTimings lightingTimings(){return new LightingTimings(0,0,0,0,0);}
     record LightingTimings(long nativeSceneLoads,long committedBatches,long recordedUploads,
                           long uploadRecordingNanos,long historyInvalidations) { }
+    /** Cumulative native resource work; CPU queue-drain waits are distinct from command recording.
+     * GPU intervals use queue timestamps and may include CPU gaps during BLAS compaction;
+     * they do not measure GPU busy time. Completed queries are collected without blocking. */
+    default RetainedUpdateTimings retainedUpdateTimings(){return new RetainedUpdateTimings(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);}
+    record RetainedUpdateTimings(long resourceBatches,long exportedMeshVariants,long affectedMaterialVariants,long changedTextures,
+        long builtBlases,long retainedBlases,long tlasGenerations,long synchronizationWaitNanos,long recordingNanos,
+        long lightIndexBuilds,long lightIndexBuildNanos,long representedLights,
+        long reusedTextureAllocations,long gpuIntervalSamples,long gpuIntervalNanos) { }
+    enum LightSamplingMode { BACKEND_DEFAULT, EXHAUSTIVE, SPATIAL_TREE }
+    /** Counts cover the latest native frame. GPU counters require RTR_RTXPT_LIGHT_STATS=1;
+     * querying measured counters performs an explicit readback outside the render loop. */
+    default LightSamplingStatus lightSamplingStatus(){return new LightSamplingStatus(LightSamplingMode.BACKEND_DEFAULT,0,0,false,0,0,0,0);}
+    record LightSamplingStatus(LightSamplingMode mode,long representedLights,long indexNodes,boolean measured,
+        long shadedReceivers,long selectedLights,long visitedTreeNodes,long shadowTests) { }
+    enum RetainedUpdateMode { INITIAL_PUBLICATION, EXPLICIT_RESET, RESOURCE_DELTA, TRANSFORMS, LIGHTING, UNCHANGED, NATIVE_SCENE }
+    default RetainedUpdateMode retainedUpdateMode(){return RetainedUpdateMode.UNCHANGED;}
     record BridgeTimings(long frames, long frameNanos, long sceneExports, long sceneExportNanos,
             long transformBatches, long transformNanos) { }
 }

@@ -330,7 +330,7 @@ public final class RtxptCompositionSelfTest {
             require(renderer.workSnapshot().presentation().presentSamples()==0,"Hidden Vulkan compositor never presented a frame");
             require(renderer.workSnapshot().vulkanFrames()==0,"Vulkan did not duplicate complete 3D tracing");
             renderer.overlays(List.of()); // Normal-color HUD evidence, without the orange test layer.
-            host.setOverlayText("RTRendererAPI 7.0.1 - MEDIUM DEMO\nRTXPT: RR | VULKAN: GPU UI\nHUD / SCENE SELECTOR / OVERLAY LIFECYCLE VERIFIED");
+            host.setOverlayText("RTRendererAPI 7.0.2 - MEDIUM DEMO\nRTXPT: RR | VULKAN: GPU UI\nHUD / SCENE SELECTOR / OVERLAY LIFECYCLE VERIFIED");
             host.setOverlayChoices(RtxptMediumScene.LABELS,0);
             // ImGui measures a newly appearing auto-sized window before it draws its contents.
             for(int i=0;i<3;i++)require(host.renderFrame(),"Final HUD frame");

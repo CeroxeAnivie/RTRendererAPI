@@ -41,14 +41,14 @@ public final class RtxptAdapterSelfTest {
             require(json.contains("EnvironmentLight")&&json.contains("DirectionalLight"),"Native light graph");
             require(gltf.contains("KHR_materials_transmission")&&gltf.contains("KHR_materials_ior"),"Native transmission and IOR");
             require(gltf.contains("\"name\":\"i1\"")&&s.interiors.size()==1,"Interior assigned to imported material");
-            require(s.materialIors.equals(Map.of("mat0",1.5f)),"Boundary IOR is retained for native material upload");
+            require(s.materialIors.equals(Map.of(new RtxptScene.Variant(1,items.getFirst().boundary(),1).name(),1.5f)),"Boundary IOR is retained for native material upload");
             var opaque=new RtxptScene(s);
             opaque.retain(SceneTransaction.builder(2)
                 .upsert(MaterialAsset.builder(1).transmission(0).indexOfRefraction(2.618034f).build())
                 .upsert(SceneInstance.builder(1,1).build()).build());
             opaque.export(dir.resolve("opaque"),frame,opaque.items(frame));
             require(opaque.interiors.isEmpty(),"Opaque IOR does not invent a medium boundary");
-            require(opaque.materialIors.equals(Map.of("mat0",2.618034f)),"Opaque IOR survives export for native BSDF upload");
+            require(opaque.materialIors.equals(Map.of(new RtxptScene.Variant(1,null,1).name(),2.618034f)),"Opaque IOR survives export for native BSDF upload");
             require(Files.size(dir.resolve("content.bin"))>0,"Geometry is exported");
             require(gltf.contains("\"NORMAL\""),"Donut always receives explicit normals");
             require(RtxptScene.sameStructure(items,items),"Static scene does not reload");
@@ -201,7 +201,7 @@ public final class RtxptAdapterSelfTest {
         try { RtxptInputContract.requireAdvancingRevision(0,1,true);throw new AssertionError("Stale scene revision accepted"); }
         catch(SceneRevisionException expected) { }
     }
-    private static void rejected(Runnable action,String message) {
+    static void rejected(Runnable action,String message) {
         try { action.run();throw new AssertionError(message); }
         catch(IllegalArgumentException expected) { }
     }

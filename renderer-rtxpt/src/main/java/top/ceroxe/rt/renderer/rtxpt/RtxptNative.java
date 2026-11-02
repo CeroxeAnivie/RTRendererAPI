@@ -48,9 +48,15 @@ final class RtxptNative {
     static native void camera(long handle,String pose,float verticalFovRadians);
     static native void loadScene(long handle,String path);
     static native void lighting(long handle,long[] ids,float[] records,float[] sky);
+    static native void environment(long handle,float[] sun,float[] sky);
+    static native void resources(long handle,String manifest);
+    static native long[] resourceTelemetry(long handle);
+    static native long[] lightSamplingTelemetry(long handle);
+    static native void captureLinear(long handle,String path);
     static native long[] lightingTelemetry(long handle);
     static native long window(long handle);
     static native void resize(long handle,int width,int height);
+    static native void windowState(long handle,int state);
     static native void settings(long handle,int maxBounces,int diffuseBounces,boolean reflex,
             int frameGenerationMode,int generatedFrames,int samplesPerPixel,int realtimeAa,
             int dlssMode,boolean standaloneDenoiser,boolean relaxDenoiser,boolean restirDi,boolean restirGi,boolean sharc,int exactOpticalInterfaces);

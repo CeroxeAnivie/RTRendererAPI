@@ -8,12 +8,14 @@ final class RtxptLighting {
     final EnvironmentState environment;
     final List<SceneLight> lights;
     private RtxptLighting(EnvironmentState environment,Collection<SceneLight> lights) {
-        this.environment=Objects.requireNonNull(environment);
-        this.lights=lights.stream().sorted(Comparator.comparingLong(SceneLight::id)).toList();
+        this(environment,lights.stream().sorted(Comparator.comparingLong(SceneLight::id)).toList());
     }
+    private RtxptLighting(EnvironmentState environment,List<SceneLight> lights){this.environment=Objects.requireNonNull(environment);this.lights=lights;}
     static RtxptLighting of(EnvironmentState environment,Collection<SceneLight> lights) {return new RtxptLighting(environment,lights);}
+    static RtxptLighting sorted(EnvironmentState environment,List<SceneLight> lights){return new RtxptLighting(environment,lights);}
     long[] ids() {var ids=new long[lights.size()+1];ids[0]=-1;for(int i=0;i<lights.size();i++)ids[i+1]=lights.get(i).id();return ids;}
     float[] sky() {var e=environment;return new float[]{e.skyRed(),e.skyGreen(),e.skyBlue(),e.ambientIntensity()};}
+    float[] sun(){var e=environment;return new float[]{0,0,0,0,e.sunDirectionX(),e.sunDirectionY(),e.sunDirectionZ(),0,e.sunRed(),e.sunGreen(),e.sunBlue(),e.sunIntensity(),0,0,1,0};}
     float[] records() {
         var e=environment;var values=new float[Math.multiplyExact(lights.size()+1,16)];
         values[4]=e.sunDirectionX();values[5]=e.sunDirectionY();values[6]=e.sunDirectionZ();

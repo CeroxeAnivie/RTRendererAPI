@@ -10,7 +10,7 @@
 * [Java API 参考](Java-API-Reference)
 * [Vulkan 专家互操作](Vulkan-Interop)
 * [兼容性与版本策略](COMPATIBILITY)
-* [7.0.1 当前合同与迁移](7.0.1.md)
+* [7.0.2 当前合同与迁移](7.0.2.md)
 * [运行时与制品](runtime-distribution.md)
 * [文档与实测索引](documentation-inventory.md)
 * [介质性能优化规范](quality/medium-performance-optimization)

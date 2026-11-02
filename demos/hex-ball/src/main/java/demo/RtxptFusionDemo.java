@@ -18,7 +18,7 @@ public final class RtxptFusionDemo {
         var config=DemoRendererProfile.rtxptMediumInteractive(false).copyBuilder().gpuTimingsEnabled(false).build();
         try(var renderer=RtxptComposedRenderer.openRtxptPresentation(
                 RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),config,
-                "RTRendererAPI 7.0.1 - RTXPT + Vulkan Fusion")) {
+                "RTRendererAPI 7.0.2 - RTXPT + Vulkan Fusion")) {
             int width=1920,height=1080,mode=0;
             long revision=1,sequence=0,hud=0,report=0,reportFrames=0;
             String scene="mixed";
@@ -30,7 +30,7 @@ public final class RtxptFusionDemo {
             renderer.submit(RtxptMediumDemo.frameRequest(sequence++,revision,width,height));
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
             System.out.println("FUSION nativeWindow="+host.windowHandle());
-            host.setWindowTitle("RTRendererAPI 7.0.1 - RTXPT + Vulkan Fusion");
+            host.setWindowTitle("RTRendererAPI 7.0.2 - RTXPT + Vulkan Fusion");
             host.setOverlayChoices(RtxptMediumScene.LABELS,0);
             var keys=new DemoWindowKeys(host.windowHandle());
             var stats=new RenderStats();

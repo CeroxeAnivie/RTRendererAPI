@@ -1,5 +1,11 @@
 // Direct port of gsEvaluatePbrSurface / gsSceneLight / gsDirectContribution.
 // Called at every shading receiver, including receivers reached through glass.
+#if RTR_SCENE_LIGHT_STATS
+RWByteAddressBuffer u_RtrLightStats : register(u96);
+void RtrCountLightWork(uint byteOffset) { u_RtrLightStats.InterlockedAdd(byteOffset,1); }
+#else
+void RtrCountLightWork(uint byteOffset) { }
+#endif
 float3 RtrSceneShadowVisibility(const RayDesc inputRay,const PathState source,const WorkingContext context)
 {
     // Keep the common unblocked case on the native fast visibility query.
@@ -44,6 +50,34 @@ float3 RtrSceneShadowVisibility(const RayDesc inputRay,const PathState source,co
     return 0;
 }
 
+float RtrLightImportance(RtrSceneLight node,float3 position)
+{
+    float3 delta=max(max(node.PositionType.xyz-position,position-node.DirectionRange.xyz),0);
+    float distanceSquared=dot(delta,delta);
+    if(node.ColorIntensity.y==0 && sqrt(distanceSquared)>=node.ColorIntensity.z)return 0;
+    return node.ColorIntensity.x/(node.ColorIntensity.y>0?1:max(distanceSquared,1));
+}
+
+uint RtrSelectSceneLight(float3 position,float u,uint count,out float probability)
+{
+    uint index=0;probability=1;
+    [loop]for(uint depth=0;depth<32;depth++)
+    {
+        RtrSceneLight node=t_RtrSceneLights[count+index];
+        RtrCountLightWork(8);
+        if(node.ColorIntensity.w>=0)return uint(node.ColorIntensity.w);
+        uint left=uint(node.PositionType.w),right=uint(node.DirectionRange.w);
+        RtrSceneLight a=t_RtrSceneLights[count+left],b=t_RtrSceneLights[count+right];
+        float wa=RtrLightImportance(a,position),wb=RtrLightImportance(b,position);
+        float uniformProbability=a.ConeShadow.x/node.ConeShadow.x;
+        // A uniform mixture preserves support even for a weak or occluded light.
+        float p=wa+wb>0?lerp(uniformProbability,wa/(wa+wb),.95):uniformProbability;
+        if(u<p){index=left;probability*=p;u=min(u/p,.99999994);}
+        else{index=right;probability*=1-p;u=min((u-p)/(1-p),.99999994);}
+    }
+    return 0; // Balanced CPU construction has depth <= 21 at native capacity.
+}
+
 NEEResult RtrSceneDirect(const PathState path,const ShadingData sd,const ActiveBSDF bsdf,const WorkingContext context)
 {
     NEEResult result=NEEResult::empty();
@@ -51,13 +85,21 @@ NEEResult RtrSceneDirect(const PathState path,const ShadingData sd,const ActiveB
     if(RtrSceneReplayPrefixDuplicate(path.getCounter((PackedCounters)3),path.getVertexIndex()))return result;
     float surfaceWeight=1-bsdf.data.SpecularTransmission();
     if(surfaceWeight<=0)return result;
+    RtrCountLightWork(0);
     float3 baseColor=RtrSceneBaseColor(sd,bsdf.data);
     float metallic=saturate(float(bsdf.data.Metallic())),roughness=clamp(float(bsdf.data.Roughness()),.025,1);
     float3 diffuse=baseColor*(1-metallic)*context.PtConsts.RtrSceneAmbient.rgb;
     float3 specular=0;
-    for(uint i=0;i<context.PtConsts.RtrSceneLightCount;i++)
+    uint count=context.PtConsts.RtrSceneLightCount;
+    bool exhaustive=count<=RTR_SCENE_EXACT_LIGHT_LIMIT+1;
+    uint samples=exhaustive?count:max(context.PtConsts.NEEFullSamples,1u);
+    for(uint sampleIndex=0;sampleIndex<samples;sampleIndex++)
     {
+        float probability=1;uint i=sampleIndex;
+        if(!exhaustive)i=RtrSelectSceneLight(sd.posW,RtrSceneOpticalRandom(path.GetPixelPos(),
+            context.PtConsts.frameIndex^((sampleIndex+1)*0x967a889bu)^path.getCounter((PackedCounters)3),path.getVertexIndex()),count,probability);
         RtrSceneLight light=t_RtrSceneLights[i];
+        RtrCountLightWork(4);
         float attenuation=1,maximumDistance=1e20;float3 direction;
         if(light.PositionType.w==0)direction=-normalize(light.DirectionRange.xyz);
         else
@@ -73,12 +115,14 @@ NEEResult RtrSceneDirect(const PathState path,const ShadingData sd,const ActiveB
                 attenuation*=light.ConeShadow.x==light.ConeShadow.y?step(light.ConeShadow.y,cone):smoothstep(light.ConeShadow.y,light.ConeShadow.x,cone);
             }
         }
-        float3 radiance=light.ColorIntensity.rgb*light.ColorIntensity.a*attenuation;
+        float estimatorWeight=exhaustive?1:rcp(probability*samples);
+        float3 radiance=light.ColorIntensity.rgb*light.ColorIntensity.a*attenuation*estimatorWeight;
         float3 inputRadiance=radiance;
         float nl=max(dot(sd.N,direction),0);
         if(nl<=0 || max3(radiance)<=0)continue;
         if(light.ConeShadow.z>0)
         {
+            RtrCountLightWork(12);
             LightSample sample=LightSample::make();sample.Direction=direction;sample.Distance=maximumDistance;
             RayDesc ray=ComputeVisibilityRay(sample,sd);
             radiance*=RtrSceneShadowVisibility(ray,path,context);

@@ -33,6 +33,12 @@ if($CheckPaths){
     return
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+$retainedPatch=Join-Path $PSScriptRoot 'patches/rtxpt-retained-resources.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $retainedPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $retainedPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT retained-resource overlay could not be removed'}
+}
 # Remove a complete lighting overlay before checking/rebuilding its pinned base.
 # A partial overlay is never accepted: final apply --check below must match every hunk.
 $lightingPatch=Join-Path $PSScriptRoot 'patches/rtxpt-incremental-lighting.patch'
@@ -593,7 +599,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float
         #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS && defined(RTR_CONDITIONAL_POINT_SAMPLING) && RTR_CONDITIONAL_POINT_SAMPLING
         if (RtrSmallPointSet()) feedbackPdf = RtrNativeGlobalPdfForFeedback(lightIndex);
         #endif // RTR restore native NEE-AT feedback weights
-'@ 'RTR native residual feedback weights'
+'@ 'RTR restore native NEE-AT feedback weights'
 # DirectionalLight::CalcSample returns a to-light direction, not a world position.
 # Match the pinned upstream IntroRTXDIBridge::RAB_GetLightDirDistance convention.
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidateSample.Direction = surfToLight / max( candidateSample.Distance, 1e-7 );' @'
@@ -648,6 +654,11 @@ Patch-Once 'Rtxpt/Sample.cpp' '    globalBindingLayoutDesc.bindings.push_back(nv
     globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(96)); // RTR original lighting buffer layout
     globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(95));
 '@ 'RTR original lighting buffer layout'
+Patch-Once 'Rtxpt/Sample.cpp' '    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(96)); // RTR original lighting buffer layout' @'
+    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(96)); // RTR original lighting buffer layout
+    if(const char* stats=std::getenv("RTR_RTXPT_LIGHT_STATS");stats&&stats[0]=='1')
+        globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::RawBuffer_UAV(96)); // RTR actual light work counters
+'@ 'RTR actual light work counters'
 Patch-Once 'Rtxpt/Sample.cpp' '        bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(95, m_CommonPasses->m_BlackTexture));' @'
         bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(96, m_lightsBaker->GetLightBuffer())); // RTR original lighting buffer placeholder
         bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(95, m_CommonPasses->m_BlackTexture));
@@ -844,7 +855,9 @@ Patch-Once 'Rtxpt/Sample.cpp' '        PostProcessAA(framebuffer, needNewPasses 
 '@ 'RTR include final merge records in readback'
 $rtrCommitPath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli'
 $rtrCommitText=[IO.File]::ReadAllText($rtrCommitPath)
-$rtrCommitText=$rtrCommitText.Replace('#if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE', '#if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD')
+$rtrCommitText=[regex]::Replace($rtrCommitText,
+    '#if defined\(RTR_SCENE_TRANSPORT_TRACE\) && RTR_SCENE_TRANSPORT_TRACE(?! && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD)',
+    '#if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD')
 $rtrCommitText=$rtrCommitText.Replace('uint4(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex())','RtrSceneTraceKey(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex(),workingContext.PtConsts.frameIndex)')
 [IO.File]::WriteAllText($rtrCommitPath,$rtrCommitText,$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerTypes.hlsli' '        RWTexture2D<float4>     OutputColor;' @'
@@ -1496,6 +1509,10 @@ if($LASTEXITCODE -ne 0){
 if($LASTEXITCODE -ne 0){throw 'RTXPT lighting patch does not match the verified pinned base'}
 & git -C $sdk apply --ignore-space-change $lightingPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT lighting patch failed'}
+& git -C $sdk apply --check --ignore-space-change $retainedPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT retained-resource patch does not match the verified pinned base'}
+& git -C $sdk apply --ignore-space-change $retainedPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT retained-resource patch failed'}
 $rootCMake=Join-Path $sdk 'CMakeLists.txt'
 $cmakeText=[IO.File]::ReadAllText($rootCMake)
 # The command-line OptiX screenshot utility is not used by the embedded realtime host.

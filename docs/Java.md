@@ -6,7 +6,7 @@ RTRendererAPI 适合嵌入 Java 25 或更高版本的桌面或引擎进程。普
 
 普通模式提交场景、材质、实例和帧请求。`vulkan-rt` 保留普通表面、可编程场景和通用命令；`rtxpt` 可托管完整 PBR／透明介质场景及原生呈现。Vulkan 专家模式通过显式资源／命令事务或 `SceneShaderProgram` 阶段替换表达。两者共用 `Renderer` 和 `RendererConfig`，配置对象本身不切换提交语义；先根据下表选择后端，再学习对应的输出循环。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:7.0.1`，默认传递解析 Vulkan 后端、NVIDIA provider 和 native runtime。RTXPT 场景额外添加 `top.ceroxe.rt:renderer-rtxpt:7.0.1`；使用下面的 `RtxptAccess`／组合类时需要编译依赖。本轮从源码构建到本地 Maven 仓库使用，不上传 Central。消费方不需要安装 SDK 或手工复制 DLL。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:7.0.2`，默认传递解析 Vulkan 后端、NVIDIA provider 和 native runtime。RTXPT 场景额外添加 `top.ceroxe.rt:renderer-rtxpt:7.0.2`；使用下面的 `RtxptAccess`／组合类时需要编译依赖。本轮从源码构建到本地 Maven 仓库使用，不上传 Central。消费方不需要安装 SDK 或手工复制 DLL。
 
 ## 学习顺序与后端选择
 
@@ -28,7 +28,7 @@ Maven 坐标是 `top.ceroxe.rt:renderer-api:7.0.1`，默认传递解析 Vulkan �
 
 ## 最小调用
 
-`Renderer.open()` 会枚举已安装 provider、执行能力探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 25 或更高版本。当前行为、验收证据和已知限制见 [7.0.1 版本与验证范围](7.0.1.md)，历史 procedural/triangle RT 证据见 [4.1.0 验证记录](quality/verification-report.md#4-1-0-procedural-validation)。这些结果不代表全部兼容硬件或特定宿主集成都已验收。
+`Renderer.open()` 会枚举已安装 provider、执行能力探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 25 或更高版本。当前行为、验收证据和已知限制见 [7.0.2 版本与验证范围](7.0.2.md)，历史 procedural/triangle RT 证据见 [4.1.0 验证记录](quality/verification-report.md#4-1-0-procedural-validation)。这些结果不代表全部兼容硬件或特定宿主集成都已验收。
 
 ```java
 try (Renderer renderer = Renderer.open()) {
@@ -131,9 +131,11 @@ var config = base.copyBuilder()
 
 画面过曝时可用 `host.setExposureCompensation(-1.5F)` 调整上游 tone mapper。该入口也可在首帧提交前调用，场景重载保留，实际值通过 `presentationStatus()` 回读。它只控制显示亮度；SR 本身不替代路径追踪降噪，小灯策略也不覆盖环境光、面积光和间接反弹的全部随机噪声。
 
-`Medium` 只含 `absorption` 和 `[1,4]` 的 IOR；`MediumBoundary` 只含介质和 `[0,14]` 优先级，最多 4 层嵌套内部。需要闭合、朝外且绕序一致的网格。旧体积散射、密度网格、HG、体积发光、无限／相机初始介质和不可见边界已删除，详见[7.0.1 合同](7.0.1.md)。
+`Medium` 只含 `absorption` 和 `[1,4]` 的 IOR；`MediumBoundary` 只含介质和 `[0,14]` 优先级，最多 4 层嵌套内部。需要闭合、朝外且绕序一致的网格。旧体积散射、密度网格、HG、体积发光、无限／相机初始介质和不可见边界已删除，详见[7.0.2 合同](7.0.2.md)。
 
 RTXPT 当前不提供通用 CPU 帧、线性 HDR 导出、任意场景 shader、精确 Vulkan 投影、屏幕雾、旧光子图预算及逐帧纹理／lightmap 覆盖；无效输入在调用边界拒绝。`capture(Path)` 是显式单次诊断捕获，`awaitIdle()` 是显式 GPU 排空，两者都不应放进正常出帧循环。
+
+7.0.2 支持通过 `SceneTransaction` 更新稳定 ID 的纹理来实现动画；上面的限制指帧请求中的覆盖输入。网格、材质和纹理事务走资源 delta，首次发布或显式 `resetScene` 才使用完整场景路径，详见[资源更新与验收](quality/rtxpt-retained-702.md)。
 
 ## RTXPT 与 Vulkan 独立工作组合
 
@@ -168,7 +170,7 @@ Vulkan 独立命令通过借用的 `vulkanCommands()` 提交；已完成 GPU 纹
 
 ## 发布一个最小场景
 
-场景聚合使用语义工厂与 Builder；7.0.1 的介质值使用直接 record。调用方提供的数组会在安全工厂中复制；高吞吐路径可以显式使用只读 direct buffer 工厂。
+场景聚合使用语义工厂与 Builder；7.0.2 的介质值使用直接 record。调用方提供的数组会在安全工厂中复制；高吞吐路径可以显式使用只读 direct buffer 工厂。
 
 ```java
 TextureAsset texture = TextureAsset.color(1L, 1, 1,
@@ -387,8 +389,8 @@ RendererConfig explicitProduction = RendererConfig.builder()
 
 ### 完整专家配置
 
-本节配置用于 Vulkan 后端；RTXPT 的固定倍率、路径预算和能力边界见 [7.0.1](7.0.1.md)。专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
-显式覆盖 7.0.1 中保留的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
+本节配置用于 Vulkan 后端；RTXPT 的固定倍率、路径预算和能力边界见 [7.0.2](7.0.2.md)。专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
+显式覆盖 7.0.2 中保留的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
 NRD 不可用时保留内建时域路径，FG/MFG 不可用时继续发布原生帧。SER 和 RTXMU 独立
 协商，某一项不支持不会阻止其他项启用。
 
@@ -462,7 +464,7 @@ session 内完成，只有 `APPLIED` 是提交证据。
 
 ### 各能力的最短配置
 
-以下片段都只需要 `top.ceroxe.rt:renderer-api:7.0.1`。把对应 options 传给
+以下片段都只需要 `top.ceroxe.rt:renderer-api:7.0.2`。把对应 options 传给
 `RendererConfig.builder()` 即可；没有任何片段要求额外模块或手工 DLL。
 
 ```java
@@ -735,7 +737,7 @@ try (Renderer renderer = Renderer.open(
 }
 ```
 
-能力必须逐项查询。`7.0.1` 的 Vulkan 后端真实执行版本化 buffer/texture、view/sampler、staging upload、buffer/texture copy、buffer-image copy、typed clear/barrier、SPIR-V compute/graphics pipeline、render pass、direct/multi/indirect draw，以及在设备支持时执行通用 BLAS/TLAS build、显式 RT shader group/SBT、AS descriptor 和 trace dispatch，并通过 fence evidence 公开完成状态。逻辑操作和 geometry shader 现在分别受设备 feature capability 约束；RT pipeline/SBT 可通过 `RetireRayTracingPipelineCommand` 按完成序列退休。`BindingType.COMBINED_IMAGE_SAMPLER` 必须使用一个 `BindingSet.CombinedImageSamplerValue`，Vulkan 会将同一 view/sampler 对写入一个 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`。接口布局会在 pipeline 创建前与 SPIR-V 逐项核对；错误的 entry point、stage、set/binding、数组长度或拆分 descriptor 声明均 fail-closed。RT 的 `RECORDED` 或 `OUTPUT_PRODUCED` 都不是显示可见证据；能力未标为 executable 的功能不能根据静态类型推断可用。
+能力必须逐项查询。`7.0.2` 的 Vulkan 后端真实执行版本化 buffer/texture、view/sampler、staging upload、buffer/texture copy、buffer-image copy、typed clear/barrier、SPIR-V compute/graphics pipeline、render pass、direct/multi/indirect draw，以及在设备支持时执行通用 BLAS/TLAS build、显式 RT shader group/SBT、AS descriptor 和 trace dispatch，并通过 fence evidence 公开完成状态。逻辑操作和 geometry shader 现在分别受设备 feature capability 约束；RT pipeline/SBT 可通过 `RetireRayTracingPipelineCommand` 按完成序列退休。`BindingType.COMBINED_IMAGE_SAMPLER` 必须使用一个 `BindingSet.CombinedImageSamplerValue`，Vulkan 会将同一 view/sampler 对写入一个 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`。接口布局会在 pipeline 创建前与 SPIR-V 逐项核对；错误的 entry point、stage、set/binding、数组长度或拆分 descriptor 声明均 fail-closed。RT 的 `RECORDED` 或 `OUTPUT_PRODUCED` 都不是显示可见证据；能力未标为 executable 的功能不能根据静态类型推断可用。
 
 ## Exact clip-space projection
 

@@ -2,6 +2,7 @@
 find_package(JNI REQUIRED COMPONENTS JVM)
 target_include_directories(RtxptCore PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 target_include_directories(donut_app PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
+target_include_directories(donut_engine PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 target_include_directories(nvrhi_d3d12 PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 # Keep embedded-host symbols separate from previous standalone sample builds.
 if(MSVC)

@@ -46,6 +46,33 @@ tasks.register<JavaExec>("rtxptLightingNativeSelfTest") {
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
     if (project.hasProperty("lightingCases")) args(project.property("lightingCases").toString().split(","))
 }
+tasks.register<JavaExec>("rtxptRetainedNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptRetainedNativeSelfTest")
+    environment("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE", "0")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    if (project.hasProperty("retainedCases")) args(project.property("retainedCases").toString().split(","))
+}
+
+tasks.register<JavaExec>("rtxptScalabilityBenchmark") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptScalabilityBenchmark")
+    val baseline = project.findProperty("benchmarkBaseline")?.toString()
+    classpath = if (baseline == null) sourceSets.test.get().runtimeClasspath else
+        files("${System.getProperty("user.home")}/.m2/repository/top/ceroxe/rt/renderer-api/$baseline/renderer-api-$baseline.jar",
+            "${System.getProperty("user.home")}/.m2/repository/top/ceroxe/rt/renderer-rtxpt/$baseline/renderer-rtxpt-$baseline.jar") + sourceSets.test.get().runtimeClasspath
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    if (project.hasProperty("benchmarkCases")) args(project.property("benchmarkCases").toString().split(","))
+}
+tasks.register<JavaExec>("rtxptLightTreeNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptLightTreeNativeSelfTest")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    environment("RTR_RTXPT_LIGHT_STATS", "1")
+    if (project.hasProperty("treeCase")) args(project.property("treeCase").toString())
+}
 
 tasks.register<JavaExec>("rtxptNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)

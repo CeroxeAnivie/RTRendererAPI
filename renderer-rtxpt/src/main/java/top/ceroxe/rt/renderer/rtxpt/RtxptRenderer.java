@@ -14,13 +14,18 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     private final int maxFramesInFlight;
     private final RendererResourceOptions resources;
     private RtxptScene scene=new RtxptScene();
+    private RtxptScene residentScene;
+    private Map<Long,Path> textureFiles=new HashMap<>();
+    private boolean fullReset=true;
+    private RetainedUpdateMode lastUpdateMode=RetainedUpdateMode.UNCHANGED;
+    private long resourceBatches,resourceMeshes,resourceMaterials,resourceTextures;
     private RtxptOptions options;
     private RendererFeatureProfile requestedProfile;
     private final RtxptFeatureController features;
     private long handle,revision,submitted=-1,completed=-1,frames,frameNs,exports,exportNs,batches,transformNs;
     private boolean closed,dirty=true,windowClosed,scenePublished,nativeContractPending;
     private int width,height;
-    private Path directory,nativeScene;
+    private Path directory,nativeScene,fullDirectory;
     private List<RtxptScene.Item> previous=List.of();
     private CameraState camera;
     private RtxptLighting lighting;
@@ -135,7 +140,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         return true;
     }
     SceneUpdateResult commitScene(PreparedScene prepared){
-        var tx=prepared.transaction();scene=prepared.value();dirty|=tx.hasChanges()&&!prepared.geometryUnchanged();
+        var tx=prepared.transaction();scene=prepared.value();dirty|=tx.hasChanges()&&!prepared.geometryUnchanged();fullReset|=tx.reset();
         nativeContractPending=!prepared.nativeContract();
         revision=tx.revision();scenePublished=true;return new SceneUpdateResult(revision);
     }
@@ -154,15 +159,26 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         if(nativeContractPending&&nativeScene==null){scene.validate();nativeContractPending=false;}
         if(f.minimumSceneRevision()>revision)throw new IllegalArgumentException("Scene revision is not resident");
         var items=nativeScene==null?scene.items(f):List.<RtxptScene.Item>of();
-        var nextLighting=nativeScene==null?RtxptLighting.of(f.environment(),scene.lights.values()):null;
+        var nextLighting=nativeScene==null?RtxptLighting.sorted(f.environment(),scene.sortedLights()):null;
         // Validate the complete batch before scene export or any native mutation.
-        float[] lightRecords=nextLighting!=null&&(dirty||!nextLighting.equals(lighting))?nextLighting.records():null;
-        boolean rebuild=nativeScene==null && (dirty || !RtxptScene.sameStructure(items,previous));
+        boolean sameLights=lighting!=null&&nextLighting!=null&&nextLighting.lights.equals(lighting.lights);
+        float[] lightRecords=nextLighting!=null&&(!sameLights||fullReset)?nextLighting.records():null;
+        boolean rebuild=nativeScene==null && (handle==0 || fullReset);
+        boolean delta=nativeScene==null&&!rebuild&&(dirty||!RtxptScene.sameStructure(items,previous));
+        var updateMode=nativeScene!=null?RetainedUpdateMode.NATIVE_SCENE:rebuild
+            ?(handle==0?RetainedUpdateMode.INITIAL_PUBLICATION:RetainedUpdateMode.EXPLICIT_RESET)
+            :delta?RetainedUpdateMode.RESOURCE_DELTA:!items.equals(previous)?RetainedUpdateMode.TRANSFORMS
+            :!Objects.equals(nextLighting,lighting)?RetainedUpdateMode.LIGHTING:RetainedUpdateMode.UNCHANGED;
+        RtxptDelta.Prepared preparedDelta=null;
         Path path=nativeScene;
         if(rebuild){long begin=System.nanoTime();try{
             if(directory==null)directory=Files.createTempDirectory("rtrenderer-rtxpt-");
-            path=scene.export(directory,f,items);
+            var generation=Files.createTempDirectory(directory,"full-");path=scene.export(generation,f,items);fullDirectory=generation;
+            textureFiles=new HashMap<>();for(long id:scene.textures.keySet())textureFiles.put(id,generation.resolve("t"+id+".png"));
         }catch(IOException e){throw new IllegalStateException("RTXPT asset translation failed",e);}exportNs+=System.nanoTime()-begin;exports++;}
+        if(delta)try{preparedDelta=RtxptDelta.prepare(Files.createTempDirectory(directory,"delta-"),residentScene,scene,previous,items,textureFiles);}
+        catch(IOException e){throw new IllegalStateException("RTXPT delta translation failed",e);}
+        try {
         if(handle==0){
             if(path==null)throw new IllegalStateException("Submit a populated scene");
             handle=RtxptNative.create(RtxptNative.runtime().toString(),path.toString(),f.width(),f.height(),externalPresentation,gpuTimingsEnabled,
@@ -172,28 +188,58 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
             applyNativeSettings();
             if(nativeScene==null)scene.uploadInteriors(handle);
         }else if(rebuild){RtxptNative.loadScene(handle,path.toString());applyNativeSettings();scene.uploadInteriors(handle);}
+        if(preparedDelta!=null&&preparedDelta.hasWork()){
+            RtxptNative.resources(handle,preparedDelta.manifest().toString());preparedDelta.translated().uploadInteriors(handle);
+            textureFiles=preparedDelta.textureFiles();resourceBatches++;resourceMeshes+=preparedDelta.meshes();
+            resourceMaterials+=preparedDelta.materials();resourceTextures+=preparedDelta.textures();
+        }
+        if(preparedDelta!=null)textureFiles=preparedDelta.textureFiles();
         if(width!=f.width()||height!=f.height()){RtxptNative.resize(handle,f.width(),f.height());width=f.width();height=f.height();}
         if(rebuild || !Objects.equals(camera,f.camera())){
             var c=f.camera();RtxptNative.camera(handle,c.x()+","+c.y()+","+c.z()+","+c.forwardX()+","+c.forwardY()+","+c.forwardZ()+","+c.upX()+","+c.upY()+","+c.upZ(),(float)(2*Math.atan(c.tanHalfFovY())));camera=c;
         }
         if(nextLighting!=null&&(rebuild||!nextLighting.equals(lighting))) {
-            try {RtxptNative.lighting(handle,nextLighting.ids(),lightRecords!=null?lightRecords:nextLighting.records(),nextLighting.sky());}
+            try {
+                if(!rebuild&&sameLights)RtxptNative.environment(handle,nextLighting.sun(),nextLighting.sky());
+                else RtxptNative.lighting(handle,nextLighting.ids(),lightRecords!=null?lightRecords:nextLighting.records(),nextLighting.sky());
+            }
             catch(RuntimeException|Error failure) {
                 // A failed native commit must never present a partially modified generation.
                 try {close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}throw failure;
             }
             lighting=nextLighting;
         }
-        if(!rebuild)updateTransforms(items);
-        previous=items;dirty=false;
+        if(!rebuild&&!delta)updateTransforms(items);
+        previous=items;dirty=false;fullReset=false;residentScene=scene;
         submitted=f.sequence();
         if(!renderFrame())throw new IllegalStateException("RTXPT window closed");
         scenePublished=true;
         verifyRequiredFeatures();
+        lastUpdateMode=updateMode;
+        if(rebuild||delta)pruneTranslations();
         return FrameSubmissionResult.accepted(submitted,revision,Set.of());
+        }catch(RuntimeException|Error failure){try{close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}throw failure;}
     }
+    @Override public RetainedUpdateTimings retainedUpdateTimings(){ready();var t=handle==0?new long[11]:RtxptNative.resourceTelemetry(handle);
+        return new RetainedUpdateTimings(resourceBatches,resourceMeshes,resourceMaterials,resourceTextures,t[0],t[1],t[2],t[3],t[4],t[5],t[6],t[7],t[8],t[9],t[10]);}
     long[] lightingTelemetry(){ready();return handle==0?new long[5]:RtxptNative.lightingTelemetry(handle);}
     @Override public LightingTimings lightingTimings(){var t=lightingTelemetry();return new LightingTimings(t[0],t[1],t[2],t[3],t[4]);}
+    @Override public LightSamplingStatus lightSamplingStatus(){ready();var t=handle==0?new long[8]:RtxptNative.lightSamplingTelemetry(handle);
+        return new LightSamplingStatus(LightSamplingMode.values()[(int)t[0]],t[1],t[2],t[3]!=0,t[4],t[5],t[6],t[7]);}
+    @Override public RetainedUpdateMode retainedUpdateMode(){ready();return lastUpdateMode;}
+    private void pruneTranslations(){
+        if(directory==null)return;
+        // Native imports are complete. Keep only the current full scene and PNGs
+        // that a later material delta may reference; retry locked files next time.
+        try(var files=Files.walk(directory)){
+            for(var path:files.sorted(Comparator.reverseOrder()).toList()) {
+                if(path.equals(directory)||path.startsWith(fullDirectory)||textureFiles.containsValue(path))continue;
+                try{Files.deleteIfExists(path);}catch(IOException ignored){ }
+            }
+        }catch(IOException ignored){ }
+    }
+    void captureLinear(Path path){ready();RtxptNative.captureLinear(handle,path.toAbsolutePath().toString());}
+    void windowState(int state){ready();RtxptNative.windowState(handle,state);}
     private void applyNativeSettings(){RtxptNative.settings(handle,options.maxBounces(),options.diffuseBounces(),options.reflex(),options.frameGenerationMode(),options.generatedFrames(),
         options.samplesPerPixel(),options.reconstruction().ordinal(),options.dlssQuality().nativeValue,options.standaloneDenoiser(),options.relaxDenoiser(),options.restirDi(),options.restirGi(),options.sharc(),options.exactOpticalInterfaces());
         RtxptNative.pathQuality(handle,options.qualityInts(),options.qualityFloats());
@@ -400,7 +446,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
             handle=0;closed=true;
             // A caller may retain a closed renderer; do not keep its entire scene or
             // a compositor closure (and its owner's Vulkan resources) alive with it.
-            scene=new RtxptScene();previous=List.of();camera=null;lighting=null;compositor=null;nativeScene=null;
+            scene=new RtxptScene();residentScene=null;textureFiles.clear();previous=List.of();camera=null;lighting=null;compositor=null;nativeScene=null;
             if(directory!=null)try(var files=Files.walk(directory)){
                 for(var p:files.sorted(Comparator.reverseOrder()).toList())Files.delete(p);
             }catch(IOException e){

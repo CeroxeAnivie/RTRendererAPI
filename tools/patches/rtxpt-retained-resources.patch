@@ -1,0 +1,547 @@
+--- a/External/Donut/include/donut/engine/SceneGraph.h
++++ b/External/Donut/include/donut/engine/SceneGraph.h
+@@ -585,6 +585,7 @@
+     struct SceneImportResult
+     {
+         std::shared_ptr<SceneGraphNode> rootNode;
++        std::vector<std::shared_ptr<Material>> materials; // RTR resource-only glTF imports
+     };
+ 
+     class SceneTypeFactory
+--- a/External/Donut/src/engine/GltfImporter.cpp
++++ b/External/Donut/src/engine/GltfImporter.cpp
+@@ -1010,6 +1010,7 @@
+         ParseMaterialExtensions(&options, &material, matinfo.get());
+ 
+         materials[&material] = matinfo;
++        result.materials.push_back(matinfo); // RTR resource-only glTF imports
+     }
+     
+     size_t totalIndices = 0;
+--- a/Rtxpt/SampleCommon/ExtendedScene.h
++++ b/Rtxpt/SampleCommon/ExtendedScene.h
+@@ -12,6 +12,7 @@
+ 
+ #include <donut/engine/Scene.h>
+ #include <string.h>
++namespace donut::engine { class CommonRenderPasses; }
+ 
+ constexpr int LightType_Environment = 1000;
+ 
+@@ -150,6 +151,11 @@
+ 
+ public:
+     using Scene::Scene;
++    donut::engine::SceneImportResult HostImport(const std::filesystem::path& path);
++    void HostReleaseModels() { m_Models.clear(); } // Graph owns the resident resources.
++    void HostFinalizeTextures(donut::engine::CommonRenderPasses& passes);
++    void HostUnloadTexture(const std::shared_ptr<donut::engine::LoadedTexture>& texture);
++
+ 
+     bool LoadWithThreadPool(const std::filesystem::path& jsonFileName, donut::engine::ThreadPool* threadPool) override;
+     std::shared_ptr<SampleSettings> GetSampleSettingsNode() const   { return m_loadedSettings; }
+--- a/Rtxpt/SampleCommon/ExtendedScene.cpp
++++ b/Rtxpt/SampleCommon/ExtendedScene.cpp
+@@ -471,4 +471,18 @@
+ {
+     Json::StreamWriterBuilder writer;
+     jsonData = Json::writeString(writer, node);
+-}
+\ No newline at end of file
++}
++// RTR retained imports share the existing cache, descriptors and factory; no scene load.
++#include <donut/engine/GltfImporter.h>
++#include <donut/engine/TextureCache.h>
++donut::engine::SceneImportResult ExtendedScene::HostImport(const std::filesystem::path& path) {
++    donut::engine::SceneImportResult result;donut::engine::SceneLoadingStats stats{};
++    if(!m_GltfImporter->Load(path,*m_TextureCache,stats,nullptr,result))throw std::runtime_error("Retained resource import failed");
++    for(auto& material:result.materials)LocalConfig::PostMaterialLoad(*material);
++    return result;
++}
++void ExtendedScene::HostUnloadTexture(const std::shared_ptr<donut::engine::LoadedTexture>& texture) {
++    if(texture)m_TextureCache->UnloadTexture(texture);
++}
++
++void ExtendedScene::HostFinalizeTextures(donut::engine::CommonRenderPasses& passes) { m_TextureCache->ProcessRenderingThreadCommands(passes,0.f); }
+--- a/Rtxpt/Materials/MaterialsBaker.h
++++ b/Rtxpt/Materials/MaterialsBaker.h
+@@ -274,6 +274,9 @@
+     bool                            DebugGUI(float indent);
+ 
+     void                            SceneReloaded();
++    void HostImportMaterial(donut::engine::Material& material);
++    void HostSyncMaterials(const std::shared_ptr<ExtendedScene>& scene);
++
+ 
+     std::filesystem::path           GetMaterialStoragePath(PTMaterialBase& material);
+ 
+--- a/Rtxpt/Materials/MaterialsBaker.cpp
++++ b/Rtxpt/Materials/MaterialsBaker.cpp
+@@ -1078,7 +1078,7 @@
+ 
+     CompleteDeferredTexturesLoad(commandList);
+ 
+-    bool needsUpload = false;
++    std::vector<uint32_t> dirtyMaterialIndices;
+     {
+         ZoneScopedN("UpdateMaterialDataIfNeeded");
+         for (auto& materialPT : m_materials)
+@@ -1094,14 +1094,21 @@
+ 
+             materialPT->FillData(m_materialsGPU[materialPT->GPUDataIndex]);
+             materialPT->GPUDataDirty = false;
+-            needsUpload = true;
+-        }
+-    }
+-
+-    if ( needsUpload )
++            dirtyMaterialIndices.push_back(materialPT->GPUDataIndex);
++        }
++    }
++
++    if (!dirtyMaterialIndices.empty())
+     {
+         ZoneScopedN("UploadMaterialData");
+-        commandList->writeBuffer( m_materialData, m_materialsGPU.data(), m_materialsGPU.size() * sizeof(PTMaterialData), 0 );
++        std::sort(dirtyMaterialIndices.begin(),dirtyMaterialIndices.end());
++        for(size_t first=0;first<dirtyMaterialIndices.size();) {
++            size_t end=first+1;
++            while(end<dirtyMaterialIndices.size() && dirtyMaterialIndices[end]==dirtyMaterialIndices[end-1]+1)++end;
++            uint32_t offset=dirtyMaterialIndices[first];
++            commandList->writeBuffer(m_materialData,m_materialsGPU.data()+offset,(end-first)*sizeof(PTMaterialData),offset*sizeof(PTMaterialData));
++            first=end;
++        }
+         m_materialDataWasReset = false;
+     }
+ 
+@@ -1372,4 +1379,32 @@
+             return m_materials[i];
+ 
+     return nullptr;
+-}
+\ No newline at end of file
++}
++// RTR update material values without replacing the fixed GPU material storage.
++void MaterialsBaker::HostImportMaterial(donut::engine::Material& material) {
++    auto& ex=dynamic_cast<MaterialEx&>(material);
++    if(!ex.PTMaterial)ex.PTMaterial=std::make_shared<PTMaterial>();
++    ImportFromDonut(material,*ex.PTMaterial);ex.PTMaterial->DonutCounterpart=&material;
++    ex.PTMaterial->GPUDataDirty=true;material.dirty=true;
++}
++void MaterialsBaker::HostSyncMaterials(const std::shared_ptr<ExtendedScene>& scene) {
++    std::vector<std::shared_ptr<PTMaterial>> next;
++    std::vector<bool> used(m_materialsGPU.size(),false);
++    for(auto& material:scene->GetSceneGraph()->GetMaterials()) {
++        auto& ex=dynamic_cast<MaterialEx&>(*material);
++        if(!ex.PTMaterial)HostImportMaterial(*material);
++        auto pt=ex.PTMaterial;
++        if(std::find(m_materials.begin(),m_materials.end(),pt)!=m_materials.end())used.at(pt->GPUDataIndex)=true;
++        next.push_back(pt);
++    }
++    for(auto& pt:next)if(std::find(m_materials.begin(),m_materials.end(),pt)==m_materials.end()) {
++        auto free=std::find(used.begin(),used.end(),false);
++        size_t index=size_t(free-used.begin());
++        if(index>=RTXPT_MATERIAL_MAX_COUNT)throw std::runtime_error("Retained material capacity exceeded");
++        if(index==used.size()){used.push_back(true);m_materialsGPU.push_back({});}else used[index]=true;
++        pt->GPUDataIndex=uint(index);pt->GPUDataDirty=true;
++    }
++    m_materials=std::move(next);m_textures.clear();m_uniqueNames.clear();
++    for(auto& pt:m_materials)InitializeUniqueDeterministicName(pt);
++    BakeShaderPermutations();m_deferredTextureLoadInProgress=true;
++}
+--- a/Rtxpt/Sample.h
++++ b/Rtxpt/Sample.h
+@@ -125,7 +125,7 @@
+     bool                                    CreatePTPipeline(donut::engine::ShaderFactory& shaderFactory);
+     void                                    DestroyOpacityMicromaps(nvrhi::ICommandList* commandList);
+     void                                    CreateOpacityMicromaps();
+-    void                                    CreateBlases(nvrhi::ICommandList* commandList);
++    void                                    CreateBlases(nvrhi::ICommandList* commandList, bool missingOnly=false);
+     void                                    ReleaseBlases();
+     void                                    CreateTlas(nvrhi::ICommandList* commandList);
+     void                                    CreateAccelStructs(nvrhi::ICommandList* commandList);
+--- a/Rtxpt/Sample.cpp
++++ b/Rtxpt/Sample.cpp
+@@ -1387,7 +1387,7 @@
+     return true;
+ }
+ 
+-void Sample::CreateBlases(nvrhi::ICommandList* commandList)
++void Sample::CreateBlases(nvrhi::ICommandList* commandList, bool missingOnly)
+ {
+     const bool poolAvailable = m_blasCompactor->IsAvailable();
+ 
+@@ -1396,6 +1396,7 @@
+ 
+     for (const std::shared_ptr<MeshInfo>& mesh : m_scene->GetSceneGraph()->GetMeshes())
+     {
++        if (missingOnly && mesh->accelStruct) continue; // RTR retain unchanged BLAS generations
+         if (mesh->isSkinPrototype) //buffers->hasAttribute(engine::VertexAttribute::JointWeights))
+             continue; // skip the skinning prototypes
+ 
+@@ -1480,14 +1481,15 @@
+ 
+     assert(m_subInstanceCount == m_subInstanceData.size());
+     // upload data to GPU buffer
+-    commandList->writeBuffer(m_subInstanceBuffer, m_subInstanceData.data(), m_subInstanceData.size() * sizeof(SubInstanceData));
++    if (!m_subInstanceData.empty())
++        commandList->writeBuffer(m_subInstanceBuffer, m_subInstanceData.data(), m_subInstanceData.size() * sizeof(SubInstanceData));
+ }
+ 
+ void Sample::CreateTlas(nvrhi::ICommandList* commandList)
+ {
+     nvrhi::rt::AccelStructDesc tlasDesc;
+     tlasDesc.isTopLevel = true;
+-    tlasDesc.topLevelMaxInstances = m_scene->GetSceneGraph()->GetMeshInstances().size();
++    tlasDesc.topLevelMaxInstances = std::max<size_t>(1, m_scene->GetSceneGraph()->GetMeshInstances().size());
+     tlasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+     // NOTE: the old assert here (topLevelMaxInstances < (1<<15), "16 bits for the identifier in the HitInfo") was stale -
+     // both HitInfo and GeometryInstanceID are gone from the codebase, and the live limits are asserted where the counts
+@@ -1511,7 +1513,7 @@
+         assert( m_scene->GetSceneGraph()->GetMeshInstances().size() < (1u << 19) ); // RTXDI instanceAndGeometryIndex: 19 bits of instance index
+         // create GPU buffer
+         nvrhi::BufferDesc bufferDesc;
+-        bufferDesc.byteSize = sizeof(SubInstanceData) * m_subInstanceCount;
++        bufferDesc.byteSize = sizeof(SubInstanceData) * std::max(1u, m_subInstanceCount);
+         bufferDesc.debugName = "Instances";
+         bufferDesc.structStride = sizeof(SubInstanceData);
+         bufferDesc.canHaveRawViews = false;
+--- a/External/Donut/include/donut/app/DeviceManager_DX12.h
++++ b/External/Donut/include/donut/app/DeviceManager_DX12.h
+@@ -52,6 +52,7 @@
+     std::vector<nvrhi::TextureHandle>               m_RhiSwapChainBuffers;
+     nvrhi::RefCountPtr<ID3D12Fence>                 m_FrameFence;
+     std::vector<HANDLE>                             m_FrameFenceEvents;
++    std::vector<UINT64>                             m_FrameFenceValues; // RTR per-buffer completion values
+ 
+     UINT64                                          m_FrameCount = 1;
+ 
+--- a/External/Donut/src/app/dx12/DeviceManager_DX12.cpp
++++ b/External/Donut/src/app/dx12/DeviceManager_DX12.cpp
+@@ -426,7 +426,8 @@
+ 
+     for(UINT bufferIndex = 0; bufferIndex < m_SwapChainDesc.BufferCount; bufferIndex++)
+     {
+-        m_FrameFenceEvents.push_back( CreateEvent(nullptr, false, true, nullptr) );
++        m_FrameFenceEvents.push_back( CreateEvent(nullptr, false, false, nullptr) );
++        m_FrameFenceValues.push_back(0);
+     }
+ 
+     return true;
+@@ -443,11 +444,11 @@
+ 
+     for (auto fenceEvent : m_FrameFenceEvents)
+     {
+-        WaitForSingleObject(fenceEvent, INFINITE);
+-        CloseHandle(fenceEvent);
++        CloseHandle(fenceEvent); // ReleaseRenderTargets already drained the queues.
+     }
+ 
+     m_FrameFenceEvents.clear();
++    m_FrameFenceValues.clear();
+ 
+     if (m_SwapChain)
+     {
+@@ -545,7 +546,26 @@
+     if (HostExternalPresentation) return true; // RTR external timeline owns frame retirement
+     auto bufferIndex = m_SwapChain->GetCurrentBackBufferIndex();
+ 
+-    WaitForSingleObject(m_FrameFenceEvents[bufferIndex], INFINITE);
++    // Events are notifications, not the completion state. A consumed/coalesced
++    // auto-reset event must not strand a completed back buffer forever.
++    const UINT64 target=m_FrameFenceValues[bufferIndex];
++    auto event=m_FrameFenceEvents[bufferIndex];
++    if(m_FrameFence->GetCompletedValue()<target) {
++        ResetEvent(event);
++        if(FAILED(m_FrameFence->SetEventOnCompletion(target,event)))return false;
++        const ULONGLONG start=GetTickCount64();
++        while(m_FrameFence->GetCompletedValue()<target) {
++            DWORD result=MsgWaitForMultipleObjectsEx(1,&event,50,QS_ALLINPUT,MWMO_INPUTAVAILABLE);
++            if(result==WAIT_FAILED || FAILED(m_Device12->GetDeviceRemovedReason()))return false;
++            if(result==WAIT_OBJECT_0+1)glfwPollEvents();
++            if(glfwWindowShouldClose(m_Window))return false;
++            if(GetTickCount64()-start>30000) {
++                donut::log::error("Back buffer fence timed out: target=%llu completed=%llu",target,m_FrameFence->GetCompletedValue());
++                return false;
++            }
++        }
++    }
++    if(m_FrameFence->GetCompletedValue()==UINT64_MAX)return false;
+ 
+     return true;
+ }
+@@ -586,8 +606,8 @@
+ 
+     HRESULT result = m_SwapChain->Present(m_DeviceParams.vsyncEnabled ? 1 : 0, presentFlags);
+ 
+-    m_FrameFence->SetEventOnCompletion(m_FrameCount, m_FrameFenceEvents[bufferIndex]);
+-    m_GraphicsQueue->Signal(m_FrameFence, m_FrameCount);
++    if(FAILED(m_GraphicsQueue->Signal(m_FrameFence, m_FrameCount)))return false;
++    m_FrameFenceValues[bufferIndex]=m_FrameCount;
+     m_FrameCount++;
+     return SUCCEEDED(result);
+ }
+--- a/External/Donut/src/engine/ThreadPool.cpp
++++ b/External/Donut/src/engine/ThreadPool.cpp
+@@ -22,6 +22,7 @@
+ 
+ #include <donut/engine/ThreadPool.h>
+ #include <cassert>
++#include "rtxpt_host_resources.h" // RTR owner-thread wait pump
+ 
+ namespace donut::engine
+ {
+@@ -90,8 +91,10 @@
+ 
+ void ThreadPool::WaitForTasks()
+ {
+-    while(m_pendingTasks.load() != 0)
+-        std::this_thread::yield();
++    while(m_pendingTasks.load() != 0) {
++        RtrHostResources::PumpEvents();
++        std::this_thread::sleep_for(std::chrono::milliseconds(2));
++    }
+ }
+ 
+ void ThreadPool::StaticThreadProc(ThreadPool* self)
+--- a/Rtxpt/SampleCommon/PTPipelineBaker.h
++++ b/Rtxpt/SampleCommon/PTPipelineBaker.h
+@@ -135,6 +135,8 @@
+     // pipelines whose hit groups differ - including in ray payload type.
+     PTPipelineBaker(nvrhi::IDevice* device, std::shared_ptr<class MaterialsBaker> & materialsBaker, nvrhi::BindingLayoutHandle bindingLayout, nvrhi::BindingLayoutHandle bindlessLayout, std::function<void(std::vector<donut::engine::ShaderMacro> & macros)> globalMacrosGetter, nvrhi::BindingLayoutHandle bindlessHeapLayout = nullptr, std::vector<donut::engine::ShaderMacro> hitGroupMacros = {});
+     ~PTPipelineBaker();
++    void HostInvalidateScene() { m_hostSceneDirty = true; } // RTR retained SBT generation
++
+     size_t HostCompilerThreadCount() const {return m_threadPool.GetThreadCount();} // RTR pool readback
+     
+     void                                Update(const std::shared_ptr<class ExtendedScene> & scene, unsigned int subInstanceCount, bool forceShaderReload);
+@@ -174,6 +176,7 @@
+                                         GetFS()                             { return m_shadersFS; }
+     std::mutex &                        GetMutex()                          { return m_mutex; }
+ 
++
+     void                                EnqueueShaderPermutation(PTPipelineVariant::ShaderPermutation* perm);
+ 
+     bool                                RegisterShortUniqueDebugID(const std::string & id);
+@@ -216,6 +219,7 @@
+ 
+     donut::engine::ThreadPool                       m_threadPool;
+ 
++    bool                                            m_hostSceneDirty = true;
+     int64_t                                         m_version = -1;
+ 
+     std::mutex                                      m_mutex;    // for synchronizing work by variants
+--- a/Rtxpt/SampleCommon/PTPipelineBaker.cpp
++++ b/Rtxpt/SampleCommon/PTPipelineBaker.cpp
+@@ -612,7 +612,7 @@
+         }
+     }
+ 
+-    bool needsUpdate = m_uniqueHitGroups.size() == 0;
++    bool needsUpdate = m_hostSceneDirty || m_perSubInstanceHitGroup.size()!=subInstanceCount; // RTR topology changes require a new SBT
+ 
+     std::vector<donut::engine::ShaderMacro> newMacros;
+     {
+@@ -639,7 +639,6 @@
+     // no need to update these if already set up
+     if (needsUpdate) // m_uniqueHitGroups.size() == 0)
+     {
+-        assert(subInstanceCount > 0);
+         // Note: these map 1-1 to m_subInstanceData, and are used to (see '->addHitGroup' below) build 1-1 mapped hit groups 
+         m_perSubInstanceHitGroup.clear();
+         m_perSubInstanceHitGroup.reserve(subInstanceCount);
+@@ -661,7 +660,7 @@
+             HitGroupInfo& unique = m_uniqueHitGroups.try_emplace(info.GetShaderPermutationIndex(), info).first->second;
+             unique.HasAnyHitShader |= info.HasAnyHitShader;
+         }
+-        needsUpdate = true;
++        m_hostSceneDirty = false;
+     }
+ 
+     if (needsUpdate)
+--- a/External/Donut/src/app/DeviceManager.cpp
++++ b/External/Donut/src/app/DeviceManager.cpp
+@@ -718,7 +718,8 @@
+         // while the local variable below becomes the render/present index, which will be different only if m_SkipRenderOnFirstFrame is set
+         if (m_FrameIndex > 0 || !m_SkipRenderOnFirstFrame)
+         {
+-            if (BeginFrame())
++            if (!BeginFrame())return false; // RTR propagate failed frame retirement
++            if (true)
+             {
+                 // first time entering this loop, m_FrameIndex is 1 for m_SkipRenderOnFirstFrame, 0 otherwise;
+                 uint32_t frameIndex = m_FrameIndex;
+--- a/External/Donut/nvrhi/src/d3d12/d3d12-device.cpp
++++ b/External/Donut/nvrhi/src/d3d12/d3d12-device.cpp
+@@ -21,6 +21,8 @@
+ */
+ 
+ #include "d3d12-backend.h"
++#include "rtxpt_host_resources.h"
++#include <stdexcept>
+ 
+ #include <nvrhi/common/misc.h>
+ 
+@@ -73,13 +75,22 @@
+ 
+     void WaitForFence(ID3D12Fence* fence, uint64_t value, HANDLE event)
+     {
++        // Device removal reports UINT64_MAX, which must never count as completion.
++        if(fence->GetCompletedValue()==UINT64_MAX)throw std::runtime_error("GPU device removed during fence wait");
+         // Test if the fence has been reached
+         if (fence->GetCompletedValue() < value)
+         {
+             // If it's not, wait for it to finish using an event
+             ResetEvent(event);
+-            fence->SetEventOnCompletion(value, event);
+-            WaitForSingleObject(event, INFINITE);
++            if(FAILED(fence->SetEventOnCompletion(value,event)))throw std::runtime_error("GPU fence registration failed");
++            const ULONGLONG start=GetTickCount64();
++            while(fence->GetCompletedValue()<value) {
++                DWORD result=WaitForSingleObject(event,20);
++                RtrHostResources::PumpEvents();
++                if(result==WAIT_FAILED)throw std::runtime_error("GPU fence wait failed");
++                if(GetTickCount64()-start>30000)throw std::runtime_error("GPU fence timeout (30 seconds)");
++            }
++            if(fence->GetCompletedValue()==UINT64_MAX)throw std::runtime_error("GPU device removed during fence wait");
+         }
+     }
+ 
+--- a/External/Donut/src/engine/Scene.cpp
++++ b/External/Donut/src/engine/Scene.cpp
+@@ -614,14 +614,14 @@
+     const size_t allocationGranularity = 1024;
+     bool arraysAllocated = false;
+ 
+-    if (m_EnableBindlessResources && m_SceneGraph->GetGeometryCount() > m_Resources->geometryData.size())
++    if (m_EnableBindlessResources && (!m_GeometryBuffer || m_SceneGraph->GetGeometryCount() > m_Resources->geometryData.size()))
+     {
+         m_Resources->geometryData.resize(nvrhi::align<size_t>(m_SceneGraph->GetGeometryCount(), allocationGranularity));
+         m_GeometryBuffer = CreateGeometryBuffer();
+         arraysAllocated = true;
+     }
+ 
+-    if (m_SceneGraph->GetMaterials().size() > m_Resources->materialData.size())
++    if ((m_EnableBindlessResources && !m_MaterialBuffer) || m_SceneGraph->GetMaterials().size() > m_Resources->materialData.size())
+     {
+         m_Resources->materialData.resize(nvrhi::align<size_t>(m_SceneGraph->GetMaterials().size(), allocationGranularity));
+         if (m_EnableBindlessResources)
+@@ -629,7 +629,7 @@
+         arraysAllocated = true;
+     }
+ 
+-    if (m_SceneGraph->GetMeshInstances().size() > m_Resources->instanceData.size())
++    if (!m_InstanceBuffer || m_SceneGraph->GetMeshInstances().size() > m_Resources->instanceData.size())
+     {
+         m_Resources->instanceData.resize(nvrhi::align<size_t>(m_SceneGraph->GetMeshInstances().size(), allocationGranularity));
+         m_InstanceBuffer = CreateInstanceBuffer();
+@@ -1104,7 +1104,7 @@
+ nvrhi::BufferHandle Scene::CreateMaterialBuffer()
+ {
+     nvrhi::BufferDesc bufferDesc;
+-    bufferDesc.byteSize = sizeof(MaterialConstants) * m_Resources->materialData.size();
++    bufferDesc.byteSize = sizeof(MaterialConstants) * std::max<size_t>(1, m_Resources->materialData.size());
+     bufferDesc.debugName = "BindlessMaterials";
+     bufferDesc.structStride = sizeof(MaterialConstants);
+     bufferDesc.canHaveRawViews = true;
+@@ -1118,7 +1118,7 @@
+ nvrhi::BufferHandle Scene::CreateGeometryBuffer()
+ {
+     nvrhi::BufferDesc bufferDesc;
+-    bufferDesc.byteSize = sizeof(GeometryData) * m_Resources->geometryData.size();
++    bufferDesc.byteSize = sizeof(GeometryData) * std::max<size_t>(1, m_Resources->geometryData.size());
+     bufferDesc.debugName = "BindlessGeometry";
+     bufferDesc.structStride = sizeof(GeometryData);
+     bufferDesc.canHaveRawViews = true;
+@@ -1136,7 +1136,7 @@
+     bool const needStructuredBuffer = m_Device->getGraphicsAPI() != nvrhi::GraphicsAPI::D3D11;
+ 
+     nvrhi::BufferDesc bufferDesc;
+-    bufferDesc.byteSize = sizeof(InstanceData) * m_Resources->instanceData.size();
++    bufferDesc.byteSize = sizeof(InstanceData) * std::max<size_t>(1, m_Resources->instanceData.size());
+     bufferDesc.debugName = "Instances";
+     bufferDesc.structStride = needStructuredBuffer ? sizeof(InstanceData) : 0;
+     bufferDesc.canHaveRawViews = true;
+@@ -1162,18 +1162,21 @@
+ 
+ void Scene::WriteMaterialBuffer(nvrhi::ICommandList* commandList) const
+ {
++    if (m_Resources->materialData.empty()) return;
+     commandList->writeBuffer(m_MaterialBuffer, m_Resources->materialData.data(),
+         m_Resources->materialData.size() * sizeof(MaterialConstants));
+ }
+ 
+ void Scene::WriteGeometryBuffer(nvrhi::ICommandList* commandList) const
+ {
++    if (m_Resources->geometryData.empty()) return;
+     commandList->writeBuffer(m_GeometryBuffer, m_Resources->geometryData.data(),
+         m_Resources->geometryData.size() * sizeof(GeometryData));
+ }
+ 
+ void Scene::WriteInstanceBuffer(nvrhi::ICommandList* commandList) const
+ {
++    if (m_Resources->instanceData.empty()) return;
+     commandList->writeBuffer(m_InstanceBuffer, m_Resources->instanceData.data(), 
+         m_Resources->instanceData.size() * sizeof(InstanceData));
+ }
+--- a/Rtxpt/RTXDI/RtxdiResources.cpp
++++ b/Rtxpt/RTXDI/RtxdiResources.cpp
+@@ -94,7 +94,7 @@
+ 
+ 
+     nvrhi::BufferDesc geometryInstanceToLightBufferDesc;
+-    geometryInstanceToLightBufferDesc.byteSize = sizeof(uint32_t) * maxGeometryInstances;
++    geometryInstanceToLightBufferDesc.byteSize = sizeof(uint32_t) * std::max(maxGeometryInstances, 1u);
+     geometryInstanceToLightBufferDesc.structStride = sizeof(uint32_t);
+     geometryInstanceToLightBufferDesc.initialState = nvrhi::ResourceStates::ShaderResource;
+     geometryInstanceToLightBufferDesc.keepInitialState = true;
+--- a/Rtxpt/RTXDI/PrepareLightsPass.cpp
++++ b/Rtxpt/RTXDI/PrepareLightsPass.cpp
+@@ -270,7 +270,8 @@
+         }
+     }
+ 
+-    commandList->writeBuffer(m_GeometryInstanceToLightBuffer, geometryInstanceToLight.data(), geometryInstanceToLight.size() * sizeof(uint32_t));
++    if (!geometryInstanceToLight.empty())
++        commandList->writeBuffer(m_GeometryInstanceToLightBuffer, geometryInstanceToLight.data(), geometryInstanceToLight.size() * sizeof(uint32_t));
+ 
+ 	lightBufferParams.localLightBufferRegion.firstLightIndex = 0;
+ 	lightBufferParams.localLightBufferRegion.numLights = lightBufferOffset;
+@@ -321,7 +322,8 @@
+ 	lightBufferParams.environmentLightParams.lightIndex = lightBufferParams.infiniteLightBufferRegion.firstLightIndex + lightBufferParams.infiniteLightBufferRegion.numLights;
+ 	lightBufferParams.environmentLightParams.lightPresent = enableImportanceSampledEnvironmentLight ? 1u : 0u;
+     
+-    commandList->writeBuffer(m_TaskBuffer, tasks.data(), tasks.size() * sizeof(PrepareLightsTask));
++    if (!tasks.empty())
++        commandList->writeBuffer(m_TaskBuffer, tasks.data(), tasks.size() * sizeof(PrepareLightsTask));
+ 
+     if (!primitiveLightInfos.empty())
+     {
+--- a/External/Donut/src/engine/TextureCache.cpp
++++ b/External/Donut/src/engine/TextureCache.cpp
+@@ -415,12 +415,15 @@
+     textureDesc.mipLevels = m_GenerateMipmaps && texture->isRenderTarget && passes
+         ? GetMipLevelsNum(textureDesc.width, textureDesc.height)
+         : texture->mipLevels;
++    // RTR retained textures must allow copy transitions after their first upload.
++    textureDesc.initialState = nvrhi::ResourceStates::ShaderResource;
++    textureDesc.keepInitialState = true;
+     textureDesc.debugName = texture->path;
+     textureDesc.isRenderTarget = texture->isRenderTarget;
+     textureDesc.defaultComponentMapping = texture->ResolveComponentMapping();
+     texture->texture = m_Device->createTexture(textureDesc);
+ 
+-    commandList->beginTrackingTextureState(texture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
++    commandList->beginTrackingTextureState(texture->texture, nvrhi::AllSubresources, textureDesc.initialState);
+ 
+     if (m_DescriptorTable)
+         texture->bindlessDescriptor = m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::Texture_SRV(0, texture->texture));
+@@ -484,7 +487,7 @@
+         passes->BlitTexture(commandList, blitParams);
+     }
+ 
+-    commandList->setPermanentTextureState(texture->texture, nvrhi::ResourceStates::ShaderResource);
++    commandList->setTextureState(texture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::ShaderResource);
+     commandList->commitBarriers();
+ 
+     ++m_TexturesFinalized;

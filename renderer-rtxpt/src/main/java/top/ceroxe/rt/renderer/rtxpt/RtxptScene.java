@@ -16,12 +16,14 @@ final class RtxptScene {
     final Map<Long,MeshAsset> meshes=new LinkedHashMap<>();
     final Map<Long,SceneInstance> instances=new LinkedHashMap<>();
     final Map<Long,SceneLight> lights=new LinkedHashMap<>();
+    private List<SceneLight> sortedLights;
+    List<SceneLight> sortedLights(){if(sortedLights==null)sortedLights=lights.values().stream().sorted(Comparator.comparingLong(SceneLight::id)).toList();return sortedLights;}
     final Map<String,MediumBoundary> interiors=new LinkedHashMap<>();
     final Map<String,Float> materialIors=new LinkedHashMap<>();
     RtxptScene() { }
     RtxptScene(RtxptScene src) {
         textures.putAll(src.textures);materials.putAll(src.materials);meshes.putAll(src.meshes);
-        instances.putAll(src.instances);lights.putAll(src.lights);
+        instances.putAll(src.instances);lights.putAll(src.lights);sortedLights=src.sortedLights;
     }
     static <T> void remove(Map<Long,T> m,LongBuffer ids){while(ids.hasRemaining())m.remove(ids.get());}
     void retain(SceneTransaction tx) {
@@ -29,6 +31,7 @@ final class RtxptScene {
     }
     void retain(SceneTransaction tx,boolean nativeContract) {
         if(tx.reset()){textures.clear();materials.clear();meshes.clear();instances.clear();lights.clear();}
+        if(tx.reset()||!tx.upserts().lights().isEmpty()||tx.removals().lightIds().hasRemaining())sortedLights=null;
         var r=tx.removals();remove(textures,r.textureIds());remove(materials,r.materialIds());remove(meshes,r.meshIds());remove(instances,r.instanceIds());remove(lights,r.lightIds());
         var u=tx.upserts();u.textures().forEach(t->textures.put(t.id(),t));u.materials().forEach(m->materials.put(m.id(),m));
         u.meshes().forEach(m->meshes.put(m.id(),m));u.instances().forEach(i->instances.put(i.id(),i));u.lights().forEach(l->lights.put(l.id(),l));
@@ -87,18 +90,21 @@ final class RtxptScene {
         }
         RtxptNative.interiors(handle,interiors.keySet().toArray(String[]::new),data.flip());
     }
-    Path export(Path dir,RenderFrameRequest frame,List<Item> items) throws IOException {
+    Path exportModel(Path dir,List<Item> items,Map<Long,Path> textureFiles,List<Variant> extraMaterials) throws IOException {
         Files.createDirectories(dir);interiors.clear();materialIors.clear();
         var root=object("asset",object("version","2.0","generator","RTRendererAPI 7 RTXPT thin scene adapter"));
         var views=new ArrayList<Object>();var accessors=new ArrayList<Object>();var gm=new ArrayList<Object>();var mats=new ArrayList<Object>();var nodes=new ArrayList<Object>();
         var images=new ArrayList<Object>();var tex=new ArrayList<Object>();var samplers=new ArrayList<Object>();var texIds=new HashMap<Long,Integer>();
         for(var t:textures.values()) {
+            Path imagePath=textureFiles.get(t.id());
+            if(imagePath==null) {
             var image=new BufferedImage(t.width(),t.height(),BufferedImage.TYPE_INT_ARGB);var pixels=t.rgba8();
             for(int y=0;y<t.height();y++)for(int x=0;x<t.width();x++) {
                 int r=pixels.get()&255,g=pixels.get()&255,b=pixels.get()&255,a=pixels.get()&255;image.setRGB(x,y,(a<<24)|(r<<16)|(g<<8)|b);
             }
-            String name="t"+t.id()+".png";ImageIO.write(image,"png",dir.resolve(name).toFile());
-            texIds.put(t.id(),tex.size());images.add(object("uri",name));
+            String name="t"+t.id()+".png";imagePath=dir.resolve(name).toAbsolutePath();ImageIO.write(image,"png",imagePath.toFile());textureFiles.put(t.id(),imagePath);
+            }
+            texIds.put(t.id(),tex.size());images.add(object("uri",imagePath.toString().replace('\\','/')));
             samplers.add(object("wrapS",t.addressU()==TextureAsset.AddressMode.REPEAT?10497:33071,"wrapT",t.addressV()==TextureAsset.AddressMode.REPEAT?10497:33071));
             tex.add(object("source",images.size()-1,"sampler",samplers.size()-1));
         }
@@ -117,24 +123,24 @@ final class RtxptScene {
             }
             geometry.put(mesh.id(),attr);
         }
+        var materialSlots=new LinkedHashMap<String,Integer>();
+        for(var v:extraMaterials)addMaterial(v,mats,materialSlots,texIds);
         var variants=new HashMap<String,Integer>();
         for(var item:items) {
-            var mesh=meshes.get(item.mesh);String key=item.mesh+":"+item.boundary+":"+item.visibility;
+            var mesh=meshes.get(item.mesh);String key=meshName(item);
             Integer meshIndex=variants.get(key);
             if(meshIndex==null) {
                 var groups=new LinkedHashMap<Long,List<Integer>>();var ids=mesh.triangleMaterialIds();var indices=exportedIndices.get(item.mesh);
                 for(int t=0;t<mesh.triangleCount();t++) {var group=groups.computeIfAbsent(ids.get(t),ignored->new ArrayList<>());for(int j=0;j<3;j++)group.add(indices.get(t*3+j));}
                 var primitives=new ArrayList<Object>();
                 for(var group:groups.entrySet()) {
-                    var m=materials.get(group.getKey());String name="mat"+mats.size();
-                    mats.add(material(name,m,item.boundary,item.visibility,texIds));if(item.boundary!=null)interiors.put(name,item.boundary);
-                    materialIors.put(name,item.boundary==null?m.indexOfRefraction():item.boundary.medium().indexOfRefraction());
+                    int materialSlot=addMaterial(new Variant(group.getKey(),item.boundary,item.visibility),mats,materialSlots,texIds);
                     int start=bin.size();for(int index:group.getValue())putInt(bin,index);
                     int view=views.size();views.add(object("buffer",0,"byteOffset",start,"byteLength",bin.size()-start));
                     int acc=accessors.size();accessors.add(object("bufferView",view,"componentType",5125,"count",group.getValue().size(),"type","SCALAR"));
-                    primitives.add(object("attributes",geometry.get(item.mesh),"indices",acc,"material",mats.size()-1));
+                    primitives.add(object("attributes",geometry.get(item.mesh),"indices",acc,"material",materialSlot));
                 }
-                meshIndex=gm.size();variants.put(key,meshIndex);gm.add(object("primitives",primitives));
+                meshIndex=gm.size();variants.put(key,meshIndex);gm.add(object("name",key,"primitives",primitives));
             }
             nodes.add(object("name",item.name,"mesh",meshIndex,"matrix",matrix(item.transform)));
         }
@@ -145,6 +151,10 @@ final class RtxptScene {
         if(!tex.isEmpty()){root.put("textures",tex);root.put("images",images);root.put("samplers",samplers);}
         try(var output=Files.newOutputStream(dir.resolve("content.bin"))){bin.writeTo(output);}
         Files.writeString(dir.resolve("content.gltf"),RtxptJson.encode(root));
+        return dir.resolve("content.gltf");
+    }
+    Path export(Path dir,RenderFrameRequest frame,List<Item> items) throws IOException {
+        exportModel(dir,items,new HashMap<>(),List.of());
         var graph=new ArrayList<Object>();graph.add(object("name","RTRoot","model",0));
         for(var l:lights.values()) {
             var light=object("name","l"+l.id(),"type",switch(l.type()){case POINT->"PointLight";case SPOT->"SpotLight";case DIRECTIONAL->"DirectionalLight";},
@@ -205,6 +215,24 @@ final class RtxptScene {
         private static void copyVertex(FloatBuffer source,FloatBuffer target,int vertex,int components) {
             for(int component=0;component<components;component++)target.put(source.get(vertex*components+component));
         }
+    }
+    record Variant(long material,MediumBoundary boundary,float visibility) {
+        String name(){return "m"+material+suffix(boundary,visibility);}
+    }
+    static String suffix(MediumBoundary boundary,float visibility) {
+        String value="_v"+Integer.toHexString(Float.floatToIntBits(visibility));
+        if(boundary==null)return value;
+        var m=boundary.medium();var a=m.absorption();
+        return value+"_b"+Integer.toHexString(Float.floatToIntBits(m.indexOfRefraction()))+"_"+boundary.priority()
+            +"_"+Integer.toHexString(Float.floatToIntBits(a.red()))+"_"+Integer.toHexString(Float.floatToIntBits(a.green()))+"_"+Integer.toHexString(Float.floatToIntBits(a.blue()));
+    }
+    static String meshName(Item i){return "mesh"+i.mesh()+suffix(i.boundary(),i.visibility());}
+    private int addMaterial(Variant v,List<Object> mats,Map<String,Integer> slots,Map<Long,Integer> texIds) {
+        String name=v.name();Integer slot=slots.get(name);if(slot!=null)return slot;
+        var m=materials.get(v.material());int index=mats.size();slots.put(name,index);
+        mats.add(material(name,m,v.boundary(),v.visibility(),texIds));
+        if(v.boundary()!=null)interiors.put(name,v.boundary());
+        materialIors.put(name,v.boundary()==null?m.indexOfRefraction():v.boundary().medium().indexOfRefraction());return index;
     }
     private static Map<String,Object> material(String name,MaterialAsset m,MediumBoundary b,float visibility,Map<Long,Integer> textures) {
         int c=m.baseColorRgba8();var pbr=object("baseColorFactor",List.of((c&255)/255f,((c>>>8)&255)/255f,((c>>>16)&255)/255f,((c>>>24)&255)/255f*visibility),"roughnessFactor",m.roughness(),"metallicFactor",m.metallic());

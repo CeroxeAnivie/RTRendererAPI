@@ -25,9 +25,9 @@ plugins {
 
 abstract class RendererHardwareGateLock : BuildService<BuildServiceParameters.None>
 
-// GPU composition is a native hardware gate even though its public task name omits "Native".
+// Composition and scalability measurements also use the physical GPU.
 fun isHardwareAcceptanceTask(task: Task) = task is JavaExec &&
-    (task.name.contains("Native") || task.name == "rtxptCompositionSelfTest")
+    (task.name.contains("Native") || task.name == "rtxptCompositionSelfTest" || task.name == "rtxptScalabilityBenchmark")
 
 // Native graphics gates share the physical adapter even when they belong to different modules.
 val rendererHardwareGateLock = gradle.sharedServices.registerIfAbsent(
