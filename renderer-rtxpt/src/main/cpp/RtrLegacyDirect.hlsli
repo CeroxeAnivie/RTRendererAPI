@@ -49,7 +49,7 @@ NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const Active
     float3 weight=path.GetThp()*surfaceWeight;
     #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
     if(RtrLegacyTracePixel(path.GetPixelPos(),context.PtConsts.frameIndex) && path.getCounter((PackedCounters)3)>0)
-        DebugPrint("RTR_TRANSPORT receiver pixel={0} branchVertex={1} weight={2} radiance={3}",path.GetPixelPos(),uint2(context.RtrLegacyFirstBranch,path.getVertexIndex()),weight,(diffuse+specular)*weight);
+        RtrLegacyTracePrint("RTR_TRANSPORT receiver pixel={0} branchVertex={1} weight={2} radiance={3}",path.GetPixelPos(),uint2(context.RtrLegacyFirstBranch,path.getVertexIndex()),weight,(diffuse+specular)*weight);
     #endif
     result.AccumulateRadiance((diffuse+specular)*weight,Average(specular*weight));
     return result;
