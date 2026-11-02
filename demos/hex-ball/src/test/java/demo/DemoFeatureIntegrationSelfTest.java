@@ -77,8 +77,8 @@ public final class DemoFeatureIntegrationSelfTest {
         try {
             System.clearProperty(property);
             var profile=DemoRendererProfile.rtxptInteractive();
-            require(profile.frameReconstruction().quality()==FrameReconstructionOptions.Quality.BALANCED,
-                "RTXPT glass preserves the accepted SR Balanced input ratio");
+            require(profile.frameReconstruction().quality()==top.ceroxe.rt.renderer.api.RendererPerformanceTier.MEDIUM.reconstructionQuality(),
+                "RTXPT default SR follows the medium budget without an implicit high-quality override");
             require(profile.denoising().equals(DenoisingOptions.disabled()),"RTXPT demo must not silently replace SR with RR");
             require(!profile.pathTracing().radianceCache().requested(),"RTXPT demo must not silently add radiance caching");
             require(profile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X
@@ -185,8 +185,17 @@ public final class DemoFeatureIntegrationSelfTest {
         RendererConfig renderer = DemoRendererProfile.interactive(config);
         require(renderer.temporalRendering().equals(TemporalRenderingOptions.balanced()),
                 "the recommended profile must enable bounded temporal rendering");
-        require(renderer.frameReconstruction().equals(FrameReconstructionOptions.recommended()),
-                "the recommended profile must enable capability-driven reconstruction");
+        require(renderer.frameReconstruction().equals(RendererConfig.presentation().frameReconstruction()),
+                "the default Demo must inherit the medium reconstruction budget");
+        for(var demo:java.util.List.of(renderer,DemoRendererProfile.rtxptInteractive(),DemoRendererProfile.rtxptMediumInteractive(false))) {
+            require(demo.maxFramesInFlight()==2&&demo.pathTracing().samplesPerPixel()==1
+                &&demo.pathTracing().maxBounces()==12&&demo.pathTracing().exactOpticalInterfaces()==4,
+                "All three demos must use the medium workload when fields are omitted");
+            require(demo.resources().workerThreads()==4&&demo.resources().shaderCompilerThreads()==1,
+                "Default demos must not consume a high-end machine's entire CPU");
+            require(demo.frameReconstruction().quality()==FrameReconstructionOptions.Quality.PERFORMANCE,
+                "All default demos use the medium reconstruction budget");
+        }
         require(renderer.denoising().equals(DenoisingOptions.disabled()),
                 "the recommended profile must keep NRD opt-in");
         require(renderer.lowLatency().equals(LowLatencyOptions.recommended()),
