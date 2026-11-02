@@ -35,6 +35,10 @@ v177 的 676 条后续光学选择均有效，32 个像素/帧组合的分支累
 
 源码核对发现，旧 `HexBallDemo` 调用 `new DemoScene()`，其默认构造选择不透明金属球（metallic=1，roughness=0.12）；旧 `VulkanHexBallTemporalEvidence` 明确选择 `new DemoScene(false)`。新路线玻璃参数为 transmission=1、roughness=0.025，并带有介质边界及吸收。因此旧金属球 FPS 不能作为同材质玻璃负载的后端速度对照。
 
-旧 `gsEvaluateSecondaryTransport` 只对首界面精确拆两支，`gsOpticalContinuation` 的后续界面按 Fresnel 随机走一支；最大事件预算固定为 12。新六界面按前六个表面顶点枚举分支，原实现每个叶分支都从相机重新出发。正在验证的共享前缀缓存保存原生 `PathPayload`，只从本次分支发生变化的位置继续，保持六界面和现有画质参数。该候选尚未通过图像及性能验收。
+旧 `gsEvaluateSecondaryTransport` 只对首界面精确拆两支，`gsOpticalContinuation` 的后续界面按 Fresnel 随机走一支；最大事件预算固定为 12。新六界面按前六个表面顶点枚举分支，原实现每个叶分支都从相机重新出发。共享前缀缓存保存原生 `PathPayload`，只从本次分支发生变化的位置继续，保持六界面和现有画质参数。
+
+缓存候选 v183 的 12 张静止、运动、停止图像，与关闭缓存的重复对照 v185 全部逐像素一致。关闭缓存的 v184/v185 两轮之间有极少像素差异，不能把这部分运行间差异当成缓存造成的画质变化。图像比较 JSON 与三轮生命周期日志均已保存。初始 GPU 占用 0%、全部诊断关闭的 v186 为 172.297973 原生 FPS，相对 v180 的 154.360039 提升 11.62%，总帧耗时约从 6.48 ms 降至 5.80 ms。此比较是两次独立动态运行的全帧结果，并非某个 GPU 子阶段的独占耗时。
+
+剩余重复工作审查见 [optical-redundancy-audit-20261102.md](optical-redundancy-audit-20261102.md)。
 
 性能运行前执行 `tools/Build-RtxptOpticalTrace.ps1` 关闭 GPU 路径日志、恢复随机种子和粗糙度控制；不启用 GPU stage profile，关闭 API GPU 计时，保留同一组已验收的渲染逻辑。计时脚本检查 trace 制品、初始 GPU 0 占用及运行输出，避免误测诊断版本。FG 关闭时统计原生帧，FG 开启时分列原生与实际呈现帧率。
