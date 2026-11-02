@@ -135,7 +135,8 @@ bool RtrLegacyOpticalSample(const ShadingData sd,const StandardBSDFData data,uin
     uint event=vertex>=2?vertex-2:0;
     float3 h=RtrLegacyDielectricNormal(sd,data,pixel,sequence,seed^((event+1u)*0x02e5be93u));
     float eta=sd.GetEta(),f=RtrLegacyFresnel(eta,max(dot(sd.V,h),0));
-    bool reflection=RtrLegacyOpticalRandom(pixel,seed^0xb5297a4du,event)<f;
+    float branchRandom=RtrLegacyOpticalRandom(pixel,seed^0xb5297a4du,event);
+    bool reflection=branchRandom<f;
     result.wo=reflection?normalize(reflect(-sd.V,h)):refract(-sd.V,h,eta);
     float nl=dot(sd.N,result.wo);
     if(reflection?nl<=0:nl>=0) return false;
@@ -143,6 +144,11 @@ bool RtrLegacyOpticalSample(const ShadingData sd,const StandardBSDFData data,uin
     if(!reflection)result.weight*=eta*eta*data.Transmission();
     result.pdf=0;result.lobeP=reflection?f:1-f;
     result.lobe=(uint)(reflection?LobeType::DeltaReflection:LobeType::DeltaTransmission);
+    #if RTR_LEGACY_TRANSPORT_TRACE
+    if(RtrLegacyTracePixel(pixel,sequence))
+        RtrLegacyTracePrint("choice",105u,RtrLegacyTraceKey(pixel,(seed-1u)&1u,vertex,sequence),
+            float4(f,branchRandom,reflection,data.Roughness()),float4(eta,seed,event,result.lobe),sd.N,h,result.wo);
+    #endif
     return true;
 }
 
