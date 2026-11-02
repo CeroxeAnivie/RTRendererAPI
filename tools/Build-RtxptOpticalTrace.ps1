@@ -1,11 +1,12 @@
 param([switch]$Enable,[uint32]$BranchSeedXor=0,[switch]$RawOpticalRoughness,
     [switch]$DisableReplayPrefixCache,
+    [switch]$WorkTrace,
     [ValidateRange(1,6)][int]$ExactInterfaceCount=6,
     [int]$PixelX=-1,[int]$PixelY=-1,[uint32]$FirstFrame=160,[uint32]$LastFrame=161)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $sdk=Join-Path $repo 'build/rtxpt-sdk'
-& (Join-Path $PSScriptRoot 'Build-RtxptBridge.ps1') -ConfigureOnly -OpticalTransportTrace:$Enable -OpticalBranchSeedXor $BranchSeedXor
+& (Join-Path $PSScriptRoot 'Build-RtxptBridge.ps1') -ConfigureOnly -OpticalTransportTrace:$Enable -OpticalWorkTrace:$WorkTrace -OpticalBranchSeedXor $BranchSeedXor
 if($LASTEXITCODE -ne 0){throw 'Shader configuration failed'}
 if($DisableReplayPrefixCache) {
     $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'

@@ -14,6 +14,10 @@ struct RtrLegacyReplayCache
     {
         uint vertex=path.getVertexIndex()+1u;
         if(vertex<2u || vertex>RTR_LEGACY_EXACT_INTERFACE_COUNT)return;
+        #if RTR_LEGACY_WORK_TRACE
+        if(RtrLegacyWorkPixel(path.GetPixelPos(),g_Const.ptConsts.frameIndex))
+            RtrLegacyWorkPrint(220u,uint4(path.GetPixelPos(),g_Const.ptConsts.frameIndex,vertex),uint3(path.getCounter((PackedCounters)3),valid,previous));
+        #endif
         prefix[vertex-2u]=PathPayload::pack(path);
         valid|=1u<<(vertex-2u);
     }
@@ -29,6 +33,10 @@ struct RtrLegacyReplayCache
             return false;
         }
         uint control=path.getCounter((PackedCounters)3);
+        #if RTR_LEGACY_WORK_TRACE
+        if(RtrLegacyWorkPixel(path.GetPixelPos(),g_Const.ptConsts.frameIndex))
+            RtrLegacyWorkPrint(221u,uint4(path.GetPixelPos(),g_Const.ptConsts.frameIndex,vertex),uint3(replay,previous,valid));
+        #endif
         path=PathPayload::unpack(prefix[vertex-2u]);
         path.setCounter((PackedCounters)3,control|(path.getCounter((PackedCounters)3)&4u));
         // Earlier prefixes have already been committed. Only add this suffix;

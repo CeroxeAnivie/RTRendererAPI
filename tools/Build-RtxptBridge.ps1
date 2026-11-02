@@ -5,6 +5,7 @@ param(
     [double]$MemoryLimitGB=10,
     [switch]$ConfigureOnly,
     [switch]$OpticalTransportTrace,
+    [switch]$OpticalWorkTrace,
     [uint32]$OpticalBranchSeedXor=0
 )
 $ErrorActionPreference='Stop'
@@ -404,6 +405,9 @@ foreach($header in @('RtrLegacyLightingInputs.hlsli','RtrLegacyDirect.hlsli','Rt
     $headerText=[IO.File]::ReadAllText((Join-Path $repo ('renderer-rtxpt/src/main/cpp/'+$header)))
     if($header -eq 'RtrLegacyTransportTrace.hlsli' -and $OpticalTransportTrace) {
         $headerText="#define RTR_LEGACY_TRANSPORT_TRACE 1 // explicitly enabled by configure`r`n"+$headerText
+    }
+    if($header -eq 'RtrLegacyTransportTrace.hlsli' -and $OpticalWorkTrace) {
+        $headerText="#define RTR_LEGACY_WORK_TRACE 1`r`n"+$headerText
     }
     if($header -eq 'RtrLegacyTransportTrace.hlsli' -and $OpticalBranchSeedXor -ne 0) {
         if(!$OpticalTransportTrace){throw 'Optical branch seed control requires explicit transport diagnostics'}
@@ -841,6 +845,29 @@ Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    if((path.getCounter((Packe
     #endif // RTR keep actual previous mask before skipping absent suffixes
     if((path.getCounter((PackedCounters)3)&4u)==0)break;
 '@ 'RTR keep actual previous mask before skipping absent suffixes'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    SER_HIT_OBJECT hit;' @'
+    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_LEGACY_WORK_TRACE
+    if(RtrLegacyWorkPixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex))
+    {
+        uint4 identity=uint4(rayQuery.CommittedStatus(),0xffffffffu,0xffffffffu,0xffffffffu);
+        float distance=kMaxRayTravel;
+        if(rayQuery.CommittedStatus()==COMMITTED_TRIANGLE_HIT) {
+            identity.yzw=uint3(rayQuery.CommittedInstanceIndex(),rayQuery.CommittedGeometryIndex(),rayQuery.CommittedPrimitiveIndex());
+            distance=rayQuery.CommittedRayT();
+        }
+        RtrLegacyWorkPrint(210u,uint4(path.GetPixelPos(),workingContext.PtConsts.frameIndex,path.getVertexIndex()+1u),
+            path.getCounter((PackedCounters)3),rayQuery.WorldRayOrigin(),rayQuery.WorldRayDirection(),identity,distance);
+    }
+    #endif // RTR sampled actual traversal identity
+    SER_HIT_OBJECT hit;
+'@ 'RTR sampled actual traversal identity'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    float2 tMinMax = FirstHitFromVBuffer(path, 0, workingContext);' @'
+    float2 tMinMax = FirstHitFromVBuffer(path, 0, workingContext);
+    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && RTR_LEGACY_WORK_TRACE
+    if(RtrLegacyWorkPixel(pixelPos,workingContext.PtConsts.frameIndex))
+        RtrLegacyWorkPrint(230u,uint4(pixelPos,workingContext.PtConsts.frameIndex,rtrOpticalReplay),path.getCounter((PackedCounters)3));
+    #endif // RTR sampled first-hit initialization
+'@ 'RTR sampled first-hit initialization'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        const float rrVal = sqrt(Luminance(path.GetThp())); // closer to perceptual' @'
         #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
         // gsOpticalContinuation uses its event budget, not throughput roulette.

@@ -14,6 +14,7 @@ public final class RtxptHexBallQualitySelfTest {
         String probe=args.length>3?args[3]:"none";
         String cacheMode=args.length>4?args[4]:"none";
         String reconstructionQuality=args.length>5?args[5]:"BALANCED";
+        boolean frameGeneration=args.length<=6||!args[6].equals("no-fg");
         boolean sharc=cacheMode.equals("sharc");
         boolean restirGi=cacheMode.equals("restirgi");
         boolean opticalTrace="1".equals(System.getenv("RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE"));
@@ -23,7 +24,7 @@ public final class RtxptHexBallQualitySelfTest {
             throw new IllegalArgumentException("Unknown indirect lighting mode: "+cacheMode);
         if(sharc&&restirGi)throw new IllegalArgumentException("Choose SHaRC or ReSTIR GI for isolated testing.");
         Files.createDirectories(output);
-        System.setProperty(DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY,"true");
+        System.setProperty(DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY,Boolean.toString(!frameGeneration));
         var config=DemoConfig.parse(new String[]{"--windowed","--width=2560","--height=1440","--spp=1"});
         var base=DemoRendererProfile.interactive(config);
         boolean dlaa=reconstructionQuality.equalsIgnoreCase("DLAA");
@@ -129,7 +130,7 @@ public final class RtxptHexBallQualitySelfTest {
                         require(status.restirDi()==reuse,"Actual upstream direct-light reuse");
                         require(status.restirGi()==restirGi,"Actual requested ReSTIR GI state");
                         require(status.sharc()==policy.pathTracing().radianceCache().requested(),"Actual requested SHaRC state");
-                        require(!status.frameGeneration(),"FG off for quality evidence");
+                        require(status.frameGeneration()==frameGeneration,"Actual requested FG policy");
                         int expectedDlssMode=dlaa?6:switch(quality) {
                             case PERFORMANCE -> 1;
                             case BALANCED -> 2;

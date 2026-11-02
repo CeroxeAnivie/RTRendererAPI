@@ -15,6 +15,18 @@
 // Six exact junctions suppress the dominant glass branch variance without
 // expanding the native payload. Later transport keeps its existing estimator.
 #define RTR_LEGACY_EXACT_INTERFACE_COUNT 6u
+#ifndef RTR_LEGACY_WORK_TRACE
+#define RTR_LEGACY_WORK_TRACE 0
+#endif
+#if RTR_LEGACY_WORK_TRACE
+// Sparse records in two frames, using upstream ShaderDebug's existing lifetime.
+// Does not serialize queues or read final SR inputs back to the CPU.
+#define RtrLegacyWorkPrint(...) do { ShaderDebug::DebugPrinter p; p.Init(); p.StringSize=0; p.AppendArgs(__VA_ARGS__); p.Commit(); } while(false)
+bool RtrLegacyWorkPixel(uint2 pixel,uint frame)
+{
+    return (frame==320u || frame==321u) && all((pixel&127u)==0u);
+}
+#endif
 // Upstream PathFlags occupy bits 10..30; bit 31 is unused in the pinned SDK.
 #define RTR_LEGACY_OPTICAL_VERTEX_FLAG 0x80000000u
 bool RtrLegacyReplayPrefixDuplicate(uint control,uint vertex)

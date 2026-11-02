@@ -15,6 +15,7 @@
 #include <array>
 #include <cstdio>
 #include <fstream>
+#include <chrono>
 #include <donut/engine/TextureCache.h>
 #include <json/json.h>
 #include "StreamlineIntegration.h"
@@ -288,6 +289,36 @@ struct Session {
     SharedFrameProducer sharedFrames;
     bool externalPresentation=false;
     uint64_t rendered=0;
+    bool presentationTrace=[] {const char* v=std::getenv("RTR_RTXPT_PRESENTATION_TRACE");return v && std::string(v)=="1";}();
+    using ProbeClock=std::chrono::steady_clock;
+    ProbeClock::time_point probeMark{},probeReport{};
+    std::array<double,4> probeMs{};
+    uint64_t probeFrames=0,probePreviousNative=0,probePreviousActual=0;
+    void probePhase(size_t phase) {
+        if(!presentationTrace)return;
+        auto now=ProbeClock::now();
+        probeMs[phase]+=std::chrono::duration<double,std::milli>(now-probeMark).count();probeMark=now;
+    }
+    void reportPresentation() {
+        if(!presentationTrace)return;
+        auto now=ProbeClock::now();
+        if(probeReport.time_since_epoch().count()==0){
+            probeReport=now;probeMs={};probeFrames=0;probePreviousNative=presented;
+            probePreviousActual=donut::app::StreamlineIntegration::Get().hostFrameGeneration.presented;return;
+        }
+        ++probeFrames;
+        double seconds=std::chrono::duration<double>(now-probeReport).count();
+        if(seconds<1)return;
+        const auto& t=donut::app::StreamlineIntegration::Get().hostFrameGeneration;
+        HWND window=glfwGetWin32Window(app->HostDeviceManager()->GetWindow());
+        donut::log::info("RTXPT_FG_TIMELINE seconds=%.6f native=%llu actual=%llu intervalNative=%llu intervalActual=%llu status=%u failures=%llu active=%d requested=%d foreground=%d iconic=%d glfwFocus=%d simStartMs=%.6f eventsAnimateBeginMs=%.6f renderSubmitMs=%.6f presentMs=%.6f",
+            seconds,(unsigned long long)presented,(unsigned long long)t.presented,
+            (unsigned long long)(presented-probePreviousNative),(unsigned long long)(t.presented-probePreviousActual),
+            t.status,(unsigned long long)t.failures,int(g_sampleUIData.ActualDLSSFGMode()!=SI::DLSSGMode::eOff),requestedGeneratedFrames,
+            int(GetForegroundWindow()==window),int(IsIconic(window)),glfwGetWindowAttrib(app->HostDeviceManager()->GetWindow(),GLFW_FOCUSED),
+            probeMs[0]/probeFrames,probeMs[1]/probeFrames,probeMs[2]/probeFrames,probeMs[3]/probeFrames);
+        probeReport=now;probePreviousNative=presented;probePreviousActual=t.presented;probeFrames=0;probeMs={};
+    }
     JNIEnv* compositorEnv=nullptr;
     jobject compositor=nullptr;
     jlongArray compositorFrame=nullptr;
@@ -453,10 +484,16 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         afterPresent = [ptr=s.get(),upstreamAfterPresent](auto& dm, uint32_t index) {
             if(upstreamAfterPresent)upstreamAfterPresent(dm,index);
             if(!ptr->externalPresentation)++ptr->presented;
+            ptr->probePhase(3);
+        };
+        auto upstreamBeforeFrame=s->app->HostDeviceManager()->m_callbacks.beforeFrame;
+        s->app->HostDeviceManager()->m_callbacks.beforeFrame=[ptr=s.get(),upstreamBeforeFrame](auto& dm,uint32_t index) {
+            ptr->probePhase(0);if(upstreamBeforeFrame)upstreamBeforeFrame(dm,index);
         };
         auto& beforeRender=s->app->HostDeviceManager()->m_callbacks.beforeRender;
         auto upstreamBeforeRender=beforeRender;
         beforeRender=[ptr=s.get(),upstreamBeforeRender](auto& dm,uint32_t index) {
+            ptr->probePhase(1);
             if(ptr->restoreFrameGenerationBeforeRender) {
                 g_sampleUIData.DLSSFGMode=ptr->requestedFrameGenerationMode
                     ? SI::DLSSGMode::eOn : SI::DLSSGMode::eOff;
@@ -471,6 +508,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         afterRender=[ptr=s.get(),upstreamAfterRender](auto& dm,uint32_t index) {
             if(upstreamAfterRender)upstreamAfterRender(dm,index);
             ptr->endGpuSample();ptr->lastPresentedTexture=dm.GetCurrentBackBuffer();
+            ptr->probePhase(2);
             if(ptr->externalPresentation)ptr->sharedFrames.publish(dm.GetDevice(),
                 static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->HostDisplayColor());
             else if(ptr->compositor) {
@@ -594,7 +632,9 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         if (glfwWindowShouldClose(dm->GetWindow())) return 0;
         static_cast<HostPathTracer*>(s.app->HostRenderPass())->UpdateLightingPolicy();
         auto before=s.externalPresentation?s.rendered:s.presented;
+        if(s.presentationTrace)s.probeMark=Session::ProbeClock::now();
         if (!dm->HostFrame()) throw std::runtime_error("RTXPT render/present failed");
+        s.reportPresentation();
         return (s.externalPresentation?s.rendered:s.presented)>before ? 2 : 1;
     } catch (const std::exception& x) { fail(e, x); return 0; }
 }

@@ -6,6 +6,9 @@ param(
     [int]$Height=1440,
     [switch]$StageProfile,
     [switch]$FrameGeneration,
+    [switch]$PresentationTrace,
+    [switch]$WorkTrace,
+    [switch]$PresentMon,
     [switch]$SmallPointCandidate,
     [switch]$ControlLighting,
     [switch]$DisableResidualPointSampling,
@@ -80,6 +83,7 @@ if($Backend -eq 'Rtxpt' -and !$Glass){$demo+='--original-balls'}
 if($Backend -eq 'Rtxpt' -and !$StageProfile){$demo+='--api.gpuTimingsEnabled=false'}
 $demo+=$ExtraArguments
 $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
+$oldPresentationTrace=$env:RTR_RTXPT_PRESENTATION_TRACE
 $oldOpticalTrace=$env:RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE
 $oldAsync=$env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX
 $oldPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
@@ -97,6 +101,10 @@ $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 try {
     $env:RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE=$null
+    $env:RTR_RTXPT_PRESENTATION_TRACE=$(if($PresentationTrace){'1'}else{$null})
+    if($WorkTrace -ne ($opticalSource -match '#define RTR_LEGACY_WORK_TRACE 1')) {
+        throw 'Work-trace option must match the configured shader artifact.'
+    }
     $env:RTR_RTXPT_GPU_PROFILE=if($StageProfile){$prefix+'-gpu.csv'}else{$null}
     $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=switch($AsyncPrefix){'On'{'1'} 'Off'{'0'} default{$null}}
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=if($RrPreset -eq 'Upstream'){$null}else{$RrPreset}
@@ -124,6 +132,8 @@ try {
     LegacyLighting=[bool]$LegacyLighting;
         Width=$Width;Height=$Height;Spp=1;FrameGeneration=[bool]$FrameGeneration;StageProfile=[bool]$StageProfile;
         OpticalTransportTrace=$false;NativeGpuTimings=[bool]$StageProfile;
+        OpticalWorkTrace=[bool]$WorkTrace;PresentationTrace=[bool]$PresentationTrace;
+        PresentMon=[bool]$PresentMon;
         OpticalTransportTraceSha256=(Get-FileHash -LiteralPath $opticalHeader).Hash;
         ExactOpticalInterfaces=([regex]::Match($opticalSource,'#define RTR_LEGACY_EXACT_INTERFACE_COUNT (\d+)u')).Groups[1].Value;
         ReplayPrefixCache=($opticalSource -notmatch '#define RTR_LEGACY_REPLAY_PREFIX_CACHE 0');
@@ -145,7 +155,7 @@ try {
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     $runLog=Get-Content -LiteralPath ($prefix+'.log') -Raw
-    if($runLog -match '\[unformatted args\]' -or $runLog -match 'single queue to preserve the final SR-input readback'){
+    if((!$WorkTrace -and $runLog -match '\[unformatted args\]') -or $runLog -match 'single queue to preserve the final SR-input readback'){
         throw 'Shader diagnostic output was unexpectedly active; discard this FPS run.'
     }
     if($LegacyLighting -and $runLog -notmatch 'RTXPT legacy lighting inputs ACTIVE'){
@@ -169,6 +179,7 @@ try {
     Get-Content -LiteralPath ($prefix+'.log') -Tail 5
     if($code -ne 0){throw "Hex-ball run exited $code; inspect $prefix.log"}
 } finally {
+    $env:RTR_RTXPT_PRESENTATION_TRACE=$oldPresentationTrace
     $env:RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE=$oldOpticalTrace
     $env:RTR_RTXPT_GPU_PROFILE=$oldProfile
     $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=$oldAsync
