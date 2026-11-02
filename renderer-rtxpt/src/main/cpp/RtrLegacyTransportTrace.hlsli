@@ -12,7 +12,7 @@
 } while(false)
 bool RtrLegacyTracePixel(uint2 pixel,uint frame)
 {
-    return frame>=16 && frame<=17 && (pixel.x&63u)==0 && (pixel.y&63u)==32u;
+    return frame>=16 && frame<=17 && all((pixel&31u)==0);
 }
 uint4 RtrLegacyTraceKey(uint2 pixel,uint branch,uint vertex,uint frame)
 {

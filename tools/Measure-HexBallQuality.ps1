@@ -104,6 +104,7 @@ if($PackagedRuntime) {
 $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath ($prefix+'-settings.json') -Encoding utf8
 & nvidia-smi --query-gpu=name,utilization.gpu,memory.used --format=csv > ($prefix+'-initial-gpu.csv')
 $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
+$oldOpticalTrace=$env:RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE
 $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
@@ -119,6 +120,7 @@ $oldExposure=$env:RTR_RTXPT_DIAGNOSTIC_SR_EXPOSURE
 $oldBloom=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
+    $env:RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE=$(if($settings.OpticalTransportTrace){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DIRECTIONAL_STRATA=$(if($DirectionalStrata){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_MIXTURE_BSDF=$(if($CombinedBsdf){'1'}else{$null})
@@ -168,6 +170,7 @@ try {
     if($code -ne 0){throw "Quality verification exited $code; inspect $prefix.log"}
 } finally {
     $env:RTR_RTXPT_GPU_PROFILE=$oldProfile
+    $env:RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE=$oldOpticalTrace
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$oldResidual
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis

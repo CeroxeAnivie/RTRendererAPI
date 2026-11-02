@@ -589,6 +589,34 @@ Patch-Once 'Rtxpt/ProcessingPasses/PostProcess.hlsl' '    u_OutputColor[pixelPos
             u_OutputColor[pixelPos],g_Const.ptConsts.invSubSampleCount);
     #endif // RTR verify final merge invocation and constants
 '@ 'RTR verify final merge invocation and constants'
+Patch-Once 'Rtxpt/Sample.cpp' 'void Sample::CloseShaderDebug()' @'
+static bool RtrLateOpticalTrace()
+{
+    static const bool enabled=[] {
+        const char* value=std::getenv("RTR_RTXPT_DIAGNOSTIC_OPTICAL_TRACE");
+        return value && value[0]=='1' && value[1]=='\0';
+    }();
+    return enabled;
+} // RTR diagnostic-only debug lifetime through final merge
+
+void Sample::CloseShaderDebug()
+'@ 'RTR diagnostic-only debug lifetime through final merge'
+Patch-Once 'Rtxpt/Sample.cpp' '    const bool asyncPrefix = ShouldRecordPrefixAsync(needNewPasses);' @'
+    const bool asyncPrefix = !RtrLateOpticalTrace() && ShouldRecordPrefixAsync(needNewPasses); // RTR trace owns one queue through readback
+'@ 'RTR trace owns one queue through readback'
+Patch-Once 'Rtxpt/Sample.cpp' @'
+        CloseShaderDebug();
+
+        if (asyncPrefix)
+'@ @'
+        if(!RtrLateOpticalTrace())CloseShaderDebug(); // RTR defer optical trace readback past final merge
+
+        if (asyncPrefix)
+'@ 'RTR defer optical trace readback past final merge'
+Patch-Once 'Rtxpt/Sample.cpp' '        PostProcessAA(framebuffer, needNewPasses || m_ui.ResetRealtimeCaches);' @'
+        PostProcessAA(framebuffer, needNewPasses || m_ui.ResetRealtimeCaches);
+        if(RtrLateOpticalTrace())CloseShaderDebug(); // RTR include final merge records in readback
+'@ 'RTR include final merge records in readback'
 $rtrCommitPath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli'
 $rtrCommitText=[IO.File]::ReadAllText($rtrCommitPath)
 $rtrCommitText=$rtrCommitText.Replace('#if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE', '#if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD')
