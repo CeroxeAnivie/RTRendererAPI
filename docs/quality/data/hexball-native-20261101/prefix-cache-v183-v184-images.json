@@ -1,0 +1,182 @@
+[
+  {
+    "a": "sr-legacy-glass-replay-control-v184",
+    "b": "sr-legacy-glass-native-smooth-v179",
+    "rows": [
+      {
+        "image": "moving-116.png",
+        "identical": false,
+        "max8bit": 8,
+        "mae8bit": 0.001286259403935185,
+        "changedChannels": 13625
+      },
+      {
+        "image": "moving-117.png",
+        "identical": false,
+        "max8bit": 19,
+        "mae8bit": 0.0013218858506944444,
+        "changedChannels": 13919
+      },
+      {
+        "image": "moving-118.png",
+        "identical": false,
+        "max8bit": 8,
+        "mae8bit": 0.001296657986111111,
+        "changedChannels": 13708
+      },
+      {
+        "image": "moving-119.png",
+        "identical": false,
+        "max8bit": 8,
+        "mae8bit": 0.001263111255787037,
+        "changedChannels": 13381
+      },
+      {
+        "image": "static-160.png",
+        "identical": false,
+        "max8bit": 6,
+        "mae8bit": 0.0008898473668981482,
+        "changedChannels": 9509
+      },
+      {
+        "image": "static-161.png",
+        "identical": false,
+        "max8bit": 6,
+        "mae8bit": 0.0009020543981481481,
+        "changedChannels": 9646
+      },
+      {
+        "image": "static-162.png",
+        "identical": false,
+        "max8bit": 6,
+        "mae8bit": 0.0008939163773148148,
+        "changedChannels": 9545
+      },
+      {
+        "image": "static-163.png",
+        "identical": false,
+        "max8bit": 6,
+        "mae8bit": 0.0008961769386574074,
+        "changedChannels": 9592
+      },
+      {
+        "image": "stopped-0.png",
+        "identical": false,
+        "max8bit": 7,
+        "mae8bit": 0.0012874348958333334,
+        "changedChannels": 13763
+      },
+      {
+        "image": "stopped-15.png",
+        "identical": false,
+        "max8bit": 7,
+        "mae8bit": 0.0012439416956018519,
+        "changedChannels": 13517
+      },
+      {
+        "image": "stopped-3.png",
+        "identical": false,
+        "max8bit": 8,
+        "mae8bit": 0.001257595486111111,
+        "changedChannels": 13563
+      },
+      {
+        "image": "stopped-79.png",
+        "identical": false,
+        "max8bit": 8,
+        "mae8bit": 0.000965892650462963,
+        "changedChannels": 10522
+      }
+    ]
+  },
+  {
+    "a": "sr-legacy-glass-prefix-cache-v183",
+    "b": "sr-legacy-glass-replay-control-v184",
+    "rows": [
+      {
+        "image": "moving-116.png",
+        "identical": false,
+        "max8bit": 7,
+        "mae8bit": 0.0004566333912037037,
+        "changedChannels": 4756
+      },
+      {
+        "image": "moving-117.png",
+        "identical": false,
+        "max8bit": 7,
+        "mae8bit": 0.0004877387152777778,
+        "changedChannels": 5107
+      },
+      {
+        "image": "moving-118.png",
+        "identical": false,
+        "max8bit": 8,
+        "mae8bit": 0.0005043764467592592,
+        "changedChannels": 5353
+      },
+      {
+        "image": "moving-119.png",
+        "identical": false,
+        "max8bit": 7,
+        "mae8bit": 0.0005218279803240741,
+        "changedChannels": 5554
+      },
+      {
+        "image": "static-160.png",
+        "identical": true,
+        "max8bit": 0,
+        "mae8bit": 0.0,
+        "changedChannels": 0
+      },
+      {
+        "image": "static-161.png",
+        "identical": true,
+        "max8bit": 0,
+        "mae8bit": 0.0,
+        "changedChannels": 0
+      },
+      {
+        "image": "static-162.png",
+        "identical": true,
+        "max8bit": 0,
+        "mae8bit": 0.0,
+        "changedChannels": 0
+      },
+      {
+        "image": "static-163.png",
+        "identical": true,
+        "max8bit": 0,
+        "mae8bit": 0.0,
+        "changedChannels": 0
+      },
+      {
+        "image": "stopped-0.png",
+        "identical": false,
+        "max8bit": 7,
+        "mae8bit": 0.000545066550925926,
+        "changedChannels": 5844
+      },
+      {
+        "image": "stopped-15.png",
+        "identical": false,
+        "max8bit": 6,
+        "mae8bit": 0.0006825991030092593,
+        "changedChannels": 7482
+      },
+      {
+        "image": "stopped-3.png",
+        "identical": false,
+        "max8bit": 6,
+        "mae8bit": 0.0006025752314814815,
+        "changedChannels": 6556
+      },
+      {
+        "image": "stopped-79.png",
+        "identical": false,
+        "max8bit": 7,
+        "mae8bit": 0.0008147967303240741,
+        "changedChannels": 8782
+      }
+    ]
+  }
+]
