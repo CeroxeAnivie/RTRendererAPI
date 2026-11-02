@@ -120,6 +120,10 @@ try {
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     $runLog=Get-Content -LiteralPath ($prefix+'.log') -Raw
+    if($code -ne 0){
+        Get-Content -LiteralPath ($prefix+'.log') -Tail 15
+        throw "Quality verification exited $code; inspect $prefix.log"
+    }
     if($DirectionalStrata -and $LightingProbe -notin @('no-sun','no-environment') -and
         $runLog -notmatch 'RTXPT directional environment strata ACTIVE count=[1-9]'){
         throw 'Directional strata were requested but not active; discard this run.'
