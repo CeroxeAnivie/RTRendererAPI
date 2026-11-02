@@ -4,7 +4,7 @@ NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const Active
 {
     NEEResult result=NEEResult::empty();
     // Shared primary receiver is shaded once; only its optical continuations split.
-    if(path.getVertexIndex()==1 && context.RtrLegacyFirstBranch>0)return result;
+    if(path.getVertexIndex()==1 && (path.getCounter((PackedCounters)3)&3u)==2u)return result;
     float surfaceWeight=1-bsdf.data.SpecularTransmission();
     float3 baseColor=RtrLegacyBaseColor(sd,bsdf.data);
     float metallic=saturate(float(bsdf.data.Metallic())),roughness=clamp(float(bsdf.data.Roughness()),.025,1);
@@ -49,7 +49,7 @@ NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const Active
     float3 weight=path.GetThp()*surfaceWeight;
     #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
     if(RtrLegacyTracePixel(path.GetPixelPos(),context.PtConsts.frameIndex) && path.getCounter((PackedCounters)3)>0)
-        RtrLegacyTracePrint("receiver",101u,uint4(path.GetPixelPos(),context.RtrLegacyFirstBranch,path.getVertexIndex()),weight,(diffuse+specular)*weight);
+        RtrLegacyTracePrint("receiver",101u,uint4(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex()),weight,(diffuse+specular)*weight);
     #endif
     result.AccumulateRadiance((diffuse+specular)*weight,Average(specular*weight));
     return result;
