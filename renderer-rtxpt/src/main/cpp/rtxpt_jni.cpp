@@ -13,6 +13,7 @@
 #include <sstream>
 #include <filesystem>
 #include <array>
+#include <cstdio>
 #include <donut/engine/TextureCache.h>
 #include <json/json.h>
 #include "StreamlineIntegration.h"
@@ -224,6 +225,10 @@ struct Session {
         // Never leave the sample's [this] log callback installed during member teardown.
         donut::log::SetCallback(previousLog);
         app.reset();
+        // The JVM can exit without flushing the native CRT's redirected streams.
+        // Flush once at teardown so final SDK/diagnostic results survive in logs.
+        std::fflush(stdout);
+        std::fflush(stderr);
     }
     ~Session() { if(app) { try { shutdown(); } catch (const std::exception& x) { donut::log::error("RTXPT shutdown: %s",x.what()); } } }
 };
