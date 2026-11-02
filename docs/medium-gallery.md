@@ -26,6 +26,8 @@
 
 可执行 JAR：`java -jar demos/hex-ball/build/libs/RTRendererAPI-MediumDemo-7.0.0.jar`。`--capture=文件.png` 在画面稳定后显式捕获一次含 HUD 的最终画面；`--native=true` 改为原生内部分辨率并关闭重建。`-Ddemo.disable-fg=true` 显式关闭 FG，`-Ddemo.fg-multiplier=3`／`4` 请求 MFG，普通／专家 API 控制仍可覆盖对应选项。独立 `rtxptMediumBenchmark` 保持 FG 关闭，不能和 Demo 总输出 FPS 混为一谈。
 
-可执行 Demo 的启动器使用 `-Xms32m -Xmx512m`，避免按本机大内存自动提交一块闲置 Java 堆；显存和原生分配不计入此堆上限。此设置仅用于两个 Demo 的子 JVM，库不会修改消费者的 JVM 内存策略。没有 Vulkan 独立命令或叠层时，组合入口也不提前创建旧设备。
+介质 Demo 默认直接调用 `Renderer.open("rtxpt", config)`：3D、HUD、场景切换和最终呈现均由 RTXPT 承担，不经过组合宿主、不创建 Vulkan 叠层。窗口标注 `RTXPT ONLY`。默认 `mixed` 是光学内容的综合场景，不表示混合后端；`--native=true` 仅改变内部渲染分辨率，不改变后端。RTXPT＋Vulkan 混合演示必须使用独立入口显式启动。
+
+可执行 Demo 的启动器使用 `-Xms32m -Xmx512m`，避免按本机大内存自动提交一块闲置 Java 堆；显存和原生分配不计入此堆上限。此设置仅用于 Demo 的子 JVM，库不会修改消费者的 JVM 内存策略。
 
 六个场景都只展示真实支持的光学能力。展品后侧的面光灯具有深色灯框、支架和底座，发光面是真实表面发光几何，不使用悬空白条或体积自发光。旧密度、体积单／多次散射、HG、体积自发光、初始相机介质及无限介质没有菜单或占位场景；未知场景直接拒绝。见 [版本合同](7.0.0.md)。

@@ -9,13 +9,10 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import top.ceroxe.rt.renderer.api.Renderer;
-import top.ceroxe.rt.renderer.api.RendererBackendPolicy;
-import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.rtxpt.RtxptAccess;
-import top.ceroxe.rt.renderer.rtxpt.RtxptComposedRenderer;
 
-/** Resident GPU presentation; the upstream UI draws the HUD without CPU image copies. */
+/** RTXPT-only GPU presentation; the upstream UI draws the HUD without a Vulkan compositor. */
 public final class RtxptMediumDemo {
     private RtxptMediumDemo() { }
 
@@ -25,7 +22,8 @@ public final class RtxptMediumDemo {
             if (argument.equals("--help")) {
                 System.out.println("--width=1920 --height=1080 --scene=" + String.join("|",RtxptMediumScene.PRESETS)
                     + " --native=false --seconds=0 --capture=file.png\n"
-                    + "Default: windowed, 1 SPP, DLSS-RR + SHaRC, 2x FG. HUD selector or keys 1-6; Esc quits.\n"
+                    + "Default: RTXPT ONLY, windowed, 1 SPP, DLSS-RR + SHaRC, 2x FG. HUD selector or keys 1-6; Esc quits.\n"
+                    + "--native selects internal resolution only; the backend is always RTXPT.\n"
                     + "Console accepts scene names and quit. -Ddemo.disable-fg=true disables FG.");
                 return;
             }
@@ -50,18 +48,17 @@ public final class RtxptMediumDemo {
         });
         var config = DemoRendererProfile.rtxptMediumInteractive(Boolean.parseBoolean(values.getOrDefault("native", "false")));
         var stats = new RenderStats();
-        try (var renderer = RtxptComposedRenderer.openRtxptPresentation(
-                RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),config,"RTRendererAPI 7.0.0 - Medium Demo")) {
+        try (var renderer = Renderer.open("rtxpt", config)) {
             renderer.apply(RtxptMediumScene.create(1,scene));
             renderer.submit(frameRequest(0,1,width,height));
             var host = renderer.extension(RtxptAccess.class).orElseThrow();
-            host.setWindowTitle("RTRendererAPI 7.0.0 - Medium Demo");
+            host.setWindowTitle("RTRendererAPI 7.0.0 - Medium Demo | RTXPT Only");
             long revision = 1, sequence = 1;
             recordPresented(host,stats,0);
             var keys = new DemoWindowKeys(host.windowHandle());
             host.setOverlayText(overlay(renderer,host,stats,scene));
             host.setOverlayChoices(RtxptMediumScene.LABELS,RtxptMediumScene.PRESETS.indexOf(scene));
-            System.out.println("RTXPT MEDIUM READY: scene=" + scene + "; HUD selector / keys 1-6, Esc; " + host.runtimeStatus());
+            System.out.println("RTXPT MEDIUM READY: backend=RTXPT_ONLY; composition=disabled; scene=" + scene + "; HUD selector / keys 1-6, Esc; " + host.runtimeStatus());
             long start = System.nanoTime(), report = start, hudUpdate = start;
             long reportFrames = host.bridgeTimings().frames();
             boolean captured = false;
@@ -135,7 +132,7 @@ public final class RtxptMediumDemo {
         var extent = new DemoConfig(display.outputWidth(),display.outputHeight(),1,true,false,false,0,0,Duration.ZERO);
         stats.observeGpuTiming(diagnostics.frameGpuTiming());
         return DemoTechnologyHud.capture(renderer,extent,stats,diagnostics).text()
-            + String.format(Locale.ROOT,"%nBACKEND RTXPT 1.9.0 | D3D12 | WINDOWED%nINPUT %dx%d -> OUTPUT %dx%d%nSHaRC %s | ReSTIR DI/GI %s/%s%nSCENE %s | %s%n[1] Mixed [2] Glass [3] Nested [4] Absorption [5] Rough [6] IOR [Esc] Quit",
+            + String.format(Locale.ROOT,"%nBACKEND RTXPT ONLY | 1.9.0 | D3D12 | WINDOWED%nINPUT %dx%d -> OUTPUT %dx%d%nSHaRC %s | ReSTIR DI/GI %s/%s%nSCENE %s | %s%n[1] Mixed optics [2] Glass [3] Nested [4] Absorption [5] Rough [6] IOR [Esc] Quit",
                 actual.renderWidth(),actual.renderHeight(),display.outputWidth(),display.outputHeight(),
                 actual.sharc()?"ACTIVE":"DISABLED",actual.restirDi()?"ACTIVE":"DISABLED",actual.restirGi()?"ACTIVE":"DISABLED",
                 scene.toUpperCase(Locale.ROOT),RtxptMediumScene.description(scene));

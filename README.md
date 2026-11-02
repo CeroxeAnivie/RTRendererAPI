@@ -304,7 +304,7 @@ java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --wind
 # 2. RTXPT 新路径弹球
 java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxpt --windowed
 
-# 3. RTXPT 介质：六个场景，可在 HUD 下拉框或数字键 1–6 切换
+# 3. 纯 RTXPT 介质（默认单后端）：六个场景，可在 HUD 下拉框或数字键 1–6 切换
 java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
 ```
 

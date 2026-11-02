@@ -5,8 +5,6 @@ import java.nio.file.Path;
 import java.util.Locale;
 import javax.imageio.ImageIO;
 import top.ceroxe.rt.renderer.api.Renderer;
-import top.ceroxe.rt.renderer.api.RendererBackendPolicy;
-import top.ceroxe.rt.renderer.api.RendererConfig;
 import top.ceroxe.rt.renderer.rtxpt.RtxptAccess;
 import top.ceroxe.rt.renderer.rtxpt.RtxptComposedRenderer;
 
@@ -18,12 +16,10 @@ public final class RtxptMediumDemoSelfTest {
         Path output=Path.of(args[0]).toAbsolutePath();
         Files.createDirectories(output);
         var csv=new StringBuilder("scene,input_width,input_height,output_width,output_height,native_frames,presented_frames,generated_frames,native_ms,native_fps,output_fps,query_failures\n");
-        try(var renderer=RtxptComposedRenderer.openRtxptPresentation(
-                RendererConfig.builder().cpuFrameReadbackEnabled(false).build(),DemoRendererProfile.rtxptMediumInteractive(false),"RTRendererAPI - Medium Demo")) {
+        try(var renderer=Renderer.open("rtxpt",DemoRendererProfile.rtxptMediumInteractive(false))) {
             renderer.apply(RtxptMediumScene.create(1,"mixed"));
             renderer.submit(RtxptMediumDemo.frameRequest(0,1,1920,1080));
-            var selection=renderer.selection().orElseThrow();
-            require(selection.backend()==RendererBackendPolicy.Backend.RTXPT&&selection.mediaPresent(),"Actual media routing selects RTXPT");
+            require(renderer.extension(RtxptComposedRenderer.class).isEmpty(),"Default medium demo never opens a composition host");
             var host=renderer.extension(RtxptAccess.class).orElseThrow();
             long revision=1,sequence=1;
             for(String scene:RtxptMediumScene.PRESETS) {
@@ -62,7 +58,7 @@ public final class RtxptMediumDemoSelfTest {
                 require(failures==0&&after.latestQuerySucceeded()&&after.latestNativeStatus().orElse(-1)==0,"SDK success");
                 String hud=RtxptMediumDemo.overlay(renderer,host,stats,scene);
                 require(hud.contains("RTRendererAPI 7.0.0")&&hud.contains("DLSS FG: ACTIVE")
-                    &&hud.contains("SCENE "+scene.toUpperCase(Locale.ROOT))&&hud.contains("[1] Mixed"),"Full active HUD");
+                    &&hud.contains("BACKEND RTXPT ONLY")&&hud.contains("SCENE "+scene.toUpperCase(Locale.ROOT))&&hud.contains("[1] Mixed"),"Full active HUD");
                 host.setOverlayText(hud);
                 host.setOverlayChoices(RtxptMediumScene.LABELS,RtxptMediumScene.PRESETS.indexOf(scene));
                 frame(host,stats);

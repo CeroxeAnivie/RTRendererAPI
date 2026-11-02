@@ -27,6 +27,8 @@ java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxp
 java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
 ```
 
+介质入口默认直接使用 `Renderer.open("rtxpt", config)`，完整 3D、HUD 和最终呈现均由 RTXPT 承担，不经过组合宿主，也不创建 Vulkan 叠层。窗口标注 `RTXPT ONLY`；`mixed` 仅表示吸收、玻璃等光学内容的综合场景，不表示混合后端。RTXPT＋Vulkan 混合演示使用下方独立入口显式启动。
+
 **HexBall JAR 不带参数会打开 API 工作台。** 看原弹球请带 `--windowed`，看新弹球可带 `--rtxpt`，或使用下方专用类入口。未指定时限持续运行，关闭渲染窗口正常退出。RTXPT 新弹球默认采用中档 **DLSS SR Performance、1 SPP、2× FG、4 个精确光学界面预算**，通过公共 API 使用稳定的 `SCENE_ANALYTIC` 光照输入，不自动增加 RR、NRD、SHaRC 或 ReSTIR。新弹球复用球场几何、物理与灯光强度，采用上游 -1.5 EV 曝光补偿；HUD 可切玻璃、不透明 20% 正面反射率球和原金属球。原 Vulkan 弹球使用金属材质，默认工作负载不同。历史修复过程见[弹球修复报告](../../docs/quality/hexball-noise-fix-20261102.md)，当前配置以本页和[预算指南](../../docs/performance-budgets.md)为准。
 
 专用 RTXPT 弹球入口**不传任何应用参数**，默认即窗口化、1 SPP、2× FG 和中档：
