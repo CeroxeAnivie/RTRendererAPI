@@ -1,4 +1,5 @@
 param([switch]$Enable,[uint32]$BranchSeedXor=0,[switch]$RawOpticalRoughness,
+    [switch]$DisableReplayPrefixCache,
     [ValidateRange(1,6)][int]$ExactInterfaceCount=6,
     [int]$PixelX=-1,[int]$PixelY=-1,[uint32]$FirstFrame=160,[uint32]$LastFrame=161)
 $ErrorActionPreference='Stop'
@@ -6,6 +7,10 @@ $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $sdk=Join-Path $repo 'build/rtxpt-sdk'
 & (Join-Path $PSScriptRoot 'Build-RtxptBridge.ps1') -ConfigureOnly -OpticalTransportTrace:$Enable -OpticalBranchSeedXor $BranchSeedXor
 if($LASTEXITCODE -ne 0){throw 'Shader configuration failed'}
+if($DisableReplayPrefixCache) {
+    $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'
+    [IO.File]::WriteAllText($header,"#define RTR_LEGACY_REPLAY_PREFIX_CACHE 0`n"+[IO.File]::ReadAllText($header),[Text.UTF8Encoding]::new($false))
+}
 if($ExactInterfaceCount -ne 6) {
     $header=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli'
     $source=[IO.File]::ReadAllText($header).Replace('#define RTR_LEGACY_EXACT_INTERFACE_COUNT 6u',"#define RTR_LEGACY_EXACT_INTERFACE_COUNT $($ExactInterfaceCount)u")

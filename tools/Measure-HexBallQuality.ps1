@@ -66,6 +66,9 @@ if($PackagedRuntime) {
 }
 $settings=[ordered]@{
     SourceCommit=(& git rev-parse HEAD).Trim();
+    OpticalShaderSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli').Hash;
+    ReplayPrefixCacheSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyReplayCache.hlsli').Hash;
+    ReplayPrefixCache=([IO.File]::ReadAllText((Join-Path $repo 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyTransportTrace.hlsli')) -notmatch '#define RTR_LEGACY_REPLAY_PREFIX_CACHE 0');
     Java='C:\Program Files\Java\graalvm-jdk-25.0.5.0.2+1.1\bin\java.exe';
     Jvm=@('-Dfile.encoding=UTF-8',('-Dtop.ceroxe.rt.rtxpt.runtime='+(Join-Path $repo 'build/rtxpt-sdk/bin')),
         '--enable-native-access=ALL-UNNAMED','--sun-misc-unsafe-memory-access=allow',

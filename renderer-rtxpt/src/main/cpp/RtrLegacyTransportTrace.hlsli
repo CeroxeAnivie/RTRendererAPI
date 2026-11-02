@@ -9,6 +9,9 @@
 #ifndef RTR_LEGACY_RAW_OPTICAL_ROUGHNESS
 #define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 0
 #endif
+#ifndef RTR_LEGACY_REPLAY_PREFIX_CACHE
+#define RTR_LEGACY_REPLAY_PREFIX_CACHE 1
+#endif
 // Six exact junctions suppress the dominant glass branch variance without
 // expanding the native payload. Later transport keeps its existing estimator.
 #define RTR_LEGACY_EXACT_INTERFACE_COUNT 6u

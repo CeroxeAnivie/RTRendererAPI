@@ -126,6 +126,8 @@ try {
         OpticalTransportTrace=$false;NativeGpuTimings=[bool]$StageProfile;
         OpticalTransportTraceSha256=(Get-FileHash -LiteralPath $opticalHeader).Hash;
         ExactOpticalInterfaces=([regex]::Match($opticalSource,'#define RTR_LEGACY_EXACT_INTERFACE_COUNT (\d+)u')).Groups[1].Value;
+        ReplayPrefixCache=($opticalSource -notmatch '#define RTR_LEGACY_REPLAY_PREFIX_CACHE 0');
+        ReplayPrefixCacheSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/Rtxpt/Shaders/PathTracer/RtrLegacyReplayCache.hlsli').Hash;
         NativeRoughnessPolicy=($opticalSource -notmatch '#define RTR_LEGACY_RAW_OPTICAL_ROUGHNESS 1');
         FinalMergeShaderSha256=(Get-FileHash -LiteralPath 'build/rtxpt-sdk/bin/ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/PostProcess.bin').Hash;
         RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;

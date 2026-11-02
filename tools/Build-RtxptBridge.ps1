@@ -400,7 +400,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidate
 '@ 'RTR directional samples carry directions'
 # Match the legacy route's summed continuous surface response without deleting
 # Full legacy lighting-input parity uses the same scene values at every receiver.
-foreach($header in @('RtrLegacyLightingInputs.hlsli','RtrLegacyDirect.hlsli','RtrLegacyTransportTrace.hlsli')) {
+foreach($header in @('RtrLegacyLightingInputs.hlsli','RtrLegacyDirect.hlsli','RtrLegacyTransportTrace.hlsli','RtrLegacyReplayCache.hlsli')) {
     $headerText=[IO.File]::ReadAllText((Join-Path $repo ('renderer-rtxpt/src/main/cpp/'+$header)))
     if($header -eq 'RtrLegacyTransportTrace.hlsli' -and $OpticalTransportTrace) {
         $headerText="#define RTR_LEGACY_TRANSPORT_TRACE 1 // explicitly enabled by configure`r`n"+$headerText
@@ -804,6 +804,43 @@ Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    } // RTR first-interface p
     if(rtrFirstOpticalVertex>1 && rtrOpticalReplay>=((1u<<(RTR_LEGACY_EXACT_INTERFACE_COUNT-1u))-1u))break;
     } // RTR first-interface paths committed and summed
 '@ 'A non-glass primary has no first-interface glass branch to enumerate.'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '#include "PathTracer/PathTracer.hlsli"' @'
+#include "PathTracer/PathTracer.hlsli"
+#if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_LEGACY_REPLAY_PREFIX_CACHE
+#include "PathTracer/RtrLegacyReplayCache.hlsli" // RTR shader-local shared optical prefixes
+#endif
+'@ 'RTR shader-local shared optical prefixes'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    [loop] for(uint rtrOpticalReplay=0;' @'
+    #if RTR_LEGACY_REPLAY_PREFIX_CACHE
+    RtrLegacyReplayCache rtrReplayCache;
+    rtrReplayCache.valid=0;rtrReplayCache.previous=0;rtrReplayCache.firstOpticalVertex=0;
+    #endif // RTR initialize shared prefix cache
+    [loop] for(uint rtrOpticalReplay=0;
+'@ 'RTR initialize shared prefix cache'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    // Main path tracing loop' @'
+    #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_LEGACY_REPLAY_PREFIX_CACHE
+    if(rtrReplayCache.Restore(rtrOpticalReplay,path))
+    {
+        tMinMax=float2(0,kMaxRayTravel);
+        rtrOpticalDepth=path.getVertexIndex();
+        rtrFirstOpticalVertex=rtrReplayCache.firstOpticalVertex;
+    }
+    #endif // RTR resume at the changed optical junction
+    // Main path tracing loop
+'@ 'RTR resume at the changed optical junction'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '        path.flagsAndVertexIndex&=~RTR_LEGACY_OPTICAL_VERTEX_FLAG;' @'
+        path.flagsAndVertexIndex&=~RTR_LEGACY_OPTICAL_VERTEX_FLAG;
+        #if RTR_LEGACY_REPLAY_PREFIX_CACHE
+        rtrReplayCache.Save(path); // RTR cache native ray state before traversal
+        #endif
+'@ 'RTR cache native ray state before traversal'
+Patch-Once 'Rtxpt/Shaders/PathTracerSample.hlsl' '    if((path.getCounter((PackedCounters)3)&4u)==0)break;' @'
+    #if RTR_LEGACY_REPLAY_PREFIX_CACHE
+    rtrReplayCache.previous=rtrOpticalReplay;
+    rtrReplayCache.firstOpticalVertex=rtrFirstOpticalVertex;
+    #endif // RTR keep actual previous mask before skipping absent suffixes
+    if((path.getCounter((PackedCounters)3)&4u)==0)break;
+'@ 'RTR keep actual previous mask before skipping absent suffixes'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '        const float rrVal = sqrt(Luminance(path.GetThp())); // closer to perceptual' @'
         #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
         // gsOpticalContinuation uses its event budget, not throughput roulette.
