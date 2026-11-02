@@ -126,21 +126,6 @@ foreach($entry in @(@('Init(nvrhi::IDevice* device)','RtrGpuProfile::Init(device
 }
 [IO.File]::WriteAllText($profilerPath,$profilerText,$utf8)
 # SR/TAA must consume this frame's merged radiance, not last frame's OutputColor.
-# The upstream exact-radiance branch must evaluate the same source as the
-# BSDF escape estimator. Keep this diagnostic outside the scene/API mapping.
-Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    return envMap.EvalLocal(localDir, Bridge::DiffuseEnvironmentMapMIPOffset());' @'
-    #if defined(RTR_EXACT_ENVIRONMENT_SOURCE) && RTR_EXACT_ENVIRONMENT_SOURCE
-    return envMap.EvalLocal(localDir, 0); // RTR matching environment source for NEE
-    #else
-    return envMap.EvalLocal(localDir, Bridge::DiffuseEnvironmentMapMIPOffset());
-    #endif
-'@ 'RTR matching environment source for NEE'
-Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '            float3 Le = envMap.EvalLocal(localDir, mipLevel);' @'
-            #if defined(RTR_EXACT_ENVIRONMENT_SOURCE) && RTR_EXACT_ENVIRONMENT_SOURCE
-            mipLevel = 0; // RTR matching environment source for BSDF
-            #endif
-            float3 Le = envMap.EvalLocal(localDir, mipLevel);
-'@ 'RTR matching environment source for BSDF'
 # RR already merges its own guides in the render prefix; NRD already merges before AA.
 $samplePath=Join-Path $sdk 'Rtxpt/Sample.cpp'
 $sampleText=[IO.File]::ReadAllText($samplePath)
@@ -411,6 +396,36 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidate
             }
             #endif
 '@ 'RTR directional samples carry directions'
+# Isolate sampling variance without adding light/visibility samples. The native
+# Owen-Sobol generator and the bounce cutoff already serve RTXPT BSDF sampling.
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    // Generates a light sample from all the available lights.' @'
+    #if defined(RTR_LOW_DISCREPANCY_NEE) && RTR_LOW_DISCREPANCY_NEE
+    #define RTR_NEE_GENERATOR SampleSequenceGenerator
+    #else
+    #define RTR_NEE_GENERATOR UniformSampleSequenceGenerator
+    #endif // RTR native NEE sequence type
+    // Generates a light sample from all the available lights.
+'@ 'RTR native NEE sequence type'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' 'uint globalCount, inout UniformSampleSequenceGenerator sampleGenerator, const LightSampler lightSampler' 'uint globalCount, inout RTR_NEE_GENERATOR sampleGenerator, const LightSampler lightSampler' 'inout RTR_NEE_GENERATOR sampleGenerator'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        [unroll] for (uint sampleIndex = 0; sampleIndex < fullSamples; sampleIndex++)' @'
+        #if defined(RTR_LOW_DISCREPANCY_NEE) && RTR_LOW_DISCREPANCY_NEE
+        const SampleGeneratorVertexBase rtrNeeBase = SampleGeneratorVertexBase::make(
+            preScatterPath.GetId(), preScatterPath.getVertexIndex(), Bridge::getSampleIndex());
+        SampleSequenceGenerator rtrNeeGenerator = SampleSequenceGenerator::make(rtrNeeBase,
+            SampleGeneratorEffectSeed::NextEventEstimationLightSampler,
+            preScatterPath.getCounter(PackedCounters::DiffuseBounces) < DisableLowDiscrepancySamplingAfterDiffuseBounceCount,
+            fullSamples * candidateSampleCount); // RTR independent native NEE sequence
+        #endif
+        [unroll] for (uint sampleIndex = 0; sampleIndex < fullSamples; sampleIndex++)
+'@ 'RTR independent native NEE sequence'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '                sampleGenerator, lightSampler, rtrConditionalPointSampling, rtrResidualGlobalProxyCount, rtrResidualLocalSlotCount); // RTR residual sample call' @'
+                #if defined(RTR_LOW_DISCREPANCY_NEE) && RTR_LOW_DISCREPANCY_NEE
+                rtrNeeGenerator,
+                #else
+                sampleGenerator,
+                #endif
+                lightSampler, rtrConditionalPointSampling, rtrResidualGlobalProxyCount, rtrResidualLocalSlotCount); // RTR residual sample call; RTR independent sequence call
+'@ 'RTR independent sequence call'
 # Raw SR/TAA/reference output does not read it; retain upstream filtering for every consumer.
 Patch-Once 'Rtxpt/AdvancedSample.cpp' '        m_denoisingGuidesBaker->DenoiseSpecHitT(m_commandList, m_bindingSet);' @'
         // RTR filter hit distance only when a consumer is active

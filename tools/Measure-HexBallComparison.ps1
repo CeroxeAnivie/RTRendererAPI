@@ -9,6 +9,7 @@ param(
     [switch]$ControlLighting,
     [switch]$DisableResidualPointSampling,
     [switch]$ExactMis,
+    [switch]$LowDiscrepancyNee,
     [switch]$ApproximateMis,
     [ValidateSet('Default','Power','NeeAt')][string]$LightSampler='Default',
     [switch]$Glass,
@@ -18,7 +19,6 @@ param(
     [ValidateSet('Upstream','J','K','M')][string]$SrPreset='Upstream',
     [ValidateRange(0.0,64.0)][double]$FixedSrExposure=0,
     [switch]$DisableBloom,
-    [switch]$ExactEnvironmentSource,
     [ValidateSet('Upstream','On','Off')][string]$AsyncPrefix='Upstream',
     [string[]]$ExtraArguments=@(),
     [string]$OutputDirectory='docs/quality/data/hexball-native-20261101'
@@ -73,10 +73,10 @@ $oldPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
 $oldSrPreset=$env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET
 $oldExposure=$env:RTR_RTXPT_DIAGNOSTIC_SR_EXPOSURE
 $oldBloom=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM
-$oldExactEnvironment=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_ENVIRONMENT
 $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
+$oldLdNee=$env:RTR_RTXPT_DIAGNOSTIC_LD_NEE
 $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 try {
@@ -86,8 +86,8 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET=if($SrPreset -eq 'Upstream'){$null}else{$SrPreset}
     $env:RTR_RTXPT_DIAGNOSTIC_SR_EXPOSURE=$(if($FixedSrExposure -gt 0){$FixedSrExposure.ToString([Globalization.CultureInfo]::InvariantCulture)}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM=$(if($DisableBloom){'1'}else{$null})
-    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_ENVIRONMENT=$(if($ExactEnvironmentSource){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_LD_NEE=$(if($LowDiscrepancyNee){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(switch($LightSampler){'Power'{'power'} 'NeeAt'{'neeat'} default{$null}})
@@ -96,11 +96,11 @@ try {
     $settings=[ordered]@{
         SourceCommit=(& git rev-parse HEAD).Trim();Backend=$Backend;Entry=$entry;
         WorkingTreeSourceSha256=$sourceDigest;WorkingTreeSourceFiles=$sourcePaths;
+    LowDiscrepancyNee=[bool]$LowDiscrepancyNee;
         Width=$Width;Height=$Height;Spp=1;FrameGeneration=$false;StageProfile=[bool]$StageProfile;
         RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;
         SrPreset=$SrPreset;
         FixedSrExposure=$FixedSrExposure;DisableBloom=[bool]$DisableBloom;
-        ExactEnvironmentSource=[bool]$ExactEnvironmentSource;
         SmallPointCandidate=[bool]$SmallPointCandidate;
         ControlLighting=[bool]$ControlLighting;
         DisableResidualPointSampling=[bool]$DisableResidualPointSampling;ExactMis=[bool]$ExactMis;Glass=[bool]$Glass;
@@ -137,10 +137,10 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET=$oldSrPreset
     $env:RTR_RTXPT_DIAGNOSTIC_SR_EXPOSURE=$oldExposure
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM=$oldBloom
-    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_ENVIRONMENT=$oldExactEnvironment
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$oldResidual
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis
+    $env:RTR_RTXPT_DIAGNOSTIC_LD_NEE=$oldLdNee
     $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$oldSampler
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$oldTransmissionGuides
 }
