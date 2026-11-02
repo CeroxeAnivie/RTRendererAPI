@@ -476,9 +476,8 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        return 
         #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
         if(RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)>0 || bsdf.data.SpecularTransmission()>0))
         {
-            RtrLegacyTracePrint("RTR_TRANSPORT scatter pixel={0} branch={1} vertex={2} valid={3}",path.GetPixelPos(),workingContext.RtrLegacyFirstBranch,path.getVertexIndex(),uint(legacyValid));
-            RtrLegacyTracePrint("RTR_TRANSPORT material={0} frontEta={1} thp={2} normal={3}",shadingData.MaterialID(),float2(shadingData.frontFacing,shadingData.GetEta()),path.GetThp(),shadingData.N);
-            RtrLegacyTracePrint("RTR_TRANSPORT direction={0} weight={1} lobe={2}",legacySample.wo,legacySample.weight,legacySample.lobe);
+            RtrLegacyTracePrint("scatter",100u,uint4(path.GetPixelPos(),workingContext.RtrLegacyFirstBranch,path.getVertexIndex()),
+                float4(shadingData.MaterialID(),shadingData.frontFacing,shadingData.GetEta(),legacyValid),path.GetThp(),shadingData.N,legacySample.wo,legacySample.weight,legacySample.lobe);
         }
         #endif // RTR optional optical transport trace
         return legacyValid && GenerateScatterRay(legacySample,shadingData,bsdf,path,workingContext); // RTR legacy optical continuation
@@ -486,6 +485,10 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        return 
 $rtrTracePath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli'
 $rtrTraceText=[IO.File]::ReadAllText($rtrTracePath)
 $rtrTraceText=$rtrTraceText.Replace('DebugPrint("RTR_TRANSPORT','RtrLegacyTracePrint("RTR_TRANSPORT')
+$rtrTraceText=[regex]::Replace($rtrTraceText,'(?s)            RtrLegacyTracePrint\("RTR_TRANSPORT scatter.*?legacySample\.lobe\);',@'
+            RtrLegacyTracePrint("scatter",100u,uint4(path.GetPixelPos(),workingContext.RtrLegacyFirstBranch,path.getVertexIndex()),
+                float4(shadingData.MaterialID(),shadingData.frontFacing,shadingData.GetEta(),legacyValid),path.GetThp(),shadingData.N,legacySample.wo,legacySample.weight,legacySample.lobe);
+'@)
 [IO.File]::WriteAllText($rtrTracePath,$rtrTraceText,$utf8)
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerDenoisingLayersHandleHit.hlsli' '            surface.bsdf.evalDeltaLobes(surface.shadingData, deltaLobes, deltaLobeCount, nonDeltaPart);' @'
             #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING

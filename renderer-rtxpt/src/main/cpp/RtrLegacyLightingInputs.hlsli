@@ -9,10 +9,7 @@
 #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
 #define RtrLegacyTracePrint(str, ...) do { \
     ShaderDebug::DebugPrinter printer; printer.Init(); \
-    uint strLen; \
-    for(strLen=0; strLen<256 && str[strLen]!="\0"[0]; ++strLen) \
-        printer.AppendChar(ShaderDebug::CharToUint(str[strLen])); \
-    printer.AppendChar(0); printer.StringSize=printer.ByteCount; \
+    printer.StringSize=0; \
     printer.AppendArgs(__VA_ARGS__); printer.Commit(); \
 } while(false)
 bool RtrLegacyTracePixel(uint2 pixel,uint frame)
