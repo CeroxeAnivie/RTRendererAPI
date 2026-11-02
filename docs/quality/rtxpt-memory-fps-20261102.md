@@ -85,4 +85,8 @@ Streamline 2.14.16 `include/sl.h:40` 的 `SL_FEATURE_FUN_IMPORT_STATIC` 把插�
 
 预算 CPU 合同、RTXPT adapter 合同与刷新后的 7.0.0 API ABI 校验均通过。真实 Demo 排列补齐后的六档离线构建生成 **361 份 DXIL**：32 组光学排列各有完整 1～6 档，共 192 份；另 169 份通用／compute 排列。全部命令哈希与上游缓存文件名对应，二进制共 407.40 MiB。
 
-仓库外首次包装验收在进入 GPU 前发现桥接 DLL 缺失。磁盘实际文件名 `RTRENDERER_RTXPT.DLL` 可由 Windows 正常加载，但 Gradle 大小写敏感的 `*.dll` 筛选将其漏掉。已将原生文件匹配改为不区分大小写、桥接文件包名规范为小写，并增加 ZIP 必需条目检查，修复后的 CPU 打包已通过。仓库外新缓存、禁止 DXC fallback 的最终 GPU 验收仍待执行，不提前记为通过。
+仓库外首次包装验收在进入 GPU 前发现桥接 DLL 缺失。磁盘实际文件名 `RTRENDERER_RTXPT.DLL` 可由 Windows 正常加载，但 Gradle 大小写敏感的 `*.dll` 筛选将其漏掉。已将原生文件匹配改为不区分大小写、桥接文件包名规范为小写，并增加 ZIP 必需条目检查。包内 DLL SHA-256 与本次原生构建完全一致：`c98269439012045ea0bf466870813028af870cfffd806d700cb55d23ecb0df99`。
+
+检查点 `3419fee` 的最终 JAR 已在仓库外新目录、新缓存中完成**十七项全通过**，真实退出 0。运行时明确设置 `RTR_RTXPT_REQUIRE_PRECOMPILED=1`，无源码运行时或 DLL 路径覆盖；361 份二进制的名称、大小、时间戳前后完全不变，证明被测排列直接使用包内二进制，未调用 DXC fallback。Bloom／tone mapping 像素差异与源码矩阵完全一致。日志为 `build/reports/rtxpt-packaged-budgets-fixed.log`；1 分 6 秒是整套测试墙钟，不是 FPS。
+
+最终 `renderer-rtxpt-7.0.0.jar` 为 257,845,660 字节（245.90 MiB），SHA-256 `abac265d59fa35b9fca5ff351cabd1134c67d6abdd032cfd06846f0fe1fc4727`。聚合 JSON 保留包哈希、全部被测原生状态、截图哈希及最终日志哈希。未来未捕获的新材质／宏组合仍保留随包上游 DXC，不能将本次已验证排列的零编译结果扩大为任意未来组合均免编译。

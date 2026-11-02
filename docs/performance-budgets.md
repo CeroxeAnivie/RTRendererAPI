@@ -118,6 +118,8 @@ Remove-Item Env:RTR_RTXPT_SHADER_MANIFEST_DIR -ErrorAction SilentlyContinue
 
 最后一项在仓库外的新缓存目录中运行真实 JAR，显式禁止动态编译，验证已覆盖的预算排列确实从包加载。命令收集属于构建期诊断，默认不开；六档验证不替代游戏全场景的性能测试。
 
+7.0.0 本轮已完成该异地验收：17 项原生预算／像素检查通过，包内 361 份二进制前后无变化，包含 32 组各具完整 1～6 档的光学排列。具体制品身份与修复经过见[联合验收记录](quality/rtxpt-memory-fps-20261102.md#消费级预算与组合正确性补验)。
+
 ## 三个 Demo
 
 原 Vulkan 弹球、RTXPT 弹球、RTXPT 介质的无参数／缺字段均继承中档预算，保留窗口化、1 SPP、2× FG。RTXPT 弹球使用 SR、稳定场景光照输入，不额外开启 RR／NRD／SHaRC／ReSTIR；介质使用中档 RR＋SHaRC。消费方可以用 `--api.pathTracing.exactOpticalInterfaces=2`、`--api.pathTracing.quality.postProcessing.bloom=false`、`--api.resources.workerThreads=2` 等显式覆盖单项，其余字段继续继承中档，非法组合明确报错。
