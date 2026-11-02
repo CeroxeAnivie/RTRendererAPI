@@ -1,0 +1,23 @@
+Exception in thread "main" top.ceroxe.rt.renderer.api.SubmissionRejectedException: Vulkan renderer deferred frame 0 without publishing partial state: scene revision 0 is still converging on the GPU
+	at top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererHost.submit(VulkanRendererHost.java:683)
+	at demo.VulkanHexBallTemporalEvidence.main(VulkanHexBallTemporalEvidence.java:35)
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_common_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_reflex_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\1ba447f76373c5994a0e03844b345f80880e293a74a0fb5adeacc590f533ed20/sl.common.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_common_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\1ba447f76373c5994a0e03844b345f80880e293a74a0fb5adeacc590f533ed20/sl.deepdvc.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\1ba447f76373c5994a0e03844b345f80880e293a74a0fb5adeacc590f533ed20/sl.directsr.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\1ba447f76373c5994a0e03844b345f80880e293a74a0fb5adeacc590f533ed20/sl.dlss.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\1ba447f76373c5994a0e03844b345f80880e293a74a0fb5adeacc590f533ed20/sl.dlss_d.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\1ba447f76373c5994a0e03844b345f80880e293a74a0fb5adeacc590f533ed20/sl.dlss_g.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\1ba447f76373c5994a0e03844b345f80880e293a74a0fb5adeacc590f533ed20/sl.nis.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\1ba447f76373c5994a0e03844b345f80880e293a74a0fb5adeacc590f533ed20/sl.nvperf.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\1ba447f76373c5994a0e03844b345f80880e293a74a0fb5adeacc590f533ed20/sl.pcl.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\Temp\rtrenderer-nvidia\1ba447f76373c5994a0e03844b345f80880e293a74a0fb5adeacc590f533ed20/sl.reflex.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_reflex_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.

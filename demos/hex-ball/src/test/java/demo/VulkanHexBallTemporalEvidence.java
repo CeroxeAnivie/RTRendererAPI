@@ -32,7 +32,11 @@ public final class VulkanHexBallTemporalEvidence {
                 var request=DemoRendererProfile.frame(frame,2560,1440,DemoRendererProfile.camera(2560,1440,15.4))
                     .minimumSceneRevision(revision).primitiveBatch(batch).environment(DemoRendererProfile.environment())
                     .antiAliasing(DemoRendererProfile.antiAliasing(1)).build();
-                renderer.submit(request);
+                long deadline=System.nanoTime()+Duration.ofSeconds(90).toNanos();
+                while(!(renderer.trySubmit(request) instanceof Renderer.FrameSubmitted)) {
+                    if(System.nanoTime()>=deadline)throw new AssertionError("Scene convergence timeout");
+                    Thread.sleep(1);
+                }
                 var completed=renderer.awaitFrame(Duration.ofSeconds(90)).orElseThrow();
                 if(completed.frameSequence()!=frame)throw new AssertionError("Unexpected frame sequence");
                 if(frame>=160) {
