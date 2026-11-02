@@ -120,6 +120,24 @@ tasks.register<JavaExec>("rtxptMemorySelfTest") {
     args(rootProject.layout.buildDirectory.dir("reports/rtxpt-memory").get().asFile.absolutePath)
 }
 
+tasks.register<JavaExec>("rtxptMemoryParitySelfTest") {
+    group = "verification"
+    description = "Short deterministic material, motion and resize captures for native memory-fix A/B comparison."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("demo.RtxptMemoryParitySelfTest")
+    args(rootProject.layout.buildDirectory.dir("reports/rtxpt-memory-parity").get().asFile.absolutePath)
+}
+
+tasks.register<JavaExec>("rtxptGenerationDeliverySelfTest") {
+    group = "verification"
+    description = "Foreground-only 2x/3x/4x SDK delivery and resize check; does not report FPS."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("demo.RtxptHexBallGenerationSelfTest")
+    args(rootProject.layout.buildDirectory.dir("reports/rtxpt-generation-delivery").get().asFile.absolutePath)
+}
+
 tasks.withType<AbstractArchiveTask>().configureEach {
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true

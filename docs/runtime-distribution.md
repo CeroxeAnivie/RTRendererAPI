@@ -1,17 +1,17 @@
-# RTRendererAPI 7.0.0 Windows 候选制品
+# RTRendererAPI 7.0.1 Windows 候选制品
 
 普通 Vulkan 路径由 renderer-api、renderer-core、renderer-nvidia 提供。renderer-rtxpt 是显式可选的 D3D12 全场景／透明介质托管后端，包含原生最终呈现和 Vulkan GPU 组合入口；发行目录同时携带这个模块，但 renderer-api 不默认依赖它。
 
 ## 使用
 
-需要 Windows x86_64、Java 25 和通过后端能力检查的 NVIDIA RTX。普通路径使用 Vulkan，RTXPT 使用 D3D12/DXR。应用加入 top.ceroxe.rt:renderer-rtxpt:7.0.0 后，通过 Renderer.open("rtxpt", config) 选择托管路径。
+需要 Windows x86_64、Java 25 和通过后端能力检查的 NVIDIA RTX。普通路径使用 Vulkan，RTXPT 使用 D3D12/DXR。应用加入 top.ceroxe.rt:renderer-rtxpt:7.0.1 后，通过 Renderer.open("rtxpt", config) 选择托管路径。
 
 ```powershell
 java --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow `
   -cp 'lib/*;your-application.jar' your.application.Main
 ```
 
-RTXPT JAR 自带 JNI、Streamline/DLSS、Agility、shader 和原始许可证。首次运行校验 SHA-256 并解包至用户缓存，之后复用；不需要安装 CUDA，不从开发机路径取 DLL，不在运行时下载 SDK。首次 shader/PSO 编译可能需要等待，进度写日志，不创建独立弹窗。具体支持范围见 7.0.0.md。
+RTXPT JAR 自带 JNI、Streamline/DLSS、Agility、shader 和原始许可证。首次运行校验 SHA-256 并解包至用户缓存，之后复用；不需要安装 CUDA，不从开发机路径取 DLL，不在运行时下载 SDK。首次 shader/PSO 编译可能需要等待，进度写日志，不创建独立弹窗。具体支持范围见 7.0.1.md。
 
 公共预算支持 LOW／MEDIUM／HIGH，工厂无参与三 Demo 缺省字段统一中档。JAR 内包含已捕获上游动态排列的真实 DXIL，以及每个已捕获场景解析光照排列的 1～6 精确界面六档；未捕获的新组合仍由随包上游 DXC 编译缓存。打包校验源码指纹和二进制哈希，仓库外独立缓存验收使用 `:renderer-rtxpt:rtxptPackagedBudgetNativeSelfTest` 禁止 fallback，检查被测排列均从包加载。构建命令与范围见[预算指南](performance-budgets.md)。
 
@@ -21,11 +21,11 @@ RTXPT JAR 自带 JNI、Streamline/DLSS、Agility、shader 和原始许可证。�
 
 ```powershell
 # 原 Vulkan 弹球
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --windowed
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.1.jar --windowed
 # RTXPT 新路径弹球
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxpt --windowed
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.1.jar --rtxpt --windowed
 # RTXPT 介质
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.1.jar
 ```
 
 三个交互入口默认请求 2× FG，HexBall JAR 无参数打开 API 工作台。两个弹球使用 `--duration-seconds=30`，介质使用 `--seconds=30`；不传时限持续运行。完整参数和真实交付判断见 [Demo 说明](../demos/hex-ball/README.md)。启动器会为子 JVM 配置 native access，普通库消费者仍自行管理 JVM 参数。

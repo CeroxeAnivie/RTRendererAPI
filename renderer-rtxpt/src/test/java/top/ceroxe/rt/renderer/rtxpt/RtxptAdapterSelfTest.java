@@ -20,6 +20,7 @@ public final class RtxptAdapterSelfTest {
     static RenderFrameRequest frame(long sequence){return RenderFrameRequest.builder(sequence,1920,1080,camera()).minimumSceneRevision(1)
         .environment(EnvironmentState.builder().skyRadiance(.4f,.6f,.9f).ambientIntensity(1).sunDirection(0,-1,0).sunIntensity(4).build()).build();}
     public static void main(String[] args) throws Exception {
+        RtxptLightingSelfTest.run();
         inputContractRejectsIgnoredControls();
         featureFallbackRecoversWithoutLosingIntent();
         var s=new RtxptScene();s.retain(scene(1));var frame=frame(0);var items=s.items(frame);

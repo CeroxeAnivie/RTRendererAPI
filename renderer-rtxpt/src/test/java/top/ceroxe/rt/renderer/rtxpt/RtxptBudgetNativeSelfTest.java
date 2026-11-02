@@ -76,7 +76,8 @@ public final class RtxptBudgetNativeSelfTest {
             require(host.bridgeTimings().frames()>=12,"Budget case produces twelve completed frames: "+name);
             var actual=host.pathQualityStatus();var runtime=host.runtimeStatus();
             require(actual.quality().equals(requested),"Every native quality field matches: expected="+requested+" actual="+actual);
-            require(actual.allocatedCacheEntries()==requested.cache().entries(),"Actual SHaRC allocation follows capacity: "+actual);
+            require(actual.allocatedCacheEntries()==(runtime.sharc()?requested.cache().entries():0),
+                "Actual SHaRC allocation follows active use and configured capacity: "+actual);
             require(actual.workerThreads()==config.resources().workerThreads(),"Actual frame worker pool follows budget: "+actual);
             require(actual.shaderCompilerThreads()==config.resources().shaderCompilerThreads(),"Actual PT compiler pool follows budget: "+actual);
             require(actual.maxFramesInFlight()==config.maxFramesInFlight(),"Native frame ring follows budget: "+actual);

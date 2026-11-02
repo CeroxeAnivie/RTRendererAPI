@@ -1,14 +1,14 @@
 # API Contract
 
-RTRendererAPI 7.0.0 starts a new Java 25 major-7 binary/API contract. Use matching API,
+RTRendererAPI 7.0.1 retains the Java 25 major-7 binary/API contract introduced in 7.0.0. Use matching API,
 backend and NVIDIA modules. Medium data is expressed directly by `Rgb`, `Medium`,
 `MediumBoundary` records. RTXPT keeps only absorption, IOR and nested priority; density,
 scattering, emission, camera-medium and `MediumTransport` controls were removed. The nested 6.x medium type, medium builders
 and compatibility wrappers are absent. Recompile custom retained-scene shaders against the
-7.0.0 `gpuscene_abi.glsl`; do not embed record strides from an older release.
+7.0.1 `gpuscene_abi.glsl`; do not embed record strides from an older release.
 
 This version is delivered through GitHub source and local Maven artifacts. No remote release
-or Maven Central publication is implied by building the sources. See [7.0.0 migration](7.0.0.md)
+or Maven Central publication is implied by building the sources. See [7.0.1 migration](7.0.1.md)
 for the exact medium API. GPU and packaged-runtime evidence is recorded separately in
 [RTXPT integration](quality/rtxpt-managed-medium-migration.md),
 [advanced-feature audit](quality/rtxpt-advanced-audit-20261101.md), and
@@ -40,7 +40,7 @@ propagate without failing the renderer; device/provenance failures fail closed.
 
 All four public Vulkan retained-scene stages can be replaced. Managed transparent media use
 the optional RTXPT D3D12 backend and its native material/transport implementation. Custom Vulkan scene stages and explicit command pipelines use
-the 7.0.0 shader contracts; no automatic 6.x shader or payload translation is provided.
+the 7.0.1 shader contracts; no automatic 6.x shader or payload translation is provided.
 Arbitrary shader groups, callable/procedural RT, graphics, compute, descriptor sets, textures
 and samplers remain available through the explicit command API.
 

@@ -1,0 +1,1444 @@
+{
+  "units": "bytes",
+  "phase": "GLASS-static, 1920x1080 output / 960x540 internal, first material",
+  "runs": {
+    "parity-before": {
+      "observation_samples": 10,
+      "private": {
+        "min": 2830761984,
+        "median": 2844123136.0,
+        "max": 2849693696
+      },
+      "working_set": {
+        "min": 853204992,
+        "median": 866195456.0,
+        "max": 871870464
+      },
+      "gpu_adapters": {
+        "0x00000000_0x00019EA4_phys_0": {
+          "Dedicated Usage": {
+            "min": 1996197888,
+            "median": 1996197888.0,
+            "max": 1996197888
+          },
+          "Shared Usage": {
+            "min": 183480320,
+            "median": 183480320.0,
+            "max": 184070144
+          },
+          "Total Committed": {
+            "min": 2179678208,
+            "median": 2179678208.0,
+            "max": 2180268032
+          }
+        }
+      },
+      "vmmap_timestamp_ms": 1793620305203,
+      "vmmap_top_level_regions": {
+        "Free": {
+          "Size": 140622008352768,
+          "Commit": 0,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 0
+        },
+        "Private Data": {
+          "Size": 113790164992,
+          "Commit": 2334846976,
+          "PrivateBytes": 2334846976,
+          "PrivateWS": 261206016,
+          "ShareableWS": 24576
+        },
+        "Unusable": {
+          "Size": 10661888,
+          "Commit": 0,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 0
+        },
+        "Thread Stack": {
+          "Size": 72417280,
+          "Commit": 2301952,
+          "PrivateBytes": 2301952,
+          "PrivateWS": 1253376,
+          "ShareableWS": 0
+        },
+        "Mapped File": {
+          "Size": 483004416,
+          "Commit": 483004416,
+          "PrivateBytes": 4284416,
+          "PrivateWS": 1503232,
+          "ShareableWS": 125083648
+        },
+        "Heap (Private Data)": {
+          "Size": 333234176,
+          "Commit": 317321216,
+          "PrivateBytes": 317321216,
+          "PrivateWS": 261206016,
+          "ShareableWS": 0
+        },
+        "Shareable": {
+          "Size": 78999552,
+          "Commit": 56446976,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 50536448
+        },
+        "Heap (Shareable)": {
+          "Size": 65536,
+          "Commit": 65536,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 4096
+        },
+        "Image (ASLR)": {
+          "Size": 711389184,
+          "Commit": 709976064,
+          "PrivateBytes": 160587776,
+          "PrivateWS": 10149888,
+          "ShareableWS": 144961536
+        }
+      },
+      "vmmap_write_combined_leaf_regions": {
+        "Size": 2059919360,
+        "Commit": 2059919360,
+        "PrivateBytes": 2010152960,
+        "PrivateWS": 54747136,
+        "ShareableWS": 49766400
+      },
+      "nearest_preceding_native_phase": {
+        "time": "1793620304380",
+        "phase": "frame.startup",
+        "private": "2796040192",
+        "workingSet": "836304896",
+        "gpuQueryStatus": "0x00000000",
+        "dedicated": "1973272576",
+        "shared": "165654528",
+        "trackedDefault": "1688797184",
+        "trackedUpload": "11468800",
+        "trackedReadback": "1966080",
+        "liveResources": "406"
+      },
+      "tracked_resources_at_vmmap": {
+        "EnvMapBakerMainCube": 268500992,
+        "Streamline texture": 263389184,
+        "Streamline buffer": 127795200,
+        "DenoisingLayersBuffer": 125370368,
+        "LightsBuffer": 67108864,
+        "LightsScratchBuffer": 67108864,
+        "SurfaceData(GBuffer)": 66846720,
+        "ShaderDebugBufferGPU": 52756480,
+        "ShaderDebugBufferGPUCopy": 52756480,
+        "EnvMapBakerMainCubeLowRes": 50331648,
+        "EnvMapBakerMainCubeBC6H": 33619968,
+        "EnvMapBakerMainCubeBC6HScratch": 33619968,
+        "SharcAccumulationBuffer": 33554432,
+        "SharcResolvedBuffer": 33554432,
+        "BlasPoolBlock0": 33554432,
+        "LightsExBuffer": 33554432,
+        "SwapChainBuffer": 26542080,
+        "ProcessedOutputColor": 17694720,
+        "LdrColor": 17170432,
+        "LightsWeights": 16842752,
+        "SharcHashEntriesBuffer": 16777216,
+        "DenoiserOutDiffRadianceHitDist": 14745600,
+        "DenoiserOutSpecRadianceHitDist": 14745600,
+        "DXR scratch pool": 12582912,
+        "LightSamplingProxies": 12582912,
+        "EnvRadianceMap": 11206656,
+        "DenoisingLayersHeader": 9830400,
+        "SecondarySurfacePositionNormal": 9830400,
+        "AccumulatedRadiance": 9830400,
+        "LdrColorScratch": 8847360,
+        "PreUIColor": 8847360,
+        "LightsWeightsBoost": 8454144,
+        "HistoryRemapCurrentToPast": 8454144,
+        "HistoryRemapPastToCurrent": 8454144,
+        "PerLightProxyCounters": 8454144,
+        "ScratchList": 8454144,
+        "EnvImportanceMap": 5636096,
+        "ScreenMotionVectors": 4915200,
+        "DenoiserMotionVectors": 4915200,
+        "StableRadianceBuffer": 4915200,
+        "DenoiserDiffRadianceHitDist": 4915200,
+        "DenoiserSpecRadianceHitDist": 4915200,
+        "SecondarySurfaceRadiance": 4915200,
+        "OutputColor": 4915200,
+        "RRNormalsAndRoughness": 4915200,
+        "DebugVizOutput": 4915200,
+        "NEE_AT_FeedbackTotalWeight": 4456448,
+        "NEE_AT_FeedbackCandidates": 4456448,
+        "DebugVizOutputCopy": 4456448,
+        "NEE_AT_LocalSamplingBuffer": 4325376,
+        "PTMaterialDataStorage": 4194304,
+        "EnvLightLookupMap": 4194304,
+        "NEE_AT_FeedbackTotalWeightScratch": 3080192,
+        "NEE_AT_FeedbackCandidatesScratch": 3080192,
+        "Depth": 2490368,
+        "Throughput": 2490368,
+        "DenoiserOutValidation": 2490368,
+        "DenoiserViewspaceZ": 2490368,
+        "DenoiserNormalRoughness": 2490368,
+        "SpecularHitT": 2490368,
+        "ScratchFloat1": 2490368,
+        "RRDiffuseAlbedo": 2490368,
+        "RRSpecAlbedo": 2490368,
+        "RRSpecMotionVectors": 2490368,
+        "NEE_AT_HistoryDepth": 2490368,
+        "SubSamplingPixelList": 2097152,
+        "Upload pool": 1900544,
+        "DenoiserAvgRadianceHalfRes": 1114112,
+        "bloom src mip1": 1114112,
+        "VertexBuffer": 720896,
+        "Luminance Texture": 720896,
+        "DenoiserDisocclusionThresholdMix": 655360,
+        "CombinedHistoryClampRelax": 655360,
+        "IndexBuffer": 589824,
+        "ImGui font texture": 524288,
+        "": 393216,
+        "ShaderDebugBufferCPU_0": 327680,
+        "ShaderDebugBufferCPU_1": 327680,
+        "ShaderDebugBufferCPU_2": 327680,
+        "ShaderDebugBufferCPU_3": 327680,
+        "bloom src mip2": 327680,
+        "bloom accumulation pass1": 327680,
+        "bloom accumulation pass2": 327680,
+        "BindlessMaterials": 262144,
+        "AvgLuminanceReadbackBuffer": 262144,
+        "Instances": 196608,
+        "BlackDepthStencilTexture": 131072,
+        "BlackDepthStencilTexture2DArray": 131072,
+        "ImGui vertex buffer": 131072,
+        "BlackTexture": 65536,
+        "GrayTexture": 65536,
+        "WhiteTexture": 65536,
+        "BlackCubeMapArray": 65536,
+        "BlackTexture2DArray": 65536,
+        "WhiteTexture2DArray": 65536,
+        "BlackTexture3D": 65536,
+        "BindlessValidationData": 65536,
+        "PrefixDummyUAV": 65536,
+        "DummyRawBufferUAV": 65536,
+        "Feedback_Buffer_Gpu": 65536,
+        "Feedback_Buffer_Cpu": 65536,
+        "DebugLinesCapture": 65536,
+        "DebugLinesDisplay": 65536,
+        "Feedback_PathDecomp_Gpu": 65536,
+        "Feedback_PathDecomp_Cpu": 65536,
+        "DebugDeltaPathTreeSearchStack": 65536,
+        "BindlessGeometry": 65536,
+        "mat4": 65536,
+        "mat0": 65536,
+        "mat1": 65536,
+        "mat2": 65536,
+        "mat3": 65536,
+        "BindlessGeometryDebug": 65536,
+        "BlasCompactedSizes": 65536,
+        "BlasCompactedSizesReadback": 65536,
+        "ShaderDebugIndirectDrawBufferGPU": 65536,
+        "ShaderDebugCopyDispatchArgs": 65536,
+        "AvgLuminanceBuffer": 65536,
+        "NEEAT::ControlData": 65536,
+        "LightingControlDataReadback": 65536,
+        "PTShaderTable_REF": 65536,
+        "PTShaderTable_BUILD": 65536,
+        "PTShaderTable_FILL": 65536,
+        "PTShaderTable_SHARC": 65536,
+        "PTShaderTable_TESTRG": 65536,
+        "PTShaderTable_EDGY": 65536,
+        "TLASInstanceDescs": 65536,
+        "TLASMeshBounds": 65536,
+        "TLASInstanceData": 65536,
+        "C:/Temp/rtrenderer-rtxpt-8850612109055436216/sky.hdr": 65536,
+        "RtrSceneLightingInputs": 65536,
+        "ImGui index buffer": 65536
+      },
+      "tracked_total_at_vmmap": 1719992320,
+      "gpu_baseline": [
+        [
+          46,
+          3833
+        ],
+        [
+          48,
+          3833
+        ],
+        [
+          45,
+          3849
+        ]
+      ],
+      "exit_code": 0,
+      "measured_manifest": {
+        "command": [
+          "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+          "-Xms32m",
+          "-Xmx512m",
+          "--enable-native-access=ALL-UNNAMED",
+          "-Dfile.encoding=UTF-8",
+          "-Dtop.ceroxe.rt.rtxpt.bridge=D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-memory-20261102\\final-native\\rtrenderer_rtxpt.dll",
+          "-cp",
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\classes\\java\\test;D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\libs\\RTRendererAPI-HexBallDemo-7.0.0.jar",
+          "demo.RtxptMemoryParitySelfTest",
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-memory-20261102\\parity-before",
+          "--legacy"
+        ],
+        "gpu_baseline": [
+          [
+            46,
+            3833
+          ],
+          [
+            48,
+            3833
+          ],
+          [
+            45,
+            3849
+          ]
+        ],
+        "performance_eligible": false,
+        "diagnostics": true,
+        "jar_sha256": "02b31c556637a866b8ac03331ba3c410f85bc2764ce3212815ce9755e4ba8659"
+      }
+    },
+    "parity-after": {
+      "observation_samples": 11,
+      "private": {
+        "min": 1976188928,
+        "median": 1976188928,
+        "max": 1995968512
+      },
+      "working_set": {
+        "min": 880726016,
+        "median": 880828416,
+        "max": 900710400
+      },
+      "gpu_adapters": {
+        "0x00000000_0x00019EA4_phys_0": {
+          "Dedicated Usage": {
+            "min": 1134628864,
+            "median": 1134632960,
+            "max": 1134637056
+          },
+          "Shared Usage": {
+            "min": 178987008,
+            "median": 178987008,
+            "max": 179773440
+          },
+          "Total Committed": {
+            "min": 1313615872,
+            "median": 1313619968,
+            "max": 1314410496
+          }
+        }
+      },
+      "vmmap_timestamp_ms": 1793620381528,
+      "vmmap_top_level_regions": {
+        "Free": {
+          "Size": 140622902788096,
+          "Commit": 0,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 0
+        },
+        "Private Data": {
+          "Size": 112915193856,
+          "Commit": 1496190976,
+          "PrivateBytes": 1496190976,
+          "PrivateWS": 295079936,
+          "ShareableWS": 24576
+        },
+        "Unusable": {
+          "Size": 10846208,
+          "Commit": 0,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 0
+        },
+        "Thread Stack": {
+          "Size": 71368704,
+          "Commit": 2408448,
+          "PrivateBytes": 2408448,
+          "PrivateWS": 1380352,
+          "ShareableWS": 0
+        },
+        "Heap (Private Data)": {
+          "Size": 314626048,
+          "Commit": 302927872,
+          "PrivateBytes": 302927872,
+          "PrivateWS": 247341056,
+          "ShareableWS": 0
+        },
+        "Shareable": {
+          "Size": 78995456,
+          "Commit": 56442880,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 50524160
+        },
+        "Mapped File": {
+          "Size": 483004416,
+          "Commit": 483004416,
+          "PrivateBytes": 4284416,
+          "PrivateWS": 1503232,
+          "ShareableWS": 125317120
+        },
+        "Heap (Shareable)": {
+          "Size": 65536,
+          "Commit": 65536,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 4096
+        },
+        "Image (ASLR)": {
+          "Size": 711401472,
+          "Commit": 709988352,
+          "PrivateBytes": 160587776,
+          "PrivateWS": 10149888,
+          "ShareableWS": 152109056
+        }
+      },
+      "vmmap_write_combined_leaf_regions": {
+        "Size": 1183518720,
+        "Commit": 1183518720,
+        "PrivateBytes": 1133752320,
+        "PrivateWS": 50188288,
+        "ShareableWS": 49766400
+      },
+      "nearest_preceding_native_phase": {
+        "time": "1793620380585",
+        "phase": "frame.startup",
+        "private": "1956892672",
+        "workingSet": "873472000",
+        "gpuQueryStatus": "0x00000000",
+        "dedicated": "1116008448",
+        "shared": "165584896",
+        "trackedDefault": "831782912",
+        "trackedUpload": "11403264",
+        "trackedReadback": "1900544",
+        "liveResources": "383"
+      },
+      "tracked_resources_at_vmmap": {
+        "Streamline texture": 263389184,
+        "Streamline buffer": 127795200,
+        "DenoisingLayersBuffer": 125370368,
+        "SurfaceData(GBuffer)": 66846720,
+        "BlasPoolBlock0": 33554432,
+        "SwapChainBuffer": 26542080,
+        "ProcessedOutputColor": 17694720,
+        "LdrColor": 17170432,
+        "DenoiserOutDiffRadianceHitDist": 14745600,
+        "DenoiserOutSpecRadianceHitDist": 14745600,
+        "DenoisingLayersHeader": 9830400,
+        "SecondarySurfacePositionNormal": 9830400,
+        "AccumulatedRadiance": 9830400,
+        "LdrColorScratch": 8847360,
+        "PreUIColor": 8847360,
+        "DXR scratch pool": 8388608,
+        "ScreenMotionVectors": 4915200,
+        "DenoiserMotionVectors": 4915200,
+        "StableRadianceBuffer": 4915200,
+        "DenoiserDiffRadianceHitDist": 4915200,
+        "DenoiserSpecRadianceHitDist": 4915200,
+        "SecondarySurfaceRadiance": 4915200,
+        "OutputColor": 4915200,
+        "RRNormalsAndRoughness": 4915200,
+        "DebugVizOutput": 4915200,
+        "DebugVizOutputCopy": 4456448,
+        "PTMaterialDataStorage": 4194304,
+        "Depth": 2490368,
+        "Throughput": 2490368,
+        "DenoiserOutValidation": 2490368,
+        "DenoiserViewspaceZ": 2490368,
+        "DenoiserNormalRoughness": 2490368,
+        "SpecularHitT": 2490368,
+        "ScratchFloat1": 2490368,
+        "RRDiffuseAlbedo": 2490368,
+        "RRSpecAlbedo": 2490368,
+        "RRSpecMotionVectors": 2490368,
+        "SubSamplingPixelList": 2097152,
+        "DenoiserAvgRadianceHalfRes": 1114112,
+        "bloom src mip1": 1114112,
+        "Upload pool": 983040,
+        "VertexBuffer": 720896,
+        "Luminance Texture": 720896,
+        "DenoiserDisocclusionThresholdMix": 655360,
+        "CombinedHistoryClampRelax": 655360,
+        "IndexBuffer": 589824,
+        "ImGui font texture": 524288,
+        "": 393216,
+        "ShaderDebugBufferGPU": 327680,
+        "ShaderDebugBufferCPU_0": 327680,
+        "ShaderDebugBufferCPU_1": 327680,
+        "ShaderDebugBufferCPU_2": 327680,
+        "ShaderDebugBufferCPU_3": 327680,
+        "bloom src mip2": 327680,
+        "bloom accumulation pass1": 327680,
+        "bloom accumulation pass2": 327680,
+        "BindlessMaterials": 262144,
+        "AvgLuminanceReadbackBuffer": 262144,
+        "Instances": 196608,
+        "BlackDepthStencilTexture": 131072,
+        "BlackDepthStencilTexture2DArray": 131072,
+        "ImGui vertex buffer": 131072,
+        "BlackTexture": 65536,
+        "GrayTexture": 65536,
+        "WhiteTexture": 65536,
+        "BlackCubeMapArray": 65536,
+        "BlackTexture2DArray": 65536,
+        "WhiteTexture2DArray": 65536,
+        "BlackTexture3D": 65536,
+        "BindlessValidationData": 65536,
+        "PrefixDummyUAV": 65536,
+        "DummyRawBufferUAV": 65536,
+        "Feedback_Buffer_Gpu": 65536,
+        "Feedback_Buffer_Cpu": 65536,
+        "DebugLinesCapture": 65536,
+        "DebugLinesDisplay": 65536,
+        "Feedback_PathDecomp_Gpu": 65536,
+        "Feedback_PathDecomp_Cpu": 65536,
+        "DebugDeltaPathTreeSearchStack": 65536,
+        "BindlessGeometry": 65536,
+        "mat0": 65536,
+        "mat1": 65536,
+        "mat4": 65536,
+        "mat2": 65536,
+        "mat3": 65536,
+        "BindlessGeometryDebug": 65536,
+        "BlasCompactedSizes": 65536,
+        "BlasCompactedSizesReadback": 65536,
+        "ShaderDebugIndirectDrawBufferGPU": 65536,
+        "ShaderDebugCopyDispatchArgs": 65536,
+        "AvgLuminanceBuffer": 65536,
+        "InactiveLightingControl": 65536,
+        "InactiveLights": 65536,
+        "InactiveLightsEx": 65536,
+        "InactiveLightingUint": 65536,
+        "InactiveLightingFloat": 65536,
+        "InactiveEnvironmentCube": 65536,
+        "InactiveEnvironmentImportance": 65536,
+        "InactiveEnvironmentLookup": 65536,
+        "InactiveLightingFeedbackWeight": 65536,
+        "InactiveLightingFeedbackCandidate": 65536,
+        "PTShaderTable_REF": 65536,
+        "PTShaderTable_BUILD": 65536,
+        "PTShaderTable_FILL": 65536,
+        "PTShaderTable_SHARC": 65536,
+        "PTShaderTable_TESTRG": 65536,
+        "PTShaderTable_EDGY": 65536,
+        "TLASInstanceDescs": 65536,
+        "TLASMeshBounds": 65536,
+        "TLASInstanceData": 65536,
+        "RtrSceneLightingInputs": 65536,
+        "ImGui index buffer": 65536
+      },
+      "tracked_total_at_vmmap": 857800704,
+      "gpu_baseline": [
+        [
+          45,
+          3856
+        ],
+        [
+          47,
+          3872
+        ],
+        [
+          43,
+          3872
+        ]
+      ],
+      "exit_code": 0,
+      "measured_manifest": {
+        "command": [
+          "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+          "-Xms32m",
+          "-Xmx512m",
+          "--enable-native-access=ALL-UNNAMED",
+          "-Dfile.encoding=UTF-8",
+          "-Dtop.ceroxe.rt.rtxpt.runtime=D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin",
+          "-cp",
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\classes\\java\\test;D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\libs\\RTRendererAPI-HexBallDemo-7.0.0.jar",
+          "demo.RtxptMemoryParitySelfTest",
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-memory-20261102\\parity-after"
+        ],
+        "gpu_baseline": [
+          [
+            45,
+            3856
+          ],
+          [
+            47,
+            3872
+          ],
+          [
+            43,
+            3872
+          ]
+        ],
+        "performance_eligible": false,
+        "diagnostics": true,
+        "jar_sha256": "02b31c556637a866b8ac03331ba3c410f85bc2764ce3212815ce9755e4ba8659"
+      }
+    },
+    "parity-packaged": {
+      "observation_samples": 11,
+      "private": {
+        "min": 1974849536,
+        "median": 1988554752,
+        "max": 1996808192
+      },
+      "working_set": {
+        "min": 882450432,
+        "median": 895856640,
+        "max": 903303168
+      },
+      "gpu_adapters": {
+        "0x00000000_0x00019EA4_phys_0": {
+          "Dedicated Usage": {
+            "min": 1138847744,
+            "median": 1138847744,
+            "max": 1138847744
+          },
+          "Shared Usage": {
+            "min": 182738944,
+            "median": 182738944,
+            "max": 183001088
+          },
+          "Total Committed": {
+            "min": 1321586688,
+            "median": 1321586688,
+            "max": 1321848832
+          }
+        }
+      },
+      "vmmap_timestamp_ms": 1793620633404,
+      "vmmap_top_level_regions": {
+        "Free": {
+          "Size": 140588517294080,
+          "Commit": 0,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 0
+        },
+        "Private Data": {
+          "Size": 147261825024,
+          "Commit": 1503657984,
+          "PrivateBytes": 1503657984,
+          "PrivateWS": 285478912,
+          "ShareableWS": 24576
+        },
+        "Unusable": {
+          "Size": 10514432,
+          "Commit": 0,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 0
+        },
+        "Thread Stack": {
+          "Size": 73465856,
+          "Commit": 2367488,
+          "PrivateBytes": 2367488,
+          "PrivateWS": 1306624,
+          "ShareableWS": 0
+        },
+        "Heap (Private Data)": {
+          "Size": 314757120,
+          "Commit": 302342144,
+          "PrivateBytes": 302342144,
+          "PrivateWS": 248279040,
+          "ShareableWS": 0
+        },
+        "Mapped File": {
+          "Size": 519966720,
+          "Commit": 519966720,
+          "PrivateBytes": 8507392,
+          "PrivateWS": 3067904,
+          "ShareableWS": 137478144
+        },
+        "Shareable": {
+          "Size": 78999552,
+          "Commit": 56446976,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 50515968
+        },
+        "Heap (Shareable)": {
+          "Size": 65536,
+          "Commit": 65536,
+          "PrivateBytes": 0,
+          "PrivateWS": 0,
+          "ShareableWS": 4096
+        },
+        "Image (ASLR)": {
+          "Size": 711401472,
+          "Commit": 709988352,
+          "PrivateBytes": 160587776,
+          "PrivateWS": 10153984,
+          "ShareableWS": 162582528
+        }
+      },
+      "vmmap_write_combined_leaf_regions": {
+        "Size": 1204015104,
+        "Commit": 1204015104,
+        "PrivateBytes": 1154248704,
+        "PrivateWS": 54009856,
+        "ShareableWS": 49766400
+      },
+      "nearest_preceding_native_phase": {
+        "time": "1793620632828",
+        "phase": "frame.startup",
+        "private": "1933201408",
+        "workingSet": "854876160",
+        "gpuQueryStatus": "0x00000000",
+        "dedicated": "1116012544",
+        "shared": "165568512",
+        "trackedDefault": "831782912",
+        "trackedUpload": "11403264",
+        "trackedReadback": "1900544",
+        "liveResources": "383"
+      },
+      "tracked_resources_at_vmmap": {
+        "Streamline texture": 263389184,
+        "Streamline buffer": 127795200,
+        "DenoisingLayersBuffer": 125370368,
+        "SurfaceData(GBuffer)": 66846720,
+        "BlasPoolBlock0": 33554432,
+        "SwapChainBuffer": 26542080,
+        "ProcessedOutputColor": 17694720,
+        "LdrColor": 17170432,
+        "DenoiserOutDiffRadianceHitDist": 14745600,
+        "DenoiserOutSpecRadianceHitDist": 14745600,
+        "DXR scratch pool": 12582912,
+        "DenoisingLayersHeader": 9830400,
+        "SecondarySurfacePositionNormal": 9830400,
+        "AccumulatedRadiance": 9830400,
+        "LdrColorScratch": 8847360,
+        "PreUIColor": 8847360,
+        "ScreenMotionVectors": 4915200,
+        "DenoiserMotionVectors": 4915200,
+        "StableRadianceBuffer": 4915200,
+        "DenoiserDiffRadianceHitDist": 4915200,
+        "DenoiserSpecRadianceHitDist": 4915200,
+        "SecondarySurfaceRadiance": 4915200,
+        "OutputColor": 4915200,
+        "RRNormalsAndRoughness": 4915200,
+        "DebugVizOutput": 4915200,
+        "DebugVizOutputCopy": 4456448,
+        "PTMaterialDataStorage": 4194304,
+        "Depth": 2490368,
+        "Throughput": 2490368,
+        "DenoiserOutValidation": 2490368,
+        "DenoiserViewspaceZ": 2490368,
+        "DenoiserNormalRoughness": 2490368,
+        "SpecularHitT": 2490368,
+        "ScratchFloat1": 2490368,
+        "RRDiffuseAlbedo": 2490368,
+        "RRSpecAlbedo": 2490368,
+        "RRSpecMotionVectors": 2490368,
+        "SubSamplingPixelList": 2097152,
+        "Upload pool": 1179648,
+        "DenoiserAvgRadianceHalfRes": 1114112,
+        "bloom src mip1": 1114112,
+        "VertexBuffer": 720896,
+        "Luminance Texture": 720896,
+        "DenoiserDisocclusionThresholdMix": 655360,
+        "CombinedHistoryClampRelax": 655360,
+        "IndexBuffer": 589824,
+        "ImGui font texture": 524288,
+        "": 393216,
+        "ShaderDebugBufferGPU": 327680,
+        "ShaderDebugBufferCPU_0": 327680,
+        "ShaderDebugBufferCPU_1": 327680,
+        "ShaderDebugBufferCPU_2": 327680,
+        "ShaderDebugBufferCPU_3": 327680,
+        "bloom src mip2": 327680,
+        "bloom accumulation pass1": 327680,
+        "bloom accumulation pass2": 327680,
+        "BindlessMaterials": 262144,
+        "AvgLuminanceReadbackBuffer": 262144,
+        "Instances": 196608,
+        "BlackDepthStencilTexture": 131072,
+        "BlackDepthStencilTexture2DArray": 131072,
+        "ImGui vertex buffer": 131072,
+        "BlackTexture": 65536,
+        "GrayTexture": 65536,
+        "WhiteTexture": 65536,
+        "BlackCubeMapArray": 65536,
+        "BlackTexture2DArray": 65536,
+        "WhiteTexture2DArray": 65536,
+        "BlackTexture3D": 65536,
+        "BindlessValidationData": 65536,
+        "PrefixDummyUAV": 65536,
+        "DummyRawBufferUAV": 65536,
+        "Feedback_Buffer_Gpu": 65536,
+        "Feedback_Buffer_Cpu": 65536,
+        "DebugLinesCapture": 65536,
+        "DebugLinesDisplay": 65536,
+        "Feedback_PathDecomp_Gpu": 65536,
+        "Feedback_PathDecomp_Cpu": 65536,
+        "DebugDeltaPathTreeSearchStack": 65536,
+        "BindlessGeometry": 65536,
+        "mat0": 65536,
+        "mat4": 65536,
+        "mat1": 65536,
+        "mat2": 65536,
+        "mat3": 65536,
+        "BindlessGeometryDebug": 65536,
+        "BlasCompactedSizes": 65536,
+        "BlasCompactedSizesReadback": 65536,
+        "ShaderDebugIndirectDrawBufferGPU": 65536,
+        "ShaderDebugCopyDispatchArgs": 65536,
+        "AvgLuminanceBuffer": 65536,
+        "InactiveLightingControl": 65536,
+        "InactiveLights": 65536,
+        "InactiveLightsEx": 65536,
+        "InactiveLightingUint": 65536,
+        "InactiveLightingFloat": 65536,
+        "InactiveEnvironmentCube": 65536,
+        "InactiveEnvironmentImportance": 65536,
+        "InactiveEnvironmentLookup": 65536,
+        "InactiveLightingFeedbackWeight": 65536,
+        "InactiveLightingFeedbackCandidate": 65536,
+        "PTShaderTable_REF": 65536,
+        "PTShaderTable_BUILD": 65536,
+        "PTShaderTable_FILL": 65536,
+        "PTShaderTable_SHARC": 65536,
+        "PTShaderTable_TESTRG": 65536,
+        "PTShaderTable_EDGY": 65536,
+        "TLASInstanceDescs": 65536,
+        "TLASMeshBounds": 65536,
+        "TLASInstanceData": 65536,
+        "RtrSceneLightingInputs": 65536,
+        "ImGui index buffer": 65536
+      },
+      "tracked_total_at_vmmap": 862191616,
+      "gpu_baseline": [
+        [
+          31,
+          3903
+        ],
+        [
+          39,
+          3912
+        ],
+        [
+          39,
+          3912
+        ]
+      ],
+      "exit_code": 0,
+      "measured_manifest": {
+        "command": [
+          "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+          "-Xms32m",
+          "-Xmx512m",
+          "--enable-native-access=ALL-UNNAMED",
+          "-Dfile.encoding=UTF-8",
+          "-cp",
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\classes\\java\\test;D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\libs\\RTRendererAPI-HexBallDemo-7.0.1.jar",
+          "demo.RtxptMemoryParitySelfTest",
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-memory-20261102\\parity-packaged"
+        ],
+        "gpu_baseline": [
+          [
+            31,
+            3903
+          ],
+          [
+            39,
+            3912
+          ],
+          [
+            39,
+            3912
+          ]
+        ],
+        "performance_eligible": false,
+        "diagnostics": true,
+        "jar_sha256": "ad3272e5c30afd5bebf82bd73ee61230609f666b7bcc7ed4af79b6023878c6b2"
+      }
+    }
+  },
+  "image_comparisons": [
+    {
+      "candidate": "parity-after",
+      "image": "GLASS-moving.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "dffa4d67f432278f092d4c62b2ee2a4d85ceb5262a95b987430394ffeb9c8066",
+      "new_png_sha256": "dffa4d67f432278f092d4c62b2ee2a4d85ceb5262a95b987430394ffeb9c8066"
+    },
+    {
+      "candidate": "parity-after",
+      "image": "GLASS-static.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "390a0b6242c3d0ec153f52133cbbd4893c41b598fb4f832e1583d40c28b9cb02",
+      "new_png_sha256": "390a0b6242c3d0ec153f52133cbbd4893c41b598fb4f832e1583d40c28b9cb02"
+    },
+    {
+      "candidate": "parity-after",
+      "image": "OPAQUE_REFLECTIVE-moving.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "3bf58540567917a938311dc09a5a1aa641eb62997b5aa536bb6657a0a3f23fd3",
+      "new_png_sha256": "3bf58540567917a938311dc09a5a1aa641eb62997b5aa536bb6657a0a3f23fd3"
+    },
+    {
+      "candidate": "parity-after",
+      "image": "OPAQUE_REFLECTIVE-static.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "0b8e8dff4a8783481063dee3674e0f2c1da4255f5fd0455f0588295621b99c3c",
+      "new_png_sha256": "0b8e8dff4a8783481063dee3674e0f2c1da4255f5fd0455f0588295621b99c3c"
+    },
+    {
+      "candidate": "parity-after",
+      "image": "ORIGINAL_METAL-moving.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "a02f1e35a5d497798226caab8a640cf85d55622a53f689b2a7969fa3a29af9af",
+      "new_png_sha256": "a02f1e35a5d497798226caab8a640cf85d55622a53f689b2a7969fa3a29af9af"
+    },
+    {
+      "candidate": "parity-after",
+      "image": "ORIGINAL_METAL-static.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "7fbeee8ebc737b82269978e4c3ef87b95144015862cde3d9048187cb3105c4e2",
+      "new_png_sha256": "7fbeee8ebc737b82269978e4c3ef87b95144015862cde3d9048187cb3105c4e2"
+    },
+    {
+      "candidate": "parity-after",
+      "image": "resized.png",
+      "size": [
+        1280,
+        720
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "e45e10bd4e5eda0db160518b360eec6045e8a8bb72f1dc29523fd24f00192f9c",
+      "new_png_sha256": "e45e10bd4e5eda0db160518b360eec6045e8a8bb72f1dc29523fd24f00192f9c"
+    },
+    {
+      "candidate": "parity-packaged",
+      "image": "GLASS-moving.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "dffa4d67f432278f092d4c62b2ee2a4d85ceb5262a95b987430394ffeb9c8066",
+      "new_png_sha256": "dffa4d67f432278f092d4c62b2ee2a4d85ceb5262a95b987430394ffeb9c8066"
+    },
+    {
+      "candidate": "parity-packaged",
+      "image": "GLASS-static.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "390a0b6242c3d0ec153f52133cbbd4893c41b598fb4f832e1583d40c28b9cb02",
+      "new_png_sha256": "390a0b6242c3d0ec153f52133cbbd4893c41b598fb4f832e1583d40c28b9cb02"
+    },
+    {
+      "candidate": "parity-packaged",
+      "image": "OPAQUE_REFLECTIVE-moving.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "3bf58540567917a938311dc09a5a1aa641eb62997b5aa536bb6657a0a3f23fd3",
+      "new_png_sha256": "3bf58540567917a938311dc09a5a1aa641eb62997b5aa536bb6657a0a3f23fd3"
+    },
+    {
+      "candidate": "parity-packaged",
+      "image": "OPAQUE_REFLECTIVE-static.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "0b8e8dff4a8783481063dee3674e0f2c1da4255f5fd0455f0588295621b99c3c",
+      "new_png_sha256": "0b8e8dff4a8783481063dee3674e0f2c1da4255f5fd0455f0588295621b99c3c"
+    },
+    {
+      "candidate": "parity-packaged",
+      "image": "ORIGINAL_METAL-moving.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "a02f1e35a5d497798226caab8a640cf85d55622a53f689b2a7969fa3a29af9af",
+      "new_png_sha256": "a02f1e35a5d497798226caab8a640cf85d55622a53f689b2a7969fa3a29af9af"
+    },
+    {
+      "candidate": "parity-packaged",
+      "image": "ORIGINAL_METAL-static.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "7fbeee8ebc737b82269978e4c3ef87b95144015862cde3d9048187cb3105c4e2",
+      "new_png_sha256": "7fbeee8ebc737b82269978e4c3ef87b95144015862cde3d9048187cb3105c4e2"
+    },
+    {
+      "candidate": "parity-packaged",
+      "image": "resized.png",
+      "size": [
+        1280,
+        720
+      ],
+      "max_channel_delta": 0,
+      "mean_channel_delta": 0.0,
+      "old_png_sha256": "e45e10bd4e5eda0db160518b360eec6045e8a8bb72f1dc29523fd24f00192f9c",
+      "new_png_sha256": "e45e10bd4e5eda0db160518b360eec6045e8a8bb72f1dc29523fd24f00192f9c"
+    }
+  ],
+  "packaged_bridge_sha256": "8d577807112c8cc6dee508851b4b76c85e204c75c4bb8a14f7b0b18515c7de72",
+  "memory_fixes_bridge_sha256": "8d577807112c8cc6dee508851b4b76c85e204c75c4bb8a14f7b0b18515c7de72",
+  "tests": {
+    "cpu_and_full_package": "151 tasks; 128 executed; success; 3.688 GB peak tree commit",
+    "budget_cases": 17,
+    "advanced_configurations": 8,
+    "packaged_shader_binaries": 361,
+    "runtime_compilation_forbidden": true,
+    "resource_shutdown_counts": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "sharc_cycles": "off/on/off/on/off",
+    "debug_geometry_cycle": "compact/full/compact",
+    "public_api_abi_equal_to_700": true,
+    "performance": "not measured: initial GPU utilization over 10%",
+    "frame_generation_delivery": {
+      "status": "deferred by user: window is not foreground; expected native-only delivery, not classified as a bug",
+      "no_more_fg_runs": true,
+      "foreground_observed": false
+    }
+  },
+  "artifact_hashes_at_memory_measurement": {
+    "demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.0.jar": "02b31c556637a866b8ac03331ba3c410f85bc2764ce3212815ce9755e4ba8659",
+    "demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.1.jar": "ad3272e5c30afd5bebf82bd73ee61230609f666b7bcc7ed4af79b6023878c6b2",
+    "demos/hex-ball/build/libs/RTRendererAPI-MediumDemo-7.0.1.jar": "a6304d59e9f2bc03bc7a90a57a38764c960c73a7bd77d7a0d9703bdd3a1720c2",
+    "renderer-rtxpt/build/libs/renderer-rtxpt-7.0.1.jar": "2db7ff69501437131ee963f6a36e8ab854e04f8f18acba5779001551fce121a6",
+    "build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll": "8d577807112c8cc6dee508851b4b76c85e204c75c4bb8a14f7b0b18515c7de72",
+    "build/reports/hexball-memory-20261102/final-native/rtrenderer_rtxpt.dll": "67beab129212e7b007f309aa1b036bf8c77a7aea1fc28551718fc85678ebf5be"
+  },
+  "memory_fix_release_packaging": {
+    "demos\\hex-ball\\build\\libs\\RTRendererAPI-HexBallDemo-7.0.1.jar": "f2d1faa3d130cf7488c2cd7e88c675f532021d3c04cbc74ff70a74b82daf2ace",
+    "demos\\hex-ball\\build\\libs\\RTRendererAPI-MediumDemo-7.0.1.jar": "f1b492da9f10b92585e1f1286666a7cca44d5b8c0717226d5899b27d92c2d7f2"
+  },
+  "final_combined_candidate": {
+    "run": {
+      "observation_samples": 10,
+      "private": {
+        "min": 1953185792,
+        "median": 1988431872.0,
+        "max": 1988431872
+      },
+      "working_set": {
+        "min": 848920576,
+        "median": 884969472.0,
+        "max": 885067776
+      },
+      "gpu_adapters": {
+        "0x00000000_0x00019EA4_phys_0": {
+          "Dedicated Usage": {
+            "min": 1138851840,
+            "median": 1138851840.0,
+            "max": 1138855936
+          },
+          "Shared Usage": {
+            "min": 182902784,
+            "median": 182902784.0,
+            "max": 183951360
+          },
+          "Total Committed": {
+            "min": 1321754624,
+            "median": 1321754624.0,
+            "max": 1322807296
+          }
+        }
+      },
+      "vmmap_timestamp_ms": 1793625169309,
+      "vmmap_write_combined_leaf_regions": {
+        "Size": 1200013312,
+        "Commit": 1200013312,
+        "PrivateBytes": 1150246912,
+        "PrivateWS": 54173696,
+        "ShareableWS": 49766400
+      },
+      "tracked_resources_at_vmmap": {
+        "Streamline texture": 263389184,
+        "Streamline buffer": 127795200,
+        "DenoisingLayersBuffer": 125370368,
+        "SurfaceData(GBuffer)": 66846720,
+        "BlasPoolBlock0": 33554432,
+        "SwapChainBuffer": 26542080,
+        "ProcessedOutputColor": 17694720,
+        "LdrColor": 17170432,
+        "DenoiserOutDiffRadianceHitDist": 14745600,
+        "DenoiserOutSpecRadianceHitDist": 14745600,
+        "DXR scratch pool": 12582912,
+        "DenoisingLayersHeader": 9830400,
+        "SecondarySurfacePositionNormal": 9830400,
+        "AccumulatedRadiance": 9830400,
+        "LdrColorScratch": 8847360,
+        "PreUIColor": 8847360,
+        "ScreenMotionVectors": 4915200,
+        "DenoiserMotionVectors": 4915200,
+        "StableRadianceBuffer": 4915200,
+        "DenoiserDiffRadianceHitDist": 4915200,
+        "DenoiserSpecRadianceHitDist": 4915200,
+        "SecondarySurfaceRadiance": 4915200,
+        "OutputColor": 4915200,
+        "RRNormalsAndRoughness": 4915200,
+        "DebugVizOutput": 4915200,
+        "DebugVizOutputCopy": 4456448,
+        "PTMaterialDataStorage": 4194304,
+        "Depth": 2490368,
+        "Throughput": 2490368,
+        "DenoiserOutValidation": 2490368,
+        "DenoiserViewspaceZ": 2490368,
+        "DenoiserNormalRoughness": 2490368,
+        "SpecularHitT": 2490368,
+        "ScratchFloat1": 2490368,
+        "RRDiffuseAlbedo": 2490368,
+        "RRSpecAlbedo": 2490368,
+        "RRSpecMotionVectors": 2490368,
+        "SubSamplingPixelList": 2097152,
+        "Upload pool": 1179648,
+        "DenoiserAvgRadianceHalfRes": 1114112,
+        "bloom src mip1": 1114112,
+        "VertexBuffer": 720896,
+        "Luminance Texture": 720896,
+        "DenoiserDisocclusionThresholdMix": 655360,
+        "CombinedHistoryClampRelax": 655360,
+        "IndexBuffer": 589824,
+        "ImGui font texture": 524288,
+        "": 393216,
+        "ShaderDebugBufferGPU": 327680,
+        "ShaderDebugBufferCPU_0": 327680,
+        "ShaderDebugBufferCPU_1": 327680,
+        "ShaderDebugBufferCPU_2": 327680,
+        "ShaderDebugBufferCPU_3": 327680,
+        "bloom src mip2": 327680,
+        "bloom accumulation pass1": 327680,
+        "bloom accumulation pass2": 327680,
+        "BindlessMaterials": 262144,
+        "AvgLuminanceReadbackBuffer": 262144,
+        "Instances": 196608,
+        "BlackDepthStencilTexture": 131072,
+        "BlackDepthStencilTexture2DArray": 131072,
+        "ImGui vertex buffer": 131072,
+        "BlackTexture": 65536,
+        "GrayTexture": 65536,
+        "WhiteTexture": 65536,
+        "BlackCubeMapArray": 65536,
+        "BlackTexture2DArray": 65536,
+        "WhiteTexture2DArray": 65536,
+        "BlackTexture3D": 65536,
+        "BindlessValidationData": 65536,
+        "PrefixDummyUAV": 65536,
+        "DummyRawBufferUAV": 65536,
+        "Feedback_Buffer_Gpu": 65536,
+        "Feedback_Buffer_Cpu": 65536,
+        "DebugLinesCapture": 65536,
+        "DebugLinesDisplay": 65536,
+        "Feedback_PathDecomp_Gpu": 65536,
+        "Feedback_PathDecomp_Cpu": 65536,
+        "DebugDeltaPathTreeSearchStack": 65536,
+        "BindlessGeometry": 65536,
+        "mat0": 65536,
+        "mat4": 65536,
+        "mat1": 65536,
+        "mat2": 65536,
+        "mat3": 65536,
+        "BindlessGeometryDebug": 65536,
+        "BlasCompactedSizes": 65536,
+        "BlasCompactedSizesReadback": 65536,
+        "ShaderDebugIndirectDrawBufferGPU": 65536,
+        "ShaderDebugCopyDispatchArgs": 65536,
+        "AvgLuminanceBuffer": 65536,
+        "InactiveLightingControl": 65536,
+        "InactiveLights": 65536,
+        "InactiveLightsEx": 65536,
+        "InactiveLightingUint": 65536,
+        "InactiveLightingFloat": 65536,
+        "InactiveEnvironmentCube": 65536,
+        "InactiveEnvironmentImportance": 65536,
+        "InactiveEnvironmentLookup": 65536,
+        "InactiveLightingFeedbackWeight": 65536,
+        "InactiveLightingFeedbackCandidate": 65536,
+        "PTShaderTable_REF": 65536,
+        "PTShaderTable_BUILD": 65536,
+        "PTShaderTable_FILL": 65536,
+        "PTShaderTable_SHARC": 65536,
+        "PTShaderTable_TESTRG": 65536,
+        "PTShaderTable_EDGY": 65536,
+        "TLASInstanceDescs": 65536,
+        "TLASMeshBounds": 65536,
+        "TLASInstanceData": 65536,
+        "RtrSceneLightingInputs": 65536,
+        "ImGui index buffer": 65536
+      },
+      "tracked_total_at_vmmap": 862191616,
+      "live_resources_after_close": 0,
+      "result": {
+        "exit_code": 0,
+        "samples": 78,
+        "private_peak": 2105237504,
+        "working_set_peak": 952217600,
+        "gpu_baseline": [
+          [
+            36,
+            3983
+          ],
+          [
+            36,
+            3983
+          ],
+          [
+            36,
+            3983
+          ]
+        ],
+        "wall_seconds": 19.602704300001278
+      },
+      "manifest": {
+        "command": [
+          "C:\\Program Files\\Java\\graalvm-jdk-25.0.5.0.2+1.1\\bin\\java.exe",
+          "-Xms32m",
+          "-Xmx512m",
+          "--enable-native-access=ALL-UNNAMED",
+          "-Dfile.encoding=UTF-8",
+          "-cp",
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\classes\\java\\test;D:\\Engineering\\code\\APIs\\RTRendererAPI\\demos\\hex-ball\\build\\libs\\RTRendererAPI-HexBallDemo-7.0.1.jar",
+          "demo.RtxptMemoryParitySelfTest",
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\hexball-memory-20261102\\parity-combined-packaged"
+        ],
+        "gpu_baseline": [
+          [
+            36,
+            3983
+          ],
+          [
+            36,
+            3983
+          ],
+          [
+            36,
+            3983
+          ]
+        ],
+        "performance_eligible": false,
+        "diagnostics": true,
+        "background_window": true,
+        "require_precompiled": true,
+        "jar_sha256": "494bb647e16e1423838adcfeeff2ab039f0633fc34a163874f7ced54ecbf5897"
+      }
+    },
+    "image_comparisons": [
+      {
+        "image": "GLASS-moving.png",
+        "size": [
+          1920,
+          1080
+        ],
+        "max_channel_delta": 0,
+        "mean_channel_delta": 0.0,
+        "old_png_sha256": "dffa4d67f432278f092d4c62b2ee2a4d85ceb5262a95b987430394ffeb9c8066",
+        "new_png_sha256": "dffa4d67f432278f092d4c62b2ee2a4d85ceb5262a95b987430394ffeb9c8066"
+      },
+      {
+        "image": "GLASS-static.png",
+        "size": [
+          1920,
+          1080
+        ],
+        "max_channel_delta": 0,
+        "mean_channel_delta": 0.0,
+        "old_png_sha256": "390a0b6242c3d0ec153f52133cbbd4893c41b598fb4f832e1583d40c28b9cb02",
+        "new_png_sha256": "390a0b6242c3d0ec153f52133cbbd4893c41b598fb4f832e1583d40c28b9cb02"
+      },
+      {
+        "image": "OPAQUE_REFLECTIVE-moving.png",
+        "size": [
+          1920,
+          1080
+        ],
+        "max_channel_delta": 0,
+        "mean_channel_delta": 0.0,
+        "old_png_sha256": "3bf58540567917a938311dc09a5a1aa641eb62997b5aa536bb6657a0a3f23fd3",
+        "new_png_sha256": "3bf58540567917a938311dc09a5a1aa641eb62997b5aa536bb6657a0a3f23fd3"
+      },
+      {
+        "image": "OPAQUE_REFLECTIVE-static.png",
+        "size": [
+          1920,
+          1080
+        ],
+        "max_channel_delta": 0,
+        "mean_channel_delta": 0.0,
+        "old_png_sha256": "0b8e8dff4a8783481063dee3674e0f2c1da4255f5fd0455f0588295621b99c3c",
+        "new_png_sha256": "0b8e8dff4a8783481063dee3674e0f2c1da4255f5fd0455f0588295621b99c3c"
+      },
+      {
+        "image": "ORIGINAL_METAL-moving.png",
+        "size": [
+          1920,
+          1080
+        ],
+        "max_channel_delta": 42,
+        "mean_channel_delta": 0.03585599922839506,
+        "old_png_sha256": "a02f1e35a5d497798226caab8a640cf85d55622a53f689b2a7969fa3a29af9af",
+        "new_png_sha256": "b3844c0cea791c20533b94c2d728dff9e945f8b405648a63aa002f4ce4582f4a"
+      },
+      {
+        "image": "ORIGINAL_METAL-static.png",
+        "size": [
+          1920,
+          1080
+        ],
+        "max_channel_delta": 0,
+        "mean_channel_delta": 0.0,
+        "old_png_sha256": "7fbeee8ebc737b82269978e4c3ef87b95144015862cde3d9048187cb3105c4e2",
+        "new_png_sha256": "7fbeee8ebc737b82269978e4c3ef87b95144015862cde3d9048187cb3105c4e2"
+      },
+      {
+        "image": "resized.png",
+        "size": [
+          1280,
+          720
+        ],
+        "max_channel_delta": 0,
+        "mean_channel_delta": 0.0,
+        "old_png_sha256": "e45e10bd4e5eda0db160518b360eec6045e8a8bb72f1dc29523fd24f00192f9c",
+        "new_png_sha256": "e45e10bd4e5eda0db160518b360eec6045e8a8bb72f1dc29523fd24f00192f9c"
+      }
+    ],
+    "artifacts": {
+      "demos/hex-ball/build/libs/RTRendererAPI-HexBallDemo-7.0.1.jar": "494bb647e16e1423838adcfeeff2ab039f0633fc34a163874f7ced54ecbf5897",
+      "demos/hex-ball/build/libs/RTRendererAPI-MediumDemo-7.0.1.jar": "4f5d287ab7a88d58a897f848e1034af586efc7d44be1100f53f4cb570ac22035",
+      "renderer-rtxpt/build/libs/renderer-rtxpt-7.0.1.jar": "a7f0c7735abadfc60072761c4ddf3befc568edbfaf1648c5265a6444c7776ca7",
+      "build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll": "0b8e7084f7ad5ddb74ea4fe671b341b056d24eeaf11d81ed11dee23145d5039a"
+    },
+    "packaged_bridge_sha256": "0b8e7084f7ad5ddb74ea4fe671b341b056d24eeaf11d81ed11dee23145d5039a",
+    "default_image_comparison_summary": {
+      "exact_matches": 6,
+      "comparisons": 7,
+      "different_image": "ORIGINAL_METAL-moving.png",
+      "mean_rgb_delta": 0.03585599922839506,
+      "max_rgb_delta": 42,
+      "changed_pixels": 180824,
+      "different_pixel_percent": 8.720293209876544,
+      "bounding_box": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "acceptance": "Not pixel-for-pixel identical; no additional demo rerun."
+    },
+    "release_checks": {
+      "status": "passed",
+      "tasks": 149,
+      "executed": 130,
+      "up_to_date": 19,
+      "peak_process_tree_commit_gb": 3.741,
+      "log": "build/reports/hexball-memory-20261102/package-combined-701.log",
+      "unchanged_native_dependencies_reused": [
+        "renderer-nvidia:configureNvidiaBridge",
+        "renderer-nvidia:compileNvidiaBridge"
+      ]
+    },
+    "packaged_budget_validation": {
+      "passed": true,
+      "cases": 17,
+      "binary_inventory_before_and_after": 361,
+      "runtime_compilation_forbidden": true,
+      "shutdowns_with_zero_live_resources": 17,
+      "peak_process_tree_commit_gb": 3.899,
+      "log": "build/reports/hexball-memory-20261102/combined-packaged-budgets.log"
+    },
+    "shader_bundle_validation": {
+      "passed": true,
+      "binaries": 361,
+      "optical_budgets": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "compiler_workers": 4,
+      "peak_process_tree_commit_gb": 0.777,
+      "log": "build/lighting-shaders-final.log"
+    },
+    "native_build_validation": {
+      "passed": true,
+      "peak_process_tree_commit_gb": 4.569,
+      "log": "build/lighting-native-final-artifact.log"
+    }
+  }
+}

@@ -21,6 +21,9 @@ public interface RtxptAccess {
      * A setting is used only by its active technique. Guide depth is additionally capped by path depth.
      */
     PathQualityStatus pathQualityStatus();
+    /** {@code allocatedCacheEntries} is zero while SHaRC storage is not allocated; the configured
+     * capacity remains available through {@code quality.cache().entries()}.
+     */
     record PathQualityStatus(top.ceroxe.rt.renderer.api.PathTracingQualityOptions quality,
             int actualLightSampler,int allocatedCacheEntries,int maxFramesInFlight,int workerThreads,int shaderCompilerThreads,
             boolean exactPointLighting,boolean directionalStrata) { }
@@ -57,6 +60,10 @@ public interface RtxptAccess {
     /** Explicit one-shot readback. Never called in the presentation or benchmark frame loop. */
     void capture(Path png);
     BridgeTimings bridgeTimings();
+    /** Native execution counters. Upload time measures CPU command recording, not GPU completion. */
+    default LightingTimings lightingTimings(){return new LightingTimings(0,0,0,0,0);}
+    record LightingTimings(long nativeSceneLoads,long committedBatches,long recordedUploads,
+                          long uploadRecordingNanos,long historyInvalidations) { }
     record BridgeTimings(long frames, long frameNanos, long sceneExports, long sceneExportNanos,
             long transformBatches, long transformNanos) { }
 }

@@ -18,13 +18,13 @@
 
 ```powershell
 # 原 Vulkan 弹球
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --windowed
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.1.jar --windowed
 
 # RTXPT 新路径弹球
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxpt --windowed
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.1.jar --rtxpt --windowed
 
 # RTXPT 介质，默认 mixed 场景
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.1.jar
 ```
 
 介质入口默认直接使用 `Renderer.open("rtxpt", config)`，完整 3D、HUD 和最终呈现均由 RTXPT 承担，不经过组合宿主，也不创建 Vulkan 叠层。窗口标注 `RTXPT ONLY`；`mixed` 仅表示吸收、玻璃等光学内容的综合场景，不表示混合后端。RTXPT＋Vulkan 混合演示使用下方独立入口显式启动。
@@ -34,7 +34,7 @@ java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
 专用 RTXPT 弹球入口**不传任何应用参数**，默认即窗口化、1 SPP、2× FG 和中档：
 
 ```powershell
-java -cp .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar demo.RtxptHexBallDemo
+java -cp .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.1.jar demo.RtxptHexBallDemo
 ```
 
 三个 Demo 未指定的 API 字段都继承 `MEDIUM`，显式字段只覆盖该项。例如追加 `--api.pathTracing.exactOpticalInterfaces=2` 或 `--api.resources.workerThreads=2` 不重置其他中档值。普通消费者可用 `RendererConfig.pathTracedPresentation(RendererPerformanceTier.LOW)` 选低档，再经 `copyBuilder()` 细调。六界面预算 1～6 对应随 JAR 预编译的已捕获上游排列，未捕获的新组合保留随包 DXC fallback；范围及重建条件见[性能档位与资源预算](../../docs/performance-budgets.md)。
@@ -61,7 +61,7 @@ java -cp .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar demo.Rt
 例如打开新弹球 30 秒：
 
 ```powershell
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.1.jar `
   --rtxpt --windowed --width=1920 --height=1080 --spp=1 --duration-seconds=30
 ```
 
@@ -97,10 +97,10 @@ java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar `
 
 ```powershell
 # 原生出帧对照：明确关闭 FG
-java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxpt --windowed
+java -Ddemo.disable-fg=true -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.1.jar --rtxpt --windowed
 
 # 请求 3× MFG；4× 使用 -Ddemo.fg-multiplier=4
-java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
+java -Ddemo.fg-multiplier=3 -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.1.jar
 ```
 
 Gradle 启动也接受 `-Ddemo.disable-fg=true` 和 `-Ddemo.fg-multiplier=3`／`4`。这些是 Demo 策略，**库的 `RendererConfig.pathTracedPresentation()` 默认 FG 关闭**；`RendererConfig.presentation()` 默认优选 2× FG。MFG 不会由库自动开启。

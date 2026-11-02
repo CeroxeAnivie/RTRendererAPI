@@ -57,7 +57,7 @@ public final class RtxptMediumDemoSelfTest {
                 require(actual.reconstruction()==RtxptAccess.Reconstruction.DLSS_RR&&actual.sharc(),"Recommended RR + SHaRC active");
                 require(failures==0&&after.latestQuerySucceeded()&&after.latestNativeStatus().orElse(-1)==0,"SDK success");
                 String hud=RtxptMediumDemo.overlay(renderer,host,stats,scene);
-                require(hud.contains("RTRendererAPI 7.0.0")&&hud.contains("DLSS FG: ACTIVE")
+                require(hud.contains("RTRendererAPI 7.0.1")&&hud.contains("DLSS FG: ACTIVE")
                     &&hud.contains("BACKEND RTXPT ONLY")&&hud.contains("SCENE "+scene.toUpperCase(Locale.ROOT))&&hud.contains("[1] Mixed"),"Full active HUD");
                 host.setOverlayText(hud);
                 host.setOverlayChoices(RtxptMediumScene.LABELS,RtxptMediumScene.PRESETS.indexOf(scene));

@@ -252,7 +252,7 @@ public final class RendererConfig
 | `backendPolicy(RendererBackendPolicy)` | 仅 Vulkan 最终呈现入口允许改变完整 3D 选择；原生最终呈现固定 RTXPT |
 | `captureRtxptSource(Path)` | 显式捕获Vulkan 侧叠层之前的 RTXPT 源 |
 
-原生 RTXPT 当前只接受 GPU 直显 SDR，不接受 CPU readback、线性 HDR 导出、显式 Vulkan GPU 对象、validation-layer 开关或 `SceneShaderProgram` 替换。帧输入也不接受 exact projection、shader data、屏幕雾、旧焦散预算、逐帧纹理／lightmap 覆盖与历史 reset。任意命令、自定义光传输和两张独立图不能自动合为一个正确的 3D 场景。当前限制、叠层同步和可执行验证见[组合指南](d3d12-vulkan-composition.md)与[版本合同](7.0.0.md)。
+原生 RTXPT 当前只接受 GPU 直显 SDR，不接受 CPU readback、线性 HDR 导出、显式 Vulkan GPU 对象、validation-layer 开关或 `SceneShaderProgram` 替换。帧输入也不接受 exact projection、shader data、屏幕雾、旧焦散预算、逐帧纹理／lightmap 覆盖与历史 reset。任意命令、自定义光传输和两张独立图不能自动合为一个正确的 3D 场景。当前限制、叠层同步和可执行验证见[组合指南](d3d12-vulkan-composition.md)与[版本合同](7.0.1.md)。
 
 ## 场景与帧
 
@@ -291,7 +291,7 @@ RenderFrameRequest.builder(sequence, width, height, camera)
 
 ### 介质
 
-7.0.0 当前托管合同使用下面三个 record，不保留旧散射／密度 API：
+7.0.1 当前托管合同使用下面三个 record，不保留旧散射／密度 API：
 
 | 类型 | 契约与入口 |
 | --- | --- |
@@ -301,7 +301,7 @@ RenderFrameRequest.builder(sequence, width, height, camera)
 
 通过 `SceneInstance.Builder.mediumBoundary` 或 `PrimitiveInstance.Builder.mediumBoundary` 定义内部，通过材质 `transmission`／`roughness` 定义表面透射。吸收经 Beer 关系交给 RTXPT attenuation；Fresnel、折射、全反射、粗糙透射及嵌套介电由上游执行。
 
-体积单／多次散射、密度网格、HG、体积发光、无限／相机初始介质及不可见边界已删除；不再提供 `MediumDensityField`、`MediumTransport` 或 `cameraMedium`。当前范围见[7.0.0](7.0.0.md)，完整运行示例见[Java 教程](Java.md#rtxpt-透明介质与原生窗口)。
+体积单／多次散射、密度网格、HG、体积发光、无限／相机初始介质及不可见边界已删除；不再提供 `MediumDensityField`、`MediumTransport` 或 `cameraMedium`。当前范围见[7.0.1](7.0.1.md)，完整运行示例见[Java 教程](Java.md#rtxpt-透明介质与原生窗口)。
 
 ### FrameSubmissionAttempt
 

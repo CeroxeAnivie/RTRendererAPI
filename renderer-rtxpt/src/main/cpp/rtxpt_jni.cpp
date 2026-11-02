@@ -31,6 +31,7 @@
 #include "rtxpt_sr_history.h"
 #include "rtxpt_path_quality.h"
 #include "rtxpt_host_resources.h"
+#include "rtxpt_memory_diagnostics.h"
 extern SampleUIData g_sampleUIData;
 
 namespace {
@@ -40,9 +41,30 @@ class HostPathTracer final : public AdvancedPathTracer {
     std::vector<SceneLight> sceneLights;
     float4 sceneSky={};
     nvrhi::BufferHandle sceneLightBuffer;
-    bool sceneLightsDirty=false;
+    bool sceneLightsDirty=false, managedLighting=false;
+    std::shared_ptr<donut::engine::SceneGraphNode> managedLightRoot;
+    struct RetiredLightingBuffer {
+        nvrhi::BufferHandle buffer;
+        nvrhi::EventQueryHandle graphics,compute;
+    };
+    std::vector<RetiredLightingBuffer> retiredLighting;
+    uint64_t sceneLoadCount=0,lightingBatchCount=0,lightingUploadCount=0,lightingUploadNs=0,lightingHistoryResets=0;
+    bool lightingCommitPending=false;
+    class ManagedDirectional final : public donut::engine::DirectionalLight, public LightExtension {
+    public:
+        std::shared_ptr<donut::engine::SceneGraphLeaf> Clone() override {
+            auto copy=std::make_shared<ManagedDirectional>();copy->color=color;copy->irradiance=irradiance;
+            copy->angularSize=angularSize;copy->Copy(*this);return copy;
+        }
+    };
+    void ConfigureManagedBackground() {
+        if(auto baker=GetEnvMapBaker()) {
+            if(managedLighting)baker->SetHostConstantBackground(sceneSky.xyz()*sceneSky.w);
+            else baker->ClearHostConstantBackground();
+        }
+    }
     bool sceneLightingActive() const {
-        return pathQuality.values[0]==1 && !sceneLights.empty()
+        return pathQuality.values[0]==1 && managedLighting && !sceneLights.empty()
             && !g_sampleUIData.ActualUseRTXDIPasses() && g_sampleUIData.ActualRadianceCacheMode()==0;
     }
     std::unique_ptr<RtrPreSrHistory> preSrHistory;
@@ -102,15 +124,20 @@ public:
         }
     }
     bool SceneLightingActive() const {return sceneLightingActive();}
+    bool UsesBakedLighting() const override {
+        // Use precisely the shader's route; directional strata still consume the baked cube.
+        return !sceneLightingActive() || useDirectionalStrata();
+    }
     bool ExactPointLightingActive() const {return smallPointLighting;}
     bool DirectionalStrataActive() const {return useDirectionalStrata();}
     size_t HostShaderCompilerThreads() const {return GetRTPipelineBaker()?GetRTPipelineBaker()->HostCompilerThreadCount():0;}
     void LoadSceneLighting(const std::string& path) {
-        sceneLights.clear();sceneSky={};sceneLightsDirty=true;
+        sceneLights.clear();sceneSky={};sceneLightsDirty=true;managedLighting=false;managedLightRoot.reset();
         std::ifstream input(std::filesystem::u8path(path));
         Json::Value root;if(!input || !(input>>root))return;
         const auto& data=root["rtrSceneLighting"];
-        if(!data.isObject())return;
+        if(!data.isObject()){ConfigureManagedBackground();return;}
+        managedLighting=true;
         const auto& sky=data["sky"];
         if(sky.size()!=4)throw std::runtime_error("Scene lighting sky must have four components");
         for(uint32_t i=0;i<4;i++)sceneSky[i]=sky[i].asFloat();
@@ -123,16 +150,96 @@ public:
             }
             sceneLights.push_back(light);
         }
-        preSrHistoryReset=true;
+        preSrHistoryReset=true;ConfigureManagedBackground();
         if(sceneLightingActive())donut::log::info("RTXPT scene lighting inputs ACTIVE lights=%zu; analytic ambient, exact direct, analytic sky, stable metal, split first interface",sceneLights.size());
+    }
+    void CreateCustomRenderPasses() override {
+        AdvancedPathTracer::CreateCustomRenderPasses();ConfigureManagedBackground();
+    }
+    std::array<uint64_t,5> LightingTelemetry() const {
+        return {sceneLoadCount,lightingBatchCount,lightingUploadCount,lightingUploadNs,lightingHistoryResets};
+    }
+    void ApplyLighting(const std::vector<int64_t>& ids,const std::vector<float>& records,const std::array<float,4>& sky) {
+        if(!GetScene() || !managedLighting)throw std::logic_error("Lighting batches require a retained API scene");
+        const size_t count=ids.size();
+        if(count==0 || records.size()!=count*16 || ids[0]!=-1)throw std::invalid_argument("Malformed complete lighting batch");
+        if(count>size_t(NEEAT_MAX_LIGHTS-RTXPT_NEEAT_ENVMAP_QT_TOTAL_NODE_COUNT))throw std::invalid_argument("Lighting batch exceeds native sampler capacity");
+        std::unordered_map<int64_t,bool> unique;
+        for(float v:sky)if(!std::isfinite(v)||v<0)throw std::invalid_argument("Invalid lighting sky");
+        std::vector<SceneLight> next(count);
+        auto candidate=std::make_shared<donut::engine::SceneGraph>();
+        auto candidateRoot=std::make_shared<donut::engine::SceneGraphNode>();candidateRoot->SetName("RTRLighting");candidate->SetRootNode(candidateRoot);
+        for(size_t i=0;i<count;i++) {
+            const float* v=&records[i*16];
+            for(size_t j=0;j<16;j++)if(!std::isfinite(v[j]))throw std::invalid_argument("Non-finite light record");
+            if((i>0&&ids[i]<0)||!unique.emplace(ids[i],true).second)throw std::invalid_argument("Duplicate or invalid light id");
+            const int type=int(v[3]);
+            if(float(type)!=v[3]||type<0||type>2 || v[7]<0 || v[8]<0||v[9]<0||v[10]<0||v[11]<0
+                || (v[14]!=0&&v[14]!=1) || (type!=0&&v[7]<=0)
+                || (type==2&&(v[12]<v[13]||v[12]>1||v[13]<-1)))throw std::invalid_argument("Invalid light record");
+            if(type!=1 && std::abs(v[4]*v[4]+v[5]*v[5]+v[6]*v[6]-1.f)>.003f)throw std::invalid_argument("Light direction must be normalized");
+            std::memcpy(&next[i],v,sizeof(SceneLight));
+            std::shared_ptr<donut::engine::Light> light;
+            if(type==0) {
+                std::shared_ptr<donut::engine::DirectionalLight> l=i==0?std::make_shared<donut::engine::DirectionalLight>():std::make_shared<ManagedDirectional>();
+                l->irradiance=v[11];l->angularSize=i==0?.53f:0.f;light=l;
+            }else if(type==1) {
+                auto l=std::make_shared<PointLightEx>();l->intensity=v[11];l->range=v[7];l->radius=0;light=l;
+            }else {
+                auto l=std::make_shared<SpotLightEx>();l->intensity=v[11];l->range=v[7];l->radius=0;
+                l->innerAngle=degrees(std::acos(std::clamp(v[12],-1.f,1.f)));l->outerAngle=degrees(std::acos(std::clamp(v[13],-1.f,1.f)));light=l;
+            }
+            if(auto* metadata=dynamic_cast<LightExtension*>(light.get())){metadata->HostManaged=true;metadata->CastsShadow=v[14]!=0;}
+            light->color=float3(v[8],v[9],v[10]);
+            auto node=candidate->AttachLeafNode(candidateRoot,light);node->SetName(i==0?"Sun":"l"+std::to_string(ids[i]));
+            light->SetPosition(double3(v[0],v[1],v[2]));if(type!=1)light->SetDirection(double3(v[4],v[5],v[6]));
+        }
+        candidate->Detach(candidateRoot);
+        auto graph=GetScene()->GetSceneGraph();
+        // Allocate and validate the whole replacement before touching the resident graph.
+        // An allocation failure during the commit propagates to Java, which closes this session before another render.
+        if(managedLightRoot)graph->Detach(managedLightRoot);
+        else {
+            auto previousLights=graph->GetLights();
+            for(auto& light:previousLights)if(light->GetLightType()!=LightType_Environment)
+                graph->Detach(light->GetNode()->shared_from_this());
+        }
+        managedLightRoot=graph->Attach(graph->GetRootNode(),candidateRoot);
+        // Consume only the lighting structure flags before Java applies this frame's transforms.
+        // Scene::Refresh must not interpret adding a light as changing mesh topology.
+        graph->Refresh(GetFrameIndex());m_lights=graph->GetLights();
+        sceneLights=std::move(next);sceneSky=float4(sky[0],sky[1],sky[2],sky[3]);sceneLightsDirty=true;
+        lightingSceneDirty=true;lightingPolicyLogged=false;directionalStrataLogged=false;preSrHistoryReset=true;
+        ConfigureManagedBackground();
+        if(auto* cache=GetSharc())cache->NotifySceneReloaded();
+        if(auto baker=GetLightsBaker())baker->SceneReloaded();
+        g_sampleUIData.ResetAccumulation=true;g_sampleUIData.ResetRealtimeCaches=true;
+        const char* freezeNoise=std::getenv("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE");
+        if(freezeNoise&&std::string(freezeNoise)=="1")g_sampleUIData.DbgFreezeRealtimeNoiseSeed=true;
+        ++lightingBatchCount;++lightingHistoryResets;lightingCommitPending=true;
     }
     void UpdateCustomResources() override {
         AdvancedPathTracer::UpdateCustomResources();
+        for(auto it=retiredLighting.begin();it!=retiredLighting.end();) {
+            if(GetDevice()->pollEventQuery(it->graphics)&&GetDevice()->pollEventQuery(it->compute))it=retiredLighting.erase(it);else ++it;
+        }
+        ConfigureManagedBackground();
         const size_t bytes=std::max<size_t>(sizeof(SceneLight),sceneLights.size()*sizeof(SceneLight));
-        if(!sceneLightBuffer || sceneLightBuffer->getDesc().byteSize<bytes) {
-            nvrhi::BufferDesc desc;desc.byteSize=bytes;desc.structStride=sizeof(SceneLight);
+        if(!sceneLightBuffer || sceneLightBuffer->getDesc().byteSize<bytes || sceneLightBuffer->getDesc().byteSize>bytes*4) {
+            size_t capacity=sizeof(SceneLight);while(capacity<bytes)capacity*=2;
+            nvrhi::BufferDesc desc;desc.byteSize=capacity;desc.structStride=sizeof(SceneLight);
             desc.debugName="RtrSceneLightingInputs";desc.initialState=nvrhi::ResourceStates::ShaderResource;desc.keepInitialState=true;
-            sceneLightBuffer=GetDevice()->createBuffer(desc);sceneLightsDirty=true;InvalidateBindingSet();
+            auto replacement=GetDevice()->createBuffer(desc);
+            if(!replacement)throw std::runtime_error("Could not allocate scene light buffer");
+            if(sceneLightBuffer) {
+                RetiredLightingBuffer retired;retired.buffer=sceneLightBuffer;
+                retired.graphics=GetDevice()->createEventQuery();retired.compute=GetDevice()->createEventQuery();
+                GetDevice()->setEventQuery(retired.graphics,nvrhi::CommandQueue::Graphics);
+                GetDevice()->setEventQuery(retired.compute,nvrhi::CommandQueue::Compute);
+                retiredLighting.push_back(std::move(retired));
+            }
+            GetBindingCache().Clear();InvalidateBindingSet();
+            sceneLightBuffer=replacement;sceneLightsDirty=true;
         }
     }
     void AddCustomBindings(nvrhi::BindingSetDesc& desc) override {
@@ -162,9 +269,16 @@ public:
         pt.RtrSceneAmbient=float4(sceneSky.xyz()*sceneSky.w,0);
         pt.RtrSceneSky=float4(sceneSky.xyz()*std::max(sceneSky.w,.05f),0);
         pt.RtrSceneLightCount=uint32_t(sceneLights.size());
-        if(sceneLightsDirty && sceneLightBuffer && !sceneLights.empty()) {
-            commandList->writeBuffer(sceneLightBuffer,sceneLights.data(),sceneLights.size()*sizeof(SceneLight));
+        if(sceneLightsDirty && sceneLightBuffer) {
+            const auto begin=std::chrono::steady_clock::now();
+            if(!sceneLights.empty())commandList->writeBuffer(sceneLightBuffer,sceneLights.data(),sceneLights.size()*sizeof(SceneLight));
             sceneLightsDirty=false;
+            if(lightingCommitPending) {
+                ++lightingUploadCount;lightingCommitPending=false;
+                lightingUploadNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-begin).count();
+                const char* diagnostics=std::getenv("RTR_RTXPT_LIGHTING_DIAGNOSTICS");
+                if(diagnostics&&std::string(diagnostics)=="1")donut::log::info("RTXPT lighting executed loads=%llu batches=%llu uploads=%llu uploadRecordingNs=%llu historyResets=%llu lights=%zu",sceneLoadCount,lightingBatchCount,lightingUploadCount,lightingUploadNs,lightingHistoryResets,sceneLights.size());
+            }
         }
         pt.RtrDirectionalCount=0;
         if(!useDirectionalStrata() || !GetEnvMapBaker())return;
@@ -187,7 +301,7 @@ public:
     }
     nvrhi::ITexture* HostDisplayColor() const { return m_renderTargets ? m_renderTargets->LdrColor.Get() : nullptr; }
     void SceneLoaded() override {
-        AdvancedPathTracer::SceneLoaded();
+        AdvancedPathTracer::SceneLoaded();++sceneLoadCount;
         preSrHistoryReset=true;
         directionalStrataLogged=false;
         const char* disableGuides=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES");
@@ -317,6 +431,7 @@ struct Session {
     bool externalPresentation=false;
     bool gpuTimingsEnabled=true;
     uint64_t rendered=0;
+    std::chrono::steady_clock::time_point memoryReport{};
     bool presentationTrace=[] {const char* v=std::getenv("RTR_RTXPT_PRESENTATION_TRACE");return v && std::string(v)=="1";}();
     using ProbeClock=std::chrono::steady_clock;
     ProbeClock::time_point probeMark{},probeReport{};
@@ -382,6 +497,7 @@ struct Session {
     }
     std::unordered_map<std::string, donut::engine::SceneGraphNode*> nodes;
     void shutdown() {
+        RtrMemoryDiagnostics::Checkpoint("shutdown.begin");
         if (app) {
             auto* dm=app->HostDeviceManager();
             if(auto* device=dm->GetDevice())device->waitForIdle();
@@ -405,6 +521,7 @@ struct Session {
         // Never leave the sample's [this] log callback installed during member teardown.
         donut::log::SetCallback(previousLog);
         app.reset();
+        RtrMemoryDiagnostics::Checkpoint("shutdown.end");
         // The JVM can exit without flushing the native CRT's redirected streams.
         // Flush once at teardown so final SDK/diagnostic results survive in logs.
         std::fflush(stdout);
@@ -473,6 +590,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
     std::lock_guard lock(lifecycle);
     try {
         if (active) throw std::runtime_error("The upstream RTXPT core supports one resident session per process");
+        RtrMemoryDiagnostics::Checkpoint("create.begin");
         if (width < 1 || height < 1 || maxFramesInFlight<2 || maxFramesInFlight>3
             ||workerThreads<1||workerThreads>64||shaderCompilerThreads<1||shaderCompilerThreads>16)
             throw std::invalid_argument("Invalid dimensions, frame budget or CPU concurrency");
@@ -517,6 +635,8 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         s->app->HostDeviceManager()->HostExternalPresentation=externalPresentation;
         s->app->HostDeviceManager()->HostFixedWindowTitle=true;
         auto status = s->app->Init(static_cast<int>(argv.size()), argv.data());
+        if(RtrMemoryDiagnostics::Enabled() && status==SampleBaseApp::InitReturnCodes::Success)
+            RtrMemoryDiagnostics::Checkpoint("create.initialized",static_cast<ID3D12Device*>(s->app->HostDeviceManager()->GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device)));
         if (status != SampleBaseApp::InitReturnCodes::Success)
             throw std::runtime_error("RTXPT initialization failed with status " + std::to_string(static_cast<int>(status)));
         s->initialized = true;
@@ -681,6 +801,14 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         auto before=s.externalPresentation?s.rendered:s.presented;
         if(s.presentationTrace)s.probeMark=Session::ProbeClock::now();
         if (!dm->HostFrame()) throw std::runtime_error("RTXPT render/present failed");
+        if(RtrMemoryDiagnostics::Enabled()) {
+            auto now=std::chrono::steady_clock::now();
+            if(s.rendered<=3 || now-s.memoryReport>=std::chrono::seconds(1)) {
+                RtrMemoryDiagnostics::Checkpoint(s.rendered<=3?"frame.startup":"frame.steady",
+                    static_cast<ID3D12Device*>(dm->GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device)));
+                s.memoryReport=now;
+            }
+        }
         s.reportPresentation();
         return (s.externalPresentation?s.rendered:s.presented)>before ? 2 : 1;
     } catch (const std::exception& x) { fail(e, x); return 0; }
@@ -736,7 +864,7 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_Rtxp
         jdouble values[36]{};
         for(size_t i=0;i<19;++i)values[i]=q.values[i];
         for(size_t i=0;i<6;++i)values[19+i]=q.constants[i];
-        values[25]=g_sampleUIData.NEEType;values[26]=cache?cache->GetEntryCount():0;values[27]=s.app->framesInFlight;
+        values[25]=g_sampleUIData.NEEType;values[26]=cache&&cache->GetHashEntriesBuffer()?cache->GetEntryCount():0;values[27]=s.app->framesInFlight;
         values[28]=host->HostWorkerThreadCount();values[29]=host->HostShaderCompilerThreads();
         values[30]=host->ExactPointLightingActive();values[31]=host->DirectionalStrataActive();
         values[32]=g_sampleUIData.EnableBloom;values[33]=g_sampleUIData.EnableToneMapping;
@@ -809,6 +937,32 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     catch (const std::exception& x) { fail(e, x); }
 }
 
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lighting(
+    JNIEnv* e,jclass,jlong h,jlongArray ids,jfloatArray records,jfloatArray sky) {
+    try {
+        auto& s=session(h);
+        if(!ids||!records||!sky)throw std::invalid_argument("Lighting arrays must not be null");
+        const size_t count=e->GetArrayLength(ids);
+        if(count==0||count>size_t(NEEAT_MAX_LIGHTS)||e->GetArrayLength(records)!=count*16||e->GetArrayLength(sky)!=4)
+            throw std::invalid_argument("Invalid complete lighting array sizes");
+        std::vector<int64_t> lightIds(count);std::vector<float> values(count*16);std::array<float,4> background{};
+        e->GetLongArrayRegion(ids,0,jsize(count),reinterpret_cast<jlong*>(lightIds.data()));
+        e->GetFloatArrayRegion(records,0,jsize(values.size()),values.data());e->GetFloatArrayRegion(sky,0,4,background.data());
+        if(e->ExceptionCheck())return;
+        auto graph=s.app->HostRenderPass()->GetScene()->GetSceneGraph();
+        std::vector<std::string> oldNames;for(auto& light:graph->GetLights())if(light->GetLightType()!=LightType_Environment)oldNames.push_back(light->GetNode()->GetName());
+        static_cast<HostPathTracer*>(s.app->HostRenderPass())->ApplyLighting(lightIds,values,background);
+        for(auto& name:oldNames)s.nodes.erase(name);
+        for(auto& light:graph->GetLights())if(light->GetLightType()!=LightType_Environment)s.nodes.insert_or_assign(light->GetNode()->GetName(),light->GetNode());
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingTelemetry(
+    JNIEnv* e,jclass,jlong h) {
+    try {
+        auto values=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->LightingTelemetry();
+        auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_snapshotMaterials(
     JNIEnv* e, jclass, jlong h, jstring directory) {
     try {

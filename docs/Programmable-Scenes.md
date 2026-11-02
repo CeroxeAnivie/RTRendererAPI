@@ -1,6 +1,6 @@
 # Programmable retained scenes
 
-7.0.0 exposes retained-scene shader replacement through `SceneShaderProgram`. Ordinary callers
+7.0.1 exposes retained-scene shader replacement through `SceneShaderProgram`. Ordinary callers
 continue to use `Renderer.open()` and the built-in shaders. Applications can replace ray generation,
 miss, closest-hit and any-hit independently; omitted stages retain the built-in implementation.
 

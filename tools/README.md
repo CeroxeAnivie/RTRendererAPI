@@ -26,6 +26,27 @@
 
 SDK 路径只通过参数或环境变量传入，不写入仓库配置。构建脚本读取 `STREAMLINE_SDK` 作为 `-StreamlineSdk` 的可选默认值；代理由调用进程自行配置。
 
+## RTXPT 原生内存诊断
+
+生产默认关闭。只对待诊断的进程设置以下环境变量，再从同一终端启动应用：
+
+```powershell
+$env:RTR_RTXPT_MEMORY_DIAGNOSTICS='1'
+$env:RTR_RTXPT_MEMORY_LOG=Join-Path (Get-Location) 'rtxpt-memory.log'
+# 在此启动应用；不指定日志路径时写 stderr。
+```
+
+诊断记录资源名称、对齐后的容量、heap 类型、创建／释放、较大分配的模块栈，以及进程私有提交、工作集和 DXGI 显存数据。`trackedDefault` 是记录到的资源容量，不是物理 RAM，也不应与 DXGI 显存相加。诊断数据只用于归因，不用于 FPS 基准。
+
+诊断开关在进程内首次读取后固定。下次正常启动前移除变量：
+
+```powershell
+Remove-Item Env:RTR_RTXPT_MEMORY_DIAGNOSTICS -ErrorAction SilentlyContinue
+Remove-Item Env:RTR_RTXPT_MEMORY_LOG -ErrorAction SilentlyContinue
+```
+
+原生构建会运行关闭／开启两种 CPU 自检。资源按需分配修复保存在 `tools/patches/rtxpt-demand-resources.patch`，由构建脚本在固定版本宿主适配后应用；重复配置会验证补丁已完整应用。
+
 ## 构建 Vulkan 的 NVIDIA 桥接
 
 该桥接使用 Gradle 任务 `:renderer-nvidia:compileNvidiaBridge`，配置入口如下。Gradle 属性通过 `-P名称=值` 传入，优先于对应环境变量；CMake 未指定时从 `PATH` 查找。

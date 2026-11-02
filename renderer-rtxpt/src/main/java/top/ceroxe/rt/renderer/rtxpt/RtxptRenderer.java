@@ -23,7 +23,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     private Path directory,nativeScene;
     private List<RtxptScene.Item> previous=List.of();
     private CameraState camera;
-    private EnvironmentState environment;
+    private RtxptLighting lighting;
     private RtxptNative.Compositor compositor;
     private String title;
     private Float exposureCompensation;
@@ -115,7 +115,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     private SceneUpdateResult applyRetained(SceneTransaction tx,boolean nativeContract){
         return commitScene(prepareScene(tx,nativeContract));
     }
-    record PreparedScene(SceneTransaction transaction,RtxptScene value,boolean transformsOnly,boolean nativeContract) { }
+    record PreparedScene(SceneTransaction transaction,RtxptScene value,boolean geometryUnchanged,boolean nativeContract) { }
     PreparedScene prepareScene(SceneTransaction tx,boolean nativeContract){
         ready();Objects.requireNonNull(tx);if(nativeScene!=null)throw new IllegalStateException("Choose retained API scenes or a native scene explicitly");
         RtxptInputContract.requireAdvancingRevision(tx.revision(),revision,scenePublished);
@@ -123,15 +123,19 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         if(tx.reset() || !tx.upserts().meshes().isEmpty() || !tx.upserts().textures().isEmpty()
                 || tx.removals().meshIds().hasRemaining() || tx.removals().textureIds().hasRemaining())
             resources.validateAssets(next.meshes.values(),next.textures.values());
-        boolean transformsOnly=!tx.reset() && tx.upserts().textures().isEmpty() && tx.upserts().materials().isEmpty() && tx.upserts().meshes().isEmpty() && tx.upserts().lights().isEmpty()
-            && !tx.removals().textureIds().hasRemaining() && !tx.removals().materialIds().hasRemaining() && !tx.removals().meshIds().hasRemaining() && !tx.removals().lightIds().hasRemaining() && !tx.removals().instanceIds().hasRemaining();
-        if(transformsOnly)for(var i:tx.upserts().instances()) {
-            var old=scene.instances.get(i.id());if(old==null || old.meshAssetId()!=i.meshAssetId() || !old.mediumBoundary().equals(i.mediumBoundary()) || old.surfaceVisibility()!=i.surfaceVisibility()) {transformsOnly=false;break;}
+        boolean geometryUnchanged=geometryUnchanged(tx,scene);
+        return new PreparedScene(tx,next,geometryUnchanged,nativeContract);
+    }
+    static boolean geometryUnchanged(SceneTransaction tx,RtxptScene scene) {
+        if(tx.reset() || !tx.upserts().textures().isEmpty() || !tx.upserts().materials().isEmpty() || !tx.upserts().meshes().isEmpty()
+            || tx.removals().textureIds().hasRemaining() || tx.removals().materialIds().hasRemaining() || tx.removals().meshIds().hasRemaining() || tx.removals().instanceIds().hasRemaining())return false;
+        for(var i:tx.upserts().instances()) {
+            var old=scene.instances.get(i.id());if(old==null || old.meshAssetId()!=i.meshAssetId() || !old.mediumBoundary().equals(i.mediumBoundary()) || old.surfaceVisibility()!=i.surfaceVisibility())return false;
         }
-        return new PreparedScene(tx,next,transformsOnly,nativeContract);
+        return true;
     }
     SceneUpdateResult commitScene(PreparedScene prepared){
-        var tx=prepared.transaction();scene=prepared.value();dirty|=tx.hasChanges()&&!prepared.transformsOnly();
+        var tx=prepared.transaction();scene=prepared.value();dirty|=tx.hasChanges()&&!prepared.geometryUnchanged();
         nativeContractPending=!prepared.nativeContract();
         revision=tx.revision();scenePublished=true;return new SceneUpdateResult(revision);
     }
@@ -150,7 +154,10 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         if(nativeContractPending&&nativeScene==null){scene.validate();nativeContractPending=false;}
         if(f.minimumSceneRevision()>revision)throw new IllegalArgumentException("Scene revision is not resident");
         var items=nativeScene==null?scene.items(f):List.<RtxptScene.Item>of();
-        boolean rebuild=nativeScene==null && (dirty || !RtxptScene.sameStructure(items,previous) || !Objects.equals(environment,f.environment()));
+        var nextLighting=nativeScene==null?RtxptLighting.of(f.environment(),scene.lights.values()):null;
+        // Validate the complete batch before scene export or any native mutation.
+        float[] lightRecords=nextLighting!=null&&(dirty||!nextLighting.equals(lighting))?nextLighting.records():null;
+        boolean rebuild=nativeScene==null && (dirty || !RtxptScene.sameStructure(items,previous));
         Path path=nativeScene;
         if(rebuild){long begin=System.nanoTime();try{
             if(directory==null)directory=Files.createTempDirectory("rtrenderer-rtxpt-");
@@ -169,14 +176,24 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         if(rebuild || !Objects.equals(camera,f.camera())){
             var c=f.camera();RtxptNative.camera(handle,c.x()+","+c.y()+","+c.z()+","+c.forwardX()+","+c.forwardY()+","+c.forwardZ()+","+c.upX()+","+c.upY()+","+c.upZ(),(float)(2*Math.atan(c.tanHalfFovY())));camera=c;
         }
+        if(nextLighting!=null&&(rebuild||!nextLighting.equals(lighting))) {
+            try {RtxptNative.lighting(handle,nextLighting.ids(),lightRecords!=null?lightRecords:nextLighting.records(),nextLighting.sky());}
+            catch(RuntimeException|Error failure) {
+                // A failed native commit must never present a partially modified generation.
+                try {close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}throw failure;
+            }
+            lighting=nextLighting;
+        }
         if(!rebuild)updateTransforms(items);
-        previous=items;environment=f.environment();dirty=false;
+        previous=items;dirty=false;
         submitted=f.sequence();
         if(!renderFrame())throw new IllegalStateException("RTXPT window closed");
         scenePublished=true;
         verifyRequiredFeatures();
         return FrameSubmissionResult.accepted(submitted,revision,Set.of());
     }
+    long[] lightingTelemetry(){ready();return handle==0?new long[5]:RtxptNative.lightingTelemetry(handle);}
+    @Override public LightingTimings lightingTimings(){var t=lightingTelemetry();return new LightingTimings(t[0],t[1],t[2],t[3],t[4]);}
     private void applyNativeSettings(){RtxptNative.settings(handle,options.maxBounces(),options.diffuseBounces(),options.reflex(),options.frameGenerationMode(),options.generatedFrames(),
         options.samplesPerPixel(),options.reconstruction().ordinal(),options.dlssQuality().nativeValue,options.standaloneDenoiser(),options.relaxDenoiser(),options.restirDi(),options.restirGi(),options.sharc(),options.exactOpticalInterfaces());
         RtxptNative.pathQuality(handle,options.qualityInts(),options.qualityFloats());
@@ -383,7 +400,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
             handle=0;closed=true;
             // A caller may retain a closed renderer; do not keep its entire scene or
             // a compositor closure (and its owner's Vulkan resources) alive with it.
-            scene=new RtxptScene();previous=List.of();camera=null;environment=null;compositor=null;nativeScene=null;
+            scene=new RtxptScene();previous=List.of();camera=null;lighting=null;compositor=null;nativeScene=null;
             if(directory!=null)try(var files=Files.walk(directory)){
                 for(var p:files.sorted(Comparator.reverseOrder()).toList())Files.delete(p);
             }catch(IOException e){

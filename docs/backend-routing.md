@@ -88,14 +88,14 @@ routing = candidate;                                // 后端成功发布才提�
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:7.0.0") {
+    implementation("top.ceroxe.rt:renderer-api:7.0.1") {
         exclude(group = "top.ceroxe.rt", module = "renderer-core")
         exclude(group = "top.ceroxe.rt", module = "renderer-nvidia")
     }
-    implementation("top.ceroxe.rt:renderer-rtxpt:7.0.0")
+    implementation("top.ceroxe.rt:renderer-rtxpt:7.0.1")
 }
 ```
 
 `renderer-rtxpt` 以 compile-only 方式依赖 API，不会重新引入上述两个模块。API 本身的场景路由只依赖公共模型和 SPI，不加载 Vulkan 实现。纯 API 调用者可将 RTXPT 依赖写成 `runtimeOnly`；使用 `RtxptAccess` 专家接口时需要编译期依赖。Maven 同样在 `renderer-api` dependency 下排除 `renderer-core`／`renderer-nvidia`，并显式添加 `renderer-rtxpt`。双后端部署则保留默认依赖并添加 RTXPT 即可。
 
-本次刷新 7.0.0 ABI 基线同时记录新场景会话 API，以及此前已实施但基线尚未同步的旧散射、密度、相机初始介质等签名收缩；没有恢复被撤下能力。
+本次刷新 7.0.1 ABI 基线同时记录新场景会话 API，以及此前已实施但基线尚未同步的旧散射、密度、相机初始介质等签名收缩；没有恢复被撤下能力。

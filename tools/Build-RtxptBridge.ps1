@@ -33,6 +33,22 @@ if($CheckPaths){
     return
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+# Remove a complete lighting overlay before checking/rebuilding its pinned base.
+# A partial overlay is never accepted: final apply --check below must match every hunk.
+$lightingPatch=Join-Path $PSScriptRoot 'patches/rtxpt-incremental-lighting.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $lightingPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $lightingPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT lighting overlay could not be removed for base verification'}
+    foreach($line in [IO.File]::ReadAllLines($lightingPatch)){
+        if($line.StartsWith('+++ b/')){
+            $path=Join-Path $sdk $line.Substring(6)
+            $text=[IO.File]::ReadAllText($path)
+            [IO.File]::WriteAllText($path,[regex]::Replace($text,"`r?`n","`r`n"),$utf8)
+        }
+    }
+}
+
 function Patch-Once([string]$Relative,[string]$Anchor,[string]$Replacement,[string]$Marker){
     $path=Join-Path $sdk $Relative
     $text=[IO.File]::ReadAllText($path)
@@ -44,6 +60,83 @@ function Patch-Once([string]$Relative,[string]$Anchor,[string]$Replacement,[stri
 }
 # Retain the upstream pipeline baker; make its binaries relocatable for the JAR
 # and optionally export the exact upstream command for offline six-budget builds.
+# Keep the census inert unless RTR_RTXPT_MEMORY_DIAGNOSTICS=1 is explicitly set.
+foreach($source in @('d3d12-buffer.cpp','d3d12-texture.cpp','d3d12-compute.cpp','d3d12-graphics.cpp','d3d12-raytracing.cpp','d3d12-upload.cpp')) {
+    Patch-Once "External/Donut/nvrhi/src/d3d12/$source" '#include "d3d12-backend.h"' @'
+#include "d3d12-backend.h"
+#include "rtxpt_memory_diagnostics.h" // RTR opt-in native resource census
+'@ 'RTR opt-in native resource census'
+}
+Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-upload.cpp' '        chunk->bufferSize = size;' @'
+        RtrMemoryDiagnostics::Created(chunk.get(),"pool",m_IsScratchBuffer?"DXR scratch pool":"Upload pool",m_Context.device,chunk->buffer,size); // RTR attribute internal pools
+        chunk->bufferSize = size;
+'@ 'RTR attribute internal pools'
+Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-upload.cpp' "    BufferChunk::~BufferChunk()`r`n    {" @'
+    BufferChunk::~BufferChunk()
+    {
+        RtrMemoryDiagnostics::Released(this); // RTR retire pool census
+'@ 'RTR retire pool census'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '#include <StreamlineIntegration.h>' @'
+#include <StreamlineIntegration.h>
+#include "rtxpt_memory_diagnostics.h" // RTR Streamline resource census
+'@ 'RTR Streamline resource census'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '            bool success = SUCCEEDED(pd3d12Device->CreateCommittedResource(heap, D3D12_HEAP_FLAG_NONE, desc, state, nullptr, IID_PPV_ARGS(&pbuffer)));' @'
+            bool success = SUCCEEDED(pd3d12Device->CreateCommittedResource(heap, D3D12_HEAP_FLAG_NONE, desc, state, nullptr, IID_PPV_ARGS(&pbuffer)));
+            if(success)RtrMemoryDiagnostics::Created(pbuffer,"streamline","Streamline buffer",pd3d12Device,pbuffer,desc->Width); // RTR attribute SDK buffers
+'@ 'RTR attribute SDK buffers'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '            bool success = SUCCEEDED(pd3d12Device->CreateCommittedResource(heap, D3D12_HEAP_FLAG_NONE, desc, state, pClearValue, IID_PPV_ARGS(&ptexture)));' @'
+            bool success = SUCCEEDED(pd3d12Device->CreateCommittedResource(heap, D3D12_HEAP_FLAG_NONE, desc, state, pClearValue, IID_PPV_ARGS(&ptexture)));
+            if(success)RtrMemoryDiagnostics::Created(ptexture,"streamline","Streamline texture",pd3d12Device,ptexture,0); // RTR attribute SDK textures
+'@ 'RTR attribute SDK textures'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '        auto i = (IUnknown*)resource->native;' @'
+        RtrMemoryDiagnostics::Released(resource->native); // RTR retire SDK census
+        auto i = (IUnknown*)resource->native;
+'@ 'RTR retire SDK census'
+Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-buffer.cpp' '        buffer->postCreate();' @'
+        RtrMemoryDiagnostics::Created(buffer,"buffer",buffer->desc.debugName,m_Context.device,buffer->resource,buffer->desc.byteSize); // RTR attribute buffer allocation
+        buffer->postCreate();
+'@ 'RTR attribute buffer allocation'
+Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-texture.cpp' '        texture->postCreate();' @'
+        RtrMemoryDiagnostics::Created(texture,"texture",texture->desc.debugName,m_Context.device,texture->resource,0); // RTR attribute texture allocation
+        texture->postCreate();
+'@ 'RTR attribute texture allocation'
+Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-buffer.cpp' "    Buffer::~Buffer()`r`n    {" @'
+    Buffer::~Buffer()
+    {
+        RtrMemoryDiagnostics::Released(this); // RTR retire buffer census
+'@ 'RTR retire buffer census'
+Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-texture.cpp' "    Texture::~Texture()`r`n    {" @'
+    Texture::~Texture()
+    {
+        RtrMemoryDiagnostics::Released(this); // RTR retire texture census
+'@ 'RTR retire texture census'
+Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-compute.cpp' "    RefCountPtr<ID3D12PipelineState> Device::createPipelineState(const ComputePipelineDesc & state, RootSignature* pRS) const`r`n    {" @'
+    RefCountPtr<ID3D12PipelineState> Device::createPipelineState(const ComputePipelineDesc & state, RootSignature* pRS) const
+    {
+        RtrMemoryDiagnostics::Scope memory("pipeline.compute"); // RTR compiler memory phase
+'@ 'RTR compiler memory phase'
+Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-graphics.cpp' "    RefCountPtr<ID3D12PipelineState> Device::createPipelineState(const GraphicsPipelineDesc & state, RootSignature* pRS, const FramebufferInfo& fbinfo) const`r`n    {" @'
+    RefCountPtr<ID3D12PipelineState> Device::createPipelineState(const GraphicsPipelineDesc & state, RootSignature* pRS, const FramebufferInfo& fbinfo) const
+    {
+        RtrMemoryDiagnostics::Scope memory("pipeline.graphics"); // RTR graphics compiler memory phase
+'@ 'RTR graphics compiler memory phase'
+Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-raytracing.cpp' "    rt::PipelineHandle Device::createRayTracingPipeline(const rt::PipelineDesc& desc)`r`n    {" @'
+    rt::PipelineHandle Device::createRayTracingPipeline(const rt::PipelineDesc& desc)
+    {
+        RtrMemoryDiagnostics::Scope memory("pipeline.raytracing"); // RTR RT compiler memory phase
+'@ 'RTR RT compiler memory phase'
+Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.cpp' '#include "SampleBaseApp.h"' @'
+#include "SampleBaseApp.h"
+#include "rtxpt_memory_diagnostics.h" // RTR initialization memory phases
+'@ 'RTR initialization memory phases'
+Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.cpp' '    HelpersRegisterActiveWindow();' @'
+    if(RtrMemoryDiagnostics::Enabled())RtrMemoryDiagnostics::Checkpoint("init.device",static_cast<ID3D12Device*>(m_DeviceManager->GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device))); // RTR device memory boundary
+    HelpersRegisterActiveWindow();
+'@ 'RTR device memory boundary'
+Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.cpp' '    m_MainSceneRender->Init(preferredScene, m_ShaderFactory);' @'
+    m_MainSceneRender->Init(preferredScene, m_ShaderFactory);
+    if(RtrMemoryDiagnostics::Enabled())RtrMemoryDiagnostics::Checkpoint("init.scene",static_cast<ID3D12Device*>(m_DeviceManager->GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device))); // RTR scene memory boundary
+'@ 'RTR scene memory boundary'
 Patch-Once 'Rtxpt/SampleCommon/PTPipelineBaker.cpp' '#include "ShaderCompilerUtils.h"' @'
 #include "ShaderCompilerUtils.h"
 #include "rtxpt_shader_bundle.h" // RTR relocatable PT shader cache
@@ -1389,6 +1482,20 @@ if(!$text.Contains('RTR_RTXPT_RUNTIME')){
     $replacement=$anchor+$newline+'    if (const char* runtime = std::getenv("RTR_RTXPT_RUNTIME")) return std::filesystem::path(runtime);'
     [IO.File]::WriteAllText($path,"#include <cstdlib>`n"+$text.Replace($anchor,$replacement),$utf8)
 }
+# Apply after the host adaptations above: this patch is relative to their pinned output.
+# A reverse check makes repeated configuration idempotent without accepting partial patches.
+$resourcePatch=Join-Path $PSScriptRoot 'patches/rtxpt-demand-resources.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $resourcePatch 2>$null
+if($LASTEXITCODE -ne 0){
+    & git -C $sdk apply --check --ignore-space-change $resourcePatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT demand-resource patch does not match the pinned host integration'}
+    & git -C $sdk apply --ignore-space-change $resourcePatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT demand-resource patch failed'}
+}
+& git -C $sdk apply --check --ignore-space-change $lightingPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT lighting patch does not match the verified pinned base'}
+& git -C $sdk apply --ignore-space-change $lightingPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT lighting patch failed'}
 $rootCMake=Join-Path $sdk 'CMakeLists.txt'
 $cmakeText=[IO.File]::ReadAllText($rootCMake)
 # The command-line OptiX screenshot utility is not used by the embedded realtime host.
@@ -1411,11 +1518,15 @@ if($StreamlineSdk){
 if($LASTEXITCODE -ne 0){throw 'RTXPT native configure failed'}
 if($ConfigureOnly){return}
 & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath $cmake `
-    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','--parallel','1','--','/p:MultiProcessorCompilation=false',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
+    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','rtxpt_memory_diagnostics_selftest','--parallel','1','--','/p:MultiProcessorCompilation=false',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
     -WorkingDirectory $sdk -MemoryLimitGB $MemoryLimitGB
 if($LASTEXITCODE -ne 0){throw 'RTXPT JNI bridge build failed'}
 & (Join-Path $sdk 'bin/rtxpt_streamline_cache_selftest.exe')
 if($LASTEXITCODE -ne 0){throw 'Streamline feature function cache lifecycle self-test failed'}
+& (Join-Path $sdk 'bin/rtxpt_memory_diagnostics_selftest.exe')
+if($LASTEXITCODE -ne 0){throw 'Disabled memory diagnostics self-test failed'}
+& (Join-Path $sdk 'bin/rtxpt_memory_diagnostics_selftest.exe') enabled
+if($LASTEXITCODE -ne 0){throw 'Enabled memory diagnostics self-test failed'}
 # Runtime redistribution keeps the exact upstream notices alongside the native payload.
 $licenses=Join-Path $sdk 'bin/ThirdPartyLicenses'
 New-Item -ItemType Directory -Path $licenses -Force | Out-Null

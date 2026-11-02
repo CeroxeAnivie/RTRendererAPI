@@ -256,6 +256,8 @@ val releaseVersionDocuments = files(
         // Versioned quality reports are immutable evidence for their historical candidate;
         // they must not be rewritten or treated as the current release's version facts.
         exclude("quality/**")
+        // Previous version contracts retain their original coordinates as historical evidence.
+        exclude { it.file.name.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+\\.md")) && it.file.name != "${project.version}.md" }
     },
     fileTree("demos/hex-ball") {
         include("**/*.md", "src/**/*.java", "*.gradle.kts")

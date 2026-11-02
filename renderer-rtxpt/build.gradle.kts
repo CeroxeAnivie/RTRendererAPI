@@ -7,6 +7,13 @@ import org.gradle.api.tasks.Sync
 plugins { `java-library` }
 description = "Thin in-process JNI host for NVIDIA RTXPT managed rendering."
 dependencies { compileOnly(project(":renderer-api")); testImplementation(project(":renderer-api")) }
+configurations.named("testRuntimeClasspath") {
+    // Tests of an unreleased patch version must use the sibling provider, not Maven's old version.
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("${rootProject.group}:renderer-nvidia:${rootProject.version}"))
+            .using(project(":renderer-nvidia"))
+    }
+}
 java { toolchain { languageVersion = JavaLanguageVersion.of(25) }; withSourcesJar(); withJavadocJar() }
 tasks.withType<JavaCompile>().configureEach { options.encoding = "UTF-8" }
 tasks.withType<Test>().configureEach { failOnNoDiscoveredTests = false }
@@ -30,6 +37,16 @@ tasks.register<JavaExec>("rtxptBudgetContractSelfTest") {
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptBudgetContractSelfTest")
 }
+tasks.register<JavaExec>("rtxptLightingNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    description = "Short background native lighting updates, actual counters, fresh-load reference, and lifecycle checks."
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptLightingNativeSelfTest")
+    environment("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE", "1")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    if (project.hasProperty("lightingCases")) args(project.property("lightingCases").toString().split(","))
+}
+
 tasks.register<JavaExec>("rtxptNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath

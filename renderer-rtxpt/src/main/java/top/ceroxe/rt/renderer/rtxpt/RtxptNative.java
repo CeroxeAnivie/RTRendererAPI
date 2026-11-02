@@ -47,6 +47,8 @@ final class RtxptNative {
     static native void exposureCompensation(long handle,float stops);
     static native void camera(long handle,String pose,float verticalFovRadians);
     static native void loadScene(long handle,String path);
+    static native void lighting(long handle,long[] ids,float[] records,float[] sky);
+    static native long[] lightingTelemetry(long handle);
     static native long window(long handle);
     static native void resize(long handle,int width,int height);
     static native void settings(long handle,int maxBounces,int diffuseBounces,boolean reflex,

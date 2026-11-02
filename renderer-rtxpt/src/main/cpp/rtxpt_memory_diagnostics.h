@@ -1,0 +1,122 @@
+#pragma once
+
+// Explicit, process-local diagnostics. No recording, queries or resource census by default.
+#include <windows.h>
+#include <psapi.h>
+#include <share.h>
+#include <directx/d3d12.h>
+#include <dxgi1_4.h>
+#include <wrl/client.h>
+#include <chrono>
+#include <cstdint>
+#include <cwchar>
+#include <cstdio>
+#include <cstdlib>
+#include <mutex>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+
+namespace RtrMemoryDiagnostics {
+inline bool Enabled() {
+    static const bool enabled=[] {wchar_t value[2]{};return GetEnvironmentVariableW(L"RTR_RTXPT_MEMORY_DIAGNOSTICS",value,2)==1 && value[0]==L'1';}();
+    return enabled;
+}
+inline FILE* Output() {
+    static FILE* output=[] {
+        FILE* file=nullptr;
+        const DWORD size=GetEnvironmentVariableW(L"RTR_RTXPT_MEMORY_LOG",nullptr,0);
+        if(size) {
+            std::wstring path(size,L'\0');
+            if(GetEnvironmentVariableW(L"RTR_RTXPT_MEMORY_LOG",path.data(),size))file=_wfsopen(path.c_str(),L"wb",_SH_DENYWR);
+        }
+        return file?file:stderr;
+    }();
+    return output;
+}
+inline unsigned long long Timestamp() {
+    FILETIME time;GetSystemTimeAsFileTime(&time);
+    ULARGE_INTEGER value;value.LowPart=time.dwLowDateTime;value.HighPart=time.dwHighDateTime;
+    return (value.QuadPart-116444736000000000ULL)/10000;
+}
+inline PROCESS_MEMORY_COUNTERS_EX ProcessMemory() {
+    PROCESS_MEMORY_COUNTERS_EX memory{};memory.cb=sizeof(memory);
+    GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memory),sizeof(memory));
+    return memory;
+}
+struct Resource {std::string name,kind;UINT heap;UINT64 logical,allocated;};
+inline std::mutex mutex;
+inline std::unordered_map<const void*,Resource> resources;
+
+inline void Created(const void* object,const char* kind,std::string_view name,ID3D12Device* device,ID3D12Resource* resource,UINT64 logical) {
+    if(!Enabled() || !resource)return;
+    auto desc=resource->GetDesc();
+    auto info=device->GetResourceAllocationInfo(0,1,&desc);
+    D3D12_HEAP_PROPERTIES heap{};D3D12_HEAP_FLAGS flags{};
+    const HRESULT heapResult=resource->GetHeapProperties(&heap,&flags);
+    const UINT type=SUCCEEDED(heapResult)?UINT(heap.Type):0;
+    std::lock_guard lock(mutex);
+    resources[object]={std::string(name),kind,type,logical,info.SizeInBytes};
+    std::fprintf(Output(),"RTXPT_MEMORY_RESOURCE time=%llu action=create object=%p kind=%s heap=%u logical=%llu allocated=%llu name=\"%.*s\"\n",
+        Timestamp(),object,kind,type,(unsigned long long)logical,(unsigned long long)info.SizeInBytes,int(name.size()),name.data());
+    if(info.SizeInBytes>=4*1024*1024) {
+        void* frames[24]{};USHORT count=CaptureStackBackTrace(1,24,frames,nullptr);
+        std::fprintf(Output(),"RTXPT_MEMORY_STACK time=%llu object=%p",Timestamp(),object);
+        for(USHORT i=0;i<count;++i) {
+            HMODULE module=nullptr;wchar_t path[MAX_PATH]{};
+            if(GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                reinterpret_cast<LPCWSTR>(frames[i]),&module) && GetModuleFileNameW(module,path,MAX_PATH)) {
+                const wchar_t* filename=wcsrchr(path,L'\\');filename=filename?filename+1:path;
+                std::fprintf(Output()," %ls+0x%llx",filename,(unsigned long long)(reinterpret_cast<uintptr_t>(frames[i])-reinterpret_cast<uintptr_t>(module)));
+            } else std::fprintf(Output()," %p",frames[i]);
+        }
+        std::fprintf(Output(),"\n");
+    }
+    std::fflush(Output());
+}
+inline void Released(const void* object) {
+    if(!Enabled())return;
+    std::lock_guard lock(mutex);
+    if(resources.erase(object)) {
+        std::fprintf(Output(),"RTXPT_MEMORY_RESOURCE time=%llu action=release object=%p\n",Timestamp(),object);
+        std::fflush(Output());
+    }
+}
+inline void Checkpoint(const char* phase,ID3D12Device* device=nullptr) {
+    if(!Enabled())return;
+    const auto memory=ProcessMemory();
+    DXGI_QUERY_VIDEO_MEMORY_INFO local{},shared{};HRESULT gpuResult=E_NOINTERFACE;
+    if(device) {
+        Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
+        Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter;
+        gpuResult=CreateDXGIFactory1(IID_PPV_ARGS(&factory));
+        if(SUCCEEDED(gpuResult))gpuResult=factory->EnumAdapterByLuid(device->GetAdapterLuid(),IID_PPV_ARGS(&adapter));
+        if(SUCCEEDED(gpuResult))gpuResult=adapter->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_LOCAL,&local);
+        if(SUCCEEDED(gpuResult))gpuResult=adapter->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,&shared);
+    }
+    std::lock_guard lock(mutex);
+    UINT64 totals[5]{};
+    for(const auto& entry:resources)if(entry.second.heap<5)totals[entry.second.heap]+=entry.second.allocated;
+    std::fprintf(Output(),"RTXPT_MEMORY_PHASE time=%llu phase=%s private=%llu workingSet=%llu gpuQueryStatus=0x%08lx dedicated=%llu shared=%llu trackedDefault=%llu trackedUpload=%llu trackedReadback=%llu liveResources=%zu\n",
+        Timestamp(),phase,(unsigned long long)memory.PrivateUsage,(unsigned long long)memory.WorkingSetSize,
+        (unsigned long)gpuResult,(unsigned long long)local.CurrentUsage,(unsigned long long)shared.CurrentUsage,
+        (unsigned long long)totals[1],(unsigned long long)totals[2],(unsigned long long)totals[3],resources.size());
+    std::fflush(Output());
+}
+class Scope {
+    const char* phase;
+    SIZE_T before=0;
+public:
+    explicit Scope(const char* value):phase(Enabled()?value:nullptr) {
+        if(phase)before=ProcessMemory().PrivateUsage;
+    }
+    ~Scope() {
+        if(!phase)return;
+        auto after=ProcessMemory().PrivateUsage;
+        std::lock_guard lock(mutex);
+        std::fprintf(Output(),"RTXPT_MEMORY_SCOPE time=%llu phase=%s before=%llu after=%llu delta=%lld\n",
+            Timestamp(),phase,(unsigned long long)before,(unsigned long long)after,(long long)after-(long long)before);
+        std::fflush(Output());
+    }
+};
+}
