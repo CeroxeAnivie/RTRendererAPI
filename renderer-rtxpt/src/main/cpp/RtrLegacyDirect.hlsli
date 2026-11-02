@@ -14,14 +14,23 @@ float3 RtrLegacyShadowVisibility(const RayDesc inputRay,const PathState source,c
         Surface hit=Bridge::loadSurface(query.CommittedInstanceIndex(),query.CommittedGeometryIndex(),query.CommittedPrimitiveIndex(),
             query.CommittedTriangleBarycentrics(),inputRay.Direction,shadow.rayCone,source.getVertexIndex(),source.GetPixelPos(),context.Debug);
         float transmission=hit.bsdf.data.SpecularTransmission();
-        // Same straight-through direct-light approximation as gsShadowVisibilityDetailed.
-        float fresnel=RtrLegacyFresnel(hit.shadingData.GetEta(),abs(dot(inputRay.Direction,hit.shadingData.N)));
+        // This visibility segment stays straight: its direction is in the outside
+        // angular domain, including at an exit face. Feeding that angle to the
+        // inside-to-outside Fresnel calculation invents total internal reflection.
+        // Use the reciprocal outside-domain boundary approximation, as in NVIDIA
+        // RTX Remix algorithm/visibility.slangh (outsideFresnel/insideFresnel).
+        // Real scatter rays still use their actual eta and retain physical TIR.
+        float eta=hit.shadingData.GetEta();
+        float visibilityEta=min(eta,rcp(max(eta,1e-7)));
+        float cosine=abs(dot(inputRay.Direction,hit.shadingData.N));
+        float fresnel=RtrLegacyFresnel(visibilityEta,cosine);
         #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
         if(RtrLegacyTracePixel(source.GetPixelPos(),context.PtConsts.frameIndex) && (source.getCounter((PackedCounters)3)&4u)!=0)
             RtrLegacyTracePrint("shadow",104u,RtrLegacyTraceKey(source.GetPixelPos(),(source.getCounter((PackedCounters)3)&3u)-1u,source.getVertexIndex(),context.PtConsts.frameIndex),
                 float4(event,hit.shadingData.MaterialID(),t_PTMaterialData[hit.shadingData.MaterialID()].TransmissionFactor,transmission),
                 float4(hit.shadingData.frontFacing,hit.shadingData.GetEta(),abs(dot(inputRay.Direction,hit.shadingData.N)),fresnel),
-                inputRay.Direction,hit.shadingData.posW,throughput);
+                inputRay.Direction,hit.shadingData.posW,throughput,
+                float2(visibilityEta,RtrLegacyFresnel(eta,cosine)));
         #endif
         if(transmission<=0)return 0;
         throughput*=transmission*(1-fresnel)*hit.bsdf.data.Transmission();
