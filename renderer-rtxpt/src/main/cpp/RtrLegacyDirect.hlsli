@@ -58,6 +58,7 @@ NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const Active
             }
         }
         float3 radiance=light.ColorIntensity.rgb*light.ColorIntensity.a*attenuation;
+        float3 inputRadiance=radiance;
         float nl=max(dot(sd.N,direction),0);
         if(nl<=0 || max3(radiance)<=0)continue;
         if(light.ConeShadow.z>0)
@@ -65,8 +66,12 @@ NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const Active
             LightSample sample=LightSample::make();sample.Direction=direction;sample.Distance=maximumDistance;
             RayDesc ray=ComputeVisibilityRay(sample,sd);
             radiance*=RtrLegacyShadowVisibility(ray,path,context);
-            if(max3(radiance)<=0)continue;
         }
+        #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
+        if(RtrLegacyTracePixel(path.GetPixelPos(),context.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
+            RtrLegacyTracePrint("light",103u,uint4(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex()),i,sd.posW,inputRadiance,radiance);
+        #endif
+        if(max3(radiance)<=0)continue;
         float3 h=normalize(sd.V+direction);
         float nv=max(dot(sd.N,sd.V),0),nh=max(dot(sd.N,h),0),vh=max(dot(sd.V,h),0);
         float3 f0=lerp(.04.xxx,baseColor,metallic),f=f0+(1-f0)*pow(1-vh,5);
@@ -78,7 +83,7 @@ NEEResult RtrLegacyDirect(const PathState path,const ShadingData sd,const Active
     }
     float3 weight=path.GetThp()*surfaceWeight;
     #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
-    if(RtrLegacyTracePixel(path.GetPixelPos(),context.PtConsts.frameIndex) && path.getCounter((PackedCounters)3)>0)
+    if(RtrLegacyTracePixel(path.GetPixelPos(),context.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0)
         RtrLegacyTracePrint("receiver",101u,uint4(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex()),weight,(diffuse+specular)*weight);
     #endif
     result.AccumulateRadiance((diffuse+specular)*weight,Average(specular*weight));

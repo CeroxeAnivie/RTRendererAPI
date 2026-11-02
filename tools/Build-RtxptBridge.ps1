@@ -442,7 +442,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '        LightSampler 
 '@ 'RTR replace complete stochastic light input'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        // only ActiveBSDF::cRandomNumberCountForSampling are actually used;' @'
         #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
-        BSDFSample legacySample;bool legacyValid=false;
+        BSDFSample legacySample=(BSDFSample)0;bool legacyValid=false;
         if(bsdf.data.SpecularTransmission()>0)
         {
             #if PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
@@ -474,7 +474,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        // only
 '@ 'RTR legacy optical continuation'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        return legacyValid && GenerateScatterRay(legacySample,shadingData,bsdf,path,workingContext); // RTR legacy optical continuation' @'
         #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
-        if(RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)>0 || bsdf.data.SpecularTransmission()>0))
+        if(RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && ((path.getCounter((PackedCounters)3)&4u)!=0 || bsdf.data.SpecularTransmission()>0))
         {
             RtrLegacyTracePrint("scatter",100u,uint4(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex()),
                 float4(shadingData.MaterialID(),shadingData.frontFacing,shadingData.GetEta(),legacyValid),path.GetThp(),shadingData.N,legacySample.wo,legacySample.weight,legacySample.lobe);
@@ -484,6 +484,8 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli' '        return 
 '@ 'RTR optional optical transport trace'
 $rtrTracePath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli'
 $rtrTraceText=[IO.File]::ReadAllText($rtrTracePath)
+$rtrTraceText=$rtrTraceText.Replace('BSDFSample legacySample;bool legacyValid=false;','BSDFSample legacySample=(BSDFSample)0;bool legacyValid=false;')
+$rtrTraceText=$rtrTraceText.Replace('(path.getCounter((PackedCounters)3)>0 || bsdf.data.SpecularTransmission()>0)', '((path.getCounter((PackedCounters)3)&4u)!=0 || bsdf.data.SpecularTransmission()>0)')
 $rtrTraceText=$rtrTraceText.Replace('DebugPrint("RTR_TRANSPORT','RtrLegacyTracePrint("RTR_TRANSPORT')
 $rtrTraceText=[regex]::Replace($rtrTraceText,'(?s)            RtrLegacyTracePrint\("RTR_TRANSPORT scatter.*?legacySample\.lobe\);',@'
             RtrLegacyTracePrint("scatter",100u,uint4(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex()),
@@ -499,7 +501,38 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerDenoisingLayersHandleHit.hlsli' '
             else
             #endif
             surface.bsdf.evalDeltaLobes(surface.shadingData, deltaLobes, deltaLobeCount, nonDeltaPart);
-'@ 'RTR old first-interface split in native queue'
+'@ 'RTR first interface stays the fill starting point'
+# Older integrations used a marker absent from the replacement, nesting this
+# conditional once per configure. Keep one copy, including in existing SDKs.
+$rtrLayerPath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracerDenoisingLayersHandleHit.hlsli'
+$rtrLayerText=[IO.File]::ReadAllText($rtrLayerPath)
+$rtrLayerBlock=@'
+            #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
+            if(vertexIndex==1 && surface.bsdf.data.SpecularTransmission()>0)
+            {
+                deltaLobeCount=0;nonDeltaPart=1; // RTR first interface stays the fill starting point
+            }
+            else
+            #endif
+'@
+$rtrLayerBlock=[regex]::Replace($rtrLayerBlock,"`r?`n","`r`n")+"`r`n"
+while($rtrLayerText.Contains($rtrLayerBlock+$rtrLayerBlock)) {
+    $rtrLayerText=$rtrLayerText.Replace($rtrLayerBlock+$rtrLayerBlock,$rtrLayerBlock)
+}
+[IO.File]::WriteAllText($rtrLayerPath,$rtrLayerText,$utf8)
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '    workingContext.DenoisingLayers.CommitDenoiserRadiance(path);' @'
+    #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
+    float3 rtrBeforeCommit=0;
+    bool rtrTraceCommit=RtrLegacyTracePixel(path.GetPixelPos(),workingContext.PtConsts.frameIndex) && (path.getCounter((PackedCounters)3)&4u)!=0;
+    if(rtrTraceCommit)rtrBeforeCommit=workingContext.DenoisingLayers.GetAllRadiance(path.GetPixelPos());
+    #endif
+    workingContext.DenoisingLayers.CommitDenoiserRadiance(path);
+    #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
+    if(rtrTraceCommit)
+        RtrLegacyTracePrint("commit",102u,uint4(path.GetPixelPos(),(path.getCounter((PackedCounters)3)&3u)-1u,path.getVertexIndex()),
+            path.getDenoisingLayerIndex(),rtrBeforeCommit,workingContext.DenoisingLayers.GetAllRadiance(path.GetPixelPos()));
+    #endif // RTR optional final optical radiance trace
+'@ 'RTR optional final optical radiance trace'
 Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerTypes.hlsli' '        RWTexture2D<float4>     OutputColor;' @'
         #if defined(RTR_LEGACY_LIGHTING) && RTR_LEGACY_LIGHTING
         uint RtrLegacyFirstBranch; // RTR actual first-interface branch selector
