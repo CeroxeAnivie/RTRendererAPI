@@ -94,21 +94,41 @@ public final class RtxptFusionDemo {
         final RtxptComposedRenderer renderer;
         final RendererCommandAccess commands;
         final GraphicsPipelineState pipeline;
-        TextureResource color,glow;
-        int width,height;
+        // The presenter retains three in-flight composition frames. One extra slot
+        // keeps the next producer independent of all three consumer-owned slots.
+        final TextureResource[] colors=new TextureResource[4],glows=new TextureResource[4];
+        int width,height,lastMode=-1;
         long resourceRevision,draws;
         VulkanEffects(RtxptComposedRenderer renderer) {
             this.renderer=renderer;commands=renderer.vulkanCommands();pipeline=pipeline();
         }
         void draw(int w,int h,float[] a,float[] b,float t,int mode) throws Exception {
+            if(mode==1) {
+                renderer.overlays(List.of());
+                if(lastMode!=mode)renderer.trimIdleCompositionResources();
+                lastMode=mode;
+                return;
+            }
+            lastMode=mode;
             if(w!=width||h!=height) {
                 renderer.overlays(List.of());renderer.trimIdleCompositionResources();
-                var retired=color==null?List.<ResourceGenerationKey>of():List.of(ResourceGenerationKey.of(color),ResourceGenerationKey.of(glow));
+                var retired=new ArrayList<ResourceGenerationKey>();
+                var allocated=new ArrayList<TextureResource>();
+                for(int index=0;index<colors.length;index++) {
+                    if(colors[index]!=null) {
+                        retired.add(ResourceGenerationKey.of(colors[index]));
+                        retired.add(ResourceGenerationKey.of(glows[index]));
+                    }
+                    colors[index]=texture(8000+8*resourceRevision+2*index,w,h);
+                    glows[index]=texture(8001+8*resourceRevision+2*index,w,h);
+                    allocated.add(colors[index]);allocated.add(glows[index]);
+                }
                 width=w;height=h;
-                color=texture(8000+2*resourceRevision,w,h);glow=texture(8001+2*resourceRevision,w,h);
-                var result=commands.submitResources(new RenderResourceTransaction(resourceRevision++,List.of(),List.of(color,glow),retired));
+                var result=commands.submitResources(new RenderResourceTransaction(resourceRevision++,List.of(),allocated,retired));
                 if(result.outcome()!=ResourceTransactionEvidence.Outcome.ACCEPTED)throw new IllegalStateException("Vulkan effects allocation: "+result);
             }
+            int slot=(int)(draws%colors.length);
+            var color=colors[slot];var glow=glows[slot];
             for(int layerIndex=0;layerIndex<2;layerIndex++) {
             long commandSequence=draws*2+layerIndex;
             var bytes=ByteBuffer.allocate(32).order(ByteOrder.nativeOrder());
