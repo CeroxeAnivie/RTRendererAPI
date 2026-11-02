@@ -121,6 +121,13 @@ public:
     }
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
+        // Isolate upstream's environment-radiance approximation. This is a
+        // renderer-wide control, independent of scene names or light counts.
+        const char* exactEnvironment=std::getenv("RTR_RTXPT_DIAGNOSTIC_EXACT_ENVIRONMENT");
+        if(exactEnvironment && std::string(exactEnvironment)=="1") {
+            macros.push_back({"NEE_AT_SAMPLE_BAKED_ENVIRONMENT","0"});
+            macros.push_back({"RTR_EXACT_ENVIRONMENT_SOURCE","1"});
+        }
         const char* residualControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING");
         if(smallPointLighting) {
             macros.push_back({"RTR_EXACT_SMALL_POINTS","1"});
@@ -595,6 +602,8 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
                 throw std::invalid_argument("Diagnostic SR exposure must be finite and positive");
             g_sampleUIData.HostDLSSFixedExposure=value;
         }
+        if(const char* exact=std::getenv("RTR_RTXPT_DIAGNOSTIC_EXACT_ENVIRONMENT"))
+            donut::log::info("RTXPT diagnostic environment source=%s",std::string(exact)=="1"?"directional-mip0":"upstream-baked");
         if(const char* bloom=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM"); bloom && std::string(bloom)=="1")
             g_sampleUIData.EnableBloom=false;
         if(const char* preset=std::getenv("RTR_RTXPT_DIAGNOSTIC_SR_PRESET")) {

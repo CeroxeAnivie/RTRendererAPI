@@ -126,6 +126,21 @@ foreach($entry in @(@('Init(nvrhi::IDevice* device)','RtrGpuProfile::Init(device
 }
 [IO.File]::WriteAllText($profilerPath,$profilerText,$utf8)
 # SR/TAA must consume this frame's merged radiance, not last frame's OutputColor.
+# The upstream exact-radiance branch must evaluate the same source as the
+# BSDF escape estimator. Keep this diagnostic outside the scene/API mapping.
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '    return envMap.EvalLocal(localDir, Bridge::DiffuseEnvironmentMapMIPOffset());' @'
+    #if defined(RTR_EXACT_ENVIRONMENT_SOURCE) && RTR_EXACT_ENVIRONMENT_SOURCE
+    return envMap.EvalLocal(localDir, 0); // RTR matching environment source for NEE
+    #else
+    return envMap.EvalLocal(localDir, Bridge::DiffuseEnvironmentMapMIPOffset());
+    #endif
+'@ 'RTR matching environment source for NEE'
+Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '            float3 Le = envMap.EvalLocal(localDir, mipLevel);' @'
+            #if defined(RTR_EXACT_ENVIRONMENT_SOURCE) && RTR_EXACT_ENVIRONMENT_SOURCE
+            mipLevel = 0; // RTR matching environment source for BSDF
+            #endif
+            float3 Le = envMap.EvalLocal(localDir, mipLevel);
+'@ 'RTR matching environment source for BSDF'
 # RR already merges its own guides in the render prefix; NRD already merges before AA.
 $samplePath=Join-Path $sdk 'Rtxpt/Sample.cpp'
 $sampleText=[IO.File]::ReadAllText($samplePath)

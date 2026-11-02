@@ -16,6 +16,7 @@ param(
     [ValidateSet('Upstream','J','K','M')][string]$SrPreset='Upstream',
     [ValidateRange(0.0,64.0)][double]$FixedSrExposure=0,
     [switch]$DisableBloom,
+    [switch]$ExactEnvironmentSource,
     [ValidateSet('none','original-lights','quarter-lights','no-points','no-sun','no-sky','no-environment')][string]$LightingProbe='none',
     [switch]$AllowDirtySource,
     [switch]$DisableTransmissionGuides
@@ -85,6 +86,7 @@ $settings=[ordered]@{
     SrPreset=$SrPreset
     FixedSrExposure=$FixedSrExposure;DisableBloom=[bool]$DisableBloom
     LightingProbe=$LightingProbe
+    ExactEnvironmentSource=[bool]$ExactEnvironmentSource
 }
 if($PackagedRuntime) {
     $settings.Jvm=@($settings.Jvm | Where-Object {$_ -notlike '-Dtop.ceroxe.rt.rtxpt.runtime=*'})
@@ -102,6 +104,7 @@ $oldRrPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
 $oldSrPreset=$env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET
 $oldExposure=$env:RTR_RTXPT_DIAGNOSTIC_SR_EXPOSURE
 $oldBloom=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM
+$oldExactEnvironment=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_ENVIRONMENT
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
@@ -113,9 +116,13 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET=$(if($SrPreset -eq 'Upstream'){$null}else{$SrPreset})
     $env:RTR_RTXPT_DIAGNOSTIC_SR_EXPOSURE=$(if($FixedSrExposure -gt 0){$FixedSrExposure.ToString([Globalization.CultureInfo]::InvariantCulture)}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM=$(if($DisableBloom){'1'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_ENVIRONMENT=$(if($ExactEnvironmentSource){'1'}else{$null})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     $runLog=Get-Content -LiteralPath ($prefix+'.log') -Raw
+    if($ExactEnvironmentSource -and $runLog -notmatch 'RTXPT diagnostic environment source=directional-mip0'){
+        throw 'Exact environment source was requested but was not active; discard this run.'
+    }
     if($FixedSrExposure -gt 0 -and $runLog -notmatch 'RTXPT explicit SR exposure texture='){
         throw 'Fixed SR exposure was requested but was not tagged; discard this run.'
     }
@@ -144,4 +151,5 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET=$oldSrPreset
     $env:RTR_RTXPT_DIAGNOSTIC_SR_EXPOSURE=$oldExposure
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM=$oldBloom
+    $env:RTR_RTXPT_DIAGNOSTIC_EXACT_ENVIRONMENT=$oldExactEnvironment
 }
