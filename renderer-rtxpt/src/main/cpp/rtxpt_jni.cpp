@@ -31,6 +31,8 @@ namespace {
 class HostPathTracer final : public AdvancedPathTracer {
     bool smallPointLighting=false;
     int previousNeeType=2;
+    bool powerSampling=false;
+    bool eligiblePowerScene=false;
     bool lightingSceneDirty=true;
     bool lightingPolicyLogged=false;
     bool eligibleLightingScene=false;
@@ -75,6 +77,10 @@ public:
     void UpdateLightingPolicy() {
         if(lightingSceneDirty) {
             eligibleLightingScene=smallPointScene();
+            eligiblePowerScene=eligibleLightingScene;
+            if(GetScene())for(const auto& material:GetScene()->GetSceneGraph()->GetMaterials())
+                if(material->emissiveColor.x!=0.f || material->emissiveColor.y!=0.f || material->emissiveColor.z!=0.f)
+                    eligiblePowerScene=false;
             lightingSceneDirty=!GetScene();
         }
         const char* overrideValue=std::getenv("RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS");
@@ -94,14 +100,20 @@ public:
         }
         const bool enabled=eligibleLightingScene && supportedRealtimePolicy
             && !(overrideValue && std::string(overrideValue)=="0");
-        if(enabled==smallPointLighting)return;
         const char* samplerControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER");
-        if(enabled) {
+        // Retain the accepted SR policy for small, non-emissive scenes. Other
+        // content and reconstruction paths keep upstream adaptive sampling.
+        const bool usePower=enabled && (samplerControl
+            ? std::string(samplerControl)=="power"
+            : eligiblePowerScene && g_sampleUIData.RealtimeAA==2 && !standaloneDenoisingActive);
+        if(enabled==smallPointLighting && usePower==powerSampling)return;
+        if(usePower && !powerSampling) {
             previousNeeType=g_sampleUIData.NEEType;
-            if(samplerControl && std::string(samplerControl)=="power")g_sampleUIData.NEEType=1;
-        } else {
+            g_sampleUIData.NEEType=1;
+        } else if(!usePower && powerSampling) {
             g_sampleUIData.NEEType=previousNeeType;
         }
+        powerSampling=usePower;
         smallPointLighting=enabled;
         donut::log::info("RTXPT exact point sum %s; native light sampler=%d (1=power, 2=NEE-AT)",
             enabled?"ACTIVE":"INACTIVE",g_sampleUIData.NEEType);

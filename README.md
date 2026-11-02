@@ -305,7 +305,7 @@ java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
 
 三个入口默认窗口化、1 SPP、请求 2× FG。不带时限会持续运行，手动关闭窗口退出。
 **HexBall JAR 无参数会打开 API 工作台**，直接看球请保留 `--windowed`。
-RTXPT 新弹球默认使用上游 DLSS Ray Reconstruction 和 2× FG，关闭 SHaRC/ReSTIR；旧弹球保留原路径的既有配置。新路径默认是玻璃球，以原生曝光补偿控制亮度；旧路径是金属球。材质和工作负载不同，默认 FPS 不作为两后端的等条件快慢对照。纯 SR／1 SPP 不含去噪，仍会有环境光和间接照明的采样噪声。
+RTXPT 新弹球默认使用 DLSS SR Balanced、1 SPP 和 2× FG，不自动增加 RR、NRD、SHaRC 或 ReSTIR。符合条件的少量点光场景采用已验收的上游 power sampling；其他场景保留上游自适应采样。新路径默认是玻璃球，以原生曝光补偿控制亮度；旧路径是金属球。材质和工作负载不同，默认 FPS 不作为两后端的等条件快慢对照。纯 SR／1 SPP 仍有残余照明采样噪声；RR 等能力可通过 API 显式启用。
 
 | 常用设置 | 两个弹球入口 | 介质入口 |
 | --- | --- | --- |

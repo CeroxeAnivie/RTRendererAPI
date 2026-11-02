@@ -41,7 +41,7 @@ public final class DemoFeatureIntegrationSelfTest {
         boundsBlockedReasonsAndHandlesMissingCapabilityExtension();
         independentPublicApiControls();
         glassBallsHavePhysicalReflectionAndClosedInteriors();
-        rtxptRealtimeEnablesNativeRrAndDemoFgControl();
+        rtxptRealtimePreservesAcceptedSrAndDemoFgControl();
         rtxptMediumHasSupportedDistinctScenesAndDefaultFg();
         System.out.println("DemoFeatureIntegrationSelfTest passed");
     }
@@ -69,16 +69,16 @@ public final class DemoFeatureIntegrationSelfTest {
             }
         } finally { restoreProperty(property,previous); }
     }
-    private static void rtxptRealtimeEnablesNativeRrAndDemoFgControl() {
+    private static void rtxptRealtimePreservesAcceptedSrAndDemoFgControl() {
         String property=DemoRendererProfile.DISABLE_FRAME_GENERATION_PROPERTY;
         String previous=System.getProperty(property);
         try {
             System.clearProperty(property);
             var profile=DemoRendererProfile.rtxptInteractive();
-            require(profile.frameReconstruction().quality()==FrameReconstructionOptions.Quality.QUALITY,
-                "RTXPT glass uses the native quality input ratio to retain detail under RR");
-            require(profile.denoising().equals(DenoisingOptions.recommended()),"RTXPT demo uses native recommended RR denoising");
-            require(profile.pathTracing().radianceCache().requested(),"RTXPT demo uses the native radiance cache by default");
+            require(profile.frameReconstruction().quality()==FrameReconstructionOptions.Quality.BALANCED,
+                "RTXPT glass preserves the accepted SR Balanced input ratio");
+            require(profile.denoising().equals(DenoisingOptions.disabled()),"RTXPT demo must not silently replace SR with RR");
+            require(!profile.pathTracing().radianceCache().requested(),"RTXPT demo must not silently add radiance caching");
             require(profile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X
                 &&profile.frameGeneration().preference().requested(),"Default demo FG remains 2x");
             System.setProperty(property,"true");
@@ -90,8 +90,8 @@ public final class DemoFeatureIntegrationSelfTest {
         require(originalBatch.primitives().stream().noneMatch(p->p.mediumBoundary().isPresent()),"Ordinary Vulkan balls must retain their surface-only path");
         var scene=new DemoScene(true);var initial=scene.initialTransaction();
         var glassProfile=DemoRendererProfile.rtxptInteractive();
-        require(glassProfile.denoising().equals(DenoisingOptions.recommended())
-            &&glassProfile.pathTracing().radianceCache().requested(),"Glass uses native RR with RTXPT's recommended indirect cache");
+        require(glassProfile.denoising().equals(DenoisingOptions.disabled())
+            &&!glassProfile.pathTracing().radianceCache().requested(),"Glass preserves the accepted SR workload without added RR/cache");
         require(glassProfile.frameGeneration().preference().requested()
             &&glassProfile.frameGeneration().multiplier()==FrameGenerationOptions.Multiplier.TWO_X,"Glass defaults to 2x FG");
         var oldLights=original.initialTransaction().upserts().lights();

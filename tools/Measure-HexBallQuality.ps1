@@ -8,7 +8,7 @@ param(
     [switch]$DisableResidualPointSampling,
     [switch]$ExactMis,
     [switch]$ApproximateMis,
-    [ValidateSet('Upstream','Power')][string]$LightSampler='Upstream',
+    [ValidateSet('Default','Power','NeeAt')][string]$LightSampler='Default',
     [switch]$Sharc,
     [switch]$RestirGi,
     [ValidateSet('AUTO','ULTRA_QUALITY','QUALITY','BALANCED','PERFORMANCE','ULTRA_PERFORMANCE','DLAA')][string]$Quality='AUTO',
@@ -26,7 +26,7 @@ if($Sharc -and $RestirGi){throw 'Choose SHaRC or ReSTIR GI for isolated testing.
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location -LiteralPath $repo
 $effectiveQuality=$Quality
-if($effectiveQuality -eq 'AUTO'){$effectiveQuality=if($Mode -eq 'default'){'QUALITY'}else{'BALANCED'}}
+if($effectiveQuality -eq 'AUTO'){$effectiveQuality='BALANCED'}
 if(!$AllowDirtySource -and (& git status --porcelain | Where-Object {$_ -notmatch '^.. docs/quality/data/'})) {
     throw 'Commit source changes before hardware verification.'
 }
@@ -99,7 +99,7 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
-    $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(if($LightSampler -eq 'Power'){'power'}else{$null})
+    $env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER=$(switch($LightSampler){'Power'{'power'} 'NeeAt'{'neeat'} default{$null}})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$(if($DisableTransmissionGuides){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$(if($RrPreset -eq 'Upstream'){$null}else{$RrPreset})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix

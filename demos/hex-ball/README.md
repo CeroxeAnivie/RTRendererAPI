@@ -27,7 +27,7 @@ java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.0.jar --rtxp
 java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.0.jar
 ```
 
-**HexBall JAR 不带参数会打开 API 工作台。** 看原弹球请带 `--windowed`，看新弹球请带 `--rtxpt`。不指定时限会持续运行，关闭渲染窗口正常退出。RTXPT 新弹球默认采用上游 DLSS Ray Reconstruction、Quality 输入档和 2× FG；SHaRC/ReSTIR 默认关闭。旧弹球保留原路径的既有配置。新弹球复用球场几何、物理与灯光强度，使用玻璃材质和上游 -1.5 EV 曝光补偿；旧弹球使用金属材质。工作负载不同，不能拿两者默认 FPS 直接认定后端快慢。1 SPP 的原始路径会有照明采样噪声；RR Quality 档显著压低噪声并比 Balanced 多保留少量细节，代价是更低的原生 FPS。实测见[弹球噪声修复报告](../../docs/quality/hexball-noise-fix-20261102.md)。
+**HexBall JAR 不带参数会打开 API 工作台。** 看原弹球请带 `--windowed`，看新弹球请带 `--rtxpt`。不指定时限会持续运行，关闭渲染窗口正常退出。RTXPT 新弹球默认采用已验收的 **DLSS SR Balanced、1 SPP、2× FG**，不自动增加 RR、NRD、SHaRC 或 ReSTIR。符合条件的少量点光采用上游 power sampling，其他场景保留上游自适应采样。新弹球复用球场几何、物理与灯光强度，使用玻璃材质和上游 -1.5 EV 曝光补偿；旧弹球使用金属材质。工作负载不同，不能拿两者默认 FPS 直接认定后端快慢。用户已接受这次 SR 画面；残余噪声仍存在，RR 等能力保留为显式 API 选项。实测见[弹球修复报告](../../docs/quality/hexball-noise-fix-20261102.md)。
 
 也可以通过 Gradle 直接启动：
 

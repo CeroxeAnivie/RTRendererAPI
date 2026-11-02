@@ -32,14 +32,14 @@ final class DemoRendererProfile {
     }
 
     static RendererConfig rtxptInteractive() {
-        // Use RTXPT's native SHaRC cache to improve indirect-light convergence before RR.
-        var highQualityReconstruction = FrameReconstructionOptions.recommended().toBuilder()
-                .quality(FrameReconstructionOptions.Quality.QUALITY)
+        // Keep the accepted SR workload; RR/cache remain explicit API choices.
+        var reconstruction = FrameReconstructionOptions.recommended().toBuilder()
+                .quality(FrameReconstructionOptions.Quality.BALANCED)
                 .build();
         return DemoApiControls.configure(RendererConfig.presentation().copyBuilder()
-                .pathTracing(PathTracingOptions.recommended())
-                .frameReconstruction(highQualityReconstruction)
-                .denoising(DenoisingOptions.recommended())
+                .pathTracing(PathTracingOptions.defaults())
+                .frameReconstruction(reconstruction)
+                .denoising(DenoisingOptions.disabled())
                 .frameGeneration(configuredGenerationPolicy()).gpuTimingsEnabled(true).build());
     }
 

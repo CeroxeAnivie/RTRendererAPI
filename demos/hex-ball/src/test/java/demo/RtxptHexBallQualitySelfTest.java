@@ -13,7 +13,7 @@ public final class RtxptHexBallQualitySelfTest {
         Path output=Path.of(args.length>2?args[2]:"build/reports/hexball-quality/"+mode).toAbsolutePath();
         String probe=args.length>3?args[3]:"none";
         String cacheMode=args.length>4?args[4]:"none";
-        String reconstructionQuality=args.length>5?args[5]:(mode.equals("default")?"QUALITY":"BALANCED");
+        String reconstructionQuality=args.length>5?args[5]:"BALANCED";
         boolean sharc=cacheMode.equals("sharc");
         boolean restirGi=cacheMode.equals("restirgi");
         if(!java.util.Set.of("none","original-lights","quarter-lights","no-points","no-sun","no-sky","no-environment").contains(probe))
@@ -37,7 +37,7 @@ public final class RtxptHexBallQualitySelfTest {
         base=base.copyBuilder().frameReconstruction(reconstruction).build();
         boolean reference=mode.equals("reference")||mode.equals("direct-reference");
         boolean directOnly=mode.equals("direct")||mode.equals("direct-reference");
-        boolean rr=mode.equals("rr")||mode.equals("default");
+        boolean rr=mode.equals("rr");
         boolean denoise=mode.equals("relax")||mode.equals("reuse-relax")||rr;
         boolean reuse=mode.startsWith("reuse-");
         var policy=switch(mode) {
