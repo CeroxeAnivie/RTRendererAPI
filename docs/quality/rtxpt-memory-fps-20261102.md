@@ -79,6 +79,10 @@ Streamline 2.14.16 `include/sl.h:40` 的 `SL_FEATURE_FUN_IMPORT_STATIC` 把插�
 | tone mapping 开／关 | 实际 212,211 像素差异超过 2/255，最大差异 32/255 |
 | Vulkan 表面预算 | 1 事件图像能量 0，8 事件能量 10,478,209；1→4 表面样本改变 2,580 字节，确认进入真实光学路径 |
 
-追加的三个原生回归也全部退出 0：玻璃→不透明→金属→玻璃保持真实材质和选择器，FG 开启、SR Performance、场景解析输入与四界面均实际激活；同源叠层十二次真实背压均等待消费者后以同 sequence 成功重试；Fusion 使用真正程序化 Vulkan 叠层，六场景、六次 resize、二十四次叠层转换全部通过。原始日志位于 `build/reports/consumer-budget-final/`。其 18.08／5.26／12.11 秒仅为测试墙钟，不能换算成场景 FPS。
+追加的三个原生回归也全部退出 0：玻璃→不透明→金属→玻璃保持真实材质和选择器，FG 开启、SR Performance、场景解析输入与四界面均实际激活；同源叠层十二次真实背压均等待消费者后以同 sequence 成功重试；Fusion 六场景、六次 resize、二十四次叠层转换生命周期全部通过。原始日志位于 `build/reports/consumer-budget-final/`。其 18.08／5.26／12.11 秒仅为测试墙钟，不能换算成场景 FPS。
 
-预算 CPU 合同、RTXPT adapter 合同与刷新后的 7.0.0 API ABI 校验均通过。六档真实 DXIL 已有构建与门禁机制；本节写入时，补齐真实 Demo 排列后的离线打包及仓库外禁编译验收仍在进行，尚未记为通过。
+随后为 Fusion 补上最终像素判据，发现前一次生命周期成功并不代表程序化叠层已经可见：ISOLATED／REPLACE 模式应显示青线与黑底，实际青色像素为 0，518,400 像素全黑。确凿根因为全屏三角形沿用了 `RasterState.filled` 默认 BACK 剔除。仅给该全屏 pass 显式 `CullMode.NONE` 后，六场景、resize、二十四次状态转换及每场青线／黑底像素断言全部通过，检查点 `79a55ec`。未修改 core、JNI 或 RTXPT shader。聚合证据保留修前失败和修后成功日志哈希，以及更新后的截图哈希。
+
+预算 CPU 合同、RTXPT adapter 合同与刷新后的 7.0.0 API ABI 校验均通过。真实 Demo 排列补齐后的六档离线构建生成 **361 份 DXIL**：32 组光学排列各有完整 1～6 档，共 192 份；另 169 份通用／compute 排列。全部命令哈希与上游缓存文件名对应，二进制共 407.40 MiB。
+
+仓库外首次包装验收在进入 GPU 前发现桥接 DLL 缺失。磁盘实际文件名 `RTRENDERER_RTXPT.DLL` 可由 Windows 正常加载，但 Gradle 大小写敏感的 `*.dll` 筛选将其漏掉。已将原生文件匹配改为不区分大小写、桥接文件包名规范为小写，并增加 ZIP 必需条目检查，修复后的 CPU 打包已通过。仓库外新缓存、禁止 DXC fallback 的最终 GPU 验收仍待执行，不提前记为通过。

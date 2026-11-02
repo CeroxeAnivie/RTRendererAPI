@@ -130,5 +130,82 @@
       "testWallSeconds": 12.11,
       "logSha256": "22056eed5f0c294af860e7301ed6ccae330929dca1d79f695baa6639d1caa940"
     }
-  ]
+  ],
+  "fusionPixelGate": {
+    "firstLifecycleRun": "PASS lifecycle only; visibility not asserted",
+    "beforeFix": "FAIL isolated overlay cyan=0 dark=518400",
+    "rootCause": "Fullscreen triangle culled by RasterState.filled default BACK culling",
+    "fix": "Explicit CullMode.NONE for the fullscreen effects pass",
+    "afterFix": "PASS all six scenes, resize and 24 overlay transitions; isolated cyan lines and dark background asserted",
+    "checkpoint": "79a55ec",
+    "logs": [
+      {
+        "log": "fusion-pixel-gate.log",
+        "sha256": "fe5c562de2a67e6fb96b7ef2f3b257ddb2479afa5395ea50206d2e50a6d7844a"
+      },
+      {
+        "log": "fusion-pixel-fixed.log",
+        "sha256": "aa20bb8e6f8e98cd143b863521687b6b23e36f3b8dcd15fbb33d76b89b3c0160"
+      }
+    ],
+    "currentImages": [
+      {
+        "name": "fusion-absorption-isolated.png",
+        "sha256": "215fb934a138fc63b2c4aed0bf2e2955f3940c7585cbd84d35cfa01647e81d63"
+      },
+      {
+        "name": "fusion-absorption.png",
+        "sha256": "87ef76d3f1a50a369d8149487608ff3ee17630eca59343524f31f4ee59640595"
+      },
+      {
+        "name": "fusion-glass-isolated.png",
+        "sha256": "7c694830ea04df2cbb9bce47fd7eb004b788fb7ba1e37c242010da367d9f8d3f"
+      },
+      {
+        "name": "fusion-glass.png",
+        "sha256": "0d6fe45058d145e8b6aac3a966878b0608edeaffd3f2ed1bbcea59b4225360ed"
+      },
+      {
+        "name": "fusion-ior-isolated.png",
+        "sha256": "3c0778f60d48764885b8885b6fbe50726ce21327d24db8d937a2193d15b5426a"
+      },
+      {
+        "name": "fusion-ior.png",
+        "sha256": "4c0e537eb81b07a9d3210d64bff4eaae38fda9af50cad7d1c10f36fcbf752bea"
+      },
+      {
+        "name": "fusion-mixed-isolated.png",
+        "sha256": "39a5da9bb3e535a8659373785b30e47c674824f48925ee8740f4ddeee185968c"
+      },
+      {
+        "name": "fusion-mixed.png",
+        "sha256": "0d4f32d18884f86757b6f27173bbbcb2c97a30903ba4a9add4e0199bb49cc525"
+      },
+      {
+        "name": "fusion-nested-isolated.png",
+        "sha256": "0f5a6b59ca40669282c5096f0fa7fd132b7f9c8891dd571d1375fd82ca271199"
+      },
+      {
+        "name": "fusion-nested.png",
+        "sha256": "27a723122d58f50459ee2c3fdf68ce506267c1bf0f33fc4f28fb4a7356eb2dca"
+      },
+      {
+        "name": "fusion-rough-isolated.png",
+        "sha256": "a10a620fa3bd0b743384381a8272cbf803ecc49c82ff5949927c259178b3727e"
+      },
+      {
+        "name": "fusion-rough.png",
+        "sha256": "555ae4dd9cc1e32440a98dc77814b9e42991baec9657fdb8354c82dcf151f22e"
+      }
+    ]
+  },
+  "packaging": {
+    "firstAttempt": "FAIL before GPU: uppercase RTRENDERER_RTXPT.DLL excluded by case-sensitive *.dll filter",
+    "fix": "Case-insensitive native payload filtering, canonical bridge filename and required ZIP entry gate",
+    "shaderPermutations": 361,
+    "opticalCanonicalGroups": 32,
+    "variantsPerGroup": 6,
+    "shaderBytes": 427188736.0,
+    "acceptance": "PENDING"
+  }
 }

@@ -1,6 +1,7 @@
 import java.security.MessageDigest
 import java.util.HexFormat
 import java.nio.file.Files
+import java.util.zip.ZipFile
 import org.gradle.api.tasks.Sync
 
 plugins { `java-library` }
@@ -111,10 +112,13 @@ val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
     archiveFileName.set("rtxpt-runtime.zip")
     destinationDirectory.set(layout.buildDirectory.dir("native-bundle"))
     from(nativeRuntime) {
+        // Windows resolves DLL names without case; the archive filter must do the same.
+        isCaseSensitive = false
         include("*.dll", "sl.*.json", "D3D12/D3D12Core.dll", "Assets/**", "ThirdPartyLicenses/**",
             "ShaderPrecompiled/**", "ShaderDynamic/Source/**", "ShaderDynamic/Tools/d3d12/x64/*.dll",
             "ShaderDynamic/Tools/d3d12/x64/dxc.exe")
         exclude("**/*.pdb", "**/.gitkeep")
+        rename { if (it.equals("rtrenderer_rtxpt.dll", ignoreCase = true)) "rtrenderer_rtxpt.dll" else it }
     }
     from(sixBudgetShaders) {
         include("**/*.bin", "bundle.json")
@@ -125,6 +129,15 @@ val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
     doFirst {
         listOf("rtrenderer_rtxpt.dll", "ThirdPartyLicenses/RTXPT.txt").forEach {
             check(nativeRuntime.get().file(it).asFile.isFile) { "Build the native runtime first: tools/Build-RtxptBridge.ps1 (missing $it)" }
+        }
+    }
+    doLast {
+        ZipFile(archiveFile.get().asFile).use { zip ->
+            listOf("rtrenderer_rtxpt.dll", "sl.interposer.dll", "NRD.dll", "omm-lib.dll",
+                "D3D12/D3D12Core.dll", "ShaderDynamic/Tools/d3d12/x64/dxc.exe",
+                "ThirdPartyLicenses/RTXPT.txt", "ShaderDynamic/Bin/dxil/bundle.json").forEach {
+                check(zip.getEntry(it) != null) { "RTXPT archive omitted required runtime entry: $it" }
+            }
         }
     }
 }
