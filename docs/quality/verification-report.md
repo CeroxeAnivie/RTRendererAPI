@@ -1,5 +1,7 @@
 # 质量验证与性能报告
 
+2026-11-02 按要求清理了仓库中的全部 `.log` 及轮转日志，包括已追踪的历史日志。本文及其他历史报告中的日志路径保留为历史记录；原始日志可从清理前提交 `e84cd3e3132943a5921b7b4f6a235989b7421df3` 提取。JSON、CSV、截图与源代码未因本次日志清理而删除。
+
 ## 2026-10-31 最终 130 FPS 版本完整 API 验收通过
 
 最终性能版本已完成当前声明的 Windows x86_64 Vulkan RT 与 NVIDIA API 全量验收。验收源码为 `87fa6d11b9f641d66f034009cfd9f65eadc2f5f5`，Git tree 为 `0329e4861978b8d0412b57a746c2ac15edbfc7c6`；开始与结束时 tracked 源树均干净。本轮直接执行完整 `verifyApiClosure --offline --no-daemon --console=plain --continue`，没有子集选择器或排除任务。

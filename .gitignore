@@ -18,3 +18,10 @@ replay_pid*.log
 __pycache__/
 *.py[cod]
 hs_err_pid*.jfr
+
+# Runtime, build and rotated diagnostic logs stay local.
+*.log
+*.log.[0-9]*
+*.log.old
+*.log.bak
+*.log.gz
