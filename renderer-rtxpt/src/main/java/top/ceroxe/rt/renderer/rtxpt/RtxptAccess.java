@@ -3,7 +3,9 @@ import java.nio.file.Path;
 
 /** Expert host boundary. Call on the renderer's creating thread. The host owns window lifetime. */
 public interface RtxptAccess {
-    /** Load an upstream scene directly, bypassing the Java retained scene adapter. */
+    /** Load an upstream scene directly, bypassing retained-scene translation and its raw-asset
+     * admission limits. Native external asset sizes are owned by the caller/upstream loader.
+     */
     void loadNativeScene(Path scene);
     /** Native HWND; only valid after the first submission and until close. */
     long windowHandle();
@@ -39,7 +41,8 @@ public interface RtxptAccess {
      * @param stops finite exposure compensation in stops
      */
     void setExposureCompensation(float stops);
-    record PresentationStatus(int outputWidth,int outputHeight,float exposureCompensation,float exposureValue,boolean bloom) { }
+    record PresentationStatus(int outputWidth,int outputHeight,float exposureCompensation,float exposureValue,boolean bloom,
+            boolean toneMapping,float bloomRadius,float bloomIntensity) { }
     enum Reconstruction { NONE, TAA, DLSS, DLSS_RR }
     record RuntimeStatus(int renderWidth,int renderHeight,Reconstruction reconstruction,
         boolean standaloneDenoiser,boolean denoising,boolean restirDi,boolean restirGi,boolean sharc,

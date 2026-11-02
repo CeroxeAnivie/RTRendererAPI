@@ -476,11 +476,11 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         if (width < 1 || height < 1 || maxFramesInFlight<2 || maxFramesInFlight>3
             ||workerThreads<1||workerThreads>64||shaderCompilerThreads<1||shaderCompilerThreads>16)
             throw std::invalid_argument("Invalid dimensions, frame budget or CPU concurrency");
-        if(!qualityIntegers||!qualityConstants||e->GetArrayLength(qualityIntegers)!=19||e->GetArrayLength(qualityConstants)!=6)
+        if(!qualityIntegers||!qualityConstants||e->GetArrayLength(qualityIntegers)!=21||e->GetArrayLength(qualityConstants)!=8)
             throw std::invalid_argument("Invalid initial path quality payload size");
         RtrPathQuality initialQuality;
-        e->GetIntArrayRegion(qualityIntegers,0,19,initialQuality.values.data());
-        e->GetFloatArrayRegion(qualityConstants,0,6,initialQuality.constants.data());
+        e->GetIntArrayRegion(qualityIntegers,0,21,initialQuality.values.data());
+        e->GetFloatArrayRegion(qualityConstants,0,8,initialQuality.constants.data());
         if(e->ExceptionCheck())return 0;
         initialQuality.Validate();
         RtrHostResources::workerThreads=unsigned(workerThreads);
@@ -666,8 +666,9 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_Rtxp
     JNIEnv* e,jclass,jlong h) {
     try {auto size=session(h).app->HostRenderPass()->GetDisplaySize();
         jdouble values[]={double(size.x),double(size.y),g_sampleUIData.ToneMappingParams.exposureCompensation,
-            g_sampleUIData.ToneMappingParams.exposureValue,double(g_sampleUIData.EnableBloom)};
-        auto result=e->NewDoubleArray(5);if(result)e->SetDoubleArrayRegion(result,0,5,values);return result;
+            g_sampleUIData.ToneMappingParams.exposureValue,double(g_sampleUIData.EnableBloom),double(g_sampleUIData.EnableToneMapping),
+            g_sampleUIData.BloomRadius,g_sampleUIData.BloomIntensity};
+        auto result=e->NewDoubleArray(8);if(result)e->SetDoubleArrayRegion(result,0,8,values);return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 
@@ -703,11 +704,11 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_pathQuality(
     JNIEnv* e,jclass,jlong h,jintArray integers,jfloatArray constants) {
     try {
-        if(!integers||!constants||e->GetArrayLength(integers)!=19||e->GetArrayLength(constants)!=6)
+        if(!integers||!constants||e->GetArrayLength(integers)!=21||e->GetArrayLength(constants)!=8)
             throw std::invalid_argument("Invalid path quality payload size");
         RtrPathQuality quality;
-        e->GetIntArrayRegion(integers,0,19,quality.values.data());
-        e->GetFloatArrayRegion(constants,0,6,quality.constants.data());
+        e->GetIntArrayRegion(integers,0,21,quality.values.data());
+        e->GetFloatArrayRegion(constants,0,8,quality.constants.data());
         if(e->ExceptionCheck())return;
         quality.Validate();
         if(quality.values[0]==1&&(g_sampleUIData.ActualUseRTXDIPasses()||g_sampleUIData.ActualRadianceCacheMode()!=0))
@@ -732,13 +733,15 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_Rtxp
             q.values[18]=c.StaleFrameFrameNum;q.constants[1]=c.TerminateThreshold;
             q.constants[3]=c.AdditionalTexLODBias;q.constants[4]=c.SceneScale;q.constants[5]=c.MinRoughnessOverride;
         }
-        jdouble values[32]{};
-        for(size_t i=0;i<q.values.size();++i)values[i]=q.values[i];
-        for(size_t i=0;i<q.constants.size();++i)values[19+i]=q.constants[i];
+        jdouble values[36]{};
+        for(size_t i=0;i<19;++i)values[i]=q.values[i];
+        for(size_t i=0;i<6;++i)values[19+i]=q.constants[i];
         values[25]=g_sampleUIData.NEEType;values[26]=cache?cache->GetEntryCount():0;values[27]=s.app->framesInFlight;
         values[28]=host->HostWorkerThreadCount();values[29]=host->HostShaderCompilerThreads();
         values[30]=host->ExactPointLightingActive();values[31]=host->DirectionalStrataActive();
-        auto output=e->NewDoubleArray(32);if(output)e->SetDoubleArrayRegion(output,0,32,values);return output;
+        values[32]=g_sampleUIData.EnableBloom;values[33]=g_sampleUIData.EnableToneMapping;
+        values[34]=g_sampleUIData.BloomRadius;values[35]=g_sampleUIData.BloomIntensity;
+        auto output=e->NewDoubleArray(36);if(output)e->SetDoubleArrayRegion(output,0,36,values);return output;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 extern "C" JNIEXPORT jintArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_runtimeStatus(

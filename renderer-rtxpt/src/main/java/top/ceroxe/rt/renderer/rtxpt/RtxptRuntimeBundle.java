@@ -84,7 +84,8 @@ final class RtxptRuntimeBundle {
 
     private static void verify(Path root) throws IOException {
         for (var file : new String[]{"rtrenderer_rtxpt.dll", "sl.interposer.dll", "NRD.dll", "omm-lib.dll",
-                "D3D12/D3D12Core.dll", "ShaderDynamic/Tools/d3d12/x64/dxc.exe", "ThirdPartyLicenses/RTXPT.txt"})
+                "D3D12/D3D12Core.dll", "ShaderDynamic/Tools/d3d12/x64/dxc.exe", "ThirdPartyLicenses/RTXPT.txt",
+                "ShaderDynamic/Bin/dxil/bundle.json"})
             if (!Files.isRegularFile(root.resolve(file))) throw new IOException("Missing RTXPT runtime file: " + file);
         for (var dir : new String[]{"ShaderPrecompiled", "ShaderDynamic/Source", "Assets/EnvironmentMaps", "Assets/Materials"})
             if (!Files.isDirectory(root.resolve(dir))) throw new IOException("Missing RTXPT runtime directory: " + dir);

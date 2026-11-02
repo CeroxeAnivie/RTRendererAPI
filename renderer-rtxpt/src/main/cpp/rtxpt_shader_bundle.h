@@ -9,6 +9,11 @@
 // Keep RTXPT's compiler and permutation model. Only remove installation paths
 // from its cache key so an offline-built permutation survives JAR extraction.
 namespace RtrShaderBundle {
+inline void RequirePrecompiled(const std::string& missing) {
+    const char* required=std::getenv("RTR_RTXPT_REQUIRE_PRECOMPILED");
+    if(required && std::string(required)=="1")
+        throw std::runtime_error("Required packaged shader permutation is missing or stale: "+missing);
+}
 inline void Replace(std::string& text,const std::string& from,const std::string& to) {
     size_t offset=0;
     while((offset=text.find(from,offset))!=std::string::npos) {

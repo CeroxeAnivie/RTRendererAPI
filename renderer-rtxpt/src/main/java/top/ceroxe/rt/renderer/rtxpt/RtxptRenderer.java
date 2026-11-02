@@ -347,7 +347,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     }
     @Override public int overlaySelection(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptNative.overlaySelection(handle);}
     @Override public PresentationStatus presentationStatus(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.presentationStatus(handle);
-        return new PresentationStatus((int)s[0],(int)s[1],(float)s[2],(float)s[3],s[4]!=0);}
+        return new PresentationStatus((int)s[0],(int)s[1],(float)s[2],(float)s[3],s[4]!=0,s[5]!=0,(float)s[6],(float)s[7]);}
     @Override public CameraState cameraState(){ready();if(handle==0)throw new IllegalStateException("Submit first");var s=RtxptNative.cameraState(handle);
         return CameraState.lookAt(s[0],s[1],s[2],s[0]+s[3],s[1]+s[4],s[2]+s[5])
             .worldUp(s[6],s[7],s[8]).verticalFieldOfViewDegrees(Math.toDegrees(s[9])).aspectRatio(s[10]/s[11]).build();}
@@ -361,7 +361,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         var cache=new PathTracingQualityOptions.RadianceCache((int)s[7],(int)s[8],(int)s[9],(int)s[10],(int)s[11],
             (float)s[20],(float)s[22],(float)s[23],(int)s[17],(int)s[18],(float)s[24]);
         var actual=new PathTracingQualityOptions(light,cache,(int)s[12],(int)s[13],(int)s[14],
-            PathTracingQualityOptions.SubSampling.values()[(int)s[15]],(float)s[21],s[16]!=0);
+            PathTracingQualityOptions.SubSampling.values()[(int)s[15]],(float)s[21],s[16]!=0,
+            new PathTracingQualityOptions.PostProcessing(s[32]!=0,(float)s[34],(float)s[35],s[33]!=0));
         return new PathQualityStatus(actual,(int)s[25],(int)s[26],(int)s[27],(int)s[28],(int)s[29],s[30]!=0,s[31]!=0);
     }
     @Override public long windowHandle(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptNative.window(handle);}

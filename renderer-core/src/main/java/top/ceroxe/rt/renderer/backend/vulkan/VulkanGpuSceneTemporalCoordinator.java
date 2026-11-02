@@ -107,7 +107,7 @@ final class VulkanGpuSceneTemporalCoordinator implements AutoCloseable {
                 configuration.temporalRendering(),
                 denoisingActive,
                 streamlineResourcesActive,
-                jitterActive, ignored -> -1
+                jitterActive, ignored -> -1, configuration.surfaceTransport()
         );
         var mediumUniforms = java.nio.ByteBuffer.wrap(uniforms).order(java.nio.ByteOrder.LITTLE_ENDIAN);
         if (surfaceScene.opaque(checkedRequest.primitiveBatch())) {

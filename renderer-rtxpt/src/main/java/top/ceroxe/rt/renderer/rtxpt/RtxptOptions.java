@@ -93,6 +93,6 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
     int[] qualityInts(){var l=quality.lighting();var c=quality.cache();return new int[]{
         l.input().ordinal(),l.sampler().ordinal(),l.samples(),l.candidates(),l.adaptiveQuality(),l.exactPointLightLimit(),l.directionalStrata()?1:0,
         c.entries(),c.trainingDownscale(),c.maxBounces(),c.diffuseBounces(),c.directLightSamples(),quality.denoisingLayers(),
-        quality.denoisingLayerMaxDepth(),quality.nestedDielectricsQuality(),quality.subSampling().ordinal(),quality.halfPrecision()?1:0,c.accumulationFrames(),c.staleFrames()};}
-    float[] qualityFloats(){var c=quality.cache();return new float[]{quality.lighting().localCandidateRatio(),c.terminationThreshold(),quality.textureLodBias(),c.textureLodBias(),c.sceneScale(),c.minRoughness()};}
+        quality.denoisingLayerMaxDepth(),quality.nestedDielectricsQuality(),quality.subSampling().ordinal(),quality.halfPrecision()?1:0,c.accumulationFrames(),c.staleFrames(),quality.postProcessing().bloom()?1:0,quality.postProcessing().toneMapping()?1:0};}
+    float[] qualityFloats(){var c=quality.cache();var p=quality.postProcessing();return new float[]{quality.lighting().localCandidateRatio(),c.terminationThreshold(),quality.textureLodBias(),c.textureLodBias(),c.sceneScale(),c.minRoughness(),p.bloomRadius(),p.bloomIntensity()};}
 }

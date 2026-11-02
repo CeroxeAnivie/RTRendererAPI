@@ -24,6 +24,11 @@ tasks.register<JavaExec>("rtxptAdapterSelfTest") {
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest")
 }
+tasks.register<JavaExec>("rtxptBudgetContractSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptBudgetContractSelfTest")
+}
 tasks.register<JavaExec>("rtxptNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath
@@ -33,6 +38,23 @@ tasks.register<JavaExec>("rtxptBudgetNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptBudgetNativeSelfTest")
+}
+tasks.register<JavaExec>("rtxptPackagedBudgetNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses, tasks.jar)
+    description = "Tests real budget settings and all six optical budgets from a fresh foreign JAR install, with compilation forbidden."
+    classpath = sourceSets.test.get().output + configurations.testRuntimeClasspath.get() + files(tasks.jar)
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptShaderBundleNativeSelfTest")
+    environment("RTR_RTXPT_REQUIRE_PRECOMPILED", "1")
+    environment("RTR_RTXPT_SHADER_MANIFEST_DIR", "")
+    systemProperty("top.ceroxe.rt.rtxpt.testOutput", rootProject.layout.buildDirectory.dir("reports/rtxpt-packaged-budgets").get().asFile.absolutePath)
+    doFirst {
+        check(!systemProperties.containsKey("top.ceroxe.rt.rtxpt.runtime") && !systemProperties.containsKey("top.ceroxe.rt.rtxpt.bridge")) {
+            "Packaged acceptance must use the JAR payload, without native overrides"
+        }
+        workingDir(Files.createTempDirectory("rb-").toFile())
+        systemProperty("top.ceroxe.rt.rtxpt.cache", workingDir.absolutePath)
+    }
+    doLast { workingDir.deleteRecursively() }
 }
 tasks.register<JavaExec>("rtxptAdvancedNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses, tasks.jar)
@@ -58,7 +80,7 @@ tasks.register<JavaExec>("rtxptPackagedNativeSelfTest") {
     }
     doLast { workingDir.deleteRecursively() }
 }
-tasks.named("check") { dependsOn("rtxptAdapterSelfTest") }
+tasks.named("check") { dependsOn("rtxptAdapterSelfTest", "rtxptBudgetContractSelfTest") }
 
 val nativeRuntime = rootProject.layout.buildDirectory.dir("rtxpt-sdk/bin")
 val rtxptShaderSource = rootProject.layout.buildDirectory.dir("rtxpt-sdk/Rtxpt/Shaders")
@@ -72,10 +94,20 @@ val syncRtxptRuntimeShaders = tasks.register<Sync>("syncRtxptRuntimeShaders") {
         }
     }
 }
+val sixBudgetShaders = rootProject.layout.buildDirectory.dir("rtxpt-six-budget-bundle")
+val verifyRtxptShaderBudgets = tasks.register<Exec>("verifyRtxptShaderBudgets") {
+    group = "verification"
+    description = "Checks all six precompiled optical budgets, upstream permutations and source hashes."
+    dependsOn(syncRtxptRuntimeShaders)
+    inputs.dir(sixBudgetShaders)
+    inputs.dir(nativeRuntime.map { it.dir("ShaderDynamic/Source") })
+    workingDir(rootProject.projectDir)
+    commandLine("pwsh", "-NoProfile", "-File", "tools/Build-RtxptShaderBudgets.ps1", "-VerifyOnly")
+}
 val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
     group = "distribution"
     description = "Packages the pinned RTXPT native renderer, runtime shaders and upstream licenses."
-    dependsOn(syncRtxptRuntimeShaders)
+    dependsOn(verifyRtxptShaderBudgets)
     archiveFileName.set("rtxpt-runtime.zip")
     destinationDirectory.set(layout.buildDirectory.dir("native-bundle"))
     from(nativeRuntime) {
@@ -83,6 +115,10 @@ val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
             "ShaderPrecompiled/**", "ShaderDynamic/Source/**", "ShaderDynamic/Tools/d3d12/x64/*.dll",
             "ShaderDynamic/Tools/d3d12/x64/dxc.exe")
         exclude("**/*.pdb", "**/.gitkeep")
+    }
+    from(sixBudgetShaders) {
+        include("**/*.bin", "bundle.json")
+        into("ShaderDynamic/Bin/dxil")
     }
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true

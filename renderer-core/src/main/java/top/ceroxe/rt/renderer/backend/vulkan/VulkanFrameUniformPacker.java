@@ -7,6 +7,7 @@ import top.ceroxe.rt.renderer.api.EnvironmentState;
 import top.ceroxe.rt.renderer.api.LightmapState;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.TemporalRenderingOptions;
+import top.ceroxe.rt.renderer.api.SurfaceTransportOptions;
 import top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents;
 
 import java.nio.ByteBuffer;
@@ -101,6 +102,24 @@ final class VulkanFrameUniformPacker {
             boolean jitterActive,
             VulkanGpuSceneAbi.SlotResolver textureSlots
     ) {
+        return pack(request,extents,lightSlotUpperBound,activeSceneRevision,temporalFrame,temporalOptions,
+                denoisingActive,reconstructionActive,jitterActive,textureSlots,SurfaceTransportOptions.defaults());
+    }
+
+    static byte[] pack(
+            RenderFrameRequest request,
+            VulkanFrameExtents extents,
+            int lightSlotUpperBound,
+            long activeSceneRevision,
+            TemporalHistoryTracker.PreparedFrame temporalFrame,
+            TemporalRenderingOptions temporalOptions,
+            boolean denoisingActive,
+            boolean reconstructionActive,
+            boolean jitterActive,
+            VulkanGpuSceneAbi.SlotResolver textureSlots,
+            SurfaceTransportOptions surfaceTransport
+    ) {
+        SurfaceTransportOptions surfacePolicy=Objects.requireNonNull(surfaceTransport,"surfaceTransport");
         RenderFrameRequest frame = Objects.requireNonNull(request, "request");
         VulkanFrameExtents frameExtents = Objects.requireNonNull(extents, "extents");
         if (frameExtents.outputWidth() != frame.width() || frameExtents.outputHeight() != frame.height()) {
@@ -166,10 +185,10 @@ final class VulkanFrameUniformPacker {
                 (float) caustics.centerX(), (float) caustics.centerY(), (float) caustics.centerZ());
         putFloat(words, VulkanGpuSceneAbi.FRAME_CAUSTIC_REGION_RADIUS_WORD, caustics.radius());
         putFloat(words, VulkanGpuSceneAbi.FRAME_CAUSTIC_NORMAL_THRESHOLD_WORD, caustics.normalThreshold());
-        // Reserved ABI lanes stay zero: managed optical transport no longer executes on Vulkan.
+        // Managed media remain RTXPT-owned; ordinary Vulkan surface optics use these active lanes.
         putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_IOR_WORD, 1);
-        putInt(words, VulkanGpuSceneAbi.FRAME_OPTICAL_MAX_EVENTS_WORD, 12);
-        putInt(words, VulkanGpuSceneAbi.FRAME_OPTICAL_SAMPLES_WORD, 1);
+        putInt(words, VulkanGpuSceneAbi.FRAME_OPTICAL_MAX_EVENTS_WORD, surfacePolicy.maxEvents());
+        putInt(words, VulkanGpuSceneAbi.FRAME_OPTICAL_SAMPLES_WORD, surfacePolicy.samples());
         putFloat(words, VulkanGpuSceneAbi.FRAME_MEDIUM_MAX_DISTANCE_WORD, 512);
         putInt(words, VulkanGpuSceneAbi.FRAME_LIGHT_SLOT_UPPER_BOUND_WORD, lightSlotUpperBound);
         putLong(words, VulkanGpuSceneAbi.FRAME_SCENE_REVISION_WORD, activeSceneRevision);

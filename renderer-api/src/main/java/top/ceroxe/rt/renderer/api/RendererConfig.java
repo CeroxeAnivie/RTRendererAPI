@@ -35,6 +35,7 @@ public final class RendererConfig {
     private final RayTracingOptimizationOptions rayTracingOptimizations;
     private final PathTracingOptions pathTracing;
     private final RendererResourceOptions resources;
+    private final SurfaceTransportOptions surfaceTransport;
 
     private RendererConfig(Builder builder) {
         if (builder.maxFramesInFlight < MIN_MAX_FRAMES_IN_FLIGHT
@@ -62,6 +63,7 @@ public final class RendererConfig {
         );
         pathTracing = Objects.requireNonNull(builder.pathTracing,"pathTracing");
         resources = Objects.requireNonNull(builder.resources,"resources");
+        surfaceTransport = Objects.requireNonNull(builder.surfaceTransport,"surfaceTransport");
         if (!temporalRendering.enabled()
                 && frameReconstruction.fallback()
                 == FrameReconstructionOptions.Fallback.BUILT_IN_TEMPORAL) {
@@ -94,9 +96,11 @@ public final class RendererConfig {
     /** Returns path budgets and light/cache reuse intent. */
     public PathTracingOptions pathTracing(){return pathTracing;}
     public RendererResourceOptions resources(){return resources;}
+    /** Ordinary Vulkan surface budgets; managed RTXPT transport uses {@link #pathTracing()}. */
+    public SurfaceTransportOptions surfaceTransport(){return surfaceTransport;}
     /** Recommended base policy with explicit low/medium/high workload budgets. */
     public static RendererConfig recommended(RendererPerformanceTier tier){
-        Objects.requireNonNull(tier);return builder().resources(tier.resources())
+        Objects.requireNonNull(tier);return builder().resources(tier.resources()).surfaceTransport(tier.surfaceTransport())
             .pathTracing(tier.pathTracing(false)).frameReconstruction(FrameReconstructionOptions.recommended().toBuilder()
                 .quality(tier.reconstructionQuality()).build()).rayTracingOptimizations(RayTracingOptimizationOptions.recommended()).build();
     }
@@ -259,7 +263,8 @@ public final class RendererConfig {
                 && lowLatency.equals(config.lowLatency)
                 && denoising.equals(config.denoising)
                 && rayTracingOptimizations.equals(config.rayTracingOptimizations)
-                && pathTracing.equals(config.pathTracing) && resources.equals(config.resources);
+                && pathTracing.equals(config.pathTracing) && resources.equals(config.resources)
+                && surfaceTransport.equals(config.surfaceTransport);
     }
 
     @Override
@@ -267,7 +272,7 @@ public final class RendererConfig {
         return Objects.hash(
                 sceneShaders, maxFramesInFlight, evidenceRetention, validationEnabled, gpuTimingsEnabled, cpuFrameReadbackEnabled,
                 gpuDevice, frameOutputFormat, temporalRendering, frameReconstruction, denoising,
-                frameGeneration, lowLatency, rayTracingOptimizations, pathTracing, resources
+                frameGeneration, lowLatency, rayTracingOptimizations, pathTracing, resources, surfaceTransport
         );
     }
 
@@ -285,7 +290,8 @@ public final class RendererConfig {
                 + ", frameGeneration=" + frameGeneration
                 + ", lowLatency=" + lowLatency
                 + ", denoising=" + denoising
-                + ", rayTracingOptimizations=" + rayTracingOptimizations + ", pathTracing="+pathTracing+", resources="+resources+']';
+                + ", rayTracingOptimizations=" + rayTracingOptimizations + ", pathTracing="+pathTracing+", resources="+resources
+                + ", surfaceTransport="+surfaceTransport+']';
     }
 
     /**
@@ -294,6 +300,7 @@ public final class RendererConfig {
     public static final class Builder {
         private PathTracingOptions pathTracing = PathTracingOptions.defaults();
         private RendererResourceOptions resources = RendererResourceOptions.defaults();
+        private SurfaceTransportOptions surfaceTransport = SurfaceTransportOptions.defaults();
         private SceneShaderProgram sceneShaders = SceneShaderProgram.builtIn();
         private int maxFramesInFlight = DEFAULT_MAX_FRAMES_IN_FLIGHT;
         private EvidenceRetentionPolicy evidenceRetention = EvidenceRetentionPolicy.bounded();
@@ -330,6 +337,7 @@ public final class RendererConfig {
             rayTracingOptimizations = source.rayTracingOptimizations;
             pathTracing = source.pathTracing;
             resources = source.resources;
+            surfaceTransport = source.surfaceTransport;
         }
 
         /**
@@ -509,5 +517,7 @@ public final class RendererConfig {
         /** Selects native path budgets and optional reuse techniques. */
         public Builder pathTracing(PathTracingOptions value){pathTracing=Objects.requireNonNull(value,"pathTracing");return this;}
         public Builder resources(RendererResourceOptions value){resources=Objects.requireNonNull(value,"resources");return this;}
+        /** Sets ordinary Vulkan optical surface workload; takes effect when opening the renderer. */
+        public Builder surfaceTransport(SurfaceTransportOptions value){surfaceTransport=Objects.requireNonNull(value,"surfaceTransport");return this;}
     }
 }

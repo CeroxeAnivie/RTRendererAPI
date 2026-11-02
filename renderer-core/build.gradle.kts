@@ -371,6 +371,7 @@ tasks.named("check") {
 }
 
 val nativeSelfTests = linkedMapOf(
+    "vulkanSurfaceBudgetNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanSurfaceBudgetNativeSelfTest",
     "vulkanFrameDisplayTransformNativeSelfTest" to "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameDisplayTransformNativeSelfTest",
 
 

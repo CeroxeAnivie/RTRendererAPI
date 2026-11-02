@@ -68,6 +68,24 @@ Patch-Once 'Rtxpt/SampleCommon/PTPipelineBaker.cpp' '        std::string newHash
         std::string newHash = ShaderCompilerUtils::ComputeSha256Hex(portableCommand); // RTR portable permutation key
         RtrShaderBundle::Export(permutation->ShaderOutFileName.generic_string(),newHash,command,portableCommand);
 '@ 'RTR portable permutation key'
+Patch-Once 'Rtxpt/SampleCommon/PTPipelineBaker.cpp' '            command = commandBase + command ' @'
+            RtrShaderBundle::RequirePrecompiled(permutation->CompiledFullPath); // RTR packaged-only acceptance
+            command = commandBase + command
+'@ 'RTR packaged-only acceptance'
+Patch-Once 'Rtxpt/SampleCommon/ComputePipelineBaker.cpp' '#include "rtxpt_host_resources.h" // RTR bounded compute compile pool' @'
+#include "rtxpt_host_resources.h" // RTR bounded compute compile pool
+#include "rtxpt_shader_bundle.h" // RTR portable compute cache
+'@ 'RTR portable compute cache'
+Patch-Once 'Rtxpt/SampleCommon/ComputePipelineBaker.cpp' '    auto cmdResult = ShaderCompilerUtils::BuildDxcCommand(baker->GetCompilerConfig(), options);' @'
+    auto cmdResult = ShaderCompilerUtils::BuildDxcCommand(baker->GetCompilerConfig(), options);
+    const std::string portableCommand=RtrShaderBundle::PortableCommand(cmdResult.CommandBase,srcFullPath,m_shaderSrcFileName,baker->GetCompilerConfig().IncludePaths);
+    cmdResult.HashHex=ShaderCompilerUtils::ComputeSha256Hex(portableCommand); // RTR relocatable compute key
+    RtrShaderBundle::Export(m_shaderSrcFileName.stem().string()+"_"+m_entryPoint,cmdResult.HashHex,cmdResult.CommandBase,portableCommand);
+'@ 'RTR relocatable compute key'
+Patch-Once 'Rtxpt/SampleCommon/ComputePipelineBaker.cpp' '        // Need to recompile' @'
+        RtrShaderBundle::RequirePrecompiled(m_compiledFullPath); // RTR precompiled compute acceptance
+        // Need to recompile
+'@ 'RTR precompiled compute acceptance'
 Patch-Once 'Rtxpt/Sharc/SharcIntegration.h' 'const std::shared_ptr<donut::engine::DescriptorTableManager>& bindlessHeapTable);' 'const std::shared_ptr<donut::engine::DescriptorTableManager>& bindlessHeapTable,uint32_t entries=4*1024*1024); // RTR public cache capacity' 'RTR public cache capacity'
 Patch-Once 'Rtxpt/Sharc/SharcIntegration.cpp' 'const std::shared_ptr<donut::engine::DescriptorTableManager>& bindlessHeapTable)' 'const std::shared_ptr<donut::engine::DescriptorTableManager>& bindlessHeapTable,uint32_t entries) // RTR configured cache capacity' 'RTR configured cache capacity'
 Patch-Once 'Rtxpt/Sharc/SharcIntegration.cpp' '        m_entriesNum = 4 * 1024 * 1024;' '        m_entriesNum = entries; // RTR allocated cache entry budget' 'RTR allocated cache entry budget'

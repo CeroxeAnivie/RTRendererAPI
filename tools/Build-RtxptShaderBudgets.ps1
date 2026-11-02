@@ -11,8 +11,11 @@ $repo=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 function Full-Path([string]$path){[IO.Path]::GetFullPath((Join-Path $repo $path))}
 $runtime=Full-Path $RuntimeDirectory
 $output=Full-Path $OutputDirectory
+if(!$output.StartsWith((Join-Path $repo 'build')+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)){
+    throw 'Shader bundle output must stay inside this repository build directory'
+}
 $sourceRoot=Join-Path $runtime 'ShaderDynamic/Source'
-function Hash-Text([string]$text){[Convert]::ToHexStringLower([Security.Cryptography.SHA256]::HashData($utf8.GetBytes($text)))}
+function Hash-Text([string]$text){[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($utf8.GetBytes($text))).ToLowerInvariant()}
 function Source-Inventory {
     @((Get-ChildItem -LiteralPath $sourceRoot -File -Recurse | Sort-Object FullName) | ForEach-Object {
         [ordered]@{path=[IO.Path]::GetRelativePath($sourceRoot,$_.FullName).Replace('\','/');sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}

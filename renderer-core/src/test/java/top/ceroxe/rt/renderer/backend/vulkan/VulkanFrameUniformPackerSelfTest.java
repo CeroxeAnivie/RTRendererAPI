@@ -22,6 +22,7 @@ public final class VulkanFrameUniformPackerSelfTest {
    }
 
    public static void main(String[] arguments) {
+      surfaceTransportBudgetsReachTheShader();
       RenderFrameRequest frame = fixture().toBuilder()
               .clock(top.ceroxe.rt.renderer.api.FrameClock.of(-123456789012345L, 16666667)).build();
       long sceneRevision = 4294967301L;
@@ -324,6 +325,35 @@ public final class VulkanFrameUniformPackerSelfTest {
 
    private static float real32(ByteBuffer bytes, int word) {
       return Float.intBitsToFloat(integer(bytes, word));
+   }
+
+   private static void surfaceTransportBudgetsReachTheShader() {
+      var frame=fixture();
+      var options=top.ceroxe.rt.renderer.api.TemporalRenderingOptions.balanced();
+      long revision=frame.minimumSceneRevision();
+      var history=new TemporalHistoryTracker(options).prepare(frame,revision);
+      var budget=new top.ceroxe.rt.renderer.api.SurfaceTransportOptions(3,4);
+      var config=top.ceroxe.rt.renderer.api.RendererConfig.builder().surfaceTransport(budget).build();
+      var copied=config.copyBuilder().build();
+      require(copied.equals(config)&&copied.hashCode()==config.hashCode()&&copied.surfaceTransport().equals(budget),
+              "Surface budget must survive public configuration copies");
+      var encoded=VulkanFrameUniformPacker.pack(frame,
+              top.ceroxe.rt.renderer.rt.pipeline.VulkanFrameExtents.identity(frame.width(),frame.height()),
+              0,revision,history,options,false,false,false,id->-1,copied.surfaceTransport());
+      var words=ByteBuffer.wrap(encoded).order(ByteOrder.LITTLE_ENDIAN);
+      require(integer(words,VulkanGpuSceneAbi.FRAME_OPTICAL_MAX_EVENTS_WORD)==3
+              &&integer(words,VulkanGpuSceneAbi.FRAME_OPTICAL_SAMPLES_WORD)==4,
+              "Explicit surface budgets must occupy the active shader ABI lanes");
+      var defaults=ByteBuffer.wrap(VulkanFrameUniformPacker.pack(frame,0,revision,history,options,false)).order(ByteOrder.LITTLE_ENDIAN);
+      require(integer(defaults,VulkanGpuSceneAbi.FRAME_OPTICAL_MAX_EVENTS_WORD)==8
+              &&integer(defaults,VulkanGpuSceneAbi.FRAME_OPTICAL_SAMPLES_WORD)==1,"Missing surface budgets use medium");
+      expect(IllegalArgumentException.class,()->new top.ceroxe.rt.renderer.api.SurfaceTransportOptions(0,1));
+      expect(IllegalArgumentException.class,()->new top.ceroxe.rt.renderer.api.SurfaceTransportOptions(65,1));
+      expect(IllegalArgumentException.class,()->new top.ceroxe.rt.renderer.api.SurfaceTransportOptions(8,0));
+      expect(IllegalArgumentException.class,()->new top.ceroxe.rt.renderer.api.SurfaceTransportOptions(8,17));
+      for(var tier:top.ceroxe.rt.renderer.api.RendererPerformanceTier.values())
+          require(top.ceroxe.rt.renderer.api.RendererConfig.recommended(tier).surfaceTransport().equals(tier.surfaceTransport()),
+                  "Renderer tier must select the actual surface budget");
    }
 
    private static double real64(ByteBuffer bytes, int word) {
