@@ -135,7 +135,7 @@ bool RtrLegacyOpticalSample(const ShadingData sd,const StandardBSDFData data,uin
     uint event=vertex>=2?vertex-2:0;
     float3 h=RtrLegacyDielectricNormal(sd,data,pixel,sequence,seed^((event+1u)*0x02e5be93u));
     float eta=sd.GetEta(),f=RtrLegacyFresnel(eta,max(dot(sd.V,h),0));
-    float branchRandom=RtrLegacyOpticalRandom(pixel,seed^0xb5297a4du,event);
+    float branchRandom=RtrLegacyOpticalRandom(pixel,seed^0xb5297a4du^RTR_LEGACY_OPTICAL_BRANCH_SEED_XOR,event);
     bool reflection=branchRandom<f;
     result.wo=reflection?normalize(reflect(-sd.V,h)):refract(-sd.V,h,eta);
     float nl=dot(sd.N,result.wo);

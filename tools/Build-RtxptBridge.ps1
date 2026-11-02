@@ -4,7 +4,8 @@ param(
     [string]$StreamlineSdk=$env:STREAMLINE_SDK,
     [double]$MemoryLimitGB=10,
     [switch]$ConfigureOnly,
-    [switch]$OpticalTransportTrace
+    [switch]$OpticalTransportTrace,
+    [uint32]$OpticalBranchSeedXor=0
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -403,6 +404,10 @@ foreach($header in @('RtrLegacyLightingInputs.hlsli','RtrLegacyDirect.hlsli','Rt
     $headerText=[IO.File]::ReadAllText((Join-Path $repo ('renderer-rtxpt/src/main/cpp/'+$header)))
     if($header -eq 'RtrLegacyTransportTrace.hlsli' -and $OpticalTransportTrace) {
         $headerText="#define RTR_LEGACY_TRANSPORT_TRACE 1 // explicitly enabled by configure`r`n"+$headerText
+    }
+    if($header -eq 'RtrLegacyTransportTrace.hlsli' -and $OpticalBranchSeedXor -ne 0) {
+        if(!$OpticalTransportTrace){throw 'Optical branch seed control requires explicit transport diagnostics'}
+        $headerText="#define RTR_LEGACY_OPTICAL_BRANCH_SEED_XOR $($OpticalBranchSeedXor)u // diagnostic control only`r`n"+$headerText
     }
     [IO.File]::WriteAllText((Join-Path $sdk ('Rtxpt/Shaders/PathTracer/'+$header)),$headerText,$utf8)
 }

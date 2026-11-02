@@ -1,8 +1,8 @@
-param([switch]$Enable)
+param([switch]$Enable,[uint32]$BranchSeedXor=0)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $sdk=Join-Path $repo 'build/rtxpt-sdk'
-& (Join-Path $PSScriptRoot 'Build-RtxptBridge.ps1') -ConfigureOnly -OpticalTransportTrace:$Enable
+& (Join-Path $PSScriptRoot 'Build-RtxptBridge.ps1') -ConfigureOnly -OpticalTransportTrace:$Enable -OpticalBranchSeedXor $BranchSeedXor
 if($LASTEXITCODE -ne 0){throw 'Shader configuration failed'}
 $config=Join-Path $repo 'build/reports/optical-trace-shaders.cfg'
 $permutations=Get-Content -LiteralPath (Join-Path $sdk 'Rtxpt/shaders.cfg') | Where-Object {$_ -like 'ProcessingPasses/PostProcess.hlsl *'}

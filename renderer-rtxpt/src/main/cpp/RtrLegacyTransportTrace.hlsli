@@ -3,6 +3,9 @@
 #ifndef RTR_LEGACY_TRANSPORT_TRACE
 #define RTR_LEGACY_TRANSPORT_TRACE 0
 #endif
+#ifndef RTR_LEGACY_OPTICAL_BRANCH_SEED_XOR
+#define RTR_LEGACY_OPTICAL_BRANCH_SEED_XOR 0u
+#endif
 #if RTR_LEGACY_TRANSPORT_TRACE
 // Numeric records also work in release DXIL, without debug string constants.
 #define RtrLegacyTracePrint(str, ...) do { \
