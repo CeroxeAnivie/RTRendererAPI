@@ -581,6 +581,14 @@ Patch-Once 'Rtxpt/ProcessingPasses/PostProcess.hlsl' '    u_OutputColor[pixelPos
             denoisingLayers.GetAllRadiance(pixelPos),u_OutputColor[pixelPos],g_Const.ptConsts.invSubSampleCount);
     #endif // RTR final radiance at SR input
 '@ 'RTR final radiance at SR input'
+Patch-Once 'Rtxpt/ProcessingPasses/PostProcess.hlsl' '    u_OutputColor[pixelPos] = float4(denoisingLayers.GetAllRadiance(pixelPos), 1.0);' @'
+    u_OutputColor[pixelPos] = float4(denoisingLayers.GetAllRadiance(pixelPos), 1.0);
+    #if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE
+    if(all(pixelPos==uint2(0,0)))
+        RtrLegacyTracePrint("merge-stage",110u,uint4(g_Const.ptConsts.frameIndex,g_Const.ptConsts.imageWidth,g_Const.ptConsts.imageHeight,g_Const.ptConsts.RtrLegacyLightCount),
+            u_OutputColor[pixelPos],g_Const.ptConsts.invSubSampleCount);
+    #endif // RTR verify final merge invocation and constants
+'@ 'RTR verify final merge invocation and constants'
 $rtrCommitPath=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli'
 $rtrCommitText=[IO.File]::ReadAllText($rtrCommitPath)
 $rtrCommitText=$rtrCommitText.Replace('#if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE', '#if defined(RTR_LEGACY_TRANSPORT_TRACE) && RTR_LEGACY_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD')

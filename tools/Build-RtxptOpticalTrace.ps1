@@ -5,7 +5,8 @@ $sdk=Join-Path $repo 'build/rtxpt-sdk'
 & (Join-Path $PSScriptRoot 'Build-RtxptBridge.ps1') -ConfigureOnly -OpticalTransportTrace:$Enable
 if($LASTEXITCODE -ne 0){throw 'Shader configuration failed'}
 $config=Join-Path $repo 'build/reports/optical-trace-shaders.cfg'
-[IO.File]::WriteAllText($config,"ProcessingPasses/PostProcess.hlsl -T cs -E main -D NO_DENOISER_FINAL_MERGE=1`n",[Text.UTF8Encoding]::new($false))
+$permutations=Get-Content -LiteralPath (Join-Path $sdk 'Rtxpt/shaders.cfg') | Where-Object {$_ -like 'ProcessingPasses/PostProcess.hlsl *'}
+[IO.File]::WriteAllText($config,($permutations -join "`n")+"`n",[Text.UTF8Encoding]::new($false))
 Push-Location -LiteralPath (Join-Path $sdk 'Rtxpt')
 try {
     & (Join-Path $sdk 'bin/ShaderMake.exe') --jobs 1 --force --ignoreConfigDir --config $config `
