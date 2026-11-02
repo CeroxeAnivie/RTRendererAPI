@@ -229,6 +229,18 @@ public final class RtxptCompositionSelfTest {
                     renderer.submit(DemoRendererProfile.frame(sequence++,width,height,camera)
                             .minimumSceneRevision(revision).environment(RtxptMediumScene.environment())
                             .antiAliasing(DemoRendererProfile.antiAliasing(1)).build());
+                    if(mode==2) {
+                        var overlayPath=output.resolve("fusion-"+scene+"-isolated.png");
+                        host.capture(overlayPath);
+                        var overlayImage=ImageIO.read(overlayPath.toFile());
+                        int cyan=0,dark=0;
+                        for(int y=0;y<height;y++)for(int x=0;x<width;x++) {
+                            int pixel=overlayImage.getRGB(x,y),r=(pixel>>>16)&255,g=(pixel>>>8)&255,b=pixel&255;
+                            if(r<90&&g>120&&b>150)cyan++;
+                            if(r<10&&g<10&&b<10)dark++;
+                        }
+                        require(cyan>20&&dark>width*height*.8,"Actual Vulkan overlay pixels must be visible in isolated final output: cyan="+cyan+", dark="+dark);
+                    }
                 }
                 require(host.windowHandle()==window,"Scene/extent/layer changes preserve the native window");
                 require(host.overlaySelection()==index,"Scene reload preserves its selector choice");
