@@ -125,7 +125,10 @@ public:
         // renderer-wide control, independent of scene names or light counts.
         const char* exactEnvironment=std::getenv("RTR_RTXPT_DIAGNOSTIC_EXACT_ENVIRONMENT");
         if(exactEnvironment && std::string(exactEnvironment)=="1") {
-            macros.push_back({"NEE_AT_SAMPLE_BAKED_ENVIRONMENT","0"});
+            // Sample already declares this macro. Replace its definition;
+            // appending a conflicting -D is rejected by DXC's -WX policy.
+            for(auto& macro:macros)
+                if(macro.name=="NEE_AT_SAMPLE_BAKED_ENVIRONMENT")macro.definition="0";
             macros.push_back({"RTR_EXACT_ENVIRONMENT_SOURCE","1"});
         }
         const char* residualControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING");
