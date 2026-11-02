@@ -108,9 +108,11 @@ public final class RtxptHexBallQualitySelfTest {
                 for(int f=0;f<count;f++) {
                     if(phase==1)for(int step=0;step<4;step++)physics.stepForTesting();
                     var batch=scene.primitiveBatch(physics,previous);
+                    long completedBefore=host.bridgeTimings().frames();
                     renderer.submit(DemoRendererProfile.frame(sequence++,2560,1440,camera)
                         .minimumSceneRevision(revision).primitiveBatch(batch).environment(environment)
                         .antiAliasing(DemoRendererProfile.antiAliasing(1)).build());
+                    awaitCompletedFrame(host,completedBefore);
                     previous=batch;
                     if(sequence==1) {
                         var status=host.runtimeStatus();
@@ -150,6 +152,7 @@ public final class RtxptHexBallQualitySelfTest {
             }
             host.awaitIdle();
             require(host.bridgeTimings().sceneExports()==1,"No per-frame scene rebuild");
+            require(host.bridgeTimings().frames()==sequence,"Every quality pose needs a completed native frame");
             require(renderer.health().activeFailure().isEmpty(),"Healthy renderer");
             System.out.println("QUALITY_CAPTURE PASS "+mode+" glass="+glass+" frames="+sequence+" "+host.bridgeTimings());
         }
@@ -157,6 +160,15 @@ public final class RtxptHexBallQualitySelfTest {
     }
     private static void require(boolean condition,String message) {
         if(!condition)throw new AssertionError(message);
+    }
+
+    private static void awaitCompletedFrame(RtxptAccess host,long before) throws InterruptedException {
+        long deadline=System.nanoTime()+java.time.Duration.ofSeconds(90).toNanos();
+        while(host.bridgeTimings().frames()==before) {
+            require(System.nanoTime()<deadline,"Native frame did not complete before capture");
+            require(host.renderFrame(),"Window closed before the requested pose completed");
+            if(host.bridgeTimings().frames()==before)Thread.sleep(1);
+        }
     }
 
     private static EnvironmentState lightingProbe(EnvironmentState source,String probe) {

@@ -57,8 +57,10 @@ public final class RtxptLightingNativeSelfTest {
                     var c=camera(offset);
                     var env=environment(name);
                     for(int i=0;i<132;i++) {
+                        long completedBefore=host.bridgeTimings().frames();
                         renderer.submit(RenderFrameRequest.builder(sequence++,1920,1080,c)
                             .minimumSceneRevision(revision).environment(env).build());
+                        awaitCompletedFrame(host,completedBefore);
                         if(i>=128)host.capture(output.resolve(name+"-pose"+pose+"-static"+i+".png"));
                     }
                     var status=host.runtimeStatus();
@@ -74,8 +76,12 @@ public final class RtxptLightingNativeSelfTest {
                     if(pose==0&&spp==1) {
                         host.awaitIdle();
                         long before=System.nanoTime();
-                        for(int i=0;i<240;i++)renderer.submit(RenderFrameRequest.builder(sequence++,1920,1080,c)
-                            .minimumSceneRevision(revision).environment(env).build());
+                        for(int i=0;i<240;i++) {
+                            long completedBefore=host.bridgeTimings().frames();
+                            renderer.submit(RenderFrameRequest.builder(sequence++,1920,1080,c)
+                                .minimumSceneRevision(revision).environment(env).build());
+                            awaitCompletedFrame(host,completedBefore);
+                        }
                         host.awaitIdle();
                         double ms=(System.nanoTime()-before)/1e6;
                         timings.append(String.format(Locale.ROOT,"%s,%d,%d,%s,%s,%s,240,%.6f,%.6f,%.6f%n",name,pose,spp,
@@ -134,6 +140,14 @@ public final class RtxptLightingNativeSelfTest {
         int[] indices={4,5,6,4,6,7,0,2,1,0,3,2,0,4,7,0,7,3,1,2,6,1,6,5,3,7,6,3,6,2,0,1,5,0,5,4};
         long[] materials=new long[12];Arrays.fill(materials,material);
         return MeshAsset.builder(id,p,indices,materials).build();
+    }
+    private static void awaitCompletedFrame(RtxptAccess host,long before) throws InterruptedException {
+        long deadline=System.nanoTime()+java.time.Duration.ofSeconds(90).toNanos();
+        while(host.bridgeTimings().frames()==before) {
+            require(System.nanoTime()<deadline,"Native frame did not complete before capture");
+            require(host.renderFrame(),"Window closed before the requested pose completed");
+            if(host.bridgeTimings().frames()==before)Thread.sleep(1);
+        }
     }
     private static void require(boolean ok,String message){if(!ok)throw new AssertionError(message);}
 }
