@@ -29,6 +29,67 @@ Patch-Once 'Rtxpt/SampleUI.h' '    //float                               DLSSSha
 Patch-Once 'Rtxpt/Sample.cpp' '                dlssOptions.preset = StreamlineInterface::DLSSPreset::eDefault;' @'
                 dlssOptions.preset = m_ui.HostDLSSSRPreset; // RTR forward upstream SR model without changing resolution
 '@ 'RTR forward upstream SR model'
+Patch-Once 'Rtxpt/SampleUI.h' '    //float                               DLSSSharpness = 0.f;' @'
+    float                              HostNisSharpness = 0.f; // RTR native NIS output sharpening, disabled by default
+    //float                               DLSSSharpness = 0.f;
+'@ 'RTR native NIS output sharpening'
+Patch-Once 'Rtxpt/Sample.h' '    void                                    PostProcessPreToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView);' @'
+    nvrhi::TextureHandle                     m_hostNisOutput; // RTR upstream NIS output
+    nvrhi::ITexture*                         PostProcessPreToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView);
+'@ 'RTR upstream NIS output'
+Patch-Once 'Rtxpt/Sample.cpp' 'void Sample::PostProcessPreToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView)' @'
+nvrhi::ITexture* Sample::PostProcessPreToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView) // RTR select post-process output
+'@ 'RTR select post-process output'
+Patch-Once 'Rtxpt/Sample.cpp' @'
+}
+
+void Sample::PostProcessPostToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView)
+'@ @'
+    // RTXPT retains its reconstruction. NIS uses NVIDIA's sharpening-only mode
+    // at the same display dimensions, then feeds tone mapping without a copy.
+    if (m_ui.HostNisSharpness > 0.f && m_ui.RealtimeMode && m_ui.RealtimeAA == 2)
+    {
+        auto& streamline = GetDeviceManager()->GetStreamline();
+        if (!streamline.IsNISAvailable())
+            throw std::runtime_error("Requested native NIS sharpening is unavailable");
+        auto source = m_renderTargets->ProcessedOutputColor;
+        const auto& desc = source->getDesc();
+        if (!m_hostNisOutput || m_hostNisOutput->getDesc().width != desc.width
+            || m_hostNisOutput->getDesc().height != desc.height)
+        {
+            if (m_hostNisOutput) streamline.CleanupNIS(true);
+            auto outputDesc = desc;
+            outputDesc.debugName = "NISSharpenOutput";
+            outputDesc.isRenderTarget = false;
+            outputDesc.isUAV = true;
+            outputDesc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+            m_hostNisOutput = GetDevice()->createTexture(outputDesc);
+            donut::log::info("RTXPT native NIS sharpen: strength=%.3f output=%ux%u", m_ui.HostNisSharpness, desc.width, desc.height);
+        }
+        StreamlineInterface::NISOptions options;
+        options.mode = StreamlineInterface::NISMode::eSharpen;
+        options.hdrMode = StreamlineInterface::NISHDR::eLinear;
+        options.sharpness = m_ui.HostNisSharpness;
+        streamline.SetNISOptions(options);
+        GpuProfiler::Begin(commandList, "NIS Sharpen");
+        streamline.TagResourcesDLSSNIS(commandList, fullscreenView.GetChildView(ViewType::PLANAR, 0), m_hostNisOutput, source);
+        commandList->commitBarriers();
+        streamline.EvaluateNIS(commandList);
+        commandList->clearState();
+        GpuProfiler::End(commandList);
+        return m_hostNisOutput;
+    }
+    return m_renderTargets->ProcessedOutputColor; // RTR same-size native NIS result
+}
+
+void Sample::PostProcessPostToneMapping(nvrhi::ICommandList* commandList, const donut::engine::ICompositeView& compositeView)
+'@ 'RTR same-size native NIS result'
+Patch-Once 'Rtxpt/Sample.cpp' '        PostProcessPreToneMapping(m_commandList, fullscreenView);   // writing to m_renderTargets->ProcessedOutputColor' @'
+        auto* toneMapInput = PostProcessPreToneMapping(m_commandList, fullscreenView); // RTR no-copy sharpen output
+'@ 'RTR no-copy sharpen output'
+Patch-Once 'Rtxpt/Sample.cpp' 'm_toneMappingPass->Render(m_commandList, GetBindingCache(), fullscreenView, m_renderTargets->ProcessedOutputColor, m_ui.EnableToneMapping)' @'
+m_toneMappingPass->Render(m_commandList, GetBindingCache(), fullscreenView, toneMapInput, m_ui.EnableToneMapping) /* RTR tone-map selected output */
+'@ 'RTR tone-map selected output'
 Patch-Once 'External/Donut/compileshaders.cmake' 'set(compilerCommand ${SHADERMAKE_PATH}' 'set(compilerCommand ${SHADERMAKE_PATH} --jobs 1' '${SHADERMAKE_PATH} --jobs 1'
 Patch-Once 'External/Nrd/CMakeLists.txt' 'set(SHADERMAKE_GENERAL_ARGS' "set(SHADERMAKE_GENERAL_ARGS --jobs 1" 'SHADERMAKE_GENERAL_ARGS --jobs 1'
 # Only expose host control and runtime file roots. Rendering, scheduling and shaders stay upstream.
@@ -566,7 +627,7 @@ if($StreamlineSdk){
 & $cmake -S $sdk -B $build -G 'Visual Studio 17 2022' -A x64 `
     -DDONUT_WITH_VULKAN=OFF -DDONUT_WITH_KTX=OFF -DDONUT_WITH_AFTERMATH=OFF `
     -DDONUT_EMBED_SHADER_PDBS=OFF -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF `
-    -DTRACY_ENABLE=OFF `
+    -DTRACY_ENABLE=OFF -DSTREAMLINE_FEATURE_NIS=ON `
     '-DCMAKE_CXX_FLAGS=/DWIN32 /D_WINDOWS /EHsc /utf-8' '-DCMAKE_C_FLAGS=/DWIN32 /D_WINDOWS /utf-8' @localDependencies
 if($LASTEXITCODE -ne 0){throw 'RTXPT native configure failed'}
 if($ConfigureOnly){return}

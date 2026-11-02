@@ -1,0 +1,32 @@
+[
+  {
+    "Name": "nvngx_dlss.dll",
+    "Version": "310,9,16,0",
+    "MatchesLatestSdk": true
+  },
+  {
+    "Name": "nvngx_dlssd.dll",
+    "Version": "310,9,16,0",
+    "MatchesLatestSdk": true
+  },
+  {
+    "Name": "nvngx_dlssg.dll",
+    "Version": "310,9,16,0",
+    "MatchesLatestSdk": true
+  },
+  {
+    "Name": "sl.dlss.dll",
+    "Version": "2,14,16,0",
+    "MatchesLatestSdk": true
+  },
+  {
+    "Name": "sl.dlss_d.dll",
+    "Version": "2,14,16,0",
+    "MatchesLatestSdk": true
+  },
+  {
+    "Name": "sl.dlss_g.dll",
+    "Version": "2,14,16,0",
+    "MatchesLatestSdk": true
+  }
+]

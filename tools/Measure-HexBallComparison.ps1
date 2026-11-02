@@ -16,6 +16,8 @@ param(
     [switch]$DisableTransmissionGuides,
     [ValidateSet('Upstream','D','E','F')][string]$RrPreset='Upstream',
     [ValidateSet('Upstream','J','K','M')][string]$SrPreset='Upstream',
+    [ValidateRange(0.0,1.0)][double]$NisSharpness=0,
+    [switch]$DisableBloom,
     [ValidateSet('Upstream','On','Off')][string]$AsyncPrefix='Upstream',
     [string[]]$ExtraArguments=@(),
     [string]$OutputDirectory='docs/quality/data/hexball-native-20261101'
@@ -68,6 +70,8 @@ $oldProfile=$env:RTR_RTXPT_GPU_PROFILE
 $oldAsync=$env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX
 $oldPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
 $oldSrPreset=$env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET
+$oldNis=$env:RTR_RTXPT_DIAGNOSTIC_NIS_SHARPNESS
+$oldBloom=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM
 $oldSmallPoints=$env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS
 $oldResidual=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING
 $oldMis=$env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS
@@ -78,6 +82,8 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=switch($AsyncPrefix){'On'{'1'} 'Off'{'0'} default{$null}}
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=if($RrPreset -eq 'Upstream'){$null}else{$RrPreset}
     $env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET=if($SrPreset -eq 'Upstream'){$null}else{$SrPreset}
+    $env:RTR_RTXPT_DIAGNOSTIC_NIS_SHARPNESS=$NisSharpness.ToString([Globalization.CultureInfo]::InvariantCulture)
+    $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM=$(if($DisableBloom){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$(if($DisableResidualPointSampling){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$(if($ExactMis){'1'}elseif($ApproximateMis){'0'}else{$null})
@@ -90,6 +96,7 @@ try {
         Width=$Width;Height=$Height;Spp=1;FrameGeneration=$false;StageProfile=[bool]$StageProfile;
         RrPreset=$RrPreset;AsyncPrefix=$AsyncPrefix;
         SrPreset=$SrPreset;
+        NisSharpness=$NisSharpness;DisableBloom=[bool]$DisableBloom;
         SmallPointCandidate=[bool]$SmallPointCandidate;
         ControlLighting=[bool]$ControlLighting;
         DisableResidualPointSampling=[bool]$DisableResidualPointSampling;ExactMis=[bool]$ExactMis;Glass=[bool]$Glass;
@@ -121,6 +128,8 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_ASYNC_PREFIX=$oldAsync
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$oldPreset
     $env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET=$oldSrPreset
+    $env:RTR_RTXPT_DIAGNOSTIC_NIS_SHARPNESS=$oldNis
+    $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM=$oldBloom
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$oldSmallPoints
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING=$oldResidual
     $env:RTR_RTXPT_DIAGNOSTIC_EXACT_MIS=$oldMis

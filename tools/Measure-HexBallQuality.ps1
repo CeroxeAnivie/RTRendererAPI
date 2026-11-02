@@ -14,6 +14,8 @@ param(
     [ValidateSet('AUTO','ULTRA_QUALITY','QUALITY','BALANCED','PERFORMANCE','ULTRA_PERFORMANCE','DLAA')][string]$Quality='AUTO',
     [ValidateSet('Upstream','D','E','F')][string]$RrPreset='Upstream',
     [ValidateSet('Upstream','J','K','M')][string]$SrPreset='Upstream',
+    [ValidateRange(0.0,1.0)][double]$NisSharpness=0,
+    [switch]$DisableBloom,
     [ValidateSet('none','original-lights','quarter-lights','no-points','no-sun','no-sky','no-environment')][string]$LightingProbe='none',
     [switch]$AllowDirtySource,
     [switch]$DisableTransmissionGuides
@@ -81,6 +83,7 @@ $settings=[ordered]@{
     Quality=$effectiveQuality
     RrPreset=$RrPreset
     SrPreset=$SrPreset
+    NisSharpness=$NisSharpness;DisableBloom=[bool]$DisableBloom
     LightingProbe=$LightingProbe
 }
 if($PackagedRuntime) {
@@ -97,6 +100,8 @@ $oldSampler=$env:RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER
 $oldTransmissionGuides=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES
 $oldRrPreset=$env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET
 $oldSrPreset=$env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET
+$oldNis=$env:RTR_RTXPT_DIAGNOSTIC_NIS_SHARPNESS
+$oldBloom=$env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM
 try {
     $env:RTR_RTXPT_GPU_PROFILE=$null
     $env:RTR_RTXPT_DIAGNOSTIC_SMALL_POINTS=$(if($ControlLighting){'0'}elseif($SmallPointCandidate){'1'}else{$null})
@@ -106,6 +111,8 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$(if($DisableTransmissionGuides){'1'}else{$null})
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$(if($RrPreset -eq 'Upstream'){$null}else{$RrPreset})
     $env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET=$(if($SrPreset -eq 'Upstream'){$null}else{$SrPreset})
+    $env:RTR_RTXPT_DIAGNOSTIC_NIS_SHARPNESS=$NisSharpness.ToString([Globalization.CultureInfo]::InvariantCulture)
+    $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM=$(if($DisableBloom){'1'}else{$null})
     & python (Join-Path $PSScriptRoot 'Run-HexBallProcess.py') $prefix
     $code=$LASTEXITCODE
     $runLog=Get-Content -LiteralPath ($prefix+'.log') -Raw
@@ -132,4 +139,6 @@ try {
     $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_TRANSMISSION_GUIDES=$oldTransmissionGuides
     $env:RTR_RTXPT_DIAGNOSTIC_RR_PRESET=$oldRrPreset
     $env:RTR_RTXPT_DIAGNOSTIC_SR_PRESET=$oldSrPreset
+    $env:RTR_RTXPT_DIAGNOSTIC_NIS_SHARPNESS=$oldNis
+    $env:RTR_RTXPT_DIAGNOSTIC_DISABLE_BLOOM=$oldBloom
 }
