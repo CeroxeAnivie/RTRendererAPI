@@ -10,6 +10,7 @@ import top.ceroxe.rt.renderer.api.*;
 final class RtxptRenderer implements Renderer,RtxptAccess {
     private final Thread owner=Thread.currentThread();
     private final boolean externalPresentation;
+    private final boolean gpuTimingsEnabled;
     private RtxptScene scene=new RtxptScene();
     private RtxptOptions options;
     private RendererFeatureProfile requestedProfile;
@@ -27,6 +28,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
     RtxptRenderer(RendererConfig config){this(config,false);}
     RtxptRenderer(RendererConfig config,boolean externalPresentation){
         this.externalPresentation=externalPresentation;
+        this.gpuTimingsEnabled=config.gpuTimingsEnabled();
         RtxptInputContract.validateConfiguration(config);requestedProfile=RtxptOptions.profile(config);options=RtxptOptions.resolve(requestedProfile);
         validatePresentationProfile(requestedProfile);
         features=new RtxptFeatureController(new RtxptFeatureController.Host(){
@@ -95,7 +97,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         return b.build();
     }
     private RendererDiagnostics.FrameGpuTiming gpuTiming(){
-        if(handle==0||closed)return RendererDiagnostics.FrameGpuTiming.unavailable();
+        if(!gpuTimingsEnabled||handle==0||closed)return RendererDiagnostics.FrameGpuTiming.unavailable();
         var t=RtxptNative.gpuTiming(handle);
         return t[0]==0?RendererDiagnostics.FrameGpuTiming.unavailable():RendererDiagnostics.FrameGpuTiming.builder()
             .enabled(true).completedSamples(t[0]).averagePostTraceNanos(t[1]).averageTotalNanos(t[1]).maxTotalNanos(t[2]).build();
@@ -149,7 +151,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess {
         }catch(IOException e){throw new IllegalStateException("RTXPT asset translation failed",e);}exportNs+=System.nanoTime()-begin;exports++;}
         if(handle==0){
             if(path==null)throw new IllegalStateException("Submit a populated scene");
-            handle=RtxptNative.create(RtxptNative.runtime().toString(),path.toString(),f.width(),f.height(),externalPresentation,options.arguments());
+            handle=RtxptNative.create(RtxptNative.runtime().toString(),path.toString(),f.width(),f.height(),externalPresentation,gpuTimingsEnabled,options.arguments());
             if(compositor!=null)RtxptNative.compositor(handle,compositor);
             if(title!=null)RtxptNative.title(handle,title);
             applyNativeSettings();

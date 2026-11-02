@@ -288,6 +288,7 @@ struct Session {
     nvrhi::TextureHandle lastPresentedTexture;
     SharedFrameProducer sharedFrames;
     bool externalPresentation=false;
+    bool gpuTimingsEnabled=true;
     uint64_t rendered=0;
     bool presentationTrace=[] {const char* v=std::getenv("RTR_RTXPT_PRESENTATION_TRACE");return v && std::string(v)=="1";}();
     using ProbeClock=std::chrono::steady_clock;
@@ -311,12 +312,13 @@ struct Session {
         if(seconds<1)return;
         const auto& t=donut::app::StreamlineIntegration::Get().hostFrameGeneration;
         HWND window=glfwGetWin32Window(app->HostDeviceManager()->GetWindow());
-        donut::log::info("RTXPT_FG_TIMELINE seconds=%.6f native=%llu actual=%llu intervalNative=%llu intervalActual=%llu status=%u failures=%llu active=%d requested=%d foreground=%d iconic=%d glfwFocus=%d simStartMs=%.6f eventsAnimateBeginMs=%.6f renderSubmitMs=%.6f presentMs=%.6f",
+        donut::log::info("RTXPT_FG_TIMELINE seconds=%.6f native=%llu actual=%llu intervalNative=%llu intervalActual=%llu status=%u failures=%llu active=%d requested=%d foreground=%d iconic=%d glfwFocus=%d simStartMs=%.6f eventsAnimateBeginMs=%.6f renderSubmitMs=%.6f presentMs=%.6f gpuTimingEnabled=%d gpuSamples=%llu",
             seconds,(unsigned long long)presented,(unsigned long long)t.presented,
             (unsigned long long)(presented-probePreviousNative),(unsigned long long)(t.presented-probePreviousActual),
             t.status,(unsigned long long)t.failures,int(g_sampleUIData.ActualDLSSFGMode()!=SI::DLSSGMode::eOff),requestedGeneratedFrames,
             int(GetForegroundWindow()==window),int(IsIconic(window)),glfwGetWindowAttrib(app->HostDeviceManager()->GetWindow(),GLFW_FOCUSED),
-            probeMs[0]/probeFrames,probeMs[1]/probeFrames,probeMs[2]/probeFrames,probeMs[3]/probeFrames);
+            probeMs[0]/probeFrames,probeMs[1]/probeFrames,probeMs[2]/probeFrames,probeMs[3]/probeFrames,
+            int(gpuTimingsEnabled),(unsigned long long)gpuSampleCount);
         probeReport=now;probePreviousNative=presented;probePreviousActual=t.presented;probeFrames=0;probeMs={};
     }
     JNIEnv* compositorEnv=nullptr;
@@ -331,7 +333,7 @@ struct Session {
     double gpuAverageNs=0;
     void beginGpuSample(uint32_t index) {
         currentGpuSample=nullptr;
-        if(g_sampleUIData.HostOverlayText.empty())return;
+        if(!gpuTimingsEnabled)return;
         auto* device=app->HostDeviceManager()->GetDevice();
         for(auto& sample:gpuSamples)if(sample.pending && device->pollTimerQuery(sample.query)) {
             double ns=device->getTimerQueryTime(sample.query)*1e9;
@@ -440,7 +442,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 }
 
 extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(
-    JNIEnv* e, jclass, jstring runtime, jstring scene, jint width, jint height, jboolean externalPresentation, jobjectArray options) {
+    JNIEnv* e, jclass, jstring runtime, jstring scene, jint width, jint height, jboolean externalPresentation, jboolean gpuTimingsEnabled, jobjectArray options) {
     std::lock_guard lock(lifecycle);
     try {
         if (active) throw std::runtime_error("The upstream RTXPT core supports one resident session per process");
@@ -466,6 +468,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         std::vector<const char*> argv; for (const auto& a : args) argv.push_back(a.c_str());
         auto s = std::make_unique<Session>();
         s->externalPresentation=externalPresentation;
+        s->gpuTimingsEnabled=gpuTimingsEnabled;
         donut::log::ConsoleApplicationMode();
         g_sampleUIData = SampleUIData{};
         s->app = std::make_unique<HostApp>();

@@ -11,7 +11,7 @@ from pathlib import Path
 def summarize(log):
     source = log.read_text(encoding="utf-8-sig", errors="replace")
     records = []
-    for match in re.finditer(r"\[unformatted args\] 0: (210|220|221|230) ([^\r\n]*)", source):
+    for match in re.finditer(r"\[unformatted args\] 0: (210|211|220|221|230) ([^\r\n]*)", source):
         fields = dict(re.findall(r"(\d+): (\([^)]*\)|[^\s]+)", match[2]))
         key = tuple(int(n) for n in fields["1"].strip("()").split(","))
         records.append((int(match[1]), key, fields))

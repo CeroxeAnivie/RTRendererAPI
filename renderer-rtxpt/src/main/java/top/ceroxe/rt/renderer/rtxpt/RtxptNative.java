@@ -24,7 +24,7 @@ final class RtxptNative {
         for(String dependency:new String[]{"sl.interposer.dll","NRD.dll","omm-lib.dll"})System.load(root.resolve(dependency).toString());
         System.load(dll.toString()); loaded=true;
     }
-    static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,String[] options);
+    static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,boolean gpuTimingsEnabled,String[] options);
     static native void prepare(String runtime);
     @FunctionalInterface interface Compositor { void compose(long[] frame); }
     static native void compositor(long handle,Compositor callback);
