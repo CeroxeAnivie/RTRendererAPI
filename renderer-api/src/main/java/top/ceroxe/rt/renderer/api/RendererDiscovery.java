@@ -12,9 +12,9 @@ final class RendererDiscovery {
     }
 
     /**
-     * Opens the highest-priority provider using one complete expert configuration.
+     * Opens the highest-priority provider using one complete configuration.
      *
-     * @param configuration immutable expert renderer policy
+     * @param configuration immutable renderer policy, including ordinary presets
      * @return newly owned renderer instance
      */
     public static Renderer open(RendererConfig configuration) {

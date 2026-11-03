@@ -143,6 +143,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             presenter.createWindow();
             presenter.createVulkanRuntime();
             presenter.createSwapchain();
+            presenter.activateOnOpen();
             return presenter;
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
             try {
@@ -159,6 +160,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         GLFW.glfwWindowHint(GLFW.GLFW_CLIENT_API, GLFW.GLFW_NO_API);
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, configuration.visible() ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_FOCUSED, configuration.visible() ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
+        GLFW.glfwWindowHint(GLFW.GLFW_FOCUS_ON_SHOW, configuration.visible() ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
         boolean fullScreen = configuration.windowMode()
                 == VulkanFramePresenterConfig.WindowMode.PRIMARY_MONITOR_FULLSCREEN;
         GLFW.glfwWindowHint(
@@ -201,6 +203,15 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     window, configuration.initialWidth(), configuration.initialHeight()
             );
         }
+    }
+
+    private void activateOnOpen() {
+        if (!configuration.visible()) return;
+        // Activate after device/swapchain startup, which can outlast the creation focus event.
+        GLFW.glfwShowWindow(window);
+        GLFW.glfwFocusWindow(window);
+        ForegroundWindow.activate(org.lwjgl.glfw.GLFWNativeWin32.glfwGetWin32Window(window));
+        GLFW.glfwPollEvents();
     }
 
     private void createVulkanRuntime() {
@@ -478,10 +489,53 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     }
 
     private static final class ForegroundWindow {
-        private static final java.lang.invoke.MethodHandle GET = java.lang.foreign.Linker.nativeLinker()
-                .downcallHandle(java.lang.foreign.SymbolLookup.libraryLookup("user32.dll",
-                        java.lang.foreign.Arena.global()).find("GetForegroundWindow").orElseThrow(),
-                        java.lang.foreign.FunctionDescriptor.of(java.lang.foreign.ValueLayout.ADDRESS));
+        private static final java.lang.foreign.Linker LINKER = java.lang.foreign.Linker.nativeLinker();
+        private static final java.lang.foreign.SymbolLookup USER32 = java.lang.foreign.SymbolLookup
+                .libraryLookup("user32.dll", java.lang.foreign.Arena.global());
+        private static final java.lang.invoke.MethodHandle GET = function("GetForegroundWindow",
+                java.lang.foreign.FunctionDescriptor.of(java.lang.foreign.ValueLayout.ADDRESS));
+        private static final java.lang.invoke.MethodHandle SET = function("SetForegroundWindow",
+                java.lang.foreign.FunctionDescriptor.of(java.lang.foreign.ValueLayout.JAVA_INT,
+                        java.lang.foreign.ValueLayout.ADDRESS));
+        private static final java.lang.invoke.MethodHandle RAISE = function("BringWindowToTop",
+                java.lang.foreign.FunctionDescriptor.of(java.lang.foreign.ValueLayout.JAVA_INT,
+                        java.lang.foreign.ValueLayout.ADDRESS));
+        private static final java.lang.invoke.MethodHandle THREAD = function("GetWindowThreadProcessId",
+                java.lang.foreign.FunctionDescriptor.of(java.lang.foreign.ValueLayout.JAVA_INT,
+                        java.lang.foreign.ValueLayout.ADDRESS, java.lang.foreign.ValueLayout.ADDRESS));
+        private static final java.lang.invoke.MethodHandle ATTACH = function("AttachThreadInput",
+                java.lang.foreign.FunctionDescriptor.of(java.lang.foreign.ValueLayout.JAVA_INT,
+                        java.lang.foreign.ValueLayout.JAVA_INT, java.lang.foreign.ValueLayout.JAVA_INT,
+                        java.lang.foreign.ValueLayout.JAVA_INT));
+
+        private static java.lang.invoke.MethodHandle function(String name,
+                java.lang.foreign.FunctionDescriptor descriptor) {
+            return LINKER.downcallHandle(USER32.find(name).orElseThrow(), descriptor);
+        }
+
+        static void activate(long handle) {
+            var target = java.lang.foreign.MemorySegment.ofAddress(handle);
+            try {
+                var active = (java.lang.foreign.MemorySegment) GET.invokeExact();
+                if (active.address() == handle) return;
+                int activated = (int) SET.invokeExact(target);
+                if (activated != 0) return;
+                int ownerThread = (int) THREAD.invokeExact(target, java.lang.foreign.MemorySegment.NULL);
+                int activeThread = (int) THREAD.invokeExact(active, java.lang.foreign.MemorySegment.NULL);
+                if (activeThread == 0 || activeThread == ownerThread) return;
+                // Share activation state only for this startup request, never throughout rendering.
+                int attached = (int) ATTACH.invokeExact(ownerThread, activeThread, 1);
+                if (attached == 0) return;
+                try {
+                    int raised = (int) RAISE.invokeExact(target);
+                    activated = (int) SET.invokeExact(target);
+                } finally {
+                    int detached = (int) ATTACH.invokeExact(ownerThread, activeThread, 0);
+                }
+            } catch (Throwable failure) {
+                throw new IllegalStateException("cannot activate presenter window", failure);
+            }
+        }
     }
 
     @Override

@@ -63,6 +63,10 @@
 
 | 文档 | 摘要 |
 | --- | --- |
+| [7.1.0 能力与版本合同](7.1.0.md) | 独立原生光照、两种宿主职责、普通／专家入口及最终验收范围。 |
+| [7.1.0 验收矩阵](rtxpt-710-acceptance.md) | 三份需求与 CPU／GPU／打包测试的对应关系和实测边界。 |
+| [7.1.0 性能量化](quality/rtxpt-710-performance.md) | 相同算法精确剪枝前后、逐位图像对照、数据传输与 compact 输出收益。 |
+| [7.1.0 发布 SDK](rtxpt-710-release-sdk.md) | 离仓 GPU 扩展工具、ABI 校验和三个接入示例。 |
 | [7.0.4 透明背景验收](quality/rtxpt-transparent-704.md) | 主射线 coverage、RR 边缘、物理表面及两条 GPU 合成路径与增量成本。 |
 | [7.0.3 资源增量／灯树验收](quality/rtxpt-retained-703.md) | 通用 retained-scene 更新、十万灯采样、窗口回归与同机版本速度对比。 |
 | [质量验证与性能报告](quality/verification-report.md) | 合并 29 份历史记录，包含验证事实、失败、未完成边界和限定条件。 |

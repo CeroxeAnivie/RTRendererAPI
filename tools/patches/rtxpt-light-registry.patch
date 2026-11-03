@@ -1,0 +1,104 @@
+diff --git a/External/Donut/include/donut/engine/SceneGraph.h b/External/Donut/include/donut/engine/SceneGraph.h
+index 925d557..300b4cb 100644
+--- a/External/Donut/include/donut/engine/SceneGraph.h
++++ b/External/Donut/include/donut/engine/SceneGraph.h
+@@ -267,6 +267,7 @@ namespace donut::engine
+         friend class SceneGraph;
+         std::weak_ptr<SceneGraph> m_Graph;
+         SceneGraphNode* m_Parent = nullptr;
++        size_t m_ParentChildIndex = 0; // RTR constant-time unordered child retirement
+         std::vector<std::shared_ptr<SceneGraphNode>> m_Children;
+         std::shared_ptr<SceneGraphLeaf> m_Leaf;
+ 
+@@ -530,6 +531,7 @@ namespace donut::engine
+         std::vector<std::shared_ptr<SceneGraphAnimation>> m_Animations;
+         std::vector<std::shared_ptr<SceneCamera>> m_Cameras;
+         std::vector<std::shared_ptr<Light>> m_Lights;
++        std::unordered_map<const Light*, size_t> m_LightIndices; // RTR stable light identity
+         
+     protected:
+         virtual void RegisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf);
+diff --git a/External/Donut/src/engine/SceneGraph.cpp b/External/Donut/src/engine/SceneGraph.cpp
+index 722b398..e0ee525 100644
+--- a/External/Donut/src/engine/SceneGraph.cpp
++++ b/External/Donut/src/engine/SceneGraph.cpp
+@@ -584,6 +584,7 @@ void SceneGraph::RegisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
+     auto light = std::dynamic_pointer_cast<Light>(leaf);
+     if (light)
+     {
++        m_LightIndices.emplace(light.get(), m_Lights.size());
+         m_Lights.push_back(light);
+         return;
+     }
+@@ -660,9 +661,18 @@ void SceneGraph::UnregisterLeaf(const std::shared_ptr<SceneGraphLeaf>& leaf)
+     auto light = std::dynamic_pointer_cast<Light>(leaf);
+     if (light)
+     {
+-        auto it = std::find(m_Lights.begin(), m_Lights.end(), light);
+-        if (it != m_Lights.end())
+-            m_Lights.erase(it);
++        auto it = m_LightIndices.find(light.get());
++        if (it != m_LightIndices.end())
++        {
++            size_t index = it->second;
++            if (index + 1 != m_Lights.size())
++            {
++                m_Lights[index] = std::move(m_Lights.back());
++                m_LightIndices.at(m_Lights[index].get()) = index;
++            }
++            m_Lights.pop_back();
++            m_LightIndices.erase(it);
++        }
+         return;
+     }
+ }
+@@ -688,6 +698,7 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Attach(const std::shared_ptr<SceneGr
+         // operating on an orphaned subgraph - do not copy or register anything
+ 
+         assert(parent);
++        child->m_ParentChildIndex = parent->m_Children.size();
+         parent->m_Children.push_back(child);
+         child->m_Parent = parent.get();
+         return child;
+@@ -731,6 +742,7 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Attach(const std::shared_ptr<SceneGr
+             // attach the copy to the new parent
+             if (currentParent)
+             {
++                copy->m_ParentChildIndex = currentParent->m_Children.size();
+                 currentParent->m_Children.push_back(copy);
+             }
+             else
+@@ -822,6 +834,7 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Attach(const std::shared_ptr<SceneGr
+ 
+         if (parent)
+         {
++            child->m_ParentChildIndex = parent->m_Children.size();
+             parent->m_Children.push_back(child);
+         }
+         else
+@@ -875,7 +888,8 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Detach(const std::shared_ptr<SceneGr
+ 
+         node->m_Parent->PropagateDirtyFlags(SceneGraphNode::DirtyFlags::SubgraphStructure);
+ 
+-        auto found = std::find(siblings.begin(), siblings.end(), node);
++        auto found = siblings.begin() + node->m_ParentChildIndex;
++        assert(found < siblings.end() && *found == node);
+ 
+         // ensure that the parent actually contains this node
+         if (found != siblings.end())
+@@ -884,11 +898,14 @@ std::shared_ptr<SceneGraphNode> SceneGraph::Detach(const std::shared_ptr<SceneGr
+             
+             if (preserveOrder || found == last)
+             {
+-                siblings.erase(found);
++                auto next = siblings.erase(found);
++                for (; next != siblings.end(); ++next)
++                    (*next)->m_ParentChildIndex = size_t(next - siblings.begin());
+             }
+             else
+             {
+                 std::swap(*found, *last);
++                (*found)->m_ParentChildIndex = size_t(found - siblings.begin());
+                 siblings.erase(last);
+             }
+         }

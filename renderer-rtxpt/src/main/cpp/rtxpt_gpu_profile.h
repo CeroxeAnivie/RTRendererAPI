@@ -44,7 +44,7 @@ struct State {
     std::unique_ptr<RtrAsyncOutput> output;
     std::array<std::array<char,512>,4096> completed{};
     uint64_t completedCount=0, overwritten=0;
-    bool enabled=true;
+    bool enabled=true,draining=false;
     std::mutex mutex;
 };
 inline std::unique_ptr<State> state;
@@ -56,6 +56,7 @@ inline uint32_t EnvNumber(const char* name,uint32_t fallback) {
     return fallback;
 }
 inline void Collect(Queue& q,int queueIndex) {
+    if(std::none_of(q.slots.begin(),q.slots.end(),[](const auto& slot){return slot.pending;}))return;
     const uint64_t completed=q.fence->GetCompletedValue();
     if(completed==UINT64_MAX) {for(auto& s:q.slots)if(s.pending){state->dropped+=s.count;s.pending=false;}return;}
     for(auto& s:q.slots) {
@@ -100,7 +101,13 @@ inline bool InitQueue(Queue& q,nvrhi::IDevice* device,nvrhi::CommandQueue type) 
     return q.resolve!=nullptr;
 }
 inline void Init(nvrhi::IDevice* device,bool explicitEnable=false) {
-    if(state){state->enabled=explicitEnable||state->output!=nullptr;return;}
+    if(state){
+        state->enabled=explicitEnable||state->output!=nullptr;
+        // DEEP is an immediate diagnostic request, including when an export
+        // path created the profiler earlier with its automatic warmup.
+        if(explicitEnable){state->warmup=0;state->stride=EnvNumber("RTR_RTXPT_GPU_PROFILE_STRIDE",1);}
+        return;
+    }
     const char* path=std::getenv("RTR_RTXPT_GPU_PROFILE");
     if(((!path || !*path)&&!explicitEnable) || device->getGraphicsAPI()!=nvrhi::GraphicsAPI::D3D12) return;
     state=std::make_unique<State>();
@@ -148,7 +155,7 @@ inline void End(nvrhi::ICommandList* list,Token token) {
     q.slots[token.slot].events[token.zone].ended=true;
 }
 inline void AfterPresent() {
-    if(!state) return;
+    if(!state||(!state->enabled&&!state->draining)) return;
     for(int i=0;i<2;++i) {
         auto& q=state->queues[i]; Collect(q,i);
         if(q.active<0) continue;
@@ -163,13 +170,23 @@ inline void AfterPresent() {
         else ++state->dropped;
         q.active=-1;
     }
-    ++state->frame;
+    if(state->enabled)++state->frame;
+    if(!state->enabled){
+        state->draining=false;
+        for(const auto& q:state->queues)for(const auto& slot:q.slots)state->draining|=slot.pending;
+    }
 }
 inline void Configure(nvrhi::IDevice* device,unsigned level,bool allowed){
     const char* path=std::getenv("RTR_RTXPT_GPU_PROFILE");
     const bool enabled=allowed&&level!=0&&(level==2||(path&&*path));
     if(enabled)Init(device,level==2);
-    if(state)state->enabled=enabled;
+    if(state){
+        state->enabled=enabled;state->draining=false;
+        if(!enabled)for(const auto& q:state->queues){
+            state->draining|=q.active>=0;
+            for(const auto& slot:q.slots)state->draining|=slot.pending;
+        }
+    }
 }
 inline std::vector<std::string> Snapshot(){
     if(!state)return {"0,0,0,0,0"};
@@ -195,7 +212,7 @@ inline void Shutdown() {
         }
         Collect(q,i);
     }
-    if(state->output){char line[256];std::snprintf(line,sizeof(line),"# frames=%llu,stride=%u,warmup=%u,dropped=%llu,outputDropped=%llu\n",
+    if(state->output&&(state->enabled||state->draining)){char line[256];std::snprintf(line,sizeof(line),"# frames=%llu,stride=%u,warmup=%u,dropped=%llu,outputDropped=%llu\n",
         static_cast<unsigned long long>(state->frame),state->stride,state->warmup,
         static_cast<unsigned long long>(state->dropped),static_cast<unsigned long long>(state->output->dropped));state->output->Write(line);}
     state.reset();

@@ -64,13 +64,14 @@ public final class RtxptNativeSelfTest {
             int min=765,max=0;
             for(int y=0;y<image.getHeight();y+=8)for(int x=0;x<image.getWidth();x+=8){int c=image.getRGB(x,y);int v=((c>>>16)&255)+((c>>>8)&255)+(c&255);min=Math.min(min,v);max=Math.max(max,v);}
             RtxptAdapterSelfTest.require(max-min>24,"Visible non-flat rendered scene");
+            long transformBatchesBeforeEdit=nativeHost.bridgeTimings().transformBatches();
             r.apply(SceneTransaction.builder(2).upsert(SceneInstance.builder(1,1)
                 .transform(new AffineTransform(new float[]{1,0,0,.75f,0,1,0,0,0,0,1,0}))
                 .mediumBoundary(MediumBoundary.surface(new Medium(new Rgb(.2f,.6f,.8f),1.5f)).withPriority(4)).build()).build());
             r.submit(RtxptAdapterSelfTest.frame(1));
             RtxptAdapterSelfTest.require(nativeHost.runtimeStatus().frameGeneration()==frameGenerationActive,
                 "Scene reload restores the requested DLSS-FG state");
-            RtxptAdapterSelfTest.require(nativeHost.bridgeTimings().sceneExports()==1 && nativeHost.bridgeTimings().transformBatches()==1,"Transform-only edit uses one native batch without scene export");
+            RtxptAdapterSelfTest.require(nativeHost.bridgeTimings().sceneExports()==1 && nativeHost.bridgeTimings().transformBatches()==transformBatchesBeforeEdit+1,"Transform-only edit uses one native batch without scene export");
             nativeHost.setExposureCompensation(-.75f);
             try {nativeHost.setExposureCompensation(Float.NaN);throw new AssertionError("Reject non-finite exposure");}
             catch(IllegalArgumentException expected) { }

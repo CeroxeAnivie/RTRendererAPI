@@ -1,5 +1,7 @@
 # RTXPT 与Vulkan 的 GPU 组合
 
+普通完整场景优先使用单后端预设；本页是需要 Vulkan 独立命令／叠层时的专家组合入口。它不同于 7.1 复用宿主主表面的传输／底图增补，入口区别见[普通用法与专家控制](ordinary-and-expert.md)。
+
 > **默认推荐 RTXPT 单后端**完成完整 3D 与最终呈现，显式使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`。
 > **RTXPT＋Vulkan 混合模式不推荐作为默认方案**：它增加整帧复制、跨 API 同步和显存成本，仅供确实需要 Vulkan 独立命令／颜色叠层的专家使用。当前以功能正确、稳定出帧为维护目标，不做混合模式性能优化。
 

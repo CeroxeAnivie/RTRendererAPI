@@ -15,7 +15,8 @@ final class RtxptScene {
     final Map<Long,MaterialAsset> materials=new LinkedHashMap<>();
     final Map<Long,MeshAsset> meshes=new LinkedHashMap<>();
     final Map<Long,SceneInstance> instances=new LinkedHashMap<>();
-    final Map<Long,SceneLight> lights=new LinkedHashMap<>();
+    final RtxptLightMap lights;
+    final RtxptPersistentMap<SparseLightSource> sparseSources;
     private record MeshMaterials(MeshAsset mesh,Set<Long> ids) { }
     private final Map<Long,MeshMaterials> meshMaterials=new HashMap<>();
     Set<Long> materialIds(MeshAsset mesh){
@@ -24,20 +25,21 @@ final class RtxptScene {
         var result=Set.copyOf(ids);meshMaterials.put(mesh.id(),new MeshMaterials(mesh,result));return result;
     }
     private List<SceneLight> sortedLights;
-    List<SceneLight> sortedLights(){if(sortedLights==null)sortedLights=lights.values().stream().sorted(Comparator.comparingLong(SceneLight::id)).toList();return sortedLights;}
+    List<SceneLight> sortedLights(){if(sortedLights==null)sortedLights=List.copyOf(lights.values());return sortedLights;}
     final Map<String,MediumBoundary> interiors=new LinkedHashMap<>();
     final Map<String,Float> materialIors=new LinkedHashMap<>();
-    RtxptScene() { }
+    RtxptScene() { lights=new RtxptLightMap();sparseSources=new RtxptPersistentMap<>(); }
     RtxptScene(RtxptScene src) {
         textures.putAll(src.textures);materials.putAll(src.materials);meshes.putAll(src.meshes);
-        instances.putAll(src.instances);lights.putAll(src.lights);sortedLights=src.sortedLights;meshMaterials.putAll(src.meshMaterials);
+        instances.putAll(src.instances);lights=new RtxptLightMap(src.lights);sortedLights=src.sortedLights;meshMaterials.putAll(src.meshMaterials);
+        sparseSources=new RtxptPersistentMap<>(src.sparseSources);
     }
     static <T> void remove(Map<Long,T> m,LongBuffer ids){while(ids.hasRemaining())m.remove(ids.get());}
     void retain(SceneTransaction tx) {
         retain(tx,true);
     }
     void retain(SceneTransaction tx,boolean nativeContract) {
-        if(tx.reset()){meshMaterials.clear();textures.clear();materials.clear();meshes.clear();instances.clear();lights.clear();}
+        if(tx.reset()){meshMaterials.clear();textures.clear();materials.clear();meshes.clear();instances.clear();lights.clear();sparseSources.clear();}
         if(tx.reset()||!tx.upserts().lights().isEmpty()||tx.removals().lightIds().hasRemaining())sortedLights=null;
         var r=tx.removals();remove(textures,r.textureIds());remove(materials,r.materialIds());remove(meshes,r.meshIds());remove(instances,r.instanceIds());remove(lights,r.lightIds());
         var u=tx.upserts();u.textures().forEach(t->textures.put(t.id(),t));u.materials().forEach(m->materials.put(m.id(),m));

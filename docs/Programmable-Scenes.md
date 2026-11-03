@@ -1,5 +1,7 @@
 # Programmable retained scenes
 
+For preset-based ordinary use, explicit expert policy and backend selection, see [ordinary and expert use](ordinary-and-expert.md). Custom scene programs remain an explicit Vulkan capability.
+
 7.0.2 exposes retained-scene shader replacement through `SceneShaderProgram`. Ordinary callers
 continue to use `Renderer.open()` and the built-in shaders. Applications can replace ray generation,
 miss, closest-hit and any-hit independently; omitted stages retain the built-in implementation.

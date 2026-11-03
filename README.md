@@ -25,8 +25,9 @@
 >
 > **推荐场景**：Java 桌面渲染器、离屏光追、实时 RTX 预览、已有 Vulkan 管线的 GPU 帧集成。
 
-> **7.0.5**：修复帧内短任务等待、材质重复编译与离屏尺寸，增加分段诊断。当前支持矩阵和定向验证以
-> [版本说明](docs/7.0.5.md)、[RTXPT 接入记录](docs/quality/rtxpt-managed-medium-migration.md)及[资源增量／灯树验收](docs/quality/rtxpt-retained-703.md)为准。
+> **7.1.0**：新增独立低分辨率光照、宿主底图增补和主表面传输；提供双向 GPU 交接、真实 BSDF 分层、紧凑光源、增量应用数据和离线 GPU 扩展。
+> 同算法精确剪枝实测将目标光照阶段 P50 从 34.79 ms 降到 12.59 ms，直接光与 GI 输出逐位一致。支持范围、测试与使用入口见
+> [版本说明](docs/7.1.0.md)、[验收账本](docs/rtxpt-710-acceptance.md)和[普通／专家用法](docs/ordinary-and-expert.md)。
 > 历史 CUDA／LuxCore 报告记录原实现，不作为当前 RTXPT 验收结论。
 
 ---
@@ -34,12 +35,12 @@
 ### ✨ 核心亮点
 
 - 🚀 **硬件光线追踪**：基于 Vulkan RT 的三角形与 procedural/AABB BLAS、TLAS、GPUScene 与预编译 SPIR-V 管线。
-- 💧 **托管透明介质**：可选 `renderer-rtxpt` 使用 NVIDIA RTXPT 处理均匀吸收、嵌套介电材质、粗糙折射与全反射；旧散射和密度参数已删除，详见 [7.0.5](docs/7.0.5.md)。
+- 💧 **托管透明介质**：可选 `renderer-rtxpt` 使用 NVIDIA RTXPT 处理均匀吸收、嵌套介电材质、粗糙折射与全反射；旧散射和密度参数已删除，详见 [7.1.0](docs/7.1.0.md)。
 - 🧩 **可编程场景**：四个 RT 场景阶段支持 GLSL 或预编译 SPIR-V，raygen 支持独立 SDR/HDR 变体；复用 `ResourceData` 提交应用缓冲区。
 - ☕ **现代 Java API**：以 Java 25 为基线，提供不可变模型、Builder、类型化异常和确定性生命周期。
 - 🖼️ **两类托管输出**：作用域映射 `FrameView` 与显式 `FrameSnapshot` 保留原始 HDR/整数格式；官方 GPU presenter 无需 CPU 回读。
 - 🔗 **专家级 Vulkan 互操作**：支持 Win32 external memory lease，并可选 linear HDR RGBA16F。
-- 🧠 **分层渲染语义**：普通模式使用场景与材质接口，透明介质显式选择 RTXPT；Vulkan 专家模式控制资源、shader、绑定、pipeline、pass、draw、barrier、BLAS/TLAS、SBT、trace 与外部帧 consumer，自定义阶段不被普通优化覆盖。
+- 🧠 **普通与专家用法**：普通代码用预设、场景和帧接口；专家按需控制质量、程序、命令及 GPU 交接。7.1 的光照／主表面快捷工厂自动准备兼容策略，完整配置入口保留显式控制，见[用法选择](docs/ordinary-and-expert.md)。
 - 🧩 **明确 workload discriminator**：`RenderWorkload` 区分 retained RT、generic raster command 和有序 RT/raster 组合，不根据缺失字段猜测意图。
 - 🧠 **显式 RTX 能力协商**：可独立请求 DLSS SR、DLAA、NIS、NRD、FG/MFG、Reflex/PCL、SER 与 RTXMU。
 - 🔎 **分层能力事实**：物理硬件、格式/handle 互操作、session 协商和真实执行状态互不混淆。
@@ -75,7 +76,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>7.0.5</version>
+    <version>7.1.0</version>
 </dependency>
 ```
 
@@ -83,26 +84,28 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:7.0.5")
+    implementation("top.ceroxe.rt:renderer-api:7.1.0")
 }
 ```
 
 上面是普通 Vulkan 路径。需要 RTXPT 全场景、透明介质或 GPU 组合入口时，再添加可选模块：
 
 ```kotlin
-implementation("top.ceroxe.rt:renderer-rtxpt:7.0.5")
+implementation("top.ceroxe.rt:renderer-rtxpt:7.1.0")
 ```
 
-Maven 同样添加 `top.ceroxe.rt:renderer-rtxpt:7.0.5`。只用公共场景接口时可作为运行依赖；使用
+Maven 同样添加 `top.ceroxe.rt:renderer-rtxpt:7.1.0`。只用公共场景接口时可作为运行依赖；使用
 `RtxptAccess`／`RtxptComposedRenderer` 时需要编译依赖。只部署 RTXPT 的依赖排除方法见[后端路由](docs/backend-routing.md#只部署-rtxpt)。
 
-7.0.5 保留既有介质、资源增量、连续照明与透明背景能力，改进帧内调度、预编译材质路径、离屏尺寸和诊断。源码上传 GitHub，JAR 仅发布到 Maven Local，不上传 Central 或 GitHub。运行
+7.1.0 保留既有介质、资源增量、连续照明与透明背景能力，改进帧内调度、预编译材质路径、离屏尺寸和诊断。源码上传 GitHub，JAR 仅发布到 Maven Local，不上传 Central 或 GitHub。运行
 `publishAllToLocalStagingRepository` 可生成 `build/repository`，供独立消费方验证使用。
 同仓库 Demo 直接依赖项目模块，不要求先发布当前版本。
 
 ### ☕ 渲染第一帧
 
 下面的最小示例只使用托管 CPU 帧，调用方不需要了解 Vulkan：
+
+需要直接显示 GPU 帧、RTXPT 完整场景或 7.1 的独立光照／主表面接入时，先看[普通入口与专家控制](docs/ordinary-and-expert.md)。GPU lease 集成不属于最小 CPU 帧流程。
 
 ```java
 import java.time.Duration;
@@ -299,13 +302,13 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 .\gradlew.bat :demos:hex-ball:shadowJar :demos:hex-ball:mediumShadowJar
 
 # 1. 原 Vulkan 弹球
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.5.jar --windowed
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.1.0.jar --windowed
 
 # 2. RTXPT 新路径弹球
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.5.jar --rtxpt --windowed
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.1.0.jar --rtxpt --windowed
 
 # 3. 纯 RTXPT 介质（默认单后端）：六个场景，可在 HUD 下拉框或数字键 1–6 切换
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.0.5.jar
+java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.1.0.jar
 ```
 
 三个入口默认窗口化、1 SPP、请求 2× FG。不带时限会持续运行，手动关闭窗口退出。
@@ -315,10 +318,10 @@ RTXPT 新弹球默认使用中档 **DLSS SR Performance、1 SPP、2× FG、4 个
 RTXPT 弹球专用入口无需任何应用参数，窗口、FG 和中档预算由入口默认配置：
 
 ```powershell
-java -cp .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.0.5.jar demo.RtxptHexBallDemo
+java -cp .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.1.0.jar demo.RtxptHexBallDemo
 ```
 
-`java -jar ...HexBallDemo-7.0.5.jar` 无参数仍打开 API 工作台；两种入口含义不同。
+`java -jar ...HexBallDemo-7.1.0.jar` 无参数仍打开 API 工作台；两种入口含义不同。
 
 | 常用设置 | 两个弹球入口 | 介质入口 |
 | --- | --- | --- |
@@ -391,7 +394,7 @@ A：不一定。它是非阻塞轮询，空值通常表示当前没有可呈现�
 
 **Q：AMD、Intel 或 Linux 能运行吗？**
 
-A：不能把它们视为 `7.0.5` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
+A：不能把它们视为 `7.1.0` 的受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
 
 ---
 

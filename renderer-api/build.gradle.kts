@@ -105,6 +105,16 @@ tasks.withType<Test>().configureEach {
     failOnNoDiscoveredTests = false
 }
 
+listOf("HostSurfaceContractSelfTest", "HostSurfaceAugmentationSelfTest", "NativeLightingApplicationPatchSelfTest").forEach { name ->
+    val contract = tasks.register<JavaExec>(name.replaceFirstChar { it.lowercase() }) {
+        group = "verification"; dependsOn(tasks.testClasses)
+        classpath = sourceSets.test.get().output + sourceSets.main.get().output
+        mainClass.set("top.ceroxe.rt.renderer.api.$name")
+        jvmArgs("-Xmx128m", "-Dfile.encoding=UTF-8")
+    }
+    tasks.named("check") { dependsOn(contract) }
+}
+
 val forbiddenApiReferences = listOf(
     "net." + "mine" + "craft.",
     "com.mojang.",

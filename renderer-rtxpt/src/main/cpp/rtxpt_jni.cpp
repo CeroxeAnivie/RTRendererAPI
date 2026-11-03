@@ -9,6 +9,7 @@
 #include <thread>
 #include <vector>
 #include <unordered_map>
+#include <set>
 #include <cmath>
 #include <sstream>
 #include <filesystem>
@@ -33,8 +34,17 @@
 #include "rtxpt_path_quality.h"
 #include "rtxpt_host_resources.h"
 #include "rtxpt_memory_diagnostics.h"
-#include "rtxpt_light_tree.h"
+#include "rtxpt_retained_light_tree.h"
+#include "rtxpt_sparse_lighting.h"
+#include "rtxpt_native_extension.h"
+#include "rtxpt_native_lighting.h"
+#include "rtxpt_signal_frames.h"
+#include "rtxpt_surface_inputs.h"
+#include "rtxpt_host_surface.h"
+#include "rtxpt_host_outputs.h"
+#include "rtxpt_host_augmentation.h"
 #include "rtxpt_gpu_profile.h"
+#include "rtxpt_instance_transform.h"
 extern SampleUIData g_sampleUIData;
 
 namespace {
@@ -42,11 +52,12 @@ class HostPathTracer final : public AdvancedPathTracer {
     struct SceneLight { float4 positionType,directionRange,colorIntensity,coneShadow; };
     static_assert(sizeof(SceneLight)==64);
     std::vector<SceneLight> sceneLights;
-    std::vector<rtr::LightTreeNode> sceneLightTree;
+    rtr::RetainedLightTree lightTree;
+    std::vector<rtr::LightTreeNode>& sceneLightTree=lightTree.nodes;
     uint64_t lightIndexBuilds=0,lightIndexBuildNs=0;
     double lightPowerNormalization=1;
     bool uploadSunOnly=false;
-    std::vector<uint32_t> sunTreePath,treeParents,lightLeaves,dirtyLightIndices,dirtyTreeIndices;
+    std::vector<uint32_t> dirtyLightIndices,dirtyTreeIndices;
     std::unordered_map<int64_t,uint32_t> lightIndices;
     std::vector<std::shared_ptr<donut::engine::Light>> managedLightObjects;
     uint64_t lightDeltaRecords=0,lightTreeRefits=0;
@@ -57,6 +68,123 @@ class HostPathTracer final : public AdvancedPathTracer {
     uint64_t cacheGeneration=1;
     uint64_t HostSceneCacheGeneration() const override { return managedLighting ? cacheGeneration : 0; }
 public:
+    RtrSparseLighting sparseLighting;
+    RtrNativeLightingPass nativeLighting;
+    RtrHostSurface hostSurface;
+    RtrHostOutputs hostOutputs;
+    RtrHostAugmentation hostAugmentation;
+    RtrSurfaceInputs* surfaceInputs=nullptr;
+    std::optional<RtrSurfaceInputs::Read> surfaceRead;
+    bool hostReadSubmitted=false;
+    std::array<dm::affine3,2> hostView;
+    std::array<dm::float4x4,2> hostProjection;
+    std::array<dm::float2,2> hostJitter;
+    bool hostViewConfigured=false;
+    uint64_t hostInputGeneration=0,hostResourceGeneration=0;
+    int64_t hostTimeNanos=0,hostDeltaNanos=0;
+    bool ConfigureHostViews(donut::engine::PlanarView& current,donut::engine::PlanarView& previous) override {
+        if(!hostSurface.active||!hostViewConfigured)return false;
+        const float2 scale=float2(float(m_renderSize.x)/m_displaySize.x,float(m_renderSize.y)/m_displaySize.y);
+        current.SetMatrices(hostView[0],hostProjection[0]);current.SetPixelOffset(hostJitter[0]*scale);
+        previous.SetMatrices(hostView[1],hostProjection[1]);previous.SetPixelOffset(hostJitter[1]*scale);return true;
+    }
+    void ConfigureHostView(const std::vector<float>& values){
+        if(values.size()!=70)throw std::invalid_argument("Host view ABI requires 70 floats");
+        for(float value:values)if(!std::isfinite(value))throw std::invalid_argument("Non-finite host view");
+        for(size_t index=0;index<2;index++){
+            const float* value=values.data()+index*35;dm::float4x4 world,projection;
+            for(int row=0;row<4;row++)for(int column=0;column<4;column++)world[row][column]=value[column*4+row]*(row==2?-1.f:1.f);
+            // Homogeneous row is translation, not the view-space Z basis.
+            hostView[index]=dm::inverse(dm::homogeneousToAffine(world));
+            int depth=int(value[34]);if(depth<0||depth>3||float(depth)!=value[34])throw std::invalid_argument("Unknown host depth convention");
+            for(int row=0;row<4;row++)for(int column=0;column<4;column++){
+                float element=value[16+column*4+row];
+                if(column==2){float z=value[24+row],w=value[28+row];
+                    if(depth==1||depth==3)z=(z+w)*.5f;
+                    element=depth<2?w-z:z;}
+                projection[row][column]=element*(row==2?-1.f:1.f);
+            }
+            hostProjection[index]=projection;
+            // API jitter offsets the sample position; Donut offsets the projection.
+            hostJitter[index]=-float2(value[32],value[33]);
+        }
+        hostViewConfigured=true;
+    }
+    void BeginHostRead(RtrSurfaceInputs& inputs,const RtrSurfaceInputs::Identity& identity){
+        if(surfaceRead)throw std::logic_error("A host surface read is already pending");
+        surfaceRead=inputs.BeginRead(identity);hostReadSubmitted=false;surfaceInputs=&inputs;std::copy_n(surfaceRead->textures.begin(),8,hostSurface.inputs.begin());
+        const auto& plan=surfaceRead->packet.plan;hostSurface.inputWidth=plan.width;hostSurface.inputHeight=plan.height;
+        hostSurface.composition=plan.composition;hostSurface.hostComponents=plan.preservedHostComponents;hostSurface.motionIncludesJitter=plan.motionIncludesJitter;
+        hostSurface.sequence=identity.sequence;hostSurface.revision=identity.revision;
+        hostInputGeneration=surfaceRead->packet.token.generation;hostResourceGeneration=identity.resourceGeneration;
+        hostTimeNanos=identity.timeNanos;hostDeltaNanos=identity.deltaNanos;
+        hostSurface.active=true;GetBindingCache().Clear();InvalidateBindingSet();
+    }
+    void AbortHostRead(){if(surfaceRead){
+        if(hostReadSubmitted){FinishHostRead();return;}
+        surfaceInputs->AbortRead(surfaceRead->packet.token);surfaceRead.reset();
+    }}
+    void FinishHostRead(){if(!surfaceRead)return;
+        auto command=GetDevice()->createCommandList();command->open();surfaceInputs->RestoreCommon(command,*surfaceRead);command->close();
+        GetDevice()->executeCommandList(command);surfaceInputs->EndRead(surfaceRead->packet.token);surfaceRead.reset();hostReadSubmitted=false;hostSurface.RecordWork(GetDevice());
+    }
+    const donut::engine::Scene* nativePreparedScene=nullptr;
+    void ActivateLightingExtension(const RtrNativeExtension& extension){nativeLighting.Prepare(GetDevice(),*m_shaderFactory,m_bindlessLayout);nativeLighting.Activate(GetDevice(),m_bindlessLayout,extension);}
+    void Render(nvrhi::IFramebuffer* framebuffer) override {
+        const bool augmentation=hostSurface.active&&hostSurface.composition==0;
+        if(!nativeLighting.active&&!augmentation){
+            if(hostSurface.active&&!surfaceRead)throw std::logic_error("Host mode requires a matching published primary surface input");
+            ++nativeLighting.beautyFrames;
+            try{hostReadSubmitted=bool(surfaceRead);AdvancedPathTracer::Render(framebuffer);
+                if(hostSurface.active)hostOutputs.Resolve(GetDevice(),HostSurfaceHdr(),hostSurface);
+            }catch(...){if(surfaceRead)FinishHostRead();throw;}
+            FinishHostRead();return;
+        }
+        if(!m_scene)throw std::runtime_error("Native lighting requires a resident scene");
+        if(augmentation&&!surfaceRead)throw std::logic_error("Host augmentation requires a matching published surface input");
+        const auto& framebufferInfo=framebuffer->getFramebufferInfo();m_displaySize=uint2(framebufferInfo.width,framebufferInfo.height);
+        if(augmentation){hostAugmentation.Prepare(GetDevice(),*m_shaderFactory,m_bindlessLayout,nativeLighting);m_renderSize=uint2(hostAugmentation.plan.width,hostAugmentation.plan.height);}
+        else{const auto* dimensions=reinterpret_cast<const uint32_t*>(nativeLighting.constants.words.data());m_renderSize=uint2(dimensions[40],dimensions[41]);}
+        m_progressLoading.Stop();m_asyncLoadingInProgress=false;
+        if(nativePreparedScene!=m_scene.get()){
+            nativePreparedScene=m_scene.get();nativeLighting.metadataDirty=true;
+        }
+        if(!augmentation)nativeLighting.Prepare(GetDevice(),*m_shaderFactory,m_bindlessLayout);
+        if(m_scene->GetSceneGraph()->GetMeshInstances().empty()){
+            m_commandList->open();
+            if(augmentation){
+                hostSurface.Prepare(GetDevice(),m_scene,m_commandList);
+                for(unsigned i=0;i<8;i++)if(hostAugmentation.outputs[i]){
+                    if(i==0)m_commandList->copyTexture(hostAugmentation.outputs[i],nvrhi::TextureSlice(),surfaceRead->textures[9],nvrhi::TextureSlice());
+                    else m_commandList->clearTextureFloat(hostAugmentation.outputs[i],nvrhi::AllSubresources,i==1?nvrhi::Color(1,1,1,0):nvrhi::Color(0));
+                }
+                if(nativeLighting.workStatisticsEnabled)m_commandList->clearBufferUInt(nativeLighting.work,0);
+                m_commandList->close();hostReadSubmitted=true;GetDevice()->executeCommandList(m_commandList);nativeLighting.RecordWork(GetDevice());FinishHostRead();++hostAugmentation.executedFrames;++m_frameIndex;return;
+            }
+            if(nativeLighting.direct)m_commandList->clearTextureFloat(nativeLighting.direct,nvrhi::AllSubresources,nvrhi::Color(1,1,1,0));
+            if(nativeLighting.indirect)m_commandList->clearTextureFloat(nativeLighting.indirect,nvrhi::AllSubresources,nvrhi::Color(0));
+            if(nativeLighting.geometry)m_commandList->clearTextureFloat(nativeLighting.geometry,nvrhi::AllSubresources,nvrhi::Color(0));
+            if(nativeLighting.identity)m_commandList->clearTextureUInt(nativeLighting.identity,nvrhi::AllSubresources,0);
+            if(nativeLighting.workStatisticsEnabled)m_commandList->clearBufferUInt(nativeLighting.work,0);
+            nativeLighting.EncodeOutputs(GetDevice(),m_commandList);
+            m_commandList->close();GetDevice()->executeCommandList(m_commandList);nativeLighting.RecordWork(GetDevice());++nativeLighting.executedFrames;++m_frameIndex;return;
+        }
+        RecreateAccelStructs(m_commandList);
+        PrepareHostLightResources();
+        m_commandList->open();
+        UploadSceneLighting(m_commandList);
+        m_scene->Refresh(m_commandList,GetFrameIndex());
+        m_sceneRenderCache.Open(m_scene,&m_frameWorkerPool,HostSceneCacheGeneration());
+        RAII_SCOPE(;,PostRender(););
+        UpdateSkinnedBLASs(m_commandList,GetFrameIndex());
+        TransitionMeshBuffersToReadOnly(m_commandList);UpdateTLAS(m_commandList);
+        if(augmentation)hostAugmentation.Dispatch(GetDevice(),m_commandList,m_scene,m_topLevelAS,sparseLighting,m_CommonPasses->m_LinearWrapSampler,sceneLightBuffer,uint32_t(sceneLights.size()),lightTree.root==rtr::RetainedLightTree::None?0:lightTree.root,lightSlotCapacity,nativeLighting,hostSurface,surfaceRead->textures,hostTimeNanos,hostDeltaNanos);
+        else nativeLighting.Dispatch(GetDevice(),m_commandList,m_scene,m_topLevelAS,sparseLighting,m_CommonPasses->m_LinearWrapSampler,sceneLightBuffer,uint32_t(sceneLights.size()),lightTree.root==rtr::RetainedLightTree::None?0:lightTree.root,lightSlotCapacity);
+        m_commandList->close();if(augmentation)hostReadSubmitted=true;GetDevice()->executeCommandList(m_commandList);nativeLighting.RecordWork(GetDevice());if(augmentation)FinishHostRead();++m_frameIndex;
+    }
+    void ApplySparseLighting(const std::vector<int64_t>& ids,const std::vector<float>& values,const std::vector<int64_t>& removals,bool reset){
+        sparseLighting.Apply(ids,values,removals,reset);LightingHistory(true);InvalidateFrameCache();
+    }
     void InvalidateFrameCache(){++cacheGeneration;}
 private:
     void HostHistoryAction(int scope,bool reset) override {
@@ -208,103 +336,7 @@ public:
     std::array<uint64_t,5> LightingTelemetry() const {
         return {sceneLoadCount,lightingBatchCount,lightingUploadCount,lightingUploadNs,lightingHistoryResets};
     }
-    void RebuildLightTree() {
-        const auto begin=std::chrono::steady_clock::now();
-        sceneLightTree=rtr::BuildLightTree(sceneLights,&lightPowerNormalization);++lightIndexBuilds;
-        sunTreePath.clear();treeParents.assign(sceneLightTree.size(),0);lightLeaves.assign(sceneLights.size(),0);
-        for(uint32_t i=0;i<sceneLightTree.size();i++){
-            auto& node=sceneLightTree[i];
-            if(node.light<0){treeParents[uint32_t(node.left)]=i;treeParents[uint32_t(node.right)]=i;}
-            else lightLeaves.at(uint32_t(node.light))=i;
-        }
-        if(!sceneLightTree.empty())for(uint32_t i=lightLeaves[0];;i=treeParents[i]){sunTreePath.push_back(i);if(i==0)break;}
-        dirtyLightIndices.clear();dirtyTreeIndices.clear();
-        lightIndexBuildNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-begin).count();
-        uploadSunOnly=false;
-    }
-    void ApplyEnvironment(const std::array<float,16>& sun,const std::array<float,4>& sky) {
-        if(!managedLighting||sceneLights.empty()||!managedLightRoot)throw std::logic_error("Environment requires a resident managed scene");
-        for(float value:sun)if(!std::isfinite(value))throw std::invalid_argument("Invalid environment sun");
-        for(float value:sky)if(!std::isfinite(value)||value<0)throw std::invalid_argument("Invalid environment sky");
-        if(sun[3]!=0||sun[8]<0||sun[9]<0||sun[10]<0||sun[11]<0||std::abs(sun[4]*sun[4]+sun[5]*sun[5]+sun[6]*sun[6]-1.f)>.003f)
-            throw std::invalid_argument("Invalid environment sun values");
-        SceneLight nextSun;std::memcpy(&nextSun,sun.data(),sizeof(SceneLight));bool abrupt=Abrupt(sceneLights[0],nextSun);
-        for(int a=0;a<4;a++)abrupt|=std::abs(sceneSky[a]-sky[a])>std::max(.001f,std::max(sceneSky[a],sky[a])*.1f);
-        if(!sceneLightsDirty)uploadSunOnly=true;
-        std::memcpy(&sceneLights[0],sun.data(),sizeof(SceneLight));sceneSky=float4(sky[0],sky[1],sky[2],sky[3]);
-        auto* light=dynamic_cast<donut::engine::DirectionalLight*>(managedLightObjects.at(0).get());
-        if(!light)throw std::logic_error("Managed sun is missing");
-        light->color=float3(sun[8],sun[9],sun[10]);light->irradiance=sun[11];light->SetDirection(double3(sun[4],sun[5],sun[6]));
-        double power=double(sun[11])*(.2126*sun[8]+.7152*sun[9]+.0722*sun[10])/lightPowerNormalization;
-        if(!std::isfinite(float(power))||power>1e25)RebuildLightTree();
-        else {rtr::RefitLightTree(sceneLightTree,sceneLights,treeParents,lightLeaves[0],lightPowerNormalization,dirtyTreeIndices);dirtyLightIndices.push_back(0);++lightTreeRefits;}
-        sceneLightsDirty=true;lightingCommitPending=true;ConfigureManagedBackground();
-        LightingHistory(abrupt);
-        directionalStrataLogged=false;++lightingBatchCount;
-    }
-    void ApplyLighting(const std::vector<int64_t>& ids,const std::vector<float>& records,const std::array<float,4>& sky) {
-        if(!GetScene() || !managedLighting)throw std::logic_error("Lighting batches require a retained API scene");
-        const size_t count=ids.size();
-        if(count==0 || records.size()!=count*16 || ids[0]!=-1)throw std::invalid_argument("Malformed complete lighting batch");
-        if(count>size_t(NEEAT_MAX_LIGHTS-RTXPT_NEEAT_ENVMAP_QT_TOTAL_NODE_COUNT))throw std::invalid_argument("Lighting batch exceeds native sampler capacity");
-        std::unordered_map<int64_t,bool> unique;
-        for(float v:sky)if(!std::isfinite(v)||v<0)throw std::invalid_argument("Invalid lighting sky");
-        std::vector<SceneLight> next(count);
-        std::vector<std::shared_ptr<donut::engine::Light>> nextObjects;nextObjects.reserve(count);
-        auto candidate=std::make_shared<donut::engine::SceneGraph>();
-        auto candidateRoot=std::make_shared<donut::engine::SceneGraphNode>();candidateRoot->SetName("RTRLighting");candidate->SetRootNode(candidateRoot);
-        for(size_t i=0;i<count;i++) {
-            if(i%256==0)RtrHostResources::PumpEvents();
-            const float* v=&records[i*16];
-            for(size_t j=0;j<16;j++)if(!std::isfinite(v[j]))throw std::invalid_argument("Non-finite light record");
-            if((i>0&&ids[i]<0)||!unique.emplace(ids[i],true).second)throw std::invalid_argument("Duplicate or invalid light id");
-            const int type=int(v[3]);
-            if(float(type)!=v[3]||type<0||type>2 || v[7]<0 || v[8]<0||v[9]<0||v[10]<0||v[11]<0
-                || (v[14]!=0&&v[14]!=1) || (type!=0&&v[7]<=0)
-                || (type==2&&(v[12]<v[13]||v[12]>1||v[13]<-1)))throw std::invalid_argument("Invalid light record");
-            if(type!=1 && std::abs(v[4]*v[4]+v[5]*v[5]+v[6]*v[6]-1.f)>.003f)throw std::invalid_argument("Light direction must be normalized");
-            std::memcpy(&next[i],v,sizeof(SceneLight));
-            std::shared_ptr<donut::engine::Light> light;
-            if(type==0) {
-                std::shared_ptr<donut::engine::DirectionalLight> l=i==0?std::make_shared<donut::engine::DirectionalLight>():std::make_shared<ManagedDirectional>();
-                l->irradiance=v[11];l->angularSize=i==0?.53f:0.f;light=l;
-            }else if(type==1) {
-                auto l=std::make_shared<PointLightEx>();l->intensity=v[11];l->range=v[7];l->radius=0;light=l;
-            }else {
-                auto l=std::make_shared<SpotLightEx>();l->intensity=v[11];l->range=v[7];l->radius=0;
-                l->innerAngle=degrees(std::acos(std::clamp(v[12],-1.f,1.f)));l->outerAngle=degrees(std::acos(std::clamp(v[13],-1.f,1.f)));light=l;
-            }
-            if(auto* metadata=dynamic_cast<LightExtension*>(light.get())){metadata->HostManaged=true;metadata->CastsShadow=v[14]!=0;}
-            nextObjects.push_back(light);light->color=float3(v[8],v[9],v[10]);
-            auto node=candidate->AttachLeafNode(candidateRoot,light);node->SetName(i==0?"Sun":"l"+std::to_string(ids[i]));
-            light->SetPosition(double3(v[0],v[1],v[2]));if(type!=1)light->SetDirection(double3(v[4],v[5],v[6]));
-        }
-        candidate->Detach(candidateRoot);
-        auto graph=GetScene()->GetSceneGraph();
-        // Allocate and validate the whole replacement before touching the resident graph.
-        // An allocation failure during the commit propagates to Java, which closes this session before another render.
-        if(managedLightRoot)graph->Detach(managedLightRoot);
-        else {
-            auto previousLights=graph->GetLights();
-            size_t retiredLightCount=0;
-            for(auto& light:previousLights)if(light->GetLightType()!=LightType_Environment){
-                if(retiredLightCount++%256==0)RtrHostResources::PumpEvents();graph->Detach(light->GetNode()->shared_from_this());
-            }
-        }
-        managedLightRoot=graph->Attach(graph->GetRootNode(),candidateRoot);
-        // Consume only the lighting structure flags before Java applies this frame's transforms.
-        // Scene::Refresh must not interpret adding a light as changing mesh topology.
-        graph->Refresh(GetFrameIndex());m_lights=graph->GetLights();
-        managedLightObjects=std::move(nextObjects);lightIndices.clear();for(uint32_t i=0;i<count;i++)lightIndices.emplace(ids[i],i);
-        sceneLights=std::move(next);sceneSky=float4(sky[0],sky[1],sky[2],sky[3]);sceneLightsDirty=true;
-        RebuildLightTree();
-        lightingSceneDirty=true;lightingPolicyLogged=false;directionalStrataLogged=false;preSrHistoryReset=true;
-        ConfigureManagedBackground();
-        LightingHistory(true);
-        const char* freezeNoise=std::getenv("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE");
-        if(freezeNoise&&std::string(freezeNoise)=="1")g_sampleUIData.DbgFreezeRealtimeNoiseSeed=true;
-        ++lightingBatchCount;lightingCommitPending=true;
-    }
+    #include "rtxpt_retained_lighting.inl"
     void SetLightingContinuity(int policy){
         if(policy<0||policy>1)throw std::invalid_argument("Invalid lighting continuity");
         if(policy==1&&!sceneLightingActive())throw std::invalid_argument("Continuous lighting requires SCENE_ANALYTIC without ReSTIR or radiance cache");
@@ -317,32 +349,18 @@ public:
     }
     std::array<jlong,16> ExecutionTelemetry() {auto p=GetRTPipelineBaker()?GetRTPipelineBaker()->HostTelemetry():std::array<uint64_t,3>{};return {jlong(importerNs),jlong(textureFinalizeNs),jlong(materialSyncNs),jlong(accelerationNs),jlong(nativeRetirementNs),jlong(lightDeltaRecords),jlong(lightTreeRefits),jlong(executedAccumulationResets),jlong(executedReconstructionResets),jlong(executedDenoiserResets),jlong(cacheNotifications),jlong(continuousUploads),jlong(p[0]),jlong(p[1]),jlong(p[2]),jlong(RtrHostResources::maximumPollIntervalNanos)};}
     void ApplyLightDelta(const std::vector<int64_t>& ids,const std::vector<float>& values){
-        if(values.size()!=ids.size()*16)throw std::invalid_argument("Invalid light delta");
-        std::vector<SceneLight> next(ids.size());std::unordered_map<int64_t,bool> seen;bool abrupt=false;
-        for(size_t i=0;i<ids.size();i++){
-            auto entry=lightIndices.find(ids[i]);if(entry==lightIndices.end()||ids[i]<0||!seen.emplace(ids[i],true).second)throw std::invalid_argument("Unknown or duplicate light delta ID");
-            const float* v=&values[i*16];for(int a=0;a<16;a++)if(!std::isfinite(v[a]))throw std::invalid_argument("Non-finite light delta");
-            auto& old=sceneLights[entry->second];if(v[3]!=old.positionType.w||v[7]<0||v[8]<0||v[9]<0||v[10]<0||v[11]<0||(v[14]!=0&&v[14]!=1)
-                ||(v[3]!=0&&v[7]<=0)||(v[3]!=1&&std::abs(v[4]*v[4]+v[5]*v[5]+v[6]*v[6]-1.f)>.003f)
-                ||(v[3]==2&&(v[12]<v[13]||v[12]>1||v[13]<-1)))throw std::invalid_argument("Invalid light delta values");
-            std::memcpy(&next[i],v,sizeof(SceneLight));abrupt|=Abrupt(old,next[i]);
-        }
-        if(!sceneLightsDirty)uploadSunOnly=true;
-        for(size_t i=0;i<ids.size();i++){
-            uint32_t index=lightIndices.at(ids[i]);sceneLights[index]=next[i];auto& l=managedLightObjects.at(index);const auto& v=next[i];
-            l->color=v.colorIntensity.xyz();l->SetPosition(double3(v.positionType.xyz()));
-            if(v.positionType.w==0){auto& d=static_cast<donut::engine::DirectionalLight&>(*l);d.irradiance=v.colorIntensity.w;l->SetDirection(double3(v.directionRange.xyz()));}
-            else if(v.positionType.w==1){auto& d=static_cast<PointLightEx&>(*l);d.intensity=v.colorIntensity.w;d.range=v.directionRange.w;}
-            else{auto& d=static_cast<SpotLightEx&>(*l);d.intensity=v.colorIntensity.w;d.range=v.directionRange.w;d.innerAngle=degrees(std::acos(std::clamp(v.coneShadow.x,-1.f,1.f)));d.outerAngle=degrees(std::acos(std::clamp(v.coneShadow.y,-1.f,1.f)));l->SetDirection(double3(v.directionRange.xyz()));}
-            if(auto* metadata=dynamic_cast<LightExtension*>(l.get()))metadata->CastsShadow=v.coneShadow.z!=0;
-            double power=double(v.colorIntensity.w)*(.2126*v.colorIntensity.x+.7152*v.colorIntensity.y+.0722*v.colorIntensity.z)/lightPowerNormalization;
-            if(!std::isfinite(float(power))||power>1e25)RebuildLightTree();
-            else{rtr::RefitLightTree(sceneLightTree,sceneLights,treeParents,lightLeaves.at(index),lightPowerNormalization,dirtyTreeIndices);dirtyLightIndices.push_back(index);++lightTreeRefits;}
-        }
-        lightDeltaRecords+=ids.size();sceneLightsDirty=true;lightingCommitPending=true;++lightingBatchCount;LightingHistory(abrupt);
+        for(auto id:ids)if(!lightIndices.count(id))throw std::invalid_argument("Unknown light delta ID");
+        std::array<float,16> sun{};std::memcpy(sun.data(),&sceneLights.at(0),sizeof(SceneLight));
+        ApplyLightPatch(ids,values,{},sun,{sceneSky.x,sceneSky.y,sceneSky.z,sceneSky.w});
     }
     void UpdateCustomResources() override {
-        AdvancedPathTracer::UpdateCustomResources();
+        AdvancedPathTracer::UpdateCustomResources();PrepareHostLightResources();
+        hostSurface.Prepare(GetDevice(),m_scene,m_commandList);
+        hostOutputs.Ensure(GetDevice(),m_commandList);
+        if(hostSurface.active)hostOutputs.Prepare(GetDevice(),*m_shaderFactory,m_commandList,m_renderSize.x,m_renderSize.y,m_displaySize.x,m_displaySize.y);
+    }
+    void PrepareHostLightResources() {
+        if(sparseLighting.Ensure(GetDevice())){GetBindingCache().Clear();InvalidateBindingSet();}
         if(lightStatsEnabled&&!lightStatsBuffer){
             nvrhi::BufferDesc desc;desc.byteSize=16;desc.canHaveUAVs=true;desc.canHaveRawViews=true;
             desc.initialState=nvrhi::ResourceStates::UnorderedAccess;desc.keepInitialState=true;desc.debugName="RtrLightWork";
@@ -352,10 +370,11 @@ public:
             if(GetDevice()->pollEventQuery(it->graphics)&&GetDevice()->pollEventQuery(it->compute))it=retiredLighting.erase(it);else ++it;
         }
         ConfigureManagedBackground();
-        const size_t bytes=std::max<size_t>(sizeof(SceneLight),(sceneLights.size()+sceneLightTree.size())*sizeof(SceneLight));
-        if(!sceneLightBuffer || sceneLightBuffer->getDesc().byteSize<bytes || sceneLightBuffer->getDesc().byteSize>bytes*4) {
-            size_t capacity=sizeof(SceneLight);while(capacity<bytes)capacity*=2;
-            nvrhi::BufferDesc desc;desc.byteSize=capacity;desc.structStride=sizeof(SceneLight);
+        if(!sceneLightBuffer || sceneLights.size()>lightSlotCapacity || sceneLightTree.size()>treeSlotCapacity) {
+            uint32_t lightCapacity=std::max(lightSlotCapacity,1u),treeCapacity=std::max(treeSlotCapacity,1u);
+            while(lightCapacity<sceneLights.size())lightCapacity*=2;
+            while(treeCapacity<sceneLightTree.size())treeCapacity*=2;
+            nvrhi::BufferDesc desc;desc.byteSize=(size_t(lightCapacity)+treeCapacity)*sizeof(SceneLight);desc.structStride=sizeof(SceneLight);
             desc.debugName="RtrSceneLightingInputs";desc.initialState=nvrhi::ResourceStates::ShaderResource;desc.keepInitialState=true;
             auto replacement=GetDevice()->createBuffer(desc);
             if(!replacement)throw std::runtime_error("Could not allocate scene light buffer");
@@ -367,11 +386,16 @@ public:
                 retiredLighting.push_back(std::move(retired));
             }
             GetBindingCache().Clear();InvalidateBindingSet();
-            sceneLightBuffer=replacement;sceneLightsDirty=true;uploadSunOnly=false;
+            sceneLightBuffer=replacement;lightSlotCapacity=lightCapacity;treeSlotCapacity=treeCapacity;
+            ++lightingWork[12];sceneLightsDirty=true;uploadSunOnly=false;
         }
     }
     void AddCustomBindings(nvrhi::BindingSetDesc& desc) override {
         AdvancedPathTracer::AddCustomBindings(desc);
+        hostSurface.Bind(desc);
+        hostOutputs.Bind(desc);
+        desc.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(97,sparseLighting.sourceBuffer));
+        desc.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(98,sparseLighting.treeBuffer));
         if(lightStatsEnabled)desc.bindings.push_back(nvrhi::BindingSetItem::RawBuffer_UAV(96,lightStatsBuffer));
         for(auto& item:desc.bindings)if(item.slot==96 && item.type==nvrhi::ResourceType::StructuredBuffer_SRV)
             item=nvrhi::BindingSetItem::StructuredBuffer_SRV(96,sceneLightBuffer);
@@ -392,34 +416,44 @@ public:
         GpuProfiler::End(command);
         preSrHistoryReset=false;
     }
+    void UploadSceneLighting(nvrhi::ICommandList* commandList) {
+        if(sceneLightsDirty && sceneLightBuffer) {
+            const auto begin=RtrDiagnostics::level.load(std::memory_order_relaxed)?RtrDiagnostics::Now():0;
+            RtrDiagnostics::Scope uploadScope(RtrDiagnostics::LightUpload,sceneLights.size(),dirtyLightIndices.size()+dirtyTreeIndices.size());
+            auto uploadRanges=[&](auto& records,std::vector<uint32_t>& dirty,uint64_t base,unsigned counter){
+                if(!uploadSunOnly){
+                    if(!records.empty()){commandList->writeBuffer(sceneLightBuffer,records.data(),records.size()*64,base*64);lightingWork[counter]+=records.size();lightingWork[11]+=records.size()*64;}
+                    return;
+                }
+                std::sort(dirty.begin(),dirty.end());dirty.erase(std::unique(dirty.begin(),dirty.end()),dirty.end());
+                dirty.erase(std::lower_bound(dirty.begin(),dirty.end(),uint32_t(records.size())),dirty.end());
+                for(size_t i=0;i<dirty.size();){size_t end=i+1;while(end<dirty.size()&&dirty[end]==dirty[end-1]+1)++end;
+                    uint32_t first=dirty[i];size_t count=end-i;
+                    if(size_t(first)+count>records.size())throw std::logic_error("Invalid dirty lighting span");
+                    commandList->writeBuffer(sceneLightBuffer,&records[first],count*64,(base+first)*64);lightingWork[counter]+=count;lightingWork[11]+=count*64;i=end;}
+            };
+            uploadRanges(sceneLights,dirtyLightIndices,0,9);uploadRanges(sceneLightTree,dirtyTreeIndices,lightSlotCapacity,10);
+            uploadSunOnly=false;dirtyLightIndices.clear();dirtyTreeIndices.clear();
+            sceneLightsDirty=false;
+            if(lightingCommitPending) {
+                ++lightingUploadCount;lightingCommitPending=false;if(continuousPending)++continuousUploads;continuousPending=false;
+                if(begin)lightingUploadNs+=RtrDiagnostics::Now()-begin;
+                const char* diagnostics=std::getenv("RTR_RTXPT_LIGHTING_DIAGNOSTICS");
+                if(diagnostics&&std::string(diagnostics)=="1")donut::log::info("RTXPT lighting executed loads=%llu batches=%llu uploads=%llu uploadRecordingNs=%llu historyResets=%llu lights=%zu",sceneLoadCount,lightingBatchCount,lightingUploadCount,lightingUploadNs,lightingHistoryResets,sceneLights.size());
+            }
+        }
+    }
     void UpdateCustomConstants(SampleConstants& constants, nvrhi::ICommandList* commandList) override {
         AdvancedPathTracer::UpdateCustomConstants(constants,commandList);
+        sparseLighting.Upload(commandList);
         if(lightStatsEnabled)commandList->clearBufferUInt(lightStatsBuffer,0);
         auto& pt=constants.ptConsts;
         pt.RtrSceneAmbient=float4(sceneSky.xyz()*sceneSky.w,transparentBackground?2.f:independentBackground?1.f:0.f);
         pt.RtrSceneSky=float4(sceneSky.xyz()*std::max(sceneSky.w,.05f),0);
         std::memcpy(&pt.RtrDirectionalPadding,&primaryBackground,sizeof(float3)); // bit-exact RGB in reserved ABI words
         pt.RtrSceneLightCount=uint32_t(sceneLights.size());
-        if(sceneLightsDirty && sceneLightBuffer) {
-            const auto begin=std::chrono::steady_clock::now();
-            if(uploadSunOnly){
-                std::sort(dirtyLightIndices.begin(),dirtyLightIndices.end());dirtyLightIndices.erase(std::unique(dirtyLightIndices.begin(),dirtyLightIndices.end()),dirtyLightIndices.end());
-                std::sort(dirtyTreeIndices.begin(),dirtyTreeIndices.end());dirtyTreeIndices.erase(std::unique(dirtyTreeIndices.begin(),dirtyTreeIndices.end()),dirtyTreeIndices.end());
-                for(uint32_t index:dirtyLightIndices)commandList->writeBuffer(sceneLightBuffer,&sceneLights[index],sizeof(SceneLight),index*sizeof(SceneLight));
-                for(uint32_t index:dirtyTreeIndices)commandList->writeBuffer(sceneLightBuffer,&sceneLightTree[index],sizeof(rtr::LightTreeNode),(sceneLights.size()+index)*sizeof(SceneLight));
-            }else{
-                if(!sceneLights.empty())commandList->writeBuffer(sceneLightBuffer,sceneLights.data(),sceneLights.size()*sizeof(SceneLight));
-                if(!sceneLightTree.empty())commandList->writeBuffer(sceneLightBuffer,sceneLightTree.data(),sceneLightTree.size()*sizeof(rtr::LightTreeNode),sceneLights.size()*sizeof(SceneLight));
-            }
-            uploadSunOnly=false;dirtyLightIndices.clear();dirtyTreeIndices.clear();
-            sceneLightsDirty=false;
-            if(lightingCommitPending) {
-                ++lightingUploadCount;lightingCommitPending=false;if(continuousPending)++continuousUploads;continuousPending=false;
-                lightingUploadNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-begin).count();
-                const char* diagnostics=std::getenv("RTR_RTXPT_LIGHTING_DIAGNOSTICS");
-                if(diagnostics&&std::string(diagnostics)=="1")donut::log::info("RTXPT lighting executed loads=%llu batches=%llu uploads=%llu uploadRecordingNs=%llu historyResets=%llu lights=%zu",sceneLoadCount,lightingBatchCount,lightingUploadCount,lightingUploadNs,lightingHistoryResets,sceneLights.size());
-            }
-        }
+        pt.RtrScenePadding=uint3(lightTree.root==rtr::RetainedLightTree::None?0:lightTree.root,lightSlotCapacity,uint32_t(pathQuality.values[5]));
+        UploadSceneLighting(commandList);
         pt.RtrDirectionalCount=0;
         if(!useDirectionalStrata() || !GetEnvMapBaker())return;
         const float cubeDim=float(GetEnvMapBaker()->GetTargetCubeResolution());
@@ -439,6 +473,7 @@ public:
             directionalStrataLogged=true;
         }
     }
+    nvrhi::ITexture* HostSurfaceHdr() const {return m_renderTargets?m_renderTargets->ProcessedOutputColor.Get():nullptr;}
     nvrhi::ITexture* HostDisplayColor() const { return m_renderTargets ? m_renderTargets->LdrColor.Get() : nullptr; }
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();++sceneLoadCount;
@@ -457,9 +492,10 @@ public:
         lightingPolicyLogged=false;
     }
     void UpdateLightingPolicy() {
+        RtrDiagnostics::Scope policyScope(RtrDiagnostics::LightingPolicy,sceneLights.size());
         m_bakeDirectionalLightsIntoEnvMap=!sceneLightingActive();
         if(lightingSceneDirty) {
-            eligibleLightingScene=smallPointScene();
+            eligibleLightingScene=!sceneLightingActive() && smallPointScene();
             eligiblePowerScene=eligibleLightingScene;
             if(GetScene())for(const auto& material:GetScene()->GetSceneGraph()->GetMaterials())
                 if(material->emissiveColor.x!=0.f || material->emissiveColor.y!=0.f || material->emissiveColor.z!=0.f)
@@ -481,12 +517,12 @@ public:
                 int(eligibleLightingScene),overrideValue?overrideValue:"default",int(supportedRealtimePolicy));
             lightingPolicyLogged=true;
         }
-        const bool enabled=eligibleLightingScene && supportedRealtimePolicy
+        const bool enabled=!sceneLightingActive() && pathQuality.values[5]>0 && supportedRealtimePolicy
             && !(overrideValue && std::string(overrideValue)=="0");
         const char* samplerControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_LIGHT_SAMPLER");
         // Retain the accepted SR policy for small, non-emissive scenes. Other
         // content and reconstruction paths keep upstream adaptive sampling.
-        const bool usePower=pathQuality.values[1]==0 && enabled && (samplerControl
+        const bool usePower=pathQuality.values[1]==0 && enabled && eligibleLightingScene && (samplerControl
             ? std::string(samplerControl)=="power"
             : eligiblePowerScene && g_sampleUIData.RealtimeAA==2 && !standaloneDenoisingActive);
         if(enabled==smallPointLighting && usePower==powerSampling)return;
@@ -503,9 +539,10 @@ public:
     }
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
         AdvancedPathTracer::GetCustomPTPipelineGlobalMacros(macros);
+        if(hostSurface.active)macros.push_back({"RTR_HOST_PRIMARY","1"});
         if(sceneLightingActive()) {
             macros.push_back({"RTR_SCENE_LIGHTING","1"});
-            macros.push_back({"RTR_SCENE_EXACT_LIGHT_LIMIT",std::to_string(pathQuality.values[5])});
+            // Exact/tree selection uses the runtime threshold, never a scene-dependent pipeline key.
             if(lightStatsEnabled)macros.push_back({"RTR_SCENE_LIGHT_STATS","1"});
             macros.push_back({"RTR_SCENE_EXACT_INTERFACE_COUNT",std::to_string(exactOpticalInterfaces)});
         }
@@ -521,13 +558,13 @@ public:
         const char* residualControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_DISABLE_RESIDUAL_SAMPLING");
         if(smallPointLighting) {
             macros.push_back({"RTR_EXACT_SMALL_POINTS","1"});
-            macros.push_back({"RTR_EXACT_POINT_LIGHT_LIMIT",std::to_string(pathQuality.values[5])});
+            macros.push_back({"RTR_EXACT_POINT_LIGHT_LIMIT","4096"});
             if(!residualControl || std::string(residualControl)!="1")
                 macros.push_back({"RTR_CONDITIONAL_POINT_SAMPLING","1"});
         }
         const char* misControl=std::getenv("RTR_RTXPT_DIAGNOSTIC_EXACT_MIS");
         const bool approximateMis=misControl && std::string(misControl)=="0";
-        const bool exactMis=!approximateMis && (smallPointLighting || (misControl && std::string(misControl)=="1"));
+        const bool exactMis=!approximateMis && (sceneLightingActive() || smallPointLighting || (misControl && std::string(misControl)=="1"));
         if(exactMis) {
             for(auto& macro:macros)
                 if(macro.name=="RTXPT_USE_APPROXIMATE_MIS")macro.definition="0";
@@ -570,6 +607,10 @@ struct Session {
     sl::Result shutdownResult = sl::Result::eOk;
     nvrhi::TextureHandle lastPresentedTexture;
     SharedFrameProducer sharedFrames;
+    RtrSignalFrames signalFrames;
+    RtrSurfaceInputs surfaceInputs;
+    RtrSurfaceSignalFrames surfaceFrames;
+    uint64_t signalSequence=0,signalRevision=0;
     bool externalPresentation=false;
     bool gpuTimingsEnabled=true,gpuTimingsAllowed=true;
     uint64_t rendered=0;
@@ -654,7 +695,7 @@ struct Session {
             }
             dm->m_callbacks={};
             lastPresentedTexture=nullptr;timerCommands=nullptr;
-            sharedFrames.clear();
+            sharedFrames.clear();signalFrames.Clear();surfaceFrames.Clear();surfaceInputs.Clear();
             if(compositor)compositorEnv->DeleteGlobalRef(compositor);
             if(compositorFrame)compositorEnv->DeleteGlobalRef(compositorFrame);
             compositor=nullptr;compositorFrame=nullptr;composeMethod=nullptr;compositorEnv=nullptr;
@@ -665,7 +706,7 @@ struct Session {
         // Never leave the sample's [this] log callback installed during member teardown.
         donut::log::SetCallback(previousLog);
         app.reset();
-        RtrMemoryDiagnostics::Checkpoint("shutdown.end");
+        RtrMemoryDiagnostics::Checkpoint("shutdown.end");RtrMemoryDiagnostics::Configure(false);
         // The JVM can exit without flushing the native CRT's redirected streams.
         // Flush once at teardown so final SDK/diagnostic results survive in logs.
         std::fflush(stdout);
@@ -695,6 +736,8 @@ Session& session(jlong h) {
 void fail(JNIEnv* e, const std::exception& x) {
     if (!e->ExceptionCheck()) e->ThrowNew(e->FindClass("java/lang/IllegalStateException"), x.what());
 }
+
+#include "rtxpt_native_application.inl"
 void configureAgility(const std::filesystem::path& runtime) {
     // Microsoft supports this factory path in retail Java hosts, including cross-volume SDKs.
     // Apply once before Donut/Streamline creates a D3D12 device; keep the factory resident.
@@ -769,7 +812,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         }
         std::vector<const char*> argv; for (const auto& a : args) argv.push_back(a.c_str());
         RtrDiagnostics::Reset();
-        RtrMemoryDiagnostics::recording=true;
+        RtrMemoryDiagnostics::Configure(true);
         auto s = std::make_unique<Session>();
         s->externalPresentation=externalPresentation;
         s->gpuTimingsEnabled=s->gpuTimingsAllowed=gpuTimingsEnabled;
@@ -825,7 +868,15 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
             if(upstreamAfterRender)upstreamAfterRender(dm,index);
             ptr->endGpuSample();ptr->lastPresentedTexture=dm.GetCurrentBackBuffer();
             ptr->probePhase(2);
-            if(ptr->externalPresentation)ptr->sharedFrames.publish(dm.GetDevice(),
+            if(static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->nativeLighting.active) {
+                auto& lighting=static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->nativeLighting;
+                ptr->signalFrames.Publish(dm.GetDevice(),lighting.Outputs(),ptr->signalSequence,ptr->signalRevision,lighting.publication,lighting.timeNanos,lighting.deltaNanos,lighting.compactEncoding?1:0,lighting.maximumGi());
+            } else if(static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->hostSurface.active){
+                auto* host=static_cast<HostPathTracer*>(ptr->app->HostRenderPass());
+                int reconstruction=host->hostSurface.composition==0?0:g_sampleUIData.RealtimeMode?(g_sampleUIData.RealtimeAA==3?2:g_sampleUIData.RealtimeAA==2?1:0):0;
+                ptr->surfaceFrames.Publish(dm.GetDevice(),host->hostSurface.composition==0?host->hostAugmentation.Outputs():host->hostOutputs.outputs,ptr->signalSequence,ptr->signalRevision,host->hostInputGeneration,host->hostTimeNanos,host->hostDeltaNanos,0,1.f,
+                    {jlong(host->hostInputGeneration),jlong(host->hostResourceGeneration),reconstruction,host->hostSurface.composition==0?jlong(host->hostAugmentation.plan.colorDomain):0});
+            } else if(ptr->externalPresentation)ptr->sharedFrames.publish(dm.GetDevice(),
                 static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->HostDisplayColor(),
                 static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->HostTransparentBackground());
             else if(ptr->compositor) {
@@ -948,11 +999,16 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     try {
         RtrDiagnostics::Scope diagnostic(RtrDiagnostics::Frame);
         auto& s = session(h); auto dm = s.app->HostDeviceManager();
-        if (glfwWindowShouldClose(dm->GetWindow())) return 0;
+        auto& nativePass=static_cast<HostPathTracer*>(s.app->HostRenderPass())->nativeLighting;nativePass.sequence=s.signalSequence;nativePass.sceneRevision=s.signalRevision;
+        if (glfwWindowShouldClose(dm->GetWindow())) {static_cast<HostPathTracer*>(s.app->HostRenderPass())->AbortHostRead();return 0;}
         static_cast<HostPathTracer*>(s.app->HostRenderPass())->UpdateLightingPolicy();
         auto before=s.externalPresentation?s.rendered:s.presented;
         if(s.presentationTrace)s.probeMark=Session::ProbeClock::now();
         if (!dm->HostFrame()) throw std::runtime_error("RTXPT render/present failed");
+        if(static_cast<HostPathTracer*>(s.app->HostRenderPass())->hostSurface.active&&s.rendered==before){
+            static_cast<HostPathTracer*>(s.app->HostRenderPass())->AbortHostRead();
+            throw std::runtime_error("Host-surface input was not consumed; the published input remains available for retry");
+        }
         if(RtrMemoryDiagnostics::Enabled()) {
             auto now=std::chrono::steady_clock::now();
             if(s.rendered<=3 || now-s.memoryReport>=std::chrono::seconds(1)) {
@@ -963,7 +1019,11 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         }
         s.reportPresentation();
         return (s.externalPresentation?s.rendered:s.presented)>before ? 2 : 1;
-    } catch (const std::exception& x) { fail(e, x); return 0; }
+    } catch (const std::exception& x) {
+        // A readiness wait alone is not a GPU read. Restore publication if Render was never entered.
+        try{static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->AbortHostRead();}catch(...){}
+        fail(e,x);return 0;
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_exposureCompensation(
@@ -1130,6 +1190,215 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
         auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_sparseLighting(
+    JNIEnv* e,jclass,jlong h,jlongArray ids,jfloatArray records,jlongArray removals,jboolean reset){
+    try{
+        if(!ids||!records||!removals)throw std::invalid_argument("Missing sparse source arrays");
+        size_t count=e->GetArrayLength(ids),removed=e->GetArrayLength(removals);
+        if(count>RtrSparseLighting::Maximum||removed>RtrSparseLighting::Maximum||e->GetArrayLength(records)!=count*RtrSparseLighting::Stride)
+            throw std::invalid_argument("Invalid sparse source array sizes");
+        std::vector<int64_t> keys(count),dead(removed);std::vector<float> values(count*RtrSparseLighting::Stride);
+        e->GetLongArrayRegion(ids,0,jsize(count),reinterpret_cast<jlong*>(keys.data()));
+        e->GetLongArrayRegion(removals,0,jsize(removed),reinterpret_cast<jlong*>(dead.data()));
+        e->GetFloatArrayRegion(records,0,jsize(values.size()),values.data());if(e->ExceptionCheck())return;
+        static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->ApplySparseLighting(keys,values,dead,reset);
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_sparseLightingTelemetry(JNIEnv* e,jclass,jlong h){
+    try{const auto& values=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->sparseLighting.work;
+        auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLighting(JNIEnv* e,jclass,jlong h,jfloatArray parameters){
+    try{auto& s=session(h);if(!s.externalPresentation)throw std::invalid_argument("Native lighting requires an offscreen RTXPT session");
+        if(!parameters||e->GetArrayLength(parameters)!=80)throw std::invalid_argument("Invalid native-lighting ABI v1 parameters");
+        std::vector<float> values(80);e->GetFloatArrayRegion(parameters,0,80,values.data());if(e->ExceptionCheck())return;
+        static_cast<HostPathTracer*>(s.app->HostRenderPass())->nativeLighting.Configure(values);
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingBaseline(JNIEnv* e,jclass,jlong h,jstring name,jfloatArray coordinates){
+    try{if(!name||!coordinates)throw std::invalid_argument("Missing native baseline coordinates");
+        const auto key=utf8(e,name);auto count=e->GetArrayLength(coordinates);if(count%6!=0)throw std::invalid_argument("Baseline requires three float2 coordinates per triangle");
+        std::vector<float2> values(size_t(count)/2);if(count)e->GetFloatArrayRegion(coordinates,0,count,reinterpret_cast<float*>(values.data()));if(e->ExceptionCheck())return;
+        for(auto value:values)if(!std::isfinite(value.x)||!std::isfinite(value.y)||value.x<0||value.x>1||value.y<0||value.y>1)throw std::invalid_argument("Baseline coordinates must be in [0,1]");
+        auto& host=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());bool found=false;
+        for(const auto& mesh:host.GetScene()->GetSceneGraph()->GetMeshes())for(size_t i=0;i<mesh->geometries.size();i++)
+            if(mesh->name+":"+std::to_string(i)==key){found=true;if(values.size()!=mesh->geometries[i]->numIndices)throw std::invalid_argument("Baseline vertex count does not match resident geometry");}
+        if(!found)throw std::invalid_argument("Unknown native-lighting geometry: "+key);
+        host.nativeLighting.meshBaselines[key]=std::move(values);host.nativeLighting.dirtyBaselines.insert(key);
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingAttributes(
+    JNIEnv* e,jclass,jlong h,jlong generation,jobjectArray names,jfloatArray attributes,jfloatArray lookup,jbyteArray application){
+    try{
+        auto& s=session(h);auto& host=*static_cast<HostPathTracer*>(s.app->HostRenderPass());auto& pass=host.nativeLighting;
+        if(generation<0||uint64_t(generation)<pass.publication||!names||!attributes)throw std::invalid_argument("Invalid native attribute generation or arrays");
+        const auto count=e->GetArrayLength(names);if(e->GetArrayLength(attributes)!=count*8)throw std::invalid_argument("Instance attributes require eight words each");
+        std::vector<RtrNativeLightingPass::InstanceAttributes> values(count);if(count)e->GetFloatArrayRegion(attributes,0,count*8,reinterpret_cast<float*>(values.data()));if(e->ExceptionCheck())return;
+        std::vector<std::string> keys;keys.reserve(count);std::unordered_set<std::string> seen;
+        for(jsize i=0;i<count;i++){
+            auto name=static_cast<jstring>(e->GetObjectArrayElement(names,i));if(!name)throw std::invalid_argument("Missing native attribute instance name");
+            auto key=utf8(e,name);e->DeleteLocalRef(name);if(!seen.insert(key).second)throw std::invalid_argument("Duplicate native attribute instance");
+            if(!s.nodes.count(key))throw std::invalid_argument("Unknown native attribute instance: "+key);
+            auto* words=reinterpret_cast<const float*>(&values[i]);for(unsigned j=0;j<8;j++)if(!std::isfinite(words[j]))throw std::invalid_argument("Nonfinite instance attribute");
+            if(words[0]<0||words[0]>31||words[0]!=float(uint32_t(words[0]))||words[1]<0||words[1]>1||words[2]<0||words[2]>1)throw std::invalid_argument("Invalid role or visibility attributes");
+            keys.push_back(std::move(key));
+        }
+        auto nextLookup=pass.baselineLookup;
+        if(lookup){if(e->GetArrayLength(lookup)!=512)throw std::invalid_argument("Baseline lookup must be 16x16 float2");
+            e->GetFloatArrayRegion(lookup,0,512,reinterpret_cast<float*>(nextLookup.data()));if(e->ExceptionCheck())return;
+            for(auto value:nextLookup)if(!std::isfinite(value.x)||!std::isfinite(value.y)||value.x<0||value.x>1||value.y<0||value.y>1)throw std::invalid_argument("Invalid baseline lookup value");}
+        std::vector<uint8_t> bytes;
+        if(application){const auto length=e->GetArrayLength(application);if(length%4!=0||length>16*1024*1024)throw std::invalid_argument("Application publication exceeds its aligned capacity");
+            bytes.resize(length);if(length)e->GetByteArrayRegion(application,0,length,reinterpret_cast<jbyte*>(bytes.data()));if(e->ExceptionCheck())return;}
+        for(jsize i=0;i<count;i++){auto previous=pass.instanceAttributes.find(keys[i]);if(previous!=pass.instanceAttributes.end()&&previous->second.rolesVisibility.x!=23)--pass.specialRoleCount;
+            if(values[i].rolesVisibility.x!=23)++pass.specialRoleCount;pass.instanceAttributes[keys[i]]=values[i];pass.dirtyInstances.insert(keys[i]);}
+        if(lookup){pass.baselineLookup=nextLookup;pass.lookupDirty=true;}
+        if(application){pass.applicationData=std::move(bytes);pass.applicationDirty=true;}
+        pass.publication=uint64_t(generation);
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingClearAttributes(JNIEnv* e,jclass,jlong h){
+    try{auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting;
+        pass.instanceAttributes.clear();pass.meshBaselines.clear();pass.dirtyInstances.clear();pass.dirtyBaselines.clear();pass.metadataDirty=true;pass.specialRoleCount=0;
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingClock(JNIEnv* e,jclass,jlong h,jlong time,jlong delta){
+    try{if(delta<0)throw std::invalid_argument("Frame delta must be nonnegative");auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting;
+        pass.timeNanos=time;pass.deltaNanos=delta;}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jobjectArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingExtensionValidate(JNIEnv* e,jclass,jstring manifest,jint signals,jint bytes){
+    try{auto extension=RtrNativeExtension::Load(std::filesystem::u8path(utf8(e,manifest)),uint32_t(signals),size_t(bytes));
+        auto result=e->NewObjectArray(3,e->FindClass("java/lang/String"),nullptr);
+        std::array<std::string,3> values={extension.identity,std::to_string(extension.signals),std::to_string(extension.minimumBytes)};
+        for(jsize i=0;i<3;i++){auto text=e->NewStringUTF(values[i].c_str());e->SetObjectArrayElement(result,i,text);e->DeleteLocalRef(text);}return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingExtension(JNIEnv* e,jclass,jlong h,jstring manifest,jstring expected){
+    try{auto& s=session(h);auto& host=*static_cast<HostPathTracer*>(s.app->HostRenderPass());
+        if(!manifest){host.nativeLighting.ResetExtension(s.app->HostDeviceManager()->GetDevice());return;}
+        auto& pass=host.nativeLighting;auto* words=reinterpret_cast<const uint32_t*>(pass.constants.words.data());
+        auto extension=RtrNativeExtension::Load(std::filesystem::u8path(utf8(e,manifest)),words[42],pass.applicationData.size());
+        if(extension.identity!=utf8(e,expected))throw std::invalid_argument("Extension artifact changed after validation");host.ActivateLightingExtension(extension);
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingTelemetry(JNIEnv* e,jclass,jlong h){
+    try{const auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting;
+        std::array<jlong,8> values={pass.active?1:0,pass.width,pass.height,pass.mask,jlong(pass.executedFrames),jlong(pass.beautyFrames),jlong(pass.metadataUploads),jlong(pass.publication)};
+        auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),values.data());return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingWorkEnabled(JNIEnv* e,jclass,jlong h,jboolean enabled){
+    try{static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting.workStatisticsEnabled=enabled;}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingWork(JNIEnv* e,jclass,jlong h){
+    try{auto& s=session(h);auto& pass=static_cast<HostPathTracer*>(s.app->HostRenderPass())->nativeLighting;pass.PollWork(s.app->HostDeviceManager()->GetDevice());
+        auto result=e->NewLongArray(9);if(result)e->SetLongArrayRegion(result,0,9,reinterpret_cast<const jlong*>(pass.latestWork.data()));return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfacePlan(JNIEnv* e,jclass,jlong h,jint width,jint height,jint composition,jint components,jboolean jitter,jlong budget){
+    try{auto& s=session(h);if(!s.externalPresentation)throw std::invalid_argument("Host surfaces require external presentation");
+        auto* host=static_cast<HostPathTracer*>(s.app->HostRenderPass());if(host->nativeLighting.active)throw std::logic_error("Independent primary tracing is already selected");
+        RtrSurfaceInputs::Plan plan{uint32_t(width),uint32_t(height),uint32_t(composition),uint32_t(components),bool(jitter),uint64_t(budget)};
+        s.surfaceInputs.Configure(s.app->HostDeviceManager()->GetDevice(),plan);
+        host->hostSurface.inputWidth=width;host->hostSurface.inputHeight=height;host->hostSurface.composition=composition;host->hostSurface.hostComponents=components;
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceAcquire(JNIEnv* e,jclass,jlong h,jlong sequence,jlong revision,jlong resource,jlong view,jlong time,jlong delta){
+    try{auto packet=session(h).surfaceInputs.TryAcquire({uint64_t(sequence),uint64_t(revision),uint64_t(resource),uint64_t(view),time,delta});
+        auto words=packet?RtrSurfaceInputs::Encode(*packet):std::vector<int64_t>{};auto result=e->NewLongArray(jsize(words.size()));if(result&&!words.empty())e->SetLongArrayRegion(result,0,jsize(words.size()),words.data());return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceInputAction(JNIEnv* e,jclass,jlong h,jlong generation,jint slot,jlong ticket,jint action){
+    try{auto& inputs=session(h).surfaceInputs;RtrSurfaceInputs::Token token{uint64_t(generation),uint32_t(slot),uint64_t(ticket)};
+        switch(action){case 0:inputs.MarkImported(token);break;case 1:inputs.Publish(token);break;case 2:inputs.CancelUnimported(token);break;case 3:inputs.AbandonReady(token);break;default:throw std::invalid_argument("Unknown host input lease action");}
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceDiscard(JNIEnv* e,jclass,jlong h,jlong generation,jlong sequence){
+    try{session(h).surfaceInputs.DiscardPublished(uint64_t(generation),uint64_t(sequence));}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceStatus(JNIEnv* e,jclass,jlong h){
+    try{auto words=session(h).surfaceInputs.Status();auto result=e->NewLongArray(jsize(words.size()));if(result)e->SetLongArrayRegion(result,0,jsize(words.size()),reinterpret_cast<const jlong*>(words.data()));return result;}catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceRead(JNIEnv* e,jclass,jlong h,jlong sequence,jlong revision,jlong resource,jlong view,jlong time,jlong delta){
+    try{auto& s=session(h);static_cast<HostPathTracer*>(s.app->HostRenderPass())->BeginHostRead(s.surfaceInputs,{uint64_t(sequence),uint64_t(revision),uint64_t(resource),uint64_t(view),time,delta});}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceTriangles(JNIEnv* e,jclass,jlong h,jstring mesh,jintArray mapping){
+    try{if(!mapping||e->GetArrayLength(mapping)%2)throw std::invalid_argument("Malformed original-triangle mapping");
+        std::vector<RtrHostSurface::Triangle> values(size_t(e->GetArrayLength(mapping))/2);if(!values.empty())e->GetIntArrayRegion(mapping,0,e->GetArrayLength(mapping),reinterpret_cast<jint*>(values.data()));if(e->ExceptionCheck())return;
+        auto& state=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->hostSurface;state.meshTriangles.insert_or_assign(utf8(e,mesh),std::move(values));state.dirty=true;
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceMappingDirty(JNIEnv* e,jclass,jlong h){
+    try{static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->hostSurface.dirty=true;}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceFrame(JNIEnv* e,jclass,jlong h){
+    try{auto& s=session(h);auto words=s.surfaceFrames.Acquire();
+        auto result=e->NewLongArray(jsize(words.size()));if(result&&!words.empty())e->SetLongArrayRegion(result,0,jsize(words.size()),words.data());return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceRelease(JNIEnv* e,jclass,jlong h,jint slot,jlong generation,jlong sequence,jboolean imported){
+    try{auto& s=session(h);s.surfaceFrames.Release(s.app->HostDeviceManager()->GetDevice(),slot,uint64_t(generation),uint64_t(sequence),imported);}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jboolean JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceCanPublish(JNIEnv* e,jclass,jlong h){
+    try{return session(h).surfaceFrames.CanPublish();}catch(const std::exception& x){fail(e,x);return false;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceOutputs(JNIEnv* e,jclass,jlong h,jint mask){
+    try{if(mask<1||mask>255)throw std::invalid_argument("Unknown host output signal mask");
+        auto* host=static_cast<HostPathTracer*>(session(h).app->HostRenderPass());
+        if(host->hostOutputs.mask!=uint32_t(mask)){host->hostOutputs.mask=uint32_t(mask);host->InvalidateFrameCache();}}
+    catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceCapture(JNIEnv* e,jclass,jlong h,jint signal,jstring path){
+    try{static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->CaptureLinear(std::filesystem::u8path(utf8(e,path)),0,signal);}
+    catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceAugmentation(JNIEnv* e,jclass,jlong h,jfloatArray parameters,jint width,jint height,jint outputs,jint domain){
+    try{if(!parameters||e->GetArrayLength(parameters)!=80)throw std::invalid_argument("Host augmentation requires the complete native style ABI");
+        std::vector<float> values(80);e->GetFloatArrayRegion(parameters,0,80,values.data());if(e->ExceptionCheck())return;
+        auto* host=static_cast<HostPathTracer*>(session(h).app->HostRenderPass());
+        RtrHostAugmentation::Plan plan;plan.width=uint32_t(width);plan.height=uint32_t(height);plan.outputs=uint32_t(outputs);plan.colorDomain=uint32_t(domain);
+        host->hostAugmentation.Configure(host->nativeLighting,plan,values);
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jboolean JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceConsumersRetired(JNIEnv* e,jclass,jlong h){
+    try{return session(h).surfaceFrames.ConsumersRetired();}catch(const std::exception& x){fail(e,x);return false;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceRequireRetired(JNIEnv* e,jclass,jlong h){
+    try{session(h).surfaceInputs.RequireReleased();}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceWorkEnabled(JNIEnv* e,jclass,jlong h,jboolean enabled){
+    try{static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->hostSurface.workStatisticsEnabled=enabled;}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceWork(JNIEnv* e,jclass,jlong h){
+    try{auto& s=session(h);auto& state=static_cast<HostPathTracer*>(s.app->HostRenderPass())->hostSurface;state.PollWork(s.app->HostDeviceManager()->GetDevice());
+        auto& words=state.latestWork;auto result=e->NewLongArray(jsize(words.size()));if(result)e->SetLongArrayRegion(result,0,jsize(words.size()),reinterpret_cast<const jlong*>(words.data()));return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceView(JNIEnv* e,jclass,jlong h,jfloatArray matrices){
+    try{if(!matrices||e->GetArrayLength(matrices)!=70)throw std::invalid_argument("Malformed exact host view");std::vector<float> values(70);e->GetFloatArrayRegion(matrices,0,70,values.data());if(e->ExceptionCheck())return;
+        static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->ConfigureHostView(values);
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jboolean JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingCanPublish(JNIEnv* e,jclass,jlong h){
+    try{return session(h).signalFrames.CanPublish();}catch(const std::exception& x){fail(e,x);return false;}
+}
+extern "C" JNIEXPORT jboolean JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingConsumersRetired(JNIEnv* e,jclass,jlong h){
+    try{return session(h).signalFrames.ConsumersRetired();}catch(const std::exception& x){fail(e,x);return false;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingFrame(JNIEnv* e,jclass,jlong h){
+    try{auto values=session(h).signalFrames.Acquire();auto result=e->NewLongArray(jsize(values.size()));if(result&&!values.empty())e->SetLongArrayRegion(result,0,jsize(values.size()),values.data());return result;}
+    catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingRelease(JNIEnv* e,jclass,jlong h,jint slot,jlong generation,jlong sequence,jboolean imported){
+    try{auto& s=session(h);s.signalFrames.Release(s.app->HostDeviceManager()->GetDevice(),slot,uint64_t(generation),uint64_t(sequence),imported);}
+    catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingCapture(JNIEnv* e,jclass,jlong h,jstring path,jint signal){
+    try{if(signal<0||signal>2)throw std::invalid_argument("Unknown native-lighting diagnostic signal");
+        static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->CaptureLinear(std::filesystem::u8path(utf8(e,path)),signal);
+    }catch(const std::exception& x){fail(e,x);}
+}
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_environment(
     JNIEnv* e,jclass,jlong h,jfloatArray sun,jfloatArray sky) {
     try{if(!sun||!sky||e->GetArrayLength(sun)!=16||e->GetArrayLength(sky)!=4)throw std::invalid_argument("Invalid environment arrays");
@@ -1145,6 +1414,24 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     try{std::array<float,3> v{};if(color){if(e->GetArrayLength(color)!=3)throw std::invalid_argument("Invalid background");e->GetFloatArrayRegion(color,0,3,v.data());if(e->ExceptionCheck())return;for(float c:v)if(!std::isfinite(c)||c<0)throw std::invalid_argument("Invalid background color");}
         static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->SetBackground(color!=nullptr,float3(v[0],v[1],v[2]),transparent);}catch(const std::exception& x){fail(e,x);}
 }
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingPatch(
+    JNIEnv* e,jclass,jlong h,jlongArray ids,jfloatArray records,jlongArray removals,jfloatArray sun,jfloatArray sky){
+    try{auto& s=session(h);if(!ids||!records||!removals||!sun||!sky)throw std::invalid_argument("Lighting patch arrays must not be null");
+        size_t count=e->GetArrayLength(ids),removed=e->GetArrayLength(removals);
+        if(count>size_t(NEEAT_MAX_LIGHTS)||removed>size_t(NEEAT_MAX_LIGHTS)||e->GetArrayLength(records)!=count*16||e->GetArrayLength(sun)!=16||e->GetArrayLength(sky)!=4)throw std::invalid_argument("Malformed lighting patch");
+        std::vector<int64_t> keys(count),deleted(removed);std::vector<float> values(count*16);std::array<float,16> solar{};std::array<float,4> ambient{};
+        e->GetLongArrayRegion(ids,0,jsize(count),reinterpret_cast<jlong*>(keys.data()));e->GetLongArrayRegion(removals,0,jsize(removed),reinterpret_cast<jlong*>(deleted.data()));
+        e->GetFloatArrayRegion(records,0,jsize(values.size()),values.data());e->GetFloatArrayRegion(sun,0,16,solar.data());e->GetFloatArrayRegion(sky,0,4,ambient.data());if(e->ExceptionCheck())return;
+        auto* host=static_cast<HostPathTracer*>(s.app->HostRenderPass());host->ApplyLightPatch(keys,values,deleted,solar,ambient);
+        for(auto id:deleted)s.nodes.erase("l"+std::to_string(id));
+        for(auto id:keys){auto slot=host->ManagedLightNode(id);s.nodes.insert_or_assign("l"+std::to_string(id),slot);}
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightUpdateTelemetry(JNIEnv* e,jclass,jlong h){
+    try{auto* host=static_cast<HostPathTracer*>(session(h).app->HostRenderPass());auto values=host->LightingWork();auto result=e->NewLongArray(jsize(values.size()));
+        if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingDelta(JNIEnv* e,jclass,jlong h,jlongArray ids,jfloatArray records){
     try{if(!ids||!records||e->GetArrayLength(records)!=e->GetArrayLength(ids)*16)throw std::invalid_argument("Invalid light delta arrays");
         size_t count=e->GetArrayLength(ids);std::vector<int64_t> keys(count);std::vector<float> values(count*16);e->GetLongArrayRegion(ids,0,jsize(count),reinterpret_cast<jlong*>(keys.data()));e->GetFloatArrayRegion(records,0,jsize(values.size()),values.data());if(e->ExceptionCheck())return;
@@ -1158,7 +1445,7 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resources(
     JNIEnv* e,jclass,jlong h,jstring manifest) {
-    try{auto& s=session(h);static_cast<HostPathTracer*>(s.app->HostRenderPass())->ApplyResources(std::filesystem::u8path(utf8(e,manifest)));indexNodes(s);}
+    try{RtrDiagnostics::Scope resourceScope(RtrDiagnostics::Resources);auto& s=session(h);static_cast<HostPathTracer*>(s.app->HostRenderPass())->ApplyResources(std::filesystem::u8path(utf8(e,manifest)));indexNodes(s);}
     catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourceTelemetry(
@@ -1341,13 +1628,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
             checked.push_back(it->second);
         }
         for(jsize i=0;i<count;++i) {
-            const auto p=data+i*12;
-            using namespace donut::math;
-            daffine3 transform(double3(p[0],p[4],p[8]),double3(p[1],p[5],p[9]),
-                double3(p[2],p[6],p[10]),double3(p[3],p[7],p[11]));
-            double3 translation,scaling;dquat rotation;
-            decomposeAffine(transform,&translation,&rotation,&scaling);
-            checked[i]->SetTransform(&translation,&rotation,&scaling);
+            RtrSetInstanceTransform(checked[i],data+i*12);
         }
         if(count)static_cast<HostPathTracer*>(s.app->HostRenderPass())->InvalidateFrameCache();
     } catch(const std::exception& x) { fail(e,x); }
@@ -1384,6 +1665,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     std::lock_guard lock(lifecycle);
     try {
         auto& s=session(h);
+        s.surfaceInputs.RequireReleased();
         if(s.app && g_sampleUIData.ActualDLSSFGMode()!=SI::DLSSGMode::eOff) {
             auto options=donut::app::StreamlineInterface::DLSSGOptions{};
             options.mode=SI::DLSSGMode::eOff;
@@ -1399,8 +1681,16 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     catch (const std::exception& x) { fail(e, x); }
 }
 
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticSubmitBegin(JNIEnv* e,jclass,jlong h,jlong sequence,jlong revision,jlong elapsed){
+    try{session(h);RtrDiagnostics::BeginSubmit(uint64_t(sequence),uint64_t(revision),uint64_t(std::max<jlong>(elapsed,0)));}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticSubmitEnd(JNIEnv*,jclass,jboolean failed){RtrDiagnostics::EndSubmit(failed);}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticSubmitStage(JNIEnv*,jclass,jint stage,jlong offset,jlong duration,jlong items,jlong tasks){
+    if(stage>=RtrDiagnostics::SubmitValidation&&stage<=RtrDiagnostics::SubmitRetirement)
+        RtrDiagnostics::SubmitStage(RtrDiagnostics::Stage(stage),uint64_t(offset),uint64_t(duration),uint64_t(items),uint64_t(tasks));
+}
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticContext(JNIEnv* e,jclass,jlong h,jlong frame,jlong revision) {
-    try {session(h);RtrDiagnostics::Context(uint64_t(frame),uint64_t(revision));}catch(const std::exception& x){fail(e,x);}
+    try {auto& s=session(h);s.signalSequence=uint64_t(frame);s.signalRevision=uint64_t(revision);RtrDiagnostics::Context(uint64_t(frame),uint64_t(revision));}catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticLevel(JNIEnv* e,jclass,jlong h,jint level) {
     try {auto& s=session(h);if(level<0||level>2)throw std::invalid_argument("Diagnostic level must be 0..2");RtrDiagnostics::Configure(unsigned(level));RtrMemoryDiagnostics::Configure(level!=0);s.gpuTimingsEnabled=level!=0&&s.gpuTimingsAllowed;RtrGpuProfile::Configure(s.app->HostDeviceManager()->GetDevice(),unsigned(level),s.gpuTimingsAllowed);}
@@ -1412,6 +1702,14 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
     catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 
+extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticMonitorToken(JNIEnv* e,jclass,jlong h) {
+    try {session(h);return jlong(RtrDiagnostics::MonitorToken());}catch(const std::exception& x){fail(e,x);return 0;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticMonitorSnapshot(JNIEnv* e,jclass,jlong token) {
+    try {if(token==0)throw std::invalid_argument("Diagnostic monitor token must be nonzero");auto values=RtrDiagnostics::Snapshot(uint64_t(token));
+        auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
 extern "C" JNIEXPORT jobjectArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticGpuSnapshot(JNIEnv* e,jclass,jlong h) {
     try {session(h);auto values=RtrGpuProfile::Snapshot();auto type=e->FindClass("java/lang/String");auto result=e->NewObjectArray(jsize(values.size()),type,nullptr);e->DeleteLocalRef(type);
         if(result)for(jsize i=0;i<jsize(values.size());++i){auto text=e->NewStringUTF(values[i].c_str());e->SetObjectArrayElement(result,i,text);e->DeleteLocalRef(text);}return result;}

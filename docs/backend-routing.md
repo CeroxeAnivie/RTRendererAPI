@@ -1,5 +1,7 @@
 # 后端选择：全 RTXPT、仅介质 RTXPT、保留 Vulkan
 
+普通窗口／CPU 帧与专家程序／GPU 交接的入口选择见[普通用法与专家控制](ordinary-and-expert.md)。7.1 主表面／独立光照工厂准备兼容策略，不启动另一套 Vulkan 世界。
+
 > **默认推荐 RTXPT 单后端**完成完整 3D 与最终呈现，显式使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`。
 > **RTXPT＋Vulkan 混合模式不推荐作为默认方案**：它增加整帧复制、跨 API 同步和显存成本，仅供确实需要 Vulkan 独立命令／颜色叠层的专家使用。当前以功能正确、稳定出帧为维护目标，不做混合模式性能优化。
 
@@ -88,11 +90,11 @@ routing = candidate;                                // 后端成功发布才提�
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:7.0.5") {
+    implementation("top.ceroxe.rt:renderer-api:7.1.0") {
         exclude(group = "top.ceroxe.rt", module = "renderer-core")
         exclude(group = "top.ceroxe.rt", module = "renderer-nvidia")
     }
-    implementation("top.ceroxe.rt:renderer-rtxpt:7.0.5")
+    implementation("top.ceroxe.rt:renderer-rtxpt:7.1.0")
 }
 ```
 

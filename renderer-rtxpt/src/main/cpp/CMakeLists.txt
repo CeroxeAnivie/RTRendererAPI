@@ -17,6 +17,8 @@ add_library(rtrenderer_rtxpt SHARED
     "${CMAKE_CURRENT_LIST_DIR}/rtxpt_material_policy.cpp")
 add_executable(rtxpt_native_control "${CMAKE_CURRENT_LIST_DIR}/rtxpt_native_control.cpp")
 add_executable(rtxpt_task_batch_selftest EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/rtxpt_task_batch_selftest.cpp")
+add_executable(rtxpt_retained_light_tree_selftest EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/rtxpt_retained_light_tree_selftest.cpp")
+target_compile_features(rtxpt_retained_light_tree_selftest PRIVATE cxx_std_17)
 target_include_directories(rtxpt_task_batch_selftest PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 target_link_libraries(rtxpt_task_batch_selftest PRIVATE donut_engine)
 target_compile_features(rtxpt_task_batch_selftest PRIVATE cxx_std_17)
@@ -34,7 +36,28 @@ set_target_properties(rtxpt_native_control PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 # Agility selection is resolved relative to the hosting process executable.
-target_link_libraries(rtrenderer_rtxpt PRIVATE RtxptCore ${JNI_LIBRARIES} d3d12 dxgi)
+target_link_libraries(rtrenderer_rtxpt PRIVATE RtxptCore ${JNI_LIBRARIES} d3d12 dxgi bcrypt)
+
+# Public extension ABI is pinned to the exact backend and transitively included headers.
+set(rtr_abi_sources
+    "backend/RtrNativeLighting.hlsl|${CMAKE_CURRENT_LIST_DIR}/RtrNativeLighting.hlsl"
+    "backend/RtrNativeLightingStyle.hlsli|${CMAKE_CURRENT_LIST_DIR}/RtrNativeLightingStyle.hlsli"
+    "donut/shaders/bindless.h|${CMAKE_SOURCE_DIR}/External/Donut/include/donut/shaders/bindless.h"
+    "donut/shaders/material_cb.h|${CMAKE_SOURCE_DIR}/External/Donut/include/donut/shaders/material_cb.h"
+    "donut/shaders/packing.hlsli|${CMAKE_SOURCE_DIR}/External/Donut/include/donut/shaders/packing.hlsli")
+list(SORT rtr_abi_sources)
+set(rtr_abi_inventory "")
+foreach(rtr_source IN LISTS rtr_abi_sources)
+    string(REPLACE "|" ";" rtr_parts "${rtr_source}")
+    list(GET rtr_parts 0 rtr_logical)
+    list(GET rtr_parts 1 rtr_path)
+    file(SHA256 "${rtr_path}" rtr_digest)
+    string(APPEND rtr_abi_inventory "${rtr_logical}=${rtr_digest}\n")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${rtr_path}")
+endforeach()
+string(SHA256 rtr_abi_digest "${rtr_abi_inventory}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/rtr_native_lighting_abi.h" "#define RTR_NATIVE_LIGHTING_ABI_SHA256 \"${rtr_abi_digest}\"\n")
+target_include_directories(rtrenderer_rtxpt PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 target_include_directories(rtrenderer_rtxpt PRIVATE ${JNI_INCLUDE_DIRS}
     "${CMAKE_SOURCE_DIR}/External/Donut/src/app/streamline")
 target_compile_definitions(rtrenderer_rtxpt PRIVATE

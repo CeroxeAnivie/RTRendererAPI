@@ -394,8 +394,8 @@ public final class RendererConfig {
         /**
          * Selects whether frame submissions populate a persistent asynchronous CPU-readback ring.
          *
-         * <p>Disable this only when the application exclusively consumes
-         * {@code VulkanFrameInterop} leases. Calling managed CPU-frame methods on a renderer built
+         * <p>Disable this for GPU-only presentation or explicit GPU-frame consumption.
+         * The presentation presets select it automatically. Calling managed CPU-frame methods on a renderer built
          * with this policy disabled is rejected instead of silently introducing a synchronous
          * fallback.</p>
          *

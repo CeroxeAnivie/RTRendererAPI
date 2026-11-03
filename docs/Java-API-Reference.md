@@ -154,6 +154,8 @@ public interface Renderer extends AutoCloseable
 
 普通模式向所选后端提交完整场景和帧。透明介质与透射场景可显式选择 RTXPT，或通过 `RTXPT_FOR_MEDIA` 路由。Vulkan 专家模式由显式资源／命令事务或 `SceneShaderProgram` 阶段替换表达；自定义阶段不会被普通模式优化覆盖。配置入口统一使用 `RendererConfig`，不存在独立的 `expertBuilder`。
 
+普通调用与专家控制的完整入口矩阵见[用法选择](ordinary-and-expert.md)。7.1 的 `RtxptRenderers.openNativeLighting(plan)` 与 `openHostSurface(plan[, augmentation])` 自动准备算法兼容策略；传入 `RendererConfig` 的重载保留显式配置并拒绝不支持组合。
+
 CPU 帧方法仅对提供该输出的后端有效：Vulkan 支持原生格式读取；RTXPT 要求关闭 CPU readback，使用原生窗口与 `RtxptAccess`。不能把 GPU 已呈现推导为有 `FrameSnapshot` 可取。
 
 ## RendererConfig
@@ -162,7 +164,7 @@ CPU 帧方法仅对提供该输出的后端有效：Vulkan 支持原生格式读
 
 | 值 | 说明 |
 | --- | --- |
-| `RendererConfig.recommended()` | CPU frame 路径；优选重建、SER 与 AS memory optimization，不请求 FG/MFG；NRD 显式启用 |
+| `RendererConfig.recommended()` | CPU frame 路径；优选重建、SER 与 AS memory optimization，不请求 FG/MFG；NRD 默认关闭，可显式启用 |
 | `RendererConfig.presentation()` | 官方 GPU presenter 路径；关闭 CPU readback，并在支持时额外优选普通 FG 2x 与低延迟 pacing；不自动请求 MFG |
 | `RendererConfig.pathTracedPresentation()` | RTXPT GPU 路径；关闭 CPU readback，优选重建、降噪、低延迟与辐射缓存；FG 默认关闭 |
 

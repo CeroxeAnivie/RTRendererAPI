@@ -30,8 +30,11 @@ final class RtxptInputContract {
     }
 
     static void validateFrame(RenderFrameRequest frame) {
+        validateFrame(frame,false);
+    }
+    static void validateFrame(RenderFrameRequest frame,boolean nativeLighting) {
         Objects.requireNonNull(frame, "frame");
-        if (frame.camera().hasExactProjection() || !frame.shaderData().isEmpty()
+        if ((!nativeLighting&&frame.camera().hasExactProjection()) || !frame.shaderData().isEmpty()
                 || frame.fog().opacity() > 0 || frame.caustics().enabled())
             throw new IllegalArgumentException("Exact Vulkan projections, custom shaders, screen fog and photon-map budgets are not native RTXPT controls");
         if (frame.antiAliasing().samplesPerPixel() != 1)

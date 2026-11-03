@@ -1,5 +1,5 @@
 /**
- * Stable, host-facing contracts for the standalone Java Vulkan RT renderer.
+ * Stable, host-facing contracts shared by the Java renderer backends.
  *
  * <p>This package contains facts and ownership protocols only. It deliberately
  * excludes scene caches, scheduling policy, acceleration structures, descriptor
@@ -20,5 +20,9 @@
  * omit presentation-time generation, while GPU-presentation defaults additionally prefer ordinary
  * FG 2x and never auto-select MFG. Explicit option builders provide the equivalent expert controls
  * without bypassing negotiation or lifecycle safety.</p>
+ *
+ * <p>Ordinary presets and explicit expert builders use the same immutable values.
+ * Retained scenes need no native handles; custom programs, command transactions
+ * and cross-API frame leases are explicit capabilities of the selected backend.</p>
  */
 package top.ceroxe.rt.renderer.api;

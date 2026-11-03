@@ -1,0 +1,31 @@
+# 7.1.0 diagnostic recorder
+
+The CPU recorder covers `SUBMIT` independently of native `FRAME`. This keeps light and resource preparation visible when it occurs before frame recording, including submissions that fail without entering `FRAME`.
+
+Call `RtxptDiagnosticAccess.diagnosticMonitor()` once on the renderer owner thread after native initialization. Its returned `RtxptDiagnostics.Monitor` can be queried from a watchdog thread while the owner is busy. The monitor reads the fixed native recorder only: it does not enter the renderer, touch GPU objects, acquire the renderer lifecycle lock, or wait for the owner. It expires when another native session replaces its generation. Level changes do not invalidate it. CPU monitor snapshots are thread safe; other renderer and GPU diagnostic methods retain their owner-thread contract.
+
+Snapshots contain up to 8,192 rolling events, 2,048 events from the latest slow or failed submission, 512 active scopes, and 1,024 independent submit samples. Overflow counters describe every window. Active scopes expose their stage, frame/revision, elapsed wall time, initial work counts, unique scope/parent identity, thread, and input/output generations where supplied. Their self time is intentionally zero until completion. `batch` links caller, workers, and waits; it is not a unique scope ID. `parentScopeId` identifies same-thread nesting, so concurrent worker wall time is never subtracted from an owner scope's self time.
+
+`submissions()` and `submissionsByKind()` provide P50/P95/P99/max and counts above 50ms/100ms/1s. Submit samples have their own bounded window so many deep worker events cannot evict all complete submit evidence. Categories use a defined precedence: first submit, resize, resource/light update, actual task wait, steady work. `stage(...)` gives completed stage distributions in the event window. First-session flags, failed/cancelled submissions, and submissions that never entered native `FRAME` are separate fields. These are CPU wall-clock measurements, not CPU execution time or GPU busy time.
+
+Switching to `OFF` finishes active CPU evidence once at the switch boundary and marks it truncated. Truncated samples remain inspectable but are excluded from completed-duration percentiles. Closing during a failed submit can mark the retained truncated event failed when the Java `finally` block arrives. Old scope destructors cannot repopulate a recorder after reset. After the switch, CPU scope construction and submit entry collect no clocks, allocate no memory, and record no events; explicit snapshots can still read retained evidence. GPU profiling stops new queries immediately, retires only previously recorded queries asynchronously, then stops polling fences and writing profile rows. Normal rendering does not wait for those samples.
+
+The native snapshot wire ABI is version 3 (16 words per event). Java still decodes version 2 snapshots. Both forms reject invalid lengths, counts, levels, and durations. Version 3 adds unique scope and parent IDs, generations, live scopes, and independent submit samples.
+
+Run the standalone test from the repository root in the configured MSVC/Java 25 environment:
+
+```powershell
+./tools/Test-RtxptDiagnostics.ps1
+```
+
+This compiles a standalone C++ recorder test and a Java decoder test, and passes a real native binary snapshot to Java. Every process uses `Invoke-BoundedBuild.ps1` with the 10 GiB process-tree cap. It does not create a renderer, GPU workload, or window.
+
+The 2026-11-03 local run passed OFF zero-clock/zero-allocation recording, same-thread self time, concurrent worker identities, watchdog live-stage visibility, failed pre-frame retention, cancellation, OFF truncation, reset generations, bounded overflow, version compatibility, malformed inputs, and all five work categories. The local CPU recorder microbenchmark measured about 5ns per synthetic submit with OFF and 0.36 microseconds with SUMMARY/DEEP. Each synthetic submit records a submit/frame/light nesting; this is recorder overhead only, not a rendered-frame or FPS comparison. It does not establish GPU profiling overhead, final packaged-renderer integration, or completion of the full T18 acceptance matrix.
+
+The hidden JVM/JNI test `:renderer-rtxpt:rtxptDiagnosticMonitorNativeSelfTest` also passed on 2026-11-03: a watchdog read 30 snapshots and observed 26 active submits and 26 nested native stages; a rejected future revision was retained before FRAME and the renderer recovered. OFF continued six new accepted/completed frames, kept operational/output status, froze CPU evidence and drained GPU queries to zero. SUMMARY resumed on the same monitor; close retained final evidence; a sequential replacement session rejected the old monitor. This test used the development native runtime, not the final release JAR. Its 86.1s elapsed time includes two native session startups and shader preparation and is not a frame-performance measurement.
+
+Event-poll interval measurement now checks the level before reading a clock and excludes the OFF gap when resumed. Optional process-memory recording has its own epoch and serializes queries/writes with configuration; an old memory scope cannot query or append records after OFF or after a later resume. The recorder self-test checks 100,000 OFF event polls with zero clocks. `rtxpt_memory_diagnostics_selftest` checks both environment opt-in states, 100,000 OFF calls with zero memory queries/clocks/writes, and rejection of stale scope epochs.
+
+Add `-IncludeMemory` to the standalone script to compile/run those optional memory checks. It uses the configured Windows SDK and the pinned DirectX-Headers under `build/rtxpt-sdk/build-host/_deps`; `-DirectXHeaders` selects another matching include directory.
+
+Integration must still associate real input/output generations with the frame context. New light-transport, input-import, reconstruction, and output-lease passes must emit their actual scopes and counters. The recorder cannot infer those stages from the outer `FRAME` event. A failed Java validation before the first native session exists also needs Java-side evidence; a native monitor cannot observe a session that has not been created.

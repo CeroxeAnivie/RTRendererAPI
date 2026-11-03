@@ -20,8 +20,8 @@ template<class Light> void RefitLightTree(std::vector<LightTreeNode>& nodes,cons
     const std::vector<uint32_t>& parents,uint32_t leaf,double normalization,std::vector<uint32_t>& dirty) {
     auto& node=nodes.at(leaf);const auto& light=lights.at(uint32_t(node.light));
     for(int a=0;a<3;a++)node.minimum[a]=node.maximum[a]=light.positionType[a];
-    node.directional=light.positionType.w==0.f?1.f:0.f;node.range=light.directionRange.w;
-    node.power=float(double(light.colorIntensity.w)*(.2126*light.colorIntensity.x+.7152*light.colorIntensity.y+.0722*light.colorIntensity.z)/normalization);
+    node.directional=light.positionType[3]==0.f?1.f:0.f;node.range=light.directionRange[3];
+    node.power=float(double(light.colorIntensity[3])*(.2126*light.colorIntensity[0]+.7152*light.colorIntensity[1]+.0722*light.colorIntensity[2])/normalization);
     dirty.push_back(leaf);
     for(uint32_t index=leaf;index!=0;) {
         index=parents.at(index);auto& parent=nodes.at(index);
@@ -37,9 +37,12 @@ template<class Light> std::vector<LightTreeNode> BuildLightTree(const std::vecto
     std::vector<uint32_t> order(lights.size());std::iota(order.begin(),order.end(),0);
     nodes.reserve(lights.size()*2-1);
     double maximumPower=0;
-    for(const auto& l:lights)maximumPower=std::max(maximumPower,double(l.colorIntensity.w)*
-        (.2126*l.colorIntensity.x+.7152*l.colorIntensity.y+.0722*l.colorIntensity.z));
-    if(normalization)*normalization=std::max(maximumPower,1e-30);
+    for(const auto& l:lights)maximumPower=std::max(maximumPower,double(l.colorIntensity[3])*
+        (.2126*l.colorIntensity[0]+.7152*l.colorIntensity[1]+.0722*l.colorIntensity[2]));
+    // Unit scale keeps an initially dark scene ready for ordinary light births.
+    // Normalizing zero to 1e-30 would force a full rebuild on its first edit.
+    const double powerScale=std::max(maximumPower,1.0);
+    if(normalization)*normalization=powerScale;
     auto build=[&](auto&& self,size_t first,size_t end)->uint32_t {
         uint32_t index=uint32_t(nodes.size());nodes.push_back({});
         LightTreeNode node{};node.light=-1;node.leaves=float(end-first);
@@ -47,14 +50,14 @@ template<class Light> std::vector<LightTreeNode> BuildLightTree(const std::vecto
         for(size_t i=first;i<end;i++) {
             const auto& l=lights[order[i]];
             for(int a=0;a<3;a++){node.minimum[a]=std::min(node.minimum[a],l.positionType[a]);node.maximum[a]=std::max(node.maximum[a],l.positionType[a]);}
-            node.directional=std::max(node.directional,l.positionType.w==0.f?1.f:0.f);
-            node.range=std::max(node.range,l.directionRange.w);
+            node.directional=std::max(node.directional,l.positionType[3]==0.f?1.f:0.f);
+            node.range=std::max(node.range,l.directionRange[3]);
         }
         if(end-first==1) {
             const auto& l=lights[order[first]];
             node.light=float(order[first]);
-            double p=double(l.colorIntensity.w)*(.2126*l.colorIntensity.x+.7152*l.colorIntensity.y+.0722*l.colorIntensity.z);
-            node.power=maximumPower>0?float(p/maximumPower):0;
+            double p=double(l.colorIntensity[3])*(.2126*l.colorIntensity[0]+.7152*l.colorIntensity[1]+.0722*l.colorIntensity[2]);
+            node.power=float(p/powerScale);
         } else {
             int axis=0;for(int a=1;a<3;a++)if(double(node.maximum[a])-node.minimum[a]>double(node.maximum[axis])-node.minimum[axis])axis=a;
             size_t middle=first+(end-first)/2;

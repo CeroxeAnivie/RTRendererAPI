@@ -1,5 +1,7 @@
 # 7.0.0 发布前 API 检查
 
+后续 7.1 普通／专家入口审查见[当前用法选择](../ordinary-and-expert.md)。本页保留原日期的审查证据，不将后续策略工厂的 CPU 检查当作本页历史 GPU 验收。
+
 > 清理说明（2026-11-02）：历史 JSON／CSV／JSONL 等实验原始数据及一次性诊断脚本已清理；本文结论、参数和截图保留。原始文件见[清理前版本](https://github.com/CeroxeAnivie/RTRendererAPI/tree/eb3bc21c8b7559dd847c575ca3f392a2f896d86f/docs/quality)，当前工具与验证入口见[工具说明](../../tools/README.md)。
 
 普通和专家模式共用不可变场景、帧和配置模型。普通调用方用 preset、场景事务和帧请求；专家按需发现扩展、规划功能变更或提交通用命令，不需要另一套互不兼容的对象模型。

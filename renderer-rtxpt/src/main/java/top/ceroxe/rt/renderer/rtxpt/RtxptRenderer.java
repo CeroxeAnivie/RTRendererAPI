@@ -7,7 +7,7 @@ import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
 /** One resident upstream renderer. Static resources are exported only on structural edits. */
-final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
+final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,SparseLightingControl,NativeLightingControl,HostSurfaceControl {
     private final Thread owner=Thread.currentThread();
     private final boolean externalPresentation;
     private final boolean gpuTimingsEnabled;
@@ -31,6 +31,231 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
     private CameraState camera;
     private RtxptLighting lighting;
     private final Set<Long> pendingLightIds=new HashSet<>();
+    private final Set<Long> pendingSparseIds=new HashSet<>();
+    private NativeLightingPlan nativeLightingPlan;
+    private HostSurfacePlan hostSurfacePlan;
+    private HostSurfaceAugmentation hostSurfaceAugmentation;
+    @Override public HostSurfaceAugmentation hostSurfaceAugmentation(){ready();hostSurfacePlan();if(hostSurfaceAugmentation==null)throw new IllegalStateException("Select host-lit augmentation first");return hostSurfaceAugmentation;}
+    @Override public void hostSurfaceAugmentation(HostSurfaceAugmentation value){
+        ready();Objects.requireNonNull(value).validateFor(hostSurfacePlan());
+        if(value.lighting().encoding()!=NativeLightingPlan.Encoding.HDR_FLOAT16)throw new IllegalArgumentException("Host augmentation publishes its declared floating working-domain signals");
+        if((hostSurfacePlan.outputSignals()&HostSurfacePlan.COMBINED)!=0&&(value.lighting().width()!=hostSurfacePlan.width()||value.lighting().height()!=hostSurfacePlan.height()))
+            throw new IllegalArgumentException("Combined host color requires native input extent; use independent modulation/GI for lower-resolution lighting");
+        hostSurfaceAugmentation=value;
+    }
+    private boolean preparingHostSurface,hostSurfaceWorkEnabled;
+    @Override public void hostSurfaceWorkStatisticsEnabled(boolean enabled){ready();hostSurfacePlan();hostSurfaceWorkEnabled=enabled;if(handle!=0)RtxptNative.hostSurfaceWorkEnabled(handle,enabled);}
+    @Override public HostSurfaceControl.WorkStatistics hostSurfaceWorkStatistics(){ready();hostSurfacePlan();var n=handle==0?new long[9]:RtxptNative.hostSurfaceWork(handle);return new HostSurfaceControl.WorkStatistics(n[0]!=0,n[1],n[2],n[3],n[4],n[5],n[6],n[7],n[8]);}
+    private long nextHostViewIdentity;
+    private CameraState lastHostCamera;
+    private record HostRequest(RenderFrameRequest frame,long revision,long resourceGeneration,long viewIdentity) { }
+    private final Map<Long,HostRequest> hostRequests=new HashMap<>();
+    private final EnumSet<HistoryCause> preparedHostHistory=EnumSet.noneOf(HistoryCause.class);
+    private RetainedUpdateMode preparedHostUpdateMode=RetainedUpdateMode.UNCHANGED;
+    private final EnumSet<HistoryInvalidationReason> preparedHostReasons=EnumSet.noneOf(HistoryInvalidationReason.class);
+    @Override public Optional<HostSurfaceFrameLease> acquireHostSurfaceFrame(){ready();hostSurfacePlan();if(handle==0)return Optional.empty();var packet=RtxptNative.hostSurfaceFrame(handle);return packet.length==0?Optional.empty():Optional.of(new RtxptHostSurfaceFrameLease(handle,packet));}
+    @Override public HostSurfacePlan hostSurfacePlan(){ready();if(hostSurfacePlan==null)throw new IllegalStateException("Select host primary-surface mode first");return hostSurfacePlan;}
+    @Override public void hostSurfacePlan(HostSurfacePlan plan){
+        ready();Objects.requireNonNull(plan);
+        if(!externalPresentation||nativeLightingPlan!=null||nativeScene!=null||options.restirDi()||options.restirGi()||options.sharc())
+            throw new IllegalArgumentException("Host primary surfaces require an offscreen retained scene without ReSTIR or radiance caches");
+        var nextAugmentation=hostSurfaceAugmentation;
+        if(plan.composition()==HostSurfacePlan.Composition.HOST_LIT_AUGMENTATION){
+            if(options.reconstruction()!=Reconstruction.NONE||options.standaloneDenoiser())throw new IllegalArgumentException("Deterministic host gain/GI has no full-image RR/SR inputs; choose unreconstructed finite signals or split transport with RR");
+            var parameters=hostSurfaceAugmentation==null?HostSurfaceAugmentation.defaults(plan.width(),plan.height(),HostSurfaceAugmentation.ColorDomain.SCENE_LINEAR):hostSurfaceAugmentation;
+            parameters.validateFor(plan);nextAugmentation=parameters;
+        }
+        if(!supportsTransparent(options))throw new IllegalArgumentException("Host surface HDR output requires bloom, ReSTIR, radiance caches and frame generation disabled");
+        if(handle!=0)configureHostSurface(plan);hostSurfaceAugmentation=nextAugmentation;hostSurfacePlan=plan;transparentBackground=true;backgroundChanged=true;
+    }
+    private void configureHostSurface(HostSurfacePlan plan){RtxptNative.hostSurfacePlan(handle,plan.width(),plan.height(),plan.composition().ordinal(),plan.preservedHostComponents(),plan.motionIncludesJitter(),plan.maximumResidentBytes());RtxptNative.hostSurfaceOutputs(handle,plan.outputSignals());}
+    @Override public Optional<HostSurfaceInputLease> acquireHostSurfaceInput(RenderFrameRequest frame,long resourceGeneration){
+        ready();hostSurfacePlan();Objects.requireNonNull(frame);
+        if(resourceGeneration<0||hostRequests.containsKey(frame.sequence()))throw new IllegalArgumentException("Invalid resource generation or duplicate input sequence");
+        RtxptHostSurfaceView.pack(frame.camera(),frame.camera(),frame.width(),frame.height());
+        preparingHostSurface=true;try{submit(frame);}finally{preparingHostSurface=false;}
+        configureHostSurface(hostSurfacePlan);
+        long viewIdentity=Math.incrementExact(nextHostViewIdentity);nextHostViewIdentity=viewIdentity;
+        var packet=RtxptNative.hostSurfaceAcquire(handle,frame.sequence(),revision,resourceGeneration,viewIdentity,frame.clock().timeNanos(),frame.clock().deltaNanos());
+        if(packet.length==0)return Optional.empty();
+        hostRequests.put(frame.sequence(),new HostRequest(frame,revision,resourceGeneration,viewIdentity));
+        return Optional.of(new RtxptHostSurfaceInputLease(handle,packet,()->hostRequests.remove(frame.sequence())));
+    }
+    @Override public void discardHostSurfaceInput(long generation,long sequence){ready();hostSurfacePlan();if(handle==0)throw new IllegalStateException("No host input allocation");RtxptNative.hostSurfaceDiscard(handle,generation,sequence);hostRequests.remove(sequence);}
+    @Override public HostSurfaceControl.Status hostSurfaceStatus(){ready();hostSurfacePlan();var n=handle==0?new long[9]:RtxptNative.hostSurfaceStatus(handle);return new HostSurfaceControl.Status(n[0],(int)n[1],(int)n[2],(int)n[3],(int)n[4],n[5],n[6],n[7],n[8]);}
+    private void prepareHostSurface(RenderFrameRequest frame,List<RtxptScene.Item> items,boolean geometryChanged){
+        if(hostSurfacePlan==null)return;
+        if(geometryChanged){
+            var uploaded=new HashSet<String>();
+            for(var item:items){String name=RtxptScene.meshName(item);if(!uploaded.add(name))continue;
+                var mesh=scene.meshes.get(item.mesh());var materialIds=mesh.triangleMaterialIds();
+                var groups=new LinkedHashMap<Long,Integer>();var counts=new HashMap<Long,Integer>();int[] mapping=new int[mesh.triangleCount()*2];
+                for(int triangle=0;triangle<mesh.triangleCount();triangle++){long material=materialIds.get(triangle);
+                    int geometry=groups.computeIfAbsent(material,ignored->groups.size());int primitive=counts.getOrDefault(material,0);counts.put(material,primitive+1);
+                    mapping[triangle*2]=geometry;mapping[triangle*2+1]=primitive;}
+                RtxptNative.hostSurfaceTriangles(handle,name,mapping);
+            }
+            RtxptNative.hostSurfaceMappingDirty(handle);
+        }
+        RtxptNative.hostSurfaceWorkEnabled(handle,hostSurfaceWorkEnabled);
+        RtxptNative.hostSurfaceView(handle,RtxptHostSurfaceView.pack(frame.camera(),lastHostCamera==null?frame.camera():lastHostCamera,frame.width(),frame.height()));
+        if(hostSurfacePlan.composition()==HostSurfacePlan.Composition.HOST_LIT_AUGMENTATION){
+            var augmentation=hostSurfaceAugmentation();var plan=augmentation.lighting();
+            RtxptNative.hostSurfaceAugmentation(handle,RtxptNativeLightingParameters.pack(plan,frame),plan.width(),plan.height(),hostSurfacePlan.outputSignals(),augmentation.colorDomain().ordinal());
+        }
+    }
+    private long lightingAttributeGeneration;
+    private long appliedLightingAttributeGeneration=-1;
+    private boolean lightingAttributeReset=true;
+    private final Map<Long,NativeLightingPublication.Instance> lightingInstances=new HashMap<>();
+    private final Map<Long,float[]> lightingBaselines=new HashMap<>();
+    private final Set<Long> pendingLightingInstances=new HashSet<>(),pendingLightingBaselines=new HashSet<>();
+    private float[] pendingBaselineLookup;
+    private byte[] pendingApplicationData;
+    private final ArrayDeque<NativeLightingApplicationPatch> pendingApplicationPatches=new ArrayDeque<>();
+    private int lightingApplicationBytes,lightingExtensionSignals=15,lightingExtensionMinimumBytes;
+    private Path lightingExtensionManifest;
+    private String lightingExtensionHash;
+    private boolean lightingExtensionPending;
+    private record LightingExtensionState(Path manifest,String hash,int signals,int minimumBytes) { }
+    private LightingExtensionState selectedLightingExtension=new LightingExtensionState(null,null,15,0);
+    private LightingExtensionState activeLightingExtension=selectedLightingExtension;
+    private boolean lightingWorkStatisticsEnabled;
+    private boolean hostAugmentationActive(){return hostSurfacePlan!=null&&hostSurfacePlan.composition()==HostSurfacePlan.Composition.HOST_LIT_AUGMENTATION;}
+    private NativeLightingPlan lightingPublicationPlan(){
+        ready();if(nativeLightingPlan!=null)return nativeLightingPlan;
+        if(hostAugmentationActive())return hostSurfaceAugmentation().lighting();
+        throw new IllegalStateException("Select independent native lighting or host-lit augmentation first");
+    }
+    @Override public void lightingWorkStatisticsEnabled(boolean enabled){ready();lightingPublicationPlan();lightingWorkStatisticsEnabled=enabled;if(handle!=0)RtxptNative.nativeLightingWorkEnabled(handle,enabled);}
+    @Override public NativeLightingControl.WorkStatistics lightingWorkStatistics(){ready();lightingPublicationPlan();var n=handle==0?new long[9]:RtxptNative.nativeLightingWork(handle);return new NativeLightingControl.WorkStatistics(n[0]!=0,n[1],n[2],n[3],n[4],n[5],n[6],n[7],n[8]);}
+    @Override public void activateLightingExtension(Path manifest){
+        ready();
+        if(hostAugmentationActive())throw new UnsupportedOperationException("Host-lit augmentation does not execute offline native-lighting extensions");
+        nativeLightingPlan();var path=Objects.requireNonNull(manifest).toAbsolutePath().normalize();
+        var validated=RtxptNative.nativeLightingExtensionValidate(path.toString(),nativeLightingPlan.signalMask(),lightingApplicationBytes);
+        var next=new LightingExtensionState(path,validated[0],Integer.parseInt(validated[1]),Integer.parseInt(validated[2]));
+        // A live device can reject the PSO here without invalidating the renderer
+        // or replacing its accepted Java capability/data contract.
+        if(handle!=0)RtxptNative.nativeLightingActivateValidatedExtension(handle,path.toString(),next.hash(),nativeLightingPlan.signalMask(),lightingApplicationBytes);
+        selectLightingExtension(next);lightingExtensionPending=handle==0;if(handle!=0)activeLightingExtension=next;
+    }
+    private void selectLightingExtension(LightingExtensionState value){
+        selectedLightingExtension=value;lightingExtensionManifest=value.manifest();lightingExtensionHash=value.hash();
+        lightingExtensionSignals=value.signals();lightingExtensionMinimumBytes=value.minimumBytes();
+    }
+    @Override public void resetLightingExtension(){
+        ready();
+        if(hostAugmentationActive())throw new UnsupportedOperationException("Host-lit augmentation does not execute offline native-lighting extensions");
+        nativeLightingPlan();var next=new LightingExtensionState(null,null,15,0);
+        if(handle!=0)RtxptNative.nativeLightingExtension(handle,null,null);
+        selectLightingExtension(next);lightingExtensionPending=handle==0;if(handle!=0)activeLightingExtension=next;
+    }
+    @Override public void publishLightingAttributes(NativeLightingPublication publication){
+        ready();Objects.requireNonNull(publication);lightingPublicationPlan();
+        if(publication.generation()<=lightingAttributeGeneration)throw new IllegalArgumentException("Lighting attribute generations must increase");
+        var instanceIds=new HashSet<Long>();var meshIds=new HashSet<Long>();
+        for(var value:publication.instances())if(!instanceIds.add(value.id())||!scene.instances.containsKey(value.id()))throw new IllegalArgumentException("Unknown or duplicate lighting instance: "+value.id());
+        for(var value:publication.baselines())if(!meshIds.add(value.meshId())||!scene.meshes.containsKey(value.meshId())||value.coordinates().length!=scene.meshes.get(value.meshId()).vertexCount()*2)
+            throw new IllegalArgumentException("Unknown, duplicate or mismatched baseline mesh: "+value.meshId());
+        if(publication.applicationData()!=null&&publication.applicationData().remaining()<lightingExtensionMinimumBytes)throw new IllegalArgumentException("Application publication is smaller than the active extension contract");
+        for(var value:publication.instances())lightingInstances.put(value.id(),value);
+        for(var value:publication.baselines())lightingBaselines.put(value.meshId(),value.coordinates());
+        pendingLightingInstances.addAll(instanceIds);pendingLightingBaselines.addAll(meshIds);
+        if(publication.baselineLookup()!=null)pendingBaselineLookup=publication.baselineLookup();
+        if(publication.applicationData()!=null){var bytes=publication.applicationData();pendingApplicationData=new byte[bytes.remaining()];bytes.get(pendingApplicationData);lightingApplicationBytes=pendingApplicationData.length;pendingApplicationPatches.clear();}
+        lightingAttributeGeneration=publication.generation();
+    }
+    @Override public void patchLightingApplicationData(NativeLightingApplicationPatch patch){
+        ready();lightingPublicationPlan();Objects.requireNonNull(patch);
+        var source=patch.data();int bytes=source.remaining();
+        if(patch.generation()<=lightingAttributeGeneration)throw new IllegalArgumentException("Application patch generations must increase with attribute publications");
+        if(lightingApplicationBytes<lightingExtensionMinimumBytes||patch.offset()>lightingApplicationBytes-bytes)
+            throw new IllegalArgumentException("Application patch must remain within the existing publication and extension capacity");
+        if(pendingApplicationData!=null){
+            // No GPU copy of this full publication exists yet. Fold the delta into
+            // that necessary first upload instead of uploading the same bytes twice.
+            var values=new byte[bytes];source.get(values);System.arraycopy(values,0,pendingApplicationData,patch.offset(),bytes);
+        }else pendingApplicationPatches.addLast(patch);
+        lightingAttributeGeneration=patch.generation();
+    }
+    long[] nativeLightingApplicationTransfers(){ready();return handle==0?new long[4]:RtxptNative.nativeLightingApplicationTelemetry(handle);}
+    double[] nativeLightingCompactProbe(){ready();if(handle==0)throw new IllegalStateException("Initialize the GPU before the encoder diagnostic");return RtxptNative.nativeLightingCompactProbe(handle);}
+    @Override public NativeLightingPlan nativeLightingPlan(){ready();if(nativeLightingPlan==null)throw new IllegalStateException("Select the independent native lighting mode first");return nativeLightingPlan;}
+    @Override public void nativeLightingPlan(NativeLightingPlan value){
+        ready();Objects.requireNonNull(value);
+        if((value.signalMask()&~lightingExtensionSignals)!=0)throw new IllegalArgumentException("Requested signals are not supported by the selected extension");
+        if(!externalPresentation||!sparseLightingSupported()||options.reconstruction()!=Reconstruction.NONE
+                ||options.standaloneDenoiser()||options.frameGeneration().preference().requested())
+            throw new IllegalArgumentException("The independent deterministic lighting plan requires offscreen SCENE_ANALYTIC without full-image reconstruction, ReSTIR or a radiance cache");
+        if(hostSurfacePlan!=null)throw new IllegalStateException("Host primary surfaces and independent native primary tracing are separate modes");
+        nativeLightingPlan=value;
+    }
+    long[] nativeLightingTelemetry(){ready();return handle==0?new long[8]:RtxptNative.nativeLightingTelemetry(handle);}
+    @Override public NativeLightingControl.Execution nativeLightingExecution(){var n=nativeLightingTelemetry();return new NativeLightingControl.Execution(n[0]!=0,(int)n[1],(int)n[2],(int)n[3],n[4],n[5],n[6],n[7]);}
+    @Override public Optional<LightingFrameLease> acquireLightingFrame(){ready();if(nativeLightingPlan==null)throw new IllegalStateException("Select native lighting first");
+        if(handle==0)return Optional.empty();var packet=RtxptNative.nativeLightingFrame(handle);return packet.length==0?Optional.empty():Optional.of(new RtxptLightingFrameLease(handle,packet));}
+    void captureNativeLighting(Path path,int signal){ready();if(handle==0||nativeLightingPlan==null)throw new IllegalStateException("Submit a native-lighting frame first");RtxptNative.nativeLightingCapture(handle,path.toAbsolutePath().toString(),signal);}
+    private void prepareNativeLighting(RenderFrameRequest frame,List<RtxptScene.Item> items,boolean geometryChanged){
+        if(nativeLightingPlan==null&&!hostAugmentationActive())return;
+        if(nativeLightingPlan!=null){
+            RtxptNative.nativeLighting(handle,RtxptNativeLightingParameters.pack(nativeLightingPlan,frame));
+            RtxptNative.nativeLightingEncoding(handle,nativeLightingPlan.encoding().ordinal());
+        }
+        RtxptNative.nativeLightingClock(handle,frame.clock().timeNanos(),frame.clock().deltaNanos());
+        RtxptNative.nativeLightingWorkEnabled(handle,lightingWorkStatisticsEnabled);
+        if(geometryChanged||lightingAttributeReset)RtxptNative.nativeLightingClearAttributes(handle);
+        if(geometryChanged||!pendingLightingBaselines.isEmpty()){
+        var uploaded=new HashSet<String>();
+        for(var item:items){String meshName=RtxptScene.meshName(item);if(!uploaded.add(meshName))continue;
+            if(!geometryChanged&&!pendingLightingBaselines.contains(item.mesh()))continue;
+            var mesh=scene.meshes.get(item.mesh());var materials=mesh.triangleMaterialIds();var indices=mesh.triangleIndices();var coordinates=mesh.lightmapCoordinates();
+            var override=lightingBaselines.get(item.mesh());
+            var groups=new LinkedHashMap<Long,ArrayList<Float>>();
+            for(int triangle=0;triangle<mesh.triangleCount();triangle++){
+                var group=groups.computeIfAbsent(materials.get(triangle),ignored->new ArrayList<>());
+                for(int vertex=0;vertex<3;vertex++){int index=indices.get(triangle*3+vertex)*2;
+                    group.add(override!=null?override[index]:coordinates.hasRemaining()?coordinates.get(index):0);group.add(override!=null?override[index+1]:coordinates.hasRemaining()?coordinates.get(index+1):0);}
+            }
+            int geometry=0;for(var group:groups.values()){float[] values=new float[group.size()];for(int i=0;i<values.length;i++)values[i]=group.get(i);
+                RtxptNative.nativeLightingBaseline(handle,meshName+":"+geometry++,values);}
+        }
+        }
+        while(!pendingApplicationPatches.isEmpty()){
+            var patch=pendingApplicationPatches.getFirst();var data=patch.data();var bytes=new byte[data.remaining()];data.get(bytes);
+            RtxptNative.nativeLightingApplicationPatch(handle,patch.generation(),patch.offset(),bytes);pendingApplicationPatches.removeFirst();
+        }
+        if(geometryChanged||appliedLightingAttributeGeneration!=lightingAttributeGeneration){
+        var instanceIds=geometryChanged?lightingInstances.keySet():pendingLightingInstances;
+        var names=new ArrayList<String>();var values=new ArrayList<Float>();
+        for(long id:instanceIds){if(!scene.instances.containsKey(id))continue;var value=lightingInstances.get(id);names.add("i"+id);
+            for(float v:new float[]{value.roles(),value.visibility(),value.fog(),0,value.localScale(),value.skyScale(),value.localBias(),value.skyBias()})values.add(v);}
+        float[] packed=new float[values.size()];for(int i=0;i<packed.length;i++)packed[i]=values.get(i);
+        RtxptNative.nativeLightingAttributes(handle,lightingAttributeGeneration,names.toArray(String[]::new),packed,pendingBaselineLookup,pendingApplicationData);
+        appliedLightingAttributeGeneration=lightingAttributeGeneration;
+        }
+        if(lightingExtensionPending&&nativeLightingPlan!=null){
+            try{
+                RtxptNative.nativeLightingExtension(handle,lightingExtensionManifest==null?null:lightingExtensionManifest.toString(),lightingExtensionHash);
+                activeLightingExtension=selectedLightingExtension;lightingExtensionPending=false;
+            }catch(RuntimeException|Error failure){selectLightingExtension(activeLightingExtension);lightingExtensionPending=false;throw failure;}
+        }
+        pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingBaselineLookup=null;pendingApplicationData=null;
+        lightingAttributeReset=false;
+    }
+    private boolean sparseLightingSupported(){return nativeScene==null&&options.qualityInts()[0]==1&&!options.restirDi()&&!options.restirGi()&&!options.sharc();}
+    @Override public SparseLightingControl.Capacity sparseLightingCapacity(){ready();if(!sparseLightingSupported())throw new IllegalStateException("Sparse sources require retained SCENE_ANALYTIC without ReSTIR or radiance cache");return new SparseLightingControl.Capacity(262144,32,96);}
+    @Override public SparseLightingControl.UpdateStatus sparseLightingStatus(){ready();long[] n=handle==0?new long[8]:RtxptNative.sparseLightingTelemetry(handle);return new SparseLightingControl.UpdateStatus(n[0],n[0]==0?0:n[0]*2-1,n[1],n[2],n[3],n[4],n[5],n[6],n[7]);}
+    @Override public SceneUpdateResult apply(SceneTransaction tx,List<SparseLightSource> upserts,java.nio.LongBuffer removals){
+        ready();Objects.requireNonNull(upserts);Objects.requireNonNull(removals);sparseLightingCapacity();
+        var prepared=prepareScene(tx,true);var next=prepared.value().sparseSources;var touched=new HashSet<Long>();
+        var removed=removals.asReadOnlyBuffer();
+        if(tx.reset()&&removed.hasRemaining())throw new IllegalArgumentException("A reset cannot remove sparse sources");
+        while(removed.hasRemaining()){long id=removed.get();if(id<0||!touched.add(id)||next.remove(id)==null)throw new IllegalArgumentException("Unknown or duplicate sparse source removal: "+id);}
+        for(var source:upserts){Objects.requireNonNull(source);if(!touched.add(source.id()))throw new IllegalArgumentException("Duplicate sparse source ID: "+source.id());next.put(source.id(),source);}
+        if(next.size()>262144)throw new IllegalArgumentException("Sparse source capacity exceeded: "+next.size());
+        var result=commitScene(prepared);pendingSparseIds.addAll(touched);return result;
+    }
     private SceneLightingControl.Continuity continuity=SceneLightingControl.Continuity.DISCONTINUOUS;
     private float[] visibleBackground;
     private boolean backgroundChanged,transparentBackground;
@@ -68,6 +293,14 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
         RtxptNative.prepare(RtxptNative.runtime().toString());
     }
     private void validatePresentationProfile(RendererFeatureProfile profile) {
+        var next=RtxptOptions.resolve(profile);
+        if(hostSurfacePlan!=null&&(next.restirDi()||next.restirGi()||next.sharc()))throw new IllegalArgumentException("Host primary surfaces do not execute ReSTIR or radiance caches");
+        if(hostAugmentationActive()&&(next.reconstruction()!=Reconstruction.NONE||next.standaloneDenoiser()))
+            throw new IllegalArgumentException("Host-lit augmentation does not execute full-image RR/SR or standalone denoising");
+        if(nativeLightingPlan!=null&&(next.reconstruction()!=Reconstruction.NONE||next.standaloneDenoiser()||next.restirDi()||next.restirGi()||next.sharc()))
+            throw new IllegalArgumentException("Independent deterministic lighting does not execute full-image reconstruction or stochastic caches");
+        if(!scene.sparseSources.isEmpty()&&(next.qualityInts()[0]!=1||next.restirDi()||next.restirGi()||next.sharc()))
+            throw new IllegalArgumentException("Resident sparse sources require SCENE_ANALYTIC without ReSTIR or radiance cache");
         if(transparentBackground&&!supportsTransparent(RtxptOptions.resolve(profile)))throw new IllegalArgumentException("Requested features do not preserve transparent output; select an opaque background first");
         if(externalPresentation&&profile.frameGeneration().preference().requested())
             throw new IllegalArgumentException("Vulkan composition accepts native RTXPT frames; DXGI FG/MFG is only supported with native RTXPT presentation");
@@ -102,7 +335,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
         return Renderer.super.extension(type);
     }
     private void ready(){if(closed)throw new IllegalStateException("RTXPT renderer closed");if(Thread.currentThread()!=owner)throw new IllegalStateException("Call RTXPT on its creating thread");}
-    @Override public Status status(){return closed?Status.CLOSED:Status.READY;}
+    @Override public Renderer.Status status(){return closed?Renderer.Status.CLOSED:Renderer.Status.READY;}
     @Override public RendererHealth health(){return new RendererHealth(status(),Optional.empty(),RendererHealth.ResourceObligations.none());}
     @Override public RendererDiagnostics diagnostics(){return RendererDiagnostics.builder().status(status()).latestAcceptedSceneRevision(revision)
         .latestSubmittedFrameSequence(submitted).latestCompletedFrameSequence(completed).residentMeshes(scene.meshes.size()).residentInstances(scene.instances.size())
@@ -159,6 +392,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
     }
     SceneUpdateResult commitScene(PreparedScene prepared){
         var tx=prepared.transaction();
+        if(tx.reset()){pendingSparseIds.clear();lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();lightingAttributeReset=true;}
+        var removedInstances=tx.removals().instanceIds();while(removedInstances.hasRemaining()){long id=removedInstances.get();lightingInstances.remove(id);pendingLightingInstances.remove(id);}
+        var removedMeshes=tx.removals().meshIds();while(removedMeshes.hasRemaining()){long id=removedMeshes.get();lightingBaselines.remove(id);pendingLightingBaselines.remove(id);}
         tx.upserts().lights().forEach(l->pendingLightIds.add(l.id()));var removedLights=tx.removals().lightIds();while(removedLights.hasRemaining())pendingLightIds.add(removedLights.get());
         scene=prepared.value();dirty|=tx.hasChanges()&&!prepared.geometryUnchanged();fullReset|=tx.reset();
         nativeContractPending=!prepared.nativeContract();
@@ -173,53 +409,72 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
         // even if its value equals the camera used before the scene switch.
         camera=null;
     }
+    private long diagnosticClock(){return diagnosticLevel==RtxptDiagnostics.Level.OFF?0:System.nanoTime();}
+    private long diagnosticElapsed(long start){return start==0?0:System.nanoTime()-start;}
     @Override public FrameSubmissionResult submit(RenderFrameRequest f){
-        long validationBegin=System.nanoTime();ready();Objects.requireNonNull(f);if(f.width()>16384||f.height()>16384)throw new IllegalArgumentException("RTXPT output dimensions exceed D3D12 limit 16384");if(f.sequence()<=submitted)throw new IllegalArgumentException("Frame sequence must increase");
+        ready();Objects.requireNonNull(f);
+        if(hostSurfacePlan!=null&&!preparingHostSurface&&handle!=0&&!RtxptNative.hostSurfaceCanPublish(handle))throw new IllegalStateException("Host HDR output ring is full; return GPU output leases before submitting");
+        if(nativeLightingPlan!=null&&handle!=0&&!RtxptNative.nativeLightingCanPublish(handle))throw new IllegalStateException("Lighting output ring is full; return GPU leases or use trySubmit");
+        if(hostSurfacePlan!=null&&!preparingHostSurface){var host=hostRequests.get(f.sequence());
+            if(host==null||host.frame()!=f||host.revision()!=revision)throw new IllegalArgumentException("Submit the exact immutable request used to acquire a published input, at the same resident scene revision");}
+        long submitBegin=preparingHostSurface?0:diagnosticClock();boolean submitTracked=!preparingHostSurface&&handle!=0,submitAccepted=false;
+        if(submitTracked)RtxptNative.diagnosticSubmitBegin(handle,f.sequence(),revision,0);
+        try {
+        long validationBegin=submitBegin;if(f.width()>16384||f.height()>16384)throw new IllegalArgumentException("RTXPT output dimensions exceed D3D12 limit 16384");if(f.sequence()<=submitted)throw new IllegalArgumentException("Frame sequence must increase");
         var historyBefore=handle==0?new long[16]:RtxptNative.executionTelemetry(handle);
-        var historyCauses=EnumSet.noneOf(HistoryCause.class);
+        var historyCauses=EnumSet.copyOf(preparedHostHistory);
         if(handle==0)historyCauses.add(HistoryCause.FIRST_FRAME);
         if(!Objects.equals(camera,f.camera()))historyCauses.add(HistoryCause.CAMERA);
         boolean extentChanged=width!=f.width()||height!=f.height();
         if(extentChanged)historyCauses.add(HistoryCause.OUTPUT_EXTENT);
         if(backgroundChanged)historyCauses.add(HistoryCause.BACKGROUND);
         if(!f.temporalHistoryResets().isEmpty())historyCauses.add(HistoryCause.EXPLICIT);
-        RtxptInputContract.validateFrame(f);
+        RtxptInputContract.validateFrame(f,nativeLightingPlan!=null||hostSurfacePlan!=null);
+        if(nativeLightingPlan!=null)RtxptNativeLightingParameters.pack(nativeLightingPlan,f);
+        else if(hostAugmentationActive())RtxptNativeLightingParameters.pack(hostSurfaceAugmentation().lighting(),f);
         if(nativeContractPending&&nativeScene==null){scene.validate();nativeContractPending=false;}
         if(f.minimumSceneRevision()>revision)throw new IllegalArgumentException("Scene revision is not resident");
         var items=nativeScene==null?scene.items(f):List.<RtxptScene.Item>of();
-        var nextLighting=nativeScene==null?RtxptLighting.sorted(f.environment(),scene.sortedLights()):null;
+        var nextLighting=nativeScene==null?RtxptLighting.of(f.environment(),List.of()):null;
         // Validate the complete batch before scene export or any native mutation.
-        boolean sameLights=lighting!=null&&nextLighting!=null&&nextLighting.lights.equals(lighting.lights);
-        boolean sparseLights=lighting!=null&&!fullReset&&!sameLights;
+        boolean sparseLights=lighting!=null&&!fullReset;
         var changedLights=new ArrayList<SceneLight>();
+        var removedLights=new ArrayList<Long>();
         if(sparseLights)for(long id:pendingLightIds){var next=scene.lights.get(id);var old=residentScene.lights.get(id);
-            if(next==null||old==null||next.type()!=old.type()){sparseLights=false;break;}
-            if(!next.equals(old))changedLights.add(next);
+            if(!Objects.equals(next,old)){if(next==null)removedLights.add(id);else changedLights.add(next);}
         }
+        boolean sameLights=sparseLights&&changedLights.isEmpty()&&removedLights.isEmpty();
+        boolean sparseSourcesChanged=fullReset?!scene.sparseSources.isEmpty():false;
+        if(!sparseSourcesChanged&&residentScene!=null)for(long id:pendingSparseIds)
+            if(!Objects.equals(scene.sparseSources.get(id),residentScene.sparseSources.get(id))){sparseSourcesChanged=true;break;}
+        if(sparseSourcesChanged)historyCauses.add(HistoryCause.LIGHT);
         if(lighting!=null&&nextLighting!=null){
             if(!lighting.environment.equals(nextLighting.environment))historyCauses.add(HistoryCause.ENVIRONMENT);
             if(!sameLights)historyCauses.add(HistoryCause.LIGHT);
         }
-        float[] lightRecords=nextLighting!=null&&(!sameLights||fullReset)&&!sparseLights?nextLighting.records():null;
-        validationNs+=System.nanoTime()-validationBegin;
-        long translationBegin=System.nanoTime();
+        var completeLighting=nextLighting!=null&&!sparseLights?RtxptLighting.sorted(f.environment(),scene.sortedLights()):null;
+        float[] lightRecords=completeLighting!=null?completeLighting.records():null;
+        var lightPatch=sparseLights?RtxptLighting.of(f.environment(),changedLights):null;
+        float[] patchRecords=lightPatch!=null?Arrays.copyOfRange(lightPatch.records(),16,(changedLights.size()+1)*16):null;
+        long validationDuration=diagnosticElapsed(validationBegin);validationNs+=validationDuration;
+        long translationBegin=diagnosticClock();
         boolean rebuild=nativeScene==null && (handle==0 || fullReset);
         boolean delta=nativeScene==null&&!rebuild&&(dirty||!RtxptScene.sameStructure(items,previous));
         var updateMode=nativeScene!=null?RetainedUpdateMode.NATIVE_SCENE:rebuild
             ?(handle==0?RetainedUpdateMode.INITIAL_PUBLICATION:RetainedUpdateMode.EXPLICIT_RESET)
             :delta?RetainedUpdateMode.RESOURCE_DELTA:!items.equals(previous)?RetainedUpdateMode.TRANSFORMS
-            :!Objects.equals(nextLighting,lighting)?RetainedUpdateMode.LIGHTING:RetainedUpdateMode.UNCHANGED;
+            :sparseSourcesChanged||!sameLights||!Objects.equals(nextLighting,lighting)?RetainedUpdateMode.LIGHTING:RetainedUpdateMode.UNCHANGED;
         if(delta||rebuild)historyCauses.add(HistoryCause.RESOURCE);
         RtxptDelta.Prepared preparedDelta=null;
         Path path=nativeScene;
-        if(rebuild){long begin=System.nanoTime();try{
+        if(rebuild){long begin=diagnosticClock();try{
             if(directory==null)directory=Files.createTempDirectory("rtrenderer-rtxpt-");
             var generation=Files.createTempDirectory(directory,"full-");path=scene.export(generation,f,items);fullDirectory=generation;
             textureFiles=new HashMap<>();for(long id:scene.textures.keySet())textureFiles.put(id,generation.resolve("t"+id+".png"));
-        }catch(IOException e){throw new IllegalStateException("RTXPT asset translation failed",e);}exportNs+=System.nanoTime()-begin;exports++;}
+        }catch(IOException e){throw new IllegalStateException("RTXPT asset translation failed",e);}exportNs+=diagnosticElapsed(begin);exports++;}
         if(delta)try{preparedDelta=RtxptDelta.prepare(Files.createTempDirectory(directory,"delta-"),residentScene,scene,previous,items,textureFiles);}
         catch(IOException e){throw new IllegalStateException("RTXPT delta translation failed",e);}
-        translationNs+=System.nanoTime()-translationBegin;
+        long translationDuration=diagnosticElapsed(translationBegin);translationNs+=translationDuration;
         try {
         if(handle==0){
             if(path==null)throw new IllegalStateException("Submit a populated scene");
@@ -232,8 +487,13 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
             if(nativeScene==null)scene.uploadInteriors(handle);
         }else if(rebuild){RtxptNative.loadScene(handle,path.toString());applyNativeSettings();scene.uploadInteriors(handle);}
         RtxptNative.diagnosticContext(handle,f.sequence(),revision);
+        if(!preparingHostSurface&&!submitTracked){RtxptNative.diagnosticSubmitBegin(handle,f.sequence(),revision,diagnosticElapsed(submitBegin));submitTracked=true;}
+        if(submitBegin!=0){
+            RtxptNative.diagnosticSubmitStage(RtxptDiagnostics.Stage.SUBMIT_VALIDATION.ordinal(),0,validationDuration,scene.lights.size(),pendingLightIds.size());
+            RtxptNative.diagnosticSubmitStage(RtxptDiagnostics.Stage.TRANSLATION.ordinal(),translationBegin-submitBegin,translationDuration,items.size(),0);
+        }
         if(preparedDelta!=null&&preparedDelta.hasWork()){
-            long begin=System.nanoTime();RtxptNative.resources(handle,preparedDelta.manifest().toString());nativeResourceNs+=System.nanoTime()-begin;preparedDelta.translated().uploadInteriors(handle);
+            long begin=diagnosticClock();RtxptNative.resources(handle,preparedDelta.manifest().toString());nativeResourceNs+=diagnosticElapsed(begin);preparedDelta.translated().uploadInteriors(handle);
             textureFiles=preparedDelta.textureFiles();resourceBatches++;resourceMeshes+=preparedDelta.meshes();
             resourceMaterials+=preparedDelta.materials();resourceTextures+=preparedDelta.textures();
         }
@@ -245,43 +505,67 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
         RtxptNative.lightingPolicy(handle,continuity.ordinal());
         RtxptNative.background(handle,visibleBackground,transparentBackground);
         if(!f.temporalHistoryResets().isEmpty())RtxptNative.resetHistory(handle);
-        if(nextLighting!=null&&(rebuild||!nextLighting.equals(lighting))) {
-            long begin=System.nanoTime();
+        if(nextLighting!=null&&(rebuild||!sameLights||!nextLighting.equals(lighting))) {
+            long begin=diagnosticClock();
             try {
                 if(!rebuild&&sparseLights){
-                    var batch=RtxptLighting.of(nextLighting.environment,changedLights);
-                    RtxptNative.lightingDelta(handle,changedLights.stream().sorted(Comparator.comparingLong(SceneLight::id)).mapToLong(SceneLight::id).toArray(),Arrays.copyOfRange(batch.records(),16,(changedLights.size()+1)*16));
-                    if(!nextLighting.environment.equals(lighting.environment))RtxptNative.environment(handle,nextLighting.sun(),nextLighting.sky());
+                    RtxptNative.lightingPatch(handle,lightPatch.lights.stream().mapToLong(SceneLight::id).toArray(),patchRecords,
+                        removedLights.stream().mapToLong(Long::longValue).toArray(),nextLighting.sun(),nextLighting.sky());
                 }else if(!rebuild&&sameLights)RtxptNative.environment(handle,nextLighting.sun(),nextLighting.sky());
-                else RtxptNative.lighting(handle,nextLighting.ids(),lightRecords!=null?lightRecords:nextLighting.records(),nextLighting.sky());
+                else RtxptNative.lighting(handle,completeLighting.ids(),lightRecords,nextLighting.sky());
             }
             catch(RuntimeException|Error failure) {
                 // A failed native commit must never present a partially modified generation.
                 try {close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}throw failure;
             }
-            lighting=nextLighting;lightingNs+=System.nanoTime()-begin;
+            lighting=nextLighting;lightingNs+=diagnosticElapsed(begin);
         }
-        if(!rebuild&&!delta)updateTransforms(items);
-        previous=items;dirty=false;fullReset=false;residentScene=scene;pendingLightIds.clear();
-        submitted=f.sequence();
-        if(!renderFrame())throw new IllegalStateException("RTXPT window closed");
+        if(!delta)updateTransforms(items,rebuild);
+        if(rebuild||!pendingSparseIds.isEmpty()){
+            var sources=new ArrayList<SparseLightSource>();var removed=new ArrayList<Long>();
+            if(rebuild)sources.addAll(scene.sparseSources.values());
+            else for(long id:pendingSparseIds){var value=scene.sparseSources.get(id);var old=residentScene.sparseSources.get(id);
+                if(!Objects.equals(value,old)){if(value==null)removed.add(id);else sources.add(value);}}
+            if(rebuild||!sources.isEmpty()||!removed.isEmpty())RtxptNative.sparseLighting(handle,sources.stream().mapToLong(SparseLightSource::id).toArray(),RtxptSparseSources.pack(sources),removed.stream().mapToLong(Long::longValue).toArray(),rebuild);
+        }
+        prepareNativeLighting(f,items,rebuild||delta);
+        prepareHostSurface(f,items,rebuild||delta);
+        previous=items;dirty=false;fullReset=false;residentScene=scene;pendingLightIds.clear();pendingSparseIds.clear();
+        if(preparingHostSurface){
+            preparedHostHistory.addAll(historyCauses);
+            if(updateMode!=RetainedUpdateMode.UNCHANGED)preparedHostUpdateMode=updateMode;
+            if(rebuild)preparedHostReasons.add(handle==0||frames==0?HistoryInvalidationReason.FIRST_FRAME:HistoryInvalidationReason.SCENE_TOPOLOGY_CHANGED);
+            else if(delta)preparedHostReasons.add(HistoryInvalidationReason.SCENE_CONTENT_CHANGED);
+            if(extentChanged)preparedHostReasons.add(HistoryInvalidationReason.OUTPUT_EXTENT_CHANGED);
+            if(rebuild||delta)pruneTranslations();return null;
+        }
+        if(hostSurfacePlan!=null){var host=hostRequests.get(f.sequence());RtxptNative.hostSurfaceRead(handle,f.sequence(),revision,host.resourceGeneration(),host.viewIdentity(),f.clock().timeNanos(),f.clock().deltaNanos());}
+        long previousSubmitted=submitted,hostConsumedBefore=hostSurfacePlan==null?0:RtxptNative.hostSurfaceStatus(handle)[7];submitted=f.sequence();
+        try{if(!renderFrame())throw new IllegalStateException("RTXPT window closed");}
+        catch(RuntimeException|Error failure){if(hostSurfacePlan!=null){submitted=previousSubmitted;
+            if(RtxptNative.hostSurfaceStatus(handle)[7]>hostConsumedBefore)hostRequests.remove(f.sequence());}throw failure;}
         scenePublished=true;
+        if(hostSurfacePlan!=null){hostRequests.remove(f.sequence());lastHostCamera=f.camera();preparedHostHistory.clear();
+            if(preparedHostUpdateMode!=RetainedUpdateMode.UNCHANGED)updateMode=preparedHostUpdateMode;
+            preparedHostUpdateMode=RetainedUpdateMode.UNCHANGED;}
         verifyRequiredFeatures();
         lastUpdateMode=updateMode;
         var historyAfter=RtxptNative.executionTelemetry(handle);
         if(historyCauses.isEmpty()&&(historyAfter[8]!=historyBefore[8]||historyAfter[9]!=historyBefore[9]))historyCauses.add(HistoryCause.CONFIGURATION);
         lastHistoryFrame=new HistoryFrame(submitted,completed==submitted,historyCauses,historyAfter[7]-historyBefore[7],historyAfter[8]-historyBefore[8],historyAfter[9]-historyBefore[9],historyAfter[10]-historyBefore[10]);
         backgroundChanged=false;
-        if(rebuild||delta){long begin=System.nanoTime();pruneTranslations();retirementNs+=System.nanoTime()-begin;}
+        if(rebuild||delta){long begin=diagnosticClock();pruneTranslations();retirementNs+=diagnosticElapsed(begin);}
         var reasons=EnumSet.noneOf(HistoryInvalidationReason.class);
+        if(hostSurfacePlan!=null){reasons.addAll(preparedHostReasons);preparedHostReasons.clear();}
         if(rebuild)reasons.add(frames==1?HistoryInvalidationReason.FIRST_FRAME:HistoryInvalidationReason.SCENE_TOPOLOGY_CHANGED);
         else if(delta)reasons.add(HistoryInvalidationReason.SCENE_CONTENT_CHANGED);
         if(extentChanged)reasons.add(HistoryInvalidationReason.OUTPUT_EXTENT_CHANGED);
         if(historyCauses.contains(HistoryCause.ENVIRONMENT)||historyCauses.contains(HistoryCause.LIGHT)||historyCauses.contains(HistoryCause.BACKGROUND))
             if(lastHistoryFrame.pathAccumulationResets()>0||lastHistoryFrame.reconstructionResets()>0||lastHistoryFrame.denoiserResets()>0)reasons.add(HistoryInvalidationReason.FRAME_SHADING_CHANGED);
         for(var reason:f.temporalHistoryResets())reasons.add(HistoryInvalidationReason.valueOf(reason.name()));
-        return FrameSubmissionResult.accepted(submitted,revision,reasons);
-        }catch(RuntimeException|Error failure){try{close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}throw failure;}
+        submitAccepted=true;return FrameSubmissionResult.accepted(submitted,revision,reasons);
+        }catch(RuntimeException|Error failure){if(hostSurfacePlan==null)try{close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}throw failure;}
+        }finally{if(submitTracked)RtxptNative.diagnosticSubmitEnd(!submitAccepted);}
     }
     void resetWindowPollInterval(){ready();RtxptNative.resetWindowPollInterval(handle);}
     @Override public SubmitStages submitStages(){ready();var n=handle==0?new long[16]:RtxptNative.executionTelemetry(handle);return new SubmitStages(validationNs,translationNs,nativeResourceNs,lightingNs,retirementNs,n[0],n[1],n[2],n[3],n[4],n[5],n[6],n[12],n[13],n[14],n[15]);}
@@ -306,6 +590,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
         }catch(IOException ignored){ }
     }
     void captureLinear(Path path){ready();RtxptNative.captureLinear(handle,path.toAbsolutePath().toString());}
+    void captureHostSurface(int signal,Path path){ready();RtxptNative.hostSurfaceCapture(handle,signal,path.toAbsolutePath().toString());}
     void windowState(int state){ready();RtxptNative.windowState(handle,state);}
     private void applyNativeSettings(){RtxptNative.settings(handle,options.maxBounces(),options.diffuseBounces(),options.reflex(),options.frameGenerationMode(),options.generatedFrames(),
         options.samplesPerPixel(),options.reconstruction().ordinal(),options.dlssQuality().nativeValue,options.standaloneDenoiser(),options.relaxDenoiser(),options.restirDi(),options.restirGi(),options.sharc(),options.exactOpticalInterfaces());
@@ -457,16 +742,19 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
             && !s.shaderExecutionReordering())
             throw new IllegalStateException("RTXPT did not activate required SER: "+s);
     }
-    private void updateTransforms(List<RtxptScene.Item> items){
-        var changed=new ArrayList<RtxptScene.Item>();for(int i=0;i<items.size();i++)if(!items.get(i).transform().equals(previous.get(i).transform()))changed.add(items.get(i));
+    private void updateTransforms(List<RtxptScene.Item> items,boolean initial){
+        var changed=new ArrayList<RtxptScene.Item>();for(int i=0;i<items.size();i++)if(initial||!items.get(i).transform().equals(previous.get(i).transform()))changed.add(items.get(i));
         if(changed.isEmpty())return;
-        long begin=System.nanoTime();var data=RtxptScene.floats(changed.size()*12);for(var i:changed)data.put(i.transform().elements());
-        RtxptNative.transforms(handle,changed.stream().map(RtxptScene.Item::name).toArray(String[]::new),data.flip());batches++;transformNs+=System.nanoTime()-begin;
+        long begin=diagnosticClock();var data=RtxptScene.floats(changed.size()*12);for(var i:changed)data.put(i.transform().elements());
+        RtxptNative.transforms(handle,changed.stream().map(RtxptScene.Item::name).toArray(String[]::new),data.flip());batches++;transformNs+=diagnosticElapsed(begin);
     }
     @Override public boolean renderFrame(){ready();if(handle==0)throw new IllegalStateException("Submit a scene first");if(windowClosed)return false;
-        long begin=System.nanoTime();int result=RtxptNative.frame(handle);frameNs+=System.nanoTime()-begin;if(result==2){frames++;completed=submitted;}else if(result==0)windowClosed=true;return result!=0;}
+        long begin=diagnosticClock();int result=RtxptNative.frame(handle);frameNs+=diagnosticElapsed(begin);if(result==2){frames++;completed=submitted;}else if(result==0)windowClosed=true;return result!=0;}
     @Override public void diagnosticLevel(RtxptDiagnostics.Level level){ready();diagnosticLevel=Objects.requireNonNull(level);if(handle!=0)RtxptNative.diagnosticLevel(handle,level.ordinal());}
+    @Override public RtxptDiagnostics.LightUpdates lightUpdates(){ready();return RtxptDiagnostics.decodeLights(handle==0?new long[16]:RtxptNative.lightUpdateTelemetry(handle));}
     @Override public RtxptDiagnostics.Snapshot diagnosticSnapshot(){ready();return handle==0?RtxptDiagnostics.decode(new long[]{2,12,0,0,0,0,0}):RtxptDiagnostics.decode(RtxptNative.diagnosticSnapshot(handle));}
+    @Override public RtxptDiagnostics.Monitor diagnosticMonitor(){ready();if(handle==0)throw new IllegalStateException("Submit a frame before acquiring a diagnostic monitor");
+        long token=RtxptNative.diagnosticMonitorToken(handle);return ()->RtxptDiagnostics.decode(RtxptNative.diagnosticMonitorSnapshot(token));}
     @Override public RtxptDiagnostics.GpuSnapshot diagnosticGpuSnapshot(){ready();return RtxptDiagnostics.decodeGpu(handle==0?new String[]{"0,0,0,0,0"}:RtxptNative.diagnosticGpuSnapshot(handle));}
     @Override public void awaitIdle(){ready();if(handle!=0)RtxptNative.awaitIdle(handle);}
     @Override public void setOverlayText(String text){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.overlay(handle,Objects.requireNonNull(text));}
@@ -504,12 +792,18 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
     void captureSource(Path png){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.captureSource(handle,Objects.requireNonNull(png).toAbsolutePath().toString());}
     void snapshotMaterials(Path directory){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.snapshotMaterials(handle,directory.toAbsolutePath().toString());}
     @Override public BridgeTimings bridgeTimings(){return new BridgeTimings(frames,frameNs,exports,exportNs,batches,transformNs);}
-    @Override public FrameSubmissionAttempt trySubmit(RenderFrameRequest f){return new FrameSubmitted(submit(f));}
+    @Override public FrameSubmissionAttempt trySubmit(RenderFrameRequest f){ready();Objects.requireNonNull(f);
+        if(hostSurfacePlan!=null&&handle!=0&&!RtxptNative.hostSurfaceCanPublish(handle))return new FrameSubmissionDeferred(SubmissionDeferralReason.FRAME_RING_FULL,"All host-surface HDR slots await consumer completion");
+        if(nativeLightingPlan!=null&&handle!=0&&!RtxptNative.nativeLightingCanPublish(handle))return new FrameSubmissionDeferred(SubmissionDeferralReason.FRAME_RING_FULL,"All HDR lighting slots await consumer completion");
+        return new FrameSubmitted(submit(f));}
     @Override public boolean readFrame(FrameConsumer consumer){ready();Objects.requireNonNull(consumer);throw new UnsupportedOperationException("RTXPT presents GPU frames directly; CPU readback is not exposed");}
     @Override public Optional<FrameSnapshot> pollFrame(){ready();throw new UnsupportedOperationException("RTXPT GPU-native presentation");}
     @Override public Optional<FrameSnapshot> awaitFrame(Duration timeout){Objects.requireNonNull(timeout);return pollFrame();}
     @Override public void close(){
         if(closed)return;ready();Throwable failure=null;
+        if(nativeLightingPlan!=null&&handle!=0&&!RtxptNative.nativeLightingConsumersRetired(handle))throw new IllegalStateException("Return imported lighting leases and finish their consumer GPU work before closing");
+        if(hostSurfacePlan!=null&&handle!=0){RtxptNative.hostSurfaceRequireRetired(handle);
+            if(!RtxptNative.hostSurfaceConsumersRetired(handle))throw new IllegalStateException("Complete imported host-surface HDR output consumers before closing");}
         try{if(handle!=0)RtxptNative.close(handle);}
         catch(RuntimeException|Error e){failure=e;throw e;}
         finally {

@@ -33,6 +33,24 @@ if($CheckPaths){
     return
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+$hostSurfacePatch=Join-Path $PSScriptRoot 'patches/rtxpt-host-surface.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $hostSurfacePatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $hostSurfacePatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT host-surface overlay could not be removed'}
+}
+$sparsePatch=Join-Path $PSScriptRoot 'patches/rtxpt-sparse-lighting.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $sparsePatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $sparsePatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT sparse-lighting overlay could not be removed'}
+}
+$registryPatch=Join-Path $PSScriptRoot 'patches/rtxpt-light-registry.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $registryPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $registryPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT light-registry overlay could not be removed'}
+}
 $framePatch=Join-Path $PSScriptRoot 'patches/rtxpt-frame-preparation.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $framePatch 2>$null
 if($LASTEXITCODE -eq 0){
@@ -606,6 +624,13 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float
 Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float localPdf = (localCount>0)?(SampleLocalPDF(lightIndex)):(0);' @'
         float localPdf = (localCount>0)?(RtrSampleLocalPDF(lightIndex, conditionalPointSampling)):(0); // RTR matching residual BSDF local PDF
 '@ 'RTR matching residual BSDF local PDF'
+$feedbackSource=Join-Path $sdk 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli'
+$feedbackText=[IO.File]::ReadAllText($feedbackSource)
+$feedbackBlocks=[regex]::Matches($feedbackText,'(?m)^[ \t]*#if defined\(RTR_EXACT_SMALL_POINTS\)[^\r\n]*\r?\n[ \t]*if \(RtrSmallPointSet\(\)\) feedbackPdf = RtrNativeGlobalPdfForFeedback\(lightIndex\);\r?\n[ \t]*#endif // RTR restore native NEE-AT feedback weights\r?\n')
+if($feedbackBlocks.Count -gt 1){
+    for($i=$feedbackBlocks.Count-1;$i -ge 1;$i--){$feedbackText=$feedbackText.Remove($feedbackBlocks[$i].Index,$feedbackBlocks[$i].Length)}
+    [IO.File]::WriteAllText($feedbackSource,$feedbackText,$utf8)
+}
 Patch-Once 'Rtxpt/Shaders/PathTracer/Lighting/LightSampler.hlsli' '        float feedbackPdf = globalPdf;' @'
         float feedbackPdf = globalPdf;
         #if defined(RTR_EXACT_SMALL_POINTS) && RTR_EXACT_SMALL_POINTS && defined(RTR_CONDITIONAL_POINT_SAMPLING) && RTR_CONDITIONAL_POINT_SAMPLING
@@ -627,7 +652,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli' '            candidate
 '@ 'RTR directional samples carry directions'
 # Match the Vulkan route's summed continuous surface response without deleting
 # Full scene lighting-input parity uses the same scene values at every receiver.
-foreach($header in @('RtrSceneLightingInputs.hlsli','RtrSceneDirect.hlsli','RtrSceneTransportTrace.hlsli','RtrSceneReplayCache.hlsli')) {
+foreach($header in @('RtrSceneLightingInputs.hlsli','RtrSceneDirect.hlsli','RtrSparseDirect.hlsli','RtrSceneTransportTrace.hlsli','RtrSceneReplayCache.hlsli')) {
     $headerText=[IO.File]::ReadAllText((Join-Path $repo ('renderer-rtxpt/src/main/cpp/'+$header)))
     if($header -eq 'RtrSceneTransportTrace.hlsli' -and $OpticalTransportTrace) {
         $headerText="#define RTR_SCENE_TRANSPORT_TRACE 1 // explicitly enabled by configure`r`n"+$headerText
@@ -1175,6 +1200,10 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '#if RTXPT_FIREFLY_FILTER
 # The bounded pre-SR history runs after current radiance merge, before SR tags.
 [IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/ProcessingPasses/RtrPreSrHistory.hlsl'),
     [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrPreSrHistory.hlsl')),$utf8)
+foreach($nativeLightingFile in @('RtrNativeLighting.hlsl','RtrNativeLightingStyle.hlsli','RtrNativeLightingEncode.hlsl','RtrHostResolve.hlsl','RtrHostAugmentation.hlsl')) {
+    [IO.File]::WriteAllText((Join-Path $sdk "Rtxpt/ProcessingPasses/$nativeLightingFile"),
+        [IO.File]::ReadAllText((Join-Path $repo "renderer-rtxpt/src/main/cpp/$nativeLightingFile")),$utf8)
+}
 # Keep exactly one current project-owned history entry. Existing SDK checkouts
 # can contain the same pass under an earlier injected file name; Patch-Once
 # alone would append the renamed pass and leave the missing file in the build.
@@ -1186,6 +1215,12 @@ if(!$shaderConfig.Contains($historyAnchor)){throw 'Pinned reconstruction shader 
 $normalizedShaderConfig=[regex]::Replace($shaderConfig,'(?m)^ProcessingPasses/Rtr[A-Za-z]*SrHistory\.hlsl -T cs -E main\r?\n?','')
 $normalizedShaderConfig=$normalizedShaderConfig.Replace($historyAnchor,
     $historyAnchor+$shaderNewline+'ProcessingPasses/RtrPreSrHistory.hlsl -T cs -E main')
+$normalizedShaderConfig=[regex]::Replace($normalizedShaderConfig,'(?m)^ProcessingPasses/RtrNativeLighting\.hlsl -T cs -E main\r?\n?','')
+$normalizedShaderConfig+='ProcessingPasses/RtrNativeLighting.hlsl -T cs -E main'+$shaderNewline
+foreach($pass in @('RtrNativeLightingEncode','RtrHostResolve','RtrHostAugmentation')){
+    $normalizedShaderConfig=[regex]::Replace($normalizedShaderConfig,"(?m)^ProcessingPasses/$pass\.hlsl -T cs -E main\r?\n?",'')
+    $normalizedShaderConfig+="ProcessingPasses/$pass.hlsl -T cs -E main"+$shaderNewline
+}
 if($normalizedShaderConfig -cne $shaderConfig){
     [IO.File]::WriteAllText($shaderConfigPath,$normalizedShaderConfig,$utf8)
 }
@@ -1534,6 +1569,21 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT transparent-background patch failed'}
 if($LASTEXITCODE -ne 0){throw 'RTXPT frame-preparation overlay does not match the verified base'}
 & git -C $sdk apply --ignore-space-change $framePatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT frame-preparation overlay failed'}
+& git -C $sdk apply --check --ignore-space-change $registryPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT light-registry overlay does not match the pinned base'}
+& git -C $sdk apply --ignore-space-change $registryPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT light-registry overlay failed'}
+& git -C $sdk apply --check --ignore-space-change $sparsePatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT sparse-lighting overlay does not match the pinned base'}
+& git -C $sdk apply --ignore-space-change $sparsePatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT sparse-lighting overlay failed'}
+& git -C $sdk apply --check --ignore-space-change $hostSurfacePatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT host-surface overlay does not match the pinned base'}
+& git -C $sdk apply --ignore-space-change $hostSurfacePatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT host-surface overlay failed'}
+[IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrHostSurface.hlsli'),(Join-Path $sdk 'Rtxpt/Shaders/RtrHostSurface.hlsli'),$true)
+[IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrHostAov.hlsli'),(Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrHostAov.hlsli'),$true)
+
 
 $rootCMake=Join-Path $sdk 'CMakeLists.txt'
 $cmakeText=[IO.File]::ReadAllText($rootCMake)

@@ -50,6 +50,8 @@ float3 RtrSceneShadowVisibility(const RayDesc inputRay,const PathState source,co
     return 0;
 }
 
+#include "RtrSparseDirect.hlsli"
+
 float RtrLightImportance(RtrSceneLight node,float3 position)
 {
     float3 delta=max(max(node.PositionType.xyz-position,position-node.DirectionRange.xyz),0);
@@ -58,16 +60,16 @@ float RtrLightImportance(RtrSceneLight node,float3 position)
     return node.ColorIntensity.x/(node.ColorIntensity.y>0?1:max(distanceSquared,1));
 }
 
-uint RtrSelectSceneLight(float3 position,float u,uint count,out float probability)
+uint RtrSelectSceneLight(float3 position,float u,uint base,uint root,out float probability)
 {
-    uint index=0;probability=1;
+    uint index=root;probability=1;
     [loop]for(uint depth=0;depth<32;depth++)
     {
-        RtrSceneLight node=t_RtrSceneLights[count+index];
+        RtrSceneLight node=t_RtrSceneLights[base+index];
         RtrCountLightWork(8);
         if(node.ColorIntensity.w>=0)return uint(node.ColorIntensity.w);
         uint left=uint(node.PositionType.w),right=uint(node.DirectionRange.w);
-        RtrSceneLight a=t_RtrSceneLights[count+left],b=t_RtrSceneLights[count+right];
+        RtrSceneLight a=t_RtrSceneLights[base+left],b=t_RtrSceneLights[base+right];
         float wa=RtrLightImportance(a,position),wb=RtrLightImportance(b,position);
         float uniformProbability=a.ConeShadow.x/node.ConeShadow.x;
         // A uniform mixture preserves support even for a weak or occluded light.
@@ -89,15 +91,16 @@ NEEResult RtrSceneDirect(const PathState path,const ShadingData sd,const ActiveB
     float3 baseColor=RtrSceneBaseColor(sd,bsdf.data);
     float metallic=saturate(float(bsdf.data.Metallic())),roughness=clamp(float(bsdf.data.Roughness()),.025,1);
     float3 diffuse=baseColor*(1-metallic)*context.PtConsts.RtrSceneAmbient.rgb;
+    if(RtrHostOwnsPrimaryLight(path,true))diffuse=0;
     float3 specular=0;
     uint count=context.PtConsts.RtrSceneLightCount;
-    bool exhaustive=count<=RTR_SCENE_EXACT_LIGHT_LIMIT+1;
-    uint samples=exhaustive?count:max(context.PtConsts.NEEFullSamples,1u);
+    bool exhaustive=count<=context.PtConsts.RtrScenePadding.z+1;
+    uint samples=RtrHostOwnsPrimaryLight(path,false)?0:(exhaustive?count:max(context.PtConsts.NEEFullSamples,1u));
     for(uint sampleIndex=0;sampleIndex<samples;sampleIndex++)
     {
         float probability=1;uint i=sampleIndex;
         if(!exhaustive)i=RtrSelectSceneLight(sd.posW,RtrSceneOpticalRandom(path.GetPixelPos(),
-            context.PtConsts.frameIndex^((sampleIndex+1)*0x967a889bu)^path.getCounter((PackedCounters)3),path.getVertexIndex()),count,probability);
+            context.PtConsts.frameIndex^((sampleIndex+1)*0x967a889bu)^path.getCounter((PackedCounters)3),path.getVertexIndex()),context.PtConsts.RtrScenePadding.y,context.PtConsts.RtrScenePadding.x,probability);
         RtrSceneLight light=t_RtrSceneLights[i];
         RtrCountLightWork(4);
         float attenuation=1,maximumDistance=1e20;float3 direction;
@@ -147,5 +150,10 @@ NEEResult RtrSceneDirect(const PathState path,const ShadingData sd,const ActiveB
         RtrSceneTracePrint("receiver",101u,RtrSceneTraceKey(path.GetPixelPos(),RtrSceneTraceBranch(path.getCounter((PackedCounters)3)),path.getVertexIndex(),context.PtConsts.frameIndex),weight,(diffuse+specular)*weight);
     #endif
     result.AccumulateRadiance((diffuse+specular)*weight,Average(specular*weight));
+    RtrHostAovDirect(path,diffuse*weight,specular*weight,0);
+    NEEResult sparse=NEEResult::empty();
+    if(!RtrHostOwnsPrimaryLight(path,false))sparse=RtrSparseDirect(path,sd,bsdf,context);
+    float4 sparseRadiance=sparse.GetRadianceAndSpecAvg();
+    result.AccumulateRadiance(sparseRadiance.rgb,sparseRadiance.w);
     return result;
 }

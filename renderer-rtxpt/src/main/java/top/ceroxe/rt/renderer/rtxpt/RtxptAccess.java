@@ -1,7 +1,11 @@
 package top.ceroxe.rt.renderer.rtxpt;
 import java.nio.file.Path;
 
-/** Expert host boundary. Call on the renderer's creating thread. The host owns window lifetime. */
+/**
+ * RTXPT window lifecycle and advanced host controls. Ordinary window callers only
+ * need {@link #renderFrame()}; native handles and diagnostic capture are optional.
+ * Call on the renderer's creating thread. The host owns window lifetime.
+ */
 public interface RtxptAccess extends RtxptDiagnosticAccess {
     /** Load an upstream scene directly, bypassing retained-scene translation and its raw-asset
      * admission limits. Native external asset sizes are owned by the caller/upstream loader.

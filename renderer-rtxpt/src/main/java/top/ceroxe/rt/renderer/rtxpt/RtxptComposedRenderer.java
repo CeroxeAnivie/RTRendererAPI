@@ -255,16 +255,21 @@ public final class RtxptComposedRenderer implements Renderer {
     private final class DiagnosticView implements RtxptDiagnosticAccess {
         public void diagnosticLevel(RtxptDiagnostics.Level level){rtxpt.diagnosticLevel(level);}
         public RtxptDiagnostics.Snapshot diagnosticSnapshot(){return rtxpt.diagnosticSnapshot();}
+        public RtxptDiagnostics.Monitor diagnosticMonitor(){return rtxpt.diagnosticMonitor();}
         public RtxptDiagnostics.GpuSnapshot diagnosticGpuSnapshot(){return rtxpt.diagnosticGpuSnapshot();}
         public RtxptAccess.SubmitStages submitStages(){return rtxpt.submitStages();}
         public RtxptAccess.PresentationStatus presentationStatus(){return rtxpt.presentationStatus();}
         public RtxptAccess.RuntimeStatus runtimeStatus(){return rtxpt.runtimeStatus();}
+        public RtxptDiagnostics.LightUpdates lightUpdates(){return rtxpt.lightUpdates();}
     }
     @Override public <T> Optional<T> extension(Class<T> type){
         ready();Objects.requireNonNull(type,"extensionType");
         if(type.isInstance(this))return Optional.of(type.cast(this));
         if(type==VulkanFramePresenter.class)return nativePresentation?Optional.empty():Optional.of(type.cast(presenter));
         if(type==RtxptDiagnosticAccess.class)return Optional.of(type.cast(new DiagnosticView()));
+        // Sparse transactions belong to the single retained RTXPT scene. Forwarding this
+        // mutable extension would bypass this owner's revision and backend routing.
+        if(type==SparseLightingControl.class||type==NativeLightingControl.class||type==HostSurfaceControl.class||type==HostSurfaceAugmentationControl.class)return Optional.empty();
         // Exposing the hidden host's renderFrame/window controls could publish unconsumed slots
         // or present a second window. The composed owner alone advances the native producer.
         if(type==RtxptAccess.class)return nativePresentation?Optional.of(type.cast(rtxpt)):Optional.empty();

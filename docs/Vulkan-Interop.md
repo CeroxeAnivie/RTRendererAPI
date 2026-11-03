@@ -1,5 +1,7 @@
 # Vulkan 专家互操作
 
+普通应用优先使用托管 CPU 帧或官方 presenter；只有明确需要跨设备／跨 API 自定义消费时才使用本页专家协议。所有入口见[普通用法与专家控制](ordinary-and-expert.md)。
+
 隔离 Maven consumer 中的 [`PublishedVulkanInteropConsumer`](../gradle/published-consumer-smoke/src/main/java/consumer/PublishedVulkanInteropConsumer.java)
 是随发布门禁编译的完整控制流样例：它演示 extension discovery、有界等待、非空结果、lease 的
 `ACTIVE -> RELEASED -> CLOSED` 顺序，以及只按 `RendererDeviceException.RecoveryAction` 决策的恢复路径。应用只需在

@@ -2,15 +2,18 @@
 .SYNOPSIS
 Build or verify the packaged RTXPT shaders for all six optical interface budgets.
 .DESCRIPTION
-Relative paths resolve from the repository root. Use -VerifyOnly for checksum verification or -CheckPaths
-for dependency-path validation. Neither option starts shader compilation or GPU rendering.
+Relative paths resolve from the repository root. -PlanOnly reports missing compiled keys without
+compiling; -VerifyOnly checks both checksums and captured configuration coverage. -RequireReleaseCoverage
+also requires reference/build/fill branches for host-primary, scene lighting and small-point lighting.
 #>
 param(
     [string]$ManifestDirectory='build/rtxpt-shader-manifests',
     [string]$OutputDirectory='build/rtxpt-six-budget-bundle',
     [string]$RuntimeDirectory='build/rtxpt-sdk/bin',
     [switch]$CheckPaths,
-    [switch]$VerifyOnly
+    [switch]$VerifyOnly,
+    [switch]$PlanOnly,
+    [switch]$RequireReleaseCoverage
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -29,35 +32,105 @@ if($CheckPaths){
     return
 }
 function Hash-Text([string]$text){[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($utf8.GetBytes($text))).ToLowerInvariant()}
+function Shader-Plan {
+    $manifests=@(Get-ChildItem -LiteralPath (Full-Path $ManifestDirectory) -Filter '*.rtrdxc' -File | Sort-Object Name)
+    if(!$manifests){throw 'No upstream DXC manifests. Run native cases with RTR_RTXPT_SHADER_MANIFEST_DIR set to the manifest directory'}
+    $seen=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach($manifest in $manifests){
+        $lines=[IO.File]::ReadAllLines($manifest.FullName)
+        if($lines.Count -ne 4 -or $lines[1] -cne (Hash-Text $lines[3])){throw "Invalid upstream manifest: $($manifest.Name)"}
+        $stem=$lines[0].Replace('\','/')
+        $isOptical=$lines[3] -match '(?:^| )-D RTR_SCENE_LIGHTING=1(?: |$)'
+        $budgets=if($isOptical){1..6}else{@(0)}
+        foreach($budget in $budgets){
+            # Exact/tree selection is runtime state in 7.1.0. Older captures must
+            # not put the retired threshold back into the runtime command key.
+            $command=[regex]::Replace($lines[2],' -D RTR_SCENE_EXACT_LIGHT_LIMIT=[^ ]+','')
+            $canonical=[regex]::Replace($lines[3],' -D RTR_SCENE_EXACT_LIGHT_LIMIT=[^ ]+','')
+            if($canonical -match ' -D RTXPT_MATERIAL_PERMUTATIONS_ENABLED=1(?: |$)' -and
+               $canonical -match ' -D ActiveBSDF=StandardBSDF(?: |$)'){
+                $materialKey=$stem+'.hlsl, {RTXPT_MATERIAL_PERMUTATIONS_ENABLED,1},{ActiveBSDF,StandardBSDF}'
+                $materialName='M'+(Hash-Text $materialKey).Substring(0,16)
+                $pattern='(?<= -D RTXPT_MATERIAL_PERMUTATION_NAME=)([A-Za-z0-9]+)_[^ ]+'
+                $replacement='${1}_'+$materialName
+                $command=[regex]::Replace($command,$pattern,$replacement)
+                $canonical=[regex]::Replace($canonical,$pattern,$replacement)
+            }
+            if($isOptical){
+                if($canonical -notmatch ' -D RTR_SCENE_EXACT_INTERFACE_COUNT=[1-6](?: |$)'){throw 'Optical manifest omits its explicit interface budget'}
+                $command=[regex]::Replace($command,'(?<= -D RTR_SCENE_EXACT_INTERFACE_COUNT=)[1-6](?= |$)',[string]$budget)
+                $canonical=[regex]::Replace($canonical,'(?<= -D RTR_SCENE_EXACT_INTERFACE_COUNT=)[1-6](?= |$)',[string]$budget)
+            }
+            $key=Hash-Text $canonical
+            if(!$seen.Add($key)){continue}
+            [pscustomobject]@{path=$stem+'_'+$key.Substring(0,24)+'.bin';stem=$stem;exactInterfaces=$budget;commandSha256=$key;command=$command;canonicalCommand=$canonical}
+        }
+    }
+}
+function Assert-Coverage($entries){
+    foreach($budget in 1..6){if(!($entries | Where-Object {$_.exactInterfaces -eq $budget})){throw "Missing optical shader budget $budget"}}
+    if(!$RequireReleaseCoverage){return}
+    foreach($feature in @('RTR_HOST_PRIMARY','RTR_SCENE_LIGHTING','RTR_EXACT_SMALL_POINTS')){
+        foreach($stem in @('PathTracerSample','PathTracerMaterialSpecializations')){
+            foreach($mode in @('PT_REFERENCE','PT_DENOISING_LAYERS_BUILD','PT_DENOISING_LAYERS_FILL')){
+                if(!($entries | Where-Object {$_.path.StartsWith($stem+'_',[StringComparison]::Ordinal) -and
+                    $_.canonicalCommand -match " -D $feature=1(?: |$)" -and
+                    $_.canonicalCommand -match " -D PATH_TRACER_MODE=$mode(?: |$)"})){
+                    throw "Missing release shader branch: $feature / $stem / $mode. Capture this configuration before packaging."
+                }
+            }
+        }
+    }
+}
 function Source-Inventory {
     @((Get-ChildItem -LiteralPath $sourceRoot -File -Recurse | Sort-Object FullName) | ForEach-Object {
         [ordered]@{path=[IO.Path]::GetRelativePath($sourceRoot,$_.FullName).Replace('\','/');sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
     })
 }
-function Verify-Bundle {
-    $indexPath=Join-Path $output 'bundle.json'
+function Verify-Bundle([string]$bundleDirectory=$output) {
+    $indexPath=Join-Path $bundleDirectory 'bundle.json'
     if(!(Test-Path -LiteralPath $indexPath)){throw 'Missing six-budget bundle; collect native manifests and run this script first'}
     $index=Get-Content -LiteralPath $indexPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if($index.format -ne 1){throw 'Unsupported RTXPT shader bundle format'}
-    $current=Source-Inventory
+    $compiler=Join-Path $runtime 'ShaderDynamic/Tools/d3d12/x64/dxc.exe'
+    if(!(Test-Path -LiteralPath $compiler) -or (Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash.ToLowerInvariant() -cne $index.compilerSha256){throw 'Pinned DXC compiler changed; rebuild the shader bundle'}
+    $current=@(Source-Inventory)
     if($current.Count -ne $index.sources.Count){throw 'Shader source inventory changed; rebuild the six-budget bundle'}
     for($i=0;$i -lt $current.Count;$i++){
         if($current[$i].path -cne $index.sources[$i].path -or $current[$i].sha256 -cne $index.sources[$i].sha256){throw "Shader source changed: $($current[$i].path)"}
     }
+    $available=@{}
     foreach($entry in $index.shaders){
-        $path=[IO.Path]::GetFullPath((Join-Path $output $entry.path))
-        if(!$path.StartsWith($output+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)){throw 'Shader bundle path escapes its directory'}
+        if((Hash-Text $entry.canonicalCommand) -cne $entry.commandSha256 -or
+            !$entry.path.EndsWith('_'+$entry.commandSha256.Substring(0,24)+'.bin',[StringComparison]::Ordinal)){throw "Invalid shader command identity: $($entry.path)"}
+        $path=[IO.Path]::GetFullPath((Join-Path $bundleDirectory $entry.path))
+        if(!$path.StartsWith($bundleDirectory+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)){throw 'Shader bundle path escapes its directory'}
         if(!(Test-Path -LiteralPath $path) -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256){throw "Missing or corrupt shader $($entry.path)"}
+        $available[$entry.commandSha256]=$entry.path
     }
-    foreach($budget in 1..6){if(!($index.shaders | Where-Object {$_.exactInterfaces -eq $budget})){throw "Missing optical shader budget $budget"}}
-    Write-Host "RTXPT shader bundle verified: $($index.shaders.Count) upstream permutations, all six optical budgets"
+    foreach($expected in @(Shader-Plan)){
+        if($available[$expected.commandSha256] -cne $expected.path){throw "Captured configuration is absent from bundle: $($expected.path)"}
+    }
+    Assert-Coverage $index.shaders
+    Write-Host "RTXPT shader bundle verified: $($index.shaders.Count) upstream permutations, all captured configurations and six optical budgets"
 }
 if($VerifyOnly){Verify-Bundle;return}
-$manifests=Get-ChildItem -LiteralPath (Full-Path $ManifestDirectory) -Filter '*.rtrdxc' -File
-if(!$manifests){throw 'No upstream DXC manifests. Run native cases with RTR_RTXPT_SHADER_MANIFEST_DIR set to the manifest directory'}
+$plan=@(Shader-Plan)
+Assert-Coverage $plan
+if($PlanOnly){
+    $existing=@{}
+    $indexPath=Join-Path $output 'bundle.json'
+    if(Test-Path -LiteralPath $indexPath){
+        $index=Get-Content -LiteralPath $indexPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach($entry in $index.shaders){$existing[$entry.commandSha256]=$entry}
+    }
+    $missing=@($plan | Where-Object {!$existing.ContainsKey($_.commandSha256) -or !(Test-Path -LiteralPath (Join-Path $output $_.path))})
+    [pscustomobject]@{Permutations=$plan.Count;MissingKeys=$missing.Count;HostPrimary=@($plan|Where-Object {$_.canonicalCommand -match ' -D RTR_HOST_PRIMARY=1(?: |$)'}).Count;SmallPoint=@($plan|Where-Object {$_.canonicalCommand -match ' -D RTR_EXACT_SMALL_POINTS=1(?: |$)'}).Count;MissingPaths=@($missing.path)}
+    return
+}
 $compiler=Join-Path $runtime 'ShaderDynamic/Tools/d3d12/x64/dxc.exe'
 if(!(Test-Path -LiteralPath $compiler)){throw 'Missing the pinned upstream DXC compiler'}
-$sources=Source-Inventory
+$sources=@(Source-Inventory)
 $compilerHash=(Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash.ToLowerInvariant()
 $previousShaders=@{}
 $previousIndex=Join-Path $output 'bundle.json'
@@ -85,41 +158,11 @@ $stage=$output+'.stage-'+[Guid]::NewGuid().ToString('N')
 $backup=$output+'.previous-'+[Guid]::NewGuid().ToString('N')
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 $entries=[Collections.Generic.List[object]]::new()
-$seen=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 $oldMoved=$false
 try {
-    foreach($manifest in $manifests){
-        $lines=[IO.File]::ReadAllLines($manifest.FullName)
-        if($lines.Count -ne 4 -or $lines[1] -cne (Hash-Text $lines[3])){throw "Invalid upstream manifest: $($manifest.Name)"}
-        $stem=$lines[0].Replace('\','/')
-        $isOptical=$lines[3] -match '(?:^| )-D RTR_SCENE_LIGHTING=1(?: |$)'
-        $budgets=if($isOptical){1..6}else{@(0)}
-        foreach($budget in $budgets){
-            $command=$lines[2];$canonical=$lines[3]
-            if($isOptical -and $canonical -notmatch ' -D RTR_SCENE_EXACT_LIGHT_LIMIT='){
-                $command=$command.Replace(' -D RTR_SCENE_LIGHTING=1',' -D RTR_SCENE_LIGHTING=1 -D RTR_SCENE_EXACT_LIGHT_LIMIT=4')
-                $canonical=$canonical.Replace(' -D RTR_SCENE_LIGHTING=1',' -D RTR_SCENE_LIGHTING=1 -D RTR_SCENE_EXACT_LIGHT_LIMIT=4')
-            }
-            # Material names are diagnostic labels, not shader features. This is
-            # the same identity used by MaterialsBaker::BakeShaderPermutations.
-            # Normalize older captured commands before deriving the offline key.
-            if($canonical -match ' -D RTXPT_MATERIAL_PERMUTATIONS_ENABLED=1(?: |$)' -and
-               $canonical -match ' -D ActiveBSDF=StandardBSDF(?: |$)'){
-                $materialKey=$stem+'.hlsl, {RTXPT_MATERIAL_PERMUTATIONS_ENABLED,1},{ActiveBSDF,StandardBSDF}'
-                $materialName='M'+(Hash-Text $materialKey).Substring(0,16)
-                $pattern='(?<= -D RTXPT_MATERIAL_PERMUTATION_NAME=)([A-Za-z0-9]+)_[^ ]+'
-                $replacement='${1}_'+$materialName
-                $command=[regex]::Replace($command,$pattern,$replacement)
-                $canonical=[regex]::Replace($canonical,$pattern,$replacement)
-            }
-            if($isOptical){
-                if($canonical -notmatch ' -D RTR_SCENE_EXACT_INTERFACE_COUNT=[1-6](?: |$)'){throw 'Optical manifest omits its explicit interface budget'}
-                $command=[regex]::Replace($command,'(?<= -D RTR_SCENE_EXACT_INTERFACE_COUNT=)[1-6](?= |$)',[string]$budget)
-                $canonical=[regex]::Replace($canonical,'(?<= -D RTR_SCENE_EXACT_INTERFACE_COUNT=)[1-6](?= |$)',[string]$budget)
-            }
-            $key=Hash-Text $canonical
-            if(!$seen.Add($key)){continue}
-            $relative=$stem+'_'+$key.Substring(0,24)+'.bin'
+    foreach($item in $plan){
+            $command=$item.command;$canonical=$item.canonicalCommand;$key=$item.commandSha256
+            $relative=$item.path;$budget=$item.exactInterfaces
             $destination=[IO.Path]::GetFullPath((Join-Path $stage $relative))
             if(!$destination.StartsWith($stage+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)){throw 'Manifest output path escapes the staging directory'}
             New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($destination)) -Force | Out-Null
@@ -149,14 +192,13 @@ try {
             [IO.File]::SetLastWriteTimeUtc($destination,$sourceStamp)
             $entries.Add([ordered]@{path=$relative;exactInterfaces=$budget;commandSha256=$key;sha256=(Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant();bytes=(Get-Item -LiteralPath $destination).Length;origin=$origin;canonicalCommand=$canonical})
             Write-Host "RTXPT offline shader $($entries.Count): optical budget=$budget origin=$origin $relative"
-        }
     }
-    foreach($budget in 1..6){if(!($entries | Where-Object {$_.exactInterfaces -eq $budget})){throw "No compiled optical permutation for budget $budget"}}
-    $index=[ordered]@{format=1;pipelineIdentity='7.0.5 stable runtime StandardBSDF; opaque and cutout exports prepared together';compilerSha256=(Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash.ToLowerInvariant();contract='Captured renderer configurations with canonical material identities; scene-analytic budgets 1..6. Material values and texture/alpha/transmission flags use runtime data. Unseen renderer configurations use the bundled upstream compiler.';sources=$sources;shaders=@($entries.ToArray())}
+    Assert-Coverage $entries
+    $index=[ordered]@{format=1;pipelineIdentity='7.1.0 runtime StandardBSDF; captured host-primary, analytic and small-point configurations';compilerSha256=$compilerHash;contract='All captured renderer configurations with canonical material identities and scene-analytic budgets 1..6 are required. Exact/tree selection is runtime state. Release coverage additionally checks host-primary, scene-analytic and small-point reference/build/fill branches. Uncaptured renderer configurations may use the bundled upstream compiler; strict package acceptance must disable that fallback.';sources=$sources;shaders=@($entries.ToArray())}
     [IO.File]::WriteAllText((Join-Path $stage 'bundle.json'),($index | ConvertTo-Json -Depth 8),$utf8)
+    Verify-Bundle $stage
     if(Test-Path -LiteralPath $output){[IO.Directory]::Move($output,$backup);$oldMoved=$true}
     [IO.Directory]::Move($stage,$output)
-    Verify-Bundle
     if($oldMoved){Remove-Item -LiteralPath $backup -Recurse -Force}
 } catch {
     if($oldMoved -and !(Test-Path -LiteralPath $output)){[IO.Directory]::Move($backup,$output);$oldMoved=$false}

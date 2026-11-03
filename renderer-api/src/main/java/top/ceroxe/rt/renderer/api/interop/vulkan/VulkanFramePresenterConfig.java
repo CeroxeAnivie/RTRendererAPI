@@ -191,6 +191,7 @@ public final class VulkanFramePresenterConfig {
 
         /**
          * Selects native visibility from window creation, without a show-then-hide transition.
+         * Visible windows request foreground activation once after presentation startup.
          * Hidden surfaces require {@link WindowMode#WINDOWED}; direct GPU composition does not
          * acquire or present their swapchain.
          * @param value whether to create a visible native window

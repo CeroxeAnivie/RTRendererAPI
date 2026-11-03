@@ -1,0 +1,347 @@
+--- a/Rtxpt/Sample.h
++++ b/Rtxpt/Sample.h
+@@ -336,6 +336,7 @@
+ 
+ private:
+     void                                    UpdateCameraFromScene( const std::shared_ptr<donut::engine::PerspectiveCamera> & sceneCamera );
++    virtual bool ConfigureHostViews(donut::engine::PlanarView& current,donut::engine::PlanarView& previous) {return false;}
+     void                                    UpdateViews( nvrhi::IFramebuffer* framebuffer );
+     void                                    UpdateTemporalAntiAliasingPass();
+     void                                    DenoisedScreenshot( nvrhi::ITexture * framebufferTexture ) const;
+--- a/Rtxpt/Sample.cpp
++++ b/Rtxpt/Sample.cpp
+@@ -376,6 +376,13 @@
+     globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(96)); // RTR original lighting buffer layout
+     globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(97)); // RTR compact sparse source bindings
+     globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(98));
++    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::ConstantBuffer(2));
++    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::ConstantBuffer(3));
++    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(98));
++    for(uint32_t slot=99;slot<=106;slot++)globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(slot));
++    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(107));
++    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(108));
++    globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::RawBuffer_UAV(97)); // RTR host input ABI
+     if(const char* stats=std::getenv("RTR_RTXPT_LIGHT_STATS");stats&&stats[0]=='1')
+         globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::RawBuffer_UAV(96)); // RTR actual light work counters
+     globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(95));   // t_PrevSpecNormal32
+@@ -675,6 +682,9 @@
+ 
+     nvrhi::Viewport windowViewport(float(m_renderSize.x), float(m_renderSize.y));
+     m_view->SetViewport(windowViewport);
++    if(ConfigureHostViews(*m_view,*m_viewPrevious)){
++        m_viewPrevious->SetViewport(windowViewport);m_view->UpdateCache();m_viewPrevious->UpdateCache();return;
++    } // RTR exact host view and previous view
+     float outputAspectRatio = m_displayAspectRatio; //windowViewport.width() / windowViewport.height();    // render and display outputs might not match in case of lower DLSS/etc resolution rounding!
+     m_view->SetMatrices(m_camera.GetWorldToViewMatrix(), perspProjD3DStyleReverse(m_cameraVerticalFOV, outputAspectRatio, m_cameraZNear));
+     m_view->SetPixelOffset(ComputeCameraJitter(m_frameIndex));
+--- a/Rtxpt/Shaders/Bindings/ShaderResourceBindings.hlsli
++++ b/Rtxpt/Shaders/Bindings/ShaderResourceBindings.hlsli
+@@ -88,4 +88,20 @@
+ struct RtrSparseSource { float4 PositionShape; float4 DirectionRange; float4 ColorIntensity; float4 ExtentFalloff; float4 ConeGroup; float4 IdentityShadow; };
+ StructuredBuffer<RtrSparseSource> t_RtrSparseSources : register(t97); // RTR compact sparse source bindings
+ StructuredBuffer<RtrSceneLight> t_RtrSparseTree : register(t98);
++struct RtrHostConstants { uint4 extent; uint4 counts; };
++ConstantBuffer<RtrHostConstants> g_RtrHost : register(b2);
++Texture2D<float4> t_RtrHostPosition : register(t99);
++Texture2D<float4> t_RtrHostGeometric : register(t100);
++Texture2D<float4> t_RtrHostShading : register(t101);
++Texture2D<float4> t_RtrHostBase : register(t102);
++Texture2D<float4> t_RtrHostMaterial : register(t103);
++Texture2D<float4> t_RtrHostEmission : register(t104);
++Texture2D<float2> t_RtrHostMotion : register(t105);
++Texture2D<uint4> t_RtrHostIdentity : register(t106);
++struct RtrHostInstance {uint2 id;uint instanceIndex;uint triangleOffset;uint triangleCount;uint3 reserved;};
++StructuredBuffer<RtrHostInstance> t_RtrHostInstances : register(t107);
++StructuredBuffer<uint2> t_RtrHostTriangles : register(t108);
++RWByteAddressBuffer u_RtrHostWork : register(u97);
++cbuffer RtrHostAovParameters : register(b3) {uint4 g_RtrHostAov;}
++RWStructuredBuffer<float4> u_RtrHostAov : register(u98);
+ #endif // #ifndef __SHADER_RESOURCE_BINDINGS_HLSLI__
+--- a/Rtxpt/Shaders/DonutBridgeCommon.hlsli
++++ b/Rtxpt/Shaders/DonutBridgeCommon.hlsli
+@@ -26,6 +26,14 @@
+ 
+ static Ray computeCameraRay(const uint2 pixelPos)
+ {
++#if defined(RTR_HOST_PRIMARY) && RTR_HOST_PRIMARY
++    if(g_RtrHost.extent.z!=0){
++        float2 uv=(float2(pixelPos)+.5-g_Const.view.pixelOffset)*g_Const.view.viewportSizeInv;
++        float4 world=mul(float4(uv.x*2-1,1-uv.y*2,1e-5,1),g_Const.view.matClipToWorldNoOffset);
++        Ray exact;exact.origin=g_Const.ptConsts.camera.PosW;
++        exact.dir=normalize(world.xyz/world.w-exact.origin);return exact;
++    } // RTR exact host projection including jitter
++#endif
+     uint sampleIndex = g_Const.ptConsts.sampleBaseIndex + g_MiniConst.params.x;
+     SampleGenerator sampleGenerator = SampleGenerator::make(SampleGeneratorVertexBase::make(pixelPos, 0, sampleIndex));
+ 
+--- a/Rtxpt/Shaders/PathTracerSurfaceBridgeDonut.hlsli
++++ b/Rtxpt/Shaders/PathTracerSurfaceBridgeDonut.hlsli
+@@ -510,11 +510,18 @@
+     return ret;
+ }
+ 
++#include "RtrHostSurface.hlsli"
++
+ void Bridge::ExportSurface(const PathState path, PathTracer::Surface surface, float sceneLength, float3 motionVectors )
+ {
+     uint2 pixelPos = path.GetPixelPos();
+ 
+ #if !RTXPT_SKIP_STANDARD_OUTPUTS
++    if(g_RtrHost.extent.z!=0&&path.getVertexIndex()==1){
++        float2 hostMotion=t_RtrHostMotion[RtrHostPixel(pixelPos)]*g_Const.view.viewportSize/float2(g_RtrHost.extent.xy);
++        if(g_RtrHost.counts.z!=0)hostMotion+=g_Const.view.pixelOffset-g_Const.previousView.pixelOffset;
++        if(all(isfinite(hostMotion)))motionVectors.xy=hostMotion;
++    } // RTR host current-to-previous unjittered pixel motion
+     u_MotionVectors[pixelPos]   = float4(motionVectors, 0);
+ #endif
+ 
+--- a/Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli
++++ b/Rtxpt/Shaders/PathTracer/PathTracerHandleHit.hlsli
+@@ -41,6 +41,10 @@
+     inline bool GenerateScatterRay(const BSDFSample bs, const ShadingData shadingData, const ActiveBSDF bsdf, inout PathState path, const WorkingContext workingContext)
+     {
+         path.SetDir(bs.wo);
++#if defined(RTR_HOST_PRIMARY) && RTR_HOST_PRIMARY
++        if(path.getVertexIndex()==1){uint lobe=bs.isLobe(LobeType::Transmission)?3:bs.isLobe(LobeType::DiffuseReflection)?1:2;
++            path.flagsAndVertexIndex=(path.flagsAndVertexIndex&~768u)|(lobe<<8);}
++#endif
+ 
+         bool onDominantDenoisingLayer = path.hasFlag(PathFlags::denoisingLayerOnPlane) && path.hasFlag(PathFlags::denoisingLayerOnDominantBranch);
+ 
+@@ -247,9 +251,8 @@
+             return false;
+     }
+ 
+-    inline void HandleHit(inout PathState path, const float3 rayOrigin, const float3 rayDir, const float rayTCurrent, float2 barycentrics, const WorkingContext workingContext)
++    inline void HandlePreparedSurface(inout PathState path, const float3 rayOrigin, const float3 rayDir, const float rayTCurrent, Surface surface, const WorkingContext workingContext)
+     {
+-        UpdatePathTravelled(path, rayOrigin, rayDir, rayTCurrent, workingContext);
+         
+ #if ENABLE_DEBUG_VIZUALISATIONS
+         const bool debugPath = workingContext.Debug.IsDebugPixel(path.GetPixelPos());
+@@ -257,7 +260,7 @@
+         const bool debugPath = false;
+ #endif
+ 
+-        Surface surface = Bridge::loadSurface( InstanceIndex(), GeometryIndex(), PrimitiveIndex(), barycentrics, rayDir, path.rayCone, path.getVertexIndex(), path.GetPixelPos(), workingContext.Debug);
++        // Surface is supplied by the traced-hit wrapper or the host primary input.
+ 
+         // if (surface.shadingData.shadingFlags.isPSDBlockMotionVectorsAtSurface())   // we've given up on this for now
+         //     path.setFlag(PathFlags::exportSpecHitTBlocked, true);
+@@ -437,7 +440,7 @@
+             radiance *= 0.0000000596;   // not 0, so the compiler doesn't compile everything out
+ #endif
+             float specRadianceAvg = path.hasFlag(PathFlags::denoisingLayerBaseScatterDiff)?(0.0):(Average(radiance));
+-            AccumulatePathRadiance( workingContext, path, radiance, specRadianceAvg, path.hasFlag(PathFlags::denoisingLayerOnBranch), ShouldCollectGISecondaryRadiance(path) );
++            AccumulatePathRadiance( workingContext, path, radiance, specRadianceAvg, path.hasFlag(PathFlags::denoisingLayerOnBranch), ShouldCollectGISecondaryRadiance(path),1 );
+ 
+             //if (path.getVertexIndex()==2)
+             //workingContext.Debug.DrawDebugViz( path.GetPixelPos(), saturate(float4( 0, path.sceneLengthFromDenoisingLayer*1, 0, 1 )) );
+@@ -561,6 +564,12 @@
+         if (shouldTerminate)
+             path.setTerminateAtNextBounce();
+     }
++    inline void HandleHit(inout PathState path,const float3 rayOrigin,const float3 rayDir,const float rayTCurrent,float2 barycentrics,const WorkingContext workingContext)
++    {
++        UpdatePathTravelled(path,rayOrigin,rayDir,rayTCurrent,workingContext);
++        Surface surface=Bridge::loadSurface(InstanceIndex(),GeometryIndex(),PrimitiveIndex(),barycentrics,rayDir,path.rayCone,path.getVertexIndex(),path.GetPixelPos(),workingContext.Debug);
++        HandlePreparedSurface(path,rayOrigin,rayDir,rayTCurrent,surface,workingContext);
++    }
+ }
+ 
+ #endif // __PATH_TRACER_HANDLE_HIT_HLSLI__
+--- a/Rtxpt/Shaders/PathTracerSample.hlsl
++++ b/Rtxpt/Shaders/PathTracerSample.hlsl
+@@ -26,7 +26,16 @@
+ #endif
+ 
+ #include "PathTracerBridgeDonut.hlsli"
++#if defined(RTR_HOST_PRIMARY) && RTR_HOST_PRIMARY
++#define ActiveBSDF StandardBSDF
++#define RTXPT_MATERIAL_PERMUTATION_NAME RTR_HostPrimary
++#define RTXPT_SHADER_ID -1
++#include "PathTracerSurfaceBridgeDonut.hlsli"
++#endif
+ #include "PathTracer/PathTracer.hlsli"
++#if defined(RTR_HOST_PRIMARY) && RTR_HOST_PRIMARY
++#include "PathTracer/PathTracerHandleHit.hlsli" // RTR shared host/traced continuation
++#endif
+ #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING && PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL && RTR_SCENE_REPLAY_PREFIX_CACHE
+ #include "PathTracer/RtrSceneReplayCache.hlsli" // RTR shader-local shared optical prefixes
+ #endif
+@@ -65,7 +74,9 @@
+         sceneLength -= lastRayTCurrent; // we'll move the path by the unaccounted travel so far, minus the ray we're about to cast
+     }
+     // these are currently unnecessary; also check the side where they're set, these are disabled there as well to avoid unnecessary work
+-    // path.flagsAndVertexIndex = sp.FlagsAndVertexIndex;      // vertexIndex will be overwritten below
++#if defined(RTR_HOST_PRIMARY) && RTR_HOST_PRIMARY
++    path.flagsAndVertexIndex=(path.flagsAndVertexIndex&~768u)|(sp.FlagsAndVertexIndex&768u);
++#endif
+     // path.packedCounters = sp.PackedCounters;                // only "rejected hits" can be non-zero
+ 
+     // this only works for primary surface replacement cases - in this case sceneLength and rayT become kind of the same
+@@ -126,6 +137,26 @@
+ 
+ void nextHit(inout PathState path, inout float2 tMinMax, const PathTracer::WorkingContext workingContext)
+ {
++#if defined(RTR_HOST_PRIMARY) && RTR_HOST_PRIMARY
++    if(g_RtrHost.extent.z!=0&&path.getVertexIndex()==0){
++        PathTracer::Surface surface;float distance;
++        uint result=RtrHostLoadSurface(path.GetPixelPos(),path.GetDir(),surface,distance);
++        if(g_RtrHost.counts.w!=0){uint ignored;
++#if PATH_TRACER_MODE==PT_DENOISING_LAYERS_BUILD
++            u_RtrHostWork.InterlockedAdd(result==1?0:result==0?4:8,1,ignored);
++#else
++            u_RtrHostWork.InterlockedAdd(result==1?12:result==0?16:20,1,ignored);
++#endif
++        }
++        if(result==1){
++            float3 origin=path.GetOrigin(),direction=normalize(surface.shadingData.posW-origin);
++            PathTracer::UpdatePathTravelled(path,origin,direction,distance,workingContext);
++            PathTracer::HandlePreparedSurface(path,origin,direction,distance,surface,workingContext);
++            tMinMax=float2(0,kMaxRayTravel);return;
++        }
++        if(result==2){PathTracer::HandleMiss(path,path.GetOrigin(),path.GetDir(),kMaxRayTravel,workingContext);return;}
++    } // RTR primary surface reuse before either RayQuery or TraceRay
++#endif
+ #if defined(SER_HIT_OBJECT) || defined(__INTELLISENSE__)
+     RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES, RAYQUERY_FLAG_ALLOW_OPACITY_MICROMAPS> rayQuery;
+     Bridge::traceScatterRay(path, rayQuery, tMinMax, workingContext.Debug);   // this outputs ray and rayQuery; if there was a hit, ray.TMax is rayQuery.ComittedRayT
+--- a/Rtxpt/Shaders/PathTracer/PathState.hlsli
++++ b/Rtxpt/Shaders/PathTracer/PathState.hlsli
+@@ -29,7 +29,11 @@
+ // Be careful with changing these. PathFlags share 32-bit uint with vertexIndex. For now, we keep 10 bits for vertexIndex.
+ // PathFlags take higher bits, VertexIndex takes lower bits.
+ static const uint kVertexIndexBitCount = 10u;
++#if defined(RTR_HOST_PRIMARY) && RTR_HOST_PRIMARY
++static const uint kVertexIndexBitMask = 255u;
++#else
+ static const uint kVertexIndexBitMask = (1u << kVertexIndexBitCount) - 1u;
++#endif
+ static const uint kPathFlagsBitCount = 32u - kVertexIndexBitCount;
+ static const uint kPathFlagsBitMask = ((1u << kPathFlagsBitCount) - 1u) << kVertexIndexBitCount;
+ static const uint kDenoisingLayerIndexBitOffset    = 14+kVertexIndexBitCount; // if changing, must change PathFlags::denoisingLayerIndexBit0
+@@ -251,7 +255,7 @@
+     void setVertexIndex(uint index)
+     {
+         // Clear old vertex index.
+-        flagsAndVertexIndex &= kPathFlagsBitMask;
++        flagsAndVertexIndex &= ~kVertexIndexBitMask;
+         // Set new vertex index (unsafe).
+         flagsAndVertexIndex |= index;
+     }
+--- a/Rtxpt/Shaders/PathTracer/PathTracer.hlsli
++++ b/Rtxpt/Shaders/PathTracer/PathTracer.hlsli
+@@ -12,6 +12,7 @@
+ #define __PATH_TRACER_HLSLI__
+ 
+ #include "PathTracerTypes.hlsli"
++#include "RtrHostAov.hlsli"
+ #if defined(RTR_SCENE_LIGHTING) && RTR_SCENE_LIGHTING
+ #include "RtrSceneTransportTrace.hlsli" // RTR shared trace in raygen and hit shaders
+ #endif
+@@ -144,8 +145,14 @@
+     inline bool ShouldCollectGISecondaryRadiance( const PathState path ) { return false; }
+ #endif
+ 
+-    inline void AccumulatePathRadiance(const WorkingContext workingContext, inout PathState path, float3 radiance, const float specularRadianceAvg, bool denoisingLayerOnBranch, bool collectGISecondaryRadiance )
+-    {
++    inline void AccumulatePathRadiance(const WorkingContext workingContext, inout PathState path, float3 radiance, const float specularRadianceAvg, bool denoisingLayerOnBranch, bool collectGISecondaryRadiance, uint rtrSourceEvent=0 )
++    {
++        if(RtrHostOwnsSource(path,rtrSourceEvent))return;
++#if PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
++        if(!denoisingLayerOnBranch)RtrHostAovRadiance(path,radiance,rtrSourceEvent);
++#else
++        RtrHostAovRadiance(path,radiance,rtrSourceEvent);
++#endif
+ #if PATH_TRACER_MODE==PT_REFERENCE
+         path.SetL( path.GetL() + float4( radiance, 0 ) );
+ #elif PATH_TRACER_MODE==PT_DENOISING_LAYERS_BUILD
+@@ -390,7 +397,7 @@
+             radiance *= 0.0000000596;   // not 0, so the compiler doesn't compile everything out
+ #endif
+             float specRadianceAvg = path.hasFlag(PathFlags::denoisingLayerBaseScatterDiff)?(0.0):(Average(radiance));
+-            AccumulatePathRadiance( workingContext, path, radiance, specRadianceAvg, path.hasFlag(PathFlags::denoisingLayerOnBranch), ShouldCollectGISecondaryRadiance(path) );
++            AccumulatePathRadiance( workingContext, path, radiance, specRadianceAvg, path.hasFlag(PathFlags::denoisingLayerOnBranch), ShouldCollectGISecondaryRadiance(path),2 );
+         }
+ 
+         #if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
+--- a/Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli
++++ b/Rtxpt/Shaders/PathTracer/PathTracerNEE.hlsli
+@@ -226,6 +226,7 @@
+                                 const ShadingData shadingData, const ActiveBSDF bsdf, const PathState preScatterPath, LightSampler lightSampler,
+                                 inout UniformSampleSequenceGenerator sampleGenerator, const WorkingContext workingContext, const bool updateNeeAtFeedback) // RTR feedback policy parameter
+     {
++        if(RtrHostOwnsPrimaryLight(preScatterPath,lightSampler.RtrIsEnvironmentSource(lightSample.LightIndex)))return;
+         bool visible = false;
+ 
+         /*[branch]*/ if (lightSample.Valid())   // if sample's bad, skip; we tried casting the ray anyway but ignoring the results - didn't yield better perf
+@@ -305,6 +306,15 @@
+             luminance *= preScatterPathThpAvg;
+ 
+             // accumulate radiances
++#if defined(RTR_HOST_PRIMARY) && RTR_HOST_PRIMARY
++            if(preScatterPath.getVertexIndex()==1&&(g_RtrHostAov.y&(4u|16u|32u))!=0){
++                float3 diffuse,specular,transmission;
++                FalcorBSDF components=FalcorBSDF::make(shadingData,bsdf.data);
++                components.RtrEvalComponents(shadingData.ToLocal(shadingData.V),shadingData.ToLocal(lightSample.Direction),diffuse,specular,transmission);
++                float3 factor=float3(bsdfThp.x>0?radiance.x/bsdfThp.x:0,bsdfThp.y>0?radiance.y/bsdfThp.y:0,bsdfThp.z>0?radiance.z/bsdfThp.z:0);
++                RtrHostAovDirect(preScatterPath,diffuse*factor,specular*factor,transmission*factor);
++            }
++#endif
+             accum.AccumulateRadiance( radiance, specAvg );
+             
+             // sample feedback for NEE-AT if needed!
+--- a/Rtxpt/Shaders/PathTracer/PathTracerDenoisingLayersHandleHit.hlsli
++++ b/Rtxpt/Shaders/PathTracer/PathTracerDenoisingLayersHandleHit.hlsli
+@@ -31,6 +31,9 @@
+         PathState newPath       = oldPath;
+         // newPath.incrementVertexIndex(); <- not needed, happens in nextHit
+         newPath.SetDir( lobe.dir );
++#if defined(RTR_HOST_PRIMARY) && RTR_HOST_PRIMARY
++        if(oldPath.getVertexIndex()==1)newPath.flagsAndVertexIndex=(newPath.flagsAndVertexIndex&~768u)|((lobe.transmission?3u:2u)<<8);
++#endif
+         newPath.SetThp( newPath.GetThp() * lobe.thp );
+         //newPath.pdf             = 0;
+         newPath.SetOrigin( shadingData.ComputeNewRayOrigin(lobe.transmission==0) );  // bool param is viewside
+@@ -316,7 +319,7 @@
+             
+             bool isDominant = path.hasFlag(PathFlags::denoisingLayerOnDominantBranch);
+             workingContext.DenoisingLayers.StoreDenoisingLayer(pixelPos, currentSPIndex, vertexIndex, rayOrigin, rayDir, path.stableBranchID, path.GetSceneLength(), rayTCurrent, path.GetThp(), 
+-                /*surface.shadingData.toPrevPosW*/virtualWorldMotion, roughness, worldNormal, diffBSDFEstimate, specBSDFEstimate, isDominant, 0, 0); //path.flagsAndVertexIndex, path.packedCounters);
++                /*surface.shadingData.toPrevPosW*/virtualWorldMotion, roughness, worldNormal, diffBSDFEstimate, specBSDFEstimate, isDominant, RtrHostLobeBits(path), 0); // Preserve the first transport lobe across BUILD/FILL.
+ 
+             if (isDominant)
+             {
+--- a/Rtxpt/Shaders/PathTracer/BSDFs/BxDF.hlsli
++++ b/Rtxpt/Shaders/PathTracer/BSDFs/BxDF.hlsli
+@@ -839,6 +839,16 @@
+         return lobes;
+     }
+ 
++#if defined(RTR_HOST_PRIMARY) && RTR_HOST_PRIMARY
++    void RtrEvalComponents(float3 wi,float3 wo,out float3 diffuse,out float3 specular,out float3 transmission){
++        diffuse=0;specular=0;transmission=0;
++        if(pDiffuseReflection>0)diffuse+=(1-specTrans)*(1-diffTrans)*diffuseReflection.eval(wi,wo);
++        if(pDiffuseTransmission>0)transmission+=(1-specTrans)*diffTrans*diffuseTransmission.eval(wi,wo);
++        if(pSpecularReflection>0)specular+=(1-specTrans)*specularReflection.eval(wi,wo);
++        if(pSpecularReflectionTransmission>0){float3 value=specTrans*specularReflectionTransmission.eval(wi,wo);
++            if(wi.z*wo.z>0)specular+=value;else transmission+=value;}
++    }
++#endif
+     float4 eval(const float3 wi, const float3 wo)   // .w is average(specular)
+     {
+         float3 diffuse = 0.f; float3 specular = 0.f;
+--- a/Rtxpt/Shaders/PathTracer/Surface/ShadingData.hlsli
++++ b/Rtxpt/Shaders/PathTracer/Surface/ShadingData.hlsli
+@@ -50,8 +50,8 @@
+     uint        MaterialID()            { return materialIDPosErrorScale & 0xFFFF; }
+     float       PosErrorScale()         { return asfloat(materialIDPosErrorScale & 0xFFFF0000); }
+     
+-#if 0   // Unpacked
+-    lpfloat3    emission;               ///< Emissive radiance. Move to Surface and compress.
++#if defined(RTR_HOST_PRIMARY) && RTR_HOST_PRIMARY // Preserve supplied HDR emission without RGB10 log quantization.
++    float3      emission;               ///< Emissive radiance. Move to Surface and compress.
+     void        SetEmission(float3 e)   { emission = e; }
+     float3      GetEmission()           { return emission; }
+ #else   // Packed
