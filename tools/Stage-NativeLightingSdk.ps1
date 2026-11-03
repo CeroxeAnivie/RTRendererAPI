@@ -67,7 +67,10 @@ Add-Source 'docs/consumer-agent-handoff.md' 'docs/consumer-agent-handoff.md'
 Add-Source 'docs/release-independent-native-and-host-lighting.md' 'docs/release-independent-native-and-host-lighting.md'
 Add-Source 'docs/quality/rtxpt-performance.md' 'docs/quality/rtxpt-performance.md'
 foreach($name in @('lighting-repair-validation.md','native-lighting-performance.md','lighting-backend-comparison.md')){Add-Source "docs/quality/$name" "docs/quality/$name"}
-foreach($name in @('native-lighting-performance.json','lighting-backend-comparison.json','lighting-lifecycle-curves.json')){Add-Source "docs/quality/data/$name" "docs/quality/data/$name"}
+foreach($name in @('native-lighting-performance.json','lighting-backend-comparison.json','lighting-lifecycle-curves.json','native-lighting-traversal.json')){Add-Source "docs/quality/data/$name" "docs/quality/data/$name"}
+foreach($file in Get-ChildItem -LiteralPath (Join-Path $repo 'docs/quality/data/native-lighting-traversal') -File){
+    Add-Source "docs/quality/data/native-lighting-traversal/$($file.Name)" "docs/quality/data/native-lighting-traversal/$($file.Name)"
+}
 if($CheckPaths){[pscustomobject]@{Repository=$repo;Output=$output;Version=$Version;Files=$files.Count};return}
 $stage=$output+'.stage-'+[Guid]::NewGuid().ToString('N')
 $backup=$output+'.previous-'+[Guid]::NewGuid().ToString('N')

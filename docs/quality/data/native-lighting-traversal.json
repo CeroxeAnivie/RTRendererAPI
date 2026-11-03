@@ -535,22 +535,22 @@
   },
   "evidence": [
     {
-      "sha256": "aba184aa8f55006195b474d46c905bc7ba9b00f3ad49dd1df062ff04e6b60e99",
+      "sha256": "4b80a883da33594e9ba3a92b3b24eb7c2545f7ae2f11a79984511affbf161d68",
       "path": "native-lighting-traversal/native-before.csv",
       "samples": 1800
     },
     {
-      "sha256": "de377e977beadd481973fa28ba0e2eb82beb0116487857b234455393cfab78aa",
+      "sha256": "652a709ebfc38d61320156d36422ee5073bbbd944d67a71dafdae23e94174e25",
       "path": "native-lighting-traversal/native-after.csv",
       "samples": 1800
     },
     {
-      "sha256": "ed13b3f2f86590ce2d5b3a3f520b8ab0e6bf4e9697bd5b56ed5700815b6fb0b0",
+      "sha256": "ddbeeb0d03b48d6d8ae04eff6837f4e27cb42e99983db0db12fe2b9adf4db3b2",
       "path": "native-lighting-traversal/vulkan.csv",
       "samples": 1800
     },
     {
-      "sha256": "7c7986e56a8146e6fa35c6d277479f2720096d74d6017e0b325e6b19b7366f93",
+      "sha256": "24177df891bc890c6ef41dae629eafecd0ddbdbdf982a954fb17f60db1bb112e",
       "path": "native-lighting-traversal/native.csv",
       "samples": 1800
     }
