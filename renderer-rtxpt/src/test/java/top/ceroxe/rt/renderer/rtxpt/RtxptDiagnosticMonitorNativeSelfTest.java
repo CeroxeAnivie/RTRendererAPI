@@ -65,7 +65,7 @@ public final class RtxptDiagnosticMonitorNativeSelfTest {
             if(error.get()!=null)throw new AssertionError("Concurrent native monitor failed",error.get());
             require(snapshots.get()>0&&liveSubmits.get()>0,"Watchdog observes actual in-progress submit");
             require(liveStages.get()>0,"Watchdog observes actual nested native work");
-            System.out.println("RTXPT_710_MONITOR_CONCURRENT PASS snapshots="+snapshots+" liveSubmits="+liveSubmits+" liveStages="+liveStages);
+            System.out.println("RTXPT_MONITOR_CONCURRENT PASS snapshots="+snapshots+" liveSubmits="+liveSubmits+" liveStages="+liveStages);
 
             long failedSequence=sequence;
             try{r.submit(frame(failedSequence,revision+1));throw new AssertionError("Future scene revision accepted");}
@@ -75,7 +75,7 @@ public final class RtxptDiagnosticMonitorNativeSelfTest {
                 "Rejected pre-frame submission is retained as failed");
             require(r.status()==Renderer.Status.READY,"Validation rejection leaves the renderer usable");
             r.submit(frame(sequence++,revision));
-            System.out.println("RTXPT_710_MONITOR_REJECT PASS failedBeforeFrame=true recovery=true");
+            System.out.println("RTXPT_MONITOR_REJECT PASS failedBeforeFrame=true recovery=true");
 
             var outputBeforeOff=r.presentationStatus();
             require(outputBeforeOff.outputWidth()>0&&outputBeforeOff.outputHeight()>0,"Initialized output has a real extent");
@@ -98,7 +98,7 @@ public final class RtxptDiagnosticMonitorNativeSelfTest {
             var restored=anotherThread(oldMonitor);
             require(restored.generation()==oldGeneration&&restored.recordedLevel().orElseThrow()==RtxptDiagnostics.Level.SUMMARY
                 &&restored.submissionSamples().size()>off.submissionSamples().size(),"SUMMARY resumes on the same monitor");
-            System.out.println("RTXPT_710_MONITOR_OFF PASS newFrames=6 sameGeneration=true gpuPending=0 restored=true");
+            System.out.println("RTXPT_MONITOR_OFF PASS newFrames=6 sameGeneration=true gpuPending=0 restored=true");
         }
         var closed=anotherThread(oldMonitor);
         require(closed.generation()==oldGeneration&&closed.recordedLevel().orElseThrow()==RtxptDiagnostics.Level.OFF,
@@ -110,7 +110,7 @@ public final class RtxptDiagnosticMonitorNativeSelfTest {
             try{oldMonitor.snapshot();throw new AssertionError("Old monitor accessed the replacement session");}
             catch(IllegalStateException expected){require(expected.getMessage().contains("generation expired"),"Stale monitor rejection explains its generation");}
         }
-        System.out.println("RTXPT_710_MONITOR_LIFECYCLE PASS closeFrozen=true oldGenerationRejected=true");
-        System.out.println("RTXPT_710_MONITOR_ALL PASS");
+        System.out.println("RTXPT_MONITOR_LIFECYCLE PASS closeFrozen=true oldGenerationRejected=true");
+        System.out.println("RTXPT_MONITOR_ALL PASS");
     }
 }

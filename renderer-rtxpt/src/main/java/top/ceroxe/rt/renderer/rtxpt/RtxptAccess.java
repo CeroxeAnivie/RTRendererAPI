@@ -90,6 +90,17 @@ public interface RtxptAccess extends RtxptDiagnosticAccess {
         long shadedReceivers,long selectedLights,long visitedTreeNodes,long shadowTests) { }
     enum RetainedUpdateMode { INITIAL_PUBLICATION, EXPLICIT_RESET, RESOURCE_DELTA, TRANSFORMS, LIGHTING, UNCHANGED, NATIVE_SCENE }
     default RetainedUpdateMode retainedUpdateMode(){return RetainedUpdateMode.UNCHANGED;}
+    /** Cumulative Java preparation work. Shared persistent subtrees are skipped; item reads
+     * count actual frame-list visits, dependency visits count traversed reverse-index edges.
+     * Allocation is owner-thread submit allocation (including JNI Java allocations), or -1
+     * when unavailable. OFF freezes collection without a diagnostic scan or string formatting. */
+    record PreparationStatistics(boolean collecting,long submissions,long itemReads,long dependencyVisits,
+        long inspectedMapNodes,long modelExports,long transformItems,long attributeInstanceVisits,long submitJavaAllocatedBytes) { }
+    default PreparationStatistics preparationStatistics(){return new PreparationStatistics(false,0,0,0,0,0,0,0,-1);}
+    /** Native resource preparation visits. Index builds are reserved for initial publication
+     * and topology changes; counts freeze at diagnostic OFF. These exclude AS and render work. */
+    record NativePreparationStatistics(boolean collecting,long materialVisits,long meshVisits,long indexBuilds) { }
+    default NativePreparationStatistics nativePreparationStatistics(){return new NativePreparationStatistics(false,0,0,0);}
     /** Cumulative inclusive Java scopes and native CPU subscopes; native subscopes overlap the
      * Java resource/lighting scopes. Fence waits and GPU queue intervals remain in retainedUpdateTimings. */
     record SubmitStages(long validationNanos,long translationAndFileNanos,long nativeResourcesNanos,long nativeLightingNanos,

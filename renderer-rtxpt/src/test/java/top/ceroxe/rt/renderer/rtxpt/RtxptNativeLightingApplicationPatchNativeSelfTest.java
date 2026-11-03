@@ -36,7 +36,7 @@ public final class RtxptNativeLightingApplicationPatchNativeSelfTest {
             renderer.publishLightingAttributes(new NativeLightingPublication(8,List.of(),List.of(),null,null));
             renderer.submit(RtxptNativeLightingExtensionNativeSelfTest.frame(3,0));after=renderer.nativeLightingApplicationTransfers();
             require(after[1]-before[1]==8&&after[2]-before[2]==1&&renderer.nativeLightingExecution().attributeGeneration()==8,"Overlaps merge and share the metadata generation timeline");
-            System.out.println("RTXPT_710_APPLICATION_PATCH_GPU PASS capacity=4096 singlePatchUploaded=4 fullEquivalent=4096 uploadReduction=99.90234375% adjacentAndGapUploaded=12 overlapUploaded=8");
+            System.out.println("RTXPT_APPLICATION_PATCH_GPU PASS capacity=4096 singlePatchUploaded=4 fullEquivalent=4096 uploadReduction=99.90234375% adjacentAndGapUploaded=12 overlapUploaded=8");
         }
     }
 }

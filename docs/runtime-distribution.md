@@ -1,10 +1,12 @@
-# RTRendererAPI 7.1.0 Windows 候选制品
+# RTRendererAPI Windows 制品布局
+
+本文说明当前版本的制品布局；发布身份见消费方交接。
 
 普通 Vulkan 路径由 renderer-api、renderer-core、renderer-nvidia 提供。renderer-rtxpt 是显式可选的 D3D12 全场景／透明介质托管后端，包含原生最终呈现和 Vulkan GPU 组合入口；发行目录同时携带这个模块，但 renderer-api 不默认依赖它。
 
 ## 使用
 
-需要 Windows x86_64、Java 25 和通过后端能力检查的 NVIDIA RTX。普通路径使用 Vulkan，RTXPT 使用 D3D12/DXR。应用加入 top.ceroxe.rt:renderer-rtxpt:7.1.0 后，通过 Renderer.open("rtxpt", config) 选择托管路径。
+需要 Windows x86_64、Java 25 和通过后端能力检查的 NVIDIA RTX。普通路径使用 Vulkan，RTXPT 使用 D3D12/DXR。应用加入 top.ceroxe.rt:renderer-rtxpt:7.1.2 后，通过 Renderer.open("rtxpt", config) 选择托管路径。
 
 ```powershell
 java --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow `
@@ -20,12 +22,14 @@ RTXPT JAR 自带 JNI、Streamline/DLSS、Agility、shader 和原始许可证。�
 在仓库根目录运行 `./gradlew.bat :demos:hex-ball:shadowJar :demos:hex-ball:mediumShadowJar` 后：
 
 ```powershell
+$demoVersion = (Get-Content .\gradle.properties -Encoding UTF8 | Select-String '^project_version=(.+)$').Matches.Groups[1].Value
+
 # 原 Vulkan 弹球
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.1.0.jar --windowed
+java -jar ".\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-$demoVersion.jar" --windowed
 # RTXPT 新路径弹球
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-7.1.0.jar --rtxpt --windowed
+java -jar ".\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-$demoVersion.jar" --rtxpt --windowed
 # RTXPT 介质
-java -jar .\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-7.1.0.jar
+java -jar ".\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-$demoVersion.jar"
 ```
 
 三个交互入口默认请求 2× FG，HexBall JAR 无参数打开 API 工作台。两个弹球使用 `--duration-seconds=30`，介质使用 `--seconds=30`；不传时限持续运行。完整参数和真实交付判断见 [Demo 说明](../demos/hex-ball/README.md)。启动器会为子 JVM 配置 native access，普通库消费者仍自行管理 JVM 参数。

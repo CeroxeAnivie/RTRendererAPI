@@ -25,6 +25,8 @@
 | [Generic-Commands-and-Ray-Tracing.md](Generic-Commands-and-Ray-Tracing.md) | 通用资源、图形命令和硬件 RT 提交流程。 |
 | [Vulkan-Interop.md](Vulkan-Interop.md) | GPU frame lease、外部内存、同步及所有权协议。 |
 | [runtime-distribution.md](runtime-distribution.md) | Windows 候选包、Maven 依赖和启动方式。 |
+| [release-local-scene-preparation.md](release-local-scene-preparation.md) | 当前局部资源准备修复、稳定命名和最终验收入口。 |
+| [quality/local-scene-preparation.md](quality/local-scene-preparation.md) | 256／4096 资源、同夹具旧包对比及实际 GPU 局部更新证据。 |
 | [Programmable-Scenes.md](Programmable-Scenes.md) | retained-scene GLSL/SPIR-V 替换、资源绑定与 ABI。 |
 | [Procedural-Geometry.md](Procedural-Geometry.md) | AABB procedural BLAS 构建、更新、交点 shader 和退休规则。 |
 | [Integer-Textures.md](Integer-Textures.md) | 整数纹理格式、上传、采样、清除和原始输出。 |
@@ -63,10 +65,10 @@
 
 | 文档 | 摘要 |
 | --- | --- |
-| [7.1.0 能力与版本合同](release-independent-native-and-host-lighting.md) | 独立原生光照、两种宿主职责、普通／专家入口及最终验收范围。 |
+| [原生与宿主光照合同](release-independent-native-and-host-lighting.md) | 独立原生光照、两种宿主职责、普通／专家入口及最终验收范围。 |
 | [7.1.0 验收矩阵](rtxpt-acceptance.md) | 三份需求与 CPU／GPU／打包测试的对应关系和实测边界。 |
 | [7.1.0 性能量化](quality/rtxpt-performance.md) | 相同算法精确剪枝前后、逐位图像对照、数据传输与 compact 输出收益。 |
-| [7.1.0 发布 SDK](rtxpt-release-sdk.md) | 离仓 GPU 扩展工具、ABI 校验和三个接入示例。 |
+| [原生光照发布 SDK](rtxpt-release-sdk.md) | 离仓 GPU 扩展工具、ABI 校验和三个接入示例。 |
 | [7.0.4 透明背景验收](quality/rtxpt-transparent.md) | 主射线 coverage、RR 边缘、物理表面及两条 GPU 合成路径与增量成本。 |
 | [7.0.3 资源增量／灯树验收](quality/rtxpt-retained-incremental-updates.md) | 通用 retained-scene 更新、十万灯采样、窗口回归与同机版本速度对比。 |
 | [质量验证与性能报告](quality/verification-report.md) | 合并 29 份历史记录，包含验证事实、失败、未完成边界和限定条件。 |

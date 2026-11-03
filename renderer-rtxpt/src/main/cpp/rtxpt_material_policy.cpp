@@ -3,12 +3,12 @@
 #include <Materials/MaterialsBaker.h>
 #include <donut/engine/SceneGraph.h>
 
-TransmissionDenoisingGuideStats ApplyDefaultTransmissionDenoisingGuides(
-    donut::engine::SceneGraph* sceneGraph, bool enabled) {
+template<class Materials>
+static TransmissionDenoisingGuideStats ApplyGuides(const Materials& materials,bool enabled) {
     TransmissionDenoisingGuideStats stats;
-    if(!sceneGraph || !enabled)return stats;
+    if(!enabled)return stats;
 
-    for(const auto& material:sceneGraph->GetMaterials()) {
+    for(const auto& material:materials) {
         auto* pt=PTMaterial::SafeCast(material);
         if(!pt || !pt->EnableTransmission || pt->TransmissionFactor<=0.f)continue;
         ++stats.transmissiveMaterials;
@@ -29,4 +29,14 @@ TransmissionDenoisingGuideStats ApplyDefaultTransmissionDenoisingGuides(
         }
     }
     return stats;
+}
+
+TransmissionDenoisingGuideStats ApplyDefaultTransmissionDenoisingGuides(
+    donut::engine::SceneGraph* sceneGraph, bool enabled) {
+    return sceneGraph?ApplyGuides(sceneGraph->GetMaterials(),enabled):TransmissionDenoisingGuideStats{};
+}
+
+TransmissionDenoisingGuideStats ApplyDefaultTransmissionDenoisingGuides(
+    const std::vector<std::shared_ptr<donut::engine::Material>>& materials, bool enabled) {
+    return ApplyGuides(materials,enabled);
 }

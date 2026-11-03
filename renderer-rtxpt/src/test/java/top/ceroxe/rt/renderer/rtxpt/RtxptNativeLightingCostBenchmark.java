@@ -103,7 +103,7 @@ public final class RtxptNativeLightingCostBenchmark {
         check(measured>=16&&sourceCount>=0&&sourceCount<=100000,"Use >=16 frames and 0..100000 sources");Files.createDirectories(out);
         String fixture=RtxptJson.encode(fixture(width,height,sourceCount));Files.writeString(out.resolve("fixture.json"),fixture,StandardCharsets.UTF_8);
         String workload=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(fixture.getBytes(StandardCharsets.UTF_8)));
-        if(args.length>5&&args[5].equals("--fixture-only")){System.out.println("RTXPT_710_E12_FIXTURE PASS workload="+workload);return;}
+        if(args.length>5&&args[5].equals("--fixture-only")){System.out.println("RTXPT_E12_FIXTURE PASS workload="+workload);return;}
         var config=RtxptRenderers.nativeLightingConfiguration().copyBuilder().gpuTimingsEnabled(true)
             .frameGeneration(FrameGenerationOptions.disabled()).lowLatency(LowLatencyOptions.disabled()).build();
         var samples=new ArrayList<Sample>();var stages=new ArrayList<Object>();long sequence=0,firstMeasured,lastMeasured;
@@ -155,6 +155,6 @@ public final class RtxptNativeLightingCostBenchmark {
             "workCountersUntimed",work.toString(),"execution",execution.toString(),"diagnosticMode","DEEP; per-ray counters OFF during timing",
             "unmeasured",List.of("receiver/source-query/shadow/GI are fused; no separate GPU interval","GL import/consumer and host reconstruction","legacy backend not run"),
             "baselineStatus","NOT_RUN","artifact",RtxptRenderer.class.getProtectionDomain().getCodeSource().getLocation().toString())),StandardCharsets.UTF_8);
-        System.out.println("RTXPT_710_E12_NATIVE "+(timingValid?"TIMING_COMPLETE":"TIMING_INCOMPLETE")+" workload="+workload+" out="+out+" legacy=NOT_RUN speedup=UNDETERMINED");
+        System.out.println("RTXPT_E12_NATIVE "+(timingValid?"TIMING_COMPLETE":"TIMING_INCOMPLETE")+" workload="+workload+" out="+out+" legacy=NOT_RUN speedup=UNDETERMINED");
     }
 }

@@ -71,7 +71,7 @@ public final class RtxptNativeLightingMatrixNativeSelfTest {
             case "projection"->projection();case "time"->timeAndOrigin();case "cpu"->cpuOracle();
             default->throw new IllegalArgumentException("Unknown native matrix case: "+value);
         }
-        System.out.println("RTXPT_710_NATIVE_MATRIX PASS cases="+cases);
+        System.out.println("RTXPT_NATIVE_MATRIX PASS cases="+cases);
     }
 
     /** Two deterministic rays hit a bounce-only plane. Its albedo and source field have a CPU oracle. */
@@ -86,7 +86,7 @@ public final class RtxptNativeLightingMatrixNativeSelfTest {
             publication(renderer,1,new NativeLightingPublication.Instance(2,4,1,0,1,1,0,0));
             renderer.submit(frame(0,1));double[] red=capture(renderer,"gi-red-bounce",1);
             renderer.awaitIdle();var guide=capture(renderer,"gi-receiver-normal",2);
-            System.out.println("RTXPT_710_GI_DIAGNOSTIC normal="+Arrays.toString(Arrays.copyOfRange(guide,CENTER,CENTER+3))+" work="+renderer.lightingWorkStatistics());
+            System.out.println("RTXPT_GI_DIAGNOSTIC normal="+Arrays.toString(Arrays.copyOfRange(guide,CENTER,CENTER+3))+" work="+renderer.lightingWorkStatistics());
             double expected=giOracle(128/255.0);
             near(red[CENTER],expected,.003,"Two actual red bounce receivers match the declared finite-source GI formula");
             near(red[CENTER+1],0,1e-6,"Red bounce does not invent green");near(red[CENTER+2],0,1e-6,"Red bounce does not invent blue");
@@ -117,7 +117,7 @@ public final class RtxptNativeLightingMatrixNativeSelfTest {
             publication(renderer,3,new NativeLightingPublication.Instance(2,4,1,0,1,1,0,0));renderer.submit(frame(8,7));
             near(capture(renderer,"gi-bounce-restored",1)[CENTER+1],half[CENTER+1]*.375,.001,"Bounce-only geometry can be restored without stale color");
             packet(renderer,8,7,FrameClock.of(0,0));require(renderer.nativeLightingExecution().fullBeautyFrames()==0,"GI matrix never runs full beauty");
-            System.out.printf(Locale.ROOT,"RTXPT_710_NATIVE_GI_MATRIX PASS samples=2 distance=6 strength=.35 oracle=%.9f measured=%.9f%n",expected,red[CENTER]);
+            System.out.printf(Locale.ROOT,"RTXPT_NATIVE_GI_MATRIX PASS samples=2 distance=6 strength=.35 oracle=%.9f measured=%.9f%n",expected,red[CENTER]);
         }
     }
     static double giOracle(double receiverAlbedo){
@@ -177,7 +177,7 @@ public final class RtxptNativeLightingMatrixNativeSelfTest {
             publication(renderer,10,new NativeLightingPublication.Instance(1,1,1,0,1,1,0,0));renderer.submit(frame(11,5));
             near(capture(renderer,"roles-two-sided-receiver",0)[CENTER],.625,.001,"Two-sided receiver accepts the same rear face");
             packet(renderer,11,5,FrameClock.of(0,0));
-            System.out.println("RTXPT_710_NATIVE_ROLE_ALPHA_MATRIX PASS shadow-only excluded single-sided double-sided texture-animation fade offscreen receiver-culling");
+            System.out.println("RTXPT_NATIVE_ROLE_ALPHA_MATRIX PASS shadow-only excluded single-sided double-sided texture-animation fade offscreen receiver-culling");
         }
     }
 
@@ -212,7 +212,7 @@ public final class RtxptNativeLightingMatrixNativeSelfTest {
                 for(int channel=0;channel<3;channel++)near(transformed[i+channel],equivalent[i+channel],.015,"Transformed normals agree with baked CPU geometry");compared++;}
             require(compared>150,"Pose comparison covers a surface region, rather than an isolated successful hit");
             packet(renderer,2,2,FrameClock.of(0,0));
-            System.out.println("RTXPT_710_NATIVE_POSE_OPAQUE_MATRIX PASS inverse-transpose bakedReferencePixels="+compared+" fastVsReference=exact");
+            System.out.println("RTXPT_NATIVE_POSE_OPAQUE_MATRIX PASS inverse-transpose bakedReferencePixels="+compared+" fastVsReference=exact");
         }
     }
     static double lengthSquared(double[] values,int i){return values[i]*values[i]+values[i+1]*values[i+1]+values[i+2]*values[i+2];}
@@ -258,7 +258,7 @@ public final class RtxptNativeLightingMatrixNativeSelfTest {
                     packet(renderer,sequence,1,FrameClock.of(0,0));sequence++;
                 }
             require(renderer.nativeLightingExecution().lightingFrames()==sequence,"Every projection combination really executed a new frame");
-            System.out.println("RTXPT_710_NATIVE_PROJECTION_MATRIX PASS depthConventions=4 perspectiveAndAsymmetric=true jitterConventions=3 logical=2560x1600,97x65 grid=33x25 oraclePixels="+compared);
+            System.out.println("RTXPT_NATIVE_PROJECTION_MATRIX PASS depthConventions=4 perspectiveAndAsymmetric=true jitterConventions=3 logical=2560x1600,97x65 grid=33x25 oraclePixels="+compared);
         }
     }
 
@@ -292,7 +292,7 @@ public final class RtxptNativeLightingMatrixNativeSelfTest {
             neutral(capture(renderer,"time-empty-world",0),1,"World replacement publishes a fresh neutral result");packet(renderer,4,4,FrameClock.of(0,0));
             require(renderer.nativeLightingExecution().lightingFrames()==5&&renderer.nativeLightingExecution().fullBeautyFrames()==0,
                 "Clock seek, pause, origin migration and empty world each execute the independent lighting plan");
-            System.out.println("RTXPT_710_NATIVE_TIME_ORIGIN_MATRIX PASS sourceMotion revision clockSeek pause originShift emptyWorld");
+            System.out.println("RTXPT_NATIVE_TIME_ORIGIN_MATRIX PASS sourceMotion revision clockSeek pause originShift emptyWorld");
         }
     }
     static void cpuOracle(){
@@ -301,6 +301,6 @@ public final class RtxptNativeLightingMatrixNativeSelfTest {
             var projection=exact(96,64,depth,ExactProjectionState.JitterConvention.NONE,0,0,false,0,0,3);
             var ray=projection.rayForPixel(47.5,31.5);near(ray.directionX(),0,1e-10,"Projection center X");near(ray.directionY(),0,1e-10,"Projection center Y");near(ray.directionZ(),-1,1e-10,"Projection center Z");
         }
-        System.out.println("RTXPT_710_NATIVE_MATRIX_CPU PASS");
+        System.out.println("RTXPT_NATIVE_MATRIX_CPU PASS");
     }
 }

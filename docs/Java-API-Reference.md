@@ -299,7 +299,7 @@ RenderFrameRequest.builder(sequence, width, height, camera)
 
 ### 介质
 
-7.0.2 当前托管合同使用下面三个 record，不保留旧散射／密度 API：
+当前托管合同使用下面三个 record，不保留旧散射／密度 API：
 
 | 类型 | 契约与入口 |
 | --- | --- |

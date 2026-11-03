@@ -23,7 +23,7 @@ if($CheckPaths){[pscustomobject]@{Output=$out;Source=$source;ClassPath=$ClassPat
 $runner=Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1'
 & $runner -FilePath $JavaCompiler -ArgumentList @('-encoding','UTF-8','-cp',$ClassPath,'-d',$classes,$source) -MemoryLimitGB 10
 if($LASTEXITCODE){throw "E12 benchmark compile failed: $LASTEXITCODE"}
-if($CompileOnly){Write-Host 'RTXPT_710_E12_COMPILE PASS noGpu=true';return}
+if($CompileOnly){Write-Host 'RTXPT_E12_COMPILE PASS noGpu=true';return}
 if(!$ComparisonRoundId){$ComparisonRoundId=[Guid]::NewGuid().ToString('N')}
 if(!$FixtureOnly){
     $deadline=[DateTime]::UtcNow.AddSeconds(30)

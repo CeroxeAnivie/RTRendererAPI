@@ -1,0 +1,729 @@
+{
+  "schema": 1,
+  "version": "7.1.2",
+  "createdUtc": "2026-11-03T17:42:39.940657+00:00",
+  "baseCommit": "b14c7c42e37b928fb83e48ec73d40aba6b627c70",
+  "scope": "H04 local scene resource preparation; generic retained-scene and diagnostics capability; version-independent code naming.",
+  "verificationPassed": true,
+  "artifacts": [
+    {
+      "module": "renderer-api",
+      "version": "7.1.2",
+      "files": [
+        {
+          "file": "renderer-api-7.1.2-javadoc.jar",
+          "sha256": "376298f8e251000d1fd03bf1375aa931f86395c3694f448072672a0422180477",
+          "bytes": 6481496
+        },
+        {
+          "file": "renderer-api-7.1.2-sources.jar",
+          "sha256": "fd2da5b072def26b2667aedbf816f3e133411efd1afd385818be2dbfdce75bec",
+          "bytes": 360971
+        },
+        {
+          "file": "renderer-api-7.1.2.jar",
+          "sha256": "59a333c95209f89fa820bdd761f8849a14247ba628026084cca7df2f76c04645",
+          "bytes": 783208
+        },
+        {
+          "file": "renderer-api-7.1.2.module",
+          "sha256": "3eb6be70c38782257c20fa9233cf9c7db6974b9515af99fa839d7fccf6462b60",
+          "bytes": 3842
+        },
+        {
+          "file": "renderer-api-7.1.2.pom",
+          "sha256": "a16168f25ab2b09261ea4b48e4aa6a34215fcb570d52caeef85cee705f3b6405",
+          "bytes": 2114
+        }
+      ]
+    },
+    {
+      "module": "renderer-core",
+      "version": "7.1.2",
+      "files": [
+        {
+          "file": "renderer-core-7.1.2-javadoc.jar",
+          "sha256": "53d25f4286f9e680529f3f787d2a5bd192164985731f8254bd676e8401553175",
+          "bytes": 6229065
+        },
+        {
+          "file": "renderer-core-7.1.2-sources.jar",
+          "sha256": "26cf6f35d94f50ddb79b9a919b807c6d1156d9559ba725f6f4bb5f4b7b651693",
+          "bytes": 12913045
+        },
+        {
+          "file": "renderer-core-7.1.2.jar",
+          "sha256": "2d8c31b653a51813a669e4610d0e3bab4bf24a03f10b6d37e59795cf39b6c34f",
+          "bytes": 14561475
+        },
+        {
+          "file": "renderer-core-7.1.2.module",
+          "sha256": "90e7ed29f8ee287bdd86785bc755870e619134e2a016f9054b4e633772552cba",
+          "bytes": 6988
+        },
+        {
+          "file": "renderer-core-7.1.2.pom",
+          "sha256": "48d16010d94d19fa77f0a36f6c9396eaeb24b815cb77fc0958314b0d22981f2a",
+          "bytes": 3871
+        }
+      ]
+    },
+    {
+      "module": "renderer-nvidia",
+      "version": "7.1.2",
+      "files": [
+        {
+          "file": "renderer-nvidia-7.1.2-javadoc.jar",
+          "sha256": "6751d83e95771c27fbaed232488ad7b91aee76560a3131bbfb89694ad0de9301",
+          "bytes": 4155734
+        },
+        {
+          "file": "renderer-nvidia-7.1.2-sources.jar",
+          "sha256": "2cf97cfaadc9a76b203771086eff4d5711db3e573204de4191a1ae1aa646d62e",
+          "bytes": 57017
+        },
+        {
+          "file": "renderer-nvidia-7.1.2.jar",
+          "sha256": "1d9801611b3419275fa040044747fc8f4f7f4300d67171e1dff7ff84771d85c7",
+          "bytes": 62644788
+        },
+        {
+          "file": "renderer-nvidia-7.1.2.module",
+          "sha256": "3f70cd4fb97fb7808d9f9504e47993022f9c4a58e0c8d3c4c056018a24c5ac50",
+          "bytes": 3516
+        },
+        {
+          "file": "renderer-nvidia-7.1.2.pom",
+          "sha256": "799f41a2e34d5cba5cedaa2bbd3796c959ca2c1e5d78e590e0816d1e58c5497e",
+          "bytes": 1711
+        }
+      ]
+    },
+    {
+      "module": "renderer-rtxpt",
+      "version": "7.1.2",
+      "files": [
+        {
+          "file": "renderer-rtxpt-7.1.2-javadoc.jar",
+          "sha256": "32e4e4da8ab4437e5b09257c109debfad65742254394503784b29c47c9627364",
+          "bytes": 4315967
+        },
+        {
+          "file": "renderer-rtxpt-7.1.2-native-symbols.zip",
+          "sha256": "b273c0c1f0912523c9c4257d63a453e39f7007fd6bd15dcc7d1cf528c25a4ee2",
+          "bytes": 23673563
+        },
+        {
+          "file": "renderer-rtxpt-7.1.2-sources.jar",
+          "sha256": "63ad34bc4ecddf932846ca7330b8d2bd6b23820bbeb96ef4b8c060d5914d361b",
+          "bytes": 72834
+        },
+        {
+          "file": "renderer-rtxpt-7.1.2.jar",
+          "sha256": "6e3cb9bd846bd56badb21b787f01a77ec134e1d5f48d9e2772ed482ada2b18b6",
+          "bytes": 763302392
+        },
+        {
+          "file": "renderer-rtxpt-7.1.2.module",
+          "sha256": "5f141a6fe2aeebfc24d6bc6e66288ff105d2c0647399e18cdada8ae660b1032e",
+          "bytes": 3509
+        },
+        {
+          "file": "renderer-rtxpt-7.1.2.pom",
+          "sha256": "5d86bf2a29815bad39dd0780a2df9ba3920ed6e2754c68060c97d3c557abf4ca",
+          "bytes": 1671
+        }
+      ]
+    }
+  ],
+  "finalIdentity": {
+    "passed": true,
+    "implementations": [
+      {
+        "class": "top.ceroxe.rt.renderer.api.Renderer",
+        "path": "C:\\Temp\\rtr-local-scene-consumer-f27424ccf3b24d6a95f3558726378b15\\artifacts\\renderer-api-7.1.2.jar",
+        "sha256": "59a333c95209f89fa820bdd761f8849a14247ba628026084cca7df2f76c04645"
+      },
+      {
+        "class": "top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererBackendProvider",
+        "path": "C:\\Temp\\rtr-local-scene-consumer-f27424ccf3b24d6a95f3558726378b15\\artifacts\\renderer-core-7.1.2.jar",
+        "sha256": "2d8c31b653a51813a669e4610d0e3bab4bf24a03f10b6d37e59795cf39b6c34f"
+      },
+      {
+        "class": "top.ceroxe.rt.renderer.nvidia.NvidiaVulkanFeatureProvider",
+        "path": "C:\\Temp\\rtr-local-scene-consumer-f27424ccf3b24d6a95f3558726378b15\\artifacts\\renderer-nvidia-7.1.2.jar",
+        "sha256": "1d9801611b3419275fa040044747fc8f4f7f4300d67171e1dff7ff84771d85c7"
+      },
+      {
+        "class": "top.ceroxe.rt.renderer.rtxpt.RtxptRenderer",
+        "path": "C:\\Temp\\rtr-local-scene-consumer-f27424ccf3b24d6a95f3558726378b15\\artifacts\\renderer-rtxpt-7.1.2.jar",
+        "sha256": "6e3cb9bd846bd56badb21b787f01a77ec134e1d5f48d9e2772ed482ada2b18b6"
+      }
+    ],
+    "runtime": "C:\\Temp\\rtr-local-scene-consumer-f27424ccf3b24d6a95f3558726378b15\\cache\\RTRendererAPI\\RTXPT\\1.9.0-432b08af76303ea59efd",
+    "nativeSha256": "6006fe697fe54b1d302ccb2ecfd9e856d15989c61ebdf146d7df5e32e60ef0ee",
+    "rawShaderSha256": "6a28236824a82f958539fbcaf1cfc586ca2a7225fd4dec301d80d836328b6c57",
+    "sdkManifestSha256": "c161562dbddec6b23902213dd39278750d5bccc825a93587b0666317876a8c29"
+  },
+  "shaderAbi": "d92ce0448c9ba604c07327f9eca68bb34e9257fc5e71e2b20bce15395ec6d908",
+  "publicApiAbi": "203c9c2e85b15a8c19ea163bba0caf5d606c1e78fa94ba9ac17fab0c4546c760",
+  "offCheckoutRuns": [
+    {
+      "identity": {
+        "passed": true,
+        "implementations": [
+          {
+            "class": "top.ceroxe.rt.renderer.api.Renderer",
+            "path": "C:\\Temp\\rtr-local-scene-consumer-5a92fa3433444855915608ca722ea06c\\artifacts\\renderer-api-7.1.2.jar",
+            "sha256": "59a333c95209f89fa820bdd761f8849a14247ba628026084cca7df2f76c04645"
+          },
+          {
+            "class": "top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererBackendProvider",
+            "path": "C:\\Temp\\rtr-local-scene-consumer-5a92fa3433444855915608ca722ea06c\\artifacts\\renderer-core-7.1.2.jar",
+            "sha256": "2d8c31b653a51813a669e4610d0e3bab4bf24a03f10b6d37e59795cf39b6c34f"
+          },
+          {
+            "class": "top.ceroxe.rt.renderer.nvidia.NvidiaVulkanFeatureProvider",
+            "path": "C:\\Temp\\rtr-local-scene-consumer-5a92fa3433444855915608ca722ea06c\\artifacts\\renderer-nvidia-7.1.2.jar",
+            "sha256": "1d9801611b3419275fa040044747fc8f4f7f4300d67171e1dff7ff84771d85c7"
+          },
+          {
+            "class": "top.ceroxe.rt.renderer.rtxpt.RtxptRenderer",
+            "path": "C:\\Temp\\rtr-local-scene-consumer-5a92fa3433444855915608ca722ea06c\\artifacts\\renderer-rtxpt-7.1.2.jar",
+            "sha256": "e0a40f06251d288d936470cfd7fd7c3d399361ca97f37cbb978f5a0a988f477b"
+          }
+        ],
+        "runtime": "C:\\Temp\\rtr-local-scene-consumer-5a92fa3433444855915608ca722ea06c\\cache\\RTRendererAPI\\RTXPT\\1.9.0-40041d23e3f9201c7e77",
+        "nativeSha256": "14226126b33d3ed907e93745d6ae8713faa0159029e498c65a42e35b911f7c3c",
+        "rawShaderSha256": "6a28236824a82f958539fbcaf1cfc586ca2a7225fd4dec301d80d836328b6c57",
+        "sdkManifestSha256": "b77b2f0fded14ce2f6366f77a2a40e4f8525d5ff0a5caf97805d629756537077"
+      },
+      "tests": [
+        {
+          "passed": true,
+          "exitCode": 0,
+          "arguments": [
+            "C:\\Temp\\rtr-local-scene-consumer-5a92fa3433444855915608ca722ea06c\\artifacts",
+            "D:/Engineering/code/APIs/RTRendererAPI/build/reports/local-scene-release/identity.json"
+          ],
+          "class": "RtxptPublishedIdentity",
+          "name": "identity"
+        },
+        {
+          "passed": true,
+          "exitCode": 0,
+          "arguments": [],
+          "class": "RtxptLightingResourceMatrixNativeSelfTest",
+          "name": "shared-resource-matrix"
+        },
+        {
+          "passed": true,
+          "exitCode": 0,
+          "arguments": [],
+          "class": "RtxptRetainedLightingRepairNativeSelfTest",
+          "name": "retained-tint-off"
+        },
+        {
+          "passed": true,
+          "exitCode": 0,
+          "arguments": [
+            "alpha",
+            "texture"
+          ],
+          "class": "RtxptLightingAttributeNativeSelfTest",
+          "name": "vertex-alpha-texture"
+        },
+        {
+          "passed": true,
+          "exitCode": 0,
+          "arguments": [],
+          "class": "RtxptNativeLightingReconstructionNativeSelfTest",
+          "name": "gi-reconstruction"
+        },
+        {
+          "passed": true,
+          "exitCode": 0,
+          "arguments": [],
+          "class": "RtxptHostAugmentationNativeSelfTest",
+          "name": "host-augmentation"
+        },
+        {
+          "passed": true,
+          "exitCode": 0,
+          "arguments": [
+            "analytic"
+          ],
+          "class": "RtxptRetainedNativeSelfTest",
+          "name": "beauty-retained-analytic"
+        }
+      ]
+    },
+    {
+      "identity": {
+        "passed": true,
+        "implementations": [
+          {
+            "class": "top.ceroxe.rt.renderer.api.Renderer",
+            "path": "C:\\Temp\\rtr-local-scene-consumer-f27424ccf3b24d6a95f3558726378b15\\artifacts\\renderer-api-7.1.2.jar",
+            "sha256": "59a333c95209f89fa820bdd761f8849a14247ba628026084cca7df2f76c04645"
+          },
+          {
+            "class": "top.ceroxe.rt.renderer.backend.vulkan.VulkanRendererBackendProvider",
+            "path": "C:\\Temp\\rtr-local-scene-consumer-f27424ccf3b24d6a95f3558726378b15\\artifacts\\renderer-core-7.1.2.jar",
+            "sha256": "2d8c31b653a51813a669e4610d0e3bab4bf24a03f10b6d37e59795cf39b6c34f"
+          },
+          {
+            "class": "top.ceroxe.rt.renderer.nvidia.NvidiaVulkanFeatureProvider",
+            "path": "C:\\Temp\\rtr-local-scene-consumer-f27424ccf3b24d6a95f3558726378b15\\artifacts\\renderer-nvidia-7.1.2.jar",
+            "sha256": "1d9801611b3419275fa040044747fc8f4f7f4300d67171e1dff7ff84771d85c7"
+          },
+          {
+            "class": "top.ceroxe.rt.renderer.rtxpt.RtxptRenderer",
+            "path": "C:\\Temp\\rtr-local-scene-consumer-f27424ccf3b24d6a95f3558726378b15\\artifacts\\renderer-rtxpt-7.1.2.jar",
+            "sha256": "6e3cb9bd846bd56badb21b787f01a77ec134e1d5f48d9e2772ed482ada2b18b6"
+          }
+        ],
+        "runtime": "C:\\Temp\\rtr-local-scene-consumer-f27424ccf3b24d6a95f3558726378b15\\cache\\RTRendererAPI\\RTXPT\\1.9.0-432b08af76303ea59efd",
+        "nativeSha256": "6006fe697fe54b1d302ccb2ecfd9e856d15989c61ebdf146d7df5e32e60ef0ee",
+        "rawShaderSha256": "6a28236824a82f958539fbcaf1cfc586ca2a7225fd4dec301d80d836328b6c57",
+        "sdkManifestSha256": "c161562dbddec6b23902213dd39278750d5bccc825a93587b0666317876a8c29"
+      },
+      "tests": [
+        {
+          "class": "RtxptPublishedIdentity",
+          "passed": true,
+          "name": "identity",
+          "exitCode": 0,
+          "arguments": [
+            "C:\\Temp\\rtr-local-scene-consumer-f27424ccf3b24d6a95f3558726378b15\\artifacts",
+            "D:/Engineering/code/APIs/RTRendererAPI/build/reports/local-scene-release/final/identity.json"
+          ]
+        },
+        {
+          "class": "RtxptMixedResourceNativeSelfTest",
+          "passed": true,
+          "name": "mixed-geometry-shared-alpha",
+          "exitCode": 0,
+          "arguments": []
+        }
+      ]
+    }
+  ],
+  "finalArtifactImpact": {
+    "passed": true,
+    "fromNativeSha256": "14226126b33d3ed907e93745d6ae8713faa0159029e498c65a42e35b911f7c3c",
+    "toNativeSha256": "6006fe697fe54b1d302ccb2ecfd9e856d15989c61ebdf146d7df5e32e60ef0ee",
+    "changedFiles": [
+      ".complete",
+      "NRD.dll",
+      "docs\\quality\\local-scene-preparation.md",
+      "docs\\release-local-scene-preparation.md",
+      "native-lighting-sdk.json",
+      "rtrenderer_rtxpt.dll"
+    ],
+    "unexpectedExecutableChanges": [],
+    "metadataOnlyChangedFiles": [
+      "NRD.dll"
+    ],
+    "nrdComparison": {
+      "oldSha256": "3e926320cdb44a15ef62e54a2c946e9c2604cfbe8848d8d0cbb181ab47edc614",
+      "newSha256": "841c0bf6d63b8fca3d6b55c42032d9e3f32dc548ee46db301f5ba95a5b536e28",
+      "sameSize": true,
+      "sections": [
+        {
+          "name": ".text",
+          "sameLayout": true,
+          "sameBytes": true,
+          "size": 468480,
+          "oldSha256": "3f38dbde5bfd0c85317836dbd8397a7cc6dfb4a537037a51ec21e3c0fa191b70",
+          "newSha256": "3f38dbde5bfd0c85317836dbd8397a7cc6dfb4a537037a51ec21e3c0fa191b70"
+        },
+        {
+          "name": ".rdata",
+          "sameLayout": true,
+          "sameBytes": false,
+          "size": 93184,
+          "oldSha256": "423d7508e8ab8c94ead9a153246c1394963e37ca19d3d8d904d4fc14835ee3fb",
+          "newSha256": "e5ee694a99c83198b8ca1e8c5089fcdf3e642dac8bf9d6a61ad4cf5080bf944e"
+        },
+        {
+          "name": ".data",
+          "sameLayout": true,
+          "sameBytes": true,
+          "size": 4096,
+          "oldSha256": "03091294360c44cfbfce60569b82b844c50a7f2c25e24f18ed506f5161457989",
+          "newSha256": "03091294360c44cfbfce60569b82b844c50a7f2c25e24f18ed506f5161457989"
+        },
+        {
+          "name": ".pdata",
+          "sameLayout": true,
+          "sameBytes": true,
+          "size": 18432,
+          "oldSha256": "a6ac78f4c49c4caf71574d3131d9bb80b96220e3aa34e24792a48b742d03fe9c",
+          "newSha256": "a6ac78f4c49c4caf71574d3131d9bb80b96220e3aa34e24792a48b742d03fe9c"
+        },
+        {
+          "name": ".fptable",
+          "sameLayout": true,
+          "sameBytes": true,
+          "size": 512,
+          "oldSha256": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560",
+          "newSha256": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560"
+        },
+        {
+          "name": ".rsrc",
+          "sameLayout": true,
+          "sameBytes": true,
+          "size": 1536,
+          "oldSha256": "4f7de4ce2cf0820d9aead88b45806a40fb49f540e6dba64492cc4eeea74bbf89",
+          "newSha256": "4f7de4ce2cf0820d9aead88b45806a40fb49f540e6dba64492cc4eeea74bbf89"
+        },
+        {
+          "name": ".reloc",
+          "sameLayout": true,
+          "sameBytes": true,
+          "size": 2560,
+          "oldSha256": "eef20bb065e5ecae4f14023f94028c97980f8e69802f3ca2b681364229adc64d",
+          "newSha256": "eef20bb065e5ecae4f14023f94028c97980f8e69802f3ca2b681364229adc64d"
+        }
+      ],
+      "differences": [
+        {
+          "offset": 280,
+          "old": 132,
+          "new": 96,
+          "metadata": [
+            "COFF timestamp"
+          ]
+        },
+        {
+          "offset": 281,
+          "old": 7,
+          "new": 26,
+          "metadata": [
+            "COFF timestamp"
+          ]
+        },
+        {
+          "offset": 539940,
+          "old": 132,
+          "new": 96,
+          "metadata": [
+            "debug directory timestamp"
+          ]
+        },
+        {
+          "offset": 539941,
+          "old": 7,
+          "new": 26,
+          "metadata": [
+            "debug directory timestamp"
+          ]
+        },
+        {
+          "offset": 539968,
+          "old": 132,
+          "new": 96,
+          "metadata": [
+            "debug directory timestamp"
+          ]
+        },
+        {
+          "offset": 539969,
+          "old": 7,
+          "new": 26,
+          "metadata": [
+            "debug directory timestamp"
+          ]
+        },
+        {
+          "offset": 539996,
+          "old": 132,
+          "new": 96,
+          "metadata": [
+            "debug directory timestamp"
+          ]
+        },
+        {
+          "offset": 539997,
+          "old": 7,
+          "new": 26,
+          "metadata": [
+            "debug directory timestamp"
+          ]
+        },
+        {
+          "offset": 543424,
+          "old": 221,
+          "new": 225,
+          "metadata": [
+            "CodeView GUID and age"
+          ]
+        }
+      ],
+      "onlyBuildMetadataChanged": true,
+      "normalizedSha256": "4b6e86c33d1729d6674e1e8887314800a1a6dd0d63f5155b46a692ffcca090b8",
+      "normalization": "Zero the 9 changed bytes: COFF/debug directory timestamps and one CodeView PDB age byte. All remaining file bytes, section layouts and executable instructions are identical."
+    },
+    "scope": "Only the dependent-mesh generation selection changed executable behavior; targeted mixed-geometry/shared-alpha test passed in the final packaged runtime. Other passed groups retained with their tested artifact identities."
+  },
+  "finalMixedResourceResult": {
+    "passed": true,
+    "rows": [
+      {
+        "case": "open",
+        "gain": 1.0,
+        "builtBlases": 2,
+        "native": "NativePreparationStatistics[collecting=true, materialVisits=1, meshVisits=2, indexBuilds=1]"
+      },
+      {
+        "case": "restore",
+        "gain": 0.449951171875,
+        "builtBlases": 2,
+        "native": "NativePreparationStatistics[collecting=true, materialVisits=2, meshVisits=4, indexBuilds=2]"
+      }
+    ]
+  },
+  "nativeNewFrameRows": 28,
+  "cpuComparison4096": [
+    {
+      "case": "material",
+      "oldAllocatedBytesP50": 3226816,
+      "newAllocatedBytesP50": 41584,
+      "allocationReductionPercent": 98.7113,
+      "oldWallNanosP50": 4501500,
+      "newWallNanosP50": 1621300,
+      "wallSpeedRatio": 2.7765,
+      "oldItemReads": 12288,
+      "oldCurrentItemReads": 4096,
+      "newItemReads": 0,
+      "newCurrentItemReads": 0
+    },
+    {
+      "case": "texture-rgb",
+      "oldAllocatedBytesP50": 3268664,
+      "newAllocatedBytesP50": 84496,
+      "allocationReductionPercent": 97.415,
+      "oldWallNanosP50": 5536700,
+      "newWallNanosP50": 2239300,
+      "wallSpeedRatio": 2.4725,
+      "oldItemReads": 12288,
+      "oldCurrentItemReads": 4096,
+      "newItemReads": 0,
+      "newCurrentItemReads": 0
+    },
+    {
+      "case": "texture-alpha",
+      "oldAllocatedBytesP50": 3269088,
+      "newAllocatedBytesP50": 84808,
+      "allocationReductionPercent": 97.4058,
+      "oldWallNanosP50": 5587200,
+      "newWallNanosP50": 2101600,
+      "wallSpeedRatio": 2.6585,
+      "oldItemReads": 12288,
+      "oldCurrentItemReads": 4096,
+      "newItemReads": 0,
+      "newCurrentItemReads": 0
+    },
+    {
+      "case": "vertex-color",
+      "oldAllocatedBytesP50": 3210944,
+      "newAllocatedBytesP50": 2656,
+      "allocationReductionPercent": 99.9173,
+      "oldWallNanosP50": 4292400,
+      "newWallNanosP50": 14600,
+      "wallSpeedRatio": 294.0,
+      "oldItemReads": 12288,
+      "oldCurrentItemReads": 4096,
+      "newItemReads": 0,
+      "newCurrentItemReads": 0
+    },
+    {
+      "case": "mesh-baseline",
+      "oldAllocatedBytesP50": 3210968,
+      "newAllocatedBytesP50": 2656,
+      "allocationReductionPercent": 99.9173,
+      "oldWallNanosP50": 4067900,
+      "newWallNanosP50": 13200,
+      "wallSpeedRatio": 308.1742,
+      "oldItemReads": 12288,
+      "oldCurrentItemReads": 4096,
+      "newItemReads": 0,
+      "newCurrentItemReads": 0
+    },
+    {
+      "case": "pose",
+      "oldAllocatedBytesP50": 2795152,
+      "newAllocatedBytesP50": 27016,
+      "allocationReductionPercent": 99.0335,
+      "oldWallNanosP50": 3245300,
+      "newWallNanosP50": 1579200,
+      "wallSpeedRatio": 2.055,
+      "oldItemReads": 12288,
+      "oldCurrentItemReads": 4096,
+      "newItemReads": 0,
+      "newCurrentItemReads": 0
+    },
+    {
+      "case": "light",
+      "oldAllocatedBytesP50": 2792216,
+      "newAllocatedBytesP50": 1984,
+      "allocationReductionPercent": 99.9289,
+      "oldWallNanosP50": 3685900,
+      "newWallNanosP50": 5900,
+      "wallSpeedRatio": 624.7288,
+      "oldItemReads": 12288,
+      "oldCurrentItemReads": 4096,
+      "newItemReads": 0,
+      "newCurrentItemReads": 0
+    }
+  ],
+  "measurementScope": "RtxptDelta.prepare, with two warmups and five measured iterations. Allocation is actual owner-thread allocation; wall time includes importer export I/O. This is not whole submit, core lighting, host frame time or MC FPS.",
+  "verificationScope": "Passed unaffected groups retain their original tested artifact identities. Final targeted geometry-replacement/shared-alpha check validates the last native fix. No FG/MFG or gratuitous rerun of prior passed performance/stress groups.",
+  "sourceBuild": "Final source overlay build and final package succeeded. Initial overlay/config and toolchain failures remain in original logs; final result does not claim a clean first pass.",
+  "publicationRecord": "build/reports/local-scene-release/result.json",
+  "rawData": [
+    {
+      "path": "docs/quality/data/local-scene-preparation/baseline.json",
+      "sha256": "a4ebb6b2811a1c90ad2c204f7fa40403e26bd2c428a020829423be4e04259a38",
+      "bytes": 3879
+    },
+    {
+      "path": "docs/quality/data/local-scene-preparation/candidate.json",
+      "sha256": "c426ccf2ab83a198504e557059b0af7d8486e66679026b9bdf7646523e4492bf",
+      "bytes": 3697
+    },
+    {
+      "path": "docs/quality/data/local-scene-preparation/native-resource-matrix.json",
+      "sha256": "a3d0048f901e8e64eb29f49cad76c361b482a93be1f97be932eeea19a85b7382",
+      "bytes": 24376
+    }
+  ],
+  "logs": [
+    {
+      "path": "build/version-naming-validation.log",
+      "sha256": "d3c4e8dad75fd8dc4a0e2b6df4743ac3daf0badfb0c4efde54375851edc73eb5",
+      "bytes": 4231
+    },
+    {
+      "path": "build/local-resource-cpu.log",
+      "sha256": "2526be873a83960a18f13a9b7237f9d8876cf6d9810487c47dd6fd8a31688086",
+      "bytes": 6816
+    },
+    {
+      "path": "build/local-resource-gpu.log",
+      "sha256": "e71eb311f74f6780020aa35673905eca298da67816d0bd7f85454cff0cd21e89",
+      "bytes": 1118058
+    },
+    {
+      "path": "build/local-resource-native-build.log",
+      "sha256": "0ae53dd441b0b05aa2b33751462deb4eae58c0d28059d687ff2cb71b2f64310c",
+      "bytes": 5881
+    },
+    {
+      "path": "build/local-scene-overlay.log",
+      "sha256": "a38174fb211e78d79ef107de170fe358b2ca8ecd16ce25df2adc3d074f20247b",
+      "bytes": 40761
+    },
+    {
+      "path": "build/local-scene-final-package.log",
+      "sha256": "c754614e56607392546bab81eba757440914d6fec85341b9bf760670e6f744a6",
+      "bytes": 5350
+    },
+    {
+      "path": "build/shader-config-normalization.log",
+      "sha256": "3b1b7c94fe02452ae681040a2cac111a731ebe0474bb04ae9c3796da00588a08",
+      "bytes": 62
+    },
+    {
+      "path": "build/reports/local-scene-release/beauty-retained-analytic.err.log",
+      "sha256": "7b5b394e90968ad5efc3dd2b33a8de8400ca50e0ad9ecf151efe3cfb88e2bc77",
+      "bytes": 874
+    },
+    {
+      "path": "build/reports/local-scene-release/beauty-retained-analytic.log",
+      "sha256": "dcc6ccce8ee6114672eeff65d2aeccc63163fcdbf369fc650a2ed60a888262d4",
+      "bytes": 27198
+    },
+    {
+      "path": "build/reports/local-scene-release/final/identity.err.log",
+      "sha256": "c602f7df6ba82cebcecf9f0329703207ad41994b4b1972641e9aab2fc816c9ec",
+      "bytes": 250
+    },
+    {
+      "path": "build/reports/local-scene-release/final/identity.log",
+      "sha256": "cd2ca34cd3f5dcf3ddf0b2e54926f2bcdc62543f0ca76a20e39964601fb36b62",
+      "bytes": 59
+    },
+    {
+      "path": "build/reports/local-scene-release/final/mixed-geometry-shared-alpha.err.log",
+      "sha256": "c602f7df6ba82cebcecf9f0329703207ad41994b4b1972641e9aab2fc816c9ec",
+      "bytes": 250
+    },
+    {
+      "path": "build/reports/local-scene-release/final/mixed-geometry-shared-alpha.log",
+      "sha256": "ca0fc8641b423bb3ec513dc8449c02373ce1eb60856f5898fbf1eaa2a694c2c8",
+      "bytes": 6922
+    },
+    {
+      "path": "build/reports/local-scene-release/gi-reconstruction.err.log",
+      "sha256": "c602f7df6ba82cebcecf9f0329703207ad41994b4b1972641e9aab2fc816c9ec",
+      "bytes": 250
+    },
+    {
+      "path": "build/reports/local-scene-release/gi-reconstruction.log",
+      "sha256": "a220a94417b423cdefc17751b4afa602e994d59f9b674039cd577307b3d1aa6d",
+      "bytes": 6471
+    },
+    {
+      "path": "build/reports/local-scene-release/host-augmentation.err.log",
+      "sha256": "1f41549da3cb2492056693a4dfa8c32b14d7c9dcc7b2772c0a4c95a3fb4483d1",
+      "bytes": 748
+    },
+    {
+      "path": "build/reports/local-scene-release/host-augmentation.log",
+      "sha256": "4f2981950fd39f2e5ea8ff72ac900a3315a99207a1feafba1a3258acee4d8022",
+      "bytes": 7377
+    },
+    {
+      "path": "build/reports/local-scene-release/identity.err.log",
+      "sha256": "c602f7df6ba82cebcecf9f0329703207ad41994b4b1972641e9aab2fc816c9ec",
+      "bytes": 250
+    },
+    {
+      "path": "build/reports/local-scene-release/identity.log",
+      "sha256": "cd2ca34cd3f5dcf3ddf0b2e54926f2bcdc62543f0ca76a20e39964601fb36b62",
+      "bytes": 59
+    },
+    {
+      "path": "build/reports/local-scene-release/retained-tint-off.err.log",
+      "sha256": "c602f7df6ba82cebcecf9f0329703207ad41994b4b1972641e9aab2fc816c9ec",
+      "bytes": 250
+    },
+    {
+      "path": "build/reports/local-scene-release/retained-tint-off.log",
+      "sha256": "a3a89b0dba2895f43bca44793e237863646c1f5b1f7e5d2f8bbd90af5986e2d2",
+      "bytes": 6744
+    },
+    {
+      "path": "build/reports/local-scene-release/shared-resource-matrix.err.log",
+      "sha256": "c602f7df6ba82cebcecf9f0329703207ad41994b4b1972641e9aab2fc816c9ec",
+      "bytes": 250
+    },
+    {
+      "path": "build/reports/local-scene-release/shared-resource-matrix.log",
+      "sha256": "af2fe6069d1401db8bd774b4377e862e58cc4d6bc0aa53b7ddbc5eacd805d9f7",
+      "bytes": 7070
+    },
+    {
+      "path": "build/reports/local-scene-release/vertex-alpha-texture.err.log",
+      "sha256": "c602f7df6ba82cebcecf9f0329703207ad41994b4b1972641e9aab2fc816c9ec",
+      "bytes": 250
+    },
+    {
+      "path": "build/reports/local-scene-release/vertex-alpha-texture.log",
+      "sha256": "5c940aea733d3e11e6bf35e990690c9967d32ff90d738ce0d8a6150423d14131",
+      "bytes": 12897
+    }
+  ]
+}

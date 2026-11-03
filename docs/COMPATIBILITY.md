@@ -1,16 +1,16 @@
 # API Contract
 
-当前普通预设、专家显式配置及 7.1 光照快捷工厂见[普通用法与专家控制](ordinary-and-expert.md)。旧 `expertBuilder()` 不复活，专家能力通过统一配置与公开扩展表达。
+当前普通预设、专家显式配置及光照快捷工厂见[普通用法与专家控制](ordinary-and-expert.md)。旧 `expertBuilder()` 不复活，专家能力通过统一配置与公开扩展表达。
 
-RTRendererAPI 7.1.0 retains the Java 25 major-7 binary/API contract introduced in 7.0.0. Use matching API,
+RTRendererAPI retains the Java 25 major-7 binary/API contract introduced in 7.0.0. Use matching API,
 backend and NVIDIA modules. Medium data is expressed directly by `Rgb`, `Medium`,
 `MediumBoundary` records. RTXPT keeps only absorption, IOR and nested priority; density,
 scattering, emission, camera-medium and `MediumTransport` controls were removed. The nested 6.x medium type, medium builders
 and compatibility wrappers are absent. Recompile custom retained-scene shaders against the
-7.0.4 `gpuscene_abi.glsl`; do not embed record strides from an older release.
+current `gpuscene_abi.glsl`; do not embed record strides from an older release.
 
-This version is delivered through GitHub source and local Maven artifacts. No remote release
-or Maven Central publication is implied by building the sources. See [7.1.0 changes](release-independent-native-and-host-lighting.md)
+The current release targets GitHub and Maven Local. Building sources alone does not publish artifacts.
+See [local preparation changes](release-local-scene-preparation.md) and [7.1.0 changes](release-independent-native-and-host-lighting.md)
 for the exact medium API. GPU and packaged-runtime evidence is recorded separately in
 [RTXPT integration](quality/rtxpt-managed-medium-migration.md),
 [advanced-feature audit](quality/rtxpt-advanced-audit-20261101.md), and
@@ -22,7 +22,7 @@ presentation plus Vulkan independent work/UI, or explicit Vulkan final presentat
 whole-3D switching under different feature constraints. See [backend routing](backend-routing.md)
 and [composition](d3d12-vulkan-composition.md). Unsupported inputs are rejected rather than silently dropped.
 
-7.0.4 adds default transparent-background methods and background composition overloads. The
+The API provides default transparent-background methods and background composition overloads. The
 original ten-argument `D3D12SharedFrame` constructor remains and defaults to `OPAQUE`;
 new producers can explicitly declare `PREMULTIPLIED`. Use matching native and Java modules.
 

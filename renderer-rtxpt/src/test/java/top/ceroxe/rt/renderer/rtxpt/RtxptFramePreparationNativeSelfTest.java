@@ -28,7 +28,7 @@ public final class RtxptFramePreparationNativeSelfTest {
             byte[] original=Files.readAllBytes(binary);Files.write(binary,new byte[]{0,1,2});
             RtxptRuntimeBundle.extract();
             require(Arrays.equals(original,Files.readAllBytes(binary)),"Damaged cache shader must be repaired from the JAR before native loading");
-            System.out.println("RTXPT_705_CACHE_REPAIR PASS");
+            System.out.println("RTXPT_CACHE_REPAIR PASS");
         }
         for(String route:args.length==0?new String[]{"rr","nrd","analytic"}:args){
             var config=RtxptLightingNativeSelfTest.configuration(route);
@@ -60,7 +60,7 @@ public final class RtxptFramePreparationNativeSelfTest {
                     require(millis<1000,"Warm material delta must not stall for a second: "+millis);
                     long materialSequence=sequence-1;
                     require(h.diagnosticSnapshot().events().stream().noneMatch(e->e.sequence()==materialSequence&&e.stage()==RtxptDiagnostics.Stage.SHADER_COMPILE),"Material delta compiled a shader");
-                    System.out.printf(Locale.ROOT,"RTXPT_705_MATERIAL route=%s edit=%d submitMs=%.6f extraPsos=0%n",route,i,millis);
+                    System.out.printf(Locale.ROOT,"RTXPT_MATERIAL route=%s edit=%d submitMs=%.6f extraPsos=0%n",route,i,millis);
                 }
                 long steadyBegin=sequence;
                 for(int i=0;i<16;i++)submit(r,frame(sequence++,revision,640,360));
@@ -69,7 +69,7 @@ public final class RtxptFramePreparationNativeSelfTest {
                     submit(r,frame(sequence++,revision,size[0],size[1]));
                     var actual=h.presentationStatus();require(actual.outputWidth()==size[0]&&actual.outputHeight()==size[1],"Requested extent "+Arrays.toString(size)+" actual="+actual);
                     require(r.diagnostics().latestCompletedFrameSequence()>=0,"Real completed frame after resize");
-                    System.out.println("RTXPT_705_SIZE route="+route+" request="+size[0]+"x"+size[1]+" actual="+actual.outputWidth()+"x"+actual.outputHeight());
+                    System.out.println("RTXPT_SIZE route="+route+" request="+size[0]+"x"+size[1]+" actual="+actual.outputWidth()+"x"+actual.outputHeight());
                 }
                 r.captureRtxptSource(OUT.resolve(route+"-materials.png"));
                 var snapshot=h.diagnosticSnapshot();

@@ -43,7 +43,7 @@ function Shader-Plan {
         $isOptical=$lines[3] -match '(?:^| )-D RTR_SCENE_LIGHTING=1(?: |$)'
         $budgets=if($isOptical){1..6}else{@(0)}
         foreach($budget in $budgets){
-            # Exact/tree selection is runtime state in 7.1.0. Older captures must
+            # Exact/tree selection is runtime state. Older captures must
             # not put the retired threshold back into the runtime command key.
             $command=[regex]::Replace($lines[2],' -D RTR_SCENE_EXACT_LIGHT_LIMIT=[^ ]+','')
             $canonical=[regex]::Replace($lines[3],' -D RTR_SCENE_EXACT_LIGHT_LIMIT=[^ ]+','')
@@ -194,7 +194,7 @@ try {
             Write-Host "RTXPT offline shader $($entries.Count): optical budget=$budget origin=$origin $relative"
     }
     Assert-Coverage $entries
-    $index=[ordered]@{format=1;pipelineIdentity='7.1.0 runtime StandardBSDF; captured host-primary, analytic and small-point configurations';compilerSha256=$compilerHash;contract='All captured renderer configurations with canonical material identities and scene-analytic budgets 1..6 are required. Exact/tree selection is runtime state. Release coverage additionally checks host-primary, scene-analytic and small-point reference/build/fill branches. Uncaptured renderer configurations may use the bundled upstream compiler; strict package acceptance must disable that fallback.';sources=$sources;shaders=@($entries.ToArray())}
+    $index=[ordered]@{format=1;pipelineIdentity='runtime StandardBSDF; captured host-primary, analytic and small-point configurations';compilerSha256=$compilerHash;contract='All captured renderer configurations with canonical material identities and scene-analytic budgets 1..6 are required. Exact/tree selection is runtime state. Release coverage additionally checks host-primary, scene-analytic and small-point reference/build/fill branches. Uncaptured renderer configurations may use the bundled upstream compiler; strict package acceptance must disable that fallback.';sources=$sources;shaders=@($entries.ToArray())}
     [IO.File]::WriteAllText((Join-Path $stage 'bundle.json'),($index | ConvertTo-Json -Depth 8),$utf8)
     Verify-Bundle $stage
     if(Test-Path -LiteralPath $output){[IO.Directory]::Move($output,$backup);$oldMoved=$true}

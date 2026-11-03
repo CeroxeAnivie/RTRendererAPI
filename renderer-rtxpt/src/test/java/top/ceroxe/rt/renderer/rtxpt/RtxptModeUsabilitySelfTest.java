@@ -35,6 +35,6 @@ public final class RtxptModeUsabilitySelfTest {
             throw new AssertionError("Expert request was silently rewritten");
         }catch(IllegalArgumentException expected){rejected=true;}
         require(rejected,"Conflicting expert requests require an explicit rejection");
-        System.out.println("RTXPT_710_MODE_USABILITY PASS noGpu=true ordinaryModes=3 expertPolicyPreserved=true");
+        System.out.println("RTXPT_MODE_USABILITY PASS noGpu=true ordinaryModes=3 expertPolicyPreserved=true");
     }
 }

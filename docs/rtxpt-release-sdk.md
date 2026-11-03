@@ -1,4 +1,4 @@
-# 7.1.0 native-lighting release SDK
+# Native-lighting release SDK
 
 The extracted `rtxpt-runtime.zip` includes `tools/`, `sdk/`, the extension,
 native-lighting OpenGL and host-surface OpenGL examples, and their API documentation. `native-lighting-sdk.json` records each
@@ -16,7 +16,7 @@ From the extracted runtime root, build the supplied receiver extension:
 ./tools/Build-NativeLightingExtension.ps1 -OutputDirectory receiver-tint -VerifyOnly
 ```
 
-Use the matching 7.1.0 Java artifacts and the example's `manifest.json` when
+Use the Java artifacts from the same build and the example's `manifest.json` when
 activating the evaluator. The extension build is offline; activation consumes
 precompiled DXIL. The shader SDK hash must match the native backend. Keep the
 compiled bundle's `sdk/`, source inventory and manifest together.

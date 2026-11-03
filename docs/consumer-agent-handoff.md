@@ -2,7 +2,9 @@
 
 本文件是消费方 agent 的固定入口，文件名不随发布版本变化。发布版本见 `gradle.properties`，历史文档见 `release-index.json`，公共 ABI 历史见 `renderer-api/abi/release-index.json`。不要从文件名推断版本或把本机代理写入项目。
 
-2026-11-04 的光源遍历优化继续使用本地坐标 7.1.1，按用户要求删除旧 Maven Local 包后重新发布。消费方重新解析同版本依赖时使用 `--refresh-dependencies`，并核对发布记录中的 JAR/runtime hash，不能仅凭版本号认定已更新。新 native DLL SHA-256 为 `b8b4bca550f2dce38fc169e3edb4f8249e5a3a5f78695556396acd7337f2fd57`；内置 raw shader 为 `6a28236824a82f958539fbcaf1cfc586ca2a7225fd4dec301d80d836328b6c57`。扩展使用新包内 SDK 重编译。432 张信号／guide 逐位一致，36 次真实 RR 通过；性能数据见 [最新报告](quality/native-lighting-performance.md)。本批只发布 GitHub 和 Maven Local。
+当前版本为 **7.1.2**。本批补齐 H04 的局部资源准备：persistent diff、真实反向依赖、结构身份复用、局部姿态提交、原生材质刷新及纹理引用退休；增加准备计数，同时清理代码中的版本绑定命名。详见[本批修复](release-local-scene-preparation.md)和[量化证据](quality/local-scene-preparation.md)。发布目标为 GitHub 和 Maven Local，不发布 Central；最终制品身份见 `build/reports/local-scene-release/result.json`。
+
+此前 2026-11-04 的光源遍历优化使用本地坐标 7.1.1，按用户要求删除旧 Maven Local 包后重新发布。消费方重新解析同版本依赖时使用 `--refresh-dependencies`，并核对发布记录中的 JAR/runtime hash，不能仅凭版本号认定已更新。新 native DLL SHA-256 为 `b8b4bca550f2dce38fc169e3edb4f8249e5a3a5f78695556396acd7337f2fd57`；内置 raw shader 为 `6a28236824a82f958539fbcaf1cfc586ca2a7225fd4dec301d80d836328b6c57`。扩展使用新包内 SDK 重编译。432 张信号／guide 逐位一致，36 次真实 RR 通过；性能数据见 [最新报告](quality/native-lighting-performance.md)。该次交付已发布 GitHub 和 Maven Local。
 
 ## 已修复的接入问题
 
@@ -11,7 +13,7 @@
 | H01 顶点染色 | 原生 primary／bounce 命中读取 RGBA8，barycentric 插值，执行 material × texture × vertex 一次；alpha 参与可见性，纯颜色变化不重建 BLAS。宿主表面已有 albedo 时仍由宿主乘一次。 |
 | H02 OFF | 统一诊断 OFF 压住独立逐射线统计开关；requested 意图保留，effective 为 false，在途读回有界排空后停止新 copy/query/poll。业务 fence 和正常出图继续。 |
 | H03 双信号 RR | 使用 `openReconstructedNativeLighting`，默认对合法漫反射 GI 调用真实 RR。直接增益独立，宿主底图保持原尺寸。详细信号／guides／尺寸和归属见 [重建契约](native-lighting-reconstruction.md)。 |
-| H04 局部成本 | 驻留资源表结构共享并维护反向依赖；材质／纹理／属性各自更新，未变化实例列表复用。baseline、顶点色和实例属性按稳定槽位局部上传。 |
+| H04 局部成本 | 准备阶段通过 persistent diff 和反向依赖选择实际 variants，稳定帧复用结构／实例快照；局部属性无导出目录，姿态只提交变化实例。原生材质／纹理更新复用常驻索引，alpha 只选择依赖 BLAS。拓扑变化正确失效并重建映射。 |
 | H05 诊断 | recorder v4 区分墙钟与实际线程 CPU；DEEP 可显式拆为 receiver、direct、GI 三个真实 GPU dispatch，改变调度和存储，只用于诊断。direct 和 GI 各自仍包括内部源遍历及 shadow，不能把它们当独立 shadow 时间。 |
 | H06 旧后端对照 | 已提供并实际运行加载旧发布 core JAR 的通用 fixture adapter，与 native 对照两个信号；原始记录、图像误差、环境限制见 [对照报告](quality/lighting-backend-comparison.md)。 |
 

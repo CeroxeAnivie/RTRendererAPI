@@ -54,7 +54,7 @@ public final class RtxptNativeLightingGlSelfTest {
                 glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,5);glfwWindowHint(GLFW_OPENGL_PROFILE,GLFW_OPENGL_CORE_PROFILE);
                 window=glfwCreateWindow(WIDTH,HEIGHT,"Hidden native lighting GL acceptance",0,0);require(window!=0,"Create hidden GL context");
                 glfwMakeContextCurrent(window);GL.createCapabilities();
-                System.out.println("RTXPT_710_GL_DEVICE "+glGetString(GL_RENDERER)+" "+glGetString(GL_VERSION));
+                System.out.println("RTXPT_GL_DEVICE "+glGetString(GL_RENDERER)+" "+glGetString(GL_VERSION));
                 int host=texture(),target=texture(),fbo=glCreateFramebuffers(),diagnostic=diagnosticProgram();
                 glNamedFramebufferTexture(fbo,GL_COLOR_ATTACHMENT0,target,0);require(glCheckNamedFramebufferStatus(fbo,GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE,"Linear HDR target FBO");
                 var pixels=MemoryUtil.memAllocFloat(WIDTH*HEIGHT*4);
@@ -96,12 +96,12 @@ public final class RtxptNativeLightingGlSelfTest {
                             }
                             require(maximumError<2e-5,"Linear gain composition preserves native one-pixel checker: error="+maximumError);
                             require(glGetError()==GL_NO_ERROR,"GL interoperability completed without errors");
-                            System.out.println("RTXPT_710_GL_HDR_COMPOSITION PASS frames=8 grids=49x33,51x35,53x37,55x39 host=144x96 formats=3 maxError="+maximumError+" pixelReads=1");
+                            System.out.println("RTXPT_GL_HDR_COMPOSITION PASS frames=8 grids=49x33,51x35,53x37,55x39 host=144x96 formats=3 maxError="+maximumError+" pixelReads=1");
                         }finally{MemoryUtil.memFree(result);}
                         var execution=control.nativeLightingExecution();require(execution.lightingFrames()==8&&execution.fullBeautyFrames()==0&&execution.actualSignalMask()==15,"Actual independent lighting execution, all requested outputs, no beauty");
                     }
                 }finally{glDeleteProgram(diagnostic);glDeleteFramebuffers(fbo);glDeleteTextures(host);glDeleteTextures(target);}
-                System.out.println("RTXPT_710_GL_NATIVE_ALL PASS");
+                System.out.println("RTXPT_GL_NATIVE_ALL PASS");
             }finally{GL.setCapabilities(null);if(window!=0)glfwDestroyWindow(window);glfwTerminate();glfwSetErrorCallback(null);}
         }
     }

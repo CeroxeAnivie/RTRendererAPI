@@ -60,8 +60,8 @@ public final class RtxptHostSurfaceNativeSelfTest {
                         for(int c=0;c<3;c++){require(Double.isFinite(aov[sample+c])&&aov[sample+c]>=0,"Finite nonnegative physical AOV");sum[c]+=aov[sample+c];}
                     }
                     for(int c=0;c<3;c++)require(Math.abs(sum[c]-image[center+c])<.03,"Actual BSDF contributions sum to the unfiltered transport reference");
-                    System.out.println("RTXPT_710_HOST_AOV_SUM PASS route="+route+" rgb="+java.util.Arrays.toString(sum));
-                    System.out.println("RTXPT_710_HOST_PRIMARY_REUSE PASS route="+route+" "+work+" center="+image[center]+","+image[center+1]+","+image[center+2]);
+                    System.out.println("RTXPT_HOST_AOV_SUM PASS route="+route+" rgb="+java.util.Arrays.toString(sum));
+                    System.out.println("RTXPT_HOST_PRIMARY_REUSE PASS route="+route+" "+work+" center="+image[center]+","+image[center+1]+","+image[center+2]);
                     // Return an unimported reservation, then resize with a new generation.
                     try(var cancelled=renderer.acquireHostSurfaceInput(frame(1,96,64),8).orElseThrow()){}
                     renderer.hostSurfacePlan(new HostSurfacePlan(97,65));
@@ -69,7 +69,7 @@ public final class RtxptHostSurfaceNativeSelfTest {
                     renderer.submit(resized);renderer.awaitIdle();
                     try(var output=renderer.acquireHostSurfaceFrame().orElseThrow()){require(output.frame().width()==97&&output.frame().height()==65,"Odd host HDR output extent");}
                     require(renderer.hostSurfaceStatus().consumedInputs()==2&&renderer.hostSurfaceStatus().abandonedInputs()==1,"Cancellation and odd resize produce fresh input reads");
-                    System.out.println("RTXPT_710_HOST_INPUT_ALL PASS frames=2 planes=8 resize=96x64->97x65");
+                    System.out.println("RTXPT_HOST_INPUT_ALL PASS frames=2 planes=8 resize=96x64->97x65");
                 }
             }finally{GL.setCapabilities(null);if(window!=0)glfwDestroyWindow(window);glfwTerminate();}
         }

@@ -31,7 +31,7 @@ public final class RtxptSparseLightingNativeSelfTest {
         for(int i=0;i<a.length;i++){squared+=(a[i]-b[i])*(a[i]-b[i]);norm+=a[i]*a[i];}
         double relative=Math.sqrt(squared/Math.max(norm,1e-20));
         require(relative<.003,"Exact sparse point sum must match analytic reference: "+relative);
-        System.out.println("RTXPT_710_SPARSE_HDR PASS relativeRmse="+relative+" tolerance=0.003");
+        System.out.println("RTXPT_SPARSE_HDR PASS relativeRmse="+relative+" tolerance=0.003");
     }
     static void retained()throws Exception {
         try(var renderer=Renderer.open("rtxpt",RtxptLightTreeNativeSelfTest.config(4))){
@@ -45,7 +45,7 @@ public final class RtxptSparseLightingNativeSelfTest {
                 for(int i=0;i<6;i++){removed[i]=159999-round*6-i;changed.add(source(200000L+round*6+i,1,1,0,0));changed.add(source(i,round%2,0,1,0));}
                 long begin=System.nanoTime();r.apply(SceneTransaction.builder(round+2).build(),changed,LongBuffer.wrap(removed));r.submit(frame(round+1,round+2));
                 require(r.sparseLightingStatus().representedSources()==160000,"Sparse dense count after edits");
-                System.out.printf(Locale.ROOT,"RTXPT_710_SPARSE_EDIT round=%d submitMs=%.6f%n",round,(System.nanoTime()-begin)/1e6);
+                System.out.printf(Locale.ROOT,"RTXPT_SPARSE_EDIT round=%d submitMs=%.6f%n",round,(System.nanoTime()-begin)/1e6);
             }
             var after=r.sparseLightingStatus();
             require(after.uploadedRecordBytes()-before.uploadedRecordBytes()<300*96,"Unchanged sparse source records retained");
@@ -55,8 +55,8 @@ public final class RtxptSparseLightingNativeSelfTest {
             try {r.apply(SceneTransaction.builder(20).build(),List.of(source(1,0,1,0,0),source(1,0,0,1,0)),LongBuffer.allocate(0));throw new AssertionError("Duplicate source accepted");}
             catch(IllegalArgumentException expected){require(r.diagnostics().latestAcceptedSceneRevision()==snapshot.latestAcceptedSceneRevision(),"Invalid sparse batch does not publish a revision");}
             r.apply(scene(20));r.submit(frame(20,20));require(r.sparseLightingStatus().representedSources()==0,"Ordinary scene reset clears sparse sources");
-            System.out.println("RTXPT_710_SPARSE_RETAINED PASS before="+before+" after="+after);
+            System.out.println("RTXPT_SPARSE_RETAINED PASS before="+before+" after="+after);
         }
     }
-    public static void main(String[] args)throws Exception {Files.createDirectories(OUT);equivalence();retained();System.out.println("RTXPT_710_SPARSE_ALL PASS");}
+    public static void main(String[] args)throws Exception {Files.createDirectories(OUT);equivalence();retained();System.out.println("RTXPT_SPARSE_ALL PASS");}
 }

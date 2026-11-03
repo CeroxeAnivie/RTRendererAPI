@@ -41,7 +41,7 @@ public final class RtxptNativeLightingExtensionNativeSelfTest {
             r.resetLightingExtension();r.submit(frame(4,1L<<31));require(Math.abs(center(r,"extension-reset")-.625)<.0005,"Default pipeline can be restored without scene reload");
             var after=r.retainedUpdateTimings();require(before.builtBlases()==after.builtBlases()&&before.exportedMeshVariants()==after.exportedMeshVariants(),"Shader/data switching retains scene geometry");
             require(r.nativeLightingExecution().fullBeautyFrames()==0,"Extensions never dispatch full beauty");
-            Files.deleteIfExists(invalid);System.out.println("RTXPT_710_NATIVE_EXTENSION_ALL PASS baseline data clock reject restore");
+            Files.deleteIfExists(invalid);System.out.println("RTXPT_NATIVE_EXTENSION_ALL PASS baseline data clock reject restore");
         }
     }
 }

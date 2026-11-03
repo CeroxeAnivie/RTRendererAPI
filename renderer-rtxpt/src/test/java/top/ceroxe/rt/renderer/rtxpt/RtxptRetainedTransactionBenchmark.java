@@ -5,7 +5,7 @@ import java.nio.file.*;
 import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
-/** Same black-box retained transaction workload can run against the published 7.1.0 provider. */
+/** Same black-box retained transaction workload can run against a published baseline provider. */
 public final class RtxptRetainedTransactionBenchmark {
     public static void main(String[] args)throws Exception {
         int count=args.length>0?Integer.parseInt(args[0]):4096;

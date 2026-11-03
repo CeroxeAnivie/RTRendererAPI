@@ -90,7 +90,7 @@ tasks.register<JavaExec>("rtxptRetainedLightingRepairNativeSelfTest") {
     systemProperty("top.ceroxe.rt.rtxpt.testOutput",rootProject.file("build/reports/retained-lighting-repairs").absolutePath)
 }
 
-listOf("RtxptLightingAttributeNativeSelfTest", "RtxptRetainedTransactionBenchmark", "RtxptRetainedDependencySelfTest", "GlGuidedLightingComposerSelfTest",
+listOf("RtxptLocalPreparationSelfTest", "RtxptLocalResourceNativeSelfTest", "RtxptMixedResourceNativeSelfTest", "RtxptLightingAttributeNativeSelfTest", "RtxptRetainedTransactionBenchmark", "RtxptRetainedDependencySelfTest", "GlGuidedLightingComposerSelfTest",
     "RtxptLightingGroupSpecializationNativeSelfTest", "RtxptWindowResponsivenessNativeSelfTest", "RtxptLightingResourceMatrixNativeSelfTest",
     "RtxptLightingPressureNativeSelfTest", "RtxptLightingDiagnosticsCostBenchmark", "RtxptLightingInstrumentationNativeSelfTest",
     "RtxptLightingLifecycleNativeSelfTest").forEach { name ->

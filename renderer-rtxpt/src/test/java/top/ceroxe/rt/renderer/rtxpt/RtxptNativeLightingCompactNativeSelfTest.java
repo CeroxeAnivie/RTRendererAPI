@@ -24,7 +24,7 @@ public final class RtxptNativeLightingCompactNativeSelfTest {
             renderer.nativeLightingPlan(new NativeLightingPlan(49,33,Set.of(NativeLightingPlan.Signal.DIRECT_GAIN),0,6,.35f,NativeLightingStyle.defaults())
                 .withEncoding(NativeLightingPlan.Encoding.COMPACT_UNORM8));renderer.submit(RtxptNativeLightingNativeSelfTest.frame(2,1));
             try(var lease=renderer.acquireLightingFrame().orElseThrow()){require(lease.frame().planes().size()==1&&lease.frame().width()==49&&lease.frame().height()==33,"Resize/direct-only compact packet does not allocate an unrequested GI signal");}
-            System.out.println("RTXPT_710_COMPACT_GPU PASS samples=100001 gainLowAbs="+error[0]+" gainHighRelative="+error[1]+" giAbs="+error[2]+" pairBytes=8 HDRPairBytes=16 encodedOutputReduction=50% conversionPass=1");
+            System.out.println("RTXPT_COMPACT_GPU PASS samples=100001 gainLowAbs="+error[0]+" gainHighRelative="+error[1]+" giAbs="+error[2]+" pairBytes=8 HDRPairBytes=16 encodedOutputReduction=50% conversionPass=1");
         }
     }
 }

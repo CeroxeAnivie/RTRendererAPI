@@ -4,7 +4,7 @@ import java.nio.file.*;
 import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
-/** Uses only 7.0.1 public entry points so the same class runs against both versions. */
+/** Uses shared public entry points so the same class runs against both artifacts. */
 public final class RtxptScalabilityBenchmark {
     static MaterialAsset material(int value){return MaterialAsset.builder(1).baseColorRgba8(0xff777700|value).baseColorTextureId(7).roughness(.8f).build();}
     static TextureAsset texture(int value){return TextureAsset.color(7,1,1,new byte[]{(byte)value,(byte)160,(byte)80,(byte)255});}

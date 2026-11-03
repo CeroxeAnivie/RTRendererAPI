@@ -47,11 +47,11 @@ public final class RtxptStructuralLightingNativeSelfTest {
                 require(after.uploadedTreeNodes()-before.uploadedTreeNodes()<=30000,"Only local tree spans uploaded");
             }
             RtxptScalabilityBenchmark.result("structural-"+count,samples,h.bridgeTimings().sceneExports());
-            System.out.println("RTXPT_706_STRUCTURAL PASS resident="+count+" before="+before+" after="+after);
+            System.out.println("RTXPT_STRUCTURAL PASS resident="+count+" before="+before+" after="+after);
         }
     }
     public static void main(String[] args) {
         for(String size:args.length==0?new String[]{"0","1","64","1000","10000","100000","160000"}:args)run(Integer.parseInt(size));
-        System.out.println("RTXPT_706_STRUCTURAL_ALL PASS");
+        System.out.println("RTXPT_STRUCTURAL_ALL PASS");
     }
 }

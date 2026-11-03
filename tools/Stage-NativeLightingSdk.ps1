@@ -64,6 +64,11 @@ foreach($name in @('rtxpt-native-lighting-extension.md','rtxpt-host-surface-inpu
 Add-Source 'docs/ordinary-and-expert.md' 'docs/ordinary-and-expert.md'
 Add-Source 'docs/native-lighting-reconstruction.md' 'docs/native-lighting-reconstruction.md'
 Add-Source 'docs/consumer-agent-handoff.md' 'docs/consumer-agent-handoff.md'
+Add-Source 'docs/release-local-scene-preparation.md' 'docs/release-local-scene-preparation.md'
+Add-Source 'docs/quality/local-scene-preparation.md' 'docs/quality/local-scene-preparation.md'
+foreach($file in Get-ChildItem -LiteralPath (Join-Path $repo 'docs/quality/data/local-scene-preparation') -File){
+    Add-Source "docs/quality/data/local-scene-preparation/$($file.Name)" "docs/quality/data/local-scene-preparation/$($file.Name)"
+}
 Add-Source 'docs/release-independent-native-and-host-lighting.md' 'docs/release-independent-native-and-host-lighting.md'
 Add-Source 'docs/quality/rtxpt-performance.md' 'docs/quality/rtxpt-performance.md'
 foreach($name in @('lighting-repair-validation.md','native-lighting-performance.md','lighting-backend-comparison.md')){Add-Source "docs/quality/$name" "docs/quality/$name"}

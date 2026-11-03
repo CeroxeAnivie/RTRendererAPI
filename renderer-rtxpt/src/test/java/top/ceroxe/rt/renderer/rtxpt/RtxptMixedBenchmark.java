@@ -4,7 +4,7 @@ import java.nio.file.*;
 import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
-/** Same public 7.0.2 workload and bytecode for both artifacts; no readback in timed frames. */
+/** Same public workload and bytecode for both artifacts; no readback in timed frames. */
 public final class RtxptMixedBenchmark {
     static TextureAsset texture(int n){byte[] p=new byte[32*32*4];for(int i=0;i<p.length;i+=4){p[i]=(byte)(100+n%80);p[i+1]=(byte)160;p[i+2]=80;p[i+3]=(byte)255;}return TextureAsset.color(7,32,32,p);}
     static MeshAsset mesh(long id,int n){

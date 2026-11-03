@@ -16,7 +16,7 @@ Compile offline from the repository root, using the pinned runtime DXC:
 
 The bundle contains `manifest.json`, its content-addressed DXIL, reflection, the extension source and a portable `sdk/`. A source build and an extracted release runtime use the same format. For an independent build, copy this directory and both PowerShell tools out of the checkout, pass the extracted runtime as `-RuntimeDirectory` and the bundle's `sdk` as `-SdkDirectory`.
 
-`NativeLightingExtensionExample.java` runs with the published `renderer-api`, `renderer-core` and `renderer-rtxpt` 7.1.0 artifacts on the classpath. It activates the manifest, publishes two application generations and restores the default algorithm. It prints atomic HDR packet metadata and deliberately leaves the packets unimported. Use the host GPU-composition example to import/read the planes; do not read the shared memory handles as CPU addresses.
+`NativeLightingExtensionExample.java` runs with matching `renderer-api`, `renderer-core` and `renderer-rtxpt` artifacts from the same build on the classpath. It activates the manifest, publishes two application generations and restores the default algorithm. It prints atomic HDR packet metadata and deliberately leaves the packets unimported. Use the host GPU-composition example to import/read the planes; do not read the shared memory handles as CPU addresses.
 
 ```powershell
 javac -encoding UTF-8 -cp $releaseClasspath -d build/extension-example examples/native-lighting-extension/NativeLightingExtensionExample.java

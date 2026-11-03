@@ -6,7 +6,7 @@ The default run creates a hidden GL context and accepts eight real frames. `--vi
 
 The example opens `RtxptRenderers.openNativeLighting(NativeLightingPlan.defaults(96,54))`; it does not require callers to assemble conflicting beauty/cache options. For expert tuning, derive `RtxptRenderers.nativeLightingConfiguration().copyBuilder()` and use the explicit configuration overload. The GL lease and synchronization duties below stay explicit. See [ordinary and expert use](../../docs/ordinary-and-expert.md).
 
-With published 7.1.0 API/core/RTXPT artifacts and LWJGL 3.4.3 core, glfw, opengl and their Windows native JARs on `$releaseClasspath`:
+With matching API/core/RTXPT artifacts from the same build and LWJGL 3.4.3 core, glfw, opengl and their Windows native JARs on `$releaseClasspath`:
 
 ```powershell
 javac -encoding UTF-8 -cp $releaseClasspath -d build/gl-example examples/native-lighting-opengl/GlLightingPacketConsumer.java examples/native-lighting-opengl/NativeLightingGlExample.java

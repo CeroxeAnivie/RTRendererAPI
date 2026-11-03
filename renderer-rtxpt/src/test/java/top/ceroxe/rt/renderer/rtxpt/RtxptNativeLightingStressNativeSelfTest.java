@@ -46,12 +46,12 @@ public final class RtxptNativeLightingStressNativeSelfTest {
                 renderer.nativeLightingPlan(NativeLightingPlan.defaults(96+(int)(sequence%3)*2,64+(int)(sequence%3)*2));
             }
             submit(renderer,frame(sequence++,revision,2560,1600));
-            if(sequence%120==0)System.out.println("RTXPT_710_PRESSURE_PROGRESS mixed="+mixed+" seconds="+(System.nanoTime()-started)/1_000_000_000+" frames="+(sequence-first));
+            if(sequence%120==0)System.out.println("RTXPT_PRESSURE_PROGRESS mixed="+mixed+" seconds="+(System.nanoTime()-started)/1_000_000_000+" frames="+(sequence-first));
             Thread.sleep(2);
         }
         renderer.awaitIdle();renderer.captureNativeLighting(OUT.resolve(mixed?"mixed-final.pfm":"dynamic-final.pfm"),0);
         require(renderer.nativeLightingExecution().fullBeautyFrames()==0,"Pressure work stays in the independent lighting plan");
-        System.out.println("RTXPT_710_PRESSURE PASS mixed="+mixed+" seconds="+seconds+" frames="+(sequence-first));
+        System.out.println("RTXPT_PRESSURE PASS mixed="+mixed+" seconds="+seconds+" frames="+(sequence-first));
         return sequence;
     }
     public static void main(String[] args)throws Exception{
@@ -73,10 +73,10 @@ public final class RtxptNativeLightingStressNativeSelfTest {
                     pressure(renderer,sequence,1+(sequence-6),120,true);
                 }
                 require(renderer.nativeLightingExecution().fullBeautyFrames()==0,"Lifecycle sessions do not execute beauty");
-                System.out.println("RTXPT_710_LIFECYCLE_SESSION PASS session="+(session+1));
+                System.out.println("RTXPT_LIFECYCLE_SESSION PASS session="+(session+1));
             }
         }
         Files.writeString(OUT.resolve("result.json"),"{\"passed\":true,\"sessions\":10,\"resizes\":"+resizes+",\"dynamicSeconds\":60,\"mixedSeconds\":120,\"frames\":"+frames+"}\n");
-        System.out.println("RTXPT_710_STRESS_ALL PASS sessions=10 resizes="+resizes+" dynamicSeconds=60 mixedSeconds=120 frames="+frames);
+        System.out.println("RTXPT_STRESS_ALL PASS sessions=10 resizes="+resizes+" dynamicSeconds=60 mixedSeconds=120 frames="+frames);
     }
 }

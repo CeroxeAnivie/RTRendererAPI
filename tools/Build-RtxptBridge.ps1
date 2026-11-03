@@ -34,6 +34,12 @@ if($CheckPaths){
     return
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+$localPreparationPatch=Join-Path $PSScriptRoot 'patches/rtxpt-local-preparation.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $localPreparationPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $localPreparationPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT local-preparation overlay could not be removed'}
+}
 # Restore this final lifecycle edit before reversing the layered SDK overlays.
 $windowSource=Join-Path $sdk 'External/Donut/src/app/DeviceManager.cpp'
 $windowText=[IO.File]::ReadAllText($windowSource)
@@ -1224,20 +1230,18 @@ if(!$shaderConfig.Contains($historyAnchor)){throw 'Pinned reconstruction shader 
 $normalizedShaderConfig=[regex]::Replace($shaderConfig,'(?m)^ProcessingPasses/Rtr[A-Za-z]*SrHistory\.hlsl -T cs -E main\r?\n?','')
 $normalizedShaderConfig=$normalizedShaderConfig.Replace($historyAnchor,
     $historyAnchor+$shaderNewline+'ProcessingPasses/RtrPreSrHistory.hlsl -T cs -E main')
-$normalizedShaderConfig=[regex]::Replace($normalizedShaderConfig,'(?m)^ProcessingPasses/RtrNativeLighting\.hlsl -T cs -E main\r?\n?','')
-$normalizedShaderConfig+='ProcessingPasses/RtrNativeLighting.hlsl -T cs -E main'+$shaderNewline
-foreach($pass in @('RtrNativeLightingEncode','RtrNativeLightingDeep','RtrNativeLightingReconstruct','RtrNativeLightingResolve','RtrHostResolve','RtrHostAugmentation')){
-    $normalizedShaderConfig=[regex]::Replace($normalizedShaderConfig,"(?m)^ProcessingPasses/$pass\.hlsl -T cs -E main\r?\n?",'')
-    $normalizedShaderConfig+="ProcessingPasses/$pass.hlsl -T cs -E main"+$shaderNewline
+# Remove the complete generated line, including permutation flags. Removing
+# only the entry-point prefix left orphan -D lines on a repeated source build.
+$normalizedShaderConfig=[regex]::Replace($normalizedShaderConfig,'(?m)^[ \t]+-D RTR_LIGHT_GROUP_CAPACITY=[^\r\n]*(?:\r?\n|$)','')
+foreach($pass in @('RtrNativeLightingEncode','RtrNativeLightingDeep','RtrNativeLightingReconstruct','RtrNativeLightingResolve','RtrHostResolve','RtrHostAugmentation','RtrNativeLighting')){
+    $normalizedShaderConfig=[regex]::Replace($normalizedShaderConfig,"(?m)^ProcessingPasses/$pass\.hlsl -T cs -E main[^\r\n]*(?:\r?\n|$)",'')
+}
+foreach($pass in @('RtrNativeLightingEncode','RtrNativeLightingDeep','RtrNativeLightingResolve','RtrHostResolve','RtrHostAugmentation','RtrNativeLighting','RtrNativeLightingReconstruct')){
+    $flags=if($pass -in @('RtrNativeLighting','RtrNativeLightingReconstruct')){' -D RTR_LIGHT_GROUP_CAPACITY={1,32} -D RTR_ANALYTIC_LIGHTS={0,1} -D RTR_WORK_STATISTICS={0,1}'}else{''}
+    $normalizedShaderConfig+="ProcessingPasses/$pass.hlsl -T cs -E main"+$flags+$shaderNewline
 }
 if($normalizedShaderConfig -cne $shaderConfig){
     [IO.File]::WriteAllText($shaderConfigPath,$normalizedShaderConfig,$utf8)
-}
-foreach($pass in @('RtrNativeLighting','RtrNativeLightingReconstruct')){
-    $config=[IO.File]::ReadAllText($shaderConfigPath)
-    $config=[regex]::Replace($config,"(?m)^ProcessingPasses/$pass\.hlsl -T cs -E main(?: -D RTR_LIGHT_GROUP_CAPACITY=[^\r\n]+)?\r?\n?",'')
-    $config+="ProcessingPasses/$pass.hlsl -T cs -E main -D RTR_LIGHT_GROUP_CAPACITY={1,32} -D RTR_ANALYTIC_LIGHTS={0,1} -D RTR_WORK_STATISTICS={0,1}"+$shaderNewline
-    [IO.File]::WriteAllText($shaderConfigPath,$config,$utf8)
 }
 Patch-Once 'Rtxpt/Sample.h' '    virtual void UpdateCustomResources() { }' @'
     virtual void UpdateCustomResources() { }
@@ -1596,6 +1600,10 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT sparse-lighting overlay failed'}
 if($LASTEXITCODE -ne 0){throw 'RTXPT host-surface overlay does not match the pinned base'}
 & git -C $sdk apply --ignore-space-change $hostSurfacePatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT host-surface overlay failed'}
+& git -C $sdk apply --check --ignore-space-change $localPreparationPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT local-preparation overlay does not match the verified base'}
+& git -C $sdk apply --ignore-space-change $localPreparationPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT local-preparation overlay failed'}
 [IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrHostSurface.hlsli'),(Join-Path $sdk 'Rtxpt/Shaders/RtrHostSurface.hlsli'),$true)
 [IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrHostAov.hlsli'),(Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrHostAov.hlsli'),$true)
 Patch-Once 'External/Donut/src/app/DeviceManager.cpp' '    if (!HostExternalPresentation) { glfwShowWindow(m_Window); if (!hostBackgroundWindow) glfwFocusWindow(m_Window); }' @'

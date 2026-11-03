@@ -9,6 +9,7 @@
 #include <thread>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <set>
 #include <cmath>
 #include <sstream>
@@ -174,7 +175,11 @@ public:
         PrepareHostLightResources();
         m_commandList->open();
         UploadSceneLighting(m_commandList);
-        m_scene->Refresh(m_commandList,GetFrameIndex());
+        // Managed resource commits refresh changed materials directly. Stable,
+        // camera-only and analytic-light frames need no scene-buffer scan.
+        auto graph=m_scene->GetSceneGraph();
+        if(!managedLighting||graph->HasPendingStructureChanges()||graph->HasPendingTransformChanges())
+            m_scene->Refresh(m_commandList,GetFrameIndex());
         m_sceneRenderCache.Open(m_scene,&m_frameWorkerPool,HostSceneCacheGeneration());
         RAII_SCOPE(;,PostRender(););
         UpdateSkinnedBLASs(m_commandList,GetFrameIndex());
@@ -720,6 +725,7 @@ void indexNodes(Session& s) {
     auto graph = s.app->HostRenderPass()->GetScene()->GetSceneGraph();
     donut::engine::SceneGraphWalker w(graph->GetRootNode().get());
     while (w) { s.nodes.emplace(w->GetName(), w.Get()); w.Next(true); }
+    static_cast<HostPathTracer*>(s.app->HostRenderPass())->IndexRetainedResources();
 }
 std::mutex lifecycle;
 Session* active = nullptr; // Upstream globals have one process-wide owner.
@@ -1495,7 +1501,7 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resources(
     JNIEnv* e,jclass,jlong h,jstring manifest) {
-    try{RtrDiagnostics::Scope resourceScope(RtrDiagnostics::Resources);auto& s=session(h);static_cast<HostPathTracer*>(s.app->HostRenderPass())->ApplyResources(std::filesystem::u8path(utf8(e,manifest)));indexNodes(s);}
+    try{RtrDiagnostics::Scope resourceScope(RtrDiagnostics::Resources);auto& s=session(h);static_cast<HostPathTracer*>(s.app->HostRenderPass())->ApplyResources(std::filesystem::u8path(utf8(e,manifest)),s.nodes);}
     catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourceTelemetry(

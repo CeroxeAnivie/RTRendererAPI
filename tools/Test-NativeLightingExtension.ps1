@@ -35,7 +35,7 @@ try{
     & $externalBuilder -OutputDirectory $externalOutput -VerifyOnly
     $external=Get-Content -LiteralPath (Join-Path $externalOutput 'manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     Require ($external.dxil.sha256 -ceq $original.dxil.sha256 -and $external.shaderAbiSha256 -ceq $original.shaderAbiSha256) 'Independent SDK build did not reproduce the same DXIL/ABI hashes'
-    Write-Host 'RTXPT_710_EXTENSION_EXTERNAL_SDK PASS identicalDXIL=true checkoutSources=false'
+    Write-Host 'RTXPT_EXTENSION_EXTERNAL_SDK PASS identicalDXIL=true checkoutSources=false'
 
     $bad=Join-Path $scratch 'source/Bad.hlsli'
     [IO.File]::WriteAllText($bad,"#error INTENTIONAL_EXTENSION_COMPILE_FAILURE`n",$utf8)
@@ -44,7 +44,7 @@ try{
     catch{$rejected=$_.Exception.Message.Contains('DXC failed')}
     Require $rejected 'Intentionally invalid source was not rejected by offline compilation'
     Require ((Get-Content -LiteralPath (Join-Path $output 'manifest.json') -Raw -Encoding UTF8) -ceq $originalManifest) 'Failed compile replaced the preceding manifest'
-    Write-Host 'RTXPT_710_EXTENSION_COMPILE_FAILURE PASS priorManifestPreserved=true'
+    Write-Host 'RTXPT_EXTENSION_COMPILE_FAILURE PASS priorManifestPreserved=true'
 
     [IO.File]::WriteAllText($bad,@'
 ByteAddressBuffer t_Extra : register(t12);
@@ -56,7 +56,7 @@ void RtrEvaluateReceiver(RtrReceiver receiver,out float3 gain,out float3 indirec
     catch{$rejected=$_.Exception.Message.Contains('incompatible resource')}
     Require $rejected 'Unsupported extra resource was not rejected by reflection'
     Require ((Get-Content -LiteralPath (Join-Path $output 'manifest.json') -Raw -Encoding UTF8) -ceq $originalManifest) 'Failed ABI validation replaced the preceding manifest'
-    Write-Host 'RTXPT_710_EXTENSION_BINDING_FAILURE PASS extraT12Rejected=true priorManifestPreserved=true'
+    Write-Host 'RTXPT_EXTENSION_BINDING_FAILURE PASS extraT12Rejected=true priorManifestPreserved=true'
 
     $binary=Join-Path $externalOutput $external.dxil.file;$saved=[IO.File]::ReadAllBytes($binary)
     try{
@@ -65,9 +65,9 @@ void RtrEvaluateReceiver(RtrReceiver receiver,out float3 gain,out float3 indirec
         Require $rejected 'Corrupt DXIL was not rejected by SHA-256 validation'
     }finally{[IO.File]::WriteAllBytes($binary,$saved)}
     & $externalBuilder -OutputDirectory $externalOutput -VerifyOnly
-    Write-Host 'RTXPT_710_EXTENSION_HASH_FAILURE PASS corruptDXILRejected=true recovery=true'
+    Write-Host 'RTXPT_EXTENSION_HASH_FAILURE PASS corruptDXILRejected=true recovery=true'
     & $builder -OutputDirectory $output -VerifyOnly
-    Write-Host "RTXPT_710_EXTENSION_OFFLINE_ALL PASS ABI=$($original.shaderAbiSha256) DXIL=$($original.dxil.sha256) bytes=$($original.dxil.bytes) resources=$($original.resources.Count)"
+    Write-Host "RTXPT_EXTENSION_OFFLINE_ALL PASS ABI=$($original.shaderAbiSha256) DXIL=$($original.dxil.sha256) bytes=$($original.dxil.bytes) resources=$($original.resources.Count)"
 }finally{
     if($KeepScratch){Write-Host "Extension test scratch: $scratch"}
     else{

@@ -101,7 +101,7 @@ public final class RtxptHostSurfaceTransportNativeSelfTest {
             check(work.available()&&work.sequence()==current&&work.sceneRevision()==revision,"Raw host counters identify this exact frame");
             check(work.suppliedPrimary()>0&&work.fallbackPrimary()==0&&work.fallbackFill()==0,"Valid host materials reuse primary without fallback");
             near(center(images,COVERAGE),1,.001,"Valid center coverage");black(images,COVERAGE,0,0,"Outside-card background coverage");
-            System.out.println("RTXPT_710_HOST_TRANSPORT_CASE PASS case="+label+" sequence="+current+" revision="+revision+" preserved="+preserved+" allSignals=8");
+            System.out.println("RTXPT_HOST_TRANSPORT_CASE PASS case="+label+" sequence="+current+" revision="+revision+" preserved="+preserved+" allSignals=8");
             return images;
         }
         void optics()throws Exception {
@@ -154,7 +154,7 @@ public final class RtxptHostSurfaceTransportNativeSelfTest {
                     renderer.hostSurfaceWorkStatisticsEnabled(true);var run=new Run(renderer,writer);
                     for(String value:cases)switch(value){case "optics"->run.optics();case "alpha"->run.alpha();case "ownership"->run.ownership();default->throw new IllegalArgumentException("Unknown host transport case: "+value);}
                     check(renderer.hostSurfaceStatus().hostReservations()==0&&renderer.hostSurfaceStatus().publishedInputs()==0,"All directed host inputs are released");
-                    System.out.println("RTXPT_710_HOST_TRANSPORT_ALL PASS cases="+cases+" frames="+run.sequence+" allSignals=8 assertions="+checks);
+                    System.out.println("RTXPT_HOST_TRANSPORT_ALL PASS cases="+cases+" frames="+run.sequence+" allSignals=8 assertions="+checks);
                 }
             }finally{GL.setCapabilities(null);if(window!=0)glfwDestroyWindow(window);glfwTerminate();glfwSetErrorCallback(null);}
         }

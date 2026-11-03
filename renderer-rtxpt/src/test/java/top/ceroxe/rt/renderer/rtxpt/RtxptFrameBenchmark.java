@@ -3,7 +3,7 @@ package top.ceroxe.rt.renderer.rtxpt;
 import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
-/** Uses 7.0.4 public methods so exactly this workload can run against both releases. */
+/** Uses shared public methods so exactly this workload can run against both artifacts. */
 public final class RtxptFrameBenchmark {
     public static void main(String[] args){
         int instances=args.length==0?16:Integer.parseInt(args[0]);

@@ -52,7 +52,7 @@ public final class RtxptMediumDemo {
             renderer.apply(RtxptMediumScene.create(1,scene));
             renderer.submit(frameRequest(0,1,width,height));
             var host = renderer.extension(RtxptAccess.class).orElseThrow();
-            host.setWindowTitle("RTRendererAPI 7.0.2 - Medium Demo | RTXPT Only");
+            host.setWindowTitle("RTRendererAPI - Medium Demo | RTXPT Only");
             long revision = 1, sequence = 1;
             recordPresented(host,stats,0);
             var keys = new DemoWindowKeys(host.windowHandle());

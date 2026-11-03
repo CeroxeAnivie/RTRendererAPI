@@ -19,6 +19,6 @@ public final class HostSurfaceAugmentationSelfTest {
         require(rejected,"Finite style augmentation cannot pretend to provide physical specular transport");
         rejected=false;try{HostSurfaceAugmentation.compose(Float.NaN,1,0,0,false);}catch(IllegalArgumentException expected){rejected=true;}
         require(rejected,"Nonfinite composition input rejected");
-        System.out.println("RTXPT_710_HOST_AUGMENTATION_CONTRACT PASS blackBase=true emissionOnce=true demandMask=true domainsExplicit=true noGpu=true");
+        System.out.println("RTXPT_HOST_AUGMENTATION_CONTRACT PASS blackBase=true emissionOnce=true demandMask=true domainsExplicit=true noGpu=true");
     }
 }

@@ -29,7 +29,7 @@ public final class RtxptNativeLightingNativeSelfTest {
             require(status[0]==1&&status[1]==48&&status[2]==32&&status[3]==3&&status[4]==1&&status[5]==0,"Independent plan, exactly two outputs, no beauty");
             var work=r.lightingWorkStatistics();require(work.available()&&work.sequence()==0&&work.sceneRevision()==1&&work.primaryRays()==48*32&&work.receivers()>0&&work.bounceRays()==work.receivers()*2,"Asynchronous work counters identify actual receiver and bounce execution");
             r.lightingWorkStatisticsEnabled(false);
-            System.out.println("RTXPT_710_NATIVE_BASELINE PASS "+Arrays.toString(status));
+            System.out.println("RTXPT_NATIVE_BASELINE PASS "+Arrays.toString(status));
             // Identical live inputs reproduce the result without temporal history or frozen rendering.
             r.submit(frame(1,1));r.captureNativeLighting(OUT.resolve("repeat-direct.pfm"),0);
             require(Arrays.equals(a,RtxptLightTreeNativeSelfTest.linear(OUT.resolve("repeat-direct.pfm"))),"Deterministic live native-lighting output");
@@ -44,7 +44,7 @@ public final class RtxptNativeLightingNativeSelfTest {
             r.captureNativeLighting(OUT.resolve("dynamic-direct.pfm"),0);var boosted=RtxptLightTreeNativeSelfTest.linear(OUT.resolve("dynamic-direct.pfm"));
             require(boosted[(16*48+24)*3]>2,"Dynamic source applies the declared additive gain");
             require(r.nativeLightingTelemetry()[5]==0,"No hidden full beauty during source changes");
-            System.out.println("RTXPT_710_NATIVE_STYLE_SOURCES PASS static=1 dynamic="+boosted[(16*48+24)*3]);
+            System.out.println("RTXPT_NATIVE_STYLE_SOURCES PASS static=1 dynamic="+boosted[(16*48+24)*3]);
             r.apply(SceneTransaction.builder(4).build(),List.of(),java.nio.LongBuffer.wrap(new long[]{1}));
             var before=r.retainedUpdateTimings();
             r.publishLightingAttributes(new NativeLightingPublication(1,List.of(),List.of(new NativeLightingPublication.MeshBaseline(1,new float[]{.25f,0,.25f,0,.25f,0,.25f,0})),null,null));
@@ -58,11 +58,11 @@ public final class RtxptNativeLightingNativeSelfTest {
             require(RtxptLightTreeNativeSelfTest.linear(OUT.resolve("shadow-only.pfm"))[(16*48+24)*3]==1,"Shadow-only geometry cannot become a receiver");
             var after=r.retainedUpdateTimings();require(before.builtBlases()==after.builtBlases()&&before.exportedMeshVariants()==after.exportedMeshVariants(),"Attribute-only updates never rebuild or export geometry");
             require(r.nativeLightingExecution().attributeGeneration()==3,"Actual publication generation");
-            System.out.println("RTXPT_710_NATIVE_ATTRIBUTES PASS generation=3 noGeometryRebuild=true");
+            System.out.println("RTXPT_NATIVE_ATTRIBUTES PASS generation=3 noGeometryRebuild=true");
         }
         signalLeases();
         sourceSemantics();
-        System.out.println("RTXPT_710_NATIVE_LIGHTING_CORE PASS");
+        System.out.println("RTXPT_NATIVE_LIGHTING_CORE PASS");
     }
     static void sourceSemantics()throws Exception {
         try(var r=new RtxptRenderer(RtxptLightTreeNativeSelfTest.config(4),true)) {
@@ -88,7 +88,7 @@ public final class RtxptNativeLightingNativeSelfTest {
             r.apply(SceneTransaction.builder(++revision).resetScene().build());r.submit(frame(sequence++,revision));
             path=OUT.resolve("empty-world.pfm");r.captureNativeLighting(path,0);for(var value:RtxptLightTreeNativeSelfTest.linear(path))require(value==1,"Empty world publishes neutral gain, never an old lit frame");
             try(var lease=r.acquireLightingFrame().orElseThrow()){require(lease.frame().sceneRevision()==revision,"Empty world output carries its own revision");}
-            System.out.println("RTXPT_710_NATIVE_SOURCE_SEMANTICS PASS compositions=3 attenuation=2 analytic=true");
+            System.out.println("RTXPT_NATIVE_SOURCE_SEMANTICS PASS compositions=3 attenuation=2 analytic=true");
         }
     }
     static void signalLeases() {
@@ -117,7 +117,7 @@ public final class RtxptNativeLightingNativeSelfTest {
                 var resized=control.acquireLightingFrame().orElseThrow();held.add(resized);
                 require(resized.frame().width()==51&&resized.frame().height()==35&&resized.frame().generation()!=oldGeneration,"Resized packet has a new allocation generation");
                 require(held.get(0).frame().width()==49&&held.get(1).frame().width()==49,"Old leased generations remain intact across resize");
-                System.out.println("RTXPT_710_NATIVE_SIGNAL_LEASES PASS slots=3 resize=49x33->51x35");
+                System.out.println("RTXPT_NATIVE_SIGNAL_LEASES PASS slots=3 resize=49x33->51x35");
             } finally {for(var lease:held)lease.close();}
         }
     }

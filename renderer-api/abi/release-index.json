@@ -54,5 +54,6 @@
     "7.0.4": "snapshots/d5123e3614597721a5c00b25a010f389ba30bb359b9998df65addf717c5c384c.abi",
     "7.0.5": "snapshots/d5123e3614597721a5c00b25a010f389ba30bb359b9998df65addf717c5c384c.abi",
     "7.1.0": "snapshots/1722f6ff18c299cf0c062e81ffe9305dd81ec9fd5ef03246aec75de6502f85f8.abi",
-    "7.1.1": "snapshots/203c9c2e85b15a8c19ea163bba0caf5d606c1e78fa94ba9ac17fab0c4546c760.abi"
+    "7.1.1": "snapshots/203c9c2e85b15a8c19ea163bba0caf5d606c1e78fa94ba9ac17fab0c4546c760.abi",
+    "7.1.2": "snapshots/203c9c2e85b15a8c19ea163bba0caf5d606c1e78fa94ba9ac17fab0c4546c760.abi"
 }

@@ -1,5 +1,6 @@
 import java.nio.charset.StandardCharsets
 import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import java.time.Instant
 import java.security.MessageDigest
 import java.util.HexFormat
@@ -248,17 +249,29 @@ tasks.named("check") {
     dependsOn(verifyProjectLicenseConsistency)
 }
 
+val releaseDocumentIndex = file("docs/release-index.json")
+val releaseDocuments = (JsonSlurper().parse(releaseDocumentIndex) as Map<*, *>).entries.associate { entry ->
+    val version = entry.key.toString()
+    val path = entry.value.toString()
+    val document = rootDir.toPath().resolve(path).normalize()
+    require(path.startsWith("docs/") && path.endsWith(".md") && document.startsWith(file("docs").toPath())) {
+        "Invalid release document index entry: $version -> $path"
+    }
+    version to document.toFile()
+}
+val currentReleaseDocument = releaseDocuments[project.version.toString()]
+    ?: throw GradleException("Missing current version in docs/release-index.json: ${project.version}")
+val historicalReleaseDocuments = releaseDocuments.filterKeys { it != project.version.toString() }.values.toSet()
+
 val releaseVersionDocuments = files(
-    // README is maintained by the calling project and is intentionally outside the
-    // published-version gate. Release-owned docs and metadata remain authoritative.
+    file("README.md"),
     fileTree("docs") {
         include("**/*.md")
-        // Versioned quality reports are immutable evidence for their historical candidate;
-        // they must not be rewritten or treated as the current release's version facts.
+        // Historical evidence retains its original artifact identities and coordinates.
         exclude("quality/**")
-        // Previous version contracts retain their original coordinates as historical evidence.
-        exclude { it.file.name.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+\\.md")) && it.file.name != "${project.version}.md" }
+        exclude { it.file in historicalReleaseDocuments }
     },
+    currentReleaseDocument,
     fileTree("demos/hex-ball") {
         include("**/*.md", "src/**/*.java", "*.gradle.kts")
         exclude("build/**")
@@ -269,6 +282,7 @@ val verifyReleaseVersionConsistency = tasks.register("verifyReleaseVersionConsis
     group = "verification"
     description = "Rejects divergent Maven coordinates, Demo artifact names, and version-tag facts."
     inputs.files(releaseVersionDocuments)
+    inputs.file(releaseDocumentIndex)
     inputs.property("projectVersion", project.version.toString())
 
     doLast {
@@ -279,9 +293,9 @@ val verifyReleaseVersionConsistency = tasks.register("verifyReleaseVersionConsis
         }
         val staleFacts = mutableListOf<String>()
         val publishedVersionPatterns = listOf(
-            Regex("top\\.ceroxe\\.rt:renderer-api:([0-9]+\\.[0-9]+\\.[0-9]+)"),
+            Regex("top\\.ceroxe\\.rt:renderer-(?:api|core|nvidia|rtxpt):([0-9]+\\.[0-9]+\\.[0-9]+)"),
             Regex("<version>([0-9]+\\.[0-9]+\\.[0-9]+)</version>"),
-            Regex("RTRendererAPI-HexBallDemo-([0-9]+\\.[0-9]+\\.[0-9]+)\\.jar")
+            Regex("RTRendererAPI-(?:HexBallDemo|MediumDemo)-([0-9]+\\.[0-9]+\\.[0-9]+)\\.jar")
         )
         releaseVersionDocuments.files.sorted().forEach { file ->
             val text = file.readText(StandardCharsets.UTF_8)
@@ -313,36 +327,59 @@ val verifyReleaseVersionConsistency = tasks.register("verifyReleaseVersionConsis
 
 val verifyMajorReleaseContract = tasks.register("verifyMajorReleaseContract") {
     group = "verification"
-    description = "Enforces the 7.x major-release contract and current documentation entrypoint."
+    description = "Verifies indexed release documentation and the matching API major baseline."
     inputs.property("projectVersion", project.version.toString())
     inputs.files(
-        file("docs/${project.version}.md"),
+        releaseDocumentIndex,
+        currentReleaseDocument,
+        file("renderer-api/abi/release-index.json"),
         file("docs/COMPATIBILITY.md"),
         file("README.md"),
         file("gradle.properties")
     )
     doLast {
         val expected = project.version.toString()
-        if (!expected.startsWith("7.")) {
-            throw GradleException("The current release line must remain on the deliberate 7.x major line: $expected")
+        val major = expected.substringBefore('.').toIntOrNull()
+            ?: throw GradleException("project_version must start with a numeric major: $expected")
+        val abiIndex = JsonSlurper().parse(file("renderer-api/abi/release-index.json")) as Map<*, *>
+        if (abiIndex[expected] == null || abiIndex["$major.0.0"] == null) {
+            throw GradleException("Current and major-baseline releases must be indexed in renderer-api/abi/release-index.json")
         }
-        val currentDocs = listOf(
-            file("README.md"),
-            file("docs/Home.md"),
-            file("docs/Java.md"),
-            file("docs/COMPATIBILITY.md"),
-            file("docs/Procedural-Geometry.md"),
-            file("demos/hex-ball/README.md")
-        )
-        val stale = currentDocs.filter { it.readText(StandardCharsets.UTF_8).contains("5.2.2") }
-        if (stale.isNotEmpty()) {
-            throw GradleException(
-                "Current release documentation still names 5.2.2: " +
-                    stale.joinToString(", ") { rootDir.toPath().relativize(it.toPath()).toString() }
-            )
+    }
+}
+
+val versionIndependentSources = fileTree(rootDir) {
+    include("**/*.java", "**/*.cpp", "**/*.h", "**/*.hpp", "**/*.inl", "**/*.hlsl", "**/*.hlsli",
+        "**/*.glsl", "**/*.comp", "**/*.rgen", "**/*.rchit", "**/*.rmiss", "**/*.rahit", "**/*.patch",
+        "**/*.ps1", "**/*.py", "**/*.kts", "**/*.cmake", "**/CMakeLists.txt", "**/*.bat", "**/*.cmd",
+        ".github/**/*.yml", ".github/**/*.yaml")
+    exclude("**/build/**", "**/.gradle/**", "**/.git/**", "docs/**")
+}
+val verifyVersionIndependentNaming = tasks.register("verifyVersionIndependentNaming") {
+    group = "verification"
+    description = "Rejects application release literals in source, log labels, and source filenames."
+    inputs.files(versionIndependentSources)
+    inputs.file(releaseDocumentIndex)
+    doLast {
+        val versions = releaseDocuments.keys
+        val dottedVersion = Regex("(?<![0-9.])(?:${versions.joinToString("|") { Regex.escape(it) }})(?![0-9.])")
+        val compactVersions = versions.joinToString("|") { it.replace(".", "") }
+        val releaseLabel = Regex("(?i)[a-z][a-z0-9]*[_-](?:$compactVersions)(?=$|[_-])")
+        val releaseFilename = Regex("(?i)(?:^|[/\\\\_.-])v?(?:$compactVersions)(?=$|[/\\\\_.-])")
+        val violations = mutableListOf<String>()
+        versionIndependentSources.files.sorted().forEach { source ->
+            val relative = rootDir.toPath().relativize(source.toPath()).toString()
+            if (dottedVersion.containsMatchIn(relative) || releaseFilename.containsMatchIn(relative)) {
+                violations += "$relative: release-bound filename"
+            }
+            source.readLines(StandardCharsets.UTF_8).forEachIndexed { index, line ->
+                if (dottedVersion.containsMatchIn(line) || releaseLabel.containsMatchIn(line)) {
+                    violations += "$relative:${index + 1}: release-bound source text"
+                }
+            }
         }
-        if (!file("docs/$expected.md").isFile) {
-            throw GradleException("docs/$expected.md is required for the current release")
+        if (violations.isNotEmpty()) {
+            throw GradleException("Use semantic names and build metadata for release identity:\n" + violations.joinToString("\n"))
         }
     }
 }
@@ -350,6 +387,7 @@ val verifyMajorReleaseContract = tasks.register("verifyMajorReleaseContract") {
 tasks.named("check") {
     dependsOn(verifyReleaseVersionConsistency)
     dependsOn(verifyMajorReleaseContract)
+    dependsOn(verifyVersionIndependentNaming)
 }
 
 val publishAllToLocalStagingRepository = tasks.register("publishAllToLocalStagingRepository") {

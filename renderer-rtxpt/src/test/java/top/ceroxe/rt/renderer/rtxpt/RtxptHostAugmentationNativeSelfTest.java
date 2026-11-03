@@ -118,7 +118,7 @@ public final class RtxptHostAugmentationNativeSelfTest {
             pixel(images.gain(),x,Y,1,label+" invalid gain is neutral");pixel(images.coverage(),x,Y,0,label+" invalid coverage");
         }
         check(renderer.hostSurfaceStatus().consumedInputs()==sequence+1,"Exactly one host GPU input consumed per frame");
-        System.out.printf(Locale.ROOT,"RTXPT_710_HOST_AUGMENTATION_CASE PASS case=%s sequence=%d revision=%d H=%.3f B=%.3f V=%.3f F=%.3f expectedGain=%.6f domain=%s%n",
+        System.out.printf(Locale.ROOT,"RTXPT_HOST_AUGMENTATION_CASE PASS case=%s sequence=%d revision=%d H=%.3f B=%.3f V=%.3f F=%.3f expectedGain=%.6f domain=%s%n",
             label,sequence,revision,input.hostRed(),input.localBaseline(),input.visibility(),input.fog(),gain,renderer.hostSurfaceAugmentation().colorDomain());
         return images;
     }
@@ -154,7 +154,7 @@ public final class RtxptHostAugmentationNativeSelfTest {
                     renderer.apply(SceneTransaction.builder(2).upsert(MaterialAsset.builder(1).roughness(.6f).build()).build());
                     runFrame(renderer,writer,"changed-style-domain",6,2,FrameClock.of(-42,0),inputs(.4f,.5f,1,0),false);
                     check(renderer.hostSurfaceStatus().publishedInputs()==0&&renderer.hostSurfaceStatus().hostReservations()==0,"No published inputs or reservations remain after acceptance");
-                    System.out.println("RTXPT_710_HOST_AUGMENTATION_ALL PASS frames=7 inputPlanes=10 outputMask="+OUTPUTS+" outputPlanes=4 domains=2 reconstruction=NONE assertions="+assertions);
+                    System.out.println("RTXPT_HOST_AUGMENTATION_ALL PASS frames=7 inputPlanes=10 outputMask="+OUTPUTS+" outputPlanes=4 domains=2 reconstruction=NONE assertions="+assertions);
                 }
             }finally{GL.setCapabilities(null);if(window!=0)glfwDestroyWindow(window);glfwTerminate();glfwSetErrorCallback(null);}
         }
