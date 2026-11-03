@@ -24,7 +24,7 @@ class RtxptPersistentMap<V> extends AbstractMap<Long,V> {
     }
     private static <V> Node<V> put(Node<V> n,long key,V value){
         if(n==null)return new Node<>(key,value,null,null);
-        if(key==n.key)return Objects.equals(value,n.value)?n:new Node<>(key,value,n.left,n.right);
+        if(key==n.key)return value==n.value?n:new Node<>(key,value,n.left,n.right);
         var l=key<n.key?put(n.left,key,value):n.left;var r=key>n.key?put(n.right,key,value):n.right;
         return l==n.left&&r==n.right?n:balance(new Node<>(n.key,n.value,l,r));
     }

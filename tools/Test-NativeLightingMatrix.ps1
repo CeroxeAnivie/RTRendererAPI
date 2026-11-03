@@ -7,11 +7,11 @@ host and the repository's 10 GiB process-tree bound. Coordinate with other GPU/b
 The classpath may point to development classes or isolated packaged provider JARs.
 #>
 param(
-    [string]$ClasspathFile='build/710-opengl-test-classpath.txt',
+    [string]$ClasspathFile='build/native-lighting-gl-classpath.txt',
     [ValidateSet('cpu','gi','roles','pose','projection','time')][string[]]$Cases=@('gi','roles','pose','projection','time'),
     [string]$RuntimeDirectory='',
     [string]$BridgePath='',
-    [string]$OutputDirectory='build/reports/rtxpt-710-native-matrix',
+    [string]$OutputDirectory='build/reports/rtxpt-native-matrix',
     [switch]$CompileOnly
 )
 $ErrorActionPreference='Stop'

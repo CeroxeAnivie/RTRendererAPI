@@ -11,12 +11,16 @@ description = "Thin in-process JNI host for NVIDIA RTXPT managed rendering."
 dependencies { compileOnly(project(":renderer-api")); testImplementation(project(":renderer-api")) }
 val lightingExampleLwjglVersion = rootProject.providers.gradleProperty("lwjgl_version").getOrElse("3.4.3")
 dependencies {
+    testImplementation(project(":renderer-core"))
     testImplementation("org.lwjgl:lwjgl:$lightingExampleLwjglVersion")
+    testImplementation("org.lwjgl:lwjgl-vulkan:$lightingExampleLwjglVersion")
+    testImplementation("org.lwjgl:lwjgl-shaderc:$lightingExampleLwjglVersion")
     testImplementation("org.lwjgl:lwjgl-glfw:$lightingExampleLwjglVersion")
     testImplementation("org.lwjgl:lwjgl-opengl:$lightingExampleLwjglVersion")
     testRuntimeOnly("org.lwjgl:lwjgl:$lightingExampleLwjglVersion:natives-windows")
     testRuntimeOnly("org.lwjgl:lwjgl-glfw:$lightingExampleLwjglVersion:natives-windows")
     testRuntimeOnly("org.lwjgl:lwjgl-opengl:$lightingExampleLwjglVersion:natives-windows")
+    testRuntimeOnly("org.lwjgl:lwjgl-shaderc:$lightingExampleLwjglVersion:natives-windows")
 }
 sourceSets.named("test") {
     java.srcDir(rootProject.file("examples/native-lighting-extension"))
@@ -78,6 +82,28 @@ tasks.register<JavaExec>("rtxptNativeLightingNativeSelfTest") {
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptNativeLightingNativeSelfTest")
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
 }
+tasks.register<JavaExec>("rtxptRetainedLightingRepairNativeSelfTest") {
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptRetainedLightingRepairNativeSelfTest")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    systemProperty("top.ceroxe.rt.rtxpt.testOutput",rootProject.file("build/reports/retained-lighting-repairs").absolutePath)
+}
+
+listOf("RtxptLightingAttributeNativeSelfTest", "RtxptRetainedTransactionBenchmark", "RtxptRetainedDependencySelfTest", "GlGuidedLightingComposerSelfTest",
+    "RtxptLightingGroupSpecializationNativeSelfTest", "RtxptWindowResponsivenessNativeSelfTest", "RtxptLightingResourceMatrixNativeSelfTest",
+    "RtxptLightingPressureNativeSelfTest", "RtxptLightingDiagnosticsCostBenchmark", "RtxptLightingInstrumentationNativeSelfTest",
+    "RtxptLightingLifecycleNativeSelfTest").forEach { name ->
+    tasks.register<JavaExec>(name.replaceFirstChar { it.lowercase() }) {
+        group = "verification"; dependsOn(tasks.testClasses)
+        classpath = sourceSets.test.get().runtimeClasspath
+        mainClass.set("top.ceroxe.rt.renderer.rtxpt.$name")
+        if (name == "RtxptLightingAttributeNativeSelfTest" && project.hasProperty("lightingAttributeCases")) args(project.property("lightingAttributeCases").toString().split(","))
+        environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+        systemProperty("top.ceroxe.rt.rtxpt.testOutput",rootProject.file("build/reports/lighting-attributes").absolutePath)
+        doFirst { rootProject.file("build/renderer-validation-classpath.txt").writeText(classpath.asPath, Charsets.UTF_8) }
+    }
+}
 tasks.register<JavaExec>("rtxptNativeLightingExtensionNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath
@@ -89,7 +115,7 @@ tasks.register<JavaExec>("rtxptNativeLightingGlSelfTest") {
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptNativeLightingGlSelfTest")
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
-    doFirst { rootProject.file("build/710-opengl-test-classpath.txt").writeText(classpath.asPath, Charsets.UTF_8) }
+    doFirst { rootProject.file("build/native-lighting-gl-classpath.txt").writeText(classpath.asPath, Charsets.UTF_8) }
 }
 tasks.register<JavaExec>("rtxptDiagnosticMonitorNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
@@ -139,7 +165,7 @@ tasks.register<JavaExec>("rtxptPackagedFramePreparationNativeSelfTest") {
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
     environment("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE", "1")
     environment("RTR_RTXPT_SHADER_MANIFEST_DIR", "")
-    systemProperty("top.ceroxe.rt.rtxpt.testOutput",rootProject.file("build/reports/rtxpt-frame-705-packaged").absolutePath)
+    systemProperty("top.ceroxe.rt.rtxpt.testOutput",rootProject.file("build/reports/rtxpt-frame-packaged").absolutePath)
     doFirst {
         check(!systemProperties.containsKey("top.ceroxe.rt.rtxpt.runtime") && !systemProperties.containsKey("top.ceroxe.rt.rtxpt.bridge"))
         workingDir(Files.createTempDirectory("rf-").toFile())
@@ -163,7 +189,7 @@ tasks.register<JavaExec>("rtxptFrameBenchmark") {
 tasks.register("rtxptReleaseValidationClasspath") {
     group = "verification"; dependsOn(tasks.testClasses,tasks.jar)
     doLast {
-        rootProject.file("build/705-release-classpath.txt").writeText(
+        rootProject.file("build/release-validation-classpath.txt").writeText(
             (sourceSets.test.get().output + configurations.testRuntimeClasspath.get() + files(tasks.jar)).asPath,Charsets.UTF_8)
     }
 }
@@ -495,3 +521,9 @@ listOf("RtxptHostSurfaceFrameContractSelfTest", "RtxptNativeLightingCompactContr
     tasks.named("check") { dependsOn(contract) }
 }
 tasks.named("check") { dependsOn("nativeLightingStyleSelfTest", "rtxptHostSurfaceInputContractSelfTest", "rtxptLightMapSelfTest") }
+tasks.register<JavaExec>("rtxptNativeLightingReconstructionNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptNativeLightingReconstructionNativeSelfTest")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+}

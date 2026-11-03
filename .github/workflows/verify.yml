@@ -36,6 +36,9 @@ jobs:
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
         with:
           validate-wrappers: true
+      - name: Check feature-based file names
+        shell: pwsh
+        run: ./tools/Check-FileNaming.ps1
       - name: Verify deterministic contracts and artifacts
         shell: pwsh
         run: .\gradlew.bat clean :check :assemble -Pjava_toolchain_version=${{ matrix.java }} --dependency-verification=strict --no-daemon --console=plain --stacktrace

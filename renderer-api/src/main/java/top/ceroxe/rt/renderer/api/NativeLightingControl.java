@@ -16,6 +16,26 @@ public interface NativeLightingControl {
     void lightingWorkStatisticsEnabled(boolean enabled);
     record WorkStatistics(boolean available,long sequence,long sceneRevision,long primaryRays,long receivers,long shadowRays,long bounceRays,long sourceNodes,long sourceCandidates) { }
     WorkStatistics lightingWorkStatistics();
+    /** Requested counters are suppressed while the unified diagnostic level is OFF.
+     * Pending samples may drain; cumulative copy/query/poll counts then stop. */
+    record StatisticsCollection(boolean requested,boolean effective,long pending,long copies,long queries,long polls) { }
+    default StatisticsCollection lightingStatisticsCollection(){return new StatisticsCollection(false,false,0,0,0,0);}
+    /** Cumulative operational update work, without per-ray GPU instrumentation. */
+    record AttributeUpdateStatistics(long baselineCorners,long colorCorners,long convertedMeshVariants,long layoutBuilds,
+            long packedCorners,long instanceWrites,long uploadedBytes,long localGeometryWrites) { }
+    default AttributeUpdateStatistics lightingAttributeUpdateStatistics(){return new AttributeUpdateStatistics(0,0,0,0,0,0,0,0);}
+    /** Opt-in DEEP receiver/direct/GI dispatch decomposition. Adds receiver storage and
+     * changes scheduling, so its timings describe diagnostic execution, not fused production.
+     * Direct includes source traversal and shadows; GI includes its nested source/shadow work. */
+    default void lightingDiagnosticDecompositionEnabled(boolean enabled){throw new UnsupportedOperationException("Diagnostic decomposition unavailable");}
+    /** Reconstruct the diffuse GI radiance at the lighting-grid extent. Gain and
+     * host base color never enter RR. NONE selects the deterministic raw path. */
+    default void lightingReconstruction(NativeLightingReconstruction value){throw new UnsupportedOperationException("Native lighting reconstruction unavailable");}
+    /** Explicitly reset layer history after a discontinuity not described by scene or camera updates. */
+    default void resetLightingReconstruction(){throw new UnsupportedOperationException("Native lighting reconstruction unavailable");}
+    record ReconstructionState(NativeLightingReconstruction requested,NativeLightingReconstruction actual,int width,int height,
+            long evaluatedFrames,long historyResets,boolean guidesValid) { }
+    default ReconstructionState lightingReconstruction(){return new ReconstructionState(NativeLightingReconstruction.NONE,NativeLightingReconstruction.NONE,0,0,0,0,false);}
     record Execution(boolean active,int gridWidth,int gridHeight,int actualSignalMask,
             long lightingFrames,long fullBeautyFrames,long attributeUploads,long attributeGeneration) { }
     Execution nativeLightingExecution();

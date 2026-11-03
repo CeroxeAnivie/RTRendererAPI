@@ -1,0 +1,20 @@
+{
+  "5.0.0": "docs/release-generic-renderer-contract.md",
+  "5.1.0": "docs/release-application-clock-and-resource-snapshots.md",
+  "5.1.1": "docs/release-arena-diagnostics-snapshot-cache.md",
+  "5.2.0": "docs/release-closed-boundary-participating-media.md",
+  "5.2.1": "docs/release-compact-topology-admission.md",
+  "5.2.2": "docs/release-opaque-visibility-fast-path.md",
+  "6.0.0": "docs/release-typed-retained-rendering-contract.md",
+  "6.0.1": "docs/release-application-shader-source-cache.md",
+  "6.0.2": "docs/release-precompiled-application-shaders.md",
+  "6.0.3": "docs/release-driver-pipeline-cache.md",
+  "7.0.0": "docs/release-managed-path-tracing-backend.md",
+  "7.0.1": "docs/release-demand-resources-and-lighting-updates.md",
+  "7.0.2": "docs/release-retained-resources-and-scalable-lighting.md",
+  "7.0.3": "docs/release-incremental-lighting-and-frame-diagnostics.md",
+  "7.0.4": "docs/release-transparent-background-composition.md",
+  "7.0.5": "docs/release-frame-tasks-and-shader-preparation.md",
+  "7.1.0": "docs/release-independent-native-and-host-lighting.md",
+  "7.1.1": "docs/quality/lighting-repair-validation.md"
+}

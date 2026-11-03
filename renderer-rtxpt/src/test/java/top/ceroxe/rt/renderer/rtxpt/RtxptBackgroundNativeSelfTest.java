@@ -8,7 +8,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 /** Bitwise secondary-path isolation with deterministic samples; not a temporal-noise test. */
 public final class RtxptBackgroundNativeSelfTest {
     public static void main(String[] args)throws Exception {
-        var out=Path.of("build/reports/rtxpt-background-703");Files.createDirectories(out);
+        var out=Path.of("build/reports/rtxpt-background");Files.createDirectories(out);
         for(String route:new String[]{"analytic","raw"}){
             var base=RtxptLightingNativeSelfTest.configuration(route);var q=base.pathTracing().quality().withPostProcessing(new PathTracingQualityOptions.PostProcessing(false,8,0,false));
             try(var r=Renderer.open("rtxpt",base.copyBuilder().pathTracing(base.pathTracing().withQuality(q)).build())){

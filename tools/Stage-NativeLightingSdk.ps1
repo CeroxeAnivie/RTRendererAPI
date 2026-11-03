@@ -7,7 +7,7 @@ Paths resolve from the repository root; output must stay under build/.
 #>
 param(
     [string]$OutputDirectory='build/rtxpt-native-lighting-sdk',
-    [string]$Version='7.1.0',
+    [string]$Version='',
     [switch]$VerifyOnly,
     [switch]$CheckPaths
 )
@@ -15,6 +15,7 @@ $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $utf8=[Text.UTF8Encoding]::new($false)
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+if(!$Version){$Version=([IO.File]::ReadAllLines((Join-Path $repo 'gradle.properties')) | Where-Object {$_ -match '^project_version='}) -replace '^project_version=','';if(!$Version){throw 'Missing project_version'}}
 $output=[IO.Path]::GetFullPath($OutputDirectory,$repo)
 $build=[IO.Path]::GetFullPath((Join-Path $repo 'build'))+[IO.Path]::DirectorySeparatorChar
 if(!$output.StartsWith($build,[StringComparison]::OrdinalIgnoreCase)){throw 'SDK staging output must stay inside this repository build directory'}
@@ -59,10 +60,14 @@ foreach($directory in @('native-lighting-extension','native-lighting-opengl','ho
         Add-Source $relative $relative
     }
 }
-foreach($name in @('rtxpt-710-native-lighting-extension.md','rtxpt-710-host-surface-input.md','rtxpt-710-host-augmentation.md','rtxpt-710-diagnostics.md','rtxpt-710-release-sdk.md','rtxpt-710-native-application-and-compact.md','rtxpt-710-native-matrix.md','rtxpt-710-e12-cost.md','rtxpt-710-acceptance.md')){Add-Source "docs/$name" "docs/$name"}
+foreach($name in @('rtxpt-native-lighting-extension.md','rtxpt-host-surface-input.md','rtxpt-host-augmentation.md','rtxpt-diagnostics.md','rtxpt-release-sdk.md','rtxpt-native-application-and-compact.md','rtxpt-native-matrix.md','rtxpt-e12-cost.md','rtxpt-acceptance.md')){Add-Source "docs/$name" "docs/$name"}
 Add-Source 'docs/ordinary-and-expert.md' 'docs/ordinary-and-expert.md'
-Add-Source 'docs/7.1.0.md' 'docs/7.1.0.md'
-Add-Source 'docs/quality/rtxpt-710-performance.md' 'docs/quality/rtxpt-710-performance.md'
+Add-Source 'docs/native-lighting-reconstruction.md' 'docs/native-lighting-reconstruction.md'
+Add-Source 'docs/consumer-agent-handoff.md' 'docs/consumer-agent-handoff.md'
+Add-Source 'docs/release-independent-native-and-host-lighting.md' 'docs/release-independent-native-and-host-lighting.md'
+Add-Source 'docs/quality/rtxpt-performance.md' 'docs/quality/rtxpt-performance.md'
+foreach($name in @('lighting-repair-validation.md','native-lighting-performance.md','lighting-backend-comparison.md')){Add-Source "docs/quality/$name" "docs/quality/$name"}
+foreach($name in @('native-lighting-performance.json','lighting-backend-comparison.json','lighting-lifecycle-curves.json')){Add-Source "docs/quality/data/$name" "docs/quality/data/$name"}
 if($CheckPaths){[pscustomobject]@{Repository=$repo;Output=$output;Version=$Version;Files=$files.Count};return}
 $stage=$output+'.stage-'+[Guid]::NewGuid().ToString('N')
 $backup=$output+'.previous-'+[Guid]::NewGuid().ToString('N')

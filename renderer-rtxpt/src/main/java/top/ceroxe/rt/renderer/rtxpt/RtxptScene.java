@@ -11,27 +11,35 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptJson.object;
 
 /** Retained resources and glTF asset translation. No tracing, denoising or scheduling. */
 final class RtxptScene {
-    final Map<Long,TextureAsset> textures=new LinkedHashMap<>();
-    final Map<Long,MaterialAsset> materials=new LinkedHashMap<>();
-    final Map<Long,MeshAsset> meshes=new LinkedHashMap<>();
-    final Map<Long,SceneInstance> instances=new LinkedHashMap<>();
+    final RtxptPersistentMap<TextureAsset> textures;
+    final RtxptPersistentMap<MaterialAsset> materials;
+    final RtxptPersistentMap<MeshAsset> meshes;
+    final RtxptPersistentMap<SceneInstance> instances;
     final RtxptLightMap lights;
     final RtxptPersistentMap<SparseLightSource> sparseSources;
     private record MeshMaterials(MeshAsset mesh,Set<Long> ids) { }
-    private final Map<Long,MeshMaterials> meshMaterials=new HashMap<>();
+    private final RtxptPersistentMap<MeshMaterials> meshMaterials;
+    private final RtxptPersistentMap<RtxptPersistentMap<Boolean>> textureUsers,materialUsers,meshUsers;
+    long referenceChecks;
     Set<Long> materialIds(MeshAsset mesh){
         var cached=meshMaterials.get(mesh.id());if(cached!=null&&cached.mesh()==mesh)return cached.ids();
         var ids=new LinkedHashSet<Long>();var data=mesh.triangleMaterialIds();while(data.hasRemaining())ids.add(data.get());
         var result=Set.copyOf(ids);meshMaterials.put(mesh.id(),new MeshMaterials(mesh,result));return result;
     }
     private List<SceneLight> sortedLights;
+    private List<Item> residentItems;
     List<SceneLight> sortedLights(){if(sortedLights==null)sortedLights=List.copyOf(lights.values());return sortedLights;}
     final Map<String,MediumBoundary> interiors=new LinkedHashMap<>();
     final Map<String,Float> materialIors=new LinkedHashMap<>();
-    RtxptScene() { lights=new RtxptLightMap();sparseSources=new RtxptPersistentMap<>(); }
+    RtxptScene() {
+        textures=new RtxptPersistentMap<>();materials=new RtxptPersistentMap<>();meshes=new RtxptPersistentMap<>();instances=new RtxptPersistentMap<>();
+        meshMaterials=new RtxptPersistentMap<>();textureUsers=new RtxptPersistentMap<>();materialUsers=new RtxptPersistentMap<>();meshUsers=new RtxptPersistentMap<>();
+        lights=new RtxptLightMap();sparseSources=new RtxptPersistentMap<>();
+    }
     RtxptScene(RtxptScene src) {
-        textures.putAll(src.textures);materials.putAll(src.materials);meshes.putAll(src.meshes);
-        instances.putAll(src.instances);lights=new RtxptLightMap(src.lights);sortedLights=src.sortedLights;meshMaterials.putAll(src.meshMaterials);
+        textures=new RtxptPersistentMap<>(src.textures);materials=new RtxptPersistentMap<>(src.materials);meshes=new RtxptPersistentMap<>(src.meshes);
+        instances=new RtxptPersistentMap<>(src.instances);residentItems=src.residentItems;lights=new RtxptLightMap(src.lights);sortedLights=src.sortedLights;meshMaterials=new RtxptPersistentMap<>(src.meshMaterials);
+        textureUsers=new RtxptPersistentMap<>(src.textureUsers);materialUsers=new RtxptPersistentMap<>(src.materialUsers);meshUsers=new RtxptPersistentMap<>(src.meshUsers);referenceChecks=src.referenceChecks;
         sparseSources=new RtxptPersistentMap<>(src.sparseSources);
     }
     static <T> void remove(Map<Long,T> m,LongBuffer ids){while(ids.hasRemaining())m.remove(ids.get());}
@@ -39,27 +47,44 @@ final class RtxptScene {
         retain(tx,true);
     }
     void retain(SceneTransaction tx,boolean nativeContract) {
-        if(tx.reset()){meshMaterials.clear();textures.clear();materials.clear();meshes.clear();instances.clear();lights.clear();sparseSources.clear();}
+        if(tx.reset()||!tx.upserts().instances().isEmpty()||tx.removals().instanceIds().hasRemaining())residentItems=null;
+        if(tx.reset()){meshMaterials.clear();textureUsers.clear();materialUsers.clear();meshUsers.clear();textures.clear();materials.clear();meshes.clear();instances.clear();lights.clear();sparseSources.clear();}
         if(tx.reset()||!tx.upserts().lights().isEmpty()||tx.removals().lightIds().hasRemaining())sortedLights=null;
-        var r=tx.removals();remove(textures,r.textureIds());remove(materials,r.materialIds());remove(meshes,r.meshIds());remove(instances,r.instanceIds());remove(lights,r.lightIds());
-        var u=tx.upserts();u.textures().forEach(t->textures.put(t.id(),t));u.materials().forEach(m->materials.put(m.id(),m));
+        var r=tx.removals();var u=tx.upserts();
+        // Reverse dependencies are immutable sets in persistent maps. Only changed paths are copied.
+        var changedMaterials=new HashSet<Long>();u.materials().forEach(m->changedMaterials.add(m.id()));collectIds(r.materialIds(),changedMaterials);
+        var changedMeshes=new HashSet<Long>();u.meshes().forEach(m->changedMeshes.add(m.id()));collectIds(r.meshIds(),changedMeshes);
+        var changedInstances=new HashSet<Long>();u.instances().forEach(i->changedInstances.add(i.id()));collectIds(r.instanceIds(),changedInstances);
+        for(long id:changedMaterials){var old=materials.get(id);if(old!=null)for(long texture:textureIds(old))dependency(textureUsers,texture,id,false);}
+        for(long id:changedMeshes){var old=meshes.get(id);if(old!=null)for(long material:materialIds(old))dependency(materialUsers,material,id,false);meshMaterials.remove(id);}
+        for(long id:changedInstances){var old=instances.get(id);if(old!=null)dependency(meshUsers,old.meshAssetId(),id,false);}
+        remove(textures,r.textureIds());remove(materials,r.materialIds());remove(meshes,r.meshIds());remove(instances,r.instanceIds());remove(lights,r.lightIds());
+        u.textures().forEach(t->textures.put(t.id(),t));u.materials().forEach(m->materials.put(m.id(),m));
         u.meshes().forEach(m->meshes.put(m.id(),m));u.instances().forEach(i->instances.put(i.id(),i));u.lights().forEach(l->lights.put(l.id(),l));
-        meshMaterials.keySet().retainAll(meshes.keySet());
-        validateReferences();
-        if(nativeContract)validate();
+        for(var m:u.materials()){for(long t:textureIds(m))if(t>=0){++referenceChecks;if(!textures.containsKey(t))throw new IllegalArgumentException("Missing texture "+t);dependency(textureUsers,t,m.id(),true);}
+            if(nativeContract)validateMaterial(m);}
+        for(var m:u.meshes())for(long id:materialIds(m)){++referenceChecks;if(!materials.containsKey(id))throw new IllegalArgumentException("Missing triangle material");dependency(materialUsers,id,m.id(),true);}
+        for(var i:u.instances()){++referenceChecks;if(!meshes.containsKey(i.meshAssetId()))throw new IllegalArgumentException("Missing mesh "+i.meshAssetId());dependency(meshUsers,i.meshAssetId(),i.id(),true);}
+        rejectReferencedRemoval(textures,textureUsers,r.textureIds(),"texture");rejectReferencedRemoval(materials,materialUsers,r.materialIds(),"material");rejectReferencedRemoval(meshes,meshUsers,r.meshIds(),"mesh");
+        if(nativeContract){var check=new HashSet<>(changedInstances);for(long id:changedMeshes){var users=meshUsers.get(id);if(users!=null)check.addAll(users.keySet());}
+            for(long id:check){var i=instances.get(id);if(i!=null)validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.renderState(),i.castsShadow(),i.visibilityMask());}}
     }
-    private void validateReferences() {
-        for(var m:materials.values()) {
-            for(long t:new long[]{m.baseColorTextureId(),m.normalTextureId(),m.metallicRoughnessTextureId(),m.emissiveTextureId()})
-                if(t>=0 && !textures.containsKey(t))throw new IllegalArgumentException("Missing texture "+t);
-        }
-        for(var m:meshes.values())for(long id:materialIds(m))if(!materials.containsKey(id))throw new IllegalArgumentException("Missing triangle material");
-        for(var i:instances.values())if(!meshes.containsKey(i.meshAssetId()))throw new IllegalArgumentException("Missing mesh "+i.meshAssetId());
+    private static long[] textureIds(MaterialAsset m){return new long[]{m.baseColorTextureId(),m.normalTextureId(),m.metallicRoughnessTextureId(),m.emissiveTextureId()};}
+    private static void collectIds(LongBuffer ids,Set<Long> output){while(ids.hasRemaining())output.add(ids.get());}
+    private static void dependency(RtxptPersistentMap<RtxptPersistentMap<Boolean>> index,long target,long source,boolean add){
+        if(target<0)return;var old=index.get(target);if((old!=null&&old.containsKey(source))==add)return;
+        var next=old==null?new RtxptPersistentMap<Boolean>():new RtxptPersistentMap<>(old);if(add)next.put(source,true);else next.remove(source);
+        if(next.isEmpty())index.remove(target);else index.put(target,next);
+    }
+    private void rejectReferencedRemoval(Map<Long,?> table,RtxptPersistentMap<RtxptPersistentMap<Boolean>> users,LongBuffer removed,String kind){
+        while(removed.hasRemaining()){long id=removed.get();++referenceChecks;if(!table.containsKey(id)&&users.containsKey(id))throw new IllegalArgumentException("Referenced "+kind+" removed: "+id);}
+    }
+    private static void validateMaterial(MaterialAsset m){
+        if(m.shadingModel()!=MaterialAsset.ShadingModel.PHYSICALLY_BASED || m.surfaceOverlay().enabled())
+            throw new IllegalArgumentException("RTXPT uses native physical materials; custom surface equations/overlays belong to Vulkan");
     }
     void validate() {
-        for(var m:materials.values())
-            if(m.shadingModel()!=MaterialAsset.ShadingModel.PHYSICALLY_BASED || m.surfaceOverlay().enabled())
-                throw new IllegalArgumentException("RTXPT uses native physical materials; custom surface equations/overlays belong to Vulkan");
+        for(var m:materials.values())validateMaterial(m);
         for(var i:instances.values())validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.renderState(),i.castsShadow(),i.visibilityMask());
     }
     void validateInstance(long id,AffineTransform transform,MediumBoundary b,InstanceRenderState state,boolean shadow,int mask) {
@@ -75,7 +100,9 @@ final class RtxptScene {
     }
     record Item(String name,long mesh,AffineTransform transform,MediumBoundary boundary,float visibility) { }
     List<Item> items(RenderFrameRequest f) {
-        var a=new ArrayList<Item>();for(var i:instances.values())a.add(new Item("i"+i.id(),i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.surfaceVisibility()));
+        if(residentItems==null){var cached=new ArrayList<Item>(instances.size());for(var i:instances.values())cached.add(new Item("i"+i.id(),i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.surfaceVisibility()));residentItems=List.copyOf(cached);}
+        if(f.primitiveBatch().primitives().isEmpty())return residentItems;
+        var a=new ArrayList<Item>(residentItems);
         int k=0;for(var i:f.primitiveBatch().primitives()) {
             validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.renderState(),i.castsShadow(),i.visibilityMask());
             a.add(new Item("p"+k++,i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.surfaceVisibility()));

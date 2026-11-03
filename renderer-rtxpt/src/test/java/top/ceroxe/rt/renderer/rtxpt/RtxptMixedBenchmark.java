@@ -17,7 +17,7 @@ public final class RtxptMixedBenchmark {
     static SceneLight moving(int n){return SceneLight.point(0,Math.sin(n*.05),2,0).intensity(8).range(12).build();}
     public static void main(String[] args)throws Exception {
         int count=args.length>0?Integer.parseInt(args[0]):100000;String label=args.length>1?args[1]:"current";
-        Path output=Path.of("build/reports/rtxpt-mixed-703/"+label+"-"+count+".csv");Files.createDirectories(output.getParent());
+        Path output=Path.of("build/reports/rtxpt-mixed/"+label+"-"+count+".csv");Files.createDirectories(output.getParent());
         var config=RtxptScalabilityBenchmark.config();
         try(var csv=Files.newBufferedWriter(output);var r=Renderer.open("rtxpt",config)) {
             var h=r.extension(RtxptAccess.class).orElseThrow();long rev=1,seq=0;

@@ -13,7 +13,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 /** Numeric receiver/transport matrices. Every case captures the newly submitted GPU signal. */
 public final class RtxptNativeLightingMatrixNativeSelfTest {
     static final Path OUT=Path.of(System.getProperty("top.ceroxe.rt.rtxpt.testOutput",
-        "build/reports/rtxpt-710-native-matrix")).toAbsolutePath();
+        "build/reports/rtxpt-native-matrix")).toAbsolutePath();
     static final int W=33,H=25,CENTER=((H/2)*W+W/2)*3;
     static final float EPSILON=.003f;
     static final NativeLightingPlan.Directional SUN_OFF=new NativeLightingPlan.Directional(0,0,1,0,1,1,1);

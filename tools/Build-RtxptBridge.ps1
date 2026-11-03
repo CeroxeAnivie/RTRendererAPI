@@ -12,6 +12,7 @@ param(
     [double]$MemoryLimitGB=10,
     [switch]$ConfigureOnly,
     [switch]$CheckPaths,
+    [switch]$SkipSelfTests,
     [switch]$OpticalTransportTrace,
     [switch]$OpticalWorkTrace,
     [uint32]$OpticalBranchSeedXor=0
@@ -33,6 +34,14 @@ if($CheckPaths){
     return
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+# Restore this final lifecycle edit before reversing the layered SDK overlays.
+$windowSource=Join-Path $sdk 'External/Donut/src/app/DeviceManager.cpp'
+$windowText=[IO.File]::ReadAllText($windowSource)
+$deferredWindow='    // RTR defer visibility until the JNI host finishes scene and shader initialization.'
+if($windowText.Contains($deferredWindow)){
+    $originalWindow=if($windowText.Contains('const bool hostBackgroundWindow')){'    if (!HostExternalPresentation) { glfwShowWindow(m_Window); if (!hostBackgroundWindow) glfwFocusWindow(m_Window); }'}else{'    if (!HostExternalPresentation) { glfwShowWindow(m_Window); glfwFocusWindow(m_Window); }'}
+    [IO.File]::WriteAllText($windowSource,$windowText.Replace($deferredWindow,$originalWindow),$utf8)
+}
 $hostSurfacePatch=Join-Path $PSScriptRoot 'patches/rtxpt-host-surface.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $hostSurfacePatch 2>$null
 if($LASTEXITCODE -eq 0){
@@ -1200,7 +1209,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '#if RTXPT_FIREFLY_FILTER
 # The bounded pre-SR history runs after current radiance merge, before SR tags.
 [IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/ProcessingPasses/RtrPreSrHistory.hlsl'),
     [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrPreSrHistory.hlsl')),$utf8)
-foreach($nativeLightingFile in @('RtrNativeLighting.hlsl','RtrNativeLightingStyle.hlsli','RtrNativeLightingEncode.hlsl','RtrHostResolve.hlsl','RtrHostAugmentation.hlsl')) {
+foreach($nativeLightingFile in @('RtrNativeLighting.hlsl','RtrNativeLightingDeep.hlsl','RtrNativeLightingReconstruct.hlsl','RtrNativeLightingResolve.hlsl','RtrNativeLightingStyle.hlsli','RtrNativeLightingEncode.hlsl','RtrHostResolve.hlsl','RtrHostAugmentation.hlsl')) {
     [IO.File]::WriteAllText((Join-Path $sdk "Rtxpt/ProcessingPasses/$nativeLightingFile"),
         [IO.File]::ReadAllText((Join-Path $repo "renderer-rtxpt/src/main/cpp/$nativeLightingFile")),$utf8)
 }
@@ -1217,12 +1226,18 @@ $normalizedShaderConfig=$normalizedShaderConfig.Replace($historyAnchor,
     $historyAnchor+$shaderNewline+'ProcessingPasses/RtrPreSrHistory.hlsl -T cs -E main')
 $normalizedShaderConfig=[regex]::Replace($normalizedShaderConfig,'(?m)^ProcessingPasses/RtrNativeLighting\.hlsl -T cs -E main\r?\n?','')
 $normalizedShaderConfig+='ProcessingPasses/RtrNativeLighting.hlsl -T cs -E main'+$shaderNewline
-foreach($pass in @('RtrNativeLightingEncode','RtrHostResolve','RtrHostAugmentation')){
+foreach($pass in @('RtrNativeLightingEncode','RtrNativeLightingDeep','RtrNativeLightingReconstruct','RtrNativeLightingResolve','RtrHostResolve','RtrHostAugmentation')){
     $normalizedShaderConfig=[regex]::Replace($normalizedShaderConfig,"(?m)^ProcessingPasses/$pass\.hlsl -T cs -E main\r?\n?",'')
     $normalizedShaderConfig+="ProcessingPasses/$pass.hlsl -T cs -E main"+$shaderNewline
 }
 if($normalizedShaderConfig -cne $shaderConfig){
     [IO.File]::WriteAllText($shaderConfigPath,$normalizedShaderConfig,$utf8)
+}
+foreach($pass in @('RtrNativeLighting','RtrNativeLightingReconstruct')){
+    $config=[IO.File]::ReadAllText($shaderConfigPath)
+    $config=[regex]::Replace($config,"(?m)^ProcessingPasses/$pass\.hlsl -T cs -E main(?: -D RTR_LIGHT_GROUP_CAPACITY=[^\r\n]+)?\r?\n?",'')
+    $config+="ProcessingPasses/$pass.hlsl -T cs -E main -D RTR_LIGHT_GROUP_CAPACITY={1,32} -D RTR_ANALYTIC_LIGHTS={0,1} -D RTR_WORK_STATISTICS={0,1}"+$shaderNewline
+    [IO.File]::WriteAllText($shaderConfigPath,$config,$utf8)
 }
 Patch-Once 'Rtxpt/Sample.h' '    virtual void UpdateCustomResources() { }' @'
     virtual void UpdateCustomResources() { }
@@ -1583,9 +1598,18 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT host-surface overlay does not match the pin
 if($LASTEXITCODE -ne 0){throw 'RTXPT host-surface overlay failed'}
 [IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrHostSurface.hlsli'),(Join-Path $sdk 'Rtxpt/Shaders/RtrHostSurface.hlsli'),$true)
 [IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrHostAov.hlsli'),(Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrHostAov.hlsli'),$true)
+Patch-Once 'External/Donut/src/app/DeviceManager.cpp' '    if (!HostExternalPresentation) { glfwShowWindow(m_Window); if (!hostBackgroundWindow) glfwFocusWindow(m_Window); }' @'
+    // RTR defer visibility until the JNI host finishes scene and shader initialization.
+'@ 'RTR defer visibility until the JNI host'
 
 
 $rootCMake=Join-Path $sdk 'CMakeLists.txt'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.h' '    sl::FrameToken* m_currentFrame = nullptr;' @'
+    sl::FrameToken* m_currentFrame = nullptr;
+public:
+    sl::FrameToken* HostFrameToken() const { return m_currentFrame; } // RTR checked native-layer evaluation
+private:
+'@ 'RTR checked native-layer evaluation'
 $cmakeText=[IO.File]::ReadAllText($rootCMake)
 # The command-line OptiX screenshot utility is not used by the embedded realtime host.
 $cmakeText=$cmakeText.Replace('if (NOT _denoiser_hash STREQUAL RTXPT_OPTIX_DENOISER_SHA256)',
@@ -1610,6 +1634,7 @@ if($ConfigureOnly){return}
     -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','rtxpt_memory_diagnostics_selftest','rtxpt_task_batch_selftest','--parallel','1','--','/p:MultiProcessorCompilation=false',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
     -WorkingDirectory $sdk -MemoryLimitGB $MemoryLimitGB
 if($LASTEXITCODE -ne 0){throw 'RTXPT JNI bridge build failed'}
+if(!$SkipSelfTests){
 & (Join-Path $sdk 'bin/rtxpt_streamline_cache_selftest.exe')
 if($LASTEXITCODE -ne 0){throw 'Streamline function-cache self-test failed'}
 & (Join-Path $sdk 'bin/rtxpt_task_batch_selftest.exe')
@@ -1618,6 +1643,7 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT task-batch self-test failed'}
 if($LASTEXITCODE -ne 0){throw 'Disabled memory diagnostics self-test failed'}
 & (Join-Path $sdk 'bin/rtxpt_memory_diagnostics_selftest.exe') enabled
 if($LASTEXITCODE -ne 0){throw 'Enabled memory diagnostics self-test failed'}
+}
 # Runtime redistribution keeps the exact upstream notices alongside the native payload.
 $licenses=Join-Path $sdk 'bin/ThirdPartyLicenses'
 New-Item -ItemType Directory -Path $licenses -Force | Out-Null

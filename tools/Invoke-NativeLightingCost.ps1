@@ -1,6 +1,6 @@
 <# E12 fixed native workload. -CompileOnly and -FixtureOnly never create a renderer. #>
 param(
-    [string]$OutputDirectory='build/reports/rtxpt-710-e12',
+    [string]$OutputDirectory='build/reports/rtxpt-e12',
     [string]$ClassPath='',
     [string]$RuntimeDirectory='build/rtxpt-sdk/bin',
     [string]$ComparisonRoundId='',
@@ -29,11 +29,11 @@ if(!$FixtureOnly){
     $smi=Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue
     if($smi){
         for($i=0;$i -lt 3;$i++){
-            $line=@(& $smi.Source '--query-gpu=uuid,name,driver_version,pstate,power.limit,utilization.gpu' '--format=csv,noheader,nounits' 2>$null)
+            $line=@(& $smi.Source '--query-gpu=uuid,name,driver_version,pstate,power.limit,utilization.gpu,clocks.gr,clocks.mem,power.draw' '--format=csv,noheader,nounits' 2>$null)
             if($LASTEXITCODE -eq 0 -and $line.Count -eq 1){
                 $fields=$line[0].Split(',').Trim();$utilization=0.0
-                if($fields.Count -eq 6 -and [double]::TryParse($fields[5],[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$utilization)){
-                    $hardware=[ordered]@{uuid=$fields[0];name=$fields[1];driver=$fields[2];pstate=$fields[3];powerLimitWatts=$fields[4]};$baseline+=$utilization
+                if($fields.Count -eq 9 -and [double]::TryParse($fields[5],[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$utilization)){
+                    $hardware=[ordered]@{uuid=$fields[0];name=$fields[1];driver=$fields[2];pstate=$fields[3];powerLimitWatts=$fields[4];graphicsClockMHz=$fields[6];memoryClockMHz=$fields[7];powerDrawWatts=$fields[8]};$baseline+=$utilization
                 }
             }
             if($i -lt 2){[Threading.Thread]::Sleep(200)}
@@ -41,7 +41,7 @@ if(!$FixtureOnly){
     }
     $environment=[ordered]@{format='rtr-e12-environment';formatVersion=1;comparisonRoundId=$ComparisonRoundId;timestampUtc=[DateTime]::UtcNow.ToString('o');hardware=$hardware;
         gpuBaselinePercent=$baseline;baselineKnown=($baseline.Count -eq 3);baselineMaximumPercent=if($baseline.Count -eq 3){($baseline|Measure-Object -Maximum).Maximum}else{$null};
-        effectiveFrameCap='NONE';vsync=$false;hostVisible=$false;jobMemoryLimitGiB=10;scenario='static';minimumDynamicSeconds=0;fullDynamicAcceptance=$false}
+        effectiveFrameCap='NONE';vsync=$false;hostVisible=$false;jobMemoryLimitGiB=10;scenario='static';minimumDynamicSeconds=0;fullDynamicAcceptance=$false;windowsPowerScheme=(& powercfg.exe /getactivescheme 2>$null | Out-String).Trim()}
     [IO.File]::WriteAllText((Join-Path $out 'environment.json'),($environment|ConvertTo-Json -Depth 6)+"`n",$utf8)
 }
 $arguments=@('-Xmx512m','-XX:-UseJVMCICompiler','--enable-native-access=ALL-UNNAMED','-Dfile.encoding=UTF-8')

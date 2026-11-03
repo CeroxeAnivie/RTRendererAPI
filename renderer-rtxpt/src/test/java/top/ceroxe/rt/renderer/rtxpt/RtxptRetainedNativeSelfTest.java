@@ -7,7 +7,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Resource identity counters plus pixels compared with an explicit reset reference. */
 public final class RtxptRetainedNativeSelfTest {
-    static final Path OUTPUT=Path.of("build/reports/rtxpt-retained-703").toAbsolutePath();
+    static final Path OUTPUT=Path.of("build/reports/rtxpt-retained").toAbsolutePath();
     static TextureAsset texture(int red){return TextureAsset.color(7,1,1,new byte[]{(byte)red,(byte)(255-red),32,(byte)255});}
     static RenderFrameRequest frame(long sequence,long revision,EnvironmentState e){return RenderFrameRequest.builder(sequence,320,180,RtxptAcceptanceFixture.camera()).minimumSceneRevision(revision).environment(e).build();}
     static void settle(RtxptAccess host){RtxptLightingNativeSelfTest.settle(host,12);}

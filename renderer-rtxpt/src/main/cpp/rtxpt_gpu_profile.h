@@ -190,6 +190,19 @@ inline void Configure(nvrhi::IDevice* device,unsigned level,bool allowed){
 }
 inline std::vector<std::string> Snapshot(){
     if(!state)return {"0,0,0,0,0"};
+    std::lock_guard lock(state->mutex);
+    // An explicit snapshot also publishes the final submitted frame. There may
+    // be no next present to collect its already-completed timestamps.
+    if(state->enabled||state->draining){
+        for(int i=0;i<2;++i)Collect(state->queues[i],i);
+        if(!state->enabled){
+            state->draining=false;
+            for(const auto& q:state->queues){
+                state->draining|=q.active>=0;
+                for(const auto& slot:q.slots)state->draining|=slot.pending;
+            }
+        }
+    }
     std::vector<std::string> result;
     uint64_t pending=0;for(auto& q:state->queues)for(auto& slot:q.slots)pending+=slot.pending?slot.count:0;
     result.push_back(std::to_string(state->dropped)+","+std::to_string(state->overwritten)+","+std::to_string(pending)+","+std::to_string(state->stride)+","+std::to_string(state->enabled));

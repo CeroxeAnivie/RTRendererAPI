@@ -44,39 +44,39 @@
 
 | 文档 | 摘要 |
 | --- | --- |
-| [5.0.0.md](5.0.0.md) | 统一 Renderer、Java 25、可编程阶段和原生格式 frame 的版本说明。 |
-| [5.1.0.md](5.1.0.md) | 应用时间轴与不可变局部资源快照。 |
-| [5.1.1.md](5.1.1.md) | GPU arena 统计快照缓存改进。 |
-| [5.2.0.md](5.2.0.md) | 初始封闭介质、吸收/发光/散射/折射和嵌套体积契约。 |
-| [5.2.1.md](5.2.1.md) | 介质维护修复和闭合网格拓扑 admission 优化。 |
-| [5.2.2.md](5.2.2.md) | 恢复无介质 opaque shadow 快速路径的性能修复。 |
-| [6.0.0.md](6.0.0.md) | Java API、provider SPI 和 GPU ABI 新 major 契约。 |
-| [6.0.1.md](6.0.1.md) | 内容寻址 GLSL/SPIR-V 缓存和冷启动编译改进。 |
-| [6.0.2.md](6.0.2.md) | 预编译 SPIR-V 场景阶段入口及完整性验证。 |
-| [6.0.3.md](6.0.3.md) | Vulkan pipeline cache 身份与持久化修复。 |
-| [7.0.0.md](7.0.0.md) | 当前两字段 Medium、RTXPT 托管范围、删除参数、原生运行时及迁移要求。 |
-| [7.0.4.md](7.0.4.md) | 主射线透明输出、宿主 GPU 背景、线性预乘合成与范围。 |
-| [7.0.3.md](7.0.3.md) | RTXPT 资源增量更新、空间灯树和窗口等待修复。 |
-| [7.0.1.md](7.0.1.md) | RTXPT 按需内存分配、通用环境／灯光增量更新与兼容性。 |
+| [release-generic-renderer-contract.md](release-generic-renderer-contract.md) | 统一 Renderer、Java 25、可编程阶段和原生格式 frame 的版本说明。 |
+| [release-application-clock-and-resource-snapshots.md](release-application-clock-and-resource-snapshots.md) | 应用时间轴与不可变局部资源快照。 |
+| [release-arena-diagnostics-snapshot-cache.md](release-arena-diagnostics-snapshot-cache.md) | GPU arena 统计快照缓存改进。 |
+| [release-closed-boundary-participating-media.md](release-closed-boundary-participating-media.md) | 初始封闭介质、吸收/发光/散射/折射和嵌套体积契约。 |
+| [release-compact-topology-admission.md](release-compact-topology-admission.md) | 介质维护修复和闭合网格拓扑 admission 优化。 |
+| [release-opaque-visibility-fast-path.md](release-opaque-visibility-fast-path.md) | 恢复无介质 opaque shadow 快速路径的性能修复。 |
+| [release-typed-retained-rendering-contract.md](release-typed-retained-rendering-contract.md) | Java API、provider SPI 和 GPU ABI 新 major 契约。 |
+| [release-application-shader-source-cache.md](release-application-shader-source-cache.md) | 内容寻址 GLSL/SPIR-V 缓存和冷启动编译改进。 |
+| [release-precompiled-application-shaders.md](release-precompiled-application-shaders.md) | 预编译 SPIR-V 场景阶段入口及完整性验证。 |
+| [release-driver-pipeline-cache.md](release-driver-pipeline-cache.md) | Vulkan pipeline cache 身份与持久化修复。 |
+| [release-managed-path-tracing-backend.md](release-managed-path-tracing-backend.md) | 当前两字段 Medium、RTXPT 托管范围、删除参数、原生运行时及迁移要求。 |
+| [release-transparent-background-composition.md](release-transparent-background-composition.md) | 主射线透明输出、宿主 GPU 背景、线性预乘合成与范围。 |
+| [release-incremental-lighting-and-frame-diagnostics.md](release-incremental-lighting-and-frame-diagnostics.md) | RTXPT 资源增量更新、空间灯树和窗口等待修复。 |
+| [release-demand-resources-and-lighting-updates.md](release-demand-resources-and-lighting-updates.md) | RTXPT 按需内存分配、通用环境／灯光增量更新与兼容性。 |
 
 ### 实测与质量记录
 
 | 文档 | 摘要 |
 | --- | --- |
-| [7.1.0 能力与版本合同](7.1.0.md) | 独立原生光照、两种宿主职责、普通／专家入口及最终验收范围。 |
-| [7.1.0 验收矩阵](rtxpt-710-acceptance.md) | 三份需求与 CPU／GPU／打包测试的对应关系和实测边界。 |
-| [7.1.0 性能量化](quality/rtxpt-710-performance.md) | 相同算法精确剪枝前后、逐位图像对照、数据传输与 compact 输出收益。 |
-| [7.1.0 发布 SDK](rtxpt-710-release-sdk.md) | 离仓 GPU 扩展工具、ABI 校验和三个接入示例。 |
-| [7.0.4 透明背景验收](quality/rtxpt-transparent-704.md) | 主射线 coverage、RR 边缘、物理表面及两条 GPU 合成路径与增量成本。 |
-| [7.0.3 资源增量／灯树验收](quality/rtxpt-retained-703.md) | 通用 retained-scene 更新、十万灯采样、窗口回归与同机版本速度对比。 |
+| [7.1.0 能力与版本合同](release-independent-native-and-host-lighting.md) | 独立原生光照、两种宿主职责、普通／专家入口及最终验收范围。 |
+| [7.1.0 验收矩阵](rtxpt-acceptance.md) | 三份需求与 CPU／GPU／打包测试的对应关系和实测边界。 |
+| [7.1.0 性能量化](quality/rtxpt-performance.md) | 相同算法精确剪枝前后、逐位图像对照、数据传输与 compact 输出收益。 |
+| [7.1.0 发布 SDK](rtxpt-release-sdk.md) | 离仓 GPU 扩展工具、ABI 校验和三个接入示例。 |
+| [7.0.4 透明背景验收](quality/rtxpt-transparent.md) | 主射线 coverage、RR 边缘、物理表面及两条 GPU 合成路径与增量成本。 |
+| [7.0.3 资源增量／灯树验收](quality/rtxpt-retained-incremental-updates.md) | 通用 retained-scene 更新、十万灯采样、窗口回归与同机版本速度对比。 |
 | [质量验证与性能报告](quality/verification-report.md) | 合并 29 份历史记录，包含验证事实、失败、未完成边界和限定条件。 |
 | [RTXPT 托管接入](quality/rtxpt-managed-medium-migration.md) | 新后端场景、打包运行时与接入验证；按记录的制品判断。 |
 | [高级能力检查](quality/rtxpt-advanced-audit-20261101.md) | RR、采样、重用及高级能力调用链／运行证据。 |
 | [新旧弹球性能](quality/hexball-rtxpt-performance-20261101.md) | 相应材质、配置、诊断状态下的链路与耗时；不外推到新玻璃质量档。 |
 | [GPU 组合与原始帧复用](quality/rtxpt-raw-reuse-composition-20261101.md) | 组合链和跨 API 工作的验证边界。 |
 | [内存与 FPS 联合验收](quality/rtxpt-memory-fps-20261102.md) | 进程／Java／GPU 内存、会话重开与性能对照。 |
-| [7.0.1 内存修复验收](quality/rtxpt-memory-701.md) | 闲置资源根因、提交／RAM／显存分别统计、固定场景画面对照与制品身份。 |
-| [7.0.1 通用灯光增量更新](quality/rtxpt-incremental-lighting-701.md) | 两条光照输入、全部灯光状态、实际执行计数、字段效果与生命周期验收。 |
+| [7.0.1 内存修复验收](quality/rtxpt-demand-memory.md) | 闲置资源根因、提交／RAM／显存分别统计、固定场景画面对照与制品身份。 |
+| [7.0.1 通用灯光增量更新](quality/rtxpt-incremental-lighting.md) | 两条光照输入、全部灯光状态、实际执行计数、字段效果与生命周期验收。 |
 | [API 发布前检查](quality/api-release-review-20261101.md) | 公开入口、后端差异和检查时点的结论。 |
 | [后端依赖大小](quality/backend-dependency-size-20261101.md) | 指定制品的依赖与打包尺寸。 |
 | [介质优化规范](quality/medium-performance-optimization.md) | 排名、测量、优化与证据保留约定。 |
@@ -181,18 +181,18 @@ Javadoc 制品是否存在及具体版本，以对应 Maven staging 或 runtime 
 | 1 | [.github/PULL_REQUEST_TEMPLATE.md](../.github/PULL_REQUEST_TEMPLATE.md) |
 | 2 | [CONTRIBUTING.md](../CONTRIBUTING.md) |
 | 3 | [demos/hex-ball/README.md](../demos/hex-ball/README.md) |
-| 4 | [docs/5.0.0.md](../docs/5.0.0.md) |
-| 5 | [docs/5.1.0.md](../docs/5.1.0.md) |
-| 6 | [docs/5.1.1.md](../docs/5.1.1.md) |
-| 7 | [docs/5.2.0.md](../docs/5.2.0.md) |
-| 8 | [docs/5.2.1.md](../docs/5.2.1.md) |
-| 9 | [docs/5.2.2.md](../docs/5.2.2.md) |
-| 10 | [docs/6.0.0.md](../docs/6.0.0.md) |
-| 11 | [docs/6.0.1.md](../docs/6.0.1.md) |
-| 12 | [docs/6.0.2.md](../docs/6.0.2.md) |
-| 13 | [docs/6.0.3.md](../docs/6.0.3.md) |
-| 14 | [docs/7.0.0.md](../docs/7.0.0.md) |
-| 15 | [docs/7.0.1.md](../docs/7.0.1.md) |
+| 4 | [docs/release-generic-renderer-contract.md](../docs/release-generic-renderer-contract.md) |
+| 5 | [docs/release-application-clock-and-resource-snapshots.md](../docs/release-application-clock-and-resource-snapshots.md) |
+| 6 | [docs/release-arena-diagnostics-snapshot-cache.md](../docs/release-arena-diagnostics-snapshot-cache.md) |
+| 7 | [docs/release-closed-boundary-participating-media.md](../docs/release-closed-boundary-participating-media.md) |
+| 8 | [docs/release-compact-topology-admission.md](../docs/release-compact-topology-admission.md) |
+| 9 | [docs/release-opaque-visibility-fast-path.md](../docs/release-opaque-visibility-fast-path.md) |
+| 10 | [docs/release-typed-retained-rendering-contract.md](../docs/release-typed-retained-rendering-contract.md) |
+| 11 | [docs/release-application-shader-source-cache.md](../docs/release-application-shader-source-cache.md) |
+| 12 | [docs/release-precompiled-application-shaders.md](../docs/release-precompiled-application-shaders.md) |
+| 13 | [docs/release-driver-pipeline-cache.md](../docs/release-driver-pipeline-cache.md) |
+| 14 | [docs/release-managed-path-tracing-backend.md](../docs/release-managed-path-tracing-backend.md) |
+| 15 | [docs/release-demand-resources-and-lighting-updates.md](../docs/release-demand-resources-and-lighting-updates.md) |
 | 16 | [docs/_Sidebar.md](../docs/_Sidebar.md) |
 | 17 | [docs/backend-routing.md](../docs/backend-routing.md) |
 | 18 | [docs/COMPATIBILITY.md](../docs/COMPATIBILITY.md) |
@@ -228,9 +228,9 @@ Javadoc 制品是否存在及具体版本，以对应 Maven staging 或 runtime 
 | 48 | [docs/quality/renderer-comparison-20261101.md](../docs/quality/renderer-comparison-20261101.md) |
 | 49 | [docs/quality/rtxpt-advanced-audit-20261101.md](../docs/quality/rtxpt-advanced-audit-20261101.md) |
 | 50 | [docs/quality/rtxpt-general-lighting-20261101.md](../docs/quality/rtxpt-general-lighting-20261101.md) |
-| 51 | [docs/quality/rtxpt-incremental-lighting-701.md](../docs/quality/rtxpt-incremental-lighting-701.md) |
+| 51 | [docs/quality/rtxpt-incremental-lighting.md](../docs/quality/rtxpt-incremental-lighting.md) |
 | 52 | [docs/quality/rtxpt-managed-medium-migration.md](../docs/quality/rtxpt-managed-medium-migration.md) |
-| 53 | [docs/quality/rtxpt-memory-701.md](../docs/quality/rtxpt-memory-701.md) |
+| 53 | [docs/quality/rtxpt-demand-memory.md](../docs/quality/rtxpt-demand-memory.md) |
 | 54 | [docs/quality/rtxpt-memory-fps-20261102.md](../docs/quality/rtxpt-memory-fps-20261102.md) |
 | 55 | [docs/quality/rtxpt-model-audit-20261102.md](../docs/quality/rtxpt-model-audit-20261102.md) |
 | 56 | [docs/quality/rtxpt-raw-reuse-composition-20261101.md](../docs/quality/rtxpt-raw-reuse-composition-20261101.md) |

@@ -7,7 +7,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Advancing-noise, actual-execution history and primary/secondary background checks. */
 public final class RtxptContinuityNativeSelfTest {
-    static final Path OUT=Path.of("build/reports/rtxpt-continuity-703");
+    static final Path OUT=Path.of("build/reports/rtxpt-continuity");
     static RenderFrameRequest frame(long seq,long rev,EnvironmentState e){return RenderFrameRequest.builder(seq,640,360,RtxptAcceptanceFixture.camera()).minimumSceneRevision(rev).environment(e).build();}
     public static void main(String[] args)throws Exception {
         Files.createDirectories(OUT);

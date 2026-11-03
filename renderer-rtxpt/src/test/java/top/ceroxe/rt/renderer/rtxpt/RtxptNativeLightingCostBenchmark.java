@@ -26,7 +26,7 @@ public final class RtxptNativeLightingCostBenchmark {
     private static long adapterLuid;
     private record Sample(long sequence,long submitNanos,long admissionNanos,long releaseNanos,int deferrals) { }
     private static void check(boolean value,String message){if(!value)throw new AssertionError(message);}
-    private static List<SparseLightSource> sources(int count){
+    public static List<SparseLightSource> sources(int count){
         var result=new ArrayList<SparseLightSource>();
         for(int i=0;i<count;i++)result.add(SparseLightSource.point(i+1,(i%8-3.5)*.7,1+(i%3)*.5,(i/8%8-3.5)*.7,
             .25f+(i%3)*.25f,.7f,.3f,1,6).withLayer(SparseLightSource.Layer.DYNAMIC)
@@ -34,7 +34,7 @@ public final class RtxptNativeLightingCostBenchmark {
             .withAttenuation(SparseLightSource.Attenuation.MANHATTAN_LINEAR));
         return result;
     }
-    private static SceneTransaction scene(){
+    public static SceneTransaction scene(){
         var tx=SceneTransaction.builder(1).resetScene();
         for(int i=0;i<POSITIONS.length;i++)tx
             .upsert(MaterialAsset.builder(i+1).baseColorRgba8(COLORS[i]).roughness(.8f).build())
@@ -42,7 +42,7 @@ public final class RtxptNativeLightingCostBenchmark {
             .upsert(SceneInstance.builder(i+1,i+1).build());
         return tx.build();
     }
-    private static RenderFrameRequest frame(long sequence){
+    public static RenderFrameRequest frame(long sequence){
         return RenderFrameRequest.builder(sequence,VIEW_WIDTH,VIEW_HEIGHT,
             CameraState.lookAt(0,2,6,0,1,0).verticalFieldOfViewDegrees(52).aspectRatio((double)VIEW_WIDTH/VIEW_HEIGHT).build())
             .minimumSceneRevision(1).clock(FrameClock.of(0,0)).environment(EnvironmentState.neutral()).build();
@@ -65,6 +65,12 @@ public final class RtxptNativeLightingCostBenchmark {
             "clock",List.of(0,0),"meshes",meshes,"sources",lights,"scenario","static-live-dispatch-no-result-reuse",
             "reconstruction","NONE","consumer","unimported-packet-abandonment; no GL consumer measured");
     }
+    /** Shared portable workload contract for the independently executed Vulkan adapter. */
+    public static String fixtureJson(int width,int height,int sourceCount){return RtxptJson.encode(fixture(width,height,sourceCount));}
+    /** Exact float parameter publication used by both backend shader implementations. */
+    public static float[] parameters(int width,int height){return RtxptNativeLightingParameters.pack(new NativeLightingPlan(width,height,
+        Set.of(NativeLightingPlan.Signal.DIRECT_GAIN,NativeLightingPlan.Signal.INDIRECT_DIFFUSE),2,6,.35f,NativeLightingStyle.defaults(),SUN,null,true),frame(0));}
+    public static String json(Object value){return RtxptJson.encode(value);}
     private static Sample submit(RtxptRenderer r,long sequence)throws Exception {
         var request=frame(sequence);long start=System.nanoTime(),submitNanos=0;int deferred=0;
         long deadline=start+30_000_000_000L;
@@ -91,7 +97,7 @@ public final class RtxptNativeLightingCostBenchmark {
     }
     private static Double percentile(double[] values,double p){return values.length==0?null:values[Math.max(0,(int)Math.ceil(values.length*p)-1)];}
     public static void main(String[] args)throws Exception {
-        Path out=Path.of(args.length>0?args[0]:"build/reports/rtxpt-710-e12").toAbsolutePath();
+        Path out=Path.of(args.length>0?args[0]:"build/reports/rtxpt-e12").toAbsolutePath();
         int width=args.length>1?Integer.parseInt(args[1]):1280,height=args.length>2?Integer.parseInt(args[2]):800;
         int measured=args.length>3?Integer.parseInt(args[3]):120,sourceCount=args.length>4?Integer.parseInt(args[4]):64;
         check(measured>=16&&sourceCount>=0&&sourceCount<=100000,"Use >=16 frames and 0..100000 sources");Files.createDirectories(out);
@@ -106,6 +112,8 @@ public final class RtxptNativeLightingCostBenchmark {
         try(var r=new RtxptRenderer(config,true)){
             r.nativeLightingPlan(new NativeLightingPlan(width,height,Set.of(NativeLightingPlan.Signal.DIRECT_GAIN,NativeLightingPlan.Signal.INDIRECT_DIFFUSE),
                 2,6,.35f,NativeLightingStyle.defaults(),SUN,null,true));
+            boolean decomposed=args.length>5&&args[5].equals("--decompose");
+            if(decomposed)r.lightingDiagnosticDecompositionEnabled(true);
             r.diagnosticLevel(RtxptDiagnostics.Level.DEEP);long prepareStart=System.nanoTime();
             r.apply(scene(),sources(sourceCount),LongBuffer.allocate(0));submit(r,sequence++);r.awaitIdle();
             preparationsNanos=System.nanoTime()-prepareStart;
@@ -113,7 +121,7 @@ public final class RtxptNativeLightingCostBenchmark {
             // Counter evidence is a separate untimed dispatch; timed passes contain no per-ray atomics.
             r.lightingWorkStatisticsEnabled(true);submit(r,sequence++);r.awaitIdle();submit(r,sequence++);r.awaitIdle();
             work=r.lightingWorkStatistics();r.lightingWorkStatisticsEnabled(false);
-            check(work.available()&&work.receivers()>0&&work.bounceRays()==work.receivers()*2,"Real fixed-sample ray workload");
+            check(work.available()&&work.primaryRays()==(long)width*height&&work.receivers()>0&&work.bounceRays()==work.receivers()*2,"Real fixed-sample ray workload: "+work);
             firstMeasured=sequence;
             for(int i=0;i<measured;i++){samples.add(submit(r,sequence++));if(i%16==15)collect(r);}
             lastMeasured=sequence-1;r.awaitIdle();collect(r);
@@ -136,7 +144,8 @@ public final class RtxptNativeLightingCostBenchmark {
         for(var s:samples)cpuCsv.append(String.format(Locale.ROOT,"%d,%.9f,%.9f,%.9f,%d%n",s.sequence(),s.submitNanos()/1e6,s.admissionNanos()/1e6,s.releaseNanos()/1e6,s.deferrals()));
         Files.writeString(out.resolve("cpu.csv"),cpuCsv,StandardCharsets.UTF_8);
         gpuGroups.forEach((name,values)->stages.add(object("name",name,"distribution",distribution(values.stream().mapToDouble(Double::doubleValue).toArray()))));
-        boolean timingValid=gpuGroups.containsKey("NativeLightingDispatch")&&gpuGroups.get("NativeLightingDispatch").size()==measured&&gpuStatus.droppedQueries()==0;
+        String dispatchName=args.length>5&&args[5].equals("--decompose")?"DiagnosticDecomposedLighting":"NativeLightingDispatch";
+        boolean timingValid=gpuGroups.containsKey(dispatchName)&&gpuGroups.get(dispatchName).size()==measured&&gpuStatus.droppedQueries()==0;
         Files.writeString(out.resolve("run.json"),RtxptJson.encode(object("format","rtr-e12-cost-run","formatVersion",1,"evidenceKind","REAL_GPU_RUN","backend","rtxpt-native",
             "workloadSha256",workload,"adapterLuid",Long.toUnsignedString(adapterLuid),"timestampUtc",java.time.Instant.now().toString(),
             "measuredFrames",measured,"warmupFrames",24,"firstMeasuredSequence",firstMeasured,"lastMeasuredSequence",lastMeasured,

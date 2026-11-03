@@ -208,8 +208,15 @@ tasks.register<JavaExec>("meshTopologySelfTest") {
 // Each major release owns an explicit, immutable public ABI baseline. A new major starts a new
 // baseline; later releases must preserve its declarations and members. The exact versioned
 // snapshot below separately rejects additions that have not been reviewed for this release.
-val rendererApiAbiBaseline = layout.projectDirectory.file("abi/renderer-api-${project.version}.abi")
-val rendererApiAbiSnapshot = layout.buildDirectory.file("abi/renderer-api-${project.version}.abi")
+val rendererApiAbiIndex = layout.projectDirectory.file("abi/release-index.json")
+fun indexedAbi(version: String): String {
+    val releases = JsonSlurper().parse(rendererApiAbiIndex.asFile) as Map<*, *>
+    val path = releases[version]?.toString() ?: "unreviewed.abi"
+    require(path == "unreviewed.abi" || Regex("snapshots/[0-9a-f]{64}\\.abi").matches(path)) { "Invalid ABI index entry" }
+    return "abi/$path"
+}
+val rendererApiAbiBaseline = providers.provider { layout.projectDirectory.file(indexedAbi(project.version.toString())) }
+val rendererApiAbiSnapshot = layout.buildDirectory.file("abi/renderer-api.abi")
 
 val verifyRendererApiMajorRelease = tasks.register("verifyRendererApiMajorRelease") {
     group = "verification"
@@ -217,7 +224,7 @@ val verifyRendererApiMajorRelease = tasks.register("verifyRendererApiMajorReleas
     val currentVersion = project.version.toString()
     val major = currentVersion.substringBefore('.').toIntOrNull()
         ?: throw GradleException("project_version must start with a numeric major: $currentVersion")
-    val majorBaseline = layout.projectDirectory.file("abi/renderer-api-$major.0.0.abi")
+    val majorBaseline = providers.provider { layout.projectDirectory.file(indexedAbi("$major.0.0")) }
     inputs.property("projectVersion", currentVersion)
     inputs.file(majorBaseline)
     doLast {
@@ -227,7 +234,7 @@ val verifyRendererApiMajorRelease = tasks.register("verifyRendererApiMajorReleas
             throw GradleException("ABI generation produced no public snapshot: $snapshot")
         }
         if (expected != "$major.0.0") {
-            if (!majorBaseline.asFile.isFile || majorBaseline.asFile.length() == 0L) {
+            if (!majorBaseline.get().asFile.isFile || majorBaseline.get().asFile.length() == 0L) {
                 throw GradleException("Missing same-major ABI baseline: $majorBaseline")
             }
             fun declarations(file: File): Map<String, Set<String>> =
@@ -239,7 +246,7 @@ val verifyRendererApiMajorRelease = tasks.register("verifyRendererApiMajorReleas
                             .findAll(block).map { it.value.trim() }.toSet()
                         type to members
                     }.toMap()
-            val oldDeclarations = declarations(majorBaseline.asFile)
+            val oldDeclarations = declarations(majorBaseline.get().asFile)
             val newDeclarations = declarations(snapshot)
             val incompatible = oldDeclarations.filter { (type, members) ->
                 val current = newDeclarations[type]
@@ -323,9 +330,16 @@ tasks.register("updateRendererApiAbiBaseline") {
 
     doLast {
         val source = rendererApiAbiSnapshot.get().asFile
-        val target = rendererApiAbiBaseline.asFile
+        val bytes = source.readBytes()
+        val digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
+        val relative = "snapshots/$digest.abi"
+        val target = layout.projectDirectory.file("abi/$relative").asFile
         target.parentFile.mkdirs()
-        target.writeBytes(source.readBytes())
+        if (target.exists() && !Arrays.equals(target.readBytes(), bytes)) throw GradleException("ABI content identity collision")
+        target.writeBytes(bytes)
+        val releases = (JsonSlurper().parse(rendererApiAbiIndex.asFile) as Map<*, *>).entries.associate { it.key.toString() to it.value.toString() }.toMutableMap()
+        releases[project.version.toString()] = relative
+        rendererApiAbiIndex.asFile.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(releases.toSortedMap())) + "\n", StandardCharsets.UTF_8)
     }
 }
 
@@ -336,7 +350,7 @@ tasks.register("verifyRendererApiAbi") {
     inputs.file(rendererApiAbiBaseline)
 
     doLast {
-        val baseline = rendererApiAbiBaseline.asFile
+        val baseline = rendererApiAbiBaseline.get().asFile
         if (!baseline.isFile || baseline.length() == 0L) {
             throw GradleException(
                 "Missing renderer-api ABI baseline: $baseline. " +

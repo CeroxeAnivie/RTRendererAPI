@@ -1,10 +1,12 @@
 # RTRendererAPI Java 开发指南
 
+当前 7.1.1 修复说明、GI RR 入口与性能实测见 [消费方交接](consumer-agent-handoff.md)及[累计验收](quality/lighting-repair-validation.md)。
+
 RTRendererAPI 是一个以 JDK 25 构建、以 Java 25 字节码与运行时为公开基线的多模块工程。所有 Java 编译任务强制
 `--release 25`。`renderer-api` 保持后端无关，`renderer-core` 提供 Windows Vulkan RT，
 可选 `renderer-rtxpt` 提供 D3D12 托管光学与原生呈现；应用使用公共入口，不构造内部实现类。
 
-7.1.0 新增独立原生光照、宿主底图增补与主表面传输，完善增量灯光、GPU 输入输出、诊断和普通快捷工厂。完整变更与量化见 [7.1.0](7.1.0.md)。本轮交付 GitHub 源码和本地 Maven 制品，不上传 Central。`publishAllToLocalStagingRepository` 生成完整本地 Maven 制品，并由独立消费方验证。
+7.1.0 新增独立原生光照、宿主底图增补与主表面传输，完善增量灯光、GPU 输入输出、诊断和普通快捷工厂。完整变更与量化见 [7.1.0](release-independent-native-and-host-lighting.md)。本轮交付 GitHub 源码和本地 Maven 制品，不上传 Central。`publishAllToLocalStagingRepository` 生成完整本地 Maven 制品，并由独立消费方验证。
 
 > **默认推荐 RTXPT 单后端**完成完整 3D 与最终呈现，显式使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`。
 
@@ -60,7 +62,7 @@ RTRendererAPI 是一个以 JDK 25 构建、以 Java 25 字节码与运行时为�
 
 ## 当前能力与证据怎么读
 
-当前 API／支持边界以 [7.1.0](7.1.0.md)、[Java API 参考](Java-API-Reference.md)和逐后端 capability 为准。已实现入口不等于每种硬件和功能组合都已验证；运行成功、GPU 完成和真正呈现也要分开读取。三个 Demo 默认请求 2× FG，库的 `pathTracedPresentation()` 默认关闭 FG。
+当前 API／支持边界以 [7.1.0](release-independent-native-and-host-lighting.md)、[Java API 参考](Java-API-Reference.md)和逐后端 capability 为准。已实现入口不等于每种硬件和功能组合都已验证；运行成功、GPU 完成和真正呈现也要分开读取。三个 Demo 默认请求 2× FG，库的 `pathTracedPresentation()` 默认关闭 FG。
 
 RTXPT 接入、高级能力、组合与内存的实测入口见[文档清单](documentation-inventory.md)。旧 CUDA／LuxCore、散射／密度记录保留原时间与制品，已删除功能不能从历史报告推导为当前支持。
 

@@ -64,6 +64,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     private VulkanD3D12Composition d3d12Composition;
     private Path pendingCapture;
     private boolean swapchainCaptureSupported;
+    private boolean windowActivated;
 
     private long window;
     private VkInstance instance;
@@ -143,7 +144,6 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             presenter.createWindow();
             presenter.createVulkanRuntime();
             presenter.createSwapchain();
-            presenter.activateOnOpen();
             return presenter;
         } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
             try {
@@ -158,7 +158,9 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     private void createWindow() {
         GLFW.glfwDefaultWindowHints();
         GLFW.glfwWindowHint(GLFW.GLFW_CLIENT_API, GLFW.GLFW_NO_API);
-        GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, configuration.visible() ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
+        // Producer initialization can continue after this presenter opens. Keep the
+        // window hidden until a real frame has been submitted for presentation.
+        GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_FOCUSED, configuration.visible() ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_FOCUS_ON_SHOW, configuration.visible() ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
         boolean fullScreen = configuration.windowMode()
@@ -205,9 +207,9 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         }
     }
 
-    private void activateOnOpen() {
-        if (!configuration.visible()) return;
-        // Activate after device/swapchain startup, which can outlast the creation focus event.
+    private void activateOnFirstFrame() {
+        if (windowActivated || !configuration.visible()) return;
+        windowActivated = true;
         GLFW.glfwShowWindow(window);
         GLFW.glfwFocusWindow(window);
         ForegroundWindow.activate(org.lwjgl.glfw.GLFWNativeWin32.glfwGetWin32Window(window));
@@ -673,6 +675,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             }
             checkVk(result,"vkQueuePresentKHR.d3d12");
             if(context.captureReadback!=null)awaitFrameContext(context);
+            activateOnFirstFrame();
             return d3d12Result(frame,Outcome.PRESENTED);
         } catch(RuntimeException|Error failure) {
             if(!submitted) {
@@ -1037,6 +1040,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     return result(descriptor, Outcome.RETIRED_FOR_RECREATE);
                 }
                 checkVk(presented, "vkQueuePresentKHR.managed");
+                activateOnFirstFrame();
                 return result(descriptor, Outcome.PRESENTED);
             } finally {
                 if (submitted && lease.state() == GpuFrameLease.LeaseState.ACTIVE
@@ -1344,6 +1348,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                     return result(descriptor, Outcome.RETIRED_FOR_RECREATE);
                 }
                 checkVk(presented, "vkQueuePresentKHR");
+                activateOnFirstFrame();
                 evictUnusedImports();
                 return result(descriptor, Outcome.PRESENTED);
             } finally {
@@ -2018,6 +2023,10 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
 
     private void awaitFrameContext(FrameContext context) {
         if (context.managedSubmission != null) {
+            while (!context.managedSubmission.pollComplete()) {
+                GLFW.glfwPollEvents();
+                java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
+            }
             context.managedSubmission.close();
             RtCommandContext.Timing timing = context.managedSubmission.timing();
             if (timing.gpuWorkNanos() >= 0L) {
@@ -2029,10 +2038,12 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
             context.managedSubmission = null;
         }
         if (context.fencePending) {
-            checkVk(
-                    VK10.vkWaitForFences(device, context.fence, true, UINT64_MAX),
-                    "vkWaitForFences.presenter"
-            );
+            int result;
+            do {
+                result=VK10.vkWaitForFences(device, context.fence, true, 16_000_000L);
+                if(result==VK10.VK_TIMEOUT)GLFW.glfwPollEvents();
+            } while(result==VK10.VK_TIMEOUT);
+            checkVk(result,"vkWaitForFences.presenter");
             // Publish completion before fallible lease and host callbacks so retries never wait
             // on a fence that has already proved the queue-lifetime boundary.
             context.fencePending = false;
@@ -2186,9 +2197,22 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
     }
 
     private void waitPresenterIdle(String operation) {
-        int result = sharedDeviceFastPath
-                ? VulkanQueueHostSync.waitIdle(queue)
-                : VK10.vkDeviceWaitIdle(device);
+        // Vulkan's idle call has no timeout. The owner thread must continue dispatching
+        // window messages while the driver drains the queue (notably during resize).
+        var idle = new java.util.concurrent.FutureTask<Integer>(() -> sharedDeviceFastPath
+                ? VulkanQueueHostSync.waitIdle(queue) : VK10.vkDeviceWaitIdle(device));
+        Thread.ofPlatform().daemon().name("rtr-presenter-idle").start(idle);
+        while (!idle.isDone()) {
+            GLFW.glfwPollEvents();
+            java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
+        }
+        int result;
+        try { result=idle.get(); }
+        catch(InterruptedException interrupted) {
+            Thread.currentThread().interrupt();throw new IllegalStateException("Interrupted after presenter idle",interrupted);
+        } catch(java.util.concurrent.ExecutionException failed) {
+            throw new IllegalStateException("Presenter idle failed",failed.getCause());
+        }
         checkVk(result, sharedDeviceFastPath
                 ? "vkQueueWaitIdle." + operation
                 : "vkDeviceWaitIdle." + operation);

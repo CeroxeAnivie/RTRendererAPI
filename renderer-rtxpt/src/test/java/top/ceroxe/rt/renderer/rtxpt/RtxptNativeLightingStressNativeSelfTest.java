@@ -9,7 +9,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Real-duration dynamic/mixed work, followed by repeated session and generation retirement. */
 public final class RtxptNativeLightingStressNativeSelfTest {
-    static final Path OUT=Path.of("build/reports/rtxpt-710-stress").toAbsolutePath();
+    static final Path OUT=Path.of("build/reports/rtxpt-stress").toAbsolutePath();
     static long frames;
     static RenderFrameRequest frame(long sequence,long revision,int width,int height){
         var base=RtxptNativeLightingNativeSelfTest.frame(sequence,revision);

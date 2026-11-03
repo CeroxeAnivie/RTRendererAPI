@@ -11,6 +11,14 @@
 #include <stdexcept>
 #include <thread>
 #include <vector>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <time.h>
+#endif
 
 // Process-global bounded evidence for the one RTXPT session. Recording performs
 // no allocations, filesystem I/O, or GPU waits. Snapshot construction is an
@@ -25,11 +33,11 @@ enum Stage : uint64_t { Frame=1, InstanceCache, SubInstances, Dispatch, Caller,
 enum Flag : uint64_t { QueueWaitEnqueue=1, Failed=2, CacheHit=4, CacheMiss=8,
     Active=256, Truncated=512, Cancelled=1024, EnteredNativeFrame=2048 };
 enum SubmissionKind : uint64_t { Initial=0, Update, Steady, Resized, Waited, KindCount };
-constexpr size_t Capacity=8192, Width=16, ActiveCapacity=512, SubmissionCapacity=1024;
+constexpr size_t Capacity=8192, Width=18, ActiveCapacity=512, SubmissionCapacity=1024;
 using Event=std::array<uint64_t,Width>;
 using SubmissionSample=std::array<uint64_t,6>;
 enum Trait : uint64_t { HasFrame=1, HasUpdate=2, HasResize=4, HasWait=8, IsInitial=16 };
-struct Live { Event event{};uint64_t children=0,traits=0;bool occupied=false; };
+struct Live { Event event{};uint64_t children=0,traits=0;bool occupied=false;uint64_t cpuChildren=0; };
 inline std::atomic<unsigned> level{0};
 inline std::atomic<uint64_t> frame{0},revision{0},inputGeneration{0},outputGeneration{0},nextId{1},generation{1},monitorGeneration{1};
 inline std::mutex mutex;
@@ -51,6 +59,16 @@ inline uint64_t Now(){
     ++clockCalls;
 #endif
     return uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+inline uint64_t ThreadCpuNow(){
+#ifdef _WIN32
+    FILETIME creation,exit,kernel,user;if(!GetThreadTimes(GetCurrentThread(),&creation,&exit,&kernel,&user))return UINT64_MAX;
+    ULARGE_INTEGER k{},u{};k.LowPart=kernel.dwLowDateTime;k.HighPart=kernel.dwHighDateTime;u.LowPart=user.dwLowDateTime;u.HighPart=user.dwHighDateTime;
+    return (k.QuadPart+u.QuadPart)*100;
+#else
+    timespec value{};if(clock_gettime(CLOCK_THREAD_CPUTIME_ID,&value)!=0)return UINT64_MAX;
+    return uint64_t(value.tv_sec)*1000000000+value.tv_nsec;
+#endif
 }
 inline Live* Find(uint64_t id){
     if(!id)return nullptr;
@@ -145,7 +163,7 @@ inline std::vector<uint64_t> Snapshot(uint64_t expectedGeneration=0){
     uint64_t activeCount=0;for(const auto& entry:live)activeCount+=entry.occupied;
     const uint64_t now=activeCount?Now():0;
     std::vector<uint64_t> result;result.reserve(13+size_t(count+retainedSlow+activeCount)*Width+size_t(retainedSubmissions)*6);
-    result.insert(result.end(),{3,Width,dropped,count,slowTriggers,retainedSlow,slowCount-retainedSlow,
+    result.insert(result.end(),{4,Width,dropped,count,slowTriggers,retainedSlow,slowCount-retainedSlow,
         activeCount,activeDropped,retainedSubmissions,submissionDropped,monitorGeneration.load(),level.load()});
     for(uint64_t i=written-count;i<written;++i)result.insert(result.end(),events[i%Capacity].begin(),events[i%Capacity].end());
     for(uint64_t i=slowCount-retainedSlow;i<slowCount;++i)result.insert(result.end(),slowEvents[i%slowEvents.size()].begin(),slowEvents[i%slowEvents.size()].end());
@@ -155,7 +173,7 @@ inline std::vector<uint64_t> Snapshot(uint64_t expectedGeneration=0){
     return result;
 }
 struct Scope {
-    Event event{};uint64_t previousId=0,epoch=0;int slot=-1,exceptions=0;bool enabled=false;
+    Event event{};uint64_t previousId=0,epoch=0,cpuBegin=UINT64_MAX;int slot=-1,exceptions=0;bool enabled=false;
     Scope(Stage stage,uint64_t items=0,uint64_t tasks=0,unsigned minimum=1,uint64_t batch=0){
         if(level.load(std::memory_order_acquire)<minimum)return;
         std::lock_guard lock(mutex);if(level.load(std::memory_order_relaxed)<minimum)return;
@@ -166,7 +184,8 @@ struct Scope {
         const uint64_t id=nextId.fetch_add(1)*ActiveCapacity+uint64_t(slot);
         event={frame.load(),revision.load(),batch?batch:id,uint64_t(std::hash<std::thread::id>{}(std::this_thread::get_id())),
             uint64_t(stage),Now(),0,0,items,tasks,previousId?Find(previousId)->event[2]:0,0,
-            id,previousId,inputGeneration.load(),outputGeneration.load()};
+            id,previousId,inputGeneration.load(),outputGeneration.load(),UINT64_MAX,UINT64_MAX};
+        cpuBegin=ThreadCpuNow();
         auto traits=Traits(stage);if(stage==Submit&&!seenSubmission){traits|=IsInitial;seenSubmission=true;}
         live[slot]={event,0,traits,true};MarkAncestors(previousId,traits);
         parentId=id;parentGeneration=epoch;
@@ -180,11 +199,12 @@ struct Scope {
         std::lock_guard lock(mutex);
         if(epoch==generation.load()&&slot>=0&&live[slot].occupied&&live[slot].event[12]==event[12]){
             event[6]=Now()-event[5];event[7]=event[6]-std::min(event[6],live[slot].children);
+            const auto cpuEnd=ThreadCpuNow();if(cpuBegin!=UINT64_MAX&&cpuEnd!=UINT64_MAX&&cpuEnd>=cpuBegin){event[16]=cpuEnd-cpuBegin;event[17]=event[16]-std::min(event[16],live[slot].cpuChildren);}
             if((event[4]==TaskWait||event[4]==PoolWait)&&event[9]){
                 live[slot].traits|=HasWait;MarkAncestors(previousId,HasWait);
             }
             if(std::uncaught_exceptions()>exceptions)event[11]|=Failed;
-            if(auto* previous=Find(previousId))previous->children+=event[6];
+            if(auto* previous=Find(previousId)){previous->children+=event[6];if(event[16]!=UINT64_MAX)previous->cpuChildren+=event[16];}
             RecordLocked(event,live[slot].traits);live[slot].occupied=false;
         }
         if(parentGeneration==epoch&&parentId==event[12]){parentId=Find(previousId)?previousId:0;parentGeneration=generation.load();}
@@ -224,7 +244,7 @@ inline void SubmitStage(Stage stage,uint64_t offset,uint64_t duration,uint64_t i
     std::lock_guard lock(mutex);
     if(submission->epoch!=generation.load()||submission->slot<0||!live[submission->slot].occupied)return;
     const auto& outer=submission->event;const auto id=nextId.fetch_add(1)*ActiveCapacity;
-    Event event={outer[0],outer[1],id,outer[3],uint64_t(stage),outer[5]+offset,duration,duration,items,tasks,outer[2],0,id,outer[12],outer[14],outer[15]};
+    Event event={outer[0],outer[1],id,outer[3],uint64_t(stage),outer[5]+offset,duration,duration,items,tasks,outer[2],0,id,outer[12],outer[14],outer[15],UINT64_MAX,UINT64_MAX};
     live[submission->slot].children+=duration;RecordLocked(event);
 }
 }

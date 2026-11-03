@@ -652,7 +652,7 @@ tasks.register("verifyReleaseChecksums") {
 val publishedConsumerDirectory = layout.buildDirectory.dir("published-consumer-smoke")
 
 // The portable ZIP includes the resolved runtime graph, Maven metadata and its source/docs.
-// It is a candidate distribution; feature coverage is documented explicitly in docs/7.0.0.md.
+// It is a candidate distribution; feature coverage is documented explicitly in docs/release-managed-path-tracing-backend.md.
 val runtimeDistributionContents = tasks.register<Sync>("prepareRuntimeDistribution") {
     group = "distribution"
     description = "Stages the complete Windows runtime dependency graph, source artifacts, documentation and hashes."
@@ -1013,6 +1013,16 @@ val apiClosureRequiredTasks = listOf(
     ":renderer-rtxpt:rtxptNativeLightingMatrixNativeSelfTest",
     ":renderer-rtxpt:rtxptNativeLightingStressNativeSelfTest",
     ":renderer-rtxpt:rtxptNativeLightingGlSelfTest",
+    ":renderer-rtxpt:rtxptRetainedLightingRepairNativeSelfTest",
+    ":renderer-rtxpt:rtxptRetainedDependencySelfTest",
+    ":renderer-rtxpt:glGuidedLightingComposerSelfTest",
+    ":renderer-rtxpt:rtxptLightingAttributeNativeSelfTest",
+    ":renderer-rtxpt:rtxptLightingResourceMatrixNativeSelfTest",
+    ":renderer-rtxpt:rtxptLightingGroupSpecializationNativeSelfTest",
+    ":renderer-rtxpt:rtxptLightingInstrumentationNativeSelfTest",
+    ":renderer-rtxpt:rtxptNativeLightingReconstructionNativeSelfTest",
+    ":renderer-rtxpt:rtxptLightingPressureNativeSelfTest",
+    ":renderer-rtxpt:rtxptLightingLifecycleNativeSelfTest",
     ":renderer-rtxpt:rtxptHostSurfaceNativeSelfTest",
     ":renderer-rtxpt:rtxptHostSurfaceRrNativeSelfTest",
     ":renderer-rtxpt:rtxptHostSurfaceTransportNativeSelfTest",

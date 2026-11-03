@@ -34,4 +34,4 @@ writer.writeCard(lease, card, new GlHostSurfaceWriter.AugmentationInputs(
 
 生产 writer 不读回像素，也不做 CPU fence wait。仅测试 `GlHostSurfaceWriterSelfTest` 做显式诊断读回，分别核对两种布局的四种精确格式、八／十平面值、数值 flags、64 位身份和原始 triangle；增强底图值刻意不同于 albedo。此测试验证 GPU writer shader，D3D12 共享同步由真实集成验收。Gradle 入口 `:renderer-rtxpt:hostSurfaceWriterSelfTest`，窗口始终隐藏。
 
-输入 ABI、取消／重试／退休、预算与诊断契约见 [输入说明](../../docs/rtxpt-710-host-surface-input.md)。writer 测试与真实传输、GPU 回传／合成分别验收；当前证据与尚未完成的最终发布包项目见[验收矩阵](../../docs/rtxpt-710-acceptance.md)。
+输入 ABI、取消／重试／退休、预算与诊断契约见 [输入说明](../../docs/rtxpt-host-surface-input.md)。writer 测试与真实传输、GPU 回传／合成分别验收；当前证据与尚未完成的最终发布包项目见[验收矩阵](../../docs/rtxpt-acceptance.md)。

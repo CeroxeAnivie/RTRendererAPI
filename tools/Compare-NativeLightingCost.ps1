@@ -12,7 +12,7 @@ $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $utf8=[Text.UTF8Encoding]::new($false)
 $candidate=[IO.Path]::GetFullPath($CandidateDirectory)
-$report=[ordered]@{format='rtr-e12-cost-comparison';formatVersion=1;classification='INCOMPLETE';speedup=$null;reasons=@();imageErrors=@();stages=@()}
+$report=[ordered]@{format='rtr-e12-cost-comparison';formatVersion=1;classification='INCOMPLETE';speedup=$null;reasons=@();imageErrors=@();stages=@();qualityMatched=$false;imageThresholds=@{maximumAbsolute=$MaximumAbsoluteError;maximumRmse=$MaximumRmse}}
 function Load-Run([string]$directory){
     $run=Get-Content -LiteralPath (Join-Path $directory 'run.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     if($run.format -cne 'rtr-e12-cost-run' -or $run.formatVersion -ne 1){throw 'Unsupported E12 run format'}
@@ -30,8 +30,10 @@ function Stage-Stats([string]$directory,$run){
     foreach($row in Import-Csv -LiteralPath (Join-Path $directory 'gpu.csv')){
         $sequence=[long]$row.sequence
         if($sequence -lt $run.firstMeasuredSequence -or $sequence -gt $run.lastMeasuredSequence){throw 'GPU sample is outside the declared measured frame interval'}
-        $frequency=[double]$row.frequency;$begin=[double]$row.begin_tick;$end=[double]$row.end_tick;$ms=[double]::Parse($row.inclusive_ms,[Globalization.CultureInfo]::InvariantCulture)
-        if($frequency -le 0 -or $end -lt $begin -or ![double]::IsFinite($ms) -or $ms -lt 0 -or [Math]::Abs(($end-$begin)*1000/$frequency-$ms) -gt .00001){throw 'GPU elapsed time does not match its timestamp interval'}
+        $frequency=[double]$row.frequency;$begin=[long]$row.begin_tick;$end=[long]$row.end_tick;$ms=[double]::Parse($row.inclusive_ms,[Globalization.CultureInfo]::InvariantCulture)
+        # Subtract integer ticks before conversion: absolute GPU clocks can exceed
+        # double's exact integer range even when the measured interval is short.
+        if($frequency -le 0 -or $end -lt $begin -or ![double]::IsFinite($ms) -or $ms -lt 0 -or [Math]::Abs([double]($end-$begin)*1000/$frequency-$ms) -gt .00001){throw 'GPU elapsed time does not match its timestamp interval'}
         $name=Stage-Name $row.stage
         if(!$groups.ContainsKey($name)){$groups[$name]=[Collections.Generic.List[double]]::new();$sequences[$name]=[Collections.Generic.HashSet[long]]::new()}
         $groups[$name].Add($ms)
@@ -64,8 +66,6 @@ if(!$old.timingValid -or !$current.timingValid -or $old.gpuTimerSemantics -cne $
 $a=Get-Content -LiteralPath (Join-Path $candidate 'environment.json') -Raw -Encoding UTF8|ConvertFrom-Json
 $b=Get-Content -LiteralPath (Join-Path $baseline 'environment.json') -Raw -Encoding UTF8|ConvertFrom-Json
 $sameConditions=$a.comparisonRoundId -and $a.comparisonRoundId -ceq $b.comparisonRoundId -and $a.hardware.uuid -and $a.hardware.uuid -ceq $b.hardware.uuid -and $a.hardware.driver -ceq $b.hardware.driver -and $a.hardware.powerLimitWatts -ceq $b.hardware.powerLimitWatts -and $a.hardware.pstate -ceq $b.hardware.pstate -and $a.effectiveFrameCap -ceq $b.effectiveFrameCap -and $a.vsync -eq $b.vsync -and $a.hostVisible -eq $b.hostVisible
-if(!$sameConditions -or $current.adapterLuid -cne $old.adapterLuid){$report.classification='CONDITIONS_MISMATCH';$report.reasons=@('Use the same comparison round, adapter, driver, power limit, frame cap, VSync and visibility.');Finish;return}
-if(!$a.baselineKnown -or !$b.baselineKnown -or $a.baselineMaximumPercent -gt 10 -or $b.baselineMaximumPercent -gt 10){$report.classification='RELATIVE_STAGES_ONLY';$report.reasons=@('Initial GPU utilization was above 10% or unknown. Cross-run speedup and absolute FPS claims are disabled.');Finish;return}
 if(!('RtrE12Pfm' -as [type])){Add-Type -TypeDefinition @'
 using System;
 using System.IO;
@@ -83,7 +83,7 @@ public static class RtrE12Pfm {
         byte[] b=File.ReadAllBytes(file);int p=0;
         if(Token(b,ref p)!="PF")throw new InvalidDataException("E12 requires RGB PFM");
         width=int.Parse(Token(b,ref p),CultureInfo.InvariantCulture);height=int.Parse(Token(b,ref p),CultureInfo.InvariantCulture);
-        if(Token(b,ref p)!="-1")throw new InvalidDataException("E12 requires little-endian unit-scale PFM");
+        if(double.Parse(Token(b,ref p),CultureInfo.InvariantCulture)!=-1.0)throw new InvalidDataException("E12 requires little-endian unit-scale PFM");
         if(p<b.Length && b[p]==13)p++;if(p>=b.Length || b[p++]!=10)throw new InvalidDataException("PFM header lacks newline");
         long count=(long)width*height*3;
         if(width<1 || height<1 || count>int.MaxValue || b.Length-p!=count*4)throw new InvalidDataException("Invalid PFM extent");
@@ -108,6 +108,9 @@ foreach($signal in @('direct','indirect')){
     $report.imageErrors+=@{signal=$signal;maximumAbsolute=$imageDelta[0];rmse=$imageDelta[1];width=$imageDelta[2];height=$imageDelta[3]}
     if($imageDelta[0] -gt $MaximumAbsoluteError -or $imageDelta[1] -gt $MaximumRmse){$report.classification='QUALITY_MISMATCH';$report.reasons=@('Fixed predeclared pixel error thresholds failed; no same-algorithm performance claim.');Finish;return}
 }
+$report.qualityMatched=$true
+if(!$sameConditions -or $current.adapterLuid -cne $old.adapterLuid){$report.classification='CONDITIONS_MISMATCH';$report.reasons=@('Use the same comparison round, adapter, driver, power limit, frame cap, VSync and visibility.');Finish;return}
+if(!$a.baselineKnown -or !$b.baselineKnown -or $a.baselineMaximumPercent -gt 10 -or $b.baselineMaximumPercent -gt 10){$report.classification='RELATIVE_STAGES_ONLY';$report.reasons=@('Initial GPU utilization was above 10% or unknown. Cross-run speedup and absolute FPS claims are disabled.');Finish;return}
 if(!$currentStats.ContainsKey('lighting_dispatch') -or !$oldStats.ContainsKey('lighting_dispatch') -or $currentStats['lighting_dispatch'].samples -ne $current.measuredFrames -or $oldStats['lighting_dispatch'].samples -ne $old.measuredFrames -or $currentStats['lighting_dispatch'].uniqueSequences -ne $current.measuredFrames -or $oldStats['lighting_dispatch'].uniqueSequences -ne $old.measuredFrames){$report.classification='INCOMPLETE_TIMING';$report.reasons=@('One native lighting dispatch GPU interval per measured frame is required.');Finish;return}
 foreach($name in @('lighting_dispatch','lighting_upload','producer_handoff','receiver','source_query','shadow','gi','reconstruction','consumer_handoff')){
     $now=$currentStats[$name];$previous=$oldStats[$name];$ratio=$null

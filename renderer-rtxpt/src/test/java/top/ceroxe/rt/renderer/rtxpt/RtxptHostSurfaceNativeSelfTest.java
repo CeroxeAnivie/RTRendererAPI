@@ -10,7 +10,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Real GL GPU writes -> D3D12 primary reuse -> existing transport. Diagnostic readbacks are explicit. */
 public final class RtxptHostSurfaceNativeSelfTest {
-    static final Path OUT=Path.of("build/reports/rtxpt-710-host-surface").toAbsolutePath();
+    static final Path OUT=Path.of("build/reports/rtxpt-host-surface").toAbsolutePath();
     private static RenderFrameRequest frame(long sequence,int width,int height){return RtxptFramePreparationNativeSelfTest.frame(sequence,1,width,height).toBuilder()
         .environment(EnvironmentState.builder().sunIntensity(0).build()).clock(FrameClock.of(sequence*16_666_667,16_666_667)).build();}
     static RendererConfig configuration(String route){

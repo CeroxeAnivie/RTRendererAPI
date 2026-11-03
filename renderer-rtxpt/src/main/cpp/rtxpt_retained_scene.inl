@@ -20,10 +20,17 @@ std::array<jlong,8> LightSamplingTelemetry() {
 }
 void CaptureLinear(const std::filesystem::path& path,int signal=0,int hostSignal=-1) {
     auto source=nativeLighting.active?(signal==0?nativeLighting.direct:signal==1?nativeLighting.indirect:nativeLighting.geometry):(m_renderTargets?m_renderTargets->OutputColor:nvrhi::TextureHandle{});
+    if(nativeLighting.active){auto& rr=nativeLighting.reconstruction;
+        if(signal==1&&rr.requested&&rr.valid)source=rr.result;
+        if(signal>=3&&signal<=8)source=rr.guides[signal-3];
+        if(signal==9)source=nativeLighting.indirect;
+    }
     if(hostSignal>=0){if(hostSignal>=8)throw std::invalid_argument("Unknown host signal");source=hostSurface.composition==0?hostAugmentation.outputs[hostSignal]:hostOutputs.outputs[hostSignal];}
     if(!source)throw std::runtime_error("No linear render output");
     auto desc=source->getDesc();
-    if(desc.format!=nvrhi::Format::RGBA16_FLOAT&&desc.format!=nvrhi::Format::RGBA32_FLOAT)throw std::runtime_error("Unsupported linear output format");
+    const unsigned channels=desc.format==nvrhi::Format::RG16_FLOAT?2:desc.format==nvrhi::Format::R32_FLOAT?1:4;
+    const bool floating32=desc.format==nvrhi::Format::RGBA32_FLOAT||desc.format==nvrhi::Format::R32_FLOAT;
+    if(desc.format!=nvrhi::Format::RGBA16_FLOAT&&desc.format!=nvrhi::Format::RGBA32_FLOAT&&desc.format!=nvrhi::Format::RG16_FLOAT&&desc.format!=nvrhi::Format::R32_FLOAT)throw std::runtime_error("Unsupported linear output format");
     auto staging=GetDevice()->createStagingTexture(desc,nvrhi::CpuAccessMode::Read);
     auto commands=GetDevice()->createCommandList();commands->open();
     commands->copyTexture(staging,nvrhi::TextureSlice(),source,nvrhi::TextureSlice());
@@ -34,8 +41,9 @@ void CaptureLinear(const std::filesystem::path& path,int signal=0,int hostSignal
     std::ofstream output(path,std::ios::binary);output<<"PF\n"<<desc.width<<" "<<desc.height<<"\n-1.0\n";
     for(int y=int(desc.height)-1;y>=0;y--){auto* row=reinterpret_cast<const uint16_t*>(bytes+size_t(y)*pitch);
         for(uint32_t x=0;x<desc.width;x++)for(int c=0;c<3;c++){
-            if(desc.format==nvrhi::Format::RGBA32_FLOAT){auto f=reinterpret_cast<const float*>(bytes+size_t(y)*pitch)[x*4+c];output.write(reinterpret_cast<const char*>(&f),4);continue;}
-            uint16_t h=row[x*4+c];int exponent=(h>>10)&31;int mantissa=h&1023;
+            unsigned component=std::min<unsigned>(unsigned(c),channels-1);
+            if(floating32){auto f=reinterpret_cast<const float*>(bytes+size_t(y)*pitch)[x*channels+component];output.write(reinterpret_cast<const char*>(&f),4);continue;}
+            uint16_t h=row[x*channels+component];int exponent=(h>>10)&31;int mantissa=h&1023;
             float f=exponent==31?(mantissa?NAN:INFINITY):std::ldexp(float(exponent?mantissa+1024:mantissa),exponent?exponent-25:-24);
             if(h&0x8000)f=-f;output.write(reinterpret_cast<const char*>(&f),4);
         }

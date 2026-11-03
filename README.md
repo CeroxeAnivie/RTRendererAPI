@@ -2,6 +2,8 @@
 
 **由 Java 驱动的硬件光线追踪渲染库**
 
+当前修复版本 7.1.1：原生 GI RR、顶点染色、资源局部更新、统一诊断关闭和 native 性能修复。接入与验收见 [消费方交接](docs/consumer-agent-handoff.md)、[累计验收](docs/quality/lighting-repair-validation.md)与[量化结果](docs/quality/native-lighting-performance.md)。
+
 可编程场景 / Vulkan 通用图形、计算与硬件 RT / RTXPT 托管光学与 GPU 直显
 
 ![Java](https://img.shields.io/badge/Java-25%2B-orange?style=flat-square&logo=openjdk&logoColor=white)
@@ -27,7 +29,7 @@
 
 > **7.1.0**：新增独立低分辨率光照、宿主底图增补和主表面传输；提供双向 GPU 交接、真实 BSDF 分层、紧凑光源、增量应用数据和离线 GPU 扩展。
 > 同算法精确剪枝实测将目标光照阶段 P50 从 34.79 ms 降到 12.59 ms，直接光与 GI 输出逐位一致。支持范围、测试与使用入口见
-> [版本说明](docs/7.1.0.md)、[验收账本](docs/rtxpt-710-acceptance.md)和[普通／专家用法](docs/ordinary-and-expert.md)。
+> [版本说明](docs/release-independent-native-and-host-lighting.md)、[验收账本](docs/rtxpt-acceptance.md)和[普通／专家用法](docs/ordinary-and-expert.md)。
 > 历史 CUDA／LuxCore 报告记录原实现，不作为当前 RTXPT 验收结论。
 
 ---
@@ -35,7 +37,7 @@
 ### ✨ 核心亮点
 
 - 🚀 **硬件光线追踪**：基于 Vulkan RT 的三角形与 procedural/AABB BLAS、TLAS、GPUScene 与预编译 SPIR-V 管线。
-- 💧 **托管透明介质**：可选 `renderer-rtxpt` 使用 NVIDIA RTXPT 处理均匀吸收、嵌套介电材质、粗糙折射与全反射；旧散射和密度参数已删除，详见 [7.1.0](docs/7.1.0.md)。
+- 💧 **托管透明介质**：可选 `renderer-rtxpt` 使用 NVIDIA RTXPT 处理均匀吸收、嵌套介电材质、粗糙折射与全反射；旧散射和密度参数已删除，详见 [7.1.0](docs/release-independent-native-and-host-lighting.md)。
 - 🧩 **可编程场景**：四个 RT 场景阶段支持 GLSL 或预编译 SPIR-V，raygen 支持独立 SDR/HDR 变体；复用 `ResourceData` 提交应用缓冲区。
 - ☕ **现代 Java API**：以 Java 25 为基线，提供不可变模型、Builder、类型化异常和确定性生命周期。
 - 🖼️ **两类托管输出**：作用域映射 `FrameView` 与显式 `FrameSnapshot` 保留原始 HDR/整数格式；官方 GPU presenter 无需 CPU 回读。

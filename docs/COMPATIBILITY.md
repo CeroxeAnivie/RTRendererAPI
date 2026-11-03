@@ -10,7 +10,7 @@ and compatibility wrappers are absent. Recompile custom retained-scene shaders a
 7.0.4 `gpuscene_abi.glsl`; do not embed record strides from an older release.
 
 This version is delivered through GitHub source and local Maven artifacts. No remote release
-or Maven Central publication is implied by building the sources. See [7.1.0 changes](7.1.0.md)
+or Maven Central publication is implied by building the sources. See [7.1.0 changes](release-independent-native-and-host-lighting.md)
 for the exact medium API. GPU and packaged-runtime evidence is recorded separately in
 [RTXPT integration](quality/rtxpt-managed-medium-migration.md),
 [advanced-feature audit](quality/rtxpt-advanced-audit-20261101.md), and

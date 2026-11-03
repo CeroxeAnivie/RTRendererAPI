@@ -7,7 +7,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Independent GPU plan integration; this does not stand in for the full E01-E12 matrix. */
 public final class RtxptNativeLightingNativeSelfTest {
-    static final Path OUT=Path.of("build/reports/rtxpt-710-native-lighting").toAbsolutePath();
+    static final Path OUT=Path.of("build/reports/rtxpt-native-lighting").toAbsolutePath();
     static SceneTransaction scene(){return SceneTransaction.builder(1).resetScene()
         .upsert(MaterialAsset.builder(1).baseColorRgba8(0xff808080).roughness(.8f).build())
         .upsert(RtxptFramePreparationNativeSelfTest.card(1).toBuilder().lightmapCoordinates(new float[]{.5f,0,.5f,0,.5f,0,.5f,0}).build())

@@ -18,7 +18,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 public final class RtxptHostSurfaceTransportNativeSelfTest {
     private static final int W=33,H=25,X=W/2,Y=H/2;
     private static final Path OUT=Path.of(System.getProperty("top.ceroxe.rt.rtxpt.testOutput",
-        "build/reports/rtxpt-710-host-transport")).toAbsolutePath();
+        "build/reports/rtxpt-host-transport")).toAbsolutePath();
     private static final HostSurfaceFrameLease.Signal COMBINED=HostSurfaceFrameLease.Signal.COMBINED_SURFACE,
         DIRECT=HostSurfaceFrameLease.Signal.DIFFUSE_DIRECT,SPECULAR=HostSurfaceFrameLease.Signal.SPECULAR,
         TRANSMISSION=HostSurfaceFrameLease.Signal.TRANSMISSION,EMISSION=HostSurfaceFrameLease.Signal.EMISSION,

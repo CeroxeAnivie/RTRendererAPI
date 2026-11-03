@@ -1,0 +1,225 @@
+{
+  "format": "rtr-lighting-release-validation",
+  "formatVersion": 1,
+  "version": "7.1.1",
+  "validatedUtc": "2026-11-03T15:49:07.8693745Z",
+  "passed": true,
+  "strategy": "Cumulative impact-based acceptance; passed unaffected cases retained; no FG/MFG",
+  "singleAllGreenFullRun": false,
+  "baselineCommit": "ad6d265bb87b00c63ef741b7629a05a9dbd3c5b0",
+  "historicalFullRun": "build/reports/rtxpt-710-release/result.json",
+  "currentArtifacts": [
+    {
+      "module": "renderer-api",
+      "file": "renderer-api/build/libs/renderer-api-7.1.1.jar",
+      "sha256": "59a333c95209f89fa820bdd761f8849a14247ba628026084cca7df2f76c04645",
+      "bytes": 783208
+    },
+    {
+      "module": "renderer-core",
+      "file": "renderer-core/build/libs/renderer-core-7.1.1.jar",
+      "sha256": "2d8c31b653a51813a669e4610d0e3bab4bf24a03f10b6d37e59795cf39b6c34f",
+      "bytes": 14561475
+    },
+    {
+      "module": "renderer-nvidia",
+      "file": "renderer-nvidia/build/libs/renderer-nvidia-7.1.1.jar",
+      "sha256": "1d9801611b3419275fa040044747fc8f4f7f4300d67171e1dff7ff84771d85c7",
+      "bytes": 62644788
+    },
+    {
+      "module": "renderer-rtxpt",
+      "file": "renderer-rtxpt/build/libs/renderer-rtxpt-7.1.1.jar",
+      "sha256": "ce425072558cd2fed5f09d3a6005ab77b85e7b08214f0a9415c712616bb7a74b",
+      "bytes": 763091774
+    }
+  ],
+  "nativeDllSha256": "96d5189544985c6b46c139a9eeb7d3fa61ba105b00922d76ed379fa7426d63d5",
+  "pdbSha256": "2f154cf4a97e8f80f4319d6b98532e940ae5253411f3327dda732cfa07017917",
+  "shaderAbiSha256": "88ac890d61b7cebd4a0e11e171c002190b9fcd97046163c1d8c4233de0b8809d",
+  "precompiledPermutations": 1143,
+  "jarTests": [
+    {
+      "name": "deep-equivalence",
+      "passed": true,
+      "exitCode": 0,
+      "startedUtc": "2026-11-03T15:43:14.5908891Z"
+    },
+    {
+      "name": "extension",
+      "passed": true,
+      "exitCode": 0,
+      "startedUtc": "2026-11-03T15:45:10.9038832Z"
+    },
+    {
+      "name": "host-augmentation",
+      "passed": true,
+      "exitCode": 0,
+      "startedUtc": "2026-11-03T15:43:26.5519564Z"
+    },
+    {
+      "name": "host-transport",
+      "passed": true,
+      "exitCode": 0,
+      "startedUtc": "2026-11-03T15:43:43.7367307Z"
+    },
+    {
+      "name": "old-abi-rejection",
+      "passed": true,
+      "exitCode": 0,
+      "startedUtc": "2026-11-03T15:44:59.649016Z"
+    },
+    {
+      "name": "raw-variants",
+      "passed": true,
+      "exitCode": 0,
+      "startedUtc": "2026-11-03T15:42:53.9420686Z"
+    },
+    {
+      "name": "retained-repairs",
+      "passed": true,
+      "exitCode": 0,
+      "startedUtc": "2026-11-03T15:42:10.5920057Z"
+    },
+    {
+      "name": "rr-variants",
+      "passed": true,
+      "exitCode": 0,
+      "startedUtc": "2026-11-03T15:43:04.3205066Z"
+    }
+  ],
+  "packagedIsolation": {
+    "foreignWorkingDirectory": true,
+    "implementationClassesFromJarsOnly": true,
+    "checkoutNativeOverride": false,
+    "strictPrecompiled": true,
+    "fgMfgExecuted": false
+  },
+  "payloadEquivalence": {
+    "documentationAndManifestOnly": true,
+    "nativeDllSha256": "96d5189544985c6b46c139a9eeb7d3fa61ba105b00922d76ed379fa7426d63d5",
+    "runtimeNonDocumentationEntriesIdentical": 1719,
+    "documentationEntries": [
+      "native-lighting-sdk.json",
+      "docs/",
+      "docs/consumer-agent-handoff.md",
+      "docs/native-lighting-reconstruction.md",
+      "docs/ordinary-and-expert.md",
+      "docs/release-independent-native-and-host-lighting.md",
+      "docs/rtxpt-acceptance.md",
+      "docs/rtxpt-diagnostics.md",
+      "docs/rtxpt-e12-cost.md",
+      "docs/rtxpt-host-augmentation.md",
+      "docs/rtxpt-host-surface-input.md",
+      "docs/rtxpt-native-application-and-compact.md",
+      "docs/rtxpt-native-lighting-extension.md",
+      "docs/rtxpt-native-matrix.md",
+      "docs/rtxpt-release-sdk.md",
+      "docs/quality/",
+      "docs/quality/lighting-backend-comparison.md",
+      "docs/quality/lighting-repair-validation.md",
+      "docs/quality/native-lighting-performance.md",
+      "docs/quality/rtxpt-performance.md",
+      "docs/quality/data/",
+      "docs/quality/data/lighting-backend-comparison.json",
+      "docs/quality/data/lighting-lifecycle-curves.json",
+      "docs/quality/data/native-lighting-performance.json"
+    ],
+    "outerCodeEntriesIdentical": 85,
+    "otherThreeJarsBitExact": true,
+    "pdbMatchesBuild": true,
+    "finalRuntimeSha256": "a87086111799867e6864454bd3b409bd9d963dae7d4b7941a7004887332ac786",
+    "passed": true
+  },
+  "pressure": {
+    "passed": true,
+    "dynamicSeconds": 60,
+    "dynamicFrames": 2969,
+    "mixedSeconds": 120,
+    "mixedFrames": 3332,
+    "rollingImages": 36,
+    "grid": [
+      1281,
+      801
+    ],
+    "maximumSources": 1024,
+    "meshes": 256
+  },
+  "lifecycle": {
+    "passed": true,
+    "sessions": 10,
+    "resizes": 50,
+    "allShutdownTrackedResources": 0,
+    "handleSamples": 91,
+    "maximumObservedHandles": 1232
+  },
+  "window": {
+    "vulkanVisibleProbes": 18,
+    "allResponded": true,
+    "nativePreviouslyPassed": true,
+    "computerUse": false
+  },
+  "deepSupplement": {
+    "passed": true,
+    "row": {
+      "level": "DEEP",
+      "cpuWallMilliseconds": {
+        "samples": 120,
+        "p50": 2.8497,
+        "p95": 3.6131,
+        "p99": 4.7772,
+        "max": 5.3063
+      },
+      "ownerJavaAllocatedBytes": {
+        "samples": 120,
+        "p50": 55768.0,
+        "p95": 55768.0,
+        "p99": 55912.0,
+        "max": 63936.0
+      },
+      "statistics": "StatisticsCollection[requested=true, effective=true, pending=1, copies=132, queries=132, polls=144]",
+      "decomposed": true
+    }
+  },
+  "performanceEvidence": "docs/quality/data/native-lighting-performance.json",
+  "impactAnalysis": "docs/quality/lighting-repair-validation.md",
+  "knownLimits": [
+    "External GPU load: no verified fixed backend speedup",
+    "DEEP source/shadow internal times remain unexpanded",
+    "Real host GL/reconstruction costs require its own adapter",
+    "Device loss/fullscreen/DPI/cross-monitor injection not run"
+  ],
+  "failures": [
+    {
+      "case": "initial full 7.1.0 gate",
+      "status": "Nine initial failures followed by passed strict supplements",
+      "originalReportPreserved": true
+    },
+    {
+      "case": "initial RR gain fixture",
+      "status": "Passed same-scene gain supplement; initial result retained"
+    },
+    {
+      "case": "resource-matrix BLAS assertion",
+      "status": "Per-alpha dependent BLAS allowed; pending tail passed"
+    },
+    {
+      "case": "DEEP phase aliasing",
+      "status": "Bad large-grid counter evidence retained; independent phase buffers restore exact production counters"
+    },
+    {
+      "case": "pressure source-removal fixture",
+      "observedError": "Unknown or duplicate sparse source removal: 65",
+      "status": "Transition-only removals fixed; full 60/120s pressure passed"
+    },
+    {
+      "case": "packaged extension output directory",
+      "status": "Old ABI correctly rejected; capture directory absent; fixture fixed and only failed/new extension cases supplemented",
+      "stderr": "build/reports/lighting-release/failures/old-abi-rejection.err.log"
+    }
+  ],
+  "publication": {
+    "status": "Validated; GitHub push then Maven Local pending",
+    "mavenCentralRequested": false
+  }
+}

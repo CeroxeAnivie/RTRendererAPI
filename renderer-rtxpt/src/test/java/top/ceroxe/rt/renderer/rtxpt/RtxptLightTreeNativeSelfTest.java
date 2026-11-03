@@ -8,7 +8,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** GPU traversal counters, large-set edits, and linear HDR estimator reference. */
 public final class RtxptLightTreeNativeSelfTest {
-    static final Path OUTPUT=Path.of("build/reports/rtxpt-light-tree-703").toAbsolutePath();
+    static final Path OUTPUT=Path.of("build/reports/rtxpt-light-tree").toAbsolutePath();
     static RendererConfig config(int limit){
         var base=RtxptScalabilityBenchmark.config();var p=base.pathTracing();
         var q=p.quality().withLighting(p.quality().lighting().withSamples(63,5).withExactPointLightLimit(limit));

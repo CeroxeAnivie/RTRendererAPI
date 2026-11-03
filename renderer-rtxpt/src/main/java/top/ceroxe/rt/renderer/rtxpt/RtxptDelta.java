@@ -30,7 +30,7 @@ final class RtxptDelta {
         var meshMaterials=new HashMap<Long,Set<Long>>();
         for(var i:items) {
             names.add(i.name());String key=RtxptScene.meshName(i);var mesh=scene.meshes.get(i.mesh());
-            boolean geometry=!Objects.equals(old.meshes.get(i.mesh()),mesh)||!oldVariants.contains(key);
+            boolean geometry=!sameGeometry(old.meshes.get(i.mesh()),mesh)||!oldVariants.contains(key);
             if(geometry&&imported.add(key))meshItems.add(i);
             var before=oldItems.get(i.name());
             if(geometry||!i.equals(before)){
@@ -65,5 +65,12 @@ final class RtxptDelta {
         int writtenTextures=(int)translated.textures.keySet().stream().filter(changedTextures::contains).count();
         return new Prepared(manifest,translated,textureFiles,imported.size(),variants.size(),writtenTextures,
             !meshItems.isEmpty()||!variants.isEmpty()||!removed.isEmpty()||!updates.isEmpty());
+    }
+    /** Only attributes consumed by the resident geometry importer participate.
+     * Baseline coordinates and authored tint have independent GPU publications. */
+    static boolean sameGeometry(MeshAsset a,MeshAsset b){
+        return a==b || a!=null&&b!=null&&a.positions().equals(b.positions())&&a.normals().equals(b.normals())
+            &&a.tangents().equals(b.tangents())&&a.textureCoordinates().equals(b.textureCoordinates())
+            &&a.triangleIndices().equals(b.triangleIndices())&&a.triangleMaterialIds().equals(b.triangleMaterialIds());
     }
 }

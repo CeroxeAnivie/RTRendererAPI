@@ -83,6 +83,8 @@ final class RtxptNative {
     static native void hostSurfaceCapture(long handle,int signal,String path);
     static native boolean hostSurfaceConsumersRetired(long handle);
     static native void nativeLighting(long handle,float[] parameters);
+    static native void nativeLightingReconstruction(long handle,boolean enabled,boolean reset);
+    static native long[] nativeLightingReconstructionState(long handle);
     static native void nativeLightingClock(long handle,long timeNanos,long deltaNanos);
     static native void nativeLightingAttributes(long handle,long generation,String[] instances,float[] attributes,float[] lookup,byte[] application);
     static native void nativeLightingApplicationPatch(long handle,long generation,int offset,byte[] data);
@@ -96,7 +98,10 @@ final class RtxptNative {
     static native void nativeLightingExtension(long handle,String manifest,String expectedHash);
     static native void nativeLightingWorkEnabled(long handle,boolean enabled);
     static native long[] nativeLightingWork(long handle);
+    static native long[] nativeLightingUpdateStatistics(long handle);
+    static native void nativeLightingDecomposition(long handle,boolean enabled);
     static native void nativeLightingBaseline(long handle,String geometry,float[] coordinates);
+    static native void nativeLightingVertexColors(long handle,String geometry,int[] colors);
     static native long[] nativeLightingTelemetry(long handle);
     static native void nativeLightingCapture(long handle,String path,int signal);
     static native boolean nativeLightingCanPublish(long handle);

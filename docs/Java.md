@@ -30,7 +30,7 @@ Maven 坐标是 `top.ceroxe.rt:renderer-api:7.1.0`，默认传递解析 Vulkan �
 
 ## 最小调用
 
-`Renderer.open()` 会枚举已安装 provider、执行能力探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 25 或更高版本。当前行为、验收证据和已知限制见 [7.0.4 版本与验证范围](7.0.4.md)，历史 procedural/triangle RT 证据见 [4.1.0 验证记录](quality/verification-report.md#4-1-0-procedural-validation)。这些结果不代表全部兼容硬件或特定宿主集成都已验收。
+`Renderer.open()` 会枚举已安装 provider、执行能力探测并打开优先级最高的可用后端。兼容目标是 Windows 10 x64 或更高版本、NVIDIA RTX 20 系或更新 GPU、Vulkan 1.2+ 与 Java 25 或更高版本。当前行为、验收证据和已知限制见 [7.0.4 版本与验证范围](release-transparent-background-composition.md)，历史 procedural/triangle RT 证据见 [4.1.0 验证记录](quality/verification-report.md#4-1-0-procedural-validation)。这些结果不代表全部兼容硬件或特定宿主集成都已验收。
 
 ```java
 try (Renderer renderer = Renderer.open()) {
@@ -61,7 +61,7 @@ try (Renderer renderer = Renderer.open()) {
 - API 不使用 `null` 表示“暂时无帧”，也不会无限等待。
 - 普通路径的 readback 使用 frame-slot 常驻异步 ring，不会逐帧创建 staging buffer 或执行 queue-idle；但把图像送到 CPU 本身仍有带宽成本。
 
-7.0.4 新增 `SceneLightingControl.transparentBackground()` 与 `RtxptComposedRenderer.backgroundLayer(...)`，用于把宿主 GPU 天空放在 RTXPT 主射线 coverage 下方；颜色空间、玻璃和功能组合范围见[透明输出合同](7.0.4.md)。
+7.0.4 新增 `SceneLightingControl.transparentBackground()` 与 `RtxptComposedRenderer.backgroundLayer(...)`，用于把宿主 GPU 天空放在 RTXPT 主射线 coverage 下方；颜色空间、玻璃和功能组合范围见[透明输出合同](release-transparent-background-composition.md)。
 
 ## RTXPT 透明介质与原生窗口
 
@@ -135,11 +135,11 @@ var config = base.copyBuilder()
 
 画面过曝时可用 `host.setExposureCompensation(-1.5F)` 调整上游 tone mapper。该入口也可在首帧提交前调用，场景重载保留，实际值通过 `presentationStatus()` 回读。它只控制显示亮度；SR 本身不替代路径追踪降噪，小灯策略也不覆盖环境光、面积光和间接反弹的全部随机噪声。
 
-`Medium` 只含 `absorption` 和 `[1,4]` 的 IOR；`MediumBoundary` 只含介质和 `[0,14]` 优先级，最多 4 层嵌套内部。需要闭合、朝外且绕序一致的网格。旧体积散射、密度网格、HG、体积发光、无限／相机初始介质和不可见边界已删除，详见[7.0.2 合同](7.0.2.md)。
+`Medium` 只含 `absorption` 和 `[1,4]` 的 IOR；`MediumBoundary` 只含介质和 `[0,14]` 优先级，最多 4 层嵌套内部。需要闭合、朝外且绕序一致的网格。旧体积散射、密度网格、HG、体积发光、无限／相机初始介质和不可见边界已删除，详见[7.0.2 合同](release-retained-resources-and-scalable-lighting.md)。
 
 RTXPT 当前不提供通用 CPU 帧、线性 HDR 导出、任意场景 shader、精确 Vulkan 投影、屏幕雾、旧光子图预算及逐帧纹理／lightmap 覆盖；无效输入在调用边界拒绝。`capture(Path)` 是显式单次诊断捕获，`awaitIdle()` 是显式 GPU 排空，两者都不应放进正常出帧循环。
 
-7.0.2 支持通过 `SceneTransaction` 更新稳定 ID 的纹理来实现动画；上面的限制指帧请求中的覆盖输入。网格、材质和纹理事务走资源 delta，首次发布或显式 `resetScene` 才使用完整场景路径，详见[资源更新与验收](quality/rtxpt-retained-702.md)。
+7.0.2 支持通过 `SceneTransaction` 更新稳定 ID 的纹理来实现动画；上面的限制指帧请求中的覆盖输入。网格、材质和纹理事务走资源 delta，首次发布或显式 `resetScene` 才使用完整场景路径，详见[资源更新与验收](quality/rtxpt-retained-resources.md)。
 
 ## RTXPT 与 Vulkan 独立工作组合
 
@@ -394,7 +394,7 @@ RendererConfig explicitProduction = RendererConfig.builder()
 
 ### 完整专家配置
 
-本节配置用于 Vulkan 后端；RTXPT 的固定倍率、路径预算和能力边界见 [7.0.2](7.0.2.md)。专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
+本节配置用于 Vulkan 后端；RTXPT 的固定倍率、路径预算和能力边界见 [7.0.2](release-retained-resources-and-scalable-lighting.md)。专家模式只表达应用意图，不接管 Vulkan、Streamline、NRD 或 RTXMU 的资源 owner。下面的配置
 显式覆盖 7.0.2 中保留的全部 NVIDIA 能力，同时保持生产环境可降级：DLSS SR 不可用时允许 NIS，
 NRD 不可用时保留内建时域路径，FG/MFG 不可用时继续发布原生帧。SER 和 RTXMU 独立
 协商，某一项不支持不会阻止其他项启用。

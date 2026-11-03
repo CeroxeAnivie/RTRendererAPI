@@ -2419,7 +2419,7 @@ Fresnel 使用入射与出射介质折射率，Snell 计算区分正常折射与
 
 当前仓库旧 HEAD 是 `f400d6f`，其 `gradle.properties` 标记 6.0.3；本地已有 6.0.4 工作和性能报告。因此历史结论依据是“本地 6.0.4 工作所基于的旧 HEAD 加本地报告”，不是一个已提交的 6.0.4 标签。
 
-旧 HEAD 的 `EnvironmentState.Medium` 和 `gpuscene_medium.glsl` 仅提供固定 RGB 系数与标量密度，没有空间密度字段；`gpuscene_shadow.rmiss` 对观察段累积环境、太阳和局部灯光，没有按相函数续接到下一次体积碰撞。仓库 [5.2.0 说明](../5.2.0.md) 与 [本地 6.0.4 报告](6.0.4-performance.md) 也把范围描述为均质/单次散射。表面反射折射的续接不等于多次体积散射，直线透射阴影不等于聚焦焦散。当前密度网格和额外体积碰撞是明确增加的能力，不应将它们描述成恢复旧功能。
+旧 HEAD 的 `EnvironmentState.Medium` 和 `gpuscene_medium.glsl` 仅提供固定 RGB 系数与标量密度，没有空间密度字段；`gpuscene_shadow.rmiss` 对观察段累积环境、太阳和局部灯光，没有按相函数续接到下一次体积碰撞。仓库 [5.2.0 说明](../release-closed-boundary-participating-media.md) 与 [本地 6.0.4 报告](6.0.4-performance.md) 也把范围描述为均质/单次散射。表面反射折射的续接不等于多次体积散射，直线透射阴影不等于聚焦焦散。当前密度网格和额外体积碰撞是明确增加的能力，不应将它们描述成恢复旧功能。
 
 ## 不使用 GPU 的检查
 

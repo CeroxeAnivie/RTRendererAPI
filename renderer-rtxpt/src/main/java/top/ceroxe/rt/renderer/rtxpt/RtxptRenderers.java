@@ -19,6 +19,14 @@ public final class RtxptRenderers {
     public static Renderer openNativeLighting(NativeLightingPlan plan){
         return openNativeLighting(nativeLightingConfiguration(),Objects.requireNonNull(plan,"plan"));
     }
+    /** Native low-resolution GI with actual DLSS RR enabled by default. Gain
+     * remains deterministic; compose over the full-resolution host base afterwards.
+     * Hardware support is checked before the first lighting dispatch. */
+    public static Renderer openReconstructedNativeLighting(NativeLightingPlan plan){
+        var renderer=(RtxptRenderer)openNativeLighting(plan);
+        try{renderer.lightingReconstruction(NativeLightingReconstruction.DLSS_RR);return renderer;}
+        catch(RuntimeException|Error failure){renderer.close();throw failure;}
+    }
     /** Opens finite host-lit augmentation using its compatible ordinary policy. */
     public static Renderer openHostSurface(HostSurfacePlan plan,HostSurfaceAugmentation augmentation){
         Objects.requireNonNull(plan,"plan");

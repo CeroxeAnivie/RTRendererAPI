@@ -1,0 +1,21 @@
+# RTRendererAPI 7.0.4
+
+7.0.4 增加主射线透明输出和宿主 GPU 背景合成。消费方指出的 7.0.3 缺口属实：独立背景颜色仍是 opaque 输出，无法保留宿主已绘制的天空。此次从路径追踪器自身输出覆盖率，消费方无需使用宿主深度猜遮罩。既有介质、资源增量和连续照明能力沿用 [7.0.3](release-incremental-lighting-and-frame-diagnostics.md)。四模块版本统一为 7.0.4，Java 25 不变。
+
+```java
+var lighting = renderer.extension(SceneLightingControl.class).orElseThrow();
+if (lighting.supportsTransparentBackground()) lighting.transparentBackground();
+// 恢复不透明输出：lighting.environmentBackground() 或 visibleBackground(r, g, b)
+```
+
+主射线 miss 输出 RGBA=0；有效首表面保留 coverage，包括不透明表面、通过 alpha cutoff 的镂空纹理、金属和玻璃。反射、折射、吸收及间接照明继续使用 API 的物理环境。玻璃不是一张用于直接露出宿主天空的 alpha 贴片：宿主二维背景不会自动经玻璃折射。API 不增加 Minecraft、太阳或月亮专用接口。
+
+`D3D12SharedFrame.alphaMode()` 标记该次发布的 `OPAQUE` 或 `PREMULTIPLIED`。旧十参数构造函数保留并默认 opaque。透明输出先在 HDR 重建中保留 coverage，tone map 时恢复直色，在线性 display 空间重新预乘 coverage，再进行 sRGB 编码。宿主需先解码 sRGB，用 `foreground + background * (1 - alpha)` 混合，再编码输出；直接在 sRGB 字节上混合会形成暗边。Alpha 先量化至 RGBA8 精度，保证最终 alpha=0 时 RGB 也严格为零。
+
+`RtxptComposedRenderer.backgroundLayer(layer)` 接收同一 Vulkan 命令通道已完成、尺寸匹配、全尺寸 RGBA8 GPU 纹理，操作为 `REPLACE`；`null` 移除。栈顺序为宿主背景 → RTXPT 透明输出 → overlays。背景最多一层，启用后最多六层 overlay。底层 `VulkanFramePresenter` 同时增加带 background 参数的 `composeD3D12SharedFrame` 和 `presentD3D12SharedFrame`。新背景路线及透明帧叠层在线性空间合成；既有 opaque 叠层保留原行为。正常帧没有 CPU 像素传输，借用纹理的 mutation、GPU 完成和 fence 生命周期继续有效。
+
+透明输出当前要求关闭 ReSTIR、SHaRC、FG/MFG 和 bloom；不满足时显式拒绝，不暗中改变用户配置。原生窗口本身不会成为 OS 透明窗口。为保护 coverage UAV，透明输出关闭原有异步前缀重叠。DLSS 的 Alpha 模式属于实例创建参数，切换透明／不透明时安全退休旧实例并重建，后续帧不重复重建。
+
+无重建、RR、SR、SR＋NRD 已做定向检查。RR 测得部分覆盖的抗锯齿边缘；本机 SR 和 SR＋NRD 的 Alpha 仅有 0/1，不能把这些路径描述成已支持平滑 coverage 抗锯齿。需要平滑合成边缘时选择 RR。本轮未跑全量回归，也未启动消费方应用；宿主真实天空接入仍由消费方完成。
+
+正确性、量化成本及失败修正记录见 [7.0.4 定向验收](quality/rtxpt-transparent.md)。源码发布 GitHub，四模块发布 Maven Local，不上传 Central。

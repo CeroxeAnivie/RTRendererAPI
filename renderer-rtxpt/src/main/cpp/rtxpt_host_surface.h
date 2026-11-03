@@ -21,7 +21,7 @@ public:
     struct Triangle {uint32_t geometry,primitive;};
     struct Constants {uint32_t extent[4]{},counts[4]{};};
     static_assert(sizeof(Instance)==32&&sizeof(Constants)==32);
-    bool active=false,dirty=true,motionIncludesJitter=false,workStatisticsEnabled=false;
+    bool active=false,dirty=true,motionIncludesJitter=false,workStatisticsEnabled=false,workStatisticsRequested=false,diagnosticsEnabled=true;
     uint64_t sequence=0,revision=0;
     uint32_t inputWidth=0,inputHeight=0,composition=1,hostComponents=0;
     nvrhi::BufferHandle constantBuffer,instances,triangles,statistics;

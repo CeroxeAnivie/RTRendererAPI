@@ -110,6 +110,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     private final Map<Long,NativeLightingPublication.Instance> lightingInstances=new HashMap<>();
     private final Map<Long,float[]> lightingBaselines=new HashMap<>();
     private final Set<Long> pendingLightingInstances=new HashSet<>(),pendingLightingBaselines=new HashSet<>();
+    private final Set<Long> pendingLightingColors=new HashSet<>();
+    private long baselineCornersConverted,colorCornersConverted,attributeMeshesConverted;
     private float[] pendingBaselineLookup;
     private byte[] pendingApplicationData;
     private final ArrayDeque<NativeLightingApplicationPatch> pendingApplicationPatches=new ArrayDeque<>();
@@ -121,6 +123,21 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     private LightingExtensionState selectedLightingExtension=new LightingExtensionState(null,null,15,0);
     private LightingExtensionState activeLightingExtension=selectedLightingExtension;
     private boolean lightingWorkStatisticsEnabled;
+    private boolean lightingDiagnosticDecomposition;
+    private NativeLightingReconstruction lightingReconstruction=NativeLightingReconstruction.NONE;
+    @Override public void lightingDiagnosticDecompositionEnabled(boolean enabled){ready();nativeLightingPlan();if(enabled&&(lightingExtensionManifest!=null||lightingReconstruction!=NativeLightingReconstruction.NONE))throw new IllegalStateException("Diagnostic decomposition requires the raw default evaluator");if(handle!=0)RtxptNative.nativeLightingDecomposition(handle,enabled);lightingDiagnosticDecomposition=enabled;}
+    @Override public void lightingReconstruction(NativeLightingReconstruction value){
+        ready();Objects.requireNonNull(value);var plan=nativeLightingPlan();
+        if(value!=NativeLightingReconstruction.NONE&&value!=NativeLightingReconstruction.DLSS_RR)throw new IllegalArgumentException("Native GI supports NONE or DLSS_RR");
+        if(value!=NativeLightingReconstruction.NONE&&(!plan.signals().contains(NativeLightingPlan.Signal.INDIRECT_DIFFUSE)||lightingDiagnosticDecomposition||lightingExtensionManifest!=null))
+            throw new IllegalStateException("GI RR requires INDIRECT_DIFFUSE and the default fused evaluator");
+        if(handle!=0)RtxptNative.nativeLightingReconstruction(handle,value==NativeLightingReconstruction.DLSS_RR,false);lightingReconstruction=value;
+    }
+    @Override public void resetLightingReconstruction(){ready();nativeLightingPlan();if(handle!=0)RtxptNative.nativeLightingReconstruction(handle,lightingReconstruction==NativeLightingReconstruction.DLSS_RR,true);}
+    @Override public NativeLightingControl.ReconstructionState lightingReconstruction(){
+        ready();nativeLightingPlan();var n=handle==0?new long[7]:RtxptNative.nativeLightingReconstructionState(handle);
+        return new NativeLightingControl.ReconstructionState(lightingReconstruction,n[0]!=0?NativeLightingReconstruction.DLSS_RR:NativeLightingReconstruction.NONE,(int)n[1],(int)n[2],n[3],n[4],n[5]!=0);
+    }
     private boolean hostAugmentationActive(){return hostSurfacePlan!=null&&hostSurfacePlan.composition()==HostSurfacePlan.Composition.HOST_LIT_AUGMENTATION;}
     private NativeLightingPlan lightingPublicationPlan(){
         ready();if(nativeLightingPlan!=null)return nativeLightingPlan;
@@ -129,8 +146,12 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     }
     @Override public void lightingWorkStatisticsEnabled(boolean enabled){ready();lightingPublicationPlan();lightingWorkStatisticsEnabled=enabled;if(handle!=0)RtxptNative.nativeLightingWorkEnabled(handle,enabled);}
     @Override public NativeLightingControl.WorkStatistics lightingWorkStatistics(){ready();lightingPublicationPlan();var n=handle==0?new long[9]:RtxptNative.nativeLightingWork(handle);return new NativeLightingControl.WorkStatistics(n[0]!=0,n[1],n[2],n[3],n[4],n[5],n[6],n[7],n[8]);}
+    @Override public NativeLightingControl.StatisticsCollection lightingStatisticsCollection(){ready();lightingPublicationPlan();var n=handle==0?new long[11]:RtxptNative.nativeLightingUpdateStatistics(handle);return new NativeLightingControl.StatisticsCollection(lightingWorkStatisticsEnabled,n[6]!=0,n[7],n[8],n[9],n[10]);}
+    @Override public NativeLightingControl.AttributeUpdateStatistics lightingAttributeUpdateStatistics(){ready();lightingPublicationPlan();var n=handle==0?new long[11]:RtxptNative.nativeLightingUpdateStatistics(handle);return new NativeLightingControl.AttributeUpdateStatistics(baselineCornersConverted,colorCornersConverted,attributeMeshesConverted,n[0],n[1],n[2],n[3],n[4]);}
     @Override public void activateLightingExtension(Path manifest){
         ready();
+        if(lightingDiagnosticDecomposition)throw new IllegalStateException("Disable diagnostic decomposition before activating an extension evaluator");
+        if(lightingReconstruction!=NativeLightingReconstruction.NONE)throw new IllegalStateException("Extension output semantics must be raw; disable GI RR before activation");
         if(hostAugmentationActive())throw new UnsupportedOperationException("Host-lit augmentation does not execute offline native-lighting extensions");
         nativeLightingPlan();var path=Objects.requireNonNull(manifest).toAbsolutePath().normalize();
         var validated=RtxptNative.nativeLightingExtensionValidate(path.toString(),nativeLightingPlan.signalMask(),lightingApplicationBytes);
@@ -185,6 +206,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     @Override public void nativeLightingPlan(NativeLightingPlan value){
         ready();Objects.requireNonNull(value);
         if((value.signalMask()&~lightingExtensionSignals)!=0)throw new IllegalArgumentException("Requested signals are not supported by the selected extension");
+        if(lightingReconstruction!=NativeLightingReconstruction.NONE&&!value.signals().contains(NativeLightingPlan.Signal.INDIRECT_DIFFUSE))throw new IllegalArgumentException("Disable GI RR before removing INDIRECT_DIFFUSE");
         if(!externalPresentation||!sparseLightingSupported()||options.reconstruction()!=Reconstruction.NONE
                 ||options.standaloneDenoiser()||options.frameGeneration().preference().requested())
             throw new IllegalArgumentException("The independent deterministic lighting plan requires offscreen SCENE_ANALYTIC without full-image reconstruction, ReSTIR or a radiance cache");
@@ -201,24 +223,35 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         if(nativeLightingPlan!=null){
             RtxptNative.nativeLighting(handle,RtxptNativeLightingParameters.pack(nativeLightingPlan,frame));
             RtxptNative.nativeLightingEncoding(handle,nativeLightingPlan.encoding().ordinal());
+            RtxptNative.nativeLightingReconstruction(handle,lightingReconstruction==NativeLightingReconstruction.DLSS_RR,!frame.temporalHistoryResets().isEmpty());
         }
         RtxptNative.nativeLightingClock(handle,frame.clock().timeNanos(),frame.clock().deltaNanos());
         RtxptNative.nativeLightingWorkEnabled(handle,lightingWorkStatisticsEnabled);
+        RtxptNative.nativeLightingDecomposition(handle,lightingDiagnosticDecomposition);
         if(geometryChanged||lightingAttributeReset)RtxptNative.nativeLightingClearAttributes(handle);
-        if(geometryChanged||!pendingLightingBaselines.isEmpty()){
+        if(geometryChanged||!pendingLightingBaselines.isEmpty()||!pendingLightingColors.isEmpty()){
         var uploaded=new HashSet<String>();
         for(var item:items){String meshName=RtxptScene.meshName(item);if(!uploaded.add(meshName))continue;
-            if(!geometryChanged&&!pendingLightingBaselines.contains(item.mesh()))continue;
+            boolean baselineChanged=geometryChanged||pendingLightingBaselines.contains(item.mesh());
+            boolean colorChanged=geometryChanged||pendingLightingColors.contains(item.mesh());
+            if(!baselineChanged&&!colorChanged)continue;
             var mesh=scene.meshes.get(item.mesh());var materials=mesh.triangleMaterialIds();var indices=mesh.triangleIndices();var coordinates=mesh.lightmapCoordinates();
             var override=lightingBaselines.get(item.mesh());
             var groups=new LinkedHashMap<Long,ArrayList<Float>>();
+            var colorGroups=new LinkedHashMap<Long,ArrayList<Integer>>();var colors=mesh.vertexColorsRgba8();
             for(int triangle=0;triangle<mesh.triangleCount();triangle++){
                 var group=groups.computeIfAbsent(materials.get(triangle),ignored->new ArrayList<>());
-                for(int vertex=0;vertex<3;vertex++){int index=indices.get(triangle*3+vertex)*2;
-                    group.add(override!=null?override[index]:coordinates.hasRemaining()?coordinates.get(index):0);group.add(override!=null?override[index+1]:coordinates.hasRemaining()?coordinates.get(index+1):0);}
+                var colorGroup=colorGroups.computeIfAbsent(materials.get(triangle),ignored->new ArrayList<>());
+                for(int vertex=0;vertex<3;vertex++){int vertexIndex=indices.get(triangle*3+vertex),index=vertexIndex*2;
+                    if(baselineChanged){group.add(override!=null?override[index]:coordinates.hasRemaining()?coordinates.get(index):0);group.add(override!=null?override[index+1]:coordinates.hasRemaining()?coordinates.get(index+1):0);}
+                    if(colorChanged)colorGroup.add(colors.hasRemaining()?colors.get(vertexIndex):0xffffffff);}
             }
             int geometry=0;for(var group:groups.values()){float[] values=new float[group.size()];for(int i=0;i<values.length;i++)values[i]=group.get(i);
-                RtxptNative.nativeLightingBaseline(handle,meshName+":"+geometry++,values);}
+                if(baselineChanged){RtxptNative.nativeLightingBaseline(handle,meshName+":"+geometry,values);baselineCornersConverted+=values.length/2;}
+                geometry++;}
+            geometry=0;if(colorChanged)for(var group:colorGroups.values()){int[] values=new int[group.size()];for(int i=0;i<values.length;i++)values[i]=group.get(i);
+                RtxptNative.nativeLightingVertexColors(handle,meshName+":"+geometry++,values);colorCornersConverted+=values.length;}
+            attributeMeshesConverted++;
         }
         }
         while(!pendingApplicationPatches.isEmpty()){
@@ -240,7 +273,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
                 activeLightingExtension=selectedLightingExtension;lightingExtensionPending=false;
             }catch(RuntimeException|Error failure){selectLightingExtension(activeLightingExtension);lightingExtensionPending=false;throw failure;}
         }
-        pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingBaselineLookup=null;pendingApplicationData=null;
+        pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();pendingBaselineLookup=null;pendingApplicationData=null;
         lightingAttributeReset=false;
     }
     private boolean sparseLightingSupported(){return nativeScene==null&&options.qualityInts()[0]==1&&!options.restirDi()&&!options.restirGi()&&!options.sharc();}
@@ -392,6 +425,11 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     }
     SceneUpdateResult commitScene(PreparedScene prepared){
         var tx=prepared.transaction();
+        for(var mesh:tx.upserts().meshes()){
+            var old=scene.meshes.get(mesh.id());
+            if(old==null||!old.lightmapCoordinates().equals(mesh.lightmapCoordinates()))pendingLightingBaselines.add(mesh.id());
+            if(old==null||!old.vertexColorsRgba8().equals(mesh.vertexColorsRgba8()))pendingLightingColors.add(mesh.id());
+        }
         if(tx.reset()){pendingSparseIds.clear();lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();lightingAttributeReset=true;}
         var removedInstances=tx.removals().instanceIds();while(removedInstances.hasRemaining()){long id=removedInstances.get();lightingInstances.remove(id);pendingLightingInstances.remove(id);}
         var removedMeshes=tx.removals().meshIds();while(removedMeshes.hasRemaining()){long id=removedMeshes.get();lightingBaselines.remove(id);pendingLightingBaselines.remove(id);}
@@ -528,8 +566,10 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
                 if(!Objects.equals(value,old)){if(value==null)removed.add(id);else sources.add(value);}}
             if(rebuild||!sources.isEmpty()||!removed.isEmpty())RtxptNative.sparseLighting(handle,sources.stream().mapToLong(SparseLightSource::id).toArray(),RtxptSparseSources.pack(sources),removed.stream().mapToLong(Long::longValue).toArray(),rebuild);
         }
-        prepareNativeLighting(f,items,rebuild||delta);
-        prepareHostSurface(f,items,rebuild||delta);
+        boolean mappingsChanged=rebuild||!RtxptScene.sameStructure(items,previous);
+        if(!mappingsChanged&&delta)for(var item:items)if(!RtxptDelta.sameGeometry(residentScene.meshes.get(item.mesh()),scene.meshes.get(item.mesh()))){mappingsChanged=true;break;}
+        prepareNativeLighting(f,items,mappingsChanged);
+        prepareHostSurface(f,items,mappingsChanged);
         previous=items;dirty=false;fullReset=false;residentScene=scene;pendingLightIds.clear();pendingSparseIds.clear();
         if(preparingHostSurface){
             preparedHostHistory.addAll(historyCauses);

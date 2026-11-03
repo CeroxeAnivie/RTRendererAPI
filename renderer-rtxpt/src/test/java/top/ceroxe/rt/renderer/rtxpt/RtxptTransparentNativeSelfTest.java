@@ -9,7 +9,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Targeted real-output gate: geometric coverage, reconstructed edges and physical secondary paths. */
 public final class RtxptTransparentNativeSelfTest {
-    static final Path OUT=Path.of("build/reports/rtxpt-transparent-704");
+    static final Path OUT=Path.of("build/reports/rtxpt-transparent");
     static RendererConfig config(String route){
         var c=RtxptLightingNativeSelfTest.configuration(route);
         var q=c.pathTracing().quality();

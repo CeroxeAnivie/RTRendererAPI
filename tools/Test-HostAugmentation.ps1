@@ -1,9 +1,9 @@
 <# Standalone hidden ten-plane host augmentation acceptance; no native rebuild or dependency downloads. #>
 param(
-    [string]$ClasspathFile='build/710-opengl-test-classpath.txt',
+    [string]$ClasspathFile='build/native-lighting-gl-classpath.txt',
     [string]$RuntimeDirectory='',
     [string]$BridgePath='',
-    [string]$OutputDirectory='build/reports/rtxpt-710-host-augmentation',
+    [string]$OutputDirectory='build/reports/rtxpt-host-augmentation',
     [switch]$CompileOnly
 )
 $ErrorActionPreference='Stop'

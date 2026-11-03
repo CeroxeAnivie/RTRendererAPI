@@ -79,7 +79,7 @@ RTXPT 原 Depth／MV／PreUIColor（HUDless）保留，不通过 Vulkan 重建�
 
 透明帧的 `D3D12SharedFrame.alphaMode()` 为 `PREMULTIPLIED`。新背景路线的所有输入先解码 sRGB，在线性 display 空间预乘合成，再编码输出。调用方上传的 UI 也必须遵循这一颜色合同。旧 opaque 叠层保留原字节域行为。纹理须是单层、单 mip、单采样、全尺寸 `RGBA8_UNORM`，拥有 storage-read usage，并以精确已完成的输出 mutation 引用；单纯上传并不等于已发布的渲染输出。
 
-透明模式要求关闭 ReSTIR、SHaRC、FG/MFG 和 bloom，且原生窗口本身不会 OS 透明。玻璃首表面仍覆盖像素，物理反射／折射使用 API 环境，不会自动折射宿主二维天空。RR 已测得部分覆盖 AA 边缘，本机 SR／SR＋NRD 仍为二值 coverage。详见 [7.0.4](7.0.4.md) 与[定向验收](quality/rtxpt-transparent-704.md)。
+透明模式要求关闭 ReSTIR、SHaRC、FG/MFG 和 bloom，且原生窗口本身不会 OS 透明。玻璃首表面仍覆盖像素，物理反射／折射使用 API 环境，不会自动折射宿主二维天空。RR 已测得部分覆盖 AA 边缘，本机 SR／SR＋NRD 仍为二值 coverage。详见 [7.0.4](release-transparent-background-composition.md) 与[定向验收](quality/rtxpt-transparent.md)。
 
 ## 验证与诊断
 

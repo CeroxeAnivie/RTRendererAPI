@@ -20,6 +20,11 @@ public:
     double normalization=1;
     std::vector<uint32_t> dirtyRecords,dirtyNodes;
     bool full=true,headerDirty=true;
+    std::array<uint32_t,32> groupCounts{};
+    uint32_t groupMask=0;
+    void Group(const Record& record,bool add){if(record.cone[3]==0)return;const auto group=uint32_t(record.cone[2]);
+        if(add){++groupCounts[group];groupMask|=1u<<group;}else if(--groupCounts[group]==0)groupMask&=~(1u<<group);}
+    bool SingleGroup()const{return (groupMask&(groupMask-1))==0;}
     uint32_t recordCapacity=0,nodeCapacity=0;
     nvrhi::BufferHandle sourceBuffer,treeBuffer;
     struct Retired {nvrhi::BufferHandle sources,nodes;nvrhi::EventQueryHandle graphics,compute;};
@@ -59,13 +64,14 @@ public:
         size_t capacity=std::max<size_t>(64,records.capacity());while(capacity<count)capacity*=2;
         records.reserve(capacity);proxies.reserve(capacity);ids.reserve(capacity);slots.reserve(capacity);tree.Reserve(capacity);
         dirtyRecords.reserve(dirtyRecords.size()+changed.size()+removed.size());dirtyNodes.reserve(dirtyNodes.size()+(changed.size()+removed.size())*128);
-        if(reset){records.clear();proxies.clear();ids.clear();slots.clear();tree.Rebuild(proxies,&normalization);dirtyRecords.clear();dirtyNodes.clear();full=true;}
+        if(reset){records.clear();proxies.clear();ids.clear();slots.clear();tree.Rebuild(proxies,&normalization);dirtyRecords.clear();dirtyNodes.clear();groupCounts.fill(0);groupMask=0;full=true;}
         uint64_t visited=tree.visited;
-        for(auto id:removed){uint32_t slot=slots.at(id),last=uint32_t(records.size()-1);tree.Remove(slot,dirtyNodes);slots.erase(id);
+        for(auto id:removed){uint32_t slot=slots.at(id),last=uint32_t(records.size()-1);Group(records[slot],false);tree.Remove(slot,dirtyNodes);slots.erase(id);
             if(slot!=last){records[slot]=records[last];proxies[slot]=proxies[last];ids[slot]=ids[last];slots.at(ids[slot])=slot;dirtyRecords.push_back(slot);}
             records.pop_back();proxies.pop_back();ids.pop_back();}
         for(size_t i=0;i<changed.size();i++){
             auto old=slots.find(changed[i]);uint32_t slot=old==slots.end()?uint32_t(records.size()):old->second;
+            if(old!=slots.end())Group(records[slot],false);Group(prepared[i],true);
             if(old==slots.end()){slots.emplace(changed[i],slot);records.push_back(prepared[i]);proxies.push_back(MakeProxy(prepared[i]));ids.push_back(changed[i]);tree.Insert(proxies,slot,normalization,dirtyNodes);}
             else{records[slot]=prepared[i];proxies[slot]=MakeProxy(prepared[i]);tree.Refit(proxies,slot,normalization,dirtyNodes);}
             dirtyRecords.push_back(slot);

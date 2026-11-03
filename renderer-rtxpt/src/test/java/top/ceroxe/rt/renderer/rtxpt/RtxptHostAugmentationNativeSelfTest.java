@@ -22,7 +22,7 @@ public final class RtxptHostAugmentationNativeSelfTest {
         HostSurfaceFrameLease.Signal.COMBINED_SURFACE,HostSurfaceFrameLease.Signal.DIRECT_MODULATION,
         HostSurfaceFrameLease.Signal.DIFFUSE_INDIRECT,HostSurfaceFrameLease.Signal.COVERAGE);
     private static final Path OUT=Path.of(System.getProperty("top.ceroxe.rt.rtxpt.testOutput",
-        "build/reports/rtxpt-710-host-augmentation")).toAbsolutePath();
+        "build/reports/rtxpt-host-augmentation")).toAbsolutePath();
     private record Images(double[] combined,double[] gain,double[] indirect,double[] coverage) { }
     private static int assertions;
     private static void check(boolean value,String message){assertions++;require(value,message);}

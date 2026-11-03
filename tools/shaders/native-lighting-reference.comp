@@ -1,0 +1,108 @@
+#version 460
+#extension GL_EXT_ray_query : require
+#ifndef RTR_LIGHTING_GROUP_CAPACITY
+#define RTR_LIGHTING_GROUP_CAPACITY 32
+#endif
+// Benchmark adapter for the portable E12 fixture. The acceleration structure is
+// the real legacy Vulkan retained scene, not an analytic/interpreter substitute.
+layout(local_size_x=8,local_size_y=8) in;
+layout(set=0,binding=0) uniform accelerationStructureEXT scene;
+layout(set=0,binding=1,rgba16f) uniform writeonly image2D directOutput;
+layout(set=0,binding=2,rgba16f) uniform writeonly image2D indirectOutput;
+layout(set=0,binding=3,std430) readonly buffer Inputs {vec4 data[];};
+layout(push_constant) uniform Options {uint width,height,sources,root;} options;
+struct Receiver {vec3 position,normal,albedo;};
+vec3 unit(vec3 v){return v*inversesqrt(max(dot(v,v),1e-30));}
+vec3 position(uint instance,uint vertex){return data[20+options.sources*6+instance*5+vertex].xyz;}
+Receiver loadReceiver(uint instance,uint primitive,vec3 origin,vec3 direction,float distance){
+    uvec3 tri=primitive==0?uvec3(0,1,2):uvec3(0,2,3);
+    Receiver r;r.position=origin+direction*distance;
+    r.normal=unit(cross(position(instance,tri.y)-position(instance,tri.x),position(instance,tri.z)-position(instance,tri.x)));
+    if(dot(r.normal,direction)>0)r.normal=-r.normal;
+    r.albedo=data[20+options.sources*6+instance*5+4].rgb;return r;
+}
+bool trace(vec3 origin,vec3 direction,float distance,out Receiver receiver){
+    rayQueryEXT query;rayQueryInitializeEXT(query,scene,0,1,origin,.003,direction,distance);
+    while(rayQueryProceedEXT(query)){if(rayQueryGetIntersectionTypeEXT(query,false)==gl_RayQueryCandidateIntersectionTriangleEXT)rayQueryConfirmIntersectionEXT(query);}
+    if(rayQueryGetIntersectionTypeEXT(query,true)!=gl_RayQueryCommittedIntersectionTriangleEXT)return false;
+    receiver=loadReceiver(rayQueryGetIntersectionInstanceCustomIndexEXT(query,true),rayQueryGetIntersectionPrimitiveIndexEXT(query,true),origin,direction,rayQueryGetIntersectionTEXT(query,true));return true;
+}
+float shadow(Receiver receiver,vec3 direction,float distance){
+    rayQueryEXT query;rayQueryInitializeEXT(query,scene,0,1,receiver.position+receiver.normal*.003,.003,direction,max(.003,distance-.006));
+    while(rayQueryProceedEXT(query)){if(rayQueryGetIntersectionTypeEXT(query,false)==gl_RayQueryCandidateIntersectionTriangleEXT)rayQueryConfirmIntersectionEXT(query);}
+    return rayQueryGetIntersectionTypeEXT(query,true)==gl_RayQueryCommittedIntersectionTriangleEXT?0:1;
+}
+// Private invocation-local storage avoids passing/copying complete array-valued
+// structs through GLSL function arguments on every light candidate.
+vec3 groupSum[2],groupMaxima[2*RTR_LIGHTING_GROUP_CAPACITY],groupChannels[2*RTR_LIGHTING_GROUP_CAPACITY];uvec2 groupKeys[2*RTR_LIGHTING_GROUP_CAPACITY];uint groupMask[2],groupChannelMask[2];
+uint groupSlot(uint set,uint group){return set*uint(RTR_LIGHTING_GROUP_CAPACITY)+(RTR_LIGHTING_GROUP_CAPACITY==1?0:group);}
+void initialize(uint set){groupSum[set]=vec3(0);groupMask[set]=groupChannelMask[set]=0;}
+bool canImprove(uint set,uint source,vec3 upper){
+    uint composition=uint(data[source+4].w),group=uint(data[source+4].z),bit=1u<<group;
+    uint slot=groupSlot(set,group);
+    if(composition==0)return any(greaterThan(upper,vec3(0)));
+    if(composition==2)return (groupChannelMask[set]&bit)==0||any(greaterThan(upper,groupChannels[slot]));
+    return (groupMask[set]&bit)==0||dot(upper,vec3(.2126,.7152,.0722))>=dot(groupMaxima[slot],vec3(.2126,.7152,.0722));
+}
+void accumulate(uint set,uint source,vec3 contribution){
+    uint composition=uint(data[source+4].w),group=uint(data[source+4].z),bit=1u<<group;
+    uint slot=groupSlot(set,group);
+    if(composition==0){groupSum[set]+=contribution;return;}
+    if(composition==2){groupChannels[slot]=(groupChannelMask[set]&bit)==0?contribution:max(groupChannels[slot],contribution);groupChannelMask[set]|=bit;return;}
+    uvec2 key=floatBitsToUint(data[source+5].zy);bool replace=(groupMask[set]&bit)==0;
+    if(!replace){float score=dot(contribution,vec3(.2126,.7152,.0722)),old=dot(groupMaxima[slot],vec3(.2126,.7152,.0722));replace=score>old||(score==old&&(key.x<groupKeys[slot].x||(key.x==groupKeys[slot].x&&key.y<groupKeys[slot].y)));}
+    if(replace){groupMaxima[slot]=contribution;groupKeys[slot]=key;groupMask[set]|=bit;}
+}
+vec3 total(uint set){vec3 result=groupSum[set];uint mask=groupMask[set];while(mask!=0){uint group=uint(findLSB(mask));mask&=mask-1;result+=groupMaxima[groupSlot(set,group)];}mask=groupChannelMask[set];while(mask!=0){uint group=uint(findLSB(mask));mask&=mask-1;result+=groupChannels[groupSlot(set,group)];}return result;}
+void localLighting(Receiver receiver,out vec3 local,out vec3 dynamic){
+    initialize(0);initialize(1);uint stack[33],pending=1;stack[0]=options.root;
+    while(pending>0){
+        uint nodeOffset=20+options.sources*6+20+stack[--pending]*4;
+        vec4 lo=data[nodeOffset],hi=data[nodeOffset+1],info=data[nodeOffset+2];
+        vec3 delta=max(max(lo.xyz-receiver.position,receiver.position-hi.xyz),vec3(0));
+        if(info.z<=0||any(greaterThan(delta,vec3(info.z)))||dot(delta/info.z,delta/info.z)>1)continue;
+        if(info.w<0){stack[pending++]=uint(lo.w);stack[pending++]=uint(hi.w);continue;}
+        uint source=20+uint(info.w)*6;vec4 p=data[source],dir=data[source+1],color=data[source+2],extent=data[source+3],cone=data[source+4],identity=data[source+5];
+        vec3 origin=p.xyz;if(p.w==1)origin=clamp(receiver.position,origin-extent.xyz,origin+extent.xyz);
+        vec3 d=origin-receiver.position;float distance=length(d);if(distance>=dir.w)continue;
+        vec3 direction=distance>1e-5?d/distance:receiver.normal;if(dot(receiver.normal,direction)<=0)continue;
+        float attenuation=pow(clamp(1-distance/dir.w,0,1),extent.w)/max(distance*distance,1);
+        if((uint(identity.w)&2)!=0)attenuation=clamp(1-dot(abs(d),vec3(1))/dir.w,0,1);
+        if(p.w==2){float cosine=dot(dir.xyz,-direction);attenuation*=cone.x==cone.y?step(cone.y,cosine):smoothstep(cone.y,cone.x,cosine);}
+        vec3 contribution=color.rgb*color.w*attenuation;bool isDynamic=(uint(identity.w)&1)!=0;
+        if(!canImprove(0,source,contribution)&&(!isDynamic||!canImprove(1,source,contribution)))continue;
+        if(identity.x>0&&distance>1e-5)contribution*=shadow(receiver,direction,distance);
+        accumulate(0,source,contribution);if(isDynamic)accumulate(1,source,contribution);
+    }
+    local=total(0);dynamic=total(1);
+}
+vec3 incident(Receiver receiver){
+    vec3 value,dynamic;localLighting(receiver,value,dynamic);float cosine=max(receiver.normal.y,0);
+    if(.8*cosine>0)value+=vec3(.8*cosine*shadow(receiver,vec3(0,1,0),1e20));return value;
+}
+vec3 bounce(Receiver receiver){
+    vec3 axis=abs(receiver.normal.y)<.999?vec3(0,1,0):vec3(1,0,0);
+    vec3 tangent=unit(cross(axis,receiver.normal)),bitangent=cross(receiver.normal,tangent),sum=vec3(0);
+    for(uint i=0;i<2;i++){
+        float radius=sqrt((float(i)+.5)/2),angle=(float(i)+.5)*2.39996323;
+        vec3 direction=tangent*(radius*cos(angle))+bitangent*(radius*sin(angle))+receiver.normal*sqrt(max(0,1-radius*radius));
+        Receiver hit;if(trace(receiver.position+receiver.normal*.003,direction,6,hit))sum+=hit.albedo*incident(hit);
+    }
+    return receiver.albedo*sum*(.35/2);
+}
+vec4 matrixProduct(uint first,vec4 v){return vec4(dot(data[first],v),dot(data[first+1],v),dot(data[first+2],v),dot(data[first+3],v));}
+void main(){
+    uvec2 pixel=gl_GlobalInvocationID.xy;if(pixel.x>=options.width||pixel.y>=options.height)return;
+    vec2 ndc=(vec2(pixel)+.5)/vec2(options.width,options.height)*vec2(2,-2)+vec2(-1,1);
+    vec4 nearView=matrixProduct(0,vec4(ndc,data[8].w,1)),farView=matrixProduct(0,vec4(ndc,data[9].x,1));
+    vec3 direction=unit(matrixProduct(4,vec4(farView.xyz/farView.w-nearView.xyz/nearView.w,0)).xyz);
+    Receiver receiver;vec3 gain=vec3(1),indirect=vec3(0);bool valid=trace(data[8].xyz,direction,1e20,receiver);
+    if(valid){
+        vec3 local,dynamic;localLighting(receiver,local,dynamic);float sunVisibility=1;
+        if(receiver.normal.y>0)sunVisibility=shadow(receiver,vec3(0,1,0),1e20);
+        vec3 increase=data[16].w==0?dynamic:local;
+        gain=clamp(1-data[15].x*(.25-min(local,vec3(.25)))+data[15].y*max(increase-.25,vec3(0))*.75-data[15].z*.8*.75*.75*(1-sunVisibility),data[17].x,data[17].y);
+        indirect=bounce(receiver);
+    }
+    imageStore(directOutput,ivec2(pixel),vec4(gain,valid?1:0));imageStore(indirectOutput,ivec2(pixel),vec4(indirect,valid?1:0));
+}

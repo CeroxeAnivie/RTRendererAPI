@@ -1,10 +1,10 @@
 <# Directed hidden split transport acceptance. Does not rebuild the backend or download dependencies. #>
 param(
-    [string]$ClasspathFile='build/710-opengl-test-classpath.txt',
+    [string]$ClasspathFile='build/native-lighting-gl-classpath.txt',
     [ValidateSet('optics','alpha','ownership')][string[]]$Cases=@('optics','alpha','ownership'),
     [string]$RuntimeDirectory='',
     [string]$BridgePath='',
-    [string]$OutputDirectory='build/reports/rtxpt-710-host-transport',
+    [string]$OutputDirectory='build/reports/rtxpt-host-transport',
     [switch]$CompileOnly
 )
 $ErrorActionPreference='Stop'

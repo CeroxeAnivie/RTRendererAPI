@@ -10,10 +10,11 @@
 |Vulkan GPU 窗口|`Renderer.open(RendererConfig.presentation())`|官方 `VulkanFramePresenter` 处理窗口和显示|
 |RTXPT 完整场景窗口|`Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`|提交场景，通过 `RtxptAccess` 驱动窗口|
 |独立有限光照|`RtxptRenderers.openNativeLighting(plan)`|提交同一套常驻场景，按 `NativeLightingControl` 获取原子光照包|
+|独立光照及 GI 重建|`RtxptRenderers.openReconstructedNativeLighting(plan)`|默认实际 RR 只处理合法漫反射 GI；gain 保持独立，宿主组合 `H*gain+GI`|
 |宿主主表面传输|`RtxptRenderers.openHostSurface(plan)`|宿主提供主表面输入；分拆传输默认优选真实 RR|
 |已照亮底图增补|`RtxptRenderers.openHostSurface(plan, augmentation)`|宿主提供明确的 B/S/V/F 和实际底图；确定性 gain/GI 不请求全图 RR|
 
-最后三项会为所选算法准备兼容配置，调用方不用手工关闭不相容的缓存、重建、bloom 或插帧。它们的跨 API GPU 输入／输出仍是显式宿主集成：lease、格式、LUID、fence 和退休责任不会因使用快捷工厂而消失。只需要窗口或 CPU 图像时使用前三项，不必接触这些资源协议。
+最后四项会为所选算法准备兼容配置，调用方不用手工关闭不相容的缓存、重建、bloom 或插帧。它们的跨 API GPU 输入／输出仍是显式宿主集成：lease、格式、LUID、fence 和退休责任不会因使用快捷工厂而消失。只需要窗口或 CPU 图像时使用前三项，不必接触这些资源协议。原生 RR 的尺寸、guide 与归属见 [重建契约](native-lighting-reconstruction.md)。
 
 ## 最小普通调用
 
@@ -54,4 +55,4 @@ try (var renderer = RtxptRenderers.openNativeLighting(policy, plan)) {
 
 专家入口提供所选后端实际支持的控制。Vulkan 程序不会因选择 RTXPT 而自动转译；底图增补不执行独立原生扩展；没有合法 RR guides 的有限信号不会声称执行 RR。不支持的组合必须明确拒绝，`PREFERRED` 功能仍按公开能力协议协商。始终区分请求、协商结果和实际执行结果。
 
-更详细的调用见 [Java 指南](Java.md)、[API 参考](Java-API-Reference.md)、[主表面输入](rtxpt-710-host-surface-input.md)、[底图增补](rtxpt-710-host-augmentation.md)、[离线扩展](rtxpt-710-native-lighting-extension.md)与 [Vulkan 互操作](Vulkan-Interop.md)。模式工厂和拒绝边界的无 GPU 检查为 `RtxptModeUsabilitySelfTest`；它不代替最终 GPU 与发布包验收。
+更详细的调用见 [Java 指南](Java.md)、[API 参考](Java-API-Reference.md)、[主表面输入](rtxpt-host-surface-input.md)、[底图增补](rtxpt-host-augmentation.md)、[离线扩展](rtxpt-native-lighting-extension.md)与 [Vulkan 互操作](Vulkan-Interop.md)。模式工厂和拒绝边界的无 GPU 检查为 `RtxptModeUsabilitySelfTest`；它不代替最终 GPU 与发布包验收。

@@ -8,7 +8,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Exercises canonical materials, CPU batches, real output extent and recording lifecycle. */
 public final class RtxptFramePreparationNativeSelfTest {
-    static final Path OUT=Path.of(System.getProperty("top.ceroxe.rt.rtxpt.testOutput","build/reports/rtxpt-frame-705")).toAbsolutePath();
+    static final Path OUT=Path.of(System.getProperty("top.ceroxe.rt.rtxpt.testOutput","build/reports/rtxpt-frame-preparation")).toAbsolutePath();
     static MeshAsset card(long material){return MeshAsset.builder(1,new float[]{-1,-1,0,1,-1,0,1,1,0,-1,1,0},new int[]{0,1,2,0,2,3},new long[]{material,material}).textureCoordinates(new float[]{0,1,1,1,1,0,0,0}).build();}
     static RenderFrameRequest frame(long sequence,long revision,int width,int height){return RenderFrameRequest.builder(sequence,width,height,CameraState.lookAt(0,0,3,0,0,0).verticalFieldOfViewDegrees(52).aspectRatio((double)width/height).build()).minimumSceneRevision(revision).environment(RtxptLightingNativeSelfTest.environment()).build();}
     static void submit(RtxptComposedRenderer r,RenderFrameRequest frame){

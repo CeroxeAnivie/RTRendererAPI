@@ -28,10 +28,14 @@ public final class RtxptDiagnostics {
      * batch links caller, workers and completion waits. Self subtracts same-thread children only. */
     public record CpuEvent(long sequence,long revision,long batch,long thread,Stage stage,
             long startNanos,long inclusiveNanos,long selfNanos,long items,long tasks,long parent,long flags,
-            long scopeId,long parentScopeId,long inputGeneration,long outputGeneration) {
+            long scopeId,long parentScopeId,long inputGeneration,long outputGeneration,long threadCpuNanos,long threadCpuSelfNanos) {
+        public CpuEvent(long sequence,long revision,long batch,long thread,Stage stage,long startNanos,long inclusiveNanos,long selfNanos,long items,long tasks,long parent,long flags,
+                long scopeId,long parentScopeId,long inputGeneration,long outputGeneration){
+            this(sequence,revision,batch,thread,stage,startNanos,inclusiveNanos,selfNanos,items,tasks,parent,flags,scopeId,parentScopeId,inputGeneration,outputGeneration,-1,-1);
+        }
         public CpuEvent(long sequence,long revision,long batch,long thread,Stage stage,long startNanos,
                 long inclusiveNanos,long selfNanos,long items,long tasks,long parent,long flags) {
-            this(sequence,revision,batch,thread,stage,startNanos,inclusiveNanos,selfNanos,items,tasks,parent,flags,0,0,0,0);
+            this(sequence,revision,batch,thread,stage,startNanos,inclusiveNanos,selfNanos,items,tasks,parent,flags,0,0,0,0,-1,-1);
         }
         public boolean active(){return (flags&FLAG_ACTIVE)!=0;}
         public boolean truncated(){return (flags&FLAG_TRUNCATED)!=0;}
@@ -113,9 +117,9 @@ public final class RtxptDiagnostics {
         return new GpuSnapshot(Long.parseLong(status[0]),Long.parseLong(status[1]),Long.parseLong(status[2]),Integer.parseInt(status[3]),status[4].equals("1"),scopes);
     }
     static Snapshot decode(long[] values) {
-        if(values==null||values.length<7||(values[0]!=2&&values[0]!=3))
+        if(values==null||values.length<7||(values[0]!=2&&values[0]!=3&&values[0]!=4))
             throw new IllegalStateException("Incompatible native diagnostic snapshot");
-        boolean current=values[0]==3;int header=current?13:7,width=current?16:12;
+        boolean current=values[0]>=3;int header=current?13:7,width=values[0]==4?18:current?16:12;
         if(values.length<header||values[1]!=width||values[2]<0||values[3]<0||values[3]>8192||values[4]<0
                 ||values[5]<0||values[5]>2048||values[6]<0)
             throw new IllegalStateException("Incompatible native diagnostic snapshot");
@@ -149,7 +153,7 @@ public final class RtxptDiagnostics {
         Stage name=stage>=0&&stage<stages.length?stages[(int)stage]:Stage.UNKNOWN;
         if(values[i+6]<0||values[i+7]<0||values[i+7]>values[i+6])throw new IllegalStateException("Invalid diagnostic duration");
         return new CpuEvent(values[i],values[i+1],values[i+2],values[i+3],name,values[i+5],values[i+6],values[i+7],values[i+8],values[i+9],values[i+10],values[i+11],
-            width==16?values[i+12]:0,width==16?values[i+13]:0,width==16?values[i+14]:0,width==16?values[i+15]:0);
+            width>=16?values[i+12]:0,width>=16?values[i+13]:0,width>=16?values[i+14]:0,width>=16?values[i+15]:0,width>=18?values[i+16]:-1,width>=18?values[i+17]:-1);
     }
     private static long percentile(long[] values,double percentile){return values.length==0?0:values[Math.max(0,(int)Math.ceil(values.length*percentile)-1)];}
 }

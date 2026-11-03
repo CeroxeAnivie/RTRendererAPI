@@ -1,0 +1,32 @@
+# 消费方接入与复验交接
+
+本文件是消费方 agent 的固定入口，文件名不随发布版本变化。发布版本见 `gradle.properties`，历史文档见 `release-index.json`，公共 ABI 历史见 `renderer-api/abi/release-index.json`。不要从文件名推断版本或把本机代理写入项目。
+
+## 已修复的接入问题
+
+| 审核项 | 修改与使用方式 |
+| --- | --- |
+| H01 顶点染色 | 原生 primary／bounce 命中读取 RGBA8，barycentric 插值，执行 material × texture × vertex 一次；alpha 参与可见性，纯颜色变化不重建 BLAS。宿主表面已有 albedo 时仍由宿主乘一次。 |
+| H02 OFF | 统一诊断 OFF 压住独立逐射线统计开关；requested 意图保留，effective 为 false，在途读回有界排空后停止新 copy/query/poll。业务 fence 和正常出图继续。 |
+| H03 双信号 RR | 使用 `openReconstructedNativeLighting`，默认对合法漫反射 GI 调用真实 RR。直接增益独立，宿主底图保持原尺寸。详细信号／guides／尺寸和归属见 [重建契约](native-lighting-reconstruction.md)。 |
+| H04 局部成本 | 驻留资源表结构共享并维护反向依赖；材质／纹理／属性各自更新，未变化实例列表复用。baseline、顶点色和实例属性按稳定槽位局部上传。 |
+| H05 诊断 | recorder v4 区分墙钟与实际线程 CPU；DEEP 可显式拆为 receiver、direct、GI 三个真实 GPU dispatch，改变调度和存储，只用于诊断。direct 和 GI 各自仍包括内部源遍历及 shadow，不能把它们当独立 shadow 时间。 |
+| H06 旧后端对照 | 已提供并实际运行加载旧发布 core JAR 的通用 fixture adapter，与 native 对照两个信号；原始记录、图像误差、环境限制见 [对照报告](quality/lighting-backend-comparison.md)。 |
+
+普通入口按功能给兼容配置；专家配置不偷偷覆盖不兼容选项。原生 raw 和重建入口并存。完整 beauty、宿主 split transport 与 host augmentation 的 requested／actual 状态各自保留，不把一条路线的 RR 结果记到另一条上。
+
+## 宿主仍需执行的步骤
+
+1. 按通用 MeshAsset／MaterialAsset／SceneInstance 发布正确数据，透明语义与 receiver／shadow／bounce roles 明确。顶点色按 raw numeric RGBA8 输入，不预烘焙 AO／光照。
+2. 使用 `LightingFrameLease` 一次取得同 generation／sequence／revision 的各 plane。导入成功后 `markImported()`，GPU 等待 readyValue，读完后在同一 GPU 队列排入 completionValue，再 `completionSignalEnqueued()`。完成销毁导入对象后再关闭 renderer。
+3. 解码紧凑增益／GI 后再插值；组合一次 `hostBase * gain + GI`。重建 GI 已含 receiver albedo，不能再次乘底图或重复叠加 raw GI。宿主透明层、手部和 UI 继续按原分辨率处理。
+4. 对真正的相机切换／外部世界跳变使用 temporal reset。持续正常运动保留相邻帧历史；不要把每帧源移动误当强制相机切换。
+5. 性能报告区分 CPU 事务、核心 GPU 光照、共享复制、宿主 GL 消费、重建与全帧。高外部 GPU 占用的数据不能宣布为纯净速度倍率；固定 fixture 不能替代最终世界验收。
+
+shader 数据布局的身份已经变化。离线扩展必须用随包 SDK 重编译，旧 ABI 扩展会在激活前拒绝，不能复用旧 hash 或覆盖 manifest 规避检查。
+
+## 证据使用规则
+
+保留已经通过且未受改动影响的测试结果。本批新补验不跑 FG/MFG；原始失败、修复后补验与最终制品验收分列，不能合并成“一次全量全绿”。带真实等待或未展开的 GPU 区间如实标明，不把 ray count 当作毫秒，也不把 inclusive wall time 当线程 CPU。
+
+当前开发证据包含 256 mesh 属性局部更新、材质／纹理／顶点 alpha、实际 GL 引导边缘、依赖删除拒绝、group specialization 与完整组逐位一致、真实 GI RR guides 和 DEEP GPU／CPU v4。最后打包与窗口验收的完成状态以最终发布验收记录为准。

@@ -8,7 +8,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Real native HDR equivalence and retained source edits, independent of analytic light counts. */
 public final class RtxptSparseLightingNativeSelfTest {
-    static final Path OUT=Path.of("build/reports/rtxpt-710-sparse").toAbsolutePath();
+    static final Path OUT=Path.of("build/reports/rtxpt-sparse").toAbsolutePath();
     static SceneTransaction scene(long revision){return SceneTransaction.builder(revision).resetScene()
         .upsert(MaterialAsset.builder(1).baseColorRgba8(0x808080ff).roughness(.8f).build())
         .upsert(RtxptFramePreparationNativeSelfTest.card(1)).upsert(SceneInstance.builder(1,1).build()).build();}
