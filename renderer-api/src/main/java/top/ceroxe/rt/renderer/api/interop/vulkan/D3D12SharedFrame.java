@@ -23,11 +23,25 @@ package top.ceroxe.rt.renderer.api.interop.vulkan;
  * @param fenceHandle borrowed D3D12_FENCE shared NT handle, private to this texture slot
  * @param readyValue positive odd producer signal
  * @param completionValue next even consumer signal; exactly readyValue + 1
+ * @param alphaMode published image alpha semantics; RGB bytes use the sRGB transfer function
  */
 public record D3D12SharedFrame(long resourceId,long frameSequence,long adapterLuid,int width,int height,
-        long allocationSize,long memoryHandle,long fenceHandle,long readyValue,long completionValue) {
+        long allocationSize,long memoryHandle,long fenceHandle,long readyValue,long completionValue,AlphaMode alphaMode) {
+    /** Display RGB is sRGB-encoded. Decode before linear-light blending; alpha is always linear. */
+    public enum AlphaMode {
+        OPAQUE,
+        /** RGB is premultiplied in linear display space, then sRGB-encoded. */
+        PREMULTIPLIED
+    }
+    /** Binary-compatible constructor for existing opaque producers. */
+    public D3D12SharedFrame(long resourceId,long frameSequence,long adapterLuid,int width,int height,
+            long allocationSize,long memoryHandle,long fenceHandle,long readyValue,long completionValue) {
+        this(resourceId,frameSequence,adapterLuid,width,height,allocationSize,memoryHandle,fenceHandle,
+            readyValue,completionValue,AlphaMode.OPAQUE);
+    }
     /** Validates the fixed image and per-slot ownership protocol without using a native driver. */
     public D3D12SharedFrame {
+        java.util.Objects.requireNonNull(alphaMode,"alphaMode");
         if(resourceId<=0||frameSequence<0)throw new IllegalArgumentException("Invalid external resource/frame identity");
         if(width<=0||height<=0||width>16384||height>16384)
             throw new IllegalArgumentException("D3D12 shared extent must be within [1,16384]");

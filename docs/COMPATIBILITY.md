@@ -1,14 +1,14 @@
 # API Contract
 
-RTRendererAPI 7.0.3 retains the Java 25 major-7 binary/API contract introduced in 7.0.0. Use matching API,
+RTRendererAPI 7.0.4 retains the Java 25 major-7 binary/API contract introduced in 7.0.0. Use matching API,
 backend and NVIDIA modules. Medium data is expressed directly by `Rgb`, `Medium`,
 `MediumBoundary` records. RTXPT keeps only absorption, IOR and nested priority; density,
 scattering, emission, camera-medium and `MediumTransport` controls were removed. The nested 6.x medium type, medium builders
 and compatibility wrappers are absent. Recompile custom retained-scene shaders against the
-7.0.3 `gpuscene_abi.glsl`; do not embed record strides from an older release.
+7.0.4 `gpuscene_abi.glsl`; do not embed record strides from an older release.
 
 This version is delivered through GitHub source and local Maven artifacts. No remote release
-or Maven Central publication is implied by building the sources. See [7.0.3 migration](7.0.3.md)
+or Maven Central publication is implied by building the sources. See [7.0.4 migration](7.0.4.md)
 for the exact medium API. GPU and packaged-runtime evidence is recorded separately in
 [RTXPT integration](quality/rtxpt-managed-medium-migration.md),
 [advanced-feature audit](quality/rtxpt-advanced-audit-20261101.md), and
@@ -19,6 +19,10 @@ does not split light transport. `RtxptComposedRenderer` separately supports RTXP
 presentation plus Vulkan independent work/UI, or explicit Vulkan final presentation with
 whole-3D switching under different feature constraints. See [backend routing](backend-routing.md)
 and [composition](d3d12-vulkan-composition.md). Unsupported inputs are rejected rather than silently dropped.
+
+7.0.4 adds default transparent-background methods and background composition overloads. The
+original ten-argument `D3D12SharedFrame` constructor remains and defaults to `OPAQUE`;
+new producers can explicitly declare `PREMULTIPLIED`. Use matching native and Java modules.
 
 ## Migration from 4.x
 
@@ -40,7 +44,7 @@ propagate without failing the renderer; device/provenance failures fail closed.
 
 All four public Vulkan retained-scene stages can be replaced. Managed transparent media use
 the optional RTXPT D3D12 backend and its native material/transport implementation. Custom Vulkan scene stages and explicit command pipelines use
-the 7.0.3 shader contracts; no automatic 6.x shader or payload translation is provided.
+the 7.0.4 shader contracts; no automatic 6.x shader or payload translation is provided.
 Arbitrary shader groups, callable/procedural RT, graphics, compute, descriptor sets, textures
 and samplers remain available through the explicit command API.
 

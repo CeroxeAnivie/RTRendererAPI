@@ -32,14 +32,18 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
     private final Set<Long> pendingLightIds=new HashSet<>();
     private SceneLightingControl.Continuity continuity=SceneLightingControl.Continuity.DISCONTINUOUS;
     private float[] visibleBackground;
-    private boolean backgroundChanged;
+    private boolean backgroundChanged,transparentBackground;
     private HistoryFrame lastHistoryFrame=new HistoryFrame(-1,false,Set.of(),0,0,0,0);
     @Override public HistoryFrame historyFrame(){ready();return lastHistoryFrame;}
     private long validationNs,translationNs,nativeResourceNs,lightingNs,retirementNs;
     @Override public void lightingContinuity(SceneLightingControl.Continuity value){ready();Objects.requireNonNull(value);if(value==SceneLightingControl.Continuity.CONTINUOUS&&!supportsContinuousLighting())throw new IllegalArgumentException("Continuous lighting requires retained SCENE_ANALYTIC without ReSTIR or radiance cache");continuity=value;}
     @Override public boolean supportsContinuousLighting(){ready();return nativeScene==null&&options.qualityInts()[0]==1&&!options.restirDi()&&!options.restirGi()&&!options.sharc();}
-    @Override public void visibleBackground(float r,float g,float b){ready();for(float v:new float[]{r,g,b})if(!Float.isFinite(v)||v<0)throw new IllegalArgumentException("Background must be finite nonnegative linear radiance");float[] next={r,g,b};backgroundChanged|=!Arrays.equals(visibleBackground,next);visibleBackground=next;}
-    @Override public void environmentBackground(){ready();backgroundChanged|=visibleBackground!=null;visibleBackground=null;}
+    @Override public void visibleBackground(float r,float g,float b){ready();for(float v:new float[]{r,g,b})if(!Float.isFinite(v)||v<0)throw new IllegalArgumentException("Background must be finite nonnegative linear radiance");float[] next={r,g,b};backgroundChanged|=transparentBackground||!Arrays.equals(visibleBackground,next);transparentBackground=false;visibleBackground=next;}
+    @Override public void environmentBackground(){ready();backgroundChanged|=transparentBackground||visibleBackground!=null;transparentBackground=false;visibleBackground=null;}
+
+    private static boolean supportsTransparent(RtxptOptions o){return !o.restirDi()&&!o.restirGi()&&!o.sharc()&&!o.frameGeneration().preference().requested()&&!o.quality().postProcessing().bloom();}
+    @Override public boolean supportsTransparentBackground(){ready();return supportsTransparent(options);}
+    @Override public void transparentBackground(){ready();if(!supportsTransparentBackground())throw new UnsupportedOperationException("Transparent output requires ReSTIR, radiance cache, frame generation and bloom disabled");backgroundChanged|=!transparentBackground;transparentBackground=true;visibleBackground=null;}
 
     private RtxptNative.Compositor compositor;
     private String title;
@@ -63,6 +67,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
         RtxptNative.prepare(RtxptNative.runtime().toString());
     }
     private void validatePresentationProfile(RendererFeatureProfile profile) {
+        if(transparentBackground&&!supportsTransparent(RtxptOptions.resolve(profile)))throw new IllegalArgumentException("Requested features do not preserve transparent output; select an opaque background first");
         if(externalPresentation&&profile.frameGeneration().preference().requested())
             throw new IllegalArgumentException("Vulkan composition accepts native RTXPT frames; DXGI FG/MFG is only supported with native RTXPT presentation");
         if(externalPresentation&&profile.lowLatency().preference().requested())
@@ -77,7 +82,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
     top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame sharedFrame(long sequence) {
         ready();if(handle==0||!externalPresentation)throw new IllegalStateException("No external RTXPT frame");
         var f=RtxptNative.sharedFrame(handle,sequence);
-        return new top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame(f[0],f[1],f[2],(int)f[3],(int)f[4],f[5],f[6],f[7],f[8],f[9]);
+        return new top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame(f[0],f[1],f[2],(int)f[3],(int)f[4],f[5],f[6],f[7],f[8],f[9],top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame.AlphaMode.values()[(int)f[10]]);
     }
     void retireSharedFrames(){ready();if(handle!=0)RtxptNative.retireSharedFrames(handle);}
     void resetHistory(){ready();if(handle!=0)RtxptNative.resetHistory(handle);}
@@ -235,7 +240,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
             var c=f.camera();RtxptNative.camera(handle,c.x()+","+c.y()+","+c.z()+","+c.forwardX()+","+c.forwardY()+","+c.forwardZ()+","+c.upX()+","+c.upY()+","+c.upZ(),(float)(2*Math.atan(c.tanHalfFovY())));camera=c;
         }
         RtxptNative.lightingPolicy(handle,continuity.ordinal());
-        RtxptNative.background(handle,visibleBackground);
+        RtxptNative.background(handle,visibleBackground,transparentBackground);
         if(!f.temporalHistoryResets().isEmpty())RtxptNative.resetHistory(handle);
         if(nextLighting!=null&&(rebuild||!nextLighting.equals(lighting))) {
             long begin=System.nanoTime();

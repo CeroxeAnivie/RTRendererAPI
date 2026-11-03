@@ -33,6 +33,12 @@ if($CheckPaths){
     return
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+$transparentPatch=Join-Path $PSScriptRoot 'patches/rtxpt-transparent-background.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $transparentPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $transparentPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT transparent-background overlay could not be removed'}
+}
 $retainedPatch=Join-Path $PSScriptRoot 'patches/rtxpt-retained-resources.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $retainedPatch 2>$null
 if($LASTEXITCODE -eq 0){
@@ -1513,6 +1519,11 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT lighting patch failed'}
 if($LASTEXITCODE -ne 0){throw 'RTXPT retained-resource patch does not match the verified pinned base'}
 & git -C $sdk apply --ignore-space-change $retainedPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT retained-resource patch failed'}
+& git -C $sdk apply --check --ignore-space-change $transparentPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT transparent-background patch does not match the verified pinned base'}
+& git -C $sdk apply --ignore-space-change $transparentPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT transparent-background patch failed'}
+
 $rootCMake=Join-Path $sdk 'CMakeLists.txt'
 $cmakeText=[IO.File]::ReadAllText($rootCMake)
 # The command-line OptiX screenshot utility is not used by the embedded realtime host.

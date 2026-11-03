@@ -29,6 +29,7 @@ public final class RtxptComposedRenderer implements Renderer {
     private RendererBackendPolicy.Selection selection;
     private RendererSceneRouting routing;
     private List<FrameCompositionPlan.Layer> overlays=List.of();
+    private FrameCompositionPlan.Layer backgroundLayer;
     private boolean closed,vulkanScenePublished;
     private long sceneRevision,vulkanRevision=-1,sequence=-1,vulkanFrames;
     private int width,height,submittedWidth,submittedHeight;
@@ -132,22 +133,27 @@ public final class RtxptComposedRenderer implements Renderer {
     public VulkanFramePresenter presenter(){
         ready();if(nativePresentation)throw new IllegalStateException("RTXPT owns the visible window; use its RtxptAccess extension");return presenter;
     }
-    /**
-     * Vulkan GPU layers composed after complete RTXPT 3D; at most seven overlays.
-     * Layers match the submitted frame extent. If native window events resize RTXPT during
-     * that frame, only the stale overlays are omitted until the caller observes the new extent.
-     * The external frame is still consumed and signalled normally.
-     */
+    /** Completed sRGB-encoded linear-premultiplied RGBA8 host background below RTXPT.
+     * Uses the producer's own coverage, never the host's depth. Null removes the background. */
+    public void backgroundLayer(FrameCompositionPlan.Layer layer){
+        ready();if(layer!=null&&layer.operation()!=FrameCompositionPlan.Operation.REPLACE)throw new IllegalArgumentException("Background layer must use REPLACE");
+        if(layer!=null&&overlays.size()>6)throw new IllegalArgumentException("At most six overlays with a background layer");
+        if(layer!=null)ensureVulkan();backgroundLayer=layer;overlays(overlays);
+    }
+    /** Vulkan layers above RTXPT: at most seven, or six with a background layer.
+     * Stale extents are omitted during native resize; the external slot is still released. */
     public void overlays(List<FrameCompositionPlan.Layer> layers){
         ready();var next=List.copyOf(Objects.requireNonNull(layers,"layers"));
-        if(next.size()>7)throw new IllegalArgumentException("At most seven overlays after the RTXPT base layer");
-        if(!next.isEmpty())ensureVulkan();
+        if(next.size()+(backgroundLayer==null?0:1)>7)throw new IllegalArgumentException("At most seven overlays, or six with a background layer");
+        if(!next.isEmpty()||backgroundLayer!=null)ensureVulkan();
         // Keep the bounded ring cached across UI toggles. No queue drain or resource
         // destruction here: applications can explicitly trim during an idle period.
-        if(nativePresentation)rtxpt.compositor(next.isEmpty()?null:values->{
-            try{presenter.composeD3D12SharedFrame(new top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame(
-                values[0],values[1],values[2],(int)values[3],(int)values[4],values[5],values[6],values[7],values[8],values[9]),
-                values[3]==submittedWidth&&values[4]==submittedHeight?overlays:List.of());}
+        if(nativePresentation)rtxpt.compositor(next.isEmpty()&&backgroundLayer==null?null:values->{
+            try{var shared=new top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame(
+                values[0],values[1],values[2],(int)values[3],(int)values[4],values[5],values[6],values[7],values[8],values[9],top.ceroxe.rt.renderer.api.interop.vulkan.D3D12SharedFrame.AlphaMode.values()[(int)values[10]]);
+                boolean matching=values[3]==submittedWidth&&values[4]==submittedHeight;
+                if(backgroundLayer!=null&&matching)presenter.composeD3D12SharedFrame(shared,backgroundLayer,overlays);
+                else presenter.composeD3D12SharedFrame(shared,matching?overlays:List.of());}
             catch(RuntimeException|Error failure){
                 try{retireExternalFrames();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}throw failure;
             }
@@ -163,7 +169,7 @@ public final class RtxptComposedRenderer implements Renderer {
      */
     public void trimIdleCompositionResources(){
         ready();
-        if(!nativePresentation||!overlays.isEmpty())
+        if(!nativePresentation||!overlays.isEmpty()||backgroundLayer!=null)
             throw new IllegalStateException("Trim requires native presentation with no overlays; call during an idle period");
         retireExternalFrames();
     }
@@ -224,7 +230,7 @@ public final class RtxptComposedRenderer implements Renderer {
                 // overlay extent separately from the actual shared-image extent in the callback.
                 submittedWidth=frame.width();submittedHeight=frame.height();
                 result=rtxpt.submit(frame);
-                if(!nativePresentation)presenter.presentD3D12SharedFrame(rtxpt.sharedFrame(frame.sequence()),overlays);
+                if(!nativePresentation){if(backgroundLayer==null)presenter.presentD3D12SharedFrame(rtxpt.sharedFrame(frame.sequence()),overlays);else presenter.presentD3D12SharedFrame(rtxpt.sharedFrame(frame.sequence()),backgroundLayer,overlays);}
             } catch(RuntimeException|Error failure) {
                 try{retireExternalFrames();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
                 throw failure;
@@ -279,7 +285,7 @@ public final class RtxptComposedRenderer implements Renderer {
         if(presenter!=null)try{presenter.close();}catch(RuntimeException|Error e){failure=e;}
         try{rtxpt.close();}catch(RuntimeException|Error e){if(failure==null)failure=e;else failure.addSuppressed(e);}
         if(vulkan!=null)try{vulkan.close();}catch(RuntimeException|Error e){if(failure==null)failure=e;else failure.addSuppressed(e);}
-        closed=true;routing=null;overlays=List.of();
+        closed=true;routing=null;overlays=List.of();backgroundLayer=null;
         if(failure instanceof RuntimeException e)throw e;if(failure instanceof Error e)throw e;
     }
 }

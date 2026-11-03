@@ -51,7 +51,7 @@ final class RtxptNative {
     static native void environment(long handle,float[] sun,float[] sky);
     static native void lightingDelta(long handle,long[] ids,float[] records);
     static native void lightingPolicy(long handle,int continuity);
-    static native void background(long handle,float[] color);
+    static native void background(long handle,float[] color,boolean transparent);
     static native void resetWindowPollInterval(long handle);
     static native long[] executionTelemetry(long handle);
     static native void resources(long handle,String manifest);

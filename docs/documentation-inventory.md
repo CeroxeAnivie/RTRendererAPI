@@ -55,6 +55,7 @@
 | [6.0.2.md](6.0.2.md) | 预编译 SPIR-V 场景阶段入口及完整性验证。 |
 | [6.0.3.md](6.0.3.md) | Vulkan pipeline cache 身份与持久化修复。 |
 | [7.0.0.md](7.0.0.md) | 当前两字段 Medium、RTXPT 托管范围、删除参数、原生运行时及迁移要求。 |
+| [7.0.4.md](7.0.4.md) | 主射线透明输出、宿主 GPU 背景、线性预乘合成与范围。 |
 | [7.0.3.md](7.0.3.md) | RTXPT 资源增量更新、空间灯树和窗口等待修复。 |
 | [7.0.1.md](7.0.1.md) | RTXPT 按需内存分配、通用环境／灯光增量更新与兼容性。 |
 
@@ -62,7 +63,8 @@
 
 | 文档 | 摘要 |
 | --- | --- |
-| [7.0.3 资源增量／灯树验收](quality/rtxpt-retained-702.md) | 通用 retained-scene 更新、十万灯采样、窗口回归与同机版本速度对比。 |
+| [7.0.4 透明背景验收](quality/rtxpt-transparent-704.md) | 主射线 coverage、RR 边缘、物理表面及两条 GPU 合成路径与增量成本。 |
+| [7.0.3 资源增量／灯树验收](quality/rtxpt-retained-703.md) | 通用 retained-scene 更新、十万灯采样、窗口回归与同机版本速度对比。 |
 | [质量验证与性能报告](quality/verification-report.md) | 合并 29 份历史记录，包含验证事实、失败、未完成边界和限定条件。 |
 | [RTXPT 托管接入](quality/rtxpt-managed-medium-migration.md) | 新后端场景、打包运行时与接入验证；按记录的制品判断。 |
 | [高级能力检查](quality/rtxpt-advanced-audit-20261101.md) | RR、采样、重用及高级能力调用链／运行证据。 |
@@ -147,10 +149,10 @@ Javadoc 是构建产物；报告不逐条索引构建日志或 HTML 输出文件
 
 | 模块 | 生成内容 |
 | --- | --- |
-| `renderer-api` | 公共消费方 API 文档及 `renderer-api-7.0.3-javadoc.jar`。 |
-| `renderer-core` | 后端实现文档及 `renderer-core-7.0.3-javadoc.jar`。 |
-| `renderer-nvidia` | NVIDIA provider 文档及 `renderer-nvidia-7.0.3-javadoc.jar`。 |
-| `renderer-rtxpt` | RTXPT 公共宿主／组合入口文档及 `renderer-rtxpt-7.0.3-javadoc.jar`。 |
+| `renderer-api` | 公共消费方 API 文档及 `renderer-api-7.0.4-javadoc.jar`。 |
+| `renderer-core` | 后端实现文档及 `renderer-core-7.0.4-javadoc.jar`。 |
+| `renderer-nvidia` | NVIDIA provider 文档及 `renderer-nvidia-7.0.4-javadoc.jar`。 |
+| `renderer-rtxpt` | RTXPT 公共宿主／组合入口文档及 `renderer-rtxpt-7.0.4-javadoc.jar`。 |
 
 Javadoc 制品是否存在及具体版本，以对应 Maven staging 或 runtime distribution 验收为准。
 

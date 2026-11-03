@@ -50,7 +50,7 @@ class HostPathTracer final : public AdvancedPathTracer {
     std::vector<std::shared_ptr<donut::engine::Light>> managedLightObjects;
     uint64_t lightDeltaRecords=0,lightTreeRefits=0;
     int lightingContinuity=0;
-    bool continuousPending=false,independentBackground=false;
+    bool continuousPending=false,independentBackground=false,transparentBackground=false;
     float3 primaryBackground={};
     uint64_t executedAccumulationResets=0,executedReconstructionResets=0,executedDenoiserResets=0,cacheNotifications=0,continuousUploads=0;
     void HostHistoryAction(int scope,bool reset) override {
@@ -304,9 +304,10 @@ public:
         if(policy==1&&!sceneLightingActive())throw std::invalid_argument("Continuous lighting requires SCENE_ANALYTIC without ReSTIR or radiance cache");
         lightingContinuity=policy;
     }
-    void SetBackground(bool independent,float3 color){
-        if(independentBackground!=independent || (independent&&any(primaryBackground!=color))){g_sampleUIData.ResetRealtimeCaches=true;preSrHistoryReset=true;}
-        independentBackground=independent;primaryBackground=color;
+    bool HostTransparentBackground() const override { return transparentBackground; }
+    void SetBackground(bool independent,float3 color,bool transparent){
+        if(transparentBackground!=transparent || independentBackground!=independent || (independent&&any(primaryBackground!=color))){g_sampleUIData.ResetRealtimeCaches=true;preSrHistoryReset=true;}
+        transparentBackground=transparent;independentBackground=independent;primaryBackground=color;
     }
     std::array<jlong,16> ExecutionTelemetry() {auto p=GetRTPipelineBaker()?GetRTPipelineBaker()->HostTelemetry():std::array<uint64_t,3>{};return {jlong(importerNs),jlong(textureFinalizeNs),jlong(materialSyncNs),jlong(accelerationNs),jlong(nativeRetirementNs),jlong(lightDeltaRecords),jlong(lightTreeRefits),jlong(executedAccumulationResets),jlong(executedReconstructionResets),jlong(executedDenoiserResets),jlong(cacheNotifications),jlong(continuousUploads),jlong(p[0]),jlong(p[1]),jlong(p[2]),jlong(RtrHostResources::maximumPollIntervalNanos)};}
     void ApplyLightDelta(const std::vector<int64_t>& ids,const std::vector<float>& values){
@@ -389,7 +390,7 @@ public:
         AdvancedPathTracer::UpdateCustomConstants(constants,commandList);
         if(lightStatsEnabled)commandList->clearBufferUInt(lightStatsBuffer,0);
         auto& pt=constants.ptConsts;
-        pt.RtrSceneAmbient=float4(sceneSky.xyz()*sceneSky.w,independentBackground?1.f:0.f);
+        pt.RtrSceneAmbient=float4(sceneSky.xyz()*sceneSky.w,transparentBackground?2.f:independentBackground?1.f:0.f);
         pt.RtrSceneSky=float4(sceneSky.xyz()*std::max(sceneSky.w,.05f),0);
         std::memcpy(&pt.RtrDirectionalPadding,&primaryBackground,sizeof(float3)); // bit-exact RGB in reserved ABI words
         pt.RtrSceneLightCount=uint32_t(sceneLights.size());
@@ -816,11 +817,12 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
             ptr->endGpuSample();ptr->lastPresentedTexture=dm.GetCurrentBackBuffer();
             ptr->probePhase(2);
             if(ptr->externalPresentation)ptr->sharedFrames.publish(dm.GetDevice(),
-                static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->HostDisplayColor());
+                static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->HostDisplayColor(),
+                static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->HostTransparentBackground());
             else if(ptr->compositor) {
                 // Keep RTXPT's upstream depth/MV/PreUIColor tags and its DXGI FG/Reflex path.
                 // Only the final UI image crosses APIs, after all render passes and before Present.
-                ptr->sharedFrames.publish(dm.GetDevice(),dm.GetCurrentBackBuffer());
+                ptr->sharedFrames.publish(dm.GetDevice(),dm.GetCurrentBackBuffer(),static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->HostTransparentBackground());
                 const auto values=ptr->sharedFrames.descriptor(ptr->rendered);
                 auto* env=ptr->compositorEnv;
                 env->SetLongArrayRegion(ptr->compositorFrame,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));
@@ -851,7 +853,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
             auto type=e->GetObjectClass(callback);method=e->GetMethodID(type,"compose","([J)V");e->DeleteLocalRef(type);
             if(!method)return;
             next=e->NewGlobalRef(callback);
-            auto local=e->NewLongArray(10);
+            auto local=e->NewLongArray(11);
             if(local){frame=static_cast<jlongArray>(e->NewGlobalRef(local));e->DeleteLocalRef(local);}
             if(!next||!frame){if(next)e->DeleteGlobalRef(next);if(frame)e->DeleteGlobalRef(frame);return;}
         }
@@ -1129,9 +1131,9 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingPolicy(JNIEnv* e,jclass,jlong h,jint policy){
     try{static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->SetLightingContinuity(policy);}catch(const std::exception& x){fail(e,x);}
 }
-extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_background(JNIEnv* e,jclass,jlong h,jfloatArray color){
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_background(JNIEnv* e,jclass,jlong h,jfloatArray color,jboolean transparent){
     try{std::array<float,3> v{};if(color){if(e->GetArrayLength(color)!=3)throw std::invalid_argument("Invalid background");e->GetFloatArrayRegion(color,0,3,v.data());if(e->ExceptionCheck())return;for(float c:v)if(!std::isfinite(c)||c<0)throw std::invalid_argument("Invalid background color");}
-        static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->SetBackground(color!=nullptr,float3(v[0],v[1],v[2]));}catch(const std::exception& x){fail(e,x);}
+        static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->SetBackground(color!=nullptr,float3(v[0],v[1],v[2]),transparent);}catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingDelta(JNIEnv* e,jclass,jlong h,jlongArray ids,jfloatArray records){
     try{if(!ids||!records||e->GetArrayLength(records)!=e->GetArrayLength(ids)*16)throw std::invalid_argument("Invalid light delta arrays");

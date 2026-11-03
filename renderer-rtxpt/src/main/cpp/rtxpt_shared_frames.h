@@ -16,6 +16,7 @@ class SharedFrameProducer {
         Microsoft::WRL::ComPtr<ID3D12Fence> fence;
         HANDLE fenceHandle=nullptr;
         uint64_t identity=0,allocationSize=0,completion=0;
+        bool premultipliedAlpha=false;
         ~Slot(){if(fenceHandle)CloseHandle(fenceHandle);}
     };
     std::array<Slot,3> slots;
@@ -51,7 +52,7 @@ public:
         }
         commands=nullptr;width=height=next=0;latest=-1;
     }
-    void publish(nvrhi::IDevice* device,nvrhi::ITexture* source) {
+    void publish(nvrhi::IDevice* device,nvrhi::ITexture* source,bool premultipliedAlpha=false) {
         if(!source)throw std::runtime_error("RTXPT has no completed display-color target");
         const auto& sourceDesc=source->getDesc();
         if(sourceDesc.format!=nvrhi::Format::SRGBA8_UNORM && sourceDesc.format!=nvrhi::Format::RGBA8_UNORM)
@@ -82,7 +83,7 @@ public:
             }
             commands=device->createCommandList();
         }
-        auto& slot=slots[next];
+        auto& slot=slots[next];slot.premultipliedAlpha=premultipliedAlpha;
         if(slot.completion)check(queue->Wait(slot.fence.Get(),slot.completion),"Wait for Vulkan frame consumption");
         commands->open();
         commands->copyTexture(slot.texture,nvrhi::TextureSlice(),source,nvrhi::TextureSlice());
@@ -94,14 +95,14 @@ public:
         check(queue->Signal(slot.fence.Get(),ready),"Signal shared display frame");
         latest=int(next);next=(next+1)%uint32_t(slots.size());
     }
-    std::array<int64_t,10> descriptor(int64_t sequence) const {
+    std::array<int64_t,11> descriptor(int64_t sequence) const {
         if(latest<0)throw std::runtime_error("Render an external frame before requesting its descriptor");
         const auto& slot=slots[latest];
         HANDLE memory=slot.texture->getNativeObject(nvrhi::ObjectTypes::SharedHandle);
         if(!memory)throw std::runtime_error("NVRHI did not export the shared texture handle");
         return {int64_t(slot.identity),sequence,int64_t(adapter),width,height,int64_t(slot.allocationSize),
             int64_t(reinterpret_cast<uintptr_t>(memory)),int64_t(reinterpret_cast<uintptr_t>(slot.fenceHandle)),
-            int64_t(slot.completion-1),int64_t(slot.completion)};
+            int64_t(slot.completion-1),int64_t(slot.completion),int64_t(slot.premultipliedAlpha)};
     }
     void copyBack(nvrhi::IDevice* device,nvrhi::ITexture* backBuffer) {
         if(latest<0)throw std::runtime_error("No composed display frame");

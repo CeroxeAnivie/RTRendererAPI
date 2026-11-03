@@ -10,6 +10,8 @@ final class VulkanD3D12CompositionInputs implements AutoCloseable {
     }
     final VulkanGenericCompositionSource[] sources;
     final int[] layouts,operations;
+    int externalLayer;
+    boolean linearSrgb;
     private final Runnable commit,release;
     private boolean closed;
 

@@ -19,6 +19,13 @@ public interface SceneLightingControl {
     void visibleBackground(float red, float green, float blue);
     /** Restore the default primary background derived from EnvironmentState. */
     void environmentBackground();
-    /** True only if an additional negotiated coverage/alpha composition contract is implemented. */
+    /** Select primary-surface coverage output. Primary misses have zero alpha and RGB;
+     * valid masked/opaque/transmissive surfaces retain coverage. Secondary paths keep the
+     * physical environment. RGBA8 shared output encodes linear premultiplied display RGB
+     * with the sRGB transfer function; decode sRGB before ONE/ONE_MINUS_SRC_ALPHA blending.
+     * Unsupported configurations reject this call without changing the selected mode.
+     * The native window does not become an OS-transparent window. */
+    default void transparentBackground() { throw new UnsupportedOperationException("Transparent background is unavailable"); }
+    /** True only if the current configuration implements the coverage/output contract. */
     default boolean supportsTransparentBackground() { return false; }
 }

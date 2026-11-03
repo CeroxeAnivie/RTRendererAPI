@@ -558,6 +558,17 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
 
     @Override
     public PresentationResult presentD3D12SharedFrame(D3D12SharedFrame frame,List<FrameCompositionPlan.Layer> overlays) {
+        return presentExternalFrame(frame,overlays,0);
+    }
+    @Override public PresentationResult presentD3D12SharedFrame(D3D12SharedFrame frame,FrameCompositionPlan.Layer background,List<FrameCompositionPlan.Layer> overlays) {
+        return presentExternalFrame(frame,backgroundLayers(background,overlays),1);
+    }
+    private static List<FrameCompositionPlan.Layer> backgroundLayers(FrameCompositionPlan.Layer background,List<FrameCompositionPlan.Layer> overlays) {
+        Objects.requireNonNull(background,"background");
+        if(background.operation()!=FrameCompositionPlan.Operation.REPLACE)throw new IllegalArgumentException("Host background must use REPLACE");
+        var layers=new java.util.ArrayList<FrameCompositionPlan.Layer>();layers.add(background);layers.addAll(Objects.requireNonNull(overlays,"overlays"));return List.copyOf(layers);
+    }
+    private PresentationResult presentExternalFrame(D3D12SharedFrame frame,List<FrameCompositionPlan.Layer> overlays,int backgroundLayers) {
         requireOwnerAndOpen();
         var layers=checkedCompositionLayers(overlays);
         if(proxySwapchainActive())throw new UnsupportedOperationException("D3D12 shared-frame composition requires Vulkan frame generation disabled");
@@ -576,6 +587,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
                 return d3d12Result(frame,Outcome.SKIPPED_MINIMIZED);
             }
             prepareComposition(context,layers,frame.width(),frame.height(),VK10.VK_FORMAT_R8G8B8A8_UNORM);
+            if(context.d3d12Inputs!=null){context.d3d12Inputs.externalLayer=backgroundLayers;context.d3d12Inputs.linearSrgb=backgroundLayers>0||frame.alphaMode()==D3D12SharedFrame.AlphaMode.PREMULTIPLIED;}
             IntBuffer index=stack.ints(0);
             int acquire=acquireNextImage(device,swapchain,UINT64_MAX,context.acquireSemaphore,0L,index);
             if(acquire==KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR) {
@@ -624,6 +636,12 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
 
     @Override
     public void composeD3D12SharedFrame(D3D12SharedFrame frame,List<FrameCompositionPlan.Layer> overlays) {
+        composeExternalFrame(frame,overlays,0);
+    }
+    @Override public void composeD3D12SharedFrame(D3D12SharedFrame frame,FrameCompositionPlan.Layer background,List<FrameCompositionPlan.Layer> overlays) {
+        composeExternalFrame(frame,backgroundLayers(background,overlays),1);
+    }
+    private void composeExternalFrame(D3D12SharedFrame frame,List<FrameCompositionPlan.Layer> overlays,int backgroundLayers) {
         requireOwnerAndOpen();
         var layers=checkedCompositionLayers(overlays);
         var imported=importD3D12Frame(frame);
@@ -634,6 +652,7 @@ final class VulkanGlfwFramePresenter implements VulkanFramePresenter {
         try(MemoryStack stack=MemoryStack.stackPush()) {
             if(!layers.isEmpty()) {
                 prepareComposition(context,layers,frame.width(),frame.height(),VK10.VK_FORMAT_R8G8B8A8_UNORM);
+                if(context.d3d12Inputs!=null){context.d3d12Inputs.externalLayer=backgroundLayers;context.d3d12Inputs.linearSrgb=backgroundLayers>0||frame.alphaMode()==D3D12SharedFrame.AlphaMode.PREMULTIPLIED;}
                 recordD3D12ComposeBack(context,imported.image(),frame.width(),frame.height());
             }
             submitD3D12Frame(stack,context,imported,frame,-1,!layers.isEmpty());

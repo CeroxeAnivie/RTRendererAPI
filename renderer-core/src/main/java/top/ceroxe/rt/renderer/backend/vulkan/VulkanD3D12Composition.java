@@ -50,13 +50,15 @@ final class VulkanD3D12Composition implements AutoCloseable {
         barrier(commands,stack,base.image(),VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK10.VK_IMAGE_LAYOUT_GENERAL,
             VK10.VK_ACCESS_TRANSFER_WRITE_BIT,VK10.VK_ACCESS_SHADER_READ_BIT,VK10.VK_PIPELINE_STAGE_TRANSFER_BIT,VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
         long[] views=new long[inputs.sources.length+1];int[] operations=new int[views.length];
-        views[0]=base.imageView();operations[0]=0;
+        views[inputs.externalLayer]=base.imageView();operations[inputs.externalLayer]=inputs.externalLayer==0?0:1;
         for(int i=0;i<inputs.sources.length;i++) {
-            var source=inputs.sources[i];views[i+1]=source.view();operations[i+1]=inputs.operations[i];
+            int index=i<inputs.externalLayer?i:i+1;
+            var source=inputs.sources[i];views[index]=source.view();operations[index]=inputs.operations[i];
             barrier(commands,stack,source.image(),inputs.layouts[i],VK10.VK_IMAGE_LAYOUT_GENERAL,
                 VK10.VK_ACCESS_MEMORY_WRITE_BIT,VK10.VK_ACCESS_SHADER_READ_BIT,
                 VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
         }
+        if(inputs.linearSrgb)operations[0]|=8; // opt-in sRGB decoding and linear-light premultiplied blend
         barrier(commands,stack,output.image(),VK10.VK_IMAGE_LAYOUT_UNDEFINED,VK10.VK_IMAGE_LAYOUT_GENERAL,
             0,VK10.VK_ACCESS_SHADER_WRITE_BIT,VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
         pipeline.record(commands,stack,slot,width,height,views,output.imageView(),operations);

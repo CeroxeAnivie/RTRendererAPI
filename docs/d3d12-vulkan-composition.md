@@ -71,6 +71,14 @@ RTXPT 原 Depth／MV／PreUIColor（HUDless）保留，不通过 Vulkan 重建�
 
 组合覆盖独立 GPU 工作、已完成纹理的叠层和 HUD，**不是任意着色语义的并集**。RTXPT 内部的自定义 BSDF／命中 shader、精确 Vulkan 投影或光传输算法不能靠最后一张颜色图补回来；任意深度／法线／运动后期也没有被这条颜色桥自动接通。Vulkan 专属场景属性会原样保留，只有选择完整 Vulkan 3D 时才交其执行；RTXPT 选择仍严格验证原生合同。
 
+## 7.0.4 宿主背景
+
+需要保留宿主已绘制的天空等内容时，先查询 `SceneLightingControl.supportsTransparentBackground()`，启用 `transparentBackground()`，再用 `backgroundLayer(completedLayer)` 把同一 Vulkan 命令通道的已完成 GPU 背景放到 RTXPT 下方。背景使用 `REPLACE`，此时最多六层上方 overlay。底层 presenter 也提供带 background 参数的 compose/present 重载。没有宿主深度猜遮罩、重复宿主几何或逐帧 CPU 读回。
+
+透明帧的 `D3D12SharedFrame.alphaMode()` 为 `PREMULTIPLIED`。新背景路线的所有输入先解码 sRGB，在线性 display 空间预乘合成，再编码输出。调用方上传的 UI 也必须遵循这一颜色合同。旧 opaque 叠层保留原字节域行为。纹理须是单层、单 mip、单采样、全尺寸 `RGBA8_UNORM`，拥有 storage-read usage，并以精确已完成的输出 mutation 引用；单纯上传并不等于已发布的渲染输出。
+
+透明模式要求关闭 ReSTIR、SHaRC、FG/MFG 和 bloom，且原生窗口本身不会 OS 透明。玻璃首表面仍覆盖像素，物理反射／折射使用 API 环境，不会自动折射宿主二维天空。RR 已测得部分覆盖 AA 边缘，本机 SR／SR＋NRD 仍为二值 coverage。详见 [7.0.4](7.0.4.md) 与[定向验收](quality/rtxpt-transparent-704.md)。
+
 ## 验证与诊断
 
 `RtxptAccess.capture(path)` 在回交模式读取最终共享颜色，包含上游 HUD 和Vulkan GPU 叠层；`captureRtxptSource(path)` 显式读取叠层前 RTXPT 色调映射源。Vulkan 最终窗口用 `captureNextPresentedFrame(path)`，只对指定帧做一次 readback。截图、预热和初始化均不进入稳态性能计时。

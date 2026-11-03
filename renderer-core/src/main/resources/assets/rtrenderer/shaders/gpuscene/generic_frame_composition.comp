@@ -28,17 +28,23 @@ vec4 sourceAt(int index, ivec2 pixel) {
     return imageLoad(source7, pixel);
 }
 
+vec3 srgbDecode(vec3 c) { return mix(pow((max(c,vec3(0))+0.055)/1.055,vec3(2.4)),c/12.92,lessThanEqual(c,vec3(0.04045))); }
+vec3 srgbEncode(vec3 c) { return mix(1.055*pow(max(c,vec3(0)),vec3(1.0/2.4))-0.055,12.92*c,lessThanEqual(c,vec3(0.0031308))); }
 void main() {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
     ivec2 extent = imageSize(outputImage);
     if (any(greaterThanEqual(pixel, extent))) return;
+    bool linearSrgb = (composition.operations[0] & 8) != 0;
     vec4 result = sourceAt(0, pixel);
+    if (linearSrgb) result.rgb = srgbDecode(result.rgb);
     for (int index = 1; index < composition.layerCount; index++) {
         vec4 layer = sourceAt(index, pixel);
-        int operation = composition.operations[index];
+        if (linearSrgb) layer.rgb = srgbDecode(layer.rgb);
+        int operation = composition.operations[index] & 3;
         if (operation == 0) result = layer;
         else if (operation == 1) result = layer + result * (1.0 - layer.a);
         else result += layer;
     }
+    if (linearSrgb) result.rgb = srgbEncode(result.rgb);
     imageStore(outputImage, pixel, result);
 }

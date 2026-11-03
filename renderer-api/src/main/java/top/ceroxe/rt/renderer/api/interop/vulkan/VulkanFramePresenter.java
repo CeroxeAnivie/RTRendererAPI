@@ -166,6 +166,25 @@ public interface VulkanFramePresenter extends AutoCloseable {
     }
 
     /**
+     * Composes one completed host background below the external frame, then overlays above it.
+     * Background must use REPLACE; at most six overlays fit the eight-layer GPU pipeline.
+     * All sources are sRGB-encoded linear-premultiplied display RGBA8. Blending is performed
+     * in linear display space. The external frame's per-slot alphaMode describes coverage.
+     * No host depth mask or CPU pixel transfer is used.
+     */
+    default void composeD3D12SharedFrame(D3D12SharedFrame frame,
+            top.ceroxe.rt.renderer.api.FrameCompositionPlan.Layer background,
+            java.util.List<top.ceroxe.rt.renderer.api.FrameCompositionPlan.Layer> overlays) {
+        throw new UnsupportedOperationException("This presenter cannot compose a host background below an external frame");
+    }
+    /** Presents the same background/external/overlay stack with linear-light blending. */
+    default PresentationResult presentD3D12SharedFrame(D3D12SharedFrame frame,
+            top.ceroxe.rt.renderer.api.FrameCompositionPlan.Layer background,
+            java.util.List<top.ceroxe.rt.renderer.api.FrameCompositionPlan.Layer> overlays) {
+        throw new UnsupportedOperationException("This presenter cannot present a host background below an external frame");
+    }
+
+    /**
      * Waits for previously submitted composition consumers and releases their source-texture
      * pins, preserving cached shared-image imports and pipelines. A producer whose texture
      * write returned BLOCKED may retry the same command sequence after this call. This is

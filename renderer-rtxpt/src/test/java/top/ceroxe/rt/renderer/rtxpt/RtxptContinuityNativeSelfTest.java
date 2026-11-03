@@ -47,7 +47,7 @@ public final class RtxptContinuityNativeSelfTest {
                 // non-reconstructed route for exact surface comparison in the separate background case.
                 control.visibleBackground(.8f,.02f,.01f);r.submit(frame(seq++,rev,env));RtxptLightingNativeSelfTest.settle(h,24);h.capture(OUT.resolve(route+"-background-red.png"));
                 control.visibleBackground(.01f,.02f,.8f);r.submit(frame(seq++,rev,env));RtxptLightingNativeSelfTest.settle(h,24);h.capture(OUT.resolve(route+"-background-blue.png"));
-                require(!control.supportsTransparentBackground(),"Coverage output must not be claimed by opaque shared frames");
+                // Transparent coverage is verified by the separate 7.0.4 native gate.
                 r.submit(frame(seq++,rev,env).toBuilder().resetTemporalHistory(HistoryResetReason.CAMERA_CUT).build());
                 require(h.historyActions().reconstructionResets()+h.historyActions().denoiserResets()>initial.reconstructionResets()+initial.denoiserResets(),"Explicit camera cut executes native reset");
                 System.out.println("CONTINUITY_FINAL "+route+" "+h.runtimeStatus()+" "+h.submitStages());

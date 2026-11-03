@@ -1,0 +1,237 @@
+--- a/External/Donut/src/app/streamline/StreamlineIntegration.cpp
++++ b/External/Donut/src/app/streamline/StreamlineIntegration.cpp
+@@ -738,6 +738,15 @@
+         return;
+     }
+ 
++    // Alpha upscaling is a creation flag; Streamline does not recreate on this option alone.
++    if (m_dlssAlphaUpscaling != options.alphaUpscalingEnabled)
++    {
++        m_device->waitForIdle();
++        const auto status = slFreeResources(sl::kFeatureDLSS, m_viewport);
++        if (status != sl::Result::eOk && status != sl::Result::eErrorInvalidParameter)
++            successCheck(status, "slFreeResources_alpha_mode");
++        m_dlssAlphaUpscaling = options.alphaUpscalingEnabled;
++    }
+     successCheck(slDLSSSetOptions(m_viewport, ConvertOptions(options)), "slDLSSSetOptions");
+ }
+ 
+@@ -826,6 +835,15 @@
+         return;
+     }
+ 
++    // Alpha upscaling is a creation flag; Streamline does not recreate on this option alone.
++    if (m_dlssrrAlphaUpscaling != options.alphaUpscalingEnabled)
++    {
++        m_device->waitForIdle();
++        const auto status = slFreeResources(sl::kFeatureDLSS_RR, m_viewport);
++        if (status != sl::Result::eOk && status != sl::Result::eErrorInvalidParameter)
++            successCheck(status, "slFreeResources_alpha_mode");
++        m_dlssrrAlphaUpscaling = options.alphaUpscalingEnabled;
++    }
+     successCheck(slDLSSDSetOptions(m_viewport, ConvertOptions(options)), "slDLSSSetOptions");
+ #endif
+ }
+--- a/External/Donut/src/app/streamline/StreamlineIntegration.h
++++ b/External/Donut/src/app/streamline/StreamlineIntegration.h
+@@ -135,6 +135,8 @@
+ #endif
+ 
+     bool m_dlssAvailable = false;
++    bool m_dlssAlphaUpscaling = false; // RTR creation-only option
++    bool m_dlssrrAlphaUpscaling = false;
+     bool m_nisAvailable = false;
+     bool m_deepdvcAvailable = false;
+     bool m_dlssgAvailable = false;
+--- a/Rtxpt/ProcessingPasses/DenoisingGuidesBaker.hlsl
++++ b/Rtxpt/ProcessingPasses/DenoisingGuidesBaker.hlsl
+@@ -500,7 +500,7 @@
+ 
+     // we feed this as the main input into denoiser
+ 
+-    u_OutputColor[pixelPos] = float4(combinedRadiance, 1.0);
++    u_OutputColor[pixelPos] = float4(combinedRadiance, g_Const.ptConsts.RtrSceneAmbient.w==2.f ? u_OutputColor[pixelPos].a : 1.f);
+ 
+ #if 0 // remove guide buffers (but not motion vectors and depth!)
+     diffAlbedo = 0.5.xxx;
+--- a/Rtxpt/ProcessingPasses/PostProcess.hlsl
++++ b/Rtxpt/ProcessingPasses/PostProcess.hlsl
+@@ -129,7 +129,7 @@
+     DenoisingLayersContext denoisingLayers = DenoisingLayersContext::make(u_DenoisingLayersHeader, u_DenoisingLayersBuffer, u_StableRadiance, g_Const.ptConsts);
+ 
+     if (initWithStableRadiance)
+-        u_OutputColor[pixelPos] = float4( denoisingLayers.LoadStableRadiance(pixelPos), 1 );
++        u_OutputColor[pixelPos] = float4( denoisingLayers.LoadStableRadiance(pixelPos), g_Const.ptConsts.RtrSceneAmbient.w==2.f ? u_OutputColor[pixelPos].a : 1.f );
+ 
+     bool hasSurface = false;
+     uint spBranchID = denoisingLayers.GetBranchID(pixelPos, denoisingLayerIndex);
+@@ -390,7 +390,7 @@
+     const Ray cameraRay = Bridge::computeCameraRay( pixelPos );
+     DenoisingLayersContext denoisingLayers = DenoisingLayersContext::make(u_DenoisingLayersHeader, u_DenoisingLayersBuffer, u_StableRadiance, g_Const.ptConsts);
+ 
+-    u_OutputColor[pixelPos] = float4(denoisingLayers.GetAllRadiance(pixelPos), 1.0);
++    u_OutputColor[pixelPos] = float4(denoisingLayers.GetAllRadiance(pixelPos), g_Const.ptConsts.RtrSceneAmbient.w==2.f ? u_OutputColor[pixelPos].a : 1.f);
+     #if defined(RTR_SCENE_TRANSPORT_TRACE) && RTR_SCENE_TRANSPORT_TRACE
+     if(all(pixelPos==uint2(0,0)))
+         RtrSceneTracePrint("merge-stage",110u,uint4(g_Const.ptConsts.frameIndex,g_Const.ptConsts.imageWidth,g_Const.ptConsts.imageHeight,g_Const.ptConsts.RtrSceneLightCount),
+--- a/Rtxpt/ProcessingPasses/RtrPreSrHistory.hlsl
++++ b/Rtxpt/ProcessingPasses/RtrPreSrHistory.hlsl
+@@ -65,5 +65,5 @@
+     }
+     u_RtrHistoryColor[pixel] = float4(resolved, age);
+     u_RtrHistoryGeometry[pixel] = geometry;
+-    u_OutputColor[pixel] = float4(resolved, 1);
++    u_OutputColor[pixel] = float4(resolved, u_OutputColor[pixel].a);
+ }
+--- a/Rtxpt/Sample.cpp
++++ b/Rtxpt/Sample.cpp
+@@ -2566,6 +2566,7 @@
+                 dlssOptions.outputHeight = m_displaySize.y;
+                 dlssOptions.sharpness = 0; //m_recommendedDLSSSettings.sharpness;    // <- is this no longer valid?
+                 dlssOptions.colorBuffersHDR = true;
++                dlssOptions.alphaUpscalingEnabled = HostTransparentBackground(); // RTR reconstruct primary coverage
+                 dlssOptions.useAutoExposure = m_ui.HostDLSSFixedExposure <= 0.f || m_ui.RealtimeAA != 2; /* RTR explicit SR exposure contract */     // Optional: provide proper "kBufferTypeExposure" for 0-lag for better precision handling
+                 dlssOptions.preset = m_ui.HostDLSSSRPreset; // RTR forward upstream SR model without changing resolution
+                 // if (m_ui.RealtimeAA < 4) <- docs https://github.com/NVIDIAGameWorks/Streamline/blob/main/docs/ProgrammingGuideDLSS_RR.md#50-provide-dlss--dlss-rr-options seem to imply that these should be set even when DLSS-RR enabled
+@@ -2621,7 +2622,7 @@
+                 dlssRROptions.indicatorInvertAxisX 	= dlssOptions.indicatorInvertAxisX;
+                 dlssRROptions.indicatorInvertAxisY 	= dlssOptions.indicatorInvertAxisY;
+                 dlssRROptions.normalRoughnessMode 	= StreamlineInterface::DLSSRRNormalRoughnessMode::ePacked;
+-                dlssRROptions.alphaUpscalingEnabled = false;
++                dlssRROptions.alphaUpscalingEnabled = HostTransparentBackground();
+                 dlssRROptions.preset                = m_ui.DLSRRPreset;
+                 m_lastDLSSRROptions = dlssRROptions; // we need to fill them up with view info, but we can only have proper view after it was initialized with correct RT size
+             }
+@@ -3275,7 +3276,7 @@
+ 
+         //Tone Mapping; it will read from m_renderTargets->ProcessedOutputColor and write into m_renderTargets->LdrColor; in case tonemapping is disabled, it's just a passthrough
+ 
+-        if (m_toneMappingPass->Render(m_commandList, GetBindingCache(), fullscreenView, m_renderTargets->ProcessedOutputColor, m_ui.EnableToneMapping))
++        if (m_toneMappingPass->Render(m_commandList, GetBindingCache(), fullscreenView, m_renderTargets->ProcessedOutputColor, m_ui.EnableToneMapping, HostTransparentBackground()))
+         {
+             ZoneScopedN("Re-update main constant buffer");;
+ 
+--- a/Rtxpt/Sample.h
++++ b/Rtxpt/Sample.h
+@@ -151,7 +151,7 @@
+     virtual void                            PrepareDLSSRRGuides(nvrhi::ICommandList* commandList) { }
+     // Whether this sample's frame up to the DLSS-RR inputs may be recorded on the compute queue (see ShouldRecordPrefixAsync)
+     virtual bool                            SupportsAsyncPrefix() const { return false; }
+-    bool                                    IsAsyncPrefixAvailable() const { return SupportsAsyncPrefix() && m_asyncPrefixCapable; }
++    bool                                    IsAsyncPrefixAvailable() const { return SupportsAsyncPrefix() && m_asyncPrefixCapable && !HostTransparentBackground(); }
+     void                                    PreUpdatePathTracing(bool resetAccum, nvrhi::CommandListHandle commandList);
+     void                                    PostUpdatePathTracing();
+     void                                    UpdatePathTracerConstants( PathTracerConstants & constants, const PathTracerCameraData & cameraData );
+@@ -270,6 +270,7 @@
+     virtual void UpdateCustomResources() { }
+     virtual void HostHistoryAction(int, bool) { } // RTR actual executed history diagnostics
+     virtual void FilterReconstructionInput(nvrhi::ICommandList*, bool) { } // RTR pre-SR history hook
++    virtual bool HostTransparentBackground() const { return false; } // RTR primary coverage contract
+ 
+     // Invalidates the binding set, forcing recreation on next frame
+     // Call this from derived classes when custom bindings need to be updated
+--- a/Rtxpt/Shaders/PathTracer/PathTracer.hlsli
++++ b/Rtxpt/Shaders/PathTracer/PathTracer.hlsli
+@@ -95,6 +95,12 @@
+     inline void StartPixel(const PathState path, const WorkingContext workingContext)
+     {
+         workingContext.DenoisingLayers.StartPixel(path.GetPixelPos());
++#if PATH_TRACER_MODE==PT_DENOISING_LAYERS_BUILD || PATH_TRACER_MODE==PT_REFERENCE
++        // Geometric primary-surface coverage; transmissive surfaces still cover the pixel.
++        // The transparent host disables the async prefix, so this is the real output UAV.
++        if(workingContext.PtConsts.RtrSceneAmbient.w==2.f)
++            workingContext.OutputColor[path.GetPixelPos()].a=1.f;
++#endif
+ 
+ #if PATH_TRACER_MODE==PT_REFERENCE
+         // workingContext.OutputColor[path.GetPixelPos()] = float4( 0, 0, 0, 1 );
+@@ -173,7 +179,7 @@
+     {
+ #if PATH_TRACER_MODE==PT_REFERENCE
+ #if !RTXPT_SKIP_STANDARD_OUTPUTS
+-        workingContext.OutputColor[path.GetPixelPos()].rgba = float4( path.GetL().rgb, 1 );
++        workingContext.OutputColor[path.GetPixelPos()].rgba = float4( path.GetL().rgb, workingContext.PtConsts.RtrSceneAmbient.w==2.f ? workingContext.OutputColor[path.GetPixelPos()].a : 1.f );
+ #endif
+ #elif PATH_TRACER_MODE==PT_DENOISING_LAYERS_BUILD
+ #elif PATH_TRACER_MODE==PT_DENOISING_LAYERS_FILL
+@@ -353,7 +359,13 @@
+         #endif // RTR old horizon and solar sky
+         // RTR independent primary background; secondary reflection/transmission keeps physical environment.
+         if(path.getVertexIndex()==1 && workingContext.PtConsts.RtrSceneAmbient.w!=0)
+-            environmentEmission=ToLpRadiance(asfloat(workingContext.PtConsts.RtrDirectionalPadding));
++        {
++            environmentEmission=workingContext.PtConsts.RtrSceneAmbient.w==2.f ? lpfloat3(0,0,0) : ToLpRadiance(asfloat(workingContext.PtConsts.RtrDirectionalPadding));
++#if PATH_TRACER_MODE==PT_DENOISING_LAYERS_BUILD || PATH_TRACER_MODE==PT_REFERENCE
++            if(workingContext.PtConsts.RtrSceneAmbient.w==2.f)
++                workingContext.OutputColor[path.GetPixelPos()].a=0.f;
++#endif
++        }
+ #if RTXPT_FIREFLY_FILTER && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
+             float baseFFThreshold = workingContext.PtConsts.fireflyFilterThreshold;
+             if( baseFFThreshold != 0 )
+--- a/Rtxpt/ToneMapper/ToneMapping.ps.hlsli
++++ b/Rtxpt/ToneMapper/ToneMapping.ps.hlsli
+@@ -133,7 +133,11 @@
+ float4 applyToneMapping(float2 texC)
+ {
+     float4 color = gColorTex.Sample(gColorSampler, texC);
+-    float3 finalColor = color.rgb;
++    bool transparentBackground = (gParams.enabled & 2u)!=0;
++    float alpha = transparentBackground ? saturate(color.a) : color.a;
++    // Reconstruction operates on linear premultiplied RGB. Tone-map straight radiance,
++    // then premultiply in linear display space before the sRGB render-target encoding.
++    float3 finalColor = transparentBackground ? (alpha>0.00001 ? max(color.rgb,0)/alpha : 0) : color.rgb;
+ /*
+ #ifdef _TONE_MAPPER_AUTO_EXPOSURE
+     // apply auto exposure
+@@ -143,7 +147,7 @@
+ #endif
+ */
+     // when disabled, this is a pure passthrough - no exposure either
+-    if (gParams.enabled)
++    if ((gParams.enabled & 1u)!=0)
+     {
+         // apply color grading and exposure (auto x user, computed on the CPU)
+         finalColor = mul(finalColor, (float3x3) gParams.colorTransform);
+@@ -155,7 +159,9 @@
+             finalColor = saturate(finalColor);
+     }
+ 
+-    return float4(finalColor, color.a);
++    // Quantize coverage before premultiplication so alpha=0 in RGBA8 cannot retain RGB.
++    float outputAlpha = transparentBackground ? round(alpha*255.f)/255.f : alpha;
++    return float4(transparentBackground ? finalColor*outputAlpha : finalColor, outputAlpha);
+ }
+ 
+ #endif //__TONE_MAPPING_PS_HLSLI__
+--- a/Rtxpt/ToneMapper/ToneMappingPasses.cpp
++++ b/Rtxpt/ToneMapper/ToneMappingPasses.cpp
+@@ -198,7 +198,7 @@
+     nvrhi::ICommandList* commandList,
+     donut::engine::BindingCache& bindingCache,
+     const donut::engine::ICompositeView& compositeView,
+-    nvrhi::ITexture* sourceTexture, bool enabled)
++    nvrhi::ITexture* sourceTexture, bool enabled, bool transparentBackground)
+ {
+     ZoneScoped;
+ 
+@@ -317,7 +317,7 @@
+             toneMappingConsts.colorTransform[0] = float4(colorTransform.col(0), 0);
+             toneMappingConsts.colorTransform[1] = float4(colorTransform.col(1), 0);
+             toneMappingConsts.colorTransform[2] = float4(colorTransform.col(2), 0);
+-            toneMappingConsts.enabled = enabled;
++            toneMappingConsts.enabled = (enabled ? 1u : 0u) | (transparentBackground ? 2u : 0u); // RTR explicit premultiplied output
+             commandList->writeBuffer(m_ToneMappingCB, &toneMappingConsts, sizeof(ToneMappingConstants));
+ 
+             commandList->setGraphicsState(state);
+--- a/Rtxpt/ToneMapper/ToneMappingPasses.h
++++ b/Rtxpt/ToneMapper/ToneMappingPasses.h
+@@ -180,7 +180,7 @@
+     void PreRender(const ToneMappingParameters& params);
+ 
+     // note - if enable == false, auto exposure metering still runs, but the output is pure passthrough (no exposure applied)
+-    bool Render( nvrhi::ICommandList* commandList, donut::engine::BindingCache& bindingCache, const donut::engine::ICompositeView& compositeView, nvrhi::ITexture* sourceTexture, bool enabled );
++    bool Render( nvrhi::ICommandList* commandList, donut::engine::BindingCache& bindingCache, const donut::engine::ICompositeView& compositeView, nvrhi::ITexture* sourceTexture, bool enabled, bool transparentBackground = false );
+ 
+ #if TONEMAPPING_AUTOEXPOSURE_CPU
+     float3 GetPreExposedGray( uint viewIndex );

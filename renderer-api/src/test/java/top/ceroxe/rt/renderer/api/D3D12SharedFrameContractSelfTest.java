@@ -17,6 +17,9 @@ public final class D3D12SharedFrameContractSelfTest {
                 "Advancing a slot retains borrowed resource and fence handles");
         require(first.adapterLuid() == 0x0123456789abcdefL && first.resourceId() == 1,
                 "Packed adapter LUID and allocation generation are preserved");
+        require(first.alphaMode()==D3D12SharedFrame.AlphaMode.OPAQUE,"Existing constructor preserves opaque ABI");
+        var transparent=new D3D12SharedFrame(2,0,first.adapterLuid(),1,1,4,123,456,1,2,D3D12SharedFrame.AlphaMode.PREMULTIPLIED);
+        require(transparent.alphaMode()==D3D12SharedFrame.AlphaMode.PREMULTIPLIED,"Per-publication alpha interpretation is explicit");
         require(first.equals(frame(1, 0, 1920, 1080, first.allocationSize(), 123, 456, 1, 2)),
                 "Descriptors retain immutable value semantics");
         frame(1, 0, 1, 1, 4, Long.MIN_VALUE, Long.MAX_VALUE, Long.MAX_VALUE - 2, Long.MAX_VALUE - 1);
@@ -53,6 +56,11 @@ public final class D3D12SharedFrameContractSelfTest {
         try { presenter.presentD3D12SharedFrame(frame,layers);throw new AssertionError("External overlays were silently dropped"); }
         catch(UnsupportedOperationException expected) { }
         try { presenter.composeD3D12SharedFrame(frame,layers);throw new AssertionError("Compose-back was silently accepted"); }
+        catch(UnsupportedOperationException expected) { }
+        var background=new FrameCompositionPlan.Layer(mutation,FrameCompositionPlan.Operation.REPLACE);
+        try { presenter.composeD3D12SharedFrame(frame,background,List.of());throw new AssertionError("Host background was silently dropped"); }
+        catch(UnsupportedOperationException expected) { }
+        try { presenter.presentD3D12SharedFrame(frame,background,List.of());throw new AssertionError("Host background presentation was silently dropped"); }
         catch(UnsupportedOperationException expected) { }
     }
 

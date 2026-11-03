@@ -90,6 +90,33 @@ tasks.register<JavaExec>("rtxptBackgroundNativeSelfTest") {
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
     environment("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE", "1")
 }
+val transparentCompositionRuntime = configurations.create("transparentCompositionRuntime") {
+    extendsFrom(configurations.testRuntimeClasspath.get())
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("${rootProject.group}:renderer-nvidia:${rootProject.version}")).using(project(":renderer-nvidia"))
+    }
+}
+dependencies { add(transparentCompositionRuntime.name, project(":renderer-core")) }
+
+tasks.register<JavaExec>("rtxptTransparentCompositionSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses, ":renderer-core:classes")
+    classpath = sourceSets.test.get().output + sourceSets.main.get().output + transparentCompositionRuntime
+    doFirst { rootProject.file("build/transparent-composition-classpath.txt").writeText(classpath.asPath, Charsets.UTF_8) }
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptTransparentCompositionSelfTest")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    environment("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE", "1")
+    args(project.findProperty("transparentPresentation")?.toString() ?: "native", project.findProperty("transparentRoute")?.toString() ?: "rr")
+}
+
+tasks.register<JavaExec>("rtxptTransparentNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptTransparentNativeSelfTest")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    environment("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE", "1")
+    if (project.hasProperty("transparentCases")) args(project.property("transparentCases").toString().split(","))
+}
+
 tasks.register<JavaExec>("rtxptCoverageNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath

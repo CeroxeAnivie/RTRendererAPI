@@ -117,7 +117,7 @@ public final class VulkanFrameCompositionPipeline implements AutoCloseable {
         }
         if (width <= 0 || height <= 0 || outputView == 0L) throw new IllegalArgumentException("invalid composition target");
         for (long view : sourceViews) if (view == 0L) throw new IllegalArgumentException("source view must not be null");
-        for (int operation : operations) if (operation < 0 || operation > 2) throw new IllegalArgumentException("invalid composition operation");
+        for (int i=0;i<operations.length;i++) { int operation=operations[i]; if (operation<0 || (operation & ~8)>2 || (i>0 && (operation & 8)!=0)) throw new IllegalArgumentException("invalid composition operation"); }
         updateDescriptors(stack, descriptorSets[slot], sourceViews, outputView);
         VK10.vkCmdBindPipeline(commands, VK10.VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
         VK10.vkCmdBindDescriptorSets(commands, VK10.VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0,
