@@ -9,11 +9,13 @@
 | 静态缓存 | 256 实例，连续 16 次未变提交均无额外帧任务派发；姿态／资源／材质修改使 generation 失效 |
 | 离屏与消费 | 三条重建路径；960×540、640×360、2560×1600、641×361、3001×1703、返回 960×540 均精确；真实 Vulkan 消费／completion；每次 resize 都有新 completed sequence |
 | 发布制品 | 从真实 JAR 的全新外部缓存启动，严格禁用运行期编译；模拟损坏一个 shader 后从 JAR 自动修复；非源码树 runtime override |
-| 资源增量与图像 | 最终 JAR RR 资源增量／reset 参考通过；block MAE=0.195795／255，mean error=0.011204／255；12 个资源批次仅重建 1 个受影响 BLAS，保留 59 个 BLAS，8 次纹理分配复用 |
-| 透明合成 | 最终 JAR RR 原生回交＋Vulkan GPU 背景／UI：与同帧线性公式最大误差 1／255；MAE=0.000253／0.004835；不是跨帧图像比较 |
+| 资源增量与图像 | 同版本前一候选 JAR 的 RR 资源增量／reset 参考通过；block MAE=0.195795／255，mean error=0.011204／255；12 个资源批次仅重建 1 个受影响 BLAS，保留 59 个 BLAS，8 次纹理分配复用 |
+| 透明合成 | 同版本前一候选 JAR 的 RR 原生回交＋Vulkan GPU 背景／UI：与同帧线性公式最大误差 1／255；MAE=0.000253／0.004835；不是跨帧图像比较 |
 | 十万灯 | 实际 GPU 统计：100003 灯、200005 树节点；436 接收点、27468 选灯、483423 访问节点；新增／修改／移除后无重复几何导出。严格包首次发现 63 样本诊断配置缺排列，已补入完整六预算包后复验 |
 | 诊断 | 同帧 sequence／revision、owner／worker、cache／compile／library／PSO／SBT、任务等待／消息泵及实际 GPU command scopes；OFF 停止新记录，查询非阻塞收尾；8192 事件覆盖与最近慢帧保留测试通过 |
 | 合同与符号 | renderer-api ABI／生命周期、adapter、预算、版本合同通过；DLL 与 PDB 的 CodeView GUID／age 严格匹配；PDB 通过 native-symbols ZIP 交付 |
+
+上述资源增量与透明合成图像对照使用 7.0.5 前一候选包（457 排列、PDB age 107）。最终发布包为 553 排列、PDB age 108，复验覆盖三路线帧准备／材质／尺寸、缓存修复与十万灯，未重复这两组图像对照。
 
 CPU 调度独立对照使用 4 worker、同一简单数组变换、各 64 个暖机后样本。旧调度重现 hardware_concurrency 分块＋2ms sleep；本机默认 Windows 定时器使该 sleep 常落在约 15ms 台阶。结果仅用于调度开销量化，不能外推为渲染器 FPS 收益。
 
